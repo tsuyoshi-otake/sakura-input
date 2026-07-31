@@ -324,3 +324,98 @@ fn output_buf_encode_frame_matches_decode_and_to_output() {
     assert_eq!(id, 7);
     assert_eq!(response, Response::Output(buf.to_output()));
 }
+
+/// The same check, but against a hand-written expectation instead of
+/// `to_output()`.
+///
+/// The test above cannot catch a bug in `OutputBuf`'s span arithmetic: the
+/// wire bytes and the expected value are both produced by slicing the preedit
+/// with the same spans, so a wrong `start` or `len` corrupts both sides
+/// identically and the comparison still succeeds. Writing the expected
+/// segments out by hand breaks that shared derivation.
+///
+/// The segment lengths are deliberately unequal in bytes (4, 6, 3, 15) and
+/// unequal between bytes and characters, so an off-by-one, a swapped
+/// start/end, or a byte/char confusion cannot happen to land on the right
+/// answer.
+#[test]
+fn output_buf_segments_match_hand_written_expectation() {
+    let mut buf = OutputBuf::new();
+    buf.consumed = true;
+    buf.mode = Some(Mode::Hiragana);
+    buf.begin_preedit();
+    buf.push_segment("𠮷", UnderlineKind::Raw).expect("push");
+    buf.push_segment("野家", UnderlineKind::Converted)
+        .expect("push");
+    buf.push_segment("の", UnderlineKind::Raw).expect("push");
+    buf.push_segment("ぎゅうどん", UnderlineKind::Focused)
+        .expect("push");
+    buf.set_cursor(9);
+
+    let expected = Output {
+        consumed: true,
+        beep: false,
+        mode: Some(Mode::Hiragana),
+        preedit: Some(Preedit {
+            segments: vec![
+                Segment {
+                    text: "𠮷".to_string(),
+                    underline: UnderlineKind::Raw,
+                },
+                Segment {
+                    text: "野家".to_string(),
+                    underline: UnderlineKind::Converted,
+                },
+                Segment {
+                    text: "の".to_string(),
+                    underline: UnderlineKind::Raw,
+                },
+                Segment {
+                    text: "ぎゅうどん".to_string(),
+                    underline: UnderlineKind::Focused,
+                },
+            ],
+            cursor: 9,
+        }),
+        commit: None,
+    };
+
+    let mut frame = [0u8; 512];
+    let n = buf.encode_frame(11, &mut frame).expect("encode_frame");
+    let (id, response) = decode_response(&frame[FRAME_HEADER_LEN..n]).expect("decode_response");
+    assert_eq!(id, 11);
+    assert_eq!(response, Response::Output(expected));
+}
+
+/// The spans themselves, checked directly rather than through the encoder.
+///
+/// `segments()` is public, so a consumer may slice `preedit_text()` with a
+/// span without going near the wire format. That path deserves its own
+/// assertion against literal strings.
+#[test]
+fn output_buf_spans_slice_the_preedit_correctly() {
+    let mut buf = OutputBuf::new();
+    buf.begin_preedit();
+    buf.push_segment("𠮷", UnderlineKind::Raw).expect("push");
+    buf.push_segment("野家", UnderlineKind::Converted)
+        .expect("push");
+    buf.push_segment("の", UnderlineKind::Raw).expect("push");
+    buf.push_segment("ぎゅうどん", UnderlineKind::Focused)
+        .expect("push");
+
+    assert_eq!(buf.preedit_text(), "𠮷野家のぎゅうどん");
+
+    let text = buf.preedit_text();
+    let sliced: Vec<&str> = buf
+        .segments()
+        .iter()
+        .map(|span| {
+            let start = span.start as usize;
+            let end = start + span.len as usize;
+            text.get(start..end)
+                .expect("span must be in bounds and on a character boundary")
+        })
+        .collect();
+
+    assert_eq!(sliced, ["𠮷", "野家", "の", "ぎゅうどん"]);
+}
