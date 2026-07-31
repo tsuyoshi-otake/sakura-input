@@ -42,19 +42,24 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   `gh run list` after adding or editing a workflow, not just the YAML.
 
 - **`windows-latest` is not one CPU, so the differential SIMD coverage of a
-  green CI run is not a fixed quantity.** Two runs 37 minutes apart, same
-  workflow, same repository: `6848ac5` landed on an **AMD EPYC 7763** (Zen 3 —
-  AVX, AVX2, **no AVX-512**) and `e829ff9` on an **AMD EPYC 9V74** (Zen 4,
-  which *does* have AVX-512). The `simd::` agreement tests only exercise
-  kernels the host supports, so the AVX-512 kernel is covered on some CI runs
-  and not others — and `cargo test` captures stdout, so **neither log said
-  which**. That is worse than no coverage: coverage indistinguishable from its
-  absence is the same failure as a workflow that never runs.
+  green CI run is not a fixed quantity.** Three runs of the same workflow on
+  the same repository inside one hour drew **three different processors**:
+  `6848ac5` an **AMD EPYC 7763** (Zen 3 — AVX, AVX2, **no AVX-512**),
+  `e829ff9` an **AMD EPYC 9V74** (Zen 4, which has it), and `577a550` an
+  **Intel Xeon Platinum 8573C** (Emerald Rapids, `avx512bw`). The `simd::`
+  agreement tests only exercise kernels the host supports, so the AVX-512
+  kernel is covered on some CI runs and not others — and `cargo test`
+  captures stdout, so **none of the first two logs said which**. That is
+  worse than no coverage: coverage indistinguishable from its absence is the
+  same failure as a workflow that never runs.
 
   Fixed by making the run state its own scope: a CI step re-runs the `simd::`
   tests with `--nocapture` purely so the log prints `kernels under test:
-  [...]`. Read that line before quoting a green run as evidence about any
-  particular kernel.
+  [...]`. It earned that on its first green run, which printed
+  `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)` — the third CPU in
+  three runs, and the first time CI could *prove* which kernels it exercised
+  rather than leave it to be inferred from a processor name. Read that line
+  before quoting a green run as evidence about any particular kernel.
 
   **AVX-512 verification is local, by the owner's decision (2026-07-31)**, and
   CI is not to be extended to *require* it — the step above only reports what
