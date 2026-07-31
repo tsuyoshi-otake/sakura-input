@@ -5,7 +5,7 @@
 //! a server and a client on a scratch pipe name; the text service's tests
 //! talk to a scripted fake engine. What none of them touch is the arrangement
 //! that actually ships: the built `sakura_engine.exe`, serving the well-known
-//! name that [`Client::connect`] resolves on its own, spoken to by a separate
+//! name that `Client::connect` resolves on its own, spoken to by a separate
 //! process.
 //!
 //! That gap is where the startup crash of the boxed-session-table fix lived —
@@ -18,98 +18,11 @@
 //! keystrokes. If this passes and the text service still cannot type, the
 //! fault is in the text service, not in the protocol or the transport.
 
-use std::process::{Child, Command};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+mod common;
 
-use sakura_ipc::{pipe_name, Client};
-use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, PROTOCOL_VERSION};
+use sakura_proto::{KeyCode, Request, Response, PROTOCOL_VERSION};
 
-/// Long enough to cover a cold process start on a loaded machine. Nothing
-/// here is measuring latency — the 50 ms keystroke budget is the DLL's
-/// concern and is tested there.
-const PATIENT: Duration = Duration::from_secs(5);
-
-/// A running engine to talk to, and whether this test is the one that
-/// started it.
-///
-/// The pipe name belongs to the logon session, so at most one engine serves
-/// it at a time (DESIGN 4.1). On a developer's machine that engine may
-/// already be running and may be mid-conversation with a real text service in
-/// a real editor; killing it to run a test would take the user's IME away
-/// under them. So: use whoever is already there, and only clean up a process
-/// this test is responsible for.
-struct Engine {
-    spawned: Option<Child>,
-}
-
-impl Engine {
-    fn running() -> Engine {
-        if Client::connect(Duration::from_millis(200)).is_ok() {
-            return Engine { spawned: None };
-        }
-
-        let child = Command::new(env!("CARGO_BIN_EXE_sakura_engine"))
-            .spawn()
-            .expect("the engine binary is built as a dependency of this test");
-        Engine {
-            spawned: Some(child),
-        }
-    }
-
-    /// Connects once the engine is serving, or fails saying what it saw.
-    ///
-    /// Polls rather than sleeping a fixed amount: the pipe appears when the
-    /// engine's first worker calls `CreateNamedPipeW`, which is early, and a
-    /// fixed sleep would be both slower in the common case and flaky in the
-    /// rare one.
-    fn client(&mut self) -> Client {
-        let deadline = Instant::now() + PATIENT;
-        loop {
-            match Client::connect(Duration::from_millis(100)) {
-                Ok(client) => return client,
-                Err(fault) if Instant::now() >= deadline => {
-                    let name = pipe_name().unwrap_or_else(|_| "<unresolvable>".to_owned());
-                    panic!("no engine on {name} after {PATIENT:?}: {fault:?}");
-                }
-                Err(_) => sleep(Duration::from_millis(20)),
-            }
-        }
-    }
-}
-
-impl Drop for Engine {
-    fn drop(&mut self) {
-        // Only what this test started. `kill` rather than `Request::Shutdown`
-        // because this runs on the failure path too, where the engine may be
-        // exactly the thing that has stopped answering — and a test that
-        // leaves a process behind is a test that poisons every run after it.
-        if let Some(child) = self.spawned.as_mut() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
-}
-
-fn char_key(c: char) -> KeyInput {
-    KeyInput {
-        code: KeyCode::Char,
-        ch: Some(c),
-        modifiers: Modifiers::NONE,
-        repeat: false,
-        test_only: false,
-    }
-}
-
-fn named_key(code: KeyCode) -> KeyInput {
-    KeyInput {
-        code,
-        ch: None,
-        modifiers: Modifiers::NONE,
-        repeat: false,
-        test_only: false,
-    }
-}
+use common::{char_key, named_key, session_for, visible, Engine, PATIENT};
 
 /// The whole M0 story across a real pipe: the engine starts, accepts the
 /// handshake, opens a session, turns romaji into kana, commits it, and is
@@ -243,24 +156,5 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
             assert!(state.mode.is_some(), "a mode change must name a mode");
         }
         other => panic!("WatchUi after a mode change: expected Ui, got {other:?}"),
-    }
-}
-
-/// What a text service would draw: every segment's text, in order.
-fn visible(preedit: Option<sakura_proto::Preedit>) -> String {
-    preedit
-        .map(|p| p.segments.into_iter().map(|s| s.text).collect())
-        .unwrap_or_default()
-}
-
-fn session_for(client: &mut Client, process_name: &str) -> sakura_proto::SessionId {
-    match client.call(
-        &Request::CreateSession {
-            process_name: process_name.to_owned(),
-        },
-        PATIENT,
-    ) {
-        Ok(Response::SessionCreated { session }) => session,
-        other => panic!("expected SessionCreated, got {other:?}"),
     }
 }
