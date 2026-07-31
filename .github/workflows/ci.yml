@@ -42,6 +42,22 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # DESIGN 7's sandboxed-access claim (the pipe's DACL and low-integrity
+      # label must let a real AppContainer token connect and round-trip a
+      # keystroke) is not exercised by the default `cargo test --workspace`
+      # run above: it is `#[ignore]`d there because it creates an
+      # AppContainer profile and spawns a sandboxed child against the
+      # engine's per-logon-session singleton pipe, which would race
+      # `pipe_round_trip.rs` and `ipc_latency.rs` if `cargo test` ran it
+      # concurrently with them. Run alone, after `Test`, never overlapping
+      # it. The `--exact` name filter is required, not stylistic: the same
+      # binary also holds the sandboxed-side probe test, which is meant only
+      # to be re-executed inside the AppContainer this step's test builds,
+      # and plain `--ignored` with no filter would run that copy directly
+      # too (see appcontainer.rs's module docs).
+      - name: Sandbox access (AppContainer)
+        run: cargo test -p sakura-engine --test appcontainer -- --exact the_pipe_is_reachable_from_a_real_appcontainer_token --ignored --nocapture
+
       # The release profile is where panic=abort and fat LTO apply, and both
       # have broken builds that were green in debug. It is a gate, not a bonus.
       - name: Build release
