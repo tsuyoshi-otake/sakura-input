@@ -41,25 +41,35 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   assumptions were assumptions about a workflow that was not executing. Check
   `gh run list` after adding or editing a workflow, not just the YAML.
 
-- **`windows-latest` is not one CPU, so the differential SIMD coverage of a
-  green CI run is not a fixed quantity.** Three runs of the same workflow on
-  the same repository inside one hour drew **three different processors**:
-  `6848ac5` an **AMD EPYC 7763** (Zen 3 — AVX, AVX2, **no AVX-512**),
-  `e829ff9` an **AMD EPYC 9V74** (Zen 4, which has it), and `577a550` an
-  **Intel Xeon Platinum 8573C** (Emerald Rapids, `avx512bw`). The `simd::`
-  agreement tests only exercise kernels the host supports, so the AVX-512
-  kernel is covered on some CI runs and not others — and `cargo test`
-  captures stdout, so **none of the first two logs said which**. That is
-  worse than no coverage: coverage indistinguishable from its absence is the
+- **A processor's model name is not evidence about the ISA available to your
+  process. Only a feature probe is.** This was got wrong twice in one hour,
+  each time by reasoning from the name printed by `Get-CimInstance
+  Win32_Processor`:
+
+  | run | reported processor | inferred | **measured** |
+  |---|---|---|---|
+  | `6848ac5` | AMD EPYC 7763 (Zen 3) | no AVX-512 | not printed |
+  | `e829ff9` | AMD EPYC 9V74 (Zen 4) | AVX-512 | not printed |
+  | `577a550` | Intel Xeon Platinum 8573C | AVX-512 | **`tier avx512bw`** |
+  | `6905660` | AMD EPYC 9V74 (Zen 4) | AVX-512 | **`tier avx2`** |
+
+  The last row is the point. Zen 4 has AVX-512 in silicon, and this runner
+  still reports `avx2` — the hypervisor does not expose it to the guest.
+  `is_x86_feature_detected!` knows that; a datasheet does not.
+
+- **`windows-latest` is not one machine, so a green CI run's differential
+  SIMD coverage is not a fixed quantity.** Four runs of one workflow inside
+  an hour drew three processors and two different ISA tiers. Since the
+  `simd::` tests only exercise kernels the host supports, and `cargo test`
+  captures stdout, the first two runs covered AVX-512 or did not with nothing
+  readable afterwards to tell the two apart — worse than a known gap, and the
   same failure as a workflow that never runs.
 
-  Fixed by making the run state its own scope: a CI step re-runs the `simd::`
-  tests with `--nocapture` purely so the log prints `kernels under test:
-  [...]`. It earned that on its first green run, which printed
-  `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)` — the third CPU in
-  three runs, and the first time CI could *prove* which kernels it exercised
-  rather than leave it to be inferred from a processor name. Read that line
-  before quoting a green run as evidence about any particular kernel.
+  Fixed by making each run state its own scope: a CI step re-runs `simd::`
+  with `--nocapture` so the log prints `kernels under test: [...] (tier ...)`.
+  It paid for itself immediately by producing the fourth row above and
+  refuting the inference in the second. **Quote that line, never the CPU
+  name, when claiming a kernel was covered.**
 
   **AVX-512 verification is local, by the owner's decision (2026-07-31)**, and
   CI is not to be extended to *require* it — the step above only reports what

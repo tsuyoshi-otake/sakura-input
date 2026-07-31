@@ -142,11 +142,24 @@ The step paid for itself on its first green run, which drew a **third**
 processor in three runs — an Intel Xeon Platinum 8573C — and printed
 `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`. So that run really did
 cover AVX-512 in CI, and for the first time the log says so instead of leaving
-it to be guessed from a processor name. Two AMD generations and an Intel one
-inside an hour is a wider pool than "the CI runner" as a phrase suggests.
+it to be guessed from a processor name.
 
-Distilled → `rules.md` (replacing the wrong version of the rule outright,
-rather than appending a correction beside it).
+Then it paid for itself a second time, by refuting me. The fourth run came up
+**EPYC 9V74 again — and printed `["scalar", "avx", "avx2"] (tier avx2)`.** I
+had already written "EPYC 9V74 (Zen 4, which has it)" into the rule and "yes"
+into the Issue #2 table, on the strength of the part number alone. Zen 4 does
+have AVX-512 in silicon; this runner does not expose it to the guest, and
+`is_x86_feature_detected!` is the only thing in the loop that knows the
+difference.
+
+So the correction is sharper than "the runner pool varies": **a CPU model name
+is not evidence about the ISA a process can use.** Both times I got this wrong,
+the mistake was the same shape — reading a name and concluding a capability.
+The two rows I had marked from the datasheet were never measurements, and are
+now recorded as unknown rather than quietly left as "yes".
+
+Distilled → `rules.md` (replacing the wrong version of the rule outright, twice
+now, rather than appending a correction beside it).
 
 And the fix itself broke CI, in a way worth more than the fix. The new step's
 command ends in the test filter `simd::`, and unquoted in YAML that is a colon
