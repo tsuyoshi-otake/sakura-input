@@ -41,20 +41,28 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   assumptions were assumptions about a workflow that was not executing. Check
   `gh run list` after adding or editing a workflow, not just the YAML.
 
-- **The CI runner's CPU is not the development machine's CPU, and that
-  silently narrows differential SIMD coverage.** GitHub's `windows-latest` is
-  an **AMD EPYC 7763** (Zen 3): AVX and AVX2, but **no AVX-512**. The
-  development machine is a Ryzen 7 9700X (Zen 5), which has AVX-512BW. The
-  `simd::` agreement tests only exercise kernels the host actually supports,
-  so the AVX-512 kernel has **no CI coverage at all**.
+- **`windows-latest` is not one CPU, so the differential SIMD coverage of a
+  green CI run is not a fixed quantity.** Two runs 37 minutes apart, same
+  workflow, same repository: `6848ac5` landed on an **AMD EPYC 7763** (Zen 3 —
+  AVX, AVX2, **no AVX-512**) and `e829ff9` on an **AMD EPYC 9V74** (Zen 4,
+  which *does* have AVX-512). The `simd::` agreement tests only exercise
+  kernels the host supports, so the AVX-512 kernel is covered on some CI runs
+  and not others — and `cargo test` captures stdout, so **neither log said
+  which**. That is worse than no coverage: coverage indistinguishable from its
+  absence is the same failure as a workflow that never runs.
 
-  **This is an accepted decision, not an open gap** (owner's call, 2026-07-31):
-  AVX-512 is verified locally and CI is not to be extended to cover it. So the
-  standing obligation is to *run* `cargo test -p sakura-core --lib -- simd::
-  --nocapture` on this machine before releasing anything that touches the
-  kernels, and to confirm the printed list actually reads
-  `["scalar", "avx", "avx2", "avx512"]` — a green CI run is not evidence about
-  AVX-512 and must never be quoted as if it were.
+  Fixed by making the run state its own scope: a CI step re-runs the `simd::`
+  tests with `--nocapture` purely so the log prints `kernels under test:
+  [...]`. Read that line before quoting a green run as evidence about any
+  particular kernel.
+
+  **AVX-512 verification is local, by the owner's decision (2026-07-31)**, and
+  CI is not to be extended to *require* it — the step above only reports what
+  happened to be covered. The standing obligation is therefore to run
+  `cargo test -p sakura-core --lib -- simd:: --nocapture` on this machine
+  before releasing anything that touches the kernels, and confirm it prints
+  `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`. Verified here on
+  2026-07-31: it does.
 
 - **A sandbox test that does not prove it is sandboxed proves nothing.** A
   test that connects to the pipe "from an AppContainer" passes just as

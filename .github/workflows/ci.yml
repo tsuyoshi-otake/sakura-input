@@ -21,9 +21,11 @@ jobs:
 
       # rust-toolchain.toml pins the version and the single x86-64 target, so
       # rustup provisions exactly what the workspace declares. The CPU line
-      # matters as much as the toolchain line: the SIMD tests only exercise
-      # the kernels this runner's CPU actually supports, so a run that says
-      # "agreement holds" is only as broad as the ISA printed here.
+      # matters as much as the toolchain line, and it is not a constant:
+      # `windows-latest` handed this repository an EPYC 7763 (Zen 3, no
+      # AVX-512) and an EPYC 9V74 (Zen 4, which has it) 37 minutes apart. The
+      # SIMD tests only exercise the kernels the host supports, so which CPU
+      # answered decides how broad "agreement holds" actually was.
       - name: Show toolchain and CPU
         shell: pwsh
         run: |
@@ -41,6 +43,17 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+      # `cargo test` captures stdout, so the step above proves the kernels
+      # agree without ever saying *which* kernels — and since the runner CPU
+      # varies (see "Show toolchain and CPU"), that set is not the same from
+      # run to run. Coverage you cannot tell apart from its absence is not
+      # coverage. This costs a few milliseconds and makes the log name the
+      # ISA the run actually exercised, so a reader can check rather than
+      # assume. It does not *require* any particular kernel: AVX-512 is
+      # verified locally by decision, and this step only reports.
+      - name: Name the SIMD kernels this runner exercised
+        run: cargo test -p sakura-core --lib -- simd:: --nocapture
 
       # DESIGN 7's sandboxed-access claim (the pipe's DACL and low-integrity
       # label must let a real AppContainer token connect and round-trip a
