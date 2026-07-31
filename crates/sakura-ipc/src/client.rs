@@ -59,12 +59,14 @@ use windows::Win32::System::IO::{
 use crate::security::{pipe_name, CLIENT_ACCESS};
 use crate::transport::Fault;
 
-/// How long to wait for a free pipe instance when every one is busy.
+/// What an installer or a command-line tool can afford to wait for a free
+/// pipe instance. Reached only when more than `MAX_INSTANCES` applications
+/// connect at once, and then only until a thread finishes accepting.
 ///
-/// Only reached when more than `MAX_INSTANCES` applications connect at
-/// once, and then only until a thread finishes accepting. It is a
-/// connect-time wait, not a keystroke-time one.
-const CONNECT_WAIT_MS: u32 = 2_000;
+/// The DLL must not use this. Its connect happens on the host
+/// application's keystroke thread, where two seconds is two seconds of a
+/// frozen editor, so it passes a budget of its own.
+pub const PATIENT_CONNECT: Duration = Duration::from_millis(2_000);
 
 /// A connection to the engine.
 #[derive(Debug)]
@@ -87,15 +89,21 @@ pub struct Client {
 unsafe impl Send for Client {}
 
 impl Client {
-    /// Connects to this logon session's engine.
-    pub fn connect() -> Result<Self, Fault> {
-        Self::connect_to(&pipe_name()?)
+    /// Connects to this logon session's engine, giving up after `budget`.
+    ///
+    /// The budget bounds the wait for a *free instance*, which is the only
+    /// part of connecting that can take real time. Callers on a keystroke
+    /// thread pass something they can afford to lose; tools that are
+    /// allowed to wait pass [`PATIENT_CONNECT`].
+    pub fn connect(budget: Duration) -> Result<Self, Fault> {
+        Self::connect_to(&pipe_name()?, budget)
     }
 
     /// Connects to a pipe by name. Exposed for tests that stand up their
     /// own server; production code wants [`connect`](Self::connect), which
     /// cannot name the wrong pipe.
-    pub fn connect_to(name: &str) -> Result<Self, Fault> {
+    pub fn connect_to(name: &str, budget: Duration) -> Result<Self, Fault> {
+        let deadline = Instant::now() + budget;
         let wide = to_wide_nul(name);
         let handle = loop {
             // SAFETY: `wide` is NUL-terminated and outlives the call.
@@ -117,9 +125,18 @@ impl Client {
             match opened {
                 Ok(handle) => break handle,
                 Err(error) if is(&error, ERROR_PIPE_BUSY) => {
+                    // Every instance is mid-accept. Wait for one, but only
+                    // for what is left of the budget: winning the race for
+                    // an instance and then having no time to use it is
+                    // still a timeout, and a caller that said 20 ms must
+                    // not be held for two seconds by a busy pipe.
+                    let left = remaining_ms(deadline);
+                    if left == 0 {
+                        return Err(Fault::Timeout);
+                    }
                     // SAFETY: `wide` is NUL-terminated and outlives the
                     // call.
-                    let waited = unsafe { WaitNamedPipeW(PCWSTR(wide.as_ptr()), CONNECT_WAIT_MS) };
+                    let waited = unsafe { WaitNamedPipeW(PCWSTR(wide.as_ptr()), left) };
                     if !waited.as_bool() {
                         return Err(Fault::Timeout);
                     }
@@ -267,15 +284,16 @@ impl Client {
             Err(error) => return Err(Fault::Os(error)),
         }
 
-        let remaining = deadline
-            .checked_duration_since(Instant::now())
-            .map(|left| left.as_millis().min(u32::MAX as u128) as u32)
-            .unwrap_or(0);
-
         // SAFETY: `overlapped` describes the operation just started on
         // `self.handle` and is still live.
         let finished = unsafe {
-            GetOverlappedResultEx(self.handle, &overlapped, &mut transferred, remaining, false)
+            GetOverlappedResultEx(
+                self.handle,
+                &overlapped,
+                &mut transferred,
+                remaining_ms(deadline),
+                false,
+            )
         };
 
         match finished {
@@ -325,6 +343,19 @@ impl Drop for Client {
             let _ = CloseHandle(self.event);
         }
     }
+}
+
+/// Milliseconds left before `deadline`, saturating at zero.
+///
+/// Zero means "do not wait", which is what both callers want: a wait that
+/// is already out of time must not be issued as an infinite one, and
+/// `INFINITE` is `u32::MAX`, so a wrapping subtraction here would be the
+/// difference between a dropped keystroke and a hung application.
+fn remaining_ms(deadline: Instant) -> u32 {
+    deadline
+        .checked_duration_since(Instant::now())
+        .map(|left| left.as_millis().min(u32::MAX as u128) as u32)
+        .unwrap_or(0)
 }
 
 /// Which direction one overlapped operation goes.

@@ -327,6 +327,16 @@ fn apply_key(
     let state = session.state();
     match keymap.lookup(state, key) {
         Some(action) => apply_action(session, action, table, normalizer, scratch, out)?,
+
+        // A Ctrl or Alt chord the key map did not claim is an application
+        // shortcut. The DLL reports it as the letter plus the modifier
+        // bits -- deliberately, so that a key map *can* bind Ctrl+J -- and
+        // without this arm the fall-through below would treat the letter
+        // as input and make Ctrl+S insert "s" instead of saving the user's
+        // file. Nothing an IME converts is worth breaking every editor it
+        // is installed in.
+        None if key.modifiers.ctrl() || key.modifiers.alt() => out.consumed = false,
+
         None if session.mode == Mode::FullAlnum || session.mode == Mode::HalfAlnum => {
             apply_alnum_char(session, normalizer, key, out)?;
         }
@@ -672,6 +682,41 @@ mod tests {
             "",
             "second backspace removes the emitted kana"
         );
+    }
+
+    /// The DLL reports Ctrl+S as the character `s` with the Ctrl bit set,
+    /// so that a key map can bind chords by the letter the user sees on the
+    /// key. Anything the key map does not claim has to reach the
+    /// application untouched — an IME that turns Ctrl+S into "s" has eaten
+    /// a save, and mid-composition is exactly when that hurts most.
+    #[test]
+    fn an_unbound_shortcut_reaches_the_application_and_leaves_the_composition_alone() {
+        for held in [Modifiers::CTRL, Modifiers::ALT] {
+            let mut dispatcher = builtin_dispatcher();
+            let mut out = OutputBuf::new();
+            let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+            type_word(&mut dispatcher, session, "sakura", &mut out);
+            let before = out.preedit_text().to_owned();
+
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: KeyInput {
+                        modifiers: held,
+                        ..char_key('s')
+                    },
+                },
+                &mut out,
+            );
+
+            assert!(!out.consumed, "{held:?}+S was swallowed");
+            assert_eq!(out.commit_text(), None);
+            assert_eq!(
+                out.preedit_text(),
+                before,
+                "{held:?}+S changed the composition"
+            );
+        }
     }
 
     #[test]

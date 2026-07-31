@@ -110,18 +110,30 @@ impl Server {
     }
 }
 
+/// How much stack each pipe-instance thread reserves.
+///
+/// A thread parked in `ReadFile` needs almost no stack, and the engine's
+/// whole budget is 15 MB (DESIGN 10); the default 1 MB reservation per thread
+/// would dominate it at the [`MAX_INSTANCES`] cap.
+///
+/// That reasoning is only sound while [`worker`]'s locals stay small, and
+/// once they did not: `SessionTable` used to hold its sixty-four sessions
+/// inline, making a `Dispatcher` ~109 KB, and the engine died at startup with
+/// "thread 'sakura-pipe' has overflowed its stack" before it accepted a single
+/// connection. The table is boxed now, and
+/// `worker_locals_fit_the_reserved_stack` is what keeps the next large local
+/// from rediscovering this at runtime.
+const WORKER_STACK_BYTES: usize = 128 * 1024;
+
 /// Creates one pipe instance and the thread that serves it.
 fn spawn_worker(shared: &Arc<Shared>, first: bool) -> windows::core::Result<()> {
     let descriptor = Descriptor::from_sddl(&shared.sddl)?;
     let instance = PipeInstance::create(&shared.name, &descriptor, first)?;
     shared.created.fetch_add(1, Ordering::Relaxed);
-    // A thread parked in `ReadFile` needs almost no stack, and the engine's
-    // whole budget is 15 MB (DESIGN 10); the default 1 MB reservation per
-    // thread would dominate it at the instance cap.
     let owned = Arc::clone(shared);
     let spawned = std::thread::Builder::new()
         .name("sakura-pipe".to_owned())
-        .stack_size(128 * 1024)
+        .stack_size(WORKER_STACK_BYTES)
         .spawn(move || worker(owned, instance));
 
     match spawned {
@@ -346,6 +358,31 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The two values [`worker`] builds on its own stack have to fit in the
+    /// stack it was given, with room left for the frames underneath them.
+    ///
+    /// This is the test that would have caught the startup crash described on
+    /// [`WORKER_STACK_BYTES`]: a `Dispatcher` grew to ~109 KB while the
+    /// reservation stayed at 128 KB, and nothing said so until the first
+    /// worker thread died. A quarter of the reservation is the ceiling
+    /// because these are not the only frames on that stack — `worker` calls
+    /// into `Dispatcher::dispatch` and the pipe I/O below it, and
+    /// `Dispatcher::new` returns its value through a temporary before the
+    /// local even exists.
+    #[test]
+    fn worker_locals_fit_the_reserved_stack() {
+        let dispatcher = core::mem::size_of::<crate::dispatch::Dispatcher>();
+        let buffers = core::mem::size_of::<Buffers>();
+        let budget = WORKER_STACK_BYTES / 4;
+        assert!(
+            dispatcher + buffers < budget,
+            "worker's locals need {dispatcher} + {buffers} bytes of the \
+             {WORKER_STACK_BYTES}-byte pipe-thread stack; keep them under \
+             {budget} by boxing whatever just grew, not by raising the \
+             reservation (that multiplies by {MAX_INSTANCES} threads)"
+        );
+    }
 
     #[test]
     fn the_server_resolves_a_pipe_name_for_this_session() {

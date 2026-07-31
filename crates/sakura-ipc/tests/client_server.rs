@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use sakura_ipc::{Client, Descriptor, Fault, PipeInstance};
+use sakura_ipc::{Client, Descriptor, Fault, PipeInstance, PATIENT_CONNECT};
 use sakura_proto::{decode_request, encode_response, peek_header, Request, Response};
 
 /// A pipe name nobody else is using, derived from this process so two test
@@ -48,7 +48,7 @@ fn a_request_gets_its_reply() {
         pipe.write_all(&reply).expect("write");
     });
 
-    let mut client = Client::connect_to(&name).expect("connect");
+    let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
     let response = client
         .call(&Request::Ping, Duration::from_secs(5))
         .expect("a reply");
@@ -70,7 +70,7 @@ fn a_silent_engine_costs_the_budget_and_no_more() {
         std::thread::sleep(Duration::from_millis(600));
     });
 
-    let mut client = Client::connect_to(&name).expect("connect");
+    let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
     let budget = Duration::from_millis(50);
     let started = Instant::now();
     let result = client.call(&Request::Ping, budget);
@@ -119,7 +119,7 @@ fn a_late_reply_is_discarded_rather_than_answered_with() {
         pipe.write_all(&reply).expect("write");
     });
 
-    let mut client = Client::connect_to(&name).expect("connect");
+    let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
 
     let abandoned = client.call(&Request::Ping, Duration::from_millis(30));
     assert!(
@@ -151,7 +151,7 @@ fn an_engine_that_vanishes_reads_as_a_disconnect() {
         drop(pipe);
     });
 
-    let mut client = Client::connect_to(&name).expect("connect");
+    let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
     let result = client.call(&Request::Ping, Duration::from_secs(5));
     assert!(
         matches!(result, Err(Fault::Disconnected)),

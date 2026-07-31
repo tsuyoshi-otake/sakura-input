@@ -28,6 +28,6 @@ pub mod client;
 pub mod security;
 pub mod transport;
 
-pub use client::Client;
+pub use client::{Client, PATIENT_CONNECT};
 pub use security::{pipe_name, sddl, Descriptor, CLIENT_ACCESS};
 pub use transport::{Fault, PipeInstance, MAX_INSTANCES};
