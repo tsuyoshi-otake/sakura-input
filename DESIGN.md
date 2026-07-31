@@ -194,11 +194,13 @@ thin TSF DLL; the engine and UI live in separate per-user processes.
 ```
 
 Why out-of-process (all four reasons matter):
-1. **Bitness/arch.** The DLL loads into every process, so it ships
-   per-arch: x64 + x86, plus ARM64X on ARM64 machines — a hybrid binary
-   cargo cannot produce on its own; treated as an explicit R&D spike
-   with a documented fallback (§14), not a routine build target. The
-   engine ships once per machine arch.
+1. **Bitness/arch.** The DLL loads into every process, so its
+   architecture is dictated by the host's, not by ours. The supported
+   configuration is **Windows 11 on x86-64 with AVX** and nothing else
+   (§3.2): 64-bit hosts get the text service, 32-bit hosts fall back to
+   MS-IME, and ARM64 is out of scope. Keeping to one architecture is
+   what makes the engine free to assume AVX everywhere and to dispatch
+   to AVX2/AVX-512 at run time.
 2. **Crash isolation.** An engine bug kills a background process, not the
    user's document. The DLL degrades to pass-through on IPC failure.
 3. **Shared state.** One engine process owns the learning store and user
@@ -261,6 +263,70 @@ encodes exactly this distinction: it allows the `windows-*` family plus that
 four-crate proc-macro closure by name, and fails the build on anything else.
 The list is closed, not a category — a new name gets added only with a written
 reason, so "it's just a build dependency" cannot become a loophole.
+
+### 3.2 Target platform and instruction set
+
+**Windows 11 (build 22000 or later), x86-64, AVX required.** One
+architecture, one OS floor. Everything else — x86 hosts, ARM64 machines,
+Windows 10 — is an unsupported configuration rather than an untested one,
+and the difference matters: an unsupported configuration is one we
+deliberately decline to ship into, so it gets a clear refusal at install
+time instead of a subtly broken IME.
+
+What the narrowing buys, in order of how much it is worth:
+
+- **The ARM64X problem disappears.** A hybrid ARM64X DLL is a link-time
+  merge of paired ARM64 and ARM64EC objects that cargo cannot produce, with
+  essentially no Rust prior art. It was the largest unpriced risk in the
+  plan and it is now simply out of scope.
+- **AVX is a floor, not a branch.** The whole workspace is built with
+  `-C target-feature=+avx` (`.cargo/config.toml`), so 128-bit and 256-bit
+  vector code needs no run-time guard and no scalar twin to fall back to.
+  AVX shipped in Sandy Bridge (2011) and every CPU Microsoft supports for
+  Windows 11 has it, so the floor costs no real users.
+- **Above the floor, dispatch is dynamic.** AVX2 (256-bit integer) and
+  AVX-512BW (512-bit) are detected once per process with `CPUID` and
+  reached through a resolved function pointer, never through a per-call
+  feature test. Every such kernel has a scalar reference implementation
+  that is the definition of correct, and a test that asserts each kernel
+  available on the machine running the tests agrees with it byte for byte.
+  A vector kernel that disagrees with the scalar one is a corruption bug in
+  the user's text, so this is the one place in the codebase where "the fast
+  path and the slow path must be observably identical" is a hard rule.
+
+**When the detection happens: once, at startup, before any work.** The
+engine resolves its ISA tier in the first few statements of `main` —
+before the pipe is created, before the dictionary is mapped — and stores
+the answer in a `OnceLock` that every later dispatch reads. Three reasons
+it is startup and not first use:
+
+1. **A per-call `is_x86_feature_detected!` is a branch on the hot path.**
+   The macro caches its answer, but the cached load and test still sit
+   inside the width normalizer, which runs on every string the engine
+   emits. Resolving a function pointer once moves that cost to a place
+   where nothing is waiting on it.
+2. **The startup log gets to name the tier.** "avx512bw" or "avx2" in the
+   first line of the log turns "why is it slower on my machine?" into a
+   question with an answer, and makes a benchmark number reproducible
+   without asking the reporter to identify their CPU.
+3. **A missing baseline should fail loudly and immediately**, not on
+   whichever keystroke first reaches vector code. If AVX is absent the
+   engine refuses to start with a message naming the requirement rather
+   than dying of `SIGILL` somewhere unattributable.
+
+That last check is a backstop and is honestly labelled as one: because the
+whole binary is compiled with `+avx`, a machine without AVX may fault
+before `main` ever runs. Setup's install-time gate (§12.2) is the check
+that actually protects users; the startup check catches the remaining case
+of files copied onto a machine that never ran the installer.
+
+Where SIMD is *not* used is worth stating too, because the temptation is to
+vectorize what is measurable rather than what is slow. A keystroke carries
+one to three bytes; there is nothing there to vectorize, and the per-key
+budget in §10 is dominated by IPC and TSF, not by arithmetic. The kernels
+live where the byte counts are actually large: the width choke point
+(§5.6), which every string leaving the engine passes through, and — from
+M1 — dictionary search over the LOUDS trie and the connection matrix.
 
 ---
 
@@ -938,10 +1004,20 @@ workflow). Its commands:
 
 ### 12.2 Install / uninstall flow
 
-Install (`[Files]` + `[Run]`, in order): copy per-arch payload (x64 +
-x86 + ARM64X DLLs, exes, `dict\system.dic`, third-party license texts
-for the dictionary data) → `regtool --register` →
+Install (`[Files]` + `[Run]`, in order): check the CPU (below) → copy the
+x64 payload (DLL, exes, `dict\system.dic`, third-party license texts for
+the dictionary data) → `regtool --register --no-wow64` →
 `regtool --enable-profile`.
+
+The CPU check comes first because it is the one precondition that cannot
+be repaired after the fact. Setup calls
+`IsProcessorFeaturePresent(PF_AVX_INSTRUCTIONS_AVAILABLE)` and refuses to
+install on a machine without AVX (§3.2), naming the reason. The
+alternative — installing and letting the DLL fault on its first
+instruction inside every process that loads it — would present as the
+user's applications crashing, with nothing pointing at the IME.
+`MinVersion=10.0.22000` in `[Setup]` enforces the Windows 11 floor the
+same way, and there is no x86 or ARM64 payload to install at all.
 
 Uninstall ordering is safety-critical — a stale TSF registration
 pointing at a deleted DLL bricks text input — and Inno's
@@ -1039,7 +1115,8 @@ uninstall → verify typing still works.
 | TSF-in-Rust has little public prior art (references are C++) | M0 exists solely to retire this; COM classes via the `windows` crate's `implement`; Mozc/SampleIME patterns ported by reading |
 | Hand-rolling parsers/codecs/tries enlarges the bug surface | Every hand-rolled format gets round-trip property tests + a fuzzer (§11); formats are fixed-layout and boring by design |
 | Trimmed lexicon degrades general Japanese | Accuracy corpus keeps a general slice with a hard floor (§11); learning + user dictionary recover the long tail per user |
-| ARM64X hybrid DLL: cargo cannot produce it — needs a bespoke MSVC `link /MACHINE:ARM64X` merge of paired ARM64+ARM64EC objects, with ~zero Rust prior art | Explicit spike with a documented fallback (native-ARM64-only DLL; x64-emulated hosts on ARM64 unsupported until proven); never on a milestone's critical path |
+| An unsupported CPU turns a compile-time AVX baseline into an illegal-instruction fault inside the user's applications | Setup refuses to install without AVX (§12.2) and the engine re-checks once at startup (§3.2); the fault can only be reached by copying files past both gates |
+| A vector kernel disagreeing with the scalar one silently corrupts the user's text | Every kernel is differential-tested against the scalar reference over exhaustive ASCII and a fuzz corpus, on whichever tier the test machine has; CI runs at least AVX2 (§3.2) |
 | Windows feature updates silently wipe third-party TSF registrations | Logon-stub self-check re-registers on every logon (§12.1) — the risk is retired continuously, not once at release |
 | Hard latency gates on shared CI runners are chronically flaky | Absolute budgets asserted on a dedicated reference runner; shared CI gates relative regressions only (§10) |
 

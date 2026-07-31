@@ -19,11 +19,34 @@ const EXIT_FAILED: i32 = 1;
 /// logon task and a manual launch can race, and the loser should be quiet
 /// about it rather than leave a failure in the task scheduler's history.
 const EXIT_ALREADY_RUNNING: i32 = 2;
+/// This machine is below the instruction-set baseline the binary was built
+/// for (DESIGN 3.2).
+const EXIT_UNSUPPORTED_CPU: i32 = 3;
 
 fn main() {
     let verbose = std::env::args().skip(1).any(|arg| arg == "--verbose");
     if verbose {
         attach_parent_console();
+    }
+
+    // Before the pipe, before the dictionary, before anything can be waiting
+    // on the answer: which vector kernels this machine gets, decided once
+    // (DESIGN 3.2). Naming the tier in the log is what makes a later
+    // "why is it slower here?" a question with an answer.
+    match sakura_core::cpu::startup() {
+        Ok(tier) => {
+            if verbose {
+                eprintln!("sakura-engine: vector kernels: {}", tier.name());
+            }
+        }
+        Err(error) => {
+            // The installer refuses to install on such a machine, so
+            // reaching this means the files were copied here by hand.
+            if verbose {
+                eprintln!("sakura-engine: {error}");
+            }
+            std::process::exit(EXIT_UNSUPPORTED_CPU);
+        }
     }
 
     std::process::exit(match run(verbose) {
