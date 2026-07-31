@@ -64,6 +64,23 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`. Verified here on
   2026-07-31: it does.
 
+- **A `cargo test` filter that ends in `::` makes an unquoted YAML `run:`
+  line unparseable, and GitHub reports it as anything but a syntax error.**
+  `run: cargo test -p sakura-core --lib -- simd:: --nocapture` puts a colon
+  immediately before a space, which is YAML's mapping separator: the file
+  stops parsing at that line (`mapping values are not allowed here`, line 56
+  column 54). What GitHub then showed was **the whole workflow having no
+  triggers** — `gh run list` named the run `.github/workflows/ci.yml` instead
+  of `CI`, it ran **zero jobs**, `gh run view --log-failed` said "log not
+  found", and `gh workflow run ci.yml` refused with HTTP 422 *"Workflow does
+  not have 'workflow_dispatch' trigger"* about a file that plainly has one.
+  Recognise that signature: it means unparseable, not misconfigured.
+
+  Quote any `run:` value containing `: `. And parse workflow files locally
+  before pushing — `~/tmp/yamlvenv/Scripts/python.exe` has `pyyaml` for
+  exactly this; a red run is a cheap way to find out, but a run that never
+  starts teaches nothing on its own.
+
 - **A sandbox test that does not prove it is sandboxed proves nothing.** A
   test that connects to the pipe "from an AppContainer" passes just as
   happily when the AppContainer was never applied. The child must assert
