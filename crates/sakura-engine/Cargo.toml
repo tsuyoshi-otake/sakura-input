@@ -22,7 +22,17 @@ sakura-proto.workspace = true
 # attaching a console under --verbose.
 [dependencies.windows]
 workspace = true
-features = ["Win32_Foundation", "Win32_System_Console"]
+# Win32_Security, Win32_Security_Isolation, and Win32_System_Threading are
+# used only by tests/appcontainer.rs, which builds a real AppContainer token
+# via CreateProcessW's PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES to prove
+# DESIGN 7's sandboxed-access claim against a token Windows actually built.
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Isolation",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+]
 
 [lints]
 workspace = true
