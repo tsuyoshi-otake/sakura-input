@@ -138,6 +138,13 @@ Fixed by having the run state its own scope: a step re-runs `simd::` with
 owner's decision that AVX-512 is verified locally stands, and that local run
 was performed: `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`.
 
+The step paid for itself on its first green run, which drew a **third**
+processor in three runs — an Intel Xeon Platinum 8573C — and printed
+`["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`. So that run really did
+cover AVX-512 in CI, and for the first time the log says so instead of leaving
+it to be guessed from a processor name. Two AMD generations and an Intel one
+inside an hour is a wider pool than "the CI runner" as a phrase suggests.
+
 Distilled → `rules.md` (replacing the wrong version of the rule outright,
 rather than appending a correction beside it).
 
