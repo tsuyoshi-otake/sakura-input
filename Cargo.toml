@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sakura-core",
+    "crates/sakura-proto",
+    "crates/sakura-reg",
+    "crates/sakura-tsf",
+    "crates/sakura-engine",
+    "crates/sakura-renderer",
+    "crates/sakura-regtool",
+    "crates/sakura-settings",
+    "crates/dictc",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "MIT"
+repository = "https://github.com/tsuyoshi-otake/sakura-input"
+authors = ["Sakura Input contributors"]
+
+# Dependency policy (DESIGN.md 3.1): the only external crates permitted in a
+# shipping binary are the Windows binding family (`windows`, `windows-core`,
+# `windows-sys` and their `windows-*` support crates, which are transitive
+# dependencies of `windows` itself). CI enforces this with ci/dep-policy.ps1.
+[workspace.dependencies]
+sakura-core = { path = "crates/sakura-core" }
+sakura-proto = { path = "crates/sakura-proto" }
+sakura-reg = { path = "crates/sakura-reg" }
+windows-core = "0.62"
+windows = "0.62"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
+
+[profile.release]
+panic = "abort"
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+strip = true
+incremental = false
+
+# The DLL loads into every host process and has a hard 1 MB budget
+# (DESIGN.md 10), so it optimizes for size while the engine optimizes for speed.
+[profile.release.package.sakura-tsf]
+opt-level = "z"
+
+[profile.dev]
+panic = "unwind"

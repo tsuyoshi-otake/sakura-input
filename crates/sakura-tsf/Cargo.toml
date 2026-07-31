@@ -1,0 +1,52 @@
+[package]
+name = "sakura-tsf"
+description = "Sakura Input TSF text service (in-process COM DLL)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "sakura_tsf"
+crate-type = ["cdylib"]
+
+[dependencies]
+sakura-proto.workspace = true
+sakura-reg.workspace = true
+windows-core.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    # `ITfProperty::SetValue` carries the display-attribute atom in a VARIANT,
+    # and the VARIANT binding is gated behind both of these.
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_System_Pipes",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_TextServices",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Globalization",
+]
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+
+# The DLL runs inside every host application: a panic here is the user's
+# document dying (DESIGN.md 3.1, "no unwrap in the DLL").
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "warn"
+undocumented_unsafe_blocks = "warn"

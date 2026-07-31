@@ -1,0 +1,19 @@
+[package]
+name = "dictc"
+description = "Dictionary compiler: TSV sources to the read-only mmap image (stub until Phase 2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "dictc"
+path = "src/main.rs"
+
+[dependencies]
+sakura-core.workspace = true
+
+[lints]
+workspace = true

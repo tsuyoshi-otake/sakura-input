@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # A dependency that resolves differently in CI than on a developer's machine
+  # is a supply-chain surprise, so the lockfile is authoritative here.
+  CARGO_NET_LOCKED: "true"
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the version and the extra i686 target, so
+      # rustup provisions exactly what the workspace declares.
+      - name: Show toolchain
+        run: |
+          rustup show
+          cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      # The release profile is where panic=abort and fat LTO apply, and both
+      # have broken builds that were green in debug. It is a gate, not a bonus.
+      - name: Build release
+        run: cargo build --workspace --release
+
+      # 32-bit host applications load the x86 DLL, so it has to keep compiling
+      # even while nothing else in the workspace targets x86.
+      - name: Build x86 DLL
+        run: cargo build -p sakura-tsf --release --target i686-pc-windows-msvc
+
+  dependency-policy:
+    name: Dependency policy
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Proves the gate can still fail before trusting it to pass.
+      - name: Self-test the gate
+        shell: pwsh
+        run: ./ci/dep-policy.ps1 -SelfTest
+
+      - name: Enforce the full-scratch rule
+        shell: pwsh
+        run: ./ci/dep-policy.ps1
+
+  # Fuzzing is sharded so a long campaign is wall-clock bounded, and each shard
+  # is seeded from its index so a failure names a reproducible seed rather than
+  # "it happened once". Kept off pull requests: it is a soak, not a gate.
+  fuzz:
+    name: Fuzz (shard ${{ matrix.shard }})
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      SAKURA_FUZZ_ITERS: "2000000"
+      SAKURA_FUZZ_SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Fuzz the protocol decoders
+        run: cargo test -p sakura-proto --release -- --ignored --nocapture
