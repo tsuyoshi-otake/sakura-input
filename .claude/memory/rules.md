@@ -52,10 +52,16 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   | `e829ff9` | AMD EPYC 9V74 (Zen 4) | AVX-512 | not printed |
   | `577a550` | Intel Xeon Platinum 8573C | AVX-512 | **`tier avx512bw`** |
   | `6905660` | AMD EPYC 9V74 (Zen 4) | AVX-512 | **`tier avx2`** |
+  | `173c216` | AMD EPYC 7763 (Zen 3) | no AVX-512 | **`tier avx2`** |
 
-  The last row is the point. Zen 4 has AVX-512 in silicon, and this runner
+  The fourth row is the point. Zen 4 has AVX-512 in silicon, and that runner
   still reports `avx2` — the hypervisor does not expose it to the guest.
-  `is_x86_feature_detected!` knows that; a datasheet does not.
+  `is_x86_feature_detected!` knows that; a datasheet does not. The fifth row
+  is the same lesson from the other side: an inference that happened to be
+  right is still not a measurement until the log prints one.
+
+  Of five runs, three printed a kernel list and **one** covered AVX-512. Treat
+  CI coverage of that kernel as occasional, never as given.
 
 - **`windows-latest` is not one machine, so a green CI run's differential
   SIMD coverage is not a fixed quantity.** Four runs of one workflow inside
