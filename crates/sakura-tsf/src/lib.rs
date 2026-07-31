@@ -22,6 +22,7 @@ mod class_factory;
 mod composition;
 mod display_attributes;
 mod edit_session;
+mod engine;
 mod exports;
 mod key_handler;
 mod text_service;

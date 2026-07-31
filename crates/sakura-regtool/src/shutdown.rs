@@ -16,7 +16,7 @@
 
 use std::time::{Duration, Instant};
 
-use sakura_ipc::{pipe_name, Client, Fault};
+use sakura_ipc::{pipe_name, Client, Fault, PATIENT_CONNECT};
 use sakura_proto::{Request, Response};
 use windows::core::HRESULT;
 use windows::Win32::Foundation::ERROR_FILE_NOT_FOUND;
@@ -37,7 +37,7 @@ pub fn stop(budget: Duration) -> Result<Outcome, String> {
     let deadline = Instant::now() + budget;
     let name = pipe_name().map_err(|error| format!("cannot name the engine's pipe: {error}"))?;
 
-    let mut client = match Client::connect_to(&name) {
+    let mut client = match Client::connect_to(&name, PATIENT_CONNECT) {
         Ok(client) => client,
         Err(error) if is_absent(&error) => return Ok(Outcome::NotRunning),
         Err(error) => return Err(format!("cannot reach the engine: {error}")),
@@ -59,7 +59,7 @@ pub fn stop(budget: Duration) -> Result<Outcome, String> {
     drop(client);
 
     while Instant::now() < deadline {
-        match Client::connect_to(&name) {
+        match Client::connect_to(&name, PATIENT_CONNECT) {
             Err(error) if is_absent(&error) => return Ok(Outcome::Stopped),
             // Still there — either the process is winding down, or another
             // instance is still accepting. Either way, not gone yet.
@@ -103,7 +103,7 @@ mod tests {
         // Guard: if something on this machine is serving the pipe, the
         // assertion below would be testing the opposite case.
         let name = pipe_name().expect("a pipe name");
-        if Client::connect_to(&name).is_ok() {
+        if Client::connect_to(&name, PATIENT_CONNECT).is_ok() {
             return;
         }
         assert_eq!(stop(Duration::from_millis(500)), Ok(Outcome::NotRunning));

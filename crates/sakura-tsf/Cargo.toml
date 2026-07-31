@@ -13,6 +13,7 @@ name = "sakura_tsf"
 crate-type = ["cdylib"]
 
 [dependencies]
+sakura-ipc.workspace = true
 sakura-proto.workspace = true
 sakura-reg.workspace = true
 windows-core.workspace = true

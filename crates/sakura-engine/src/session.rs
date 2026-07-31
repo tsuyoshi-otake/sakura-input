@@ -171,22 +171,32 @@ fn truncate_to_fit(s: &str, cap: usize) -> &str {
     &s[..end]
 }
 
-/// A fixed-capacity, allocation-free map from [`SessionId`] to [`Session`].
+/// A fixed-capacity map from [`SessionId`] to [`Session`], allocation-free
+/// once built.
 ///
-/// Backed by `[Option<(SessionId, Session)>; MAX_SESSIONS]` rather than a
-/// `HashMap` — this crate's whole point is a bounded, allocation-free
-/// footprint per connection (DESIGN 5.7, DESIGN 10's 15 MB budget), and a
-/// `HashMap` is exactly the unbounded-growth, heap-backed structure that
-/// contradicts it. It is also not `sakura_proto::FixedVec<(SessionId,
-/// Session), N>`: `FixedVec` requires `T: Copy + Default` so that an empty
-/// slot needs no drop handling, and `Session` holds a `FixedStr` (`Clone`,
-/// not `Copy`, so that cloning stays an explicit, visible cost — see
-/// [`Session`]'s docs). An array of `Option` needs no such bound and costs
-/// nothing extra: a `None` slot is exactly as cheap as an unused `FixedVec`
-/// slot would have been.
+/// Backed by exactly [`MAX_SESSIONS`] slots rather than a `HashMap` — this
+/// crate's whole point is a bounded footprint per connection (DESIGN 5.7,
+/// DESIGN 10's 15 MB budget), and a `HashMap` is exactly the
+/// unbounded-growth structure that contradicts it. The slots are not
+/// `sakura_proto::FixedVec<(SessionId, Session), N>` either: `FixedVec`
+/// requires `T: Copy + Default` so that an empty slot needs no drop
+/// handling, and `Session` holds a `FixedStr` (`Clone`, not `Copy`, so that
+/// cloning stays an explicit, visible cost — see [`Session`]'s docs). A
+/// slice of `Option` needs no such bound and costs nothing extra: a `None`
+/// slot is exactly as cheap as an unused `FixedVec` slot would have been.
+///
+/// The slots live in a boxed slice rather than an inline
+/// `[Option<(SessionId, Session)>; MAX_SESSIONS]`. Sixty-four sessions each
+/// holding a preedit-sized [`FixedStr`] is ~107 KB, and inline that lands
+/// wherever the table is built — including on the 128 KB pipe-worker stack
+/// `crate::server` deliberately reserves, which it overflowed. Bounded is
+/// the promise; *inline* was never part of it. One allocation happens here,
+/// at connection setup, and never again: `SendKey` still touches nothing but
+/// already-owned memory, which is what `tests/zero_alloc_dispatch.rs`
+/// measures.
 #[derive(Debug)]
 pub struct SessionTable {
-    slots: [Option<(SessionId, Session)>; MAX_SESSIONS],
+    slots: Box<[Option<(SessionId, Session)>]>,
     len: usize,
     /// The id the *next* `create` will hand out. Monotonic for the whole
     /// life of the table: never reset, never reused, even for an id whose
@@ -200,8 +210,16 @@ impl SessionTable {
     /// "no session" sentinel if it ever needs one without that colliding
     /// with a real id.
     pub fn new() -> Self {
+        // Grown through a `Vec` rather than boxing an array literal:
+        // `Box::new([...; MAX_SESSIONS])` builds the whole ~107 KB array in
+        // the caller's frame first and only then copies it to the heap, and
+        // that temporary is what has to not exist here (see the type's
+        // docs). `resize_with` writes each slot straight into the heap
+        // buffer `with_capacity` already reserved.
+        let mut slots = Vec::with_capacity(MAX_SESSIONS);
+        slots.resize_with(MAX_SESSIONS, || None);
         SessionTable {
-            slots: core::array::from_fn(|_| None),
+            slots: slots.into_boxed_slice(),
             len: 0,
             next_id: 1,
         }
@@ -272,7 +290,7 @@ impl SessionTable {
     /// this id must keep failing with `UnknownSession` forever, not start
     /// resolving against whatever session happens to reuse the number.
     pub fn delete(&mut self, id: SessionId) -> bool {
-        for slot in &mut self.slots {
+        for slot in self.slots.iter_mut() {
             if matches!(slot, Some((sid, _)) if *sid == id) {
                 *slot = None;
                 self.len -= 1;
@@ -290,7 +308,7 @@ impl SessionTable {
     /// gone, but the id counter keeps counting up regardless, for the same
     /// stale-id-must-not-resolve reason `delete` never reuses one.
     pub fn clear(&mut self) {
-        for slot in &mut self.slots {
+        for slot in self.slots.iter_mut() {
             *slot = None;
         }
         self.len = 0;
