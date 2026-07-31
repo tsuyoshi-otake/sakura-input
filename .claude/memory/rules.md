@@ -46,13 +46,37 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   an **AMD EPYC 7763** (Zen 3): AVX and AVX2, but **no AVX-512**. The
   development machine is a Ryzen 7 9700X (Zen 5), which has AVX-512BW. The
   `simd::` agreement tests only exercise kernels the host actually supports,
-  so the AVX-512 kernel has **no CI coverage at all** and is verified only
-  locally. Say so rather than reporting the criterion as blanket-verified.
+  so the AVX-512 kernel has **no CI coverage at all**.
+
+  **This is an accepted decision, not an open gap** (owner's call, 2026-07-31):
+  AVX-512 is verified locally and CI is not to be extended to cover it. So the
+  standing obligation is to *run* `cargo test -p sakura-core --lib -- simd::
+  --nocapture` on this machine before releasing anything that touches the
+  kernels, and to confirm the printed list actually reads
+  `["scalar", "avx", "avx2", "avx512"]` — a green CI run is not evidence about
+  AVX-512 and must never be quoted as if it were.
 
 - **A sandbox test that does not prove it is sandboxed proves nothing.** A
   test that connects to the pipe "from an AppContainer" passes just as
   happily when the AppContainer was never applied. The child must assert
   `TokenIsAppContainer` on its own token before it does anything else.
+
+- **A test that leaks a watchdog corrupts the *next* run, not its own.**
+  `tests/watchdog_recovery.rs` kills the engine and waits for the renderer to
+  restart it, with a no-renderer control phase to prove nothing ambient does
+  the restarting. An early version leaked its renderer, and the following
+  run saw an engine reappear 12.75 s after the kill — about one
+  `WATCH_BUDGET` — with no renderer of its own started. The control's 5 s
+  window missed it, so the test would have passed for entirely the wrong
+  reason. Two fixes, both structural: refuse to start when **any** Sakura
+  process is running (a renderer holds no pipe, so only the process list
+  finds it), and tear down the watchdog *before* the thing it watches, or it
+  dutifully restarts what the teardown just stopped.
+
+- **Verify a test can fail before believing it passed.** Commenting out the
+  renderer spawn made `watchdog_recovery` fail after 30 s with the intended
+  message. Without that run, "it passed" would have been indistinguishable
+  from "it cannot fail".
 
 ## Windows specifics
 
