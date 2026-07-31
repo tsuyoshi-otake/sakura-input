@@ -14,24 +14,15 @@ path = "src/main.rs"
 
 [dependencies]
 sakura-core.workspace = true
+sakura-ipc.workspace = true
 sakura-proto.workspace = true
-windows-core.workspace = true
 
+# The engine itself touches almost no Win32: the pipe — creation, security,
+# framing — lives in sakura-ipc. What is left is reading an error code and
+# attaching a console under --verbose.
 [dependencies.windows]
 workspace = true
-features = [
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_Security_Authorization",
-    "Win32_System_Memory",
-    "Win32_System_Pipes",
-    "Win32_System_Threading",
-    "Win32_System_IO",
-    "Win32_System_SystemServices",
-    "Win32_System_RemoteDesktop",
-    "Win32_System_Console",
-    "Win32_Storage_FileSystem",
-]
+features = ["Win32_Foundation", "Win32_System_Console"]
 
 [lints]
 workspace = true

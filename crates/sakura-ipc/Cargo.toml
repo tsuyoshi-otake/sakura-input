@@ -1,0 +1,29 @@
+[package]
+name = "sakura-ipc"
+description = "The named pipe between the TSF DLL, the engine and the tools: naming, security, framing, and both ends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+sakura-proto.workspace = true
+windows-core.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+    "Win32_System_IO",
+    "Win32_System_SystemServices",
+]
+
+[lints]
+workspace = true
