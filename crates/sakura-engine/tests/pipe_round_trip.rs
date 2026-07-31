@@ -209,6 +209,41 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
         }
         other => panic!("expected Output on the second connection, got {other:?}"),
     }
+
+    // What the renderer does. `since: 0` is nobody's revision, so this is
+    // answered from the engine's current state without blocking.
+    let mut renderer = engine.client();
+    let seen = match renderer.call(&Request::WatchUi { since: 0 }, PATIENT) {
+        Ok(Response::Ui(state)) => state.revision,
+        other => panic!("WatchUi: expected Ui, got {other:?}"),
+    };
+
+    // A mode key on the typing connection has to reach the watcher on the
+    // renderer's connection — which is the entire reason the UI board is
+    // the one piece of engine state that is not per-connection.
+    match next.call(
+        &Request::SendKey {
+            session: next_session,
+            key: named_key(KeyCode::Muhenkan),
+        },
+        PATIENT,
+    ) {
+        Ok(Response::Output(output)) => {
+            assert!(
+                output.mode.is_some(),
+                "無変換 is bound to mode_kana_toggle and must report the new mode"
+            );
+        }
+        other => panic!("Muhenkan: expected Output, got {other:?}"),
+    }
+
+    match renderer.call(&Request::WatchUi { since: seen }, PATIENT) {
+        Ok(Response::Ui(state)) => {
+            assert_ne!(state.revision, seen, "the mode change did not reach the UI");
+            assert!(state.mode.is_some(), "a mode change must name a mode");
+        }
+        other => panic!("WatchUi after a mode change: expected Ui, got {other:?}"),
+    }
 }
 
 /// What a text service would draw: every segment's text, in order.

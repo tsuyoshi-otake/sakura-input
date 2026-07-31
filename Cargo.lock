@@ -79,6 +79,7 @@ dependencies = [
 name = "sakura-renderer"
 version = "0.1.0"
 dependencies = [
+ "sakura-ipc",
  "sakura-proto",
  "windows",
  "windows-core",

@@ -46,7 +46,7 @@ pub mod wire;
 pub use fixed::{FixedStr, FixedVec, Overflow};
 pub use message::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
-    Header, Request, Response,
+    Header, Request, Response, UiState,
 };
 pub use output::{OutputBuf, SegSpan};
 pub use types::{
@@ -90,3 +90,7 @@ pub type SessionId = u64;
 /// Identifies one request, for stale-response correlation (see the crate
 /// docs' "Wire format" section).
 pub type RequestId = u64;
+
+/// Identifies one version of the UI state the renderer draws (see
+/// [`UiState`]). Monotonic for the life of the engine.
+pub type Revision = u64;

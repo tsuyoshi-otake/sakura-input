@@ -18,9 +18,9 @@
 //! correlation ids a late reply to a timed-out request would be
 //! mis-attributed to the next one).
 
-use crate::types::{ErrorCode, InputScope, KeyInput, Output};
+use crate::types::{ErrorCode, InputScope, KeyInput, Mode, Output};
 use crate::wire::{Reader, Sink, VecSink};
-use crate::{RequestId, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
+use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
 
 // Re-exported so `sakura_proto::message::Error` and `sakura_proto::Error`
 // both name the one error type used across the whole crate.
@@ -36,6 +36,7 @@ pub(crate) const REQ_SET_INPUT_SCOPE: u16 = 0x0006;
 pub(crate) const REQ_DELETE_SESSION: u16 = 0x0007;
 pub(crate) const REQ_PING: u16 = 0x0008;
 pub(crate) const REQ_SHUTDOWN: u16 = 0x0009;
+pub(crate) const REQ_WATCH_UI: u16 = 0x000A;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -46,6 +47,7 @@ pub(crate) const RES_SESSION_CREATED: u16 = 0x8002;
 pub(crate) const RES_OUTPUT: u16 = 0x8003;
 pub(crate) const RES_PONG: u16 = 0x8004;
 pub(crate) const RES_OK: u16 = 0x8005;
+pub(crate) const RES_UI: u16 = 0x8006;
 pub(crate) const RES_ERROR: u16 = 0x80FF;
 
 /// A message sent from a client (the TSF DLL) to the engine.
@@ -73,6 +75,25 @@ pub enum Request {
     Ping,
     /// Asks the engine to flush state and exit.
     Shutdown,
+    /// Asks for the UI state, but not before it differs from `since`.
+    ///
+    /// This is how the renderer learns what to draw (DESIGN 8's mode
+    /// indicator). It is a long poll, not a subscription: the engine holds
+    /// the reply until [`UiState::revision`] moves past `since`, or until a
+    /// heartbeat interval passes, and answers [`Response::Ui`] either way.
+    ///
+    /// Long poll rather than a push channel because the transport is one
+    /// reply per request in both directions (see the module docs' frame
+    /// layout), and rather than fixed-interval polling because a mode
+    /// indicator that woke a laptop ten times a second to be told nothing
+    /// changed would cost more battery than the entire rest of the IME.
+    /// The heartbeat is what makes engine death observable: a renderer
+    /// whose long poll stops coming back knows to restart it (DESIGN 4.3's
+    /// watchdog).
+    ///
+    /// `since` of 0 means "answer immediately with whatever is current",
+    /// which is what a renderer that just connected wants.
+    WatchUi { since: Revision },
 }
 
 /// A message sent from the engine back to a client.
@@ -91,8 +112,51 @@ pub enum Response {
     Pong,
     /// A generic success acknowledgement (e.g. for `Commit`/`Revert`).
     Ok,
+    /// Answers `Request::WatchUi` with what the renderer should draw.
+    Ui(UiState),
     /// The request could not be fulfilled.
     Error(ErrorCode),
+}
+
+/// What the renderer draws, and the revision that identifies it.
+///
+/// Deliberately not a session's state. The renderer draws one indicator for
+/// the whole logon session, because that is what the user sees — one caret,
+/// in one focused field, at a time — while the engine keeps a mode per
+/// session, one per focused field in every running application. This is the
+/// mode of whichever session most recently changed one, which is the same
+/// thing as "the mode of the field the user is typing in" for as long as
+/// only one field can have the caret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UiState {
+    /// Increments on every change. A renderer passes the last one it saw
+    /// back as `Request::WatchUi { since }`; the engine answers when this
+    /// has moved past it.
+    ///
+    /// Starts at 1, so `since: 0` is always stale and always answers at
+    /// once — that is a fresh renderer asking "what is true right now?".
+    pub revision: Revision,
+    /// The mode to show, or `None` when no field is composing and the
+    /// indicator should be hidden.
+    pub mode: Option<Mode>,
+    /// The engine is shutting down deliberately, and whoever is watching
+    /// should shut down too rather than treat the closing pipe as a crash.
+    ///
+    /// This exists because the renderer is the engine's watchdog (DESIGN
+    /// 3): when the pipe breaks it restarts the engine. That is right when
+    /// the engine crashed and catastrophic during an uninstall, where
+    /// `sakura_regtool --stop` has just asked it to exit and the installer
+    /// is about to delete the very file the watchdog would relaunch — and
+    /// a relaunched engine holds that file open, so the delete fails too.
+    /// The two cases are indistinguishable from the broken pipe alone,
+    /// which is why the intent is announced *before* the pipe breaks.
+    ///
+    /// It rides on the UI state rather than getting a message of its own
+    /// because the renderer is already parked in a `WatchUi` call, and
+    /// DESIGN 11 specifies `--stop` as asking the engine *and the renderer*
+    /// to exit over the pipe — the renderer only holds the client end, so
+    /// the request can only reach it as an answer to something it asked.
+    pub stopping: bool,
 }
 
 /// The fixed-layout header shared by every payload, decoded without
@@ -181,6 +245,7 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::DeleteSession { .. } => REQ_DELETE_SESSION,
         Request::Ping => REQ_PING,
         Request::Shutdown => REQ_SHUTDOWN,
+        Request::WatchUi { .. } => REQ_WATCH_UI,
     }
 }
 
@@ -201,6 +266,7 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
         Request::DeleteSession { session } => w.write_u64(*session),
         Request::Ping => Ok(()),
         Request::Shutdown => Ok(()),
+        Request::WatchUi { since } => w.write_u64(*since),
     }
 }
 
@@ -211,6 +277,7 @@ fn response_msg_type(res: &Response) -> u16 {
         Response::Output(_) => RES_OUTPUT,
         Response::Pong => RES_PONG,
         Response::Ok => RES_OK,
+        Response::Ui(_) => RES_UI,
         Response::Error(_) => RES_ERROR,
     }
 }
@@ -230,6 +297,11 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
         Response::Output(out) => out.encode(w),
         Response::Pong => Ok(()),
         Response::Ok => Ok(()),
+        Response::Ui(ui) => {
+            w.write_u64(ui.revision)?;
+            w.write_option(&ui.mode, |w, mode| mode.encode(w))?;
+            w.write_bool(ui.stopping)
+        }
         Response::Error(code) => code.encode(w),
     }
 }
@@ -290,6 +362,9 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
         },
         REQ_PING => Request::Ping,
         REQ_SHUTDOWN => Request::Shutdown,
+        REQ_WATCH_UI => Request::WatchUi {
+            since: r.read_u64()?,
+        },
         other => return Err(Error::BadMsgType(other)),
     };
     r.finish()?;
@@ -322,6 +397,16 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         RES_OUTPUT => Response::Output(Output::decode(&mut r)?),
         RES_PONG => Response::Pong,
         RES_OK => Response::Ok,
+        RES_UI => {
+            let revision = r.read_u64()?;
+            let mode = r.read_option(Mode::decode)?;
+            let stopping = r.read_bool()?;
+            Response::Ui(UiState {
+                revision,
+                mode,
+                stopping,
+            })
+        }
         RES_ERROR => Response::Error(ErrorCode::decode(&mut r)?),
         other => return Err(Error::BadMsgType(other)),
     };

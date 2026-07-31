@@ -16,18 +16,22 @@
 //! because a lock held across a blocking pipe read is how one wedged host
 //! application freezes typing in every other one.
 //!
-//! The cost of share-nothing is that cross-session state — the input
-//! history that later phases use to bias conversion (DESIGN 5.4) — cannot
-//! live here. That is deliberate: it will be one explicitly synchronized
-//! component with its own lock discipline, rather than a shared mutable
-//! engine that every connection happens to reach through.
+//! The cost of share-nothing is that cross-session state cannot live here.
+//! That is deliberate: such state arrives as an explicitly synchronized
+//! component with its own lock discipline, rather than as a shared mutable
+//! engine that every connection happens to reach through. [`crate::ui`]'s
+//! board is the first — the renderer has to be told about a mode change
+//! that happened on somebody else's connection — and the input history that
+//! later phases use to bias conversion (DESIGN 5.4) will be the next.
 //!
 //! # Shutdown
 //!
 //! `Request::Shutdown` is answered first and acted on second, so the client
-//! that asked gets its acknowledgement. The reply is flushed, then the
-//! process exits — threads blocked in `ConnectNamedPipe` cannot be polled
-//! awake, and inventing a wakeup channel to unblock them would buy nothing:
+//! that asked gets its acknowledgement. The reply is flushed, the renderer
+//! is told this was deliberate rather than a crash (see
+//! [`crate::ui::UiBoard::stop`]), then the process exits — threads blocked
+//! in `ConnectNamedPipe` cannot be polled awake, and inventing a wakeup
+//! channel to unblock them would buy nothing:
 //! there is nothing to persist in this phase, and when there is (the
 //! learning store, DESIGN 4.3) it will be flushed on its own schedule
 //! rather than at exit, precisely so that a crash loses no more than a
@@ -36,14 +40,16 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
+use std::time::Duration;
 
 use sakura_proto::{
-    encode_response, peek_header, ErrorCode, OutputBuf, RequestId, Response, MAX_FRAME,
+    encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
 };
 
 use sakura_ipc::{security, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 
 use crate::dispatch::{Dispatcher, Reply};
+use crate::ui::UiBoard;
 
 /// Everything a worker thread needs that is not its own pipe instance.
 #[derive(Debug)]
@@ -56,6 +62,8 @@ struct Shared {
     idle: AtomicU32,
     /// Set once, when a client asks the engine to stop.
     shutdown: Sender<()>,
+    /// What the renderer draws. The one thing every connection shares.
+    ui: UiBoard,
     verbose: bool,
 }
 
@@ -82,6 +90,7 @@ impl Server {
                 created: AtomicU32::new(0),
                 idle: AtomicU32::new(0),
                 shutdown,
+                ui: UiBoard::new(),
                 verbose,
             }),
             stopped,
@@ -106,9 +115,26 @@ impl Server {
         // so `recv` returns either when a client asks for shutdown or when
         // every worker is gone.
         let _ = self.stopped.recv();
+        // Tell the renderer this was deliberate before the pipe breaks
+        // under it, and hold the exit open just long enough for that to
+        // reach the wire. Without it the renderer's watchdog sees only a
+        // dead engine and restarts the one `--stop` just stopped — which
+        // during an uninstall means relaunching the file being deleted.
+        self.shared.ui.stop();
+        self.shared.ui.settle(SHUTDOWN_GRACE);
         Ok(())
     }
 }
+
+/// How long the engine holds its own exit open for watchers to collect the
+/// shutdown announcement.
+///
+/// Long enough for a scheduler round trip and a pipe write on a loaded
+/// machine, short enough that a renderer which has stopped reading cannot
+/// make an uninstall look hung. It is a ceiling, not a delay: with nothing
+/// outstanding — the usual case, since the renderer is normally the only
+/// watcher and there is often none — the wait ends immediately.
+const SHUTDOWN_GRACE: Duration = Duration::from_millis(250);
 
 /// How much stack each pipe-instance thread reserves.
 ///
@@ -185,7 +211,7 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance) {
 
         ensure_spare_instance(&shared);
 
-        match serve(&instance, &mut dispatcher, &mut connection) {
+        match serve(&shared, &instance, &mut dispatcher, &mut connection) {
             Outcome::Closed => {}
             Outcome::Failed(fault) => report(&shared, format_args!("{fault}")),
             Outcome::Shutdown => {
@@ -258,7 +284,12 @@ impl Buffers {
 }
 
 /// Serves one connected client until it disconnects or misbehaves.
-fn serve(instance: &PipeInstance, dispatcher: &mut Dispatcher, bufs: &mut Buffers) -> Outcome {
+fn serve(
+    shared: &Shared,
+    instance: &PipeInstance,
+    dispatcher: &mut Dispatcher,
+    bufs: &mut Buffers,
+) -> Outcome {
     loop {
         let payload = match instance.read_frame(&mut bufs.read) {
             Ok(payload) => payload,
@@ -296,8 +327,32 @@ fn serve(instance: &PipeInstance, dispatcher: &mut Dispatcher, bufs: &mut Buffer
             }
         };
 
+        // `WatchUi` never reaches the dispatcher. It is answered from state
+        // shared by every connection, and it *blocks* — two things the
+        // dispatcher's module docs rule out on purpose (no clocks, nothing
+        // shared), and both of which belong to this layer.
+        if let Request::WatchUi { since } = request {
+            // `delivery` is held across the write and dropped straight
+            // after, which is what lets a shutdown wait for the farewell to
+            // reach the wire instead of racing the process teardown.
+            let (state, delivery) = shared.ui.wait_past(since);
+            let written = send(instance, &Response::Ui(state), id, &mut bufs.reply);
+            drop(delivery);
+            if let Err(fault) = written {
+                return end(fault);
+            }
+            continue;
+        }
+
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
+                // The protocol sets this only when the mode actually
+                // changed, which is what the indicator exists to announce
+                // (DESIGN 8) — so this lock is taken on a mode key, never
+                // on an ordinary character.
+                if let Some(mode) = bufs.out.mode {
+                    shared.ui.publish(mode);
+                }
                 let written = match bufs.out.encode_frame(id, &mut bufs.frame) {
                     Ok(written) => written,
                     Err(error) => {

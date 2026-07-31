@@ -13,6 +13,7 @@ name = "sakura_renderer"
 path = "src/main.rs"
 
 [dependencies]
+sakura-ipc.workspace = true
 sakura-proto.workspace = true
 windows-core.workspace = true
 
