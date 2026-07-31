@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/sakura-core",
     "crates/sakura-proto",
+    "crates/sakura-ipc",
     "crates/sakura-reg",
     "crates/sakura-tsf",
     "crates/sakura-engine",
@@ -27,6 +28,7 @@ authors = ["Sakura Input contributors"]
 [workspace.dependencies]
 sakura-core = { path = "crates/sakura-core" }
 sakura-proto = { path = "crates/sakura-proto" }
+sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
 windows-core = "0.62"
 windows = "0.62"

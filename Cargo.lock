@@ -39,6 +39,15 @@ name = "sakura-engine"
 version = "0.1.0"
 dependencies = [
  "sakura-core",
+ "sakura-ipc",
+ "sakura-proto",
+ "windows",
+]
+
+[[package]]
+name = "sakura-ipc"
+version = "0.1.0"
+dependencies = [
  "sakura-proto",
  "windows",
  "windows-core",
@@ -60,10 +69,10 @@ dependencies = [
 name = "sakura-regtool"
 version = "0.1.0"
 dependencies = [
+ "sakura-ipc",
  "sakura-proto",
  "sakura-reg",
  "windows",
- "windows-core",
 ]
 
 [[package]]
