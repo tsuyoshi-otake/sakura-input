@@ -158,6 +158,12 @@ the mistake was the same shape — reading a name and concluding a capability.
 The two rows I had marked from the datasheet were never measurements, and are
 now recorded as unknown rather than quietly left as "yes".
 
+A fifth run (`173c216`) drew an EPYC 7763 and printed `tier avx2`, which is the
+same lesson from the friendlier side: the Zen 3 guess turned out right, and it
+was still a guess until the log printed it. Tally so far — five runs, three
+with a printed kernel list, **one** covering AVX-512. That kernel's CI
+coverage is occasional, which is exactly why it is verified locally.
+
 Distilled → `rules.md` (replacing the wrong version of the rule outright, twice
 now, rather than appending a correction beside it).
 
