@@ -1,0 +1,30 @@
+[package]
+name = "sakura-reg"
+description = "Single source of truth for Sakura Input GUIDs and TSF/COM registration."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+windows-core.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_Foundation",
+    # RegCreateKeyExW takes a SECURITY_ATTRIBUTES pointer, so its binding is
+    # gated behind Win32_Security even though registration passes None.
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Registry",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_TextServices",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Globalization",
+]
+
+[lints]
+workspace = true

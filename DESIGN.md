@@ -250,6 +250,18 @@ The rule governs shipping *runtime* binaries. Build and packaging tooling
 is exempt — in particular, the installer is Inno Setup (§12), because
 commodity install machinery is not worth reimplementing.
 
+Because it is a *linked-code* rule, procedural-macro crates are exempt too.
+`#[implement]` and `#[interface]` — the machinery that makes TSF COM classes
+possible in Rust at all — arrive as `windows-implement` and
+`windows-interface`, which pull in `proc-macro2`, `quote`, `syn` and
+`unicode-ident`. Those four compile for the *host*, run once at build time to
+emit source text, and contribute no bytes to any shipped artifact. They
+therefore appear in `Cargo.lock` and never in a binary. `ci/dep-policy.ps1`
+encodes exactly this distinction: it allows the `windows-*` family plus that
+four-crate proc-macro closure by name, and fails the build on anything else.
+The list is closed, not a category — a new name gets added only with a written
+reason, so "it's just a build dependency" cannot become a loophole.
+
 ---
 
 ## 4. Platform integration layer (Windows / TSF)

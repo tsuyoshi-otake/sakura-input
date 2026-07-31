@@ -1,0 +1,18 @@
+[package]
+name = "sakura-core"
+description = "Platform-free conversion engine core: romaji FSM, width policy, key map, session state machine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# Only `sakura-proto`, which is itself dependency-free: this crate must build
+# and be testable on any platform (DESIGN.md 1, "portable core"). A `windows`
+# dependency here is a design violation, not an oversight.
+[dependencies]
+sakura-proto.workspace = true
+
+[lints]
+workspace = true
