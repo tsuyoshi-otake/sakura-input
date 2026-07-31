@@ -68,6 +68,38 @@ passed. Distilled → `rules.md`.
 - No orphaned processes after every run, checked by process listing rather
   than by the test command returning.
 
+### The watchdog had never actually been watched
+
+`watch.rs` unit-tests the *rule* (`decide` → Launch / Wait / GiveUp) and stops
+there on purpose, because a unit test that really started an engine would
+seize the pipe a developer's live IME is using. Nothing had ever checked the
+other half: that a running renderer notices a dead engine and starts another.
+That is the half the crash-resilience criterion actually promises, and its
+failure mode is not a stutter — the IME is gone until the next logon.
+
+`crates/sakura-renderer/tests/watchdog_recovery.rs` now does it end to end,
+with a control phase first (kill the engine with no renderer, and the pipe
+must stay dead) so that the recovery is attributable to the renderer rather
+than to anything ambient. Measured: **recovery in ~100 ms**, consistently
+across three back-to-back runs, and the restarted engine composes さ rather
+than merely answering the pipe.
+
+Two things went wrong on the way, both worth keeping:
+
+- Deliberately removing the renderer made it fail after 30 s with the intended
+  message — which is the only reason "it passed" means anything.
+- One anomalous run recovered at 12.75 s with **no renderer started by the
+  test**. That is roughly one `WATCH_BUDGET` (15 s), and the explanation is a
+  renderer leaked by the previous run still sitting in its long poll. The
+  control's 5 s window missed it entirely. Fixed by refusing to start when any
+  Sakura process is running — a renderer holds no pipe, so the pipe probe
+  cannot see it and only process enumeration can — and by killing the renderer
+  *before* shutting the engine down, since a live watchdog restarts whatever
+  the teardown stops. The test now also asserts nothing is left running.
+
+AVX-512 CI coverage was raised and closed as an accepted decision: verified
+locally, CI is not to be extended for it.
+
 ### Left manual on purpose
 
 Typing matrix (Notepad / Windows Terminal / Chrome), elevated host, crash
