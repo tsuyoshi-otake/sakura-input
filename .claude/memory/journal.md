@@ -141,6 +141,23 @@ was performed: `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`.
 Distilled → `rules.md` (replacing the wrong version of the rule outright,
 rather than appending a correction beside it).
 
+And the fix itself broke CI, in a way worth more than the fix. The new step's
+command ends in the test filter `simd::`, and unquoted in YAML that is a colon
+immediately before a space — the mapping separator. The file stopped parsing
+at that line. GitHub never said so: the run appeared named
+`.github/workflows/ci.yml` rather than `CI`, ran zero jobs, had no log to
+fetch, and `gh workflow run` rejected a dispatch with *"Workflow does not have
+'workflow_dispatch' trigger"* about a file whose seventh line is
+`workflow_dispatch:`. Every symptom pointed at configuration; the cause was
+syntax.
+
+Found it by reading the diff for what YAML would object to rather than by
+hunting for a missing trigger, then confirmed with a parser: `mapping values
+are not allowed here`, line 56, column 54. Quoted the value. Validated both
+workflow files locally before pushing again, and checked the validator
+actually rejects the committed broken one first — a checker nobody has seen
+fail is not a checker. Distilled → `rules.md`.
+
 ### Left manual on purpose
 
 Typing matrix (Notepad / Windows Terminal / Chrome), elevated host, crash

@@ -52,8 +52,15 @@ jobs:
       # ISA the run actually exercised, so a reader can check rather than
       # assume. It does not *require* any particular kernel: AVX-512 is
       # verified locally by decision, and this step only reports.
+      #
+      # Quoted, and it has to be: the filter `simd::` puts a colon directly
+      # before a space, which is YAML's mapping separator, so unquoted this
+      # one line makes the whole file unparseable. GitHub does not report
+      # that as a syntax error on line 56 — it reports the workflow as
+      # having no triggers at all, names the run after the file path instead
+      # of `CI`, and runs zero jobs.
       - name: Name the SIMD kernels this runner exercised
-        run: cargo test -p sakura-core --lib -- simd:: --nocapture
+        run: "cargo test -p sakura-core --lib -- simd:: --nocapture"
 
       # DESIGN 7's sandboxed-access claim (the pipe's DACL and low-integrity
       # label must let a real AppContainer token connect and round-trip a
