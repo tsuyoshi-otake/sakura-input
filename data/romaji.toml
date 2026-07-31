@@ -1,0 +1,378 @@
+# Romaji → kana input table (DESIGN 5.1).
+#
+# Each entry maps a romaji sequence to the kana it produces. A plain string is
+# the whole output; a two-element list is `[output, carry]`, where the carry is
+# re-fed to the FSM as if the user had typed it — that is how `tt` becomes っ
+# followed by a pending `t`.
+#
+# The FSM matches longest-first with backtracking, so an entry that is a prefix
+# of a longer one waits: `n` alone is ん, but only once the next key rules out
+# `na`, `ni`, `nn` and the rest.
+#
+# Lookup is case-insensitive for ASCII. Whether a capital letter reaches the
+# FSM at all is a mode decision made a layer up, not a property of this table.
+#
+# The table is user-overridable, which is also how AZIK and other custom
+# layouts are supported without any code (DESIGN 5.1).
+#
+# Deliberately absent, so that the shipped default matches Microsoft IME
+# conventions (a user who wants them can add them to their own table):
+#   - the `z`-prefix arrow shortcuts (`zh` → ←) from ATOK and Google IME
+#   - the archaic kana `ゐ` / `ゑ`
+
+[kana]
+
+# --- Vowels ---
+a = "あ"
+i = "い"
+u = "う"
+e = "え"
+o = "お"
+
+# --- K ---
+ka = "か"
+ki = "き"
+ku = "く"
+ke = "け"
+ko = "こ"
+kya = "きゃ"
+kyi = "きぃ"
+kyu = "きゅ"
+kye = "きぇ"
+kyo = "きょ"
+kwa = "くぁ"
+kwi = "くぃ"
+kwu = "くぅ"
+kwe = "くぇ"
+kwo = "くぉ"
+ca = "か"
+ci = "し"
+cu = "く"
+ce = "せ"
+co = "こ"
+
+# --- G ---
+ga = "が"
+gi = "ぎ"
+gu = "ぐ"
+ge = "げ"
+go = "ご"
+gya = "ぎゃ"
+gyi = "ぎぃ"
+gyu = "ぎゅ"
+gye = "ぎぇ"
+gyo = "ぎょ"
+gwa = "ぐぁ"
+gwi = "ぐぃ"
+gwu = "ぐぅ"
+gwe = "ぐぇ"
+gwo = "ぐぉ"
+
+# --- S ---
+sa = "さ"
+si = "し"
+su = "す"
+se = "せ"
+so = "そ"
+sha = "しゃ"
+shi = "し"
+shu = "しゅ"
+she = "しぇ"
+sho = "しょ"
+sya = "しゃ"
+syi = "しぃ"
+syu = "しゅ"
+sye = "しぇ"
+syo = "しょ"
+swa = "すぁ"
+swi = "すぃ"
+swu = "すぅ"
+swe = "すぇ"
+swo = "すぉ"
+
+# --- Z ---
+za = "ざ"
+zi = "じ"
+zu = "ず"
+ze = "ぜ"
+zo = "ぞ"
+zya = "じゃ"
+zyi = "じぃ"
+zyu = "じゅ"
+zye = "じぇ"
+zyo = "じょ"
+ja = "じゃ"
+ji = "じ"
+ju = "じゅ"
+je = "じぇ"
+jo = "じょ"
+jya = "じゃ"
+jyi = "じぃ"
+jyu = "じゅ"
+jye = "じぇ"
+jyo = "じょ"
+
+# --- T ---
+ta = "た"
+ti = "ち"
+tu = "つ"
+te = "て"
+to = "と"
+chi = "ち"
+cha = "ちゃ"
+chu = "ちゅ"
+che = "ちぇ"
+cho = "ちょ"
+cya = "ちゃ"
+cyi = "ちぃ"
+cyu = "ちゅ"
+cye = "ちぇ"
+cyo = "ちょ"
+tya = "ちゃ"
+tyi = "ちぃ"
+tyu = "ちゅ"
+tye = "ちぇ"
+tyo = "ちょ"
+tha = "てゃ"
+thi = "てぃ"
+thu = "てゅ"
+the = "てぇ"
+tho = "てょ"
+twa = "とぁ"
+twi = "とぃ"
+twu = "とぅ"
+twe = "とぇ"
+two = "とぉ"
+tsa = "つぁ"
+tsi = "つぃ"
+tsu = "つ"
+tse = "つぇ"
+tso = "つぉ"
+
+# --- D ---
+da = "だ"
+di = "ぢ"
+du = "づ"
+de = "で"
+do = "ど"
+dya = "ぢゃ"
+dyi = "ぢぃ"
+dyu = "ぢゅ"
+dye = "ぢぇ"
+dyo = "ぢょ"
+dha = "でゃ"
+dhi = "でぃ"
+dhu = "でゅ"
+dhe = "でぇ"
+dho = "でょ"
+dwa = "どぁ"
+dwi = "どぃ"
+dwu = "どぅ"
+dwe = "どぇ"
+dwo = "どぉ"
+
+# --- N ---
+# `n` is the reason the FSM backtracks rather than matching greedily: it is a
+# complete entry and a prefix of five others at the same time.
+na = "な"
+ni = "に"
+nu = "ぬ"
+ne = "ね"
+no = "の"
+nya = "にゃ"
+nyi = "にぃ"
+nyu = "にゅ"
+nye = "にぇ"
+nyo = "にょ"
+n = "ん"
+nn = "ん"
+"n'" = "ん"
+xn = "ん"
+# `nn` has to keep waiting even though it is already a complete entry, or
+# `minna` comes out みんあ: the second `n` of `nn` is both the end of ん and the
+# start of `na`. Spelling out `nna`..`nnyo` is what lets the same two keys mean
+# both — `nn` + Enter commits ん, while `nn` + a vowel becomes ん plus the
+# な-row kana. This is why `konnichiha` types こんにちは and not こんいちは.
+nna = "んな"
+nni = "んに"
+nnu = "んぬ"
+nne = "んね"
+nno = "んの"
+nnya = "んにゃ"
+nnyi = "んにぃ"
+nnyu = "んにゅ"
+nnye = "んにぇ"
+nnyo = "んにょ"
+
+# --- H / F ---
+ha = "は"
+hi = "ひ"
+hu = "ふ"
+he = "へ"
+ho = "ほ"
+hya = "ひゃ"
+hyi = "ひぃ"
+hyu = "ひゅ"
+hye = "ひぇ"
+hyo = "ひょ"
+fa = "ふぁ"
+fi = "ふぃ"
+fu = "ふ"
+fe = "ふぇ"
+fo = "ふぉ"
+fya = "ふゃ"
+fyi = "ふぃ"
+fyu = "ふゅ"
+fye = "ふぇ"
+fyo = "ふょ"
+fwa = "ふぁ"
+fwi = "ふぃ"
+fwu = "ふぅ"
+fwe = "ふぇ"
+fwo = "ふぉ"
+
+# --- B ---
+ba = "ば"
+bi = "び"
+bu = "ぶ"
+be = "べ"
+bo = "ぼ"
+bya = "びゃ"
+byi = "びぃ"
+byu = "びゅ"
+bye = "びぇ"
+byo = "びょ"
+
+# --- P ---
+pa = "ぱ"
+pi = "ぴ"
+pu = "ぷ"
+pe = "ぺ"
+po = "ぽ"
+pya = "ぴゃ"
+pyi = "ぴぃ"
+pyu = "ぴゅ"
+pye = "ぴぇ"
+pyo = "ぴょ"
+
+# --- M ---
+ma = "ま"
+mi = "み"
+mu = "む"
+me = "め"
+mo = "も"
+mya = "みゃ"
+myi = "みぃ"
+myu = "みゅ"
+mye = "みぇ"
+myo = "みょ"
+
+# --- Y ---
+ya = "や"
+yi = "い"
+yu = "ゆ"
+ye = "いぇ"
+yo = "よ"
+
+# --- R ---
+ra = "ら"
+ri = "り"
+ru = "る"
+re = "れ"
+ro = "ろ"
+rya = "りゃ"
+ryi = "りぃ"
+ryu = "りゅ"
+rye = "りぇ"
+ryo = "りょ"
+
+# --- W ---
+wa = "わ"
+wi = "うぃ"
+wu = "う"
+we = "うぇ"
+wo = "を"
+wha = "うぁ"
+whi = "うぃ"
+whu = "う"
+whe = "うぇ"
+who = "うぉ"
+
+# --- V ---
+va = "ゔぁ"
+vi = "ゔぃ"
+vu = "ゔ"
+ve = "ゔぇ"
+vo = "ゔぉ"
+vya = "ゔゃ"
+vyi = "ゔぃ"
+vyu = "ゔゅ"
+vye = "ゔぇ"
+vyo = "ゔょ"
+
+# --- Small kana (`x` and `l` prefixes) ---
+xa = "ぁ"
+xi = "ぃ"
+xu = "ぅ"
+xe = "ぇ"
+xo = "ぉ"
+la = "ぁ"
+li = "ぃ"
+lu = "ぅ"
+le = "ぇ"
+lo = "ぉ"
+xya = "ゃ"
+xyi = "ぃ"
+xyu = "ゅ"
+xye = "ぇ"
+xyo = "ょ"
+lya = "ゃ"
+lyi = "ぃ"
+lyu = "ゅ"
+lye = "ぇ"
+lyo = "ょ"
+xtu = "っ"
+xtsu = "っ"
+ltu = "っ"
+ltsu = "っ"
+xwa = "ゎ"
+lwa = "ゎ"
+xka = "ヵ"
+xke = "ヶ"
+lka = "ヵ"
+lke = "ヶ"
+
+# --- Sokuon by doubled consonant ---
+# The doubled consonant emits っ and hands the consonant back to the FSM, so
+# `kekka` runs け → っ(carry k) → か.
+#
+# `nn` is absent on purpose: it is ん, and always has been. `ll` and `xx` are
+# absent because `l` and `x` introduce small kana rather than a consonant.
+kk = ["っ", "k"]
+ss = ["っ", "s"]
+tt = ["っ", "t"]
+hh = ["っ", "h"]
+ff = ["っ", "f"]
+mm = ["っ", "m"]
+yy = ["っ", "y"]
+rr = ["っ", "r"]
+ww = ["っ", "w"]
+gg = ["っ", "g"]
+zz = ["っ", "z"]
+jj = ["っ", "j"]
+dd = ["っ", "d"]
+bb = ["っ", "b"]
+pp = ["っ", "p"]
+cc = ["っ", "c"]
+vv = ["っ", "v"]
+
+# --- Punctuation ---
+# Kuten and touten are produced in their Japanese form here and re-styled at
+# the width/punctuation choke point (DESIGN 5.6), so `punctuation_style` has a
+# single place to act rather than a second table to keep in sync.
+"-" = "ー"
+"," = "、"
+"." = "。"
+"/" = "・"
+"[" = "「"
+"]" = "」"

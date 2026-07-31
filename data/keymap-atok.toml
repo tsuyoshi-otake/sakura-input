@@ -1,0 +1,104 @@
+# The `atok` key map preset — the alternative (DESIGN 2 "Key map").
+#
+# ATOK's layout for the keys where it genuinely differs from Microsoft IME,
+# and Microsoft IME's everywhere else. The deviations are listed here rather
+# than left for a reader to diff out:
+#
+#   - 無変換 cycles ひらがな → カタカナ → 半角カタカナ instead of toggling
+#     two forms.
+#   - Ctrl+N / Ctrl+P move through candidates, ATOK's long-standing
+#     alternative to the arrow keys.
+#   - Ctrl+A / Ctrl+E move the caret to the start and end of the preedit.
+#   - Shift+Space steps backwards through candidates while converting, the
+#     same as in the ms-ime preset.
+#
+# Most of what people mean by "ATOK behaviour" is engine behaviour rather
+# than key bindings — how segments are guessed, how candidates are ordered,
+# how learning weights a pick — and none of that belongs in a key map. What
+# is here is only the keys.
+#
+# Everything the ms-ime preset documents about syntax, scopes and matching
+# applies unchanged.
+
+[global]
+hankaku_zenkaku = "ime_toggle"
+"alt+`" = "ime_toggle"
+kana_mode = "mode_kana_toggle"
+
+[idle]
+muhenkan = "mode_kana_cycle"
+henkan = "reconvert"
+"ctrl+backspace" = "undo_commit"
+
+[composing]
+space = "convert"
+henkan = "convert"
+enter = "commit"
+"shift+enter" = "commit_first"
+escape = "cancel"
+tab = "predict_next"
+"shift+tab" = "predict_prev"
+down = "predict_next"
+up = "predict_prev"
+backspace = "delete_back"
+delete = "delete_forward"
+left = "caret_left"
+right = "caret_right"
+home = "caret_home"
+end = "caret_end"
+"ctrl+a" = "caret_home"
+"ctrl+e" = "caret_end"
+muhenkan = "mode_kana_cycle"
+f6 = "transform_hiragana"
+f7 = "transform_katakana"
+f8 = "transform_half_katakana"
+f9 = "transform_full_alnum"
+f10 = "transform_half_alnum"
+"ctrl+u" = "transform_hiragana"
+"ctrl+i" = "transform_katakana"
+"ctrl+o" = "transform_half_katakana"
+"ctrl+p" = "transform_full_alnum"
+"ctrl+t" = "transform_half_alnum"
+
+[converting]
+space = "candidate_next"
+henkan = "candidate_next"
+"shift+space" = "candidate_prev"
+down = "candidate_next"
+up = "candidate_prev"
+# Ctrl+N / Ctrl+P take priority over the transform spellings here, so while
+# converting, Ctrl+P steps back through candidates and F9 is the only way to
+# reach the full-width alphanumeric transform. Composing keeps Ctrl+P as the
+# transform, where there are no candidates to step through.
+"ctrl+n" = "candidate_next"
+"ctrl+p" = "candidate_prev"
+page_down = "candidate_page_down"
+page_up = "candidate_page_up"
+tab = "candidate_expand"
+enter = "commit"
+escape = "cancel"
+backspace = "cancel"
+left = "segment_prev"
+right = "segment_next"
+"shift+left" = "segment_shrink"
+"shift+right" = "segment_grow"
+f6 = "transform_hiragana"
+f7 = "transform_katakana"
+f8 = "transform_half_katakana"
+f9 = "transform_full_alnum"
+f10 = "transform_half_alnum"
+"ctrl+u" = "transform_hiragana"
+"ctrl+i" = "transform_katakana"
+"ctrl+o" = "transform_half_katakana"
+"ctrl+t" = "transform_half_alnum"
+
+[predicting]
+tab = "predict_next"
+"shift+tab" = "predict_prev"
+down = "predict_next"
+up = "predict_prev"
+enter = "commit"
+escape = "cancel"
+space = "convert"
+henkan = "convert"
+backspace = "delete_back"
