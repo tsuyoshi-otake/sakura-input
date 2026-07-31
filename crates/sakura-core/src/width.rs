@@ -14,6 +14,7 @@
 //! [`TextSink`]. It knows nothing about romaji, dictionaries, or TSF — only
 //! Unicode code points and the two settings that govern them.
 
+use crate::simd;
 use crate::text::TextSink;
 use sakura_proto::{Mode, Overflow};
 
@@ -107,16 +108,113 @@ impl Normalizer {
     /// expected to size its buffer for the traffic it carries, and a
     /// half-normalized string left in the sink is strictly more useful to a
     /// caller than silently dropping the tail would be.
+    ///
+    /// Most text arrives already in the width the policy wants — a half-width
+    /// policy changes no ASCII at all, and kana and kanji are outside the
+    /// policy's reach — so this does not walk characters it has nothing to
+    /// say about. [`simd`] finds each run of bytes that will come out
+    /// unchanged and the run is copied in one move, leaving the
+    /// character-at-a-time path for the characters that actually change.
+    /// Observably this is identical to mapping [`Normalizer::normalize_char`]
+    /// over `src.chars()`, which is what the tests assert.
+    ///
+    /// # What that is worth
+    ///
+    /// Nanoseconds per call, per-character loop → this, best of seven runs on
+    /// an AVX-512 machine (`tests/width_bench.rs`):
+    ///
+    /// | text | half-width policy (the default) | every channel full-width |
+    /// |------|--------------------------------:|-------------------------:|
+    /// | one keystroke | 1.7 → 2.1 | 1.6 → 2.8 |
+    /// | a 45-byte shell command | 55 → 10 | 62 → 75 |
+    /// | 90 bytes of Japanese prose | 54 → 58 | 54 → 59 |
+    /// | 84 bytes of mixed Japanese and ASCII | 76 → 50 | 77 → 79 |
+    ///
+    /// The left column is what ships, and the command line is the case this
+    /// exists for: five times faster, because an engineer's committed text is
+    /// mostly ASCII the policy has nothing to say about. Everything else is
+    /// within a nanosecond or two either way.
+    ///
+    /// The right column is the price of the guard when *no* ASCII survives
+    /// the policy, so every run is empty and the scan is pure overhead —
+    /// around 20% of a cost measured in tens of nanoseconds, against a
+    /// per-keystroke budget of 5 ms (DESIGN 10). It is a real regression, and
+    /// it is knowingly accepted: the configuration that pays it is the opt-in
+    /// one, and the configuration that gains is the shipped one.
+    #[inline]
     pub fn normalize_into(
         &self,
         src: &str,
         mode: Mode,
         dst: &mut impl TextSink,
     ) -> Result<(), Overflow> {
-        for c in src.chars() {
+        // Below one vector block there is nothing to amortize the scanner's
+        // setup over, and this is the shape the hot path actually has: a
+        // preedit is a handful of characters, and a keystroke is one. So the
+        // short case is handled *here*, in a body small enough to inline into
+        // the caller, and only longer strings pay for a call.
+        if src.len() < simd::MIN_VECTOR_BYTES {
+            for c in src.chars() {
+                dst.push(self.normalize_char(c, mode))?;
+            }
+            return Ok(());
+        }
+        self.normalize_runs(src, mode, dst)
+    }
+
+    /// The long-string half of [`Normalizer::normalize_into`], kept out of
+    /// line so that inlining the short case does not drag the scanner, the
+    /// dispatch, and the overflow-replay path into every call site.
+    fn normalize_runs(
+        &self,
+        src: &str,
+        mode: Mode,
+        dst: &mut impl TextSink,
+    ) -> Result<(), Overflow> {
+        // Resolved once per call rather than once per character: this is the
+        // whole of what the policy has to say about single-byte characters.
+        let lut = self.passthrough_lut(mode);
+        let mut rest = src;
+        while let Some(&first) = rest.as_bytes().first() {
+            // Asking whether a run *starts* here is a table lookup; asking
+            // how long it is may be a vector load. Japanese text stops a run
+            // at every character, so checking first is what keeps kana from
+            // paying vector cost to be told zero.
+            if simd::admits(lut, first) {
+                // Sound because a run only ever covers ASCII bytes, so both
+                // ends are character boundaries (see `simd`'s module docs).
+                let (run, tail) = rest.split_at(simd::passthrough_len(rest.as_bytes(), lut));
+                if dst.push_str(run).is_err() {
+                    // `push_str` is all-or-nothing, so nothing landed — and
+                    // this function promises the prefix that fits, not an
+                    // untouched sink. Replaying the run one character at a
+                    // time is what reproduces the documented behaviour.
+                    for c in run.chars() {
+                        dst.push(c)?;
+                    }
+                }
+                rest = tail;
+                continue;
+            }
+            // Walked with the iterator rather than re-sliced by index:
+            // `&src[at..]` re-validates a character boundary every time, and
+            // on Japanese text — where every single character takes this
+            // branch — that check costs more than the run scan saves.
+            let mut chars = rest.chars();
+            let c = chars.next().expect("`rest` is not empty");
             dst.push(self.normalize_char(c, mode))?;
+            rest = chars.as_str();
         }
         Ok(())
+    }
+
+    /// The set of single-byte characters this policy leaves alone in `mode`.
+    fn passthrough_lut(&self, mode: Mode) -> &'static simd::Lut {
+        simd::passthrough_lut(
+            wants_full(self.width.alnum, mode),
+            wants_full(self.width.number, mode),
+            wants_full(self.width.symbol, mode),
+        )
     }
 
     /// Normalizes one character. This is the entire policy in one pure
@@ -494,6 +592,168 @@ mod tests {
         for c in ['あ', 'ア', '漢', '𠮷', '🍣'] {
             assert_eq!(normalizer.normalize_char(c, Mode::Direct), c);
         }
+    }
+
+    /// Every normalizer worth building, so the agreement tests below cover
+    /// all eight passthrough tables rather than the default one.
+    fn every_normalizer() -> Vec<Normalizer> {
+        let widths = [Width::Half, Width::Full, Width::FollowMode];
+        let styles = [
+            PunctuationStyle::KutenTouten,
+            PunctuationStyle::CommaPeriod,
+            PunctuationStyle::Mixed,
+        ];
+        let mut all = Vec::new();
+        for alnum in widths {
+            for number in widths {
+                for symbol in widths {
+                    for punctuation in styles {
+                        all.push(Normalizer {
+                            width: WidthPolicy {
+                                alnum,
+                                number,
+                                symbol,
+                            },
+                            punctuation,
+                        });
+                    }
+                }
+            }
+        }
+        all
+    }
+
+    /// Text chosen to straddle every kernel's block size (16, 32 and 64
+    /// bytes) and to mix the cases that end a run — non-ASCII, punctuation,
+    /// characters the policy widens — with the ones that do not.
+    fn corpus() -> Vec<String> {
+        let mut all: Vec<String> = [
+            "",
+            "a",
+            "docker",
+            "、",
+            "。",
+            "，",
+            "．",
+            "こんにちは",
+            "ａｂｃ１２３",
+            "\u{3000}",
+            "🍣",
+            "\0\u{1}\u{7f}",
+            "日本語とEnglishが混ざったテキスト、句読点。",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+
+        for base in [
+            "abcdefghijklmnop",
+            "0123456789!@#$%^",
+            "あいうえお",
+            "aあ1、",
+            " \t\n",
+        ] {
+            for repeat in [1usize, 2, 3, 5, 9] {
+                all.push(base.repeat(repeat));
+            }
+        }
+        all
+    }
+
+    /// The run-based path must be observably identical to the definition it
+    /// replaced — [`Normalizer::normalize_char`] over every character. This
+    /// is the assertion that stands between a vector kernel and the user's
+    /// text, so it runs over every policy, every mode, and text long enough
+    /// to reach the widest kernel this machine has.
+    #[test]
+    fn normalize_into_agrees_with_normalize_char_everywhere() {
+        for normalizer in every_normalizer() {
+            for mode in Mode::ALL {
+                for src in corpus() {
+                    let expected: String = src
+                        .chars()
+                        .map(|c| normalizer.normalize_char(c, mode))
+                        .collect();
+                    let mut actual = String::new();
+                    normalizer
+                        .normalize_into(&src, mode, &mut actual)
+                        .expect("a String never overflows");
+                    assert_eq!(
+                        actual, expected,
+                        "{normalizer:?} in {mode:?} disagreed on {src:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The same agreement, driven by character value rather than by string
+    /// shape: every ASCII character in turn, buried in a long run so it is
+    /// classified by a vector kernel rather than by the scalar tail.
+    #[test]
+    fn every_ascii_character_survives_the_run_path_identically() {
+        let policies = [
+            Normalizer::default(),
+            Normalizer {
+                width: WidthPolicy {
+                    alnum: Width::Full,
+                    number: Width::Full,
+                    symbol: Width::Full,
+                },
+                punctuation: PunctuationStyle::CommaPeriod,
+            },
+        ];
+        for normalizer in policies {
+            for cp in 0u32..0x80 {
+                let c = char::from_u32(cp).expect("every ASCII code point is a character");
+                let src = format!("{}{c}{}", "x".repeat(40), "y".repeat(40));
+                let expected: String = src
+                    .chars()
+                    .map(|c| normalizer.normalize_char(c, Mode::Direct))
+                    .collect();
+                let mut actual = String::new();
+                normalizer
+                    .normalize_into(&src, Mode::Direct, &mut actual)
+                    .expect("a String never overflows");
+                assert_eq!(actual, expected, "{normalizer:?} disagreed on {c:?}");
+            }
+        }
+    }
+
+    /// A run that does not fit must still leave the prefix that does. The
+    /// bulk copy is all-or-nothing, so this is the case where the fast path
+    /// has to fall back to reproduce the documented semantics.
+    #[test]
+    fn an_overflowing_run_still_leaves_the_prefix_that_fits() {
+        let normalizer = Normalizer::default();
+        // Long enough to be one passthrough run rather than a few characters.
+        let mut dst = FixedStr::<20>::new();
+        let result =
+            normalizer.normalize_into("abcdefghijklmnopqrstuvwxyz", Mode::Direct, &mut dst);
+        assert_eq!(result, Err(Overflow));
+        assert_eq!(dst.as_str(), "abcdefghijklmnopqrst");
+    }
+
+    /// The same, for a run that ends mid-string because the *next* character
+    /// is transformed — the fallback must not lose the characters the run
+    /// already placed.
+    #[test]
+    fn overflow_after_a_completed_run_keeps_what_landed() {
+        let normalizer = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::Half,
+                number: Width::Half,
+                symbol: Width::Half,
+            },
+            punctuation: PunctuationStyle::KutenTouten,
+        };
+        // "abc" is a run; 、is three bytes and does not fit in the last one.
+        let mut dst = FixedStr::<4>::new();
+        assert_eq!(
+            normalizer.normalize_into("abc、d", Mode::Direct, &mut dst),
+            Err(Overflow)
+        );
+        assert_eq!(dst.as_str(), "abc");
     }
 
     #[test]

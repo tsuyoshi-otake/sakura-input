@@ -1,5 +1,8 @@
 [toolchain]
 channel = "1.96.0"
 components = ["rustfmt", "clippy"]
-targets = ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc"]
+# x86-64 only, by decision rather than by omission: DESIGN 3.2 puts 32-bit
+# hosts and ARM64 out of scope, so an i686 target here would provision a
+# toolchain for a build nothing is allowed to ship.
+targets = ["x86_64-pc-windows-msvc"]
 profile = "minimal"

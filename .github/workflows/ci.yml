@@ -19,12 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # rust-toolchain.toml pins the version and the extra i686 target, so
-      # rustup provisions exactly what the workspace declares.
-      - name: Show toolchain
+      # rust-toolchain.toml pins the version and the single x86-64 target, so
+      # rustup provisions exactly what the workspace declares. The CPU line
+      # matters as much as the toolchain line: the SIMD tests only exercise
+      # the kernels this runner's CPU actually supports, so a run that says
+      # "agreement holds" is only as broad as the ISA printed here.
+      - name: Show toolchain and CPU
+        shell: pwsh
         run: |
           rustup show
           cargo --version
+          (Get-CimInstance Win32_Processor).Name
 
       - uses: Swatinem/rust-cache@v2
 
@@ -41,11 +46,6 @@ jobs:
       # have broken builds that were green in debug. It is a gate, not a bonus.
       - name: Build release
         run: cargo build --workspace --release
-
-      # 32-bit host applications load the x86 DLL, so it has to keep compiling
-      # even while nothing else in the workspace targets x86.
-      - name: Build x86 DLL
-        run: cargo build -p sakura-tsf --release --target i686-pc-windows-msvc
 
   dependency-policy:
     name: Dependency policy

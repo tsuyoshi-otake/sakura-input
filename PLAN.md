@@ -92,10 +92,15 @@ Tasks, in order:
    `--enable-profile` / `--stop`.
 9. `installer/setup.iss` v0: files + regtool ordering (§12.2); CI builds
    the installer; VM-snapshot script: install → type → uninstall → type.
-10. Multi-arch: x86 DLL build; **ARM64X spike** (bespoke
-    `link /MACHINE:ARM64X` merge — unproven in Rust; fallback documented
-    in DESIGN §14). The spike's *conclusion* is the exit requirement,
-    not a working ARM64X binary.
+10. Single-arch + ISA baseline (DESIGN §3.2): x86-64 only —
+    `i686` and ARM64X are out of scope, so the ARM64X spike is
+    **cancelled**, not deferred. In its place: `-C target-feature=+avx`
+    workspace-wide; a `cpu` module that resolves the ISA tier **once at
+    engine startup** (AVX / AVX2 / AVX-512BW) and refuses to start
+    without AVX; AVX2 and AVX-512BW kernels for the width normalizer
+    behind that one resolved dispatch; and the installer's
+    `IsProcessorFeaturePresent` gate. Every kernel is differential-tested
+    against the scalar reference.
 
 Exit criteria:
 
@@ -111,6 +116,8 @@ Exit criteria:
 | Elevated host | manual: admin terminal / Notepad-as-admin | composition + candidate flow work |
 | Clean uninstall | VM script | typing intact afterwards (MS-IME fallback) |
 | DLL size | release artifact | ≤ 1 MB |
+| ISA baseline | `cargo test -p sakura-core cpu::` + engine startup log | tier resolved once and named in the log; AVX absent ⇒ refuse to start |
+| SIMD agreement | `cargo test -p sakura-core simd::` on the CI runner | every kernel the runner supports matches the scalar reference byte for byte |
 | No orphaned processes | list engine/test procs after test runs | none |
 
 ---
