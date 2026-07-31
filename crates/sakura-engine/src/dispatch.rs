@@ -171,6 +171,13 @@ impl Dispatcher {
             Request::DeleteSession { session } => self.delete_session(*session),
             Request::Ping => Reply::Message(Response::Pong),
             Request::Shutdown => Reply::Shutdown(Response::Ok),
+            // `crate::server` answers this before the request ever gets
+            // here, from state shared across connections and by blocking on
+            // a condition variable — a clock and a shared mutable, the two
+            // things this module's docs promise it does not have. Reaching
+            // this arm would mean that interception was removed, so it says
+            // so rather than inventing an answer.
+            Request::WatchUi { .. } => Reply::Message(Response::Error(ErrorCode::Internal)),
         }
     }
 

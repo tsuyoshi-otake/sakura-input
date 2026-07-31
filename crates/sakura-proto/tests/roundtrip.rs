@@ -6,7 +6,8 @@
 use sakura_proto::{
     decode_request, decode_response, encode_request, encode_response, payload_len, Error,
     ErrorCode, InputScope, KeyCode, KeyInput, Mode, Modifiers, Output, OutputBuf, Preedit, Request,
-    Response, Segment, UnderlineKind, FRAME_HEADER_LEN, MAX_STRING_BYTES, PROTOCOL_VERSION,
+    Response, Segment, UiState, UnderlineKind, FRAME_HEADER_LEN, MAX_STRING_BYTES,
+    PROTOCOL_VERSION,
 };
 
 /// Encodes `req`, decodes it back, and asserts the id and value match.
@@ -57,6 +58,8 @@ fn every_request_variant_roundtrips() {
         Request::DeleteSession { session: 1 },
         Request::Ping,
         Request::Shutdown,
+        Request::WatchUi { since: 0 },
+        Request::WatchUi { since: u64::MAX },
     ];
     for (i, req) in variants.iter().enumerate() {
         roundtrip_request(req, i as u64);
@@ -86,6 +89,25 @@ fn every_response_variant_roundtrips() {
         }),
         Response::Pong,
         Response::Ok,
+        Response::Ui(UiState {
+            revision: 1,
+            mode: Some(Mode::HalfAlnum),
+            stopping: false,
+        }),
+        // No mode means "hide the indicator", and it has to survive the
+        // wire as distinctly as any mode does.
+        Response::Ui(UiState {
+            revision: u64::MAX,
+            mode: None,
+            stopping: false,
+        }),
+        // The farewell. Losing this flag on the wire would turn an
+        // uninstall into a watchdog restarting the engine being removed.
+        Response::Ui(UiState {
+            revision: 2,
+            mode: Some(Mode::Hiragana),
+            stopping: true,
+        }),
         Response::Error(ErrorCode::Busy),
     ];
     for (i, res) in variants.iter().enumerate() {
