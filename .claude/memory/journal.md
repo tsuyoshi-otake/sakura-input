@@ -100,6 +100,47 @@ Two things went wrong on the way, both worth keeping:
 AVX-512 CI coverage was raised and closed as an accepted decision: verified
 locally, CI is not to be extended for it.
 
+### The sandbox claim, answered by a real token
+
+`sakura-ipc`'s pipe descriptor names both AppContainer SIDs, withholds
+`FILE_CREATE_PIPE_INSTANCE`, and carries a low mandatory label — three things
+whose unit tests only check the SDDL *string*. Nothing had handed that
+descriptor a token Windows built as an AppContainer, and every other test on
+this pipe connects from an ordinary desktop token, which cannot fail any of
+the three.
+
+`crates/sakura-engine/tests/appcontainer.rs` now launches a copy of its own
+binary through `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES` — the only way a
+process becomes an AppContainer — and the child asserts `TokenIsAppContainer`
+on itself before touching the pipe, because a launch that quietly produced an
+ordinary process would connect just as happily. Verified load-bearing by
+removing the attribute: it then fails at that assertion, never reaching
+`Client::connect`. Restored, green, and green on CI.
+
+It passes locally and on `windows-latest`, which also settles a question the
+file's own docs flagged as uncertain — a hosted runner *can* create an
+AppContainer profile and launch a sandboxed child.
+
+### CI's SIMD coverage was a coin flip, and the log did not say which side
+
+Recording "the CI runner is an EPYC 7763, so AVX-512 has no CI coverage" was
+wrong within the hour. The very next run came up **EPYC 9V74** — Zen 4, which
+has AVX-512. Same workflow, same repo, 37 minutes apart.
+
+The dangerous part was not the varying CPU but that `cargo test` captures
+stdout: the `simd::` tests print the kernel list they exercised, and neither
+run's log contained it. So a green CI run covered AVX-512 or did not, and
+nothing distinguished the two — the same defect as this repository's earlier
+workflow-that-never-ran, in a subtler place.
+
+Fixed by having the run state its own scope: a step re-runs `simd::` with
+`--nocapture` so the log names the kernels. Reporting, not requiring — the
+owner's decision that AVX-512 is verified locally stands, and that local run
+was performed: `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`.
+
+Distilled → `rules.md` (replacing the wrong version of the rule outright,
+rather than appending a correction beside it).
+
 ### Left manual on purpose
 
 Typing matrix (Notepad / Windows Terminal / Chrome), elevated host, crash
