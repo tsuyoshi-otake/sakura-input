@@ -12,9 +12,11 @@
 
 pub mod com_server;
 pub mod guids;
+pub mod launcher;
 pub mod module;
 pub mod profile;
 pub mod registry;
+pub mod user_profile;
 pub mod wide;
 
 use std::path::Path;
