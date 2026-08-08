@@ -36,6 +36,7 @@
 //!
 //! ```text
 //! cargo build --workspace
+//! set SAKURA_PHASE1_DICTIONARY=C:\path\to\system.dic
 //! cargo test -p sakura-renderer --test watchdog_recovery -- --ignored --nocapture
 //! ```
 //!
@@ -84,10 +85,11 @@ const PATIENT: Duration = Duration::from_secs(5);
 #[ignore = "starts, kills and restarts the engine singleton and puts a renderer on the desktop"]
 fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     refuse_if_anything_is_already_running();
+    let dictionary = required_dictionary();
 
     // ---- Control: no watchdog, so nothing should resurrect the engine ----
     {
-        let mut engine = Spawned::engine();
+        let mut engine = Spawned::engine(&dictionary);
         wait_until_serving("the engine this test started");
         engine.kill_now();
         wait_until_silent();
@@ -106,10 +108,10 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     }
 
     // ---- The real thing: the renderer is watching ----
-    let mut engine = Spawned::engine();
+    let mut engine = Spawned::engine(&dictionary);
     wait_until_serving("the engine this test started");
 
-    let mut renderer = Spawned::renderer();
+    let mut renderer = Spawned::renderer(&dictionary);
     // The renderer needs to have connected before the kill for this to be
     // the case we care about. It is not observable from outside the process,
     // so this settles rather than polls — and if it has *not* connected yet,
@@ -277,15 +279,19 @@ struct Spawned {
 }
 
 impl Spawned {
-    fn engine() -> Spawned {
-        Spawned::start("sakura_engine.exe", &engine_exe())
+    fn engine(dictionary: &std::path::Path) -> Spawned {
+        Spawned::start("sakura_engine.exe", &engine_exe(), dictionary)
     }
 
-    fn renderer() -> Spawned {
-        Spawned::start("sakura_renderer.exe", &PathBuf::from(RENDERER_EXE))
+    fn renderer(dictionary: &std::path::Path) -> Spawned {
+        Spawned::start(
+            "sakura_renderer.exe",
+            &PathBuf::from(RENDERER_EXE),
+            dictionary,
+        )
     }
 
-    fn start(what: &'static str, path: &std::path::Path) -> Spawned {
+    fn start(what: &'static str, path: &std::path::Path, dictionary: &std::path::Path) -> Spawned {
         assert!(
             path.exists(),
             "{what} is not at {}. Run `cargo build --workspace` first: the \
@@ -294,6 +300,7 @@ impl Spawned {
             path.display()
         );
         let child = Command::new(path)
+            .env("SAKURA_DICTIONARY", dictionary)
             .spawn()
             .unwrap_or_else(|error| panic!("could not start {what}: {error}"));
         Spawned {
@@ -329,6 +336,18 @@ fn engine_exe() -> PathBuf {
 }
 
 const RENDERER_EXE: &str = env!("CARGO_BIN_EXE_sakura_renderer");
+
+fn required_dictionary() -> PathBuf {
+    let value = std::env::var_os("SAKURA_PHASE1_DICTIONARY")
+        .expect("SAKURA_PHASE1_DICTIONARY must name a real release dictionary");
+    let path = PathBuf::from(value);
+    assert!(
+        path.is_file(),
+        "dictionary is not a file: {}",
+        path.display()
+    );
+    path
+}
 
 fn wait_until_serving(who: &str) {
     let deadline = Instant::now() + PATIENT;

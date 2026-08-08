@@ -1,0 +1,19 @@
+[package]
+name = "sakura-logon"
+description = "Per-user logon self-repair and process bootstrap for Sakura Input."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "sakura_logon"
+path = "src/main.rs"
+
+[dependencies]
+sakura-reg.workspace = true
+
+[lints]
+workspace = true

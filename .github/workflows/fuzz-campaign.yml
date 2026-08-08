@@ -1,0 +1,117 @@
+name: Phase 5 fuzz campaign
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_minutes:
+        description: Bounded time to add to each target/shard (max 300 recommended)
+        required: true
+        default: "300"
+      iterations_per_slice:
+        description: Deterministic cases per bounded test process
+        required: true
+        default: "2000000"
+      require_complete:
+        description: Fail unless the full 72-hour evidence gate passes
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase-5-fuzz-campaign
+  cancel-in-progress: false
+
+jobs:
+  campaign:
+    name: ${{ matrix.target }} / shard ${{ matrix.shard }}
+    runs-on: windows-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ipc, dictionary, fsm]
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+
+      # Each run gets an immutable cache key and restores the newest prior key
+      # for this exact target/shard. A cancelled process leaves run_status at
+      # "running"; the next invocation records that interruption as a failure
+      # instead of laundering it into successful elapsed time.
+      - name: Restore resumable campaign state
+        uses: actions/cache/restore@v4
+        with:
+          path: .codex/goal-loop/all-phases/phase5/fuzz
+          key: phase5-fuzz-${{ matrix.target }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            phase5-fuzz-${{ matrix.target }}-${{ matrix.shard }}-
+
+      - name: Run bounded deterministic slices
+        shell: pwsh
+        run: >-
+          ./scripts/run-fuzz-shard.ps1
+          -Target '${{ matrix.target }}'
+          -Shard ${{ matrix.shard }}
+          -RunMinutes '${{ inputs.run_minutes }}'
+          -IterationsPerSlice '${{ inputs.iterations_per_slice }}'
+          -SliceTimeoutSeconds 600
+
+      - name: Save resumable campaign state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .codex/goal-loop/all-phases/phase5/fuzz
+          key: phase5-fuzz-${{ matrix.target }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload current signed-off receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-fuzz-${{ matrix.target }}-${{ matrix.shard }}
+          path: .codex/goal-loop/all-phases/phase5/fuzz
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  grade:
+    name: Grade campaign evidence
+    if: always()
+    needs: campaign
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download current state from every target and shard
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase5-fuzz-*
+          path: fuzz-state
+          merge-multiple: true
+
+      - name: Verify hashes, terminal states, and non-overlapping elapsed time
+        shell: pwsh
+        run: |
+          $arguments = @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/verify-fuzz-campaign.ps1',
+            '-StateDirectory', 'fuzz-state',
+            '-RequiredHours', '72',
+            '-RequiredShards', '4',
+            '-SummaryPath', 'fuzz-state/campaign-summary.json'
+          )
+          if ('${{ inputs.require_complete }}' -ne 'true') {
+            $arguments += '-ProgressOnly'
+          }
+          & pwsh @arguments
+          exit $LASTEXITCODE
+
+      - name: Upload campaign grade
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-fuzz-grade
+          path: fuzz-state/campaign-summary.json
+          if-no-files-found: error

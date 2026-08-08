@@ -29,7 +29,14 @@
 
 use sakura_core::keymap::State;
 use sakura_core::romaji;
-use sakura_proto::{FixedStr, InputScope, Mode, SessionId, MAX_PREEDIT_BYTES};
+use sakura_core::{
+    ContextPreferences, ConversionSegment, Normalizer, SegmentTransform, SuggestAccept,
+};
+use sakura_proto::types::CandidatePresentation;
+use sakura_proto::{
+    FixedStr, FixedVec, InputScope, Mode, SessionId, MAX_COMMIT_BYTES, MAX_PREEDIT_BYTES,
+    MAX_SEGMENTS,
+};
 
 /// The most sessions one connection may have live at once.
 ///
@@ -52,6 +59,61 @@ pub const MAX_SESSIONS: usize = 64;
 /// create.
 pub const MAX_PROCESS_NAME_BYTES: usize = 128;
 
+/// Volatile recency window described by DESIGN §5.8.
+pub const COMMIT_CACHE_CAPACITY: usize = 8;
+
+/// Whether a host scope requires direct pass-through and a cleared personal
+/// context. This predicate is shared by real scope publication, Probe's
+/// throwaway transition, and the persistence guard.
+pub(crate) const fn scope_is_sensitive(scope: InputScope) -> bool {
+    matches!(
+        scope,
+        InputScope::Password | InputScope::Url | InputScope::Email | InputScope::Digits
+    )
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct CommitCacheEntry {
+    reading_hash: u64,
+    reading_len: u16,
+    surface_hash: u64,
+    surface_len: u16,
+    it_words: u8,
+    total_words: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UndoRecord {
+    reading: FixedStr<MAX_PREEDIT_BYTES>,
+    raw_input: FixedStr<MAX_PREEDIT_BYTES>,
+    shifted_ascii: bool,
+    /// The exact committed surface that must be verified at the host caret
+    /// before the frontend may delete it for undo.
+    surface: FixedStr<MAX_COMMIT_BYTES>,
+    previous_right_id: u16,
+    previous_had_carry: bool,
+    /// Carry state that was visible after the commit. It is retained so a
+    /// host-side rejection can put the engine back at the exact pre-undo
+    /// terminal state without spending the one undo record.
+    post_commit_right_id: u16,
+    post_commit_had_carry: bool,
+}
+
+impl Default for UndoRecord {
+    fn default() -> Self {
+        Self {
+            reading: FixedStr::new(),
+            raw_input: FixedStr::new(),
+            shifted_ascii: false,
+            surface: FixedStr::new(),
+            previous_right_id: 0,
+            previous_had_carry: false,
+            post_commit_right_id: 0,
+            post_commit_had_carry: false,
+        }
+    }
+}
+
 /// One editing session's state: what mode it is in, what input scope the
 /// focused field reported, and the composition (if any) in progress.
 ///
@@ -61,13 +123,28 @@ pub const MAX_PROCESS_NAME_BYTES: usize = 128;
 /// running the real logic against a clone and discarding it, instead of
 /// needing a separate "what would happen" code path to keep in sync with
 /// the real one.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     process_name: FixedStr<MAX_PROCESS_NAME_BYTES>,
     /// The IME mode new keystrokes are interpreted under.
     pub(crate) mode: Mode,
+    /// Width and punctuation policy resolved once from the host profile.
+    pub(crate) normalizer: Normalizer,
+    /// Prediction policy resolved once from the host profile.
+    pub(crate) prediction_enabled: bool,
+    pub(crate) suggest_accept: SuggestAccept,
     /// The input scope of the field this session belongs to (DESIGN 9).
     pub(crate) scope: InputScope,
+    /// `true` only after TSF has positively classified the scope. A default
+    /// `Normal` value is not enough to permit developer-history persistence.
+    pub(crate) scope_classified: bool,
+    /// Stable identity used to correlate records across pipe connections.
+    history_session_id: SessionId,
+    /// The user-selected mode to restore after a sensitive field stops being
+    /// focused. Sensitive scopes temporarily force direct pass-through, but a
+    /// later scope-read failure or normal field must not strand the session in
+    /// direct mode.
+    sensitive_mode_restore: Option<Mode>,
     /// Romaji typed but not yet resolved to kana (the FSM's own state).
     pub(crate) romaji: romaji::Input,
     /// Kana (and any unmapped passthrough characters) resolved so far,
@@ -76,6 +153,53 @@ pub struct Session {
     /// place, so that normalizing twice (impossible today, but a change
     /// that made it possible tomorrow) could never double-widen anything.
     pub(crate) preedit: FixedStr<MAX_PREEDIT_BYTES>,
+    /// Physical romaji retained for explicit F9/F10 transforms.
+    pub(crate) raw_input: FixedStr<MAX_PREEDIT_BYTES>,
+    /// True only for a composition that started with a Shift+ASCII letter and
+    /// has contained no unshifted/non-ASCII character since. This is the
+    /// narrow signal used to try an English dictionary reading; ordinary
+    /// romaji remains on the kana path.
+    pub(crate) shifted_ascii: bool,
+    /// Character cursor in `preedit`; pending romaji is always at this point.
+    pub(crate) cursor: u16,
+    /// Whether the reading has entered dictionary conversion.
+    pub(crate) converting: bool,
+    /// Conversion starts compact and only CandidateExpand exposes its page.
+    /// This belongs to the session rather than the renderer so output survives
+    /// UI reconnection and every conversion terminal path can reset it.
+    conversion_presentation: CandidatePresentation,
+    /// Monotonic identity for the preedit text used by the prediction worker.
+    pub(crate) prediction_generation: u64,
+    /// Suggestions may be visible without owning keyboard focus.
+    pub(crate) suggestions_visible: bool,
+    /// `true` only after Tab/Shift+Tab enters the suggest list.
+    pub(crate) suggestion_focused: bool,
+    /// Signed so reverse cycling from the first entry wraps naturally.
+    pub(crate) suggestion_selection: i16,
+    /// Signed until rendering so `CandidatePrev` from zero can mean the last
+    /// item without knowing the current candidate count in the key handler.
+    pub(crate) selected_candidate: i16,
+    /// UTF-8 reading end offsets for every pinned conversion segment.
+    segment_ends: FixedVec<u16, MAX_SEGMENTS>,
+    /// Candidate selection is independent for each segment.
+    segment_selections: [i16; MAX_SEGMENTS],
+    segment_transforms: [SegmentTransform; MAX_SEGMENTS],
+    segment_transform_cycles: [u8; MAX_SEGMENTS],
+    focused_segment: u8,
+    /// Grammatical right context carried across commit boundaries.
+    carry_right_id: u16,
+    has_carry: bool,
+    /// Compact, volatile hashes avoid retaining another eight copies of user
+    /// text while still giving exact candidate matching with length guards.
+    commit_cache: [CommitCacheEntry; COMMIT_CACHE_CAPACITY],
+    commit_cache_len: u8,
+    commit_cache_next: u8,
+    undo_record: UndoRecord,
+    undo_armed: bool,
+    /// The frontend has an exact-text undo output in flight. While this is
+    /// set, key dispatch must not advance the session until the frontend
+    /// acknowledges whether the host document deletion was applied.
+    undo_pending: bool,
 }
 
 impl Session {
@@ -98,9 +222,38 @@ impl Session {
         Session {
             process_name: name,
             mode: Mode::Hiragana,
+            normalizer: Normalizer::default(),
+            prediction_enabled: false,
+            suggest_accept: SuggestAccept::Disabled,
             scope: InputScope::Normal,
+            scope_classified: false,
+            history_session_id: 0,
+            sensitive_mode_restore: None,
             romaji: romaji::Input::new(),
             preedit: FixedStr::new(),
+            raw_input: FixedStr::new(),
+            shifted_ascii: false,
+            cursor: 0,
+            converting: false,
+            conversion_presentation: CandidatePresentation::Compact,
+            prediction_generation: 0,
+            suggestions_visible: false,
+            suggestion_focused: false,
+            suggestion_selection: 0,
+            selected_candidate: 0,
+            segment_ends: FixedVec::new(),
+            segment_selections: [0; MAX_SEGMENTS],
+            segment_transforms: [SegmentTransform::None; MAX_SEGMENTS],
+            segment_transform_cycles: [0; MAX_SEGMENTS],
+            focused_segment: 0,
+            carry_right_id: 0,
+            has_carry: false,
+            commit_cache: [CommitCacheEntry::default(); COMMIT_CACHE_CAPACITY],
+            commit_cache_len: 0,
+            commit_cache_next: 0,
+            undo_record: UndoRecord::default(),
+            undo_armed: false,
+            undo_pending: false,
         }
     }
 
@@ -108,6 +261,15 @@ impl Session {
     /// truncated; see [`Session::new`]).
     pub fn process_name(&self) -> &str {
         self.process_name.as_str()
+    }
+
+    /// Applies a profile only during context creation. Later refocuses never
+    /// call this, so a user-selected mode remains authoritative.
+    pub(crate) fn apply_context_preferences(&mut self, preferences: ContextPreferences) {
+        self.mode = preferences.default_mode;
+        self.normalizer = preferences.normalizer;
+        self.prediction_enabled = preferences.prediction_enabled;
+        self.suggest_accept = preferences.suggest_accept;
     }
 
     /// The current IME mode.
@@ -120,6 +282,71 @@ impl Session {
         self.scope
     }
 
+    pub(crate) fn scope_classified(&self) -> bool {
+        self.scope_classified
+    }
+
+    /// Applies the one authoritative host-scope transition to this session.
+    ///
+    /// Returns whether the caller must clear its per-session prediction cache.
+    /// Probe invokes this on a cloned session and therefore never gets a path
+    /// to the live cache; Apply invokes it before clearing the live cache.
+    pub(crate) fn apply_input_scope(&mut self, scope: InputScope) -> bool {
+        if scope == InputScope::Unclassified {
+            let was_sensitive = scope_is_sensitive(self.scope);
+            self.scope = InputScope::Normal;
+            self.scope_classified = false;
+            if was_sensitive {
+                self.reset();
+                self.clear_personal_context();
+                self.restore_mode_after_sensitive();
+                return true;
+            }
+            return false;
+        }
+
+        let was_sensitive = scope_is_sensitive(self.scope);
+        self.scope = scope;
+        self.scope_classified = true;
+        if scope_is_sensitive(scope) {
+            // Sensitive fields bypass composition entirely. Discarding an
+            // earlier reading is intentional: flushing it could leak text
+            // typed before the host's scope was known.
+            self.remember_mode_before_sensitive();
+            self.reset();
+            self.clear_personal_context();
+            self.mode = Mode::Direct;
+            true
+        } else if was_sensitive {
+            self.reset();
+            self.clear_personal_context();
+            self.restore_mode_after_sensitive();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn set_history_session_id(&mut self, id: SessionId) {
+        self.history_session_id = id;
+    }
+
+    pub(crate) fn history_session_id(&self) -> SessionId {
+        self.history_session_id
+    }
+
+    pub(crate) fn remember_mode_before_sensitive(&mut self) {
+        if self.sensitive_mode_restore.is_none() {
+            self.sensitive_mode_restore = Some(self.mode);
+        }
+    }
+
+    pub(crate) fn restore_mode_after_sensitive(&mut self) {
+        if let Some(mode) = self.sensitive_mode_restore.take() {
+            self.mode = mode;
+        }
+    }
+
     /// The keymap state this session is in.
     ///
     /// M0 has no conversion, so the only two states a session can ever
@@ -127,7 +354,11 @@ impl Session {
     /// (romaji is pending, or kana has been resolved and not yet committed
     /// or cancelled) — see the module docs.
     pub fn state(&self) -> State {
-        if self.is_composing() {
+        if self.converting {
+            State::Converting
+        } else if self.suggestion_focused {
+            State::Predicting
+        } else if self.is_composing() {
             State::Composing
         } else {
             State::Idle
@@ -137,7 +368,10 @@ impl Session {
     /// `true` if there is a composition in progress: pending romaji, or
     /// kana already resolved from it and not yet committed or cancelled.
     pub fn is_composing(&self) -> bool {
-        !self.romaji.is_empty() || !self.preedit.is_empty()
+        self.converting
+            || !self.romaji.is_empty()
+            || !self.preedit.is_empty()
+            || (self.shifted_ascii && !self.raw_input.is_empty())
     }
 
     /// Discards any composition in progress, back to a clean idle session.
@@ -151,7 +385,600 @@ impl Session {
     pub fn reset(&mut self) {
         self.romaji.clear();
         self.preedit.clear();
+        self.raw_input.clear();
+        self.shifted_ascii = false;
+        self.cursor = 0;
+        self.converting = false;
+        self.conversion_presentation = CandidatePresentation::Compact;
+        self.invalidate_prediction();
+        self.selected_candidate = 0;
+        self.clear_segments();
     }
+
+    pub(crate) fn cancel_conversion(&mut self) {
+        self.converting = false;
+        self.conversion_presentation = CandidatePresentation::Compact;
+        self.invalidate_prediction();
+        self.selected_candidate = 0;
+        self.clear_segments();
+        self.cursor = u16::try_from(self.preedit.as_str().chars().count()).unwrap_or(u16::MAX);
+    }
+
+    pub(crate) fn set_segments(&mut self, segments: &[ConversionSegment]) -> bool {
+        self.hide_suggestions();
+        self.clear_segments();
+        for segment in segments {
+            if self.segment_ends.push(segment.reading_end).is_err() {
+                self.clear_segments();
+                return false;
+            }
+        }
+        !self.segment_ends.is_empty()
+    }
+
+    /// Enters a newly begun conversion. Re-entering conversion is deliberately
+    /// not folded into this helper: callers that merely move a candidate must
+    /// preserve an already expanded presentation.
+    pub(crate) fn begin_conversion(&mut self) {
+        self.converting = true;
+        self.conversion_presentation = CandidatePresentation::Compact;
+    }
+
+    /// Changes a live conversion to expanded presentation. Repeating the
+    /// action is a successful no-op, while callers receive `false` outside
+    /// conversion and can report their recoverable beep outcome.
+    pub(crate) fn expand_conversion(&mut self) -> bool {
+        if !self.converting {
+            return false;
+        }
+        self.conversion_presentation = CandidatePresentation::Expanded;
+        true
+    }
+
+    pub(crate) const fn conversion_presentation(&self) -> CandidatePresentation {
+        self.conversion_presentation
+    }
+
+    pub(crate) fn clear_segments(&mut self) {
+        self.segment_ends.clear();
+        self.segment_selections.fill(0);
+        self.segment_transforms.fill(SegmentTransform::None);
+        self.segment_transform_cycles.fill(0);
+        self.focused_segment = 0;
+    }
+
+    pub(crate) fn invalidate_prediction(&mut self) {
+        self.prediction_generation = self.prediction_generation.wrapping_add(1);
+        self.suggestions_visible = false;
+        self.suggestion_focused = false;
+        self.suggestion_selection = 0;
+    }
+
+    pub(crate) fn show_suggestions(&mut self, available: bool) {
+        self.suggestions_visible = available;
+        if !available {
+            self.suggestion_focused = false;
+            self.suggestion_selection = 0;
+        }
+    }
+
+    pub(crate) fn hide_suggestions(&mut self) {
+        self.suggestions_visible = false;
+        self.suggestion_focused = false;
+        self.suggestion_selection = 0;
+    }
+
+    pub(crate) fn focus_suggestion(&mut self, direction: i16, count: usize) -> bool {
+        let Ok(count) = i16::try_from(count) else {
+            return false;
+        };
+        if count == 0 {
+            return false;
+        }
+        self.suggestions_visible = true;
+        if self.suggestion_focused {
+            self.suggestion_selection = self
+                .suggestion_selection
+                .saturating_add(direction)
+                .rem_euclid(count);
+        } else {
+            self.suggestion_focused = true;
+            self.suggestion_selection = if direction < 0 { count - 1 } else { 0 };
+        }
+        true
+    }
+
+    pub(crate) fn selected_suggestion(&self, count: usize) -> Option<usize> {
+        let count = i16::try_from(count).ok()?;
+        (count > 0).then(|| self.suggestion_selection.rem_euclid(count) as usize)
+    }
+
+    pub(crate) fn segment_count(&self) -> usize {
+        self.segment_ends.len()
+    }
+
+    pub(crate) fn focused_segment(&self) -> usize {
+        usize::from(self.focused_segment).min(self.segment_count().saturating_sub(1))
+    }
+
+    pub(crate) fn segment_range(&self, index: usize) -> Option<core::ops::Range<usize>> {
+        let end = usize::from(*self.segment_ends.get(index)?);
+        let start = if index == 0 {
+            0
+        } else {
+            usize::from(*self.segment_ends.get(index - 1)?)
+        };
+        (start < end && end <= self.preedit.len()).then_some(start..end)
+    }
+
+    pub(crate) fn focus_previous_segment(&mut self) {
+        self.focused_segment = self.focused_segment.saturating_sub(1);
+        self.selected_candidate = self.segment_selection(self.focused_segment());
+    }
+
+    pub(crate) fn focus_next_segment(&mut self) {
+        let last = self.segment_count().saturating_sub(1);
+        self.focused_segment = u8::try_from((self.focused_segment() + 1).min(last)).unwrap_or(0);
+        self.selected_candidate = self.segment_selection(self.focused_segment());
+    }
+
+    pub(crate) fn segment_selection(&self, index: usize) -> i16 {
+        self.segment_selections.get(index).copied().unwrap_or(0)
+    }
+
+    pub(crate) fn set_segment_selection(&mut self, index: usize, selection: i16) {
+        if let Some(stored) = self.segment_selections.get_mut(index) {
+            *stored = selection;
+        }
+        if index == self.focused_segment() {
+            self.selected_candidate = selection;
+        }
+    }
+
+    pub(crate) fn segment_transform(&self, index: usize) -> (SegmentTransform, u8) {
+        (
+            self.segment_transforms
+                .get(index)
+                .copied()
+                .unwrap_or_default(),
+            self.segment_transform_cycles
+                .get(index)
+                .copied()
+                .unwrap_or(0),
+        )
+    }
+
+    pub(crate) fn apply_segment_transform(&mut self, transform: SegmentTransform) {
+        let index = self.focused_segment();
+        let Some(stored) = self.segment_transforms.get_mut(index) else {
+            return;
+        };
+        let Some(cycle) = self.segment_transform_cycles.get_mut(index) else {
+            return;
+        };
+        if *stored == transform {
+            *cycle = cycle.wrapping_add(1) % 3;
+        } else {
+            *stored = transform;
+            *cycle = 0;
+        }
+    }
+
+    pub(crate) fn clear_segment_transform(&mut self, index: usize) {
+        if let Some(stored) = self.segment_transforms.get_mut(index) {
+            *stored = SegmentTransform::None;
+        }
+        if let Some(cycle) = self.segment_transform_cycles.get_mut(index) {
+            *cycle = 0;
+        }
+    }
+
+    /// Writes back an exact `(transform, cycle)` pair, as returned earlier by
+    /// [`Session::segment_transform`]. Callers use this to undo a speculative
+    /// `clear_segment_transform` when the fallible work it was staged for
+    /// (e.g. committing a numbered candidate) did not actually go through.
+    pub(crate) fn restore_segment_transform(
+        &mut self,
+        index: usize,
+        transform: SegmentTransform,
+        cycle: u8,
+    ) {
+        if let Some(stored) = self.segment_transforms.get_mut(index) {
+            *stored = transform;
+        }
+        if let Some(stored_cycle) = self.segment_transform_cycles.get_mut(index) {
+            *stored_cycle = cycle;
+        }
+    }
+
+    pub(crate) fn carry_right_id(&self) -> u16 {
+        if self.has_carry {
+            self.carry_right_id
+        } else {
+            0
+        }
+    }
+
+    pub(crate) fn reset_carryover(&mut self) {
+        self.carry_right_id = 0;
+        self.has_carry = false;
+    }
+
+    /// Returns the most recently committed surface fingerprint for `reading`.
+    /// Lengths accompany the hashes so a collision must agree on both before
+    /// it can influence a candidate.
+    pub(crate) fn cached_surface_fingerprint(&self, reading: &str) -> Option<(u64, u16)> {
+        let reading_len = u16::try_from(reading.len()).ok()?;
+        let reading_hash = text_hash(reading);
+        let len = usize::from(self.commit_cache_len);
+        for distance in 0..len {
+            let next = usize::from(self.commit_cache_next);
+            let index = (next + COMMIT_CACHE_CAPACITY - 1 - distance) % COMMIT_CACHE_CAPACITY;
+            let entry = self.commit_cache[index];
+            if entry.reading_len == reading_len && entry.reading_hash == reading_hash {
+                return Some((entry.surface_hash, entry.surface_len));
+            }
+        }
+        None
+    }
+
+    pub(crate) fn domain_it_ratio_per_mille(&self) -> u16 {
+        let mut it_words = 0u32;
+        let mut total_words = 0u32;
+        let len = usize::from(self.commit_cache_len);
+        for distance in 0..len {
+            let next = usize::from(self.commit_cache_next);
+            let index = (next + COMMIT_CACHE_CAPACITY - 1 - distance) % COMMIT_CACHE_CAPACITY;
+            let entry = self.commit_cache[index];
+            it_words = it_words.saturating_add(u32::from(entry.it_words));
+            total_words = total_words.saturating_add(u32::from(entry.total_words));
+        }
+        u16::try_from(
+            it_words
+                .saturating_mul(1_000)
+                .checked_div(total_words)
+                .unwrap_or(0),
+        )
+        .unwrap_or(1_000)
+    }
+
+    /// Records the composition about to be committed. This must run before
+    /// [`Session::reset`] so depth-one undo can restore the physical reading.
+    pub(crate) fn record_current_commit(
+        &mut self,
+        surface: &str,
+        right_id: u16,
+        it_words: u8,
+        total_words: u8,
+    ) {
+        if matches!(
+            self.scope,
+            InputScope::Password | InputScope::Url | InputScope::Email | InputScope::Digits
+        ) || surface.is_empty()
+        {
+            self.clear_personal_context();
+            return;
+        }
+
+        self.undo_record.reading.clear();
+        self.undo_record.raw_input.clear();
+        self.undo_record.shifted_ascii = self.shifted_ascii;
+        self.undo_record.surface.clear();
+        if self
+            .undo_record
+            .reading
+            .push_str(self.preedit.as_str())
+            .is_err()
+            || self
+                .undo_record
+                .raw_input
+                .push_str(self.raw_input.as_str())
+                .is_err()
+            || self.undo_record.surface.push_str(surface).is_err()
+        {
+            self.disarm_commit_undo();
+            return;
+        }
+        self.undo_record.previous_right_id = self.carry_right_id;
+        self.undo_record.previous_had_carry = self.has_carry;
+        self.undo_armed = true;
+        self.undo_pending = false;
+
+        let entry = CommitCacheEntry {
+            reading_hash: text_hash(self.preedit.as_str()),
+            reading_len: u16::try_from(self.preedit.len()).unwrap_or(u16::MAX),
+            surface_hash: text_hash(surface),
+            surface_len: u16::try_from(surface.len()).unwrap_or(u16::MAX),
+            it_words,
+            total_words,
+        };
+        let index = usize::from(self.commit_cache_next);
+        self.commit_cache[index] = entry;
+        self.commit_cache_next = u8::try_from((index + 1) % COMMIT_CACHE_CAPACITY).unwrap_or(0);
+        self.commit_cache_len = self
+            .commit_cache_len
+            .saturating_add(1)
+            .min(COMMIT_CACHE_CAPACITY as u8);
+
+        if right_id == 0 || is_sentence_boundary(surface) {
+            self.reset_carryover();
+        } else {
+            self.carry_right_id = right_id;
+            self.has_carry = true;
+        }
+        self.undo_record.post_commit_right_id = self.carry_right_id;
+        self.undo_record.post_commit_had_carry = self.has_carry;
+    }
+
+    /// Begins a depth-one commit undo transaction.
+    ///
+    /// The composition is restored for the output, but the record and recency
+    /// entry remain live until the frontend sends an explicit applied or
+    /// rejected outcome. This prevents an async TSF validation failure from
+    /// leaving the engine restored while the document still contains the
+    /// committed surface.
+    pub(crate) fn undo_commit(&mut self) -> Option<FixedStr<MAX_COMMIT_BYTES>> {
+        if self.undo_pending {
+            return None;
+        }
+        if !self.undo_armed || self.is_composing() {
+            self.disarm_commit_undo();
+            return None;
+        }
+        let reading = self.undo_record.reading.clone();
+        let raw_input = self.undo_record.raw_input.clone();
+        let shifted_ascii = self.undo_record.shifted_ascii;
+        let surface = self.undo_record.surface.clone();
+        let previous_right_id = self.undo_record.previous_right_id;
+        let previous_had_carry = self.undo_record.previous_had_carry;
+        if reading.is_empty() || surface.is_empty() {
+            self.disarm_commit_undo();
+            return None;
+        }
+
+        self.undo_pending = true;
+        self.carry_right_id = previous_right_id;
+        self.has_carry = previous_had_carry;
+        self.reset();
+        self.preedit = reading;
+        self.raw_input = raw_input;
+        self.shifted_ascii = shifted_ascii;
+        self.cursor = u16::try_from(self.preedit.as_str().chars().count()).unwrap_or(u16::MAX);
+        Some(surface)
+    }
+
+    pub(crate) fn undo_pending(&self) -> bool {
+        self.undo_pending
+    }
+
+    /// Commits the engine half after the host has deleted the exact surface.
+    /// Only this terminal path consumes the undo record and its recency entry.
+    pub(crate) fn acknowledge_undo_commit(&mut self) -> bool {
+        if !self.undo_pending {
+            return false;
+        }
+        self.undo_pending = false;
+        self.undo_armed = false;
+        if self.commit_cache_len > 0 {
+            let previous = (usize::from(self.commit_cache_next) + COMMIT_CACHE_CAPACITY - 1)
+                % COMMIT_CACHE_CAPACITY;
+            self.commit_cache_next = u8::try_from(previous).unwrap_or(0);
+            self.commit_cache_len = self.commit_cache_len.saturating_sub(1);
+            self.commit_cache[previous] = CommitCacheEntry::default();
+        }
+        self.clear_undo_record();
+        true
+    }
+
+    /// Rejects the host-side deletion before any document mutation was made.
+    /// Restore the exact post-commit idle state and keep the one undo record so
+    /// a later, correctly positioned caret can retry it.
+    pub(crate) fn reject_undo_commit(&mut self) -> bool {
+        if !self.undo_pending {
+            return false;
+        }
+        let right_id = self.undo_record.post_commit_right_id;
+        let had_carry = self.undo_record.post_commit_had_carry;
+        self.undo_pending = false;
+        self.reset();
+        self.carry_right_id = right_id;
+        self.has_carry = had_carry;
+        true
+    }
+
+    /// Clears a pending undo when a document result is unknowable (for
+    /// example, a host HRESULT after SetText). The TSF side abandons the
+    /// projection at the same terminal boundary, so the record cannot be
+    /// replayed against a document whose text is no longer trusted.
+    pub(crate) fn abort_undo_commit(&mut self) -> bool {
+        if !self.undo_pending {
+            return false;
+        }
+        self.reset();
+        // The host may have applied an edit but failed before the frontend
+        // could establish its final text. Neither the pre-undo nor the
+        // post-commit carry context is trustworthy now; clear all bounded
+        // personal-context state before disarming the record.
+        self.clear_personal_context();
+        true
+    }
+
+    pub(crate) fn disarm_commit_undo(&mut self) {
+        self.undo_pending = false;
+        self.undo_armed = false;
+        self.clear_undo_record();
+    }
+
+    fn clear_undo_record(&mut self) {
+        self.undo_record.reading.clear();
+        self.undo_record.raw_input.clear();
+        self.undo_record.shifted_ascii = false;
+        self.undo_record.surface.clear();
+        self.undo_record.previous_right_id = 0;
+        self.undo_record.previous_had_carry = false;
+        self.undo_record.post_commit_right_id = 0;
+        self.undo_record.post_commit_had_carry = false;
+    }
+
+    pub(crate) fn clear_personal_context(&mut self) {
+        self.reset_carryover();
+        self.commit_cache.fill(CommitCacheEntry::default());
+        self.commit_cache_len = 0;
+        self.commit_cache_next = 0;
+        self.disarm_commit_undo();
+    }
+
+    /// Moves only the focused segment's right boundary. Every other boundary
+    /// remains byte-for-byte pinned, so distant segmentation cannot change.
+    ///
+    /// A focused segment that is already the *last* one has no existing
+    /// boundary between it and a right neighbor to slide, so it is handled
+    /// separately: shrinking instead carves a brand-new boundary out of the
+    /// segment's own text (see [`Session::split_trailing_segment`]), which is
+    /// how a single mis-guessed bunsetsu becomes splittable at all, and how
+    /// the trailing segment of a longer conversion can spawn a new one after
+    /// it. Growing still refuses there regardless of how many segments
+    /// already exist: `segment_ends`'s last entry is always
+    /// `self.preedit.len()` (the whole-reading invariant), so there is never
+    /// anything past the last segment for it to absorb. This refusal is
+    /// unaffected by a boundary a previous split created elsewhere, because
+    /// it is decided purely from whether `index` is still the last segment,
+    /// re-read fresh from the live segment count on every call.
+    pub(crate) fn resize_focused_segment(&mut self, grow: bool) -> bool {
+        let index = self.focused_segment();
+        if index + 1 >= self.segment_count() {
+            return !grow && self.split_trailing_segment(index);
+        }
+        let Some(range) = self.segment_range(index) else {
+            return false;
+        };
+        let Some(next) = self.segment_range(index + 1) else {
+            return false;
+        };
+        let new_end = if grow {
+            let mut characters = self.preedit.as_str()[next.clone()].char_indices();
+            let Some((_, first)) = characters.next() else {
+                return false;
+            };
+            let candidate = next.start + first.len_utf8();
+            (candidate < next.end).then_some(candidate)
+        } else {
+            let mut characters = self.preedit.as_str()[range.clone()].char_indices();
+            let Some((last, _)) = characters.next_back() else {
+                return false;
+            };
+            // `char_indices` is relative to this segment slice, not to the
+            // whole preedit. A non-zero final offset means at least two
+            // characters remain and the boundary can move left safely.
+            (last > 0).then_some(range.start + last)
+        };
+        let Some(new_end) = new_end.and_then(|end| u16::try_from(end).ok()) else {
+            return false;
+        };
+        let Some(boundary) = self.segment_ends.get_mut(index) else {
+            return false;
+        };
+        *boundary = new_end;
+        self.segment_selections[index] = 0;
+        self.segment_selections[index + 1] = 0;
+        self.segment_transforms[index] = SegmentTransform::None;
+        self.segment_transforms[index + 1] = SegmentTransform::None;
+        self.selected_candidate = 0;
+        true
+    }
+
+    /// Carves a new boundary out of the focused *trailing* segment: its end
+    /// moves one character to the left, and a new segment is appended to
+    /// cover exactly the freed remainder. Focus itself is left pointing at
+    /// `index` (the now-shorter segment), matching the boundary-slide branch
+    /// above, which never moves focus either -- from the user's perspective
+    /// this is "make the current segment one character shorter", not "jump
+    /// to the new one".
+    ///
+    /// Refuses (returns `false`), without mutating anything, when:
+    /// - `index` is not a real segment (`segment_range` fails), which also
+    ///   makes this safe to call on an empty conversion;
+    /// - the segment is already a single character, since shrinking it
+    ///   further would require producing an empty segment, which the
+    ///   `start < end` contract `segment_range` and the rest of this module
+    ///   rely on forbids; or
+    /// - `segment_ends` is already holding [`MAX_SEGMENTS`] entries. These
+    ///   are fixed-capacity, stack-resident collections with no growth path
+    ///   past that bound, so a session already at the cap has no slot left
+    ///   for the new segment; refusing here is the only option that is
+    ///   neither a panic nor a silent truncation of the conversion.
+    fn split_trailing_segment(&mut self, index: usize) -> bool {
+        let Some(range) = self.segment_range(index) else {
+            return false;
+        };
+        let mut characters = self.preedit.as_str()[range.clone()].char_indices();
+        let Some((last, _)) = characters.next_back() else {
+            return false;
+        };
+        if last == 0 {
+            return false;
+        }
+        // `last` is a byte offset relative to this segment's own slice (see
+        // the identical note on the boundary-slide branch above), so the
+        // real preedit-relative boundary is `range.start + last`.
+        let Some(new_end) = u16::try_from(range.start + last).ok() else {
+            return false;
+        };
+        let Some(&old_end) = self.segment_ends.get(index) else {
+            return false;
+        };
+        // The new segment's end is the old segment's end -- appending it
+        // keeps the "last end equals preedit length" invariant intact
+        // without needing to touch any other entry, since `index` was
+        // already the last one (that is this function's only caller's
+        // precondition). `push` is the one point that can fail: once
+        // `segment_ends` already holds MAX_SEGMENTS entries there is no
+        // capacity for a new segment, and this must refuse rather than
+        // panic or drop the conversion's tail silently.
+        if self.segment_ends.push(old_end).is_err() {
+            return false;
+        }
+        let Some(boundary) = self.segment_ends.get_mut(index) else {
+            // Unreachable: `index` resolved to a live entry a few lines
+            // above and this function never removes entries in between, but
+            // this stays a refusal rather than an assumption.
+            return false;
+        };
+        *boundary = new_end;
+        let new_index = index + 1;
+        // Both halves of the split have unresolved candidates for their new
+        // (shorter) reading text, so neither may keep the old selection or
+        // transform: `render_converted_segments`/`commit_converted_segments`
+        // in `dispatch.rs` re-derive each segment's reading from
+        // `segment_range` fresh on every call, so resetting these to a sane
+        // default here is enough for the very next render to show correct
+        // candidates for both segments.
+        self.segment_selections[index] = 0;
+        self.segment_selections[new_index] = 0;
+        self.segment_transforms[index] = SegmentTransform::None;
+        self.segment_transforms[new_index] = SegmentTransform::None;
+        self.segment_transform_cycles[index] = 0;
+        self.segment_transform_cycles[new_index] = 0;
+        self.selected_candidate = 0;
+        true
+    }
+}
+
+pub(crate) fn text_hash(text: &str) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    text.as_bytes().iter().fold(OFFSET, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
+    })
+}
+
+fn is_sentence_boundary(surface: &str) -> bool {
+    let trimmed = surface.trim_end();
+    trimmed.ends_with(['。', '！', '？'])
+        || trimmed.ends_with("です")
+        || trimmed.ends_with("ます")
+        || trimmed.ends_with("でした")
+        || trimmed.ends_with("ました")
 }
 
 /// The longest prefix of `s` that both fits in `cap` bytes and ends on a
@@ -380,6 +1207,301 @@ mod tests {
         assert!(!session.romaji.is_empty());
         assert!(session.is_composing());
         assert_eq!(session.state(), State::Composing);
+    }
+
+    #[test]
+    fn segment_resize_changes_only_the_focused_boundary_and_is_reversible() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("あいうえおかきく").expect("fits");
+        let segments = [6u16, 12, 18, 24].map(|reading_end| ConversionSegment {
+            reading_end,
+            ..ConversionSegment::default()
+        });
+        assert!(session.set_segments(&segments));
+        session.converting = true;
+        session.focus_next_segment();
+        assert_eq!(session.focused_segment(), 1);
+
+        assert!(session.resize_focused_segment(true));
+        assert_eq!(session.segment_range(0), Some(0..6));
+        assert_eq!(session.segment_range(1), Some(6..15));
+        assert_eq!(session.segment_range(2), Some(15..18));
+        assert_eq!(session.segment_range(3), Some(18..24));
+
+        assert!(session.resize_focused_segment(false));
+        assert_eq!(session.segment_range(0), Some(0..6));
+        assert_eq!(session.segment_range(1), Some(6..12));
+        assert_eq!(session.segment_range(2), Some(12..18));
+        assert_eq!(session.segment_range(3), Some(18..24));
+    }
+
+    #[test]
+    fn resize_focused_segment_splits_a_single_bunsetsu_conversion_on_shrink() {
+        // The common case this fixes: the engine guessed the whole reading
+        // as one segment, and Shift+Left must still be able to re-cut it.
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("あいう").expect("fits");
+        let segments = [ConversionSegment {
+            reading_end: 9,
+            ..ConversionSegment::default()
+        }];
+        assert!(session.set_segments(&segments));
+        session.converting = true;
+        assert_eq!(session.segment_count(), 1);
+        assert_eq!(session.focused_segment(), 0);
+
+        // Growing the only segment has nothing past the conversion's end to
+        // absorb, so it must keep refusing exactly as it did before this
+        // segment could ever split.
+        assert!(!session.resize_focused_segment(true));
+        assert_eq!(session.segment_count(), 1);
+
+        assert!(session.resize_focused_segment(false));
+        assert_eq!(session.segment_count(), 2);
+        assert_eq!(session.segment_range(0), Some(0..6));
+        assert_eq!(session.segment_range(1), Some(6..9));
+        // Both boundaries land on character boundaries -- "う" (3 bytes)
+        // stays intact in the new trailing segment, never split in half.
+        assert!(session.preedit.as_str().is_char_boundary(6));
+        assert!(session.preedit.as_str().is_char_boundary(9));
+        assert_eq!(&session.preedit.as_str()[0..6], "あい");
+        assert_eq!(&session.preedit.as_str()[6..9], "う");
+        // Focus stays on the segment that was resized, matching the
+        // boundary-slide branch, which never moves focus either.
+        assert_eq!(session.focused_segment(), 0);
+        assert_eq!(session.segment_selection(0), 0);
+        assert_eq!(session.segment_selection(1), 0);
+        assert_eq!(session.segment_transform(0), (SegmentTransform::None, 0));
+        assert_eq!(session.segment_transform(1), (SegmentTransform::None, 0));
+    }
+
+    #[test]
+    fn resize_focused_segment_refuses_to_shrink_a_one_character_segment() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("あ").expect("fits");
+        let segments = [ConversionSegment {
+            reading_end: 3,
+            ..ConversionSegment::default()
+        }];
+        assert!(session.set_segments(&segments));
+        session.converting = true;
+
+        assert!(!session.resize_focused_segment(false));
+        assert_eq!(session.segment_count(), 1);
+        assert_eq!(session.segment_range(0), Some(0..3));
+    }
+
+    #[test]
+    fn resize_focused_segment_splits_the_trailing_segment_of_a_multi_segment_conversion() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("あいうえおかきく").expect("fits");
+        let segments = [6u16, 12, 18, 24].map(|reading_end| ConversionSegment {
+            reading_end,
+            ..ConversionSegment::default()
+        });
+        assert!(session.set_segments(&segments));
+        session.converting = true;
+        session.focus_next_segment();
+        session.focus_next_segment();
+        session.focus_next_segment();
+        assert_eq!(session.focused_segment(), 3);
+
+        // Growing the trailing segment still refuses: there is nothing past
+        // the conversion's end for it to absorb.
+        assert!(!session.resize_focused_segment(true));
+        assert_eq!(session.segment_count(), 4);
+
+        assert!(session.resize_focused_segment(false));
+        assert_eq!(session.segment_count(), 5);
+        assert_eq!(session.segment_range(0), Some(0..6));
+        assert_eq!(session.segment_range(1), Some(6..12));
+        assert_eq!(session.segment_range(2), Some(12..18));
+        assert_eq!(session.segment_range(3), Some(18..21));
+        assert_eq!(session.segment_range(4), Some(21..24));
+        assert!(session.preedit.as_str().is_char_boundary(21));
+        assert_eq!(&session.preedit.as_str()[18..21], "き");
+        assert_eq!(&session.preedit.as_str()[21..24], "く");
+        // Earlier boundaries (0..18) are untouched, matching the
+        // boundary-slide branch's "every other boundary stays pinned"
+        // guarantee.
+        assert_eq!(session.focused_segment(), 3);
+        assert_eq!(session.segment_selection(4), 0);
+        assert_eq!(session.segment_transform(4), (SegmentTransform::None, 0));
+    }
+
+    #[test]
+    fn resize_focused_segment_refuses_to_split_once_segment_count_is_at_capacity() {
+        // MAX_SEGMENTS - 1 one-character segments, plus a trailing
+        // two-character segment: exactly MAX_SEGMENTS segments already, with
+        // the trailing one otherwise splittable on every ground except room.
+        let mut session = Session::new("editor.exe");
+        let mut reading = String::new();
+        let mut ends = Vec::new();
+        for _ in 0..MAX_SEGMENTS - 1 {
+            reading.push('x');
+            ends.push(u16::try_from(reading.len()).expect("fits"));
+        }
+        reading.push_str("yz");
+        ends.push(u16::try_from(reading.len()).expect("fits"));
+        session.preedit.push_str(&reading).expect("fits");
+        let segments: Vec<ConversionSegment> = ends
+            .into_iter()
+            .map(|reading_end| ConversionSegment {
+                reading_end,
+                ..ConversionSegment::default()
+            })
+            .collect();
+        assert!(session.set_segments(&segments));
+        session.converting = true;
+        assert_eq!(session.segment_count(), MAX_SEGMENTS);
+        for _ in 0..MAX_SEGMENTS - 1 {
+            session.focus_next_segment();
+        }
+        assert_eq!(session.focused_segment(), MAX_SEGMENTS - 1);
+
+        assert!(!session.resize_focused_segment(false));
+        assert_eq!(session.segment_count(), MAX_SEGMENTS);
+    }
+
+    #[test]
+    fn commit_undo_cache_restores_reading_and_rolls_back_context() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("かな").expect("fits");
+        session.raw_input.push_str("kana").expect("fits");
+        session.record_current_commit("加奈", 42, 0, 1);
+        let cached = session.cached_surface_fingerprint("かな");
+        assert_eq!(cached, Some((text_hash("加奈"), 6)));
+        assert_eq!(session.carry_right_id(), 42);
+        session.reset();
+
+        assert!(session.undo_commit().is_some());
+        assert_eq!(session.preedit.as_str(), "かな");
+        assert_eq!(session.raw_input.as_str(), "kana");
+        assert_eq!(session.carry_right_id(), 0);
+        assert_eq!(
+            session.cached_surface_fingerprint("かな"),
+            cached,
+            "the recency entry remains live until the host acknowledges deletion"
+        );
+        assert!(session.reject_undo_commit());
+        assert_eq!(session.carry_right_id(), 42);
+        assert!(session.undo_commit().is_some());
+        assert!(session.acknowledge_undo_commit());
+        assert_eq!(session.cached_surface_fingerprint("かな"), None);
+        assert_eq!(session.undo_commit(), None, "undo depth is exactly one");
+    }
+
+    #[test]
+    fn commit_undo_rejection_and_ack_keep_engine_and_document_terminal_states_aligned() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("reading").expect("fits");
+        session.raw_input.push_str("raw").expect("fits");
+        session.record_current_commit("committed", 7, 0, 1);
+        session.reset();
+
+        // A moved caret/text mismatch is a host rejection: the simulated
+        // document is untouched, while the engine returns to its exact
+        // post-commit idle state and keeps the bounded undo record.
+        let mut document = String::from("prefixother");
+        let expected = session.undo_commit().expect("undo is pending");
+        assert_eq!(expected.as_str(), "committed");
+        assert!(session.undo_pending());
+        if !document.ends_with(expected.as_str()) {
+            assert!(session.reject_undo_commit());
+        }
+        assert_eq!(document, "prefixother");
+        assert!(!session.undo_pending());
+        assert!(!session.is_composing());
+        assert_eq!(session.carry_right_id(), 7);
+        assert!(session.undo_commit().is_some(), "rejection preserves undo");
+
+        // Exact verification succeeds: only then does the simulated host
+        // delete and the engine consume its record/cache entry.
+        let expected = session.undo_record.surface.as_str().to_owned();
+        document.push_str("committed");
+        assert!(document.ends_with(&expected));
+        document.truncate(document.len() - expected.len());
+        assert!(session.acknowledge_undo_commit());
+        assert_eq!(document, "prefixother");
+        assert!(!session.undo_pending());
+        assert!(session.is_composing());
+        assert_eq!(session.cached_surface_fingerprint("reading"), None);
+        assert!(session.undo_commit().is_none(), "ack consumes undo");
+    }
+
+    #[test]
+    fn commit_undo_wrapped_commit_history_uses_only_the_live_ring_window() {
+        let mut session = Session::new("editor.exe");
+        for _ in 0..COMMIT_CACHE_CAPACITY {
+            session.preedit.push_str("いった").expect("fits");
+            session.record_current_commit("言った", 1, 0, 1);
+            session.reset();
+        }
+        for _ in 0..4 {
+            session.preedit.push_str("かんすう").expect("fits");
+            session.record_current_commit("関数", 2, 1, 1);
+            session.reset();
+        }
+
+        assert_eq!(
+            session.domain_it_ratio_per_mille(),
+            u16::try_from(4_000 / COMMIT_CACHE_CAPACITY).expect("ratio")
+        );
+        assert!(session.undo_commit().is_some());
+        assert_eq!(
+            session.domain_it_ratio_per_mille(),
+            u16::try_from(4_000 / COMMIT_CACHE_CAPACITY).expect("ratio"),
+            "the recency entry remains until the host reports Applied"
+        );
+        assert!(session.acknowledge_undo_commit());
+        assert_eq!(
+            session.domain_it_ratio_per_mille(),
+            u16::try_from(3_000 / (COMMIT_CACHE_CAPACITY - 1)).expect("ratio")
+        );
+    }
+
+    #[test]
+    fn commit_undo_unknown_clears_untrusted_carry_and_personal_context() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("かな").expect("fits");
+        session.record_current_commit("加奈", 77, 1, 1);
+        session.reset();
+        assert_eq!(session.carry_right_id(), 77);
+        assert!(session.has_carry);
+        assert!(session.cached_surface_fingerprint("かな").is_some());
+
+        assert!(session.undo_commit().is_some());
+        assert!(session.undo_pending());
+        assert!(session.abort_undo_commit());
+
+        assert!(!session.undo_pending());
+        assert_eq!(session.carry_right_id(), 0);
+        assert!(!session.has_carry);
+        assert_eq!(session.domain_it_ratio_per_mille(), 0);
+        assert_eq!(session.cached_surface_fingerprint("かな"), None);
+        assert!(session.undo_commit().is_none());
+    }
+
+    #[test]
+    fn sentence_boundary_and_sensitive_scope_gate_recent_context() {
+        let mut session = Session::new("editor.exe");
+        session.preedit.push_str("いしゃに").expect("fits");
+        session.record_current_commit("医者に", 42, 0, 2);
+        assert_eq!(session.carry_right_id(), 42);
+        session.reset();
+
+        session.preedit.push_str("おわり").expect("fits");
+        session.record_current_commit("終わり。", 9, 0, 1);
+        assert_eq!(session.carry_right_id(), 0);
+        session.reset();
+
+        session.scope = InputScope::Password;
+        session.preedit.push_str("ひみつ").expect("fits");
+        session.record_current_commit("秘密", 7, 1, 1);
+        assert_eq!(session.carry_right_id(), 0);
+        assert_eq!(session.cached_surface_fingerprint("ひみつ"), None);
+        session.reset();
+        assert_eq!(session.undo_commit(), None);
     }
 
     #[test]

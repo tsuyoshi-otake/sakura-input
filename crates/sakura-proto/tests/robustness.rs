@@ -9,7 +9,8 @@
 
 use sakura_proto::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
-    InputScope, KeyCode, KeyInput, Modifiers, Request, FRAME_HEADER_LEN, MAX_PAYLOAD,
+    Error, InputScope, KeyCode, KeyInput, Modifiers, Request, Response, ScreenRect,
+    UndoCommitOutcome, FRAME_HEADER_LEN, MAX_COMMIT_BYTES, MAX_PAYLOAD,
 };
 
 /// A minimal xorshift64* PRNG. Deterministic given a seed, so a failing
@@ -70,6 +71,16 @@ fn iters() -> usize {
         .unwrap_or(200_000)
 }
 
+fn env_u64(name: &str) -> Option<u64> {
+    std::env::var(name).ok()?.parse().ok()
+}
+
+fn campaign_seed(domain: u64) -> u64 {
+    let shard = env_u64("SAKURA_FUZZ_SHARD").unwrap_or(0);
+    let seed = env_u64("SAKURA_FUZZ_SEED").unwrap_or(0);
+    domain ^ shard.rotate_left(17) ^ seed.rotate_left(31)
+}
+
 /// Random byte strings of random lengths must never make any decoder
 /// panic; they may of course fail to decode.
 #[test]
@@ -109,8 +120,33 @@ fn sample_valid_request_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
             process_name: "notepad.exe".to_string(),
         },
         Request::SendKey { session: 42, key },
+        Request::ProbeKey {
+            session: 42,
+            scope: InputScope::Normal,
+            fresh_context: false,
+            key,
+        },
+        Request::ProbeKey {
+            session: 42,
+            scope: InputScope::Password,
+            fresh_context: true,
+            key,
+        },
         Request::Commit { session: 42 },
         Request::Revert { session: 42 },
+        Request::UndoCommit {
+            session: 42,
+            outcome: UndoCommitOutcome::Unknown,
+        },
+        Request::Reconvert {
+            session: 42,
+            text: "仮名".to_owned(),
+            preview: false,
+        },
+        Request::ClearLearning,
+        Request::ClearInputHistory,
+        Request::FlushInputHistory,
+        Request::InputHistoryStats,
         Request::SetInputScope {
             session: 42,
             scope: InputScope::Password,
@@ -118,6 +154,16 @@ fn sample_valid_request_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
         Request::DeleteSession { session: 42 },
         Request::Ping,
         Request::Shutdown,
+        Request::SetUiPlacement {
+            session: 42,
+            anchor: Some(ScreenRect {
+                left: -50,
+                top: 10,
+                right: 25,
+                bottom: 30,
+            }),
+            renderer_visible: true,
+        },
     ];
     requests
         .iter()
@@ -128,6 +174,101 @@ fn sample_valid_request_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
             dst
         })
         .collect()
+}
+
+#[test]
+fn probe_key_fresh_context_bool_rejects_nonzero_nonone_wire_values() {
+    let request = Request::ProbeKey {
+        session: 42,
+        scope: InputScope::Normal,
+        fresh_context: false,
+        key: KeyInput {
+            code: KeyCode::Char,
+            ch: Some('a'),
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: true,
+        },
+    };
+    let mut frame = Vec::new();
+    encode_request(&request, 7, &mut frame).expect("encode ProbeKey request");
+
+    // Frame header + version + request id + message type + session + scope.
+    const FRESH_CONTEXT_OFFSET: usize = FRAME_HEADER_LEN + 2 + 8 + 2 + 8 + 1;
+    assert_eq!(frame[FRESH_CONTEXT_OFFSET], 0);
+    for invalid in [2u8, u8::MAX] {
+        let mut mutated = frame.clone();
+        mutated[FRESH_CONTEXT_OFFSET] = invalid;
+        assert_eq!(
+            decode_request(&mutated[FRAME_HEADER_LEN..]),
+            Err(Error::BadBool),
+            "fresh_context wire byte {invalid} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn undo_commit_outcomes_are_strict_and_exact_text_is_bounded() {
+    let request = Request::UndoCommit {
+        session: 42,
+        outcome: UndoCommitOutcome::Unknown,
+    };
+    let mut frame = Vec::new();
+    encode_request(&request, 7, &mut frame).expect("encode undo request");
+
+    // The outcome follows version (2), request id (8), message type (2), and
+    // session (8) in the payload. Unknown values must not be accepted as a
+    // terminal engine state.
+    let outcome_offset = FRAME_HEADER_LEN + 2 + 8 + 2 + 8;
+    frame[outcome_offset..outcome_offset + 2].copy_from_slice(&0u16.to_le_bytes());
+    assert_eq!(
+        decode_request(&frame[FRAME_HEADER_LEN..]),
+        Err(Error::BadEnum)
+    );
+
+    let too_long = Response::Output(sakura_proto::Output {
+        consumed: true,
+        beep: false,
+        mode: None,
+        preedit: None,
+        commit: None,
+        delete_before: "a".repeat(MAX_COMMIT_BYTES + 1),
+        candidates: None,
+    });
+    let mut output_frame = Vec::new();
+    assert_eq!(
+        encode_response(&too_long, 8, &mut output_frame),
+        Err(Error::TooLarge)
+    );
+
+    // `Output::decode` must reject the exact-delete field before allocating
+    // an owned string. Make a structurally complete frame whose borrowed
+    // field is over the commit cap, so the expected result is TooLarge rather
+    // than Truncated.
+    let valid = Response::Output(sakura_proto::Output {
+        consumed: true,
+        beep: false,
+        mode: None,
+        preedit: None,
+        commit: None,
+        delete_before: String::new(),
+        candidates: None,
+    });
+    let mut oversized_decode_frame = Vec::new();
+    encode_response(&valid, 9, &mut oversized_decode_frame).expect("encode valid output");
+    let candidate_tag = oversized_decode_frame.pop().expect("candidate tag");
+    oversized_decode_frame.extend(std::iter::repeat_n(b'a', MAX_COMMIT_BYTES + 1));
+    oversized_decode_frame.push(candidate_tag);
+    let payload_len = u32::try_from(oversized_decode_frame.len() - FRAME_HEADER_LEN)
+        .expect("payload length fits");
+    oversized_decode_frame[..FRAME_HEADER_LEN].copy_from_slice(&payload_len.to_le_bytes());
+    let delete_len_offset = FRAME_HEADER_LEN + 2 + 8 + 2 + 1 + 1 + 1 + 1 + 1;
+    oversized_decode_frame[delete_len_offset..delete_len_offset + 2]
+        .copy_from_slice(&u16::try_from(MAX_COMMIT_BYTES + 1).unwrap().to_le_bytes());
+    assert_eq!(
+        decode_response(&oversized_decode_frame[FRAME_HEADER_LEN..]),
+        Err(Error::TooLarge)
+    );
 }
 
 fn sample_valid_response_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
@@ -150,6 +291,8 @@ fn sample_valid_response_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
                 cursor: 1,
             }),
             commit: Some("commit".to_string()),
+            delete_before: String::new(),
+            candidates: None,
         }),
         Response::Pong,
         Response::Ok,
@@ -264,5 +407,46 @@ fn payload_len_rejects_declared_lengths_above_max_payload() {
         } else {
             assert_eq!(result, Ok(len as usize));
         }
+    }
+}
+
+/// The Phase 5 soak entry point. Unlike the short regression tests above, this
+/// target is ignored by default and accepts both a shard and a per-slice seed.
+/// A resumable runner changes the seed after every successful slice, so
+/// restarting a campaign advances coverage instead of replaying the same bytes.
+#[test]
+#[ignore = "long deterministic campaign; set SAKURA_FUZZ_ITERS, SAKURA_FUZZ_SHARD, and SAKURA_FUZZ_SEED"]
+fn sharded_protocol_campaign() {
+    let iterations = iters();
+    let shard = env_u64("SAKURA_FUZZ_SHARD").unwrap_or(0);
+    let slice_seed = env_u64("SAKURA_FUZZ_SEED").unwrap_or(0);
+    let mut random = Xorshift64Star::new(campaign_seed(0x5A6B_72F0_0000_0001));
+
+    for iteration in 0..iterations {
+        let seed = random.state;
+        let len = match iteration % 8 {
+            0 => random.below(4),
+            1 => FRAME_HEADER_LEN + random.below(64),
+            2 => 255 + random.below(4),
+            3 => 4_096 + random.below(64),
+            _ => random.below(1_024),
+        };
+        let mut bytes = vec![0u8; len];
+        random.fill_bytes(&mut bytes);
+
+        let outcome = std::panic::catch_unwind(|| {
+            let _ = decode_request(&bytes);
+            let _ = decode_response(&bytes);
+            let _ = peek_header(&bytes);
+            if bytes.len() >= FRAME_HEADER_LEN {
+                let header = [bytes[0], bytes[1], bytes[2], bytes[3]];
+                let _ = payload_len(&header);
+            }
+        });
+        assert!(
+            outcome.is_ok(),
+            "protocol decoder panicked at shard {shard}, slice seed {slice_seed}, iteration {iteration}, PRNG seed {seed:#018x}, bytes {}",
+            bytes.len()
+        );
     }
 }

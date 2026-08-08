@@ -1,0 +1,249 @@
+[CmdletBinding()]
+param(
+    [string]$IsccPath,
+
+    [string]$ReportPath = (Join-Path $PSScriptRoot '..\installer\out\installer-build.report.json')
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$setupPath = Join-Path $repositoryRoot 'installer\setup.iss'
+$installerPath = Join-Path $repositoryRoot 'installer\out\sakura_setup.exe'
+$dictionaryReportPath = Join-Path $repositoryRoot 'artifacts\release\dictionary-build.report.json'
+$ReportPath = [IO.Path]::GetFullPath($ReportPath)
+
+function Get-Sha256 {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $algorithm = [Security.Cryptography.SHA256]::Create()
+        try {
+            return [Convert]::ToHexString($algorithm.ComputeHash($stream)).ToLowerInvariant()
+        }
+        finally {
+            $algorithm.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Get-TextSha256 {
+    param([Parameter(Mandatory)][string]$Text)
+
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return [Convert]::ToHexString(
+            $algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))
+        ).ToLowerInvariant()
+    }
+    finally {
+        $algorithm.Dispose()
+    }
+}
+
+function Resolve-Iscc {
+    if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
+        $resolved = [IO.Path]::GetFullPath($IsccPath)
+        if (-not [IO.File]::Exists($resolved)) { throw "ISCC is missing: $resolved" }
+        return $resolved
+    }
+
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command) { return $command.Source }
+
+    $candidates = [Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $candidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $candidates.Add((Join-Path $env:USERPROFILE 'AppData\Local\Programs\Inno Setup 6\ISCC.exe'))
+    }
+    if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
+        $candidates.Add((Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates.Add((Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'))
+    }
+    foreach ($candidate in $candidates) {
+        if ([IO.File]::Exists($candidate)) { return $candidate }
+    }
+    throw 'Inno Setup 6 compiler (ISCC.exe) was not found'
+}
+
+function Get-CanonicalVersion {
+    $cargoText = [IO.File]::ReadAllText((Join-Path $repositoryRoot 'Cargo.toml'))
+    $workspaceMatch = [regex]::Match(
+        $cargoText,
+        '(?ms)^\[workspace\.package\]\s*(?<body>.*?)(?=^\[|\z)'
+    )
+    if (-not $workspaceMatch.Success) { throw 'Cargo.toml has no [workspace.package] section' }
+    $cargoVersionMatch = [regex]::Match(
+        $workspaceMatch.Groups['body'].Value,
+        '(?m)^version\s*=\s*"(?<version>[^"]+)"\s*$'
+    )
+    if (-not $cargoVersionMatch.Success) { throw 'workspace package version is missing' }
+    $version = $cargoVersionMatch.Groups['version'].Value
+    if ($version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+        throw "workspace package version is not canonical: $version"
+    }
+
+    $setupText = [IO.File]::ReadAllText($setupPath)
+    $setupMatches = [regex]::Matches(
+        $setupText,
+        '(?m)^#define AppProductVersion "(?<version>[^"]+)"$'
+    )
+    if ($setupMatches.Count -ne 1) { throw 'setup.iss must contain exactly one AppProductVersion' }
+    $setupVersion = $setupMatches[0].Groups['version'].Value.Trim()
+    if ($setupVersion -cne $version) {
+        throw "installer version $setupVersion does not match workspace version $version"
+    }
+    return $version
+}
+
+function Get-ArtifactRecord {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $item = [IO.FileInfo]::new($Path)
+    if (-not $item.Exists) { throw "release payload is missing: $Path" }
+    return [ordered]@{
+        path = [IO.Path]::GetRelativePath($repositoryRoot, $item.FullName).Replace('\', '/')
+        bytes = $item.Length
+        sha256 = Get-Sha256 $item.FullName
+    }
+}
+
+$version = Get-CanonicalVersion
+$iscc = Resolve-Iscc
+$payloadPaths = @(
+    'target\x86_64-pc-windows-msvc\release\sakura_tsf.dll',
+    'target\x86_64-pc-windows-msvc\release\sakura_engine.exe',
+    'target\x86_64-pc-windows-msvc\release\sakura_renderer.exe',
+    'target\x86_64-pc-windows-msvc\release\sakura_regtool.exe',
+    'target\x86_64-pc-windows-msvc\release\sakura_logon.exe',
+    'target\x86_64-pc-windows-msvc\release\sakura_settings.exe',
+    'target\x86_64-pc-windows-msvc\release\sakura_settings_payload.exe',
+    'artifacts\release\system.dic',
+    'LICENSE',
+    'README.md',
+    'docs\guide-ja.md',
+    'THIRD_PARTY_NOTICES.md',
+    'THIRD_PARTY_LICENSES\mozc-dictionary.txt',
+    'THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt'
+)
+$payloads = [Collections.Generic.List[object]]::new()
+foreach ($relativePath in $payloadPaths) {
+    $payloads.Add((Get-ArtifactRecord (Join-Path $repositoryRoot $relativePath)))
+}
+
+if (-not [IO.File]::Exists($dictionaryReportPath)) {
+    throw "dictionary provenance report is missing: $dictionaryReportPath"
+}
+$dictionaryReport = [IO.File]::ReadAllText($dictionaryReportPath) | ConvertFrom-Json
+if ($dictionaryReport.schema_version -ne 1 -or $dictionaryReport.deterministic_repeat -ne $true) {
+    throw 'dictionary provenance does not prove a deterministic repeat build'
+}
+$dictionaryRecord = $payloads | Where-Object { $_.path -ceq 'artifacts/release/system.dic' }
+if ($null -eq $dictionaryReport.artifacts.dictionary -or
+    $dictionaryReport.artifacts.dictionary.sha256 -cne $dictionaryRecord.sha256 -or
+    [long]$dictionaryReport.artifacts.dictionary.bytes -ne [long]$dictionaryRecord.bytes) {
+    throw 'packaged dictionary does not match its deterministic build report'
+}
+
+$fingerprintLines = [Collections.Generic.List[string]]::new()
+foreach ($payload in $payloads) {
+    $fingerprintLines.Add("$($payload.path)|$($payload.bytes)|$($payload.sha256)")
+}
+$buildIdInput = $version + "`n" + ($fingerprintLines -join "`n") + "`n"
+$buildId = (Get-TextSha256 -Text $buildIdInput).Substring(0, 16)
+
+$buildStarted = [DateTime]::UtcNow
+$startInfo = [Diagnostics.ProcessStartInfo]::new()
+$startInfo.FileName = $iscc
+$startInfo.ArgumentList.Add("/dAppBuildId=$buildId")
+$startInfo.ArgumentList.Add("/dAppVersionedDir={app}\versions\$version-$buildId")
+$startInfo.ArgumentList.Add($setupPath)
+$startInfo.WorkingDirectory = Join-Path $repositoryRoot 'installer'
+$startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
+$startInfo.RedirectStandardOutput = $true
+$startInfo.RedirectStandardError = $true
+$process = [Diagnostics.Process]::new()
+$process.StartInfo = $startInfo
+try {
+    if (-not $process.Start()) { throw 'ISCC did not start' }
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    $exitCode = $process.ExitCode
+}
+finally {
+    $process.Dispose()
+}
+$compilerOutput = ($stdout + $stderr).Replace("`r`n", "`n")
+Write-Host $compilerOutput.TrimEnd()
+if ($exitCode -ne 0) { throw "ISCC failed with exit code $exitCode" }
+if ($compilerOutput -match '(?m)^Warning:') { throw 'ISCC emitted a warning; installer build fails closed' }
+if ($compilerOutput -notmatch '(?m)^Successful compile') {
+    throw 'ISCC returned success without its explicit successful terminal message'
+}
+$compilerVersionMatches = [regex]::Matches(
+    $compilerOutput,
+    'Compiler engine version:\s*(?:Inno Setup\s+)?(?<version>[0-9]+(?:\.[0-9]+){1,3})'
+)
+if ($compilerVersionMatches.Count -ne 1) {
+    throw "ISCC reported $($compilerVersionMatches.Count) recognizable compiler-version lines; exactly one is required"
+}
+$compilerVersion = [version]$compilerVersionMatches[0].Groups['version'].Value
+if ($compilerVersion -lt [version]'6.3.0') {
+    throw "Inno Setup $compilerVersion is too old for x64compatible packaging"
+}
+
+$installer = [IO.FileInfo]::new($installerPath)
+if (-not $installer.Exists -or $installer.Length -le 0) { throw 'installer output is missing or empty' }
+if ($installer.LastWriteTimeUtc -lt $buildStarted.AddSeconds(-2)) {
+    throw 'installer output was not recreated by this build'
+}
+$fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($installer.FullName)
+if ($fileVersion.ProductVersion -notlike "$version*") {
+    throw "installer product version '$($fileVersion.ProductVersion)' does not match $version"
+}
+
+$report = [ordered]@{
+    schema_version = 1
+    completed_utc = [DateTime]::UtcNow.ToString('O')
+    version = $version
+    build_id = $buildId
+    compiler = [ordered]@{
+        path = $iscc
+        version = $compilerVersion.ToString()
+        output_sha256 = Get-TextSha256 $compilerOutput
+        warnings = 0
+    }
+    dictionary_provenance_sha256 = Get-Sha256 $dictionaryReportPath
+    payloads = @($payloads)
+    installer = Get-ArtifactRecord $installer.FullName
+}
+$reportDirectory = [IO.Path]::GetDirectoryName($ReportPath)
+[IO.Directory]::CreateDirectory($reportDirectory) | Out-Null
+$temporaryReport = Join-Path $reportDirectory ('.installer-build.' + [guid]::NewGuid().ToString('N') + '.tmp')
+try {
+    [IO.File]::WriteAllText(
+        $temporaryReport,
+        (($report | ConvertTo-Json -Depth 6) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    [IO.File]::Move($temporaryReport, $ReportPath, $true)
+}
+finally {
+    if ([IO.File]::Exists($temporaryReport)) { [IO.File]::Delete($temporaryReport) }
+}
+
+Write-Host "installer built and audited: $installerPath"
+Write-Host "audit report: $ReportPath"

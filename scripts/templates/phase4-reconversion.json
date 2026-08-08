@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "phase": 4,
+  "responsible_human": "",
+  "rows": [
+    {
+      "host": "Word",
+      "observed_at_utc": "",
+      "committed_text_reentered_conversion": false,
+      "candidate_ui_visible": false,
+      "commit_succeeded": false,
+      "evidence": {
+        "path": "",
+        "sha256": ""
+      },
+      "notes": ""
+    },
+    {
+      "host": "Notepad",
+      "observed_at_utc": "",
+      "committed_text_reentered_conversion": false,
+      "candidate_ui_visible": false,
+      "commit_succeeded": false,
+      "evidence": {
+        "path": "",
+        "sha256": ""
+      },
+      "notes": ""
+    }
+  ],
+  "recorded_at_utc": ""
+}

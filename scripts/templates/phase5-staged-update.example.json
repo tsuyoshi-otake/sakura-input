@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "phase": 5,
+  "responsible_human": "REPLACE_WITH_NAME",
+  "machine": "REPLACE_WITH_NONSECRET_MACHINE_LABEL",
+  "observed_at_utc": "REPLACE_WITH_UTC_TIMESTAMP",
+  "source_version": "REPLACE_WITH_OLDER_VERSION",
+  "target_version": "1.0.0",
+  "source_engine_sha256": "REPLACE",
+  "target_engine_sha256": "REPLACE",
+  "source_dictionary_sha256": "REPLACE",
+  "target_dictionary_sha256": "REPLACE",
+  "installer_exit_code": 0,
+  "engine_copied_before_activation": false,
+  "dictionary_copied_before_activation": false,
+  "old_dll_new_engine_round_trip": false,
+  "dll_terminal": "pending",
+  "active_dll_version": "",
+  "typing_before_update": false,
+  "typing_after_activation": false,
+  "typing_after_new_host_restart": false,
+  "evidence": {
+    "path": "REPLACE",
+    "sha256": "REPLACE"
+  }
+}

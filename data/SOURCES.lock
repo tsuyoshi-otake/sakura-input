@@ -1,0 +1,33 @@
+schema_version = 1
+
+[mozc]
+repository = "https://github.com/google/mozc"
+revision = "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732"
+dictionary_glob = "src/data/dictionary_oss/dictionary??.txt"
+connection = "src/data/dictionary_oss/connection_single_column.txt"
+license_files = ["LICENSE", "src/data/dictionary_oss/README.txt"]
+output_license = "LicenseRef-Mozc-Dictionary"
+
+[mozc.trim]
+max_word_cost = 6900
+max_candidates_per_reading = 12
+
+[smile_chat]
+repository = "https://github.com/systemexe-research-and-development/smile-chat"
+revision = "b5cada441b41c207ab49bf2cd5f1d9c5614c5b92"
+glossary_glob = "frontend/public/glossaries/ja_part*.json"
+license_file = "frontend/public/LICENSE"
+output_license = "MIT"
+
+[smile_chat.defaults]
+katakana_left_id = 1851
+katakana_right_id = 1851
+ascii_left_id = 1851
+ascii_right_id = 1851
+base_word_cost = 4800
+
+[sakura_curated]
+path = "data/curated-terms.tsv"
+license_file = "LICENSE"
+output_license = "MIT"
+purpose = "Canonical casing and Shift+ASCII terms absent from the generated glossary"

@@ -1,6 +1,6 @@
 [package]
 name = "dictc"
-description = "Dictionary compiler: TSV sources to the read-only mmap image (stub until Phase 2)."
+description = "Dictionary compiler: licensed TSV sources to Sakura's read-only mmap image."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,8 +12,21 @@ authors.workspace = true
 name = "dictc"
 path = "src/main.rs"
 
+[[bin]]
+name = "glossary-import"
+path = "src/bin/glossary_import.rs"
+
+[[bin]]
+name = "mozc-trim"
+path = "src/bin/mozc_trim.rs"
+
+[[bin]]
+name = "corpus-eval"
+path = "src/bin/corpus_eval.rs"
+
 [dependencies]
 sakura-core.workspace = true
+sakura-proto.workspace = true
 
 [lints]
 workspace = true

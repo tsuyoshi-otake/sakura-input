@@ -1,11 +1,9 @@
 //! Sakura Input's renderer: the parts of the IME the user looks at.
 //!
-//! In this phase that is the mode indicator — the floating あ / A and the
-//! notification-area icon (DESIGN 8) — plus the watchdog that keeps the
-//! engine running (DESIGN 3). The candidate window arrives in a later
-//! phase and belongs here for the same reason: it is a window, and windows
-//! are slow and can hang, and neither the engine nor a DLL living inside
-//! somebody else's application can afford to be either.
+//! The renderer owns the floating mode indicator, notification-area icon,
+//! candidate popup, and engine watchdog. Keeping all actual windows here
+//! means neither conversion nor a DLL inside somebody else's application can
+//! be stalled by paint work.
 //!
 //! # Shape
 //!
@@ -27,16 +25,23 @@
 // outside tests, which need the ordinary test-harness console.
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
+mod accessibility;
+mod candidate;
 mod glyph;
 mod indicator;
 mod tray;
 mod watch;
 
 use std::ffi::c_void;
+use std::sync::{Arc, Mutex};
 
+use sakura_proto::UiState;
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::Threading::CreateMutexW;
+use windows::Win32::UI::HiDpi::{
+    SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowLongPtrW,
     PostMessageW, PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SetWindowLongPtrW,
@@ -44,6 +49,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_OVERLAPPED,
 };
 
+use candidate::CandidateWindow;
 use indicator::Indicator;
 use tray::Tray;
 use watch::Signal;
@@ -72,9 +78,8 @@ const SINGLE_INSTANCE: PCWSTR = windows::core::w!(r"Local\SakuraInputRenderer");
 /// is the module that knows what else that window uses.
 pub const WM_TRAY: u32 = WM_APP + 1;
 
-/// The watcher reporting a mode. `wparam` is a [`glyph::code`], or zero for
-/// "no mode".
-const WM_MODE: u32 = WM_APP + 2;
+/// The watcher reporting that the single-slot UI mailbox has new state.
+const WM_UI: u32 = WM_APP + 2;
 
 /// The watcher reporting that the feed has ended for good.
 const WM_ENDED: u32 = WM_APP + 3;
@@ -83,7 +88,11 @@ const WM_ENDED: u32 = WM_APP + 3;
 /// through the host window's user data.
 struct App {
     indicator: Indicator,
+    candidates: CandidateWindow,
     tray: Tray,
+    /// A latest-value mailbox shared with the blocking watcher. Multiple
+    /// engine revisions can coalesce while the UI thread is busy painting.
+    mailbox: Arc<Mutex<Option<UiState>>>,
     /// `TaskbarCreated`, resolved at startup. Its value is assigned by the
     /// system at run time, so it cannot be a constant and has to be carried
     /// to the place that compares against it.
@@ -91,14 +100,23 @@ struct App {
 }
 
 fn main() -> Result<()> {
+    let _com = accessibility::ComApartment::new()?;
+    // SAFETY: called before any window is created. Failure means a manifest
+    // or host policy already chose awareness; continuing is the safe fallback.
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
     if already_running()? {
         return Ok(());
     }
 
     let host = create_host()?;
+    let mailbox = Arc::new(Mutex::new(None));
     let mut app = App {
         indicator: Indicator::new()?,
+        candidates: CandidateWindow::new()?,
         tray: Tray::new(host),
+        mailbox: Arc::clone(&mailbox),
         // SAFETY: the name is a static wide literal. A zero result means
         // the message could not be registered, which only costs the
         // Explorer-restart recovery — and zero matches no real message, so
@@ -120,7 +138,7 @@ fn main() -> Result<()> {
     // hands it straight back to `PostMessageW`, which is documented to be
     // callable from any thread.
     let target = host.0 as isize;
-    watch::spawn(move |signal| report(target, signal));
+    watch::spawn(move |signal| report(target, &mailbox, signal));
 
     pump();
 
@@ -195,17 +213,23 @@ fn create_host() -> Result<HWND> {
 }
 
 /// Hands a watcher signal to the UI thread.
-fn report(target: isize, signal: Signal) {
+fn report(target: isize, mailbox: &Mutex<Option<UiState>>, signal: Signal) {
     let window = HWND(target as *mut c_void);
-    let (message, w) = match signal {
-        Signal::Ui(state) => (WM_MODE, state.mode.map_or(0, glyph::code)),
-        Signal::Ended => (WM_ENDED, 0),
+    let message = match signal {
+        Signal::Ui(state) => {
+            let mut slot = mailbox
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *slot = Some(state);
+            WM_UI
+        }
+        Signal::Ended => WM_ENDED,
     };
     // SAFETY: `window` is the host window, which outlives the watcher
     // thread — that thread is only unblocked by the process ending. A
     // failed post means the window is gone and there is nothing to tell.
     unsafe {
-        let _ = PostMessageW(Some(window), message, WPARAM(w as usize), LPARAM(0));
+        let _ = PostMessageW(Some(window), message, WPARAM(0), LPARAM(0));
     }
 }
 
@@ -234,14 +258,22 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
     let taskbar_created = (!app.is_null()).then(|| unsafe { (*app).taskbar_created });
 
     match message {
-        WM_MODE if !app.is_null() => {
+        WM_UI if !app.is_null() => {
             // SAFETY: `app` is the live local from `main`, and this runs on
             // the thread that owns it — the pump dispatches on the main
             // thread, so no other reference to it exists at this moment.
             let app = unsafe { &mut *app };
-            if let Some(mode) = glyph::from_code(w.0 as isize) {
-                app.indicator.show(mode);
-                let _ = app.tray.set(mode);
+            let state = app
+                .mailbox
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .take();
+            if let Some(state) = state {
+                if let Some(mode) = state.mode {
+                    app.indicator.show(mode);
+                    let _ = app.tray.set(mode);
+                }
+                app.candidates.update(&state);
             }
             LRESULT(0)
         }
@@ -281,7 +313,7 @@ mod tests {
     /// click coordinates happened to encode.
     #[test]
     fn the_application_messages_do_not_collide() {
-        let all = [WM_TRAY, WM_MODE, WM_ENDED];
+        let all = [WM_TRAY, WM_UI, WM_ENDED];
         for (i, a) in all.iter().enumerate() {
             assert!(
                 *a >= WM_APP,
@@ -293,18 +325,15 @@ mod tests {
         }
     }
 
-    /// `report` has to turn "no mode" into the zero that
-    /// [`glyph::from_code`] rejects, so an engine reporting no mode leaves
-    /// the indicator alone instead of drawing an arbitrary glyph.
+    /// A state without a mode does not fabricate one for the indicator.
     #[test]
     fn no_mode_posts_the_code_that_decodes_to_nothing() {
         let absent: Option<Mode> = None;
-        assert_eq!(absent.map_or(0, glyph::code), 0);
-        assert_eq!(glyph::from_code(0), None);
+        assert_eq!(absent.map(glyph::code), None);
 
         let present = Some(Mode::Katakana);
         assert_eq!(
-            glyph::from_code(present.map_or(0, glyph::code)),
+            present.and_then(|mode| glyph::from_code(glyph::code(mode))),
             Some(Mode::Katakana)
         );
     }

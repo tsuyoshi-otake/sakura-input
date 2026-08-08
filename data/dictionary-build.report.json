@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "mozc_revision": "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732",
+  "glossary_revision": "b5cada441b41c207ab49bf2cd5f1d9c5614c5b92",
+  "deterministic_repeat": true,
+  "inputs": {
+    "curated_terms": {
+      "file": "curated-terms.tsv",
+      "bytes": 10110,
+      "sha256": "8fa9b141bb4db0e68e8e6a8a829fec1c7072d14458bf482229c59fd1aa9f6d72"
+    }
+  },
+  "artifacts": {
+    "system_tsv": {
+      "file": "mozc-system.tsv",
+      "bytes": 22863752,
+      "sha256": "7ec9967d9c5d4ee019252c2fb60b94e33a610f6c6d0134643a481110de0735c6"
+    },
+    "trim_report": {
+      "file": "mozc-trim.report.json",
+      "bytes": 417,
+      "sha256": "09b1760c80fcc4f0fec6190deccd7f3aa1b5173a08da840c088cfad3fe516782"
+    },
+    "overlay_tsv": {
+      "file": "it-terms.tsv",
+      "bytes": 9085252,
+      "sha256": "3c9e02a7bbad90c4a374655aa1eea3ef1c57170db5dba59054aced57731a3a46"
+    },
+    "overlay_report": {
+      "file": "it-terms.report.json",
+      "bytes": 4126,
+      "sha256": "e8b4854abffeba63ad9ce29ac167b54dddaec7e4784672a65ea3dbf07f8d6592"
+    },
+    "dictionary": {
+      "file": "system.dic",
+      "bytes": 35906552,
+      "sha256": "50e17c1fa5695c4f0eb29c2acbd144f55bfd2cdffff6e3c58d56a49d04a6e548"
+    }
+  }
+}

@@ -126,6 +126,29 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
 
 ## Windows specifics
 
+- **Real-process tests must isolate `LOCALAPPDATA` unless they explicitly test
+  the installed user profile.** The engine's learning, configuration, user
+  dictionary, and diagnostics all derive from that root. A candidate UIA test
+  once restored a previously learned candidate at index 11 and opened on page 2
+  before the test sent PageDown. A unique per-run app-data directory both makes
+  the test deterministic and prevents verification from mutating user state.
+
+- **Auxiliary indexes over a mapped dictionary should retain image offsets, not
+  copied records.** Copying every 24-byte entry into the prediction index pushed
+  private working set over the 15 MiB release gate. A four-byte entry index lets
+  the hot path materialize the validated record from the read-only mapping only
+  when ranking or rendering it; the compact index passed the footprint gate
+  while keeping end-to-end prediction p99 below 0.3 ms.
+
+- **A server-side UI Automation raw provider needs COM initialized on the
+  renderer UI thread before the provider/window is created.** The candidate
+  window handled `WM_GETOBJECT` and called `UiaReturnRawElementProvider`, yet a
+  separate real UIA client saw only the generic host-window provider (empty
+  Name and no Sakura AutomationId). Adding an STA guard before window creation
+  made the custom `IRawElementProviderSimple` discoverable; the real-process
+  `candidate_uia` test now proves Name, AutomationId, control type, bounding
+  rectangle, paging updates, and hidden/off-screen state.
+
 - **`FILE_APPEND_DATA` and `FILE_CREATE_PIPE_INSTANCE` are the same bit
   (0x0004).** A named-pipe client that asks for `GENERIC_READ | GENERIC_WRITE`
   is therefore also asking for permission to create a pipe instance, which the
@@ -148,6 +171,46 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   into helpers that never declared `[CmdletBinding()]`. Verified with a
   purpose-built probe script rather than assumed.
 
+- **Opening the engine pipe is not a successful protocol handshake.** The
+  renderer watchdog used to reset its reconnect delay as soon as `CreateFileW`
+  succeeded. A reachable engine that rejected `Hello` therefore produced an
+  immediate reconnect storm, even though the source comment claimed backoff
+  would slow it. Only a valid `Hello` may reset the delay; protocol rejection
+  retains exponential backoff up to the ceiling. The schedule is now a tested
+  explicit terminal transition in `sakura-renderer::watch`.
+
+- **Every child wait must consume the caller's remaining deadline, not a fresh
+  per-operation timeout.** `sakura-regtool --stop` had an overall deadline but
+  each pipe reconnect could independently wait the full two-second patient
+  budget, allowing the loop to overshoot its advertised terminal. Each connect
+  and sleep is now capped by the remaining duration, with the cap covered by a
+  regression test.
+
+- **After a synthetic `WM_DPICHANGED`, wait relative to the most recently
+  observed rectangle.** The live candidate UIA test compared the post-DPI move
+  against its original caret rectangle. Because an earlier placement had
+  already changed that rectangle, the wait completed immediately on stale
+  state and raced the new placement. Capturing the DPI rectangle first and
+  requiring a subsequent change made the real HWND/UIA assertion deterministic.
+
+- **A Cargo target directory is not the installed product layout.** The
+  watchdog correctly starts its sibling engine, but that engine cannot discover
+  `{app}\dict\system.dic` when both executables live under `target\...\debug`.
+  Installed-layout supervisor tests must pass an explicit dictionary path to
+  the supervisor so the restarted child inherits the same validated data root.
+
+- **Diagnostic tier names must come from the same canonical vocabulary as CPU
+  dispatch.** The core selected `avx512bw` while the engine event log shortened
+  it to `avx512`, causing machine-readable Phase 1 evidence to reject a healthy
+  startup. `CpuTier::name()` now emits the exact core tier and has a unit test.
+
+- **Isolating `LOCALAPPDATA` also hides per-user developer tools.** A clean
+  verification profile could not find Inno Setup even though it was installed
+  under `%USERPROFILE%\AppData\Local\Programs`. Tool discovery used by isolated
+  real-process tests must accept an explicit path and check that fixed per-user
+  install location instead of treating the isolated application-data root as
+  the developer's tool root.
+
 ## This machine
 
 - **Every `cargo` invocation must be prefixed with
@@ -163,3 +226,83 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   live under `target/x86_64-pc-windows-msvc/release/`, not `target/release/`.
   Anything that hard-codes the old path (installer sources, size checks) is
   silently looking at a stale or absent file.
+
+## TSF re-entrancy safety
+
+- **Treat every separately re-entrant COM call as its own authority boundary.**
+  A lease check around an aggregate operation is insufficient when that
+  operation performs several host calls. Check authority before and after each
+  call, and suppress all later calls as soon as lifecycle, focus, context, or
+  operation ownership changes.
+
+- **Install cleanup ownership before validating authority after a successful
+  host Begin.** Re-entry can invalidate the caller while `BeginUIElement`
+  succeeds. Record the exact manager, element, and id first, then evaluate the
+  post-call lease; otherwise teardown loses the only matching `EndUIElement`.
+
+- **A refused single-threaded state borrow needs an out-of-band terminal
+  owner.** For delayed TSF callbacks, retain an exact operation token plus one
+  bounded deferred or lifecycle-owned settlement. Never leave a state such as
+  `QueryQueued` merely because a `RefCell` borrow or hidden-window post failed.
+
+- **Candidate teardown and candidate Begin/Update must share one exclusion
+  domain.** Hold it across subscription removal, `UnadviseSink`,
+  `EndUIElement`, controller restoration, and retained-work repost. Re-entrant
+  work must survive the old teardown and keep its own eventual cleanup owner.
+
+## Overflow-hazard test construction (dictionaries and prediction)
+
+- **`dictc::parse_entries` rejects any single `reading`/`surface` field over
+  `MAX_PREEDIT_BYTES` (1536 bytes) at compile time.** A dictionary TSV cannot
+  contain an oversized field to use as an overflow-test fixture — `dictc`
+  itself refuses to compile it. To construct a *runtime* overflow with a
+  *compile-valid* dictionary, attach a custom `AppProfile` with
+  `WidthPolicy { alnum: Width::Full, .. }` and use an ASCII surface: each
+  ASCII byte widens to a 3-byte fullwidth character during
+  `Normalizer::normalize_into`, so e.g. 600 dictc-legal ASCII bytes become
+  1800 bytes at render/commit time, well past the 1536-byte scratch buffer.
+  Confirmed working for `oversized_render_segment_dispatcher`
+  (`crates/sakura-engine/src/dispatch.rs`).
+
+- **`Converter::search_n_best` (`crates/sakura-core/src/conversion.rs`) used
+  to let one oversized N-best candidate's `ConversionError::OutputTooLong`
+  abort the whole search via `?`, discarding every candidate already found —
+  including the guaranteed-good cheapest one from `build_viterbi_candidate` —
+  and silently degrading the entire conversion to raw/unconverted display.**
+  Fixed by catching `Err(ConversionError::OutputTooLong)` specifically inside
+  the search loop and `continue`-ing instead of propagating it; every other
+  error variant still propagates via `return Err(error)`. This was found
+  purely as a side effect of writing an unrelated dispatch.rs regression
+  test — a symptom worth remembering: "conversion silently fell back to the
+  raw reading" is a search_n_best-abort symptom, not just a lattice/dictionary
+  problem.
+
+- **A `PredictionCandidate` surface is typed `FixedStr<MAX_PREDICTION_SURFACE_BYTES>`
+  (512 bytes) regardless of source (system dictionary, user dictionary, or
+  learned history) — `crates/sakura-engine/src/prediction.rs`.** An entry
+  whose surface exceeds 512 bytes is not truncated, it is silently dropped:
+  `system_candidate`/`user_candidate`/the history callback all build the
+  candidate with `.push_str(...).ok()?`, so a `None` return removes the
+  candidate from the ranked list with no error anywhere. Symptom: a
+  dictionary entry with `flags=predict` never appears as a Tab suggestion —
+  `State::Predicting` is never reached — even though the same dictionary
+  entry converts fine through ordinary (non-prediction) conversion. Check
+  `MAX_PREDICTION_SURFACE_BYTES` before assuming a Tab-suggestion bug is a
+  reading-length or indexing bug.
+
+- **`MAX_PREDICTION_SURFACE_BYTES` (512) × the widest possible
+  `normalize_into` expansion ratio (3, ASCII→fullwidth) exactly equals
+  `MAX_PREEDIT_BYTES` (1536).** This means `commit_suggestion_at`'s
+  `normalizer.normalize_into(candidate.surface(), ...)` call can **never**
+  actually overflow for any real (system/user/history) prediction candidate:
+  the maximal legitimate surface always lands exactly on the 1536-byte
+  boundary, and `FixedStr::push_str` accepts a write landing exactly on
+  capacity (`new_len > N` is the rejection condition, not `>=`). Do not write
+  a black-box regression test asserting `ErrorCode::TooLarge` from this path
+  — it is unreachable given today's constants, not merely hard to trigger.
+  Instead assert the boundary succeeds exactly at 1536 bytes (see
+  `a_maximal_suggestion_commit_fits_exactly_at_the_preedit_boundary` in
+  `crates/sakura-engine/src/dispatch.rs`), so a future change narrowing
+  either constant (or widening the expansion ratio) fails loudly here instead
+  of silently reopening the corruption `commit_suggestion_at`'s
+  stage-before-mutate ordering was written to prevent.

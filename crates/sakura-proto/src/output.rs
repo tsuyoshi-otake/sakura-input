@@ -13,11 +13,14 @@
 
 use crate::fixed::{FixedStr, FixedVec, Overflow};
 use crate::message::RES_OUTPUT;
-use crate::types::{Mode, Output, Preedit, Segment, UnderlineKind};
+use crate::types::{
+    Candidate, CandidateKind, CandidateList, CandidatePresentation, Mode, Output, Preedit, Segment,
+    UnderlineKind,
+};
 use crate::wire::{Error, Sink, SliceSink};
 use crate::{
-    RequestId, FRAME_HEADER_LEN, MAX_COMMIT_BYTES, MAX_PAYLOAD, MAX_PREEDIT_BYTES, MAX_SEGMENTS,
-    PROTOCOL_VERSION,
+    RequestId, CANDIDATE_PAGE_SIZE, FRAME_HEADER_LEN, MAX_CANDIDATES, MAX_CANDIDATE_TEXT_BYTES,
+    MAX_COMMIT_BYTES, MAX_PAYLOAD, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
 
 /// One segment's span within `OutputBuf`'s flat preedit text buffer.
@@ -31,6 +34,14 @@ pub struct SegSpan {
     pub start: u32,
     pub len: u32,
     pub underline: UnderlineKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct CandidateSpan {
+    text_start: u32,
+    text_len: u32,
+    annotation_start: u32,
+    annotation_len: u32,
 }
 
 /// A fixed-capacity, allocation-free builder for a `Response::Output`
@@ -50,6 +61,15 @@ pub struct OutputBuf {
     cursor: u32,
     has_commit: bool,
     commit: FixedStr<MAX_COMMIT_BYTES>,
+    delete_before: FixedStr<MAX_COMMIT_BYTES>,
+    has_candidates: bool,
+    candidate_kind: CandidateKind,
+    candidate_presentation: CandidatePresentation,
+    candidate_text: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    candidate_annotations: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    candidates: FixedVec<CandidateSpan, MAX_CANDIDATES>,
+    selected_candidate: u16,
+    candidate_page_size: u16,
 }
 
 impl OutputBuf {
@@ -65,6 +85,15 @@ impl OutputBuf {
             cursor: 0,
             has_commit: false,
             commit: FixedStr::new(),
+            delete_before: FixedStr::new(),
+            has_candidates: false,
+            candidate_kind: CandidateKind::Conversion,
+            candidate_presentation: CandidatePresentation::Compact,
+            candidate_text: FixedStr::new(),
+            candidate_annotations: FixedStr::new(),
+            candidates: FixedVec::new(),
+            selected_candidate: 0,
+            candidate_page_size: CANDIDATE_PAGE_SIZE as u16,
         }
     }
 
@@ -81,6 +110,15 @@ impl OutputBuf {
         self.cursor = 0;
         self.has_commit = false;
         self.commit.clear();
+        self.delete_before.clear();
+        self.has_candidates = false;
+        self.candidate_kind = CandidateKind::Conversion;
+        self.candidate_presentation = CandidatePresentation::Compact;
+        self.candidate_text.clear();
+        self.candidate_annotations.clear();
+        self.candidates.clear();
+        self.selected_candidate = 0;
+        self.candidate_page_size = CANDIDATE_PAGE_SIZE as u16;
     }
 
     /// Starts (or restarts) a preedit composition: marks a preedit as
@@ -141,6 +179,40 @@ impl OutputBuf {
         Ok(())
     }
 
+    /// Appends to the commit text, preserving a commit produced earlier in
+    /// the same key event. This is needed when a mode-switching IME commits
+    /// an existing preedit and then emits a temporary direct-input character.
+    pub fn append_commit(&mut self, text: &str) -> Result<(), Overflow> {
+        let Some(new_len) = self.commit.len().checked_add(text.len()) else {
+            return Err(Overflow);
+        };
+        if new_len > self.commit.capacity() {
+            return Err(Overflow);
+        }
+        self.commit.push_str(text)?;
+        self.has_commit = true;
+        Ok(())
+    }
+
+    /// Requests exact-text verification and deletion immediately before the
+    /// host caret. Empty disables commit undo.
+    pub fn set_delete_before(&mut self, text: &str) -> Result<(), Overflow> {
+        if text.len() > self.delete_before.capacity() {
+            return Err(Overflow);
+        }
+        self.delete_before.clear();
+        self.delete_before.push_str(text)
+    }
+
+    pub fn delete_before(&self) -> &str {
+        self.delete_before.as_str()
+    }
+
+    /// Returns the UTF-16 width for the legacy input-history diagnostic field.
+    pub fn delete_before_utf16(&self) -> u16 {
+        u16::try_from(self.delete_before.as_str().encode_utf16().count()).unwrap_or(u16::MAX)
+    }
+
     /// Returns the accumulated preedit text (the concatenation of every
     /// pushed segment).
     pub fn preedit_text(&self) -> &str {
@@ -155,6 +227,130 @@ impl OutputBuf {
         } else {
             None
         }
+    }
+
+    pub fn begin_candidates(&mut self, selected: u16, page_size: u16) -> Result<(), Overflow> {
+        self.begin_candidate_list(
+            CandidateKind::Conversion,
+            CandidatePresentation::Compact,
+            selected,
+            page_size,
+        )
+    }
+
+    /// Starts conversion candidates with the requested presentation. The
+    /// complete bounded list remains in the builder; compactness is consumed
+    /// by presentation-aware renderer/accessibility clients only.
+    pub fn begin_conversion_candidates(
+        &mut self,
+        presentation: CandidatePresentation,
+        selected: u16,
+        page_size: u16,
+    ) -> Result<(), Overflow> {
+        self.begin_candidate_list(CandidateKind::Conversion, presentation, selected, page_size)
+    }
+
+    /// Starts an inline prediction list. It shares the fixed candidate buffers
+    /// with conversion because the two UI states are mutually exclusive.
+    pub fn begin_suggestions(&mut self, selected: u16, page_size: u16) -> Result<(), Overflow> {
+        self.begin_candidate_list(
+            CandidateKind::Suggestion,
+            CandidatePresentation::Expanded,
+            selected,
+            page_size,
+        )
+    }
+
+    fn begin_candidate_list(
+        &mut self,
+        kind: CandidateKind,
+        presentation: CandidatePresentation,
+        selected: u16,
+        page_size: u16,
+    ) -> Result<(), Overflow> {
+        if page_size == 0 || usize::from(selected) >= MAX_CANDIDATES {
+            return Err(Overflow);
+        }
+        self.has_candidates = true;
+        self.candidate_kind = kind;
+        self.candidate_presentation = presentation;
+        self.candidate_text.clear();
+        self.candidate_annotations.clear();
+        self.candidates.clear();
+        self.selected_candidate = selected;
+        self.candidate_page_size = page_size;
+        Ok(())
+    }
+
+    pub fn push_candidate(&mut self, text: &str, annotation: &str) -> Result<(), Overflow> {
+        if !self.has_candidates || self.candidates.len() >= MAX_CANDIDATES {
+            return Err(Overflow);
+        }
+        let text_start = self.candidate_text.len();
+        let annotation_start = self.candidate_annotations.len();
+        if text_start.saturating_add(text.len()) > self.candidate_text.capacity()
+            || annotation_start.saturating_add(annotation.len())
+                > self.candidate_annotations.capacity()
+        {
+            return Err(Overflow);
+        }
+        self.candidate_text.push_str(text)?;
+        self.candidate_annotations.push_str(annotation)?;
+        self.candidates.push(CandidateSpan {
+            text_start: text_start as u32,
+            text_len: text.len() as u32,
+            annotation_start: annotation_start as u32,
+            annotation_len: annotation.len() as u32,
+        })
+    }
+
+    pub fn candidate_count(&self) -> usize {
+        self.candidates.len()
+    }
+
+    /// Returns whether this output carries a candidate list.
+    pub fn has_candidates(&self) -> bool {
+        self.has_candidates
+    }
+
+    pub fn candidate_kind(&self) -> Option<CandidateKind> {
+        self.has_candidates.then_some(self.candidate_kind)
+    }
+
+    /// Returns the candidate presentation when a list is present.
+    pub fn candidate_presentation(&self) -> Option<CandidatePresentation> {
+        self.has_candidates.then_some(self.candidate_presentation)
+    }
+
+    /// Returns one candidate without allocating.
+    pub fn candidate(&self, index: usize) -> Option<(&str, &str)> {
+        let span = *self.candidates.as_slice().get(index)?;
+        Some((self.candidate_text(span), self.candidate_annotation(span)))
+    }
+
+    /// The selected candidate index, when a list is present.
+    pub fn selected_candidate(&self) -> Option<u16> {
+        self.has_candidates.then_some(self.selected_candidate)
+    }
+
+    /// The candidate page size, when a list is present.
+    pub fn candidate_page_size(&self) -> Option<u16> {
+        self.has_candidates.then_some(self.candidate_page_size)
+    }
+
+    fn candidate_text(&self, span: CandidateSpan) -> &str {
+        let start = span.text_start as usize;
+        let end = start + span.text_len as usize;
+        self.candidate_text.as_str().get(start..end).unwrap_or("")
+    }
+
+    fn candidate_annotation(&self, span: CandidateSpan) -> &str {
+        let start = span.annotation_start as usize;
+        let end = start + span.annotation_len as usize;
+        self.candidate_annotations
+            .as_str()
+            .get(start..end)
+            .unwrap_or("")
     }
 
     /// Returns the pushed segment spans, in push order.
@@ -172,6 +368,13 @@ impl OutputBuf {
     }
 
     fn encode_body<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        if self.has_candidates
+            && (self.candidates.is_empty()
+                || usize::from(self.selected_candidate) >= self.candidates.len()
+                || self.candidate_page_size == 0)
+        {
+            return Err(Error::TooLarge);
+        }
         w.write_bool(self.consumed)?;
         w.write_bool(self.beep)?;
         w.write_option(&self.mode, |w, m| m.encode(w))?;
@@ -189,6 +392,21 @@ impl OutputBuf {
         if self.has_commit {
             w.write_u8(1)?;
             w.write_str(self.commit.as_str())?;
+        } else {
+            w.write_u8(0)?;
+        }
+        w.write_str(self.delete_before.as_str())?;
+        if self.has_candidates {
+            w.write_u8(1)?;
+            self.candidate_kind.encode(w)?;
+            self.candidate_presentation.encode(w)?;
+            w.write_count(self.candidates.len())?;
+            for span in self.candidates.as_slice() {
+                w.write_str(self.candidate_text(*span))?;
+                w.write_str(self.candidate_annotation(*span))?;
+            }
+            w.write_u16(self.selected_candidate)?;
+            w.write_u16(self.candidate_page_size)?;
         } else {
             w.write_u8(0)?;
         }
@@ -242,12 +460,33 @@ impl OutputBuf {
             None
         };
         let commit = self.commit_text().map(|s| s.to_string());
+        let candidates = if self.has_candidates {
+            Some(CandidateList {
+                kind: self.candidate_kind,
+                presentation: self.candidate_presentation,
+                items: self
+                    .candidates
+                    .as_slice()
+                    .iter()
+                    .map(|span| Candidate {
+                        text: self.candidate_text(*span).to_string(),
+                        annotation: self.candidate_annotation(*span).to_string(),
+                    })
+                    .collect(),
+                selected: self.selected_candidate,
+                page_size: self.candidate_page_size,
+            })
+        } else {
+            None
+        };
         Output {
             consumed: self.consumed,
             beep: self.beep,
             mode: self.mode,
             preedit,
             commit,
+            delete_before: self.delete_before.as_str().to_owned(),
+            candidates,
         }
     }
 }
@@ -268,6 +507,7 @@ impl core::fmt::Debug for OutputBuf {
             .field("segments", &self.segments())
             .field("cursor", &self.cursor)
             .field("commit_text", &self.commit_text())
+            .field("candidate_count", &self.candidate_count())
             .finish()
     }
 }
@@ -286,7 +526,9 @@ mod tests {
         assert_eq!(buf.mode, None);
         assert_eq!(buf.preedit_text(), "");
         assert_eq!(buf.commit_text(), None);
+        assert_eq!(buf.delete_before(), "");
         assert!(buf.segments().is_empty());
+        assert_eq!(buf.candidate_count(), 0);
     }
 
     #[test]
@@ -339,6 +581,14 @@ mod tests {
     }
 
     #[test]
+    fn append_commit_preserves_an_existing_commit() {
+        let mut buf = OutputBuf::new();
+        buf.set_commit("かな").expect("fits");
+        buf.append_commit("A").expect("fits");
+        assert_eq!(buf.commit_text(), Some("かなA"));
+    }
+
+    #[test]
     fn clear_resets_everything() {
         let mut buf = OutputBuf::new();
         buf.consumed = true;
@@ -347,13 +597,18 @@ mod tests {
         buf.begin_preedit();
         buf.push_segment("a", UnderlineKind::Raw).expect("push");
         buf.set_commit("b").expect("push");
+        buf.set_delete_before("committed").expect("delete text");
+        buf.begin_candidates(0, 9).expect("begin candidates");
+        buf.push_candidate("候補", "注釈").expect("push candidate");
         buf.clear();
         assert!(!buf.consumed);
         assert!(!buf.beep);
         assert_eq!(buf.mode, None);
         assert_eq!(buf.preedit_text(), "");
         assert_eq!(buf.commit_text(), None);
+        assert_eq!(buf.delete_before(), "");
         assert!(buf.segments().is_empty());
+        assert_eq!(buf.candidate_count(), 0);
     }
 
     #[test]
@@ -366,12 +621,68 @@ mod tests {
             .expect("push");
         buf.set_cursor(4);
         buf.set_commit("🍣").expect("push");
+        buf.set_delete_before("🍣").expect("delete text");
 
         let mut frame = [0u8; 256];
         let n = buf.encode_frame(99, &mut frame).expect("encode");
         let (id, response) = decode_response(&frame[FRAME_HEADER_LEN..n]).expect("decode");
         assert_eq!(id, 99);
         assert_eq!(response, Response::Output(buf.to_output()));
+    }
+
+    #[test]
+    fn candidates_roundtrip_without_allocating_in_the_builder() {
+        let mut buf = OutputBuf::new();
+        buf.consumed = true;
+        buf.begin_candidates(1, 9).expect("begin candidates");
+        buf.push_candidate("かな", "ひらがな").expect("push");
+        buf.push_candidate("仮名", "IT用語").expect("push");
+
+        let mut frame = [0u8; 256];
+        let n = buf.encode_frame(17, &mut frame).expect("encode");
+        let (id, response) = decode_response(&frame[FRAME_HEADER_LEN..n]).expect("decode");
+        assert_eq!(id, 17);
+        assert_eq!(response, Response::Output(buf.to_output()));
+
+        let candidates = buf.to_output().candidates.expect("candidate list");
+        assert_eq!(candidates.kind, CandidateKind::Conversion);
+        assert_eq!(candidates.presentation, CandidatePresentation::Compact);
+        assert_eq!(candidates.selected, 1);
+        assert_eq!(candidates.page_size, 9);
+        assert_eq!(candidates.items[1].text, "仮名");
+        assert_eq!(candidates.items[1].annotation, "IT用語");
+    }
+
+    #[test]
+    fn expanded_conversion_candidates_roundtrip_with_their_presentation() {
+        let mut buf = OutputBuf::new();
+        buf.consumed = true;
+        buf.begin_conversion_candidates(CandidatePresentation::Expanded, 1, 9)
+            .expect("begin expanded candidates");
+        buf.push_candidate("first", "").expect("push");
+        buf.push_candidate("second", "").expect("push");
+
+        assert_eq!(buf.candidate_kind(), Some(CandidateKind::Conversion));
+        assert_eq!(
+            buf.candidate_presentation(),
+            Some(CandidatePresentation::Expanded)
+        );
+
+        let mut frame = [0u8; 256];
+        let n = buf.encode_frame(18, &mut frame).expect("encode");
+        let (id, response) = decode_response(&frame[FRAME_HEADER_LEN..n]).expect("decode");
+        assert_eq!(id, 18);
+        assert_eq!(response, Response::Output(buf.to_output()));
+    }
+
+    #[test]
+    fn candidate_selection_must_reference_a_pushed_item() {
+        let mut buf = OutputBuf::new();
+        buf.begin_candidates(1, 9).expect("begin candidates");
+        buf.push_candidate("一件だけ", "").expect("push");
+
+        let mut frame = [0u8; 128];
+        assert_eq!(buf.encode_frame(1, &mut frame), Err(Error::TooLarge));
     }
 
     #[test]

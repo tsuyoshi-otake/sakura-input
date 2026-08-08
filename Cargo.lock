@@ -4,9 +4,10 @@ version = 4
 
 [[package]]
 name = "dictc"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-core",
+ "sakura-proto",
 ]
 
 [[package]]
@@ -29,15 +30,16 @@ dependencies = [
 
 [[package]]
 name = "sakura-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-proto",
 ]
 
 [[package]]
 name = "sakura-engine"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
+ "dictc",
  "sakura-core",
  "sakura-ipc",
  "sakura-proto",
@@ -46,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-ipc"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-proto",
  "windows",
@@ -54,12 +56,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sakura-logon"
+version = "1.0.0"
+dependencies = [
+ "sakura-reg",
+]
+
+[[package]]
 name = "sakura-proto"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "sakura-reg"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "windows",
  "windows-core",
@@ -67,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-regtool"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
@@ -77,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-renderer"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
@@ -87,14 +96,20 @@ dependencies = [
 
 [[package]]
 name = "sakura-settings"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-core",
+ "sakura-engine",
+ "sakura-ipc",
+ "sakura-proto",
+ "sakura-reg",
+ "windows",
+ "windows-core",
 ]
 
 [[package]]
 name = "sakura-tsf"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",

@@ -18,6 +18,7 @@
 
 #![cfg(windows)]
 
+mod candidate_ui;
 mod class_factory;
 mod composition;
 mod display_attributes;
@@ -25,4 +26,6 @@ mod edit_session;
 mod engine;
 mod exports;
 mod key_handler;
+mod reconversion;
 mod text_service;
+mod write_coordinator;

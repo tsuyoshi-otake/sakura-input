@@ -46,18 +46,18 @@ pub mod wire;
 pub use fixed::{FixedStr, FixedVec, Overflow};
 pub use message::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
-    Header, Request, Response, UiState,
+    Header, Request, Response, UiState, UndoCommitOutcome,
 };
 pub use output::{OutputBuf, SegSpan};
 pub use types::{
-    ErrorCode, InputScope, KeyCode, KeyInput, Mode, Modifiers, Output, Preedit, Segment,
-    UnderlineKind,
+    Candidate, CandidateKind, CandidateList, ErrorCode, InputScope, KeyCode, KeyInput, Mode,
+    Modifiers, Output, Preedit, ScreenRect, Segment, UnderlineKind,
 };
 pub use wire::Error;
 
 /// The protocol version this crate implements. Carried in every payload;
 /// a decoder rejects any other value with `Error::UnsupportedVersion`.
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 11;
 
 /// The largest payload (the bytes after the 4-byte frame length prefix)
 /// this protocol allows. A frame whose declared length exceeds this is
@@ -83,6 +83,18 @@ pub const MAX_COMMIT_BYTES: usize = 1536;
 /// The maximum number of segments a preedit composition or an
 /// [`OutputBuf`] may hold.
 pub const MAX_SEGMENTS: usize = 64;
+
+/// Candidates shown on one numbered page.
+pub const CANDIDATE_PAGE_SIZE: usize = 9;
+
+/// Maximum candidates carried in one output frame.
+///
+/// Two bounded pages make page navigation observable while keeping the
+/// allocation-free engine hand-off compact.
+pub const MAX_CANDIDATES: usize = CANDIDATE_PAGE_SIZE * 2;
+
+/// Fixed storage for all candidate surfaces or annotations in an `OutputBuf`.
+pub const MAX_CANDIDATE_TEXT_BYTES: usize = MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE;
 
 /// Identifies one editing session on the engine.
 pub type SessionId = u64;

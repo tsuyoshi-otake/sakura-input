@@ -1,0 +1,18 @@
+raw-kana: consumed=true beep=false delete=<none> mode=None preedit=[かな:Raw]@2
+convert: consumed=true beep=false delete=<none> mode=None preedit=[仮名:Focused]@2 candidates=0/14:仮名|IT用語
+choose-second: consumed=true beep=false delete=<none> mode=None preedit=[加奈:Focused]@2 candidates=1/14:加奈|人名
+commit-choice: consumed=true beep=false delete=<none> mode=None commit=加奈
+raw-kana-again: consumed=true beep=false delete=<none> mode=None preedit=[かな:Raw]@2
+cache-reselect: consumed=true beep=false delete=<none> mode=None preedit=[加奈:Focused]@2 candidates=1/14:加奈|人名
+commit-cached: consumed=true beep=false delete=<none> mode=None commit=加奈
+undo-commit: consumed=true beep=false delete="加奈" mode=None preedit=[かな:Raw]@2
+cancel-restored-reading: consumed=true beep=false delete=<none> mode=None
+raw-identifier: consumed=true beep=false delete=<none> mode=None preedit=[どcけ:Raw,r:Raw]@4
+lower: consumed=true beep=false delete=<none> mode=None preedit=[docker:Focused]@6
+upper: consumed=true beep=false delete=<none> mode=None preedit=[DOCKER:Focused]@6
+title: consumed=true beep=false delete=<none> mode=None preedit=[Docker:Focused]@6
+full-width: consumed=true beep=false delete=<none> mode=None preedit=[ｄｏｃｋｅｒ:Focused]@6
+segments: consumed=true beep=false delete=<none> mode=None preedit=[今日:Focused,です:Converted]@4 candidates=0/5:今日|common
+shrink-focused: consumed=true beep=false delete=<none> mode=None preedit=[きょ:Focused,うです:Converted]@5 candidates=0/2:きょ|
+restore-boundary: consumed=true beep=false delete=<none> mode=None preedit=[今日:Focused,です:Converted]@4 candidates=0/5:今日|common
+focus-next: consumed=true beep=false delete=<none> mode=None preedit=[今日:Converted,です:Focused]@4 candidates=0/4:です|common

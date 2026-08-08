@@ -2,7 +2,7 @@
 //!
 //! There is no argument-parsing crate here for the same reason there is no
 //! MeCab: shipping binaries depend on the `windows` family and nothing else
-//! (DESIGN 3.1). The surface is six verbs and four options, so the cost of
+//! (DESIGN 3.1). The surface is a small set of verbs and options, so the cost of
 //! that rule is this file.
 //!
 //! One property is worth stating because it is load-bearing rather than
@@ -38,13 +38,24 @@ pub enum Command {
     },
     /// Machine-wide removal, ordered to fail safe (DESIGN 12.1).
     Unregister,
+    /// Machine-wide: install the SYSTEM logon task that retries old-payload cleanup.
+    InstallCleanupTask,
+    /// Machine-wide removal of the SYSTEM payload-cleanup task.
+    RemoveCleanupTask,
+    /// Internal machine-wide maintenance action run by the cleanup task.
+    CleanupPayloads,
     /// Per-user: input list entry plus the logon task.
     EnableProfile {
-        engine: Option<PathBuf>,
-        renderer: Option<PathBuf>,
+        logon_stub: Option<PathBuf>,
     },
+    /// Per-user removal used by the installer before replacing an old task.
+    RemoveLogonTask,
     /// Per-user removal.
     DisableProfile,
+    /// Install bounded WER LocalDumps policy for Sakura executables.
+    ConfigureDiagnostics,
+    /// Remove the WER policy but retain existing dumps.
+    RemoveDiagnostics,
     /// Ask a running engine to exit, and wait until it has.
     Stop {
         budget: Duration,
@@ -76,14 +87,26 @@ MACHINE-WIDE (requires administrator):
     --unregister            Remove the profile, the categories and the
                             class, in that order.
 
+    --install-cleanup-task  Install the elevated machine-wide logon task that
+                            removes inactive versioned payloads.
+    --remove-cleanup-task   Remove that maintenance task.
+
+    --cleanup-payloads      Remove inactive payload generations now. This is
+                            normally invoked by the maintenance task.
+
+    --configure-diagnostics Configure local WER minidumps for Sakura
+                            processes (DumpCount=5; never uploaded).
+    --remove-diagnostics    Remove that WER policy but keep existing dumps.
+
 PER-USER (must run as the signed-in user, not as an elevated installer):
     --enable-profile        Add the text service to this user's input list
                             and register the logon task that starts the
                             engine.
-        --engine <path>     Default: sakura_engine.exe beside this
-                            executable.
-        --renderer <path>   Default: sakura_renderer.exe beside this
-                            executable, if present.
+        --logon-stub <path> Default: sakura_logon.exe beside this executable.
+
+    --remove-logon-task     Remove only this user's logon task. The installer
+                            uses this during upgrades so an old task with a
+                            stale ACL cannot block re-registration.
 
     --disable-profile       Remove both again.
 
@@ -113,14 +136,24 @@ where
     let mut wow64_dll = None;
     let mut no_wow64 = false;
     let mut enabled_by_default = false;
-    let mut engine = None;
-    let mut renderer = None;
+    let mut logon_stub = None;
     let mut timeout_ms = 5_000u64;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--register" | "--unregister" | "--enable-profile" | "--disable-profile" | "--stop"
-            | "--help" | "-h" => {
+            "--register"
+            | "--unregister"
+            | "--install-cleanup-task"
+            | "--remove-cleanup-task"
+            | "--cleanup-payloads"
+            | "--configure-diagnostics"
+            | "--remove-diagnostics"
+            | "--enable-profile"
+            | "--remove-logon-task"
+            | "--disable-profile"
+            | "--stop"
+            | "--help"
+            | "-h" => {
                 if let Some(first) = &verb {
                     return Err(format!(
                         "{first} and {arg} are separate commands; run one at a time"
@@ -144,13 +177,9 @@ where
                 seen.push("--default");
                 enabled_by_default = true;
             }
-            "--engine" => {
-                seen.push("--engine");
-                engine = Some(value(&mut args, &arg)?.into());
-            }
-            "--renderer" => {
-                seen.push("--renderer");
-                renderer = Some(value(&mut args, &arg)?.into());
+            "--logon-stub" => {
+                seen.push("--logon-stub");
+                logon_stub = Some(value(&mut args, &arg)?.into());
             }
             "--timeout" => {
                 seen.push("--timeout");
@@ -183,7 +212,13 @@ where
             }
         }
         "--unregister" => Command::Unregister,
-        "--enable-profile" => Command::EnableProfile { engine, renderer },
+        "--install-cleanup-task" => Command::InstallCleanupTask,
+        "--remove-cleanup-task" => Command::RemoveCleanupTask,
+        "--cleanup-payloads" => Command::CleanupPayloads,
+        "--configure-diagnostics" => Command::ConfigureDiagnostics,
+        "--remove-diagnostics" => Command::RemoveDiagnostics,
+        "--enable-profile" => Command::EnableProfile { logon_stub },
+        "--remove-logon-task" => Command::RemoveLogonTask,
         "--disable-profile" => Command::DisableProfile,
         "--stop" => Command::Stop {
             budget: Duration::from_millis(timeout_ms),
@@ -200,7 +235,7 @@ where
 fn reject_options_that_do_not_apply(verb: &str, seen: &[&str]) -> Result<(), String> {
     let allowed: &[&str] = match verb {
         "--register" => &["--dll", "--wow64-dll", "--no-wow64", "--default"],
-        "--enable-profile" => &["--engine", "--renderer"],
+        "--enable-profile" => &["--logon-stub"],
         "--stop" => &["--timeout"],
         _ => &[],
     };
@@ -289,8 +324,8 @@ mod tests {
         // Silently ignoring this would report success for a --register
         // that never saw the engine path the caller thought it passed.
         assert_eq!(
-            parse_args(&["--register", "--engine", "sakura_engine.exe"]),
-            Err("--engine does not apply to --register".into())
+            parse_args(&["--register", "--logon-stub", "sakura_logon.exe"]),
+            Err("--logon-stub does not apply to --register".into())
         );
         assert!(parse_args(&["--stop", "--dll", "sakura_tsf.dll"]).is_err());
     }
@@ -304,5 +339,18 @@ mod tests {
             })
         );
         assert!(parse_args(&["--stop", "--timeout", "soon"]).is_err());
+    }
+
+    #[test]
+    fn diagnostic_policy_commands_are_unambiguous_and_take_no_options() {
+        assert_eq!(
+            parse_args(&["--configure-diagnostics"]),
+            Ok(Command::ConfigureDiagnostics)
+        );
+        assert_eq!(
+            parse_args(&["--remove-diagnostics"]),
+            Ok(Command::RemoveDiagnostics)
+        );
+        assert!(parse_args(&["--configure-diagnostics", "--timeout", "1"]).is_err());
     }
 }

@@ -78,6 +78,10 @@ fn keystroke(n: usize) -> sakura_proto::KeyInput {
 #[ignore = "timing against a process singleton: run with --release --ignored --nocapture"]
 fn a_keystroke_crosses_the_pipe_and_returns_inside_the_budget() {
     let mut engine = Engine::running();
+    if !engine.compatible() {
+        eprintln!("skipping IPC benchmark: an older engine owns the well-known pipe");
+        return;
+    }
     let mut client = engine.client();
     let session = session_for(&mut client, "ipc_latency.exe");
 
@@ -113,12 +117,50 @@ fn a_keystroke_crosses_the_pipe_and_returns_inside_the_budget() {
     samples.sort_unstable();
     let report = Percentiles::of(&samples);
     println!("\nSendKey round trip over the well-known pipe, {SAMPLES} samples\n{report}");
+    write_report_if_requested(&report);
 
     assert!(
         report.p99 < BUDGET,
         "p99 {:?} exceeds the {BUDGET:?} keystroke budget (DESIGN 10)\n{report}",
         report.p99,
     );
+}
+
+fn write_report_if_requested(report: &Percentiles) {
+    let Some(path) = std::env::var_os("SAKURA_IPC_LATENCY_REPORT") else {
+        return;
+    };
+    let path = std::path::PathBuf::from(path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("create IPC latency report directory");
+    }
+    let micros = |duration: Duration| duration.as_secs_f64() * 1e6;
+    let body = format!(
+        concat!(
+            "{{\n",
+            "  \"schema_version\": 1,\n",
+            "  \"samples\": {},\n",
+            "  \"budget_us\": {:.3},\n",
+            "  \"min_us\": {:.3},\n",
+            "  \"p50_us\": {:.3},\n",
+            "  \"p90_us\": {:.3},\n",
+            "  \"p99_us\": {:.3},\n",
+            "  \"max_us\": {:.3},\n",
+            "  \"mean_us\": {:.3},\n",
+            "  \"passed\": {}\n",
+            "}}\n"
+        ),
+        SAMPLES,
+        micros(BUDGET),
+        micros(report.min),
+        micros(report.p50),
+        micros(report.p90),
+        micros(report.p99),
+        micros(report.max),
+        micros(report.mean),
+        report.p99 < BUDGET,
+    );
+    std::fs::write(&path, body).expect("write IPC latency report");
 }
 
 fn send(

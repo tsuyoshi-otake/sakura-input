@@ -29,10 +29,12 @@ mod paths;
 mod shutdown;
 
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
 use cli::{Command, Wow64};
-use sakura_reg::{launcher, user_profile, ComApartment};
+use sakura_reg::RegistryView;
+use sakura_reg::{com_server, launcher, maintenance, payloads, user_profile, ComApartment};
 use windows::core::{Error, HRESULT};
 use windows::Win32::Foundation::{ERROR_ACCESS_DENIED, E_ACCESSDENIED};
 
@@ -72,10 +74,34 @@ fn run(command: Command) -> Result<(), String> {
             enabled_by_default,
         } => register(dll, wow64, enabled_by_default),
         Command::Unregister => unregister(),
-        Command::EnableProfile { engine, renderer } => enable_profile(engine, renderer),
+        Command::InstallCleanupTask => install_cleanup_task(),
+        Command::RemoveCleanupTask => remove_cleanup_task(),
+        Command::CleanupPayloads => cleanup_payloads(),
+        Command::ConfigureDiagnostics => configure_diagnostics(),
+        Command::RemoveDiagnostics => remove_diagnostics(),
+        Command::EnableProfile { logon_stub } => enable_profile(logon_stub),
+        Command::RemoveLogonTask => remove_logon_task(),
         Command::DisableProfile => disable_profile(),
         Command::Stop { budget } => stop(budget),
     }
+}
+
+fn configure_diagnostics() -> Result<(), String> {
+    sakura_reg::diagnostics::configure_local_dumps()
+        .map_err(|error| explain("WER LocalDumps configuration", &error))?;
+    println!(
+        "configured WER minidumps: DumpCount={} under {}",
+        sakura_reg::diagnostics::DUMP_COUNT,
+        sakura_reg::diagnostics::DUMP_FOLDER
+    );
+    Ok(())
+}
+
+fn remove_diagnostics() -> Result<(), String> {
+    sakura_reg::diagnostics::remove_local_dumps()
+        .map_err(|error| explain("WER LocalDumps removal", &error))?;
+    println!("removed Sakura Input WER policy; existing dump files were retained");
+    Ok(())
 }
 
 fn register(dll: Option<PathBuf>, wow64: Wow64, enabled_by_default: bool) -> Result<(), String> {
@@ -124,19 +150,45 @@ fn unregister() -> Result<(), String> {
     Ok(())
 }
 
-fn enable_profile(engine: Option<PathBuf>, renderer: Option<PathBuf>) -> Result<(), String> {
+fn install_cleanup_task() -> Result<(), String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("cannot locate sakura_regtool.exe: {error}"))?;
+    let _com = ComApartment::new().map_err(|error| explain("COM initialization", &error))?;
+    maintenance::register_cleanup_task(&executable)
+        .map_err(|error| explain("cleanup task registration", &error))?;
+    println!("installed the elevated Sakura Input payload cleanup task");
+    Ok(())
+}
+
+fn remove_cleanup_task() -> Result<(), String> {
+    let _com = ComApartment::new().map_err(|error| explain("COM initialization", &error))?;
+    maintenance::unregister_cleanup_task()
+        .map_err(|error| explain("cleanup task removal", &error))?;
+    println!("removed the elevated Sakura Input payload cleanup task");
+    Ok(())
+}
+
+fn cleanup_payloads() -> Result<(), String> {
+    let install_dir = paths::payload_dir()?;
+    let active = com_server::registered_payload_dir(RegistryView::Native)
+        .map_err(|error| explain("reading active payload registration", &error))?;
+    let Some(active) = active else {
+        println!("skipped payload cleanup: no active Sakura Input registration");
+        return Ok(());
+    };
+    let report = payloads::cleanup_inactive_payloads(&install_dir, &active)
+        .map_err(|error| format!("payload cleanup failed: {error}"))?;
+    println!(
+        "payload cleanup: removed={}, kept={}, skipped={}",
+        report.removed, report.kept, report.skipped
+    );
+    Ok(())
+}
+
+fn enable_profile(logon_stub: Option<PathBuf>) -> Result<(), String> {
     let account = interactive::require_signed_in_user().map_err(|why| why.to_string())?;
 
-    let engine = paths::required(engine, paths::ENGINE_EXE, "engine executable")?;
-    let renderer = paths::optional(renderer, paths::RENDERER_EXE, "renderer executable")?;
-    let mut programs: Vec<&Path> = vec![engine.as_path()];
-    match &renderer {
-        Some(path) => programs.push(path.as_path()),
-        None => eprintln!(
-            "note: no renderer alongside the engine; the mode indicator and \
-             candidate window will not start at logon"
-        ),
-    }
+    let logon_stub = paths::required(logon_stub, paths::LOGON_EXE, "logon stub")?;
 
     let _com = ComApartment::new().map_err(|error| explain("COM initialization", &error))?;
 
@@ -144,10 +196,47 @@ fn enable_profile(engine: Option<PathBuf>, renderer: Option<PathBuf>) -> Result<
     // the user would have Sakura Input in their input list with nothing
     // behind it — an IME that swallows keystrokes. This way round, a
     // failure leaves a task that starts an engine nobody talks to.
-    launcher::register(&programs).map_err(|error| explain("logon task registration", &error))?;
+    launcher::register_if_missing(&[logon_stub.as_path()])
+        .map_err(|error| explain("logon task registration", &error))?;
     user_profile::enable().map_err(|error| explain("adding to the input list", &error))?;
+    start_current_session(&logon_stub)?;
 
-    println!("enabled Sakura Input for {account}");
+    println!("enabled and started Sakura Input for {account}");
+    Ok(())
+}
+
+/// Starts the same stable bootstrap used by the logon task.
+///
+/// An update stops the old engine before replacing payloads. Merely preserving
+/// the task would leave the current desktop without an engine until the next
+/// sign-in, so `--enable-profile` must also bootstrap this session before it
+/// reports success. The signed-in-user guard above ensures this process never
+/// starts the IME in an elevated installer's or SYSTEM account's session.
+fn start_current_session(logon_stub: &Path) -> Result<(), String> {
+    let working_dir = logon_stub
+        .parent()
+        .ok_or_else(|| "logon bootstrap path has no parent directory".to_owned())?;
+    let status = ProcessCommand::new(logon_stub)
+        .current_dir(working_dir)
+        .status()
+        .map_err(|error| format!("current-session bootstrap failed to start: {error}"))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(match status.code() {
+            Some(code) => format!("current-session bootstrap failed with exit code {code}"),
+            None => "current-session bootstrap was terminated before reporting a result".to_owned(),
+        })
+    }
+}
+
+fn remove_logon_task() -> Result<(), String> {
+    let account = interactive::require_signed_in_user().map_err(|why| why.to_string())?;
+    let _com = ComApartment::new().map_err(|error| explain("COM initialization", &error))?;
+
+    launcher::unregister().map_err(|error| explain("logon task removal", &error))?;
+    println!("removed Sakura Input logon task for {account}");
     Ok(())
 }
 

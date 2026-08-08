@@ -4,11 +4,11 @@
 //! clarity beats efficiency, and a leaked `HKEY` in an installer is the kind of
 //! bug that only shows up as a locked hive on someone else's machine.
 
-use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
+use windows::Win32::Foundation::{ERROR_DATATYPE_MISMATCH, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegOpenKeyExW, RegSetValueExW, HKEY,
-    KEY_ALL_ACCESS, KEY_WOW64_32KEY, KEY_WOW64_64KEY, KEY_WRITE, REG_OPTION_NON_VOLATILE,
-    REG_SAM_FLAGS, REG_SZ,
+    RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+    HKEY, KEY_ALL_ACCESS, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY, KEY_WRITE, REG_DWORD,
+    REG_EXPAND_SZ, REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ, REG_VALUE_TYPE,
 };
 use windows_core::{Result, PCWSTR};
 
@@ -89,8 +89,47 @@ impl RegKey {
         Ok(Some(Self(handle)))
     }
 
+    /// Opens an existing key for reading, or returns `Ok(None)` when it is not
+    /// present.  The bootstrap executables use this to resolve the currently
+    /// registered payload without needing write access to the machine hive.
+    pub fn open_for_read(root: HKEY, subkey: &str, view: RegistryView) -> Result<Option<Self>> {
+        let path = to_wide_nul(subkey);
+        let mut handle = HKEY::default();
+        // SAFETY: `path` is NUL terminated and `handle` is a valid writable
+        // out-parameter.  The requested access is read-only.
+        let status = unsafe {
+            RegOpenKeyExW(
+                root,
+                PCWSTR(path.as_ptr()),
+                None,
+                KEY_READ | view.sam(),
+                &mut handle,
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        status.ok()?;
+        Ok(Some(Self(handle)))
+    }
+
     /// Writes a `REG_SZ` value. `name` of `None` writes the key's default value.
     pub fn set_string(&self, name: Option<&str>, value: &str) -> Result<()> {
+        self.set_wide_string(name, value, REG_SZ)
+    }
+
+    /// Writes a `REG_EXPAND_SZ` value such as a per-user dump path containing
+    /// `%LOCALAPPDATA%`.
+    pub fn set_expand_string(&self, name: &str, value: &str) -> Result<()> {
+        self.set_wide_string(Some(name), value, REG_EXPAND_SZ)
+    }
+
+    fn set_wide_string(
+        &self,
+        name: Option<&str>,
+        value: &str,
+        value_type: windows::Win32::System::Registry::REG_VALUE_TYPE,
+    ) -> Result<()> {
         let name_w = name.map(to_wide_nul);
         let name_ptr = name_w
             .as_ref()
@@ -99,8 +138,82 @@ impl RegKey {
         // SAFETY: `name_ptr` is either null (meaning the default value) or points
         // at NUL-terminated storage alive for the call, and `data` is a byte
         // image of a NUL-terminated UTF-16 string as REG_SZ requires.
-        let status = unsafe { RegSetValueExW(self.0, name_ptr, None, REG_SZ, Some(&data)) };
+        let status = unsafe { RegSetValueExW(self.0, name_ptr, None, value_type, Some(&data)) };
         status.ok()
+    }
+
+    /// Writes a little-endian `REG_DWORD` value.
+    pub fn set_dword(&self, name: &str, value: u32) -> Result<()> {
+        let name = to_wide_nul(name);
+        let data = value.to_le_bytes();
+        // SAFETY: `name` is NUL terminated and both it and the four-byte DWORD
+        // image remain alive for the duration of the call.
+        let status =
+            unsafe { RegSetValueExW(self.0, PCWSTR(name.as_ptr()), None, REG_DWORD, Some(&data)) };
+        status.ok()
+    }
+
+    /// Reads a `REG_SZ` or `REG_EXPAND_SZ` value.  Registry strings are
+    /// returned without the terminating NUL and are not environment-expanded;
+    /// callers that store paths need the literal value that COM will use.
+    pub fn get_string(&self, name: Option<&str>) -> Result<Option<String>> {
+        let name_w = name.map(to_wide_nul);
+        let name_ptr = name_w
+            .as_ref()
+            .map_or(PCWSTR::null(), |value| PCWSTR(value.as_ptr()));
+        let mut value_type = REG_VALUE_TYPE(0);
+        let mut byte_count = 0u32;
+        // SAFETY: this first call only queries the value size and type.  The
+        // optional data pointer is intentionally null.
+        let status = unsafe {
+            RegQueryValueExW(
+                self.0,
+                name_ptr,
+                None,
+                Some(&mut value_type),
+                None,
+                Some(&mut byte_count),
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        status.ok()?;
+        if value_type != REG_SZ && value_type != REG_EXPAND_SZ {
+            return Err(ERROR_DATATYPE_MISMATCH.into());
+        }
+        if byte_count == 0 {
+            return Ok(Some(String::new()));
+        }
+
+        let mut bytes = vec![0u8; byte_count as usize];
+        // SAFETY: `bytes` has exactly the size reported by the first query and
+        // remains alive for this synchronous read.
+        let status = unsafe {
+            RegQueryValueExW(
+                self.0,
+                name_ptr,
+                None,
+                Some(&mut value_type),
+                Some(bytes.as_mut_ptr()),
+                Some(&mut byte_count),
+            )
+        };
+        status.ok()?;
+        if byte_count as usize > bytes.len() || !byte_count.is_multiple_of(2) {
+            return Err(ERROR_DATATYPE_MISMATCH.into());
+        }
+        let units = &bytes[..byte_count as usize]
+            .chunks_exact(2)
+            .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        let end = units
+            .iter()
+            .position(|unit| *unit == 0)
+            .unwrap_or(units.len());
+        String::from_utf16(&units[..end])
+            .map(Some)
+            .map_err(|_| ERROR_DATATYPE_MISMATCH.into())
     }
 
     /// Deletes a subkey and everything beneath it. Missing is success — an

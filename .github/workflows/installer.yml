@@ -21,7 +21,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out pinned Mozc dictionary data
+        uses: actions/checkout@v4
+        with:
+          repository: google/mozc
+          ref: 3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732
+          path: .sources/mozc
+          sparse-checkout: |
+            LICENSE
+            src/data/dictionary_oss
+
+      - name: Check out pinned IT glossary data
+        uses: actions/checkout@v4
+        with:
+          repository: systemexe-research-and-development/smile-chat
+          ref: b5cada441b41c207ab49bf2cd5f1d9c5614c5b92
+          path: .sources/smile-chat
+          sparse-checkout: |
+            frontend/public
+
       - uses: Swatinem/rust-cache@v2
+
+      - name: Build and reproduce the release dictionary
+        shell: pwsh
+        run: >-
+          ./scripts/build-dictionary.ps1
+          -MozcSource .sources/mozc
+          -GlossarySource .sources/smile-chat
+          -OutputDirectory artifacts/release
 
       # .cargo/config.toml pins [build] target = "x86_64-pc-windows-msvc"
       # (DESIGN 3.2: this product is x86_64-only), so a bare release build
@@ -31,21 +58,6 @@ jobs:
       - name: Build release
         run: cargo build --workspace --release
 
-      # windows-latest's Inno Setup version and install path have moved
-      # before across GitHub-hosted runner image updates; checking for the
-      # exact path this step depends on and failing with a clear message
-      # here is cheaper than debugging an opaque "ISCC.exe not found" a
-      # dozen steps into ISCC's own output.
-      - name: Verify Inno Setup is present
-        shell: pwsh
-        run: |
-          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
-          if (-not (Test-Path -LiteralPath $iscc)) {
-            Write-Error "Inno Setup 6 not found at $iscc -- the windows-latest runner image no longer ships it at this path, or a required version bump changed it. Update this workflow's ISCC path to match."
-            exit 1
-          }
-          Write-Host "found $iscc"
-
       # No signing here: an unsigned installer is fine for a CI artifact
       # that exists to prove the packaging step still works end to end.
       # SignTool integration (DESIGN 12.4: "every CI build emits a signed
@@ -53,15 +65,12 @@ jobs:
       # sign with, and belongs in a release workflow rather than here.
       - name: Compile installer
         shell: pwsh
-        run: |
-          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer\setup.iss
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "ISCC exited with code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
+        run: ./scripts/build-installer.ps1
 
       - uses: actions/upload-artifact@v4
         with:
           name: sakura_setup
-          path: installer/out/sakura_setup.exe
+          path: |
+            installer/out/sakura_setup.exe
+            installer/out/installer-build.report.json
           if-no-files-found: error

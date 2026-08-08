@@ -21,10 +21,8 @@ use std::path::{Path, PathBuf};
 
 /// The text service DLL, matching the bitness of whoever loads it.
 pub const TSF_DLL: &str = "sakura_tsf.dll";
-/// The conversion engine, started by the logon task.
-pub const ENGINE_EXE: &str = "sakura_engine.exe";
-/// The candidate window and mode indicator, started alongside it.
-pub const RENDERER_EXE: &str = "sakura_renderer.exe";
+/// The short-lived task action that repairs per-user state before bootstrap.
+pub const LOGON_EXE: &str = "sakura_logon.exe";
 /// Where the x86 build of the DLL sits in an installed layout. The file
 /// name stays the same across architectures; only the directory changes,
 /// so nothing has to encode "32" into a name that on ARM64 would be a lie.
@@ -128,6 +126,11 @@ mod tests {
             optional(None, "no-such-component.exe", "renderer"),
             Ok(None)
         );
-        assert!(optional(Some(PathBuf::from("no-such.exe")), RENDERER_EXE, "renderer").is_err());
+        assert!(optional(
+            Some(PathBuf::from("no-such.exe")),
+            "renderer.exe",
+            "renderer"
+        )
+        .is_err());
     }
 }

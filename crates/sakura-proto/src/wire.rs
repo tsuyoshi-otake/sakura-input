@@ -38,6 +38,8 @@ pub enum Error {
     BadUtf8,
     /// A `char` field's `u32` scalar value was not a valid Unicode scalar.
     BadChar,
+    /// A boolean field carried a value other than zero or one.
+    BadBool,
     /// A strictly-decoded enum field carried an unrecognised value.
     BadEnum,
     /// A message type byte did not match any known request/response.
@@ -59,6 +61,7 @@ impl fmt::Display for Error {
             Error::TooLarge => f.write_str("declared length exceeds protocol limit"),
             Error::BadUtf8 => f.write_str("string field was not valid UTF-8"),
             Error::BadChar => f.write_str("char field was not a valid Unicode scalar value"),
+            Error::BadBool => f.write_str("boolean field was neither 0 nor 1"),
             Error::BadEnum => f.write_str("enum field carried an unrecognised value"),
             Error::BadMsgType(t) => write!(f, "unrecognised message type: 0x{t:04x}"),
             Error::BadTag => f.write_str("option tag byte was neither 0 nor 1"),
@@ -132,10 +135,15 @@ impl<'a> Reader<'a> {
         Ok(u64::from_le_bytes(arr))
     }
 
-    /// Reads a `bool` encoded as one byte: `0` is `false`, anything else is
-    /// `true`.
+    /// Reads a `bool` encoded as one byte: `0` is `false` and `1` is `true`.
+    /// Any other value is rejected so a newly-added boolean field cannot be
+    /// silently reinterpreted by an older or malformed peer.
     pub fn read_bool(&mut self) -> Result<bool, Error> {
-        Ok(self.read_u8()? != 0)
+        match self.read_u8()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(Error::BadBool),
+        }
     }
 
     /// Reads a `char` encoded as a little-endian `u32` Unicode scalar

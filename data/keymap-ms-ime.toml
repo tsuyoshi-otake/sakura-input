@@ -10,7 +10,8 @@
 #
 # A spec is `modifier+modifier+key`, with modifiers `shift`, `ctrl`, `alt`.
 # Modifiers match exactly — `shift+enter` is a separate binding from `enter`,
-# not a variation on it. Caps Lock and Kana Lock never take part.
+# not a variation on it. Keyboard lock bits never take part in modifier matching;
+# the Caps Lock key itself can still be named as a trigger.
 #
 # Ctrl+Space is deliberately absent: it is IntelliSense in every major IDE,
 # which is the target user's home turf (DESIGN 2). It stays available as an
@@ -20,12 +21,17 @@
 # JIS keyboards have the key; US keyboards get Alt+` so they lose nothing.
 hankaku_zenkaku = "ime_toggle"
 "alt+`" = "ime_toggle"
-kana_mode = "mode_kana_toggle"
+kana_mode = "mode_hiragana"
+"shift+kana_mode" = "mode_katakana"
+caps_lock = "mode_alnum_toggle"
+"ctrl+caps_lock" = "mode_hiragana"
+"shift+caps_lock" = "mode_katakana"
+muhenkan = "mode_kana_cycle"
+"shift+muhenkan" = "mode_alnum_width_toggle"
 
 [idle]
 # 無変換 and 変換 with no composition. Windows 11 lets both be reassigned to
 # IME off/on; a user who wants that writes two lines in their own file.
-muhenkan = "mode_kana_toggle"
 henkan = "reconvert"
 # 確定の取り消し. Outside the armed window the engine passes this through to
 # the application as delete-previous-word (DESIGN 2).
@@ -33,6 +39,7 @@ henkan = "reconvert"
 
 [composing]
 space = "convert"
+"shift+space" = "convert"
 henkan = "convert"
 enter = "commit"
 # Commits the top prediction without focusing the list first.
@@ -50,7 +57,6 @@ left = "caret_left"
 right = "caret_right"
 home = "caret_home"
 end = "caret_end"
-muhenkan = "mode_kana_toggle"
 f6 = "transform_hiragana"
 f7 = "transform_katakana"
 f8 = "transform_half_katakana"
@@ -63,6 +69,9 @@ f10 = "transform_half_alnum"
 "ctrl+t" = "transform_half_alnum"
 
 [converting]
+# While a reading is being edited, the global 無変換 binding is a temporary
+# kana-surface transform; it must not switch the persistent input mode.
+muhenkan = "mode_kana_cycle"
 space = "candidate_next"
 henkan = "candidate_next"
 "shift+space" = "candidate_prev"
@@ -70,6 +79,15 @@ down = "candidate_next"
 up = "candidate_prev"
 page_down = "candidate_page_down"
 page_up = "candidate_page_up"
+"1" = "candidate_1"
+"2" = "candidate_2"
+"3" = "candidate_3"
+"4" = "candidate_4"
+"5" = "candidate_5"
+"6" = "candidate_6"
+"7" = "candidate_7"
+"8" = "candidate_8"
+"9" = "candidate_9"
 # Tab means the expanded candidate table here, not prediction: by this point
 # the candidate window is what is on screen.
 tab = "candidate_expand"
@@ -94,6 +112,22 @@ f10 = "transform_half_alnum"
 "ctrl+t" = "transform_half_alnum"
 
 [predicting]
+# Microsoft IME commits a suggestion by its numbered slot once the list owns
+# keyboard focus. This section is only reached after Tab or Down; while the
+# list is merely visible the composing map applies, so a number typed during
+# `２２` stays text instead of selecting the second suggestion.
+"1" = "candidate_1"
+"2" = "candidate_2"
+"3" = "candidate_3"
+"4" = "candidate_4"
+"5" = "candidate_5"
+"6" = "candidate_6"
+"7" = "candidate_7"
+"8" = "candidate_8"
+"9" = "candidate_9"
+# Only a focused learned-history suggestion may be removed. The engine beeps
+# for system/user entries, unavailable selection, and durable write failure.
+"ctrl+delete" = "delete_prediction_history"
 tab = "predict_next"
 "shift+tab" = "predict_prev"
 down = "predict_next"
@@ -103,5 +137,6 @@ enter = "commit"
 escape = "cancel"
 # Prediction never blocks conversion (DESIGN 2).
 space = "convert"
+"shift+space" = "convert"
 henkan = "convert"
 backspace = "delete_back"

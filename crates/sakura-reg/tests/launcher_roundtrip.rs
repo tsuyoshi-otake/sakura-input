@@ -43,10 +43,10 @@ fn the_logon_task_registers_and_unregisters() {
         "the task must be visible immediately after registration"
     );
 
-    // Registration is idempotent: the installer, a repair, and the logon
-    // stub's self-repair all call it, and the second call must update the
-    // task rather than fail with "already exists".
-    launcher::register(&[program.as_path()]).expect("re-registration");
+    // Normal upgrades and logon repair preserve the stable task instead of
+    // rewriting its ACL-protected definition. The ensure operation remains
+    // idempotent and reports success when that task is already present.
+    launcher::register_if_missing(&[program.as_path()]).expect("existing registration");
     assert!(launcher::is_registered());
 
     launcher::unregister().expect("removal");
@@ -66,5 +66,9 @@ fn registering_nothing_is_refused() {
     assert!(
         launcher::register(&[]).is_err(),
         "a task with no actions would look installed and do nothing"
+    );
+    assert!(
+        launcher::register_if_missing(&[]).is_err(),
+        "the no-op path must not make an empty task request look valid"
     );
 }

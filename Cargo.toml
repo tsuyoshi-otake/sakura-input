@@ -9,12 +9,13 @@ members = [
     "crates/sakura-engine",
     "crates/sakura-renderer",
     "crates/sakura-regtool",
+    "crates/sakura-logon",
     "crates/sakura-settings",
     "crates/dictc",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.96"
 license = "MIT"
@@ -30,6 +31,7 @@ sakura-core = { path = "crates/sakura-core" }
 sakura-proto = { path = "crates/sakura-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
+sakura-engine = { path = "crates/sakura-engine" }
 windows-core = "0.62"
 windows = "0.62"
 

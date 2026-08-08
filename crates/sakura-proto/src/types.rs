@@ -50,6 +50,8 @@ pub enum KeyCode {
     KanaMode = 18,
     /// 半角/全角 toggle key.
     HankakuZenkaku = 19,
+    /// Caps Lock / 英数 mode key.
+    CapsLock = 20,
     F1 = 32,
     F2 = 33,
     F3 = 34,
@@ -101,6 +103,7 @@ impl KeyCode {
             17 => Muhenkan,
             18 => KanaMode,
             19 => HankakuZenkaku,
+            20 => CapsLock,
             32 => F1,
             33 => F2,
             34 => F3,
@@ -119,7 +122,7 @@ impl KeyCode {
 
     /// All `KeyCode` variants, in declaration order. Used by tests that
     /// need to exercise every value.
-    pub const ALL: [KeyCode; 32] = [
+    pub const ALL: [KeyCode; 33] = [
         KeyCode::Unknown,
         KeyCode::Char,
         KeyCode::Space,
@@ -140,6 +143,7 @@ impl KeyCode {
         KeyCode::Muhenkan,
         KeyCode::KanaMode,
         KeyCode::HankakuZenkaku,
+        KeyCode::CapsLock,
         KeyCode::F1,
         KeyCode::F2,
         KeyCode::F3,
@@ -320,16 +324,21 @@ pub enum InputScope {
     Url = 2,
     Email = 3,
     Digits = 4,
+    /// The TSF host could not positively classify the focused range. This is
+    /// deliberately distinct from `Normal`: callers must not turn a failed
+    /// scope read into permission to persist user input.
+    Unclassified = 5,
 }
 
 impl InputScope {
     /// All `InputScope` variants, in declaration order.
-    pub const ALL: [InputScope; 5] = [
+    pub const ALL: [InputScope; 6] = [
         InputScope::Normal,
         InputScope::Password,
         InputScope::Url,
         InputScope::Email,
         InputScope::Digits,
+        InputScope::Unclassified,
     ];
 
     /// Encodes as one byte.
@@ -346,6 +355,7 @@ impl InputScope {
             2 => Ok(InputScope::Url),
             3 => Ok(InputScope::Email),
             4 => Ok(InputScope::Digits),
+            5 => Ok(InputScope::Unclassified),
             _ => Err(Error::BadEnum),
         }
     }
@@ -420,6 +430,236 @@ pub struct Preedit {
     pub cursor: u32,
 }
 
+/// One candidate surface and its optional dictionary annotation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Candidate {
+    pub text: String,
+    pub annotation: String,
+}
+
+impl Candidate {
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        w.write_str(&self.text)?;
+        w.write_str(&self.annotation)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            text: r.read_str()?.to_string(),
+            annotation: r.read_str()?.to_string(),
+        })
+    }
+}
+
+/// How a candidate list is presented by Sakura-owned UI.
+///
+/// The complete bounded list remains on the wire for every presentation so
+/// UI-less TSF clients retain their existing paging/count contract. Compact
+/// conversion is a renderer/accessibility view of that list, not a truncated
+/// protocol payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CandidatePresentation {
+    /// Show only the currently selected conversion candidate.
+    #[default]
+    Compact = 0,
+    /// Show the bounded current candidate page.
+    Expanded = 1,
+}
+
+impl CandidatePresentation {
+    /// Every presentation, in declaration order.
+    pub const ALL: [CandidatePresentation; 2] = [
+        CandidatePresentation::Compact,
+        CandidatePresentation::Expanded,
+    ];
+
+    /// Encodes as the independent candidate-list presentation byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly.
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(Self::Compact),
+            1 => Ok(Self::Expanded),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+/// Semantic role of a candidate list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CandidateKind {
+    /// Conversion candidates opened by Space/Henkan.
+    #[default]
+    Conversion = 0,
+    /// As-you-type prediction suggestions, always shown as a page.
+    Suggestion = 1,
+}
+
+impl CandidateKind {
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(Self::Conversion),
+            1 => Ok(Self::Suggestion),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+/// Candidate-window data for both the renderer and TSF UI-less clients.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CandidateList {
+    /// Distinguishes the inline suggest list from the conversion table.
+    pub kind: CandidateKind,
+    /// Sakura-owned presentation of this semantic candidate role.
+    pub presentation: CandidatePresentation,
+    pub items: Vec<Candidate>,
+    pub selected: u16,
+    pub page_size: u16,
+}
+
+impl CandidateList {
+    /// Number of bounded pages represented by this list.
+    pub fn page_count(&self) -> usize {
+        let page_size = usize::from(self.page_size);
+        if page_size == 0 {
+            0
+        } else {
+            self.items.len().div_ceil(page_size)
+        }
+    }
+
+    /// Zero-based page containing the selected candidate.
+    pub fn current_page(&self) -> usize {
+        let page_size = usize::from(self.page_size);
+        usize::from(self.selected)
+            .checked_div(page_size)
+            .unwrap_or(0)
+    }
+
+    /// Global candidate index at which `page` begins.
+    pub fn page_start(&self, page: usize) -> Option<usize> {
+        let page_size = usize::from(self.page_size);
+        let start = page.checked_mul(page_size)?;
+        (page_size > 0 && start < self.items.len()).then_some(start)
+    }
+
+    /// Global range visible on the selected candidate's page.
+    pub fn current_page_range(&self) -> core::ops::Range<usize> {
+        let Some(start) = self.page_start(self.current_page()) else {
+            return 0..0;
+        };
+        start
+            ..start
+                .saturating_add(usize::from(self.page_size))
+                .min(self.items.len())
+    }
+
+    /// The range Sakura-owned UI and accessibility should expose. The full
+    /// current page remains available through [`Self::current_page_range`] for
+    /// TSF UI-less clients regardless of compact conversion presentation.
+    pub fn visible_range(&self) -> core::ops::Range<usize> {
+        if self.kind == CandidateKind::Conversion
+            && self.presentation == CandidatePresentation::Compact
+        {
+            let selected = usize::from(self.selected);
+            return self
+                .items
+                .get(selected)
+                .map_or(0..0, |_| selected..selected.saturating_add(1));
+        }
+        self.current_page_range()
+    }
+
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        if self.items.is_empty()
+            || self.items.len() > crate::MAX_CANDIDATES
+            || usize::from(self.selected) >= self.items.len()
+            || self.page_size == 0
+        {
+            return Err(Error::TooLarge);
+        }
+        self.kind.encode(w)?;
+        self.presentation.encode(w)?;
+        w.write_count(self.items.len())?;
+        for candidate in &self.items {
+            candidate.encode(w)?;
+        }
+        w.write_u16(self.selected)?;
+        w.write_u16(self.page_size)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        let kind = CandidateKind::decode(r)?;
+        let presentation = CandidatePresentation::decode(r)?;
+        let count = r.read_count()? as usize;
+        if count == 0 || count > crate::MAX_CANDIDATES {
+            return Err(Error::TooLarge);
+        }
+        let mut items = Vec::with_capacity(count);
+        for _ in 0..count {
+            items.push(Candidate::decode(r)?);
+        }
+        let selected = r.read_u16()?;
+        let page_size = r.read_u16()?;
+        if usize::from(selected) >= count || page_size == 0 {
+            return Err(Error::TooLarge);
+        }
+        Ok(Self {
+            kind,
+            presentation,
+            items,
+            selected,
+            page_size,
+        })
+    }
+}
+
+/// A screen-coordinate rectangle used to place renderer-owned UI beside the
+/// active TSF composition.
+///
+/// Coordinates are signed because Windows virtual desktops may extend left
+/// or above the primary monitor. The wire representation is four little-endian
+/// `i32` values in `left, top, right, bottom` order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ScreenRect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+impl ScreenRect {
+    /// Returns whether the rectangle has a positive width and height.
+    pub fn is_valid(self) -> bool {
+        self.right > self.left && self.bottom > self.top
+    }
+
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u32(self.left as u32)?;
+        w.write_u32(self.top as u32)?;
+        w.write_u32(self.right as u32)?;
+        w.write_u32(self.bottom as u32)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            left: r.read_u32()? as i32,
+            top: r.read_u32()? as i32,
+            right: r.read_u32()? as i32,
+            bottom: r.read_u32()? as i32,
+        })
+    }
+}
+
 impl Preedit {
     /// Encodes the segment count, then each segment, then the cursor.
     pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
@@ -461,6 +701,12 @@ pub struct Output {
     pub preedit: Option<Preedit>,
     /// Present when text was committed to the host application.
     pub commit: Option<String>,
+    /// Exact committed text immediately before the caret that the frontend
+    /// must verify and remove in the same edit session as applying this
+    /// output. Empty means no commit undo is requested.
+    pub delete_before: String,
+    /// Present while conversion or prediction candidates are selectable.
+    pub candidates: Option<CandidateList>,
 }
 
 impl Output {
@@ -470,7 +716,12 @@ impl Output {
         w.write_bool(self.beep)?;
         w.write_option(&self.mode, |w, m| m.encode(w))?;
         w.write_option(&self.preedit, |w, p| p.encode(w))?;
-        w.write_option(&self.commit, |w, c| w.write_str(c))
+        w.write_option(&self.commit, |w, c| w.write_str(c))?;
+        if self.delete_before.len() > crate::MAX_COMMIT_BYTES {
+            return Err(Error::TooLarge);
+        }
+        w.write_str(&self.delete_before)?;
+        w.write_option(&self.candidates, |w, candidates| candidates.encode(w))
     }
 
     /// Decodes all fields in declaration order.
@@ -480,12 +731,20 @@ impl Output {
         let mode = r.read_option(Mode::decode)?;
         let preedit = r.read_option(Preedit::decode)?;
         let commit = r.read_option(|r| Ok(r.read_str()?.to_string()))?;
+        let delete_before = r.read_str()?;
+        if delete_before.len() > crate::MAX_COMMIT_BYTES {
+            return Err(Error::TooLarge);
+        }
+        let delete_before = delete_before.to_owned();
+        let candidates = r.read_option(CandidateList::decode)?;
         Ok(Output {
             consumed,
             beep,
             mode,
             preedit,
             commit,
+            delete_before,
+            candidates,
         })
     }
 }
@@ -609,6 +868,88 @@ mod tests {
         }
         let mut r = Reader::new(&buf);
         assert_eq!(Preedit::decode(&mut r), Err(Error::TooLarge));
+    }
+
+    #[test]
+    fn candidate_pages_share_one_bounded_definition() {
+        let candidates = CandidateList {
+            kind: CandidateKind::Conversion,
+            presentation: CandidatePresentation::Compact,
+            items: (0..crate::MAX_CANDIDATES)
+                .map(|index| Candidate {
+                    text: format!("candidate-{index}"),
+                    annotation: String::new(),
+                })
+                .collect(),
+            selected: crate::CANDIDATE_PAGE_SIZE as u16,
+            page_size: crate::CANDIDATE_PAGE_SIZE as u16,
+        };
+
+        assert_eq!(candidates.page_count(), 2);
+        assert_eq!(candidates.current_page(), 1);
+        assert_eq!(
+            candidates.current_page_range(),
+            crate::CANDIDATE_PAGE_SIZE..crate::MAX_CANDIDATES
+        );
+        assert_eq!(candidates.page_start(0), Some(0));
+        assert_eq!(candidates.page_start(1), Some(crate::CANDIDATE_PAGE_SIZE));
+        assert_eq!(candidates.page_start(2), None);
+        assert_eq!(
+            candidates.visible_range(),
+            crate::CANDIDATE_PAGE_SIZE..crate::CANDIDATE_PAGE_SIZE + 1,
+            "compact conversion exposes only the selected row to Sakura-owned UI"
+        );
+
+        let expanded = CandidateList {
+            kind: CandidateKind::Conversion,
+            presentation: CandidatePresentation::Expanded,
+            ..candidates.clone()
+        };
+        assert_eq!(expanded.presentation, CandidatePresentation::Expanded);
+        assert_eq!(expanded.visible_range(), expanded.current_page_range());
+
+        let suggestions = CandidateList {
+            kind: CandidateKind::Suggestion,
+            presentation: CandidatePresentation::Expanded,
+            ..candidates
+        };
+        assert_eq!(suggestions.presentation, CandidatePresentation::Expanded);
+        assert_eq!(
+            suggestions.visible_range(),
+            suggestions.current_page_range()
+        );
+    }
+
+    #[test]
+    fn candidate_presentation_decode_is_strict() {
+        let mut buf = Vec::new();
+        VecSink::new(&mut buf).write_u8(2).expect("write");
+        let mut r = Reader::new(&buf);
+        assert_eq!(CandidatePresentation::decode(&mut r), Err(Error::BadEnum));
+    }
+
+    #[test]
+    fn candidate_list_rejects_an_unknown_independent_presentation_byte() {
+        let candidates = CandidateList {
+            kind: CandidateKind::Conversion,
+            presentation: CandidatePresentation::Compact,
+            items: vec![Candidate {
+                text: "candidate".to_owned(),
+                annotation: String::new(),
+            }],
+            selected: 0,
+            page_size: 9,
+        };
+        let mut buf = Vec::new();
+        candidates
+            .encode(&mut VecSink::new(&mut buf))
+            .expect("encode candidate list");
+        // The role remains a valid conversion byte. Corrupt only the distinct
+        // presentation byte that immediately follows it.
+        buf[1] = 2;
+
+        let mut r = Reader::new(&buf);
+        assert_eq!(CandidateList::decode(&mut r), Err(Error::BadEnum));
     }
 
     #[test]
