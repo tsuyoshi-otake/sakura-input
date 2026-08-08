@@ -73,6 +73,21 @@ pub struct Table {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Input {
     pending: Sequence,
+    /// How many of `pending`'s leading bytes are a *carry*: romaji already
+    /// used once to resolve an earlier, already-emitted kana, and fed back
+    /// into `pending` rather than discarded (the second `t` of `tt` -> っ,
+    /// carried forward so `tsu` is still reachable). Those bytes do not
+    /// have a keystroke of their own still ahead of that kana -- they
+    /// *are* part of its source, reused. A caller mapping `pending` back
+    /// onto raw keystrokes (issue #16 findings B/C) needs this and cannot
+    /// reconstruct it later from `pending`'s text alone: a carry is table
+    /// data (`CompiledEntry::carry`), not a copy of the raw characters it
+    /// stands for, so nothing guarantees their content still matches once
+    /// case-folding or a custom table is in play. Always `<= pending.len()`;
+    /// read through [`Input::carry_overlap`], which enforces that bound as
+    /// `pending` shrinks under [`Input::backspace`] instead of requiring
+    /// every mutation site to keep the two in lock-step by hand.
+    carry_overlap: usize,
 }
 
 impl Input {
@@ -89,6 +104,13 @@ impl Input {
         self.pending.as_str()
     }
 
+    /// How many of [`Input::pending`]'s leading bytes are a carry rather
+    /// than a fresh keystroke of their own — see the field doc on
+    /// `carry_overlap`.
+    pub fn carry_overlap(&self) -> usize {
+        self.carry_overlap.min(self.pending.len())
+    }
+
     /// `true` when nothing is pending.
     pub fn is_empty(&self) -> bool {
         self.pending.is_empty()
@@ -97,6 +119,7 @@ impl Input {
     /// Discards pending romaji without emitting anything.
     pub fn clear(&mut self) {
         self.pending.clear();
+        self.carry_overlap = 0;
     }
 
     /// Removes the last pending romaji character.
@@ -105,7 +128,11 @@ impl Input {
     /// signal that the backspace belongs to the kana already emitted rather
     /// than to the FSM.
     pub fn backspace(&mut self) -> bool {
-        self.pending.pop_char().is_some()
+        let removed = self.pending.pop_char().is_some();
+        if removed {
+            self.carry_overlap = self.carry_overlap.min(self.pending.len());
+        }
+        removed
     }
 }
 
@@ -279,6 +306,7 @@ impl Table {
         }
 
         let mut candidate = state.pending.clone();
+        let mut overlap = state.carry_overlap;
         if candidate.push(key).is_err() {
             // Unreachable while pending is a proper prefix of some entry and
             // every entry fits in MAX_SEQUENCE, both of which are enforced at
@@ -287,10 +315,12 @@ impl Table {
             self.flush(state, out)?;
             candidate = Sequence::new();
             candidate.push(key)?;
+            overlap = 0;
         }
 
-        let result = self.drive(&mut candidate, out, true);
+        let result = self.drive(&mut candidate, &mut overlap, out, true);
         state.pending = candidate;
+        state.carry_overlap = overlap;
         result
     }
 
@@ -301,8 +331,10 @@ impl Table {
     /// unchanged, so a half-typed `t` commits as `t` rather than vanishing.
     pub fn flush(&self, state: &mut Input, out: &mut impl TextSink) -> Result<(), Overflow> {
         let mut candidate = state.pending.clone();
-        let result = self.drive(&mut candidate, out, false);
+        let mut overlap = state.carry_overlap;
+        let result = self.drive(&mut candidate, &mut overlap, out, false);
         state.pending = candidate;
+        state.carry_overlap = overlap;
         result
     }
 
@@ -313,14 +345,25 @@ impl Table {
     /// least one character more than its carry gives back (enforced by
     /// [`TableErrorKind::CarryNotShorter`]), and a raw passthrough consumes
     /// one character and gives back nothing.
+    ///
+    /// `overlap` tracks [`Input::carry_overlap`] across the same steps. A
+    /// step always matches from position 0, so of the old candidate's
+    /// leading `*overlap` shared bytes, `consumed` are retired by this step
+    /// and `overlap.saturating_sub(consumed)` survive untouched at the
+    /// front of `candidate[consumed..]`. The new candidate is `carry +
+    /// candidate[consumed..]`, so its own leading shared span is `carry`'s
+    /// bytes plus however many of those survivors are still there:
+    /// `carry.len() + overlap.saturating_sub(consumed)`.
     fn drive(
         &self,
         candidate: &mut Sequence,
+        overlap: &mut usize,
         out: &mut impl TextSink,
         may_wait: bool,
     ) -> Result<(), Overflow> {
         loop {
             if candidate.is_empty() {
+                *overlap = 0;
                 return Ok(());
             }
             // A sequence that could still grow into a longer entry waits for
@@ -358,6 +401,7 @@ impl Table {
                 Emission::Raw(c) => out.push(c)?,
             }
             *candidate = next;
+            *overlap = carry.len() + overlap.saturating_sub(consumed);
         }
     }
 

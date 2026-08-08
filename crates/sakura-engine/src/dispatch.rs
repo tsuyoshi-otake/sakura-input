@@ -1407,54 +1407,144 @@ fn apply_key(
     )
 }
 
-/// A [`TextSink`] that discards its output and only counts characters.
-///
-/// Used to replay `raw_input` through the romaji table when mapping between
-/// a raw-keystroke offset and a resolved-`preedit` character offset (see
-/// [`raw_chars_for_emitted`]) without allocating or caring what the
-/// replayed kana actually is.
-#[derive(Default)]
-struct CharCounter(usize);
-
-impl TextSink for CharCounter {
-    fn push_str(&mut self, s: &str) -> Result<(), Overflow> {
-        self.0 = self.0.saturating_add(s.chars().count());
-        Ok(())
-    }
-}
-
 /// How many leading characters of `raw` (ASCII keystrokes) resolve to
-/// exactly `target` characters of kana, found by replaying them through a
-/// fresh romaji FSM state from scratch.
+/// exactly `target` characters of `expected`, found by replaying `raw`
+/// through a romaji FSM state.
 ///
-/// This is sound, not approximate: [`move_caret`] always flushes pending
-/// romaji before the cursor changes, so every offset this is ever asked
-/// about -- the boundary between what is already resolved into `preedit`
-/// and what is not -- is exactly a boundary a plain left-to-right replay of
-/// `raw_input` reproduces. That equivalence is what lets `raw_input` stay a
-/// faithful, caret-aware record (#16 findings B, C, D) without adding a
-/// second persisted mapping to `Session` alongside it.
-fn raw_chars_for_emitted(table: &Table, raw: &str, target: usize) -> usize {
+/// `expected` is the ground truth `raw` is supposed to reproduce: the slice
+/// of `preedit` that starts at the same position `raw` does (see callers
+/// for the exact slice each one passes). A from-scratch replay is *not*
+/// sound on its own -- it assumes every raw byte still in `raw_input` was
+/// fed to the FSM continuously, live, in one unbroken run. That assumption
+/// is false once a carry survives a Backspace that clears
+/// `romaji.pending()` to empty without deleting a raw byte, exactly what
+/// happens whenever `pending_source_range.end <= raw_boundary` (see the
+/// provenance contract above): `raw_input` keeps no record that the
+/// discarded carry's live FSM continuity ended there, so a blind replay can
+/// re-extend it into whatever raw bytes come next, hit no matching entry,
+/// and fall back to a literal passthrough of a byte that, live, was never
+/// part of any emission at all. That fallback is correct, load-bearing FSM
+/// behavior in isolation -- see
+/// `every_carrying_entry_resolves_deterministically_when_flushed_alone` in
+/// romaji.rs -- so it cannot change; the unsoundness is entirely in trusting
+/// a replay that cannot see the Backspace to reproduce it faithfully.
+///
+/// The fix is to not just trust the replay's own emissions: `expected` is
+/// always a genuinely known-good answer (real `preedit`, produced by real
+/// live typing), so each emission is compared against it, character by
+/// character, as it comes out. The moment one does not match, the FSM's
+/// current candidate must be a replay artifact -- live typing could not
+/// have produced it, since `expected` says otherwise -- so it is discarded:
+/// state resets to fresh and the walk resumes from the raw index right
+/// after the last *verified* checkpoint, not from the mismatch itself.
+///
+/// A checkpoint only advances on a step that actually emitted something
+/// `expected` confirmed -- `candidate_matched` strictly increasing. A step
+/// that merely extends `pending` with no emission at all "matches" only
+/// vacuously (there was nothing to compare), so it cannot anchor a rewind
+/// target: replaying a discarded carry into unrelated text can wait
+/// silently for one or more further characters before the mismatch it
+/// causes becomes visible (a carried `t` plus a fresh `s` is itself a valid
+/// prefix -- of `tsu` -- so it keeps waiting rather than failing at `s`; the
+/// mismatch only surfaces once a vowel completes it into the wrong kana).
+/// Rewinding only to the last *step that produced output* correctly lands
+/// before that silent stretch, right where the carry's live continuity
+/// actually ended.
+///
+/// Retrying can still reach the exact same mismatch again -- if nothing
+/// between two resets ever advances the checkpoint, replaying the same raw
+/// characters from the same fresh state is deterministic and repeats
+/// itself -- so a reset onto a checkpoint already retried without any
+/// progress since is refused rather than looped.
+///
+/// This runs on the key-input hot path (`next_raw_boundary`, read by every
+/// `feed_character` insertion) and must stay allocation-free like the rest
+/// of it (`zero_alloc_dispatch` enforces this): [`MatchSink`] compares each
+/// emitted character against `expected` as `table.feed` produces it, so
+/// nothing here ever buffers a `String` or collects a `Vec<char>`.
+fn raw_chars_for_emitted(table: &Table, raw: &str, expected: &str, target: usize) -> usize {
     if target == 0 {
         return 0;
     }
+    // `raw` is ASCII-only (see callers), so its bytes are its characters and
+    // there is no need to collect `raw.chars()` into an owned buffer first.
+    let raw_bytes = raw.as_bytes();
     let mut state = Input::new();
-    let mut emitted = 0usize;
-    for (index, ch) in raw.chars().enumerate() {
-        let mut counter = CharCounter::default();
-        if table.feed(&mut state, ch, &mut counter).is_err() {
+    let mut matched = 0usize;
+    let mut safe_index = 0usize;
+    let mut safe_matched = 0usize;
+    let mut last_reset: Option<usize> = None;
+    let mut index = 0usize;
+    while index < raw_bytes.len() {
+        let mut sink = MatchSink {
+            expected,
+            matched,
+            mismatch: false,
+        };
+        if table
+            .feed(&mut state, raw_bytes[index] as char, &mut sink)
+            .is_err()
+        {
             // This exact prefix already produced a bounded `preedit` once,
-            // live; if replaying it here still overflows the (unbounded)
-            // counter's notion of "so far", stop at what has been read
-            // rather than guess past it.
+            // live; if replaying it here still overflows the sink, stop at
+            // what has been read rather than guess past it.
             return index + 1;
         }
-        emitted = emitted.saturating_add(counter.0);
-        if emitted >= target {
+        if sink.mismatch {
+            if last_reset == Some(safe_index) {
+                // Already retried from this exact checkpoint once with no
+                // verified progress in between; a deterministic replay from
+                // the same fresh state over the same raw characters would
+                // only repeat the same outcome, so stop instead of looping.
+                return index + 1;
+            }
+            last_reset = Some(safe_index);
+            state = Input::new();
+            matched = safe_matched;
+            index = safe_index;
+            continue;
+        }
+        let progressed = sink.matched > matched;
+        matched = sink.matched;
+        if matched >= target {
             return index + 1;
+        }
+        index += 1;
+        if progressed {
+            safe_index = index;
+            safe_matched = matched;
         }
     }
-    raw.chars().count()
+    raw_bytes.len()
+}
+
+/// Compares each character [`Table::feed`] emits, live, against `expected`
+/// starting at char offset `matched`, without buffering the emission first
+/// -- see [`raw_chars_for_emitted`] for why this replay must not allocate.
+/// `mismatch` latches: once one character disagrees with `expected`, later
+/// characters in the same emission are still consumed (a sink must accept
+/// what it is given) but no longer compared, since the caller discards the
+/// whole step on any mismatch regardless of how much of it was right.
+struct MatchSink<'a> {
+    expected: &'a str,
+    matched: usize,
+    mismatch: bool,
+}
+
+impl TextSink for MatchSink<'_> {
+    fn push_str(&mut self, s: &str) -> Result<(), Overflow> {
+        for ch in s.chars() {
+            if self.mismatch {
+                continue;
+            }
+            if self.expected.chars().nth(self.matched) == Some(ch) {
+                self.matched += 1;
+            } else {
+                self.mismatch = true;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Removes `count` characters from `buf` starting at character offset
@@ -1469,6 +1559,161 @@ fn remove_raw_chars<const N: usize>(buf: &mut FixedStr<N>, start: usize, count: 
             break;
         }
     }
+}
+
+/// Removes byte range `range` from `buf`. Both ends must already fall on
+/// character boundaries -- every caller derives `range` from
+/// [`raw_chars_for_emitted`] and [`FixedStr::byte_index`], which only ever
+/// produce boundaries. Walks [`FixedStr::remove_char_at`] one character at a
+/// time from `range.start`: removing a character shifts everything after it
+/// left, so `range.start` stays valid for the next character in the span
+/// throughout.
+fn remove_raw_range<const N: usize>(buf: &mut FixedStr<N>, range: core::ops::Range<usize>) {
+    let count = buf
+        .as_str()
+        .get(range.clone())
+        .map_or(0, |s| s.chars().count());
+    for _ in 0..count {
+        if buf.remove_char_at(range.start).is_none() {
+            break;
+        }
+    }
+}
+
+/// # `raw_input`'s provenance contract (#16 findings B/C)
+///
+/// `raw_input` holds the raw keystrokes behind the *currently visible*
+/// `preedit` and `romaji.pending()` -- it is not an unwound log of every
+/// key ever pressed this session (Backspace/Delete-forward already remove
+/// from it as they run). Three positions describe where in it a given
+/// piece of state lives:
+///
+/// - `raw_boundary` ([`raw_byte_offset_for_preedit_cursor`]): the byte
+///   offset immediately after the keystrokes behind `preedit[..cursor]`.
+/// - [`pending_source_range`]: the byte range that is `romaji.pending()`'s
+///   own raw source. Ordinarily this starts exactly at `raw_boundary` --
+///   pending is whatever was typed right after the last resolved kana. A
+///   sokuon/carry breaks that assumption: the second "t" of "tt" resolves
+///   to "っ" *and* is carried forward as the new pending "t", so that one
+///   raw byte is simultaneously "っ"'s source (already counted in
+///   `raw_boundary`) and the carried pending's source.
+///   `pending_source_range` accounts for this by starting
+///   `romaji.carry_overlap()` bytes *before* `raw_boundary` instead of
+///   assuming pending's source can never precede it.
+/// - [`next_raw_boundary`]: `max(raw_boundary, pending_source_range.end)`
+///   -- the one correct place to look for "the next raw span", used both
+///   to insert a fresh keystroke (`feed_character`) and to locate the next
+///   resolved kana's raw span to remove (`raw_range_for_next_emitted`,
+///   Delete-forward). `raw_boundary` alone is wrong here whenever
+///   something is pending; `pending_source_range.end` alone is wrong
+///   precisely in the carry case above, where that end lands *at*
+///   `raw_boundary` rather than past it.
+///
+/// Backspace over pending romaji follows the same contract: it deletes a
+/// raw byte only when `pending_source_range.end > raw_boundary` -- pending
+/// owns a byte no emitted kana's provenance depends on. When
+/// `pending_source_range.end <= raw_boundary`, pending is wholly a carry
+/// with no byte of its own to give back; clearing it (`Input::backspace`)
+/// reverts FSM state only, and `raw_input` -- still that emitted kana's
+/// provenance -- stays untouched. See `apply_backspace`.
+///
+/// The byte offset in `raw_input` immediately after the keystrokes that
+/// produced `preedit[..session.cursor]`, and immediately before whatever
+/// romaji is currently pending (`raw_boundary` above).
+///
+/// Derived fresh from `session.cursor` on every call instead of being
+/// cached anywhere on `Session`: a second persisted offset would need to
+/// stay in lock-step with `cursor` across every edit, commit, reset and
+/// reconversion path, which is exactly the kind of desynchronization #16
+/// findings B/C were caused by in the first place. A pure function of the
+/// one existing cursor cannot drift out of sync with it.
+fn raw_byte_offset_for_preedit_cursor(table: &Table, session: &Session) -> usize {
+    let cursor = usize::from(session.cursor);
+    let raw = session.raw_input.as_str();
+    let raw_chars = raw_chars_for_emitted(table, raw, session.preedit.as_str(), cursor);
+    session.raw_input.byte_index(raw_chars).unwrap_or(raw.len())
+}
+
+/// The byte range in `raw_input` that is the currently pending romaji's own
+/// raw source (see the provenance contract above). Empty (a zero-length
+/// range at `raw_boundary`) when nothing is pending.
+///
+/// `start` is `raw_boundary` pulled back by `romaji.carry_overlap()` bytes
+/// rather than always `raw_boundary` itself: a carry's overlap bytes are
+/// *also* counted in `raw_boundary`, since they are part of some
+/// already-emitted kana's source too, so counting them again ahead of
+/// `raw_boundary` would double their length in `raw_input` instead of
+/// sharing it. `end` is defensively clamped to `raw_input`'s actual length
+/// -- not load-bearing for the single carry the shipped table produces
+/// (whose overlap already keeps `end` within bounds exactly), but cheap
+/// insurance against a custom table whose carries compose in a way this
+/// crate has not been asked to reason about.
+///
+/// Deliberately does not assert the slice equals `romaji.pending()`: that
+/// is false whenever `carry_overlap() > 0` (the overlapping bytes belong to
+/// emitted text too, so the slice is shorter than a literal copy would be)
+/// and in `shifted_ascii` mode, where the table folds case for lookup so
+/// `pending()` can be lowercase while `raw_input` keeps the literal typed
+/// case. Both are legitimate and out of scope here.
+fn pending_source_range(table: &Table, session: &Session) -> core::ops::Range<usize> {
+    let boundary = raw_byte_offset_for_preedit_cursor(table, session);
+    let start = boundary.saturating_sub(session.romaji.carry_overlap());
+    let raw_len = session.raw_input.as_str().len();
+    let end = raw_len.min(start.saturating_add(session.romaji.pending().len()));
+    start..end
+}
+
+/// `max(raw_boundary, pending_source_range.end)` -- see the provenance
+/// contract above for why neither alone is correct once a carry is
+/// involved.
+fn next_raw_boundary(table: &Table, session: &Session) -> usize {
+    let boundary = raw_byte_offset_for_preedit_cursor(table, session);
+    let pending_end = pending_source_range(table, session).end;
+    boundary.max(pending_end)
+}
+
+/// The byte range in `raw_input` for the single resolved kana character at
+/// `preedit[cursor]` -- the raw keystrokes Delete-forward must remove.
+///
+/// Always starts at [`next_raw_boundary`], not merely after any pending
+/// romaji (#16 finding B/C): pending has not resolved into `preedit` yet,
+/// so it is never "the next emitted character", and once a carry is
+/// involved `pending_source_range.end` alone can land inside
+/// already-emitted text rather than past it (see the provenance contract
+/// above). Once the caret has moved ahead of already-resolved text and a
+/// keystroke is pending there, that resolved text sits in `raw_input`
+/// *after* the pending span, not at the cursor's raw offset directly.
+/// Replays only the raw text after that boundary from a fresh FSM state,
+/// rather than all of `raw_input` from index 0 -- a pending span spliced
+/// ahead of already-resolved text breaks a whole-buffer replay's
+/// correspondence to `preedit` positions, which is exactly the bug this
+/// replaces.
+///
+/// Returns `None` when the cursor is already at the end of `preedit` and
+/// there is nothing to delete.
+fn raw_range_for_next_emitted(table: &Table, session: &Session) -> Option<core::ops::Range<usize>> {
+    let cursor = usize::from(session.cursor);
+    let preedit = session.preedit.as_str();
+    if cursor >= preedit.chars().count() {
+        return None;
+    }
+    let boundary = next_raw_boundary(table, session);
+    let raw = session.raw_input.as_str();
+    let after = raw.get(boundary..).unwrap_or("");
+    // `after`'s ground truth is `preedit[cursor..]`, not the whole of
+    // `preedit`: `after` itself already starts past `preedit[..cursor]`'s
+    // own raw source, so the two must stay aligned to the same start.
+    let expected_after = session
+        .preedit
+        .byte_index(cursor)
+        .and_then(|at| preedit.get(at..))
+        .unwrap_or("");
+    let raw_chars = raw_chars_for_emitted(table, after, expected_after, 1);
+    let end = after
+        .char_indices()
+        .nth(raw_chars)
+        .map_or(raw.len(), |(offset, _)| boundary + offset);
+    Some(boundary..end)
 }
 
 /// The slice of `raw_input` that produced `preedit[range]` -- a single
@@ -1488,8 +1733,8 @@ fn segment_raw_text<'a>(
     let end_chars = preedit
         .get(..range.end)
         .map_or(start_chars, |s| s.chars().count());
-    let raw_start = raw_chars_for_emitted(table, raw_input, start_chars);
-    let raw_end = raw_chars_for_emitted(table, raw_input, end_chars).max(raw_start);
+    let raw_start = raw_chars_for_emitted(table, raw_input, preedit, start_chars);
+    let raw_end = raw_chars_for_emitted(table, raw_input, preedit, end_chars).max(raw_start);
     // ASCII-only, so these character offsets are also valid byte offsets.
     raw_input.get(raw_start..raw_end).unwrap_or("")
 }
@@ -1522,18 +1767,12 @@ fn feed_character(
 
     let mut raw_input = session.raw_input.clone();
     if character.is_ascii() {
-        // `raw_input` must stay caret-ordered, not append-only: the resolved
-        // kana lands at `session.cursor` (see below), so the raw keystroke
-        // behind it must land at the matching raw offset. `preedit[..cursor]`
-        // was produced by exactly the first `raw_chars_for_emitted(...)` raw
-        // characters, and whatever romaji is still pending -- read *before*
-        // `table.feed` below mutates it -- sits right after those, since it
-        // has not resolved into `preedit` yet (#16 finding C).
-        let cursor = usize::from(session.cursor);
-        let pending_len = session.romaji.pending().chars().count();
-        let raw_at = raw_chars_for_emitted(table, session.raw_input.as_str(), cursor)
-            .saturating_add(pending_len);
-        let raw_byte_at = raw_input.byte_index(raw_at).unwrap_or(raw_input.len());
+        // `raw_input` must stay caret-ordered, not append-only: the new
+        // keystroke lands right after whatever romaji is already pending,
+        // which itself sits right after the raw source of `preedit[..cursor]`
+        // -- exactly `next_raw_boundary`, read *before* `table.feed` below
+        // extends that pending state (#16 finding B/C).
+        let raw_byte_at = next_raw_boundary(table, session);
         let mut buf = [0u8; 4];
         raw_input.insert_str(raw_byte_at, character.encode_utf8(&mut buf))?;
     }
@@ -2542,10 +2781,29 @@ fn apply_backspace(session: &mut Session, table: &Table) {
     }
     if !session.romaji.is_empty() {
         // Pending romaji has not resolved into `preedit` yet, so the raw
-        // keystrokes behind it are exactly the trailing characters of
-        // `raw_input`; removing the last one keeps both records in step
-        // with the one pending character this undoes.
-        let _ = session.raw_input.pop_char();
+        // keystrokes behind it are exactly `pending_source_range` --
+        // wherever the caret was when they were typed, not necessarily at
+        // the end of `raw_input` (#16 finding B/C). But a sokuon/carry can
+        // leave pending wholly overlapping already-emitted text (the
+        // provenance contract on `pending_source_range`): the second "t"
+        // of "tt" -> "っ" carries forward as pending "t", and that raw
+        // byte is still "っ"'s own source, untouched by this Backspace.
+        // Only remove a raw byte when pending's source reaches past
+        // `raw_boundary` -- a byte no emitted kana's provenance depends
+        // on; otherwise this Backspace reverts FSM state only, matching
+        // `Input::backspace`'s own one-character-at-a-time contract.
+        let raw_boundary = raw_byte_offset_for_preedit_cursor(table, session);
+        let pending_end = pending_source_range(table, session).end;
+        if pending_end > raw_boundary {
+            if let Some((last_start, _)) = session
+                .raw_input
+                .as_str()
+                .get(..pending_end)
+                .and_then(|s| s.char_indices().last())
+            {
+                session.raw_input.remove_char_at(last_start);
+            }
+        }
         session.romaji.backspace();
         session.invalidate_prediction();
         return;
@@ -2554,8 +2812,18 @@ fn apply_backspace(session: &mut Session, table: &Table) {
     if cursor == 0 {
         return;
     }
-    let before = raw_chars_for_emitted(table, session.raw_input.as_str(), cursor);
-    let after = raw_chars_for_emitted(table, session.raw_input.as_str(), cursor - 1);
+    let before = raw_chars_for_emitted(
+        table,
+        session.raw_input.as_str(),
+        session.preedit.as_str(),
+        cursor,
+    );
+    let after = raw_chars_for_emitted(
+        table,
+        session.raw_input.as_str(),
+        session.preedit.as_str(),
+        cursor - 1,
+    );
     remove_raw_chars(&mut session.raw_input, after, before.saturating_sub(after));
     if let Some(at) = session.preedit.byte_index(cursor - 1) {
         let _ = session.preedit.remove_char_at(at);
@@ -2567,13 +2835,16 @@ fn apply_backspace(session: &mut Session, table: &Table) {
 /// Mirrors `apply_backspace`'s kana-group-wise removal on the raw side: the
 /// character sitting at `cursor` may likewise have taken more than one
 /// keystroke to produce, and forward-delete must drop exactly those to keep
-/// `raw_input` faithful (#16 finding C -- the old code never touched
-/// `raw_input` here at all).
+/// `raw_input` faithful (#16 finding C). Uses `raw_range_for_next_emitted`
+/// rather than a whole-buffer replay so a keystroke still pending ahead of
+/// the deleted character -- possible once the caret has moved -- is left
+/// untouched instead of being folded into the deleted span (#16 finding
+/// B/C).
 fn apply_delete_forward(session: &mut Session, table: &Table) {
     let cursor = usize::from(session.cursor);
-    let before = raw_chars_for_emitted(table, session.raw_input.as_str(), cursor.saturating_add(1));
-    let after = raw_chars_for_emitted(table, session.raw_input.as_str(), cursor);
-    remove_raw_chars(&mut session.raw_input, after, before.saturating_sub(after));
+    if let Some(range) = raw_range_for_next_emitted(table, session) {
+        remove_raw_range(&mut session.raw_input, range);
+    }
     if let Some(at) = session.preedit.byte_index(cursor) {
         let _ = session.preedit.remove_char_at(at);
         session.invalidate_prediction();
@@ -5903,6 +6174,138 @@ mod tests {
         );
     }
 
+    /// Characterizes (issue #16 audit, prerequisite to a B/C fix) what
+    /// currently happens when the caret moves while romaji is still
+    /// pending. Every caret motion -- Left, Right, Home, End -- shares one
+    /// `move_caret` implementation that calls `flush_pending`
+    /// unconditionally before evaluating the new cursor position. So "type
+    /// pending romaji, then move the caret" is not a reachable state: the
+    /// pending romaji is always resolved first (emitted as kana, or passed
+    /// through raw if it cannot resolve to anything, exactly as an explicit
+    /// commit would) at the *old* cursor position, and only then does the
+    /// cursor move. The only reachable order is "move the caret, then type
+    /// pending romaji" -- which is what the residual-gap tests around this
+    /// one exercise. Any `raw_input`/caret redesign can therefore ignore
+    /// "pending survives a caret move" as a case: it cannot occur.
+    #[test]
+    fn characterize_caret_movement_while_romaji_is_pending() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "k", &mut out);
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.romaji.pending(),
+            "k",
+            "k is pending before the caret moves"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Right),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "kさくら",
+            "the pending k is flushed as a literal raw passthrough character \
+             at the old cursor position before the caret moves"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert!(
+            live.romaji.is_empty(),
+            "flush_pending inside move_caret already resolved the pending k \
+             -- nothing is pending anymore once the caret has moved"
+        );
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ksakura",
+            "flush_pending never touches raw_input, only preedit/cursor/romaji"
+        );
+    }
+
+    /// #16 finding B/C (residual, found auditing 065200b): the pending-romaji
+    /// branch of `apply_backspace` assumes whatever is pending sits at the
+    /// *end* of `raw_input` and pops `raw_input`'s last character
+    /// unconditionally. That assumption only holds if the pending keystroke
+    /// was typed with the caret at the true end of the composition. Once the
+    /// caret has moved (e.g. Home) before the pending keystroke lands,
+    /// `feed_character` correctly inserts that keystroke's raw character at
+    /// the caret's raw offset -- not at the end -- so the character
+    /// `pop_char()` removes is some unrelated, already-resolved keystroke
+    /// instead of the pending one.
+    ///
+    /// This is invisible from `out.preedit_text()` alone: `session.preedit`
+    /// (the resolved kana) is untouched by either the correct or the buggy
+    /// path, so the on-screen text looks identical either way. Only
+    /// `raw_input` itself diverges, which is why this assertion has to read
+    /// `live.raw_input.as_str()` directly rather than trust the rendered
+    /// text.
+    #[test]
+    fn backspace_after_inserting_pending_romaji_at_a_moved_caret_preserves_raw_input_alignment() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        assert_eq!(out.preedit_text(), "さくら");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+
+        type_word(&mut dispatcher, session, "k", &mut out);
+        assert_eq!(
+            out.preedit_text(),
+            "kさくら",
+            "the pending k renders at the caret, ahead of the untouched さくら"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_input.as_str(), "ksakura");
+        assert!(
+            !live.romaji.is_empty(),
+            "k must still be pending, not resolved"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "さくら",
+            "only the pending k is undone; さくら is untouched on screen"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "sakura",
+            "raw_input must lose exactly the pending k, not sakura's trailing a"
+        );
+        assert!(
+            live.romaji.is_empty(),
+            "the pending k must be fully consumed by the backspace, not left dangling"
+        );
+    }
+
     /// #16 finding C: `feed_character` used to always *append* to
     /// `raw_input` while inserting the resolved kana at the caret, so moving
     /// the caret and typing produced a `raw_input` whose keystroke order no
@@ -5968,6 +6371,435 @@ mod tests {
             live.raw_input.as_str(),
             "ki",
             "both keystrokes behind the deleted か are gone, not just one"
+        );
+    }
+
+    /// #16 finding B/C (residual, found auditing 065200b): `apply_delete_forward`
+    /// has no pending-romaji branch at all -- unlike `apply_backspace`, it
+    /// unconditionally replays `raw_input` from scratch through
+    /// `raw_chars_for_emitted` regardless of whether a keystroke is still
+    /// pending. `raw_chars_for_emitted`'s own soundness argument only covers
+    /// offsets `move_caret` produces (which always flushes pending first,
+    /// see its doc comment); an offset taken while pending is non-empty and
+    /// the caret sits ahead of already-resolved text is outside that
+    /// contract, and the replay mis-segments the buffer as a result.
+    ///
+    /// Same setup as the Backspace companion above: type "sakura", Home,
+    /// type "k" (stays pending, inserted at the caret's raw offset by
+    /// finding C's fix, landing ahead of "sakura" as "ksakura"). A
+    /// delete-forward at that point should remove only the resolved kana
+    /// directly behind the pending k -- さ, produced by raw "sa" -- leaving
+    /// the pending k and the untouched "kura" behind くら:
+    /// `raw_input == "kkura"`. The rendered preedit ("kくら") looks correct
+    /// either way, which is exactly the false-GREEN risk this test guards
+    /// against by asserting `raw_input` and the pending romaji directly.
+    #[test]
+    fn delete_after_inserting_pending_romaji_at_a_moved_caret_preserves_raw_input_alignment() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        assert_eq!(out.preedit_text(), "さくら");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+
+        type_word(&mut dispatcher, session, "k", &mut out);
+        assert_eq!(
+            out.preedit_text(),
+            "kさくら",
+            "the pending k renders at the caret, ahead of the untouched さくら"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ksakura",
+            "setup must actually land k ahead of sakura via the moved-caret \
+             insertion path, or this is not exercising finding C at all"
+        );
+        assert_eq!(
+            live.romaji.pending(),
+            "k",
+            "k must still be pending, not resolved, going into the delete"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Delete),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "kくら",
+            "delete-forward removes the first resolved kana (さ) behind the pending k"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "kkura",
+            "raw_input must lose exactly \"sa\" (the keystrokes behind さ), \
+             keeping the pending k and the untouched \"kura\" behind くら"
+        );
+        assert_eq!(
+            live.romaji.pending(),
+            "k",
+            "delete-forward must not consume the pending k -- it only removed \
+             an already-resolved kana ahead of it"
+        );
+    }
+
+    /// #16 finding B/C, carry provenance: `raw_input` holds the raw
+    /// provenance of the *currently visible* preedit, not an unwound
+    /// keystroke log. A sokuon/carry (the second "t" of "tt" resolves
+    /// "tt" to "っ" *and* is carried forward as the new pending) makes the
+    /// same raw byte simultaneously っ's source and the carried pending's
+    /// source. Clearing that pending on Backspace must not delete the
+    /// shared byte -- doing so would corrupt っ's own provenance, which is
+    /// still visible on screen and untouched by this Backspace. Backspace
+    /// only removes a raw byte when pending owns one exclusively (its
+    /// source range extends strictly past the already-resolved boundary);
+    /// a fully carried/shared pending has no byte of its own to remove.
+    #[test]
+    fn backspace_over_carried_pending_romaji_at_a_moved_caret_preserves_raw_provenance() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+
+        type_word(&mut dispatcher, session, "tt", &mut out);
+        assert_eq!(
+            out.preedit_text(),
+            "っtさくら",
+            "っ must be emitted and the carried t must render as pending, \
+             ahead of the untouched さくら"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttsakura",
+            "setup must actually produce a carry ahead of a moved caret, \
+             or this is not exercising carry provenance at all"
+        );
+        assert_eq!(live.romaji.pending(), "t");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "っさくら",
+            "backspace clears the carried pending t; っ, which shares its \
+             raw source with that pending, must remain untouched"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.romaji.pending(), "", "the pending unit is gone");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttsakura",
+            "raw_input must stay whole -- the only raw byte the carried \
+             pending could claim is the same byte っ already depends on, so \
+             backspacing pending must not delete any raw byte here"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::F10),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "ttsakura",
+            "F10's half-width alnum surface, a real downstream consumer of \
+             raw_input, must reproduce the exact keystrokes behind っさくら, \
+             not a corrupted leftover from a wrongly-deleted raw byte"
+        );
+    }
+
+    /// #16 finding B/C, carry provenance: the Delete-forward analogue of
+    /// the Backspace test above. Unlike Backspace, deleting the *next
+    /// resolved kana* (さ) ahead of the carried pending must remove that
+    /// kana's own raw source ("sa") in full -- さ does not share its
+    /// source with the carry the way っ does, so nothing here should be
+    /// preserved. The carried pending t itself must survive untouched.
+    #[test]
+    fn delete_forward_over_carried_pending_romaji_at_a_moved_caret_preserves_raw_provenance() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+
+        type_word(&mut dispatcher, session, "tt", &mut out);
+        assert_eq!(out.preedit_text(), "っtさくら");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttsakura",
+            "setup must actually produce a carry ahead of a moved caret, \
+             or this is not exercising carry provenance at all"
+        );
+        assert_eq!(live.romaji.pending(), "t");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Delete),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "っtくら",
+            "delete-forward removes the next resolved kana (さ) behind the \
+             carried pending t, leaving っ, the pending t and くら"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttkura",
+            "raw_input must lose exactly \"sa\" -- さ's own raw source -- \
+             not \"a\" alone. The carried t's source (the second \"t\") is \
+             also っ's source and must neither be double-deleted nor left \
+             stranded"
+        );
+        assert_eq!(
+            live.romaji.pending(),
+            "t",
+            "delete-forward must not consume the carried pending t"
+        );
+    }
+
+    /// #16 finding B/C, carry provenance: the `feed_character` (typing)
+    /// analogue of the two tests above. Each new keystroke is spliced into
+    /// `raw_input` at `next_raw_boundary`, the same boundary
+    /// Backspace/Delete-forward read. Before that boundary was carry-aware
+    /// (when it was merely `pending_raw_range(...).end`, clamped but not
+    /// overlap-aware), it landed one byte too late -- right after っ's
+    /// *shared* raw source -- splicing the new keystroke into the middle of
+    /// さくら's own "sa" instead of ahead of it, where the caret actually
+    /// is. "s" cannot tell the two candidate offsets apart --
+    /// inserting it one byte earlier or later produces the same string by
+    /// coincidence, since "sakura" already starts with "s" -- so this uses
+    /// "y" (extends the carried "t" toward "tya"/"tyu"/"tyo", and never
+    /// appears in "sakura") to make the two offsets produce visibly
+    /// different strings.
+    #[test]
+    fn typing_after_carried_pending_romaji_at_a_moved_caret_preserves_raw_provenance() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+
+        type_word(&mut dispatcher, session, "tt", &mut out);
+        assert_eq!(out.preedit_text(), "っtさくら");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttsakura",
+            "setup must actually produce a carry ahead of a moved caret, \
+             or this is not exercising carry provenance at all"
+        );
+        assert_eq!(live.romaji.pending(), "t");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('y'),
+            },
+            &mut out,
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.romaji.pending(),
+            "ty",
+            "y extends the carried t (toward tya/tyu/tyo) rather than \
+             resolving, so it must still be waiting as pending, not emitted"
+        );
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttysakura",
+            "the new y must land right after \"tt\" and before \"sakura\" \
+             -- at the boundary the carried t shares with っ, not one byte \
+             later, inside さくら's own \"sa\""
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "っtyさくら",
+            "nothing resolved yet, so preedit keeps rendering っ plus the \
+             now-two-character pending ty ahead of the untouched さくら"
+        );
+    }
+
+    /// #16 finding B/C, carry provenance: no moved caret at all -- typing
+    /// "tt" (a sokuon that carries the second "t" forward as pending),
+    /// Backspace (clearing that pending without deleting the raw byte it
+    /// shares with っ, per the Backspace test above), then continuing to
+    /// type "sakura" left-to-right must not corrupt `raw_input`. This is not
+    /// about caret movement or Delete-forward's own raw span: it is about
+    /// `next_raw_boundary` itself, read by every `feed_character` insertion,
+    /// depending on [`raw_byte_offset_for_preedit_cursor`]'s replay of
+    /// `raw_input` from a fresh romaji FSM. That replay has no way to see
+    /// that the live FSM's pending was actually cleared by the Backspace
+    /// above -- `raw_input` alone does not record it -- so a naive replay
+    /// re-extends the discarded carry "t" into the next raw bytes ("sa"),
+    /// hits no matching entry, falls back to a literal "t" passthrough
+    /// (correct, tested FSM behavior in isolation -- see
+    /// `every_carrying_entry_resolves_deterministically_when_flushed_alone`
+    /// in romaji.rs), and that spurious literal throws off every insertion
+    /// point after it. Each subsequent character then lands one raw byte
+    /// too early, scrambling the tail into "raraku"-style corruption instead
+    /// of "sakura".
+    #[test]
+    fn continued_typing_after_backspacing_a_carry_does_not_corrupt_raw_input() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "tt", &mut out);
+        assert_eq!(out.preedit_text(), "っt");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_input.as_str(), "tt");
+        assert_eq!(live.romaji.pending(), "t");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "っ");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.romaji.pending(), "", "the carried pending is gone");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "tt",
+            "backspacing the fully-carried pending must not delete っ's own \
+             raw source"
+        );
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        assert_eq!(
+            out.preedit_text(),
+            "っさくら",
+            "さくら must resolve normally -- the discarded carry must not \
+             leak a literal t into freshly-typed, unrelated kana"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "ttsakura",
+            "each new keystroke must land at the true end of raw_input, in \
+             the order it was typed -- not reordered by a replay that \
+             thinks the discarded carry is still live"
+        );
+        assert_eq!(live.romaji.pending(), "");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::F10),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "ttsakura",
+            "F10's half-width alnum surface, a real downstream consumer of \
+             raw_input, must reproduce the exact keystrokes behind っさくら"
+        );
+    }
+
+    /// #16 finding B/C, downstream check: the two regression tests above
+    /// assert `raw_input` directly, which is exactly the kind of assertion
+    /// a fix could satisfy while still leaving `raw_input` wrong for every
+    /// *other* reader -- the false-GREEN risk `out.preedit_text()` alone
+    /// already demonstrated twice over in this file. F10's half-width alnum
+    /// surface is a real, independent consumer of `raw_input` (via
+    /// `segment_raw_text`, degenerating to the whole buffer for this
+    /// single-segment case): if the Backspace fix left `raw_input` merely
+    /// looking right to a direct field comparison, this would still catch
+    /// it.
+    #[test]
+    fn raw_input_alignment_after_moved_caret_backspace_is_observed_by_f10() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "k", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            live.raw_input.as_str(),
+            "sakura",
+            "setup must actually recover a clean raw_input via the Backspace fix, \
+             or this is not exercising the fix at all"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::F10),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "sakura",
+            "F10's half-width alnum surface must come from the corrected raw_input \
+             (\"sakura\"), not a corrupted leftover like the old pop_char() bug's \
+             \"ksakur\""
         );
     }
 
