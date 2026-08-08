@@ -70,14 +70,19 @@ pub enum Fault {
     /// cannot be resynchronized — so the server answers if it still can
     /// and then drops it.
     Protocol(sakura_proto::Error),
-    /// This side failed to encode its own outgoing request before sending
-    /// a single byte to the peer.
+    /// This side failed to encode an outgoing frame — a request or a
+    /// reply — before a single byte of it reached the peer.
     ///
-    /// Distinct from [`Protocol`](Fault::Protocol): the peer never saw
-    /// this request and never misbehaved, so the connection is not at
-    /// fault and does not need to be dropped. Only the request itself —
-    /// e.g. a reconversion selection too large to fit the wire format —
-    /// is rejected.
+    /// Distinct from [`Protocol`](Fault::Protocol): the peer never sent
+    /// anything malformed, and never misbehaved. What the connection does
+    /// next still depends on which side failed, so this variant alone does
+    /// not decide it. A client whose own request could not be encoded has
+    /// told the peer nothing yet, so only that request is rejected and the
+    /// link stays usable (e.g. a reconversion selection too large to fit
+    /// the wire format). A server that cannot encode its reply has already
+    /// dispatched the client's request and left it waiting for an answer
+    /// it can never receive on this connection — the caller ends the
+    /// connection rather than leave that wait unresolved.
     Encode(sakura_proto::Error),
     /// The reply did not arrive inside the caller's deadline. Only the
     /// client end can produce this: the DLL must never block a keystroke
