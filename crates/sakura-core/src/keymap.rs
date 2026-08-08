@@ -180,6 +180,12 @@ pub enum Action {
     SegmentNext,
     SegmentShrink,
     SegmentGrow,
+    /// Jump focus to the first/last segment (Home/End while converting,
+    /// issue #16 finding E). `CaretHome`/`CaretEnd` address the raw preedit
+    /// cursor, which conversion has already cut into segments, so a
+    /// segment-focused equivalent is needed instead.
+    SegmentHome,
+    SegmentEnd,
 
     CaretLeft,
     CaretRight,
@@ -187,6 +193,17 @@ pub enum Action {
     CaretEnd,
     DeleteBack,
     DeleteForward,
+
+    /// Claims a key without changing any state: `apply_action`'s existing
+    /// catch-all already swallows every action it does not explicitly
+    /// handle (`consumed = true`, no effect), so this variant reaches the
+    /// same outcome, but names the intent at the binding site instead of
+    /// leaving a key unbound. An unbound key falls through to
+    /// `apply_key`'s final arm and leaks to the host application while a
+    /// composition or conversion is on screen (issue #16 finding E) — use
+    /// this where Microsoft IME visibly consumes the key but the effect it
+    /// has is not modelled, rather than leave the gap unclaimed.
+    Swallow,
 
     /// F6–F10 and their Ctrl equivalents, applied to the focused segment.
     TransformHiragana,
@@ -244,12 +261,15 @@ impl Action {
             Action::SegmentNext => "segment_next",
             Action::SegmentShrink => "segment_shrink",
             Action::SegmentGrow => "segment_grow",
+            Action::SegmentHome => "segment_home",
+            Action::SegmentEnd => "segment_end",
             Action::CaretLeft => "caret_left",
             Action::CaretRight => "caret_right",
             Action::CaretHome => "caret_home",
             Action::CaretEnd => "caret_end",
             Action::DeleteBack => "delete_back",
             Action::DeleteForward => "delete_forward",
+            Action::Swallow => "swallow",
             Action::TransformHiragana => "transform_hiragana",
             Action::TransformKatakana => "transform_katakana",
             Action::TransformHalfKatakana => "transform_half_katakana",
@@ -282,7 +302,7 @@ impl Action {
     }
 
     /// Every action, in declaration order.
-    pub const ALL: [Action; 52] = [
+    pub const ALL: [Action; 55] = [
         Action::ImeToggle,
         Action::ImeOn,
         Action::ImeOff,
@@ -322,12 +342,15 @@ impl Action {
         Action::SegmentNext,
         Action::SegmentShrink,
         Action::SegmentGrow,
+        Action::SegmentHome,
+        Action::SegmentEnd,
         Action::CaretLeft,
         Action::CaretRight,
         Action::CaretHome,
         Action::CaretEnd,
         Action::DeleteBack,
         Action::DeleteForward,
+        Action::Swallow,
         Action::TransformHiragana,
         Action::TransformKatakana,
         Action::TransformHalfKatakana,
@@ -900,6 +923,233 @@ mod tests {
                 event.code
             );
         }
+    }
+
+    /// Resolves one binding and asserts it against the exact expected
+    /// `Action`, not merely `is_some()` — a leaking key that got rebound to
+    /// the wrong action would pass an `is_some()` check just as happily as
+    /// one rebound correctly.
+    fn assert_binding(
+        preset: Preset,
+        state: State,
+        code: KeyCode,
+        modifiers: Modifiers,
+        expected: Action,
+    ) {
+        let map = KeyMap::preset(preset).expect("preset must compile");
+        assert_eq!(
+            map.lookup(state, &key(code, modifiers)),
+            Some(expected),
+            "{} {state:?} {code:?} (modifiers {modifiers:?}) must resolve to {expected:?} (issue #16 finding E)",
+            preset.name(),
+        );
+    }
+
+    // Every named key issue #16 finding E identified as leaking to the host
+    // application while the IME owned a composition, conversion or focused
+    // suggestion list — `[composing]` page_up/page_down, `[converting]`
+    // delete/home/end/shift+tab/ctrl+delete, and `[predicting]`
+    // left/right/home/end/delete/shift+enter/f6-f10 — now resolves to a real
+    // action or `Action::Swallow` in the shipped `ms-ime` preset. Each case
+    // gets its own test so a future regression names exactly which binding
+    // broke, rather than reporting "some case in a table failed".
+
+    #[test]
+    fn ms_ime_composing_page_up_is_bound_to_swallow() {
+        assert_binding(
+            Preset::MsIme,
+            State::Composing,
+            KeyCode::PageUp,
+            Modifiers::NONE,
+            Action::Swallow,
+        );
+    }
+
+    #[test]
+    fn ms_ime_composing_page_down_is_bound_to_swallow() {
+        assert_binding(
+            Preset::MsIme,
+            State::Composing,
+            KeyCode::PageDown,
+            Modifiers::NONE,
+            Action::Swallow,
+        );
+    }
+
+    #[test]
+    fn ms_ime_converting_delete_is_bound_to_swallow() {
+        assert_binding(
+            Preset::MsIme,
+            State::Converting,
+            KeyCode::Delete,
+            Modifiers::NONE,
+            Action::Swallow,
+        );
+    }
+
+    #[test]
+    fn ms_ime_converting_home_is_bound_to_segment_home() {
+        assert_binding(
+            Preset::MsIme,
+            State::Converting,
+            KeyCode::Home,
+            Modifiers::NONE,
+            Action::SegmentHome,
+        );
+    }
+
+    #[test]
+    fn ms_ime_converting_end_is_bound_to_segment_end() {
+        assert_binding(
+            Preset::MsIme,
+            State::Converting,
+            KeyCode::End,
+            Modifiers::NONE,
+            Action::SegmentEnd,
+        );
+    }
+
+    #[test]
+    fn ms_ime_converting_shift_tab_is_bound_to_swallow() {
+        assert_binding(
+            Preset::MsIme,
+            State::Converting,
+            KeyCode::Tab,
+            Modifiers::SHIFT,
+            Action::Swallow,
+        );
+    }
+
+    #[test]
+    fn ms_ime_converting_ctrl_delete_is_bound_to_swallow() {
+        assert_binding(
+            Preset::MsIme,
+            State::Converting,
+            KeyCode::Delete,
+            Modifiers::CTRL,
+            Action::Swallow,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_left_is_bound_to_caret_left() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::Left,
+            Modifiers::NONE,
+            Action::CaretLeft,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_right_is_bound_to_caret_right() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::Right,
+            Modifiers::NONE,
+            Action::CaretRight,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_home_is_bound_to_caret_home() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::Home,
+            Modifiers::NONE,
+            Action::CaretHome,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_end_is_bound_to_caret_end() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::End,
+            Modifiers::NONE,
+            Action::CaretEnd,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_delete_is_bound_to_delete_forward() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::Delete,
+            Modifiers::NONE,
+            Action::DeleteForward,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_shift_enter_is_bound_to_commit_first() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::Enter,
+            Modifiers::SHIFT,
+            Action::CommitFirst,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_f6_is_bound_to_transform_hiragana() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::F6,
+            Modifiers::NONE,
+            Action::TransformHiragana,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_f7_is_bound_to_transform_katakana() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::F7,
+            Modifiers::NONE,
+            Action::TransformKatakana,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_f8_is_bound_to_transform_half_katakana() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::F8,
+            Modifiers::NONE,
+            Action::TransformHalfKatakana,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_f9_is_bound_to_transform_full_alnum() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::F9,
+            Modifiers::NONE,
+            Action::TransformFullAlnum,
+        );
+    }
+
+    #[test]
+    fn ms_ime_predicting_f10_is_bound_to_transform_half_alnum() {
+        assert_binding(
+            Preset::MsIme,
+            State::Predicting,
+            KeyCode::F10,
+            Modifiers::NONE,
+            Action::TransformHalfAlnum,
+        );
     }
 
     #[test]

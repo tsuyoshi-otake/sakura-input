@@ -522,6 +522,23 @@ impl Session {
         self.selected_candidate = self.segment_selection(self.focused_segment());
     }
 
+    /// Jumps focus straight to the first segment (Home while converting).
+    /// `CaretHome`/`CaretEnd` address the raw preedit cursor, which is not
+    /// meaningful once conversion has cut the preedit into segments — this
+    /// is the segment-navigation equivalent, filling the gap noted in issue
+    /// #16 finding E ("`Action` has no variant for first/last segment").
+    pub(crate) fn focus_first_segment(&mut self) {
+        self.focused_segment = 0;
+        self.selected_candidate = self.segment_selection(self.focused_segment());
+    }
+
+    /// Jumps focus straight to the last segment (End while converting).
+    pub(crate) fn focus_last_segment(&mut self) {
+        let last = self.segment_count().saturating_sub(1);
+        self.focused_segment = u8::try_from(last).unwrap_or(0);
+        self.selected_candidate = self.segment_selection(self.focused_segment());
+    }
+
     pub(crate) fn segment_selection(&self, index: usize) -> i16 {
         self.segment_selections.get(index).copied().unwrap_or(0)
     }
