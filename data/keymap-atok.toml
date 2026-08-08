@@ -62,6 +62,11 @@ end = "caret_end"
 "ctrl+a" = "caret_home"
 "ctrl+e" = "caret_end"
 muhenkan = "mode_kana_cycle"
+# There is no candidate window to page through yet -- claim the keys so
+# they do not reach the host application mid-composition instead of
+# leaving them unbound (issue #16 finding E).
+page_down = "swallow"
+page_up = "swallow"
 f6 = "transform_hiragana"
 f7 = "transform_katakana"
 f8 = "transform_half_katakana"
@@ -107,6 +112,17 @@ left = "segment_prev"
 right = "segment_next"
 "shift+left" = "segment_shrink"
 "shift+right" = "segment_grow"
+# Home/End address the segment list rather than the raw preedit cursor,
+# which conversion has already cut into segments (issue #16 finding E).
+home = "segment_home"
+end = "segment_end"
+# Neither has a modelled effect once the candidate window is open; claim
+# them so they do not fall through to the host application (issue #16
+# finding E). `ctrl+delete` here is unrelated to [predicting]'s
+# `delete_prediction_history` binding below -- that only ever targets a
+# focused suggestion, never a conversion candidate.
+delete = "swallow"
+"ctrl+delete" = "swallow"
 f6 = "transform_hiragana"
 f7 = "transform_katakana"
 f8 = "transform_half_katakana"

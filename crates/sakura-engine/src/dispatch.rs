@@ -1873,6 +1873,8 @@ fn apply_action(
         }
         Action::SegmentPrev => session.focus_previous_segment(),
         Action::SegmentNext => session.focus_next_segment(),
+        Action::SegmentHome => session.focus_first_segment(),
+        Action::SegmentEnd => session.focus_last_segment(),
         Action::SegmentShrink => {
             if !session.resize_focused_segment(false) {
                 out.beep = true;
@@ -1933,6 +1935,12 @@ fn apply_action(
             // protocol request; a bare idle key action has no text to recover.
             out.consumed = false;
         }
+        // Named explicitly so a keymap author can see, at the binding site,
+        // that a key is deliberately claimed with no effect rather than
+        // left unbound (issue #16 finding E) -- reaches the same outcome as
+        // the catch-all below, which is this function's documented default
+        // for any action with no bespoke arm.
+        Action::Swallow => {}
         _ => {}
     }
     Ok(())
@@ -6064,6 +6072,459 @@ mod tests {
                 "{held:?}+S changed the composition"
             );
         }
+    }
+
+    // Issue #16 finding E: every named key exercised below used to fall
+    // through `apply_key`'s final arm and reach the host application while
+    // the IME owned a composition, conversion or focused suggestion list.
+    // The keymap now binds each one to a real action or `Action::Swallow`;
+    // `sakura_core::keymap`'s `ms_ime_*_is_bound_to_*` tests pin down
+    // exactly which action each key resolves to. The tests below pin down
+    // the resulting *behaviour* instead: the key must be consumed under
+    // both a `test_only` probe and a real dispatch, a probe must never
+    // mutate the live session, and a `Swallow` binding must have no
+    // modelled effect at all. Every case gets its own fresh dispatcher and
+    // session -- probe and real dispatch never share one either -- so a
+    // case that unexpectedly changes state cannot contaminate the next
+    // case, and neither dispatch can hide a mutation the other would have
+    // caught.
+
+    fn composing_state_dispatcher(word: &str, name: &str) -> (Dispatcher, SessionId) {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, name);
+        type_word(&mut dispatcher, session, word, &mut out);
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").state(),
+            State::Composing,
+            "setup must reach State::Composing"
+        );
+        (dispatcher, session)
+    }
+
+    fn converting_state_dispatcher(word: &str, name: &str) -> (Dispatcher, SessionId) {
+        let mut dispatcher = contextual_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, name);
+        type_word(&mut dispatcher, session, word, &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").state(),
+            State::Converting,
+            "setup must reach State::Converting"
+        );
+        (dispatcher, session)
+    }
+
+    fn predicting_state_dispatcher(
+        word: &str,
+        name: &str,
+    ) -> (Dispatcher, crate::prediction::PredictionRuntime, SessionId) {
+        let (mut dispatcher, runtime) = prediction_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, name);
+        type_word(&mut dispatcher, session, word, &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").state(),
+            State::Predicting,
+            "setup must reach State::Predicting"
+        );
+        (dispatcher, runtime, session)
+    }
+
+    #[test]
+    fn ms_ime_composing_named_keys_do_not_leak_to_the_host_application() {
+        // Both cases bind to `Action::Swallow` (issue #16 finding E), so
+        // both additionally must leave the session completely unchanged.
+        let cases: [(KeyCode, Modifiers); 2] = [
+            (KeyCode::PageUp, Modifiers::NONE),
+            (KeyCode::PageDown, Modifiers::NONE),
+        ];
+        let mut failures = Vec::new();
+        for (code, modifiers) in cases {
+            let (mut probe_dispatcher, probe_session) =
+                composing_state_dispatcher("ka", "leak-composing-probe.exe");
+            let before_probe = probe_dispatcher
+                .sessions
+                .get(probe_session)
+                .expect("session")
+                .clone();
+            let mut probe_out = OutputBuf::new();
+            probe_dispatcher.dispatch(
+                &Request::SendKey {
+                    session: probe_session,
+                    key: KeyInput {
+                        test_only: true,
+                        ..modified_named_key(code, modifiers)
+                    },
+                },
+                &mut probe_out,
+            );
+            if !probe_out.consumed {
+                failures.push(format!("composing {code:?} test_only leaked to the host"));
+            }
+            if probe_dispatcher
+                .sessions
+                .get(probe_session)
+                .expect("session")
+                != &before_probe
+            {
+                failures.push(format!("composing {code:?} probe mutated the session"));
+            }
+            if probe_out.commit_text().is_some() {
+                failures.push(format!("composing {code:?} probe produced a commit"));
+            }
+
+            let (mut real_dispatcher, real_session) =
+                composing_state_dispatcher("ka", "leak-composing-real.exe");
+            let before_real = real_dispatcher
+                .sessions
+                .get(real_session)
+                .expect("session")
+                .clone();
+            let mut real_out = OutputBuf::new();
+            real_dispatcher.dispatch(
+                &Request::SendKey {
+                    session: real_session,
+                    key: modified_named_key(code, modifiers),
+                },
+                &mut real_out,
+            );
+            if !real_out.consumed {
+                failures.push(format!(
+                    "composing {code:?} real dispatch leaked to the host"
+                ));
+            }
+            if real_out.commit_text().is_some() {
+                failures.push(format!(
+                    "composing {code:?} real dispatch produced a commit"
+                ));
+            }
+            if real_dispatcher.sessions.get(real_session).expect("session") != &before_real {
+                failures.push(format!(
+                    "composing {code:?} swallow mutated the session instead of doing nothing"
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn ms_ime_converting_named_keys_do_not_leak_to_the_host_application() {
+        // `swallow` marks the three cases bound to `Action::Swallow`
+        // (delete, shift+tab, ctrl+delete): those must additionally leave
+        // the session untouched. `home`/`end` bind to `SegmentHome`/
+        // `SegmentEnd`, which legitimately move `focused_segment` -- real
+        // movement across 3+ segments is proven separately, by the
+        // dedicated test below, not here.
+        let cases: [(KeyCode, Modifiers, bool); 5] = [
+            (KeyCode::Delete, Modifiers::NONE, true),
+            (KeyCode::Home, Modifiers::NONE, false),
+            (KeyCode::End, Modifiers::NONE, false),
+            (KeyCode::Tab, Modifiers::SHIFT, true),
+            (KeyCode::Delete, Modifiers::CTRL, true),
+        ];
+        let mut failures = Vec::new();
+        for (code, modifiers, swallow) in cases {
+            let (mut probe_dispatcher, probe_session) =
+                converting_state_dispatcher("ishaniittaowari", "leak-converting-probe.exe");
+            let before_probe = probe_dispatcher
+                .sessions
+                .get(probe_session)
+                .expect("session")
+                .clone();
+            let mut probe_out = OutputBuf::new();
+            probe_dispatcher.dispatch(
+                &Request::SendKey {
+                    session: probe_session,
+                    key: KeyInput {
+                        test_only: true,
+                        ..modified_named_key(code, modifiers)
+                    },
+                },
+                &mut probe_out,
+            );
+            if !probe_out.consumed {
+                failures.push(format!("converting {code:?} test_only leaked to the host"));
+            }
+            if probe_dispatcher
+                .sessions
+                .get(probe_session)
+                .expect("session")
+                != &before_probe
+            {
+                failures.push(format!("converting {code:?} probe mutated the session"));
+            }
+            if probe_out.commit_text().is_some() {
+                failures.push(format!("converting {code:?} probe produced a commit"));
+            }
+
+            let (mut real_dispatcher, real_session) =
+                converting_state_dispatcher("ishaniittaowari", "leak-converting-real.exe");
+            let before_real = real_dispatcher
+                .sessions
+                .get(real_session)
+                .expect("session")
+                .clone();
+            let mut real_out = OutputBuf::new();
+            real_dispatcher.dispatch(
+                &Request::SendKey {
+                    session: real_session,
+                    key: modified_named_key(code, modifiers),
+                },
+                &mut real_out,
+            );
+            if !real_out.consumed {
+                failures.push(format!(
+                    "converting {code:?} real dispatch leaked to the host"
+                ));
+            }
+            if real_out.commit_text().is_some() {
+                failures.push(format!(
+                    "converting {code:?} real dispatch produced a commit"
+                ));
+            }
+            if swallow
+                && real_dispatcher.sessions.get(real_session).expect("session") != &before_real
+            {
+                failures.push(format!(
+                    "converting {code:?} swallow mutated the session instead of doing nothing"
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn ms_ime_predicting_named_keys_do_not_leak_to_the_host_application() {
+        // `commits` marks the one case bound to `Action::CommitFirst`
+        // (shift+enter): unlike the other ten, a commit there is correct,
+        // modelled behaviour -- Microsoft IME's own "confirm the top pick"
+        // shortcut -- so it is excluded from the "must not commit"
+        // assertion the other ten get.
+        let cases: [(KeyCode, Modifiers, bool); 11] = [
+            (KeyCode::Left, Modifiers::NONE, false),
+            (KeyCode::Right, Modifiers::NONE, false),
+            (KeyCode::Home, Modifiers::NONE, false),
+            (KeyCode::End, Modifiers::NONE, false),
+            (KeyCode::Delete, Modifiers::NONE, false),
+            (KeyCode::Enter, Modifiers::SHIFT, true),
+            (KeyCode::F6, Modifiers::NONE, false),
+            (KeyCode::F7, Modifiers::NONE, false),
+            (KeyCode::F8, Modifiers::NONE, false),
+            (KeyCode::F9, Modifiers::NONE, false),
+            (KeyCode::F10, Modifiers::NONE, false),
+        ];
+        let mut failures = Vec::new();
+        for (code, modifiers, commits) in cases {
+            let (mut probe_dispatcher, _probe_runtime, probe_session) =
+                predicting_state_dispatcher("kana", "leak-predicting-probe.exe");
+            let before_probe = probe_dispatcher
+                .sessions
+                .get(probe_session)
+                .expect("session")
+                .clone();
+            let mut probe_out = OutputBuf::new();
+            probe_dispatcher.dispatch(
+                &Request::SendKey {
+                    session: probe_session,
+                    key: KeyInput {
+                        test_only: true,
+                        ..modified_named_key(code, modifiers)
+                    },
+                },
+                &mut probe_out,
+            );
+            if !probe_out.consumed {
+                failures.push(format!("predicting {code:?} test_only leaked to the host"));
+            }
+            if probe_dispatcher
+                .sessions
+                .get(probe_session)
+                .expect("session")
+                != &before_probe
+            {
+                failures.push(format!("predicting {code:?} probe mutated the session"));
+            }
+            if !commits && probe_out.commit_text().is_some() {
+                failures.push(format!("predicting {code:?} probe produced a commit"));
+            }
+
+            let (mut real_dispatcher, _real_runtime, real_session) =
+                predicting_state_dispatcher("kana", "leak-predicting-real.exe");
+            let mut real_out = OutputBuf::new();
+            real_dispatcher.dispatch(
+                &Request::SendKey {
+                    session: real_session,
+                    key: modified_named_key(code, modifiers),
+                },
+                &mut real_out,
+            );
+            if !real_out.consumed {
+                failures.push(format!(
+                    "predicting {code:?} real dispatch leaked to the host"
+                ));
+            }
+            if !commits && real_out.commit_text().is_some() {
+                failures.push(format!(
+                    "predicting {code:?} real dispatch produced an unexpected commit"
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// `Home`/`End` while converting jump straight to the first/last
+    /// segment (issue #16 finding E). A 1-segment fixture would let a
+    /// no-op implementation pass this test trivially, so this fixture is
+    /// picked to yield 4 segments, and focus is moved off both edges
+    /// before each assertion so neither could pass merely because focus
+    /// never left the edge.
+    #[test]
+    fn ms_ime_converting_home_and_end_move_focus_across_three_or_more_segments() {
+        let (mut dispatcher, session) =
+            converting_state_dispatcher("ishaniittaowari", "segment-home-end.exe");
+        let segment_count = dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .segment_count();
+        assert!(
+            segment_count >= 3,
+            "fixture must produce at least 3 segments to prove real movement, got {segment_count}"
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .focused_segment(),
+            0,
+            "conversion must start with the first segment focused"
+        );
+
+        let mut out = OutputBuf::new();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Right),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .focused_segment(),
+            1,
+            "segment_next must move focus off the first segment before End is tested"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::End),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .focused_segment(),
+            segment_count - 1,
+            "End must move focus to the last segment"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Home),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .focused_segment(),
+            0,
+            "Home must move focus back to the first segment"
+        );
+    }
+
+    /// Ctrl+Space is deliberately absent from every shipped preset (see the
+    /// `ms-ime` preset's header comment): it is IntelliSense in every major
+    /// IDE. This guards against a future fix for issue #16 finding E
+    /// accidentally widening into claiming it too.
+    #[test]
+    fn ctrl_space_is_not_bound_and_reaches_the_application() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "code.exe");
+        type_word(&mut dispatcher, session, "sakura", &mut out);
+        let before = out.preedit_text().to_owned();
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: modified_named_key(KeyCode::Space, Modifiers::CTRL),
+            },
+            &mut out,
+        );
+
+        assert!(!out.consumed, "Ctrl+Space was swallowed");
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(
+            out.preedit_text(),
+            before,
+            "Ctrl+Space changed the composition"
+        );
+    }
+
+    /// The issue #16 finding E keymap fix bound specific named keys in
+    /// `[composing]`, `[converting]` and `[predicting]` -- it must not have
+    /// widened into "always consume named keys". `[idle]` never binds
+    /// PageUp, so it must still reach the host application when there is no
+    /// composition to protect.
+    #[test]
+    fn an_unbound_named_key_reaches_the_application_while_idle() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").state(),
+            State::Idle
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::PageUp),
+            },
+            &mut out,
+        );
+
+        assert!(!out.consumed, "PageUp was swallowed while idle");
+        assert_eq!(out.commit_text(), None);
     }
 
     #[test]
