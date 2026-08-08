@@ -400,7 +400,13 @@ fn send(
     id: RequestId,
     scratch: &mut Vec<u8>,
 ) -> Result<(), Fault> {
-    encode_response(response, id, scratch).map_err(Fault::Protocol)?;
+    // A reply this side cannot encode is `Fault::Encode`, not
+    // `Fault::Protocol`: the client sent nothing malformed here, this
+    // process failed to serialize its own answer. `end()` still drops the
+    // connection for it (see `Fault::Encode`'s doc comment) — the client is
+    // left waiting for a reply to a request it already sent, and there is
+    // no way to answer that on this connection.
+    encode_response(response, id, scratch).map_err(Fault::Encode)?;
     instance.write_all(scratch)
 }
 
@@ -483,5 +489,87 @@ mod tests {
         server.shared.idle.store(1, Ordering::Relaxed);
         ensure_spare_instance(&server.shared);
         assert_eq!(server.shared.created.load(Ordering::Relaxed), 0);
+    }
+
+    /// A `Response` `send` cannot encode. Its single candidate annotation
+    /// sits over `MAX_STRING_BYTES`, so `write_str` rejects it before
+    /// `encode_response` gets anywhere near `MAX_PAYLOAD` — no connected
+    /// peer is needed to observe the failure, because `send` never reaches
+    /// `write_all` when encoding fails first.
+    ///
+    /// This does not claim the failure is reachable through any live
+    /// request-handling path today: every `Response` `serve` actually
+    /// builds is sourced from `OutputBuf`'s fixed-capacity buffers, bounded
+    /// well under `MAX_PAYLOAD`. `CandidateList.items: Vec<Candidate>` is
+    /// unbounded at the type level, though, so nothing here is exercising
+    /// dead code — only a currently-unused-in-practice path.
+    fn oversized_ui_response() -> Response {
+        use sakura_proto::types::CandidatePresentation;
+        use sakura_proto::{Candidate, CandidateKind, CandidateList, UiState, MAX_STRING_BYTES};
+
+        Response::Ui(UiState {
+            revision: 1,
+            mode: None,
+            candidates: Some(CandidateList {
+                kind: CandidateKind::Conversion,
+                presentation: CandidatePresentation::Expanded,
+                items: vec![Candidate {
+                    text: "a".repeat(MAX_STRING_BYTES + 1),
+                    annotation: String::new(),
+                }],
+                selected: 0,
+                page_size: 9,
+            }),
+            anchor: None,
+            renderer_visible: true,
+            stopping: false,
+        })
+    }
+
+    fn unconnected_instance(tag: &str) -> PipeInstance {
+        let name = format!(
+            r"\\.\pipe\sakura_engine_test_send_{tag}_{}",
+            std::process::id()
+        );
+        let security = Descriptor::for_pipe().expect("descriptor");
+        PipeInstance::create(&name, &security, true).expect("create")
+    }
+
+    /// [`sakura_ipc::Fault::Protocol`]'s own doc comment says "the client
+    /// sent something the protocol forbids" — a reply this side fails to
+    /// encode is not that. The client sent nothing malformed; this process
+    /// failed to serialize its own answer.
+    #[test]
+    fn local_response_encode_failure_is_not_reported_as_peer_protocol_fault() {
+        let instance = unconnected_instance("encode_failure_fault");
+        let mut scratch = Vec::new();
+        let outcome = send(&instance, &oversized_ui_response(), 1, &mut scratch);
+
+        assert!(
+            matches!(outcome, Err(Fault::Encode(sakura_proto::Error::TooLarge))),
+            "a local encode failure must surface as Fault::Encode, not \
+             Fault::Protocol, since the peer did nothing wrong: got {outcome:?}"
+        );
+    }
+
+    /// Unlike the client's `Fault::Encode` (the peer never saw the failed
+    /// request, so the link stays usable), a server that cannot encode its
+    /// reply has already dispatched the client's request and left it
+    /// waiting for an answer it can never receive on this connection. The
+    /// only safe move is to end the connection so the client resynchronizes
+    /// instead of hanging on a reply that will never arrive.
+    #[test]
+    fn local_response_encode_failure_still_ends_the_connection() {
+        let instance = unconnected_instance("encode_failure_ends");
+        let mut scratch = Vec::new();
+        let fault = send(&instance, &oversized_ui_response(), 1, &mut scratch)
+            .expect_err("an oversized response must fail to encode");
+
+        assert!(
+            matches!(end(fault), Outcome::Failed(Fault::Encode(_))),
+            "a response this side could not encode must still end the \
+             connection: the peer is left waiting for a reply it will \
+             never receive on this connection"
+        );
     }
 }
