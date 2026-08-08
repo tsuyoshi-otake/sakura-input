@@ -7219,6 +7219,102 @@ mod tests {
         assert!(failures.is_empty(), "{failures:#?}");
     }
 
+    // Issue #16 finding G-1: unlike MS-IME, ATOK restates `muhenkan` in
+    // every state's key-map section instead of inheriting it from
+    // `[global]` (see the comment above `[global]` in
+    // `data/keymap-atok.toml`), and `[predicting]` used to be the one
+    // state where that restatement was missing -- so muhenkan fell
+    // through to the host application while a suggestion was focused
+    // under the ATOK preset specifically. `sakura_core::keymap`'s
+    // `atok_predicting_muhenkan_is_bound_to_mode_kana_cycle` pins down
+    // the exact key-map binding; this test proves the ATOK preset
+    // actually *reaches* that action end-to-end through the engine, and
+    // that the resulting temporary transform behaves exactly like the
+    // already-proven composing-state case (issue #16 finding E's
+    // `ModeKanaCycle` coverage): it changes only the rendered surface,
+    // commits nothing, and never leaks to the host. Expected values are
+    // taken from an empirical dispatch of this exact sequence, not
+    // assumed from reading the transform code.
+    #[test]
+    fn atok_predicting_muhenkan_applies_a_temporary_katakana_transform_without_leaking() {
+        let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t1\t100\t100\tpredict\tcommon\nかなた\t彼方\t0\t2\t200\t200\tpredict\tdirection\nかながわ\t神奈川\t0\t3\t300\t300\tpredict\tprefecture\n";
+        let entries = dictc::parse_entries("prediction.tsv", source).expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t4\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let image = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("image")
+                .into_boxed_slice(),
+        );
+        let conversion = Arc::new(
+            ConversionService::from_static_bytes(image).expect("prediction conversion fixture"),
+        );
+        let learning = Arc::new(LearningService::memory());
+        let runtime = crate::prediction::PredictionRuntime::start(Arc::clone(&conversion))
+            .expect("prediction runtime");
+        let mut dispatcher = Dispatcher::new_with_runtime_configuration(
+            conversion,
+            learning,
+            runtime.service(),
+            Preferences {
+                keymap_preset: Preset::Atok,
+                ..Preferences::default()
+            },
+        )
+        .expect("shipped defaults");
+
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "atok-predicting-muhenkan.exe");
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").state(),
+            State::Predicting,
+            "setup must reach State::Predicting with a focused suggestion"
+        );
+        let mode_before = dispatcher.sessions.get(session).expect("session").mode;
+
+        let mut out = OutputBuf::new();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Muhenkan),
+            },
+            &mut out,
+        );
+
+        assert!(
+            out.consumed,
+            "issue #16 finding G-1: ATOK muhenkan leaked to the host from State::Predicting"
+        );
+        assert_eq!(
+            out.commit_text(),
+            None,
+            "a temporary transform out of Predicting must not commit anything"
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "カナ",
+            "muhenkan's first cycle step must render the predicted reading as full-width katakana"
+        );
+
+        let session_ref = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(
+            session_ref.mode, mode_before,
+            "a temporary transform out of Predicting must not persist into the session's input mode"
+        );
+    }
+
     /// `Home`/`End` while converting jump straight to the first/last
     /// segment (issue #16 finding E). A 1-segment fixture would let a
     /// no-op implementation pass this test trivially, so this fixture is

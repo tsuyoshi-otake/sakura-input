@@ -1152,6 +1152,150 @@ mod tests {
         );
     }
 
+    // Issue #16 finding G-1: `[predicting]` was the one ATOK state that
+    // forgot to restate `muhenkan` (ATOK repeats it per-state instead of
+    // inheriting `[global]`; see the comment above `[global]` in
+    // `data/keymap-atok.toml`), so muhenkan fell through to the host
+    // while a suggestion was focused. Asserting the exact `Action`, not
+    // merely `is_some()`, matters here: a wrong-but-present binding would
+    // pass a looser check while still misbehaving.
+    #[test]
+    fn atok_predicting_muhenkan_is_bound_to_mode_kana_cycle() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::Muhenkan,
+            Modifiers::NONE,
+            Action::ModeKanaCycle,
+        );
+    }
+
+    // Issue #16 finding G-3: `[predicting]` also lacked caret movement,
+    // forward delete, shift+enter commit-first, and all five F6-F10
+    // surface transforms -- the same set MS-IME's `[predicting]` already
+    // had (see the `ms_ime_predicting_*` tests above). Each ATOK case
+    // gets its own test, mirroring that naming convention.
+    #[test]
+    fn atok_predicting_left_is_bound_to_caret_left() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::Left,
+            Modifiers::NONE,
+            Action::CaretLeft,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_right_is_bound_to_caret_right() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::Right,
+            Modifiers::NONE,
+            Action::CaretRight,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_home_is_bound_to_caret_home() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::Home,
+            Modifiers::NONE,
+            Action::CaretHome,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_end_is_bound_to_caret_end() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::End,
+            Modifiers::NONE,
+            Action::CaretEnd,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_delete_is_bound_to_delete_forward() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::Delete,
+            Modifiers::NONE,
+            Action::DeleteForward,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_shift_enter_is_bound_to_commit_first() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::Enter,
+            Modifiers::SHIFT,
+            Action::CommitFirst,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_f6_is_bound_to_transform_hiragana() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::F6,
+            Modifiers::NONE,
+            Action::TransformHiragana,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_f7_is_bound_to_transform_katakana() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::F7,
+            Modifiers::NONE,
+            Action::TransformKatakana,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_f8_is_bound_to_transform_half_katakana() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::F8,
+            Modifiers::NONE,
+            Action::TransformHalfKatakana,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_f9_is_bound_to_transform_full_alnum() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::F9,
+            Modifiers::NONE,
+            Action::TransformFullAlnum,
+        );
+    }
+
+    #[test]
+    fn atok_predicting_f10_is_bound_to_transform_half_alnum() {
+        assert_binding(
+            Preset::Atok,
+            State::Predicting,
+            KeyCode::F10,
+            Modifiers::NONE,
+            Action::TransformHalfAlnum,
+        );
+    }
+
     #[test]
     fn both_presets_bind_prediction_numbers_and_history_deletion() {
         // Both shipped presets let a focused suggestion list be committed by its
