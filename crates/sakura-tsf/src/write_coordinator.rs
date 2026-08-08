@@ -46,6 +46,11 @@ pub(crate) enum CancelReason {
     EngineUnavailable,
     DeferredUnavailable,
     PredecessorFailed,
+    /// This operation's own request was refused before it ever reached the
+    /// engine (a local encode failure). Distinct from
+    /// [`PredecessorFailed`](CancelReason::PredecessorFailed): no earlier
+    /// operation is at fault here, this one's own request was.
+    RequestRejected,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

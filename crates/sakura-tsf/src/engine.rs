@@ -38,13 +38,22 @@
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use sakura_ipc::diagnostics::{self, TimeoutOperation};
 use sakura_ipc::{Client, Fault};
-use sakura_proto::{ErrorCode, KeyInput, Output, Request, Response, SessionId, PROTOCOL_VERSION};
+use sakura_proto::{
+    ErrorCode, InputScope, KeyInput, Output, Request, Response, ScreenRect, SessionId,
+    UndoCommitOutcome, PROTOCOL_VERSION,
+};
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 
 /// DESIGN 4.3's per-keystroke budget. Exceeding it is a dropped keystroke;
 /// not having it at all is a frozen application.
 const KEY_BUDGET: Duration = Duration::from_millis(50);
+
+/// Placement is cosmetic and must never consume the whole keystroke budget.
+/// A missed update leaves the popup hidden or at its last valid rectangle;
+/// the next TSF layout notification supplies another bounded opportunity.
+const UI_BUDGET: Duration = Duration::from_millis(10);
 
 /// The whole cost of rebuilding a broken link — connect, `Hello` and
 /// `CreateSession` together, not each. Deliberately no larger than a
@@ -64,6 +73,17 @@ pub enum Answer {
     /// The engine answered inside the budget. Whether it wants the key is
     /// [`Output::consumed`].
     Ready(Output),
+    /// The engine owns an unfinished transaction for this session. The caller
+    /// must consume the key locally until the queued host-side operation sends
+    /// its explicit terminal outcome; handing it to the document would race
+    /// the exact-text undo.
+    Busy,
+    /// This request never reached the engine: it failed to encode on this
+    /// side of the wire (e.g. a reconversion selection too large to fit
+    /// the protocol). The peer was never contacted and never misbehaved,
+    /// so only this operation is refused — the link, the session, and any
+    /// other work already in flight are untouched.
+    Rejected,
     /// No engine, no answer in time, or an answer that made no sense. The
     /// key belongs to the application, and any composition already on
     /// screen has to be finalized rather than left hanging — see the
@@ -83,6 +103,10 @@ pub struct Engine {
 struct Link {
     client: Client,
     session: SessionId,
+    /// The last scope accepted by this engine session. A reconnect starts
+    /// unclassified, so the first key on the new link must publish its scope
+    /// again before it can be persisted by developer mode.
+    input_scope: Option<InputScope>,
     /// Set when a request timed out. The engine may or may not have
     /// applied that keystroke, so the two ends can no longer be assumed to
     /// agree about what is being composed.
@@ -97,7 +121,7 @@ impl Engine {
     /// An engine already connected to a named pipe, for tests that need a
     /// scripted peer rather than the real one.
     #[cfg(test)]
-    fn attached_to(name: &str) -> Self {
+    pub(crate) fn attached_to(name: &str) -> Self {
         Self {
             link: connect_to(name),
             blocked_until: None,
@@ -122,6 +146,71 @@ impl Engine {
         self.request(&Request::SendKey { session, key })
     }
 
+    /// Evaluates a test-only key against the supplied host scope without
+    /// publishing that scope to the live engine session. The engine applies
+    /// the transition only to a fixed-capacity Probe clone, so OnTestKeyDown
+    /// cannot reset live composition, clear live prediction state, or update
+    /// this link's applied-scope cache.
+    pub fn probe_key(&mut self, scope: InputScope, key: KeyInput) -> Answer {
+        self.probe_key_for_context(scope, key, false)
+    }
+
+    /// Evaluates a key against a throwaway session for a replacement TSF
+    /// context. The engine receives the explicit fresh-context bit; this
+    /// method never publishes the scope or updates the live link cache.
+    pub fn probe_key_for_context(
+        &mut self,
+        scope: InputScope,
+        mut key: KeyInput,
+        fresh_context: bool,
+    ) -> Answer {
+        let session = match self.link() {
+            Some(link) => link.session,
+            None => return Answer::Unavailable,
+        };
+        key.test_only = true;
+        self.request(&Request::ProbeKey {
+            session,
+            scope,
+            fresh_context,
+            key,
+        })
+    }
+
+    /// Publishes the focused field's classification before a key is sent.
+    /// Repeating the same scope is local-only; a reconnect or a changed field
+    /// sends one bounded administration request. Failure is fail-closed: the
+    /// caller must give the key back to the host rather than let an
+    /// unclassified key reach the engine.
+    pub fn set_input_scope(&mut self, scope: InputScope) -> bool {
+        let Some(link) = self.link() else {
+            return false;
+        };
+        if link.input_scope == Some(scope) {
+            return true;
+        }
+        let request = Request::SetInputScope {
+            session: link.session,
+            scope,
+        };
+        match link.client.call(&request, KEY_BUDGET) {
+            Ok(Response::Ok) => {
+                link.input_scope = Some(scope);
+                true
+            }
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                link.desynchronized = true;
+                link.input_scope = None;
+                false
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
+    }
+
     /// Asks the engine to finalize whatever it is composing.
     ///
     /// Used when the document is about to stop being ours — focus loss —
@@ -133,6 +222,101 @@ impl Engine {
             None => return Answer::Unavailable,
         };
         self.request(&Request::Commit { session })
+    }
+
+    /// Asks the engine to recover the reading and candidates for text that is
+    /// already committed in the host document. Preview is observational;
+    /// actual reconversion replaces the engine session with the returned
+    /// conversion state.
+    pub fn reconvert(&mut self, text: String, preview: bool) -> Answer {
+        let session = match self.link() {
+            Some(link) => link.session,
+            None => return Answer::Unavailable,
+        };
+        self.request(&Request::Reconvert {
+            session,
+            text,
+            preview,
+        })
+    }
+
+    /// Discards the engine-side composition after a document-side
+    /// reconversion failure. This is intentionally observable as `bool`: an
+    /// unsuccessful reset leaves the link desynchronized or closed, never
+    /// silently reusable.
+    pub fn revert(&mut self) -> bool {
+        let Some(link) = self.link.as_mut() else {
+            return false;
+        };
+        let session = link.session;
+        match link.client.call(&Request::Revert { session }, KEY_BUDGET) {
+            Ok(Response::Ok) => {
+                link.desynchronized = false;
+                true
+            }
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Revert);
+                link.desynchronized = true;
+                false
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
+    }
+
+    /// Completes an engine-side exact-text commit undo transaction. The
+    /// frontend sends this only after the TSF journal has reached a terminal
+    /// host outcome; an unsuccessful acknowledgement drops the link so a
+    /// later key cannot reuse an engine session whose pending state is unknown.
+    pub fn settle_undo_commit(&mut self, outcome: UndoCommitOutcome) -> bool {
+        let Some(link) = self.link.as_mut() else {
+            return false;
+        };
+        let request = Request::UndoCommit {
+            session: link.session,
+            outcome,
+        };
+        match link.client.call(&request, KEY_BUDGET) {
+            Ok(Response::Ok) => true,
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Revert);
+                link.desynchronized = true;
+                false
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
+    }
+
+    /// Best-effort publication of the candidate popup's screen geometry.
+    ///
+    /// This never reconnects and a timeout does not desynchronize conversion:
+    /// unlike a key request it mutates no session text. A broken pipe still
+    /// drops the link so the next real keystroke can rebuild it normally.
+    pub fn set_ui_placement(&mut self, anchor: Option<ScreenRect>, renderer_visible: bool) -> bool {
+        let Some(link) = self.link.as_mut() else {
+            return false;
+        };
+        let request = Request::SetUiPlacement {
+            session: link.session,
+            anchor,
+            renderer_visible,
+        };
+        match link.client.call(&request, UI_BUDGET) {
+            Ok(Response::Ok) => true,
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::UiPlacement);
+                false
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
     }
 
     /// Whether a connection currently exists.
@@ -163,7 +347,13 @@ impl Engine {
                 Answer::Unavailable
             }
 
-            // `Ok` and `Error` are legitimate answers to `Commit` and to
+            // Busy is materially different from an unavailable engine: the
+            // session is alive, but a pending exact-text undo still owns the
+            // host document boundary. Keep that fact visible to TSF so it can
+            // consume the later key without creating a blank write plan.
+            Ok(Response::Error(ErrorCode::Busy)) => Answer::Busy,
+
+            // `Ok` and other `Error` answers are legitimate answers to `Commit` and to
             // requests this milestone does not make; neither carries text,
             // so there is nothing to show and nothing to correct.
             Ok(_) => Answer::Unavailable,
@@ -172,9 +362,15 @@ impl Engine {
             // stops the next successful call from building on a
             // composition the engine may have moved on from.
             Err(Fault::Timeout) => {
+                note_timeout(timeout_operation(request));
                 link.desynchronized = true;
                 Answer::Unavailable
             }
+
+            // Never left this process, so the peer cannot have misbehaved
+            // and the link cannot be desynchronized by it. Only this
+            // request is refused.
+            Err(Fault::Encode(_)) => Answer::Rejected,
 
             Err(_) => {
                 self.drop_link();
@@ -243,6 +439,10 @@ impl Link {
                 self.desynchronized = false;
                 true
             }
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Resynchronize);
+                false
+            }
             // Still not answering, or answering something unexpected.
             // Either way this connection has stopped being trustworthy.
             _ => false,
@@ -270,11 +470,18 @@ fn connect_to(name: &str) -> Option<Link> {
 
 fn open(name: Option<&str>) -> Option<Link> {
     let deadline = Instant::now() + RECONNECT_BUDGET;
-    let mut client = match name {
+    let connected = match name {
         Some(name) => Client::connect_to(name, left(deadline)),
         None => Client::connect(left(deadline)),
-    }
-    .ok()?;
+    };
+    let mut client = match connected {
+        Ok(client) => client,
+        Err(Fault::Timeout) => {
+            note_timeout(TimeoutOperation::Connect);
+            return None;
+        }
+        Err(_) => return None,
+    };
 
     match client.call(
         &Request::Hello {
@@ -286,6 +493,10 @@ fn open(name: Option<&str>) -> Option<Link> {
         // when it matches; anything else means this DLL and that engine
         // are from different installs and must not talk.
         Ok(Response::Hello { .. }) => {}
+        Err(Fault::Timeout) => {
+            note_timeout(TimeoutOperation::Handshake);
+            return None;
+        }
         _ => return None,
     }
 
@@ -299,10 +510,58 @@ fn open(name: Option<&str>) -> Option<Link> {
         Ok(Response::SessionCreated { session }) => Some(Link {
             client,
             session,
+            input_scope: None,
             desynchronized: false,
         }),
+        Err(Fault::Timeout) => {
+            note_timeout(TimeoutOperation::Handshake);
+            None
+        }
         _ => None,
     }
+}
+
+fn timeout_operation(request: &Request) -> TimeoutOperation {
+    match request {
+        Request::SendKey { .. } | Request::ProbeKey { .. } => TimeoutOperation::Key,
+        Request::Commit { .. } => TimeoutOperation::Commit,
+        Request::Reconvert { .. } => TimeoutOperation::Reconvert,
+        Request::Revert { .. } => TimeoutOperation::Revert,
+        Request::UndoCommit { .. } => TimeoutOperation::Revert,
+        Request::SetUiPlacement { .. } | Request::WatchUi { .. } => TimeoutOperation::UiPlacement,
+        Request::Hello { .. } | Request::CreateSession { .. } => TimeoutOperation::Handshake,
+        Request::ClearLearning
+        | Request::ClearInputHistory
+        | Request::FlushInputHistory
+        | Request::InputHistoryStats
+        | Request::SetInputScope { .. }
+        | Request::DeleteSession { .. }
+        | Request::Ping
+        | Request::Shutdown => TimeoutOperation::Administration,
+    }
+}
+
+#[cfg(not(test))]
+fn note_timeout(operation: TimeoutOperation) {
+    // Diagnostic failure must never replace the original, recoverable timeout
+    // with a host-application error.
+    let _ = diagnostics::record_timeout(operation);
+}
+
+#[cfg(test)]
+fn note_timeout(operation: TimeoutOperation) {
+    // Unit tests deliberately manufacture timeout paths. Keep that evidence
+    // under the system temporary directory so `cargo test` can never append to
+    // the installed user's durable diagnostics profile.
+    let _ = diagnostics::record_timeout_at(&test_timeout_log_path(), operation);
+}
+
+#[cfg(test)]
+fn test_timeout_log_path() -> std::path::PathBuf {
+    std::env::temp_dir()
+        .join("sakura-input-tests")
+        .join(format!("sakura-tsf-{}", std::process::id()))
+        .join("ipc-timeouts.bin")
 }
 
 fn left(deadline: Instant) -> Duration {
@@ -354,7 +613,9 @@ const UNKNOWN_HOST: &str = "unknown.exe";
 mod tests {
     use super::*;
     use sakura_ipc::{Descriptor, PipeInstance};
-    use sakura_proto::{decode_request, encode_response, KeyCode, Modifiers, Preedit, Segment};
+    use sakura_proto::{
+        decode_request, encode_response, InputScope, KeyCode, Modifiers, Preedit, Segment,
+    };
 
     fn scratch_name(tag: &str) -> String {
         format!(r"\\.\pipe\sakura_tsf_test_{tag}_{}", std::process::id())
@@ -423,6 +684,17 @@ mod tests {
                 cursor: 1,
             }),
             commit: None,
+            delete_before: String::new(),
+            candidates: None,
+        }
+    }
+
+    #[test]
+    fn timeout_diagnostics_for_unit_tests_never_use_the_installed_user_profile() {
+        let test_path = test_timeout_log_path();
+        assert!(test_path.starts_with(std::env::temp_dir()));
+        if let Ok(installed_path) = diagnostics::default_timeout_log_path() {
+            assert_ne!(test_path, installed_path);
         }
     }
 
@@ -451,6 +723,135 @@ mod tests {
         server.join().expect("the server thread");
     }
 
+    #[test]
+    fn test_only_probe_key_carries_scope_without_publishing_or_changing_link_cache() {
+        let (name, server) = fake_engine("probe-scope", |pipe, buffer| {
+            let payload = pipe.read_frame(buffer).expect("ProbeKey request");
+            let (id, request) = decode_request(payload).expect("decodable ProbeKey");
+            assert!(matches!(
+                request,
+                Request::ProbeKey {
+                    session: 1,
+                    scope: InputScope::Password,
+                    fresh_context: false,
+                    key: KeyInput {
+                        test_only: true,
+                        ..
+                    },
+                }
+            ));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(some_output()), id, &mut reply)
+                .expect("encode ProbeKey response");
+            pipe.write_all(&reply).expect("write ProbeKey response");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert_eq!(
+            engine.link.as_ref().and_then(|link| link.input_scope),
+            None,
+            "the probe starts without a published scope"
+        );
+        assert!(matches!(
+            engine.probe_key(InputScope::Password, a_key('k')),
+            Answer::Ready(_)
+        ));
+        assert_eq!(
+            engine.link.as_ref().and_then(|link| link.input_scope),
+            None,
+            "ProbeKey must not update the live link scope cache"
+        );
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn test_only_context_replacement_probe_carries_fresh_session_mode_without_publishing_scope() {
+        let (name, server) = fake_engine("probe-fresh-context", |pipe, buffer| {
+            let payload = pipe
+                .read_frame(buffer)
+                .expect("fresh-context ProbeKey request");
+            let (id, request) = decode_request(payload).expect("decodable ProbeKey");
+            assert!(matches!(
+                request,
+                Request::ProbeKey {
+                    session: 1,
+                    scope: InputScope::Normal,
+                    fresh_context: true,
+                    key: KeyInput {
+                        test_only: true,
+                        ..
+                    },
+                }
+            ));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(some_output()), id, &mut reply)
+                .expect("encode fresh-context ProbeKey response");
+            pipe.write_all(&reply)
+                .expect("write fresh-context ProbeKey response");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(matches!(
+            engine.probe_key_for_context(InputScope::Normal, a_key('k'), true),
+            Answer::Ready(_)
+        ));
+        assert_eq!(
+            engine.link.as_ref().and_then(|link| link.input_scope),
+            None,
+            "a replacement Probe must not publish the live link scope"
+        );
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn commit_undo_busy_is_distinct_and_keeps_the_engine_link_alive() {
+        let (name, server) = fake_engine("busy", |pipe, buffer| {
+            answer(pipe, buffer, &Response::Error(ErrorCode::Busy));
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(matches!(engine.send_key(a_key('k')), Answer::Busy));
+        assert!(
+            engine.is_connected(),
+            "Busy is a live pending transaction, not an unavailable engine"
+        );
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn reconversion_carries_the_selected_text_and_preview_flag() {
+        let (name, server) = fake_engine("reconversion", |pipe, buffer| {
+            let payload = pipe.read_frame(buffer).expect("reconversion request");
+            let (id, request) = decode_request(payload).expect("decodable reconversion");
+            assert!(matches!(
+                request,
+                Request::Reconvert {
+                    session: 1,
+                    ref text,
+                    preview: true,
+                } if text == "仮名"
+            ));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(some_output()), id, &mut reply).expect("encode");
+            pipe.write_all(&reply).expect("write");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(matches!(
+            engine.reconvert("仮名".to_owned(), true),
+            Answer::Ready(_)
+        ));
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
     /// The crash-resilience case from PLAN.md Phase 1: the engine dies with
     /// a composition open. The keystroke has to come back as unavailable so
     /// the caller can finalize what is on screen and hand the key to the
@@ -469,6 +870,103 @@ mod tests {
         assert!(
             !engine.is_connected(),
             "a dead peer must not be left in place as a live link"
+        );
+
+        server.join().expect("the server thread");
+    }
+
+    /// `Client::call` splits a purely local `encode_request` failure
+    /// (`Fault::Encode`, `client.rs:180`) from a hostile peer's malformed
+    /// frame (`Fault::Protocol`, `client.rs:215`), and `Engine::request`
+    /// (this file) routes the two to different `Answer`s: `Rejected` keeps
+    /// the link, `Unavailable`'s catch-all drops it. This test proves that
+    /// split holds end to end -- including that the link is not just
+    /// "still marked connected" but actually still usable for the next
+    /// request.
+    #[test]
+    fn local_reconvert_encode_failure_answers_rejected_and_keeps_the_link_usable() {
+        let (name, server) = fake_engine("oversized-local", |pipe, buffer| {
+            // The oversized `Reconvert` below never reaches the wire:
+            // encoding fails inside `Client::call`, before any byte is
+            // written to this pipe (`client.rs:180`). So this fake engine
+            // only ever sees the two healthy verification keys.
+            answer(pipe, buffer, &Response::Output(some_output()));
+            answer(pipe, buffer, &Response::Output(some_output()));
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(engine.is_connected(), "the handshake must have completed");
+
+        // Prove the link is healthy -- not "an engine that was never
+        // really there" -- before the oversized request touches it.
+        assert!(
+            matches!(engine.send_key(a_key('k')), Answer::Ready(_)),
+            "the link must answer normally before the oversized request"
+        );
+        assert!(engine.is_connected());
+
+        // A `text` this large fails `write_str`'s own `MAX_STRING_BYTES`
+        // (4096 bytes, see `wire.rs`) check well before the request could
+        // even approach `MAX_PAYLOAD` (64 KiB) -- and comfortably exceeds
+        // `MAX_PAYLOAD` too, so the failure holds regardless of which
+        // internal check trips first.
+        let huge_text = "あ".repeat(30_000); // 90,000 bytes
+        let outcome = engine.reconvert(huge_text, false);
+
+        assert!(
+            matches!(outcome, Answer::Rejected),
+            "a local encode failure never reached the peer, so it must not \
+             be answered the same way as a dead or misbehaving engine -- \
+             got {outcome:?}"
+        );
+        assert!(
+            engine.is_connected(),
+            "a local encode failure must not drop an otherwise healthy \
+             link; the peer never saw this request and never misbehaved"
+        );
+
+        // Not just "still marked connected" -- the next, unrelated request
+        // must actually succeed on the same link.
+        assert!(
+            matches!(engine.send_key(a_key('k')), Answer::Ready(_)),
+            "the link must still answer a normal request after rejecting \
+             the oversized one"
+        );
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    /// The contrasting case: a corrupted/hostile frame really did reach the
+    /// wire. Unlike the local-encode case above, keeping this link would
+    /// mean trusting bytes this process cannot even parse. `payload_len`
+    /// (`message.rs`) is the first thing that reads it, and its own
+    /// `Error::TooLarge` also becomes `Fault::Protocol` (`client.rs:215`)
+    /// -- proving the transport cannot tell the two cases apart on its
+    /// own, even though this one must drop the link and the one above must
+    /// not.
+    #[test]
+    fn oversized_remote_frame_is_unavailable_and_drops_the_link() {
+        let (name, server) = fake_engine("oversized-remote", |pipe, buffer| {
+            // Consume the real request, then answer with a frame whose
+            // declared length alone already exceeds `MAX_PAYLOAD` -- the
+            // client rejects this from the 4-byte header, before it would
+            // ever try to read a body this large.
+            let _ = pipe.read_frame(buffer);
+            let bogus_len = (sakura_proto::MAX_PAYLOAD + 1) as u32;
+            pipe.write_all(&bogus_len.to_le_bytes())
+                .expect("write an oversized frame header");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(engine.is_connected(), "the handshake must have completed");
+
+        assert!(matches!(engine.send_key(a_key('k')), Answer::Unavailable));
+        assert!(
+            !engine.is_connected(),
+            "a peer that sends a frame this large is not a peer this link \
+             can keep trusting -- it must be dropped, unlike a local \
+             encode failure"
         );
 
         server.join().expect("the server thread");

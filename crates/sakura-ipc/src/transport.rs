@@ -70,6 +70,15 @@ pub enum Fault {
     /// cannot be resynchronized — so the server answers if it still can
     /// and then drops it.
     Protocol(sakura_proto::Error),
+    /// This side failed to encode its own outgoing request before sending
+    /// a single byte to the peer.
+    ///
+    /// Distinct from [`Protocol`](Fault::Protocol): the peer never saw
+    /// this request and never misbehaved, so the connection is not at
+    /// fault and does not need to be dropped. Only the request itself —
+    /// e.g. a reconversion selection too large to fit the wire format —
+    /// is rejected.
+    Encode(sakura_proto::Error),
     /// The reply did not arrive inside the caller's deadline. Only the
     /// client end can produce this: the DLL must never block a keystroke
     /// for longer than 50 ms (DESIGN 4.3), and a slow engine is answered
@@ -97,6 +106,7 @@ impl core::fmt::Display for Fault {
         match self {
             Fault::Disconnected => write!(f, "client disconnected"),
             Fault::Protocol(error) => write!(f, "protocol violation: {error:?}"),
+            Fault::Encode(error) => write!(f, "failed to encode outgoing request: {error:?}"),
             Fault::Timeout => write!(f, "the engine did not answer in time"),
             Fault::Desynchronized => write!(f, "reply to a request that was never sent"),
             Fault::Os(error) => write!(f, "{error}"),
