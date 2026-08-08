@@ -11,6 +11,9 @@
 #   - Ctrl+A / Ctrl+E move the caret to the start and end of the preedit.
 #   - Shift+Space steps backwards through candidates while converting, the
 #     same as in the ms-ime preset.
+#   - Tab / Shift+Tab move to the next / previous candidate group while
+#     converting; this engine exposes that bounded navigation as next / prior
+#     candidate movement.
 #
 # Most of what people mean by "ATOK behaviour" is engine behaviour rather
 # than key bindings — how segments are guessed, how candidates are ordered,
@@ -24,6 +27,16 @@
 hankaku_zenkaku = "ime_toggle"
 "alt+`" = "ime_toggle"
 kana_mode = "mode_kana_toggle"
+
+# Unlike the ms-ime preset, this preset does not put 無変換 in [global] and
+# let states inherit it. It restates `muhenkan = "mode_kana_cycle"` in every
+# state instead — [idle], [composing], [converting] and [predicting] below —
+# so each state's binding is visible next to that state's own comments
+# without a reader also having to check [global]. `KeyMap::lookup` only
+# checks a state's own section and then [global], so this restating matters:
+# any state that forgets the line resolves 無変換 to no action at all and
+# leaks the raw key to the host application (issue #16 finding G-1 was
+# exactly that, for [predicting]).
 
 [idle]
 muhenkan = "mode_kana_cycle"
@@ -61,6 +74,8 @@ f10 = "transform_half_alnum"
 "ctrl+t" = "transform_half_alnum"
 
 [converting]
+# In a conversion/preedit, 無変換 changes only the current segment surface.
+muhenkan = "mode_kana_cycle"
 space = "candidate_next"
 henkan = "candidate_next"
 "shift+space" = "candidate_prev"
@@ -74,7 +89,17 @@ up = "candidate_prev"
 "ctrl+p" = "candidate_prev"
 page_down = "candidate_page_down"
 page_up = "candidate_page_up"
-tab = "candidate_expand"
+"1" = "candidate_1"
+"2" = "candidate_2"
+"3" = "candidate_3"
+"4" = "candidate_4"
+"5" = "candidate_5"
+"6" = "candidate_6"
+"7" = "candidate_7"
+"8" = "candidate_8"
+"9" = "candidate_9"
+tab = "candidate_next"
+"shift+tab" = "candidate_prev"
 enter = "commit"
 escape = "cancel"
 backspace = "cancel"
@@ -93,6 +118,30 @@ f10 = "transform_half_alnum"
 "ctrl+t" = "transform_half_alnum"
 
 [predicting]
+# 無変換 keeps its idle/composing/converting meaning — the three-form
+# ひらがな→カタカナ→半角カタカナ cycle — while a suggestion is focused too.
+# This preset's [global] deliberately does not restate 無変換 the way
+# ms-ime's does (see the note above `[idle]`), so each state repeats the
+# binding explicitly instead; before this entry, `[predicting]` was the one
+# state that forgot to, and `KeyMap::lookup` has no third place to fall
+# back to, so 無変換 reached the host application while a suggestion held
+# focus (issue #16 finding G-1).
+muhenkan = "mode_kana_cycle"
+# Numbered candidate selection and learned-history deletion, matching the
+# ms-ime preset's [predicting] section: without these an ATOK-preset user
+# could not commit a suggestion by its slot, and had no keyboard route at
+# all to forget a bad learned prediction-history entry (issue #16 finding
+# G-2).
+"1" = "candidate_1"
+"2" = "candidate_2"
+"3" = "candidate_3"
+"4" = "candidate_4"
+"5" = "candidate_5"
+"6" = "candidate_6"
+"7" = "candidate_7"
+"8" = "candidate_8"
+"9" = "candidate_9"
+"ctrl+delete" = "delete_prediction_history"
 tab = "predict_next"
 "shift+tab" = "predict_prev"
 down = "predict_next"
@@ -102,3 +151,20 @@ escape = "cancel"
 space = "convert"
 henkan = "convert"
 backspace = "delete_back"
+# Caret movement, forward delete and the commit-the-top-pick shortcut, the
+# same as [composing]'s. None of these were bound here before, so each fell
+# through `apply_key`'s final arm and reached the host application while a
+# suggestion was focused (issue #16 finding G-3).
+left = "caret_left"
+right = "caret_right"
+home = "caret_home"
+end = "caret_end"
+delete = "delete_forward"
+"shift+enter" = "commit_first"
+# The five surface transforms, same as [composing]'s F6-F10: a focused
+# suggestion should not block re-transforming the segment underneath it.
+f6 = "transform_hiragana"
+f7 = "transform_katakana"
+f8 = "transform_half_katakana"
+f9 = "transform_full_alnum"
+f10 = "transform_half_alnum"

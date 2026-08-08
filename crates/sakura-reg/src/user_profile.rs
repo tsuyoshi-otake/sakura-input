@@ -50,7 +50,8 @@ pub fn profile_spec() -> String {
     )
 }
 
-/// Adds Sakura Input to the calling user's input methods.
+/// Adds Sakura Input to the calling user's input methods and activates it for
+/// the current logon session.
 ///
 /// Must run as the interactive user. Under an elevated installer token
 /// HKCU is a *different hive*, so this would enable the IME for the
@@ -58,7 +59,8 @@ pub fn profile_spec() -> String {
 /// responsible for getting that right, because from inside the process
 /// there is no reliable way to tell.
 pub fn enable() -> Result<()> {
-    install(&profile_spec(), 0)
+    install(&profile_spec(), 0)?;
+    crate::profile::activate_profile_for_session()
 }
 
 /// Removes Sakura Input from the calling user's input methods.

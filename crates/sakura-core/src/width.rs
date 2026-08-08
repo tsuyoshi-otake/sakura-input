@@ -14,6 +14,7 @@
 //! [`TextSink`]. It knows nothing about romaji, dictionaries, or TSF — only
 //! Unicode code points and the two settings that govern them.
 
+use crate::editing::{half_katakana, katakana_char};
 use crate::simd;
 use crate::text::TextSink;
 use sakura_proto::{Mode, Overflow};
@@ -148,6 +149,9 @@ impl Normalizer {
         mode: Mode,
         dst: &mut impl TextSink,
     ) -> Result<(), Overflow> {
+        if matches!(mode, Mode::Katakana | Mode::HalfKatakana) {
+            return self.normalize_kana(src, mode, dst);
+        }
         // Below one vector block there is nothing to amortize the scanner's
         // setup over, and this is the shape the hot path actually has: a
         // preedit is a handful of characters, and a keystroke is one. So the
@@ -160,6 +164,29 @@ impl Normalizer {
             return Ok(());
         }
         self.normalize_runs(src, mode, dst)
+    }
+
+    /// Renders kana modes after romaji composition has produced hiragana.
+    /// Half-width katakana is a one-to-many transform for voiced kana, so it
+    /// cannot be expressed by `normalize_char` and is handled before the
+    /// ordinary width-policy fast path.
+    fn normalize_kana(
+        &self,
+        src: &str,
+        mode: Mode,
+        dst: &mut impl TextSink,
+    ) -> Result<(), Overflow> {
+        for character in src.chars() {
+            let katakana = katakana_char(character);
+            if mode == Mode::HalfKatakana {
+                if let Some(mapped) = half_katakana(katakana) {
+                    dst.push_str(mapped)?;
+                    continue;
+                }
+            }
+            dst.push(self.normalize_char(katakana, mode))?;
+        }
+        Ok(())
     }
 
     /// The long-string half of [`Normalizer::normalize_into`], kept out of
@@ -376,6 +403,23 @@ mod tests {
         assert_eq!(full.normalize_char('a', Mode::Direct), 'ａ');
         assert_eq!(full.normalize_char('0', Mode::Direct), '０');
         assert_eq!(full.normalize_char('@', Mode::Direct), '＠');
+    }
+
+    #[test]
+    fn kana_modes_render_their_declared_script() {
+        let normalizer = Normalizer::default();
+        let source = "\u{304b}\u{304c}"; // かが
+        let mut full = FixedStr::<32>::new();
+        normalizer
+            .normalize_into(source, Mode::Katakana, &mut full)
+            .expect("full-width kana fits");
+        assert_eq!(full.as_str(), "\u{30ab}\u{30ac}"); // カガ
+
+        let mut half = FixedStr::<32>::new();
+        normalizer
+            .normalize_into(source, Mode::HalfKatakana, &mut half)
+            .expect("half-width kana fits");
+        assert_eq!(half.as_str(), "\u{ff76}\u{ff76}\u{ff9e}"); // ｶｶﾞ
     }
 
     #[test]
@@ -660,7 +704,7 @@ mod tests {
         all
     }
 
-    /// The run-based path must be observably identical to the definition it
+    /// The width-policy run path must be observably identical to the scalar
     /// replaced — [`Normalizer::normalize_char`] over every character. This
     /// is the assertion that stands between a vector kernel and the user's
     /// text, so it runs over every policy, every mode, and text long enough
@@ -669,6 +713,9 @@ mod tests {
     fn normalize_into_agrees_with_normalize_char_everywhere() {
         for normalizer in every_normalizer() {
             for mode in Mode::ALL {
+                if matches!(mode, Mode::Katakana | Mode::HalfKatakana) {
+                    continue;
+                }
                 for src in corpus() {
                     let expected: String = src
                         .chars()

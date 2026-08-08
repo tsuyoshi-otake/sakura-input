@@ -16,9 +16,9 @@
 //! Modifiers match exactly, after the lock bits are cleared. Shift+Enter is
 //! therefore a different binding from Enter rather than a variation on it,
 //! which is what DESIGN 2 requires — Shift+Enter commits the top prediction
-//! outright while Enter commits what is focused. Caps Lock and Kana Lock are
-//! states of the keyboard rather than keys held while typing, so they never
-//! take part in the match.
+//! outright while Enter commits what is focused. Keyboard lock bits are
+//! stripped before matching; the Caps Lock key itself is still available as a
+//! named trigger.
 //!
 //! # Resolution
 //!
@@ -137,6 +137,10 @@ pub enum Action {
     ModeKanaToggle,
     /// Hiragana → katakana → half-width katakana, the ATOK meaning.
     ModeKanaCycle,
+    /// Hiragana/alphanumeric mode toggle (英数/Caps Lock).
+    ModeAlnumToggle,
+    /// Half-width/full-width alphanumeric mode toggle (Shift+無変換).
+    ModeAlnumWidthToggle,
 
     /// Commit what is focused.
     Commit,
@@ -153,12 +157,24 @@ pub enum Action {
     CandidatePrev,
     CandidatePageDown,
     CandidatePageUp,
+    Candidate1,
+    Candidate2,
+    Candidate3,
+    Candidate4,
+    Candidate5,
+    Candidate6,
+    Candidate7,
+    Candidate8,
+    Candidate9,
     /// Open the expanded candidate table (Tab in the candidate window).
     CandidateExpand,
 
     /// Focus the next prediction; the first press enters the list.
     PredictNext,
     PredictPrev,
+    /// Forget the focused learned-history prediction without touching system
+    /// or user dictionary candidates.
+    DeletePredictionHistory,
 
     SegmentPrev,
     SegmentNext,
@@ -200,6 +216,8 @@ impl Action {
             Action::ModeDirect => "mode_direct",
             Action::ModeKanaToggle => "mode_kana_toggle",
             Action::ModeKanaCycle => "mode_kana_cycle",
+            Action::ModeAlnumToggle => "mode_alnum_toggle",
+            Action::ModeAlnumWidthToggle => "mode_alnum_width_toggle",
             Action::Commit => "commit",
             Action::CommitFirst => "commit_first",
             Action::Cancel => "cancel",
@@ -209,9 +227,19 @@ impl Action {
             Action::CandidatePrev => "candidate_prev",
             Action::CandidatePageDown => "candidate_page_down",
             Action::CandidatePageUp => "candidate_page_up",
+            Action::Candidate1 => "candidate_1",
+            Action::Candidate2 => "candidate_2",
+            Action::Candidate3 => "candidate_3",
+            Action::Candidate4 => "candidate_4",
+            Action::Candidate5 => "candidate_5",
+            Action::Candidate6 => "candidate_6",
+            Action::Candidate7 => "candidate_7",
+            Action::Candidate8 => "candidate_8",
+            Action::Candidate9 => "candidate_9",
             Action::CandidateExpand => "candidate_expand",
             Action::PredictNext => "predict_next",
             Action::PredictPrev => "predict_prev",
+            Action::DeletePredictionHistory => "delete_prediction_history",
             Action::SegmentPrev => "segment_prev",
             Action::SegmentNext => "segment_next",
             Action::SegmentShrink => "segment_shrink",
@@ -237,8 +265,24 @@ impl Action {
         Action::ALL.into_iter().find(|action| action.name() == name)
     }
 
+    /// Zero-based shortcut offset within the current candidate page.
+    pub fn candidate_offset(self) -> Option<usize> {
+        match self {
+            Action::Candidate1 => Some(0),
+            Action::Candidate2 => Some(1),
+            Action::Candidate3 => Some(2),
+            Action::Candidate4 => Some(3),
+            Action::Candidate5 => Some(4),
+            Action::Candidate6 => Some(5),
+            Action::Candidate7 => Some(6),
+            Action::Candidate8 => Some(7),
+            Action::Candidate9 => Some(8),
+            _ => None,
+        }
+    }
+
     /// Every action, in declaration order.
-    pub const ALL: [Action; 40] = [
+    pub const ALL: [Action; 52] = [
         Action::ImeToggle,
         Action::ImeOn,
         Action::ImeOff,
@@ -250,6 +294,8 @@ impl Action {
         Action::ModeDirect,
         Action::ModeKanaToggle,
         Action::ModeKanaCycle,
+        Action::ModeAlnumToggle,
+        Action::ModeAlnumWidthToggle,
         Action::Commit,
         Action::CommitFirst,
         Action::Cancel,
@@ -259,9 +305,19 @@ impl Action {
         Action::CandidatePrev,
         Action::CandidatePageDown,
         Action::CandidatePageUp,
+        Action::Candidate1,
+        Action::Candidate2,
+        Action::Candidate3,
+        Action::Candidate4,
+        Action::Candidate5,
+        Action::Candidate6,
+        Action::Candidate7,
+        Action::Candidate8,
+        Action::Candidate9,
         Action::CandidateExpand,
         Action::PredictNext,
         Action::PredictPrev,
+        Action::DeletePredictionHistory,
         Action::SegmentPrev,
         Action::SegmentNext,
         Action::SegmentShrink,
@@ -621,7 +677,7 @@ fn parse_trigger(name: &str) -> Result<Trigger, KeyMapErrorKind> {
 ///
 /// `KeyCode::Char` is absent on purpose — character keys are written as
 /// themselves (`ctrl+u`), not by name.
-const NAMED_KEYS: [(&str, KeyCode); 30] = [
+const NAMED_KEYS: [(&str, KeyCode); 31] = [
     ("space", KeyCode::Space),
     ("enter", KeyCode::Enter),
     ("escape", KeyCode::Escape),
@@ -640,6 +696,7 @@ const NAMED_KEYS: [(&str, KeyCode); 30] = [
     ("muhenkan", KeyCode::Muhenkan),
     ("kana_mode", KeyCode::KanaMode),
     ("hankaku_zenkaku", KeyCode::HankakuZenkaku),
+    ("caps_lock", KeyCode::CapsLock),
     ("f1", KeyCode::F1),
     ("f2", KeyCode::F2),
     ("f3", KeyCode::F3),
@@ -762,7 +819,7 @@ mod tests {
             (
                 State::Idle,
                 key(KeyCode::Muhenkan, Modifiers::NONE),
-                Action::ModeKanaToggle,
+                Action::ModeKanaCycle,
             ),
             (
                 State::Idle,
@@ -841,6 +898,99 @@ mod tests {
                 Some(expected),
                 "{state:?} {:?}",
                 event.code
+            );
+        }
+    }
+
+    #[test]
+    fn both_presets_bind_prediction_numbers_and_history_deletion() {
+        // Both shipped presets let a focused suggestion list be committed by its
+        // numbered slot and let a bad learned entry be deleted from the keyboard
+        // (issue #16, finding G): ATOK's `[predicting]` section used to be nine
+        // lines short of this and left both gaps unbound, silently leaking the
+        // digit keys and Ctrl+Delete to the host application.
+        for preset in [Preset::MsIme, Preset::Atok] {
+            let map = KeyMap::preset(preset).expect("preset compiles");
+            for (digit, action) in [
+                ('1', Action::Candidate1),
+                ('2', Action::Candidate2),
+                ('3', Action::Candidate3),
+                ('4', Action::Candidate4),
+                ('5', Action::Candidate5),
+                ('6', Action::Candidate6),
+                ('7', Action::Candidate7),
+                ('8', Action::Candidate8),
+                ('9', Action::Candidate9),
+            ] {
+                assert_eq!(
+                    map.lookup(State::Predicting, &ch(digit, Modifiers::NONE)),
+                    Some(action),
+                    "{preset:?} digit {digit}",
+                );
+            }
+            assert_eq!(
+                map.lookup(State::Predicting, &key(KeyCode::Delete, Modifiers::CTRL)),
+                Some(Action::DeletePredictionHistory),
+                "{preset:?} ctrl+delete",
+            );
+        }
+    }
+
+    #[test]
+    fn ms_ime_mode_aliases_and_shift_space_are_bound() {
+        let map = ms_ime();
+        let cases = [
+            (
+                State::Idle,
+                key(KeyCode::KanaMode, Modifiers::NONE),
+                Action::ModeHiragana,
+            ),
+            (
+                State::Idle,
+                key(KeyCode::KanaMode, Modifiers::SHIFT),
+                Action::ModeKatakana,
+            ),
+            (
+                State::Idle,
+                key(KeyCode::CapsLock, Modifiers::NONE),
+                Action::ModeAlnumToggle,
+            ),
+            (
+                State::Idle,
+                key(KeyCode::CapsLock, Modifiers::CTRL),
+                Action::ModeHiragana,
+            ),
+            (
+                State::Idle,
+                key(KeyCode::CapsLock, Modifiers::SHIFT),
+                Action::ModeKatakana,
+            ),
+            (
+                State::Idle,
+                key(KeyCode::Muhenkan, Modifiers::SHIFT),
+                Action::ModeAlnumWidthToggle,
+            ),
+            (
+                State::Composing,
+                key(KeyCode::Space, Modifiers::SHIFT),
+                Action::Convert,
+            ),
+            (
+                State::Converting,
+                key(KeyCode::Space, Modifiers::SHIFT),
+                Action::CandidatePrev,
+            ),
+            (
+                State::Predicting,
+                key(KeyCode::Space, Modifiers::SHIFT),
+                Action::Convert,
+            ),
+        ];
+        for (state, event, expected) in cases {
+            assert_eq!(
+                map.lookup(state, &event),
+                Some(expected),
+                "{state:?} {event:?}"
             );
         }
     }
@@ -1168,15 +1318,46 @@ mod tests {
         let ms = ms_ime();
         let atok = KeyMap::preset(Preset::Atok).expect("compile");
         assert_ne!(ms, atok);
-        // The documented deviation: 無変換 cycles three kana forms rather
-        // than toggling two.
+        // Both presets use the three-form 無変換 cycle; ATOK still differs in
+        // its other candidate and caret bindings.
         assert_eq!(
             atok.lookup(State::Idle, &key(KeyCode::Muhenkan, Modifiers::NONE)),
             Some(Action::ModeKanaCycle)
         );
         assert_eq!(
             ms.lookup(State::Idle, &key(KeyCode::Muhenkan, Modifiers::NONE)),
-            Some(Action::ModeKanaToggle)
+            Some(Action::ModeKanaCycle)
+        );
+    }
+
+    #[test]
+    fn atok_uses_prediction_tab_and_candidate_group_navigation() {
+        let atok = KeyMap::preset(Preset::Atok).expect("compile");
+        let ms = ms_ime();
+
+        assert_eq!(
+            atok.lookup(State::Composing, &key(KeyCode::Tab, Modifiers::NONE)),
+            Some(Action::PredictNext)
+        );
+        assert_eq!(
+            atok.lookup(State::Converting, &key(KeyCode::Tab, Modifiers::NONE)),
+            Some(Action::CandidateNext)
+        );
+        assert_eq!(
+            atok.lookup(State::Converting, &key(KeyCode::Tab, Modifiers::SHIFT)),
+            Some(Action::CandidatePrev)
+        );
+        assert_eq!(
+            atok.lookup(State::Converting, &key(KeyCode::Muhenkan, Modifiers::NONE)),
+            Some(Action::ModeKanaCycle)
+        );
+        assert_eq!(
+            ms.lookup(State::Converting, &key(KeyCode::Muhenkan, Modifiers::NONE)),
+            Some(Action::ModeKanaCycle)
+        );
+        assert_eq!(
+            ms.lookup(State::Converting, &key(KeyCode::Tab, Modifiers::NONE)),
+            Some(Action::CandidateExpand)
         );
     }
 

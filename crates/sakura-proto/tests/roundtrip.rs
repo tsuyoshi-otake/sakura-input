@@ -3,11 +3,12 @@
 //! a set of deliberately awkward edge cases (empty/maximal strings,
 //! non-BMP characters, boundary integers, every enum value).
 
+use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
-    decode_request, decode_response, encode_request, encode_response, payload_len, Error,
-    ErrorCode, InputScope, KeyCode, KeyInput, Mode, Modifiers, Output, OutputBuf, Preedit, Request,
-    Response, Segment, UiState, UnderlineKind, FRAME_HEADER_LEN, MAX_STRING_BYTES,
-    PROTOCOL_VERSION,
+    decode_request, decode_response, encode_request, encode_response, payload_len, Candidate,
+    CandidateKind, CandidateList, Error, ErrorCode, InputScope, KeyCode, KeyInput, Mode, Modifiers,
+    Output, OutputBuf, Preedit, Request, Response, ScreenRect, Segment, UiState, UnderlineKind,
+    UndoCommitOutcome, FRAME_HEADER_LEN, MAX_STRING_BYTES, PROTOCOL_VERSION,
 };
 
 /// Encodes `req`, decodes it back, and asserts the id and value match.
@@ -49,8 +50,41 @@ fn every_request_variant_roundtrips() {
             process_name: "notepad.exe".to_string(),
         },
         Request::SendKey { session: 1, key },
+        Request::ProbeKey {
+            session: 1,
+            scope: InputScope::Password,
+            fresh_context: false,
+            key,
+        },
+        Request::ProbeKey {
+            session: 1,
+            scope: InputScope::Normal,
+            fresh_context: true,
+            key,
+        },
         Request::Commit { session: 1 },
         Request::Revert { session: 1 },
+        Request::UndoCommit {
+            session: 1,
+            outcome: UndoCommitOutcome::Applied,
+        },
+        Request::UndoCommit {
+            session: 1,
+            outcome: UndoCommitOutcome::Rejected,
+        },
+        Request::UndoCommit {
+            session: 1,
+            outcome: UndoCommitOutcome::Unknown,
+        },
+        Request::Reconvert {
+            session: 1,
+            text: "仮名".to_owned(),
+            preview: true,
+        },
+        Request::ClearLearning,
+        Request::ClearInputHistory,
+        Request::FlushInputHistory,
+        Request::InputHistoryStats,
         Request::SetInputScope {
             session: 1,
             scope: InputScope::Email,
@@ -60,6 +94,16 @@ fn every_request_variant_roundtrips() {
         Request::Shutdown,
         Request::WatchUi { since: 0 },
         Request::WatchUi { since: u64::MAX },
+        Request::SetUiPlacement {
+            session: 1,
+            anchor: Some(ScreenRect {
+                left: -1920,
+                top: -32,
+                right: -1800,
+                bottom: 8,
+            }),
+            renderer_visible: true,
+        },
     ];
     for (i, req) in variants.iter().enumerate() {
         roundtrip_request(req, i as u64);
@@ -86,12 +130,39 @@ fn every_response_variant_roundtrips() {
                 cursor: 1,
             }),
             commit: Some("commit".to_string()),
+            delete_before: String::new(),
+            candidates: None,
         }),
         Response::Pong,
         Response::Ok,
+        Response::InputHistoryStats {
+            active: true,
+            dropped_events: 7,
+            persistence_failures: 3,
+            excluded_unclassified_events: 11,
+            excluded_sensitive_events: 13,
+            excluded_test_only_events: 17,
+        },
         Response::Ui(UiState {
             revision: 1,
             mode: Some(Mode::HalfAlnum),
+            candidates: Some(CandidateList {
+                kind: CandidateKind::Conversion,
+                presentation: CandidatePresentation::Compact,
+                items: vec![Candidate {
+                    text: "候補".to_owned(),
+                    annotation: "注釈".to_owned(),
+                }],
+                selected: 0,
+                page_size: 9,
+            }),
+            anchor: Some(ScreenRect {
+                left: -100,
+                top: 10,
+                right: -40,
+                bottom: 34,
+            }),
+            renderer_visible: true,
             stopping: false,
         }),
         // No mode means "hide the indicator", and it has to survive the
@@ -99,6 +170,9 @@ fn every_response_variant_roundtrips() {
         Response::Ui(UiState {
             revision: u64::MAX,
             mode: None,
+            candidates: None,
+            anchor: None,
+            renderer_visible: false,
             stopping: false,
         }),
         // The farewell. Losing this flag on the wire would turn an
@@ -106,6 +180,9 @@ fn every_response_variant_roundtrips() {
         Response::Ui(UiState {
             revision: 2,
             mode: Some(Mode::Hiragana),
+            candidates: None,
+            anchor: None,
+            renderer_visible: false,
             stopping: true,
         }),
         Response::Error(ErrorCode::Busy),
@@ -113,6 +190,28 @@ fn every_response_variant_roundtrips() {
     for (i, res) in variants.iter().enumerate() {
         roundtrip_response(res, i as u64);
     }
+}
+
+#[test]
+fn commit_undo_output_roundtrips_with_exact_utf8_text() {
+    roundtrip_response(
+        &Response::Output(Output {
+            consumed: true,
+            beep: false,
+            mode: None,
+            preedit: Some(Preedit {
+                segments: vec![Segment {
+                    text: "かな".to_owned(),
+                    underline: UnderlineKind::Raw,
+                }],
+                cursor: 2,
+            }),
+            commit: None,
+            delete_before: "🍣かな".to_owned(),
+            candidates: None,
+        }),
+        91,
+    );
 }
 
 #[test]
@@ -136,6 +235,8 @@ fn empty_strings_roundtrip() {
                 cursor: 0,
             }),
             commit: Some(String::new()),
+            delete_before: String::new(),
+            candidates: None,
         }),
         1,
     );
@@ -195,6 +296,8 @@ fn non_bmp_characters_roundtrip_in_every_position() {
             cursor: 2,
         }),
         commit: Some(text),
+        delete_before: String::new(),
+        candidates: None,
     };
     roundtrip_response(&Response::Output(output), 1);
 }
@@ -210,6 +313,8 @@ fn cursor_and_session_at_u32_and_u64_max_roundtrip() {
             cursor: u32::MAX,
         }),
         commit: None,
+        delete_before: String::new(),
+        candidates: None,
     };
     roundtrip_response(&Response::Output(output), 1);
     roundtrip_request(&Request::Commit { session: u64::MAX }, 1);
@@ -237,6 +342,8 @@ fn max_segments_roundtrips() {
             cursor: 0,
         }),
         commit: None,
+        delete_before: String::new(),
+        candidates: None,
     };
     roundtrip_response(&Response::Output(output), 1);
 }
@@ -264,6 +371,8 @@ fn every_mode_roundtrips() {
             mode: Some(mode),
             preedit: None,
             commit: None,
+            delete_before: String::new(),
+            candidates: None,
         };
         roundtrip_response(&Response::Output(output), 1);
     }
@@ -291,6 +400,8 @@ fn every_underline_kind_roundtrips() {
                 cursor: 0,
             }),
             commit: None,
+            delete_before: String::new(),
+            candidates: None,
         };
         roundtrip_response(&Response::Output(output), 1);
     }
@@ -311,20 +422,53 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn wrong_protocol_version_decodes_to_unsupported_version() {
-    let mut dst = Vec::new();
-    encode_request(&Request::Ping, 1, &mut dst).expect("encode");
-    dst[FRAME_HEADER_LEN] = 0x02;
-    dst[FRAME_HEADER_LEN + 1] = 0x00;
-    let result = decode_request(&dst[FRAME_HEADER_LEN..]);
-    assert_eq!(result, Err(Error::UnsupportedVersion(2)));
+fn protocol_v11_hello_roundtrips_and_v10_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 10;
+    assert_eq!(
+        PROTOCOL_VERSION, 11,
+        "input-history admission counters change the stats response body"
+    );
 
-    let mut dst = Vec::new();
-    encode_response(&Response::Pong, 1, &mut dst).expect("encode");
-    dst[FRAME_HEADER_LEN] = 0x02;
-    dst[FRAME_HEADER_LEN + 1] = 0x00;
-    let result = decode_response(&dst[FRAME_HEADER_LEN..]);
-    assert_eq!(result, Err(Error::UnsupportedVersion(2)));
+    let request = Request::Hello {
+        client_version: PROTOCOL_VERSION,
+    };
+    let mut request_frame = Vec::new();
+    encode_request(&request, 17, &mut request_frame).expect("encode v11 request");
+    assert_eq!(
+        &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
+        &PROTOCOL_VERSION.to_le_bytes()
+    );
+    assert_eq!(
+        decode_request(&request_frame[FRAME_HEADER_LEN..]),
+        Ok((17, request))
+    );
+    request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2]
+        .copy_from_slice(&PREVIOUS_PROTOCOL_VERSION.to_le_bytes());
+    assert_eq!(
+        decode_request(&request_frame[FRAME_HEADER_LEN..]),
+        Err(Error::UnsupportedVersion(PREVIOUS_PROTOCOL_VERSION))
+    );
+
+    let response = Response::Hello {
+        server_version: PROTOCOL_VERSION,
+        engine_version: [1, 0, 0],
+    };
+    let mut response_frame = Vec::new();
+    encode_response(&response, 17, &mut response_frame).expect("encode v11 response");
+    assert_eq!(
+        &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
+        &PROTOCOL_VERSION.to_le_bytes()
+    );
+    assert_eq!(
+        decode_response(&response_frame[FRAME_HEADER_LEN..]),
+        Ok((17, response))
+    );
+    response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2]
+        .copy_from_slice(&PREVIOUS_PROTOCOL_VERSION.to_le_bytes());
+    assert_eq!(
+        decode_response(&response_frame[FRAME_HEADER_LEN..]),
+        Err(Error::UnsupportedVersion(PREVIOUS_PROTOCOL_VERSION))
+    );
 }
 
 #[test]
@@ -400,6 +544,8 @@ fn output_buf_segments_match_hand_written_expectation() {
             cursor: 9,
         }),
         commit: None,
+        delete_before: String::new(),
+        candidates: None,
     };
 
     let mut frame = [0u8; 512];
@@ -407,6 +553,79 @@ fn output_buf_segments_match_hand_written_expectation() {
     let (id, response) = decode_response(&frame[FRAME_HEADER_LEN..n]).expect("decode_response");
     assert_eq!(id, 11);
     assert_eq!(response, Response::Output(expected));
+}
+
+#[test]
+fn candidate_list_roundtrips_and_matches_output_buf() {
+    let candidates = CandidateList {
+        kind: CandidateKind::Suggestion,
+        presentation: CandidatePresentation::Expanded,
+        items: vec![
+            Candidate {
+                text: "かな".to_string(),
+                annotation: "ひらがな".to_string(),
+            },
+            Candidate {
+                text: "仮名".to_string(),
+                annotation: "IT用語".to_string(),
+            },
+        ],
+        selected: 1,
+        page_size: 9,
+    };
+    let output = Output {
+        consumed: true,
+        beep: false,
+        mode: None,
+        preedit: None,
+        commit: None,
+        delete_before: String::new(),
+        candidates: Some(candidates.clone()),
+    };
+    roundtrip_response(&Response::Output(output), 23);
+
+    let mut buf = OutputBuf::new();
+    buf.consumed = true;
+    buf.begin_suggestions(1, 9).expect("begin suggestions");
+    for candidate in &candidates.items {
+        buf.push_candidate(&candidate.text, &candidate.annotation)
+            .expect("push candidate");
+    }
+    assert_eq!(buf.to_output().candidates, Some(candidates));
+}
+
+#[test]
+fn expanded_conversion_candidate_list_roundtrips() {
+    let candidates = CandidateList {
+        kind: CandidateKind::Conversion,
+        presentation: CandidatePresentation::Expanded,
+        items: vec![
+            Candidate {
+                text: "first".to_string(),
+                annotation: String::new(),
+            },
+            Candidate {
+                text: "second".to_string(),
+                annotation: String::new(),
+            },
+        ],
+        selected: 1,
+        page_size: 9,
+    };
+    assert_eq!(candidates.presentation, CandidatePresentation::Expanded);
+    assert_eq!(candidates.visible_range(), 0..2);
+    roundtrip_response(
+        &Response::Output(Output {
+            consumed: true,
+            beep: false,
+            mode: None,
+            preedit: None,
+            commit: None,
+            delete_before: String::new(),
+            candidates: Some(candidates),
+        }),
+        24,
+    );
 }
 
 /// The spans themselves, checked directly rather than through the encoder.

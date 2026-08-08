@@ -29,10 +29,16 @@ workspace = true
 features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Security_Cryptography",
     "Win32_Security_Isolation",
     "Win32_System_Console",
+    "Win32_System_Memory",
+    "Win32_System_ProcessStatus",
     "Win32_System_Threading",
 ]
+
+[dev-dependencies]
+dictc = { path = "../dictc" }
 
 [lints]
 workspace = true

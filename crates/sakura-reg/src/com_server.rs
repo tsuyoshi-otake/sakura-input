@@ -1,6 +1,6 @@
 //! The `HKLM\Software\Classes\CLSID` entries that let COM find `sakura_tsf.dll`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
 use windows_core::{Error, Result, HRESULT};
@@ -46,6 +46,25 @@ pub fn register(dll_path: &Path, view: RegistryView) -> Result<()> {
     server.set_string(None, dll)?;
     server.set_string(Some("ThreadingModel"), THREADING_MODEL)?;
     Ok(())
+}
+
+/// Returns the DLL path currently registered for the text service.
+///
+/// The stable bootstrap executables use this value as the single active
+/// payload pointer.  Keeping the pointer in the same registry value COM uses
+/// avoids a second "current version" file that could drift away from the
+/// registration after a failed upgrade.
+pub fn registered_dll(view: RegistryView) -> Result<Option<PathBuf>> {
+    let path = format!("{}\\InprocServer32", clsid_key_path());
+    let Some(key) = RegKey::open_for_read(HKEY_LOCAL_MACHINE, &path, view)? else {
+        return Ok(None);
+    };
+    Ok(key.get_string(None)?.map(PathBuf::from))
+}
+
+/// Returns the directory containing the currently registered payload.
+pub fn registered_payload_dir(view: RegistryView) -> Result<Option<PathBuf>> {
+    Ok(registered_dll(view)?.and_then(|path| path.parent().map(Path::to_path_buf)))
 }
 
 /// Removes the class registration from the given view. Already-absent is success.

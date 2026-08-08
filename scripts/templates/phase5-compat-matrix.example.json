@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "phase": 5,
+  "responsible_human": "REPLACE_WITH_NAME",
+  "started_at_utc": "REPLACE_WITH_UTC_TIMESTAMP",
+  "completed_at_utc": "REPLACE_WITH_LATER_UTC_TIMESTAMP",
+  "rows": [
+    { "id": "word-horizontal", "host": "Microsoft Word (horizontal)", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "word-vertical", "host": "Microsoft Word (vertical)", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "excel", "host": "Microsoft Excel", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "electron-vscode", "host": "Visual Studio Code", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "electron-secondary", "host": "Second Electron application", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "game", "host": "Named game", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "rdp", "host": "Remote Desktop session", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "uwp", "host": "Named UWP application", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "windows-terminal", "host": "Windows Terminal", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "conhost", "host": "Classic console host", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "touch-keyboard", "host": "Windows touch keyboard coexistence", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } },
+    { "id": "mixed-dpi", "host": "Live composition dragged between mixed-DPI monitors", "host_version": "REPLACE", "windows_build": "REPLACE", "status": "pending", "workaround": "", "open_p0_p1": 0, "notes": "", "evidence": { "path": "REPLACE", "sha256": "REPLACE" } }
+  ]
+}

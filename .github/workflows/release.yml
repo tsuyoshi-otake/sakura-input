@@ -1,0 +1,187 @@
+name: Signed release candidate
+
+on:
+  push:
+    tags: ["v1.0.0"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (must match Cargo version)
+        required: true
+        default: v1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  release-candidate:
+    name: Build signed v1 release candidate
+    runs-on: windows-latest
+    timeout-minutes: 90
+    environment: release
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_NET_LOCKED: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Check out pinned Mozc dictionary data
+        uses: actions/checkout@v4
+        with:
+          repository: google/mozc
+          ref: 3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732
+          path: .sources/mozc
+          sparse-checkout: |
+            LICENSE
+            src/data/dictionary_oss
+
+      - name: Check out pinned IT glossary data
+        uses: actions/checkout@v4
+        with:
+          repository: systemexe-research-and-development/smile-chat
+          ref: b5cada441b41c207ab49bf2cd5f1d9c5614c5b92
+          path: .sources/smile-chat
+          sparse-checkout: |
+            frontend/public
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Require one canonical version across tag, Cargo, and installer
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          $cargo = [IO.File]::ReadAllText('Cargo.toml')
+          $setup = [IO.File]::ReadAllText('installer/setup.iss')
+          if ($cargo -notmatch '(?m)^version = "([0-9]+\.[0-9]+\.[0-9]+)"$') {
+            throw 'workspace package version is missing or noncanonical'
+          }
+          $version = $Matches[1]
+          if ($env:RELEASE_TAG -cne "v$version") {
+            throw "tag '$env:RELEASE_TAG' does not match workspace version '$version'"
+          }
+          if ($setup -notmatch "(?m)^#define AppProductVersion \"$([regex]::Escape($version))\"$") {
+            throw 'installer AppProductVersion does not match workspace version'
+          }
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+      - name: Prove test runners exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }
+
+      - name: Build and reproduce the release dictionary
+        shell: pwsh
+        run: >-
+          ./scripts/build-dictionary.ps1
+          -MozcSource .sources/mozc
+          -GlossarySource .sources/smile-chat
+          -OutputDirectory artifacts/release
+
+      - name: Build release binaries
+        run: cargo build --workspace --release --locked
+
+      - name: Materialize the protected signing certificate
+        id: certificate
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_CERTIFICATE_PFX_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)) {
+            throw 'release environment has no SIGNING_CERTIFICATE_PFX_BASE64 secret'
+          }
+          $path = Join-Path $env:RUNNER_TEMP 'sakura-input-release-signing.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+          "path=$path" >> $env:GITHUB_OUTPUT
+
+      - name: Sign and verify every shipped binary
+        shell: pwsh
+        env:
+          SAKURA_SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          SAKURA_SIGNING_CERT_SUBJECT: ${{ secrets.SIGNING_CERTIFICATE_SUBJECT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SAKURA_SIGNING_CERT_SUBJECT)) {
+            throw 'release environment has no SIGNING_CERTIFICATE_SUBJECT secret'
+          }
+          $root = 'target/x86_64-pc-windows-msvc/release'
+          $files = @(
+            "$root/sakura_tsf.dll",
+            "$root/sakura_engine.exe",
+            "$root/sakura_renderer.exe",
+            "$root/sakura_regtool.exe",
+            "$root/sakura_logon.exe",
+            "$root/sakura_settings.exe",
+            "$root/sakura_settings_payload.exe"
+          )
+          ./scripts/sign-release.ps1 `
+            -CertificatePath '${{ steps.certificate.outputs.path }}' `
+            -ExpectedSubject $env:SAKURA_SIGNING_CERT_SUBJECT `
+            -Files $files
+
+      - name: Compile installer from signed payload
+        shell: pwsh
+        run: ./scripts/build-installer.ps1
+
+      - name: Sign and verify installer
+        shell: pwsh
+        env:
+          SAKURA_SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          SAKURA_SIGNING_CERT_SUBJECT: ${{ secrets.SIGNING_CERTIFICATE_SUBJECT }}
+        run: >-
+          ./scripts/sign-release.ps1
+          -CertificatePath '${{ steps.certificate.outputs.path }}'
+          -ExpectedSubject $env:SAKURA_SIGNING_CERT_SUBJECT
+          -Files installer/out/sakura_setup.exe
+
+      - name: Write updater manifest from the signed installer
+        shell: pwsh
+        run: >-
+          ./scripts/write-release-manifest.ps1
+          -Version $env:RELEASE_VERSION
+          -Installer installer/out/sakura_setup.exe
+          -Output installer/out/release-manifest.txt
+
+      - name: Assemble immutable release bundle
+        shell: pwsh
+        run: |
+          [IO.Directory]::CreateDirectory('release-bundle') | Out-Null
+          [IO.Directory]::CreateDirectory('release-bundle/payload') | Out-Null
+          [IO.File]::Copy('installer/out/sakura_setup.exe', 'release-bundle/sakura_setup.exe', $true)
+          [IO.File]::Copy('installer/out/release-manifest.txt', 'release-bundle/release-manifest.txt', $true)
+          [IO.File]::Copy('docs/release-notes-v1.0.0.md', 'release-bundle/release-notes.md', $true)
+          [IO.File]::Copy('artifacts/release/dictionary-build.report.json', 'release-bundle/dictionary-build.report.json', $true)
+          [IO.File]::Copy('installer/out/installer-build.report.json', 'release-bundle/installer-build.report.json', $true)
+          $release = 'target/x86_64-pc-windows-msvc/release'
+          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe')) {
+            [IO.File]::Copy((Join-Path $release $name), (Join-Path 'release-bundle/payload' $name), $true)
+          }
+
+      - name: Upload signed release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: sakura-input-${{ env.RELEASE_VERSION }}-signed
+          path: release-bundle
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove signing material
+        if: always()
+        shell: pwsh
+        run: |
+          $path = '${{ steps.certificate.outputs.path }}'
+          if (-not [string]::IsNullOrWhiteSpace($path) -and [IO.File]::Exists($path)) {
+            [IO.File]::Delete($path)
+          }

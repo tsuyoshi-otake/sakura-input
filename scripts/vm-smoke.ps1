@@ -86,7 +86,7 @@ $ProfileGuid = '{8466B5F0-210F-408B-A3FE-8D18ECBA711D}'
 $LangIdKey = '0x00000411'  # ja-JP, decimal 1041 == guids::LANGID_JA_JP
 
 $InstallDir = Join-Path ${env:ProgramFiles} 'Sakura Input'
-$DllPath = Join-Path $InstallDir 'sakura_tsf.dll'
+$VersionRoot = Join-Path $InstallDir 'versions'
 $TypingProbe = 'sakura smoke 1234'
 
 # One row per check, printed as a table at the end. A script that only
@@ -150,19 +150,18 @@ function Invoke-Install {
     }
 
     $proc = Start-Process -FilePath $Path -ArgumentList $installerArgs -Wait -PassThru
-    # Inno's documented silent-install contract (DESIGN 12.4): 0 is a plain
-    # success, 3010 is also success but means a reboot is now pending for
-    # the queued DLL swap (restartreplace, DESIGN 12.3). Anything else is a
-    # real failure, and the log this run wrote is the first thing to read.
+    # The side-by-side installer has no mapped-file replacement to queue:
+    # normal activation must finish with exit 0. A 3010 result is retained as
+    # a failure signal here so a legacy/reboot-based installer cannot silently
+    # re-enter the supported path.
     switch ($proc.ExitCode) {
         0 {
             Add-Result -Step 'Install' -Status 'Pass' -Detail 'exit 0'
             return $true
         }
         3010 {
-            Add-Result -Step 'Install' -Status 'Pass' -Detail 'exit 3010 (reboot pending for the DLL swap; not a failure)'
-            $script:RebootPending = $true
-            return $true
+            Add-Result -Step 'Install' -Status 'Fail' -Detail 'exit 3010 (unexpected reboot request; side-by-side activation must return 0)'
+            return $false
         }
         default {
             Add-Result -Step 'Install' -Status 'Fail' -Detail "exit $($proc.ExitCode); see $logPath"
@@ -184,14 +183,26 @@ function Test-MachineRegistration {
         $entry = Get-ItemProperty -LiteralPath $clsidPath
         $registeredDll = $entry.'(default)'
         $threading = $entry.ThreadingModel
-        if ($registeredDll -and ($registeredDll -ieq $DllPath)) {
+        $registeredDllPath = if ($registeredDll) {
+            [IO.Path]::GetFullPath([string]$registeredDll)
+        } else {
+            ''
+        }
+        $versionRootPath = [IO.Path]::GetFullPath($VersionRoot)
+        $relativeDll = if ($registeredDllPath.StartsWith($versionRootPath + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            $registeredDllPath.Substring($versionRootPath.Length + 1)
+        } else {
+            ''
+        }
+        $isVersionedDll = $relativeDll -match '^[^\\]+\\sakura_tsf\.dll$' -and [IO.File]::Exists($registeredDllPath)
+        if ($isVersionedDll) {
             $detail = "points at $registeredDll"
             if ($threading -ne 'Apartment') {
                 $detail += " (ThreadingModel is '$threading', expected Apartment)"
             }
             Add-Result -Step 'CLSID (64-bit)' -Status 'Pass' -Detail $detail
         } else {
-            Add-Result -Step 'CLSID (64-bit)' -Status 'Fail' -Detail "registered path '$registeredDll' does not match expected '$DllPath'"
+            Add-Result -Step 'CLSID (64-bit)' -Status 'Fail' -Detail "registered path '$registeredDll' is not an existing versioned DLL below '$VersionRoot'"
         }
     }
 
@@ -225,6 +236,32 @@ function Test-LanguageProfile {
         Add-Result -Step 'Language profile (HKCU)' -Status 'Manual' `
             -Detail "not found at $profilePath -- expected only when this script's account is the signed-in user Setup ran as (crates/sakura-regtool/src/interactive.rs); confirm by hand if this run is not that account"
     }
+}
+
+# ---------------------------------------------------------------------------
+# Payload cleanup maintenance runs separately from the per-user IME task. The
+# latter stays at LUA for UIPI compatibility; this hidden task runs as SYSTEM
+# so a mapped DLL under Program Files can be retried at every logon without a
+# UAC prompt.
+# ---------------------------------------------------------------------------
+function Test-PayloadCleanupTask {
+    $task = Get-ScheduledTask -TaskPath '\Sakura Input Maintenance\' -TaskName 'Payload Cleanup' -ErrorAction SilentlyContinue
+    if (-not $task) {
+        Add-Result -Step 'Payload cleanup task' -Status 'Fail' -Detail 'no SYSTEM task found under \Sakura Input Maintenance\Payload Cleanup'
+        return
+    }
+    $action = @($task.Actions) | Select-Object -First 1
+    $execute = if ($action) { [string]$action.Execute } else { '' }
+    $arguments = if ($action) { [string]$action.Arguments } else { '' }
+    $principal = $task.Principal
+    if ([string]$principal.UserId -ne 'SYSTEM' -or
+        [string]$principal.RunLevel -notmatch 'Highest' -or
+        $execute -notmatch 'sakura_regtool\.exe$' -or
+        $arguments -notmatch '--cleanup-payloads') {
+        Add-Result -Step 'Payload cleanup task' -Status 'Fail' -Detail 'task exists but is not SYSTEM/Highest or does not invoke sakura_regtool --cleanup-payloads'
+        return
+    }
+    Add-Result -Step 'Payload cleanup task' -Status 'Pass' -Detail "found $($task.TaskPath)$($task.TaskName) as SYSTEM/Highest"
 }
 
 # ---------------------------------------------------------------------------
@@ -370,8 +407,8 @@ function Invoke-Uninstall {
             return $true
         }
         3010 {
-            Add-Result -Step 'Uninstall' -Status 'Pass' -Detail 'exit 3010 (reboot pending; not a failure)'
-            return $true
+            Add-Result -Step 'Uninstall' -Status 'Fail' -Detail 'exit 3010 (unexpected reboot request; no delete-on-reboot path is supported)'
+            return $false
         }
         default {
             # This is the exit code UnregisterOrAbort's Abort call in
@@ -394,16 +431,21 @@ function Test-NoProcessesSurvive {
     }
 }
 
+function Test-PayloadCleanupTaskRemoved {
+    $task = Get-ScheduledTask -TaskPath '\Sakura Input Maintenance\' -TaskName 'Payload Cleanup' -ErrorAction SilentlyContinue
+    if ($task) {
+        Add-Result -Step 'Payload cleanup task removed' -Status 'Fail' -Detail 'SYSTEM maintenance task still exists after uninstall'
+    } else {
+        Add-Result -Step 'Payload cleanup task removed' -Status 'Pass' -Detail 'not found'
+    }
+}
+
 function Test-FilesRemoved {
     if (Test-Path -LiteralPath $InstallDir) {
-        # Not automatically a failure: uninsrestartdelete means the DLL can
-        # legitimately still be present, queued for delete-on-reboot, if
-        # any process had it open at uninstall time (DESIGN 12.3).
-        if ($script:RebootPending) {
-            Add-Result -Step 'Install directory removed' -Status 'Manual' -Detail "$InstallDir still present, but a reboot is pending (uninsrestartdelete); recheck after reboot"
-        } else {
-            Add-Result -Step 'Install directory removed' -Status 'Fail' -Detail "$InstallDir still present and no reboot is pending"
-        }
+        # A host can keep a versioned TSF image mapped after deregistration.
+        # The installer never queues a reboot rename; retry cleanup after all
+        # host processes have exited instead.
+        Add-Result -Step 'Install directory removed' -Status 'Manual' -Detail "$InstallDir still contains an unlocked/unavailable legacy payload; no reboot is pending, retry after host processes exit"
     } else {
         Add-Result -Step 'Install directory removed' -Status 'Pass' -Detail 'gone'
     }
@@ -425,12 +467,11 @@ function Test-FilesRemoved {
 # first red line tells the next run less than one that finishes and shows
 # everything that was and was not true this time.
 # ---------------------------------------------------------------------------
-$script:RebootPending = $false
-
 Write-Host "=== install ==="
 if (Invoke-Install -Path $Installer) {
     Test-MachineRegistration
     Test-LanguageProfile
+    Test-PayloadCleanupTask
     Test-EngineAutostart
 
     Write-Host "=== type (Sakura Input installed) ==="
@@ -442,6 +483,7 @@ if (Invoke-Install -Path $Installer) {
 Write-Host "=== uninstall ==="
 $uninstalled = Invoke-Uninstall
 Test-NoProcessesSurvive
+Test-PayloadCleanupTaskRemoved
 Test-FilesRemoved
 
 Write-Host "=== type (Sakura Input uninstalled, MS-IME fallback) ==="

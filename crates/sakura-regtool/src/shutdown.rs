@@ -37,7 +37,7 @@ pub fn stop(budget: Duration) -> Result<Outcome, String> {
     let deadline = Instant::now() + budget;
     let name = pipe_name().map_err(|error| format!("cannot name the engine's pipe: {error}"))?;
 
-    let mut client = match Client::connect_to(&name, PATIENT_CONNECT) {
+    let mut client = match Client::connect_to(&name, cap_connect_budget(remaining(deadline))) {
         Ok(client) => client,
         Err(error) if is_absent(&error) => return Ok(Outcome::NotRunning),
         Err(error) => return Err(format!("cannot reach the engine: {error}")),
@@ -59,14 +59,18 @@ pub fn stop(budget: Duration) -> Result<Outcome, String> {
     drop(client);
 
     while Instant::now() < deadline {
-        match Client::connect_to(&name, PATIENT_CONNECT) {
+        match Client::connect_to(&name, cap_connect_budget(remaining(deadline))) {
             Err(error) if is_absent(&error) => return Ok(Outcome::Stopped),
             // Still there — either the process is winding down, or another
             // instance is still accepting. Either way, not gone yet.
             Ok(client) => drop(client),
             Err(_) => {}
         }
-        std::thread::sleep(POLL);
+        let pause = remaining(deadline).min(POLL);
+        if pause.is_zero() {
+            break;
+        }
+        std::thread::sleep(pause);
     }
 
     Err(format!(
@@ -77,6 +81,10 @@ pub fn stop(budget: Duration) -> Result<Outcome, String> {
 
 fn remaining(deadline: Instant) -> Duration {
     deadline.saturating_duration_since(Instant::now())
+}
+
+fn cap_connect_budget(remaining: Duration) -> Duration {
+    remaining.min(PATIENT_CONNECT)
 }
 
 /// Distinguishes "no engine" from "an engine that will not talk to us".
@@ -94,6 +102,15 @@ fn is_absent(fault: &Fault) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_connect_wait_is_capped_by_the_callers_remaining_budget() {
+        assert_eq!(
+            cap_connect_budget(Duration::from_millis(40)),
+            Duration::from_millis(40)
+        );
+        assert_eq!(cap_connect_budget(Duration::from_secs(9)), PATIENT_CONNECT);
+    }
 
     /// With no engine running — the state of any machine that has not
     /// started one — `--stop` must succeed rather than report a failure

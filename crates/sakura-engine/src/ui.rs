@@ -20,11 +20,11 @@
 //!
 //! # Cost on the keystroke path
 //!
-//! [`UiBoard::publish`] takes a lock, and it is called from the keystroke
-//! path. It is called only when the engine reports that the mode *changed*,
-//! which is a deliberate key press, never an ordinary character — so the
-//! "no lock at all" claim for typing still holds, and the lock that does get
-//! taken on a mode toggle is uncontended and held for two assignments.
+//! [`UiBoard::publish_output`] takes one short, normally uncontended lock on
+//! the keystroke path. Candidate strings are copied into fixed-capacity
+//! buffers before that lock is taken; conversion never allocates merely to
+//! tell the renderer what changed. Owned strings are created only on the
+//! renderer's long-poll thread in [`UiBoard::wait_past`].
 //!
 //! # Why the board knows about shutdown
 //!
@@ -41,7 +41,11 @@
 use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
-use sakura_proto::{Mode, Revision, UiState};
+use sakura_proto::types::CandidatePresentation;
+use sakura_proto::{
+    Candidate, CandidateKind, CandidateList, FixedStr, FixedVec, Mode, OutputBuf, Revision,
+    ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES, MAX_CANDIDATE_TEXT_BYTES,
+};
 
 /// How long [`UiBoard::wait_past`] blocks before answering with unchanged
 /// state.
@@ -53,10 +57,199 @@ use sakura_proto::{Mode, Revision, UiState};
 /// two idle processes against how long a wedged IME can look fine.
 pub const HEARTBEAT: Duration = Duration::from_secs(5);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct CandidateSpan {
+    text_start: u32,
+    text_len: u32,
+    annotation_start: u32,
+    annotation_len: u32,
+}
+
+/// Candidate data in the board's allocation-free representation.
+#[derive(Debug)]
+struct CandidateSnapshot {
+    kind: CandidateKind,
+    presentation: CandidatePresentation,
+    text: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    annotations: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    spans: FixedVec<CandidateSpan, MAX_CANDIDATES>,
+    selected: u16,
+    page_size: u16,
+}
+
+impl CandidateSnapshot {
+    fn new() -> Self {
+        Self {
+            kind: CandidateKind::Conversion,
+            presentation: CandidatePresentation::Compact,
+            text: FixedStr::new(),
+            annotations: FixedStr::new(),
+            spans: FixedVec::new(),
+            selected: 0,
+            page_size: CANDIDATE_PAGE_SIZE as u16,
+        }
+    }
+
+    fn output_is_valid(output: &OutputBuf) -> bool {
+        if !output.has_candidates() || output.candidate_count() == 0 {
+            return false;
+        }
+        matches!(
+            (output.selected_candidate(), output.candidate_page_size()),
+            (Some(selected), Some(page_size))
+                if page_size > 0 && usize::from(selected) < output.candidate_count()
+        )
+    }
+
+    fn matches_output(&self, output: &OutputBuf) -> bool {
+        if self.spans.len() != output.candidate_count()
+            || Some(self.kind) != output.candidate_kind()
+            || Some(self.presentation) != output.candidate_presentation()
+            || Some(self.selected) != output.selected_candidate()
+            || Some(self.page_size) != output.candidate_page_size()
+        {
+            return false;
+        }
+        self.spans
+            .as_slice()
+            .iter()
+            .enumerate()
+            .all(|(index, span)| {
+                output.candidate(index).is_some_and(|(text, annotation)| {
+                    Self::slice(self.text.as_str(), span.text_start, span.text_len) == text
+                        && Self::slice(
+                            self.annotations.as_str(),
+                            span.annotation_start,
+                            span.annotation_len,
+                        ) == annotation
+                })
+            })
+    }
+
+    /// Reuses the board-owned buffers. No large candidate snapshot is ever
+    /// returned through the pipe worker's deliberately small stack.
+    fn copy_from_output(&mut self, output: &OutputBuf) -> bool {
+        let (Some(presentation), Some(selected), Some(page_size)) = (
+            output.candidate_presentation(),
+            output.selected_candidate(),
+            output.candidate_page_size(),
+        ) else {
+            return false;
+        };
+        self.clear();
+        self.kind = output.candidate_kind().unwrap_or_default();
+        self.presentation = presentation;
+        self.selected = selected;
+        self.page_size = page_size;
+        for index in 0..output.candidate_count() {
+            let Some((text, annotation)) = output.candidate(index) else {
+                self.clear();
+                return false;
+            };
+            let text_start = self.text.len();
+            let annotation_start = self.annotations.len();
+            if self.text.push_str(text).is_err()
+                || self.annotations.push_str(annotation).is_err()
+                || self
+                    .spans
+                    .push(CandidateSpan {
+                        text_start: text_start as u32,
+                        text_len: text.len() as u32,
+                        annotation_start: annotation_start as u32,
+                        annotation_len: annotation.len() as u32,
+                    })
+                    .is_err()
+            {
+                self.clear();
+                return false;
+            }
+        }
+        true
+    }
+
+    fn clear(&mut self) {
+        self.kind = CandidateKind::Conversion;
+        self.presentation = CandidatePresentation::Compact;
+        self.text.clear();
+        self.annotations.clear();
+        self.spans.clear();
+        self.selected = 0;
+        self.page_size = CANDIDATE_PAGE_SIZE as u16;
+    }
+
+    fn slice(source: &str, start: u32, len: u32) -> &str {
+        let start = start as usize;
+        let Some(end) = start.checked_add(len as usize) else {
+            return "";
+        };
+        source.get(start..end).unwrap_or("")
+    }
+
+    fn to_owned(&self) -> CandidateList {
+        let mut items = Vec::with_capacity(self.spans.len());
+        for span in self.spans.as_slice() {
+            items.push(Candidate {
+                text: Self::slice(self.text.as_str(), span.text_start, span.text_len).to_owned(),
+                annotation: Self::slice(
+                    self.annotations.as_str(),
+                    span.annotation_start,
+                    span.annotation_len,
+                )
+                .to_owned(),
+            });
+        }
+        CandidateList {
+            kind: self.kind,
+            presentation: self.presentation,
+            items,
+            selected: self.selected,
+            page_size: self.page_size,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct UiSnapshot {
+    revision: Revision,
+    mode: Option<Mode>,
+    has_candidates: bool,
+    candidates: CandidateSnapshot,
+    candidate_session: Option<SessionId>,
+    anchor: Option<ScreenRect>,
+    renderer_visible: bool,
+    stopping: bool,
+}
+
+impl UiSnapshot {
+    fn initial() -> Self {
+        Self {
+            revision: 1,
+            mode: None,
+            has_candidates: false,
+            candidates: CandidateSnapshot::new(),
+            candidate_session: None,
+            anchor: None,
+            renderer_visible: false,
+            stopping: false,
+        }
+    }
+
+    fn to_owned(&self) -> UiState {
+        UiState {
+            revision: self.revision,
+            mode: self.mode,
+            candidates: self.has_candidates.then(|| self.candidates.to_owned()),
+            anchor: self.anchor,
+            renderer_visible: self.renderer_visible,
+            stopping: self.stopping,
+        }
+    }
+}
+
 /// The current UI state, and a way to wait for the next one.
 #[derive(Debug)]
 pub struct UiBoard {
-    state: Mutex<UiState>,
+    state: Mutex<UiSnapshot>,
     changed: Condvar,
     /// Watchers that have been handed a state but have not finished
     /// writing it to their pipe.
@@ -86,11 +279,7 @@ impl UiBoard {
     /// something that appears *on mode change*, not a permanent overlay.
     pub fn new() -> Self {
         UiBoard {
-            state: Mutex::new(UiState {
-                revision: 1,
-                mode: None,
-                stopping: false,
-            }),
+            state: Mutex::new(UiSnapshot::initial()),
             changed: Condvar::new(),
             delivering: Mutex::new(0),
             quiet: Condvar::new(),
@@ -127,6 +316,103 @@ impl UiBoard {
         }
         state.revision = state.revision.wrapping_add(1);
         state.mode = Some(mode);
+        drop(state);
+        self.changed.notify_all();
+    }
+
+    /// Publishes the mode/candidate portion of one session output.
+    ///
+    /// Candidate data is copied into fixed buffers, so this method performs
+    /// no heap allocation on the keystroke path. A candidate list owned by a
+    /// different session resets placement; an output without candidates
+    /// explicitly terminates the previous popup state.
+    pub fn publish_output(&self, session: SessionId, output: &OutputBuf) {
+        let has_candidates = CandidateSnapshot::output_is_valid(output);
+        let candidate_session = has_candidates.then_some(session);
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+
+        let next_mode = output.mode.or(state.mode);
+        let changed = state.mode != next_mode
+            || state.has_candidates != has_candidates
+            || (has_candidates && !state.candidates.matches_output(output))
+            || state.candidate_session != candidate_session;
+        if !changed {
+            return;
+        }
+
+        if state.candidate_session != candidate_session || !has_candidates {
+            state.anchor = None;
+            state.renderer_visible = false;
+        }
+        if has_candidates {
+            if !state.candidates.copy_from_output(output) {
+                // OutputBuf and CandidateSnapshot have the same capacities,
+                // so this indicates an internal invariant violation. Publish
+                // a terminal hidden state rather than partial candidate data.
+                state.has_candidates = false;
+                state.candidate_session = None;
+                state.anchor = None;
+                state.renderer_visible = false;
+                state.revision = state.revision.wrapping_add(1);
+                drop(state);
+                self.changed.notify_all();
+                return;
+            }
+        } else {
+            state.candidates.clear();
+        }
+        state.revision = state.revision.wrapping_add(1);
+        state.mode = next_mode;
+        state.has_candidates = has_candidates;
+        state.candidate_session = candidate_session;
+        drop(state);
+        self.changed.notify_all();
+    }
+
+    /// Updates the popup geometry for the session that owns the current list.
+    /// Stale layout callbacks from a former focus owner are ignored.
+    pub fn publish_placement(
+        &self,
+        session: SessionId,
+        anchor: Option<ScreenRect>,
+        renderer_visible: bool,
+    ) -> bool {
+        let anchor = anchor.filter(|rect| rect.is_valid());
+        let Ok(mut state) = self.state.lock() else {
+            return false;
+        };
+        if state.candidate_session != Some(session) {
+            return false;
+        }
+        if state.anchor == anchor && state.renderer_visible == renderer_visible {
+            return true;
+        }
+        state.revision = state.revision.wrapping_add(1);
+        state.anchor = anchor;
+        state.renderer_visible = renderer_visible;
+        drop(state);
+        self.changed.notify_all();
+        true
+    }
+
+    /// Clears candidate UI owned by `session`, leaving another session's
+    /// newer popup untouched. Used by non-`Output` terminal commands such as
+    /// revert and session deletion.
+    pub fn clear_session(&self, session: SessionId) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        if state.candidate_session != Some(session) {
+            return;
+        }
+        state.revision = state.revision.wrapping_add(1);
+        state.has_candidates = false;
+        state.candidates.clear();
+        state.candidate_session = None;
+        state.anchor = None;
+        state.renderer_visible = false;
         drop(state);
         self.changed.notify_all();
     }
@@ -200,6 +486,9 @@ impl UiBoard {
                 UiState {
                     revision: since,
                     mode: None,
+                    candidates: None,
+                    anchor: None,
+                    renderer_visible: false,
                     stopping: false,
                 },
                 delivery,
@@ -209,7 +498,7 @@ impl UiBoard {
             .changed
             .wait_timeout_while(state, HEARTBEAT, |state| state.revision == since)
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        (*state, delivery)
+        (state.to_owned(), delivery)
     }
 }
 
@@ -247,6 +536,7 @@ impl Default for UiBoard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sakura_proto::OutputBuf;
     use std::sync::Arc;
     use std::time::Instant;
 
@@ -255,6 +545,16 @@ mod tests {
         let (state, delivery) = board.wait_past(since);
         drop(delivery);
         state
+    }
+
+    fn candidate_output(selected: u16) -> OutputBuf {
+        let mut output = OutputBuf::new();
+        output
+            .begin_candidates(selected, 9)
+            .expect("candidate list");
+        output.push_candidate("候補", "一般").expect("candidate");
+        output.push_candidate("公募", "名詞").expect("candidate");
+        output
     }
 
     #[test]
@@ -278,6 +578,67 @@ mod tests {
         let state = look(&board, 1);
         assert_eq!(state.mode, Some(Mode::Katakana));
         assert_ne!(state.revision, 1);
+    }
+
+    #[test]
+    fn candidates_are_owned_only_when_a_watcher_collects_them() {
+        let board = UiBoard::new();
+        let output = candidate_output(1);
+        board.publish_output(7, &output);
+        let state = look(&board, 1);
+        let candidates = state.candidates.expect("published candidates");
+        assert_eq!(candidates.selected, 1);
+        assert_eq!(candidates.items[0].text, "候補");
+        assert_eq!(candidates.items[1].annotation, "名詞");
+        assert_eq!(state.anchor, None);
+        assert!(!state.renderer_visible);
+    }
+
+    #[test]
+    fn only_the_candidate_owner_can_move_or_show_the_popup() {
+        let board = UiBoard::new();
+        board.publish_output(7, &candidate_output(0));
+        let after_candidates = look(&board, 1);
+        let anchor = ScreenRect {
+            left: -200,
+            top: 10,
+            right: -120,
+            bottom: 34,
+        };
+
+        assert!(!board.publish_placement(8, Some(anchor), true));
+        let unchanged = look(&board, 0);
+        assert_eq!(unchanged.revision, after_candidates.revision);
+        assert_eq!(unchanged.anchor, None);
+
+        assert!(board.publish_placement(7, Some(anchor), true));
+        let placed = look(&board, after_candidates.revision);
+        assert_eq!(placed.anchor, Some(anchor));
+        assert!(placed.renderer_visible);
+    }
+
+    #[test]
+    fn a_terminal_output_clears_candidates_and_placement() {
+        let board = UiBoard::new();
+        board.publish_output(7, &candidate_output(0));
+        let candidates = look(&board, 1);
+        board.publish_placement(
+            7,
+            Some(ScreenRect {
+                left: 10,
+                top: 20,
+                right: 30,
+                bottom: 40,
+            }),
+            true,
+        );
+        let placed = look(&board, candidates.revision);
+
+        board.publish_output(7, &OutputBuf::new());
+        let cleared = look(&board, placed.revision);
+        assert_eq!(cleared.candidates, None);
+        assert_eq!(cleared.anchor, None);
+        assert!(!cleared.renderer_visible);
     }
 
     #[test]
@@ -366,18 +727,24 @@ mod tests {
         let board = Arc::new(UiBoard::new());
         let watcher = Arc::clone(&board);
         let holding = Duration::from_millis(120);
+        let (claimed_tx, claimed_rx) = std::sync::mpsc::sync_channel(0);
 
         let delivering = std::thread::spawn(move || {
             let (_, delivery) = watcher.wait_past(0);
+            // Synchronize on the state this test actually needs instead of
+            // guessing that the new thread was scheduled within a fixed sleep.
+            claimed_tx
+                .send(())
+                .expect("the settle test still owns its receiver");
             // Stands in for the pipe write, which is what `settle` is
             // really waiting to have finished.
             std::thread::sleep(holding);
             drop(delivery);
         });
 
-        // Give the watcher time to claim its slot before settling, so this
-        // measures the wait rather than a lucky ordering.
-        std::thread::sleep(Duration::from_millis(20));
+        claimed_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("the watcher claimed its delivery slot");
         let started = Instant::now();
         board.settle(HEARTBEAT);
         let waited = started.elapsed();

@@ -42,13 +42,18 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::time::Duration;
 
+use sakura_core::{default_app_profiles, AppProfile, Preferences};
 use sakura_proto::{
     encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
 };
 
 use sakura_ipc::{security, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 
+use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
+use crate::input_history::InputHistoryService;
+use crate::learning::LearningService;
+use crate::prediction::PredictionService;
 use crate::ui::UiBoard;
 
 /// Everything a worker thread needs that is not its own pipe instance.
@@ -64,6 +69,16 @@ struct Shared {
     shutdown: Sender<()>,
     /// What the renderer draws. The one thing every connection shares.
     ui: UiBoard,
+    /// Read-only dictionary plus the bounded process-wide conversion pool.
+    conversion: Option<Arc<ConversionService>>,
+    /// Process-wide synchronized personalization index and durable log.
+    learning: Option<Arc<LearningService>>,
+    /// Explicitly enabled developer interaction history.
+    input_history: Option<Arc<InputHistoryService>>,
+    /// Request side of the one process-wide prediction worker.
+    prediction: Option<Arc<PredictionService>>,
+    preferences: Preferences,
+    profiles: Arc<[AppProfile]>,
     verbose: bool,
 }
 
@@ -82,6 +97,170 @@ impl Server {
     /// from a logon task with no console, where that goes nowhere and is
     /// meant to; it is for running the engine by hand.
     pub fn new(verbose: bool) -> windows::core::Result<Self> {
+        let preferences = Preferences::default();
+        Self::build(
+            verbose,
+            None,
+            None,
+            None,
+            None,
+            preferences,
+            Arc::from(default_app_profiles(preferences)),
+        )
+    }
+
+    /// Builds the production server with dictionary conversion enabled.
+    pub fn with_conversion(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+    ) -> windows::core::Result<Self> {
+        let preferences = Preferences::default();
+        Self::build(
+            verbose,
+            Some(conversion),
+            None,
+            None,
+            None,
+            preferences,
+            Arc::from(default_app_profiles(preferences)),
+        )
+    }
+
+    /// Builds the production server with dictionary conversion and a shared
+    /// personalization store. Every pipe worker receives the same service.
+    pub fn with_services(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+    ) -> windows::core::Result<Self> {
+        let preferences = Preferences::default();
+        Self::build(
+            verbose,
+            Some(conversion),
+            Some(learning),
+            None,
+            None,
+            preferences,
+            Arc::from(default_app_profiles(preferences)),
+        )
+    }
+
+    /// Builds the production server with all process-wide services and the
+    /// validated user configuration captured at startup.
+    pub fn with_configuration(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        preferences: Preferences,
+    ) -> windows::core::Result<Self> {
+        let profiles = Arc::from(default_app_profiles(preferences));
+        Self::with_configuration_and_profiles(verbose, conversion, learning, preferences, profiles)
+    }
+
+    pub fn with_configuration_and_profiles(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+    ) -> windows::core::Result<Self> {
+        Self::build(
+            verbose,
+            Some(conversion),
+            Some(learning),
+            None,
+            None,
+            preferences,
+            profiles,
+        )
+    }
+
+    pub fn with_configuration_and_profiles_and_history(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+        input_history: Arc<InputHistoryService>,
+    ) -> windows::core::Result<Self> {
+        Self::build(
+            verbose,
+            Some(conversion),
+            Some(learning),
+            None,
+            Some(input_history),
+            preferences,
+            profiles,
+        )
+    }
+
+    /// Builds the production server with the persistent prediction worker.
+    pub fn with_runtime_configuration(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        prediction: Arc<PredictionService>,
+        preferences: Preferences,
+    ) -> windows::core::Result<Self> {
+        let profiles = Arc::from(default_app_profiles(preferences));
+        Self::with_runtime_configuration_and_profiles(
+            verbose,
+            conversion,
+            learning,
+            prediction,
+            preferences,
+            profiles,
+        )
+    }
+
+    pub fn with_runtime_configuration_and_profiles(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        prediction: Arc<PredictionService>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+    ) -> windows::core::Result<Self> {
+        Self::build(
+            verbose,
+            Some(conversion),
+            Some(learning),
+            Some(prediction),
+            None,
+            preferences,
+            profiles,
+        )
+    }
+
+    pub fn with_runtime_configuration_and_profiles_and_history(
+        verbose: bool,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        prediction: Arc<PredictionService>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+        input_history: Arc<InputHistoryService>,
+    ) -> windows::core::Result<Self> {
+        Self::build(
+            verbose,
+            Some(conversion),
+            Some(learning),
+            Some(prediction),
+            Some(input_history),
+            preferences,
+            profiles,
+        )
+    }
+
+    fn build(
+        verbose: bool,
+        conversion: Option<Arc<ConversionService>>,
+        learning: Option<Arc<LearningService>>,
+        prediction: Option<Arc<PredictionService>>,
+        input_history: Option<Arc<InputHistoryService>>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+    ) -> windows::core::Result<Self> {
         let (shutdown, stopped) = mpsc::channel();
         Ok(Server {
             shared: Arc::new(Shared {
@@ -91,6 +270,12 @@ impl Server {
                 idle: AtomicU32::new(0),
                 shutdown,
                 ui: UiBoard::new(),
+                conversion,
+                learning,
+                input_history,
+                prediction,
+                preferences,
+                profiles,
                 verbose,
             }),
             stopped,
@@ -191,13 +376,41 @@ fn thread_failure(error: &std::io::Error) -> windows::core::Error {
 
 /// One instance's whole life: accept, serve, disconnect, repeat.
 fn worker(shared: Arc<Shared>, instance: PipeInstance) {
-    let mut dispatcher = match Dispatcher::new() {
+    let dispatcher = match (
+        shared.conversion.as_ref(),
+        shared.learning.as_ref(),
+        shared.prediction.as_ref(),
+    ) {
+        (Some(conversion), Some(learning), Some(prediction)) => {
+            Dispatcher::new_with_runtime_configuration_and_profiles(
+                Arc::clone(conversion),
+                Arc::clone(learning),
+                Arc::clone(prediction),
+                shared.preferences,
+                Arc::clone(&shared.profiles),
+            )
+        }
+        (Some(conversion), Some(learning), None) => {
+            Dispatcher::new_with_configuration_and_profiles(
+                Arc::clone(conversion),
+                Arc::clone(learning),
+                shared.preferences,
+                Arc::clone(&shared.profiles),
+            )
+        }
+        (Some(conversion), None, _) => Dispatcher::new_with_conversion(Arc::clone(conversion)),
+        (None, _, _) => Dispatcher::new(),
+    };
+    let mut dispatcher = match dispatcher {
         Ok(dispatcher) => dispatcher,
         Err(error) => {
             report(&shared, format_args!("engine data is unusable: {error}"));
             return;
         }
     };
+    if let Some(history) = shared.input_history.as_ref() {
+        dispatcher.set_input_history(Arc::clone(history));
+    }
     let mut connection = Buffers::new();
 
     loop {
@@ -266,7 +479,7 @@ struct Buffers {
     /// Scratch for the responses that are not `Output`; these are rare and
     /// small, so `encode_response`'s owned form is fine for them.
     reply: Vec<u8>,
-    out: OutputBuf,
+    out: Box<OutputBuf>,
 }
 
 impl Buffers {
@@ -278,7 +491,10 @@ impl Buffers {
             // writes into a slice and needs the space to already exist.
             frame: vec![0; MAX_FRAME],
             reply: Vec::new(),
-            out: OutputBuf::new(),
+            // Candidate buffers are intentionally large and bounded. Keep
+            // them off the 128 KiB pipe-worker stack; this allocation happens
+            // once per worker, never on a keystroke.
+            out: Box::new(OutputBuf::new()),
         }
     }
 }
@@ -344,13 +560,55 @@ fn serve(
             continue;
         }
 
+        // Layout callbacks arrive independently of keystrokes and update
+        // only the shared renderer snapshot. The session id prevents a late
+        // callback from an old focus owner moving a newer popup.
+        if let Request::SetUiPlacement {
+            session,
+            anchor,
+            renderer_visible,
+        } = request
+        {
+            let _ = shared
+                .ui
+                .publish_placement(session, anchor, renderer_visible);
+            if let Err(fault) = send(instance, &Response::Ok, id, &mut bufs.reply) {
+                return end(fault);
+            }
+            continue;
+        }
+
+        let output_session = match &request {
+            Request::SendKey { session, key } if !key.test_only => Some(*session),
+            Request::Commit { session } => Some(*session),
+            Request::Reconvert {
+                session,
+                preview: false,
+                ..
+            } => Some(*session),
+            _ => None,
+        };
+        let clears_candidates = match &request {
+            Request::Revert { session } | Request::DeleteSession { session } => Some(*session),
+            Request::SetInputScope { session, scope }
+                if matches!(
+                    scope,
+                    sakura_proto::InputScope::Password
+                        | sakura_proto::InputScope::Url
+                        | sakura_proto::InputScope::Email
+                        | sakura_proto::InputScope::Digits
+                ) =>
+            {
+                Some(*session)
+            }
+            _ => None,
+        };
+
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
-                // The protocol sets this only when the mode actually
-                // changed, which is what the indicator exists to announce
-                // (DESIGN 8) — so this lock is taken on a mode key, never
-                // on an ordinary character.
-                if let Some(mode) = bufs.out.mode {
+                if let Some(session) = output_session {
+                    shared.ui.publish_output(session, &bufs.out);
+                } else if let Some(mode) = bufs.out.mode {
                     shared.ui.publish(mode);
                 }
                 let written = match bufs.out.encode_frame(id, &mut bufs.frame) {
@@ -373,6 +631,11 @@ fn serve(
                 }
             }
             Reply::Message(response) => {
+                if matches!(response, Response::Ok) {
+                    if let Some(session) = clears_candidates {
+                        shared.ui.clear_session(session);
+                    }
+                }
                 if let Err(fault) = send(instance, &response, id, &mut bufs.reply) {
                     return end(fault);
                 }

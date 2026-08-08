@@ -44,6 +44,16 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Prove workspace test runners exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }
+
       # `cargo test` captures stdout, so the step above proves the kernels
       # agree without ever saying *which* kernels — and since the runner CPU
       # varies (see "Show toolchain and CPU"), that set is not the same from
@@ -62,6 +72,16 @@ jobs:
       - name: Name the SIMD kernels this runner exercised
         run: "cargo test -p sakura-core --lib -- simd:: --nocapture"
 
+      - name: Prove SIMD test runner exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }
+
       # DESIGN 7's sandboxed-access claim (the pipe's DACL and low-integrity
       # label must let a real AppContainer token connect and round-trip a
       # keystroke) is not exercised by the default `cargo test --workspace`
@@ -77,6 +97,16 @@ jobs:
       # too (see appcontainer.rs's module docs).
       - name: Sandbox access (AppContainer)
         run: cargo test -p sakura-engine --test appcontainer -- --exact the_pipe_is_reachable_from_a_real_appcontainer_token --ignored --nocapture
+
+      - name: Prove AppContainer test runner exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }
 
       # The release profile is where panic=abort and fat LTO apply, and both
       # have broken builds that were green in debug. It is a gate, not a bonus.
@@ -98,9 +128,9 @@ jobs:
         shell: pwsh
         run: ./ci/dep-policy.ps1
 
-  # Fuzzing is sharded so a long campaign is wall-clock bounded, and each shard
-  # is seeded from its index so a failure names a reproducible seed rather than
-  # "it happened once". Kept off pull requests: it is a soak, not a gate.
+  # These are bounded smoke slices for all three Phase 5 fuzz surfaces. The
+  # resumable, evidence-producing 72-hour run lives in fuzz-campaign.yml; this
+  # job keeps its exact ignored entry points from silently becoming no-ops.
   fuzz:
     name: Fuzz (shard ${{ matrix.shard }})
     if: github.event_name != 'pull_request'
@@ -112,8 +142,40 @@ jobs:
     env:
       SAKURA_FUZZ_ITERS: "2000000"
       SAKURA_FUZZ_SHARD: ${{ matrix.shard }}
+      SAKURA_FUZZ_SEED: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - name: Fuzz the protocol decoders
-        run: cargo test -p sakura-proto --release -- --ignored --nocapture
+        run: cargo test -p sakura-proto --release --test robustness sharded_protocol_campaign -- --exact --ignored --nocapture
+      - name: Prove protocol fuzz runner exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }
+      - name: Fuzz hostile dictionary images
+        run: cargo test -p dictc --release --test dictionary_robustness sharded_hostile_dictionary_campaign -- --exact --ignored --nocapture
+      - name: Prove dictionary fuzz runner exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }
+      - name: Fuzz the input FSM
+        run: cargo test -p sakura-core --release --test fsm_robustness sharded_fsm_campaign -- --exact --ignored --nocapture
+      - name: Prove FSM fuzz runner exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a test process survived its invocation'
+          }

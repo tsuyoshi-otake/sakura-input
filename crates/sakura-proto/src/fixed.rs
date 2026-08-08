@@ -101,6 +101,48 @@ impl<const N: usize> FixedStr<N> {
         self.push_str(c.encode_utf8(&mut tmp))
     }
 
+    /// Inserts `value` at the UTF-8 byte boundary `at`.
+    ///
+    /// The operation is atomic: an invalid boundary or insufficient capacity
+    /// returns [`Overflow`] without changing the string.
+    pub fn insert_str(&mut self, at: usize, value: &str) -> Result<(), Overflow> {
+        if at > self.len || !self.as_str().is_char_boundary(at) {
+            return Err(Overflow);
+        }
+        let new_len = self.len.checked_add(value.len()).ok_or(Overflow)?;
+        if new_len > N {
+            return Err(Overflow);
+        }
+        self.buf.copy_within(at..self.len, at + value.len());
+        self.buf[at..at + value.len()].copy_from_slice(value.as_bytes());
+        self.len = new_len;
+        Ok(())
+    }
+
+    /// Removes the character beginning at UTF-8 byte boundary `at`.
+    ///
+    /// Returns the removed character, or `None` when `at` is not a character
+    /// boundary inside the current string. No allocation or temporary string
+    /// is needed; the tail is shifted in place.
+    pub fn remove_char_at(&mut self, at: usize) -> Option<char> {
+        if at >= self.len || !self.as_str().is_char_boundary(at) {
+            return None;
+        }
+        let character = self.as_str()[at..].chars().next()?;
+        let end = at + character.len_utf8();
+        self.buf.copy_within(end..self.len, at);
+        self.len -= character.len_utf8();
+        Some(character)
+    }
+
+    /// Returns the UTF-8 byte boundary at character offset `index`.
+    pub fn byte_index(&self, index: usize) -> Option<usize> {
+        if index == self.as_str().chars().count() {
+            return Some(self.len);
+        }
+        self.as_str().char_indices().nth(index).map(|(at, _)| at)
+    }
+
     /// Drops the last `n` *characters* (not bytes) from the buffer.
     ///
     /// Char-boundary safe: used for backspace over multi-byte kana. If `n`
@@ -205,6 +247,11 @@ impl<T: Copy + Default, const N: usize> FixedVec<T, N> {
         self.as_slice().get(index)
     }
 
+    /// Returns the element at `index` mutably, or `None` if out of bounds.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.buf[..self.len].get_mut(index)
+    }
+
     /// Returns the last element, or `None` if empty.
     pub fn last(&self) -> Option<&T> {
         self.as_slice().last()
@@ -290,6 +337,26 @@ mod tests {
         s.clear();
         assert!(s.is_empty());
         assert_eq!(s.as_str(), "");
+    }
+
+    #[test]
+    fn fixed_str_inserts_and_removes_at_unicode_boundaries() {
+        let mut value: FixedStr<16> = FixedStr::new();
+        value.push_str("あう").unwrap();
+        value.insert_str(3, "い").unwrap();
+        assert_eq!(value.as_str(), "あいう");
+        assert_eq!(value.byte_index(2), Some(6));
+        assert_eq!(value.remove_char_at(3), Some('い'));
+        assert_eq!(value.as_str(), "あう");
+    }
+
+    #[test]
+    fn fixed_str_insert_failure_is_atomic() {
+        let mut value: FixedStr<4> = FixedStr::new();
+        value.push_str("abc").unwrap();
+        assert_eq!(value.insert_str(1, "xy"), Err(Overflow));
+        assert_eq!(value.insert_str(2, "あ"), Err(Overflow));
+        assert_eq!(value.as_str(), "abc");
     }
 
     #[test]

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "mozc_repository": "https://github.com/google/mozc",
+  "mozc_revision": "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732",
+  "output_license": "LicenseRef-Mozc-Dictionary",
+  "source_shards": 10,
+  "max_word_cost": 6900,
+  "max_candidates_per_reading": 12,
+  "input_entries": 1289076,
+  "cost_eligible": 467976,
+  "duplicate_entries": 8247,
+  "capped_entries": 18014,
+  "output_entries": 441715
+}

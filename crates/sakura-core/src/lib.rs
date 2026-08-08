@@ -11,6 +11,7 @@
 //! - [`simd`] — kernels selected by that answer; scalar-equivalent by test.
 //! - [`text`] — the sink everything writes through.
 //! - [`config`] — the small TOML subset every shipped data file is written in.
+//! - [`dictionary`] — borrowed fixed-layout views over the mmap dictionary.
 //! - [`romaji`] — the input FSM, compiled from a config document.
 //! - [`width`] — the width and punctuation choke point (DESIGN 5.6).
 //! - [`keymap`] — key bindings, also compiled from a config document.
@@ -21,16 +22,36 @@
 //! would give up the property the rest of this crate exists for.
 
 pub mod config;
+pub mod conversion;
 pub mod cpu;
+pub mod dictionary;
+pub mod editing;
 pub mod keymap;
+pub mod preferences;
 pub mod romaji;
 pub mod simd;
 pub mod text;
+pub mod user_dictionary;
 pub mod width;
 
 pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
+pub use conversion::{
+    ConversionCandidate, ConversionError, ConversionOptions, ConversionSegment, Converter,
+};
 pub use cpu::{Tier, UnsupportedCpu};
+pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};
+pub use editing::{identifier_into, transform_into, IdentifierStyle, SegmentTransform};
 pub use keymap::{Action, KeyMap, KeyMapError, KeyMapErrorKind, Preset, State};
+pub use preferences::{
+    default_app_profiles, is_valid_profile_process_name, parse_preferences,
+    resolve_context_preferences, serialize_preferences, serialize_preferences_with_profiles,
+    AppProfile, ContextPreferences, ParsedPreferences, Preferences, SuggestAccept,
+    CONFIG_FORMAT_VERSION,
+};
 pub use romaji::{Input, Table, TableError, TableErrorKind};
 pub use text::TextSink;
+pub use user_dictionary::{
+    UserDictionary, UserDictionaryEntry, UserDictionaryError, UserDictionaryErrorKind,
+    UserPartOfSpeech, UserPosSpec, MAX_USER_DICTIONARY_ENTRIES, USER_DICTIONARY_FORMAT_VERSION,
+};
 pub use width::{Normalizer, PunctuationStyle, Width, WidthPolicy};

@@ -19,15 +19,28 @@ together with this script:
 
 Properties the script must hold to, learned from how IMEs fail:
 
-- **Uninstall order is a safety property.** The language profile is withdrawn
-  first and the CLSID entries last (DESIGN 12.1), so no host can ever activate
-  a text service whose class has already been deleted. `[UninstallRun]` also
-  halts the whole uninstall if `--unregister` exits nonzero, rather than
-  continuing on to delete the files that registration still points at.
-- **The DLL is replaced via `restartreplace`.** It is loaded into every running
-  host process, so it cannot be overwritten in place. A reboot is the expected
-  completion of an upgrade, not a failure, and mixed versions must stay safe
-  until then.
+- **Uninstall order is a safety property.** At
+  `CurUninstallStepChanged(usUninstall)`, the SYSTEM cleanup task is removed and
+  then the language profile is withdrawn before any file deletion. A nonzero
+  deregistration result restores the cleanup task and aborts Uninstall, so no
+  live registration can be left pointing at files the same run deletes.
+- **Runtime files are versioned side by side.** The TSF DLL, engine, renderer,
+  settings payload, dictionary, and notices are copied below
+  `versions/<version>-<build-id>`. The stable root tools register the new DLL
+  explicitly after the copy, so a host process may keep an older image loaded
+  without blocking activation and a normal update does not require a reboot.
+  Obsolete version directories are removed on a best-effort basis after the
+  switch. A directory whose DLL is still mapped is left for the hidden
+  `Sakura Input Maintenance\Payload Cleanup` task, which runs as SYSTEM at
+  every logon and retries without elevating the interactive IME task.
+- **Updates preserve both scheduled tasks.** Their actions use stable root
+  bootstraps, so deleting and recreating either task before copying payloads
+  only creates a failure window. The updater starts Setup normally and lets
+  Inno perform UAC elevation, which preserves the original-user token used for
+  fresh per-user registration; existing logon tasks are not rewritten.
+  `--enable-profile` also waits for the stable logon bootstrap after the update,
+  so the newly active engine and renderer start in the current desktop instead
+  of waiting for the next sign-in.
 - **Two install-time preconditions gate everything else (DESIGN 3.2/12.2).**
   `MinVersion=10.0.22000` refuses anything older than Windows 11, and
   `InitializeSetup` refuses a CPU without AVX before any file is copied —

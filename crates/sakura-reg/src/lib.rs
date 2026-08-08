@@ -11,9 +11,12 @@
 #![cfg(windows)]
 
 pub mod com_server;
+pub mod diagnostics;
 pub mod guids;
 pub mod launcher;
+pub mod maintenance;
 pub mod module;
+pub mod payloads;
 pub mod profile;
 pub mod registry;
 pub mod user_profile;

@@ -8,6 +8,22 @@ run, not self-assessment.
 
 Sizes: S = days, M = 1–2 weeks, L = 2–4 weeks of focused work.
 
+## Verification entry points
+
+Each phase has a fail-closed verifier at `scripts/verify-phase0.ps1` through
+`scripts/verify-phase5.ps1`. `scripts/verify-all-phases.ps1` is the canonical
+C1–C8 aggregate: it re-runs the local workspace, dependency, workflow, source,
+stateful-flow, process-cleanliness and project-memory gates, hashes fresh phase
+reports, then independently recomputes strict status from their internal
+engineering and external-evidence fields. It deliberately does not accept an
+`-EngineeringOnly` report's top-level `passed` value as proof that manual,
+elapsed-time, signing, CI or publication gates occurred.
+
+Human evidence starts from the checked-in examples under `scripts/templates/`.
+Every referenced artifact is SHA-256 checked by its phase grader. Templates are
+schemas, not completion evidence: a responsible human must record observations
+made on the named host and allow the required wall-clock interval to elapse.
+
 ---
 
 ## Phase 0 — Bootstrap (repo, CI, skeleton)  [S]
@@ -134,11 +150,12 @@ Tasks:
 2. `sakura-core` dictionary reader: mmap fixed-layout views, common-prefix
    search, offsets-not-strings discipline; **reader fuzz target** (a
    hostile image must not crash the engine).
-3. Data pipeline: **freeze the connection-class taxonomy (~1.3 k, DESIGN
-   §5.2) before any image work**; import + trim Mozc dictionary data;
+3. Data pipeline: **freeze the connection-class taxonomy (2,672 classes,
+   DESIGN §5.2) before any image work**; import + trim Mozc dictionary data;
    **smile-chat glossary importer** (`frontend/public/glossaries` →
-   `it-terms.tsv`: ~7,900 reading-bearing entries; English aliases →
-   English surfaces; domains → `IT` tags; definitions → annotations).
+   `it-terms.tsv`: 9,653 terms / 14,627 emitted surfaces at the pinned
+   revision; English aliases → English surfaces; domains → `IT` tags;
+   definitions → annotations; every missing-reading gap is reported).
 4. **Overlay POS/cost assignment — its own task, not "curation"**
    (DESIGN §6.2): bootstrap left/right ids + costs by surface/reading
    match against Mozc data; class-by-shape defaults + corpus frequency
@@ -263,7 +280,7 @@ Exit criteria:
 | Compat matrix | release checklist | all hosts green or documented workaround |
 | Fuzzing | 72 h campaign | zero crashes/hangs |
 | Signed artifacts | release job | Authenticode-valid installer + binaries |
-| Update path | staged rollout test | dictionary + engine swap completes without reboot; DLL swap queued via restartreplace — reboot is the *expected* completion, mixed versions safe until then |
+| Update path | staged rollout test | versioned payload is copied before the explicit COM pointer switch; update exits 0 without a reboot, and old loaded DLL/new active payload combinations remain safe |
 | Registration self-repair | simulated profile wipe + relogon | logon stub restores profile registration without user action |
 | Disk bounds | crash-loop + long-run test | dumps capped at 5, engine.log rotation holds total under its cap |
 | Release | GitHub Releases | v1.0 tagged, installer attached |

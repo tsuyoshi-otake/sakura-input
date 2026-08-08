@@ -1,0 +1,4 @@
+!Microsoft IME Dictionary Tool
+サクラ	桜	名詞	花の名前
+おーぷんえーあい	OpenAI	固有名詞	組織名
+とうきょう	東京	地名	首都

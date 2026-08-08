@@ -14,7 +14,8 @@ use windows::Win32::System::Com::{
 use windows::Win32::UI::Input::KeyboardAndMouse::HKL;
 use windows::Win32::UI::TextServices::{
     CLSID_TF_CategoryMgr, CLSID_TF_InputProcessorProfiles, ITfCategoryMgr,
-    ITfInputProcessorProfileMgr,
+    ITfInputProcessorProfileMgr, TF_IPPMF_DONTCARECURRENTINPUTLANGUAGE, TF_IPPMF_ENABLEPROFILE,
+    TF_IPPMF_FORSESSION, TF_PROFILETYPE_INPUTPROCESSOR,
 };
 use windows_core::Result;
 
@@ -100,6 +101,31 @@ pub fn register_profile(dll_path: &Path, enabled_by_default: bool) -> Result<()>
             0,
             enabled_by_default,
             0,
+        )
+    }
+}
+
+/// Makes Sakura the active Japanese text service for this logon session.
+///
+/// `RegisterProfile` publishes a profile and `InstallLayoutOrTip` adds it to
+/// the user's input list, but neither operation changes the TIP that is
+/// currently active in existing applications. Without this explicit session
+/// activation, the user's half-width/full-width key continues to toggle the
+/// previously selected IME and never reaches Sakura's normal TSF key-event path.
+/// The caller must be the interactive user, with the COM apartment already
+/// initialized; no administrator rights are required.
+pub fn activate_profile_for_session() -> Result<()> {
+    let manager = profile_manager()?;
+    // SAFETY: the manager is a live TSF profile manager and all GUIDs are
+    // compile-time constants. A null HKL asks TSF to use the current layout.
+    unsafe {
+        manager.ActivateProfile(
+            TF_PROFILETYPE_INPUTPROCESSOR,
+            LANGID_JA_JP,
+            &CLSID_SAKURA_TSF,
+            &GUID_PROFILE_JA_JP,
+            HKL(std::ptr::null_mut()),
+            TF_IPPMF_FORSESSION | TF_IPPMF_ENABLEPROFILE | TF_IPPMF_DONTCARECURRENTINPUTLANGUAGE,
         )
     }
 }

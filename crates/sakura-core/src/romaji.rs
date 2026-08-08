@@ -621,6 +621,144 @@ mod tests {
         assert_eq!(committed(&table, "annnai"), "あんない");
     }
 
+    /// EVAL: scans every shipped entry for the exact structural shape that
+    /// causes a live-typing stall -- an entry that is itself a complete,
+    /// valid mapping (`Table::drive` could commit it right now) but is also
+    /// a strict prefix of one or more longer entries, so `may_wait` in
+    /// `Table::drive` holds it pending indefinitely until another key (or an
+    /// explicit flush) arrives. `n` and `nn` are the only entries shaped this
+    /// way in the shipped table, and both exist on purpose (see the comment
+    /// above `nna`). Typing either and then stopping -- e.g. `denn` with
+    /// nothing else typed -- leaves the raw romaji on screen instead of ん
+    /// until the next key or a commit/convert key resolves it; a user
+    /// reported exactly this ("nn doesn't type ん") and it turned out to be
+    /// this, not a defect. If a future table edit (including a user's custom
+    /// table) adds another entry with this shape, this fails so the same
+    /// stall gets a deliberate look instead of shipping silently.
+    #[test]
+    fn only_n_and_nn_are_complete_entries_that_still_wait_for_more() {
+        let table = builtin();
+        let mut stalls: Vec<&str> = table
+            .entries
+            .iter()
+            .filter(|entry| entry.carry.is_empty())
+            .filter(|entry| table.extends(&entry.sequence))
+            .map(|entry| entry.sequence.as_str())
+            .collect();
+        stalls.sort_unstable();
+        assert_eq!(
+            stalls,
+            vec!["n", "nn"],
+            "an entry both commits on its own and waits for more input; \
+             review whether the live-typing stall this causes (raw romaji \
+             stays on screen until another key or a flush) is intended"
+        );
+    }
+
+    /// EVAL: `data/romaji.toml` spells every small kana two ways -- `x` and
+    /// `l` prefixes (`xa`/`la`, `xtu`/`ltu`, `xka`/`lka`, ...) -- so both the
+    /// long-standing `x` convention and the newer `l` one work identically.
+    /// Nothing but this test enforces that they stay identical: the compiler
+    /// has no notion that `xa` and `la` are supposed to agree, so a future
+    /// table edit that changes one prefix's output but not the other's would
+    /// compile cleanly and silently make the two spellings of "the same
+    /// small kana" produce different kana. `xn` is excluded on purpose -- it
+    /// is an alternate spelling of ん (see `xn = "ん"` in the table), not a
+    /// small-kana prefix, and has no `l` counterpart to compare against.
+    #[test]
+    fn x_and_l_small_kana_prefixes_stay_in_sync() {
+        let table = builtin();
+        let x_forms: std::collections::BTreeMap<&str, &str> = table
+            .entries
+            .iter()
+            .filter(|entry| entry.sequence != "xn")
+            .filter_map(|entry| {
+                entry
+                    .sequence
+                    .strip_prefix('x')
+                    .map(|rest| (rest, entry.output.as_str()))
+            })
+            .collect();
+        let l_forms: std::collections::BTreeMap<&str, &str> = table
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                entry
+                    .sequence
+                    .strip_prefix('l')
+                    .map(|rest| (rest, entry.output.as_str()))
+            })
+            .collect();
+        assert_eq!(
+            x_forms, l_forms,
+            "every `x`-prefixed small-kana spelling must have an identical \
+             `l`-prefixed twin, and vice versa"
+        );
+    }
+
+    /// EVAL: locks in the exact commit-time behavior found while
+    /// investigating the report above. The "extra `n` out of habit" leniency
+    /// documented at `nna` (`minnna` still commits みんな, not みんんな) only
+    /// fires because a vowel/や行 follows and reclaims the surplus `n`. With
+    /// nothing following, there is nothing to reclaim it: every full pair of
+    /// trailing `n`s is its own ん. Typing an extra `n` hoping to force ん
+    /// sooner does not recover `denn`'s missing ん -- it adds a second one.
+    #[test]
+    fn trailing_n_runs_do_not_get_the_mid_word_leniency() {
+        let table = builtin();
+        assert_eq!(
+            committed(&table, "minna"),
+            "みんな",
+            "mid-word: leniency applies"
+        );
+        assert_eq!(
+            committed(&table, "minnna"),
+            "みんな",
+            "mid-word: leniency applies"
+        );
+        assert_eq!(committed(&table, "nn"), "ん");
+        assert_eq!(
+            committed(&table, "nnn"),
+            "んん",
+            "no vowel follows to reclaim the third n -- it becomes its own ん"
+        );
+        assert_eq!(committed(&table, "denn"), "でん");
+        assert_eq!(
+            committed(&table, "dennn"),
+            "でんん",
+            "the workaround some people reach for after `denn` looks stuck \
+             does not produce でん -- it produces でんん"
+        );
+    }
+
+    /// EVAL: `every_carrying_entry_emits_its_output_and_carries_on` proves the
+    /// output half of a carrying entry via `feed` (mid-typing, where
+    /// `may_wait` is `true`); this proves the other half via `flush`
+    /// (`may_wait = false`), the code path `Enter` actually uses. `kk` alone
+    /// is unremarkable -- っ commits and the carried `k` passes through raw
+    /// because no bare `k` entry exists -- but nothing in the type system
+    /// forces that: a future table edit adding a bare single-consonant entry
+    /// (as `n` already is) would silently change what every sokuon carrying
+    /// that consonant commits to when nothing follows it. This locks today's
+    /// correct answer in so that change gets a deliberate look instead of
+    /// shipping as a side effect of an unrelated edit.
+    #[test]
+    fn every_carrying_entry_resolves_deterministically_when_flushed_alone() {
+        let table = builtin();
+        for entry in &table.entries {
+            if entry.carry.is_empty() {
+                continue;
+            }
+            let expected = format!("{}{}", entry.output, entry.carry);
+            assert_eq!(
+                committed(&table, &entry.sequence),
+                expected,
+                "entry {:?} did not resolve to output+carry when flushed alone",
+                entry.sequence
+            );
+        }
+    }
+
     #[test]
     fn punctuation_and_the_long_vowel_mark() {
         let table = builtin();
@@ -628,6 +766,36 @@ mod tests {
         assert_eq!(committed(&table, "a,bi."), "あ、び。");
         assert_eq!(committed(&table, "[a]"), "「あ」");
         assert_eq!(committed(&table, "a/i"), "あ・い");
+    }
+
+    /// EVAL: `n'` exists for exactly one reason -- disambiguating ん from the
+    /// な/や-row kana that would otherwise absorb it, the same problem `nn`
+    /// solves for a hasty typist. It is shaped differently from `nn` though:
+    /// nothing extends past `n'` (see
+    /// `only_n_and_nn_are_complete_entries_that_still_wait_for_more`, which
+    /// finds only `n` and `nn` in that stalling shape), so it commits ん the
+    /// instant it is typed instead of waiting for another key. This checks
+    /// both halves of that: `n'` earns its keep as a second, independent way
+    /// to reach the ん+や-row split alongside `hon'ya`/`honya`/`honnya`, and
+    /// stays an inert, passed-through character everywhere an apostrophe
+    /// does not follow an `n`.
+    #[test]
+    fn apostrophe_disambiguates_n_and_is_inert_elsewhere() {
+        let table = builtin();
+        assert_eq!(committed(&table, "n'"), "ん");
+        let (emitted, pending) = typed(&table, "n'");
+        assert_eq!(emitted, "ん", "`n'` should commit without waiting for more");
+        assert_eq!(pending, "");
+        // A second word pair alongside hon'ya/honya/honnya, so the earlier
+        // result is not an artifact of that one word's shape.
+        assert_eq!(committed(&table, "kon'yaku"), "こんやく");
+        assert_eq!(committed(&table, "konyaku"), "こにゃく");
+        assert_eq!(committed(&table, "konnyaku"), "こんにゃく");
+        // With no preceding `n` to disambiguate, the apostrophe means
+        // nothing and passes through like any other unmapped character --
+        // it must not silently vanish.
+        assert_eq!(committed(&table, "'"), "'");
+        assert_eq!(committed(&table, "a'i"), "あ'い");
     }
 
     /// Letters with no reading pass through rather than disappearing — this is
@@ -697,6 +865,121 @@ mod tests {
         table.feed(&mut state, 'i', &mut out).expect("fits");
         assert_eq!(table.feed(&mut state, 'u', &mut out), Err(Overflow));
         assert_eq!(out.as_str(), "あい");
+    }
+
+    /// EVAL: when `feed` resolves more than one step in the same call (here,
+    /// `n` completing to ん and then the fresh `q` starting a new,
+    /// still-pending candidate) and the sink overflows partway through, the
+    /// step(s) that already reached the sink must stay committed and the
+    /// step that didn't must stay recoverable. This is `drive`'s
+    /// `*candidate = next` ordering under test: it only runs after the sink
+    /// accepts the emission, so a failed emission leaves `candidate` (and
+    /// thus `state.pending` once `feed` stores it back) exactly where it was
+    /// before that step, not half-updated.
+    #[test]
+    fn overflow_preserves_unconsumed_suffix_after_partial_resolution() {
+        let table = builtin();
+        let mut state = Input::new();
+        table
+            .feed(&mut state, 'n', &mut String::new())
+            .expect("String sink");
+
+        // Exactly enough room for ん (3 bytes) and no more.
+        let mut out = FixedStr::<3>::new();
+        assert_eq!(table.feed(&mut state, 'q', &mut out), Err(Overflow));
+        assert_eq!(out.as_str(), "ん", "the step that fit must still land");
+        assert_eq!(
+            state.pending(),
+            "q",
+            "the step that didn't fit must survive as pending, not vanish"
+        );
+
+        // A later flush to a sink with room recovers exactly the part that
+        // overflowed -- nothing was lost, and nothing was emitted twice.
+        let mut flushed = String::new();
+        table.flush(&mut state, &mut flushed).expect("String sink");
+        assert_eq!(flushed, "q");
+    }
+
+    /// EVAL: the non-ASCII branch of `feed` recovers differently from the
+    /// ASCII branch above, and that difference is worth spelling out rather
+    /// than leaving implicit. An ASCII overflow always leaves the
+    /// unconsumed part sitting in `state.pending` (proved above), because
+    /// pending romaji is where the FSM's mid-resolution state naturally
+    /// lives. A non-ASCII character never enters `pending` at all -- it
+    /// isn't ASCII, so the FSM's buffer cannot hold it even transiently --
+    /// so when `out.push(key)` overflows after a successful `flush`, the
+    /// character is not stored anywhere in `Input`. Recovery depends
+    /// entirely on the caller re-feeding the identical key once the sink has
+    /// room, exactly as `feed`'s doc comment describes ("a retry continues
+    /// from where it stopped"). This proves that retry actually works end to
+    /// end, and documents the asymmetry so a caller (`sakura-engine`'s
+    /// dispatch loop) cannot assume both overflow paths recover the same
+    /// way.
+    #[test]
+    fn non_ascii_overflow_never_loses_the_current_character() {
+        let table = builtin();
+        let mut state = Input::new();
+        table
+            .feed(&mut state, 'n', &mut String::new())
+            .expect("String sink");
+
+        // Exactly enough room for ん (3 bytes) and no more, so ん flushes
+        // clean but 字 has nowhere to go.
+        let mut out = FixedStr::<3>::new();
+        assert_eq!(table.feed(&mut state, '字', &mut out), Err(Overflow));
+        assert_eq!(out.as_str(), "ん");
+        assert_eq!(
+            state.pending(),
+            "",
+            "字 is not ASCII, so unlike the suffix case above it cannot be \
+             held in Input's pending buffer -- there is nowhere in Input \
+             for it to survive an overflow"
+        );
+
+        // Retrying the exact same key against a sink with room recovers it.
+        let mut retry = String::new();
+        table
+            .feed(&mut state, '字', &mut retry)
+            .expect("retry with room must succeed");
+        assert_eq!(retry, "字");
+    }
+
+    /// EVAL: a corpus of real, whole words, each crossing several entry
+    /// boundaries. `every_carry_free_entry_is_reachable_by_typing_it` proves
+    /// every single entry works in isolation, but the `nn` report was never
+    /// about one entry in isolation -- it was about what happens where two
+    /// entries meet. This is the same idea applied at the boundary: sokuon
+    /// immediately followed by the consonant it carries back, youon next to
+    /// a plain vowel, a mapped run next to an unmapped character, and so on.
+    #[test]
+    fn whole_word_corpus_crosses_entry_boundaries_correctly() {
+        let table = builtin();
+        let cases = [
+            ("ohayou", "おはよう"),
+            ("arigatou", "ありがとう"),
+            ("sayounara", "さようなら"),
+            // sokuon immediately followed by the carried consonant + vowel.
+            ("shuppatsu", "しゅっぱつ"),
+            ("kekkon", "けっこん"),
+            ("kippu", "きっぷ"),
+            ("kitte", "きって"),
+            ("zutto", "ずっと"),
+            // a multi-char entry (`chi`) immediately followed by a plain
+            // vowel that must not be absorbed into it.
+            ("chiisai", "ちいさい"),
+            // `s` alone is not a complete entry -- must wait for `sha`, not
+            // misresolve partway through.
+            ("kaisha", "かいしゃ"),
+            // youon (`gyu`, `nyu`) next to a plain vowel and next to `n`.
+            ("gyuunyuu", "ぎゅうにゅう"),
+            // v-row, a mapped run next to an unmapped punctuation character.
+            ("vaiorin", "ゔぁいおりん"),
+            ("sugoi!", "すごい!"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(committed(&table, input), expected, "input {input:?}");
+        }
     }
 
     // --- Table compilation ---

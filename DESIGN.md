@@ -494,12 +494,13 @@ tokenizer, trie, or model crates (§3.1).
    OOV rate for exactly the terms we specialize in.
 2. **Search.** Viterbi over `word_cost + connection_cost(right_id_prev,
    left_id_next)`. Connection matrix is a class-bigram cost table,
-   memory-mapped. The class count is **frozen at ~1.3 k (Mozc's own
-   taxonomy) before any `dictc` work starts** — a flat `u16[classes²]`
-   is then ≈ 3.4 MB, a named line item in the §10 budget. Class growth
-   costs quadratically (4 k classes = 32 MB, nearly the whole dictionary
-   budget), so any expansion requires matrix compression first, never
-   budget creep.
+   memory-mapped. The pinned Mozc taxonomy is **frozen at exactly 2,672
+   classes before any `dictc` work starts**. A flat `u16[classes²]` would
+   consume about 13.6 MiB, so `dictc` stores each row's exact modal cost
+   plus sorted exceptions. The reader reconstructs every cell without an
+   approximation and the encoded matrix remains a named ≤ 4 MiB line item
+   in the §10 budget. Class growth costs quadratically, so any expansion
+   requires a new measured compression design, never budget creep.
 3. **N-best.** A* backward enumeration for the candidate list per segment
    and for whole-sentence alternates.
 4. **Segments.** The Viterbi path induces bunsetsu segmentation. Segment
@@ -577,6 +578,41 @@ budget, reconciled by arithmetic in §10's table — never learn in
 password/private scopes, one-click "clear learning data", exportable
 (export/clear are shipped, tested features, not aspirations — §11).
 
+### 5.4.1 Explicit developer input history
+
+Developer input history is a separate, opt-in store for local IME development.
+It is disabled by default and can only be enabled explicitly with
+`config set developer-mode on`. It is never enabled by test flags or inferred
+from the build type. The store lives under
+`%LOCALAPPDATA%\\SakuraInput\\history\\input.bin`, separate from learning and
+diagnostic logs.
+
+While enabled, each real key event records the key code, character when
+available, modifiers, repeat flag, scope classification, action, state and
+mode transition, rendered preedit before and after the action, commit/delete
+output, beep result, and the sequence/session identifiers. Conversion commits
+also record the reading, chosen surface, and neighboring context. Synthetic
+test input is excluded. An unclassified scope is never recorded; only a
+positively classified normal scope can create developer-history records.
+Password, URL, email, and digit scopes are always excluded.
+
+Records are DPAPI-protected for the current Windows user, length- and
+checksum-framed, written through a bounded non-blocking queue, and capped at
+30 days and 64 MiB. Queue drops and write failures are counted. The running
+engine exposes flush, clear, and live statistics operations, and the settings
+CLI provides `history show`, `history export`, `history clear`, and `history
+stats` so development data can be inspected, diagnosed, or removed without
+touching learning data. The TSF bridge publishes the focused range's
+`ITfInputScope` before admitting each key; a missing or unknown classification
+is fail-closed.
+
+The saved preference and the running service state are reported separately:
+developer-mode changes take effect at the next engine start, and the CLI never
+claims that a saved value has already changed a live process. Live statistics
+include `active`, queue drops, persistence failures, and aggregate exclusion
+counts for unclassified, sensitive, and test-only admission. These counters
+contain no input content and reset with the engine process.
+
 ### 5.5 Engine API (IPC-visible, platform-agnostic)
 
 Session-oriented protocol (hand-rolled binary schema, versioned):
@@ -591,8 +627,14 @@ SendKey(session_id, key, modifiers, input_scope) → Output
              mode | absent }
 GetCandidates / SelectCandidate / ResizeSegment / Revert / Commit
 Reconvert(text) → same Output shape
+SetInputScope(session_id, scope)
+ClearInputHistory / FlushInputHistory / InputHistoryStats
 DeleteSession
 ```
+
+`InputHistoryStats` carries the live `active` bit plus dropped, failed, and
+privacy-exclusion counters; protocol versioning rejects older layouts rather
+than interpreting a short payload as a valid zero-valued response.
 
 The same API serves macOS/Linux frontends later; nothing in it is
 TSF-shaped. The DLL is a dumb translator between this protocol and TSF
@@ -705,11 +747,13 @@ without polluting long-term state.
 ### 6.1 System dictionary
 
 - **Sources.** The full-scratch rule applies to *code*, not corpus data:
-  we compile open TSV *data* with our own `dictc` — Mozc's dictionary
-  data (BSD; includes readings, POS ids, corpus-derived costs, and the
-  connection matrix) as the seed, optionally SudachiDict (Apache-2.0).
-  No MeCab binaries, no external dictionary formats at runtime. License
-  audit is a build-time gate; no ATOK/proprietary data ever.
+  we compile the pinned Mozc OSS dictionary data with our own `dictc`.
+  Mozc is a mixed-license data set: Google-authored portions are
+  BSD-3-Clause, IPAdic/ICOT portions retain their upstream conditions, and
+  the Okinawa dictionary portion is Public Domain. `data/SOURCES.lock`
+  pins the revision and paths, and `THIRD_PARTY_LICENSES` bundles the exact
+  notices. No MeCab binaries or external dictionary formats exist at
+  runtime; the license gate rejects any unlisted source marker.
 - **Deliberately trimmed general lexicon.** Rare proper nouns, celebrity
   names, and long-tail generalist entries are dropped to hit the size
   target; domain coverage comes back via the IT overlay (§6.2). A
@@ -727,7 +771,8 @@ without polluting long-term state.
     arrays — including the **prediction-worthiness cost §5.3 needs, from
     day one**, so prediction (Phase 4) does not force a format bump,
   - surfaces: front-coded string pool,
-  - connection matrix: flat `u16[classes²]` (~1.3 k classes frozen, §5.2),
+  - connection matrix: exact row-mode-plus-sorted-exceptions encoding for
+    2,672 frozen classes (§5.2),
   - annotations: side table keyed by entry id.
 - Target size: ≤ 35 MB on disk (trimmed lexicon + IT overlay), mapped
   lazily; cold-start to first conversion ≤ 150 ms.
@@ -740,18 +785,23 @@ without polluting long-term state.
 
 ### 6.2 IT-term overlay dictionary (the specialization asset)
 
-A hand-curated, in-repo TSV (`data/it-terms.tsv`) — this file is the
+The IT vocabulary is split into a generated in-repo TSV
+(`data/it-terms.tsv`) and a small project-authored complement
+(`data/curated-terms.tsv`). The generated layer follows the pinned glossary;
+the curated layer owns canonical casing and important Shift+ASCII gaps. This is the
 product's moat and is expected to grow forever.
 
-**Primary seed: the smile-chat glossary.** The in-house glossary shipped
-with smile-chat (`frontend/public/glossaries`; ~9,650 Japanese entries,
-~7,900 with kana readings; domain-tagged: software-engineering, security,
-cloud/AWS/OCI, database, programming, project-management, …) is converted
-by a one-shot importer: `term` + `reading` → dictionary entries,
+**Primary seed: the smile-chat glossary.** The pinned glossary under
+`frontend/public/glossaries` contains 9,653 Japanese terms and is governed
+by its nearest license boundary, `frontend/public/LICENSE` (MIT). The
+one-shot importer currently emits 14,627 deduplicated term/alias surfaces,
+matches 1,977 of them to Mozc ids/costs, applies explicit shape defaults to
+12,650, and records all 1,554 missing-reading gaps. `term` + `reading` →
+dictionary entries,
 `normalizedTerms` English aliases → English-surface candidates
 (くらうど→cloud), `domain` → the `IT` tag plus finer facets, and
-definition texts → candidate annotations (§8). In-house data — licensing
-is a non-issue.
+definition texts → candidate annotations (§8). The pinned SHA, license
+path, counts, and gap list are retained in machine-readable reports.
 
 **The hard part of the import is not parsing — it is
 POS/connection-id/cost assignment**, which the glossary does not carry.
@@ -877,12 +927,15 @@ read-only lives once per machine under Program Files.
 - IME sees everything the user types — treat the whole codebase as
   security-sensitive. No network capability in DLL/engine/renderer
   (enforced: no networking crates linked; CI check).
-- Password fields (`IS_PASSWORD` input scope): direct input mode forced,
-  no prediction, no learning, no logging, and the recent-context buffer
-  (§5.8) is neither read nor written.
+- Sensitive fields (`IS_PASSWORD`, URL, email, and digit input scopes): direct
+  input mode forced, no prediction, no learning, no developer input history,
+  and the recent-context buffer (§5.8) is neither read nor written.
 - The recent-context buffer is memory-only and dies with the session; it
   is never written to disk.
-- Logs contain events and timings, never text.
+- Ordinary logs contain events and timings, never text. The separately named
+  developer input-history store is an explicit local-development exception;
+  it is DPAPI-protected, bounded, exportable, and never records sensitive
+  scopes.
 - Crash handling: local minidumps via WER LocalDumps for our processes,
   never uploaded automatically; dumps are treated as sensitive since they
   may contain composition text. Retention is capped (`DumpCount=5`) —
@@ -924,7 +977,7 @@ Memory budgets (steady state, measured in CI on the reference VM):
 | Renderer private working set                  | ≤ 10 MB |
 | Heap allocations per keystroke (steady state, kana + conversion + prediction hand-off) | 0 |
 | Dictionary image on disk                      | ≤ 35 MB |
-| — of which connection matrix (~1.3 k² × u16, §5.2) | ≤ 4 MB |
+| — of which exact compressed connection matrix (2,672 classes, §5.2) | ≤ 4 MB |
 | Learning index in memory (≤ 64 B × 100 k, §5.4) | ≤ 8 MB |
 
 ---
@@ -972,7 +1025,7 @@ The full-scratch rule (§3.1) covers runtime components, not packaging
 tooling. The installer is a standard Inno Setup script
 (`installer/setup.iss`) producing `sakura_setup.exe`. Inno provides the
 commodity machinery — file copy with rollback, upgrade detection
-(AppId), ARP entry, in-use-file handling (`restartreplace`), silent
+(AppId), ARP entry, versioned file copy, silent
 flags, SignTool hooks — none of which is worth reimplementing.
 
 Everything IME-specific stays in Rust: `sakura_regtool.exe`, a small
@@ -1005,9 +1058,17 @@ workflow). Its commands:
 ### 12.2 Install / uninstall flow
 
 Install (`[Files]` + `[Run]`, in order): check the CPU (below) → copy the
-x64 payload (DLL, exes, `dict\system.dic`, third-party license texts for
-the dictionary data) → `regtool --register --no-wow64` →
-`regtool --enable-profile`.
+x64 payload into `versions/<version>-<build-id>` → register the explicit
+`versions/<version>-<build-id>\sakura_tsf.dll` with
+`regtool --register --dll ... --no-wow64` → `regtool --enable-profile`.
+The final command preserves or creates the stable logon task, enables the
+signed-in user's profile, and waits for `sakura_logon.exe` to bootstrap the
+newly active engine and renderer in the current session. This is required on an
+upgrade because `PrepareToInstall` stopped the old engine and a logon trigger
+will not fire again until the next sign-in.
+The root `sakura_regtool.exe`, `sakura_logon.exe`, and `sakura_settings.exe`
+files are stable bootstraps; the latter dispatches to the versioned settings
+payload. The active COM registration is the single version-selection pointer.
 
 The CPU check comes first because it is the one precondition that cannot
 be repaired after the fact. Setup calls
@@ -1020,18 +1081,20 @@ user's applications crashing, with nothing pointing at the IME.
 same way, and there is no x86 or ARM64 payload to install at all.
 
 Uninstall ordering is safety-critical — a stale TSF registration
-pointing at a deleted DLL bricks text input — and Inno's
-`[UninstallRun]` executes *before* file removal, which is exactly the
-ordering we need:
+pointing at a deleted DLL bricks text input. The latest uninstall script runs
+its critical boundary directly from `CurUninstallStepChanged(usUninstall)`,
+where Inno documents that `Abort` stops Uninstall before file removal:
 
-1. `regtool --unregister` (TSF profile + categories first). The
+1. Remove the SYSTEM payload-cleanup task so it cannot race file deletion.
+2. `regtool --unregister` (TSF profile + categories first). The
    uninstaller **halts on a nonzero exit code** instead of continuing to
-   file removal — ordering alone is not atomicity, and continuing past a
-   failed deregistration is precisely the brick scenario.
-2. `regtool --stop`.
-3. Inno removes files; in-use DLLs are queued for delete-on-reboot and
-   the reboot-required state is reported.
-4. User data under `%LOCALAPPDATA%` is kept unless the user opts into
+   file removal; it first restores the cleanup task as compensation so a
+   failed attempt leaves the installed system maintainable.
+3. `regtool --stop`.
+4. Inno removes files. A loaded versioned DLL is left in place when Windows
+   refuses deletion; it is already unreachable because registration was
+   removed, and no delete-on-reboot request is created.
+5. User data under `%LOCALAPPDATA%` is kept unless the user opts into
    purge (uninstall page checkbox / `/PURGE=1`).
 
 CI exercises this path on VM snapshots every release: install → type →
@@ -1039,18 +1102,34 @@ uninstall → verify typing still works.
 
 ### 12.3 Upgrade & auto-update
 
-- In-place upgrade: same AppId; `PrepareToInstall` runs
-  `regtool --stop`; engine/renderer exes and the dictionary image are
-  replaced atomically (§6.1 — the engine is stopped, so nothing maps
-  them). The TSF DLL is different: it sits loaded in nearly every
-  process that ever focused a text field, so **a reboot is the *normal*
-  completion of an update, not a rare fallback** — `restartreplace`
-  queues the swap and IPC version negotiation (§7) keeps
-  old-DLL/new-engine combinations safe until then. On RDS/Citrix the
-  pending rename is machine-global: one update implies a reboot
-  affecting every logged-on user — documented in the admin guide.
+- Side-by-side upgrade: same AppId; `PrepareToInstall` runs
+  `regtool --stop`, then the installer copies every runtime payload into a
+  new `versions/<version>-<build-id>` directory. The active COM registration
+  is switched only after the copy succeeds, using an explicit DLL path. A host
+  process that has the old TSF DLL loaded keeps using that old image safely;
+  no mapped file is overwritten and **a normal update exits successfully
+  without a Windows reboot**. New host processes load the newly registered
+  version, while `sakura_logon.exe` resolves engine/renderer from the active
+  registration rather than from a mutable root path.
+- The per-user logon task and the SYSTEM cleanup task both target stable root
+  bootstraps and remain registered throughout an upgrade. Existing logon tasks
+  are treated as already configured rather than rewritten. Therefore an update
+  canceled before activation does not remove either the next-login startup path
+  or the cleanup retry path.
+- The root tools are stable across updates. `sakura_settings.exe` is a
+  bootstrap that launches the versioned settings payload, so the settings UI
+  can update independently of the image currently executing it.
+- After activation, Setup removes obsolete version directories when their
+  files are free. A still-mapped old TSF DLL keeps its directory temporarily;
+  it is already unregistered, no reboot rename is queued. Setup also installs
+  a separate hidden `Sakura Input Maintenance\Payload Cleanup` task as
+  `SYSTEM`; it retries the cleanup at every interactive logon without
+  elevating the normal-integrity engine task or prompting the user with UAC.
+  Locked generations remain until a later logon can remove them.
 - Updates require elevation (machine-wide install; §1 non-goals): the
-  auto-updater triggers one UAC prompt. Non-admin users get a "new
+  auto-updater launches Setup normally and lets Inno perform the UAC transition,
+  retaining the pre-UAC token needed by `runasoriginaluser`; it triggers one
+  UAC prompt. Non-admin users get a "new
   version available" notice to hand to their admin instead of a
   silently failing update.
 - Auto-update (M4): the settings app checks GitHub Releases over
@@ -1062,7 +1141,9 @@ uninstall → verify typing still works.
 ### 12.4 Silent operation & distribution
 
 - Standard Inno flags: `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-  /RESTARTEXITCODE=3010 /LOG=<path>`, plus `/PURGE=1` on uninstall.
+  /RESTARTEXITCODE=3010 /LOG=<path>`, plus `/PURGE=1` on uninstall. A normal
+  side-by-side update returns `0`; `3010` remains recognized only for a
+  legacy installer or an unrelated cleanup that genuinely needs a reboot.
 - Every CI build emits a signed installer (SignTool integration; EV
   certificate recommended for SmartScreen reputation).
 - Distribution: GitHub Releases only. MSI for enterprise GPO remains a
@@ -1108,7 +1189,7 @@ uninstall → verify typing still works.
 | Risk | Mitigation |
 |------|------------|
 | TSF app-compat black holes (Electron, games, UWP) | M0 targets the three worst hosts first; UI-less mode support from the start; pass-through fallback |
-| Dictionary licensing | Only BSD/Apache sources (Mozc data, SudachiDict); build-time license gate |
+| Dictionary licensing | Pin every source and nearest license boundary; gate source markers; bundle Mozc's mixed BSD/IPAdic-ICOT/Public-Domain notice and smile-chat's MIT notice |
 | Conversion quality plateau below expectations | Costs/matrix inherited from Mozc data give a strong floor; learning layer is where we differentiate, and it's independent of base quality |
 | Stale TSF registration breaks user's typing | Uninstall/rollback tested in CI VM snapshots; registration is idempotent and versioned |
 | Scope creep toward cloud/NN features | Non-goals list; NN reranker explicitly deferred until after M4, and only as an offline-trained, on-device reranker of N-best |

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "phase": 3,
+  "responsible_human": "",
+  "default_ime": false,
+  "period_start": "YYYY-MM-DD",
+  "period_end": "YYYY-MM-DD",
+  "work_days": [
+    {
+      "date": "YYYY-MM-DD",
+      "evidence": [
+        "path or URL to a commit, document, or contemporaneous work artifact typed through Sakura"
+      ],
+      "notes": ""
+    }
+  ],
+  "pass_through_fallback_events": null,
+  "open_p0_p1": null,
+  "engine_log": {
+    "path": "",
+    "sha256": ""
+  },
+  "recorded_at_utc": ""
+}

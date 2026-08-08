@@ -20,9 +20,64 @@
 
 mod common;
 
-use sakura_proto::{KeyCode, Request, Response, PROTOCOL_VERSION};
+use sakura_ipc::Client;
+use sakura_proto::{KeyCode, Request, Response, SessionId, PROTOCOL_VERSION};
 
-use common::{char_key, named_key, session_for, visible, Engine, PATIENT};
+use common::{char_key, named_key, session_for, shifted_char_key, visible, Engine, PATIENT};
+
+fn assert_shifted_term(client: &mut Client, session: SessionId, typed: &str, expected: &[&str]) {
+    let mut shifted_preedit = String::new();
+    for character in typed.chars() {
+        match client.call(
+            &Request::SendKey {
+                session,
+                key: shifted_char_key(character),
+            },
+            PATIENT,
+        ) {
+            Ok(Response::Output(output)) => {
+                assert!(
+                    output.consumed,
+                    "Shift+{character} in {typed} must stay in English composition"
+                );
+                shifted_preedit = visible(output.preedit);
+            }
+            other => panic!("Shift+{character} in {typed}: expected Output, got {other:?}"),
+        }
+    }
+    assert_eq!(shifted_preedit, typed);
+
+    let converted = match client.call(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        PATIENT,
+    ) {
+        Ok(Response::Output(output)) => {
+            assert!(output.consumed);
+            let converted = visible(output.preedit);
+            assert!(
+                expected.contains(&converted.as_str()),
+                "Space after Shift+{typed}: expected one of {expected:?}, got {converted:?}"
+            );
+            converted
+        }
+        other => panic!("Space after Shift+{typed}: expected Output, got {other:?}"),
+    };
+    match client.call(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        PATIENT,
+    ) {
+        Ok(Response::Output(output)) => {
+            assert_eq!(output.commit.as_deref(), Some(converted.as_str()))
+        }
+        other => panic!("Enter after Shift+{typed}: expected Output, got {other:?}"),
+    }
+}
 
 /// The whole M0 story across a real pipe: the engine starts, accepts the
 /// handshake, opens a session, turns romaji into kana, commits it, and is
@@ -36,6 +91,10 @@ use common::{char_key, named_key, session_for, visible, Engine, PATIENT};
 #[test]
 fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
     let mut engine = Engine::running();
+    if !engine.compatible() {
+        eprintln!("skipping real-pipe test: an older engine owns the well-known pipe");
+        return;
+    }
     let mut client = engine.client();
 
     match client.call(
@@ -123,36 +182,88 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
         other => panic!("expected Output on the second connection, got {other:?}"),
     }
 
+    // 無変換 while composing is deliberately a temporary kana transform and
+    // must not publish a persistent mode change. Commit the preedit first so
+    // the mode-key assertion below exercises the idle `mode_kana_cycle` path
+    // that the renderer's shared UI state is meant to observe.
+    match next.call(
+        &Request::SendKey {
+            session: next_session,
+            key: named_key(KeyCode::Enter),
+        },
+        PATIENT,
+    ) {
+        Ok(Response::Output(output)) => {
+            assert_eq!(output.commit.as_deref(), Some("あ"));
+        }
+        other => panic!("Enter on the second connection: expected Output, got {other:?}"),
+    }
+
+    // Real-pipe tests intentionally run against the durable learning store.
+    // A user who previously selected Claude Code should keep that Microsoft
+    // IME-style preference, while a fresh profile still ranks Claude first.
+    assert_shifted_term(
+        &mut next,
+        next_session,
+        "CLAUDE",
+        &["Claude", "Claude Code"],
+    );
+    assert_shifted_term(&mut next, next_session, "OPENAI", &["OpenAI"]);
+    assert_shifted_term(&mut next, next_session, "GITLAB", &["GitLab"]);
+    assert_shifted_term(&mut next, next_session, "PYTORCH", &["PyTorch"]);
+
     // What the renderer does. `since: 0` is nobody's revision, so this is
     // answered from the engine's current state without blocking.
     let mut renderer = engine.client();
     let seen = match renderer.call(&Request::WatchUi { since: 0 }, PATIENT) {
-        Ok(Response::Ui(state)) => state.revision,
+        Ok(Response::Ui(state)) => state,
         other => panic!("WatchUi: expected Ui, got {other:?}"),
     };
 
     // A mode key on the typing connection has to reach the watcher on the
     // renderer's connection — which is the entire reason the UI board is
-    // the one piece of engine state that is not per-connection.
-    match next.call(
-        &Request::SendKey {
-            session: next_session,
-            key: named_key(KeyCode::Muhenkan),
+    // the one piece of engine state that is not per-connection. The shared UI
+    // board may have been left in any of the three kana modes by another real
+    // session, while this fresh session always starts from its own default.
+    // Cycle until the session reports a mode different from the observed board;
+    // within three states that must produce an observable revision.
+    let mut changed_mode = None;
+    for _ in 0..3 {
+        match next.call(
+            &Request::SendKey {
+                session: next_session,
+                key: named_key(KeyCode::Muhenkan),
+            },
+            PATIENT,
+        ) {
+            Ok(Response::Output(output)) => {
+                let mode = output
+                    .mode
+                    .expect("idle 無変換 is bound to mode_kana_cycle and must report the new mode");
+                if Some(mode) != seen.mode {
+                    changed_mode = Some(mode);
+                    break;
+                }
+            }
+            other => panic!("Muhenkan: expected Output, got {other:?}"),
+        }
+    }
+    assert!(
+        changed_mode.is_some(),
+        "the three-state mode cycle must differ from the observed UI mode"
+    );
+
+    match renderer.call(
+        &Request::WatchUi {
+            since: seen.revision,
         },
         PATIENT,
     ) {
-        Ok(Response::Output(output)) => {
-            assert!(
-                output.mode.is_some(),
-                "無変換 is bound to mode_kana_toggle and must report the new mode"
-            );
-        }
-        other => panic!("Muhenkan: expected Output, got {other:?}"),
-    }
-
-    match renderer.call(&Request::WatchUi { since: seen }, PATIENT) {
         Ok(Response::Ui(state)) => {
-            assert_ne!(state.revision, seen, "the mode change did not reach the UI");
+            assert_ne!(
+                state.revision, seen.revision,
+                "the mode change did not reach the UI"
+            );
             assert!(state.mode.is_some(), "a mode change must name a mode");
         }
         other => panic!("WatchUi after a mode change: expected Ui, got {other:?}"),

@@ -20,6 +20,14 @@
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+#ifndef AppBuildId
+#define AppBuildId "dev"
+#endif
+#define AppProductVersion "1.0.0"
+#ifndef AppVersionedDir
+#define AppVersionedDir "{app}\versions\1.0.0-dev"
+#endif
+
 [Setup]
 ; This value is burned into every installed machine's upgrade detection
 ; (AppId is what Inno's "is this an upgrade of the same product" check
@@ -33,7 +41,7 @@ AppName=Sakura Input
 ; Kept in step with [workspace.package].version in the repository's
 ; Cargo.toml by hand for now; a release pipeline that reads Cargo.toml is
 ; out of scope for this v0 script.
-AppVersion=0.1.0
+AppVersion={#AppProductVersion}
 AppPublisher=Sakura Input contributors
 AppPublisherURL=https://github.com/tsuyoshi-otake/sakura-input
 DefaultDirName={autopf}\Sakura Input
@@ -61,61 +69,59 @@ OutputDir=out
 OutputBaseFilename=sakura_setup
 Compression=lzma2
 SolidCompression=yes
-UninstallDisplayIcon={app}\sakura_renderer.exe
-; Governs whether an *interactive* run offers to restart immediately once a
-; pending file rename (see restartreplace below) is queued. Left at its
-; default (yes) deliberately: turning it off would mean the DLL swap
-; silently waits for whenever the machine next reboots on its own -- which
-; could be days -- during which the new engine/renderer negotiate with the
-; still-loaded old DLL across a gap far larger than DESIGN 12.3
-; anticipates. Silent installs are unaffected either way; they always
-; honor /NORESTART plus /RESTARTEXITCODE=3010 instead (12.4), which is how
-; scripts -- including scripts/vm-smoke.ps1 -- tell a normal
-; reboot-pending completion apart from an actual failure.
-RestartIfNeededByRun=yes
+UninstallDisplayIcon={app}\sakura_settings.exe
+; The TSF DLL is installed into a unique version directory and the registry is
+; switched to it after the copy. A host process may keep an older version
+; loaded, but the installer never overwrites that mapped image and therefore
+; does not need a reboot to activate the new registration.
+RestartIfNeededByRun=no
 
 [Files]
-; The text service DLL is mapped into every host process that has ever
-; focused a text field for as long as that process keeps running (DESIGN
-; 12.3), so it can be loaded -- and therefore locked -- at the exact moment
-; Setup wants to overwrite it. restartreplace queues the swap with
-; MoveFileEx instead of failing the copy outright, and the reboot that
-; performs it is the *normal* completion of an install or upgrade, not a
-; fallback path. uninsrestartdelete gives uninstall the same treatment:
-; without it, uninstalling on a machine where any host process still has
-; the old DLL open would leave a stray file the uninstaller silently
-; failed to remove.
+; Every runtime payload is copied below a release/build-specific directory.
+; The active version is selected only after all files are present, by the
+; explicit --dll registration command in [Run]. This is the lock-safe part of
+; the upgrade protocol: a host may keep any older TSF image mapped indefinitely
+; while the new image is copied and registered beside it.
 ; .cargo/config.toml pins the workspace to the x86_64-pc-windows-msvc
 ; target (DESIGN 3.2), so release artifacts land under that target's own
 ; subdirectory rather than the bare target\release\ a host-triple-less
 ; build would use.
-Source: "..\target\x86_64-pc-windows-msvc\release\sakura_tsf.dll"; DestDir: "{app}"; Flags: restartreplace uninsrestartdelete
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_tsf.dll"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 
-; The four executables are not memory-mapped into anyone else's process, so
-; there is nothing to queue for them: PrepareToInstall (below) stops the
-; engine before Setup reaches this section, which is what makes a plain
-; overwrite of their .exe files safe (DESIGN 12.3, "the engine is stopped,
-; so nothing maps them"). ignoreversion is stated explicitly rather than
-; relied on as a default: none of these binaries carries Win32
-; version-resource metadata (the dependency policy in DESIGN 3.1 excludes
-; the crates that would embed one), so Inno's normal version comparison has
-; nothing to compare, and this line says so instead of depending on
-; unstated default behaviour.
-Source: "..\target\x86_64-pc-windows-msvc\release\sakura_engine.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\target\x86_64-pc-windows-msvc\release\sakura_renderer.exe"; DestDir: "{app}"; Flags: ignoreversion
+; The engine and renderer are launched from the active version directory by
+; sakura_logon.exe. They are copied beside the DLL, so stopping the old
+; engine is still useful for a clean hand-off but is not required to replace a
+; loaded image. The root executables are stable bootstraps and are kept out of
+; the version directory so tasks and shortcuts do not change on every update.
+; The settings bootstrap dispatches to the versioned payload.
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_engine.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_renderer.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_regtool.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_logon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings_payload.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 
-; No dict\system.dic yet: the shared dictionary image is Phase 2 work
-; (DESIGN 6.1/6.4). Nothing in [Run] or sakura_regtool references one
-; either; adding a line for it here before dictc exists would just fail
-; the build.
+; The engine maps exactly one shared read-only image from this subdirectory.
+; Each version owns its dictionary, so an older engine can finish using its
+; image while the new registration is already active.
+Source: "..\artifacts\release\system.dic"; DestDir: "{#AppVersionedDir}\dict"; Flags: ignoreversion
+
+; Licenses and the Japanese operator guide are payload, not release-page-only
+; links: the notices must remain available offline beside the derived data
+; they govern.
+Source: "..\LICENSE"; DestDir: "{#AppVersionedDir}\docs"; Flags: ignoreversion
+Source: "..\README.md"; DestDir: "{#AppVersionedDir}\docs"; DestName: "README-ja.md"; Flags: ignoreversion
+Source: "..\docs\guide-ja.md"; DestDir: "{#AppVersionedDir}\docs"; Flags: ignoreversion
+Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
+Source: "..\THIRD_PARTY_LICENSES\mozc-dictionary.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
+Source: "..\THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
 
 [Run]
 ; Machine-wide registration (DESIGN 12.1/12.2): COM class in both registry
 ; views, TSF category claims, and the ja-JP language profile, in that order
-; (register_all in crates/sakura-reg/src/lib.rs). --no-wow64 is passed
-; explicitly rather than left to regtool's Wow64::Auto default: Auto probes
+; (register_all in crates/sakura-reg/src/lib.rs). The versioned DLL path and
+; --no-wow64 are passed explicitly rather than left to regtool's defaults:
+; Auto probes
 ; for x86\sakura_tsf.dll beside the executable and silently registers
 ; without one if it is absent, reporting success either way -- the right
 ; behaviour for a product that *might* ship an x86 build and sometimes
@@ -126,11 +132,28 @@ Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings.exe"; DestDir:
 ; purpose rather than a fact regtool happened to discover; the practical
 ; effect either way is the same -- 32-bit host applications have no Sakura
 ; Input entry and fall back to MS-IME.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--register --no-wow64"; Flags: runhidden waituntilterminated; StatusMsg: "Registering the Sakura Input text service..."
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--register --dll ""{#AppVersionedDir}\sakura_tsf.dll"" --no-wow64"; Flags: runhidden waituntilterminated; Check: RegisterActivePayload; StatusMsg: "Registering the Sakura Input text service..."
 
-; Per-user: adds Sakura Input to this account's input list and registers
-; the logon task that starts the engine (user_profile::enable +
-; launcher::register). This must land in the *signed-in* user's HKCU,
+; The resident per-user logon task intentionally runs at LUA so it can talk to
+; normal-integrity applications. Payload deletion needs administrator rights,
+; so a separate hidden SYSTEM task retries it for every logon without showing a
+; UAC prompt or elevating the IME engine itself.
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--install-cleanup-task"; Flags: runhidden waituntilterminated; Check: InstallCleanupTaskOrAbort; StatusMsg: "Installing payload cleanup maintenance..."
+
+; Local crash dumps remain on the machine and are never uploaded. Every Sakura
+; executable shares the per-user dump directory; WER enforces DumpCount=5 for
+; each image and the engine's logon maintenance additionally prunes the shared
+; directory. This command is machine-wide and therefore runs before dropping
+; back to the original user's token below.
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--configure-diagnostics"; Flags: runhidden waituntilterminated; StatusMsg: "Configuring bounded local crash diagnostics..."
+
+; Per-user: adds Sakura Input to this account's input list, ensures the stable
+; logon task exists, and runs that same stable bootstrap once for the current
+; desktop (user_profile::enable + launcher::register_if_missing +
+; sakura_logon.exe). An existing task is preserved across updates; only a
+; missing task is created. Starting the bootstrap here is required because an
+; update stops the old engine before switching payloads, while a logon task does
+; not run again until the next sign-in. This must land in the *signed-in* user's HKCU,
 ; never the elevated installer's -- under "run as different user",
 ; SCCM/Intune, or a SYSTEM deployment, the elevated process's HKCU is a
 ; different hive, and writing there would enable the IME for an account
@@ -149,44 +172,51 @@ Filename: "{app}\sakura_regtool.exe"; Parameters: "--register --no-wow64"; Flags
 ; PLAN.md schedules as an M4 (Phase 5) exit criterion: a task that
 ; re-applies per-user registration at every sign-in until it sticks. Phase
 ; 1's regtool already provides the primitives that stub will need --
-; --enable-profile is safe to call repeatedly, and
-; sakura_reg::launcher::is_registered exists for it to check first -- but
-; the stub itself, and wiring it into this installer, is later work, not
-; v0.
+; --enable-profile is safe to call repeatedly, and the launcher checks whether
+; the stable task already exists before attempting a write. It then waits for
+; sakura_logon.exe and propagates that helper's exit bitmask, so success means
+; the task/profile repair and both process launches completed -- but
+; sakura_logon.exe is now that stub: the task launches it first, it reapplies
+; both the task definition and the input-list entry, then starts the engine and
+; renderer. Every failed step is reflected in its exit bitmask and status file.
 Filename: "{app}\sakura_regtool.exe"; Parameters: "--enable-profile"; Flags: runhidden waituntilterminated runasoriginaluser; StatusMsg: "Adding Sakura Input to your input methods..."
 
 [UninstallRun]
-; Ordering here is a safety property, not a preference (DESIGN 12.2): the
-; language profile -- the thing that lets Windows *try to activate* this
-; text service -- has to be gone before the DLL it points at is deleted
-; from disk, or a host process that activates it in the gap between those
-; two events finds a class with nowhere to load from. Inno already runs
-; every [UninstallRun] entry before any file is removed, which is the
-; ordering this needs; nothing here changes that guarantee.
-;
-; The command that actually executes lives in Check, not in the
-; declarative Filename/Parameters below -- those exist so a reader of this
-; file sees the real ordering and the real command at a glance without
-; having to read Pascal. Inno's Run/UninstallRun mechanism has no native
-; way to stop the surrounding uninstall because an entry's exit code was
-; nonzero: by default a failing entry is just a line in the log, and file
-; removal proceeds regardless. UnregisterOrAbort (see [Code]) runs the
-; command itself, inspects the real exit code, and calls Abort on failure
-; -- which does stop the uninstall before anything is deleted. Continuing
-; past a failed deregistration here is precisely the brick scenario DESIGN
-; 12.2 names: a live profile left pointing at a DLL that file removal is
-; about to erase. Check always returns False afterward so Setup does not
-; then also launch Filename/Parameters itself and run --unregister a
-; second, redundant time.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--unregister"; Flags: runhidden waituntilterminated; Check: UnregisterOrAbort
+; The safety-critical maintenance-task removal and TSF deregistration run from
+; CurUninstallStepChanged(usUninstall), before this section and before file
+; removal. They cannot be expressed as side-effecting Check functions here:
+; Inno evaluates [UninstallRun] Check parameters while installing the uninstall
+; log, which would remove live state during an ordinary upgrade. The event
+; handler inspects both exit codes, compensates by restoring maintenance when
+; deregistration fails, and calls Abort while that call is documented to stop
+; Uninstall.
 
 ; Best effort, and deliberately not gated the way --unregister is above: by
 ; the time execution reaches here the profile is already withdrawn, so a
-; stuck engine process is untidy -- it keeps its files locked until
-; uninsrestartdelete cleans them up at the next reboot -- but it is not the
-; brick scenario. Failing the whole uninstall over a process that would not
-; exit would trade a minor annoyance for a much larger one.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--stop"; Flags: runhidden waituntilterminated
+; stuck engine process is untidy -- it can keep a versioned payload locked
+; after the uninstaller has removed registration -- but it is not the brick
+; scenario. Failing the whole uninstall over a process that would not exit
+; would trade a minor annoyance for a much larger one.
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--stop"; Flags: runhidden waituntilterminated; RunOnceId: "SakuraStop"
+
+; Policy removal is best effort and intentionally does not delete dump files.
+; Those may contain sensitive composition memory and remain subject to the
+; user's explicit /PURGE=1 choice, like every other per-user data file.
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--remove-diagnostics"; Flags: runhidden waituntilterminated; RunOnceId: "SakuraRemoveDiagnostics"
+
+[UninstallDelete]
+; The active version is selected through registration, not through the
+; directory name. Once registration has been removed, deleting every
+; versioned payload is safe when no host process still has one mapped. Locked
+; files are simply left behind for a later retry; no reboot rename is queued.
+Type: filesandordirs; Name: "{app}\versions"
+; Remove payloads from installs made before the side-by-side layout existed.
+Type: files; Name: "{app}\sakura_tsf.dll"
+Type: files; Name: "{app}\sakura_engine.exe"
+Type: files; Name: "{app}\sakura_renderer.exe"
+Type: filesandordirs; Name: "{app}\dict"
+Type: filesandordirs; Name: "{app}\docs"
+Type: filesandordirs; Name: "{app}\licenses"
 
 [Code]
 
@@ -207,6 +237,13 @@ function IsProcessorFeaturePresent(Feature: Cardinal): Boolean;
 
 const
   PF_AVX_INSTRUCTIONS_AVAILABLE = 39;
+  UNINSTALL_TEARDOWN_NOT_STARTED = 0;
+  UNINSTALL_TEARDOWN_RUNNING = 1;
+  UNINSTALL_TEARDOWN_COMPLETE = 2;
+  UNINSTALL_TEARDOWN_FAILED = 3;
+
+var
+  UninstallTeardownState: Integer;
 
 // Runs before Setup shows its first wizard page, i.e. before anything in
 // [Files] is touched. Deliberately checks only AVX, not AVX2 or AVX-512:
@@ -232,48 +269,184 @@ begin
   Result := ExpandConstant('{app}\sakura_regtool.exe');
 end;
 
-// The real work behind the --unregister line in [UninstallRun]; see the
-// comment there for why this lives in a Check function instead of an
-// ordinary Run entry. Returns False unconditionally on the success path
-// too, so Setup never launches the entry's own Filename/Parameters
-// afterward and runs the command twice.
-function UnregisterOrAbort(): Boolean;
+// The [Run] entry below is intentionally declarative for auditability, but
+// Check owns the actual command so a registration failure aborts installation
+// before a new version can be considered active. The DLL path is explicit:
+// the root regtool is a stable bootstrap and must never infer an old root-level
+// payload beside itself.
+procedure CleanupObsoletePayload();
 var
   ResultCode: Integer;
   Launched: Boolean;
 begin
+  // Use the same guarded implementation as the SYSTEM logon task. It resolves
+  // the active generation from COM registration, requires that generation to
+  // be a direct child of a non-reparse-point versions directory, ignores
+  // unrecognized entries, and treats mapped DLLs as a retryable "kept" state.
+  // Keeping this best effort is deliberate: registration has already switched
+  // to the complete new payload, so aborting here could leave an external COM
+  // registration change pointing at files that Inno rolls back.
+  Launched := Exec(RegToolPath(), '--cleanup-payloads', ExpandConstant('{app}'),
+    SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if Launched and (ResultCode = 0) then
+    Log('completed guarded Sakura Input payload cleanup')
+  else
+    Log('guarded payload cleanup was deferred; the SYSTEM logon task will retry');
+end;
+
+function RegisterActivePayload(): Boolean;
+var
+  ResultCode: Integer;
+  Launched: Boolean;
+  Parameters: String;
+begin
+  Parameters := '--register --dll "' +
+    ExpandConstant('{#AppVersionedDir}\sakura_tsf.dll') + '" --no-wow64';
+  Launched := Exec(RegToolPath(), Parameters, ExpandConstant('{app}'), SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  if (not Launched) or (ResultCode <> 0) then
+  begin
+    SuppressibleMsgBox(
+      'Sakura Input could not activate the new text service version ' +
+      ExpandConstant('{#AppProductVersion}') +
+      '. Installation has stopped before the previous registration was ' +
+      'discarded. Check the installer log and try again.',
+      mbCriticalError, MB_OK, IDOK);
+    Abort;
+  end;
+  CleanupObsoletePayload();
+  // The command was already executed above; prevent [Run] from executing it
+  // a second time after Check returns.
+  Result := False;
+end;
+
+function InstallCleanupTaskOrAbort(): Boolean;
+var
+  ResultCode: Integer;
+  Launched: Boolean;
+begin
+  Launched := Exec(RegToolPath(), '--install-cleanup-task',
+    ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if (not Launched) or (ResultCode <> 0) then
+  begin
+    SuppressibleMsgBox(
+      'Sakura Input could not install its automatic payload cleanup task. ' +
+      'Installation has stopped so future updates do not accumulate locked ' +
+      'payload generations without a retry path.',
+      mbCriticalError, MB_OK, IDOK);
+    Abort;
+  end;
+  Log('installed and read-back verified Sakura Input payload cleanup task');
+  Result := False;
+end;
+
+function RestoreCleanupTask(): Boolean;
+var
+  ResultCode: Integer;
+  Launched: Boolean;
+begin
+  Launched := Exec(RegToolPath(), '--install-cleanup-task',
+    ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := Launched and (ResultCode = 0);
+  if Result then
+    Log('restored Sakura Input payload cleanup task after aborted uninstall')
+  else
+    Log('could not restore Sakura Input payload cleanup task after aborted uninstall');
+end;
+
+// Performs the irreversible uninstall boundary while every installed binary
+// still exists. Each branch reaches an explicit terminal state: success permits
+// normal file removal, and every failure restores the maintenance retry when
+// possible before Abort prevents file removal.
+procedure TeardownRegistrationOrAbort();
+var
+  ResultCode: Integer;
+  Launched: Boolean;
+  CleanupRestored: Boolean;
+  FailureText: String;
+begin
+  if UninstallTeardownState = UNINSTALL_TEARDOWN_COMPLETE then
+    exit;
+  if UninstallTeardownState <> UNINSTALL_TEARDOWN_NOT_STARTED then
+  begin
+    UninstallTeardownState := UNINSTALL_TEARDOWN_FAILED;
+    SuppressibleMsgBox(
+      'Sakura Input detected an incomplete uninstall teardown. No program ' +
+      'files were removed. Run Uninstall again from an elevated account.',
+      mbCriticalError, MB_OK, IDOK);
+    Abort;
+  end;
+
+  UninstallTeardownState := UNINSTALL_TEARDOWN_RUNNING;
+  if not FileExists(RegToolPath()) then
+  begin
+    UninstallTeardownState := UNINSTALL_TEARDOWN_FAILED;
+    SuppressibleMsgBox(
+      'Sakura Input cannot safely unregister because sakura_regtool.exe is ' +
+      'missing. No additional program files were removed. Repair or reinstall ' +
+      'Sakura Input, then run Uninstall again.',
+      mbCriticalError, MB_OK, IDOK);
+    Abort;
+  end;
+
+  Launched := Exec(RegToolPath(), '--remove-cleanup-task',
+    ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if (not Launched) or (ResultCode <> 0) then
+  begin
+    CleanupRestored := RestoreCleanupTask();
+    UninstallTeardownState := UNINSTALL_TEARDOWN_FAILED;
+    FailureText :=
+      'Sakura Input could not remove its automatic payload cleanup task. ' +
+      'Uninstallation stopped before text-service registration or program ' +
+      'files were removed.';
+    if not CleanupRestored then
+      FailureText := FailureText +
+        ' The maintenance task also could not be restored; reinstall Sakura ' +
+        'Input before retrying Uninstall.';
+    SuppressibleMsgBox(FailureText, mbCriticalError, MB_OK, IDOK);
+    Abort;
+  end;
+  Log('removed Sakura Input payload cleanup task for uninstall');
+
   Launched := Exec(RegToolPath(), '--unregister', ExpandConstant('{app}'),
     SW_HIDE, ewWaitUntilTerminated, ResultCode);
   if (not Launched) or (ResultCode <> 0) then
   begin
+    CleanupRestored := RestoreCleanupTask();
+    UninstallTeardownState := UNINSTALL_TEARDOWN_FAILED;
     // SuppressibleMsgBox, not MsgBox: a silent uninstall (/SUPPRESSMSGBOXES,
     // DESIGN 12.4) must never block on a dialog nobody is there to click.
     // Under that flag this returns immediately with the default answer
     // instead of hanging the uninstaller forever.
-    SuppressibleMsgBox(
+    FailureText :=
       'Sakura Input could not remove its text service registration ' +
       '(sakura_regtool.exe --unregister failed). Uninstall has stopped ' +
       'here on purpose: deleting the program files now would leave ' +
       'Windows pointing at a text service whose files no longer exist, ' +
       'which breaks typing in every application until it is fixed by ' +
       'hand. Run sakura_regtool.exe --unregister from an elevated ' +
-      'command prompt, then try Uninstall again.',
-      mbCriticalError, MB_OK, IDOK);
+      'command prompt, then try Uninstall again.';
+    if not CleanupRestored then
+      FailureText := FailureText +
+        ' The payload cleanup task could not be restored either; reinstall ' +
+        'Sakura Input before retrying Uninstall.';
+    SuppressibleMsgBox(FailureText, mbCriticalError, MB_OK, IDOK);
     // Stops the uninstall outright -- rolling back is not the point here
     // (nothing has been removed yet); refusing to go any further is.
     Abort;
   end;
-  Result := False;
+  Log('removed Sakura Input text service registration for uninstall');
+  UninstallTeardownState := UNINSTALL_TEARDOWN_COMPLETE;
 end;
 
-// Runs before any file in [Files] is copied, on both a fresh install and
-// an upgrade. On an upgrade the previous engine and renderer are still
-// running; stopping them here is what makes the plain (non-restartreplace)
-// overwrite of their .exe files safe, and it is why the DLL swap that
-// follows can rely on nothing new mapping the old file while it happens
-// (DESIGN 12.3, "the engine is stopped, so nothing maps them"). A fresh
-// install has no previous regtool.exe to call yet, which is not an error
-// -- there is simply nothing to stop.
+// Runs before any file in [Files] is copied, on both a fresh install and an
+// upgrade. Stopping the old engine makes the process hand-off deterministic;
+// it is not used to make a loaded TSF DLL overwriteable because the new DLL is
+// in a different directory. Both scheduled tasks deliberately remain
+// registered throughout an upgrade: their stable root action paths stay valid,
+// and preserving them ensures a canceled or failed installer cannot remove
+// either normal startup or the next-logon payload-cleanup retry. A fresh install
+// has no previous regtool.exe to call yet, which is not an error.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
@@ -283,11 +456,10 @@ begin
   ExistingRegTool := RegToolPath();
   if FileExists(ExistingRegTool) then
   begin
-    // A failure to stop is not fatal to the upgrade: restartreplace still
-    // queues the DLL swap for the next reboot regardless of whether the
-    // engine exited cleanly, and refusing to proceed here would turn one
-    // stuck process into a stuck installer. Recorded in /LOG rather than
-    // acted on further.
+    // A failure to stop is not fatal to the upgrade: the new version is
+    // side-by-side and can be copied even while the old engine is alive.
+    // Recorded in /LOG rather than acted on further; the old process will keep
+    // using its already-selected version until it exits.
     Exec(ExistingRegTool, '--stop', ExpandConstant('{app}'), SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
   end;
@@ -306,6 +478,9 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
+  if CurUninstallStep = usUninstall then
+    TeardownRegistrationOrAbort();
+
   // Runs after Setup's own file and registry removal (usPostUninstall),
   // not interleaved with [UninstallRun]: a purge failure here must never
   // be mistaken for the registration teardown above having failed, and

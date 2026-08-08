@@ -18,7 +18,7 @@
 //! correlation ids a late reply to a timed-out request would be
 //! mis-attributed to the next one).
 
-use crate::types::{ErrorCode, InputScope, KeyInput, Mode, Output};
+use crate::types::{CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output, ScreenRect};
 use crate::wire::{Reader, Sink, VecSink};
 use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
 
@@ -37,6 +37,14 @@ pub(crate) const REQ_DELETE_SESSION: u16 = 0x0007;
 pub(crate) const REQ_PING: u16 = 0x0008;
 pub(crate) const REQ_SHUTDOWN: u16 = 0x0009;
 pub(crate) const REQ_WATCH_UI: u16 = 0x000A;
+pub(crate) const REQ_SET_UI_PLACEMENT: u16 = 0x000B;
+pub(crate) const REQ_RECONVERT: u16 = 0x000C;
+pub(crate) const REQ_CLEAR_LEARNING: u16 = 0x000D;
+pub(crate) const REQ_CLEAR_INPUT_HISTORY: u16 = 0x000E;
+pub(crate) const REQ_FLUSH_INPUT_HISTORY: u16 = 0x000F;
+pub(crate) const REQ_INPUT_HISTORY_STATS: u16 = 0x0010;
+pub(crate) const REQ_UNDO_COMMIT: u16 = 0x0011;
+pub(crate) const REQ_PROBE_KEY: u16 = 0x0012;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -48,6 +56,7 @@ pub(crate) const RES_OUTPUT: u16 = 0x8003;
 pub(crate) const RES_PONG: u16 = 0x8004;
 pub(crate) const RES_OK: u16 = 0x8005;
 pub(crate) const RES_UI: u16 = 0x8006;
+pub(crate) const RES_INPUT_HISTORY_STATS: u16 = 0x8007;
 pub(crate) const RES_ERROR: u16 = 0x80FF;
 
 /// A message sent from a client (the TSF DLL) to the engine.
@@ -60,10 +69,49 @@ pub enum Request {
     CreateSession { process_name: String },
     /// Delivers one key event to a session.
     SendKey { session: SessionId, key: KeyInput },
+    /// Evaluates one key against a throwaway session state after applying the
+    /// supplied host scope. Unlike `SetInputScope`, this never changes the
+    /// live session or the link's applied-scope cache. When `fresh_context` is
+    /// true, the probe starts from the same resolved profile defaults as a new
+    /// connection after a TSF context replacement, rather than cloning the
+    /// old document's session state.
+    ProbeKey {
+        session: SessionId,
+        scope: InputScope,
+        fresh_context: bool,
+        key: KeyInput,
+    },
     /// Commits the current composition.
     Commit { session: SessionId },
     /// Reverts the current composition (cancels it).
     Revert { session: SessionId },
+    /// Completes the two-phase exact-text commit undo transaction. The TSF
+    /// side sends `Applied` only after the host deleted the verified text;
+    /// `Rejected` means validation failed before mutation, and `Unknown`
+    /// means a host call may have changed the document; the TSF caller retires
+    /// the engine link if it cannot confirm settlement.
+    UndoCommit {
+        session: SessionId,
+        outcome: UndoCommitOutcome,
+    },
+    /// Builds conversion candidates for already committed text. `preview`
+    /// serves `ITfFnReconversion::GetReconversion` without mutating the live
+    /// session; `false` starts the real composition.
+    Reconvert {
+        session: SessionId,
+        text: String,
+        preview: bool,
+    },
+    /// Atomically clears the engine's live and durable learning state. This
+    /// administration request is used by the per-user settings process and
+    /// deliberately carries no editing session.
+    ClearLearning,
+    /// Clears the opt-in developer input-history store.
+    ClearInputHistory,
+    /// Flushes queued developer input-history records to durable storage.
+    FlushInputHistory,
+    /// Reads live developer input-history drop and persistence counters.
+    InputHistoryStats,
     /// Tells the engine the input scope of the focused field.
     SetInputScope {
         session: SessionId,
@@ -94,6 +142,40 @@ pub enum Request {
     /// `since` of 0 means "answer immediately with whatever is current",
     /// which is what a renderer that just connected wants.
     WatchUi { since: Revision },
+    /// Updates the renderer-owned candidate window's caret rectangle and
+    /// whether TSF's UI-element manager permits the renderer to show it.
+    ///
+    /// This request is separate from keystrokes so layout-change callbacks
+    /// can move the popup without mutating the conversion session.
+    SetUiPlacement {
+        session: SessionId,
+        anchor: Option<ScreenRect>,
+        renderer_visible: bool,
+    },
+}
+
+/// Terminal outcome for an exact-text commit undo transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+pub enum UndoCommitOutcome {
+    Applied = 1,
+    Rejected = 2,
+    Unknown = 3,
+}
+
+impl UndoCommitOutcome {
+    fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u16(self as u16)
+    }
+
+    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u16()? {
+            1 => Ok(Self::Applied),
+            2 => Ok(Self::Rejected),
+            3 => Ok(Self::Unknown),
+            _ => Err(Error::BadEnum),
+        }
+    }
 }
 
 /// A message sent from the engine back to a client.
@@ -112,6 +194,15 @@ pub enum Response {
     Pong,
     /// A generic success acknowledgement (e.g. for `Commit`/`Revert`).
     Ok,
+    /// Live counters for the developer input-history writer.
+    InputHistoryStats {
+        active: bool,
+        dropped_events: u64,
+        persistence_failures: u64,
+        excluded_unclassified_events: u64,
+        excluded_sensitive_events: u64,
+        excluded_test_only_events: u64,
+    },
     /// Answers `Request::WatchUi` with what the renderer should draw.
     Ui(UiState),
     /// The request could not be fulfilled.
@@ -127,7 +218,7 @@ pub enum Response {
 /// mode of whichever session most recently changed one, which is the same
 /// thing as "the mode of the field the user is typing in" for as long as
 /// only one field can have the caret.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiState {
     /// Increments on every change. A renderer passes the last one it saw
     /// back as `Request::WatchUi { since }`; the engine answers when this
@@ -139,6 +230,16 @@ pub struct UiState {
     /// The mode to show, or `None` when no field is composing and the
     /// indicator should be hidden.
     pub mode: Option<Mode>,
+    /// Candidates for the renderer-owned popup, or `None` when conversion is
+    /// not active. UI-less TSF hosts read the same list through
+    /// `ITfCandidateListUIElement` in the DLL.
+    pub candidates: Option<CandidateList>,
+    /// Screen rectangle of the active composition. The renderer anchors its
+    /// popup below this rectangle and hides it until one is available.
+    pub anchor: Option<ScreenRect>,
+    /// `false` when TSF's UI-element manager elected to render candidates
+    /// itself. The external renderer must then stay hidden.
+    pub renderer_visible: bool,
     /// The engine is shutting down deliberately, and whoever is watching
     /// should shut down too rather than treat the closing pipe as a crash.
     ///
@@ -239,13 +340,21 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::Hello { .. } => REQ_HELLO,
         Request::CreateSession { .. } => REQ_CREATE_SESSION,
         Request::SendKey { .. } => REQ_SEND_KEY,
+        Request::ProbeKey { .. } => REQ_PROBE_KEY,
         Request::Commit { .. } => REQ_COMMIT,
         Request::Revert { .. } => REQ_REVERT,
+        Request::UndoCommit { .. } => REQ_UNDO_COMMIT,
         Request::SetInputScope { .. } => REQ_SET_INPUT_SCOPE,
         Request::DeleteSession { .. } => REQ_DELETE_SESSION,
         Request::Ping => REQ_PING,
         Request::Shutdown => REQ_SHUTDOWN,
         Request::WatchUi { .. } => REQ_WATCH_UI,
+        Request::SetUiPlacement { .. } => REQ_SET_UI_PLACEMENT,
+        Request::Reconvert { .. } => REQ_RECONVERT,
+        Request::ClearLearning => REQ_CLEAR_LEARNING,
+        Request::ClearInputHistory => REQ_CLEAR_INPUT_HISTORY,
+        Request::FlushInputHistory => REQ_FLUSH_INPUT_HISTORY,
+        Request::InputHistoryStats => REQ_INPUT_HISTORY_STATS,
     }
 }
 
@@ -257,8 +366,32 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
             w.write_u64(*session)?;
             key.encode(w)
         }
+        Request::ProbeKey {
+            session,
+            scope,
+            fresh_context,
+            key,
+        } => {
+            w.write_u64(*session)?;
+            scope.encode(w)?;
+            w.write_bool(*fresh_context)?;
+            key.encode(w)
+        }
         Request::Commit { session } => w.write_u64(*session),
         Request::Revert { session } => w.write_u64(*session),
+        Request::UndoCommit { session, outcome } => {
+            w.write_u64(*session)?;
+            outcome.encode(w)
+        }
+        Request::Reconvert {
+            session,
+            text,
+            preview,
+        } => {
+            w.write_u64(*session)?;
+            w.write_str(text)?;
+            w.write_bool(*preview)
+        }
         Request::SetInputScope { session, scope } => {
             w.write_u64(*session)?;
             scope.encode(w)
@@ -266,7 +399,20 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
         Request::DeleteSession { session } => w.write_u64(*session),
         Request::Ping => Ok(()),
         Request::Shutdown => Ok(()),
+        Request::ClearLearning => Ok(()),
+        Request::ClearInputHistory => Ok(()),
+        Request::FlushInputHistory => Ok(()),
+        Request::InputHistoryStats => Ok(()),
         Request::WatchUi { since } => w.write_u64(*since),
+        Request::SetUiPlacement {
+            session,
+            anchor,
+            renderer_visible,
+        } => {
+            w.write_u64(*session)?;
+            w.write_option(anchor, |w, rect| rect.encode(w))?;
+            w.write_bool(*renderer_visible)
+        }
     }
 }
 
@@ -277,6 +423,7 @@ fn response_msg_type(res: &Response) -> u16 {
         Response::Output(_) => RES_OUTPUT,
         Response::Pong => RES_PONG,
         Response::Ok => RES_OK,
+        Response::InputHistoryStats { .. } => RES_INPUT_HISTORY_STATS,
         Response::Ui(_) => RES_UI,
         Response::Error(_) => RES_ERROR,
     }
@@ -297,9 +444,27 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
         Response::Output(out) => out.encode(w),
         Response::Pong => Ok(()),
         Response::Ok => Ok(()),
+        Response::InputHistoryStats {
+            active,
+            dropped_events,
+            persistence_failures,
+            excluded_unclassified_events,
+            excluded_sensitive_events,
+            excluded_test_only_events,
+        } => {
+            w.write_bool(*active)?;
+            w.write_u64(*dropped_events)?;
+            w.write_u64(*persistence_failures)?;
+            w.write_u64(*excluded_unclassified_events)?;
+            w.write_u64(*excluded_sensitive_events)?;
+            w.write_u64(*excluded_test_only_events)
+        }
         Response::Ui(ui) => {
             w.write_u64(ui.revision)?;
             w.write_option(&ui.mode, |w, mode| mode.encode(w))?;
+            w.write_option(&ui.candidates, |w, candidates| candidates.encode(w))?;
+            w.write_option(&ui.anchor, |w, rect| rect.encode(w))?;
+            w.write_bool(ui.renderer_visible)?;
             w.write_bool(ui.stopping)
         }
         Response::Error(code) => code.encode(w),
@@ -346,11 +511,32 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
             let key = KeyInput::decode(&mut r)?;
             Request::SendKey { session, key }
         }
+        REQ_PROBE_KEY => {
+            let session = r.read_u64()?;
+            let scope = InputScope::decode(&mut r)?;
+            let fresh_context = r.read_bool()?;
+            let key = KeyInput::decode(&mut r)?;
+            Request::ProbeKey {
+                session,
+                scope,
+                fresh_context,
+                key,
+            }
+        }
         REQ_COMMIT => Request::Commit {
             session: r.read_u64()?,
         },
         REQ_REVERT => Request::Revert {
             session: r.read_u64()?,
+        },
+        REQ_UNDO_COMMIT => Request::UndoCommit {
+            session: r.read_u64()?,
+            outcome: UndoCommitOutcome::decode(&mut r)?,
+        },
+        REQ_RECONVERT => Request::Reconvert {
+            session: r.read_u64()?,
+            text: r.read_str()?.to_string(),
+            preview: r.read_bool()?,
         },
         REQ_SET_INPUT_SCOPE => {
             let session = r.read_u64()?;
@@ -362,8 +548,17 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
         },
         REQ_PING => Request::Ping,
         REQ_SHUTDOWN => Request::Shutdown,
+        REQ_CLEAR_LEARNING => Request::ClearLearning,
+        REQ_CLEAR_INPUT_HISTORY => Request::ClearInputHistory,
+        REQ_FLUSH_INPUT_HISTORY => Request::FlushInputHistory,
+        REQ_INPUT_HISTORY_STATS => Request::InputHistoryStats,
         REQ_WATCH_UI => Request::WatchUi {
             since: r.read_u64()?,
+        },
+        REQ_SET_UI_PLACEMENT => Request::SetUiPlacement {
+            session: r.read_u64()?,
+            anchor: r.read_option(ScreenRect::decode)?,
+            renderer_visible: r.read_bool()?,
         },
         other => return Err(Error::BadMsgType(other)),
     };
@@ -397,13 +592,27 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         RES_OUTPUT => Response::Output(Output::decode(&mut r)?),
         RES_PONG => Response::Pong,
         RES_OK => Response::Ok,
+        RES_INPUT_HISTORY_STATS => Response::InputHistoryStats {
+            active: r.read_bool()?,
+            dropped_events: r.read_u64()?,
+            persistence_failures: r.read_u64()?,
+            excluded_unclassified_events: r.read_u64()?,
+            excluded_sensitive_events: r.read_u64()?,
+            excluded_test_only_events: r.read_u64()?,
+        },
         RES_UI => {
             let revision = r.read_u64()?;
             let mode = r.read_option(Mode::decode)?;
+            let candidates = r.read_option(CandidateList::decode)?;
+            let anchor = r.read_option(ScreenRect::decode)?;
+            let renderer_visible = r.read_bool()?;
             let stopping = r.read_bool()?;
             Response::Ui(UiState {
                 revision,
                 mode,
+                candidates,
+                anchor,
+                renderer_visible,
                 stopping,
             })
         }

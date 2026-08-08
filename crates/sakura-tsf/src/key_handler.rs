@@ -58,6 +58,7 @@ const NAMED_KEYS: &[(VIRTUAL_KEY, KeyCode)] = &[
     (VK_CONVERT, KeyCode::Henkan),
     (VK_NONCONVERT, KeyCode::Muhenkan),
     (VK_KANA, KeyCode::KanaMode),
+    (VK_CAPITAL, KeyCode::CapsLock),
     // 半角/全角. The key reports itself as `VK_KANJI` through TSF on the
     // Japanese layout; the OEM aliases below are what some keyboards and
     // remapping utilities send for the same physical key.

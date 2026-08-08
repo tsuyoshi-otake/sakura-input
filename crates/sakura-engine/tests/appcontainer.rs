@@ -167,6 +167,10 @@ const CHILD_TIMEOUT: Duration = Duration::from_secs(30);
             --nocapture"]
 fn the_pipe_is_reachable_from_a_real_appcontainer_token() {
     let mut engine = Engine::running();
+    if !engine.compatible() {
+        eprintln!("skipping AppContainer probe: an older engine owns the well-known pipe");
+        return;
+    }
     // Blocks until the engine is actually serving, so the child never races
     // a pipe that has not been created yet.
     let _ready = engine.client();

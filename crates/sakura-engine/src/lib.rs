@@ -24,7 +24,14 @@
 
 #![cfg(windows)]
 
+pub mod configuration;
+pub mod dictionary;
 pub mod dispatch;
+pub mod event_log;
+pub mod input_history;
+pub mod learning;
+pub mod prediction;
 pub mod server;
 pub mod session;
 pub mod ui;
+pub mod user_dictionary;

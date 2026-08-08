@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "phase": 4,
+  "responsible_human": "",
+  "sakura_used_for_primary_work": false,
+  "comparison_imes": [
+    "Sakura Input",
+    ""
+  ],
+  "period_start": "YYYY-MM-DD",
+  "period_end": "YYYY-MM-DD",
+  "work_days": [
+    {
+      "date": "YYYY-MM-DD",
+      "ime": "Sakura Input",
+      "evidence": [
+        "path or URL to a contemporaneous work artifact"
+      ],
+      "notes": ""
+    }
+  ],
+  "preference_statement": "",
+  "open_p0_p1": null,
+  "diagnostics": {
+    "path": "",
+    "sha256": "",
+    "steady_state_ipc_timeouts": null
+  },
+  "recorded_at_utc": ""
+}

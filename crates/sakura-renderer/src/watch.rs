@@ -63,7 +63,7 @@ const RETRY_CEILING: Duration = Duration::from_secs(30);
 const RELAUNCH_GAP: Duration = Duration::from_secs(5);
 
 /// What the watcher tells the UI thread.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Signal {
     /// New state to draw.
     Ui(UiState),
@@ -95,16 +95,20 @@ fn run(sink: &impl Fn(Signal)) {
     loop {
         match Client::connect(PATIENT_CONNECT) {
             Ok(client) => {
-                backoff = RETRY_FLOOR;
-                if follow(client, sink) == Ending::Deliberate {
+                let ending = follow(client, sink);
+                if ending == Ending::Deliberate {
                     sink(Signal::Ended);
                     return;
                 }
-                // The connection dropped without a farewell. Fall through
-                // to the reconnect below rather than relaunching straight
-                // away: an engine that is merely busy or restarting is
-                // reachable again in milliseconds, and only a connect that
-                // keeps failing means it is really gone.
+                // A connection that reached a valid Hello was healthy before
+                // it dropped, so restart at the floor. A peer that repeatedly
+                // rejects the protocol is still reachable, however: retaining
+                // the accumulated delay prevents an immediate reconnect storm
+                // while an installer finishes replacing mixed versions.
+                let (delay, next) = retry_schedule(ending, backoff)
+                    .expect("a non-deliberate ending has a retry schedule");
+                sleep(delay);
+                backoff = next;
             }
             Err(_) => {
                 if !relaunch(&mut launched) {
@@ -112,7 +116,7 @@ fn run(sink: &impl Fn(Signal)) {
                     return;
                 }
                 sleep(backoff);
-                backoff = (backoff * 2).min(RETRY_CEILING);
+                backoff = grow_backoff(backoff);
             }
         }
     }
@@ -123,8 +127,24 @@ fn run(sink: &impl Fn(Signal)) {
 enum Ending {
     /// The engine said it was stopping.
     Deliberate,
-    /// The pipe broke, or the engine stopped making sense.
-    Lost,
+    /// A valid protocol session existed, then its pipe broke or stopped making
+    /// sense. The next retry may start from the floor.
+    ConnectionLost,
+    /// The peer never accepted this build's protocol. Repeated attempts keep
+    /// their accumulated backoff until a valid handshake is observed.
+    ProtocolRejected,
+}
+
+fn grow_backoff(delay: Duration) -> Duration {
+    (delay * 2).min(RETRY_CEILING)
+}
+
+fn retry_schedule(ending: Ending, current: Duration) -> Option<(Duration, Duration)> {
+    match ending {
+        Ending::Deliberate => None,
+        Ending::ConnectionLost => Some((RETRY_FLOOR, grow_backoff(RETRY_FLOOR))),
+        Ending::ProtocolRejected => Some((current, grow_backoff(current))),
+    }
 }
 
 /// Handshakes, then reports every state the engine publishes until the
@@ -143,7 +163,7 @@ fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
         // backoff will slow the retries down, and if the mismatch is
         // because an upgrade replaced the engine mid-session, the next
         // connection is to the new one and simply works.
-        _ => return Ending::Lost,
+        _ => return Ending::ProtocolRejected,
     }
 
     // Nobody's revision, so the first call is answered immediately with
@@ -156,12 +176,18 @@ fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
                 if state.stopping {
                     return Ending::Deliberate;
                 }
-                since = state.revision;
-                sink(Signal::Ui(state));
+                // Heartbeat replies deliberately repeat a revision. They
+                // prove liveness but are not redraw requests: forwarding one
+                // would make the transient mode indicator flash every five
+                // seconds while the user is idle.
+                if state.revision != since {
+                    since = state.revision;
+                    sink(Signal::Ui(state));
+                }
             }
-            Ok(_) => return Ending::Lost,
-            Err(Fault::Disconnected) => return Ending::Lost,
-            Err(_) => return Ending::Lost,
+            Ok(_) => return Ending::ConnectionLost,
+            Err(Fault::Disconnected) => return Ending::ConnectionLost,
+            Err(_) => return Ending::ConnectionLost,
         }
     }
 }
@@ -252,9 +278,27 @@ mod tests {
     fn backoff_climbs_but_stops_at_the_ceiling() {
         let mut backoff = RETRY_FLOOR;
         for _ in 0..20 {
-            backoff = (backoff * 2).min(RETRY_CEILING);
+            backoff = grow_backoff(backoff);
         }
         assert_eq!(backoff, RETRY_CEILING);
+    }
+
+    #[test]
+    fn protocol_rejection_keeps_exponential_backoff_instead_of_resetting_it() {
+        let current = Duration::from_secs(4);
+        assert_eq!(
+            retry_schedule(Ending::ProtocolRejected, current),
+            Some((current, Duration::from_secs(8)))
+        );
+    }
+
+    #[test]
+    fn a_previously_healthy_connection_restarts_from_the_retry_floor() {
+        assert_eq!(
+            retry_schedule(Ending::ConnectionLost, RETRY_CEILING),
+            Some((RETRY_FLOOR, grow_backoff(RETRY_FLOOR)))
+        );
+        assert_eq!(retry_schedule(Ending::Deliberate, RETRY_CEILING), None);
     }
 
     /// The watchdog only ever launches a sibling of itself. Anything else

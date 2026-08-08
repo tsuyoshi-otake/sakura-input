@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "phase": 1,
+  "responsible_human": "",
+  "host": {
+    "machine": "",
+    "windows_build": "",
+    "notes": ""
+  },
+  "started_at_utc": "",
+  "completed_at_utc": "",
+  "rows": [
+    {
+      "id": "notepad-typing",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "windows-terminal-typing",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "chrome-typing",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "width-policy",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "engine-crash-recovery",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "focus-loss",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "elevated-host",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    },
+    {
+      "id": "install-uninstall",
+      "status": "pending",
+      "observation": "",
+      "evidence": { "path": "", "sha256": "" }
+    }
+  ]
+}

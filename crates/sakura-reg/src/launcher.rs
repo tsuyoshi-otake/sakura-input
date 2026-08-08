@@ -278,6 +278,29 @@ pub fn register(programs: &[&Path]) -> Result<()> {
     Ok(())
 }
 
+/// Ensures the stable per-user logon task exists without rewriting it on
+/// every install or logon.
+///
+/// The task launches the root `sakura_logon.exe` bootstrap. That path is
+/// deliberately stable across side-by-side payload updates, so an existing
+/// task already points at the current bootstrap and does not need an update.
+/// Avoiding a gratuitous `TASK_CREATE_OR_UPDATE` matters for older installs
+/// whose task was created by an already-elevated Setup process: Windows may
+/// allow the interactive user to read and run that task while denying them
+/// permission to replace its definition. A missing task is still repaired by
+/// [`register`], and any real registration failure remains observable to the
+/// caller.
+pub fn register_if_missing(programs: &[&Path]) -> Result<()> {
+    if programs.is_empty() {
+        return Err(Error::from_hresult(E_INVALIDARG));
+    }
+    if is_registered() {
+        Ok(())
+    } else {
+        register(programs)
+    }
+}
+
 /// Removes the logon task for the calling user.
 ///
 /// A task that was never registered is not an error: uninstall runs this
@@ -306,9 +329,10 @@ pub fn unregister() -> Result<()> {
 /// Whether the logon task is registered for the calling user.
 ///
 /// The logon stub uses this to self-repair after a Windows feature update
-/// (DESIGN 12.2), so "cannot tell" must read as "not registered" — a
-/// redundant re-registration is harmless, a missed one leaves the account
-/// without an IME.
+/// (DESIGN 12.2). "Cannot tell" reads as "not registered" so
+/// [`register_if_missing`] makes one concrete registration attempt and returns
+/// its real error; silently treating an inspection failure as success would
+/// leave the account without an IME.
 pub fn is_registered() -> bool {
     let Ok(service) = connect() else {
         return false;
