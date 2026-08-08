@@ -177,7 +177,7 @@ impl Client {
         let id = self.next_id;
         self.next_id = self.next_id.wrapping_add(1);
 
-        encode_request(request, id, &mut self.request).map_err(Fault::Protocol)?;
+        encode_request(request, id, &mut self.request).map_err(Fault::Encode)?;
         // Borrowed out of `self` so the buffer is not aliased by the
         // `&mut self` the I/O helpers take.
         let frame = core::mem::take(&mut self.request);

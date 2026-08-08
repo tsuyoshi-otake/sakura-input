@@ -199,6 +199,7 @@ fn fault(action: &str, error: Fault) -> io::Error {
         Fault::Timeout => io::ErrorKind::TimedOut,
         Fault::Disconnected => io::ErrorKind::BrokenPipe,
         Fault::Protocol(_) | Fault::Desynchronized => io::ErrorKind::InvalidData,
+        Fault::Encode(_) => io::ErrorKind::InvalidInput,
         Fault::Os(_) => io::ErrorKind::Other,
     };
     io::Error::new(kind, format!("{action}: {error}"))
