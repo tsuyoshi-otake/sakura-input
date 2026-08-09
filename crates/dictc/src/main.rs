@@ -4,18 +4,21 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use dictc::{
-    compile, merge_entries, parse_connection, parse_entries, parse_mozc_connection,
-    parse_mozc_entries, SourceEntry, MAX_DICTIONARY_IMAGE_BYTES,
+    compile, merge_entries, parse_category_entries, parse_connection, parse_entries,
+    parse_mozc_connection, parse_mozc_entries, SourceEntry, MAX_DICTIONARY_IMAGE_BYTES,
 };
 
 #[derive(Clone, Copy)]
 enum EntryFormat {
     Sakura,
+    Category,
     Mozc,
 }
 
 #[derive(Clone, Copy)]
 enum EntryLayer {
+    /// Low-priority, additive source.  A matching system or overlay edge wins.
+    Supplement,
     System,
     Overlay,
 }
@@ -40,6 +43,13 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         match argument.to_str() {
+            Some("--supplement") => {
+                entry_paths.push((
+                    next_path(&mut args, &argument)?,
+                    EntryFormat::Sakura,
+                    EntryLayer::Supplement,
+                ));
+            }
             Some("--entries" | "--system") => {
                 entry_paths.push((
                     next_path(&mut args, &argument)?,
@@ -52,6 +62,13 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                     next_path(&mut args, &argument)?,
                     EntryFormat::Sakura,
                     EntryLayer::Overlay,
+                ));
+            }
+            Some("--category") => {
+                entry_paths.push((
+                    next_path(&mut args, &argument)?,
+                    EntryFormat::Category,
+                    EntryLayer::System,
                 ));
             }
             Some("--mozc-system") => {
@@ -78,8 +95,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
             Some("--output") => output_path = Some(next_path(&mut args, &argument)?),
             Some("--help" | "-h") => {
                 println!(
-                    "Usage: dictc (--system FILE | --mozc-system FILE)... \
-                     (--connection FILE | --mozc-connection FILE) --output FILE"
+                    "Usage: dictc (--category FILE | --system FILE | --supplement FILE | --mozc-system FILE)... \
+                      (--connection FILE | --mozc-connection FILE) --output FILE"
                 );
                 return Ok(());
             }
@@ -88,27 +105,39 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         }
     }
     if entry_paths.is_empty() {
-        return Err("at least one --system/--overlay/--entries file is required".to_string());
+        return Err(
+            "at least one --category/--system/--supplement/--overlay/--entries file is required"
+                .to_string(),
+        );
     }
     let connection_path = connection_path.ok_or("--connection is required")?;
     let output_path = output_path.ok_or("--output is required")?;
 
+    let mut supplement_entries = Vec::<SourceEntry>::new();
     let mut system_entries = Vec::<SourceEntry>::new();
     let mut overlay_entries = Vec::<SourceEntry>::new();
     for (path, entry_format, layer) in entry_paths {
         let text = read_utf8(&path)?;
         let parsed = match entry_format {
             EntryFormat::Sakura => parse_entries(&path.display().to_string(), &text),
+            EntryFormat::Category => parse_category_entries(&path.display().to_string(), &text),
             EntryFormat::Mozc => parse_mozc_entries(&path.display().to_string(), &text),
         }
         .map_err(|error| error.to_string())?;
         match layer {
+            EntryLayer::Supplement => supplement_entries.extend(parsed),
             EntryLayer::System => system_entries.extend(parsed),
             EntryLayer::Overlay => overlay_entries.extend(parsed),
         }
     }
-    let entries =
-        merge_entries(system_entries, overlay_entries).map_err(|error| error.to_string())?;
+    // Preserve the current Mozc system layer on duplicate edges, then permit
+    // curated overlays to keep their existing precedence over both layers.
+    // This lets a large supplemental lexicon improve recall without replacing
+    // tuned core costs or requiring its source files to pre-filter every base
+    // dictionary identity.
+    let entries = merge_entries(supplement_entries, system_entries)
+        .and_then(|merged| merge_entries(merged, overlay_entries))
+        .map_err(|error| error.to_string())?;
     let (connection_path, connection_format) = connection_path;
     let connection_text = read_utf8(&connection_path)?;
     let connection = match connection_format {

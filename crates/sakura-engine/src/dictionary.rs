@@ -22,8 +22,9 @@ use windows::Win32::System::Memory::{
     CreateFileMappingW, MapViewOfFile, UnmapViewOfFile, FILE_MAP_READ, PAGE_READONLY,
 };
 
-/// Release gate for the complete system image, including the IT overlay.
-pub const MAX_DICTIONARY_IMAGE_BYTES: usize = 35 * 1024 * 1024;
+/// Release gate for the complete Sakura system image, including all fourteen
+/// canonical categories. The image remains a single read-only mapping.
+pub const MAX_DICTIONARY_IMAGE_BYTES: usize = 128 * 1024 * 1024;
 
 /// Two conversions may run in parallel while keeping the reusable arenas
 /// within the engine's private-working-set budget.

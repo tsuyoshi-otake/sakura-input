@@ -42,9 +42,12 @@ use windows::Win32::UI::TextServices::{
     ITfDisplayAttributeInfo, ITfDisplayAttributeProvider, ITfDisplayAttributeProvider_Impl,
     ITfFnReconversion, ITfFnReconversion_Impl, ITfFunctionProvider, ITfFunctionProvider_Impl,
     ITfFunction_Impl, ITfInputScope, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr,
-    ITfRange, ITfSource, ITfSourceSingle, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
+    ITfLangBarItem, ITfLangBarItemButton, ITfLangBarItemButton_Impl, ITfLangBarItemMgr,
+    ITfLangBarItemSink, ITfLangBarItem_Impl, ITfMenu, ITfRange, ITfSource, ITfSourceSingle,
+    ITfSource_Impl, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
     ITfTextInputProcessor_Impl, ITfTextLayoutSink, ITfTextLayoutSink_Impl, ITfThreadMgr,
-    InputScope as TfInputScope, TfLayoutCode, GUID_PROP_INPUTSCOPE, TF_PRESERVEDKEY,
+    InputScope as TfInputScope, TfLBIClick, TfLayoutCode, GUID_LBI_INPUTMODE, GUID_PROP_INPUTSCOPE,
+    TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_MENU, TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_PRESERVEDKEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, PostMessageW,
@@ -56,8 +59,8 @@ use windows_core::{
 };
 
 use sakura_proto::{
-    CandidateKind, CandidateList as EngineCandidateList, InputScope, KeyCode, KeyInput, Output,
-    Preedit, ScreenRect, UndoCommitOutcome, MAX_PREEDIT_BYTES,
+    CandidateKind, CandidateList as EngineCandidateList, InputScope, KeyCode, KeyInput, Mode,
+    Output, Preedit, ScreenRect, UndoCommitOutcome, MAX_PREEDIT_BYTES,
 };
 use sakura_reg::{CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DESCRIPTION};
 
@@ -68,6 +71,7 @@ use crate::edit_session;
 use crate::engine::{Answer, Engine};
 use crate::exports::{on_object_created, on_object_destroyed};
 use crate::key_handler;
+use crate::mode_item::{self, MenuCommand};
 use crate::reconversion;
 use crate::write_coordinator::{
     AdmissionError, CancelReason, Completion, ContextId, Reservation, TerminalOutcome, Ticket,
@@ -87,6 +91,8 @@ struct Activation {
     thread_mgr: ITfThreadMgr,
     keystroke_mgr: ITfKeystrokeMgr,
     function_source: ITfSourceSingle,
+    lang_bar_mgr: ITfLangBarItemMgr,
+    lang_bar_item: ITfLangBarItem,
     client_id: u32,
     preserved_key: &'static PreservedKeyRegistration,
 }
@@ -304,6 +310,7 @@ struct PendingWrite {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct UnknownUndoTerminalization<T> {
     completions: Vec<Completion<T>>,
     has_undo: bool,
@@ -760,7 +767,10 @@ fn run_candidate_teardown_host_calls<Subscription, Controller>(
     ITfDisplayAttributeProvider,
     ITfTextLayoutSink,
     ITfFunctionProvider,
-    ITfFnReconversion
+    ITfFnReconversion,
+    ITfLangBarItem,
+    ITfLangBarItemButton,
+    ITfSource
 )]
 #[derive(Debug)]
 pub struct TextService {
@@ -797,6 +807,11 @@ pub struct TextService {
     undo_terminalization: Cell<Option<UndoCommitOutcome>>,
     writes: RefCell<WriteCoordinator<PendingWrite>>,
     engine: RefCell<Engine>,
+    /// The TSF input-mode item is deliberately visible only while a document
+    /// caret belongs to this service. `Cell` keeps focus loss authoritative
+    /// even if the shell re-enters a language-bar callback.
+    focus_foreground: Cell<bool>,
+    mode_item: mode_item::ModeItemState,
 }
 
 impl TextService {
@@ -816,6 +831,8 @@ impl TextService {
             undo_terminalization: Cell::new(None),
             writes: RefCell::new(WriteCoordinator::new(DEFAULT_WRITE_CAPACITY)),
             engine: RefCell::new(Engine::new()),
+            focus_foreground: Cell::new(false),
+            mode_item: mode_item::ModeItemState::default(),
         }
     }
 
@@ -1825,6 +1842,7 @@ impl TextService {
         client_id: u32,
         key_sink: &ITfKeyEventSink,
         function_provider: &ITfFunctionProvider,
+        lang_bar_item: &ITfLangBarItem,
     ) -> Result<()> {
         // TSF should never activate an already-active service, but if it does,
         // silently overwriting the old activation would strand a key sink on a
@@ -1894,14 +1912,60 @@ impl TextService {
             return preserve_result.and(function_result).and(key_result);
         }
 
+        // Windows 11 renders the first `GUID_LBI_INPUTMODE` item as the IME's
+        // focused input-mode indicator. Register it with the same activation
+        // transaction as every other TSF callback registration so it cannot
+        // outlive this service or become a permanent notification icon.
+        let lang_bar_mgr: ITfLangBarItemMgr = match thread_mgr.cast() {
+            Ok(manager) => manager,
+            Err(error) => {
+                let preserved_key_result = unpreserve_registered_key(&keystroke_mgr, preserved_key);
+                // SAFETY: both interfaces performed their matching registrations
+                // earlier in this activation transaction.
+                let function_result = unsafe {
+                    function_source.UnadviseSingleSink(client_id, &ITfFunctionProvider::IID)
+                };
+                // SAFETY: this manager issued the key-sink registration above.
+                let key_result = unsafe { keystroke_mgr.UnadviseKeyEventSink(client_id) };
+                let manager_result: Result<()> = Err(error);
+                return manager_result
+                    .and(preserved_key_result)
+                    .and(function_result)
+                    .and(key_result);
+            }
+        };
+        // SAFETY: `lang_bar_item` is this live text service and stays retained
+        // by `Activation` until this exact manager removes it at detach.
+        if let Err(error) = unsafe { lang_bar_mgr.AddItem(lang_bar_item) } {
+            // Defensively request removal even on an error: a shell-side
+            // partial registration must never become a permanent stale item.
+            let _ = unsafe { lang_bar_mgr.RemoveItem(lang_bar_item) };
+            let preserved_key_result = unpreserve_registered_key(&keystroke_mgr, preserved_key);
+            // SAFETY: both interfaces performed their matching registrations
+            // earlier in this activation transaction.
+            let function_result =
+                unsafe { function_source.UnadviseSingleSink(client_id, &ITfFunctionProvider::IID) };
+            // SAFETY: this manager issued the key-sink registration above.
+            let key_result = unsafe { keystroke_mgr.UnadviseKeyEventSink(client_id) };
+            let item_result: Result<()> = Err(error);
+            return item_result
+                .and(preserved_key_result)
+                .and(function_result)
+                .and(key_result);
+        }
+
         let mut slot = match self.activation.try_borrow_mut() {
             Ok(slot) => slot,
             Err(_) => {
-                // All three external registrations have a terminal owner even
+                // All four external registrations have a terminal owner even
                 // if re-entrancy prevents publication. PreserveKey succeeded,
                 // so its exact UnpreserveKey must run before this branch can
                 // return; function-provider and key-sink rollback still run
                 // even if that first cleanup reports an error.
+                // SAFETY: this is the exact manager/item pair that just
+                // completed `AddItem` above.
+                let language_bar_result = unsafe { lang_bar_mgr.RemoveItem(lang_bar_item) };
+                self.mode_item.reset();
                 let preserved_key_result = unpreserve_registered_key(&keystroke_mgr, preserved_key);
                 // SAFETY: these calls reverse the registrations made above for
                 // this client id; no RefCell borrow is held across either call.
@@ -1914,6 +1978,7 @@ impl TextService {
                 let key_result = unsafe { keystroke_mgr.UnadviseKeyEventSink(client_id) };
                 let reentrancy_result: Result<()> = Err(reentrancy());
                 return reentrancy_result
+                    .and(language_bar_result)
                     .and(preserved_key_result)
                     .and(function_result)
                     .and(key_result);
@@ -1923,6 +1988,8 @@ impl TextService {
             thread_mgr: thread_mgr.clone(),
             keystroke_mgr,
             function_source,
+            lang_bar_mgr,
+            lang_bar_item: lang_bar_item.clone(),
             client_id,
             preserved_key,
         });
@@ -1930,6 +1997,11 @@ impl TextService {
     }
 
     fn detach(&self) -> Result<()> {
+        // The focused indicator has a stricter lifetime than the background
+        // engine connection: focus loss/deactivation hides it immediately,
+        // before any deferred composition settlement can re-enter TSF.
+        self.focus_foreground.set(false);
+        self.mode_item.hide();
         self.deactivate_write_journal();
         // Deactivation is the last chance to drop the composition handle. The
         // document is going away with it, so there is nothing to end — holding
@@ -1956,6 +2028,7 @@ impl TextService {
             }
         };
         let Some(activation) = previous else {
+            self.mode_item.reset();
             return deferred_window_result.and(composition_result);
         };
 
@@ -1963,6 +2036,13 @@ impl TextService {
         // otherwise one failed cleanup would strand another registration for
         // the host thread. Retaining the exact manager from activation avoids
         // a fallible cast becoming an early terminal before key cleanup.
+        // SAFETY: this exact manager added this exact item in `attach`.
+        let language_bar_result = unsafe {
+            activation
+                .lang_bar_mgr
+                .RemoveItem(&activation.lang_bar_item)
+        };
+        self.mode_item.reset();
         let preserved_key_result =
             unpreserve_registered_key(&activation.keystroke_mgr, activation.preserved_key);
         // SAFETY: the retained function source issued this registration for
@@ -1981,6 +2061,7 @@ impl TextService {
         };
         deferred_window_result
             .and(composition_result)
+            .and(language_bar_result)
             .and(preserved_key_result)
             .and(function_result)
             .and(key_result)
@@ -1993,6 +2074,96 @@ impl TextService {
         if let Ok(mut engine) = self.engine.try_borrow_mut() {
             engine.warm_up();
         }
+        self.sync_mode_item();
+    }
+
+    /// Returns the context currently owning the thread-manager focus. This is
+    /// intentionally resolved afresh for a language-bar menu invocation: a
+    /// menu can remain open while an application changes documents.
+    fn focused_context(&self) -> Result<ITfContext> {
+        let manager = self.thread_manager()?;
+        // SAFETY: the manager is retained for this active service thread; TSF
+        // returns independently owned document/context interfaces.
+        unsafe {
+            let document = manager.GetFocus()?;
+            document.GetTop()
+        }
+    }
+
+    /// Sends only a cached, already-resolved engine status to the shell. A
+    /// missing link is not guessed: the item stays hidden until the active
+    /// session has identified its real input mode.
+    fn sync_mode_item(&self) {
+        if !self.focus_foreground.get() {
+            self.mode_item.hide();
+            return;
+        }
+        let status = self
+            .engine
+            .try_borrow()
+            .ok()
+            .and_then(|engine| engine.input_mode_status());
+        match status {
+            Some(status) => self.mode_item.update(
+                true,
+                Some(status.mode),
+                status.can_change,
+                status.can_restore,
+            ),
+            None => self.mode_item.hide(),
+        }
+    }
+
+    /// Updates the engine's fail-closed scope classification before exposing
+    /// a focused input-mode item or accepting a language-bar menu operation.
+    fn refresh_mode_item_for_focus(&self) {
+        if !self.focus_foreground.get() {
+            self.mode_item.hide();
+            return;
+        }
+        match self.focused_context() {
+            Ok(context) => {
+                let _ = self.publish_input_scope(&context);
+            }
+            Err(_) => self.mode_item.hide(),
+        }
+    }
+
+    /// Executes a menu command only for the still-focused, positively
+    /// classified ordinary-text session. No TSF document edit session is
+    /// requested here; the engine rejects a composing session before changing
+    /// any persistent mode, so a menu click cannot commit or rewrite text.
+    fn select_mode_menu_command(&self, command: MenuCommand) {
+        if !self.focus_foreground.get() {
+            return;
+        }
+        self.refresh_mode_item_for_focus();
+        if !self.focus_foreground.get() {
+            return;
+        }
+
+        if let Ok(mut engine) = self.engine.try_borrow_mut() {
+            let status = engine.input_mode_status();
+            let can_change = status.is_some_and(|status| status.can_change);
+            match command {
+                MenuCommand::RestoreMode if status.is_some_and(|status| status.can_restore) => {
+                    let _ = engine.restore_input_mode();
+                }
+                MenuCommand::SetMode(mode) if can_change => {
+                    let _ = engine.set_input_mode(mode);
+                }
+                MenuCommand::ToggleIme if can_change => {
+                    let target = if status.is_some_and(|status| status.mode == Mode::Direct) {
+                        Mode::Hiragana
+                    } else {
+                        Mode::Direct
+                    };
+                    let _ = engine.set_input_mode(target);
+                }
+                _ => {}
+            }
+        }
+        self.sync_mode_item();
     }
 
     /// Closes the connection, which is also what tells the engine to forget
@@ -2003,6 +2174,7 @@ impl TextService {
         if let Ok(mut engine) = self.engine.try_borrow_mut() {
             *engine = Engine::new();
         }
+        self.sync_mode_item();
     }
 
     /// Puts one question to the engine.
@@ -2012,7 +2184,10 @@ impl TextService {
     /// to re-enter this object the moment it returns.
     fn ask(&self, key: sakura_proto::KeyInput) -> Result<Answer> {
         let mut engine = self.engine.try_borrow_mut().map_err(|_| reentrancy())?;
-        Ok(engine.send_key(key))
+        let answer = engine.send_key(key);
+        drop(engine);
+        self.sync_mode_item();
+        Ok(answer)
     }
 
     fn ask_probe(
@@ -2057,7 +2232,10 @@ impl TextService {
     fn publish_input_scope(&self, context: &ITfContext) -> Result<bool> {
         let scope = self.read_input_scope(context)?;
         let mut engine = self.engine.try_borrow_mut().map_err(|_| reentrancy())?;
-        Ok(engine.set_input_scope(scope))
+        let published = engine.set_input_scope(scope);
+        drop(engine);
+        self.sync_mode_item();
+        Ok(published)
     }
 
     fn ask_reconversion(&self, text: String, preview: bool) -> Result<Answer> {
@@ -4280,8 +4458,15 @@ impl ITfTextInputProcessorEx_Impl for TextService_Impl {
         let thread_mgr = ptim.ok()?;
         let key_sink: ITfKeyEventSink = self.to_interface();
         let function_provider: ITfFunctionProvider = self.to_interface();
+        let lang_bar_item: ITfLangBarItem = self.to_interface();
         let service = self.get_impl();
-        service.attach(thread_mgr, tid, &key_sink, &function_provider)?;
+        service.attach(
+            thread_mgr,
+            tid,
+            &key_sink,
+            &function_provider,
+            &lang_bar_item,
+        )?;
         if let Err(error) = service.create_deferred_window(self as *const TextService_Impl) {
             let _ = service.detach();
             return Err(error);
@@ -4295,6 +4480,124 @@ impl ITfTextInputProcessorEx_Impl for TextService_Impl {
         // point at which keys start being delivered correctly.
         service.warm_up();
         Ok(())
+    }
+}
+
+impl ITfLangBarItem_Impl for TextService_Impl {
+    fn GetInfo(&self, pinfo: *mut TF_LANGBARITEMINFO) -> Result<()> {
+        if pinfo.is_null() {
+            return Err(Error::from_hresult(E_POINTER));
+        }
+        let mut info = TF_LANGBARITEMINFO {
+            clsidService: CLSID_SAKURA_TSF,
+            guidItem: GUID_LBI_INPUTMODE,
+            dwStyle: TF_LBI_STYLE_BTN_MENU | TF_LBI_STYLE_HIDDENSTATUSCONTROL,
+            ulSort: 0,
+            ..Default::default()
+        };
+        for (slot, unit) in info
+            .szDescription
+            .iter_mut()
+            .zip("Sakura Input".encode_utf16())
+        {
+            *slot = unit;
+        }
+        // SAFETY: the caller supplied a non-null output pointer that is valid
+        // for this COM call, and `info` is fully initialized.
+        unsafe { pinfo.write(info) };
+        Ok(())
+    }
+
+    fn GetStatus(&self) -> Result<u32> {
+        Ok(self.get_impl().mode_item.status())
+    }
+
+    fn Show(&self, fshow: BOOL) -> Result<()> {
+        let service = self.get_impl();
+        // The TSF shell can request a status refresh, but it must not turn a
+        // background service into a persistent taskbar/tray indicator.
+        if fshow.as_bool() && service.focus_foreground.get() {
+            service.refresh_mode_item_for_focus();
+        } else {
+            service.mode_item.hide();
+        }
+        Ok(())
+    }
+
+    fn GetTooltipString(&self) -> Result<BSTR> {
+        let state = self.get_impl().mode_item.snapshot();
+        let text = match state.mode {
+            Some(mode) => format!("Sakura Input — {}", mode_item::description(mode)),
+            None => "Sakura Input".to_owned(),
+        };
+        Ok(BSTR::from(text))
+    }
+}
+
+impl ITfLangBarItemButton_Impl for TextService_Impl {
+    fn OnClick(
+        &self,
+        _click: TfLBIClick,
+        _point: &windows::Win32::Foundation::POINT,
+        _area: *const windows::Win32::Foundation::RECT,
+    ) -> Result<()> {
+        // This is a menu button. Its left-click semantics deliberately remain
+        // a no-op until Sakura has a document-safe command to expose here.
+        Ok(())
+    }
+
+    fn InitMenu(&self, pmenu: Ref<'_, ITfMenu>) -> Result<()> {
+        let menu = pmenu.ok()?;
+        let service = self.get_impl();
+        let state = if service.focus_foreground.get() {
+            service.mode_item.snapshot()
+        } else {
+            mode_item::Snapshot {
+                visible: false,
+                mode: None,
+                can_change: false,
+                can_restore: false,
+            }
+        };
+        mode_item::populate_menu(menu, state)
+    }
+
+    fn OnMenuSelect(&self, wid: u32) -> Result<()> {
+        if let Some(command) = mode_item::menu_command(wid) {
+            self.get_impl().select_mode_menu_command(command);
+        }
+        Ok(())
+    }
+
+    fn GetIcon(&self) -> Result<windows::Win32::UI::WindowsAndMessaging::HICON> {
+        let state = self.get_impl().mode_item.snapshot();
+        let mode = state.mode.ok_or_else(|| Error::from_hresult(E_FAIL))?;
+        mode_item::icon_for(mode)
+    }
+
+    fn GetText(&self) -> Result<BSTR> {
+        let state = self.get_impl().mode_item.snapshot();
+        let text = state.mode.map(mode_item::label).unwrap_or("Sakura Input");
+        Ok(BSTR::from(text))
+    }
+}
+
+impl ITfSource_Impl for TextService_Impl {
+    fn AdviseSink(&self, riid: *const GUID, punk: Ref<'_, IUnknown>) -> Result<u32> {
+        if riid.is_null() {
+            return Err(Error::from_hresult(E_POINTER));
+        }
+        // SAFETY: `riid` was checked non-null and is readable for this COM
+        // call. The language bar only supplies its `ITfLangBarItemSink` here.
+        if unsafe { *riid } != ITfLangBarItemSink::IID {
+            return Err(mode_item::cannot_connect());
+        }
+        let sink: ITfLangBarItemSink = punk.ok()?.cast()?;
+        self.get_impl().mode_item.advise_sink(sink)
+    }
+
+    fn UnadviseSink(&self, cookie: u32) -> Result<()> {
+        self.get_impl().mode_item.unadvise_sink(cookie)
     }
 }
 
@@ -4479,11 +4782,19 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
     /// ends our claim on them (PLAN.md Phase 1, focus-loss criterion).
     fn OnSetFocus(&self, fforeground: BOOL) -> Result<()> {
         if fforeground.as_bool() {
-            self.get_impl().resume_after_focus_gain();
+            let service = self.get_impl();
+            service.resume_after_focus_gain();
+            service.focus_foreground.set(true);
+            service.refresh_mode_item_for_focus();
             return Ok(());
         }
 
         let service = self.get_impl();
+        // The OS indicator follows the caret, not the engine lifetime. Hide it
+        // before scheduling focus-loss finalization, which can run after a
+        // different document has already acquired focus.
+        service.focus_foreground.set(false);
+        service.mode_item.hide();
         service.invalidate_for_focus_change();
         service.queue_focus_loss()
     }
@@ -4654,8 +4965,15 @@ mod tests {
             let (id, request) = decode_request(payload).expect("decode CreateSession");
             assert!(matches!(request, Request::CreateSession { .. }));
             reply.clear();
-            encode_response(&Response::SessionCreated { session: 1 }, id, &mut reply)
-                .expect("encode CreateSession");
+            encode_response(
+                &Response::SessionCreated {
+                    session: 1,
+                    mode: Mode::Hiragana,
+                },
+                id,
+                &mut reply,
+            )
+            .expect("encode CreateSession");
             server.write_all(&reply).expect("write CreateSession");
 
             let payload = server.read_frame(&mut buffer).expect("UndoCommit request");
@@ -4706,8 +5024,15 @@ mod tests {
             let (id, request) = decode_request(payload).expect("decode CreateSession");
             assert!(matches!(request, Request::CreateSession { .. }));
             reply.clear();
-            encode_response(&Response::SessionCreated { session: 1 }, id, &mut reply)
-                .expect("encode CreateSession");
+            encode_response(
+                &Response::SessionCreated {
+                    session: 1,
+                    mode: Mode::Hiragana,
+                },
+                id,
+                &mut reply,
+            )
+            .expect("encode CreateSession");
             server.write_all(&reply).expect("write CreateSession");
 
             let payload = server.read_frame(&mut buffer).expect("UndoCommit request");
@@ -4774,8 +5099,15 @@ mod tests {
             let (id, request) = decode_request(payload).expect("decode CreateSession");
             assert!(matches!(request, Request::CreateSession { .. }));
             reply.clear();
-            encode_response(&Response::SessionCreated { session: 1 }, id, &mut reply)
-                .expect("encode CreateSession");
+            encode_response(
+                &Response::SessionCreated {
+                    session: 1,
+                    mode: Mode::Hiragana,
+                },
+                id,
+                &mut reply,
+            )
+            .expect("encode CreateSession");
             server.write_all(&reply).expect("write CreateSession");
 
             // A local encode failure never reaches the wire (`client.rs`
@@ -4883,8 +5215,15 @@ mod tests {
             let (id, request) = decode_request(payload).expect("decode CreateSession");
             assert!(matches!(request, Request::CreateSession { .. }));
             reply.clear();
-            encode_response(&Response::SessionCreated { session: 1 }, id, &mut reply)
-                .expect("encode CreateSession");
+            encode_response(
+                &Response::SessionCreated {
+                    session: 1,
+                    mode: Mode::Hiragana,
+                },
+                id,
+                &mut reply,
+            )
+            .expect("encode CreateSession");
             server.write_all(&reply).expect("write CreateSession");
 
             // The oversized `Reconvert` never reaches the wire -- encoding

@@ -220,14 +220,14 @@ Type: filesandordirs; Name: "{app}\licenses"
 
 [Code]
 
-// DESIGN 3.2: the whole workspace is compiled with -C target-feature=+avx
-// (.cargo/config.toml), so 128- and 256-bit vector code in sakura-core's
-// width normalizer needs no run-time guard. That is a floor, not a branch
-// -- which means a CPU without AVX does not get a graceful fallback, it
-// gets an illegal-instruction fault the first time any process loads
+// DESIGN 3.2: the whole workspace is compiled with
+// -C target-feature=+avx,+ssse3 (.cargo/config.toml). The 128-bit width
+// scanner uses SSSE3 `pshufb`, so AVX + SSSE3 is a compatibility floor, not a
+// branch. A CPU missing either does not get a graceful fallback: it gets an
+// illegal-instruction fault the first time any process loads
 // sakura_tsf.dll. That would present to the user as their applications
-// crashing, with nothing pointing at the IME as the cause. AVX shipped in
-// Sandy Bridge (2011) / Bulldozer (2011) and is present on every CPU
+// crashing, with nothing pointing at the IME as the cause. AVX and SSSE3
+// shipped before the Windows 11 hardware baseline and are present on every CPU
 // Microsoft supports for Windows 11, so this check should never actually
 // fire on a machine that also passes the MinVersion gate above -- it
 // exists for the narrow gap between "Windows 11 is running" and "on this
@@ -236,6 +236,7 @@ function IsProcessorFeaturePresent(Feature: Cardinal): Boolean;
   external 'IsProcessorFeaturePresent@kernel32.dll stdcall';
 
 const
+  PF_SSSE3_INSTRUCTIONS_AVAILABLE = 36;
   PF_AVX_INSTRUCTIONS_AVAILABLE = 39;
   UNINSTALL_TEARDOWN_NOT_STARTED = 0;
   UNINSTALL_TEARDOWN_RUNNING = 1;
@@ -246,21 +247,20 @@ var
   UninstallTeardownState: Integer;
 
 // Runs before Setup shows its first wizard page, i.e. before anything in
-// [Files] is touched. Deliberately checks only AVX, not AVX2 or AVX-512:
-// those tiers are resolved at run time by sakura-core's CPU-dispatch code
-// (DESIGN 3.2) precisely so that machines without them still work, and
-// gating the installer on either would refuse perfectly capable hardware
-// to save the engine one already-cheap indirect call.
+// [Files] is touched. Deliberately checks the full AVX+SSSE3 compatibility
+// floor, but not AVX2 or AVX-512: those concrete strategies are resolved at
+// startup by sakura-core's CPU-dispatch code (DESIGN 3.2), precisely so that
+// machines without them still work.
 function InitializeSetup(): Boolean;
 begin
-  Result := IsProcessorFeaturePresent(PF_AVX_INSTRUCTIONS_AVAILABLE);
+  Result := IsProcessorFeaturePresent(PF_AVX_INSTRUCTIONS_AVAILABLE) and
+            IsProcessorFeaturePresent(PF_SSSE3_INSTRUCTIONS_AVAILABLE);
   if not Result then
     MsgBox(
-      'This CPU does not support AVX, which Sakura Input requires ' +
-      '(Intel Sandy Bridge / AMD Bulldozer, 2011, or later). Installing ' +
-      'anyway would let the text service crash every application that ' +
-      'loads it instead of failing here, cleanly, before anything is ' +
-      'copied.',
+      'This CPU does not support the AVX + SSSE3 baseline required by ' +
+      'Sakura Input (Intel Sandy Bridge / AMD Bulldozer, 2011, or later). ' +
+      'Installing anyway would let the text service crash every application ' +
+      'that loads it instead of failing here, cleanly, before anything is copied.',
       mbCriticalError, MB_OK);
 end;
 

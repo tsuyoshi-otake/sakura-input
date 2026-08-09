@@ -323,6 +323,7 @@ impl Dispatcher {
             Request::FlushInputHistory => self.flush_input_history(),
             Request::InputHistoryStats => self.input_history_stats(),
             Request::SetInputScope { session, scope } => self.set_input_scope(*session, *scope),
+            Request::SetMode { session, mode } => self.set_mode(*session, *mode),
             Request::DeleteSession { session } => self.delete_session(*session),
             Request::Ping => Reply::Message(Response::Pong),
             Request::Shutdown => Reply::Shutdown(Response::Ok),
@@ -346,6 +347,7 @@ impl Dispatcher {
             | Request::Reconvert { session, .. }
             | Request::Revert { session }
             | Request::SetInputScope { session, .. }
+            | Request::SetMode { session, .. }
             | Request::DeleteSession { session } => *session,
             Request::Hello { .. }
             | Request::CreateSession { .. }
@@ -406,7 +408,12 @@ impl Dispatcher {
                     created.set_history_session_id(history_session_id);
                     created.apply_context_preferences(resolved);
                 }
-                Reply::Message(Response::SessionCreated { session })
+                let mode = self
+                    .sessions
+                    .get(session)
+                    .map(Session::mode)
+                    .unwrap_or(Mode::Hiragana);
+                Reply::Message(Response::SessionCreated { session, mode })
             }
             Err(code) => Reply::Message(Response::Error(code)),
         }
@@ -502,6 +509,29 @@ impl Dispatcher {
             self.prediction_cache.clear_if_session(id);
         }
         Reply::Message(Response::Ok)
+    }
+
+    /// Applies an explicit input-mode choice from the focused TSF input-mode
+    /// item. Unlike a keyboard mode action, this path never commits or edits a
+    /// document: a menu callback has no edit-session transaction to settle.
+    ///
+    /// A mode menu is deliberately fail-closed until TSF has classified the
+    /// field as ordinary text. That prevents a menu click immediately after
+    /// focus enters a password/URL/e-mail/digits field from reviving kana
+    /// composition before the normal key path publishes its scope.
+    fn set_mode(&mut self, id: SessionId, mode: Mode) -> Reply {
+        let Some(session) = self.sessions.get_mut(id) else {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if session.undo_pending()
+            || session.is_composing()
+            || !session.scope_classified()
+            || scope_is_sensitive(session.scope())
+        {
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
+        session.mode = mode;
+        Reply::Message(Response::InputMode { mode })
     }
 
     fn send_key(&mut self, id: SessionId, key: &KeyInput, out: &mut OutputBuf) -> Reply {
@@ -1481,10 +1511,20 @@ fn raw_chars_for_emitted(table: &Table, raw: &str, expected: &str, target: usize
             matched,
             mismatch: false,
         };
-        if table
-            .feed(&mut state, raw_bytes[index] as char, &mut sink)
-            .is_err()
-        {
+        // Mirror `feed_character`'s direct decimal path during provenance
+        // replay. `expected` proves that the live state chose the literal
+        // output; without it, a user-customized table remains authoritative.
+        let literal_decimal_period = raw_bytes[index] == b'.'
+            && index > 0
+            && raw_bytes[index - 1].is_ascii_digit()
+            && state.is_empty()
+            && expected.chars().nth(matched) == Some('.');
+        let feed_result = if literal_decimal_period {
+            sink.push('.')
+        } else {
+            table.feed(&mut state, raw_bytes[index] as char, &mut sink)
+        };
+        if feed_result.is_err() {
             // This exact prefix already produced a bounded `preedit` once,
             // live; if replaying it here still overflows the sink, stop at
             // what has been read rather than guess past it.
@@ -1537,7 +1577,8 @@ impl TextSink for MatchSink<'_> {
             if self.mismatch {
                 continue;
             }
-            if self.expected.chars().nth(self.matched) == Some(ch) {
+            let expected = self.expected.chars().nth(self.matched);
+            if expected == Some(ch) {
                 self.matched += 1;
             } else {
                 self.mismatch = true;
@@ -1672,6 +1713,37 @@ fn next_raw_boundary(table: &Table, session: &Session) -> usize {
     boundary.max(pending_end)
 }
 
+/// Returns whether the character immediately before the caret is a literal
+/// half-width digit, both in the visible preedit and its raw keystroke
+/// provenance. Requiring an empty pending-romaji state prevents `1n.` from
+/// being treated as a decimal merely because the unresolved `n` has not yet
+/// appeared in `preedit`.
+fn ascii_digit_immediately_before_cursor(session: &Session, table: &Table) -> bool {
+    if !session.romaji.is_empty() {
+        return false;
+    }
+    let cursor_at = session
+        .preedit
+        .byte_index(usize::from(session.cursor))
+        .unwrap_or(session.preedit.len());
+    let previous_preedit_is_digit = session
+        .preedit
+        .as_str()
+        .get(..cursor_at)
+        .and_then(|prefix| prefix.chars().next_back())
+        .is_some_and(|character| character.is_ascii_digit());
+    if !previous_preedit_is_digit {
+        return false;
+    }
+    let raw_boundary = raw_byte_offset_for_preedit_cursor(table, session);
+    session
+        .raw_input
+        .as_str()
+        .get(..raw_boundary)
+        .and_then(|prefix| prefix.as_bytes().last())
+        .is_some_and(|byte| byte.is_ascii_digit())
+}
+
 /// The byte range in `raw_input` for the single resolved kana character at
 /// `preedit[cursor]` -- the raw keystrokes Delete-forward must remove.
 ///
@@ -1757,9 +1829,13 @@ fn feed_character(
     // atomic: on `Err(Overflow)`, `session` is left exactly as it was on
     // entry, instead of holding a `raw_input`/`romaji` advanced past a
     // `preedit` that never received the matching text.
+    // The Shift on the first ASCII letter chooses the temporary English
+    // composition. It stays chosen for following ASCII input even after Shift
+    // is released, and ends only when the composition ends or receives a
+    // non-ASCII character.
     let shifted_ascii = if starts_shifted_ascii {
         true
-    } else if session.shifted_ascii && (!shifted || !character.is_ascii()) {
+    } else if session.shifted_ascii && !character.is_ascii() {
         false
     } else {
         session.shifted_ascii
@@ -1778,7 +1854,15 @@ fn feed_character(
     }
     let mut romaji = session.romaji.clone();
     scratch.clear();
-    table.feed(&mut romaji, character, scratch)?;
+    if character == '.' && ascii_digit_immediately_before_cursor(session, table) {
+        // A half-width number owns its decimal separator. Flush defensively
+        // before inserting the literal period so this direct path has the
+        // same ordering and terminal-state guarantee as `Table::feed`.
+        table.flush(&mut romaji, scratch)?;
+        scratch.push('.')?;
+    } else {
+        table.feed(&mut romaji, character, scratch)?;
+    }
     let mut preedit = session.preedit.clone();
     let mut cursor = session.cursor;
     if !scratch.is_empty() {
@@ -2572,7 +2656,7 @@ fn begin_conversion(
     }
     let shifted_ascii_dictionary_hit = prepare_shifted_ascii_reading(session, conversion)?;
     if session.shifted_ascii && !shifted_ascii_dictionary_hit {
-        // An all-Shift sequence is an explicit English composition. Never
+        // A Shift-started ASCII sequence is an explicit English composition. Never
         // reinterpret an unknown word as kana merely because the romaji table
         // can produce a phonetic fallback; keep the raw text available for
         // Enter/commit instead.
@@ -2627,8 +2711,8 @@ fn begin_conversion(
     Ok(())
 }
 
-/// Uses the physical all-Shift ASCII sequence as the dictionary reading when
-/// the dictionary proves that it has a technical entry for that sequence.
+/// Uses the Shift-started ASCII sequence as the dictionary reading when the
+/// dictionary proves that it has a technical entry for that sequence.
 ///
 /// The conversion core always supplies a synthetic reading fallback and also
 /// generates identifier-case variants, so merely checking for a non-empty
@@ -3790,7 +3874,7 @@ mod tests {
             },
             out,
         ) {
-            Reply::Message(Response::SessionCreated { session }) => session,
+            Reply::Message(Response::SessionCreated { session, .. }) => session,
             other => panic!("expected SessionCreated, got {other:?}"),
         }
     }
@@ -6012,12 +6096,12 @@ mod tests {
     }
 
     #[test]
-    fn typing_konnichiha_produces_the_hiragana_preedit() {
+    fn typing_konnnichiha_produces_the_hiragana_preedit() {
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
 
-        type_word(&mut dispatcher, session, "konnichiha", &mut out);
+        type_word(&mut dispatcher, session, "konnnichiha", &mut out);
 
         assert_eq!(out.preedit_text(), "こんにちは");
     }
@@ -6027,7 +6111,7 @@ mod tests {
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
-        type_word(&mut dispatcher, session, "konnichiha", &mut out);
+        type_word(&mut dispatcher, session, "konnnichiha", &mut out);
 
         let reply = dispatcher.dispatch(
             &Request::SendKey {
@@ -6041,6 +6125,113 @@ mod tests {
         assert!(out.consumed);
         assert_eq!(out.commit_text(), Some("こんにちは"));
         assert_eq!(out.preedit_text(), "");
+    }
+
+    #[test]
+    fn decimal_period_stays_ascii_after_a_half_width_digit() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        type_word(&mut dispatcher, session, "1.", &mut out);
+
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.preedit.as_str(), "1.");
+        assert_eq!(live.raw_input.as_str(), "1.");
+        assert_eq!(out.preedit_text(), "1.");
+        assert_eq!(raw_preedit(&mut dispatcher, session), "1.");
+
+        type_word(&mut dispatcher, session, "23", &mut out);
+        assert_eq!(out.preedit_text(), "1.23");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("1.23"));
+
+        // Provenance replay remains correct with a literal decimal `.`:
+        // deleting digits and typing another one must retain the same
+        // raw/preedit alignment instead of inserting at the old `。` byte
+        // boundary.
+        let editing = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, editing, "1.23", &mut out);
+        for expected in ["1.2", "1."] {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session: editing,
+                    key: named_key(KeyCode::Backspace),
+                },
+                &mut out,
+            );
+            assert_eq!(out.preedit_text(), expected);
+            assert_eq!(
+                dispatcher
+                    .sessions
+                    .get(editing)
+                    .expect("editing session")
+                    .raw_input
+                    .as_str(),
+                expected
+            );
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: editing,
+                key: char_key('4'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "1.4");
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(editing)
+                .expect("editing session")
+                .raw_input
+                .as_str(),
+            "1.4"
+        );
+
+        // The decision follows the character immediately before the caret,
+        // not just the last character of the composition.
+        let inserted = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, inserted, "12", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: inserted,
+                key: named_key(KeyCode::Left),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: inserted,
+                key: char_key('.'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "1.2");
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(inserted)
+                .expect("inserted session")
+                .raw_input
+                .as_str(),
+            "1.2"
+        );
+
+        let ordinary = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, ordinary, "a.", &mut out);
+        assert_eq!(
+            out.preedit_text(),
+            "あ。",
+            "a period stays Japanese punctuation unless its previous input is a digit"
+        );
     }
 
     #[test]
@@ -6959,6 +7150,14 @@ mod tests {
         name: &str,
     ) -> (Dispatcher, crate::prediction::PredictionRuntime, SessionId) {
         let (mut dispatcher, runtime) = prediction_dispatcher();
+        // The state-machine assertion must not depend on the prediction worker
+        // winning a 10 ms production timeout while other Cargo test binaries
+        // are running.  The runtime exposes a test-only scripted response so
+        // this helper exercises the same action path with a deterministic
+        // terminal result; worker scheduling remains covered by prediction.rs.
+        let prediction_service = runtime.service();
+        prediction_service.test_script_prediction(word, "test-prediction");
+        prediction_service.test_set_scripted_prediction_available(true);
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, name);
         type_word(&mut dispatcher, session, word, &mut out);
@@ -7708,15 +7907,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v9_version_is_rejected() {
+    fn hello_with_the_previous_v10_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 11,
-            "ProbeKey fresh-context mode adds a v10 wire request"
+            PROTOCOL_VERSION, 12,
+            "input-mode status and SetMode add v12 wire messages"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 9 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 10 }, &mut out);
 
         assert_eq!(
             reply,
@@ -7725,10 +7924,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v10_version_is_accepted() {
+    fn hello_with_v12_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 11,
-            "ProbeKey fresh-context mode adds a v10 wire request"
+            PROTOCOL_VERSION, 12,
+            "input-mode status and SetMode add v12 wire messages"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
@@ -7836,22 +8035,77 @@ mod tests {
     }
 
     #[test]
-    fn shifted_ascii_without_dictionary_hit_never_falls_back_to_kana() {
+    fn shifted_first_ascii_letter_latches_english_composition_for_unshifted_ascii() {
         let mut dispatcher = shifted_ascii_english_conversion_dispatcher();
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
 
-        for character in ['A', 'I', 'A', 'M', 'U'] {
-            dispatcher.dispatch(
-                &Request::SendKey {
-                    session,
-                    key: shifted_char_key(character),
-                },
-                &mut out,
+        for (index, character) in "Claude".chars().enumerate() {
+            let key = if index == 0 {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            assert_eq!(
+                dispatcher.dispatch(&Request::SendKey { session, key }, &mut out),
+                Reply::Output,
+                "character {character:?} at index {index}"
             );
+            assert!(out.consumed);
+        }
+
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(out.preedit_text(), "Claude");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_input.as_str(), "Claude");
+        assert!(live.shifted_ascii, "initial Shift must stay latched");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert_eq!(out.preedit_text(), "Claude");
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        let candidates = (0..CANDIDATE_PAGE_SIZE)
+            .filter_map(|index| out.candidate(index).map(|(surface, _)| surface))
+            .collect::<Vec<_>>();
+        assert!(candidates.contains(&"Claude"));
+        assert!(candidates.contains(&"Claude Code"));
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("Claude"));
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.mode(), Mode::Hiragana);
+        assert!(!live.shifted_ascii, "commit must end the temporary mode");
+        assert_eq!(live.state(), State::Idle);
+    }
+
+    #[test]
+    fn shift_started_ascii_without_dictionary_hit_never_falls_back_to_kana() {
+        let mut dispatcher = shifted_ascii_english_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        for (index, character) in "Aiamu".chars().enumerate() {
+            let key = if index == 0 {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
         }
         assert_eq!(out.commit_text(), None);
-        assert_eq!(out.preedit_text(), "AIAMU");
+        assert_eq!(out.preedit_text(), "Aiamu");
 
         assert_eq!(
             dispatcher.dispatch(
@@ -7866,7 +8120,7 @@ mod tests {
         assert!(out.consumed);
         assert!(out.beep);
         assert_eq!(out.commit_text(), None);
-        assert_eq!(out.preedit_text(), "AIAMU");
+        assert_eq!(out.preedit_text(), "Aiamu");
         assert_eq!(out.candidate_kind(), None);
         assert_eq!(
             dispatcher.sessions.get(session).expect("session").state(),
@@ -7883,7 +8137,7 @@ mod tests {
             ),
             Reply::Output
         );
-        assert_eq!(out.commit_text(), Some("AIAMU"));
+        assert_eq!(out.commit_text(), Some("Aiamu"));
     }
 
     #[test]
@@ -8242,7 +8496,8 @@ mod tests {
         // one keystroke overflows deterministically. This table maps
         // nothing but "a", so "usable afterward" is checked with a
         // character this same minimal table can actually resolve: "k" has
-        // no entry either, so it passes through raw immediately.
+        // no entry, so it passes through raw immediately without reaching
+        // the intentionally oversized "a" mapping again.
         let huge = "あ".repeat(600); // 1800 bytes > MAX_PREEDIT_BYTES (1536)
         let table = Table::parse(&format!("[kana]\na = \"{huge}\"\n")).expect("table compiles");
         let keymap = KeyMap::preset(Preset::MsIme).expect("preset compiles");
@@ -8261,13 +8516,7 @@ mod tests {
         assert_eq!(reply, Reply::Message(Response::Error(ErrorCode::TooLarge)));
 
         // The session must still be usable afterward, on the same table.
-        dispatcher.dispatch(
-            &Request::SendKey {
-                session,
-                key: char_key('k'),
-            },
-            &mut out,
-        );
+        type_word(&mut dispatcher, session, "k", &mut out);
         assert_eq!(out.preedit_text(), "k");
     }
 
@@ -9468,6 +9717,47 @@ mod tests {
     }
 
     #[test]
+    fn one_off_far_learning_does_not_override_base_conversion_but_repetition_does() {
+        let conversion = conversion_fixture();
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher = Dispatcher::new_with_services(conversion, Arc::clone(&learning))
+            .expect("shipped defaults");
+        let mut out = OutputBuf::new();
+
+        // Candidate 6 is intentionally far below the base winner. A single
+        // exact-context confirmation stays in the learning store but must not
+        // make the next conversion surprising.
+        learning.learn("かな", "候補07", 0, 0);
+        let first = create_session(&mut dispatcher, &mut out, "first.exe");
+        type_word(&mut dispatcher, first, "kana", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: first,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "仮名");
+        assert_eq!(out.selected_candidate(), Some(0));
+
+        // Repeated explicit evidence in the same grammatical context becomes
+        // strong enough to select the user's genuine preference.
+        learning.learn("かな", "候補07", 0, 0);
+        learning.learn("かな", "候補07", 0, 0);
+        let second = create_session(&mut dispatcher, &mut out, "second.exe");
+        type_word(&mut dispatcher, second, "kana", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: second,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "候補07");
+        assert_eq!(out.selected_candidate(), Some(6));
+    }
+
+    #[test]
     fn explicit_learning_beats_conflicting_commit_cache_and_domain_coherence() {
         let conversion = conversion_fixture();
         let learning = Arc::new(LearningService::memory());
@@ -9915,6 +10205,10 @@ mod tests {
                 session,
                 scope: InputScope::Password,
             },
+            Request::SetMode {
+                session,
+                mode: Mode::Katakana,
+            },
             Request::DeleteSession { session },
         ];
         for request in blocked {
@@ -9977,6 +10271,83 @@ mod tests {
             &mut out,
         );
         assert_eq!(out.preedit_text(), "k");
+    }
+
+    #[test]
+    fn language_bar_mode_change_is_idle_scope_checked_and_never_writes_text() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        // A fresh TSF connection has not yet classified its focused field.
+        // The language bar must not guess that it is ordinary text.
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetMode {
+                    session,
+                    mode: Mode::Katakana,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Error(ErrorCode::Busy))
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").mode(),
+            Mode::Hiragana
+        );
+
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetMode {
+                    session,
+                    mode: Mode::Katakana,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::InputMode {
+                mode: Mode::Katakana
+            })
+        );
+        assert_eq!(out.preedit_text(), "");
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").mode(),
+            Mode::Katakana
+        );
+
+        // Once the user has preedit, the request is rejected rather than
+        // committing, cancelling, or reinterpreting the document text.
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('k'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "k");
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetMode {
+                    session,
+                    mode: Mode::Hiragana,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Error(ErrorCode::Busy))
+        );
+        let current = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(current.mode(), Mode::Katakana);
+        assert!(current.is_composing());
     }
 
     #[test]

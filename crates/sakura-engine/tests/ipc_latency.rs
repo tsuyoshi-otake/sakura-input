@@ -1,9 +1,10 @@
 //! How long a keystroke actually takes to cross the pipe and come back.
 //!
 //! This is the Phase 1 exit criterion "SendKey round-trip p99 < 5 ms"
-//! (PLAN.md), measured against the arrangement that ships: the built
-//! `sakura_engine.exe`, the well-known per-logon-session pipe, and a client
-//! in a separate process. Everything cheaper than that — timing `dispatch`
+//! (PLAN.md), measured against the built `sakura_engine.exe` and a client in
+//! a separate process. The harness gives that engine an explicit owned private
+//! pipe and profile; production well-known-pipe discovery is intentionally not
+//! part of this benchmark. Everything cheaper than that — timing `dispatch`
 //! directly, or a scratch pipe inside one process — measures something the
 //! user never experiences.
 //!
@@ -20,11 +21,9 @@
 //! Two reasons, and only the first is about flakiness. A timing threshold on
 //! a shared CI runner fails for reasons that have nothing to do with the
 //! code, and a test that fails for unrelated reasons gets muted, at which
-//! point it protects nothing. The second is that this test starts and talks
-//! to a process singleton: run concurrently with `pipe_round_trip.rs` — which
-//! `cargo test` would happily do, since separate test binaries run in
-//! parallel — the two would contend for one engine and both would measure
-//! something meaningless.
+//! point it protects nothing. This test can run concurrently with the other
+//! ordinary real-process tests because each owns an independent pipe, child,
+//! dictionary fixture, and LOCALAPPDATA tree.
 //!
 //! So it runs on purpose, on a machine somebody chose:
 //!
@@ -35,6 +34,7 @@
 //! Release matters. A debug engine is several times slower and says nothing
 //! about the binary that ships.
 
+#[allow(dead_code)]
 mod common;
 
 use std::time::{Duration, Instant};
@@ -75,13 +75,9 @@ fn keystroke(n: usize) -> sakura_proto::KeyInput {
 }
 
 #[test]
-#[ignore = "timing against a process singleton: run with --release --ignored --nocapture"]
+#[ignore = "timing benchmark: run with --release --ignored --nocapture"]
 fn a_keystroke_crosses_the_pipe_and_returns_inside_the_budget() {
-    let mut engine = Engine::running();
-    if !engine.compatible() {
-        eprintln!("skipping IPC benchmark: an older engine owns the well-known pipe");
-        return;
-    }
+    let mut engine = Engine::spawn_isolated();
     let mut client = engine.client();
     let session = session_for(&mut client, "ipc_latency.exe");
 
@@ -116,13 +112,25 @@ fn a_keystroke_crosses_the_pipe_and_returns_inside_the_budget() {
 
     samples.sort_unstable();
     let report = Percentiles::of(&samples);
-    println!("\nSendKey round trip over the well-known pipe, {SAMPLES} samples\n{report}");
+    println!(
+        "\nSendKey round trip over owned pipe {}, {SAMPLES} samples\n{report}",
+        engine.pipe_name()
+    );
     write_report_if_requested(&report);
 
     assert!(
         report.p99 < BUDGET,
         "p99 {:?} exceeds the {BUDGET:?} keystroke budget (DESIGN 10)\n{report}",
         report.p99,
+    );
+
+    drop(client);
+    let cleanup = engine.cleanup().expect("owned engine cleanup must succeed");
+    assert!(
+        cleanup.status.success(),
+        "owned engine pid {} exited with {}",
+        cleanup.pid,
+        cleanup.status
     );
 }
 

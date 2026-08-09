@@ -35,7 +35,7 @@ rtk cargo run --locked --release -p dictc --bin corpus-eval -- `
 
 The command fails unless Sakura reaches 80% of Mozc's held-out correct count,
 the IT slice reaches the Phase 2 interim 90% floor, conversion p99 is at most
-20 ms, the image is at most 35 MiB, and the exact matrix is at most 4 MiB.
+20 ms, the image is at most 128 MiB, and the exact matrix is at most 4 MiB.
 
 ## Regenerating the Mozc baseline
 

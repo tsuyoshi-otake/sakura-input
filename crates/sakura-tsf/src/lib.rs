@@ -26,6 +26,7 @@ mod edit_session;
 mod engine;
 mod exports;
 mod key_handler;
+mod mode_item;
 mod reconversion;
 mod text_service;
 mod write_coordinator;

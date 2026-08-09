@@ -43,11 +43,11 @@ Properties the script must hold to, learned from how IMEs fail:
   of waiting for the next sign-in.
 - **Two install-time preconditions gate everything else (DESIGN 3.2/12.2).**
   `MinVersion=10.0.22000` refuses anything older than Windows 11, and
-  `InitializeSetup` refuses a CPU without AVX before any file is copied —
-  the whole workspace is built with `-C target-feature=+avx`
-  (`.cargo/config.toml`), so installing without it would let the DLL fault on
-  its first instruction inside every process that loads it instead of
-  failing here, cleanly.
+  `InitializeSetup` refuses a CPU without the AVX + SSSE3 baseline before any
+  file is copied — the whole workspace is built with
+  `-C target-feature=+avx,+ssse3` (`.cargo/config.toml`), so installing
+  without either feature would let the DLL fault inside every process that
+  loads it instead of failing here, cleanly.
 - **No x86 payload.** This product targets Windows 11 on x86_64 only
   (DESIGN 3.2), so `[Run]` calls `regtool --register --no-wow64` explicitly
   rather than relying on its `Wow64::Auto` default, and 32-bit host

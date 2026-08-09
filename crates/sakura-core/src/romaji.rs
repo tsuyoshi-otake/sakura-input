@@ -602,35 +602,37 @@ mod tests {
         let table = builtin();
         // Followed by a consonant: ん, and the consonant starts a new sequence.
         assert_eq!(committed(&table, "genki"), "げんき");
-        assert_eq!(committed(&table, "konnichiha"), "こんにちは");
         assert_eq!(committed(&table, "shinkansen"), "しんかんせん");
         // Followed by a vowel: the longer reading wins.
         assert_eq!(committed(&table, "kani"), "かに");
         assert_eq!(committed(&table, "sunao"), "すなお");
-        // The apostrophe exists for exactly one job: separating ん from a
-        // な-row or や-row kana that would otherwise absorb it. Without it
-        // `honya` reads ほにゃ and `honnya` reads ほんにゃ, both defensible
-        // and neither ほんや.
+        // An apostrophe provides a concise ん boundary before a な-row or
+        // や-row kana. Without it `honya` reads ほにゃ. With the
+        // Microsoft-compatible `nn` rule, `honnya` is ほんや; a third `n`
+        // makes the next syllable にゃ.
         assert_eq!(committed(&table, "hon'ya"), "ほんや");
         assert_eq!(committed(&table, "honya"), "ほにゃ");
-        assert_eq!(committed(&table, "honnya"), "ほんにゃ");
-        assert_eq!(committed(&table, "konnyaku"), "こんにゃく");
+        assert_eq!(committed(&table, "honnya"), "ほんや");
+        assert_eq!(committed(&table, "honnnya"), "ほんにゃ");
+        assert_eq!(committed(&table, "konnyaku"), "こんやく");
+        assert_eq!(committed(&table, "konnnyaku"), "こんにゃく");
         // Alone at the end of input.
         assert_eq!(committed(&table, "n"), "ん");
         assert_eq!(committed(&table, "pan"), "ぱん");
     }
 
-    /// The case that decides whether `nn` may commit ん on its own: the second
-    /// `n` is simultaneously the end of ん and the start of `na`.
+    /// Microsoft IME treats `nn` as an explicit ん, even before a vowel.
+    /// A following な-row syllable therefore needs a third `n`.
     #[test]
-    fn nn_before_a_vowel_is_n_plus_the_na_row() {
+    fn microsoft_double_n_commits_n_before_a_vowel() {
         let table = builtin();
-        assert_eq!(committed(&table, "minna"), "みんな");
-        assert_eq!(committed(&table, "annai"), "あんない");
-        assert_eq!(committed(&table, "onnanoko"), "おんなのこ");
-        // Typed with the third `n` some people add out of habit, which has to
-        // land on the same kana.
+        assert_eq!(committed(&table, "hannei"), "はんえい");
+        assert_eq!(committed(&table, "minna"), "みんあ");
+        assert_eq!(committed(&table, "annai"), "あんあい");
+        assert_eq!(committed(&table, "onnanoko"), "おんあのこ");
+        // The third `n` begins the following な-row syllable.
         assert_eq!(committed(&table, "minnna"), "みんな");
+        assert_eq!(committed(&table, "annnai"), "あんない");
         assert_eq!(committed(&table, "konnnichiha"), "こんにちは");
     }
 
@@ -669,18 +671,14 @@ mod tests {
     /// causes a live-typing stall -- an entry that is itself a complete,
     /// valid mapping (`Table::drive` could commit it right now) but is also
     /// a strict prefix of one or more longer entries, so `may_wait` in
-    /// `Table::drive` holds it pending indefinitely until another key (or an
-    /// explicit flush) arrives. `n` and `nn` are the only entries shaped this
-    /// way in the shipped table, and both exist on purpose (see the comment
-    /// above `nna`). Typing either and then stopping -- e.g. `denn` with
-    /// nothing else typed -- leaves the raw romaji on screen instead of ん
-    /// until the next key or a commit/convert key resolves it; a user
-    /// reported exactly this ("nn doesn't type ん") and it turned out to be
-    /// this, not a defect. If a future table edit (including a user's custom
+    /// `Table::drive` holds it pending until another key (or an explicit
+    /// flush) arrives. Only `n` has that shape in the Microsoft-compatible
+    /// shipped table. `nn` must commit ん immediately so `hannei` cannot
+    /// become はんねい. If a future table edit (including a user's custom
     /// table) adds another entry with this shape, this fails so the same
     /// stall gets a deliberate look instead of shipping silently.
     #[test]
-    fn only_n_and_nn_are_complete_entries_that_still_wait_for_more() {
+    fn only_n_is_a_complete_entry_that_still_waits_for_more() {
         let table = builtin();
         let mut stalls: Vec<&str> = table
             .entries
@@ -692,7 +690,7 @@ mod tests {
         stalls.sort_unstable();
         assert_eq!(
             stalls,
-            vec!["n", "nn"],
+            vec!["n"],
             "an entry both commits on its own and waits for more input; \
              review whether the live-typing stall this causes (raw romaji \
              stays on screen until another key or a flush) is intended"
@@ -740,38 +738,33 @@ mod tests {
         );
     }
 
-    /// EVAL: locks in the exact commit-time behavior found while
-    /// investigating the report above. The "extra `n` out of habit" leniency
-    /// documented at `nna` (`minnna` still commits みんな, not みんんな) only
-    /// fires because a vowel/や行 follows and reclaims the surplus `n`. With
-    /// nothing following, there is nothing to reclaim it: every full pair of
-    /// trailing `n`s is its own ん. Typing an extra `n` hoping to force ん
-    /// sooner does not recover `denn`'s missing ん -- it adds a second one.
+    /// EVAL: `nn` commits ん immediately and every remaining `n` begins a new
+    /// decision. This is what makes `hannei` unambiguous, while spelling
+    /// ん+な as `minnna` remains available without an apostrophe.
     #[test]
-    fn trailing_n_runs_do_not_get_the_mid_word_leniency() {
+    fn n_runs_follow_the_microsoft_double_n_rule() {
         let table = builtin();
         assert_eq!(
             committed(&table, "minna"),
-            "みんな",
-            "mid-word: leniency applies"
+            "みんあ",
+            "two `n`s commit ん before the vowel"
         );
         assert_eq!(
             committed(&table, "minnna"),
             "みんな",
-            "mid-word: leniency applies"
+            "the third `n` starts な"
         );
         assert_eq!(committed(&table, "nn"), "ん");
         assert_eq!(
             committed(&table, "nnn"),
             "んん",
-            "no vowel follows to reclaim the third n -- it becomes its own ん"
+            "the remaining `n` becomes its own ん on commit"
         );
         assert_eq!(committed(&table, "denn"), "でん");
         assert_eq!(
             committed(&table, "dennn"),
             "でんん",
-            "the workaround some people reach for after `denn` looks stuck \
-             does not produce でん -- it produces でんん"
+            "the third `n` is a separate trailing ん"
         );
     }
 
@@ -812,17 +805,12 @@ mod tests {
         assert_eq!(committed(&table, "a/i"), "あ・い");
     }
 
-    /// EVAL: `n'` exists for exactly one reason -- disambiguating ん from the
-    /// な/や-row kana that would otherwise absorb it, the same problem `nn`
-    /// solves for a hasty typist. It is shaped differently from `nn` though:
-    /// nothing extends past `n'` (see
-    /// `only_n_and_nn_are_complete_entries_that_still_wait_for_more`, which
-    /// finds only `n` and `nn` in that stalling shape), so it commits ん the
-    /// instant it is typed instead of waiting for another key. This checks
-    /// both halves of that: `n'` earns its keep as a second, independent way
-    /// to reach the ん+や-row split alongside `hon'ya`/`honya`/`honnya`, and
-    /// stays an inert, passed-through character everywhere an apostrophe
-    /// does not follow an `n`.
+    /// EVAL: `n'` provides a concise delimiter for ん before a な/や-row
+    /// syllable. Without it, the Microsoft-compatible table needs a third
+    /// `n` (`honnnya`) to produce ほんにゃ. Nothing extends past `n'` (see
+    /// `only_n_is_a_complete_entry_that_still_waits_for_more`), so it commits
+    /// ん the instant it is typed. This also verifies that an apostrophe stays
+    /// inert everywhere it does not follow an `n`.
     #[test]
     fn apostrophe_disambiguates_n_and_is_inert_elsewhere() {
         let table = builtin();
@@ -830,11 +818,11 @@ mod tests {
         let (emitted, pending) = typed(&table, "n'");
         assert_eq!(emitted, "ん", "`n'` should commit without waiting for more");
         assert_eq!(pending, "");
-        // A second word pair alongside hon'ya/honya/honnya, so the earlier
+        // A second word pair alongside hon'ya/honya/honnnya, so the earlier
         // result is not an artifact of that one word's shape.
         assert_eq!(committed(&table, "kon'yaku"), "こんやく");
         assert_eq!(committed(&table, "konyaku"), "こにゃく");
-        assert_eq!(committed(&table, "konnyaku"), "こんにゃく");
+        assert_eq!(committed(&table, "konnnyaku"), "こんにゃく");
         // With no preceding `n` to disambiguate, the apostrophe means
         // nothing and passes through like any other unmapped character --
         // it must not silently vanish.
@@ -857,7 +845,7 @@ mod tests {
     fn lookup_folds_ascii_case() {
         let table = builtin();
         assert_eq!(committed(&table, "KA"), "か");
-        assert_eq!(committed(&table, "KoNnIcHiHa"), "こんにちは");
+        assert_eq!(committed(&table, "KoNnNiChiHa"), "こんにちは");
     }
 
     /// A non-ASCII character cannot be part of a sequence, so pending romaji
@@ -1024,6 +1012,15 @@ mod tests {
         for (input, expected) in cases {
             assert_eq!(committed(&table, input), expected, "input {input:?}");
         }
+    }
+
+    /// EVAL: the common word `反映` is typeable continuously as `hannei`, as
+    /// it is in Microsoft IME. The second `n` completes ん before `e`, rather
+    /// than becoming the `n` in ね and producing はんねい.
+    #[test]
+    fn hannei_can_be_typed_continuously_with_double_n() {
+        let table = builtin();
+        assert_eq!(committed(&table, "hannei"), "はんえい");
     }
 
     // --- Table compilation ---

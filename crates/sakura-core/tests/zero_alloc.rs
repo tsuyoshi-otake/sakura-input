@@ -109,7 +109,7 @@ fn feeding_the_romaji_fsm_allocates_nothing() {
     let observed = allocations(|| {
         // Every shape the FSM has: plain syllables, a waiting `n`, a
         // backtrack, a carry, a passthrough, and a flush.
-        for c in "konnichihakekkadockern".chars() {
+        for c in "konnnichihakekkadockern".chars() {
             table.feed(&mut state, c, &mut out).expect("fits");
         }
         table.flush(&mut state, &mut out).expect("fits");

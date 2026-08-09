@@ -24,6 +24,10 @@ path = "src/bin/mozc_trim.rs"
 name = "corpus-eval"
 path = "src/bin/corpus_eval.rs"
 
+[[bin]]
+name = "category-split"
+path = "src/bin/category_split.rs"
+
 [dependencies]
 sakura-core.workspace = true
 sakura-proto.workspace = true

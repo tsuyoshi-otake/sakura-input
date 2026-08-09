@@ -2,6 +2,12 @@
 param(
     [string]$MozcSource,
     [string]$GlossarySource,
+    # Canonical Sakura system dictionary split into fourteen category files.
+    # The source stays outside the repository and is included in the generated
+    # image when explicitly supplied. Keep the old parameter as a compatibility
+    # alias for existing local build commands.
+    [Alias('SupplementLexiconDirectory')]
+    [string]$SystemCategoryDirectory,
     [string]$OutputDirectory = (Join-Path $env:USERPROFILE 'tmp\sakura-input-dictionary-build'),
     [switch]$SkipDeterminismCheck,
     [switch]$UpdateCheckedInData
@@ -18,10 +24,46 @@ $GlossaryRevision = 'b5cada441b41c207ab49bf2cd5f1d9c5614c5b92'
 $RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $CuratedTerms = Join-Path $RepositoryRoot 'data\curated-terms.tsv'
+$ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
+$ExpectedSystemCategoryFiles = @(
+    '01-grammar-function.tsv',
+    '02-inflectional.tsv',
+    '03-general-lexicon.tsv',
+    '04-fixed-expressions.tsv',
+    '05-numeric-time-units.tsv',
+    '06-person-names.tsv',
+    '07-place-names.tsv',
+    '08-organizations-products.tsv',
+    '09-katakana-loanwords.tsv',
+    '10-abbreviations-ascii.tsv',
+    '11-it-engineering.tsv',
+    '12-specialist-domains.tsv',
+    '13-symbols-emoji.tsv',
+    '14-orthography-variants.tsv'
+)
+$CategoryDictionaryFiles = @(
+    '01_文法・機能語.tsv',
+    '02_活用語.tsv',
+    '03_一般語.tsv',
+    '04_慣用句・定型表現.tsv',
+    '05_数値・日付・単位.tsv',
+    '06_人名.tsv',
+    '07_地名.tsv',
+    '08_組織名・製品名.tsv',
+    '09_外来語・カタカナ語.tsv',
+    '10_略語・英数字.tsv',
+    '11_IT・技術用語.tsv',
+    '12_専門用語.tsv',
+    '13_記号・絵文字.tsv',
+    '14_表記ゆれ.tsv'
+)
 [IO.Directory]::CreateDirectory($OutputDirectory) | Out-Null
 
 if (-not [IO.File]::Exists($CuratedTerms)) {
     throw "curated dictionary layer is missing: $CuratedTerms"
+}
+if (-not [IO.File]::Exists($ConversionPriorities)) {
+    throw "conversion-priority dictionary layer is missing: $ConversionPriorities"
 }
 
 function Invoke-Rtk {
@@ -149,13 +191,97 @@ function Get-ArtifactRecord {
     }
 }
 
+function Resolve-SystemCategoryDictionary {
+    param([AllowEmptyString()][string]$Directory)
+
+    if ([string]::IsNullOrWhiteSpace($Directory)) {
+        return $null
+    }
+
+    $resolved = [IO.Path]::GetFullPath($Directory)
+    if (-not [IO.Directory]::Exists($resolved)) {
+        throw "system category dictionary directory does not exist: $resolved"
+    }
+    $manifestPath = Join-Path $resolved 'manifest.json'
+    if (-not [IO.File]::Exists($manifestPath)) {
+        throw "system category dictionary manifest is missing: $manifestPath"
+    }
+    try {
+        $manifest = [IO.File]::ReadAllText($manifestPath, [Text.UTF8Encoding]::new($false)) |
+            ConvertFrom-Json
+    }
+    catch {
+        throw "cannot parse system category dictionary manifest ${manifestPath}: $($_.Exception.Message)"
+    }
+
+    if ($manifest.schema_version -ne 1) {
+        throw "unsupported system category dictionary manifest schema: $($manifest.schema_version)"
+    }
+    if ($manifest.license_declaration -ne 'LicenseRef-ATOK36-LGPL') {
+        throw 'system category dictionary manifest is not compatible with this build'
+    }
+    if ([string]$manifest.source_scope -notlike '*user dictionaries excluded*') {
+        throw 'system category dictionary manifest does not prove that user dictionaries were excluded'
+    }
+    [long]$uniquePairs = 0
+    if (-not [long]::TryParse([string]$manifest.unique_safely_mapped_pairs, [ref]$uniquePairs) -or $uniquePairs -lt 1200000) {
+        throw "system category dictionary has fewer than 1,200,000 safely mapped pairs: $($manifest.unique_safely_mapped_pairs)"
+    }
+
+    $categories = @($manifest.categories)
+    if ($categories.Count -ne $ExpectedSystemCategoryFiles.Count) {
+        throw "system category dictionary manifest must contain exactly $($ExpectedSystemCategoryFiles.Count) categories, found $($categories.Count)"
+    }
+    $byFile = @{}
+    foreach ($category in $categories) {
+        $file = [string]$category.file
+        if ([string]::IsNullOrWhiteSpace($file) -or $byFile.ContainsKey($file)) {
+            throw "system category dictionary manifest has a missing or duplicate category file: $file"
+        }
+        $byFile[$file] = $category
+    }
+
+    $categoryPaths = [Collections.Generic.List[string]]::new()
+    $directoryPrefix = if ($resolved.EndsWith([IO.Path]::DirectorySeparatorChar)) {
+        $resolved
+    }
+    else {
+        $resolved + [IO.Path]::DirectorySeparatorChar
+    }
+    for ($index = 0; $index -lt $ExpectedSystemCategoryFiles.Count; $index++) {
+        $file = $ExpectedSystemCategoryFiles[$index]
+        if (-not $byFile.ContainsKey($file)) {
+            throw "system category dictionary manifest is missing category file: $file"
+        }
+        if ($byFile[$file].id -ne ($index + 1)) {
+            throw "system category file $file does not match its required id"
+        }
+        $path = [IO.Path]::GetFullPath((Join-Path $resolved $file))
+        if (-not $path.StartsWith($directoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "system category file escaped its declared dictionary directory: $path"
+        }
+        if (-not [IO.File]::Exists($path)) {
+            throw "system category file is missing: $path"
+        }
+        $categoryPaths.Add($path)
+    }
+
+    return [pscustomobject]@{
+        manifest = $manifestPath
+        paths = $categoryPaths.ToArray()
+    }
+}
+
 function Invoke-BuildPass {
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$Suffix,
         [Parameter(Mandatory)][string]$MozcDictionaryDirectory,
         [Parameter(Mandatory)][string]$GlossaryDirectory,
         [Parameter(Mandatory)][string]$ConnectionPath,
-        [Parameter(Mandatory)][string]$CuratedTermsPath
+        [Parameter(Mandatory)][string]$MozcPosPath,
+        [Parameter(Mandatory)][string]$CuratedTermsPath,
+        [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
+        [string[]]$SystemCategoryPaths = @()
     )
 
     $options = [IO.EnumerationOptions]::new()
@@ -176,6 +302,7 @@ function Invoke-BuildPass {
     $trimReport = Join-Path $OutputDirectory "mozc-trim$Suffix.report.json"
     $overlayTsv = Join-Path $OutputDirectory "it-terms$Suffix.tsv"
     $overlayReport = Join-Path $OutputDirectory "it-terms$Suffix.report.json"
+    $categoryDirectory = Join-Path $OutputDirectory "カテゴリ辞書$Suffix"
     $dictionary = Join-Path $OutputDirectory "system$Suffix.dic"
 
     $mozcArguments = @('cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'mozc-trim', '--')
@@ -196,20 +323,58 @@ function Invoke-BuildPass {
     $glossaryArguments += @('--output', $overlayTsv, '--report', $overlayReport)
     Invoke-Rtk -Arguments $glossaryArguments
 
-    Invoke-Rtk -Arguments @(
-        'cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'dictc', '--',
+    $categoryArguments = @(
+        'cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'category-split', '--',
+        '--mozc-pos', $MozcPosPath,
         '--system', $systemTsv,
         '--overlay', $overlayTsv,
         '--overlay', $CuratedTermsPath,
+        '--overlay', $ConversionPrioritiesPath,
+        '--output-dir', $categoryDirectory
+    )
+    # PowerShell unwraps an empty array passed through a parameter, so the
+    # no-category build can arrive here as `$null` even though the parameter
+    # is declared as `string[]`. Normalize it before reading Count or indexing.
+    $systemCategoryPathArray = @(
+        foreach ($path in @($SystemCategoryPaths)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$path)) {
+                [string]$path
+            }
+        }
+    )
+    for ($index = 0; $index -lt $systemCategoryPathArray.Count; $index++) {
+        $categoryArguments += @('--system-category', ($index + 1), $systemCategoryPathArray[$index])
+    }
+    Invoke-Rtk -Arguments $categoryArguments
+
+    $categoryFiles = [Collections.Generic.List[string]]::new()
+    foreach ($file in $CategoryDictionaryFiles) {
+        $path = Join-Path $categoryDirectory $file
+        if (-not [IO.File]::Exists($path)) {
+            throw "category dictionary was not produced: $path"
+        }
+        $categoryFiles.Add($path)
+    }
+
+    $dictionaryArguments = @(
+        'cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'dictc', '--'
+    )
+    foreach ($category in $categoryFiles) {
+        $dictionaryArguments += @('--category', $category)
+    }
+    $dictionaryArguments += @(
         '--mozc-connection', $ConnectionPath,
         '--output', $dictionary
     )
+    Invoke-Rtk -Arguments $dictionaryArguments
 
     return [ordered]@{
         system_tsv = $systemTsv
         trim_report = $trimReport
         overlay_tsv = $overlayTsv
         overlay_report = $overlayReport
+        category_directory = $categoryDirectory
+        category_files = $categoryFiles.ToArray()
         dictionary = $dictionary
     }
 }
@@ -225,15 +390,34 @@ function Remove-BuildArtifact {
     [IO.File]::Delete($resolved)
 }
 
+function Remove-BuildDirectory {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $expectedPrefix = $OutputDirectory.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    if (-not $resolved.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "refusing to remove directory outside output directory: $resolved"
+    }
+    if ([IO.Directory]::Exists($resolved)) {
+        [IO.Directory]::Delete($resolved, $true)
+    }
+}
+
 $stopwatch = [Diagnostics.Stopwatch]::StartNew()
 $MozcSource = Resolve-PinnedSource -ProvidedPath $MozcSource -Repository $MozcRepository `
     -Revision $MozcRevision -ManagedName 'mozc' -SparsePaths @('LICENSE', 'src/data/dictionary_oss')
 $GlossarySource = Resolve-PinnedSource -ProvidedPath $GlossarySource -Repository $GlossaryRepository `
     -Revision $GlossaryRevision -ManagedName 'smile-chat' -SparsePaths @('frontend/public')
+$SystemCategoryDictionary = Resolve-SystemCategoryDictionary -Directory $SystemCategoryDirectory
+if ($UpdateCheckedInData -and $null -ne $SystemCategoryDictionary) {
+    throw '-UpdateCheckedInData cannot be combined with -SystemCategoryDirectory; canonical category source files remain local only'
+}
+$SystemCategoryPaths = if ($null -eq $SystemCategoryDictionary) { @() } else { [string[]]$SystemCategoryDictionary.paths }
 
 $mozcDictionaryDirectory = Join-Path $MozcSource 'src\data\dictionary_oss'
 $glossaryDirectory = Join-Path $GlossarySource 'frontend\public\glossaries'
 $connectionPath = Join-Path $mozcDictionaryDirectory 'connection_single_column.txt'
+$mozcPosPath = Join-Path $mozcDictionaryDirectory 'id.def'
 $requiredLicenseFiles = @(
     (Join-Path $MozcSource 'LICENSE'),
     (Join-Path $mozcDictionaryDirectory 'README.txt'),
@@ -244,28 +428,42 @@ foreach ($path in $requiredLicenseFiles) {
         throw "required upstream license file is missing: $path"
     }
 }
+if (-not [IO.File]::Exists($mozcPosPath)) {
+    throw "Mozc POS taxonomy is missing: $mozcPosPath"
+}
 
 $env:CARGO_HTTP_CHECK_REVOKE = 'false'
 Push-Location $RepositoryRoot
 try {
     $primary = Invoke-BuildPass -Suffix '' -MozcDictionaryDirectory $mozcDictionaryDirectory `
         -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-        -CuratedTermsPath $CuratedTerms
+        -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+        -ConversionPrioritiesPath $ConversionPriorities -SystemCategoryPaths $SystemCategoryPaths
 
+    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'dictionary')
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-            -CuratedTermsPath $CuratedTerms
-        foreach ($name in $primary.Keys) {
+            -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+            -ConversionPrioritiesPath $ConversionPriorities -SystemCategoryPaths $SystemCategoryPaths
+        foreach ($name in $scalarArtifactNames) {
             $firstHash = Get-Sha256 $primary[$name]
             $secondHash = Get-Sha256 $repeat[$name]
             if ($firstHash -ne $secondHash) {
                 throw "non-deterministic $name output: $firstHash != $secondHash"
             }
         }
-        foreach ($path in $repeat.Values) {
-            Remove-BuildArtifact $path
+        for ($index = 0; $index -lt $primary.category_files.Count; $index++) {
+            $firstHash = Get-Sha256 $primary.category_files[$index]
+            $secondHash = Get-Sha256 $repeat.category_files[$index]
+            if ($firstHash -ne $secondHash) {
+                throw "non-deterministic category dictionary $($CategoryDictionaryFiles[$index]): $firstHash != $secondHash"
+            }
         }
+        foreach ($name in $scalarArtifactNames) {
+            Remove-BuildArtifact $repeat[$name]
+        }
+        Remove-BuildDirectory $repeat.category_directory
     }
 
     $report = [ordered]@{
@@ -275,16 +473,35 @@ try {
         deterministic_repeat = -not $SkipDeterminismCheck
         inputs = [ordered]@{
             curated_terms = Get-ArtifactRecord $CuratedTerms
+            conversion_priorities = Get-ArtifactRecord $ConversionPriorities
+            system_category_dictionary = if ($null -eq $SystemCategoryDictionary) {
+                $null
+            }
+            else {
+                [ordered]@{
+                    manifest = Get-ArtifactRecord $SystemCategoryDictionary.manifest
+                    categories = @(
+                        foreach ($path in $SystemCategoryDictionary.paths) {
+                            Get-ArtifactRecord $path
+                        }
+                    )
+                }
+            }
         }
         artifacts = [ordered]@{}
     }
-    foreach ($name in $primary.Keys) {
+    foreach ($name in $scalarArtifactNames) {
         $report.artifacts[$name] = Get-ArtifactRecord $primary[$name]
     }
+    $report.artifacts.category_dictionaries = @(
+        foreach ($path in $primary.category_files) {
+            Get-ArtifactRecord $path
+        }
+    )
     $buildReport = Join-Path $OutputDirectory 'dictionary-build.report.json'
     [IO.File]::WriteAllText(
         $buildReport,
-        (($report | ConvertTo-Json -Depth 5) + [Environment]::NewLine),
+        (($report | ConvertTo-Json -Depth 7) + [Environment]::NewLine),
         [Text.UTF8Encoding]::new($false)
     )
 

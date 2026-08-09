@@ -12,6 +12,7 @@ use std::sync::Arc;
 use sakura_core::dictionary::{image_format as format, Dictionary, EntryFlags};
 use sakura_proto::MAX_PREEDIT_BYTES;
 
+pub mod category;
 pub mod glossary;
 
 /// Connection taxonomy from the pinned Mozc dictionary revision. The source
@@ -20,18 +21,22 @@ pub mod glossary;
 /// exceptions instead of spending 13.6 MiB on a flat matrix.
 pub const FROZEN_CLASS_COUNT: u16 = 2_672;
 pub const MAX_MATRIX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
-/// Phase 2 release gate for the complete system image.
-pub const MAX_DICTIONARY_IMAGE_BYTES: usize = 35 * 1024 * 1024;
+/// Release gate for the complete categorized Sakura system image.  The
+/// expanded lexical corpus is intentionally mapped read-only, and a 128 MiB
+/// cap leaves room for 1.2M conservative system entries without allowing
+/// unbounded artifacts.
+pub const MAX_DICTIONARY_IMAGE_BYTES: usize = 128 * 1024 * 1024;
 
 pub const MOZC_UPSTREAM_COMMIT: &str = "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732";
 
-const ALLOWED_LICENSES: [&str; 6] = [
+const ALLOWED_LICENSES: [&str; 7] = [
     "BSD-3-Clause",
     "Apache-2.0",
     "CC0-1.0",
     "MIT",
     "LicenseRef-Sakura-InHouse",
     "LicenseRef-Mozc-Dictionary",
+    "LicenseRef-ATOK36-LGPL",
 ];
 
 /// One row from a human-editable dictionary TSV.
@@ -239,8 +244,29 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Parses the dictionary TSV schema and enforces its SPDX-style license line.
+const TSV_HEADER: &str =
+    "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation";
+
+/// Parses a licensed dictionary TSV source.
 pub fn parse_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error> {
+    parse_sakura_entries(source, text, true)
+}
+
+/// Parses a final category dictionary TSV.
+///
+/// Category files intentionally start directly with the schema header: their
+/// file name already communicates the contents, and they do not carry source
+/// or license metadata.  The source files fed into the category builder remain
+/// validated with [`parse_entries`] before this representation is emitted.
+pub fn parse_category_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error> {
+    parse_sakura_entries(source, text, false)
+}
+
+fn parse_sakura_entries(
+    source: &str,
+    text: &str,
+    require_license: bool,
+) -> Result<Vec<SourceEntry>, Error> {
     let source_name: Arc<str> = Arc::from(source);
     let mut license = None;
     let mut saw_header = false;
@@ -253,6 +279,13 @@ pub fn parse_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error
             continue;
         }
         if let Some(comment) = line.strip_prefix('#') {
+            if !require_license {
+                return Err(Error::at(
+                    source,
+                    line_number,
+                    "category dictionary files must not contain comments or metadata",
+                ));
+            }
             if let Some(value) = comment.trim().strip_prefix("license:") {
                 if license.replace(value.trim().to_string()).is_some() {
                     return Err(Error::at(
@@ -264,7 +297,7 @@ pub fn parse_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error
             }
             continue;
         }
-        if license.is_none() {
+        if require_license && license.is_none() {
             return Err(Error::at(
                 source,
                 line_number,
@@ -272,12 +305,11 @@ pub fn parse_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error
             ));
         }
         if !saw_header {
-            let expected = "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation";
-            if line != expected {
+            if line != TSV_HEADER {
                 return Err(Error::at(
                     source,
                     line_number,
-                    format!("unexpected header; expected '{expected}'"),
+                    format!("unexpected header; expected '{TSV_HEADER}'"),
                 ));
             }
             saw_header = true;
@@ -335,7 +367,9 @@ pub fn parse_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error
         });
     }
 
-    validate_license(source, license.as_deref())?;
+    if require_license {
+        validate_license(source, license.as_deref())?;
+    }
     if !saw_header {
         return Err(Error::at(source, 1, "missing dictionary TSV header"));
     }
@@ -693,11 +727,32 @@ pub fn compile(entries: &[SourceEntry], connection: &ConnectionMatrix) -> Result
     assemble_image(class_count, sorted.len(), built.node_count, tables)
 }
 
-/// Writes the human-reviewable Sakura TSV consumed by [`parse_entries`].
+/// Writes the licensed Sakura TSV consumed by [`parse_entries`].
 pub fn entries_to_tsv(entries: &[SourceEntry], license: &str) -> Result<String, Error> {
     use std::fmt::Write as _;
 
     validate_license("generated TSV", Some(license))?;
+    let mut output = String::new();
+    writeln!(&mut output, "# license: {license}")
+        .map_err(|_| Error::build("failed to write TSV license"))?;
+    write_tsv_body(&mut output, entries)?;
+    Ok(output)
+}
+
+/// Writes a final category TSV with no metadata lines.
+///
+/// The category builder only calls this after parsing and validating its
+/// licensed inputs.  The compiler reads these category files through
+/// [`parse_category_entries`].
+pub fn entries_to_category_tsv(entries: &[SourceEntry]) -> Result<String, Error> {
+    let mut output = String::new();
+    write_tsv_body(&mut output, entries)?;
+    Ok(output)
+}
+
+fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Error> {
+    use std::fmt::Write as _;
+
     let mut sorted = entries.iter().collect::<Vec<_>>();
     sorted.sort_by(|a, b| {
         (
@@ -717,12 +772,8 @@ pub fn entries_to_tsv(entries: &[SourceEntry], license: &str) -> Result<String, 
                 b.prediction_cost,
             ))
     });
-    let mut output = String::new();
-    writeln!(&mut output, "# license: {license}")
-        .map_err(|_| Error::build("failed to write TSV license"))?;
-    output.push_str(
-        "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
-    );
+    output.push_str(TSV_HEADER);
+    output.push('\n');
     for entry in sorted {
         if entry.reading.contains(['\t', '\r', '\n'])
             || entry.surface.contains(['\t', '\r', '\n'])
@@ -761,7 +812,7 @@ pub fn entries_to_tsv(entries: &[SourceEntry], license: &str) -> Result<String, 
             entry.prediction_cost.to_string()
         };
         writeln!(
-            &mut output,
+            output,
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             entry.reading,
             entry.surface,
@@ -774,7 +825,7 @@ pub fn entries_to_tsv(entries: &[SourceEntry], license: &str) -> Result<String, 
         )
         .map_err(|_| Error::build("failed to write TSV row"))?;
     }
-    Ok(output)
+    Ok(())
 }
 
 /// Merges a base lexicon with a higher-priority overlay without duplicating an

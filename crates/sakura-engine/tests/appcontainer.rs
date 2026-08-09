@@ -42,13 +42,13 @@
 //!
 //! # Why it is ignored by default
 //!
-//! Like `pipe_round_trip.rs` and `ipc_latency.rs`, this starts and talks to
-//! the engine, which is a per-logon-session singleton — running it in the
-//! same `cargo test` invocation as those would have separate test binaries
-//! (which `cargo test` runs concurrently) racing each other for one engine.
-//! Unlike those, it also creates an AppContainer profile, copies this
-//! binary, and launches a child process, none of which belongs in the
-//! default, no-setup `cargo test --workspace` run. So:
+//! Ordinary real-process tests use explicit owned private pipes and profiles,
+//! so they can run concurrently. This is the sole exception: the sandboxed
+//! child must independently derive the production well-known pipe name, so
+//! this test owns that name only after it proves no installed engine owns it.
+//! It remains ignored because it creates OS AppContainer state, copies this
+//! binary, and launches a sandboxed child; it also deliberately fails when a
+//! real installed engine owns the well-known pipe. So:
 //!
 //! ```text
 //! cargo test -p sakura-engine --test appcontainer -- --exact \
@@ -113,7 +113,7 @@ use windows::Win32::System::Threading::{
     STARTUPINFOW,
 };
 
-use common::{char_key, session_for, visible, Engine, PATIENT};
+use common::{session_for, test_char_key, visible, Engine, PATIENT};
 use sakura_ipc::Client;
 use sakura_proto::{Request, Response, PROTOCOL_VERSION};
 
@@ -136,6 +136,11 @@ const CHILD_MARKER_ENV: &str = "SAKURA_APPCONTAINER_CHILD";
 /// comparison exists before the connect attempt, not after it.
 const PARENT_PIPE_NAME_ENV: &str = "SAKURA_APPCONTAINER_PARENT_PIPE_NAME";
 
+/// Set alongside [`PARENT_PIPE_NAME_ENV`] by the parent that spawned the
+/// well-known-pipe engine. The sandboxed child must bind its exact pipe handle
+/// to this PID before it sends any protocol request.
+const PARENT_ENGINE_PID_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PID";
+
 /// The exact libtest name of the child-side probe. Passed to `--exact` so
 /// the re-executed copy runs only that test. Kept next to the function it
 /// names, in the same file, because nothing enforces the two staying in
@@ -152,30 +157,24 @@ const CHILD_TIMEOUT: Duration = Duration::from_secs(30);
 /// The whole point of this file: a real AppContainer token, built the only
 /// way Windows allows, reaches the engine's pipe and completes a keystroke.
 ///
-/// One test function, not several, for the same reason `pipe_round_trip.rs`
-/// is one test: the engine is a per-logon-session singleton, and
-/// [`Engine::running`]'s guard stops whichever copy this test started when
-/// it drops. Two tests sharing that guard's lifetime would race each other
-/// to stop the engine out from under one another.
+/// This is the sole intentional well-known-pipe owner. It first fails before
+/// any protocol request if a user's engine already owns that pipe, then owns
+/// and cleans up only the engine it spawned.
 #[test]
 #[ignore = "creates an AppContainer profile and spawns a sandboxed child \
-            process against the engine's per-logon-session singleton pipe; \
+            against the production well-known pipe, which must be unoccupied; \
             run alone, filtered to this test by name (see the module docs \
             for why the filter is required): cargo test -p sakura-engine \
             --test appcontainer -- --exact \
             the_pipe_is_reachable_from_a_real_appcontainer_token --ignored \
             --nocapture"]
 fn the_pipe_is_reachable_from_a_real_appcontainer_token() {
-    let mut engine = Engine::running();
-    if !engine.compatible() {
-        eprintln!("skipping AppContainer probe: an older engine owns the well-known pipe");
-        return;
-    }
+    let mut engine = Engine::spawn_well_known_for_appcontainer();
     // Blocks until the engine is actually serving, so the child never races
     // a pipe that has not been created yet.
     let _ready = engine.client();
 
-    let mut child = SandboxedChild::launch();
+    let mut child = SandboxedChild::launch(engine.child_pid());
     let outcome = child.wait(CHILD_TIMEOUT);
 
     let stdout = read_log(&child.stdout_path);
@@ -186,6 +185,16 @@ fn the_pipe_is_reachable_from_a_real_appcontainer_token() {
     // needing the test to fail first.
     println!("--- sandboxed child stdout ---\n{stdout}");
     println!("--- sandboxed child stderr ---\n{stderr}");
+
+    let cleanup = engine
+        .cleanup()
+        .expect("owned well-known-pipe engine cleanup must succeed");
+    assert!(
+        cleanup.status.success(),
+        "owned engine pid {} exited with {}",
+        cleanup.pid,
+        cleanup.status
+    );
 
     match outcome {
         Some(0) => {}
@@ -280,6 +289,8 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
          reported as a DACL/mandatory-label bug."
     );
 
+    let expected_server_pid = child_contract_engine_pid();
+
     let mut client = match Client::connect(PATIENT) {
         Ok(client) => client,
         Err(sakura_ipc::Fault::Os(error)) if is_win32(&error, ERROR_ACCESS_DENIED) => panic!(
@@ -305,6 +316,16 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
         ),
     };
 
+    let actual_server_pid = client.server_process_id().unwrap_or_else(|fault| {
+        panic!(
+            "could not identify the server on the sandbox child's exact pipe connection: {fault:?}; no protocol request was sent"
+        )
+    });
+    assert_eq!(
+        actual_server_pid, expected_server_pid,
+        "refusing sandboxed protocol traffic: the exact pipe connection is served by pid {actual_server_pid}, not the parent-owned engine pid {expected_server_pid}; no protocol request was sent"
+    );
+
     match client.call(
         &Request::Hello {
             client_version: PROTOCOL_VERSION,
@@ -322,7 +343,7 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     match client.call(
         &Request::SendKey {
             session,
-            key: char_key('a'),
+            key: test_char_key('a'),
         },
         PATIENT,
     ) {
@@ -380,6 +401,29 @@ fn is_win32(error: &Error, code: WIN32_ERROR) -> bool {
     error.code() == HRESULT::from_win32(code.0)
 }
 
+fn child_contract_engine_pid() -> u32 {
+    let value = env::var(PARENT_ENGINE_PID_ENV).unwrap_or_else(|error| {
+        panic!(
+            "SandboxedChild::launch must set {PARENT_ENGINE_PID_ENV}: {error}; no protocol request was sent"
+        )
+    });
+    parse_owned_engine_pid(&value).unwrap_or_else(|detail| {
+        panic!(
+            "invalid {PARENT_ENGINE_PID_ENV} child launch contract: {detail}; no protocol request was sent"
+        )
+    })
+}
+
+fn parse_owned_engine_pid(value: &str) -> Result<u32, String> {
+    let pid = value
+        .parse::<u32>()
+        .map_err(|_| format!("{value:?} is not an unsigned decimal PID"))?;
+    if pid == 0 {
+        return Err("PID 0 is not a child process".to_owned());
+    }
+    Ok(pid)
+}
+
 fn read_log(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| format!("<could not read {}: {error}>", path.display()))
@@ -419,7 +463,7 @@ impl SandboxedChild {
     /// copy with `--exact PROBE_TEST_NAME --ignored --nocapture
     /// --test-threads=1` so it runs only
     /// [`the_probe_confirms_it_is_sandboxed_then_uses_the_pipe`].
-    fn launch() -> SandboxedChild {
+    fn launch(owned_engine_pid: u32) -> SandboxedChild {
         let profile_wide = to_wide_nul(APPCONTAINER_PROFILE_NAME);
         let display_wide = to_wide_nul("Sakura Input test AppContainer");
         let desc_wide = to_wide_nul(
@@ -494,8 +538,10 @@ impl SandboxedChild {
             list: attr_list,
         };
 
-        let mut environment_block =
-            build_environment_block(&[(PARENT_PIPE_NAME_ENV, parent_pipe_name)]);
+        let mut environment_block = build_environment_block(&[
+            (PARENT_PIPE_NAME_ENV, parent_pipe_name),
+            (PARENT_ENGINE_PID_ENV, owned_engine_pid.to_string()),
+        ]);
 
         let command_line = format!(
             "\"{}\" --exact {PROBE_TEST_NAME} --ignored --nocapture --test-threads=1",
@@ -879,4 +925,18 @@ fn to_wide_nul(s: &str) -> Vec<u16> {
     let mut wide: Vec<u16> = s.encode_utf16().collect();
     wide.push(0);
     wide
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_owned_engine_pid;
+
+    #[test]
+    fn the_sandbox_pid_contract_accepts_only_a_nonzero_decimal_pid() {
+        assert_eq!(parse_owned_engine_pid("12345"), Ok(12345));
+        assert!(parse_owned_engine_pid("0").is_err());
+        assert!(parse_owned_engine_pid("-1").is_err());
+        assert!(parse_owned_engine_pid("12.5").is_err());
+        assert!(parse_owned_engine_pid("pid").is_err());
+    }
 }

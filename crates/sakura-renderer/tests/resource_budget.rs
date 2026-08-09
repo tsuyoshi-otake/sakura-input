@@ -53,7 +53,7 @@ fn renderer_with_candidates_stays_within_its_footprint_budget() {
         },
         PATIENT,
     ) {
-        Ok(Response::SessionCreated { session }) => session,
+        Ok(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     };
     for character in "kannsuu".chars() {

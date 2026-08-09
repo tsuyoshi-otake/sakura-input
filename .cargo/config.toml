@@ -6,13 +6,17 @@
 # rather than whatever the host happens to be.
 target = "x86_64-pc-windows-msvc"
 
-# AVX is a floor, not a feature to detect. Every CPU Microsoft supports for
-# Windows 11 has had it since 2011, so 128- and 256-bit vector code needs no
-# run-time guard and no scalar twin to fall back to.
+# AVX + SSSE3 is the shipped compatibility floor, not a feature to branch on.
+# The narrow ASCII pass-through scanner uses `pshufb` (SSSE3), so enabling only
+# AVX would let a copied binary execute an unsupported instruction before its
+# startup resolver could reject the CPU. Every supported Windows 11 x64 CPU has
+# both features, while the installer checks both explicitly.
 #
-# What this does NOT enable is deliberate: AVX2 and AVX-512 are reached
-# through run-time dispatch (sakura-core's `cpu` module resolves the tier once
-# at startup), because raising the compile-time floor to AVX2 would exclude
+# What this does NOT enable is deliberate: AVX2 is reached through run-time
+# dispatch. AVX-512F+BW+VL candidates are benchmark-only in this release;
+# production retains AVX2 until direct results are backed by stable
+# end-to-end and cross-host evidence. sakura-core resolves one concrete kernel
+# set at startup, because raising the compile-time floor to AVX2 would exclude
 # working machines to save a single already-resolved indirect call.
 #
 # The cost of this line is that a CPU without AVX faults on an instruction
@@ -22,4 +26,4 @@ target = "x86_64-pc-windows-msvc"
 # Set per-target rather than under [build]: build scripts and proc macros run
 # on the host and have no business inheriting the shipped binary's ISA floor.
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+avx"]
+rustflags = ["-C", "target-feature=+avx,+ssse3"]

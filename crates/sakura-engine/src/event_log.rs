@@ -22,21 +22,25 @@ pub const ENGINE_LOG_GENERATIONS: usize = 2;
 /// of defense for files left by an interrupted policy transition.
 pub const MAX_LOCAL_DUMPS: usize = 5;
 
-/// CPU implementation selected during process bootstrap.
+/// Concrete width-scan strategy selected during process bootstrap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CpuTier {
+pub enum WidthScanStrategy {
     Scalar,
-    Avx,
-    Avx2,
-    Avx512,
+    AvxSsse3Xmm,
+    Avx2Hybrid,
+    Avx512BwVlFrom64,
+    Avx512BwVlFrom128,
+    Avx512BwVlFrom256,
 }
 
-impl CpuTier {
+impl WidthScanStrategy {
     pub fn from_name(name: &str) -> Self {
         match name {
-            "avx" => Self::Avx,
-            "avx2" => Self::Avx2,
-            "avx512" | "avx512bw" => Self::Avx512,
+            "avx" | "avx-ssse3-128" => Self::AvxSsse3Xmm,
+            "avx2" | "avx2-hybrid" => Self::Avx2Hybrid,
+            "avx512bw-vl-from-64" => Self::Avx512BwVlFrom64,
+            "avx512bw-vl-from-128" => Self::Avx512BwVlFrom128,
+            "avx512bw-vl-from-256" => Self::Avx512BwVlFrom256,
             _ => Self::Scalar,
         }
     }
@@ -44,9 +48,11 @@ impl CpuTier {
     const fn name(self) -> &'static str {
         match self {
             Self::Scalar => "scalar",
-            Self::Avx => "avx",
-            Self::Avx2 => "avx2",
-            Self::Avx512 => "avx512bw",
+            Self::AvxSsse3Xmm => "avx-ssse3-128",
+            Self::Avx2Hybrid => "avx2-hybrid",
+            Self::Avx512BwVlFrom64 => "avx512bw-vl-from-64",
+            Self::Avx512BwVlFrom128 => "avx512bw-vl-from-128",
+            Self::Avx512BwVlFrom256 => "avx512bw-vl-from-256",
         }
     }
 }
@@ -54,7 +60,7 @@ impl CpuTier {
 /// Terminal and lifecycle events safe to persist without user content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineEvent {
-    Startup { cpu_tier: CpuTier },
+    Startup { width_scan: WidthScanStrategy },
     Ready { elapsed_ms: u64 },
     Stopped,
     AlreadyRunning,
@@ -151,9 +157,9 @@ impl EventLog {
 
 fn render_record(timestamp_ms: u64, event: EngineEvent) -> String {
     match event {
-        EngineEvent::Startup { cpu_tier } => format!(
-            "unix_ms={timestamp_ms}\tevent=startup\tcpu_tier={}\n",
-            cpu_tier.name()
+        EngineEvent::Startup { width_scan } => format!(
+            "unix_ms={timestamp_ms}\tevent=startup\twidth_scan={}\n",
+            width_scan.name()
         ),
         EngineEvent::Ready { elapsed_ms } => {
             format!("unix_ms={timestamp_ms}\tevent=ready\telapsed_ms={elapsed_ms}\n")
@@ -322,10 +328,28 @@ mod tests {
     }
 
     #[test]
-    fn cpu_tier_log_names_match_the_core_dispatch_vocabulary() {
-        assert_eq!(CpuTier::from_name("avx").name(), "avx");
-        assert_eq!(CpuTier::from_name("avx2").name(), "avx2");
-        assert_eq!(CpuTier::from_name("avx512bw").name(), "avx512bw");
+    fn width_scan_log_names_match_the_core_dispatch_vocabulary() {
+        assert_eq!(
+            WidthScanStrategy::from_name("avx-ssse3-128").name(),
+            "avx-ssse3-128"
+        );
+        assert_eq!(
+            WidthScanStrategy::from_name("avx2-hybrid").name(),
+            "avx2-hybrid"
+        );
+        assert_eq!(
+            WidthScanStrategy::from_name("avx512bw-vl-from-64").name(),
+            "avx512bw-vl-from-64"
+        );
+        assert_eq!(
+            WidthScanStrategy::from_name("avx512bw-vl-from-128").name(),
+            "avx512bw-vl-from-128"
+        );
+        assert_eq!(
+            WidthScanStrategy::from_name("avx512bw-vl-from-256").name(),
+            "avx512bw-vl-from-256"
+        );
+        assert_eq!(WidthScanStrategy::from_name("unknown").name(), "scalar");
     }
 
     #[test]
@@ -335,7 +359,7 @@ mod tests {
         log.record_at(
             123,
             EngineEvent::Startup {
-                cpu_tier: CpuTier::Avx2,
+                width_scan: WidthScanStrategy::Avx2Hybrid,
             },
         )
         .expect("startup");
@@ -351,7 +375,7 @@ mod tests {
 
         assert_eq!(
             fs::read_to_string(&path).expect("log"),
-            "unix_ms=123\tevent=startup\tcpu_tier=avx2\n\
+            "unix_ms=123\tevent=startup\twidth_scan=avx2-hybrid\n\
              unix_ms=124\tevent=ready\telapsed_ms=17\n\
              unix_ms=125\tevent=startup_failed\thresult=0x80004005\n"
         );

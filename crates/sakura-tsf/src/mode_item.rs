@@ -1,0 +1,532 @@
+//! The focused TSF input-mode item and its original Sakura menu model.
+//!
+//! Windows 11 exposes a third-party IME's current mode through the one
+//! `GUID_LBI_INPUTMODE` language-bar item. This module owns the small,
+//! re-entrancy-safe state behind that item: visibility, the `あ`/`A` glyph,
+//! the menu's enabled state, and the language-bar update sink. It does not
+//! talk to the engine or TSF document contexts; `text_service` owns those
+//! boundaries and passes this module an already-resolved snapshot.
+
+use std::cell::{Cell, RefCell};
+
+use sakura_proto::Mode;
+use windows::Win32::Foundation::{COLORREF, E_FAIL, RECT, SIZE};
+use windows::Win32::Graphics::Gdi::{
+    CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
+    DeleteObject, DrawTextW, FillRect, GetDC, GetSysColor, ReleaseDC, SelectObject, SetBkMode,
+    SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, COLOR_WINDOW, COLOR_WINDOWTEXT,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_SEMIBOLD,
+    HBITMAP, HDC, HFONT, OUT_TT_PRECIS, TRANSPARENT,
+};
+use windows::Win32::System::Ole::{
+    CONNECT_E_ADVISELIMIT, CONNECT_E_CANNOTCONNECT, CONNECT_E_NOCONNECTION,
+};
+use windows::Win32::UI::TextServices::{
+    ITfLangBarItemSink, ITfMenu, TF_LBI_ICON, TF_LBI_STATUS, TF_LBI_STATUS_HIDDEN, TF_LBI_TEXT,
+    TF_LBI_TOOLTIP, TF_LBMENUF_GRAYED, TF_LBMENUF_RADIOCHECKED, TF_LBMENUF_SEPARATOR,
+    TF_LBMENUF_SUBMENU,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON, SM_CYSMICON,
+};
+use windows_core::{Error, Result, PCWSTR};
+
+/// Item ids are local to one [`ITfMenu`] invocation. Keep them stable so a
+/// future new menu entry cannot silently change what an old id means.
+pub const MENU_RESTORE_MODE: u32 = 1;
+pub const MENU_INPUT_MODE: u32 = 2;
+pub const MENU_IME_TOGGLE: u32 = 3;
+pub const MENU_MODE_HIRAGANA: u32 = 10;
+pub const MENU_MODE_KATAKANA: u32 = 11;
+pub const MENU_MODE_HALF_KATAKANA: u32 = 12;
+pub const MENU_MODE_FULL_ALNUM: u32 = 13;
+pub const MENU_MODE_HALF_ALNUM: u32 = 14;
+pub const MENU_MODE_DIRECT: u32 = 15;
+
+const SINK_COOKIE: u32 = 1;
+
+/// A selected menu operation. The text service validates the focus generation
+/// and asks the active engine session to execute it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuCommand {
+    RestoreMode,
+    SetMode(Mode),
+    ToggleIme,
+}
+
+/// The caller-owned state used to build a menu at the instant TSF requests it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Snapshot {
+    pub visible: bool,
+    pub mode: Option<Mode>,
+    pub can_change: bool,
+    pub can_restore: bool,
+}
+
+/// Mutable state shared by COM callbacks. Scalars live in `Cell` so focus loss
+/// can hide the item even if TSF re-enters while a sink callback is in flight.
+/// The one COM reference remains behind a short-lived `RefCell` borrow and is
+/// always cloned before invoking TSF again.
+#[derive(Debug, Default)]
+pub struct ModeItemState {
+    visible: Cell<bool>,
+    mode: Cell<Option<Mode>>,
+    can_change: Cell<bool>,
+    can_restore: Cell<bool>,
+    pending_update: Cell<u32>,
+    sink: RefCell<Option<ITfLangBarItemSink>>,
+}
+
+impl ModeItemState {
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            visible: self.visible.get(),
+            mode: self.mode.get(),
+            can_change: self.can_change.get(),
+            can_restore: self.can_restore.get(),
+        }
+    }
+
+    /// Replaces the externally visible state and notifies the language bar
+    /// after every interior borrow has ended. A missing or temporarily
+    /// re-entrant sink leaves a pending notification for the next safe call.
+    pub fn update(&self, visible: bool, mode: Option<Mode>, can_change: bool, can_restore: bool) {
+        let visible = visible && mode.is_some();
+        let mut flags = 0;
+        if self.visible.replace(visible) != visible {
+            flags |= TF_LBI_STATUS;
+        }
+        if self.mode.replace(mode) != mode {
+            flags |= TF_LBI_ICON | TF_LBI_TEXT | TF_LBI_TOOLTIP;
+        }
+        // Menu items are generated only when opened, so their enabled state
+        // needs no asynchronous redraw. Keeping it here still makes a
+        // concurrent focus/scope change fail closed at selection time.
+        self.can_change.set(can_change);
+        self.can_restore.set(can_restore);
+        self.queue_update(flags);
+    }
+
+    pub fn hide(&self) {
+        self.update(false, None, false, false);
+    }
+
+    pub fn status(&self) -> u32 {
+        if self.visible.get() {
+            0
+        } else {
+            TF_LBI_STATUS_HIDDEN
+        }
+    }
+
+    pub fn advise_sink(&self, sink: ITfLangBarItemSink) -> Result<u32> {
+        let mut slot = self
+            .sink
+            .try_borrow_mut()
+            .map_err(|_| Error::from_hresult(E_FAIL))?;
+        if slot.is_some() {
+            return Err(Error::from_hresult(CONNECT_E_ADVISELIMIT));
+        }
+        *slot = Some(sink);
+        drop(slot);
+        self.flush_update();
+        Ok(SINK_COOKIE)
+    }
+
+    pub fn unadvise_sink(&self, cookie: u32) -> Result<()> {
+        if cookie != SINK_COOKIE {
+            return Err(Error::from_hresult(CONNECT_E_NOCONNECTION));
+        }
+        let mut slot = self
+            .sink
+            .try_borrow_mut()
+            .map_err(|_| Error::from_hresult(E_FAIL))?;
+        if slot.take().is_none() {
+            return Err(Error::from_hresult(CONNECT_E_NOCONNECTION));
+        }
+        Ok(())
+    }
+
+    /// Detach owns final cleanup. A re-entrant borrowed slot is left for the
+    /// corresponding TSF `UnadviseSink`; visibility has already been cleared
+    /// through `Cell`, so it cannot leave a stale visible status behind.
+    pub fn reset(&self) {
+        self.visible.set(false);
+        self.mode.set(None);
+        self.can_change.set(false);
+        self.can_restore.set(false);
+        self.pending_update.set(0);
+        if let Ok(mut slot) = self.sink.try_borrow_mut() {
+            let _ = slot.take();
+        }
+    }
+
+    fn queue_update(&self, flags: u32) {
+        if flags == 0 {
+            return;
+        }
+        self.pending_update.set(self.pending_update.get() | flags);
+        self.flush_update();
+    }
+
+    fn flush_update(&self) {
+        let flags = self.pending_update.get();
+        if flags == 0 {
+            return;
+        }
+        let sink = match self.sink.try_borrow() {
+            Ok(slot) => slot.clone(),
+            Err(_) => return,
+        };
+        let Some(sink) = sink else {
+            return;
+        };
+        self.pending_update.set(0);
+        // SAFETY: this is the sink TSF supplied through `ITfSource`; the COM
+        // reference is cloned above and no `RefCell` borrow remains across the
+        // re-entrant callback.
+        if unsafe { sink.OnUpdate(flags) }.is_err() {
+            self.pending_update.set(self.pending_update.get() | flags);
+        }
+    }
+}
+
+/// Maps a menu id back to the one engine operation it is allowed to perform.
+pub const fn menu_command(id: u32) -> Option<MenuCommand> {
+    match id {
+        MENU_RESTORE_MODE => Some(MenuCommand::RestoreMode),
+        MENU_IME_TOGGLE => Some(MenuCommand::ToggleIme),
+        MENU_MODE_HIRAGANA => Some(MenuCommand::SetMode(Mode::Hiragana)),
+        MENU_MODE_KATAKANA => Some(MenuCommand::SetMode(Mode::Katakana)),
+        MENU_MODE_HALF_KATAKANA => Some(MenuCommand::SetMode(Mode::HalfKatakana)),
+        MENU_MODE_FULL_ALNUM => Some(MenuCommand::SetMode(Mode::FullAlnum)),
+        MENU_MODE_HALF_ALNUM => Some(MenuCommand::SetMode(Mode::HalfAlnum)),
+        MENU_MODE_DIRECT => Some(MenuCommand::SetMode(Mode::Direct)),
+        _ => None,
+    }
+}
+
+/// Builds Sakura's menu from the current snapshot. This follows the useful
+/// hierarchy of familiar IMEs (a focused input-mode submenu and a one-shot
+/// restore), while intentionally using Sakura labels and only operations the
+/// engine can carry out safely.
+pub fn populate_menu(menu: &ITfMenu, state: Snapshot) -> Result<()> {
+    let mut unused = None;
+    let restore_flags = if state.can_restore && state.can_change {
+        0
+    } else {
+        TF_LBMENUF_GRAYED
+    };
+    add(
+        menu,
+        MENU_RESTORE_MODE,
+        restore_flags,
+        "変更前の入力モードに戻す",
+        &mut unused,
+    )?;
+    add(menu, 0, TF_LBMENUF_SEPARATOR, "", &mut unused)?;
+
+    let mut mode_menu = None;
+    add(
+        menu,
+        MENU_INPUT_MODE,
+        TF_LBMENUF_SUBMENU,
+        "入力モード",
+        &mut mode_menu,
+    )?;
+    let Some(mode_menu) = mode_menu else {
+        return Err(Error::from_hresult(E_FAIL));
+    };
+
+    add_mode(
+        &mode_menu,
+        MENU_MODE_HIRAGANA,
+        Mode::Hiragana,
+        "ひらがな",
+        state,
+    )?;
+    add_mode(
+        &mode_menu,
+        MENU_MODE_KATAKANA,
+        Mode::Katakana,
+        "全角カタカナ",
+        state,
+    )?;
+    add_mode(
+        &mode_menu,
+        MENU_MODE_HALF_KATAKANA,
+        Mode::HalfKatakana,
+        "半角カタカナ",
+        state,
+    )?;
+    add(&mode_menu, 0, TF_LBMENUF_SEPARATOR, "", &mut unused)?;
+    add_mode(
+        &mode_menu,
+        MENU_MODE_FULL_ALNUM,
+        Mode::FullAlnum,
+        "全角英数",
+        state,
+    )?;
+    add_mode(
+        &mode_menu,
+        MENU_MODE_HALF_ALNUM,
+        Mode::HalfAlnum,
+        "半角英数",
+        state,
+    )?;
+    add_mode(
+        &mode_menu,
+        MENU_MODE_DIRECT,
+        Mode::Direct,
+        "直接入力",
+        state,
+    )?;
+
+    add(menu, 0, TF_LBMENUF_SEPARATOR, "", &mut unused)?;
+    let ime_label = if state.mode == Some(Mode::Direct) {
+        "日本語入力をオン"
+    } else {
+        "日本語入力をオフ"
+    };
+    let toggle_flags = if state.can_change {
+        0
+    } else {
+        TF_LBMENUF_GRAYED
+    };
+    add(menu, MENU_IME_TOGGLE, toggle_flags, ime_label, &mut unused)
+}
+
+fn add_mode(menu: &ITfMenu, id: u32, mode: Mode, label: &str, state: Snapshot) -> Result<()> {
+    let mut flags = if state.mode == Some(mode) {
+        TF_LBMENUF_RADIOCHECKED
+    } else {
+        0
+    };
+    if !state.can_change {
+        flags |= TF_LBMENUF_GRAYED;
+    }
+    let mut unused = None;
+    add(menu, id, flags, label, &mut unused)
+}
+
+fn add(
+    menu: &ITfMenu,
+    id: u32,
+    flags: u32,
+    label: &str,
+    submenu: &mut Option<ITfMenu>,
+) -> Result<()> {
+    let label: Vec<u16> = label.encode_utf16().collect();
+    // SAFETY: the temporary UTF-16 buffer and out-pointer stay live for the
+    // duration of the call. The system owns any returned submenu interface.
+    unsafe {
+        menu.AddMenuItem(
+            id,
+            flags,
+            HBITMAP::default(),
+            HBITMAP::default(),
+            &label,
+            submenu,
+        )
+    }
+}
+
+/// The concise status glyph. The tooltip contains the precise full mode name.
+pub const fn label(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Hiragana | Mode::Katakana | Mode::HalfKatakana => "あ",
+        Mode::Direct | Mode::HalfAlnum | Mode::FullAlnum => "A",
+    }
+}
+
+pub const fn description(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Direct => "直接入力",
+        Mode::Hiragana => "ひらがな",
+        Mode::Katakana => "全角カタカナ",
+        Mode::HalfKatakana => "半角カタカナ",
+        Mode::HalfAlnum => "半角英数",
+        Mode::FullAlnum => "全角英数",
+    }
+}
+
+/// Creates a caller-owned, DPI-sized `あ`/`A` icon. TSF explicitly assigns
+/// `DestroyIcon` ownership to the language bar after `GetIcon` returns, so no
+/// icon handle is cached in the in-process service.
+pub fn icon_for(mode: Mode) -> Result<HICON> {
+    // SAFETY: the metrics have no input pointers and return a scalar size.
+    let size = unsafe {
+        SIZE {
+            cx: GetSystemMetrics(SM_CXSMICON).max(16),
+            cy: GetSystemMetrics(SM_CYSMICON).max(16),
+        }
+    };
+    // SAFETY: a null HWND requests the screen DC; it is released below on all
+    // paths because `Canvas::compose` returns before the explicit release only
+    // through its `Result`, which is captured first.
+    let screen = unsafe { GetDC(None) };
+    let result = Canvas::new(screen, size).compose(size, label(mode));
+    // SAFETY: `screen` came from `GetDC(None)` above.
+    unsafe { ReleaseDC(None, screen) };
+    result
+}
+
+struct Canvas {
+    memory: HDC,
+    color: HBITMAP,
+    mask: HBITMAP,
+}
+
+impl Canvas {
+    fn new(screen: HDC, size: SIZE) -> Self {
+        // SAFETY: a live screen DC is sufficient for all three compatible GDI
+        // objects; `Drop` releases each one exactly once.
+        unsafe {
+            Self {
+                memory: CreateCompatibleDC(Some(screen)),
+                color: CreateCompatibleBitmap(screen, size.cx, size.cy),
+                mask: CreateCompatibleBitmap(screen, size.cx, size.cy),
+            }
+        }
+    }
+
+    fn compose(&self, size: SIZE, text: &str) -> Result<HICON> {
+        // SAFETY: `color` is selected only for the duration of drawing and is
+        // restored before the canvas drops it.
+        let previous = unsafe { SelectObject(self.memory, self.color.into()) };
+        let rect = RECT {
+            left: 0,
+            top: 0,
+            right: size.cx,
+            bottom: size.cy,
+        };
+        // SAFETY: both system colour indices are valid. The brush is deleted
+        // after filling the live memory DC.
+        unsafe {
+            let paper = COLORREF(GetSysColor(COLOR_WINDOW));
+            let brush = CreateSolidBrush(paper);
+            FillRect(self.memory, &rect, brush);
+            let _ = DeleteObject(brush.into());
+        }
+        draw_centered(
+            self.memory,
+            &rect,
+            text,
+            // SAFETY: `COLOR_WINDOWTEXT` is a documented system colour index.
+            COLORREF(unsafe { GetSysColor(COLOR_WINDOWTEXT) }),
+        );
+        // SAFETY: restores the previous GDI object before `color` is released.
+        unsafe { SelectObject(self.memory, previous) };
+
+        let info = ICONINFO {
+            fIcon: true.into(),
+            xHotspot: 0,
+            yHotspot: 0,
+            hbmMask: self.mask,
+            hbmColor: self.color,
+        };
+        // SAFETY: both same-sized bitmaps are live and unselected. Windows
+        // copies them into the returned caller-owned icon.
+        unsafe { CreateIconIndirect(&info) }
+    }
+}
+
+impl Drop for Canvas {
+    fn drop(&mut self) {
+        // SAFETY: every handle came from `Canvas::new` and is released once.
+        unsafe {
+            let _ = DeleteObject(self.color.into());
+            let _ = DeleteObject(self.mask.into());
+            let _ = DeleteDC(self.memory);
+        }
+    }
+}
+
+fn draw_centered(dc: HDC, rect: &RECT, text: &str, color: COLORREF) {
+    let font = font_of_height(((rect.bottom - rect.top) * 2) / 3);
+    // SAFETY: the previous font is restored before the temporary font is
+    // deleted. `wide` remains valid for the call.
+    let previous = unsafe { SelectObject(dc, font.into()) };
+    let mut wide: Vec<u16> = text.encode_utf16().collect();
+    let mut area = *rect;
+    unsafe {
+        let _ = SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, color);
+        DrawTextW(
+            dc,
+            &mut wide,
+            &mut area,
+            DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+        );
+        SelectObject(dc, previous);
+        let _ = DeleteObject(font.into());
+    }
+}
+
+fn font_of_height(height: i32) -> HFONT {
+    // SAFETY: the empty face name asks Windows to select an installed UI font
+    // with its normal Japanese fallback chain.
+    unsafe {
+        CreateFontW(
+            -height,
+            0,
+            0,
+            0,
+            FW_SEMIBOLD.0 as i32,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_TT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY,
+            (DEFAULT_PITCH.0 | FF_DONTCARE.0).into(),
+            PCWSTR::null(),
+        )
+    }
+}
+
+/// Returns the `ITfSource` error expected for an unsupported sink interface.
+pub fn cannot_connect() -> Error {
+    Error::from_hresult(CONNECT_E_CANNOTCONNECT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_mode_has_a_status_glyph_and_distinct_name() {
+        for mode in Mode::ALL {
+            assert!(!label(mode).is_empty());
+            assert!(!description(mode).is_empty());
+        }
+        for (index, mode) in Mode::ALL.iter().enumerate() {
+            for other in &Mode::ALL[index + 1..] {
+                assert_ne!(description(*mode), description(*other));
+            }
+        }
+    }
+
+    #[test]
+    fn visibility_is_fail_closed_without_a_mode() {
+        let item = ModeItemState::default();
+        item.update(true, None, true, false);
+        assert_eq!(item.snapshot().visible, false);
+        assert_eq!(item.status(), TF_LBI_STATUS_HIDDEN);
+    }
+
+    #[test]
+    fn menu_ids_have_one_supported_meaning() {
+        assert_eq!(
+            menu_command(MENU_RESTORE_MODE),
+            Some(MenuCommand::RestoreMode)
+        );
+        assert_eq!(
+            menu_command(MENU_MODE_HALF_KATAKANA),
+            Some(MenuCommand::SetMode(Mode::HalfKatakana))
+        );
+        assert_eq!(menu_command(MENU_IME_TOGGLE), Some(MenuCommand::ToggleIme));
+        assert_eq!(menu_command(999), None);
+    }
+}

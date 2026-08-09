@@ -157,6 +157,12 @@ fn source_license_and_frozen_taxonomy_are_real_gates() {
     let error = parse_entries("bad.tsv", &proprietary).expect_err("license must be rejected");
     assert!(error.to_string().contains("license"));
 
+    let atok36 = ENTRIES.replace("BSD-3-Clause", "LicenseRef-ATOK36-LGPL");
+    assert!(
+        parse_entries("atok36.tsv", &atok36).is_ok(),
+        "the local ATOK 36 provenance reference must remain buildable"
+    );
+
     let error = parse_connection("small.tsv", CONNECTION, true)
         .expect_err("shipping compiler freezes the taxonomy at 2672 classes");
     assert!(error.to_string().contains("2672"));
@@ -181,6 +187,38 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 
     let duplicate_overlay = [overlay.clone(), overlay].concat();
     assert!(merge_entries(system, duplicate_overlay).is_err());
+}
+
+#[test]
+fn system_and_overlay_keep_precedence_over_a_supplement() {
+    let supplement_text = concat!(
+        "# license: LicenseRef-ATOK36-LGPL\n",
+        "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        "かんじ\t漢字\t1\t2\t7800\t-\t\timported supplement\n",
+    );
+    let system_text = concat!(
+        "# license: BSD-3-Clause\n",
+        "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        "かんじ\t漢字\t1\t2\t1200\t900\tpredict\tcore system\n",
+    );
+    let overlay_text = concat!(
+        "# license: LicenseRef-Sakura-InHouse\n",
+        "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        "かんじ\t漢字\t1\t2\t600\t300\tit,predict\tcurated override\n",
+    );
+    let supplement = parse_entries("supplement.tsv", supplement_text).expect("supplement");
+    let system = parse_entries("system.tsv", system_text).expect("system");
+    let overlay = parse_entries("overlay.tsv", overlay_text).expect("overlay");
+
+    let after_system = merge_entries(supplement, system).expect("system wins");
+    assert_eq!(after_system.len(), 1);
+    assert_eq!(after_system[0].word_cost, 1200);
+    assert_eq!(after_system[0].annotation, "core system");
+
+    let final_entries = merge_entries(after_system, overlay).expect("overlay wins");
+    assert_eq!(final_entries.len(), 1);
+    assert_eq!(final_entries[0].word_cost, 600);
+    assert_eq!(final_entries[0].annotation, "curated override");
 }
 
 #[test]

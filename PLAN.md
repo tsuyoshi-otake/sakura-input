@@ -110,13 +110,15 @@ Tasks, in order:
    the installer; VM-snapshot script: install → type → uninstall → type.
 10. Single-arch + ISA baseline (DESIGN §3.2): x86-64 only —
     `i686` and ARM64X are out of scope, so the ARM64X spike is
-    **cancelled**, not deferred. In its place: `-C target-feature=+avx`
-    workspace-wide; a `cpu` module that resolves the ISA tier **once at
-    engine startup** (AVX / AVX2 / AVX-512BW) and refuses to start
-    without AVX; AVX2 and AVX-512BW kernels for the width normalizer
-    behind that one resolved dispatch; and the installer's
-    `IsProcessorFeaturePresent` gate. Every kernel is differential-tested
-    against the scalar reference.
+    **cancelled**, not deferred. In its place: `-C target-feature=+avx,+ssse3`
+    workspace-wide; a `CpuFeatures` set and concrete `KernelSet` resolved
+     **once at engine startup**. AVX+SSSE3 is the compatibility floor and AVX2
+     is the standard width-normalizer path. AVX-512F+BW+VL remains a
+     bench-only 64/128/256-byte candidate until direct results are backed by
+     stable end-to-end and cross-host evidence. The installer gates the
+     AVX+SSSE3 floor with
+    `IsProcessorFeaturePresent`. Every kernel is differential-tested against
+    the scalar reference.
 
 Exit criteria:
 

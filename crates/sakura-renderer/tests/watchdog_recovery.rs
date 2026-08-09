@@ -392,7 +392,7 @@ fn handshake_and_open(client: &mut Client) -> SessionId {
         },
         PATIENT,
     ) {
-        Ok(Response::SessionCreated { session }) => session,
+        Ok(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     }
 }

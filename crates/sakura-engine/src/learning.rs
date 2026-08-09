@@ -44,6 +44,12 @@ const MAX_LOG_RECORDS: u64 = 50_000;
 const TARGET_LOG_RECORDS: u64 = 40_000;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
 const RECORD_COMMIT: u8 = 1;
+/// A learned choice loses half of its effective evidence every 30 days.
+///
+/// The same decay applies to exact-context and general preferences.  Exact
+/// context remains more specific, but an old one-off choice must not override
+/// the converter's current grammatical ranking indefinitely.
+const LEARNING_HALF_LIFE_DAYS: u32 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LearningPreference {
@@ -70,6 +76,53 @@ struct PreferenceQuery {
     reading_len: u16,
     day: u32,
     exact: bool,
+}
+
+/// How much evidence a learned choice has after recency decay.
+///
+/// Candidate indices are the converter's unpersonalized order, so this is a
+/// guardrail rather than another independent score scale.  A weak choice may
+/// affect only an already-near candidate; repeated, recent exact-context
+/// choices earn a wider influence.  General (context-free) learning is always
+/// more conservative because it has less evidence about the current sentence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LearningStrength {
+    Weak,
+    Medium,
+    Strong,
+}
+
+impl LearningStrength {
+    fn from_effective_frequency(frequency: u32) -> Option<Self> {
+        match frequency {
+            0 => None,
+            1 => Some(Self::Weak),
+            2 => Some(Self::Medium),
+            _ => Some(Self::Strong),
+        }
+    }
+
+    /// Highest zero-based base-candidate index this strength may select.
+    ///
+    /// Exact context has the previous grammatical connection and the learned
+    /// candidate's right connection, so repeated evidence can eventually win.
+    /// General learning deliberately remains bounded: it must never transplant
+    /// a far-down candidate into an unrelated context solely on global history.
+    const fn maximum_candidate_index(self, exact_context: bool) -> usize {
+        match (exact_context, self) {
+            (true, Self::Weak) => 1,
+            (true, Self::Medium) => 3,
+            (true, Self::Strong) => usize::MAX,
+            (false, Self::Weak) => 0,
+            (false, Self::Medium) => 2,
+            (false, Self::Strong) => 5,
+        }
+    }
+}
+
+fn effective_learning_frequency(frequency: u32, last_seen_day: u32, day: u32) -> u32 {
+    let half_lives = day.saturating_sub(last_seen_day) / LEARNING_HALF_LIFE_DAYS;
+    frequency.checked_shr(half_lives).unwrap_or(0)
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -302,19 +355,28 @@ impl Index {
             else {
                 continue;
             };
-            let score = if query.exact {
-                slot.sequence
-            } else {
-                // Integer exponential decay with an approximately 30-day
-                // half-life. Sequence breaks ties toward the recent choice.
-                let half_lives = query.day.saturating_sub(slot.last_seen_day) / 30;
-                u64::from(slot.frequency)
-                    .checked_shr(half_lives.min(63))
-                    .unwrap_or(0)
+            let effective_frequency =
+                effective_learning_frequency(slot.frequency, slot.last_seen_day, query.day);
+            let Some(strength) = LearningStrength::from_effective_frequency(effective_frequency)
+            else {
+                continue;
             };
-            let ranked = (candidate_index, score, slot.sequence);
+            if candidate_index > strength.maximum_candidate_index(query.exact) {
+                continue;
+            }
+
+            // Frequency (after decay) wins before recency.  The old
+            // exact-context path used sequence alone, which let one unusual
+            // confirmation unconditionally beat the base converter forever.
+            // A repeated choice is stronger evidence; sequence still makes the
+            // latest choice deterministic when evidence is tied.
+            let ranked = (
+                candidate_index,
+                u64::from(effective_frequency),
+                slot.sequence,
+            );
             if best.is_none_or(|(_, best_score, best_sequence)| {
-                (score, slot.sequence) > (best_score, best_sequence)
+                (u64::from(effective_frequency), slot.sequence) > (best_score, best_sequence)
             }) {
                 best = Some(ranked);
             }
@@ -2236,6 +2298,47 @@ mod tests {
     }
 
     #[test]
+    fn learning_strength_rejects_one_off_far_choices_and_decays_stale_context() {
+        let mut index = Index::new();
+        let candidates = [
+            ("top", 9),
+            ("near", 9),
+            ("third", 9),
+            ("fourth", 9),
+            ("fifth", 9),
+            ("sixth", 9),
+            ("far", 9),
+        ];
+
+        // A single far-down selection remains recorded, but weak evidence must
+        // not displace the converter's base ranking in the next conversion.
+        index.learn(7, 9, "reading", "far", 100, 1);
+        let one_confirmation = index.preference("reading", 7, candidates, 100);
+        assert_eq!(one_confirmation.exact, None);
+        assert_eq!(one_confirmation.general, None);
+
+        // Two confirmations are medium evidence, still bounded to the first
+        // four exact-context candidates.  Three recent confirmations are a
+        // deliberate user preference and may select the exact-context choice.
+        index.learn(7, 9, "reading", "far", 100, 2);
+        assert_eq!(index.preference("reading", 7, candidates, 100).exact, None);
+        index.learn(7, 9, "reading", "far", 100, 3);
+        assert_eq!(
+            index.preference("reading", 7, candidates, 100).exact,
+            Some(6)
+        );
+
+        // Context-free history is never allowed to carry this far-down choice
+        // into a different grammatical context, even after repetition.
+        let different_context = index.preference("reading", 8, candidates, 100);
+        assert_eq!(different_context.exact, None);
+        assert_eq!(different_context.general, None);
+
+        // Three 30-day half-lives reduce three confirmations to zero evidence.
+        assert_eq!(index.preference("reading", 7, candidates, 190).exact, None);
+    }
+
+    #[test]
     fn packed_index_and_public_entry_cap_stay_inside_the_memory_budget() {
         assert_eq!(MAX_LEARNING_ENTRIES, 98_304);
         assert!(
@@ -2301,7 +2404,7 @@ mod tests {
         let reading = "かな";
         let surface = "加奈";
         let mut payload = Vec::new();
-        payload.extend_from_slice(&123u32.to_le_bytes());
+        payload.extend_from_slice(&unix_day().to_le_bytes());
         payload.extend_from_slice(&(reading.len() as u16).to_le_bytes());
         payload.extend_from_slice(&(surface.len() as u16).to_le_bytes());
         payload.extend_from_slice(reading.as_bytes());
@@ -2338,7 +2441,7 @@ mod tests {
         let surface = "行った";
         let mut payload = Vec::new();
         payload.push(RECORD_COMMIT);
-        payload.extend_from_slice(&123u32.to_le_bytes());
+        payload.extend_from_slice(&unix_day().to_le_bytes());
         payload.extend_from_slice(&7u16.to_le_bytes());
         payload.extend_from_slice(&(reading.len() as u16).to_le_bytes());
         payload.extend_from_slice(&(surface.len() as u16).to_le_bytes());
@@ -2386,11 +2489,14 @@ mod tests {
         drop(service);
 
         let reopened = LearningService::open(&path).expect("restart");
+        // Compaction retains the bounded recent records. The nine retained
+        // normal choices are stronger evidence than the one last anomalous
+        // choice, so the frequency-aware preference is the base candidate.
         assert_eq!(
             reopened
                 .preference("かな", 3, [("仮名", 4), ("加奈", 4)])
                 .exact,
-            Some(1)
+            Some(0)
         );
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }

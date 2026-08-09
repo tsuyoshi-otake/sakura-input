@@ -14,5 +14,10 @@ authors.workspace = true
 [dependencies]
 sakura-proto.workspace = true
 
+[features]
+# Retains otherwise bench-only SIMD kernels only in the isolated assembly
+# audit artifact. It is never enabled by the shipping workspace build.
+simd-assembly-audit = []
+
 [lints]
 workspace = true

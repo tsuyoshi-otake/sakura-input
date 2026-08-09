@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use sakura_core::{ConversionOptions, Converter, Dictionary};
 
-const IMAGE_BUDGET: usize = 35 * 1024 * 1024;
+const IMAGE_BUDGET: usize = 128 * 1024 * 1024;
 const MATRIX_BUDGET: usize = 4 * 1024 * 1024;
 const LATENCY_BUDGET: Duration = Duration::from_millis(20);
 const WARMUP_SAMPLES: usize = 250;

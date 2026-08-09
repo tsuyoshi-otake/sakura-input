@@ -9,7 +9,7 @@
 
 use sakura_proto::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
-    Error, InputScope, KeyCode, KeyInput, Modifiers, Request, Response, ScreenRect,
+    Error, InputScope, KeyCode, KeyInput, Mode, Modifiers, Request, Response, ScreenRect,
     UndoCommitOutcome, FRAME_HEADER_LEN, MAX_COMMIT_BYTES, MAX_PAYLOAD,
 };
 
@@ -151,6 +151,10 @@ fn sample_valid_request_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
             session: 42,
             scope: InputScope::Password,
         },
+        Request::SetMode {
+            session: 42,
+            mode: Mode::HalfAlnum,
+        },
         Request::DeleteSession { session: 42 },
         Request::Ping,
         Request::Shutdown,
@@ -278,7 +282,13 @@ fn sample_valid_response_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
             server_version: 1,
             engine_version: [0, 1, 0],
         },
-        Response::SessionCreated { session: 42 },
+        Response::SessionCreated {
+            session: 42,
+            mode: Mode::Hiragana,
+        },
+        Response::InputMode {
+            mode: Mode::HalfAlnum,
+        },
         Response::Output(Output {
             consumed: true,
             beep: false,

@@ -89,6 +89,10 @@ fn every_request_variant_roundtrips() {
             session: 1,
             scope: InputScope::Email,
         },
+        Request::SetMode {
+            session: 1,
+            mode: Mode::HalfKatakana,
+        },
         Request::DeleteSession { session: 1 },
         Request::Ping,
         Request::Shutdown,
@@ -117,7 +121,13 @@ fn every_response_variant_roundtrips() {
             server_version: PROTOCOL_VERSION,
             engine_version: [0, 1, 2],
         },
-        Response::SessionCreated { session: 1 },
+        Response::SessionCreated {
+            session: 1,
+            mode: Mode::Hiragana,
+        },
+        Response::InputMode {
+            mode: Mode::HalfKatakana,
+        },
         Response::Output(Output {
             consumed: true,
             beep: false,
@@ -318,7 +328,13 @@ fn cursor_and_session_at_u32_and_u64_max_roundtrip() {
     };
     roundtrip_response(&Response::Output(output), 1);
     roundtrip_request(&Request::Commit { session: u64::MAX }, 1);
-    roundtrip_response(&Response::SessionCreated { session: u64::MAX }, 1);
+    roundtrip_response(
+        &Response::SessionCreated {
+            session: u64::MAX,
+            mode: Mode::Hiragana,
+        },
+        1,
+    );
 }
 
 #[test]
@@ -422,18 +438,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v11_hello_roundtrips_and_v10_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 10;
+fn protocol_v12_hello_roundtrips_and_v11_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 11;
     assert_eq!(
-        PROTOCOL_VERSION, 11,
-        "input-history admission counters change the stats response body"
+        PROTOCOL_VERSION, 12,
+        "input-mode status and SetMode change the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v11 request");
+    encode_request(&request, 17, &mut request_frame).expect("encode v12 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -454,7 +470,7 @@ fn protocol_v11_hello_roundtrips_and_v10_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 17, &mut response_frame).expect("encode v11 response");
+    encode_response(&response, 17, &mut response_frame).expect("encode v12 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
