@@ -208,6 +208,10 @@ try {
     Invoke-Gate -Name 'workspace tests' -Arguments @('cargo', 'test', '--workspace') -CheckProcesses
     Invoke-Gate -Name 'debug workspace build for watchdog' -Arguments @('cargo', 'build', '--workspace', '--locked')
     Invoke-Gate -Name 'locked release workspace build' -Arguments @('cargo', 'build', '--workspace', '--release', '--locked')
+    Invoke-Gate -Name 'SIMD instruction-set assembly gate' -Arguments @(
+        'proxy', 'pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', (Join-Path $repository 'ci\check-simd-assembly.ps1')
+    ) -CheckProcesses
     Invoke-Gate -Name 'core zero-allocation gate' -Arguments @('cargo', 'test', '-p', 'sakura-core', '--test', 'zero_alloc') -CheckProcesses
     Invoke-Gate -Name 'engine handoff zero-allocation gate' -Arguments @('cargo', 'test', '-p', 'sakura-engine', '--test', 'zero_alloc_dispatch') -CheckProcesses
     Invoke-Gate -Name 'named SIMD kernel agreement' -Arguments @('cargo', 'test', '-p', 'sakura-core', '--lib', '--', 'simd::', '--nocapture') -CheckProcesses
@@ -228,7 +232,7 @@ try {
         if (-not [IO.File]::Exists($latencyEngineLog)) { throw 'engine startup log was not written' }
         $startupMatches = [regex]::Matches(
             [IO.File]::ReadAllText($latencyEngineLog),
-            '(?m)^unix_ms=[0-9]+\tevent=startup\tcpu_tier=(avx|avx2|avx512bw)$'
+            '(?m)^unix_ms=[0-9]+\tevent=startup\twidth_scan=(avx-ssse3-128|avx2-hybrid|avx512bw-vl-from-(64|128|256)|scalar)$'
         )
         if ($startupMatches.Count -ne 1) {
             throw "expected exactly one ISA startup record, found $($startupMatches.Count)"

@@ -847,7 +847,9 @@ fn worker(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_core::ConversionOptions;
+    use sakura_core::{
+        ConversionOptions, UserDictionaryEntry, UserPartOfSpeech, MAX_USER_DICTIONARY_ENTRIES,
+    };
 
     #[test]
     fn mapped_entry_index_stays_compact() {
@@ -872,6 +874,74 @@ mod tests {
                 .into_boxed_slice(),
         );
         Arc::new(ConversionService::from_static_bytes(bytes).expect("service"))
+    }
+
+    fn capacity_user_dictionary(prefix: &str) -> UserDictionary {
+        const HIRAGANA_DIGITS: [char; 10] =
+            ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ'];
+
+        let entries = (0..MAX_USER_DICTIONARY_ENTRIES)
+            .map(|number| {
+                let mut reading = prefix.to_owned();
+                let mut value = number;
+                for _ in 0..4 {
+                    reading.push(HIRAGANA_DIGITS[value % HIRAGANA_DIGITS.len()]);
+                    value /= HIRAGANA_DIGITS.len();
+                }
+                UserDictionaryEntry {
+                    reading,
+                    surface: if number < 2 {
+                        "shared".to_owned()
+                    } else {
+                        format!("user-{number:04}")
+                    },
+                    part_of_speech: UserPartOfSpeech::Noun,
+                    comment: String::new(),
+                }
+            })
+            .collect();
+        UserDictionary::from_entries(entries).expect("capacity user dictionary")
+    }
+
+    fn benchmark_user_dictionary(size: usize, matching_entries: usize) -> UserDictionary {
+        const HIRAGANA_DIGITS: [char; 10] =
+            ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ'];
+
+        assert!(matching_entries <= size);
+        let entries = (0..size)
+            .map(|number| {
+                let (prefix, mut value) = if number < matching_entries {
+                    ("さ", number)
+                } else {
+                    ("あ", number - matching_entries)
+                };
+                let mut reading = prefix.to_owned();
+                for _ in 0..4 {
+                    reading.push(HIRAGANA_DIGITS[value % HIRAGANA_DIGITS.len()]);
+                    value /= HIRAGANA_DIGITS.len();
+                }
+                UserDictionaryEntry {
+                    reading,
+                    surface: format!("bench-{number:05}"),
+                    part_of_speech: UserPartOfSpeech::Noun,
+                    comment: String::new(),
+                }
+            })
+            .collect();
+        UserDictionary::from_entries(entries).expect("benchmark user dictionary")
+    }
+
+    fn nanos_each(mut body: impl FnMut()) -> f64 {
+        const ROUNDS: usize = 1_000;
+
+        for _ in 0..ROUNDS / 10 {
+            body();
+        }
+        let started = Instant::now();
+        for _ in 0..ROUNDS {
+            body();
+        }
+        started.elapsed().as_secs_f64() * 1e9 / ROUNDS as f64
     }
 
     #[test]
@@ -899,6 +969,116 @@ mod tests {
             ["彼方", "仮名"]
         );
         runtime.stop().expect("joined worker");
+    }
+
+    #[test]
+    fn capacity_user_dictionary_preserves_prediction_order_deduplication_and_limit() {
+        let conversion = conversion();
+        let user_dictionary = capacity_user_dictionary("か");
+        let mut expected = Vec::new();
+        for entry in user_dictionary.entries() {
+            if !expected.iter().any(|surface| surface == &entry.surface) {
+                expected.push(entry.surface.clone());
+            }
+            if expected.len() == MAX_SUGGESTIONS {
+                break;
+            }
+        }
+        conversion.replace_user_dictionary(user_dictionary);
+
+        let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
+        let result = runtime
+            .service()
+            .request(8, 5, "か", 1_000, Duration::from_secs(1))
+            .expect("capacity prediction result");
+
+        assert_eq!(result.candidates().len(), MAX_SUGGESTIONS);
+        assert!(result
+            .candidates()
+            .iter()
+            .all(|candidate| candidate.source() == PredictionSource::User));
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .map(|candidate| candidate.surface())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        runtime.stop().expect("joined worker");
+    }
+
+    #[test]
+    #[ignore = "timing evaluation: run with --release --ignored --nocapture and record the table"]
+    fn user_dictionary_prediction_evaluation() {
+        const SIZES: [usize; 4] = [0, 100, 1_000, MAX_USER_DICTIONARY_ENTRIES];
+        const QUERIES: [(&str, usize); 5] = [
+            ("no-match", 0),
+            ("one-match", 1),
+            ("nine-match", 9),
+            ("hundred-match", 100),
+            ("ten-thousand-match", MAX_USER_DICTIONARY_ENTRIES),
+        ];
+
+        let conversion = conversion();
+        let index = PredictionIndex::build(conversion.dictionary()).expect("prediction index");
+        let mut query_prefix = FixedStr::new();
+        query_prefix.push_str("さ").expect("benchmark prefix");
+        let query = Query {
+            sequence: 1,
+            session: 1,
+            generation: 1,
+            prefix: query_prefix,
+            domain_it_per_mille: 1_000,
+        };
+
+        println!("user dictionary prediction evaluation: 1,000 rounds per row");
+        println!("entries  query                matches  search ns  ranking ns  worker ns");
+        for size in SIZES {
+            for (name, matching_entries) in QUERIES {
+                if matching_entries > size {
+                    continue;
+                }
+                let user_dictionary = benchmark_user_dictionary(size, matching_entries);
+                let search_ns = nanos_each(|| {
+                    let mut visited = 0usize;
+                    user_dictionary.predictive_search("さ", |_| {
+                        visited += 1;
+                        true
+                    });
+                    std::hint::black_box(visited);
+                });
+
+                let mut ranked = PredictionResult::default();
+                let ranking_ns = nanos_each(|| {
+                    index.predict_into(&query, &user_dictionary, None, &mut ranked);
+                    std::hint::black_box(ranked.candidates().len());
+                });
+
+                conversion.replace_user_dictionary(user_dictionary);
+                let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
+                let service = runtime.service();
+                let mut worker_result = PredictionResult::default();
+                let mut generation = 1u64;
+                let worker_ns = nanos_each(|| {
+                    generation += 1;
+                    assert!(service.request_into(
+                        1,
+                        generation,
+                        "さ",
+                        1_000,
+                        Duration::from_secs(1),
+                        &mut worker_result,
+                    ));
+                    std::hint::black_box(worker_result.candidates().len());
+                });
+                runtime.stop().expect("joined worker");
+
+                println!(
+                    "{size:7}  {name:19}  {matching_entries:7}  {search_ns:9.1}  {ranking_ns:10.1}  {worker_ns:9.1}"
+                );
+            }
+        }
     }
 
     #[test]

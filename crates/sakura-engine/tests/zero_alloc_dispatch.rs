@@ -124,7 +124,7 @@ fn send_key_dispatch_into_a_reused_output_buf_allocates_nothing() {
         },
         &mut out,
     ) {
-        Reply::Message(Response::SessionCreated { session }) => session,
+        Reply::Message(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     };
 
@@ -141,7 +141,7 @@ fn send_key_dispatch_into_a_reused_output_buf_allocates_nothing() {
     out.clear();
 
     let observed = allocations(|| {
-        for c in "konnichiha".chars() {
+        for c in "konnnichiha".chars() {
             let reply = dispatcher.dispatch(
                 &Request::SendKey {
                     session,
@@ -175,7 +175,7 @@ fn test_only_probe_dispatch_into_a_reused_output_buf_allocates_nothing() {
         },
         &mut out,
     ) {
-        Reply::Message(Response::SessionCreated { session }) => session,
+        Reply::Message(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     };
 
@@ -327,7 +327,7 @@ fn conversion_into_reused_candidate_buffers_allocates_nothing() {
         },
         &mut out,
     ) {
-        Reply::Message(Response::SessionCreated { session }) => session,
+        Reply::Message(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     };
     for character in "kannsuu".chars() {
@@ -388,7 +388,7 @@ fn prediction_handoff_into_reused_buffers_allocates_nothing() {
         },
         &mut out,
     ) {
-        Reply::Message(Response::SessionCreated { session }) => session,
+        Reply::Message(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     };
     dispatcher.dispatch(

@@ -156,9 +156,10 @@ pub struct Session {
     /// Physical romaji retained for explicit F9/F10 transforms.
     pub(crate) raw_input: FixedStr<MAX_PREEDIT_BYTES>,
     /// True only for a composition that started with a Shift+ASCII letter and
-    /// has contained no unshifted/non-ASCII character since. This is the
-    /// narrow signal used to try an English dictionary reading; ordinary
-    /// romaji remains on the kana path.
+    /// has contained only ASCII characters since. The initial Shift latches
+    /// the English composition through its subsequent unshifted ASCII keys.
+    /// This is the narrow signal used to try an English dictionary reading;
+    /// ordinary romaji remains on the kana path.
     pub(crate) shifted_ascii: bool,
     /// Character cursor in `preedit`; pending romaji is always at this point.
     pub(crate) cursor: u16,

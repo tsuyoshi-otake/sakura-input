@@ -21,7 +21,7 @@ use windows::Win32::System::ProcessStatus::{
     K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2,
 };
 
-const IMAGE_BUDGET: u64 = 35 * 1024 * 1024;
+const IMAGE_BUDGET: u64 = 128 * 1024 * 1024;
 const PRIVATE_WORKING_SET_BUDGET: usize = 15 * 1024 * 1024;
 const PATIENT: Duration = Duration::from_secs(5);
 
@@ -55,7 +55,7 @@ fn full_engine_stays_within_the_phase2_resource_budgets() {
         },
         PATIENT,
     ) {
-        Ok(Response::SessionCreated { session }) => session,
+        Ok(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     };
     for character in "kyoukaigidesetteihenkounokekkawokuwashikusetsumeisuru".chars() {

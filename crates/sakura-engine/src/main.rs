@@ -9,9 +9,11 @@
 #![cfg(windows)]
 #![windows_subsystem = "windows"]
 
-use sakura_engine::event_log::{prune_default_dumps, CpuTier, EngineEvent, EventLog};
+use sakura_engine::event_log::{prune_default_dumps, EngineEvent, EventLog, WidthScanStrategy};
 use sakura_engine::server::Server;
 use std::time::Instant;
+
+const TEST_PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputEngineTest-";
 
 /// Clean exit: a client asked the engine to stop.
 const EXIT_OK: i32 = 0;
@@ -26,6 +28,13 @@ const EXIT_ALREADY_RUNNING: i32 = 2;
 const EXIT_UNSUPPORTED_CPU: i32 = 3;
 
 fn main() {
+    let options = match startup_options(std::env::args().skip(1)) {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("sakura-engine: {error}");
+            std::process::exit(EXIT_FAILED);
+        }
+    };
     let started = Instant::now();
     let event_log = EventLog::open_default().ok();
     match prune_default_dumps() {
@@ -43,25 +52,26 @@ fn main() {
             },
         ),
     }
-    let verbose = std::env::args().skip(1).any(|arg| arg == "--verbose");
+    let verbose = options.verbose;
     if verbose {
         attach_parent_console();
     }
 
     // Before the pipe, before the dictionary, before anything can be waiting
-    // on the answer: which vector kernels this machine gets, decided once
-    // (DESIGN 3.2). Naming the tier in the log is what makes a later
+    // on the answer: which vector kernel this machine gets, decided once
+    // (DESIGN 3.2). Naming the concrete kernel in the log is what makes a later
     // "why is it slower here?" a question with an answer.
-    match sakura_core::cpu::startup() {
-        Ok(tier) => {
+    match sakura_core::simd::startup() {
+        Ok(kernel_set) => {
+            let kernel = kernel_set.width_scan().metadata();
             record(
                 event_log.as_ref(),
                 EngineEvent::Startup {
-                    cpu_tier: CpuTier::from_name(tier.name()),
+                    width_scan: WidthScanStrategy::from_name(kernel.name),
                 },
             );
             if verbose {
-                eprintln!("sakura-engine: vector kernels: {}", tier.name());
+                eprintln!("sakura-engine: vector kernel: {}", kernel.name);
             }
         }
         Err(error) => {
@@ -75,34 +85,46 @@ fn main() {
         }
     }
 
-    std::process::exit(match run(verbose, started, event_log.as_ref()) {
-        Ok(()) => {
-            record(event_log.as_ref(), EngineEvent::Stopped);
-            EXIT_OK
-        }
-        Err(error) if is_name_taken(&error) => {
-            record(event_log.as_ref(), EngineEvent::AlreadyRunning);
-            if verbose {
-                eprintln!("sakura-engine: another engine already has this session's pipe");
+    std::process::exit(
+        match run(
+            verbose,
+            started,
+            event_log.as_ref(),
+            options.test_pipe.as_deref(),
+        ) {
+            Ok(()) => {
+                record(event_log.as_ref(), EngineEvent::Stopped);
+                EXIT_OK
             }
-            EXIT_ALREADY_RUNNING
-        }
-        Err(error) => {
-            record(
-                event_log.as_ref(),
-                EngineEvent::StartupFailed {
-                    hresult: error.code().0,
-                },
-            );
-            if verbose {
-                eprintln!("sakura-engine: {error}");
+            Err(error) if is_name_taken(&error) => {
+                record(event_log.as_ref(), EngineEvent::AlreadyRunning);
+                if verbose {
+                    eprintln!("sakura-engine: another engine already has this session's pipe");
+                }
+                EXIT_ALREADY_RUNNING
             }
-            EXIT_FAILED
-        }
-    });
+            Err(error) => {
+                record(
+                    event_log.as_ref(),
+                    EngineEvent::StartupFailed {
+                        hresult: error.code().0,
+                    },
+                );
+                if verbose {
+                    eprintln!("sakura-engine: {error}");
+                }
+                EXIT_FAILED
+            }
+        },
+    );
 }
 
-fn run(verbose: bool, started: Instant, event_log: Option<&EventLog>) -> windows::core::Result<()> {
+fn run(
+    verbose: bool,
+    started: Instant,
+    event_log: Option<&EventLog>,
+    test_pipe: Option<&str>,
+) -> windows::core::Result<()> {
     use std::sync::Arc;
 
     use windows::Win32::Foundation::E_FAIL;
@@ -260,6 +282,10 @@ fn run(verbose: bool, started: Instant, event_log: Option<&EventLog>) -> windows
             Arc::clone(&profiles),
         )?,
     };
+    let server = match test_pipe {
+        Some(pipe_name) => server.with_explicit_test_pipe(pipe_name.to_owned()),
+        None => server,
+    };
     if verbose {
         eprintln!("sakura-engine: dictionary: {}", dictionary_path.display());
         if let Some(path) = learning_path {
@@ -305,6 +331,56 @@ fn run(verbose: bool, started: Instant, event_log: Option<&EventLog>) -> windows
     result
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+struct StartupOptions {
+    verbose: bool,
+    test_pipe: Option<String>,
+}
+
+fn startup_options(arguments: impl IntoIterator<Item = String>) -> Result<StartupOptions, String> {
+    let mut options = StartupOptions::default();
+    let mut arguments = arguments.into_iter();
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "--verbose" => options.verbose = true,
+            "--test-pipe" => {
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "--test-pipe requires a named-pipe path".to_owned())?;
+                if options
+                    .test_pipe
+                    .replace(validate_test_pipe(value)?)
+                    .is_some()
+                {
+                    return Err("--test-pipe may be supplied only once".to_owned());
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(options)
+}
+
+/// Restricts the integration-test override to the private namespace generated
+/// by `tests/common`. This is deliberately an argument, never an environment
+/// variable, so production pipe discovery remains ambient-state free.
+fn validate_test_pipe(value: String) -> Result<String, String> {
+    let suffix = value
+        .strip_prefix(TEST_PIPE_PREFIX)
+        .ok_or_else(|| format!("--test-pipe must start with {TEST_PIPE_PREFIX:?}"))?;
+    if suffix.is_empty()
+        || suffix.len() > 160
+        || !suffix
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(
+            "--test-pipe must have a non-empty ASCII alphanumeric, '-' or '_' suffix".to_owned(),
+        );
+    }
+    Ok(value)
+}
+
 fn record(log: Option<&EventLog>, event: EngineEvent) {
     if let Some(log) = log {
         let _ = log.record(event);
@@ -334,5 +410,49 @@ fn attach_parent_console() {
     // error rather than as undefined behaviour.
     unsafe {
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipe_option_accepts_only_the_private_test_namespace() {
+        let pipe = format!("{TEST_PIPE_PREFIX}worker-abc_123");
+        assert_eq!(validate_test_pipe(pipe.clone()), Ok(pipe));
+        assert!(validate_test_pipe(r"\\.\pipe\SakuraInput".to_owned()).is_err());
+        assert!(validate_test_pipe(format!("{TEST_PIPE_PREFIX}has/slash")).is_err());
+        assert!(validate_test_pipe(format!("{TEST_PIPE_PREFIX}")).is_err());
+    }
+
+    #[test]
+    fn production_startup_options_do_not_change_pipe_discovery() {
+        assert_eq!(
+            startup_options(["--verbose".to_owned()]),
+            Ok(StartupOptions {
+                verbose: true,
+                test_pipe: None,
+            })
+        );
+        assert_eq!(
+            startup_options(["--test-pipe".to_owned(), format!("{TEST_PIPE_PREFIX}one")]),
+            Ok(StartupOptions {
+                verbose: false,
+                test_pipe: Some(format!("{TEST_PIPE_PREFIX}one")),
+            })
+        );
+    }
+
+    #[test]
+    fn test_pipe_option_requires_one_valid_unique_value() {
+        assert!(startup_options(["--test-pipe".to_owned()]).is_err());
+        assert!(startup_options([
+            "--test-pipe".to_owned(),
+            format!("{TEST_PIPE_PREFIX}one"),
+            "--test-pipe".to_owned(),
+            format!("{TEST_PIPE_PREFIX}two"),
+        ])
+        .is_err());
     }
 }

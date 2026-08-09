@@ -287,6 +287,18 @@ impl Server {
         &self.shared.name
     }
 
+    /// Replaces the name before [`run`](Self::run) creates any pipe instance.
+    ///
+    /// The binary invokes this only after validating its narrowly scoped test
+    /// command-line option. Production constructors still resolve their normal
+    /// name through [`security::pipe_name`] during construction.
+    pub fn with_explicit_test_pipe(mut self, pipe_name: String) -> Self {
+        Arc::get_mut(&mut self.shared)
+            .expect("a newly constructed server has no worker thread or shared clone")
+            .name = pipe_name;
+        self
+    }
+
     /// Creates the first instance and blocks until the engine is asked to
     /// stop.
     ///
@@ -631,6 +643,13 @@ fn serve(
                 }
             }
             Reply::Message(response) => {
+                // The TSF input-mode menu changes an idle session without a
+                // document-edit `Output`. Publish its exact mode separately
+                // so the renderer's transient indicator remains in sync with
+                // the language-bar item that initiated the change.
+                if let Response::InputMode { mode } = &response {
+                    shared.ui.publish(*mode);
+                }
                 if matches!(response, Response::Ok) {
                     if let Some(session) = clears_candidates {
                         shared.ui.clear_session(session);
@@ -712,6 +731,20 @@ mod tests {
     fn the_server_resolves_a_pipe_name_for_this_session() {
         let server = Server::new(false).expect("this process has a token");
         assert!(server.pipe_name().starts_with(r"\\.\pipe\sakura_input_"));
+    }
+
+    #[test]
+    fn explicit_test_pipe_does_not_change_production_name_resolution() {
+        let private_pipe = r"\\.\pipe\SakuraInputEngineTest-server-unit".to_owned();
+        let private = Server::new(false)
+            .expect("this process has a production token")
+            .with_explicit_test_pipe(private_pipe.clone());
+        assert_eq!(private.pipe_name(), private_pipe);
+
+        let production = Server::new(false).expect("this process has a production token");
+        assert!(production
+            .pipe_name()
+            .starts_with(r"\\.\pipe\sakura_input_"));
     }
 
     /// The pool must not be able to outgrow the instance limit the pipe

@@ -278,7 +278,7 @@ fn create_session(client: &mut Client) -> u64 {
         },
         PATIENT,
     ) {
-        Ok(Response::SessionCreated { session }) => session,
+        Ok(Response::SessionCreated { session, .. }) => session,
         other => panic!("expected SessionCreated, got {other:?}"),
     }
 }

@@ -50,7 +50,7 @@ use windows::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, WriteFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_OVERLAPPED,
     FILE_SHARE_MODE, OPEN_EXISTING,
 };
-use windows::Win32::System::Pipes::WaitNamedPipeW;
+use windows::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
 use windows::Win32::System::Threading::CreateEventW;
 use windows::Win32::System::IO::{
     CancelIoEx, GetOverlappedResult, GetOverlappedResultEx, OVERLAPPED,
@@ -205,6 +205,21 @@ impl Client {
     /// that logs timeouts can correlate them with the engine's own log.
     pub fn next_request_id(&self) -> RequestId {
         self.next_id
+    }
+
+    /// Returns the PID of the server attached to this exact pipe connection.
+    ///
+    /// Unlike looking up a pipe by name, this queries the kernel handle that
+    /// [`connect_to`](Self::connect_to) opened. Callers that own a short-lived
+    /// test server can use it to fail closed before sending a request if a
+    /// different process won a pipe-name race.
+    pub fn server_process_id(&self) -> Result<u32, Fault> {
+        let mut process_id = 0;
+        // SAFETY: `self.handle` is this live client's pipe handle, and the
+        // mutable output points to initialized storage for the duration of the
+        // call.
+        unsafe { GetNamedPipeServerProcessId(self.handle, &mut process_id) }.map_err(Fault::Os)?;
+        Ok(process_id)
     }
 
     fn read_frame(&mut self, deadline: Instant) -> Result<&[u8], Fault> {

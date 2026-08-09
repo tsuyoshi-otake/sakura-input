@@ -1,6 +1,8 @@
 //! Human-editable user dictionary and its compact in-memory reading trie.
 
 use core::fmt;
+#[cfg(test)]
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
 use sakura_proto::MAX_PREEDIT_BYTES;
@@ -9,6 +11,63 @@ use crate::dictionary::EntryFlags;
 
 pub const MAX_USER_DICTIONARY_ENTRIES: usize = 10_000;
 pub const USER_DICTIONARY_FORMAT_VERSION: u16 = 1;
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct PredictiveSearchComparisons {
+    lower_bound: usize,
+    prefix: usize,
+}
+
+#[cfg(test)]
+impl PredictiveSearchComparisons {
+    const EMPTY: Self = Self {
+        lower_bound: 0,
+        prefix: 0,
+    };
+
+    const fn total(self) -> usize {
+        self.lower_bound + self.prefix
+    }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static PREDICTIVE_SEARCH_COMPARISONS: Cell<PredictiveSearchComparisons> = const {
+        Cell::new(PredictiveSearchComparisons::EMPTY)
+    };
+}
+
+#[cfg(test)]
+fn record_lower_bound_comparison() {
+    PREDICTIVE_SEARCH_COMPARISONS.with(|comparisons| {
+        let mut value = comparisons.get();
+        value.lower_bound += 1;
+        comparisons.set(value);
+    });
+}
+
+#[cfg(test)]
+fn record_prefix_comparison() {
+    PREDICTIVE_SEARCH_COMPARISONS.with(|comparisons| {
+        let mut value = comparisons.get();
+        value.prefix += 1;
+        comparisons.set(value);
+    });
+}
+
+#[cfg(test)]
+fn reset_predictive_search_comparisons() {
+    PREDICTIVE_SEARCH_COMPARISONS.with(|comparisons| {
+        comparisons.set(PredictiveSearchComparisons::EMPTY);
+    });
+}
+
+#[cfg(test)]
+fn take_predictive_search_comparisons() -> PredictiveSearchComparisons {
+    PREDICTIVE_SEARCH_COMPARISONS
+        .with(|comparisons| comparisons.replace(PredictiveSearchComparisons::EMPTY))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserPartOfSpeech {
@@ -280,16 +339,33 @@ impl UserDictionary {
     }
 
     /// Visits entries whose complete reading starts with `prefix`, in the
-    /// dictionary's deterministic reading/cost/surface order. User dictionaries
-    /// are capped at 10,000 entries, so a linear scan is both bounded and keeps
-    /// this mutable in-memory format independent from the system image's
-    /// prediction index.
+    /// dictionary's deterministic reading/cost/surface order. The entries are
+    /// sorted by reading, so a lower-bound search finds the start of the one
+    /// contiguous matching range in O(log N), then visits its K entries.
     pub fn predictive_search(&self, prefix: &str, mut visit: impl FnMut(usize) -> bool) {
         if prefix.is_empty() {
             return;
         }
-        for (index, entry) in self.entries.iter().enumerate() {
-            if entry.reading.starts_with(prefix) && !visit(index) {
+        let prefix = prefix.as_bytes();
+        let mut low = 0usize;
+        let mut high = self.entries.len();
+        while low < high {
+            let middle = low + (high - low) / 2;
+            #[cfg(test)]
+            record_lower_bound_comparison();
+            if self.entries[middle].reading.as_bytes() < prefix {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        for (offset, entry) in self.entries[low..].iter().enumerate() {
+            #[cfg(test)]
+            record_prefix_comparison();
+            if !entry.reading.as_bytes().starts_with(prefix) {
+                break;
+            }
+            if !visit(low + offset) {
                 return;
             }
         }
@@ -445,6 +521,51 @@ fn validate_entry(entry: &UserDictionaryEntry) -> Result<(), UserDictionaryError
 mod tests {
     use super::*;
 
+    fn user_entry(reading: impl Into<String>, surface: impl Into<String>) -> UserDictionaryEntry {
+        UserDictionaryEntry {
+            reading: reading.into(),
+            surface: surface.into(),
+            part_of_speech: UserPartOfSpeech::Noun,
+            comment: String::new(),
+        }
+    }
+
+    fn capacity_entries(prefix: &str) -> Vec<UserDictionaryEntry> {
+        const HIRAGANA_DIGITS: [char; 10] =
+            ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ'];
+
+        (0..MAX_USER_DICTIONARY_ENTRIES)
+            .map(|number| {
+                let mut reading = prefix.to_owned();
+                let mut value = number;
+                for _ in 0..4 {
+                    reading.push(HIRAGANA_DIGITS[value % HIRAGANA_DIGITS.len()]);
+                    value /= HIRAGANA_DIGITS.len();
+                }
+                user_entry(reading, format!("user-{number:04}"))
+            })
+            .collect()
+    }
+
+    fn measured_prediction_indices(
+        dictionary: &UserDictionary,
+        prefix: &str,
+        stop_after: Option<usize>,
+    ) -> (Vec<usize>, PredictiveSearchComparisons) {
+        reset_predictive_search_comparisons();
+        let mut indices = Vec::new();
+        dictionary.predictive_search(prefix, |index| {
+            indices.push(index);
+            stop_after.is_none_or(|limit| indices.len() < limit)
+        });
+        (indices, take_predictive_search_comparisons())
+    }
+
+    fn ceil_log2(value: usize) -> usize {
+        assert!(value > 0);
+        usize::BITS as usize - (value - 1).leading_zeros() as usize
+    }
+
     #[test]
     fn parses_picklist_entries_and_searches_reading_prefixes() {
         let dictionary = UserDictionary::parse_tsv(
@@ -470,6 +591,104 @@ mod tests {
             true
         });
         assert_eq!(predictions, ["Sakura", "Sakura Input"]);
+    }
+
+    #[test]
+    fn predictive_search_preserves_bounds_order_and_early_stop_semantics() {
+        let dictionary = UserDictionary::from_entries(vec![
+            user_entry("かき", "follow-up"),
+            user_entry("か", "exact-b"),
+            user_entry("かー", "long-vowel"),
+            user_entry("か", "exact-a"),
+            user_entry("さ", "later"),
+        ])
+        .expect("valid dictionary");
+
+        let (indices, _) = measured_prediction_indices(&dictionary, "か", None);
+        let surfaces = indices
+            .iter()
+            .map(|&index| dictionary.entry(index).expect("entry").surface.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(surfaces, ["exact-a", "exact-b", "follow-up", "long-vowel"]);
+
+        let (exact, _) = measured_prediction_indices(&dictionary, "かき", None);
+        assert_eq!(
+            exact
+                .iter()
+                .map(|&index| dictionary.entry(index).expect("entry").surface.as_str())
+                .collect::<Vec<_>>(),
+            ["follow-up"]
+        );
+        let (long_vowel, _) = measured_prediction_indices(&dictionary, "かー", None);
+        assert_eq!(
+            long_vowel
+                .iter()
+                .map(|&index| dictionary.entry(index).expect("entry").surface.as_str())
+                .collect::<Vec<_>>(),
+            ["long-vowel"]
+        );
+
+        let (early, early_comparisons) = measured_prediction_indices(&dictionary, "か", Some(1));
+        assert_eq!(early, indices[..1]);
+        assert_eq!(early_comparisons.prefix, 1);
+
+        for prefix in ["", "ぁ", "き", "そ"] {
+            let (matches, comparisons) = measured_prediction_indices(&dictionary, prefix, None);
+            assert!(matches.is_empty(), "unexpected match for {prefix:?}");
+            if prefix.is_empty() {
+                assert_eq!(comparisons, PredictiveSearchComparisons::EMPTY);
+            }
+        }
+    }
+
+    #[test]
+    fn predictive_search_at_capacity_is_logarithmic_plus_matching_entries() {
+        let dictionary =
+            UserDictionary::from_entries(capacity_entries("")).expect("capacity dictionary");
+        assert_eq!(dictionary.len(), MAX_USER_DICTIONARY_ENTRIES);
+        let first = dictionary
+            .entries()
+            .first()
+            .expect("first entry")
+            .reading
+            .clone();
+        let last = dictionary
+            .entries()
+            .last()
+            .expect("last entry")
+            .reading
+            .clone();
+        let logarithmic_bound = ceil_log2(dictionary.len());
+
+        for (prefix, expected_matches) in [
+            (first.as_str(), 1usize),
+            (last.as_str(), 1usize),
+            ("おさ", 0usize),
+            ("そ", 0usize),
+        ] {
+            let (matches, comparisons) = measured_prediction_indices(&dictionary, prefix, None);
+            assert_eq!(matches.len(), expected_matches, "prefix {prefix:?}");
+            assert!(
+                comparisons.lower_bound > 0,
+                "the capacity search must perform lower-bound comparisons for {prefix:?}"
+            );
+            assert!(
+                comparisons.lower_bound <= logarithmic_bound,
+                "lower-bound comparisons for {prefix:?}: {comparisons:?}"
+            );
+            assert!(
+                comparisons.total() <= logarithmic_bound + expected_matches + 2,
+                "search comparisons for {prefix:?}: {comparisons:?}"
+            );
+        }
+
+        let matching = UserDictionary::from_entries(capacity_entries("さ"))
+            .expect("shared-prefix capacity dictionary");
+        let (matches, comparisons) = measured_prediction_indices(&matching, "さ", None);
+        assert_eq!(matches.len(), MAX_USER_DICTIONARY_ENTRIES);
+        assert!(comparisons.lower_bound <= ceil_log2(matching.len()));
+        assert_eq!(comparisons.prefix, MAX_USER_DICTIONARY_ENTRIES);
+        assert!(comparisons.total() <= ceil_log2(matching.len()) + MAX_USER_DICTIONARY_ENTRIES);
     }
 
     #[test]

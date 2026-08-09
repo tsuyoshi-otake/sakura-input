@@ -196,11 +196,13 @@ thin TSF DLL; the engine and UI live in separate per-user processes.
 Why out-of-process (all four reasons matter):
 1. **Bitness/arch.** The DLL loads into every process, so its
    architecture is dictated by the host's, not by ours. The supported
-   configuration is **Windows 11 on x86-64 with AVX** and nothing else
+   configuration is **Windows 11 on x86-64 with AVX + SSSE3** and nothing else
    (§3.2): 64-bit hosts get the text service, 32-bit hosts fall back to
    MS-IME, and ARM64 is out of scope. Keeping to one architecture is
-   what makes the engine free to assume AVX everywhere and to dispatch
-   to AVX2/AVX-512 at run time.
+    what makes the engine free to assume AVX + SSSE3 everywhere and to dispatch
+    to AVX2 at run time. AVX-512BW+VL is an additional bench-only candidate;
+    shipping remains on AVX2 until direct measurements are backed by stable
+    end-to-end and cross-host evidence.
 2. **Crash isolation.** An engine bug kills a background process, not the
    user's document. The DLL degrades to pass-through on IPC failure.
 3. **Shared state.** One engine process owns the learning store and user
@@ -266,7 +268,7 @@ reason, so "it's just a build dependency" cannot become a loophole.
 
 ### 3.2 Target platform and instruction set
 
-**Windows 11 (build 22000 or later), x86-64, AVX required.** One
+**Windows 11 (build 22000 or later), x86-64, AVX + SSSE3 required.** One
 architecture, one OS floor. Everything else — x86 hosts, ARM64 machines,
 Windows 10 — is an unsupported configuration rather than an untested one,
 and the difference matters: an unsupported configuration is one we
@@ -279,43 +281,57 @@ What the narrowing buys, in order of how much it is worth:
   merge of paired ARM64 and ARM64EC objects that cargo cannot produce, with
   essentially no Rust prior art. It was the largest unpriced risk in the
   plan and it is now simply out of scope.
-- **AVX is a floor, not a branch.** The whole workspace is built with
-  `-C target-feature=+avx` (`.cargo/config.toml`), so 128-bit and 256-bit
-  vector code needs no run-time guard and no scalar twin to fall back to.
-  AVX shipped in Sandy Bridge (2011) and every CPU Microsoft supports for
-  Windows 11 has it, so the floor costs no real users.
-- **Above the floor, dispatch is dynamic.** AVX2 (256-bit integer) and
-  AVX-512BW (512-bit) are detected once per process with `CPUID` and
-  reached through a resolved function pointer, never through a per-call
-  feature test. Every such kernel has a scalar reference implementation
-  that is the definition of correct, and a test that asserts each kernel
-  available on the machine running the tests agrees with it byte for byte.
-  A vector kernel that disagrees with the scalar one is a corruption bug in
-  the user's text, so this is the one place in the codebase where "the fast
-  path and the slow path must be observably identical" is a hard rule.
+- **AVX + SSSE3 is a floor, not a branch.** The whole workspace is built
+  with `-C target-feature=+avx,+ssse3` (`.cargo/config.toml`). The narrow
+  ASCII pass-through scanner uses SSSE3 `pshufb`, so checking only AVX would
+  be an invalid safety contract. Both features predate the Windows 11 x64
+  hardware baseline, so the floor costs no real users.
+- **Above the floor, concrete kernels are resolved once.** Startup reads a
+  `CpuFeatures` set and resolves a `KernelSet`, whose width-normalization
+  member is one `WidthScanStrategy`. AVX2 is the standard 256-bit fast path;
+  AVX+SSSE3 remains the 128-bit compatibility path. AVX-512 is never selected
+  merely because a CPU advertises it: the benchmark candidate requires the
+  complete `AVX-512F + AVX-512BW + AVX-512VL` set and evaluates the exact ZMM
+  ownership boundaries `64, 65, 95, 96, 127, 128, 129, 255, 256, 257, 512`
+  against AVX2. A future production admission requires every owned length to
+  show a 5% median direct-kernel win with no slow-tail loss, plus stable
+  end-to-end and cross-host evidence. Until then, the candidate is bench-only
+  and the shipping resolver keeps AVX2. Inputs below any tested threshold
+  delegate to the exact AVX2 scanner; in particular, a 16--63 byte run does
+  not execute any AVX-512 instruction merely because the candidate can use ZMM
+  for a measured longer range. The normalizer performs one selected-kernel call
+  for inputs of 16 bytes or more, never a per-call CPUID, feature match, or
+  lazy-initialization check. Every vector kernel has a
+  scalar reference implementation that is the definition of correct, and a
+  test that asserts each kernel available on the machine running the tests
+  agrees with it byte for byte. A disagreement is a text-corruption bug, so
+  "the fast path and the slow path must be observably identical" is a hard
+  rule.
 
 **When the detection happens: once, at startup, before any work.** The
-engine resolves its ISA tier in the first few statements of `main` —
+engine resolves CPU features into one `KernelSet` in the first few statements of `main` —
 before the pipe is created, before the dictionary is mapped — and stores
-the answer in a `OnceLock` that every later dispatch reads. Three reasons
-it is startup and not first use:
+the answer in a startup-only `OnceLock`; the normalizer instead reads the
+already-published `WidthScanStrategy` pointer. Three reasons it is startup
+and not first use:
 
 1. **A per-call `is_x86_feature_detected!` is a branch on the hot path.**
    The macro caches its answer, but the cached load and test still sit
    inside the width normalizer, which runs on every string the engine
    emits. Resolving a function pointer once moves that cost to a place
    where nothing is waiting on it.
-2. **The startup log gets to name the tier.** "avx512bw" or "avx2" in the
-   first line of the log turns "why is it slower on my machine?" into a
-   question with an answer, and makes a benchmark number reproducible
-   without asking the reporter to identify their CPU.
+2. **The startup log gets to name the strategy.** "avx-ssse3-128",
+   "avx2-hybrid", or a calibrated "avx512bw-vl-from-64" (and its 128/256
+   variants) in the first line of the log turns "why is it slower on my
+   machine?" into a question with an answer, and makes a benchmark number
+   reproducible without asking the reporter to identify their CPU.
 3. **A missing baseline should fail loudly and immediately**, not on
-   whichever keystroke first reaches vector code. If AVX is absent the
-   engine refuses to start with a message naming the requirement rather
-   than dying of `SIGILL` somewhere unattributable.
+   whichever keystroke first reaches vector code. If either AVX or SSSE3 is
+   absent the engine refuses to start with a message naming the requirement
+   rather than dying of `SIGILL` somewhere unattributable.
 
 That last check is a backstop and is honestly labelled as one: because the
-whole binary is compiled with `+avx`, a machine without AVX may fault
+whole binary is compiled with `+avx,+ssse3`, a machine missing either feature may fault
 before `main` ever runs. Setup's install-time gate (§12.2) is the check
 that actually protects users; the startup check catches the remaining case
 of files copied onto a machine that never ran the installer.
@@ -327,6 +343,12 @@ budget in §10 is dominated by IPC and TSF, not by arithmetic. The kernels
 live where the byte counts are actually large: the width choke point
 (§5.6), which every string leaving the engine passes through, and — from
 M1 — dictionary search over the LOUDS trie and the connection matrix.
+
+The width scanner only skips runs whose ASCII bytes can remain unchanged. It
+does not vectorize kana-to-kanji conversion or full-width rewriting, so a
+Japanese or full-width-heavy corpus is a regression guard rather than an
+AVX-512 speed claim. The direct benchmark therefore labels its actual ZMM,
+YMM/VL, and XMM path counts alongside the measured percentiles.
 
 ---
 
@@ -353,6 +375,11 @@ M1 — dictionary search over the LOUDS trie and the connection matrix.
   appear inline in Word, terminals, Electron, etc.
 - `ITfFnReconversion` — reconversion of committed text.
 - `ITfDisplayAttributeProvider` — segment underline/highlight styles.
+- `ITfLangBarItem` / `ITfLangBarItemButton` / `ITfSource` — the Windows 11
+  `GUID_LBI_INPUTMODE` item. It is hidden until this TIP owns a focused
+  editable context, then exposes the current あ/A mode and a narrowly scoped
+  menu; focus loss and deactivation hide/remove it immediately rather than
+  leaving a permanent notification-area icon.
 - `InputScope` reading (`ITfInputScope`) — detect password fields
   (`IS_PASSWORD`) → force direct input, disable learning and prediction.
 - Registration: `ITfInputProcessorProfileMgr` with
@@ -566,10 +593,16 @@ Signals recorded on every commit:
   sensitive.
 
 Application at conversion time, in priority order:
-1. Exact `(context, reading) → surface` match: large negative cost bonus
-   (effectively "last choice wins").
-2. `(reading) → surface` frequency/recency score: moderate bonus with
-   exponential decay (half-life ~30 days).
+1. Exact `(context, reading) → surface` match: a **strength-gated** default
+   candidate. One recent confirmation may affect only an already-near base
+   candidate; two confirmations may affect the upper candidate group; three or
+   more recent confirmations establish a strong exact-context preference. This
+   preserves immediate learning without letting one anomalous selection
+   unconditionally replace the converter's grammatical/contextual result.
+2. `(reading) → surface` frequency/recency score: a more conservative
+   strength-gated fallback. It is limited to the upper base candidates even
+   when frequently chosen, because it has no current grammatical context.
+   Both layers use exponential decay with a half-life of about 30 days.
 3. Learned segmentation constraints: soft boundary bonuses.
 
 Caps and hygiene: bounded store — LRU beyond ~100 k entries at a packed
@@ -912,8 +945,10 @@ read-only lives once per machine under Program Files.
   handles both orientations. The window is exposed to UI Automation
   (screen readers announce candidates), alongside the `ITfUIElement`
   data path for UI-less hosts.
-- **Mode indicator**: small floating "あ/A" near the caret on mode change
-  (Win11-style), plus tray icon.
+- **Mode indicator**: small floating "あ/A" near the caret on mode change,
+  plus the Windows 11 focused `GUID_LBI_INPUTMODE` taskbar item. The taskbar
+  item exists only while an editable caret is focused; its menu offers the
+  safe input-mode choices, one-shot restore, and Japanese-input on/off.
 - **Settings**: key binding editor (presets: `ms-ime` default / `atok`,
   per-key overrides), romaji table editor, dictionary
   manager (user dict CRUD, import/export ATOK/Mozc/MS-IME formats),
@@ -1072,8 +1107,9 @@ payload. The active COM registration is the single version-selection pointer.
 
 The CPU check comes first because it is the one precondition that cannot
 be repaired after the fact. Setup calls
-`IsProcessorFeaturePresent(PF_AVX_INSTRUCTIONS_AVAILABLE)` and refuses to
-install on a machine without AVX (§3.2), naming the reason. The
+`IsProcessorFeaturePresent` for both `PF_AVX_INSTRUCTIONS_AVAILABLE` and
+`PF_SSSE3_INSTRUCTIONS_AVAILABLE`, and refuses to install on a machine
+without the AVX + SSSE3 baseline (§3.2), naming the reason. The
 alternative — installing and letting the DLL fault on its first
 instruction inside every process that loads it — would present as the
 user's applications crashing, with nothing pointing at the IME.
@@ -1196,8 +1232,8 @@ uninstall → verify typing still works.
 | TSF-in-Rust has little public prior art (references are C++) | M0 exists solely to retire this; COM classes via the `windows` crate's `implement`; Mozc/SampleIME patterns ported by reading |
 | Hand-rolling parsers/codecs/tries enlarges the bug surface | Every hand-rolled format gets round-trip property tests + a fuzzer (§11); formats are fixed-layout and boring by design |
 | Trimmed lexicon degrades general Japanese | Accuracy corpus keeps a general slice with a hard floor (§11); learning + user dictionary recover the long tail per user |
-| An unsupported CPU turns a compile-time AVX baseline into an illegal-instruction fault inside the user's applications | Setup refuses to install without AVX (§12.2) and the engine re-checks once at startup (§3.2); the fault can only be reached by copying files past both gates |
-| A vector kernel disagreeing with the scalar one silently corrupts the user's text | Every kernel is differential-tested against the scalar reference over exhaustive ASCII and a fuzz corpus, on whichever tier the test machine has; CI runs at least AVX2 (§3.2) |
+| An unsupported CPU turns the compile-time AVX + SSSE3 baseline into an illegal-instruction fault inside the user's applications | Setup refuses to install without both requirements (§12.2) and the engine re-checks once at startup (§3.2); the fault can only be reached by copying files past both gates |
+| A vector kernel disagreeing with the scalar one silently corrupts the user's text | Every kernel is differential-tested against the scalar reference over exhaustive ASCII and a fuzz corpus, on whichever selected strategy the test machine can run; CI runs at least AVX2 (§3.2) |
 | Windows feature updates silently wipe third-party TSF registrations | Logon-stub self-check re-registers on every logon (§12.1) — the risk is retired continuously, not once at release |
 | Hard latency gates on shared CI runners are chronically flaky | Absolute budgets asserted on a dedicated reference runner; shared CI gates relative regressions only (§10) |
 

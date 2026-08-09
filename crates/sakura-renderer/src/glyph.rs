@@ -7,16 +7,13 @@
 //! shape at whatever size Windows asks for, including the 24×24 tray icon on
 //! a 150% display, which a 16×16 resource would not be.
 
-use windows::core::{Result, PCWSTR};
-use windows::Win32::Foundation::{COLORREF, HWND, RECT, SIZE};
+use windows::core::PCWSTR;
+use windows::Win32::Foundation::{COLORREF, HWND, RECT};
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
-    DeleteObject, DrawTextW, FillRect, GetDC, ReleaseDC, SelectObject, SetBkMode, SetTextColor,
-    CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER,
-    DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_SEMIBOLD, HBITMAP, HDC, HFONT, OUT_TT_PRECIS,
-    TRANSPARENT,
+    CreateFontW, DeleteObject, DrawTextW, SelectObject, SetBkMode, SetTextColor, CLEARTYPE_QUALITY,
+    CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER, DT_SINGLELINE, DT_VCENTER,
+    FF_DONTCARE, FW_SEMIBOLD, HDC, HFONT, OUT_TT_PRECIS, TRANSPARENT,
 };
-use windows::Win32::UI::WindowsAndMessaging::{CreateIconIndirect, HICON, ICONINFO};
 
 use sakura_proto::Mode;
 
@@ -25,28 +22,14 @@ use sakura_proto::Mode;
 /// Matches what Windows' own IME indicator shows, because a user switching
 /// to this IME should not have to learn a new alphabet of symbols: あ for
 /// the kana modes, A for the alphanumeric ones. Katakana and half-width
-/// katakana share あ with hiragana here — they are distinguished in the tray
-/// tooltip rather than the glyph, which is one character wide. `Direct`
+/// katakana share あ with hiragana here — the focused TSF input-mode item
+/// carries the precise full mode name. `Direct`
 /// joins the A side for the same reason Windows shows A for it: nothing the
 /// user types is being transformed.
 pub fn label(mode: Mode) -> &'static str {
     match mode {
         Mode::Hiragana | Mode::Katakana | Mode::HalfKatakana => "あ",
         Mode::Direct | Mode::HalfAlnum | Mode::FullAlnum => "A",
-    }
-}
-
-/// The mode's full name, for the tray tooltip, where there is room to be
-/// precise about the modes the glyph cannot tell apart — the three kana
-/// ones, and `Direct` against the two alphanumeric ones.
-pub fn description(mode: Mode) -> &'static str {
-    match mode {
-        Mode::Direct => "直接入力",
-        Mode::Hiragana => "ひらがな",
-        Mode::Katakana => "全角カタカナ",
-        Mode::HalfKatakana => "半角カタカナ",
-        Mode::HalfAlnum => "半角英数",
-        Mode::FullAlnum => "全角英数",
     }
 }
 
@@ -137,98 +120,6 @@ fn font_of_height(height: i32) -> HFONT {
     }
 }
 
-/// Builds a tray icon showing `text`.
-///
-/// The icon is a colour bitmap with an all-zero mask, which is how a 32-bit
-/// icon says "the alpha channel is the mask". The background is painted
-/// opaque rather than left transparent: the tray sits on a taskbar whose
-/// colour the user chooses, and a glyph with no backing is unreadable on
-/// half of them.
-pub fn tray_icon(size: SIZE, text: &str, ink: COLORREF, paper: COLORREF) -> Result<HICON> {
-    // SAFETY: a null window handle asks for the screen DC, which is the
-    // documented way to get a DC to make compatible objects from; it is
-    // released below.
-    let screen = unsafe { GetDC(None) };
-    let icon = Canvas::new(screen, size).compose(size, text, ink, paper);
-    // SAFETY: `screen` came from `GetDC(None)` and is released once. The
-    // compatible objects made from it above do not depend on it afterwards.
-    unsafe { ReleaseDC(None, screen) };
-    icon
-}
-
-/// The off-screen surface an icon is composed on.
-///
-/// A type rather than three locals because all three handles have to be
-/// released on every path out of [`Canvas::compose`], including the failing
-/// ones. Leaking one GDI object per mode change is the kind of leak that
-/// only shows itself after a long day of switching modes, so the release is
-/// a destructor rather than something a future edit has to remember.
-struct Canvas {
-    memory: HDC,
-    color: HBITMAP,
-    mask: HBITMAP,
-}
-
-impl Canvas {
-    fn new(screen: HDC, size: SIZE) -> Self {
-        // SAFETY: `screen` is a live DC, which is all these calls require;
-        // everything created here is deleted by `Drop` below.
-        unsafe {
-            Canvas {
-                memory: CreateCompatibleDC(Some(screen)),
-                color: CreateCompatibleBitmap(screen, size.cx, size.cy),
-                mask: CreateCompatibleBitmap(screen, size.cx, size.cy),
-            }
-        }
-    }
-
-    fn compose(&self, size: SIZE, text: &str, ink: COLORREF, paper: COLORREF) -> Result<HICON> {
-        // SAFETY: `memory` is a live DC and `color` a live bitmap; the
-        // previous selection is restored below before either is deleted.
-        let previous = unsafe { SelectObject(self.memory, self.color.into()) };
-        let rect = RECT {
-            left: 0,
-            top: 0,
-            right: size.cx,
-            bottom: size.cy,
-        };
-        // SAFETY: `brush` is live for the fill and deleted immediately
-        // after; `rect` outlives the call.
-        unsafe {
-            let brush = CreateSolidBrush(paper);
-            FillRect(self.memory, &rect, brush);
-            let _ = DeleteObject(brush.into());
-        }
-        draw_centered(self.memory, &rect, text, ink);
-        // SAFETY: restores what `SelectObject` above displaced, so `color`
-        // is not selected into a DC when it is handed to `CreateIconIndirect`.
-        unsafe { SelectObject(self.memory, previous) };
-
-        let info = ICONINFO {
-            fIcon: true.into(),
-            xHotspot: 0,
-            yHotspot: 0,
-            hbmMask: self.mask,
-            hbmColor: self.color,
-        };
-        // SAFETY: both bitmaps are live, the same size, and not selected
-        // into any DC. `CreateIconIndirect` copies them, which is why they
-        // can be (and are) deleted when this canvas drops.
-        unsafe { CreateIconIndirect(&info) }
-    }
-}
-
-impl Drop for Canvas {
-    fn drop(&mut self) {
-        // SAFETY: each handle was created in `new` and is deleted once.
-        unsafe {
-            let _ = DeleteObject(self.color.into());
-            let _ = DeleteObject(self.mask.into());
-            let _ = DeleteDC(self.memory);
-        }
-    }
-}
-
 /// The window a mode indicator should appear beside: the foreground one.
 pub fn foreground() -> Option<HWND> {
     // SAFETY: no arguments; a null result means no foreground window.
@@ -241,26 +132,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_mode_has_a_glyph_and_a_name() {
+    fn every_mode_has_a_glyph() {
         for mode in Mode::ALL {
             assert!(!label(mode).is_empty());
-            assert!(!description(mode).is_empty());
-        }
-    }
-
-    /// The tooltip is what distinguishes the modes the one-character glyph
-    /// cannot, so two modes sharing a description would leave the tray icon
-    /// unable to answer the only question it exists to answer.
-    #[test]
-    fn no_two_modes_share_a_name() {
-        for (i, mode) in Mode::ALL.iter().enumerate() {
-            for other in &Mode::ALL[i + 1..] {
-                assert_ne!(
-                    description(*mode),
-                    description(*other),
-                    "{mode:?} and {other:?} are indistinguishable in the tray"
-                );
-            }
         }
     }
 

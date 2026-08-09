@@ -1,0 +1,11 @@
+# license: LicenseRef-Sakura-InHouse
+# This layer calibrates context-free top-1 conversion for common readings.
+# It replaces an existing lattice edge; it does not add a second edge.
+reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
+あさごはん	朝ご飯	1851	1851	4300	5500	predict	[calibration] common spelling preferred over hiragana-only form
+かいぎょう	改行	1841	1841	2500	3700	predict	[calibration] technical reading in the Sakura corpus
+かんじ	漢字	1851	1851	2500	3700	predict	[calibration] common noun spelling in the Sakura corpus
+きのう	昨日	1841	1841	1100	2300	predict	[calibration] date expression, noun connection
+きのう	昨日	1909	1909	1100	2300	predict	[calibration] date expression, standalone connection
+してき	指摘	1841	1841	2000	3200	it,predict	[calibration] engineering review vocabulary
+しりあらいず	シリアライズ	1920	1920	2000	3200	it,predict	[calibration] engineering terminology

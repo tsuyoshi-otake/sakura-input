@@ -2,7 +2,7 @@
 
 Sakura Input は、Windows 11 x64 向けの日本語入力システムです。Microsoft IME に近い既定キー操作を保ちながら、IT 用語辞書、文脈変換、予測入力、学習、アプリ別設定、MS-IME／ATOK／Mozc 形式のユーザー辞書入出力を備えます。
 
-> 対応環境は Windows 11（build 22000 以降）、x64、AVX 対応 CPU です。32 bit ホスト用 DLL と ARM64 ネイティブ版は提供しません。
+> 対応環境は Windows 11（build 22000 以降）、x64、AVX + SSSE3 対応 CPU です。32 bit ホスト用 DLL と ARM64 ネイティブ版は提供しません。
 
 ## インストール
 
@@ -34,7 +34,7 @@ Sakura Input は、Windows 11 x64 向けの日本語入力システムです。M
 
 入力中の`Tab`は推測候補を選択し、`Enter`で確定します。先頭候補が入力済み文字列と同じ場合は、最初の`Tab`で見た目が変わらないことがあります。候補表示中は`1`～`9`で候補を直接選択でき、Microsoft IMEプリセットの変換中`Tab`は候補表を展開します。ATOKプリセットでは変換中の`Tab`／`Shift`+`Tab`が候補グループの次／前移動になります。入力中の`無変換`は現在の文字列だけを変換し、確定後に入力モードを変更しません。完全なキー一覧と設定・辞書・診断の説明は [日本語ユーザーガイド](docs/guide-ja.md) を参照してください。
 
-ひらがなモードで`Shift`を押したまま英字を続けて入力すると、英語用のcompositionになります。`Space`で正規表記へ変換でき、たとえば`CLAUDE`から`Claude`／`Claude Code`、`OPENAI`から`OpenAI`、`GITLAB`から`GitLab`を選べます。辞書にない語はかなへ誤変換せず、大文字のまま`Enter`で確定できます。
+ひらがなモードで最初の英字を`Shift`を押しながら入力すると、以降は`Shift`を離しても英語用のcompositionになります。`Space`で正規表記へ変換でき、たとえば`Shift`+`C`の後に`laude`と入力して`Claude`／`Claude Code`、`Shift`+`O`の後に`penai`と入力して`OpenAI`を選べます。辞書にない語はかなへ誤変換せず、入力した英字のまま`Enter`で確定できます。
 
 ## 設定
 
@@ -87,4 +87,4 @@ Windows の「インストールされているアプリ」からアンインス
 
 設計上の制約は [DESIGN.md](DESIGN.md)、フェーズと合格基準は [PLAN.md](PLAN.md)、別セッションへの作業引き継ぎは [CLAUDE.md](CLAUDE.md) を参照してください。通常の検証は `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` です。全フェーズの厳格判定は `scripts/verify-all-phases.ps1`、個別判定は `scripts/verify-phase0.ps1`～`verify-phase5.ps1` を使います。手動・dogfood・互換性・段階更新の記録例は `scripts/templates/` にあり、テンプレートをコピーしただけでは合格にならず、担当者・日時・実ファイルの SHA-256 が検証されます。
 
-辞書は `scripts/build-dictionary.ps1` が pinned source から決定論的に生成し、`.dic` はリポジトリへコミットしません。`-EngineeringOnly` はローカル実装の反復用であり、CI、実ホスト、経過日数、72時間 fuzz、実署名、公開済み Release の代替にはなりません。
+辞書は `scripts/build-dictionary.ps1` が pinned source から決定論的に生成し、`.dic` はリポジトリへコミットしません。リリース用の本体辞書を生成するときは、14カテゴリの入力ディレクトリを `-SystemCategoryDirectory` で指定します。`build-installer.ps1` は14カテゴリのmanifestがない辞書を拒否します。`-EngineeringOnly` はローカル実装の反復用であり、CI、実ホスト、経過日数、72時間 fuzz、実署名、公開済み Release の代替にはなりません。

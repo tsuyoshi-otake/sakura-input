@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 use sakura_ipc::diagnostics::{self, TimeoutOperation};
 use sakura_ipc::{Client, Fault};
 use sakura_proto::{
-    ErrorCode, InputScope, KeyInput, Output, Request, Response, ScreenRect, SessionId,
+    ErrorCode, InputScope, KeyInput, Mode, Output, Request, Response, ScreenRect, SessionId,
     UndoCommitOutcome, PROTOCOL_VERSION,
 };
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
@@ -91,6 +91,22 @@ pub enum Answer {
     Unavailable,
 }
 
+/// The one focused engine session's input-mode state, used by the TSF
+/// `GUID_LBI_INPUTMODE` item. It is deliberately cached at this boundary: the
+/// language-bar callbacks must never guess a profile default or issue a new
+/// connection attempt merely to paint an icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct InputModeStatus {
+    pub mode: Mode,
+    /// Only a positively-classified ordinary-text context may change modes
+    /// through the menu. Password-like and unclassified fields keep the
+    /// visible A/あ status but expose no mutation path.
+    pub can_change: bool,
+    /// A one-shot undo for a change made from this menu, not for arbitrary
+    /// keyboard mode changes.
+    pub can_restore: bool,
+}
+
 /// One connection to the engine, plus the policy for not having one.
 #[derive(Debug, Default)]
 pub struct Engine {
@@ -103,6 +119,17 @@ pub struct Engine {
 struct Link {
     client: Client,
     session: SessionId,
+    /// Exact profile-resolved mode supplied with `SessionCreated`, then kept
+    /// current from engine output and explicit menu responses.
+    mode: Mode,
+    /// The pre-menu mode for the optional one-shot “restore previous input
+    /// mode” command. Keyboard actions and scope changes clear it so the menu
+    /// never resurrects a stale context's state.
+    menu_mode_restore: Option<Mode>,
+    /// The mode that was active before a sensitive scope temporarily forced
+    /// direct input. This mirrors the engine's scope transition locally so the
+    /// status item remains accurate before the next key produces output.
+    mode_before_sensitive: Option<Mode>,
     /// The last scope accepted by this engine session. A reconnect starts
     /// unclassified, so the first key on the new link must publish its scope
     /// again before it can be persisted by developer mode.
@@ -146,11 +173,80 @@ impl Engine {
         self.request(&Request::SendKey { session, key })
     }
 
+    /// Returns the cached status of the active engine session without opening
+    /// or reconnecting a pipe. The caller uses `None` to hide the language-bar
+    /// item rather than draw a guessed state.
+    pub(crate) fn input_mode_status(&self) -> Option<InputModeStatus> {
+        self.link.as_ref().map(|link| InputModeStatus {
+            mode: link.mode,
+            can_change: link.input_scope == Some(InputScope::Normal),
+            can_restore: link.menu_mode_restore.is_some()
+                && link.input_scope == Some(InputScope::Normal),
+        })
+    }
+
+    /// Selects an idle session's persistent mode from the language-bar menu.
+    /// This request is explicitly not a synthetic key: the engine rejects it
+    /// before any document mutation when the session is composing or its scope
+    /// is not known ordinary text.
+    pub(crate) fn set_input_mode(&mut self, requested: Mode) -> bool {
+        let Some(link) = self.link.as_mut() else {
+            return false;
+        };
+        // A menu click may have been queued just before focus moved. Keep the
+        // frontend boundary fail-closed as well as relying on the engine's
+        // authoritative scope/composition validation.
+        if link.input_scope != Some(InputScope::Normal) {
+            return false;
+        }
+        let session = link.session;
+        let prior = link.mode;
+        match link.client.call(
+            &Request::SetMode {
+                session,
+                mode: requested,
+            },
+            KEY_BUDGET,
+        ) {
+            Ok(Response::InputMode { mode }) => {
+                link.mode = mode;
+                link.menu_mode_restore = (mode != prior).then_some(prior);
+                true
+            }
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                link.desynchronized = true;
+                false
+            }
+            Ok(Response::Error(ErrorCode::Busy)) => false,
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
+    }
+
+    /// Restores the mode before the last successful menu-driven change. A
+    /// successful restore consumes the record; it is an undo, not a toggle.
+    pub(crate) fn restore_input_mode(&mut self) -> bool {
+        let Some(mode) = self.link.as_ref().and_then(|link| link.menu_mode_restore) else {
+            return false;
+        };
+        if !self.set_input_mode(mode) {
+            return false;
+        }
+        if let Some(link) = self.link.as_mut() {
+            link.menu_mode_restore = None;
+        }
+        true
+    }
+
     /// Evaluates a test-only key against the supplied host scope without
     /// publishing that scope to the live engine session. The engine applies
     /// the transition only to a fixed-capacity Probe clone, so OnTestKeyDown
     /// cannot reset live composition, clear live prediction state, or update
     /// this link's applied-scope cache.
+    #[cfg(test)]
     pub fn probe_key(&mut self, scope: InputScope, key: KeyInput) -> Answer {
         self.probe_key_for_context(scope, key, false)
     }
@@ -195,6 +291,7 @@ impl Engine {
         };
         match link.client.call(&request, KEY_BUDGET) {
             Ok(Response::Ok) => {
+                update_mode_for_scope(link, scope);
                 link.input_scope = Some(scope);
                 true
             }
@@ -336,7 +433,24 @@ impl Engine {
         };
 
         match link.client.call(request, KEY_BUDGET) {
-            Ok(Response::Output(output)) => Answer::Ready(output),
+            Ok(Response::Output(output)) => {
+                if matches!(
+                    request,
+                    Request::SendKey {
+                        key: KeyInput {
+                            test_only: false,
+                            ..
+                        },
+                        ..
+                    }
+                ) {
+                    if let Some(mode) = output.mode {
+                        link.mode = mode;
+                        link.menu_mode_restore = None;
+                    }
+                }
+                Answer::Ready(output)
+            }
 
             // The engine forgot this session: it restarted behind a
             // connection that outlived it, or its table was reset. A new
@@ -507,9 +621,12 @@ fn open(name: Option<&str>) -> Option<Link> {
         left(deadline),
     );
     match created {
-        Ok(Response::SessionCreated { session }) => Some(Link {
+        Ok(Response::SessionCreated { session, mode }) => Some(Link {
             client,
             session,
+            mode,
+            menu_mode_restore: None,
+            mode_before_sensitive: None,
             input_scope: None,
             desynchronized: false,
         }),
@@ -535,10 +652,34 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::FlushInputHistory
         | Request::InputHistoryStats
         | Request::SetInputScope { .. }
+        | Request::SetMode { .. }
         | Request::DeleteSession { .. }
         | Request::Ping
         | Request::Shutdown => TimeoutOperation::Administration,
     }
+}
+
+fn update_mode_for_scope(link: &mut Link, scope: InputScope) {
+    let was_sensitive = link.input_scope.is_some_and(scope_is_sensitive);
+    if scope_is_sensitive(scope) {
+        if !was_sensitive {
+            link.mode_before_sensitive = Some(link.mode);
+        }
+        link.mode = Mode::Direct;
+        link.menu_mode_restore = None;
+    } else if was_sensitive {
+        if let Some(mode) = link.mode_before_sensitive.take() {
+            link.mode = mode;
+        }
+        link.menu_mode_restore = None;
+    }
+}
+
+const fn scope_is_sensitive(scope: InputScope) -> bool {
+    matches!(
+        scope,
+        InputScope::Password | InputScope::Url | InputScope::Email | InputScope::Digits
+    )
 }
 
 #[cfg(not(test))]
@@ -664,7 +805,10 @@ mod tests {
             answer(
                 &server,
                 &mut buffer,
-                &Response::SessionCreated { session: 1 },
+                &Response::SessionCreated {
+                    session: 1,
+                    mode: Mode::Hiragana,
+                },
             );
             then(&server, &mut buffer);
         });
@@ -718,6 +862,81 @@ mod tests {
             }
             other => panic!("expected an answer, got {other:?}"),
         }
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn language_bar_mode_menu_tracks_scope_and_one_shot_restore() {
+        let (name, server) = fake_engine("mode-menu", |pipe, buffer| {
+            let steps = [
+                (
+                    Request::SetInputScope {
+                        session: 1,
+                        scope: InputScope::Normal,
+                    },
+                    Response::Ok,
+                ),
+                (
+                    Request::SetMode {
+                        session: 1,
+                        mode: Mode::Katakana,
+                    },
+                    Response::InputMode {
+                        mode: Mode::Katakana,
+                    },
+                ),
+                (
+                    Request::SetMode {
+                        session: 1,
+                        mode: Mode::Hiragana,
+                    },
+                    Response::InputMode {
+                        mode: Mode::Hiragana,
+                    },
+                ),
+            ];
+            for (expected, response) in steps {
+                let payload = pipe.read_frame(buffer).expect("mode-menu request");
+                let (id, request) = decode_request(payload).expect("decodable mode-menu request");
+                assert_eq!(request, expected);
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode mode-menu response");
+                pipe.write_all(&reply).expect("write mode-menu response");
+            }
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert_eq!(
+            engine.input_mode_status(),
+            Some(InputModeStatus {
+                mode: Mode::Hiragana,
+                can_change: false,
+                can_restore: false,
+            })
+        );
+
+        assert!(engine.set_input_scope(InputScope::Normal));
+        assert!(engine.set_input_mode(Mode::Katakana));
+        assert_eq!(
+            engine.input_mode_status(),
+            Some(InputModeStatus {
+                mode: Mode::Katakana,
+                can_change: true,
+                can_restore: true,
+            })
+        );
+
+        assert!(engine.restore_input_mode());
+        assert_eq!(
+            engine.input_mode_status(),
+            Some(InputModeStatus {
+                mode: Mode::Hiragana,
+                can_change: true,
+                can_restore: false,
+            })
+        );
 
         drop(engine);
         server.join().expect("the server thread");

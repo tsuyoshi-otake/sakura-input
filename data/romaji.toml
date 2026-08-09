@@ -188,21 +188,10 @@ n = "ん"
 nn = "ん"
 "n'" = "ん"
 xn = "ん"
-# `nn` has to keep waiting even though it is already a complete entry, or
-# `minna` comes out みんあ: the second `n` of `nn` is both the end of ん and the
-# start of `na`. Spelling out `nna`..`nnyo` is what lets the same two keys mean
-# both — `nn` + Enter commits ん, while `nn` + a vowel becomes ん plus the
-# な-row kana. This is why `konnichiha` types こんにちは and not こんいちは.
-nna = "んな"
-nni = "んに"
-nnu = "んぬ"
-nne = "んね"
-nno = "んの"
-nnya = "んにゃ"
-nnyi = "んにぃ"
-nnyu = "んにゅ"
-nnye = "んにぇ"
-nnyo = "んにょ"
+# Match Microsoft IME: `nn` resolves to ん immediately, including before a
+# vowel. Thus `hannei` is はんえい, not はんねい. A following な-row or や-row
+# syllable needs a third `n` (`minnna`, `konnnichiha`); an apostrophe is an
+# alternate delimiter where it reads more clearly (`hon'ya`).
 
 # --- H / F ---
 ha = "は"

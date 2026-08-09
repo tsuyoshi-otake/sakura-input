@@ -1,12 +1,13 @@
-//! The engine answers a real client over the real pipe.
+//! The engine answers a real client over a private test-owned pipe.
 //!
 //! Every other test in this workspace stops one layer short of this. The
 //! dispatcher's unit tests call `dispatch` directly; `sakura-ipc`'s tests put
 //! a server and a client on a scratch pipe name; the text service's tests
-//! talk to a scripted fake engine. What none of them touch is the arrangement
-//! that actually ships: the built `sakura_engine.exe`, serving the well-known
-//! name that `Client::connect` resolves on its own, spoken to by a separate
-//! process.
+//! talk to a scripted fake engine. This test exercises the built
+//! `sakura_engine.exe` in a separate process, but gives that process a unique
+//! explicit test pipe and owned profile. It never resolves or touches the
+//! installed engine's well-known pipe, so real-process test binaries may run
+//! concurrently.
 //!
 //! That gap is where the startup crash of the boxed-session-table fix lived —
 //! the engine failed before it accepted its first connection, and a fully
@@ -18,6 +19,7 @@
 //! keystrokes. If this passes and the text service still cannot type, the
 //! fault is in the text service, not in the protocol or the transport.
 
+#[allow(dead_code)]
 mod common;
 
 use sakura_ipc::Client;
@@ -80,21 +82,14 @@ fn assert_shifted_term(client: &mut Client, session: SessionId, typed: &str, exp
 }
 
 /// The whole M0 story across a real pipe: the engine starts, accepts the
-/// handshake, opens a session, turns romaji into kana, commits it, and is
-/// still serving the connection after that.
+/// handshake, opens a session, verifies stateful composition and UI behavior,
+/// then verifies isolated durable English learning.
 ///
-/// One test function rather than several, because the engine is a
-/// per-logon-session singleton and [`Engine`] is a guard that stops it: two
-/// tests running in parallel would each hold their own guard, and whichever
-/// finished first would kill the engine out from under the other. One guard,
-/// one lifetime, no race.
+/// The harness owns a unique pipe and process, so concurrent integration test
+/// binaries cannot interfere with this test or a user's installed engine.
 #[test]
-fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
-    let mut engine = Engine::running();
-    if !engine.compatible() {
-        eprintln!("skipping real-pipe test: an older engine owns the well-known pipe");
-        return;
-    }
+fn a_real_engine_serves_a_real_client_over_an_owned_private_pipe() {
+    let mut engine = Engine::spawn_isolated();
     let mut client = engine.client();
 
     match client.call(
@@ -212,6 +207,29 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
     assert_shifted_term(&mut next, next_session, "GITLAB", &["GitLab"]);
     assert_shifted_term(&mut next, next_session, "PYTORCH", &["PyTorch"]);
 
+    // These and the stateful composition/UI keys above deliberately remain
+    // non-test-only: this test verifies retained engine state. Every write is
+    // confined to this test's owned profile, never the user's LOCALAPPDATA.
+    let learning_path = engine
+        .local_app_data()
+        .join("SakuraInput")
+        .join("learning")
+        .join("log.bin");
+    let learning = sakura_engine::learning::read_snapshot(&learning_path).unwrap_or_else(|error| {
+        panic!(
+            "read isolated learning log {}: {error}",
+            learning_path.display()
+        )
+    });
+    assert!(
+        learning
+            .records
+            .iter()
+            .any(|record| record.surface == "Claude" || record.surface == "Claude Code"),
+        "non-test-only English commit did not persist in isolated learning log {}: {learning:?}",
+        learning_path.display()
+    );
+
     // What the renderer does. `since: 0` is nobody's revision, so this is
     // answered from the engine's current state without blocking.
     let mut renderer = engine.client();
@@ -221,12 +239,8 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
     };
 
     // A mode key on the typing connection has to reach the watcher on the
-    // renderer's connection — which is the entire reason the UI board is
-    // the one piece of engine state that is not per-connection. The shared UI
-    // board may have been left in any of the three kana modes by another real
-    // session, while this fresh session always starts from its own default.
-    // Cycle until the session reports a mode different from the observed board;
-    // within three states that must produce an observable revision.
+    // renderer's connection. Cycle until the session reports a mode different
+    // from the observed board; within three states that must publish a change.
     let mut changed_mode = None;
     for _ in 0..3 {
         match next.call(
@@ -237,9 +251,7 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
             PATIENT,
         ) {
             Ok(Response::Output(output)) => {
-                let mode = output
-                    .mode
-                    .expect("idle 無変換 is bound to mode_kana_cycle and must report the new mode");
+                let mode = output.mode.expect("idle Muhenkan must report the new mode");
                 if Some(mode) != seen.mode {
                     changed_mode = Some(mode);
                     break;
@@ -268,4 +280,14 @@ fn a_real_engine_serves_a_real_client_over_the_well_known_pipe() {
         }
         other => panic!("WatchUi after a mode change: expected Ui, got {other:?}"),
     }
+
+    drop(renderer);
+    drop(next);
+    let cleanup = engine.cleanup().expect("owned engine cleanup must succeed");
+    assert!(
+        cleanup.status.success(),
+        "owned engine pid {} exited with {}",
+        cleanup.pid,
+        cleanup.status
+    );
 }

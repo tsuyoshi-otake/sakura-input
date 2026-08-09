@@ -113,10 +113,16 @@ fn what_the_run_scanner_costs_and_saves() {
     let mode = Mode::Hiragana;
 
     println!();
+    let kernel = sakura_core::simd::startup()
+        .expect("the benchmark requires the AVX + SSSE3 compatibility floor")
+        .width_scan()
+        .metadata();
     println!(
-        "vector kernels: {} ({} bytes per block), {ROUNDS} rounds",
-        sakura_core::cpu::tier().name(),
-        sakura_core::cpu::tier().block_bytes(),
+        "resolved width-scan strategy: {} ({}-byte main block; scalar below {} bytes), {ROUNDS} rounds",
+        kernel.name, kernel.block_bytes, kernel.minimum_bytes,
+    );
+    println!(
+        "This names the selected strategy, not a claim that every corpus executes its main vector block."
     );
     println!(
         "\n{:<16} {:<12} {:>5} {:>12} {:>12} {:>9}",

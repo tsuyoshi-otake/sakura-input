@@ -58,6 +58,31 @@ fn a_request_gets_its_reply() {
     server.join().expect("the server thread");
 }
 
+#[test]
+fn a_client_reports_the_process_serving_its_exact_pipe_connection() {
+    let (accepted, ready) = std::sync::mpsc::channel();
+    let (name, server) = with_server("server-process-id", move |pipe| {
+        accepted.send(()).expect("tell test the pipe was accepted");
+        let mut buffer = Vec::new();
+        // The test client sends no protocol frame. Holding this accepted
+        // instance open until the client drops makes the server PID query
+        // describe the exact live connection, not a name lookup.
+        let _ = pipe.read_frame(&mut buffer);
+    });
+
+    let client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
+    ready
+        .recv_timeout(Duration::from_secs(5))
+        .expect("server accepted the exact client connection");
+    assert_eq!(
+        client.server_process_id().expect("query exact server PID"),
+        std::process::id()
+    );
+
+    drop(client);
+    server.join().expect("the server thread");
+}
+
 /// The property the whole overlapped-I/O apparatus exists for: an engine
 /// that stops answering must cost the caller its budget, not its thread.
 #[test]

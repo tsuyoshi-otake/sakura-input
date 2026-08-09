@@ -29,7 +29,6 @@ mod accessibility;
 mod candidate;
 mod glyph;
 mod indicator;
-mod tray;
 mod watch;
 
 use std::ffi::c_void;
@@ -44,18 +43,15 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowLongPtrW,
-    PostMessageW, PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SetWindowLongPtrW,
-    TranslateMessage, GWLP_USERDATA, MSG, WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WNDCLASSW,
-    WS_OVERLAPPED,
+    PostMessageW, PostQuitMessage, RegisterClassW, SetWindowLongPtrW, TranslateMessage,
+    GWLP_USERDATA, MSG, WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WNDCLASSW, WS_OVERLAPPED,
 };
 
 use candidate::CandidateWindow;
 use indicator::Indicator;
-use tray::Tray;
 use watch::Signal;
 
-/// The class of the window that owns the tray icon and receives the
-/// watcher's reports.
+/// The class of the hidden window that receives the watcher's reports.
 ///
 /// Named rather than anonymous so that a person debugging a machine can
 /// find this process's window. It is *not* how the renderer is asked to
@@ -73,11 +69,6 @@ const HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 /// (a fast user switch, a repaired install) without anything being wrong.
 const SINGLE_INSTANCE: PCWSTR = windows::core::w!(r"Local\SakuraInputRenderer");
 
-/// The shell's callback for the tray icon. Owned here, not in [`tray`],
-/// because `WM_APP`-relative ids are only unique within one window and this
-/// is the module that knows what else that window uses.
-pub const WM_TRAY: u32 = WM_APP + 1;
-
 /// The watcher reporting that the single-slot UI mailbox has new state.
 const WM_UI: u32 = WM_APP + 2;
 
@@ -89,14 +80,9 @@ const WM_ENDED: u32 = WM_APP + 3;
 struct App {
     indicator: Indicator,
     candidates: CandidateWindow,
-    tray: Tray,
     /// A latest-value mailbox shared with the blocking watcher. Multiple
     /// engine revisions can coalesce while the UI thread is busy painting.
     mailbox: Arc<Mutex<Option<UiState>>>,
-    /// `TaskbarCreated`, resolved at startup. Its value is assigned by the
-    /// system at run time, so it cannot be a constant and has to be carried
-    /// to the place that compares against it.
-    taskbar_created: u32,
 }
 
 fn main() -> Result<()> {
@@ -115,13 +101,7 @@ fn main() -> Result<()> {
     let mut app = App {
         indicator: Indicator::new()?,
         candidates: CandidateWindow::new()?,
-        tray: Tray::new(host),
         mailbox: Arc::clone(&mailbox),
-        // SAFETY: the name is a static wide literal. A zero result means
-        // the message could not be registered, which only costs the
-        // Explorer-restart recovery — and zero matches no real message, so
-        // the comparison simply never fires.
-        taskbar_created: unsafe { RegisterWindowMessageW(windows::core::w!("TaskbarCreated")) },
     };
 
     // Published before the watcher starts, so no message can arrive at a
@@ -173,13 +153,8 @@ fn already_running() -> Result<bool> {
     }
 }
 
-/// Creates the hidden window that owns the tray icon.
-///
-/// A real top-level window rather than a message-only one, despite only
-/// ever receiving messages. `TaskbarCreated` is a broadcast, and broadcasts
-/// do not reach message-only windows — so the shell-restart recovery in
-/// [`tray`] would silently never fire. It is simply never shown, which
-/// makes it invisible in every way that matters.
+/// Creates the hidden watcher host window. It is a real top-level window so
+/// ordinary UI-thread messages have a stable owner, but it is never shown.
 fn create_host() -> Result<HWND> {
     // SAFETY: the class name is a static wide literal and the procedure is
     // a real `extern "system"` function.
@@ -253,10 +228,6 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
     // local that outlives the pump. Null until it is published and again
     // after it is cleared, which is why every use below is guarded.
     let app = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
-    // SAFETY: as above. Read before the match so the shell's run-time
-    // message can be compared without repeating the dereference.
-    let taskbar_created = (!app.is_null()).then(|| unsafe { (*app).taskbar_created });
-
     match message {
         WM_UI if !app.is_null() => {
             // SAFETY: `app` is the live local from `main`, and this runs on
@@ -271,7 +242,6 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
             if let Some(state) = state {
                 if let Some(mode) = state.mode {
                     app.indicator.show(mode);
-                    let _ = app.tray.set(mode);
                 }
                 app.candidates.update(&state);
             }
@@ -280,20 +250,11 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
         // The engine stopped on purpose, or is gone for good. Either way
         // there is nothing left to render.
         //
-        // `WM_CLOSE` and `WM_ENDSESSION` join it because logoff and
-        // shutdown have to end the same way: returning from the pump is
-        // what lets `Tray`'s destructor take the icon out of the
-        // notification area, which the shell otherwise leaves behind as a
-        // ghost until something hovers over it.
+        // `WM_CLOSE` and `WM_ENDSESSION` join it because logoff and shutdown
+        // have to end the same way.
         WM_ENDED | WM_CLOSE | WM_ENDSESSION | WM_DESTROY => {
             // SAFETY: no arguments; posts `WM_QUIT` to this thread.
             unsafe { PostQuitMessage(0) };
-            LRESULT(0)
-        }
-        _ if taskbar_created == Some(message) => {
-            // SAFETY: as above — the live local, on its owning thread.
-            let app = unsafe { &mut *app };
-            let _ = app.tray.restore();
             LRESULT(0)
         }
         // SAFETY: the default handler is where every unhandled message
@@ -307,13 +268,10 @@ mod tests {
     use super::*;
     use sakura_proto::Mode;
 
-    /// The three application messages must be distinct, or the tray's
-    /// callback and the watcher's reports would be read as each other — a
-    /// click on the icon would show a mode indicator for whatever mode the
-    /// click coordinates happened to encode.
+    /// The watcher's application messages must stay distinct.
     #[test]
     fn the_application_messages_do_not_collide() {
-        let all = [WM_TRAY, WM_UI, WM_ENDED];
+        let all = [WM_UI, WM_ENDED];
         for (i, a) in all.iter().enumerate() {
             assert!(
                 *a >= WM_APP,

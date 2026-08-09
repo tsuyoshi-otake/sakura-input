@@ -38,7 +38,7 @@ pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
 pub use conversion::{
     ConversionCandidate, ConversionError, ConversionOptions, ConversionSegment, Converter,
 };
-pub use cpu::{Tier, UnsupportedCpu};
+pub use cpu::{CpuFeatures, UnsupportedCpu};
 pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};
 pub use editing::{identifier_into, transform_into, IdentifierStyle, SegmentTransform};
 pub use keymap::{Action, KeyMap, KeyMapError, KeyMapErrorKind, Preset, State};
@@ -49,6 +49,7 @@ pub use preferences::{
     CONFIG_FORMAT_VERSION,
 };
 pub use romaji::{Input, Table, TableError, TableErrorKind};
+pub use simd::{KernelMetadata, KernelSet, WidthScanStrategy, WidthScanStrategyId};
 pub use text::TextSink;
 pub use user_dictionary::{
     UserDictionary, UserDictionaryEntry, UserDictionaryError, UserDictionaryErrorKind,

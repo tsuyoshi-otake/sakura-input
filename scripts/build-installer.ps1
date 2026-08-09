@@ -147,6 +147,10 @@ $dictionaryReport = [IO.File]::ReadAllText($dictionaryReportPath) | ConvertFrom-
 if ($dictionaryReport.schema_version -ne 1 -or $dictionaryReport.deterministic_repeat -ne $true) {
     throw 'dictionary provenance does not prove a deterministic repeat build'
 }
+if ($null -eq $dictionaryReport.inputs.system_category_dictionary -or
+    @($dictionaryReport.inputs.system_category_dictionary.categories).Count -ne 14) {
+    throw 'dictionary provenance does not prove that the canonical fourteen Sakura system categories were included'
+}
 $dictionaryRecord = $payloads | Where-Object { $_.path -ceq 'artifacts/release/system.dic' }
 if ($null -eq $dictionaryReport.artifacts.dictionary -or
     $dictionaryReport.artifacts.dictionary.sha256 -cne $dictionaryRecord.sha256 -or

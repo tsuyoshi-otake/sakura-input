@@ -122,7 +122,9 @@ impl Normalizer {
     /// # What that is worth
     ///
     /// Nanoseconds per call, per-character loop → this, best of seven runs on
-    /// an AVX-512 machine (`tests/width_bench.rs`):
+    /// one development machine (`tests/width_bench.rs`). The benchmark prints
+    /// the selected strategy separately; a CPU advertising AVX-512 does not
+    /// imply that a given input executed a 512-bit body:
     ///
     /// | text | half-width policy (the default) | every channel full-width |
     /// |------|--------------------------------:|-------------------------:|
@@ -198,6 +200,21 @@ impl Normalizer {
         mode: Mode,
         dst: &mut impl TextSink,
     ) -> Result<(), Overflow> {
+        self.normalize_runs_with(src, mode, dst, simd::passthrough_len)
+    }
+
+    /// The long-string body parameterized by the already-selected run scanner.
+    /// Production always passes [`simd::passthrough_len`]. Keeping the scanner
+    /// at this narrow boundary lets the SIMD unit benchmark compare concrete
+    /// safe-to-call kernels end to end without swapping the process-global
+    /// dispatch pointer while tests run in parallel.
+    fn normalize_runs_with(
+        &self,
+        src: &str,
+        mode: Mode,
+        dst: &mut impl TextSink,
+        mut scan: impl FnMut(&[u8], &simd::Lut) -> usize,
+    ) -> Result<(), Overflow> {
         // Resolved once per call rather than once per character: this is the
         // whole of what the policy has to say about single-byte characters.
         let lut = self.passthrough_lut(mode);
@@ -210,7 +227,7 @@ impl Normalizer {
             if simd::admits(lut, first) {
                 // Sound because a run only ever covers ASCII bytes, so both
                 // ends are character boundaries (see `simd`'s module docs).
-                let (run, tail) = rest.split_at(simd::passthrough_len(rest.as_bytes(), lut));
+                let (run, tail) = rest.split_at(scan(rest.as_bytes(), lut));
                 if dst.push_str(run).is_err() {
                     // `push_str` is all-or-nothing, so nothing landed — and
                     // this function promises the prefix that fits, not an
@@ -233,6 +250,36 @@ impl Normalizer {
             rest = chars.as_str();
         }
         Ok(())
+    }
+
+    /// Test-only entry point for paired AVX2/AVX-512 normalizer measurements.
+    ///
+    /// Unlike changing `ACTIVE_WIDTH_SCAN`, this does not mutate global state,
+    /// so it remains sound when Rust's test harness runs unrelated normalizer
+    /// tests at the same time. The caller must establish the raw kernel's
+    /// target-feature requirements before calling it.
+    #[cfg(test)]
+    pub(crate) unsafe fn normalize_into_with_scan(
+        &self,
+        src: &str,
+        mode: Mode,
+        dst: &mut impl TextSink,
+        scan: unsafe fn(&[u8], &simd::Lut) -> usize,
+    ) -> Result<(), Overflow> {
+        if matches!(mode, Mode::Katakana | Mode::HalfKatakana) || src.len() < simd::MIN_VECTOR_BYTES
+        {
+            return self.normalize_into(src, mode, dst);
+        }
+        self.normalize_runs_with(src, mode, dst, |bytes, lut| {
+            if bytes.len() < simd::MIN_VECTOR_BYTES {
+                // Match production's caller-side scalar short-input path. The
+                // global strategy is not observed here because
+                // `passthrough_len` returns before reading it for this range.
+                return simd::passthrough_len(bytes, lut);
+            }
+            // SAFETY: upheld by this test-only API's caller.
+            unsafe { scan(bytes, lut) }
+        })
     }
 
     /// The set of single-byte characters this policy leaves alone in `mode`.
