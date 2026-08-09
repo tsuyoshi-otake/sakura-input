@@ -3,3 +3,9 @@
 *.pdb
 /installer/out/
 /artifacts/
+
+# Local Codex work artifacts can include diagnostics and test input data.
+/.codex/
+
+# Native probe/build outputs created during local investigation.
+/*.obj
