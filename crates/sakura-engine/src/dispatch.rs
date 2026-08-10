@@ -336,6 +336,13 @@ impl Dispatcher {
             Request::InputHistoryStats => self.input_history_stats(),
             Request::SetInputScope { session, scope } => self.set_input_scope(*session, *scope),
             Request::SetMode { session, mode } => self.set_mode(*session, *mode),
+            // The renderer has no dispatcher-owned session. `server` resolves
+            // this request through its shared revision-stamped UiBoard before
+            // it reaches a worker; a direct dispatcher call must remain a
+            // fail-closed no-op rather than deleting by a guessed surface.
+            Request::DeleteHistoryCandidate { .. } => {
+                Reply::Message(Response::HistoryCandidateDeleted { removed: false })
+            }
             Request::DeleteSession { session } => self.delete_session(*session),
             Request::Ping => Reply::Message(Response::Pong),
             Request::Shutdown => Reply::Shutdown(Response::Ok),
@@ -368,6 +375,7 @@ impl Dispatcher {
             | Request::ClearInputHistory
             | Request::FlushInputHistory
             | Request::InputHistoryStats
+            | Request::DeleteHistoryCandidate { .. }
             | Request::Ping
             | Request::Shutdown
             | Request::WatchUi { .. }
@@ -1984,6 +1992,7 @@ fn flush_pending(
 /// composition cannot land in the host document underneath an active
 /// preedit -- see this module's docs on the clean seam that leaves for
 /// later phases.
+#[allow(clippy::too_many_arguments)]
 fn apply_action(
     session_id: SessionId,
     session: &mut Session,
@@ -2345,6 +2354,7 @@ fn apply_action(
 /// Commits a 1-9 shortcut from the page containing the current selection.
 /// Invalid numbers on a short final page have an explicit, recoverable
 /// outcome: the candidate list stays open and the client is asked to beep.
+#[allow(clippy::too_many_arguments)]
 fn commit_numbered_candidate(
     session: &mut Session,
     table: &Table,
@@ -2574,6 +2584,7 @@ fn append_segment_surface(
 /// performs exactly one bounded conversion after the previous slot has been
 /// released, avoiding nested pool locks. Failure is observable as `false` and
 /// leaves the converting session intact for its caller to finalize.
+#[allow(clippy::too_many_arguments)]
 fn commit_converted_segments(
     session: &mut Session,
     table: &Table,
@@ -2704,6 +2715,7 @@ fn commit_converted_segments(
     Ok(true)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn begin_conversion(
     session_id: SessionId,
     session: &mut Session,
@@ -3078,6 +3090,7 @@ fn move_caret(
 /// path, plus every mode switch (`switch_mode`), which must not silently
 /// drop a composition in progress just because the user pressed a mode key
 /// instead of Enter (DESIGN 1: never lose user text).
+#[allow(clippy::too_many_arguments)]
 fn commit_pending(
     session: &mut Session,
     table: &Table,
@@ -3305,6 +3318,7 @@ fn focus_prediction_after_refresh(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn commit_selected_suggestion(
     session_id: SessionId,
     session: &mut Session,
@@ -3423,7 +3437,16 @@ fn render_suggestions(
     for candidate in candidates {
         scratch.clear();
         normalizer.normalize_into(candidate.surface(), session.mode, scratch)?;
-        out.push_candidate(scratch.as_str(), candidate.annotation())?;
+        if candidate.source() == PredictionSource::History {
+            out.push_history_candidate(
+                scratch.as_str(),
+                candidate.annotation(),
+                candidate.reading(),
+                candidate.surface(),
+            )?;
+        } else {
+            out.push_candidate(scratch.as_str(), candidate.annotation())?;
+        }
     }
     if let (Some(service), Some(entry_index)) = (
         conversion,
@@ -3690,7 +3713,11 @@ fn render_converted_segments(
     // rendering failure never leaves a normalized selection behind for a
     // conversion that was never actually redrawn.
     let mut pending_selections: [Option<i16>; MAX_SEGMENTS] = [None; MAX_SEGMENTS];
-    for index in 0..session.segment_count() {
+    for (index, pending_selection) in pending_selections
+        .iter_mut()
+        .enumerate()
+        .take(session.segment_count())
+    {
         let Some(range) = session.segment_range(index) else {
             return Ok(false);
         };
@@ -3789,7 +3816,7 @@ fn render_converted_segments(
 
         match rendered {
             Ok(Ok(Some((selected, rendered_chars, meta)))) => {
-                pending_selections[index] = Some(selected);
+                *pending_selection = Some(selected);
                 cursor = cursor.saturating_add(rendered_chars);
                 context_right_id = meta.right_id;
             }
@@ -8188,15 +8215,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v12_version_is_rejected() {
+    fn hello_with_the_previous_v13_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 13,
-            "selected-candidate detail adds v13 wire data"
+            PROTOCOL_VERSION, 14,
+            "history deletion capability adds v14 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 12 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 13 }, &mut out);
 
         assert_eq!(
             reply,
@@ -8205,10 +8232,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v13_version_is_accepted() {
+    fn hello_with_v14_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 13,
-            "selected-candidate detail adds v13 wire data"
+            PROTOCOL_VERSION, 14,
+            "history deletion capability adds v14 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
@@ -9187,9 +9214,7 @@ mod tests {
             Reply::Message(Response::Error(ErrorCode::TooLarge)),
             "a maximal (512-byte) suggestion must fit exactly in the 1536-byte preedit, not overflow it"
         );
-        let expected_commit: String = std::iter::repeat('\u{FF58}')
-            .take(crate::prediction::MAX_PREDICTION_SURFACE_BYTES)
-            .collect();
+        let expected_commit = "\u{FF58}".repeat(crate::prediction::MAX_PREDICTION_SURFACE_BYTES);
         assert_eq!(out.commit_text(), Some(expected_commit.as_str()));
         assert_eq!(
             out.commit_text().unwrap().len(),

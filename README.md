@@ -46,7 +46,7 @@ Sakura Input は、Windows 11 x64 向けの日本語入力システムです。M
 
 選択中の候補に、出典のある辞書説明があるときだけ、同じSakura候補ポップアップ内に説明を補助表示します。説明は一定幅の詳細ペイン内で全文を折り返し、モニターの作業領域に物理的に収まらない場合だけ末尾を省略します。候補一覧の基準矩形と列位置は選択移動で変えません。画面端では候補の右側、左側、下側の順に配置を試み、収まらなければ表示しません。説明がない候補、複合候補、または辞書の厳密なentry ordinalへ解決できない候補は、推測せず説明なしとして扱います。
 
-辞書は原文を長さ上限なしで保持しますが、rendererへ渡すのは明示的に切り詰め状態を伴う安全なプレビューだけです。別名、関連語、類似語、反対語は明示データだけを表示し、表記や意味の推測で補いません。UI Automationにも選択候補の説明を公開し、プレビューである場合はその状態を伝えます。固定したsmile-chatとJapanese WordNet 1.1から、正規の全14カテゴリ辞書で36,606件の説明を再現可能に生成しています。説明を持たないentryや曖昧な語義には詳細を表示しません。
+辞書は原文を長さ上限なしで保持しますが、rendererへ渡すのは明示的に切り詰め状態を伴う安全なプレビューだけです。別名、関連語、類似語、反対語はmanifestに固定された明示データだけを表示し、実行時に表記や意味から推測しません。UI Automationにも選択候補の説明を公開し、プレビューである場合はその状態を伝えます。固定したsmile-chatとJapanese WordNet 1.1のfull-source構成では36,606件を再現できます。通常の既定ビルドでは、Sakuraのcurated sourceとIssue #30の審査済み000010 releaseを加え、472,825 entries中29,229 exact-entry detailsを2-passで確認しました。000010は242語を審査対象とし、236語を承認（246 exact-entry details）、6語を保留しました。承認レコードは全件に関連語があり、類似語43件・反対語16件も明示的に保持します。説明を持たないentry、曖昧な語義、未審査draftには詳細を表示しません。
 
 ひらがなモードで最初の英字を`Shift`を押しながら入力すると、以降は`Shift`を離しても英語用のcompositionになります。`Space`で正規表記へ変換でき、たとえば`Shift`+`C`の後に`laude`と入力して`Claude`／`Claude Code`、`Shift`+`O`の後に`penai`と入力して`OpenAI`を選べます。辞書にない語はかなへ誤変換せず、入力した英字のまま`Enter`で確定できます。
 
@@ -113,4 +113,4 @@ Windows の「インストールされているアプリ」からアンインス
 
 設計上の制約は [DESIGN.md](DESIGN.md)、フェーズと合格基準は [PLAN.md](PLAN.md)、別セッションへの作業引き継ぎは [CLAUDE.md](CLAUDE.md) を参照してください。通常の検証は `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` です。全フェーズの厳格判定は `scripts/verify-all-phases.ps1`、個別判定は `scripts/verify-phase0.ps1`～`verify-phase5.ps1` を使います。手動・dogfood・互換性・段階更新の記録例は `scripts/templates/` にあり、テンプレートをコピーしただけでは合格にならず、担当者・日時・実ファイルの SHA-256 が検証されます。
 
-辞書は `scripts/build-dictionary.ps1` が pinned source から決定論的に生成し、`.dic` はリポジトリへコミットしません。リリース用の本体辞書を生成するときは、14カテゴリの入力ディレクトリを `-SystemCategoryDirectory` で指定します。`build-installer.ps1` は14カテゴリのmanifestがない辞書を拒否します。`-EngineeringOnly` はローカル実装の反復用であり、CI、実ホスト、経過日数、72時間 fuzz、実署名、公開済み Release の代替にはなりません。
+辞書は `scripts/build-dictionary.ps1` が pinned source とSakuraのcurated layerから14カテゴリを決定論的に生成し、`.dic` はリポジトリへコミットしません。外部のカテゴリ辞書を追加する場合だけ `-SystemCategoryDirectory` を指定し、そのmanifestとライセンス宣言を厳格に検証します。`build-installer.ps1` は生成レポートに正規14カテゴリが完全・重複なしで記録されていない辞書を拒否します。`-EngineeringOnly` はローカル実装の反復用であり、CI、実ホスト、経過日数、72時間 fuzz、実署名、公開済み Release の代替にはなりません。

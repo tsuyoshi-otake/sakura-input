@@ -54,6 +54,23 @@ $BuildTimeOnly = [ordered]@{
     'miniz_oxide'   = 'flate2 pure-Rust DEFLATE implementation detail for offline WordNet archive'
     'adler2'        = 'miniz_oxide checksum implementation detail'
     'simd-adler32'  = 'miniz_oxide checksum implementation detail'
+    'serde'         = 'offline dictc LLM-detail release-gate strict schema parser'
+    'serde_derive'  = 'derive-only schema implementation for offline dictc LLM-detail release gate'
+    'serde_json'    = 'offline dictc LLM-detail release-gate JSONL parser'
+    'itoa'          = 'serde_json integer formatting implementation detail for offline dictc release gate'
+    'memchr'        = 'serde_json parser implementation detail for offline dictc release gate'
+    'ryu'           = 'serde_json float formatting implementation detail for offline dictc release gate'
+    'sha2'          = 'offline dictc LLM-detail target and input SHA-256 release gate'
+    'digest'        = 'sha2 implementation detail for offline dictc release gate'
+    'block-buffer'  = 'sha2 implementation detail for offline dictc release gate'
+    'crypto-common' = 'sha2 implementation detail for offline dictc release gate'
+    'generic-array' = 'sha2 implementation detail for offline dictc release gate'
+    'typenum'       = 'sha2 implementation detail for offline dictc release gate'
+    'version_check' = 'sha2 build-time configuration for offline dictc release gate'
+    'cpufeatures'   = 'sha2 CPU dispatch implementation detail for offline dictc release gate'
+    'unicode-normalization' = 'offline dictc NFC normalization for LLM-detail target identity'
+    'tinyvec'       = 'unicode-normalization implementation detail for offline dictc release gate'
+    'tinyvec_macros' = 'tinyvec implementation detail for offline dictc release gate'
 }
 
 # `windows`, `windows-core`, `windows_x86_64_msvc`, ... — one family, one rule.
@@ -97,6 +114,19 @@ $IsolatedWorkerRuntime = [ordered]@{
     'memchr'                = 'serde_json parser implementation detail'
     'ryu'                   = 'serde_json float formatting implementation detail'
 }
+
+# These tools produce build artifacts but are not shipping runtime binaries.
+# A dependency admitted for dictc must not therefore become available to an IME
+# runtime transitively. Check the resolved graph, not just direct manifests.
+$RuntimeCrates = @(
+    'sakura-core', 'sakura-proto', 'sakura-ipc', 'sakura-reg', 'sakura-tsf',
+    'sakura-engine', 'sakura-renderer', 'sakura-regtool', 'sakura-logon', 'sakura-settings'
+)
+$OfflineDetailParserCrates = @(
+    'serde', 'serde_derive', 'serde_json', 'itoa', 'memchr', 'ryu', 'sha2', 'digest',
+    'block-buffer', 'crypto-common', 'generic-array', 'typenum', 'version_check',
+    'cpufeatures', 'unicode-normalization', 'tinyvec', 'tinyvec_macros'
+)
 
 function Get-WorkspaceCrateName {
     <#
@@ -220,6 +250,20 @@ if ($offenders.Count -gt 0) {
     Write-Host 'add it to $BuildTimeOnly in this script together with a written reason'
     Write-Host 'and amend DESIGN.md 3.1 in the same commit.'
     exit 1
+}
+
+foreach ($crate in $RuntimeCrates) {
+    # Dev-dependencies compile test fixtures (the engine intentionally uses
+    # dictc there) but cannot enter the shipping runtime binary.
+    $tree = & cargo tree --locked -p $crate --edges normal --prefix none 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "could not inspect resolved dependency graph for runtime crate '$crate'"
+    }
+    foreach ($dependency in $OfflineDetailParserCrates) {
+        if ($tree | Select-String -Quiet -Pattern ("^$([regex]::Escape($dependency)) v")) {
+            throw "offline dictc LLM-detail dependency '$dependency' leaked into runtime crate '$crate'"
+        }
+    }
 }
 
 Write-Host 'No disallowed dependencies.' -ForegroundColor Green

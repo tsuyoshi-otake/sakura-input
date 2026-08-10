@@ -11,6 +11,8 @@
 //! [`OutputBuf::to_output`] is provided for tests and the DLL side, where
 //! an owned `Output` is convenient and allocation is not a concern.
 
+use core::ptr;
+
 use crate::fixed::{FixedStr, FixedVec, Overflow};
 use crate::message::RES_OUTPUT;
 use crate::types::{
@@ -45,6 +47,12 @@ struct CandidateSpan {
     text_len: u32,
     annotation_start: u32,
     annotation_len: u32,
+    /// A private engine-to-UI-board capability, not part of the regular
+    /// `Output` wire shape. Zero means this row is not a learned history row.
+    history_reading_start: u32,
+    history_reading_len: u32,
+    history_surface_start: u32,
+    history_surface_len: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -159,6 +167,11 @@ pub struct OutputBuf {
     candidate_presentation: CandidatePresentation,
     candidate_text: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
     candidate_annotations: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    /// Exact, unnormalised learning keys for history rows. These never leave
+    /// the engine as part of `Response::Output`; the shared UI board uses them
+    /// to authorize a revision-stamped renderer delete request.
+    candidate_history_readings: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    candidate_history_surfaces: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
     candidates: FixedVec<CandidateSpan, MAX_CANDIDATES>,
     selected_candidate: u16,
     candidate_page_size: u16,
@@ -192,6 +205,8 @@ impl OutputBuf {
             candidate_presentation: CandidatePresentation::Compact,
             candidate_text: FixedStr::new(),
             candidate_annotations: FixedStr::new(),
+            candidate_history_readings: FixedStr::new(),
+            candidate_history_surfaces: FixedStr::new(),
             candidates: FixedVec::new(),
             selected_candidate: 0,
             candidate_page_size: CANDIDATE_PAGE_SIZE as u16,
@@ -205,6 +220,60 @@ impl OutputBuf {
             detail_similar: FixedVec::new(),
             detail_antonyms: FixedVec::new(),
         }
+    }
+
+    /// Allocates and initializes an empty `OutputBuf` directly in its final
+    /// heap storage.
+    ///
+    /// This is for thread setup, where building a whole [`OutputBuf`] first
+    /// would put its large fixed buffers on a deliberately small worker stack
+    /// before `Box::new` could move it. [`OutputBuf::new`] remains the
+    /// allocation-free value constructor, and every mutation after this one
+    /// setup allocation remains allocation-free.
+    pub fn new_boxed() -> Box<Self> {
+        let mut boxed = Box::<Self>::new_uninit();
+        let output = boxed.as_mut_ptr();
+
+        // SAFETY: `output` points to uniquely owned, uninitialized storage
+        // for exactly one `OutputBuf`. Every field is written exactly once
+        // with the same value as `new()` and none of these constructors can
+        // panic. No reference to a partially initialized value escapes.
+        unsafe {
+            ptr::addr_of_mut!((*output).consumed).write(false);
+            ptr::addr_of_mut!((*output).beep).write(false);
+            ptr::addr_of_mut!((*output).mode).write(None);
+            ptr::addr_of_mut!((*output).has_preedit).write(false);
+            ptr::addr_of_mut!((*output).preedit).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).segments).write(FixedVec::new());
+            ptr::addr_of_mut!((*output).cursor).write(0);
+            ptr::addr_of_mut!((*output).has_commit).write(false);
+            ptr::addr_of_mut!((*output).commit).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).delete_before).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).has_candidates).write(false);
+            ptr::addr_of_mut!((*output).candidate_kind).write(CandidateKind::Conversion);
+            ptr::addr_of_mut!((*output).candidate_presentation)
+                .write(CandidatePresentation::Compact);
+            ptr::addr_of_mut!((*output).candidate_text).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).candidate_annotations).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).candidate_history_readings).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).candidate_history_surfaces).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).candidates).write(FixedVec::new());
+            ptr::addr_of_mut!((*output).selected_candidate).write(0);
+            ptr::addr_of_mut!((*output).candidate_page_size).write(CANDIDATE_PAGE_SIZE as u16);
+            ptr::addr_of_mut!((*output).has_candidate_detail).write(false);
+            ptr::addr_of_mut!((*output).detail_reading).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).detail_definition).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).detail_definition_truncated).write(false);
+            ptr::addr_of_mut!((*output).detail_relations).write(FixedStr::new());
+            ptr::addr_of_mut!((*output).detail_aliases).write(FixedVec::new());
+            ptr::addr_of_mut!((*output).detail_related).write(FixedVec::new());
+            ptr::addr_of_mut!((*output).detail_similar).write(FixedVec::new());
+            ptr::addr_of_mut!((*output).detail_antonyms).write(FixedVec::new());
+        }
+
+        // SAFETY: the field-wise initialization above completed every field
+        // of the allocated `OutputBuf` exactly once.
+        unsafe { boxed.assume_init() }
     }
 
     /// Resets every field to its default, ready for reuse. Does not
@@ -226,6 +295,8 @@ impl OutputBuf {
         self.candidate_presentation = CandidatePresentation::Compact;
         self.candidate_text.clear();
         self.candidate_annotations.clear();
+        self.candidate_history_readings.clear();
+        self.candidate_history_surfaces.clear();
         self.candidates.clear();
         self.selected_candidate = 0;
         self.candidate_page_size = CANDIDATE_PAGE_SIZE as u16;
@@ -387,6 +458,8 @@ impl OutputBuf {
         self.candidate_presentation = presentation;
         self.candidate_text.clear();
         self.candidate_annotations.clear();
+        self.candidate_history_readings.clear();
+        self.candidate_history_surfaces.clear();
         self.candidates.clear();
         self.selected_candidate = selected;
         self.candidate_page_size = page_size;
@@ -395,24 +468,68 @@ impl OutputBuf {
     }
 
     pub fn push_candidate(&mut self, text: &str, annotation: &str) -> Result<(), Overflow> {
+        self.push_candidate_inner(text, annotation, None)
+    }
+
+    /// Pushes a rendered prediction row with the exact persisted history key
+    /// retained for the engine-owned UI board. This metadata remains private
+    /// to the engine process: ordinary output consumers still receive only the
+    /// candidate surface and annotation.
+    pub fn push_history_candidate(
+        &mut self,
+        text: &str,
+        annotation: &str,
+        reading: &str,
+        surface: &str,
+    ) -> Result<(), Overflow> {
+        if reading.is_empty() || surface.is_empty() {
+            return Err(Overflow);
+        }
+        self.push_candidate_inner(text, annotation, Some((reading, surface)))
+    }
+
+    fn push_candidate_inner(
+        &mut self,
+        text: &str,
+        annotation: &str,
+        history: Option<(&str, &str)>,
+    ) -> Result<(), Overflow> {
         if !self.has_candidates || self.candidates.len() >= MAX_CANDIDATES {
             return Err(Overflow);
         }
         let text_start = self.candidate_text.len();
         let annotation_start = self.candidate_annotations.len();
+        let reading_start = self.candidate_history_readings.len();
+        let surface_start = self.candidate_history_surfaces.len();
         if text_start.saturating_add(text.len()) > self.candidate_text.capacity()
             || annotation_start.saturating_add(annotation.len())
                 > self.candidate_annotations.capacity()
+            || history.is_some_and(|(reading, _)| {
+                reading_start.saturating_add(reading.len())
+                    > self.candidate_history_readings.capacity()
+            })
+            || history.is_some_and(|(_, surface)| {
+                surface_start.saturating_add(surface.len())
+                    > self.candidate_history_surfaces.capacity()
+            })
         {
             return Err(Overflow);
         }
         self.candidate_text.push_str(text)?;
         self.candidate_annotations.push_str(annotation)?;
+        if let Some((reading, surface)) = history {
+            self.candidate_history_readings.push_str(reading)?;
+            self.candidate_history_surfaces.push_str(surface)?;
+        }
         self.candidates.push(CandidateSpan {
             text_start: text_start as u32,
             text_len: text.len() as u32,
             annotation_start: annotation_start as u32,
             annotation_len: annotation.len() as u32,
+            history_reading_start: reading_start as u32,
+            history_reading_len: history.map_or(0, |(reading, _)| reading.len()) as u32,
+            history_surface_start: surface_start as u32,
+            history_surface_len: history.map_or(0, |(_, surface)| surface.len()) as u32,
         })
     }
 
@@ -438,6 +555,31 @@ impl OutputBuf {
     pub fn candidate(&self, index: usize) -> Option<(&str, &str)> {
         let span = *self.candidates.as_slice().get(index)?;
         Some((self.candidate_text(span), self.candidate_annotation(span)))
+    }
+
+    /// Returns the exact persisted identity only for a history prediction row.
+    /// It is intentionally unavailable through the ordinary `Output` type.
+    pub fn candidate_history_identity(&self, index: usize) -> Option<(&str, &str)> {
+        let span = *self.candidates.as_slice().get(index)?;
+        if span.history_reading_len == 0 || span.history_surface_len == 0 {
+            return None;
+        }
+        let reading = self.candidate_history_readings.as_str().get(
+            span.history_reading_start as usize
+                ..span.history_reading_start as usize + span.history_reading_len as usize,
+        )?;
+        let surface = self.candidate_history_surfaces.as_str().get(
+            span.history_surface_start as usize
+                ..span.history_surface_start as usize + span.history_surface_len as usize,
+        )?;
+        Some((reading, surface))
+    }
+
+    /// Returns whether a candidate carries the private, exact history
+    /// capability used by the UI board. This is exposed as a typed display
+    /// marker on `Candidate`, while the identity itself stays in-process.
+    pub fn candidate_is_deletable_history(&self, index: usize) -> bool {
+        self.candidate_history_identity(index).is_some()
     }
 
     /// The selected candidate index, when a list is present.
@@ -663,6 +805,7 @@ impl OutputBuf {
             for span in self.candidates.as_slice() {
                 w.write_str(self.candidate_text(*span))?;
                 w.write_str(self.candidate_annotation(*span))?;
+                w.write_bool(span.history_reading_len != 0 && span.history_surface_len != 0)?;
             }
             w.write_u16(self.selected_candidate)?;
             w.write_u16(self.candidate_page_size)?;
@@ -749,6 +892,8 @@ impl OutputBuf {
                     .map(|span| Candidate {
                         text: self.candidate_text(*span).to_string(),
                         annotation: self.candidate_annotation(*span).to_string(),
+                        deletable_history: span.history_reading_len != 0
+                            && span.history_surface_len != 0,
                     })
                     .collect(),
                 selected: self.selected_candidate,
@@ -817,6 +962,27 @@ mod tests {
         assert_eq!(buf.delete_before(), "");
         assert!(buf.segments().is_empty());
         assert_eq!(buf.candidate_count(), 0);
+    }
+
+    #[test]
+    fn boxed_constructor_has_the_same_empty_state_as_the_value_constructor() {
+        let mut buf = OutputBuf::new_boxed();
+        assert!(!buf.consumed);
+        assert!(!buf.beep);
+        assert_eq!(buf.mode, None);
+        assert_eq!(buf.preedit_text(), "");
+        assert_eq!(buf.commit_text(), None);
+        assert_eq!(buf.delete_before(), "");
+        assert!(buf.segments().is_empty());
+        assert_eq!(buf.candidate_count(), 0);
+
+        // The setup allocation is outside the key path. Reusing the boxed
+        // value must preserve the normal allocation-free mutation contract.
+        buf.begin_preedit();
+        buf.push_segment("a", UnderlineKind::Raw)
+            .expect("boxed buffer accepts a segment");
+        buf.clear();
+        assert_eq!(buf.preedit_text(), "");
     }
 
     #[test]
@@ -939,6 +1105,39 @@ mod tests {
         assert_eq!(candidates.page_size, 9);
         assert_eq!(candidates.items[1].text, "仮名");
         assert_eq!(candidates.items[1].annotation, "IT用語");
+    }
+
+    #[test]
+    fn history_candidate_marker_roundtrips_but_private_learning_key_never_reaches_output_wire() {
+        let mut buf = OutputBuf::new();
+        buf.begin_suggestions(0, 9).expect("suggestions");
+        buf.push_history_candidate(
+            "visible surface",
+            "history label",
+            "private-reading-7b4c",
+            "private-surface-09e1",
+        )
+        .expect("history candidate");
+        assert_eq!(
+            buf.candidate_history_identity(0),
+            Some(("private-reading-7b4c", "private-surface-09e1"))
+        );
+        assert!(buf.candidate_is_deletable_history(0));
+
+        let mut frame = vec![0; crate::MAX_FRAME];
+        let written = buf.encode_frame(77, &mut frame).expect("encode");
+        let payload = &frame[crate::FRAME_HEADER_LEN..written];
+        assert!(!payload
+            .windows("private-reading-7b4c".len())
+            .any(|bytes| bytes == b"private-reading-7b4c"));
+        assert!(!payload
+            .windows("private-surface-09e1".len())
+            .any(|bytes| bytes == b"private-surface-09e1"));
+        let (_, response) = crate::decode_response(payload).expect("decode");
+        let crate::Response::Output(output) = response else {
+            panic!("expected output response");
+        };
+        assert!(output.candidates.expect("candidates").items[0].deletable_history);
     }
 
     #[test]

@@ -4,11 +4,13 @@
 //! from 96-DPI tokens, while painting uses a restrained Sakura palette unless
 //! Windows high-contrast mode requests system colors instead.
 
+use std::sync::mpsc::{SyncSender, TrySendError};
+
 use sakura_proto::{
     CandidateDetail, CandidateKind, CandidateList, ScreenRect, UiState, CANDIDATE_PAGE_SIZE,
 };
 use windows::core::{Result, PCWSTR};
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect,
     GetMonitorInfoW, GetSysColor, InvalidateRect, MonitorFromRect, SelectObject, SetBkMode,
@@ -22,14 +24,16 @@ use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetWindowLongPtrW,
-    RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW, CS_HREDRAW,
-    CS_VREDRAW, GWLP_USERDATA, HTTRANSPARENT, HWND_TOPMOST, SPI_GETHIGHCONTRAST, SWP_NOACTIVATE,
-    SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_DESTROY,
-    WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT, WM_NCHITTEST, WM_PAINT, WNDCLASSW,
+    GetWindowRect, RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    SystemParametersInfoW, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HTCLIENT, HTTRANSPARENT,
+    HWND_TOPMOST, MA_NOACTIVATE, SPI_GETHIGHCONTRAST, SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE,
+    SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_DESTROY, WM_DPICHANGED,
+    WM_ERASEBKGND, WM_GETOBJECT, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW,
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 use crate::accessibility::CandidateAccessibility;
+use crate::watch::HistoryDeleteRequest;
 
 const CLASS: PCWSTR = windows::core::w!("SakuraInputCandidates");
 
@@ -50,6 +54,8 @@ const DETAIL_PADDING_96: i32 = 12;
 const DETAIL_TITLE_HEIGHT_96: i32 = 22;
 const DETAIL_LINE_HEIGHT_96: i32 = 18;
 const DETAIL_SECTION_GAP_96: i32 = 4;
+const HISTORY_DELETE_SIZE_96: i32 = 14;
+const HISTORY_DELETE_GAP_96: i32 = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Palette {
@@ -60,6 +66,7 @@ struct Palette {
     selected_ink: COLORREF,
     rail: COLORREF,
     border: COLORREF,
+    action: COLORREF,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,6 +81,8 @@ struct Layout {
     annotation_width: i32,
     rail_width: i32,
     rail_margin: i32,
+    history_delete_size: i32,
+    history_delete_gutter: i32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,6 +112,10 @@ struct PaintState {
     candidates: Option<CandidateList>,
     detail: Option<CandidateDetail>,
     layout: Option<PopupLayout>,
+    candidate_layout: Option<Layout>,
+    revision: u64,
+    delete_history: SyncSender<HistoryDeleteRequest>,
+    pending_history_delete: Option<HistoryDeleteRequest>,
     accessibility: CandidateAccessibility,
 }
 
@@ -114,7 +127,7 @@ pub struct CandidateWindow {
 }
 
 impl CandidateWindow {
-    pub fn new() -> Result<Self> {
+    pub fn new(delete_history: SyncSender<HistoryDeleteRequest>) -> Result<Self> {
         // SAFETY: the class name and procedure are static. Duplicate class
         // registration is harmless when tests create more than one object.
         unsafe {
@@ -147,6 +160,10 @@ impl CandidateWindow {
             candidates: None,
             detail: None,
             layout: None,
+            candidate_layout: None,
+            revision: 0,
+            delete_history,
+            pending_history_delete: None,
             accessibility: CandidateAccessibility::new(window),
         });
         // SAFETY: `Box` keeps this address stable until `Drop`, where the
@@ -191,9 +208,14 @@ impl CandidateWindow {
             )
         });
         let placed = popup_placement(anchor, candidate_layout, detail_layout, work);
+        if self.state.revision != ui.revision {
+            self.state.pending_history_delete = None;
+        }
         self.state.candidates = Some(candidates.clone());
         self.state.detail = detail.cloned();
         self.state.layout = Some(placed.layout);
+        self.state.candidate_layout = Some(candidate_layout);
+        self.state.revision = ui.revision;
         self.state.accessibility.update(candidates, detail);
         // SAFETY: the popup is live; `SWP_NOACTIVATE` and
         // `SW_SHOWNOACTIVATE` jointly preserve focus in the host application.
@@ -217,6 +239,15 @@ impl CandidateWindow {
         // SAFETY: the popup is live for this object's lifetime.
         unsafe {
             let _ = ShowWindow(self.window, SW_HIDE);
+        }
+    }
+
+    /// A pipe response has completed for this exact opaque snapshot
+    /// coordinate. Completion never changes visible candidates; only a newer
+    /// engine `UiState` may do that.
+    pub fn history_delete_finished(&mut self, request: HistoryDeleteRequest) {
+        if self.state.pending_history_delete == Some(request) {
+            self.state.pending_history_delete = None;
         }
     }
 }
@@ -388,7 +419,21 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
         // Painting fills the complete client area, so Windows need not erase
         // it first. This removes the usual popup resize flash.
         WM_ERASEBKGND => LRESULT(1),
-        WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
+        WM_NCHITTEST => {
+            let screen = point_from_lparam(l);
+            if history_delete_at_screen_point(window, screen).is_some() {
+                LRESULT(HTCLIENT as isize)
+            } else {
+                LRESULT(HTTRANSPARENT as isize)
+            }
+        }
+        // The one interactive pixel region remains a passive popup: it must
+        // receive the click without ever activating or stealing host focus.
+        WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
+        WM_LBUTTONUP => {
+            queue_history_delete(window, point_from_lparam(l));
+            LRESULT(0)
+        }
         WM_GETOBJECT => {
             // SAFETY: this only reads the per-window pointer installed by
             // `CandidateWindow`; its validity is checked before dereference.
@@ -429,6 +474,103 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
         WM_DESTROY => LRESULT(0),
         // SAFETY: every unhandled message belongs to the default procedure.
         _ => unsafe { DefWindowProcW(window, message, w, l) },
+    }
+}
+
+fn point_from_lparam(value: LPARAM) -> POINT {
+    let packed = value.0 as u32;
+    POINT {
+        x: (packed as u16 as i16) as i32,
+        y: ((packed >> 16) as u16 as i16) as i32,
+    }
+}
+
+fn point_in_rect(point: POINT, rect: RECT) -> bool {
+    point.x >= rect.left && point.x < rect.right && point.y >= rect.top && point.y < rect.bottom
+}
+
+fn history_delete_at_client_point(
+    state: &PaintState,
+    point: POINT,
+) -> Option<HistoryDeleteRequest> {
+    let candidates = state.candidates.as_ref()?;
+    let popup = state.layout?;
+    let layout = state.candidate_layout?;
+    history_delete_request_at_client_point(candidates, popup, layout, state.revision, point)
+}
+
+fn history_delete_request_at_client_point(
+    candidates: &CandidateList,
+    popup: PopupLayout,
+    layout: Layout,
+    revision: u64,
+    point: POINT,
+) -> Option<HistoryDeleteRequest> {
+    for (row_index, candidate_index) in candidates.visible_range().enumerate() {
+        let row = RECT {
+            left: popup.candidates.left,
+            top: popup
+                .candidates
+                .top
+                .saturating_add(layout.row_height.saturating_mul(row_index as i32)),
+            right: popup.candidates.right,
+            bottom: popup.candidates.top.saturating_add(
+                layout
+                    .row_height
+                    .saturating_mul((row_index as i32).saturating_add(1)),
+            ),
+        };
+        let candidate = candidates.items.get(candidate_index)?;
+        if is_deletable_history(candidate) && point_in_rect(point, history_delete_rect(row, layout))
+        {
+            return Some(HistoryDeleteRequest {
+                revision,
+                candidate_index: u16::try_from(candidate_index).ok()?,
+            });
+        }
+    }
+    None
+}
+
+fn history_delete_at_screen_point(window: HWND, screen: POINT) -> Option<HistoryDeleteRequest> {
+    let mut window_rect = RECT::default();
+    // SAFETY: the live popup is the target of this synchronous hit-test.
+    if unsafe { GetWindowRect(window, &mut window_rect) }.is_err() {
+        return None;
+    }
+    let client = POINT {
+        x: screen.x.saturating_sub(window_rect.left),
+        y: screen.y.saturating_sub(window_rect.top),
+    };
+    // SAFETY: CandidateWindow owns this stable box until the HWND is destroyed.
+    let state = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *const PaintState;
+    (!state.is_null()).then(|| {
+        // SAFETY: the pointer is checked above and remains live during this
+        // synchronous window-procedure call.
+        unsafe { history_delete_at_client_point(&*state, client) }
+    })?
+}
+
+fn queue_history_delete(window: HWND, point: POINT) {
+    // SAFETY: CandidateWindow owns this stable box until the HWND is destroyed.
+    let state = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut PaintState;
+    if state.is_null() {
+        return;
+    }
+    // SAFETY: candidate window messages run on its owner thread, so this is
+    // the only mutable access to the state during the handler.
+    let state = unsafe { &mut *state };
+    let Some(request) = history_delete_at_client_point(state, point) else {
+        return;
+    };
+    if state.pending_history_delete == Some(request) {
+        return;
+    }
+    match state.delete_history.try_send(request) {
+        Ok(()) => state.pending_history_delete = Some(request),
+        // A bounded queue must never turn a click storm into unbounded work.
+        // Keep the candidate visible and wait for the next engine UiState.
+        Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}
     }
 }
 
@@ -532,10 +674,14 @@ fn draw(
         }
 
         let number_rect = RECT {
-            left: row.left.saturating_add(layout.padding),
+            left: row
+                .left
+                .saturating_add(layout.padding)
+                .saturating_add(layout.history_delete_gutter),
             right: row
                 .left
                 .saturating_add(layout.padding)
+                .saturating_add(layout.history_delete_gutter)
                 .saturating_add(layout.number_width),
             ..row
         };
@@ -553,6 +699,18 @@ fn draw(
 
         let (surface_rect, annotation_rect) = candidate_columns(row, layout);
         let candidate = &candidates.items[global_index];
+        if is_deletable_history(candidate) {
+            draw_history_delete_glyph(
+                dc,
+                history_delete_rect(row, layout),
+                palette.action,
+                if selected {
+                    palette.selected
+                } else {
+                    palette.surface
+                },
+            );
+        }
         text(
             dc,
             &candidate.text,
@@ -694,6 +852,11 @@ fn layout(candidates: &CandidateList, dpi: u32) -> Layout {
     let annotation_gap_96 = i32::from(annotation_width_96 > 0) * GAP_96;
     let content_width_96 = PADDING_96
         .saturating_mul(2)
+        .saturating_add(if candidates.items.iter().any(is_deletable_history) {
+            HISTORY_DELETE_SIZE_96.saturating_add(HISTORY_DELETE_GAP_96)
+        } else {
+            0
+        })
         .saturating_add(NUMBER_WIDTH_96)
         .saturating_add(GAP_96)
         .saturating_add(surface_width_96)
@@ -717,6 +880,15 @@ fn layout(candidates: &CandidateList, dpi: u32) -> Layout {
         annotation_width: scaled(annotation_width_96, dpi),
         rail_width: scaled(RAIL_WIDTH_96, dpi).max(1),
         rail_margin: scaled(RAIL_MARGIN_96, dpi),
+        history_delete_size: scaled(HISTORY_DELETE_SIZE_96, dpi).max(1),
+        history_delete_gutter: if candidates.items.iter().any(is_deletable_history) {
+            scaled(
+                HISTORY_DELETE_SIZE_96.saturating_add(HISTORY_DELETE_GAP_96),
+                dpi,
+            )
+        } else {
+            0
+        },
     }
 }
 
@@ -994,6 +1166,7 @@ fn candidate_columns(row: RECT, layout: Layout) -> (RECT, RECT) {
     let surface_left = row
         .left
         .saturating_add(layout.padding)
+        .saturating_add(layout.history_delete_gutter)
         .saturating_add(layout.number_width)
         .saturating_add(layout.gap);
     let annotation_right = row.right.saturating_sub(layout.padding);
@@ -1015,6 +1188,71 @@ fn candidate_columns(row: RECT, layout: Layout) -> (RECT, RECT) {
             ..row
         },
     )
+}
+
+/// Only the engine-marked history capability is interactive. The renderer does
+/// not infer history status from text, annotations, aliases, or any other
+/// presentation detail.
+fn is_deletable_history(candidate: &sakura_proto::Candidate) -> bool {
+    candidate.deletable_history
+}
+
+fn history_delete_rect(row: RECT, layout: Layout) -> RECT {
+    let left = row.left.saturating_add(layout.padding);
+    let top = row.top.saturating_add(
+        (row.bottom
+            .saturating_sub(row.top)
+            .saturating_sub(layout.history_delete_size))
+            / 2,
+    );
+    RECT {
+        left,
+        top,
+        right: left.saturating_add(layout.history_delete_size),
+        bottom: top.saturating_add(layout.history_delete_size),
+    }
+}
+
+/// Draw a small independent trash can using only Sakura's restrained palette.
+/// It intentionally avoids a system icon or third-party glyph asset.
+fn draw_history_delete_glyph(
+    dc: windows::Win32::Graphics::Gdi::HDC,
+    rect: RECT,
+    color: COLORREF,
+    surface: COLORREF,
+) {
+    let width = rect.right.saturating_sub(rect.left).max(1);
+    let stroke = (width / 7).max(1);
+    let lid = RECT {
+        left: rect.left.saturating_add(stroke),
+        top: rect.top.saturating_add(stroke.saturating_mul(2)),
+        right: rect.right.saturating_sub(stroke),
+        bottom: rect.top.saturating_add(stroke.saturating_mul(3)),
+    };
+    let handle = RECT {
+        left: rect.left.saturating_add(width / 2).saturating_sub(stroke),
+        top: rect.top,
+        right: rect.left.saturating_add(width / 2).saturating_add(stroke),
+        bottom: rect.top.saturating_add(stroke.saturating_mul(2)),
+    };
+    let body = RECT {
+        left: rect.left.saturating_add(stroke.saturating_mul(2)),
+        top: lid.bottom,
+        right: rect.right.saturating_sub(stroke.saturating_mul(2)),
+        bottom: rect.bottom.saturating_sub(stroke),
+    };
+    fill_color(dc, &lid, color);
+    fill_color(dc, &handle, color);
+    fill_color(dc, &body, color);
+    let inner = RECT {
+        left: body.left.saturating_add(stroke),
+        top: body.top.saturating_add(stroke),
+        right: body.right.saturating_sub(stroke),
+        bottom: body.bottom.saturating_sub(stroke),
+    };
+    if inner.left < inner.right && inner.top < inner.bottom {
+        fill_color(dc, &inner, surface);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1059,21 +1297,26 @@ fn page_rail(footer: RECT, candidates: &CandidateList, layout: Layout) -> PageRa
 
 fn palette() -> Palette {
     if high_contrast_enabled() {
-        return Palette {
-            surface: system_color(COLOR_WINDOW),
-            ink: system_color(COLOR_WINDOWTEXT),
-            annotation: system_color(COLOR_GRAYTEXT),
-            selected: system_color(COLOR_HIGHLIGHT),
-            selected_ink: system_color(COLOR_HIGHLIGHTTEXT),
-            rail: system_color(COLOR_HIGHLIGHT),
-            border: system_color(COLOR_3DSHADOW),
-        };
+        return high_contrast_palette();
     }
     let window = system_color(COLOR_WINDOW);
     if is_dark(window) {
         dark_palette()
     } else {
         light_palette()
+    }
+}
+
+fn high_contrast_palette() -> Palette {
+    Palette {
+        surface: system_color(COLOR_WINDOW),
+        ink: system_color(COLOR_WINDOWTEXT),
+        annotation: system_color(COLOR_GRAYTEXT),
+        selected: system_color(COLOR_HIGHLIGHT),
+        selected_ink: system_color(COLOR_HIGHLIGHTTEXT),
+        rail: system_color(COLOR_HIGHLIGHT),
+        border: system_color(COLOR_3DSHADOW),
+        action: system_color(COLOR_WINDOWTEXT),
     }
 }
 
@@ -1104,6 +1347,7 @@ fn light_palette() -> Palette {
         selected_ink: rgb(0x30, 0x2E, 0x2D),
         rail: rgb(0xB2, 0x8D, 0x96),
         border: rgb(0xBD, 0xB9, 0xB5),
+        action: rgb(0x89, 0x72, 0x77),
     }
 }
 
@@ -1116,6 +1360,7 @@ fn dark_palette() -> Palette {
         selected_ink: rgb(0xE4, 0xE1, 0xDE),
         rail: rgb(0xA7, 0x83, 0x8C),
         border: rgb(0x53, 0x50, 0x4D),
+        action: rgb(0xB2, 0x98, 0x9D),
     }
 }
 
@@ -1243,6 +1488,15 @@ mod tests {
         Candidate {
             text: text.to_owned(),
             annotation: annotation.to_owned(),
+            deletable_history: false,
+        }
+    }
+
+    fn deletable_history_item(text: &str) -> Candidate {
+        Candidate {
+            text: text.to_owned(),
+            annotation: "presentation-only".to_owned(),
+            deletable_history: true,
         }
     }
 
@@ -1289,12 +1543,14 @@ mod tests {
         assert_eq!(light_palette().selected, rgb(0xE8, 0xE5, 0xE2));
         assert_eq!(light_palette().rail, rgb(0xB2, 0x8D, 0x96));
         assert_eq!(light_palette().border, rgb(0xBD, 0xB9, 0xB5));
+        assert_eq!(light_palette().action, rgb(0x89, 0x72, 0x77));
         assert_eq!(dark_palette().surface, rgb(0x24, 0x23, 0x22));
         assert_eq!(dark_palette().ink, rgb(0xE4, 0xE1, 0xDE));
         assert_eq!(dark_palette().annotation, rgb(0xA9, 0xA3, 0x9F));
         assert_eq!(dark_palette().selected, rgb(0x37, 0x33, 0x31));
         assert_eq!(dark_palette().rail, rgb(0xA7, 0x83, 0x8C));
         assert_eq!(dark_palette().border, rgb(0x53, 0x50, 0x4D));
+        assert_eq!(dark_palette().action, rgb(0xB2, 0x98, 0x9D));
         assert_ne!(light_palette(), dark_palette());
     }
 
@@ -1306,6 +1562,14 @@ mod tests {
             let color = rgb(channel, channel, channel);
             assert_eq!(is_dark(color), channel < 128);
         }
+    }
+
+    #[test]
+    fn high_contrast_delete_glyph_uses_the_system_window_text_role() {
+        let palette = high_contrast_palette();
+        assert_eq!(palette.action, system_color(COLOR_WINDOWTEXT));
+        assert_eq!(palette.surface, system_color(COLOR_WINDOW));
+        assert_eq!(palette.selected, system_color(COLOR_HIGHLIGHT));
     }
 
     #[test]
@@ -1350,6 +1614,93 @@ mod tests {
                 assert!(surface.right <= annotation.left || layout.annotation_width == 0);
                 assert!(annotation.right <= row.right.saturating_sub(layout.padding));
             }
+        }
+    }
+
+    #[test]
+    fn history_delete_is_typed_dpi_scaled_and_icon_only() {
+        let list = candidates(
+            vec![
+                item("annotation-is-not-a-capability", "履歴"),
+                deletable_history_item("history"),
+            ],
+            0,
+            CandidateKind::Suggestion,
+        );
+        for dpi in [96, 120, 144, 168, 192] {
+            let layout = layout(&list, dpi);
+            assert_eq!(
+                layout.history_delete_size,
+                scaled(HISTORY_DELETE_SIZE_96, dpi)
+            );
+            assert_eq!(
+                layout.history_delete_gutter,
+                scaled(HISTORY_DELETE_SIZE_96 + HISTORY_DELETE_GAP_96, dpi)
+            );
+            let popup = PopupLayout {
+                candidates: RECT {
+                    left: 0,
+                    top: 0,
+                    right: layout.width,
+                    bottom: layout.height,
+                },
+                detail: None,
+            };
+            let second_row = RECT {
+                left: 0,
+                top: layout.row_height,
+                right: layout.width,
+                bottom: layout.row_height * 2,
+            };
+            let icon = history_delete_rect(second_row, layout);
+            let hit = POINT {
+                x: (icon.left + icon.right) / 2,
+                y: (icon.top + icon.bottom) / 2,
+            };
+            assert_eq!(
+                history_delete_request_at_client_point(&list, popup, layout, 41, hit),
+                Some(HistoryDeleteRequest {
+                    revision: 41,
+                    candidate_index: 1,
+                })
+            );
+            let first_row_icon = history_delete_rect(
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: layout.width,
+                    bottom: layout.row_height,
+                },
+                layout,
+            );
+            assert_eq!(
+                history_delete_request_at_client_point(
+                    &list,
+                    popup,
+                    layout,
+                    41,
+                    POINT {
+                        x: (first_row_icon.left + first_row_icon.right) / 2,
+                        y: (first_row_icon.top + first_row_icon.bottom) / 2,
+                    },
+                ),
+                None,
+                "annotation alone must never create a deletion capability"
+            );
+            assert_eq!(
+                history_delete_request_at_client_point(
+                    &list,
+                    popup,
+                    layout,
+                    41,
+                    POINT {
+                        x: icon.right,
+                        y: hit.y,
+                    },
+                ),
+                None,
+                "row text remains click-through"
+            );
         }
     }
 

@@ -69,6 +69,9 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
 /// What asking the engine produced.
 #[derive(Debug)]
+// Keeping `Output` inline avoids a heap allocation on every accepted
+// keystroke; the zero-sized terminal variants are deliberately asymmetric.
+#[allow(clippy::large_enum_variant)]
 pub enum Answer {
     /// The engine answered inside the budget. Whether it wants the key is
     /// [`Output::consumed`].
@@ -651,6 +654,7 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::ClearInputHistory
         | Request::FlushInputHistory
         | Request::InputHistoryStats
+        | Request::DeleteHistoryCandidate { .. }
         | Request::SetInputScope { .. }
         | Request::SetMode { .. }
         | Request::DeleteSession { .. }

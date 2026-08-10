@@ -20,8 +20,14 @@
 - 詳細はSakura独自の候補ポップアップと同一HWNDで、選択中の候補1件だけに補助表示する。候補の順序、選択、ページ、入力フォーカス、click-through、GDI描画境界を変えない。候補一覧はページ全体から幅を決め、選択移動で基準矩形や列位置を動かさない。辞書説明は一覧annotationへ重複させず、一定幅の詳細ペインで全文を折り返す。モニター作業領域に物理的に収まらない場合だけ末尾を省略する。配置は右、左、下の順に試し、収まらなければ表示しない。
 - 辞書の原文説明は表示用上限を持たない。一方、wireへはUTF-8安全なプレビューと明示的なtruncated flagだけを送り、暗黙に切り詰めない。UIAは選択候補の詳細を公開し、プレビューが省略されていることを保持する。候補全件へ詳細を複製しない。
 - detailは最終ENTR tableのexact entry ordinalで結び、surface文字列だけで照合しない。複合候補、ordinal不一致、旧辞書、壊れたoptional table、空または不正なdetailはfail-closedでdetailなしにする。
-- 別名／関連語／類似語／反対語は明示的な直接データだけであり、推測、表記類似、埋め込み類似、カテゴリ、推移的探索で補わない。表示は各種最大3語。固定したsmile-chatとJapanese WordNet 1.1を統合し、正規14カテゴリ・1,635,239 entriesに36,606 detailsを生成する。説明なし・同形異義・多義で一意に解決できないentryはdetailなしにする。
-- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。一覧annotationの重複説明を除去した実データは2-pass決定性、93,001,395 bytes、SHA-256 `f8894a485c6e2ae98d499a74dc72dad74b2f6260f40cc4a00c5f4c86765c5a2f`を確認済みである。
+- 別名／関連語／類似語／反対語はmanifest固定済みの直接データだけであり、実行時の推測、表記類似、埋め込み類似、カテゴリ、推移的探索で補わない。表示は各種最大3語。固定したsmile-chatとJapanese WordNet 1.1を統合したfull-source構成は36,606 source-backed details。通常の既定ビルドは、curated sourceとIssue #30のreview済み000010 releaseを合わせ、472,825 entries中29,229 exact-entry detailsを生成する。000010の承認236語は246 exact-entry detailsとなり、全レコードに関連語、合計43件の類似語、16件の反対語がある。説明なし・同形異義・多義で一意に解決できないentryと未審査draftはdetailなしにする。
+- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。full-source実データの既存検証値は93,001,395 bytes、SHA-256 `f8894a485c6e2ae98d499a74dc72dad74b2f6260f40cc4a00c5f4c86765c5a2f`。000010を含む通常の既定ビルドは2-pass決定性、38,456,565 bytes、SHA-256 `6d34364b5354d3c67efefaf15b50142b1365b21140ec8eee0f77570d828544ad`を2026-08-11に確認した。両構成の件数・hashを混同しない。
+
+## Issue #30 重要辞書のSakura作成説明
+
+- 対象はIT・技術用語、外来語・カタカナ語、略語・英数字、専門用語を優先する。全辞書を件数だけで埋める目標は持たず、語義が一意で実用性の高い語を選ぶ。
+- `data/llm-detail-targets/<batch>`のcommitted target manifestが全入力hashとexact dictionary identityを固定し、`data/llm-details/releases/<batch>`のrelease manifestが審査済みJSONLを固定する。draftは直接importできず、release directoryと対応target directoryを両方指定しない限り`dictc`へ入らない。
+- 現在の通常ビルド対象は000010。既定辞書だけから作った242 targetsのうち236語を承認、6語（始め、監督、命令、告知、提言、標記）を保留し、承認語は246 exact-entry detailsとして入る。候補段階の「終わり」は多義・複数identityのためtarget作成前に保留した。承認レコードは全件に少なくとも1つの型付き関係語を持つ。レビューはユーザー指定によりsubagentを使わず、同一モデルの別prompt工程で実施したもので、独立モデル審査とは表現しない。000004以前のreleaseは履歴として残るが通常ビルドへ重ねてimportしない。既存detailと同じNFC正規化済み(surface, reading) pair、曖昧語義、辞書identity不一致、改ざん、未知schemaはfail closedで除外する。
 
 ## 最優先タスク：Issue #24 ローカル DeBERTa 長文変換 reranker（実装進行中）
 

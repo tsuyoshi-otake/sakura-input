@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(validate_test_pipe(pipe.clone()), Ok(pipe));
         assert!(validate_test_pipe(r"\\.\pipe\SakuraInput".to_owned()).is_err());
         assert!(validate_test_pipe(format!("{TEST_PIPE_PREFIX}has/slash")).is_err());
-        assert!(validate_test_pipe(format!("{TEST_PIPE_PREFIX}")).is_err());
+        assert!(validate_test_pipe(TEST_PIPE_PREFIX.to_string()).is_err());
     }
 
     #[test]

@@ -932,6 +932,7 @@ fn ensure_file(path: &Path) -> io::Result<()> {
         .create(true)
         .read(true)
         .write(true)
+        .truncate(false)
         .open(path)?;
     if file.metadata()?.len() == 0 {
         file.write_all(&header())?;
@@ -1091,6 +1092,9 @@ fn protect(bytes: &[u8]) -> io::Result<Vec<u8>> {
         cbData: 0,
         pbData: std::ptr::null_mut(),
     };
+    // SAFETY: `input` borrows `bytes` for the duration of the call and
+    // `output` is writable. DPAPI allocates `output.pbData`; it is copied
+    // before being released exactly once with LocalFree.
     unsafe {
         CryptProtectData(
             &input,
@@ -1122,6 +1126,9 @@ fn unprotect(bytes: &[u8]) -> io::Result<Vec<u8>> {
         cbData: 0,
         pbData: std::ptr::null_mut(),
     };
+    // SAFETY: `input` borrows the protected bytes for the call and `output`
+    // is writable. DPAPI owns the returned allocation until the matching
+    // LocalFree after the plaintext has been copied.
     unsafe {
         CryptUnprotectData(&input, None, None, None, None, 0, &mut output)
             .map_err(|error| io::Error::other(format!("DPAPI unprotect: {error}")))?;

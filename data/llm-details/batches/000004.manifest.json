@@ -1,0 +1,10 @@
+{
+  "schema_version": "sakura.llm-detail-draft-manifest.v1",
+  "coverage_status": "current_pair_coverage_used_draft_nonrelease",
+  "target_directory": "data/llm-detail-targets/000004",
+  "target_manifest_sha256": "4f6fc1e8a46c30d466c4721107c647f5befeca84ea3b699694146c162e9e0254",
+  "draft_file": "000004.draft.jsonl",
+  "draft_schema_version": "sakura.llm-detail-draft.v1",
+  "record_count": 26,
+  "draft_sha256": "d105167b4db2e8263766237ef1d1d175f60b5b9469d90ee55671eb6aca9fa5ef"
+}

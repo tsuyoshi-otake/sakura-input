@@ -1,0 +1,1 @@
+{"schema_version":"sakura.llm-detail-draft-reject.v1","reason":"allowlist_only","note":"Only manually selected, pair-coverage-clean targets were drafted; every other candidate remains outside this non-release batch."}

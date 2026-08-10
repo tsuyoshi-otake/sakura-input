@@ -668,7 +668,8 @@ mod tests {
         ));
         assert!(matches!(
             parse_words(&["history", "export", "history.tsv"]),
-            Ok(Command::HistoryExport { path }) if path == PathBuf::from("history.tsv")
+            Ok(Command::HistoryExport { path })
+                if path.as_path() == std::path::Path::new("history.tsv")
         ));
         assert!(matches!(
             parse_words(&["history", "stats"]),
@@ -728,7 +729,8 @@ mod tests {
         );
         assert!(matches!(
             resolved,
-            Command::HistoryExport { path } if path == PathBuf::from("history.tsv")
+            Command::HistoryExport { path }
+                if path.as_path() == std::path::Path::new("history.tsv")
         ));
 
         // Import reads through the same operand and needs the same anchor.

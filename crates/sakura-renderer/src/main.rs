@@ -32,7 +32,7 @@ mod indicator;
 mod watch;
 
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Receiver, Arc, Mutex};
 
 use sakura_proto::UiState;
 use windows::core::{Result, PCWSTR};
@@ -49,7 +49,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use candidate::CandidateWindow;
 use indicator::Indicator;
-use watch::Signal;
+use watch::{HistoryDeleteCompletion, Signal};
 
 /// The class of the hidden window that receives the watcher's reports.
 ///
@@ -80,6 +80,10 @@ const WM_UI: u32 = WM_APP + 2;
 /// The watcher reporting that the feed has ended for good.
 const WM_ENDED: u32 = WM_APP + 3;
 
+/// A bounded delete request received an engine response. This only releases
+/// duplicate-click suppression; it never changes candidates locally.
+const WM_HISTORY_DELETE_FINISHED: u32 = WM_APP + 4;
+
 /// The windows the main thread owns, reached from the window procedure
 /// through the host window's user data.
 struct App {
@@ -88,6 +92,7 @@ struct App {
     /// A latest-value mailbox shared with the blocking watcher. Multiple
     /// engine revisions can coalesce while the UI thread is busy painting.
     mailbox: Arc<Mutex<Option<UiState>>>,
+    history_delete_completions: Receiver<HistoryDeleteCompletion>,
 }
 
 fn main() -> Result<()> {
@@ -110,10 +115,16 @@ fn main() -> Result<()> {
 
     let host = create_host()?;
     let mailbox = Arc::new(Mutex::new(None));
+    let (history_delete, history_delete_completions) = watch::spawn_history_deleter(
+        host.0 as isize,
+        WM_HISTORY_DELETE_FINISHED,
+        options.test_pipe.clone(),
+    );
     let mut app = App {
         indicator: Indicator::new()?,
-        candidates: CandidateWindow::new()?,
+        candidates: CandidateWindow::new(history_delete)?,
         mailbox: Arc::clone(&mailbox),
+        history_delete_completions,
     };
 
     // Published before the watcher starts, so no message can arrive at a
@@ -328,6 +339,17 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
             }
             LRESULT(0)
         }
+        WM_HISTORY_DELETE_FINISHED if !app.is_null() => {
+            // SAFETY: as in the WM_UI arm, the main window procedure is the
+            // sole mutable owner of `app`.
+            let app = unsafe { &mut *app };
+            while let Ok(HistoryDeleteCompletion(request)) =
+                app.history_delete_completions.try_recv()
+            {
+                app.candidates.history_delete_finished(request);
+            }
+            LRESULT(0)
+        }
         // The engine stopped on purpose, or is gone for good. Either way
         // there is nothing left to render.
         //
@@ -352,7 +374,7 @@ mod tests {
     /// The watcher's application messages must stay distinct.
     #[test]
     fn the_application_messages_do_not_collide() {
-        let all = [WM_UI, WM_ENDED];
+        let all = [WM_UI, WM_ENDED, WM_HISTORY_DELETE_FINISHED];
         for (i, a) in all.iter().enumerate() {
             assert!(
                 *a >= WM_APP,

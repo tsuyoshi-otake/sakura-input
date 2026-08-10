@@ -335,7 +335,7 @@ struct UnknownUndoTerminalization<T> {
 fn terminalize_unknown_undo_after_document_access<T>(
     journal: &mut WriteCoordinator<T>,
     ticket: Ticket,
-    mut is_undo: impl FnMut(&T) -> bool,
+    is_undo: impl FnMut(&T) -> bool,
     mut settle: impl FnMut(UndoCommitOutcome) -> bool,
 ) -> UnknownUndoTerminalization<T> {
     let mut completions = journal.reject(ticket, true, None);
@@ -347,7 +347,7 @@ fn terminalize_unknown_undo_after_document_access<T>(
     let has_undo = completions
         .iter()
         .filter_map(|completion| completion.payload.as_ref())
-        .any(|payload| is_undo(payload));
+        .any(is_undo);
     let settlement_confirmed = !has_undo || settle(UndoCommitOutcome::Unknown);
     let journal_drained = journal.is_empty();
     UnknownUndoTerminalization {
@@ -444,10 +444,10 @@ fn decide_probe_fence<T>(
     undo_terminalization: Option<UndoCommitOutcome>,
     writes: &WriteCoordinator<T>,
     context: ContextId,
-    mut is_undo: impl FnMut(&T) -> bool,
+    is_undo: impl FnMut(&T) -> bool,
     input_blocked: bool,
 ) -> ProbeFence {
-    if undo_terminalization.is_some() || writes.any_payload(|payload| is_undo(payload)) {
+    if undo_terminalization.is_some() || writes.any_payload(is_undo) {
         ProbeFence::Busy
     } else if input_blocked {
         ProbeFence::Declined
@@ -1940,6 +1940,8 @@ impl TextService {
         if let Err(error) = unsafe { lang_bar_mgr.AddItem(lang_bar_item) } {
             // Defensively request removal even on an error: a shell-side
             // partial registration must never become a permanent stale item.
+            // SAFETY: `lang_bar_item` is the same live interface supplied to
+            // AddItem and remains retained by this activation transaction.
             let _ = unsafe { lang_bar_mgr.RemoveItem(lang_bar_item) };
             let preserved_key_result = unpreserve_registered_key(&keystroke_mgr, preserved_key);
             // SAFETY: both interfaces performed their matching registrations
@@ -3136,6 +3138,8 @@ fn classify_input_scope_variant(mut value: VARIANT) -> Result<InputScope> {
         // failure to classify, so it must not be confused with the error
         // paths below. Conflating the two rejected every real keystroke
         // Notepad, VS Code, and every other plain text host ever produced.
+        // SAFETY: `value` is an initialized owning VARIANT returned by TSF;
+        // reading its discriminant is valid before VariantClear below.
         let vt = unsafe { value.Anonymous.Anonymous.vt };
         if vt.0 == VT_EMPTY.0 || vt.0 == VT_NULL.0 {
             return Ok(InputScope::Normal);
@@ -3146,7 +3150,10 @@ fn classify_input_scope_variant(mut value: VARIANT) -> Result<InputScope> {
         if (vt.0 & VT_TYPEMASK.0) != VT_UNKNOWN.0 {
             return Err(Error::from_hresult(E_INVALIDARG));
         }
-        let unknown = unsafe { (&*value.Anonymous.Anonymous.Anonymous.punkVal).clone() }
+        // SAFETY: VT_UNKNOWN selects the `punkVal` union member. Cloning the
+        // contained Option retains the interface independently until the
+        // owning VARIANT is cleared after this closure.
+        let unknown = unsafe { (*value.Anonymous.Anonymous.Anonymous.punkVal).clone() }
             .ok_or_else(|| Error::from_hresult(E_INVALIDARG))?;
         let input_scope: ITfInputScope = unknown.cast()?;
 
@@ -3177,6 +3184,8 @@ fn classify_input_scope_variant(mut value: VARIANT) -> Result<InputScope> {
 
     // GetValue returns an owning VARIANT. Always release a possible COM
     // interface, including when shape validation or scope conversion fails.
+    // SAFETY: `value` is still initialized and has not previously been
+    // cleared; VariantClear releases its active union member exactly once.
     let clear_result = unsafe { VariantClear(&mut value) };
     match result {
         Ok(scope) => clear_result.map(|()| scope),
@@ -6727,13 +6736,15 @@ mod tests {
 
         match plan.updates.as_slice() {
             [Update::Show(segments)] => {
-                assert_eq!(segments.len(), 3);
-                assert_eq!(segments[0].text, "わたし");
-                assert_eq!(segments[0].underline, UnderlineKind::Converted);
-                assert_eq!(segments[1].text, "は");
-                assert_eq!(segments[1].underline, UnderlineKind::Focused);
-                assert_eq!(segments[2].text, "にほん");
-                assert_eq!(segments[2].underline, UnderlineKind::Raw);
+                let [converted, focused, raw] = segments.as_slice() else {
+                    panic!("expected three preedit segments, got {segments:?}");
+                };
+                assert_eq!(converted.text, "わたし");
+                assert_eq!(converted.underline, UnderlineKind::Converted);
+                assert_eq!(focused.text, "は");
+                assert_eq!(focused.underline, UnderlineKind::Focused);
+                assert_eq!(raw.text, "にほん");
+                assert_eq!(raw.underline, UnderlineKind::Raw);
             }
             other => panic!("expected one multi-segment show, got {other:?}"),
         }

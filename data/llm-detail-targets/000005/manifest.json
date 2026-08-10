@@ -1,0 +1,66 @@
+{
+  "schema_version": "sakura.llm-detail-target-manifest.v2",
+  "target_schema_version": "sakura.llm-detail-target.v1",
+  "prompt_version": "sakura.llm-detail-prompt.v1",
+  "batch_size": 200,
+  "target_count": 7,
+  "eligible_targets_before_limit": 332572,
+  "target_limit": null,
+  "allowlist_sha256": "0a43f38a559066d9b35a7cd6cef70467b6f89b6d0dd6b7305e9a33bf87623b19",
+  "source_sha256": {
+    "pinned-source-details/smile-chat+wordnet-1.1": "f106c48906df9fefd1b8477991dfbe155d1872e5c83e5f87557ab8ab4affb3d0",
+    "repo/artifacts/release/カテゴリ辞書/01_文法・機能語.tsv": "6f0f542d1e458aa1c28cae41f8c9eb11511e088c2e6aeddf223ae4755bdf1f09",
+    "repo/artifacts/release/カテゴリ辞書/02_活用語.tsv": "35a861d79693a09ddcdf8ee282782a77ce75b32a52cc55ff8ed8b9c0227b48ab",
+    "repo/artifacts/release/カテゴリ辞書/03_一般語.tsv": "1f09f8809aa2746f509bdb44a23083828eb8534d8334e5f01b9ca1a7a0582d85",
+    "repo/artifacts/release/カテゴリ辞書/04_慣用句・定型表現.tsv": "e72c7964f38d750405e4e662e1d3f819f7520717eff2f4b2e494f2fda29d6d24",
+    "repo/artifacts/release/カテゴリ辞書/05_数値・日付・単位.tsv": "cb0d9c309121fe8c62bd596db2dab8acf2e6902877862ce86c1623fe12846c0e",
+    "repo/artifacts/release/カテゴリ辞書/06_人名.tsv": "793c7a008824945cc0c18d5e023031a4781451fa7f4f1539e8906a9d9b70c674",
+    "repo/artifacts/release/カテゴリ辞書/07_地名.tsv": "1410ec80f17d5f8aae06e78b6b1c2254ae3dd612fbb0171efcaeba4758a39489",
+    "repo/artifacts/release/カテゴリ辞書/08_組織名・製品名.tsv": "2fbff78fcbc8fdf45f797cc6a1c65607aa423230ef7bd0256fd710ee3d30b5fa",
+    "repo/artifacts/release/カテゴリ辞書/09_外来語・カタカナ語.tsv": "fcc1b16f8ad278b6bed99344020b8840bc08e07888b7d1fe2275f6181e89c2c7",
+    "repo/artifacts/release/カテゴリ辞書/10_略語・英数字.tsv": "fb1fe48f85cee609b2945bf00de09b26a473ccbfcf17122a4ad5f1a254ef9609",
+    "repo/artifacts/release/カテゴリ辞書/11_IT・技術用語.tsv": "27ca2166d983d618714347ecefb052594e36e1860e417bf11b8528a8c5f9ec20",
+    "repo/artifacts/release/カテゴリ辞書/12_専門用語.tsv": "c9be5106d82fb762e1da2e8adaeff2fd40f6e8b30f06421e15381b7246cd5b86",
+    "repo/artifacts/release/カテゴリ辞書/13_記号・絵文字.tsv": "4a0e21f044efc24cded1f1905b6872d26921718bdcdedfe108535f5f3f99f0cc",
+    "repo/artifacts/release/カテゴリ辞書/14_表記ゆれ.tsv": "6e04345481aa9e99de2062ecd582bf8f73ccbe660969e1075b647dd9961f3ab1",
+    "repo/data/conversion-priorities.tsv": "243d0187c6a0e2de9a127d7f6a3611ba1c30edf20b8ea22ca797de31d476d424",
+    "repo/data/curated-terms.tsv": "8fa9b141bb4db0e68e8e6a8a829fec1c7072d14458bf482229c59fd1aa9f6d72",
+    "repo/data/it-terms.tsv": "d3d207db79803ed131cccf808249fcd23c0077a70ee0f8a16f61118423992ba8"
+  },
+  "filter_counts": {
+    "input_entries": 1635239,
+    "duplicate_identities": 159,
+    "already_detailed": 0,
+    "already_detailed_pairs": 25187,
+    "non_lexical": 198788,
+    "proper_name": 838788,
+    "spelling_or_variant": 234,
+    "abnormal_length": 177,
+    "reading_mismatch": 355,
+    "ambiguous_surface": 211701,
+    "selected_targets": 7,
+    "held_targets": 1188809
+  },
+  "held_audit": {
+    "record_count": 1188809,
+    "sha256": "768709b01fc7845300efa1101db39376c2ecfcb4e105e909fe12b440df771167",
+    "materialization": "external_nonmaterialized"
+  },
+  "batches": [
+    {
+      "batch_index": 1,
+      "file": "000001.targets.jsonl",
+      "record_count": 7,
+      "input_sha256": "4dcfe8be92d1f6204646b5e6996f01b85c02ce07703180b2eb273f1ad50361fc",
+      "input_hashes": [
+        "5e074d7a8df12777e8c7e8e65bdf1e433349c88f13efe899e2a60121278ee164",
+        "b11470566cdd58695fb1556b34239f0b67713285cdc84f1c10d8775a44a0c23c",
+        "fd3c94fdf7e49fe6104b47bc5a30dd42482558e4064921173179dd0426b02c65",
+        "78145298d96cf9f30a1b43fd378eef906682b120fdc479c64faed073f75da879",
+        "4a5975dcebfec9ae2144e8b0b63dac8d7bde4160d033d8de3f937d20f86c861e",
+        "06d64b227eb28edeb6446961427f041e9eacff66298bbc187b1802b67f5226ec",
+        "a06e7b5717e3424fc44d863fc108e8705dbb77b8222db9a0d366f793f96b4c18"
+      ]
+    }
+  ]
+}

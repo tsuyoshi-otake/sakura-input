@@ -28,11 +28,29 @@ path = "src/bin/corpus_eval.rs"
 name = "category-split"
 path = "src/bin/category_split.rs"
 
+[[bin]]
+name = "llm-detail-targets"
+path = "src/bin/llm_detail_targets.rs"
+
+[[bin]]
+name = "llm-detail-drafts"
+path = "src/bin/llm_detail_drafts.rs"
+
+[[bin]]
+name = "llm-detail-promote"
+path = "src/bin/llm_detail_promote.rs"
+
 [dependencies]
 sakura-core.workspace = true
 sakura-proto.workspace = true
 quick-xml.workspace = true
 flate2.workspace = true
+# `dictc` is an offline build tool.  The LLM-detail release gate needs a
+# battle-tested strict JSON parser; runtime binaries never depend on this.
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.140"
+sha2 = "=0.10.9"
+unicode-normalization = "=0.1.25"
 
 [lints]
 workspace = true

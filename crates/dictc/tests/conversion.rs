@@ -29,6 +29,12 @@ fn fixture() -> Vec<u8> {
     compile(&entries, &matrix).expect("image")
 }
 
+fn compile_fixture(entries: &str) -> Vec<u8> {
+    let entries = parse_entries("quality-gate.tsv", entries).expect("entries");
+    let matrix = parse_connection("matrix.tsv", CONNECTION, false).expect("matrix");
+    compile(&entries, &matrix).expect("image")
+}
+
 #[test]
 fn viterbi_finds_a_multiword_path_and_astar_returns_unique_n_best() {
     let bytes = fixture();
@@ -352,4 +358,96 @@ fn a_latin_token_is_never_segmented_into_partial_dictionary_entries() {
         .convert(&dictionary, "ipあどれす", ConversionOptions::default())
         .expect("conversion");
     assert_eq!(candidates[0].text(), "IPアドレス");
+}
+
+#[test]
+fn n_best_rejects_spliced_kana_fallbacks_but_keeps_lossless_whole_reading_fallbacks() {
+    // These short, inexpensive dictionary entries intentionally reproduce the
+    // bad N-best shape reported for `ぷろんふと`: a partial entry, an unmatched
+    // kana fallback, and more unrelated partial entries. They are individual
+    // dictionary matches, but the concatenation is not a conversion candidate
+    // the user can trust.
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+ぷろ\tプロ\t1\t1\t10\t-\t\t\n\
+ふ\t布\t1\t1\t10\t-\t\t\n\
+ふ\t富\t1\t1\t11\t-\t\t\n\
+ふ\t婦\t1\t1\t12\t-\t\t\n\
+ふ\t夫\t1\t1\t13\t-\t\t\n\
+と\t戸\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    // The lowest-cost unfiltered path would have been `プロん布戸`. It must not
+    // occupy even the one-candidate conversion result; the converter must keep
+    // searching until it finds a complete lossless fallback.
+    let top_one = converter
+        .convert(
+            &dictionary,
+            "ぷろんふと",
+            ConversionOptions {
+                max_candidates: 1,
+                ..ConversionOptions::default()
+            },
+        )
+        .expect("conversion");
+    assert_eq!(top_one.len(), 1);
+    assert_eq!(top_one[0].text(), "ぷろんふと");
+
+    let candidates = converter
+        .convert(&dictionary, "ぷろんふと", ConversionOptions::default())
+        .expect("conversion");
+    let texts: Vec<_> = candidates
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect();
+    assert_eq!(texts, ["ぷろんふと", "プロンフト"]);
+    assert!(texts
+        .iter()
+        .all(|text| !text.contains('ん') || *text == "ぷろんふと"));
+}
+
+#[test]
+fn quality_gate_covers_every_unicode_prefix_boundary_without_hiding_complete_segmentation() {
+    // Run every character boundary through a dictionary that recognizes only
+    // the prefix. This is a compact property-style check: no partial lexical
+    // prefix may be joined to the remaining kana fallback, including across
+    // UTF-8 boundaries. The one fully lexical two-word phrase stays valid.
+    let reading = "あいうえお";
+    let expected_fallbacks = ["あいうえお", "アイウエオ"];
+    let mut converter = Converter::new();
+    for boundary in 1..reading.chars().count() {
+        let prefix: String = reading.chars().take(boundary).collect();
+        let entries = format!(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n{prefix}\t語\t1\t1\t10\t-\t\t\n"
+        );
+        let bytes = compile_fixture(&entries);
+        let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("partial conversion");
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|candidate| candidate.text())
+                .collect::<Vec<_>>(),
+            expected_fallbacks,
+            "partial prefix boundary {boundary} leaked a spliced candidate"
+        );
+    }
+
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+あい\t愛\t1\t1\t10\t-\t\t\n\
+うえお\t上尾\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let candidates = converter
+        .convert(&dictionary, reading, ConversionOptions::default())
+        .expect("complete multiword conversion");
+    assert_eq!(candidates[0].text(), "愛上尾");
+    assert_eq!(candidates[0].segments().len(), 2);
 }

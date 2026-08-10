@@ -25,13 +25,17 @@
 //! is being uninstalled. Either one ends this thread instead of relaunching
 //! anything.
 
+use std::ffi::c_void;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant};
 
 use sakura_ipc::{Client, Fault, PATIENT_CONNECT};
 use sakura_proto::{Request, Response, UiState, PROTOCOL_VERSION};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 /// The file the watchdog restarts, beside this executable.
 const ENGINE_EXE: &str = "sakura_engine.exe";
@@ -61,6 +65,92 @@ const RETRY_CEILING: Duration = Duration::from_secs(30);
 /// makes the machine unusable — and does it at logon, where the user has no
 /// obvious way to intervene.
 const RELAUNCH_GAP: Duration = Duration::from_secs(5);
+const HISTORY_DELETE_BUDGET: Duration = Duration::from_secs(2);
+const HISTORY_DELETE_QUEUE_CAPACITY: usize = 8;
+
+/// A deletion request carries only the opaque UI snapshot coordinates. The
+/// engine, not the renderer, resolves those coordinates to learned history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryDeleteRequest {
+    pub revision: u64,
+    pub candidate_index: u16,
+}
+
+/// Completion proves only that the engine answered the deletion request. It
+/// never authorizes a renderer-side candidate mutation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryDeleteCompletion(pub HistoryDeleteRequest);
+
+/// Starts one bounded command worker separate from the long-poll watcher.
+///
+/// A `WatchUi` call may block for its heartbeat, so sharing that client would
+/// make a click wait seconds. This worker owns short-lived independent pipe
+/// clients; it never changes the popup locally and engine UI updates remain the
+/// sole confirmation path.
+pub fn spawn_history_deleter(
+    notify_target: isize,
+    notify_message: u32,
+    test_pipe: Option<String>,
+) -> (
+    SyncSender<HistoryDeleteRequest>,
+    Receiver<HistoryDeleteCompletion>,
+) {
+    let (sender, receiver) =
+        mpsc::sync_channel::<HistoryDeleteRequest>(HISTORY_DELETE_QUEUE_CAPACITY);
+    let (completed_sender, completed_receiver) = mpsc::channel();
+    let binding = match test_pipe {
+        Some(pipe_name) => PipeBinding::Test(pipe_name),
+        None => PipeBinding::Production,
+    };
+    thread::Builder::new()
+        .name("sakura-history-delete".to_owned())
+        .spawn(move || {
+            while let Ok(request) = receiver.recv() {
+                let Ok(mut client) = binding.connect() else {
+                    continue;
+                };
+                if !matches!(
+                    client.call(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        HISTORY_DELETE_BUDGET,
+                    ),
+                    Ok(Response::Hello { server_version, .. }) if server_version == PROTOCOL_VERSION
+                ) {
+                    continue;
+                }
+                // `removed: false` is a terminal no-op. Either response only
+                // clears click de-duplication; the current popup remains until
+                // WatchUi sends an engine-authored snapshot.
+                if matches!(
+                    client.call(
+                        &Request::DeleteHistoryCandidate {
+                            revision: request.revision,
+                            candidate_index: request.candidate_index,
+                        },
+                        HISTORY_DELETE_BUDGET,
+                    ),
+                    Ok(Response::HistoryCandidateDeleted { .. })
+                ) {
+                    let _ = completed_sender.send(HistoryDeleteCompletion(request));
+                    // SAFETY: this numeric HWND is the main thread's live host
+                    // until process teardown. A failed post only means it has
+                    // already gone away and the completion can be dropped.
+                    unsafe {
+                        let _ = PostMessageW(
+                            Some(HWND(notify_target as *mut c_void)),
+                            notify_message,
+                            WPARAM(0),
+                            LPARAM(0),
+                        );
+                    }
+                }
+            }
+        })
+        .expect("the renderer cannot create its bounded history-delete worker");
+    (sender, completed_receiver)
+}
 
 /// What the watcher tells the UI thread.
 #[derive(Debug, Clone, PartialEq, Eq)]

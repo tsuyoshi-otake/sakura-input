@@ -31,6 +31,22 @@ $japaneseWordNetArchiveSha256 = '1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f
 $japaneseWordNetArchiveBytes = 12415268L
 $japaneseWordNetRevision = 'v1.1'
 $japaneseWordNetLicenseId = 'LicenseRef-Japanese-WordNet-1.1'
+$canonicalCategoryDictionaryFiles = @(
+    '01_文法・機能語.tsv',
+    '02_活用語.tsv',
+    '03_一般語.tsv',
+    '04_慣用句・定型表現.tsv',
+    '05_数値・日付・単位.tsv',
+    '06_人名.tsv',
+    '07_地名.tsv',
+    '08_組織名・製品名.tsv',
+    '09_外来語・カタカナ語.tsv',
+    '10_略語・英数字.tsv',
+    '11_IT・技術用語.tsv',
+    '12_専門用語.tsv',
+    '13_記号・絵文字.tsv',
+    '14_表記ゆれ.tsv'
+)
 $neuralPayloadPaths = @(
     'artifacts\release\sakura_neural_worker.exe',
     'artifacts\release\onnxruntime.dll',
@@ -218,8 +234,20 @@ $dictionaryReport = [IO.File]::ReadAllText($dictionaryReportPath) | ConvertFrom-
 if ($dictionaryReport.schema_version -notin @(1, 2) -or $dictionaryReport.deterministic_repeat -ne $true) {
     throw 'dictionary provenance does not prove a deterministic repeat build'
 }
-if ($null -eq $dictionaryReport.inputs.system_category_dictionary -or
-    @($dictionaryReport.inputs.system_category_dictionary.categories).Count -ne 14) {
+$dictionaryArtifacts = Get-RequiredJsonProperty $dictionaryReport 'artifacts' 'dictionary artifacts'
+$categoryArtifacts = @(
+    Get-RequiredJsonProperty $dictionaryArtifacts 'category_dictionaries' 'canonical category dictionaries'
+)
+$reportedCategoryFiles = @(
+    foreach ($category in $categoryArtifacts) {
+        [string](Get-RequiredJsonProperty $category 'file' 'canonical category dictionary file')
+    }
+)
+$missingCategoryFiles = @($canonicalCategoryDictionaryFiles | Where-Object { $_ -notin $reportedCategoryFiles })
+$unexpectedCategoryFiles = @($reportedCategoryFiles | Where-Object { $_ -notin $canonicalCategoryDictionaryFiles })
+if ($categoryArtifacts.Count -ne $canonicalCategoryDictionaryFiles.Count -or
+    @($reportedCategoryFiles | Select-Object -Unique).Count -ne $canonicalCategoryDictionaryFiles.Count -or
+    $missingCategoryFiles.Count -ne 0 -or $unexpectedCategoryFiles.Count -ne 0) {
     throw 'dictionary provenance does not prove that the canonical fourteen Sakura system categories were included'
 }
 $includesJapaneseWordNet = $false
@@ -267,9 +295,20 @@ if ($dictionaryReport.schema_version -eq 2) {
     $smileChatDetailSource = Get-RequiredJsonProperty $detailSources 'smile-chat' 'smile-chat detail source accounting'
     $wordNetSourceCount = Get-RequiredJsonProperty $wordNetDetailSource 'detail_count' 'Japanese WordNet source detail count'
     $smileChatSourceCount = Get-RequiredJsonProperty $smileChatDetailSource 'detail_count' 'smile-chat source detail count'
+    $curatedImport = Get-RequiredJsonProperty $dictionaryReport 'curated_detail_import' 'curated detail import accounting'
+    $curatedSchemaVersion = Get-RequiredJsonProperty $curatedImport 'schema_version' 'curated detail schema version'
+    $curatedInputRecords = Get-RequiredJsonProperty $curatedImport 'input_records' 'curated detail input count'
+    $curatedEmittedDetails = Get-RequiredJsonProperty $curatedImport 'emitted_details' 'curated detail emitted count'
+    $curatedSuppressed = Get-RequiredJsonProperty $curatedImport 'suppressed_by_existing' 'curated detail suppression count'
+    $llmImport = Get-RequiredJsonProperty $dictionaryReport 'llm_detail_import' 'LLM detail import accounting'
+    $llmImportReport = Get-RequiredJsonProperty $llmImport 'report' 'LLM detail import report'
+    $llmEmittedDetails = Get-RequiredJsonProperty $llmImportReport 'emitted_details' 'LLM detail emitted count'
+    $expectedDetailCount = [long]$mergedDetailCount + [long]$curatedEmittedDetails + [long]$llmEmittedDetails
     if ($importSchemaVersion -ne 2 -or $null -eq $importDetailCount -or
         [long]$importDetailCount -ne [long]$wordNetSourceCount -or
-        $null -eq $mergedDetailCount -or [long]$mergedDetailCount -ne [long]$detailsCount -or
+        $null -eq $mergedDetailCount -or $curatedSchemaVersion -cne 'sakura.curated-detail-import.v1' -or
+        [long]$curatedInputRecords -ne ([long]$curatedEmittedDetails + [long]$curatedSuppressed) -or
+        $expectedDetailCount -ne [long]$detailsCount -or
         $null -eq $smileChatSourceCount -or [long]$smileChatSourceCount -lt 0 -or
         $null -eq $surfaceAmbiguous -or [long]$surfaceAmbiguous -lt 0 -or
         $null -eq $senseAmbiguous -or [long]$senseAmbiguous -lt 0 -or

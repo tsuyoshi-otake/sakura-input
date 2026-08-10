@@ -431,22 +431,29 @@ pub struct Preedit {
 }
 
 /// One candidate surface and its optional dictionary annotation.
+///
+/// `deletable_history` is a renderer affordance, not a learning key. It is
+/// true only when the engine owns a matching, revision-stamped private history
+/// identity; a renderer must never infer this capability from `annotation`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
     pub text: String,
     pub annotation: String,
+    pub deletable_history: bool,
 }
 
 impl Candidate {
     pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
         w.write_str(&self.text)?;
-        w.write_str(&self.annotation)
+        w.write_str(&self.annotation)?;
+        w.write_bool(self.deletable_history)
     }
 
     pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
         Ok(Self {
             text: r.read_str()?.to_string(),
             annotation: r.read_str()?.to_string(),
+            deletable_history: r.read_bool()?,
         })
     }
 }
@@ -1000,6 +1007,7 @@ mod tests {
                 .map(|index| Candidate {
                     text: format!("candidate-{index}"),
                     annotation: String::new(),
+                    deletable_history: index % 2 == 0,
                 })
                 .collect(),
             selected: crate::CANDIDATE_PAGE_SIZE as u16,
@@ -1057,6 +1065,7 @@ mod tests {
             items: vec![Candidate {
                 text: "candidate".to_owned(),
                 annotation: String::new(),
+                deletable_history: false,
             }],
             selected: 0,
             page_size: 9,

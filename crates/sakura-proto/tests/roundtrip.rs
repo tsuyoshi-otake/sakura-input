@@ -93,6 +93,10 @@ fn every_request_variant_roundtrips() {
             session: 1,
             mode: Mode::HalfKatakana,
         },
+        Request::DeleteHistoryCandidate {
+            revision: u64::MAX,
+            candidate_index: u16::MAX,
+        },
         Request::DeleteSession { session: 1 },
         Request::Ping,
         Request::Shutdown,
@@ -114,6 +118,32 @@ fn every_request_variant_roundtrips() {
     }
 }
 
+/// Fixed-seed property coverage for the complete renderer-side deletion
+/// capability.  It deliberately includes values that look like wrapped UI
+/// revisions and every possible `u16` index shape without adding a fuzzing
+/// dependency to the production workspace.
+#[test]
+fn history_delete_request_preserves_random_revision_and_index_pairs() {
+    let mut state = 0xD3E1_E7E0_29A5_4B17u64;
+    for request_id in 0..4096u64 {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        let revision = state;
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        let candidate_index = (state >> 17) as u16;
+        roundtrip_request(
+            &Request::DeleteHistoryCandidate {
+                revision,
+                candidate_index,
+            },
+            request_id,
+        );
+    }
+}
+
 #[test]
 fn every_response_variant_roundtrips() {
     let variants = [
@@ -128,6 +158,8 @@ fn every_response_variant_roundtrips() {
         Response::InputMode {
             mode: Mode::HalfKatakana,
         },
+        Response::HistoryCandidateDeleted { removed: false },
+        Response::HistoryCandidateDeleted { removed: true },
         Response::Output(Output {
             consumed: true,
             beep: false,
@@ -163,6 +195,7 @@ fn every_response_variant_roundtrips() {
                 items: vec![Candidate {
                     text: "候補".to_owned(),
                     annotation: "注釈".to_owned(),
+                    deletable_history: true,
                 }],
                 selected: 0,
                 page_size: 9,
@@ -449,18 +482,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v13_hello_roundtrips_and_v12_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 12;
+fn protocol_v14_hello_roundtrips_and_v13_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 13;
     assert_eq!(
-        PROTOCOL_VERSION, 13,
-        "selected-candidate detail changes the wire contract"
+        PROTOCOL_VERSION, 14,
+        "renderer history deletion changes the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v13 request");
+    encode_request(&request, 17, &mut request_frame).expect("encode v14 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -481,7 +514,7 @@ fn protocol_v13_hello_roundtrips_and_v12_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 17, &mut response_frame).expect("encode v13 response");
+    encode_response(&response, 17, &mut response_frame).expect("encode v14 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -592,10 +625,12 @@ fn candidate_list_roundtrips_and_matches_output_buf() {
             Candidate {
                 text: "かな".to_string(),
                 annotation: "ひらがな".to_string(),
+                deletable_history: false,
             },
             Candidate {
                 text: "仮名".to_string(),
                 annotation: "IT用語".to_string(),
+                deletable_history: false,
             },
         ],
         selected: 1,
@@ -632,10 +667,12 @@ fn expanded_conversion_candidate_list_roundtrips() {
             Candidate {
                 text: "first".to_string(),
                 annotation: String::new(),
+                deletable_history: false,
             },
             Candidate {
                 text: "second".to_string(),
                 annotation: String::new(),
+                deletable_history: false,
             },
         ],
         selected: 1,

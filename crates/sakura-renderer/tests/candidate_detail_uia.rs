@@ -20,7 +20,7 @@ use sakura_proto::{
     Request, Response, ScreenRect, UiState, PROTOCOL_VERSION,
 };
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RPC_E_CHANGED_MODE, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RPC_E_CHANGED_MODE, WPARAM};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
     COINIT_APARTMENTTHREADED,
@@ -28,8 +28,8 @@ use windows::Win32::System::Com::{
 use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
-    IsWindowVisible, SendMessageW, GWL_EXSTYLE, HTTRANSPARENT, WM_NCHITTEST, WS_EX_NOACTIVATE,
-    WS_EX_TRANSPARENT,
+    IsWindowVisible, SendMessageW, GWL_EXSTYLE, HTCLIENT, HTTRANSPARENT, MA_NOACTIVATE,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -167,6 +167,108 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
     renderer.wait_for_exit();
 }
 
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn history_delete_uses_typed_index_keeps_popup_until_next_ui_state_and_never_activates() {
+    let app_data = IsolatedAppData::new("candidate-history-delete-uia");
+    let mut engine = FixtureEngine::new(history_state(41, anchor(120, 120)));
+    let renderer_path = PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer"));
+    let renderer = Command::new(&renderer_path)
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn test-owned renderer");
+    let mut renderer = OwnedChild::new(renderer, "renderer");
+    let popup = wait_for_candidate_window(renderer.pid());
+    let _apartment = ComApartment::new();
+    // SAFETY: `popup` is the visible candidate HWND belonging to our child.
+    let automation: IUIAutomation = unsafe {
+        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+            .expect("create UI Automation client")
+    };
+    // SAFETY: the live popup can be represented by UI Automation.
+    let element = unsafe {
+        automation
+            .ElementFromHandle(popup)
+            .expect("candidate popup UIA element")
+    };
+    let name = wait_for_name(&element, "learned-history deletion is available");
+    assert!(name.contains("fixture-history"));
+
+    let rect = window_rect(popup);
+    let icon = POINT { x: 15, y: 14 };
+    let screen_icon = POINT {
+        x: rect.left + icon.x,
+        y: rect.top + icon.y,
+    };
+    assert_eq!(
+        // SAFETY: the LPARAM packs the screen position for WM_NCHITTEST.
+        unsafe {
+            SendMessageW(
+                popup,
+                WM_NCHITTEST,
+                Some(WPARAM(0)),
+                Some(pack_point(screen_icon)),
+            )
+        },
+        LRESULT(HTCLIENT as isize),
+        "only the typed history icon becomes a client hit"
+    );
+    assert_eq!(
+        // SAFETY: the row text coordinate is not a button hit target.
+        unsafe {
+            SendMessageW(
+                popup,
+                WM_NCHITTEST,
+                Some(WPARAM(0)),
+                Some(pack_point(POINT {
+                    x: rect.left + 80,
+                    y: rect.top + icon.y,
+                })),
+            )
+        },
+        LRESULT(HTTRANSPARENT as isize),
+        "all non-icon pixels remain click-through"
+    );
+    assert_eq!(
+        // SAFETY: popup messages use no borrowed pointers.
+        unsafe { SendMessageW(popup, WM_MOUSEACTIVATE, Some(WPARAM(0)), Some(LPARAM(0))) },
+        LRESULT(MA_NOACTIVATE as isize),
+        "the delete button must not activate the popup"
+    );
+    // SAFETY: WM_LBUTTONUP carries client coordinates only and has no pointers.
+    unsafe { SendMessageW(popup, WM_LBUTTONUP, Some(WPARAM(0)), Some(pack_point(icon))) };
+    assert_eq!(engine.wait_for_delete(), (41, 0));
+    sleep(Duration::from_millis(150));
+    assert!(
+        // SAFETY: `popup` is the live window owned by this test process.
+        unsafe { IsWindowVisible(popup) }.as_bool(),
+        "a delete response must not optimistically hide the candidate"
+    );
+    assert!(
+        // SAFETY: `element` is the live UIA object obtained for `popup`.
+        unsafe { element.CurrentName() }
+            .expect("read UIA name after delete response")
+            .to_string()
+            .contains("fixture-history"),
+        "renderer must wait for a newer UiState before changing the popup"
+    );
+
+    engine.publish(UiState {
+        revision: 42,
+        mode: None,
+        candidates: None,
+        candidate_detail: None,
+        anchor: None,
+        renderer_visible: false,
+        stopping: false,
+    });
+    wait_for_hidden_window(popup);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
 fn assert_noninteractive_popup(window: HWND, element: &IUIAutomationElement) {
     // SAFETY: the caller supplies a live candidate popup HWND and this query
     // only reads its extended window style.
@@ -231,12 +333,35 @@ fn state(
                 .map(|index| Candidate {
                     text: format!("fixture-candidate-{index}"),
                     annotation: String::new(),
+                    deletable_history: false,
                 })
                 .collect(),
             selected: u16::try_from(selected).expect("fixture selected fits u16"),
             page_size: 9,
         }),
         candidate_detail,
+        anchor: Some(anchor),
+        renderer_visible: true,
+        stopping: false,
+    }
+}
+
+fn history_state(revision: u64, anchor: ScreenRect) -> UiState {
+    UiState {
+        revision,
+        mode: None,
+        candidates: Some(CandidateList {
+            kind: CandidateKind::Suggestion,
+            presentation: CandidatePresentation::Expanded,
+            items: vec![Candidate {
+                text: "fixture-history".to_owned(),
+                annotation: "not-a-marker".to_owned(),
+                deletable_history: true,
+            }],
+            selected: 0,
+            page_size: 9,
+        }),
+        candidate_detail: None,
         anchor: Some(anchor),
         renderer_visible: true,
         stopping: false,
@@ -265,9 +390,12 @@ fn anchor(left: i32, top: i32) -> ScreenRect {
     }
 }
 
+type DeletedRequests = Arc<(Mutex<Vec<(u64, u16)>>, Condvar)>;
+
 struct FixtureEngine {
     pipe_name: String,
     state: Arc<(Mutex<UiState>, Condvar)>,
+    deleted: DeletedRequests,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -284,13 +412,43 @@ impl FixtureEngine {
         // races a not-yet-created fixture could otherwise enter its production
         // watchdog path and launch the adjacent engine binary.
         let security = Descriptor::for_pipe().expect("fixture pipe security descriptor");
-        let pipe = PipeInstance::create(&pipe_name, &security, true).expect("create fixture pipe");
-        let thread = thread::spawn(move || serve_fixture(pipe, server_state));
+        let pipe =
+            PipeInstance::create(&pipe_name, &security, true).expect("create first fixture pipe");
+        let delete_pipe =
+            PipeInstance::create(&pipe_name, &security, false).expect("create delete fixture pipe");
+        let deleted = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
+        let server_deleted = Arc::clone(&deleted);
+        let thread =
+            thread::spawn(move || serve_fixture(pipe, delete_pipe, server_state, server_deleted));
         Self {
             pipe_name,
             state,
+            deleted,
             thread: Some(thread),
         }
+    }
+
+    fn wait_for_delete(&self) -> (u64, u16) {
+        let (deleted, changed) = &*self.deleted;
+        let deadline = Instant::now() + PATIENT;
+        let mut requests = deleted.lock().expect("fixture delete lock");
+        while requests.is_empty() {
+            let wait = deadline.saturating_duration_since(Instant::now());
+            assert!(
+                !wait.is_zero(),
+                "renderer never issued history delete request"
+            );
+            let (next, _) = changed
+                .wait_timeout(requests, wait)
+                .expect("fixture delete lock after wake");
+            requests = next;
+        }
+        assert_eq!(
+            requests.len(),
+            1,
+            "renderer must not duplicate one delete click"
+        );
+        requests[0]
     }
 
     fn pipe_name(&self) -> &str {
@@ -321,6 +479,7 @@ impl FixtureEngine {
         // dropped immediately; a live renderer connection simply makes it
         // time out while the notified WatchUi request completes normally.
         let _ = Client::connect_to(&self.pipe_name, Duration::from_millis(100));
+        let _ = Client::connect_to(&self.pipe_name, Duration::from_millis(100));
         self.thread
             .take()
             .expect("fixture server thread remains owned")
@@ -337,7 +496,24 @@ impl Drop for FixtureEngine {
     }
 }
 
-fn serve_fixture(pipe: PipeInstance, state: Arc<(Mutex<UiState>, Condvar)>) {
+fn serve_fixture(
+    pipe: PipeInstance,
+    delete_pipe: PipeInstance,
+    state: Arc<(Mutex<UiState>, Condvar)>,
+    deleted: DeletedRequests,
+) {
+    let watch_state = Arc::clone(&state);
+    let watch_deleted = Arc::clone(&deleted);
+    let watch = thread::spawn(move || serve_fixture_connection(pipe, watch_state, watch_deleted));
+    serve_fixture_connection(delete_pipe, state, deleted);
+    watch.join().expect("watch fixture connection must finish");
+}
+
+fn serve_fixture_connection(
+    pipe: PipeInstance,
+    state: Arc<(Mutex<UiState>, Condvar)>,
+    deleted: DeletedRequests,
+) {
     pipe.wait_for_client().expect("accept renderer connection");
     let mut frame = Vec::new();
     loop {
@@ -359,6 +535,18 @@ fn serve_fixture(pipe: PipeInstance, state: Arc<(Mutex<UiState>, Condvar)>) {
                 }
             }
             Request::WatchUi { since } => Response::Ui(wait_for_fixture_state(&state, since)),
+            Request::DeleteHistoryCandidate {
+                revision,
+                candidate_index,
+            } => {
+                let (requests, changed) = &*deleted;
+                requests
+                    .lock()
+                    .expect("fixture delete lock")
+                    .push((revision, candidate_index));
+                changed.notify_all();
+                Response::HistoryCandidateDeleted { removed: true }
+            }
             other => panic!("fixture renderer sent unexpected request: {other:?}"),
         };
         frame.clear();
@@ -368,6 +556,12 @@ fn serve_fixture(pipe: PipeInstance, state: Arc<(Mutex<UiState>, Condvar)>) {
             return;
         }
     }
+}
+
+fn pack_point(point: POINT) -> LPARAM {
+    let x = point.x as u16 as u32;
+    let y = point.y as u16 as u32;
+    LPARAM((x | (y << 16)) as isize)
 }
 
 fn wait_for_fixture_state(state: &Arc<(Mutex<UiState>, Condvar)>, since: u64) -> UiState {
@@ -467,6 +661,18 @@ fn window_rect(window: HWND) -> windows::Win32::Foundation::RECT {
     // SAFETY: caller provides the live popup HWND and `rect` is a valid out-pointer.
     unsafe { GetWindowRect(window, &mut rect).expect("candidate popup rectangle") };
     rect
+}
+
+fn wait_for_hidden_window(window: HWND) {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        // SAFETY: the caller owns the renderer process and this immediate query.
+        if !unsafe { IsWindowVisible(window) }.as_bool() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "candidate window did not hide");
+        sleep(Duration::from_millis(20));
+    }
 }
 
 fn wait_for_moved_window(

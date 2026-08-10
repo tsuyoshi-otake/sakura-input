@@ -14,6 +14,8 @@ use sakura_proto::MAX_PREEDIT_BYTES;
 
 pub mod category;
 pub mod glossary;
+pub mod llm_detail_targets;
+pub mod llm_details;
 pub mod wordnet;
 
 /// Connection taxonomy from the pinned Mozc dictionary revision. The source
@@ -924,6 +926,103 @@ pub fn merge_entries(
         }
     }
     Ok(merged)
+}
+
+/// Converts reviewed entry annotations into sparse detail records while
+/// removing those annotations from the compiled candidate-list payload.
+///
+/// Every reviewed source row must still match the final merged entry exactly,
+/// including costs and flags. This makes category placement and overlay
+/// precedence part of the release gate instead of silently attaching a
+/// description to a different lattice edge.
+pub fn extract_entry_details(
+    entries: &mut [SourceEntry],
+    reviewed: &[SourceEntry],
+) -> Result<Vec<SourceDetail>, Error> {
+    let mut entry_by_identity = BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let identity = (
+            entry.reading.as_str(),
+            entry.surface.as_str(),
+            entry.left_id,
+            entry.right_id,
+        );
+        if entry_by_identity.insert(identity, index).is_some() {
+            return Err(Error::build(format!(
+                "duplicate compiled entry for reading '{}' and surface '{}'",
+                entry.reading, entry.surface
+            )));
+        }
+    }
+
+    let mut reviewed_identities = BTreeSet::new();
+    let mut clear_annotations = Vec::with_capacity(reviewed.len());
+    let mut details = Vec::with_capacity(reviewed.len());
+    for source in reviewed {
+        let identity = (
+            source.reading.as_str(),
+            source.surface.as_str(),
+            source.left_id,
+            source.right_id,
+        );
+        if !reviewed_identities.insert(identity) {
+            return Err(Error::at(
+                &source.source,
+                source.line,
+                format!(
+                    "duplicate reviewed detail for reading '{}' and surface '{}'",
+                    source.reading, source.surface
+                ),
+            ));
+        }
+        if source.annotation.trim().is_empty() {
+            return Err(Error::at(
+                &source.source,
+                source.line,
+                "reviewed detail description must not be empty",
+            ));
+        }
+        let Some(&index) = entry_by_identity.get(&identity) else {
+            return Err(Error::at(
+                &source.source,
+                source.line,
+                format!(
+                    "reviewed detail for reading '{}' and surface '{}' is not in the final dictionary",
+                    source.reading, source.surface
+                ),
+            ));
+        };
+        let entry = &entries[index];
+        if entry.word_cost != source.word_cost
+            || entry.prediction_cost != source.prediction_cost
+            || entry.flags != source.flags
+            || entry.annotation != source.annotation
+        {
+            return Err(Error::at(
+                &source.source,
+                source.line,
+                format!(
+                    "reviewed detail source no longer matches the final entry for reading '{}' and surface '{}'",
+                    source.reading, source.surface
+                ),
+            ));
+        }
+        clear_annotations.push(index);
+        details.push(SourceDetail {
+            reading: source.reading.clone(),
+            surface: source.surface.clone(),
+            left_id: source.left_id,
+            right_id: source.right_id,
+            description: source.annotation.clone(),
+            relations: Vec::new(),
+        });
+    }
+
+    drop(entry_by_identity);
+    for index in clear_annotations {
+        entries[index].annotation.clear();
+    }
+    Ok(details)
 }
 
 fn sort_and_validate_layer(entries: &mut [SourceEntry], label: &str) -> Result<(), Error> {

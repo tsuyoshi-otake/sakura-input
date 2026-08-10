@@ -217,6 +217,9 @@ fn announcement(candidates: &CandidateList, detail: Option<&CandidateDetail>) ->
             result.push_str(" — ");
             result.push_str(&candidate.annotation);
         }
+        if candidate.deletable_history {
+            result.push_str("; learned-history deletion is available from the trash button.");
+        }
         result.push('.');
     }
     if let Some(detail) = detail {
@@ -286,6 +289,7 @@ mod tests {
                     } else {
                         String::new()
                     },
+                    deletable_history: false,
                 })
                 .collect(),
             selected: 9,
@@ -308,6 +312,7 @@ mod tests {
                 .map(|index| Candidate {
                     text: format!("candidate-{index}"),
                     annotation: String::new(),
+                    deletable_history: false,
                 })
                 .collect(),
             selected: 1,
@@ -318,6 +323,37 @@ mod tests {
         assert!(name.contains("Candidate 2 of 3 (selected): candidate-2."));
         assert!(!name.contains("candidate-1"));
         assert!(!name.contains("candidate-3"));
+    }
+
+    #[test]
+    fn deletion_affordance_uses_only_the_typed_engine_capability() {
+        let candidates = CandidateList {
+            kind: CandidateKind::Suggestion,
+            presentation: CandidatePresentation::Expanded,
+            items: vec![
+                Candidate {
+                    text: "annotation-only".to_owned(),
+                    annotation: "履歴".to_owned(),
+                    deletable_history: false,
+                },
+                Candidate {
+                    text: "engine-marked".to_owned(),
+                    annotation: String::new(),
+                    deletable_history: true,
+                },
+            ],
+            selected: 0,
+            page_size: 9,
+        };
+        let name = announcement(&candidates, None);
+        assert_eq!(
+            name.matches("learned-history deletion is available")
+                .count(),
+            1
+        );
+        assert!(
+            name.contains("Candidate 2 of 2: engine-marked; learned-history deletion is available")
+        );
     }
 
     #[test]
@@ -340,6 +376,7 @@ mod tests {
                                             } else {
                                                 String::new()
                                             },
+                                            deletable_history: false,
                                         })
                                         .collect(),
                                     selected: selected as u16,
@@ -396,6 +433,7 @@ mod tests {
             items: vec![Candidate {
                 text: "用語".to_string(),
                 annotation: String::new(),
+                deletable_history: false,
             }],
             selected: 0,
             page_size: 9,

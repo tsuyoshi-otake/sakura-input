@@ -4,9 +4,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use dictc::{
-    compile_with_details, merge_entries, parse_category_entries, parse_connection, parse_entries,
-    parse_mozc_connection, parse_mozc_entries, wordnet::import_lmf_gzip, SourceDetail, SourceEntry,
-    MAX_DICTIONARY_IMAGE_BYTES,
+    compile_with_details, extract_entry_details, merge_entries, parse_category_entries,
+    parse_connection, parse_entries, parse_mozc_connection, parse_mozc_entries,
+    wordnet::import_lmf_gzip, SourceDetail, SourceEntry, MAX_DICTIONARY_IMAGE_BYTES,
 };
 use sakura_core::dictionary::DetailRelationKind;
 
@@ -72,6 +72,12 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let mut wordnet_lmf_path = None;
     let mut wordnet_report_path = None;
     let mut glossary_directory = None;
+    let mut llm_release_directory = None;
+    let mut llm_targets_directory = None;
+    let mut llm_report_path = None;
+    let mut curated_detail_paths = Vec::new();
+    let mut curated_detail_report_path = None;
+    let mut detail_coverage_output = None;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         match argument.to_str() {
@@ -140,11 +146,42 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 next_path(&mut args, &argument)?,
                 "glossary directory",
             )?,
+            Some("--llm-detail-release-dir") => set_once(
+                &mut llm_release_directory,
+                next_path(&mut args, &argument)?,
+                "committed LLM release directory",
+            )?,
+            Some("--llm-detail-target-dir") => set_once(
+                &mut llm_targets_directory,
+                next_path(&mut args, &argument)?,
+                "committed LLM target directory",
+            )?,
+            Some("--llm-detail-report") => set_once(
+                &mut llm_report_path,
+                next_path(&mut args, &argument)?,
+                "LLM detail import report",
+            )?,
+            Some("--curated-detail-source") => {
+                curated_detail_paths.push(next_path(&mut args, &argument)?);
+            }
+            Some("--curated-detail-report") => set_once(
+                &mut curated_detail_report_path,
+                next_path(&mut args, &argument)?,
+                "curated detail import report",
+            )?,
+            Some("--detail-coverage-output") => set_once(
+                &mut detail_coverage_output,
+                next_path(&mut args, &argument)?,
+                "detail coverage output",
+            )?,
             Some("--help" | "-h") => {
                 println!(
                     "Usage: dictc (--category FILE | --system FILE | --supplement FILE | --mozc-system FILE)... \
                        (--connection FILE | --mozc-connection FILE) --output FILE \
-                       [--wordnet-lmf FILE --wordnet-report FILE] [--glossary-dir DIR]"
+                       [--wordnet-lmf FILE --wordnet-report FILE] [--glossary-dir DIR] \
+                       [--curated-detail-source FILE... --curated-detail-report FILE] \
+                       [--llm-detail-release-dir DIR --llm-detail-target-dir DIR --llm-detail-report FILE] \
+                       [--detail-coverage-output FILE]"
                 );
                 return Ok(());
             }
@@ -162,6 +199,24 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let output_path = output_path.ok_or("--output is required")?;
     if wordnet_lmf_path.is_some() != wordnet_report_path.is_some() {
         return Err("--wordnet-lmf and --wordnet-report must be specified together".to_owned());
+    }
+    if !(llm_release_directory.is_some()
+        && llm_targets_directory.is_some()
+        && llm_report_path.is_some())
+        && (llm_release_directory.is_some()
+            || llm_targets_directory.is_some()
+            || llm_report_path.is_some())
+    {
+        return Err(
+            "--llm-detail-release-dir, --llm-detail-target-dir, and --llm-detail-report must be specified together"
+                .to_owned(),
+        );
+    }
+    if curated_detail_paths.is_empty() != curated_detail_report_path.is_none() {
+        return Err(
+            "--curated-detail-source and --curated-detail-report must be specified together"
+                .to_owned(),
+        );
     }
 
     let mut supplement_entries = Vec::<SourceEntry>::new();
@@ -186,7 +241,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     // This lets a large supplemental lexicon improve recall without replacing
     // tuned core costs or requiring its source files to pre-filter every base
     // dictionary identity.
-    let entries = merge_entries(supplement_entries, system_entries)
+    let mut entries = merge_entries(supplement_entries, system_entries)
         .and_then(|merged| merge_entries(merged, overlay_entries))
         .map_err(|error| error.to_string())?;
     let (connection_path, connection_format) = connection_path;
@@ -204,6 +259,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         ),
     }
     .map_err(|error| error.to_string())?;
+    let curated_details = curated_entry_details(&curated_detail_paths, &mut entries)?;
+    let curated_input_count = curated_details.len();
     let mut details = glossary_details(glossary_directory.as_deref(), &entries)?;
     let glossary_detail_count = details.len();
     let glossary_relations = RelationCounts::from_details(&details);
@@ -221,6 +278,50 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let wordnet_detail_count = wordnet_details.len();
     let wordnet_relations = RelationCounts::from_details(&wordnet_details);
     let wordnet_suppressed_by_glossary = merge_details(&mut details, wordnet_details);
+    // The WordNet report describes only the pinned glossary/WordNet merge.
+    // Keep that provenance boundary stable even when a later, independently
+    // reviewed LLM release adds more exact-entry details.
+    let source_backed_detail_count = details.len();
+    let curated_suppressed_by_existing = merge_details(&mut details, curated_details);
+    if let Some(path) = curated_detail_report_path.as_deref() {
+        atomic_write(
+            path,
+            curated_detail_report_json(curated_input_count, curated_suppressed_by_existing)
+                .as_bytes(),
+        )?;
+    }
+    if let Some(path) = detail_coverage_output.as_deref() {
+        atomic_write(
+            path,
+            &dictc::llm_detail_targets::details_coverage_tsv(&details)?,
+        )?;
+    }
+    if let (Some(release_directory), Some(targets_directory), Some(report_path)) = (
+        llm_release_directory.as_deref(),
+        llm_targets_directory.as_deref(),
+        llm_report_path.as_deref(),
+    ) {
+        let targets = dictc::llm_detail_targets::load_committed_targets(targets_directory)
+            .map_err(|error| format!("{}: {error}", targets_directory.display()))?;
+        let llm_text = dictc::llm_details::load_committed_release_jsonl(
+            release_directory,
+            targets_directory,
+            &targets,
+        )?;
+        let imported = dictc::llm_details::import_release_jsonl(
+            &release_directory.display().to_string(),
+            &llm_text,
+            &targets,
+            &entries,
+            &details,
+        )
+        .map_err(|error| error.to_string())?;
+        let _suppressed_after_import = merge_details(&mut details, imported.details);
+        atomic_write(
+            report_path,
+            dictc::llm_details::report_json(imported.report).as_bytes(),
+        )?;
+    }
     if let Some(report) = wordnet_report.as_ref() {
         let report_path = wordnet_report_path.expect("paired argument checked above");
         atomic_write(
@@ -232,7 +333,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 wordnet_detail_count,
                 wordnet_relations,
                 wordnet_suppressed_by_glossary,
-                details.len(),
+                source_backed_detail_count,
             )
             .as_bytes(),
         )?;
@@ -256,6 +357,31 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         output_path.display()
     );
     Ok(())
+}
+
+fn curated_entry_details(
+    paths: &[PathBuf],
+    entries: &mut [SourceEntry],
+) -> Result<Vec<SourceDetail>, String> {
+    let mut reviewed = Vec::new();
+    for path in paths {
+        let source = path.display().to_string();
+        reviewed
+            .extend(parse_entries(&source, &read_utf8(path)?).map_err(|error| error.to_string())?);
+    }
+    extract_entry_details(entries, &reviewed).map_err(|error| error.to_string())
+}
+
+fn curated_detail_report_json(input_records: usize, suppressed_by_existing: usize) -> String {
+    let emitted_details = input_records.saturating_sub(suppressed_by_existing);
+    format!(
+        concat!(
+            "{{\n  \"schema_version\": \"sakura.curated-detail-import.v1\",\n",
+            "  \"input_records\": {},\n  \"emitted_details\": {},\n",
+            "  \"suppressed_by_existing\": {}\n}}\n"
+        ),
+        input_records, emitted_details, suppressed_by_existing
+    )
 }
 
 fn glossary_details(
