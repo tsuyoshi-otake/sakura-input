@@ -17,11 +17,11 @@
 
 ## Issue #28 選択候補の辞書詳細（実装・実データ検証済み）
 
-- 詳細はSakura独自の候補ポップアップと同一HWNDで、選択中の候補1件だけに補助表示する。候補の順序、選択、ページ、入力フォーカス、click-through、GDI描画境界を変えない。説明は画面上で最大2行。配置は右、左、下の順に試し、収まらなければ表示しない。
+- 詳細はSakura独自の候補ポップアップと同一HWNDで、選択中の候補1件だけに補助表示する。候補の順序、選択、ページ、入力フォーカス、click-through、GDI描画境界を変えない。候補一覧はページ全体から幅を決め、選択移動で基準矩形や列位置を動かさない。辞書説明は一覧annotationへ重複させず、一定幅の詳細ペインで全文を折り返す。モニター作業領域に物理的に収まらない場合だけ末尾を省略する。配置は右、左、下の順に試し、収まらなければ表示しない。
 - 辞書の原文説明は表示用上限を持たない。一方、wireへはUTF-8安全なプレビューと明示的なtruncated flagだけを送り、暗黙に切り詰めない。UIAは選択候補の詳細を公開し、プレビューが省略されていることを保持する。候補全件へ詳細を複製しない。
 - detailは最終ENTR tableのexact entry ordinalで結び、surface文字列だけで照合しない。複合候補、ordinal不一致、旧辞書、壊れたoptional table、空または不正なdetailはfail-closedでdetailなしにする。
 - 別名／関連語／類似語／反対語は明示的な直接データだけであり、推測、表記類似、埋め込み類似、カテゴリ、推移的探索で補わない。表示は各種最大3語。固定したsmile-chatとJapanese WordNet 1.1を統合し、正規14カテゴリ・1,635,239 entriesに36,606 detailsを生成する。説明なし・同形異義・多義で一意に解決できないentryはdetailなしにする。
-- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。実データは2-pass決定性、94,737,211 bytes、SHA-256 `3bec6909000519ea706e15fbee1c1ba4c5391ef5fd790313f73190e3cfb944fe`を確認済みである。
+- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。一覧annotationの重複説明を除去した実データは2-pass決定性、93,001,395 bytes、SHA-256 `f8894a485c6e2ae98d499a74dc72dad74b2f6260f40cc4a00c5f4c86765c5a2f`を確認済みである。
 
 ## 最優先タスク：Issue #24 ローカル DeBERTa 長文変換 reranker（実装進行中）
 

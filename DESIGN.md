@@ -1089,9 +1089,14 @@ The renderer may show a non-interactive dictionary-detail panel only for the
 currently selected candidate, within the same Sakura-owned HWND as the candidate
 popup. It keeps the popup non-activating and click-through, uses the same
 low-contrast palette and GDI boundary, and must not alter candidate selection,
-ordering, paging, or TSF semantics. The definition is limited to two visual
-lines. Placement attempts the candidate popup's right, then left, then below;
-when no placement fits the monitor work area, the detail panel is absent.
+ordering, paging, or TSF semantics. Candidate width and annotation-column
+geometry are derived from the complete current page, even in compact presentation,
+so selection changes cannot move the list. Long dictionary prose is absent from
+the inline annotation column; short state labels such as history remain there.
+The fixed-width detail panel wraps every available definition line and ellipsizes
+only when the monitor work area is physically too short. Placement attempts the
+candidate popup's right, then left, then below; when no placement fits the monitor
+work area, the detail panel is absent.
 
 The compiled image keeps optional detail records keyed by the exact final ENTR
 ordinal, not by surface text. A detail is therefore omitted (fail closed) for a
@@ -1113,7 +1118,7 @@ omission, wire-frame limits, DPI/work-area placement, and UI Automation exposure
 The reproducible release build combines pinned smile-chat definitions, aliases,
 and resolved related terms with pinned Japanese WordNet 1.1 definitions and
 same-synset similar terms. The verified 14-category image contains 1,635,239
-entries and 36,606 exact-entry details in 94,737,211 bytes. Entries without an
+entries and 36,606 exact-entry details in 93,001,395 bytes. Entries without an
 unambiguous source-backed meaning remain detail-free; this count is not a claim
 that every dictionary entry has a definition.
 

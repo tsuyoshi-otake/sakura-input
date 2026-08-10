@@ -87,8 +87,8 @@
     },
     "overlay_tsv": {
       "file": "it-terms.tsv",
-      "bytes": 8702958,
-      "sha256": "88220bf7ae4f37c7a0e9d87127086b80921714715875ea96898c0c86965cba10"
+      "bytes": 2232237,
+      "sha256": "d3d207db79803ed131cccf808249fcd23c0077a70ee0f8a16f61118423992ba8"
     },
     "overlay_report": {
       "file": "it-terms.report.json",
@@ -97,8 +97,8 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 39983337,
-      "sha256": "fe37f0588da712490babb2a384f51507b8a60bdbad2c325e046490664456bcbb"
+      "bytes": 38247521,
+      "sha256": "dafef81c3d310ff98cec6cfac9b9eacdf2fd754e90c07ba779ef0c49b692902e"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
@@ -158,8 +158,8 @@
       },
       {
         "file": "11_IT・技術用語.tsv",
-        "bytes": 8712499,
-        "sha256": "07a3f737e955a77aadc5a11976dced647990488eb7356c0e0d3160f09ded1706"
+        "bytes": 2242216,
+        "sha256": "15a2b9f8d1d857971ca69050dda4cf4761d0d4896e648ff0c49f3983c6a0c34e"
       },
       {
         "file": "12_専門用語.tsv",

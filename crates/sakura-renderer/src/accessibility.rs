@@ -233,8 +233,8 @@ fn announcement(candidates: &CandidateList, detail: Option<&CandidateDetail>) ->
             result.push(')');
         }
         result.push_str(". Definition: ");
-        // UI Automation intentionally receives the complete definition, not
-        // the two-line visual truncation used by the non-interactive popup.
+        // UI Automation receives every definition character carried by the
+        // protocol, independent of any work-area ellipsis in the visual popup.
         // When the protocol carries only a bounded preview, the announcement
         // explicitly says that more source text exists.
         result.push_str(&detail.definition);

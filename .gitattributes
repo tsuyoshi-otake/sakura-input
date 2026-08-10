@@ -1,0 +1,3 @@
+# The eighth TSV column is an optional annotation. An empty value is encoded
+# by the schema-required final tab, so it is data rather than trailing padding.
+data/it-terms.tsv whitespace=-blank-at-eol

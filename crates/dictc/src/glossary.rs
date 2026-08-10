@@ -3,11 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use sakura_core::dictionary::EntryFlags;
-use sakura_proto::MAX_PREEDIT_BYTES;
-
 use super::{validate_text, Error, SourceDetail, SourceDetailRelation, SourceEntry};
 use sakura_core::dictionary::DetailRelationKind;
+use sakura_core::dictionary::EntryFlags;
 
 const MAX_JSON_DEPTH: usize = 64;
 /// Kana input should prefer a native Japanese surface when Mozc already has
@@ -178,7 +176,10 @@ impl Importer {
                         .find_map(|sense| sense.reading.as_deref())
                 })
                 .or_else(|| is_kana_text(&term.term).then_some(term.term.as_str()));
-            let annotation = annotation(term);
+            // Glossary definitions are carried by the typed candidate-detail
+            // record. Repeating them in the narrow candidate annotation column
+            // creates clipped, duplicate prose and unstable visual hierarchy.
+            let annotation = String::new();
             let normalized_reading = raw_reading.and_then(normalize_reading);
             if let Some(reading) = normalized_reading.as_deref() {
                 insert_pending(
@@ -440,21 +441,6 @@ fn katakana_surface(reading: &str) -> String {
             _ => character,
         })
         .collect()
-}
-
-fn annotation(term: &GlossaryTerm) -> String {
-    let Some(sense) = term.senses.first() else {
-        return String::new();
-    };
-    let mut value = sense.definition.replace(['\t', '\r', '\n'], " ");
-    if value.len() > MAX_PREEDIT_BYTES {
-        let mut end = MAX_PREEDIT_BYTES;
-        while !value.is_char_boundary(end) {
-            end -= 1;
-        }
-        value.truncate(end);
-    }
-    value
 }
 
 fn insert_pending(
