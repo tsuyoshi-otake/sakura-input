@@ -12,6 +12,7 @@ members = [
     "crates/sakura-logon",
     "crates/sakura-settings",
     "crates/dictc",
+    "crates/sakura-neural-worker",
 ]
 
 [workspace.package]
@@ -22,10 +23,10 @@ license = "MIT"
 repository = "https://github.com/tsuyoshi-otake/sakura-input"
 authors = ["Sakura Input contributors"]
 
-# Dependency policy (DESIGN.md 3.1): the only external crates permitted in a
-# shipping binary are the Windows binding family (`windows`, `windows-core`,
-# `windows-sys` and their `windows-*` support crates, which are transitive
-# dependencies of `windows` itself). CI enforces this with ci/dep-policy.ps1.
+# Dependency policy (DESIGN.md 3.1): core shipping binaries admit only the
+# Windows binding family. The optional out-of-process neural worker has a
+# separate closed allowlist for dynamic ORT bindings, strict manifest parsing,
+# hashing, and tokenization. CI enforces both sets with ci/dep-policy.ps1.
 [workspace.dependencies]
 sakura-core = { path = "crates/sakura-core" }
 sakura-proto = { path = "crates/sakura-proto" }

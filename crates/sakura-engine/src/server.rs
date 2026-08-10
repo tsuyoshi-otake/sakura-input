@@ -53,6 +53,7 @@ use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::input_history::InputHistoryService;
 use crate::learning::LearningService;
+use crate::long_conversion::LongConversionService;
 use crate::prediction::PredictionService;
 use crate::ui::UiBoard;
 
@@ -77,6 +78,8 @@ struct Shared {
     input_history: Option<Arc<InputHistoryService>>,
     /// Request side of the one process-wide prediction worker.
     prediction: Option<Arc<PredictionService>>,
+    /// Optional isolated ONNX reranker; its child process remains lazy.
+    long_conversion: Option<Arc<LongConversionService>>,
     preferences: Preferences,
     profiles: Arc<[AppProfile]>,
     verbose: bool,
@@ -274,6 +277,7 @@ impl Server {
                 learning,
                 input_history,
                 prediction,
+                long_conversion: None,
                 preferences,
                 profiles,
                 verbose,
@@ -296,6 +300,13 @@ impl Server {
         Arc::get_mut(&mut self.shared)
             .expect("a newly constructed server has no worker thread or shared clone")
             .name = pipe_name;
+        self
+    }
+
+    pub fn with_long_conversion(mut self, long_conversion: Arc<LongConversionService>) -> Self {
+        Arc::get_mut(&mut self.shared)
+            .expect("a newly constructed server has no worker thread or shared clone")
+            .long_conversion = Some(long_conversion);
         self
     }
 
@@ -422,6 +433,9 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance) {
     };
     if let Some(history) = shared.input_history.as_ref() {
         dispatcher.set_input_history(Arc::clone(history));
+    }
+    if let Some(long_conversion) = shared.long_conversion.as_ref() {
+        dispatcher.set_long_conversion(Arc::clone(long_conversion));
     }
     let mut connection = Buffers::new();
 

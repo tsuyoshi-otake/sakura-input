@@ -1,0 +1,22 @@
+[package]
+name = "sakura-neural-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "sakura_neural_worker"
+path = "src/main.rs"
+
+[dependencies]
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic"] }
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.140"
+sha2 = "=0.10.9"
+unicode-general-category = "=1.1.0"
+
+[lints]
+workspace = true

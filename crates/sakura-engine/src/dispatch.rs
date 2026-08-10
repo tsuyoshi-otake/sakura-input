@@ -51,6 +51,7 @@ use sakura_proto::{
 use crate::dictionary::ConversionService;
 use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
 use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
+use crate::long_conversion::LongConversionService;
 use crate::prediction::{PredictionResult, PredictionService, PredictionSource};
 use crate::session::{scope_is_sensitive, text_hash, Session, SessionTable};
 
@@ -126,6 +127,8 @@ pub struct Dispatcher {
     learning: Option<Arc<LearningService>>,
     input_history: Option<Arc<InputHistoryService>>,
     prediction: Option<Arc<PredictionService>>,
+    long_conversion: Option<Arc<LongConversionService>>,
+    long_conversion_owner: u64,
     prediction_enabled: bool,
     suggest_accept: SuggestAccept,
     app_profiles: Arc<[AppProfile]>,
@@ -235,6 +238,11 @@ impl Dispatcher {
         self.input_history = Some(input_history);
     }
 
+    pub(crate) fn set_long_conversion(&mut self, long_conversion: Arc<LongConversionService>) {
+        self.long_conversion_owner = long_conversion.allocate_owner();
+        self.long_conversion = Some(long_conversion);
+    }
+
     /// Builds a dispatcher from already-built parts. Used by tests that need
     /// a romaji table, key map, or normalizer the shipped defaults cannot
     /// reach (for example the MS-IME preset binds no key to a direct
@@ -249,6 +257,8 @@ impl Dispatcher {
             learning: None,
             input_history: None,
             prediction: None,
+            long_conversion: None,
+            long_conversion_owner: 0,
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,
             app_profiles: Arc::from([]),
@@ -562,6 +572,8 @@ impl Dispatcher {
             learning: self.learning.as_deref(),
             input_history: self.input_history.as_deref(),
             prediction: self.prediction.as_deref(),
+            long_conversion: self.long_conversion.as_deref(),
+            long_conversion_owner: self.long_conversion_owner,
             prediction_enabled: session.prediction_enabled,
             suggest_accept: session.suggest_accept,
         };
@@ -617,6 +629,7 @@ impl Dispatcher {
             },
         ) {
             Ok(()) => {
+                schedule_long_conversion(id, session, &services);
                 if let Some(history) = services.input_history {
                     history.record_key(
                         session.history_session_id(),
@@ -750,6 +763,8 @@ impl Dispatcher {
             learning: self.learning.as_deref(),
             input_history: self.input_history.as_deref(),
             prediction: self.prediction.as_deref(),
+            long_conversion: None,
+            long_conversion_owner: 0,
             prediction_enabled: probe.prediction_enabled,
             suggest_accept: probe.suggest_accept,
         };
@@ -951,6 +966,8 @@ struct KeyServices<'a> {
     learning: Option<&'a LearningService>,
     input_history: Option<&'a InputHistoryService>,
     prediction: Option<&'a PredictionService>,
+    long_conversion: Option<&'a LongConversionService>,
+    long_conversion_owner: u64,
     prediction_enabled: bool,
     suggest_accept: SuggestAccept,
 }
@@ -1133,6 +1150,29 @@ fn conversion_options(session: &Session, initial_right_id: u16) -> ConversionOpt
     options
 }
 
+fn schedule_long_conversion(session_id: SessionId, session: &Session, services: &KeyServices<'_>) {
+    let Some(long_conversion) = services.long_conversion else {
+        return;
+    };
+    if !session.scope_classified()
+        || session.scope() != InputScope::Normal
+        || session.converting
+        || session.shifted_ascii
+        || session.preedit.is_empty()
+        || usize::from(session.cursor) != session.preedit.as_str().chars().count()
+    {
+        return;
+    }
+    let options = conversion_options(session, session.carry_right_id());
+    let _ = long_conversion.schedule(
+        services.long_conversion_owner,
+        session_id,
+        session.prediction_generation,
+        session.preedit.as_str(),
+        options,
+    );
+}
+
 fn preferred_candidate_index(
     candidates: &[ConversionCandidate],
     requested: i16,
@@ -1159,6 +1199,30 @@ fn preferred_candidate_index(
         }
     }
     requested.rem_euclid(candidates.len() as i16) as usize
+}
+
+fn has_authoritative_candidate_preference(
+    candidates: &[ConversionCandidate],
+    requested: i16,
+    cached: Option<(u64, u16)>,
+    learned: LearningPreference,
+) -> bool {
+    if requested != 0 {
+        return true;
+    }
+    if learned.exact.is_some_and(|index| index < candidates.len())
+        || learned
+            .general
+            .is_some_and(|index| index < candidates.len())
+    {
+        return true;
+    }
+    cached.is_some_and(|(surface_hash, surface_len)| {
+        candidates.iter().any(|candidate| {
+            u16::try_from(candidate.text().len()).ok() == Some(surface_len)
+                && text_hash(candidate.text()) == surface_hash
+        })
+    })
 }
 
 #[derive(Clone, Copy, Default)]
@@ -2106,10 +2170,13 @@ fn apply_action(
         Action::Convert => {
             session.hide_suggestions();
             begin_conversion(
+                session_id,
                 session,
                 services.table,
                 services.conversion,
                 services.learning,
+                services.long_conversion,
+                services.long_conversion_owner,
                 scratch,
                 0,
                 out,
@@ -2117,10 +2184,13 @@ fn apply_action(
         }
         Action::ConvertPrev => {
             begin_conversion(
+                session_id,
                 session,
                 services.table,
                 services.conversion,
                 services.learning,
+                services.long_conversion,
+                services.long_conversion_owner,
                 scratch,
                 -1,
                 out,
@@ -2632,10 +2702,13 @@ fn commit_converted_segments(
 }
 
 fn begin_conversion(
+    session_id: SessionId,
     session: &mut Session,
     table: &Table,
     conversion: Option<&ConversionService>,
     learning: Option<&LearningService>,
+    long_conversion: Option<&LongConversionService>,
+    long_conversion_owner: u64,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     initial_selection: i16,
     out: &mut OutputBuf,
@@ -2689,8 +2762,29 @@ fn begin_conversion(
                         )
                     },
                 );
-                let selected =
+                let authoritative = has_authoritative_candidate_preference(
+                    candidates,
+                    initial_selection,
+                    cached,
+                    learned,
+                );
+                let preferred =
                     preferred_candidate_index(candidates, initial_selection, cached, learned);
+                let selected = if !authoritative {
+                    long_conversion
+                        .and_then(|service| {
+                            service.selection(
+                                long_conversion_owner,
+                                session_id,
+                                session.prediction_generation,
+                                session.preedit.as_str(),
+                                candidates,
+                            )
+                        })
+                        .unwrap_or(preferred)
+                } else {
+                    preferred
+                };
                 chosen_selection = i16::try_from(selected).unwrap_or(i16::MAX);
                 let candidate = &candidates[selected];
                 for segment in candidate.segments() {
@@ -2790,8 +2884,19 @@ fn build_reconversion(
     session.cursor =
         u16::try_from(session.preedit.as_str().chars().count()).map_err(|_| ErrorCode::TooLarge)?;
 
-    begin_conversion(session, table, Some(conversion), learning, scratch, 0, out)
-        .map_err(|_| ErrorCode::TooLarge)?;
+    begin_conversion(
+        SessionId::default(),
+        session,
+        table,
+        Some(conversion),
+        learning,
+        None,
+        0,
+        scratch,
+        0,
+        out,
+    )
+    .map_err(|_| ErrorCode::TooLarge)?;
     let normalizer = session.normalizer;
     render_preedit(session, table, &normalizer, Some(conversion), scratch, out)
         .map_err(|_| ErrorCode::TooLarge)

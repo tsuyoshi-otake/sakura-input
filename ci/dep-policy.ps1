@@ -15,7 +15,7 @@
         contribute no bytes to any shipped artifact.
 
     Anything else fails the build. The point is to catch the accident — a
-    `serde` or a `once_cell` arriving as somebody's transitive dependency —
+    an unreviewed parser or runtime crate arriving as a transitive dependency —
     before it is load-bearing and expensive to remove.
 
 .PARAMETER SelfTest
@@ -52,6 +52,45 @@ $BuildTimeOnly = [ordered]@{
 
 # `windows`, `windows-core`, `windows_x86_64_msvc`, ... — one family, one rule.
 $WindowsFamilyPattern = '^windows([-_].+)?$'
+
+# The isolated sakura_neural_worker dynamically loads the installer-provided
+# ONNX Runtime DLL. These bindings never enter the TSF DLL or engine graph.
+$IsolatedWorkerRuntime = [ordered]@{
+    'ort'                   = 'isolated neural worker binding; load-dynamic only, no bundled runtime'
+    'ort-sys'               = 'FFI declarations for the isolated worker; dynamic loading only'
+    'autocfg'               = 'ort numeric build-time configuration'
+    'cfg-if'                = 'ort platform configuration'
+    'libloading'            = 'ort LoadLibrary implementation for worker sibling DLL'
+    'matrixmultiply'        = 'ndarray arithmetic required by ort public API'
+    'ndarray'               = 'ort tensor API'
+    'num-complex'           = 'ndarray numeric support'
+    'num-integer'           = 'ndarray numeric support'
+    'num-traits'            = 'ndarray numeric support'
+    'once_cell'             = 'ort process-local runtime initialization'
+    'pin-project-lite'      = 'ort tracing dependency'
+    'portable-atomic'       = 'ort runtime initialization'
+    'portable-atomic-util'  = 'ort runtime initialization'
+    'rawpointer'            = 'ndarray implementation detail'
+    'smallvec'              = 'ort tensor shape storage'
+    'tracing'               = 'ort diagnostic API'
+    'tracing-core'          = 'ort diagnostic API'
+    'sha2'                  = 'isolated worker manifest SHA-256 verification'
+    'digest'                = 'sha2 implementation detail'
+    'block-buffer'          = 'sha2 implementation detail'
+    'crypto-common'         = 'sha2 implementation detail'
+    'generic-array'         = 'sha2 implementation detail'
+    'typenum'               = 'sha2 implementation detail'
+    'version_check'         = 'sha2 build-time configuration'
+    'cpufeatures'           = 'sha2 CPU dispatch'
+    'libc'                  = 'transitive platform support for isolated worker'
+    'unicode-general-category' = 'isolated worker reproduces Transformers BasicTokenizer Unicode categories'
+    'serde'                 = 'isolated worker strict model-manifest deserialization'
+    'serde_derive'          = 'derive-only manifest schema implementation'
+    'serde_json'            = 'isolated worker strict JSON manifest parser'
+    'itoa'                  = 'serde_json integer formatting implementation detail'
+    'memchr'                = 'serde_json parser implementation detail'
+    'ryu'                   = 'serde_json float formatting implementation detail'
+}
 
 function Get-WorkspaceCrateName {
     <#
@@ -114,6 +153,7 @@ function Get-DisallowedPackage {
         if ($WorkspaceCrate -contains $name) { continue }
         if ($name -match $WindowsFamilyPattern) { continue }
         if ($BuildTimeOnly.Contains($name)) { continue }
+        if ($IsolatedWorkerRuntime.Contains($name)) { continue }
         $offenders.Add($name)
     }
     return , $offenders.ToArray()
@@ -126,7 +166,8 @@ function Invoke-SelfTest {
     $allowed = @(
         'sakura-core', 'sakura-tsf',
         'windows', 'windows-core', 'windows_x86_64_msvc', 'windows-implement',
-        'proc-macro2', 'quote', 'syn', 'unicode-ident'
+        'proc-macro2', 'quote', 'syn', 'unicode-ident',
+        'ort', 'serde', 'serde_json', 'sha2', 'unicode-general-category'
     )
     $flagged = Get-DisallowedPackage -PackageName $allowed -WorkspaceCrate $workspace
     if ($flagged.Count -ne 0) {
@@ -134,7 +175,7 @@ function Invoke-SelfTest {
     }
 
     # The case that matters: a plausible third-party crate must not slip past.
-    $forbidden = @('serde', 'once_cell', 'winapi', 'window-shopping')
+    $forbidden = @('toml', 'regex', 'winapi', 'window-shopping')
     $flagged = Get-DisallowedPackage `
         -PackageName ($allowed + $forbidden) -WorkspaceCrate $workspace
     foreach ($name in $forbidden) {

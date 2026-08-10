@@ -246,6 +246,20 @@ fn run(
     } else {
         None
     };
+    let long_conversion_runtime =
+        match sakura_engine::long_conversion::LongConversionRuntime::discover(Arc::clone(
+            &conversion,
+        )) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                if verbose {
+                    eprintln!(
+                        "sakura-engine: long-conversion reranker unavailable; using local ranking: {error}"
+                    );
+                }
+                None
+            }
+        };
     let server = match (prediction_runtime.as_ref(), input_history.as_ref()) {
         (Some(runtime), Some(history)) => {
             Server::with_runtime_configuration_and_profiles_and_history(
@@ -282,6 +296,10 @@ fn run(
             Arc::clone(&profiles),
         )?,
     };
+    let server = match long_conversion_runtime.as_ref() {
+        Some(runtime) => server.with_long_conversion(runtime.service()),
+        None => server,
+    };
     let server = match test_pipe {
         Some(pipe_name) => server.with_explicit_test_pipe(pipe_name.to_owned()),
         None => server,
@@ -316,6 +334,7 @@ fn run(
         },
     );
     let result = server.run();
+    drop(long_conversion_runtime);
     // The watcher owns a polling thread; dropping it here signals and joins
     // that thread before the engine process reaches its terminal state.
     drop(user_dictionary_watcher);
