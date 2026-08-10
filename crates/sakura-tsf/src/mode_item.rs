@@ -377,6 +377,7 @@ pub fn icon_for(mode: Mode) -> Result<HICON> {
 
 struct Canvas {
     memory: HDC,
+    color: HBITMAP,
     mask: HBITMAP,
 }
 
@@ -387,16 +388,28 @@ impl Canvas {
         unsafe {
             Self {
                 memory: CreateCompatibleDC(Some(screen)),
-                // A monochrome HICON has no colour bitmap. Its single mask is
-                // twice the icon height: the upper half is the AND mask and
-                // the lower half is the XOR mask. This is also the format TSF
-                // requires for TF_LBI_STYLE_TEXTCOLORICON.
-                mask: CreateBitmap(size.cx, size.cy * 2, 1, 1, None),
+                // Keep both planes one-bit. Modern Windows 11 taskbars apply
+                // TF_LBI_STYLE_TEXTCOLORICON to black pixels in hbmColor, but
+                // do not recolour a legacy mask-only monochrome HICON.
+                color: CreateBitmap(size.cx, size.cy, 1, 1, None),
+                mask: CreateBitmap(size.cx, size.cy, 1, 1, None),
             }
         }
     }
 
     fn compose(&self, size: SIZE, text: &str) -> Result<HICON> {
+        // The colour plane is intentionally black everywhere. The AND mask
+        // below decides which pixels are visible, and TSF converts the visible
+        // black glyph pixels to the selected Windows theme's text colour.
+        // SAFETY: `color` is live and is restored before any other bitmap is
+        // selected or the canvas is released.
+        let previous_color = unsafe { SelectObject(self.memory, self.color.into()) };
+        // SAFETY: the monochrome colour bitmap is selected into this live DC.
+        unsafe {
+            let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy, BLACKNESS);
+            SelectObject(self.memory, previous_color);
+        }
+
         // SAFETY: `mask` is selected only for the duration of drawing and is
         // restored before the canvas drops it.
         let previous = unsafe { SelectObject(self.memory, self.mask.into()) };
@@ -407,13 +420,10 @@ impl Canvas {
             bottom: size.cy,
         };
         // SAFETY: the monochrome bitmap is selected into this live memory DC.
-        // For a monochrome icon, AND=1/XOR=0 leaves the taskbar pixel unchanged
-        // (transparent), while AND=0/XOR=0 produces black. TSF replaces those
-        // black glyph pixels with the selected Windows theme's text colour.
-        // Initializing both halves explicitly also avoids depending on bitmap
-        // allocation contents.
+        // AND=1 leaves the taskbar pixel unchanged (transparent), while AND=0
+        // exposes the matching black pixel in the colour plane. Initializing
+        // the whole mask explicitly avoids depending on allocation contents.
         unsafe {
-            let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy * 2, BLACKNESS);
             let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy, WHITENESS);
         }
         draw_centered(self.memory, &rect, text, COLORREF(0));
@@ -425,10 +435,10 @@ impl Canvas {
             xHotspot: 0,
             yHotspot: 0,
             hbmMask: self.mask,
-            hbmColor: HBITMAP::default(),
+            hbmColor: self.color,
         };
-        // SAFETY: the double-height monochrome mask is live and unselected.
-        // Windows copies it into the returned caller-owned icon.
+        // SAFETY: both monochrome planes are live and unselected. Windows
+        // copies them into the returned caller-owned icon.
         unsafe { CreateIconIndirect(&info) }
     }
 }
@@ -437,6 +447,7 @@ impl Drop for Canvas {
     fn drop(&mut self) {
         // SAFETY: every handle came from `Canvas::new` and is released once.
         unsafe {
+            let _ = DeleteObject(self.color.into());
             let _ = DeleteObject(self.mask.into());
             let _ = DeleteDC(self.memory);
         }
@@ -525,9 +536,9 @@ mod tests {
                 cy: GetSystemMetrics(SM_CYSMICON).max(16),
             }
         };
-        // A true monochrome HICON has no colour bitmap. Its upper mask half
-        // contains the transparent background and the glyph's opaque pixels.
-        let monochrome = info.hbmColor.is_invalid();
+        // The transparent mask contains the background and the glyph's opaque
+        // pixels; the one-bit colour plane lets TSF apply its theme text colour.
+        let has_theme_color_plane = !info.hbmColor.is_invalid();
         let dc = unsafe { CreateCompatibleDC(None) };
         let previous = unsafe { SelectObject(dc, info.hbmMask.into()) };
         let corners_are_transparent = [(0, 0), (size.cx - 1, 0), (0, size.cy - 1)]
@@ -553,7 +564,10 @@ mod tests {
             let _ = DestroyIcon(icon);
         }
 
-        assert!(monochrome, "text-colour icons must have no colour bitmap");
+        assert!(
+            has_theme_color_plane,
+            "Windows 11 needs a black colour plane for theme recolouring"
+        );
         assert!(
             corners_are_transparent,
             "the taskbar background must remain visible around the glyph"
