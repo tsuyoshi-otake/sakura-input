@@ -15,12 +15,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sakura_proto::Mode;
-use windows::Win32::Foundation::{COLORREF, ERROR_SUCCESS, E_FAIL, HMODULE, RECT, SIZE};
+use windows::Win32::Foundation::{ERROR_SUCCESS, E_FAIL, HMODULE};
 use windows::Win32::Graphics::Gdi::{
-    CreateBitmap, CreateCompatibleDC, CreateFontW, DeleteDC, DeleteObject, DrawTextW, GetDC,
-    PatBlt, ReleaseDC, SelectObject, SetBkMode, SetTextColor, BLACKNESS, CLIP_DEFAULT_PRECIS,
-    DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_SEMIBOLD,
-    HBITMAP, HDC, HFONT, NONANTIALIASED_QUALITY, OUT_TT_PRECIS, TRANSPARENT, WHITENESS,
+    CreateBitmap, CreateDIBSection, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
+    DIB_RGB_COLORS, HBITMAP,
 };
 use windows::Win32::System::LibraryLoader::{
     GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -36,12 +34,10 @@ use windows::Win32::UI::TextServices::{
     TF_LBMENUF_SUBMENU,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON, SM_CYSMICON,
+    CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON,
 };
 use windows_core::{w, Error, Result, PCWSTR};
 
-#[cfg(test)]
-use windows::Win32::Graphics::Gdi::GetPixel;
 #[cfg(test)]
 use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo};
 
@@ -353,8 +349,11 @@ fn add(
 /// The concise status glyph. The tooltip contains the precise full mode name.
 pub const fn label(mode: Mode) -> &'static str {
     match mode {
-        Mode::Hiragana | Mode::Katakana | Mode::HalfKatakana => "あ",
-        Mode::Direct | Mode::HalfAlnum | Mode::FullAlnum => "A",
+        Mode::Hiragana => "あ",
+        Mode::Katakana => "ア",
+        Mode::HalfKatakana => "ｱ",
+        Mode::FullAlnum => "Ａ",
+        Mode::HalfAlnum | Mode::Direct => "A",
     }
 }
 
@@ -369,109 +368,187 @@ pub const fn description(mode: Mode) -> &'static str {
     }
 }
 
-/// Creates a caller-owned, DPI-sized `あ`/`A` icon. TSF explicitly assigns
-/// `DestroyIcon` ownership to the language bar after `GetIcon` returns, so no
-/// icon handle is cached in the in-process service.
-pub fn icon_for(mode: Mode) -> Result<HICON> {
-    // SAFETY: the metrics have no input pointers and return a scalar size.
-    let size = unsafe {
-        SIZE {
-            cx: GetSystemMetrics(SM_CXSMICON).max(16),
-            cy: GetSystemMetrics(SM_CYSMICON).max(16),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AssetSize {
+    Px16,
+    Px32,
+}
+
+impl AssetSize {
+    const fn edge(self) -> i32 {
+        match self {
+            Self::Px16 => 16,
+            Self::Px32 => 32,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct IconAsset {
+    size: AssetSize,
+    pixels: &'static [u8],
+}
+
+const fn asset_size_for_metric(metric: i32) -> AssetSize {
+    if metric >= 24 {
+        AssetSize::Px32
+    } else {
+        AssetSize::Px16
+    }
+}
+
+fn asset_for(mode: Mode, size: AssetSize, light_theme: bool) -> IconAsset {
+    let pixels = match (mode, size, light_theme) {
+        (Mode::Hiragana, AssetSize::Px16, true) => {
+            include_bytes!("../assets/mode-indicator/hiragana-16-light.bgra").as_slice()
+        }
+        (Mode::Hiragana, AssetSize::Px16, false) => {
+            include_bytes!("../assets/mode-indicator/hiragana-16-dark.bgra").as_slice()
+        }
+        (Mode::Hiragana, AssetSize::Px32, true) => {
+            include_bytes!("../assets/mode-indicator/hiragana-32-light.bgra").as_slice()
+        }
+        (Mode::Hiragana, AssetSize::Px32, false) => {
+            include_bytes!("../assets/mode-indicator/hiragana-32-dark.bgra").as_slice()
+        }
+        (Mode::Katakana, AssetSize::Px16, true) => {
+            include_bytes!("../assets/mode-indicator/katakana-16-light.bgra").as_slice()
+        }
+        (Mode::Katakana, AssetSize::Px16, false) => {
+            include_bytes!("../assets/mode-indicator/katakana-16-dark.bgra").as_slice()
+        }
+        (Mode::Katakana, AssetSize::Px32, true) => {
+            include_bytes!("../assets/mode-indicator/katakana-32-light.bgra").as_slice()
+        }
+        (Mode::Katakana, AssetSize::Px32, false) => {
+            include_bytes!("../assets/mode-indicator/katakana-32-dark.bgra").as_slice()
+        }
+        (Mode::HalfKatakana, AssetSize::Px16, true) => {
+            include_bytes!("../assets/mode-indicator/half-katakana-16-light.bgra").as_slice()
+        }
+        (Mode::HalfKatakana, AssetSize::Px16, false) => {
+            include_bytes!("../assets/mode-indicator/half-katakana-16-dark.bgra").as_slice()
+        }
+        (Mode::HalfKatakana, AssetSize::Px32, true) => {
+            include_bytes!("../assets/mode-indicator/half-katakana-32-light.bgra").as_slice()
+        }
+        (Mode::HalfKatakana, AssetSize::Px32, false) => {
+            include_bytes!("../assets/mode-indicator/half-katakana-32-dark.bgra").as_slice()
+        }
+        (Mode::FullAlnum, AssetSize::Px16, true) => {
+            include_bytes!("../assets/mode-indicator/full-alnum-16-light.bgra").as_slice()
+        }
+        (Mode::FullAlnum, AssetSize::Px16, false) => {
+            include_bytes!("../assets/mode-indicator/full-alnum-16-dark.bgra").as_slice()
+        }
+        (Mode::FullAlnum, AssetSize::Px32, true) => {
+            include_bytes!("../assets/mode-indicator/full-alnum-32-light.bgra").as_slice()
+        }
+        (Mode::FullAlnum, AssetSize::Px32, false) => {
+            include_bytes!("../assets/mode-indicator/full-alnum-32-dark.bgra").as_slice()
+        }
+        (Mode::HalfAlnum, AssetSize::Px16, true) => {
+            include_bytes!("../assets/mode-indicator/half-alnum-16-light.bgra").as_slice()
+        }
+        (Mode::HalfAlnum, AssetSize::Px16, false) => {
+            include_bytes!("../assets/mode-indicator/half-alnum-16-dark.bgra").as_slice()
+        }
+        (Mode::HalfAlnum, AssetSize::Px32, true) => {
+            include_bytes!("../assets/mode-indicator/half-alnum-32-light.bgra").as_slice()
+        }
+        (Mode::HalfAlnum, AssetSize::Px32, false) => {
+            include_bytes!("../assets/mode-indicator/half-alnum-32-dark.bgra").as_slice()
+        }
+        (Mode::Direct, AssetSize::Px16, true) => {
+            include_bytes!("../assets/mode-indicator/direct-16-light.bgra").as_slice()
+        }
+        (Mode::Direct, AssetSize::Px16, false) => {
+            include_bytes!("../assets/mode-indicator/direct-16-dark.bgra").as_slice()
+        }
+        (Mode::Direct, AssetSize::Px32, true) => {
+            include_bytes!("../assets/mode-indicator/direct-32-light.bgra").as_slice()
+        }
+        (Mode::Direct, AssetSize::Px32, false) => {
+            include_bytes!("../assets/mode-indicator/direct-32-dark.bgra").as_slice()
         }
     };
-    // SAFETY: a null HWND requests the screen DC; it is released below on all
-    // paths because `Canvas::compose` returns before the explicit release only
-    // through its `Result`, which is captured first.
-    let screen = unsafe { GetDC(None) };
-    let result = Canvas::new(screen, size).compose(size, label(mode));
-    // SAFETY: `screen` came from `GetDC(None)` above.
-    unsafe { ReleaseDC(None, screen) };
-    result
+    IconAsset { size, pixels }
 }
 
-struct Canvas {
-    memory: HDC,
-    color: HBITMAP,
-    mask: HBITMAP,
+/// Creates a caller-owned icon from one original, DPI-specific ARGB asset. TSF
+/// assigns `DestroyIcon` ownership to the language bar after `GetIcon` returns,
+/// so the in-process service never caches a host-owned handle.
+pub fn icon_for(mode: Mode) -> Result<HICON> {
+    // SAFETY: the metric has no input pointers and returns one scalar size.
+    let size = asset_size_for_metric(unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16));
+    create_icon(asset_for(mode, size, system_uses_light_theme()))
 }
 
-impl Canvas {
-    fn new(screen: HDC, size: SIZE) -> Self {
-        // SAFETY: a live screen DC is sufficient for all three compatible GDI
-        // objects; `Drop` releases each one exactly once.
-        unsafe {
-            Self {
-                memory: CreateCompatibleDC(Some(screen)),
-                // Keep both planes one-bit. Modern Windows 11 taskbars apply
-                // TF_LBI_STYLE_TEXTCOLORICON to black pixels in hbmColor, but
-                // do not recolour a legacy mask-only monochrome HICON.
-                color: CreateBitmap(size.cx, size.cy, 1, 1, None),
-                mask: CreateBitmap(size.cx, size.cy, 1, 1, None),
-            }
-        }
+fn create_icon(asset: IconAsset) -> Result<HICON> {
+    let edge = asset.size.edge();
+    if asset.pixels.len() != edge as usize * edge as usize * 4 {
+        return Err(Error::from_hresult(E_FAIL));
     }
 
-    fn compose(&self, size: SIZE, text: &str) -> Result<HICON> {
-        // The AND mask below decides which pixels are visible. Windows 11 does
-        // not consistently apply TF_LBI_STYLE_TEXTCOLORICON to third-party TSF
-        // items, so choose the same foreground family as the adjacent language
-        // indicator: black for a light system theme, white for a dark one.
-        // SAFETY: `color` is live and is restored before any other bitmap is
-        // selected or the canvas is released.
-        let previous_color = unsafe { SelectObject(self.memory, self.color.into()) };
-        // SAFETY: the monochrome colour bitmap is selected into this live DC.
+    let info = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: edge,
+            // A negative height makes the DIB top-down, matching asset order.
+            biHeight: -edge,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            biSizeImage: asset.pixels.len() as u32,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut::<c_void>();
+    // SAFETY: `info` is a valid top-down 32-bit DIB descriptor and `bits` is a
+    // writable out-pointer. A null section asks GDI for process-owned storage.
+    let color = unsafe { CreateDIBSection(None, &info, DIB_RGB_COLORS, &mut bits, None, 0)? };
+    if bits.is_null() {
+        // SAFETY: `color` was created immediately above and is not selected.
         unsafe {
-            let _ = PatBlt(
-                self.memory,
-                0,
-                0,
-                size.cx,
-                size.cy,
-                glyph_plane_rop(system_uses_light_theme()),
-            );
-            SelectObject(self.memory, previous_color);
+            let _ = DeleteObject(color.into());
         }
+        return Err(Error::from_hresult(E_FAIL));
+    }
+    // SAFETY: the DIB allocation is exactly `width * height * 4` bytes and the
+    // embedded asset was length-checked above. The ranges cannot overlap.
+    unsafe {
+        std::ptr::copy_nonoverlapping(asset.pixels.as_ptr(), bits.cast::<u8>(), asset.pixels.len());
+    }
 
-        // SAFETY: `mask` is selected only for the duration of drawing and is
-        // restored before the canvas drops it.
-        let previous = unsafe { SelectObject(self.memory, self.mask.into()) };
-        let rect = RECT {
-            left: 0,
-            top: 0,
-            right: size.cx,
-            bottom: size.cy,
-        };
-        // SAFETY: the monochrome bitmap is selected into this live memory DC.
-        // AND=1 leaves the taskbar pixel unchanged (transparent), while AND=0
-        // exposes the matching black pixel in the colour plane. Initializing
-        // the whole mask explicitly avoids depending on allocation contents.
+    let mask_stride = (edge as usize).div_ceil(16) * 2;
+    let mask_bits = vec![0u8; mask_stride * edge as usize];
+    // SAFETY: `mask_bits` contains the word-aligned monochrome scanlines that
+    // `CreateBitmap` requires and remains live for the duration of the call.
+    let mask = unsafe { CreateBitmap(edge, edge, 1, 1, Some(mask_bits.as_ptr().cast::<c_void>())) };
+    if mask.is_invalid() {
+        // SAFETY: `color` is still live and unselected.
         unsafe {
-            let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy, WHITENESS);
+            let _ = DeleteObject(color.into());
         }
-        draw_centered(self.memory, &rect, text, COLORREF(0));
-        // SAFETY: restores the previous GDI object before `mask` is released.
-        unsafe { SelectObject(self.memory, previous) };
-
-        let info = ICONINFO {
-            fIcon: true.into(),
-            xHotspot: 0,
-            yHotspot: 0,
-            hbmMask: self.mask,
-            hbmColor: self.color,
-        };
-        // SAFETY: both monochrome planes are live and unselected. Windows
-        // copies them into the returned caller-owned icon.
-        unsafe { CreateIconIndirect(&info) }
+        return Err(Error::from_thread());
     }
-}
 
-const fn glyph_plane_rop(system_uses_light_theme: bool) -> windows::Win32::Graphics::Gdi::ROP_CODE {
-    if system_uses_light_theme {
-        BLACKNESS
-    } else {
-        WHITENESS
+    let icon_info = ICONINFO {
+        fIcon: true.into(),
+        xHotspot: 0,
+        yHotspot: 0,
+        hbmMask: mask,
+        hbmColor: color,
+    };
+    // SAFETY: both bitmaps are live and unselected. CreateIconIndirect copies
+    // their pixels, after which this function owns and releases both handles.
+    let icon = unsafe { CreateIconIndirect(&icon_info) };
+    unsafe {
+        let _ = DeleteObject(mask.into());
+        let _ = DeleteObject(color.into());
     }
+    icon
 }
 
 fn system_uses_light_theme() -> bool {
@@ -552,64 +629,6 @@ fn settings_path_from_module_path(module_path: &Path) -> Option<PathBuf> {
     Some(versions_dir.parent()?.join("sakura_settings.exe"))
 }
 
-impl Drop for Canvas {
-    fn drop(&mut self) {
-        // SAFETY: every handle came from `Canvas::new` and is released once.
-        unsafe {
-            let _ = DeleteObject(self.color.into());
-            let _ = DeleteObject(self.mask.into());
-            let _ = DeleteDC(self.memory);
-        }
-    }
-}
-
-fn draw_centered(dc: HDC, rect: &RECT, text: &str, color: COLORREF) {
-    let font = font_of_height(((rect.bottom - rect.top) * 4) / 5);
-    // SAFETY: the previous font is restored before the temporary font is
-    // deleted. `wide` remains valid for the call.
-    let previous = unsafe { SelectObject(dc, font.into()) };
-    let mut wide: Vec<u16> = text.encode_utf16().collect();
-    let mut area = *rect;
-    // SAFETY: the caller supplied a live DC and rectangle; the temporary font
-    // and UTF-16 buffer remain valid until the previous font is restored.
-    unsafe {
-        let _ = SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, color);
-        DrawTextW(
-            dc,
-            &mut wide,
-            &mut area,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE,
-        );
-        SelectObject(dc, previous);
-        let _ = DeleteObject(font.into());
-    }
-}
-
-fn font_of_height(height: i32) -> HFONT {
-    // SAFETY: Yu Gothic UI is the Japanese Windows UI face used beside this
-    // item by the taskbar language indicator. It is part of supported Windows
-    // 11, and the explicit face keeps あ/A visually aligned with its 日本 text.
-    unsafe {
-        CreateFontW(
-            -height,
-            0,
-            0,
-            0,
-            FW_SEMIBOLD.0 as i32,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_TT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            NONANTIALIASED_QUALITY,
-            (DEFAULT_PITCH.0 | FF_DONTCARE.0).into(),
-            w!("Yu Gothic UI"),
-        )
-    }
-}
-
 /// Returns the `ITfSource` error expected for an unsupported sink interface.
 pub fn cannot_connect() -> Error {
     Error::from_hresult(CONNECT_E_CANNOTCONNECT)
@@ -633,76 +652,121 @@ mod tests {
     }
 
     #[test]
-    fn mode_icon_is_a_transparent_monochrome_glyph() -> Result<()> {
-        let icon = icon_for(Mode::Hiragana)?;
-        let mut info = ICONINFO::default();
-        // SAFETY: `icon` is live and `info` is a writable output structure.
-        unsafe { GetIconInfo(icon, &mut info)? };
+    fn every_mode_theme_and_size_is_a_valid_argb_asset() {
+        for mode in Mode::ALL {
+            for size in [AssetSize::Px16, AssetSize::Px32] {
+                let edge = size.edge() as usize;
+                for light_theme in [false, true] {
+                    let asset = asset_for(mode, size, light_theme);
+                    assert_eq!(asset.pixels.len(), edge * edge * 4);
 
-        let size = unsafe {
-            SIZE {
-                cx: GetSystemMetrics(SM_CXSMICON).max(16),
-                cy: GetSystemMetrics(SM_CYSMICON).max(16),
-            }
-        };
-        // The transparent mask contains the background and the glyph's opaque
-        // pixels; the one-bit colour plane lets TSF apply its theme text colour.
-        let has_theme_color_plane = !info.hbmColor.is_invalid();
-        let dc = unsafe { CreateCompatibleDC(None) };
-        let previous = unsafe { SelectObject(dc, info.hbmMask.into()) };
-        let corners_are_transparent = [(0, 0), (size.cx - 1, 0), (0, size.cy - 1)]
-            .into_iter()
-            .all(|(x, y)| unsafe { GetPixel(dc, x, y).0 } == 0x00ff_ffff);
-        let mut glyph_pixels = 0usize;
-        for y in 0..size.cy {
-            for x in 0..size.cx {
-                if unsafe { GetPixel(dc, x, y).0 } == 0 {
-                    glyph_pixels += 1;
+                    let alpha: Vec<u8> = asset
+                        .pixels
+                        .chunks_exact(4)
+                        .map(|pixel| pixel.last().copied().unwrap_or_default())
+                        .collect();
+                    for corner in [0, edge - 1, edge * (edge - 1), edge * edge - 1] {
+                        assert_eq!(
+                            alpha.get(corner).copied(),
+                            Some(0),
+                            "{mode:?} {size:?} corner"
+                        );
+                    }
+                    assert!(alpha.contains(&0));
+                    assert!(alpha.iter().any(|value| *value > 0));
+                    assert!(alpha.iter().any(|value| (1..255).contains(value)));
+
+                    for pixel in asset.pixels.chunks_exact(4) {
+                        let blue = pixel.first().copied().unwrap_or_default();
+                        let green = pixel.get(1).copied().unwrap_or_default();
+                        let red = pixel.get(2).copied().unwrap_or_default();
+                        let alpha = pixel.last().copied().unwrap_or_default();
+                        assert!(blue <= alpha && green <= alpha && red <= alpha);
+                        if light_theme {
+                            assert!(blue <= 28 && green <= 28 && red <= 28);
+                        } else {
+                            assert_eq!((blue, green, red), (alpha, alpha, alpha));
+                        }
+                    }
                 }
             }
         }
-        // SAFETY: restore the original DC object, then release every copied
-        // handle returned by GetIconInfo and finally the caller-owned icon.
-        unsafe {
-            SelectObject(dc, previous);
-            let _ = DeleteDC(dc);
-            let _ = DeleteObject(info.hbmMask.into());
-            if !info.hbmColor.is_invalid() {
-                let _ = DeleteObject(info.hbmColor.into());
-            }
-            let _ = DestroyIcon(icon);
-        }
+    }
 
-        assert!(
-            has_theme_color_plane,
-            "Windows 11 needs a black colour plane for theme recolouring"
-        );
-        assert!(
-            corners_are_transparent,
-            "the taskbar background must remain visible around the glyph"
-        );
-        assert!(
-            glyph_pixels > 0,
-            "the monochrome mask must contain the glyph"
-        );
-        assert!(
-            glyph_pixels < (size.cx * size.cy) as usize,
-            "the glyph must not fill the entire icon"
-        );
+    #[test]
+    fn theme_variants_share_alpha_but_contrast_and_modes_stay_distinct() {
+        for size in [AssetSize::Px16, AssetSize::Px32] {
+            let mut mode_alpha = Vec::new();
+            for mode in Mode::ALL {
+                let dark = asset_for(mode, size, false);
+                let light = asset_for(mode, size, true);
+                let dark_alpha: Vec<u8> = dark
+                    .pixels
+                    .chunks_exact(4)
+                    .map(|pixel| pixel.last().copied().unwrap_or_default())
+                    .collect();
+                let light_alpha: Vec<u8> = light
+                    .pixels
+                    .chunks_exact(4)
+                    .map(|pixel| pixel.last().copied().unwrap_or_default())
+                    .collect();
+                assert_eq!(dark_alpha, light_alpha);
+                assert_ne!(dark.pixels, light.pixels);
+                assert!(mode_alpha.iter().all(|other| other != &dark_alpha));
+                mode_alpha.push(dark_alpha);
+            }
+        }
+    }
+
+    #[test]
+    fn every_asset_constructs_an_owned_hicon() -> Result<()> {
+        for mode in Mode::ALL {
+            for size in [AssetSize::Px16, AssetSize::Px32] {
+                for light_theme in [false, true] {
+                    let icon = create_icon(asset_for(mode, size, light_theme))?;
+                    let mut info = ICONINFO::default();
+                    // SAFETY: `icon` is live and `info` is a writable output.
+                    unsafe { GetIconInfo(icon, &mut info)? };
+                    assert!(!info.hbmColor.is_invalid());
+                    assert!(!info.hbmMask.is_invalid());
+                    // SAFETY: GetIconInfo returns caller-owned bitmap copies;
+                    // the original icon is caller-owned as well.
+                    unsafe {
+                        let _ = DeleteObject(info.hbmColor.into());
+                        let _ = DeleteObject(info.hbmMask.into());
+                        let _ = DestroyIcon(icon);
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
     #[test]
-    fn glyph_plane_contrasts_with_both_system_themes() {
-        assert_eq!(glyph_plane_rop(true), BLACKNESS);
-        assert_eq!(glyph_plane_rop(false), WHITENESS);
+    fn direct_input_has_a_dedicated_asset() {
+        for size in [AssetSize::Px16, AssetSize::Px32] {
+            assert_ne!(
+                asset_for(Mode::Direct, size, false).pixels,
+                asset_for(Mode::HalfAlnum, size, false).pixels
+            );
+        }
+    }
+
+    #[test]
+    fn metric_selects_nearest_authored_size() {
+        for metric in 0..24 {
+            assert_eq!(asset_size_for_metric(metric), AssetSize::Px16);
+        }
+        for metric in 24..=64 {
+            assert_eq!(asset_size_for_metric(metric), AssetSize::Px32);
+        }
     }
 
     #[test]
     fn visibility_is_fail_closed_without_a_mode() {
         let item = ModeItemState::default();
         item.update(true, None, true, false);
-        assert_eq!(item.snapshot().visible, false);
+        assert!(!item.snapshot().visible);
         assert_eq!(item.status(), TF_LBI_STATUS_HIDDEN);
     }
 
