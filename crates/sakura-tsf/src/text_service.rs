@@ -47,7 +47,8 @@ use windows::Win32::UI::TextServices::{
     ITfSource_Impl, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
     ITfTextInputProcessor_Impl, ITfTextLayoutSink, ITfTextLayoutSink_Impl, ITfThreadMgr,
     InputScope as TfInputScope, TfLBIClick, TfLayoutCode, GUID_LBI_INPUTMODE, GUID_PROP_INPUTSCOPE,
-    TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_MENU, TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_PRESERVEDKEY,
+    TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_MENU, TF_LBI_STYLE_HIDDENSTATUSCONTROL,
+    TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, PostMessageW,
@@ -4491,7 +4492,9 @@ impl ITfLangBarItem_Impl for TextService_Impl {
         let mut info = TF_LANGBARITEMINFO {
             clsidService: CLSID_SAKURA_TSF,
             guidItem: GUID_LBI_INPUTMODE,
-            dwStyle: TF_LBI_STYLE_BTN_MENU | TF_LBI_STYLE_HIDDENSTATUSCONTROL,
+            dwStyle: TF_LBI_STYLE_BTN_MENU
+                | TF_LBI_STYLE_HIDDENSTATUSCONTROL
+                | TF_LBI_STYLE_TEXTCOLORICON,
             ulSort: 0,
             ..Default::default()
         };
