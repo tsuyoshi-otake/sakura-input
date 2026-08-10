@@ -28,7 +28,7 @@ use windows::Win32::UI::TextServices::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON, SM_CYSMICON,
 };
-use windows_core::{Error, Result, PCWSTR};
+use windows_core::{w, Error, Result};
 
 #[cfg(test)]
 use windows::Win32::Graphics::Gdi::GetPixel;
@@ -467,8 +467,9 @@ fn draw_centered(dc: HDC, rect: &RECT, text: &str, color: COLORREF) {
 }
 
 fn font_of_height(height: i32) -> HFONT {
-    // SAFETY: the empty face name asks Windows to select an installed UI font
-    // with its normal Japanese fallback chain.
+    // SAFETY: Yu Gothic UI is the Japanese Windows UI face used beside this
+    // item by the taskbar language indicator. It is part of supported Windows
+    // 11, and the explicit face keeps あ/A visually aligned with its 日本 text.
     unsafe {
         CreateFontW(
             -height,
@@ -484,7 +485,7 @@ fn font_of_height(height: i32) -> HFONT {
             CLIP_DEFAULT_PRECIS,
             NONANTIALIASED_QUALITY,
             (DEFAULT_PITCH.0 | FF_DONTCARE.0).into(),
-            PCWSTR::null(),
+            w!("Yu Gothic UI"),
         )
     }
 }
