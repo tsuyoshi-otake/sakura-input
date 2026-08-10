@@ -8,18 +8,28 @@
 //! boundaries and passes this module an already-resolved snapshot.
 
 use std::cell::{Cell, RefCell};
+use std::ffi::{c_void, OsString};
+use std::mem::size_of;
+use std::os::windows::ffi::OsStringExt;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use sakura_proto::Mode;
-use windows::Win32::Foundation::{COLORREF, E_FAIL, RECT, SIZE};
+use windows::Win32::Foundation::{COLORREF, ERROR_SUCCESS, E_FAIL, HMODULE, RECT, SIZE};
 use windows::Win32::Graphics::Gdi::{
     CreateBitmap, CreateCompatibleDC, CreateFontW, DeleteDC, DeleteObject, DrawTextW, GetDC,
     PatBlt, ReleaseDC, SelectObject, SetBkMode, SetTextColor, BLACKNESS, CLIP_DEFAULT_PRECIS,
     DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_SEMIBOLD,
     HBITMAP, HDC, HFONT, NONANTIALIASED_QUALITY, OUT_TT_PRECIS, TRANSPARENT, WHITENESS,
 };
+use windows::Win32::System::LibraryLoader::{
+    GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+};
 use windows::Win32::System::Ole::{
     CONNECT_E_ADVISELIMIT, CONNECT_E_CANNOTCONNECT, CONNECT_E_NOCONNECTION,
 };
+use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 use windows::Win32::UI::TextServices::{
     ITfLangBarItemSink, ITfMenu, TF_LBI_ICON, TF_LBI_STATUS, TF_LBI_STATUS_HIDDEN, TF_LBI_TEXT,
     TF_LBI_TOOLTIP, TF_LBMENUF_GRAYED, TF_LBMENUF_RADIOCHECKED, TF_LBMENUF_SEPARATOR,
@@ -28,7 +38,7 @@ use windows::Win32::UI::TextServices::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON, SM_CYSMICON,
 };
-use windows_core::{w, Error, Result};
+use windows_core::{w, Error, Result, PCWSTR};
 
 #[cfg(test)]
 use windows::Win32::Graphics::Gdi::GetPixel;
@@ -40,6 +50,7 @@ use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo};
 pub const MENU_RESTORE_MODE: u32 = 1;
 pub const MENU_INPUT_MODE: u32 = 2;
 pub const MENU_IME_TOGGLE: u32 = 3;
+pub const MENU_SETTINGS: u32 = 4;
 pub const MENU_MODE_HIRAGANA: u32 = 10;
 pub const MENU_MODE_KATAKANA: u32 = 11;
 pub const MENU_MODE_HALF_KATAKANA: u32 = 12;
@@ -56,6 +67,7 @@ pub enum MenuCommand {
     RestoreMode,
     SetMode(Mode),
     ToggleIme,
+    OpenSettings,
 }
 
 /// The caller-owned state used to build a menu at the instant TSF requests it.
@@ -200,6 +212,7 @@ pub const fn menu_command(id: u32) -> Option<MenuCommand> {
     match id {
         MENU_RESTORE_MODE => Some(MenuCommand::RestoreMode),
         MENU_IME_TOGGLE => Some(MenuCommand::ToggleIme),
+        MENU_SETTINGS => Some(MenuCommand::OpenSettings),
         MENU_MODE_HIRAGANA => Some(MenuCommand::SetMode(Mode::Hiragana)),
         MENU_MODE_KATAKANA => Some(MenuCommand::SetMode(Mode::Katakana)),
         MENU_MODE_HALF_KATAKANA => Some(MenuCommand::SetMode(Mode::HalfKatakana)),
@@ -297,7 +310,9 @@ pub fn populate_menu(menu: &ITfMenu, state: Snapshot) -> Result<()> {
     } else {
         TF_LBMENUF_GRAYED
     };
-    add(menu, MENU_IME_TOGGLE, toggle_flags, ime_label, &mut unused)
+    add(menu, MENU_IME_TOGGLE, toggle_flags, ime_label, &mut unused)?;
+    add(menu, 0, TF_LBMENUF_SEPARATOR, "", &mut unused)?;
+    add(menu, MENU_SETTINGS, 0, "Sakura Input の設定", &mut unused)
 }
 
 fn add_mode(menu: &ITfMenu, id: u32, mode: Mode, label: &str, state: Snapshot) -> Result<()> {
@@ -398,15 +413,23 @@ impl Canvas {
     }
 
     fn compose(&self, size: SIZE, text: &str) -> Result<HICON> {
-        // The colour plane is intentionally black everywhere. The AND mask
-        // below decides which pixels are visible, and TSF converts the visible
-        // black glyph pixels to the selected Windows theme's text colour.
+        // The AND mask below decides which pixels are visible. Windows 11 does
+        // not consistently apply TF_LBI_STYLE_TEXTCOLORICON to third-party TSF
+        // items, so choose the same foreground family as the adjacent language
+        // indicator: black for a light system theme, white for a dark one.
         // SAFETY: `color` is live and is restored before any other bitmap is
         // selected or the canvas is released.
         let previous_color = unsafe { SelectObject(self.memory, self.color.into()) };
         // SAFETY: the monochrome colour bitmap is selected into this live DC.
         unsafe {
-            let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy, BLACKNESS);
+            let _ = PatBlt(
+                self.memory,
+                0,
+                0,
+                size.cx,
+                size.cy,
+                glyph_plane_rop(system_uses_light_theme()),
+            );
             SelectObject(self.memory, previous_color);
         }
 
@@ -441,6 +464,92 @@ impl Canvas {
         // copies them into the returned caller-owned icon.
         unsafe { CreateIconIndirect(&info) }
     }
+}
+
+const fn glyph_plane_rop(system_uses_light_theme: bool) -> windows::Win32::Graphics::Gdi::ROP_CODE {
+    if system_uses_light_theme {
+        BLACKNESS
+    } else {
+        WHITENESS
+    }
+}
+
+fn system_uses_light_theme() -> bool {
+    let mut value = 1u32;
+    let mut bytes = size_of::<u32>() as u32;
+    // SAFETY: both names are static NUL-terminated strings, and `value` plus
+    // `bytes` are writable for the exact REG_DWORD size supplied to the API.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"),
+            w!("SystemUsesLightTheme"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&mut value as *mut u32).cast::<c_void>()),
+            Some(&mut bytes),
+        )
+    };
+    if status == ERROR_SUCCESS && bytes == size_of::<u32>() as u32 {
+        value != 0
+    } else {
+        // Windows 11 defaults to the light system theme when the preference is
+        // absent. Matching that default is safer than an invisible white glyph.
+        true
+    }
+}
+
+/// Opens the stable install-root settings bootstrap rather than a versioned
+/// payload. The bootstrap resolves the currently registered version, so a menu
+/// hosted by an older process still opens the newly installed settings UI.
+pub fn open_settings() -> Result<()> {
+    let settings = settings_path_from_loaded_module()?;
+    Command::new(settings)
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| Error::from_hresult(E_FAIL))
+}
+
+fn settings_path_from_loaded_module() -> Result<PathBuf> {
+    let mut module = HMODULE::default();
+    // SAFETY: with FROM_ADDRESS, Windows interprets this stable function
+    // address as an address inside the containing module, not as a string.
+    unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            PCWSTR(settings_path_from_loaded_module as *const () as *const u16),
+            &mut module,
+        )?;
+    }
+    let mut buffer = vec![0u16; 32_768];
+    // SAFETY: `module` identifies this loaded DLL and `buffer` is writable for
+    // the length supplied by the slice binding.
+    let written = unsafe { GetModuleFileNameW(Some(module), &mut buffer) } as usize;
+    if written == 0 || written >= buffer.len() {
+        return Err(Error::from_thread());
+    }
+    let module_path = PathBuf::from(OsString::from_wide(&buffer[..written]));
+    settings_path_from_module_path(&module_path).ok_or_else(|| Error::from_hresult(E_FAIL))
+}
+
+fn settings_path_from_module_path(module_path: &Path) -> Option<PathBuf> {
+    if !module_path
+        .file_name()?
+        .to_string_lossy()
+        .eq_ignore_ascii_case("sakura_tsf.dll")
+    {
+        return None;
+    }
+    let version_dir = module_path.parent()?;
+    let versions_dir = version_dir.parent()?;
+    if !versions_dir
+        .file_name()?
+        .to_string_lossy()
+        .eq_ignore_ascii_case("versions")
+    {
+        return None;
+    }
+    Some(versions_dir.parent()?.join("sakura_settings.exe"))
 }
 
 impl Drop for Canvas {
@@ -584,6 +693,12 @@ mod tests {
     }
 
     #[test]
+    fn glyph_plane_contrasts_with_both_system_themes() {
+        assert_eq!(glyph_plane_rop(true), BLACKNESS);
+        assert_eq!(glyph_plane_rop(false), WHITENESS);
+    }
+
+    #[test]
     fn visibility_is_fail_closed_without_a_mode() {
         let item = ModeItemState::default();
         item.update(true, None, true, false);
@@ -602,6 +717,29 @@ mod tests {
             Some(MenuCommand::SetMode(Mode::HalfKatakana))
         );
         assert_eq!(menu_command(MENU_IME_TOGGLE), Some(MenuCommand::ToggleIme));
+        assert_eq!(menu_command(MENU_SETTINGS), Some(MenuCommand::OpenSettings));
         assert_eq!(menu_command(999), None);
+    }
+
+    #[test]
+    fn settings_bootstrap_is_derived_only_from_the_versioned_tsf_layout() {
+        let module =
+            Path::new(r"C:\Program Files\Sakura Input\versions\1.0.0-build\sakura_tsf.dll");
+        assert_eq!(
+            settings_path_from_module_path(module),
+            Some(PathBuf::from(
+                r"C:\Program Files\Sakura Input\sakura_settings.exe"
+            ))
+        );
+        assert_eq!(
+            settings_path_from_module_path(Path::new(r"C:\temp\sakura_tsf.dll")),
+            None
+        );
+        assert_eq!(
+            settings_path_from_module_path(Path::new(
+                r"C:\Program Files\Sakura Input\versions\1.0.0-build\other.dll"
+            )),
+            None
+        );
     }
 }
