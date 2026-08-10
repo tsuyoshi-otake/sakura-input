@@ -85,10 +85,34 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
     engine.publish(state(2, 0, Some(full), anchor(120, 120)));
     let full_name = wait_for_name(&element, "complete-definition");
     assert!(!full_name.contains("Definition continues."));
+    let short_detail_rect = window_rect(popup);
+
+    // Changing only definition length must not alter the candidate/detail
+    // horizontal rhythm. The fixed-width detail grows vertically to expose the
+    // complete preview instead of making the popup jitter sideways.
+    let long_definition = format!("long-complete-definition-{}", "x".repeat(880));
+    engine.publish(state(
+        3,
+        0,
+        Some(detail(&long_definition, false, 0)),
+        anchor(120, 120),
+    ));
+    let long_name = wait_for_name(&element, "long-complete-definition");
+    assert!(long_name.contains(&long_definition));
+    let long_detail_rect = window_rect(popup);
+    assert_eq!(
+        long_detail_rect.right - long_detail_rect.left,
+        short_detail_rect.right - short_detail_rect.left,
+        "definition length must not change popup width"
+    );
+    assert!(
+        long_detail_rect.bottom - long_detail_rect.top
+            >= short_detail_rect.bottom - short_detail_rect.top
+    );
 
     // An update for a different selected candidate with no detail must clear
     // the prior detail rather than leave the old text associated with B.
-    engine.publish(state(3, 1, None, anchor(120, 120)));
+    engine.publish(state(4, 1, None, anchor(120, 120)));
     let cleared_name = wait_for_name(&element, "selected 2 of 18");
     assert!(
         !cleared_name.contains("Detail for selected candidate"),
@@ -98,7 +122,7 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
 
     // A truncated wire preview must keep the explicit continuation marker.
     let truncated = detail("preview-definition", true, 0b1111);
-    engine.publish(state(4, 1, Some(truncated), anchor(120, 120)));
+    engine.publish(state(5, 1, Some(truncated), anchor(120, 120)));
     let truncated_name = wait_for_name(&element, "preview-definition");
     assert!(truncated_name.contains("Definition continues."));
 
@@ -157,14 +181,14 @@ fn assert_noninteractive_popup(window: HWND, element: &IUIAutomationElement) {
         0,
         "popup must be click-through"
     );
-    // SAFETY: synchronous message with no borrowed pointer arguments.
     assert_eq!(
-        unsafe { SendMessageW(window, WM_NCHITTEST, Some(WPARAM(0)), Some(LPARAM(0)),) },
+        // SAFETY: synchronous message with no borrowed pointer arguments.
+        unsafe { SendMessageW(window, WM_NCHITTEST, Some(WPARAM(0)), Some(LPARAM(0))) },
         LRESULT(HTTRANSPARENT as isize),
         "candidate popup must return HTTRANSPARENT"
     );
-    // SAFETY: querying the UIA proxy has no caller-owned pointer arguments.
     assert!(
+        // SAFETY: querying the UIA proxy has no caller-owned pointer arguments.
         !unsafe {
             element
                 .CurrentIsKeyboardFocusable()

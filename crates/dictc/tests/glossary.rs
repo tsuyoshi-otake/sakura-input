@@ -126,7 +126,7 @@ fn importer_matches_mozc_then_uses_visible_shape_defaults() {
     assert_eq!(docker.word_cost, 600);
     assert!(docker.flags.contains(EntryFlags::IT));
     assert!(docker.flags.contains(EntryFlags::PREDICTION));
-    assert_eq!(docker.annotation, "コンテナを扱う基盤。");
+    assert_eq!(docker.annotation, "");
 
     let alias = imported
         .entries
@@ -175,7 +175,7 @@ fn importer_matches_mozc_then_uses_visible_shape_defaults() {
 }
 
 #[test]
-fn importer_omits_domain_metadata_without_altering_definition_brackets() {
+fn importer_keeps_definition_brackets_in_typed_details_not_inline_annotations() {
     let terms = parse_part(
         "ja_part1.json",
         r#"[
@@ -197,8 +197,10 @@ fn importer_omits_domain_metadata_without_altering_definition_brackets() {
         .find(|entry| entry.surface == "Brackets" && entry.reading == "brackets")
         .expect("bracketed definition entry");
 
-    assert_eq!(entry.annotation, "Keep [literal] definition text.");
-    assert!(!entry.annotation.contains("[it-basics]"));
+    assert_eq!(entry.annotation, "");
+    let details = detail_sources(&terms, &imported.entries);
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0].description, "Keep [literal] definition text.");
 }
 
 #[test]

@@ -159,24 +159,21 @@ fn startup_options(
     let mut options = StartupOptions::default();
     let mut arguments = arguments.into_iter();
     while let Some(argument) = arguments.next() {
-        match argument.as_str() {
-            "--test-pipe" => {
-                let value = arguments
-                    .next()
-                    .ok_or_else(|| "--test-pipe requires a named-pipe path".to_owned())?;
-                if options
-                    .test_pipe
-                    .replace(validate_test_pipe(value)?)
-                    .is_some()
-                {
-                    return Err("--test-pipe may be supplied only once".to_owned());
-                }
+        if argument == "--test-pipe" {
+            let value = arguments
+                .next()
+                .ok_or_else(|| "--test-pipe requires a named-pipe path".to_owned())?;
+            if options
+                .test_pipe
+                .replace(validate_test_pipe(value)?)
+                .is_some()
+            {
+                return Err("--test-pipe may be supplied only once".to_owned());
             }
-            // The production renderer historically has no command-line
-            // surface. Preserve its harmless ignoring of unrelated launcher
-            // arguments; only the explicit test override is interpreted.
-            _ => {}
         }
+        // The production renderer historically has no command-line surface.
+        // Preserve harmless ignoring of unrelated launcher arguments; only
+        // the explicit test override is interpreted.
     }
     Ok(options)
 }

@@ -45,8 +45,7 @@ const MIN_WIDTH_96: i32 = 260;
 const MAX_WIDTH_96: i32 = 480;
 const BODY_FONT_96: i32 = 16;
 const SUPPORT_FONT_96: i32 = 13;
-const DETAIL_MIN_WIDTH_96: i32 = 220;
-const DETAIL_MAX_WIDTH_96: i32 = 360;
+const DETAIL_WIDTH_96: i32 = 360;
 const DETAIL_PADDING_96: i32 = 12;
 const DETAIL_TITLE_HEIGHT_96: i32 = 22;
 const DETAIL_LINE_HEIGHT_96: i32 = 18;
@@ -182,8 +181,15 @@ impl CandidateWindow {
             .as_ref()
             .filter(|detail| detail.validate().is_ok());
         let surface = selected_surface(candidates).unwrap_or("");
-        let detail_layout = detail.map(|detail| detail_layout(surface, detail, current_dpi));
         let work = monitor_work_area(anchor);
+        let detail_layout = detail.map(|detail| {
+            detail_layout(
+                surface,
+                detail,
+                current_dpi,
+                work.bottom.saturating_sub(work.top),
+            )
+        });
         let placed = popup_placement(anchor, candidate_layout, detail_layout, work);
         self.state.candidates = Some(candidates.clone());
         self.state.detail = detail.cloned();
@@ -309,11 +315,20 @@ fn popup_placement(
         {
             return None;
         }
+        // A long definition may be taller than the candidate list. Keep the
+        // candidate rectangle fixed and slide only the detail vertically into
+        // the work area instead of dropping the pane or moving the list.
+        let detail_top = candidates.top.clamp(
+            work.top,
+            work.bottom
+                .saturating_sub(detail_layout.height)
+                .max(work.top),
+        );
         let right = RECT {
             left: candidates.right,
-            top: candidates.top,
+            top: detail_top,
             right: candidates.right.saturating_add(detail_layout.width),
-            bottom: candidates.top.saturating_add(detail_layout.height),
+            bottom: detail_top.saturating_add(detail_layout.height),
         };
         if right.right <= work.right && right.bottom <= work.bottom {
             return Some(right);
@@ -321,9 +336,9 @@ fn popup_placement(
 
         let left = RECT {
             left: candidates.left.saturating_sub(detail_layout.width),
-            top: candidates.top,
+            top: detail_top,
             right: candidates.left,
-            bottom: candidates.top.saturating_add(detail_layout.height),
+            bottom: detail_top.saturating_add(detail_layout.height),
         };
         if left.left >= work.left && left.bottom <= work.bottom {
             return Some(left);
@@ -563,7 +578,7 @@ fn draw(
                 } else {
                     palette.annotation
                 },
-                DT_RIGHT | DT_END_ELLIPSIS,
+                DT_LEFT | DT_END_ELLIPSIS,
             );
             if support_font_selected && body_font_selected {
                 // SAFETY: restores the body font for the next primary row.
@@ -661,14 +676,17 @@ fn draw(
 }
 
 fn layout(candidates: &CandidateList, dpi: u32) -> Layout {
-    let visible = candidates.visible_range();
-    let annotation_width_96 = visible
+    // Size from the complete current page even when compact presentation only
+    // paints the selected row. Selection changes must never make the popup or
+    // either text column jump horizontally.
+    let sizing_range = candidates.current_page_range();
+    let annotation_width_96 = sizing_range
         .clone()
         .map(|index| text_width_96(&candidates.items[index].annotation, true))
         .max()
         .unwrap_or(0)
         .min(MAX_WIDTH_96 / 2);
-    let surface_width_96 = visible
+    let surface_width_96 = sizing_range
         .map(|index| text_width_96(&candidates.items[index].text, false))
         .max()
         .unwrap_or(0)
@@ -702,20 +720,17 @@ fn layout(candidates: &CandidateList, dpi: u32) -> Layout {
     }
 }
 
-fn detail_layout(surface: &str, detail: &CandidateDetail, dpi: u32) -> DetailLayout {
-    let widest = std::iter::once(surface)
-        .chain(std::iter::once(detail.reading.as_str()))
-        .chain(std::iter::once(detail.definition.as_str()))
-        .chain(detail.aliases.iter().map(String::as_str))
-        .chain(detail.related.iter().map(String::as_str))
-        .chain(detail.similar.iter().map(String::as_str))
-        .chain(detail.antonyms.iter().map(String::as_str))
-        .map(|value| text_width_96(value, true))
-        .max()
-        .unwrap_or(0);
-    let width_96 = widest
-        .saturating_add(DETAIL_PADDING_96.saturating_mul(2))
-        .clamp(DETAIL_MIN_WIDTH_96, DETAIL_MAX_WIDTH_96);
+fn detail_layout(
+    surface: &str,
+    detail: &CandidateDetail,
+    dpi: u32,
+    max_height: i32,
+) -> DetailLayout {
+    let width = scaled(DETAIL_WIDTH_96, dpi);
+    let padding = scaled(DETAIL_PADDING_96, dpi);
+    let title_height = scaled(DETAIL_TITLE_HEIGHT_96, dpi);
+    let line_height = scaled(DETAIL_LINE_HEIGHT_96, dpi);
+    let section_gap = scaled(DETAIL_SECTION_GAP_96, dpi);
     let sections = [
         &detail.aliases,
         &detail.related,
@@ -725,23 +740,25 @@ fn detail_layout(surface: &str, detail: &CandidateDetail, dpi: u32) -> DetailLay
     .into_iter()
     .filter(|group| !group.is_empty())
     .count() as i32;
-    let reading_height = i32::from(detail.reading != surface).saturating_mul(DETAIL_LINE_HEIGHT_96);
-    let height_96 = DETAIL_PADDING_96
+    let reading_height = i32::from(detail.reading != surface).saturating_mul(line_height);
+    let fixed_height = padding
         .saturating_mul(2)
-        .saturating_add(DETAIL_TITLE_HEIGHT_96)
+        .saturating_add(title_height)
         .saturating_add(reading_height)
-        // Definitions intentionally have a hard two-line visual budget.
-        .saturating_add(DETAIL_LINE_HEIGHT_96.saturating_mul(2))
-        .saturating_add(
-            sections.saturating_mul(DETAIL_LINE_HEIGHT_96.saturating_add(DETAIL_SECTION_GAP_96)),
-        );
+        .saturating_add(sections.saturating_mul(line_height.saturating_add(section_gap)));
+    let content_width = width.saturating_sub(padding.saturating_mul(2));
+    let full_line_count = wrapped_line_count(&detail.definition, content_width, dpi);
+    let available_definition_height = max_height.saturating_sub(fixed_height).max(line_height);
+    let visible_line_count = full_line_count
+        .min((available_definition_height / line_height).max(1) as usize)
+        .max(1);
     DetailLayout {
-        width: scaled(width_96, dpi),
-        height: scaled(height_96, dpi),
-        padding: scaled(DETAIL_PADDING_96, dpi),
-        title_height: scaled(DETAIL_TITLE_HEIGHT_96, dpi),
-        line_height: scaled(DETAIL_LINE_HEIGHT_96, dpi),
-        section_gap: scaled(DETAIL_SECTION_GAP_96, dpi),
+        width,
+        height: fixed_height.saturating_add(line_height.saturating_mul(visible_line_count as i32)),
+        padding,
+        title_height,
+        line_height,
+        section_gap,
     }
 }
 
@@ -753,7 +770,7 @@ fn draw_detail(
     dpi: u32,
     palette: Palette,
 ) {
-    let layout = detail_layout(surface, detail, dpi);
+    let layout = detail_layout(surface, detail, dpi, rect.bottom.saturating_sub(rect.top));
     fill_color(dc, &rect, palette.surface);
     let border = [
         RECT {
@@ -816,10 +833,27 @@ fn draw_detail(
         );
         cursor = reading.bottom;
     }
+    let relation_height = [
+        &detail.aliases,
+        &detail.related,
+        &detail.similar,
+        &detail.antonyms,
+    ]
+    .into_iter()
+    .filter(|group| !group.is_empty())
+    .count() as i32
+        * layout.line_height.saturating_add(layout.section_gap);
+    let available_definition_height = content
+        .bottom
+        .saturating_sub(cursor)
+        .saturating_sub(relation_height);
+    let max_definition_lines = (available_definition_height / layout.line_height).max(1) as usize;
     for line in definition_lines(
         &detail.definition,
         content.right.saturating_sub(content.left),
         dpi,
+        max_definition_lines,
+        detail.definition_truncated,
     ) {
         let line_rect = RECT {
             top: cursor,
@@ -884,18 +918,46 @@ fn relation_text(values: &[String]) -> String {
         .join("・")
 }
 
-fn definition_lines(definition: &str, available_width: i32, dpi: u32) -> [String; 2] {
-    // This intentionally uses the widest expected glyph advance, which keeps
-    // CJK and emoji text inside the fixed two visual rows at every DPI.
-    let per_line = (available_width / scaled(SUPPORT_FONT_96, dpi).max(1)).max(1) as usize;
-    let mut characters = definition.chars();
-    let first: String = characters.by_ref().take(per_line).collect();
-    let mut second: String = characters.by_ref().take(per_line).collect();
-    if characters.next().is_some() {
-        second.pop();
-        second.push('…');
+fn characters_per_line(available_width: i32, dpi: u32) -> usize {
+    // Use the widest expected glyph advance so CJK, emoji, and combining text
+    // remain inside the measured column at every DPI.
+    (available_width / scaled(SUPPORT_FONT_96, dpi).max(1)).max(1) as usize
+}
+
+fn wrapped_line_count(definition: &str, available_width: i32, dpi: u32) -> usize {
+    definition
+        .chars()
+        .count()
+        .max(1)
+        .div_ceil(characters_per_line(available_width, dpi))
+}
+
+fn definition_lines(
+    definition: &str,
+    available_width: i32,
+    dpi: u32,
+    max_lines: usize,
+    source_truncated: bool,
+) -> Vec<String> {
+    let per_line = characters_per_line(available_width, dpi);
+    let max_lines = max_lines.max(1);
+    let mut characters = definition.chars().peekable();
+    let mut lines =
+        Vec::with_capacity(max_lines.min(wrapped_line_count(definition, available_width, dpi)));
+    while characters.peek().is_some() && lines.len() < max_lines {
+        lines.push(characters.by_ref().take(per_line).collect::<String>());
     }
-    [first, second]
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    if characters.peek().is_some() || source_truncated {
+        let last = lines.last_mut().expect("one definition line");
+        if last.chars().count() >= per_line {
+            last.pop();
+        }
+        last.push('…');
+    }
+    lines
 }
 
 fn text_width_96(value: &str, supporting: bool) -> i32 {
@@ -1187,7 +1249,7 @@ mod tests {
     fn detail() -> CandidateDetail {
         CandidateDetail {
             reading: "ようご".to_owned(),
-            definition: "絵文字😀と結合文字e\u{301}を含む、画面では二行までの説明です。".repeat(8),
+            definition: "絵文字😀と結合文字e\u{301}を含む、全文折り返し表示の説明です。".repeat(8),
             definition_truncated: true,
             aliases: vec!["別名A".to_owned(), "別名B".to_owned()],
             related: vec!["関連語".to_owned()],
@@ -1288,6 +1350,28 @@ mod tests {
                 assert!(surface.right <= annotation.left || layout.annotation_width == 0);
                 assert!(annotation.right <= row.right.saturating_sub(layout.padding));
             }
+        }
+    }
+
+    #[test]
+    fn compact_selection_never_changes_page_sized_width_or_columns() {
+        let items = (0..CANDIDATE_PAGE_SIZE)
+            .map(|index| {
+                item(
+                    &"候補".repeat(index.saturating_add(1)),
+                    if index % 3 == 0 { "履歴" } else { "" },
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut list = candidates(items, 0, CandidateKind::Conversion);
+        list.presentation = CandidatePresentation::Compact;
+        let baseline = layout(&list, 96);
+        for selected in 0..CANDIDATE_PAGE_SIZE {
+            list.selected = selected as u16;
+            let current = layout(&list, 96);
+            assert_eq!(current.width, baseline.width);
+            assert_eq!(current.annotation_width, baseline.annotation_width);
+            assert_eq!(current.height, baseline.height);
         }
     }
 
@@ -1394,14 +1478,49 @@ mod tests {
     }
 
     #[test]
-    fn detail_uses_two_visual_lines_and_only_three_relation_words() {
-        let lines = definition_lines("😀e\u{301}".repeat(128).as_str(), 40, 96);
-        assert_eq!(lines.len(), 2);
-        assert!(lines[1].ends_with('…'));
+    fn detail_wraps_all_available_lines_and_only_three_relation_words() {
+        let value = "😀e\u{301}".repeat(128);
+        let full = definition_lines(&value, 40, 96, usize::MAX, false);
+        assert!(full.len() > 2);
+        assert!(!full.last().expect("last full line").ends_with('…'));
+        let bounded = definition_lines(&value, 40, 96, 3, false);
+        assert_eq!(bounded.len(), 3);
+        assert!(bounded[2].ends_with('…'));
+        let source_bounded = definition_lines("complete preview", 400, 96, 8, true);
+        assert!(source_bounded[0].ends_with('…'));
         assert_eq!(
             relation_text(&["a".into(), "b".into(), "c".into(), "d".into()]),
             "a・b・c"
         );
+    }
+
+    #[test]
+    fn detail_width_is_constant_and_height_grows_then_caps_at_every_dpi() {
+        for dpi in [96, 120, 144, 168, 192, 240] {
+            let mut short = detail();
+            short.definition = "短い説明。".to_owned();
+            let mut long = detail();
+            long.definition = "全文を折り返して表示する長い日本語説明。".repeat(1_000);
+            let max_height = scaled(720, dpi);
+            let short_layout = detail_layout("用語", &short, dpi, max_height);
+            let long_layout = detail_layout("長さの異なる用語", &long, dpi, max_height);
+            assert_eq!(short_layout.width, scaled(DETAIL_WIDTH_96, dpi));
+            assert_eq!(long_layout.width, short_layout.width);
+            assert!(long_layout.height > short_layout.height);
+            assert!(long_layout.height <= max_height);
+            assert!(max_height - long_layout.height < long_layout.line_height);
+        }
+    }
+
+    #[test]
+    fn wrapping_preserves_every_scalar_when_height_is_available() {
+        for dpi in [96, 120, 144, 168, 192, 240] {
+            for width in 1..=512 {
+                let value = "日本語😀e\u{301}ABC・説明".repeat(5);
+                let lines = definition_lines(&value, width, dpi, usize::MAX, false);
+                assert_eq!(lines.concat(), value);
+            }
+        }
     }
 
     #[test]
@@ -1411,8 +1530,8 @@ mod tests {
         let work = RECT {
             left: 0,
             top: 0,
-            right: 1_200,
-            bottom: 900,
+            right: 2_500,
+            bottom: 1_800,
         };
         for dpi in [96, 120, 144, 168, 192, 240] {
             let candidate_layout = layout(&list, dpi);
@@ -1424,7 +1543,7 @@ mod tests {
                     bottom: 124,
                 },
                 candidate_layout,
-                Some(detail_layout("候補", &detail, dpi)),
+                Some(detail_layout("候補", &detail, dpi, work.bottom - work.top)),
                 work,
             );
             assert_eq!(
@@ -1447,7 +1566,7 @@ mod tests {
     fn detail_falls_back_right_left_bottom_then_absent() {
         let list = candidates(vec![item("候補", "")], 0, CandidateKind::Conversion);
         let candidate_layout = layout(&list, 96);
-        let detail_layout = detail_layout("候補", &detail(), 96);
+        let detail_layout = detail_layout("候補", &detail(), 96, 700);
 
         let right = popup_placement(
             ScreenRect {
