@@ -4,7 +4,9 @@
 //! from 96-DPI tokens, while painting uses a restrained Sakura palette unless
 //! Windows high-contrast mode requests system colors instead.
 
-use sakura_proto::{CandidateKind, CandidateList, ScreenRect, UiState, CANDIDATE_PAGE_SIZE};
+use sakura_proto::{
+    CandidateDetail, CandidateKind, CandidateList, ScreenRect, UiState, CANDIDATE_PAGE_SIZE,
+};
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
@@ -43,6 +45,12 @@ const MIN_WIDTH_96: i32 = 260;
 const MAX_WIDTH_96: i32 = 480;
 const BODY_FONT_96: i32 = 16;
 const SUPPORT_FONT_96: i32 = 13;
+const DETAIL_MIN_WIDTH_96: i32 = 220;
+const DETAIL_MAX_WIDTH_96: i32 = 360;
+const DETAIL_PADDING_96: i32 = 12;
+const DETAIL_TITLE_HEIGHT_96: i32 = 22;
+const DETAIL_LINE_HEIGHT_96: i32 = 18;
+const DETAIL_SECTION_GAP_96: i32 = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Palette {
@@ -69,9 +77,33 @@ struct Layout {
     rail_margin: i32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DetailLayout {
+    width: i32,
+    height: i32,
+    padding: i32,
+    title_height: i32,
+    line_height: i32,
+    section_gap: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PopupLayout {
+    candidates: RECT,
+    detail: Option<RECT>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PopupPlacement {
+    window: RECT,
+    layout: PopupLayout,
+}
+
 #[derive(Debug)]
 struct PaintState {
     candidates: Option<CandidateList>,
+    detail: Option<CandidateDetail>,
+    layout: Option<PopupLayout>,
     accessibility: CandidateAccessibility,
 }
 
@@ -114,6 +146,8 @@ impl CandidateWindow {
         };
         let mut state = Box::new(PaintState {
             candidates: None,
+            detail: None,
+            layout: None,
             accessibility: CandidateAccessibility::new(window),
         });
         // SAFETY: `Box` keeps this address stable until `Drop`, where the
@@ -139,23 +173,32 @@ impl CandidateWindow {
             return;
         }
 
-        self.state.candidates = Some(candidates.clone());
-        self.state.accessibility.update(candidates);
-
         let current_dpi = dpi(self.window);
-        let layout = layout(candidates, current_dpi);
+        let candidate_layout = layout(candidates, current_dpi);
+        // Details are optional and strictly source-backed by the protocol. A
+        // malformed value is deliberately omitted rather than partially drawn.
+        let detail = ui
+            .candidate_detail
+            .as_ref()
+            .filter(|detail| detail.validate().is_ok());
+        let surface = selected_surface(candidates).unwrap_or("");
+        let detail_layout = detail.map(|detail| detail_layout(surface, detail, current_dpi));
         let work = monitor_work_area(anchor);
-        let placed = place(anchor, layout.width, layout.height, work, layout.gap);
+        let placed = popup_placement(anchor, candidate_layout, detail_layout, work);
+        self.state.candidates = Some(candidates.clone());
+        self.state.detail = detail.cloned();
+        self.state.layout = Some(placed.layout);
+        self.state.accessibility.update(candidates, detail);
         // SAFETY: the popup is live; `SWP_NOACTIVATE` and
         // `SW_SHOWNOACTIVATE` jointly preserve focus in the host application.
         unsafe {
             let _ = SetWindowPos(
                 self.window,
                 Some(HWND_TOPMOST),
-                placed.left,
-                placed.top,
-                placed.right - placed.left,
-                placed.bottom - placed.top,
+                placed.window.left,
+                placed.window.top,
+                placed.window.right - placed.window.left,
+                placed.window.bottom - placed.window.top,
                 SWP_NOACTIVATE,
             );
             let _ = InvalidateRect(Some(self.window), None, false);
@@ -244,6 +287,83 @@ fn place(anchor: ScreenRect, width: i32, height: i32, work: RECT, gap: i32) -> R
     }
 }
 
+/// Keeps the established candidate rectangle intact, then attaches the
+/// selected-candidate detail to its right, left, or bottom. The detail is
+/// omitted when no complete placement fits the current monitor work area.
+fn popup_placement(
+    anchor: ScreenRect,
+    candidate_layout: Layout,
+    detail_layout: Option<DetailLayout>,
+    work: RECT,
+) -> PopupPlacement {
+    let candidates = place(
+        anchor,
+        candidate_layout.width,
+        candidate_layout.height,
+        work,
+        candidate_layout.gap,
+    );
+    let detail = detail_layout.and_then(|detail_layout| {
+        if detail_layout.width > work.right.saturating_sub(work.left)
+            || detail_layout.height > work.bottom.saturating_sub(work.top)
+        {
+            return None;
+        }
+        let right = RECT {
+            left: candidates.right,
+            top: candidates.top,
+            right: candidates.right.saturating_add(detail_layout.width),
+            bottom: candidates.top.saturating_add(detail_layout.height),
+        };
+        if right.right <= work.right && right.bottom <= work.bottom {
+            return Some(right);
+        }
+
+        let left = RECT {
+            left: candidates.left.saturating_sub(detail_layout.width),
+            top: candidates.top,
+            right: candidates.left,
+            bottom: candidates.top.saturating_add(detail_layout.height),
+        };
+        if left.left >= work.left && left.bottom <= work.bottom {
+            return Some(left);
+        }
+
+        let max_x = (work.right.saturating_sub(detail_layout.width)).max(work.left);
+        let below_left = candidates.left.clamp(work.left, max_x);
+        let below = RECT {
+            left: below_left,
+            top: candidates.bottom.saturating_add(candidate_layout.gap),
+            right: below_left.saturating_add(detail_layout.width),
+            bottom: candidates
+                .bottom
+                .saturating_add(candidate_layout.gap)
+                .saturating_add(detail_layout.height),
+        };
+        (below.bottom <= work.bottom).then_some(below)
+    });
+
+    let window = detail.map_or(candidates, |detail| RECT {
+        left: candidates.left.min(detail.left),
+        top: candidates.top.min(detail.top),
+        right: candidates.right.max(detail.right),
+        bottom: candidates.bottom.max(detail.bottom),
+    });
+    let local = |rect: RECT| RECT {
+        left: rect.left.saturating_sub(window.left),
+        top: rect.top.saturating_sub(window.top),
+        right: rect.right.saturating_sub(window.left),
+        bottom: rect.bottom.saturating_sub(window.top),
+    };
+    PopupPlacement {
+        window,
+        layout: PopupLayout {
+            candidates: local(candidates),
+            detail: detail.map(local),
+        },
+    }
+}
+
 extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     match message {
         WM_PAINT => {
@@ -313,8 +433,16 @@ fn paint(window: HWND) {
     if sized && !state.is_null() {
         // SAFETY: `CandidateWindow` owns the stable box for the lifetime of
         // this window and clears the pointer before destroying it.
-        if let Some(candidates) = &unsafe { &*state }.candidates {
-            draw(dc, client, candidates, dpi(window));
+        let state = unsafe { &*state };
+        if let (Some(candidates), Some(layout)) = (&state.candidates, state.layout) {
+            draw(
+                dc,
+                client,
+                candidates,
+                state.detail.as_ref(),
+                layout,
+                dpi(window),
+            );
         }
     }
     // SAFETY: pairs with the successful `BeginPaint` above.
@@ -327,8 +455,11 @@ fn draw(
     dc: windows::Win32::Graphics::Gdi::HDC,
     client: RECT,
     candidates: &CandidateList,
+    detail: Option<&CandidateDetail>,
+    popup: PopupLayout,
     dpi: u32,
 ) {
+    let candidate_client = popup.candidates;
     let layout = layout(candidates, dpi);
     let palette = palette();
     fill_color(dc, &client, palette.surface);
@@ -359,12 +490,12 @@ fn draw(
     let page = candidates.current_page_range();
     for (row_index, global_index) in visible.enumerate() {
         let row = RECT {
-            left: client.left,
-            top: client
+            left: candidate_client.left,
+            top: candidate_client
                 .top
                 .saturating_add(layout.row_height.saturating_mul(row_index as i32)),
-            right: client.right,
-            bottom: client.top.saturating_add(
+            right: candidate_client.right,
+            bottom: candidate_client.top.saturating_add(
                 layout
                     .row_height
                     .saturating_mul((row_index as i32).saturating_add(1)),
@@ -442,10 +573,10 @@ fn draw(
     }
 
     let footer = RECT {
-        left: client.left,
-        top: client.bottom.saturating_sub(layout.footer_height),
-        right: client.right,
-        bottom: client.bottom,
+        left: candidate_client.left,
+        top: candidate_client.bottom.saturating_sub(layout.footer_height),
+        right: candidate_client.right,
+        bottom: candidate_client.bottom,
     };
     fill_color(dc, &footer, palette.surface);
     let divider = RECT {
@@ -484,20 +615,20 @@ fn draw(
     );
 
     let border_top = RECT {
-        bottom: client.top.saturating_add(1),
-        ..client
+        bottom: candidate_client.top.saturating_add(1),
+        ..candidate_client
     };
     let border_bottom = RECT {
-        top: client.bottom.saturating_sub(1),
-        ..client
+        top: candidate_client.bottom.saturating_sub(1),
+        ..candidate_client
     };
     let border_left = RECT {
-        right: client.left.saturating_add(1),
-        ..client
+        right: candidate_client.left.saturating_add(1),
+        ..candidate_client
     };
     let border_right = RECT {
-        left: client.right.saturating_sub(1),
-        ..client
+        left: candidate_client.right.saturating_sub(1),
+        ..candidate_client
     };
     for border in [border_top, border_bottom, border_left, border_right] {
         fill_color(dc, &border, palette.border);
@@ -515,6 +646,17 @@ fn draw(
         if !support_font.is_invalid() {
             let _ = DeleteObject(support_font.into());
         }
+    }
+
+    if let (Some(detail), Some(detail_rect)) = (detail, popup.detail) {
+        draw_detail(
+            dc,
+            detail_rect,
+            selected_surface(candidates).unwrap_or(""),
+            detail,
+            dpi,
+            palette,
+        );
     }
 }
 
@@ -560,6 +702,202 @@ fn layout(candidates: &CandidateList, dpi: u32) -> Layout {
     }
 }
 
+fn detail_layout(surface: &str, detail: &CandidateDetail, dpi: u32) -> DetailLayout {
+    let widest = std::iter::once(surface)
+        .chain(std::iter::once(detail.reading.as_str()))
+        .chain(std::iter::once(detail.definition.as_str()))
+        .chain(detail.aliases.iter().map(String::as_str))
+        .chain(detail.related.iter().map(String::as_str))
+        .chain(detail.similar.iter().map(String::as_str))
+        .chain(detail.antonyms.iter().map(String::as_str))
+        .map(|value| text_width_96(value, true))
+        .max()
+        .unwrap_or(0);
+    let width_96 = widest
+        .saturating_add(DETAIL_PADDING_96.saturating_mul(2))
+        .clamp(DETAIL_MIN_WIDTH_96, DETAIL_MAX_WIDTH_96);
+    let sections = [
+        &detail.aliases,
+        &detail.related,
+        &detail.similar,
+        &detail.antonyms,
+    ]
+    .into_iter()
+    .filter(|group| !group.is_empty())
+    .count() as i32;
+    let reading_height = i32::from(detail.reading != surface).saturating_mul(DETAIL_LINE_HEIGHT_96);
+    let height_96 = DETAIL_PADDING_96
+        .saturating_mul(2)
+        .saturating_add(DETAIL_TITLE_HEIGHT_96)
+        .saturating_add(reading_height)
+        // Definitions intentionally have a hard two-line visual budget.
+        .saturating_add(DETAIL_LINE_HEIGHT_96.saturating_mul(2))
+        .saturating_add(
+            sections.saturating_mul(DETAIL_LINE_HEIGHT_96.saturating_add(DETAIL_SECTION_GAP_96)),
+        );
+    DetailLayout {
+        width: scaled(width_96, dpi),
+        height: scaled(height_96, dpi),
+        padding: scaled(DETAIL_PADDING_96, dpi),
+        title_height: scaled(DETAIL_TITLE_HEIGHT_96, dpi),
+        line_height: scaled(DETAIL_LINE_HEIGHT_96, dpi),
+        section_gap: scaled(DETAIL_SECTION_GAP_96, dpi),
+    }
+}
+
+fn draw_detail(
+    dc: windows::Win32::Graphics::Gdi::HDC,
+    rect: RECT,
+    surface: &str,
+    detail: &CandidateDetail,
+    dpi: u32,
+    palette: Palette,
+) {
+    let layout = detail_layout(surface, detail, dpi);
+    fill_color(dc, &rect, palette.surface);
+    let border = [
+        RECT {
+            bottom: rect.top.saturating_add(1),
+            ..rect
+        },
+        RECT {
+            top: rect.bottom.saturating_sub(1),
+            ..rect
+        },
+        RECT {
+            right: rect.left.saturating_add(1),
+            ..rect
+        },
+        RECT {
+            left: rect.right.saturating_sub(1),
+            ..rect
+        },
+    ];
+    for edge in border {
+        fill_color(dc, &edge, palette.border);
+    }
+
+    let body_font = font(scaled(BODY_FONT_96, dpi));
+    let support_font = font(scaled(SUPPORT_FONT_96, dpi));
+    let prior = select_font(dc, body_font).or_else(|| select_font(dc, support_font));
+    // SAFETY: the paint DC is valid for this frame and the mode value is a
+    // documented GDI constant.
+    unsafe {
+        let _ = SetBkMode(dc, TRANSPARENT);
+    }
+    let content = RECT {
+        left: rect.left.saturating_add(layout.padding),
+        top: rect.top.saturating_add(layout.padding),
+        right: rect.right.saturating_sub(layout.padding),
+        bottom: rect.bottom.saturating_sub(layout.padding),
+    };
+    let mut cursor = content.top;
+    let title = RECT {
+        top: cursor,
+        bottom: cursor.saturating_add(layout.title_height),
+        ..content
+    };
+    text(dc, surface, title, palette.ink, DT_LEFT | DT_END_ELLIPSIS);
+    cursor = title.bottom;
+    let _ = select_font(dc, support_font);
+    if detail.reading != surface {
+        let reading = RECT {
+            top: cursor,
+            bottom: cursor.saturating_add(layout.line_height),
+            ..content
+        };
+        let value = format!("読み: {}", detail.reading);
+        text(
+            dc,
+            &value,
+            reading,
+            palette.annotation,
+            DT_LEFT | DT_END_ELLIPSIS,
+        );
+        cursor = reading.bottom;
+    }
+    for line in definition_lines(
+        &detail.definition,
+        content.right.saturating_sub(content.left),
+        dpi,
+    ) {
+        let line_rect = RECT {
+            top: cursor,
+            bottom: cursor.saturating_add(layout.line_height),
+            ..content
+        };
+        text(
+            dc,
+            &line,
+            line_rect,
+            palette.annotation,
+            DT_LEFT | DT_END_ELLIPSIS,
+        );
+        cursor = line_rect.bottom;
+    }
+    for (label, group) in [
+        ("別名", &detail.aliases),
+        ("関連語", &detail.related),
+        ("類似語", &detail.similar),
+        ("反対語", &detail.antonyms),
+    ] {
+        if group.is_empty() {
+            continue;
+        }
+        cursor = cursor.saturating_add(layout.section_gap);
+        let section = RECT {
+            top: cursor,
+            bottom: cursor.saturating_add(layout.line_height),
+            ..content
+        };
+        let value = format!("{label}: {}", relation_text(group));
+        text(
+            dc,
+            &value,
+            section,
+            palette.annotation,
+            DT_LEFT | DT_END_ELLIPSIS,
+        );
+        cursor = section.bottom;
+    }
+    // SAFETY: restore the pre-existing object before deleting either owned
+    // font. Each created font is owned by this routine only.
+    unsafe {
+        if let Some(prior) = prior {
+            let _ = SelectObject(dc, prior);
+        }
+        if !body_font.is_invalid() {
+            let _ = DeleteObject(body_font.into());
+        }
+        if !support_font.is_invalid() {
+            let _ = DeleteObject(support_font.into());
+        }
+    }
+}
+
+fn relation_text(values: &[String]) -> String {
+    values
+        .iter()
+        .take(3)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("・")
+}
+
+fn definition_lines(definition: &str, available_width: i32, dpi: u32) -> [String; 2] {
+    // This intentionally uses the widest expected glyph advance, which keeps
+    // CJK and emoji text inside the fixed two visual rows at every DPI.
+    let per_line = (available_width / scaled(SUPPORT_FONT_96, dpi).max(1)).max(1) as usize;
+    let mut characters = definition.chars();
+    let first: String = characters.by_ref().take(per_line).collect();
+    let mut second: String = characters.by_ref().take(per_line).collect();
+    if characters.next().is_some() {
+        second.pop();
+        second.push('…');
+    }
+    [first, second]
+}
+
 fn text_width_96(value: &str, supporting: bool) -> i32 {
     let unit = if supporting {
         SUPPORT_FONT_96
@@ -570,6 +908,13 @@ fn text_width_96(value: &str, supporting: bool) -> i32 {
         let advance = if character.is_ascii() { unit / 2 } else { unit };
         width.saturating_add(advance)
     })
+}
+
+fn selected_surface(candidates: &CandidateList) -> Option<&str> {
+    candidates
+        .items
+        .get(usize::from(candidates.selected))
+        .map(|candidate| candidate.text.as_str())
 }
 
 /// Keeps the full logical selection rail visible inside the one-pixel window
@@ -839,6 +1184,18 @@ mod tests {
         }
     }
 
+    fn detail() -> CandidateDetail {
+        CandidateDetail {
+            reading: "ようご".to_owned(),
+            definition: "絵文字😀と結合文字e\u{301}を含む、画面では二行までの説明です。".repeat(8),
+            definition_truncated: true,
+            aliases: vec!["別名A".to_owned(), "別名B".to_owned()],
+            related: vec!["関連語".to_owned()],
+            similar: Vec::new(),
+            antonyms: vec!["反対語".to_owned()],
+        }
+    }
+
     #[test]
     fn digit_labels_cover_exactly_the_protocol_page() {
         for index in 0..CANDIDATE_PAGE_SIZE {
@@ -1034,5 +1391,140 @@ mod tests {
         };
         let popup = place(anchor, 600, 600, work, 4);
         assert_eq!((popup.left, popup.top), (work.left, work.top));
+    }
+
+    #[test]
+    fn detail_uses_two_visual_lines_and_only_three_relation_words() {
+        let lines = definition_lines("😀e\u{301}".repeat(128).as_str(), 40, 96);
+        assert_eq!(lines.len(), 2);
+        assert!(lines[1].ends_with('…'));
+        assert_eq!(
+            relation_text(&["a".into(), "b".into(), "c".into(), "d".into()]),
+            "a・b・c"
+        );
+    }
+
+    #[test]
+    fn detail_placement_preserves_candidate_geometry_at_dpi_and_work_edges() {
+        let list = candidates(vec![item("候補", "")], 0, CandidateKind::Conversion);
+        let detail = detail();
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_200,
+            bottom: 900,
+        };
+        for dpi in [96, 120, 144, 168, 192, 240] {
+            let candidate_layout = layout(&list, dpi);
+            let placement = popup_placement(
+                ScreenRect {
+                    left: 100,
+                    top: 100,
+                    right: 120,
+                    bottom: 124,
+                },
+                candidate_layout,
+                Some(detail_layout("候補", &detail, dpi)),
+                work,
+            );
+            assert_eq!(
+                placement.layout.candidates.right - placement.layout.candidates.left,
+                candidate_layout.width
+            );
+            assert_eq!(
+                placement.layout.candidates.bottom - placement.layout.candidates.top,
+                candidate_layout.height
+            );
+            assert!(placement.layout.detail.is_some());
+            assert!(placement.window.left >= work.left);
+            assert!(placement.window.top >= work.top);
+            assert!(placement.window.right <= work.right);
+            assert!(placement.window.bottom <= work.bottom);
+        }
+    }
+
+    #[test]
+    fn detail_falls_back_right_left_bottom_then_absent() {
+        let list = candidates(vec![item("候補", "")], 0, CandidateKind::Conversion);
+        let candidate_layout = layout(&list, 96);
+        let detail_layout = detail_layout("候補", &detail(), 96);
+
+        let right = popup_placement(
+            ScreenRect {
+                left: 100,
+                top: 80,
+                right: 120,
+                bottom: 104,
+            },
+            candidate_layout,
+            Some(detail_layout),
+            RECT {
+                left: 0,
+                top: 0,
+                right: 1_000,
+                bottom: 700,
+            },
+        );
+        assert_eq!(
+            right.layout.detail.expect("right detail").left,
+            right.layout.candidates.right
+        );
+
+        let left = popup_placement(
+            ScreenRect {
+                left: 400,
+                top: 80,
+                right: 420,
+                bottom: 104,
+            },
+            candidate_layout,
+            Some(detail_layout),
+            RECT {
+                left: 0,
+                top: 0,
+                right: 800,
+                bottom: 700,
+            },
+        );
+        assert_eq!(
+            left.layout.detail.expect("left detail").right,
+            left.layout.candidates.left
+        );
+
+        let below = popup_placement(
+            ScreenRect {
+                left: 20,
+                top: 80,
+                right: 40,
+                bottom: 104,
+            },
+            candidate_layout,
+            Some(detail_layout),
+            RECT {
+                left: 0,
+                top: 0,
+                right: 480,
+                bottom: 700,
+            },
+        );
+        assert!(below.layout.detail.expect("bottom detail").top > below.layout.candidates.bottom);
+
+        let absent = popup_placement(
+            ScreenRect {
+                left: 20,
+                top: 600,
+                right: 40,
+                bottom: 624,
+            },
+            candidate_layout,
+            Some(detail_layout),
+            RECT {
+                left: 0,
+                top: 0,
+                right: 480,
+                bottom: 700,
+            },
+        );
+        assert!(absent.layout.detail.is_none());
     }
 }

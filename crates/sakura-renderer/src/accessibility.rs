@@ -3,7 +3,7 @@
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use sakura_proto::CandidateList;
+use sakura_proto::{CandidateDetail, CandidateList};
 use windows::core::{implement, Error, IUnknown, Result};
 use windows::Win32::Foundation::{
     E_NOTIMPL, E_UNEXPECTED, HWND, LPARAM, LRESULT, RPC_E_CHANGED_MODE, WPARAM,
@@ -149,8 +149,8 @@ impl CandidateAccessibility {
         Self { provider, state }
     }
 
-    pub fn update(&self, candidates: &CandidateList) {
-        let name = announcement(candidates);
+    pub fn update(&self, candidates: &CandidateList, detail: Option<&CandidateDetail>) {
+        let name = announcement(candidates, detail);
         match self.state.lock() {
             Ok(mut state) => {
                 state.name = name;
@@ -191,7 +191,7 @@ impl CandidateAccessibility {
     }
 }
 
-fn announcement(candidates: &CandidateList) -> String {
+fn announcement(candidates: &CandidateList, detail: Option<&CandidateDetail>) -> String {
     let visible = candidates.visible_range();
     let page = candidates.current_page().saturating_add(1);
     let pages = candidates.page_count();
@@ -218,6 +218,44 @@ fn announcement(candidates: &CandidateList) -> String {
             result.push_str(&candidate.annotation);
         }
         result.push('.');
+    }
+    if let Some(detail) = detail {
+        result.push_str(" Detail for selected candidate: ");
+        let surface = candidates
+            .items
+            .get(usize::from(candidates.selected))
+            .map(|candidate| candidate.text.as_str())
+            .unwrap_or("");
+        result.push_str(surface);
+        if detail.reading != surface {
+            result.push_str(" (reading: ");
+            result.push_str(&detail.reading);
+            result.push(')');
+        }
+        result.push_str(". Definition: ");
+        // UI Automation intentionally receives the complete definition, not
+        // the two-line visual truncation used by the non-interactive popup.
+        // When the protocol carries only a bounded preview, the announcement
+        // explicitly says that more source text exists.
+        result.push_str(&detail.definition);
+        if detail.definition_truncated {
+            result.push_str(" Definition continues.");
+        }
+        for (label, group) in [
+            ("Aliases", &detail.aliases),
+            ("Related", &detail.related),
+            ("Similar", &detail.similar),
+            ("Antonyms", &detail.antonyms),
+        ] {
+            if group.is_empty() {
+                continue;
+            }
+            result.push(' ');
+            result.push_str(label);
+            result.push_str(": ");
+            result.push_str(&group.join(", "));
+            result.push('.');
+        }
     }
     result
 }
@@ -254,7 +292,7 @@ mod tests {
             page_size: 9,
         };
 
-        let name = announcement(&candidates);
+        let name = announcement(&candidates, None);
         assert!(name.contains("conversion candidates, page 2 of 2, selected 10 of 14"));
         assert!(name.contains("Candidate 10 of 14 (selected): candidate-10 — annotation."));
         assert!(name.contains("Candidate 14 of 14: candidate-14."));
@@ -276,7 +314,7 @@ mod tests {
             page_size: 9,
         };
 
-        let name = announcement(&candidates);
+        let name = announcement(&candidates, None);
         assert!(name.contains("Candidate 2 of 3 (selected): candidate-2."));
         assert!(!name.contains("candidate-1"));
         assert!(!name.contains("candidate-3"));
@@ -308,7 +346,7 @@ mod tests {
                                     page_size: page_size as u16,
                                 };
 
-                                let name = announcement(&candidates);
+                                let name = announcement(&candidates, None);
                                 let expected_page = selected / page_size + 1;
                                 let expected_pages = item_count.div_ceil(page_size);
                                 assert!(name.starts_with("Sakura Input candidates,"));
@@ -348,5 +386,47 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn announcement_keeps_the_full_definition_and_only_non_empty_groups() {
+        let candidates = CandidateList {
+            kind: CandidateKind::Conversion,
+            presentation: CandidatePresentation::Compact,
+            items: vec![Candidate {
+                text: "用語".to_string(),
+                annotation: String::new(),
+            }],
+            selected: 0,
+            page_size: 9,
+        };
+        let definition =
+            "これは画面の二行制限より長い完全な説明です。スクリーンリーダーには省略しません。";
+        let detail = CandidateDetail {
+            reading: "ようご".to_string(),
+            definition: definition.to_string(),
+            definition_truncated: false,
+            aliases: vec!["別名A".to_string(), "別名B".to_string()],
+            related: Vec::new(),
+            similar: vec!["類似語".to_string()],
+            antonyms: Vec::new(),
+        };
+
+        let name = announcement(&candidates, Some(&detail));
+        assert!(name.contains("Detail for selected candidate: 用語 (reading: ようご)."));
+        assert!(name.contains(definition));
+        assert!(name.contains("Aliases: 別名A, 別名B."));
+        assert!(name.contains("Similar: 類似語."));
+        assert!(!name.contains("Related:"));
+        assert!(!name.contains("Antonyms:"));
+        assert!(!name.contains("Definition continues."));
+
+        let truncated = CandidateDetail {
+            definition: "省略された説明のプレビュー".to_string(),
+            definition_truncated: true,
+            ..detail
+        };
+        let truncated_name = announcement(&candidates, Some(&truncated));
+        assert!(truncated_name.contains("省略された説明のプレビュー Definition continues."));
     }
 }

@@ -78,6 +78,9 @@ pub struct ConversionCandidate {
     text: FixedStr<MAX_PREEDIT_BYTES>,
     annotation: FixedStr<MAX_PREEDIT_BYTES>,
     segments: FixedVec<ConversionSegment, MAX_SEGMENTS>,
+    /// Exact system-dictionary provenance, present only for a one-edge system
+    /// candidate. Composite and generated candidates deliberately have none.
+    system_entry_index: Option<u32>,
     pub cost: i64,
 }
 
@@ -107,6 +110,10 @@ impl ConversionCandidate {
 
     pub fn segments(&self) -> &[ConversionSegment] {
         self.segments.as_slice()
+    }
+
+    pub const fn system_entry_index(&self) -> Option<u32> {
+        self.system_entry_index
     }
 }
 
@@ -139,7 +146,7 @@ impl std::error::Error for ConversionError {}
 
 #[derive(Debug, Clone, Copy)]
 enum Surface {
-    Dictionary(Entry),
+    Dictionary { entry: Entry, entry_index: u32 },
     User(usize),
     Reading,
     Katakana,
@@ -369,6 +376,7 @@ impl Converter {
                     text,
                     annotation,
                     segments,
+                    system_entry_index: None,
                     cost: base
                         .cost
                         .saturating_add(100 + i64::try_from(style_index).unwrap_or(0)),
@@ -441,6 +449,9 @@ impl Converter {
                         0
                     };
                     let local_cost = i64::from(matched.entry.word_cost).saturating_sub(boost);
+                    let Ok(entry_index) = u32::try_from(matched.entry_index) else {
+                        return true;
+                    };
                     if let Err(error) = self.add_node(
                         dictionary,
                         NodeSpec {
@@ -449,7 +460,10 @@ impl Converter {
                             left_id: matched.entry.left_id,
                             right_id: matched.entry.right_id,
                             local_cost,
-                            surface: Surface::Dictionary(matched.entry),
+                            surface: Surface::Dictionary {
+                                entry: matched.entry,
+                                entry_index,
+                            },
                         },
                     ) {
                         failure = Some(error);
@@ -867,14 +881,14 @@ fn make_candidate(
         let node = nodes[*index];
         let text_start = text.len();
         let flags = match node.surface {
-            Surface::Dictionary(entry) => entry.flags,
+            Surface::Dictionary { entry, .. } => entry.flags,
             Surface::User(index) => user_dictionary
                 .and_then(|user| user.entry(index))
                 .map_or(EntryFlags::NONE, |entry| entry.flags()),
             _ => EntryFlags::NONE,
         };
         match node.surface {
-            Surface::Dictionary(entry) => {
+            Surface::Dictionary { entry, .. } => {
                 dictionary
                     .write_surface(entry, &mut text)
                     .map_err(|_| ConversionError::OutputTooLong)?;
@@ -919,10 +933,19 @@ fn make_candidate(
             })
             .map_err(|_| ConversionError::LatticeFull)?;
     }
+    let system_entry_index = if path.len() == 1 {
+        match nodes[path[0]].surface {
+            Surface::Dictionary { entry_index, .. } => Some(entry_index),
+            _ => None,
+        }
+    } else {
+        None
+    };
     Ok(ConversionCandidate {
         text,
         annotation,
         segments,
+        system_entry_index,
         cost,
     })
 }

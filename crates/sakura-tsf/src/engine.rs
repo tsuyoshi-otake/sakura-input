@@ -830,6 +830,7 @@ mod tests {
             commit: None,
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
         }
     }
 

@@ -43,8 +43,10 @@ use std::time::Duration;
 
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
-    Candidate, CandidateKind, CandidateList, FixedStr, FixedVec, Mode, OutputBuf, Revision,
-    ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES, MAX_CANDIDATE_TEXT_BYTES,
+    Candidate, CandidateDetail, CandidateKind, CandidateList, FixedStr, FixedVec, Mode, OutputBuf,
+    Revision, ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES,
+    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
+    MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_CANDIDATE_TEXT_BYTES,
 };
 
 /// How long [`UiBoard::wait_past`] blocks before answering with unchanged
@@ -208,12 +210,151 @@ impl CandidateSnapshot {
     }
 }
 
+/// Board-owned selected-detail snapshot. This mirrors one `OutputBuf` detail
+/// in fixed storage, so publishing a candidate list never allocates and a UI
+/// revision cannot combine candidates from one output with detail from another.
+#[derive(Debug)]
+struct CandidateDetailSnapshot {
+    reading: FixedStr<MAX_CANDIDATE_DETAIL_READING_BYTES>,
+    definition: FixedStr<MAX_CANDIDATE_DETAIL_DEFINITION_BYTES>,
+    definition_truncated: bool,
+    aliases: DetailTermsSnapshot,
+    related: DetailTermsSnapshot,
+    similar: DetailTermsSnapshot,
+    antonyms: DetailTermsSnapshot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct DetailTextSpan {
+    start: u16,
+    len: u16,
+}
+
+#[derive(Debug)]
+struct DetailTermsSnapshot {
+    text: FixedStr<{ MAX_CANDIDATE_DETAIL_RELATION_BYTES * MAX_CANDIDATE_DETAIL_RELATIONS }>,
+    spans: FixedVec<DetailTextSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
+}
+
+impl DetailTermsSnapshot {
+    fn new() -> Self {
+        Self {
+            text: FixedStr::new(),
+            spans: FixedVec::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.text.clear();
+        self.spans.clear();
+    }
+
+    fn copy_from<'a>(&mut self, terms: impl Iterator<Item = &'a str>) -> bool {
+        self.clear();
+        for term in terms {
+            let start = self.text.len();
+            if self.text.push_str(term).is_err()
+                || self
+                    .spans
+                    .push(DetailTextSpan {
+                        start: u16::try_from(start).unwrap_or(u16::MAX),
+                        len: u16::try_from(term.len()).unwrap_or(u16::MAX),
+                    })
+                    .is_err()
+            {
+                self.clear();
+                return false;
+            }
+        }
+        true
+    }
+
+    fn terms(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.spans.as_slice().iter().map(|span| {
+            let start = usize::from(span.start);
+            self.text
+                .as_str()
+                .get(start..start + usize::from(span.len))
+                .unwrap_or("")
+        })
+    }
+}
+
+impl CandidateDetailSnapshot {
+    fn new() -> Self {
+        Self {
+            reading: FixedStr::new(),
+            definition: FixedStr::new(),
+            definition_truncated: false,
+            aliases: DetailTermsSnapshot::new(),
+            related: DetailTermsSnapshot::new(),
+            similar: DetailTermsSnapshot::new(),
+            antonyms: DetailTermsSnapshot::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.reading.clear();
+        self.definition.clear();
+        self.definition_truncated = false;
+        self.aliases.clear();
+        self.related.clear();
+        self.similar.clear();
+        self.antonyms.clear();
+    }
+
+    fn copy_from_output(&mut self, output: &OutputBuf) -> bool {
+        self.clear();
+        let Some(detail) = output.candidate_detail() else {
+            return true;
+        };
+        if self.reading.push_str(detail.reading).is_err()
+            || self.definition.push_str(detail.definition).is_err()
+            || !self.aliases.copy_from(detail.aliases())
+            || !self.related.copy_from(detail.related())
+            || !self.similar.copy_from(detail.similar())
+            || !self.antonyms.copy_from(detail.antonyms())
+        {
+            self.clear();
+            return false;
+        }
+        self.definition_truncated = detail.definition_truncated;
+        true
+    }
+
+    fn matches_output(&self, output: &OutputBuf) -> bool {
+        let Some(detail) = output.candidate_detail() else {
+            return self.reading.is_empty();
+        };
+        self.reading.as_str() == detail.reading
+            && self.definition.as_str() == detail.definition
+            && self.definition_truncated == detail.definition_truncated
+            && self.aliases.terms().eq(detail.aliases())
+            && self.related.terms().eq(detail.related())
+            && self.similar.terms().eq(detail.similar())
+            && self.antonyms.terms().eq(detail.antonyms())
+    }
+
+    fn to_owned(&self) -> Option<CandidateDetail> {
+        (!self.reading.is_empty()).then(|| CandidateDetail {
+            reading: self.reading.as_str().to_owned(),
+            definition: self.definition.as_str().to_owned(),
+            definition_truncated: self.definition_truncated,
+            aliases: self.aliases.terms().map(str::to_owned).collect(),
+            related: self.related.terms().map(str::to_owned).collect(),
+            similar: self.similar.terms().map(str::to_owned).collect(),
+            antonyms: self.antonyms.terms().map(str::to_owned).collect(),
+        })
+    }
+}
+
 #[derive(Debug)]
 struct UiSnapshot {
     revision: Revision,
     mode: Option<Mode>,
     has_candidates: bool,
     candidates: CandidateSnapshot,
+    candidate_detail: CandidateDetailSnapshot,
     candidate_session: Option<SessionId>,
     anchor: Option<ScreenRect>,
     renderer_visible: bool,
@@ -227,6 +368,7 @@ impl UiSnapshot {
             mode: None,
             has_candidates: false,
             candidates: CandidateSnapshot::new(),
+            candidate_detail: CandidateDetailSnapshot::new(),
             candidate_session: None,
             anchor: None,
             renderer_visible: false,
@@ -239,6 +381,10 @@ impl UiSnapshot {
             revision: self.revision,
             mode: self.mode,
             candidates: self.has_candidates.then(|| self.candidates.to_owned()),
+            candidate_detail: self
+                .has_candidates
+                .then(|| self.candidate_detail.to_owned())
+                .flatten(),
             anchor: self.anchor,
             renderer_visible: self.renderer_visible,
             stopping: self.stopping,
@@ -337,6 +483,7 @@ impl UiBoard {
         let changed = state.mode != next_mode
             || state.has_candidates != has_candidates
             || (has_candidates && !state.candidates.matches_output(output))
+            || (has_candidates && !state.candidate_detail.matches_output(output))
             || state.candidate_session != candidate_session;
         if !changed {
             return;
@@ -360,8 +507,15 @@ impl UiBoard {
                 self.changed.notify_all();
                 return;
             }
+            if !state.candidate_detail.copy_from_output(output) {
+                // Detail is an optional enhancement. A malformed detail may
+                // never hide the authoritative candidate list or disturb its
+                // selected row; retain a terminal empty-detail snapshot.
+                state.candidate_detail.clear();
+            }
         } else {
             state.candidates.clear();
+            state.candidate_detail.clear();
         }
         state.revision = state.revision.wrapping_add(1);
         state.mode = next_mode;
@@ -410,6 +564,7 @@ impl UiBoard {
         state.revision = state.revision.wrapping_add(1);
         state.has_candidates = false;
         state.candidates.clear();
+        state.candidate_detail.clear();
         state.candidate_session = None;
         state.anchor = None;
         state.renderer_visible = false;
@@ -487,6 +642,7 @@ impl UiBoard {
                     revision: since,
                     mode: None,
                     candidates: None,
+                    candidate_detail: None,
                     anchor: None,
                     renderer_visible: false,
                     stopping: false,
@@ -536,7 +692,7 @@ impl Default for UiBoard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_proto::OutputBuf;
+    use sakura_proto::{CandidateDetailInput, OutputBuf, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES};
     use std::sync::Arc;
     use std::time::Instant;
 
@@ -592,6 +748,67 @@ mod tests {
         assert_eq!(candidates.items[1].annotation, "名詞");
         assert_eq!(state.anchor, None);
         assert!(!state.renderer_visible);
+    }
+
+    #[test]
+    fn rejected_detail_leaves_the_candidate_snapshot_visible_and_selected() {
+        let board = UiBoard::new();
+        let mut output = candidate_output(1);
+        let oversized = "x".repeat(MAX_CANDIDATE_DETAIL_DEFINITION_BYTES + 1);
+        assert!(output
+            .set_candidate_detail(CandidateDetailInput {
+                reading: "かな",
+                definition: &oversized,
+                definition_truncated: false,
+                aliases: &[],
+                related: &[],
+                similar: &[],
+                antonyms: &[],
+            })
+            .is_err());
+
+        board.publish_output(7, &output);
+        let state = look(&board, 1);
+        assert_eq!(state.candidates.as_ref().map(|list| list.selected), Some(1));
+        assert_eq!(
+            state.candidates.as_ref().map(|list| list.items.len()),
+            Some(2)
+        );
+        assert_eq!(state.candidate_detail, None);
+    }
+
+    #[test]
+    fn selection_change_without_detail_clears_the_prior_detail_atomically() {
+        let board = UiBoard::new();
+        let mut selected_system_entry = candidate_output(0);
+        selected_system_entry
+            .set_candidate_detail(CandidateDetailInput {
+                reading: "かな",
+                definition: "selected system definition",
+                definition_truncated: false,
+                aliases: &[],
+                related: &[],
+                similar: &[],
+                antonyms: &[],
+            })
+            .expect("valid detail");
+        board.publish_output(7, &selected_system_entry);
+        let first = look(&board, 1);
+        assert_eq!(
+            first
+                .candidate_detail
+                .as_ref()
+                .map(|detail| detail.definition.as_str()),
+            Some("selected system definition")
+        );
+
+        board.publish_output(7, &candidate_output(1));
+        let second = look(&board, first.revision);
+        assert_eq!(
+            second.candidates.as_ref().map(|list| list.selected),
+            Some(1)
+        );
+        assert_eq!(second.candidate_detail, None);
     }
 
     #[test]

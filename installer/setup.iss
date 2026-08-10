@@ -35,6 +35,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 #ifndef IncludeNeuralReranker
 #define IncludeNeuralReranker 0
 #endif
+#ifndef IncludeJapaneseWordNet
+#define IncludeJapaneseWordNet 0
+#endif
 #if IncludeNeuralReranker
 #include "..\artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.iss"
 #if NeuralPayloadCount != 8
@@ -129,6 +132,14 @@ Source: "..\docs\guide-ja.md"; DestDir: "{#AppVersionedDir}\docs"; Flags: ignore
 Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
 Source: "..\THIRD_PARTY_LICENSES\mozc-dictionary.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
 Source: "..\THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
+
+#if IncludeJapaneseWordNet
+; Dictionary details are sourced only from the pinned Japanese WordNet release.
+; Keep its license, immutable source lock, and the aggregate notice beside the
+; derived system.dic so an offline installation retains its provenance.
+Source: "..\THIRD_PARTY_LICENSES\japanese-wordnet-1.1-NICT.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
+Source: "..\data\SOURCES.lock"; DestDir: "{#AppVersionedDir}\licenses"; DestName: "dictionary-sources.lock"; Flags: ignoreversion
+#endif
 
 #if IncludeNeuralReranker
 ; The worker resolves onnxruntime.dll beside its executable. The model, tokenizer

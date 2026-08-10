@@ -90,6 +90,10 @@ jobs:
           -MozcSource .sources/mozc
           -GlossarySource .sources/smile-chat
           -OutputDirectory artifacts/release
+      # build-dictionary obtains Japanese WordNet from its official fixed
+      # artifact and verifies its pinned byte length and SHA-256 itself.
+      # Keep this ownership here: an unchecked workflow download must not
+      # bypass the dictionary builder's source validation.
 
       - name: Build release binaries
         run: cargo build --workspace --release --locked
@@ -164,6 +168,15 @@ jobs:
           [IO.File]::Copy('docs/release-notes-v1.0.0.md', 'release-bundle/release-notes.md', $true)
           [IO.File]::Copy('artifacts/release/dictionary-build.report.json', 'release-bundle/dictionary-build.report.json', $true)
           [IO.File]::Copy('installer/out/installer-build.report.json', 'release-bundle/installer-build.report.json', $true)
+          [IO.Directory]::CreateDirectory('release-bundle/provenance/data') | Out-Null
+          [IO.Directory]::CreateDirectory('release-bundle/provenance/THIRD_PARTY_LICENSES') | Out-Null
+          [IO.File]::Copy('data/SOURCES.lock', 'release-bundle/provenance/data/SOURCES.lock', $true)
+          [IO.File]::Copy('THIRD_PARTY_NOTICES.md', 'release-bundle/provenance/THIRD_PARTY_NOTICES.md', $true)
+          [IO.File]::Copy(
+            'THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt',
+            'release-bundle/provenance/THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt',
+            $true
+          )
           $release = 'target/x86_64-pc-windows-msvc/release'
           foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe')) {
             [IO.File]::Copy((Join-Path $release $name), (Join-Path 'release-bundle/payload' $name), $true)

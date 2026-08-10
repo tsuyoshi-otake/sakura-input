@@ -6,7 +6,8 @@ use std::sync::Arc;
 use sakura_core::dictionary::EntryFlags;
 use sakura_proto::MAX_PREEDIT_BYTES;
 
-use super::{validate_text, Error, SourceEntry};
+use super::{validate_text, Error, SourceDetail, SourceDetailRelation, SourceEntry};
+use sakura_core::dictionary::DetailRelationKind;
 
 const MAX_JSON_DEPTH: usize = 64;
 /// Kana input should prefer a native Japanese surface when Mozc already has
@@ -25,6 +26,7 @@ pub struct GlossarySense {
     pub definition: String,
     pub reading: Option<String>,
     pub domain: Option<String>,
+    pub keywords: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +84,68 @@ pub fn import(
     let mut importer = Importer::new(terms, defaults)?;
     importer.match_mozc(mozc_entries);
     Ok(importer.finish())
+}
+
+/// Builds sparse exact-entry detail records from smile-chat's licensed source.
+/// Alias strings are retained as aliases.  A keyword becomes a `Related` edge
+/// only when it names exactly one glossary term; unresolved or ambiguous
+/// keywords are deliberately omitted.  smile-chat has no explicit synonym or
+/// antonym field, so this function never fabricates either relationship.
+pub fn detail_sources(terms: &[GlossaryTerm], entries: &[SourceEntry]) -> Vec<SourceDetail> {
+    let mut term_counts = BTreeMap::<&str, usize>::new();
+    for term in terms {
+        *term_counts.entry(term.term.as_str()).or_default() += 1;
+    }
+    // The category lexicon has millions of entries whereas the glossary has
+    // thousands of terms. Index only glossary surfaces in one pass instead of
+    // scanning every dictionary entry for every term.
+    let mut entries_by_surface = BTreeMap::<&str, Vec<&SourceEntry>>::new();
+    for entry in entries {
+        if !term_counts.contains_key(entry.surface.as_str()) {
+            continue;
+        }
+        entries_by_surface
+            .entry(entry.surface.as_str())
+            .or_default()
+            .push(entry);
+    }
+    let mut details = Vec::new();
+    for term in terms {
+        let Some(sense) = term.senses.first() else {
+            continue;
+        };
+        let mut relations = term
+            .aliases
+            .iter()
+            .filter(|alias| !alias.is_empty() && *alias != &term.term)
+            .map(|alias| SourceDetailRelation {
+                kind: DetailRelationKind::Alias,
+                target: alias.clone(),
+            })
+            .collect::<Vec<_>>();
+        for keyword in term.senses.iter().flat_map(|sense| &sense.keywords) {
+            if keyword != &term.term && term_counts.get(keyword.as_str()) == Some(&1) {
+                relations.push(SourceDetailRelation {
+                    kind: DetailRelationKind::Related,
+                    target: keyword.clone(),
+                });
+            }
+        }
+        let Some(matches) = entries_by_surface.get(term.term.as_str()) else {
+            continue;
+        };
+        for entry in matches {
+            details.push(SourceDetail {
+                reading: entry.reading.clone(),
+                surface: entry.surface.clone(),
+                left_id: entry.left_id,
+                right_id: entry.right_id,
+                description: sense.definition.clone(),
+                relations: relations.clone(),
+            });
+        }
+    }
+    details
 }
 
 /// Incremental glossary importer for processing Mozc's dictionary shards.
@@ -382,14 +446,7 @@ fn annotation(term: &GlossaryTerm) -> String {
     let Some(sense) = term.senses.first() else {
         return String::new();
     };
-    let mut value = String::new();
-    if let Some(domain) = sense.domain.as_deref() {
-        value.push('[');
-        value.push_str(domain);
-        value.push_str("] ");
-    }
-    value.push_str(&sense.definition);
-    value = value.replace(['\t', '\r', '\n'], " ");
+    let mut value = sense.definition.replace(['\t', '\r', '\n'], " ");
     if value.len() > MAX_PREEDIT_BYTES {
         let mut end = MAX_PREEDIT_BYTES;
         while !value.is_char_boundary(end) {
@@ -590,11 +647,13 @@ impl<'a> Parser<'a> {
         let mut definition = None;
         let mut reading = None;
         let mut domain = None;
+        let mut keywords = Vec::new();
         self.object_fields(|parser, key| {
             match key.as_str() {
                 "definition" => definition = Some(parser.string_value()?),
                 "reading" => reading = parser.optional_string()?,
                 "domain" => domain = parser.optional_string()?,
+                "keywords" => keywords = parser.string_array()?,
                 _ => parser.skip_value(0)?,
             }
             Ok(())
@@ -607,6 +666,7 @@ impl<'a> Parser<'a> {
             definition,
             reading,
             domain,
+            keywords,
         })
     }
 

@@ -451,6 +451,115 @@ impl Candidate {
     }
 }
 
+/// Optional, source-backed information for exactly the selected candidate.
+///
+/// This is intentionally separate from [`CandidateList`]: copying a glossary
+/// entry onto every candidate would increase IPC and renderer work without
+/// improving the selected-row explanation. Relationship lists are direct
+/// links only; callers must not expand them transitively.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CandidateDetail {
+    pub reading: String,
+    /// A bounded preview for display and UI Automation, never an implicitly
+    /// shortened source definition. See [`Self::definition_truncated`].
+    pub definition: String,
+    /// `false` means [`Self::definition`] is complete; `true` means its
+    /// source-backed dictionary definition has additional content.
+    pub definition_truncated: bool,
+    pub aliases: Vec<String>,
+    pub related: Vec<String>,
+    pub similar: Vec<String>,
+    pub antonyms: Vec<String>,
+}
+
+impl CandidateDetail {
+    /// Explicitly derives a bounded UTF-8 preview and whether source text
+    /// remains. Producers opt into this helper; the protocol never silently
+    /// truncates a definition during encode or decode.
+    pub fn bounded_definition_preview(definition: &str) -> (&str, bool) {
+        if definition.len() <= crate::MAX_CANDIDATE_DETAIL_DEFINITION_BYTES {
+            return (definition, false);
+        }
+        let mut end = crate::MAX_CANDIDATE_DETAIL_DEFINITION_BYTES;
+        while !definition.is_char_boundary(end) {
+            end -= 1;
+        }
+        (&definition[..end], true)
+    }
+
+    /// Validates all bounded fields and rejects empty or duplicate relation
+    /// words. A malformed optional detail must be omitted by its producer,
+    /// not partially displayed by a consumer.
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.reading.is_empty()
+            || self.definition.is_empty()
+            || self.reading.len() > crate::MAX_CANDIDATE_DETAIL_READING_BYTES
+            || self.definition.len() > crate::MAX_CANDIDATE_DETAIL_DEFINITION_BYTES
+        {
+            return Err(Error::TooLarge);
+        }
+        let groups = [&self.aliases, &self.related, &self.similar, &self.antonyms];
+        let mut seen = [""; crate::MAX_CANDIDATE_DETAIL_RELATIONS * 4];
+        let mut seen_len = 0;
+        for group in groups {
+            if group.len() > crate::MAX_CANDIDATE_DETAIL_RELATIONS {
+                return Err(Error::TooLarge);
+            }
+            for value in group {
+                if value.is_empty() || value.len() > crate::MAX_CANDIDATE_DETAIL_RELATION_BYTES {
+                    return Err(Error::TooLarge);
+                }
+                if seen[..seen_len].contains(&value.as_str()) {
+                    return Err(Error::TooLarge);
+                }
+                seen[seen_len] = value;
+                seen_len += 1;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        self.validate()?;
+        w.write_str(&self.reading)?;
+        w.write_str(&self.definition)?;
+        w.write_bool(self.definition_truncated)?;
+        for group in [&self.aliases, &self.related, &self.similar, &self.antonyms] {
+            w.write_count(group.len())?;
+            for value in group {
+                w.write_str(value)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        fn group(r: &mut Reader<'_>) -> Result<Vec<String>, Error> {
+            let count = r.read_count()? as usize;
+            if count > crate::MAX_CANDIDATE_DETAIL_RELATIONS {
+                return Err(Error::TooLarge);
+            }
+            let mut values = Vec::with_capacity(count);
+            for _ in 0..count {
+                values.push(r.read_str()?.to_owned());
+            }
+            Ok(values)
+        }
+
+        let detail = Self {
+            reading: r.read_str()?.to_owned(),
+            definition: r.read_str()?.to_owned(),
+            definition_truncated: r.read_bool()?,
+            aliases: group(r)?,
+            related: group(r)?,
+            similar: group(r)?,
+            antonyms: group(r)?,
+        };
+        detail.validate()?;
+        Ok(detail)
+    }
+}
+
 /// How a candidate list is presented by Sakura-owned UI.
 ///
 /// The complete bounded list remains on the wire for every presentation so
@@ -707,11 +816,17 @@ pub struct Output {
     pub delete_before: String,
     /// Present while conversion or prediction candidates are selectable.
     pub candidates: Option<CandidateList>,
+    /// Optional information for the selected candidate only. It is invalid
+    /// without a candidate list and therefore fails closed on encode/decode.
+    pub candidate_detail: Option<CandidateDetail>,
 }
 
 impl Output {
     /// Encodes all fields in declaration order.
     pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        if self.candidate_detail.is_some() && self.candidates.is_none() {
+            return Err(Error::TooLarge);
+        }
         w.write_bool(self.consumed)?;
         w.write_bool(self.beep)?;
         w.write_option(&self.mode, |w, m| m.encode(w))?;
@@ -721,7 +836,8 @@ impl Output {
             return Err(Error::TooLarge);
         }
         w.write_str(&self.delete_before)?;
-        w.write_option(&self.candidates, |w, candidates| candidates.encode(w))
+        w.write_option(&self.candidates, |w, candidates| candidates.encode(w))?;
+        w.write_option(&self.candidate_detail, |w, detail| detail.encode(w))
     }
 
     /// Decodes all fields in declaration order.
@@ -737,6 +853,10 @@ impl Output {
         }
         let delete_before = delete_before.to_owned();
         let candidates = r.read_option(CandidateList::decode)?;
+        let candidate_detail = r.read_option(CandidateDetail::decode)?;
+        if candidate_detail.is_some() && candidates.is_none() {
+            return Err(Error::TooLarge);
+        }
         Ok(Output {
             consumed,
             beep,
@@ -745,6 +865,7 @@ impl Output {
             commit,
             delete_before,
             candidates,
+            candidate_detail,
         })
     }
 }
@@ -950,6 +1071,107 @@ mod tests {
 
         let mut r = Reader::new(&buf);
         assert_eq!(CandidateList::decode(&mut r), Err(Error::BadEnum));
+    }
+
+    #[test]
+    fn candidate_detail_rejects_bounded_duplicates_and_roundtrips() {
+        let detail = CandidateDetail {
+            reading: "らすと".to_owned(),
+            definition: "プログラミング言語。".to_owned(),
+            definition_truncated: false,
+            aliases: vec!["Rust language".to_owned()],
+            related: vec!["Cargo".to_owned()],
+            similar: vec!["C++".to_owned()],
+            antonyms: vec!["unsafe".to_owned()],
+        };
+        let mut bytes = Vec::new();
+        detail
+            .encode(&mut VecSink::new(&mut bytes))
+            .expect("encode");
+        let mut reader = Reader::new(&bytes);
+        assert_eq!(CandidateDetail::decode(&mut reader), Ok(detail.clone()));
+
+        let duplicate = CandidateDetail {
+            related: vec!["Rust language".to_owned()],
+            ..detail.clone()
+        };
+        assert_eq!(duplicate.validate(), Err(Error::TooLarge));
+
+        let mut too_long_reading = detail.clone();
+        too_long_reading.reading = "r".repeat(crate::MAX_CANDIDATE_DETAIL_READING_BYTES + 1);
+        assert_eq!(too_long_reading.validate(), Err(Error::TooLarge));
+        let mut too_long_definition = detail.clone();
+        too_long_definition.definition =
+            "d".repeat(crate::MAX_CANDIDATE_DETAIL_DEFINITION_BYTES + 1);
+        assert_eq!(too_long_definition.validate(), Err(Error::TooLarge));
+        let mut too_long_relation = detail;
+        too_long_relation.aliases =
+            vec!["a".repeat(crate::MAX_CANDIDATE_DETAIL_RELATION_BYTES + 1)];
+        assert_eq!(too_long_relation.validate(), Err(Error::TooLarge));
+    }
+
+    #[test]
+    fn definition_preview_is_explicit_and_utf8_boundary_safe() {
+        let exact = "d".repeat(crate::MAX_CANDIDATE_DETAIL_DEFINITION_BYTES);
+        assert_eq!(
+            CandidateDetail::bounded_definition_preview(&exact),
+            (&*exact, false)
+        );
+
+        // 342 Japanese characters are 1026 UTF-8 bytes. The preview must stop
+        // at 1023, not split a three-byte character at 1024.
+        let source = "あ".repeat(342);
+        let (preview, truncated) = CandidateDetail::bounded_definition_preview(&source);
+        assert_eq!(preview.len(), 1023);
+        assert!(preview.is_char_boundary(preview.len()));
+        assert!(truncated);
+        assert!(source.starts_with(preview));
+
+        let detail = CandidateDetail {
+            reading: "reading".to_owned(),
+            definition: preview.to_owned(),
+            definition_truncated: truncated,
+            aliases: Vec::new(),
+            related: Vec::new(),
+            similar: Vec::new(),
+            antonyms: Vec::new(),
+        };
+        let mut bytes = Vec::new();
+        detail
+            .encode(&mut VecSink::new(&mut bytes))
+            .expect("encode");
+        assert_eq!(
+            CandidateDetail::decode(&mut Reader::new(&bytes)),
+            Ok(detail)
+        );
+    }
+
+    #[test]
+    fn output_rejects_detail_without_candidates() {
+        let output = Output {
+            consumed: false,
+            beep: false,
+            mode: None,
+            preedit: None,
+            commit: None,
+            delete_before: String::new(),
+            candidates: None,
+            candidate_detail: Some(CandidateDetail {
+                reading: "reading".to_owned(),
+                definition: "definition".to_owned(),
+                definition_truncated: false,
+                aliases: Vec::new(),
+                related: Vec::new(),
+                similar: Vec::new(),
+                antonyms: Vec::new(),
+            }),
+        };
+        let mut bytes = Vec::new();
+        assert_eq!(
+            output.encode(&mut VecSink::new(&mut bytes)),
+            Err(Error::TooLarge)
+        );
+        assert!(bytes.is_empty());
     }
 
     #[test]

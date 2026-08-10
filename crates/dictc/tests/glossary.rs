@@ -1,6 +1,8 @@
-use dictc::glossary::{import, normalize_reading, parse_part, Importer, OverlayDefaults};
+use dictc::glossary::{
+    detail_sources, import, normalize_reading, parse_part, Importer, OverlayDefaults,
+};
 use dictc::{entries_to_tsv, parse_entries, parse_mozc_entries};
-use sakura_core::dictionary::EntryFlags;
+use sakura_core::dictionary::{DetailRelationKind, EntryFlags};
 
 const PART: &str = r#"[
   {"term":"Docker","reading":"ドッカー","aliases":["docker","Docker"],"senses":[{"definition":"コンテナを扱う基盤。","domain":"containers","keywords":["image"]}],"future":{"enabled":true}},
@@ -29,6 +31,74 @@ fn parser_accepts_the_glossary_schema_and_skips_future_fields() {
     assert_eq!(terms[0].reading.as_deref(), Some("ドッカー"));
     assert_eq!(terms[0].aliases, ["docker", "Docker"]);
     assert_eq!(terms[0].senses[0].domain.as_deref(), Some("containers"));
+    assert_eq!(terms[0].senses[0].keywords, ["image"]);
+}
+
+#[test]
+fn details_preserve_definition_and_only_link_unique_keywords() {
+    let terms = parse_part(
+        "detail.json",
+        r#"[
+          {"term":"Docker","reading":"どっかー","aliases":["docker"],"senses":[{"definition":"原文\nを保存する。","keywords":["Container","Ambiguous"]}]},
+          {"term":"Container","reading":"こんてな","senses":[{"definition":"target"}]},
+          {"term":"Ambiguous","reading":"あんび","senses":[{"definition":"one"}]},
+          {"term":"Ambiguous","reading":"あんびぐ","senses":[{"definition":"two"}]}
+        ]"#,
+    )
+    .expect("terms");
+    let imported = import(&terms, &[], defaults()).expect("entries");
+    let details = detail_sources(&terms, &imported.entries);
+    let docker = details
+        .iter()
+        .find(|detail| detail.surface == "Docker" && detail.reading == "どっかー")
+        .expect("Docker detail");
+    assert_eq!(docker.description, "原文\nを保存する。");
+    assert!(docker
+        .relations
+        .iter()
+        .any(|relation| relation.kind == DetailRelationKind::Alias && relation.target == "docker"));
+    assert!(docker.relations.iter().any(|relation| {
+        relation.kind == DetailRelationKind::Related && relation.target == "Container"
+    }));
+    assert!(!docker
+        .relations
+        .iter()
+        .any(|relation| relation.target == "Ambiguous"));
+    assert!(docker.relations.iter().all(|relation| {
+        !matches!(
+            relation.kind,
+            DetailRelationKind::Synonym | DetailRelationKind::Antonym
+        )
+    }));
+}
+
+#[test]
+fn detail_sources_indexes_a_large_lexicon_once() {
+    let term_json = (0..512)
+        .map(|index| {
+            format!(r#"{{"term":"term-{index}","senses":[{{"definition":"definition-{index}"}}]}}"#)
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let terms = parse_part("scale.json", &format!("[{term_json}]")).expect("scale glossary terms");
+    let mut tsv = String::from(
+        "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+    );
+    for index in 0..20_000 {
+        tsv.push_str(&format!(
+            "reading-{index}\tunmatched-{index}\t1\t1\t1\t1\t\t\n"
+        ));
+    }
+    for index in 0..512 {
+        tsv.push_str(&format!("reading-{index}\tterm-{index}\t1\t1\t1\t1\t\t\n"));
+    }
+    let entries = parse_entries("scale.tsv", &tsv).expect("scale entries");
+
+    let details = detail_sources(&terms, &entries);
+    assert_eq!(details.len(), 512);
+    assert!(details
+        .iter()
+        .all(|detail| detail.surface.starts_with("term-")));
 }
 
 #[test]
@@ -56,7 +126,7 @@ fn importer_matches_mozc_then_uses_visible_shape_defaults() {
     assert_eq!(docker.word_cost, 600);
     assert!(docker.flags.contains(EntryFlags::IT));
     assert!(docker.flags.contains(EntryFlags::PREDICTION));
-    assert_eq!(docker.annotation, "[containers] コンテナを扱う基盤。");
+    assert_eq!(docker.annotation, "コンテナを扱う基盤。");
 
     let alias = imported
         .entries
@@ -102,6 +172,33 @@ fn importer_matches_mozc_then_uses_visible_shape_defaults() {
         .expect("middle-dot phrase");
     assert_eq!(phrase.reading, "かっせいひかっせい");
     assert_eq!((phrase.left_id, phrase.right_id), (10, 11));
+}
+
+#[test]
+fn importer_omits_domain_metadata_without_altering_definition_brackets() {
+    let terms = parse_part(
+        "ja_part1.json",
+        r#"[
+          {
+            "term": "Brackets",
+            "reading": "brackets",
+            "senses": [{
+              "definition": "Keep [literal] definition text.",
+              "domain": "it-basics"
+            }]
+          }
+        ]"#,
+    )
+    .expect("glossary part");
+    let imported = import(&terms, &[], defaults()).expect("overlay");
+    let entry = imported
+        .entries
+        .iter()
+        .find(|entry| entry.surface == "Brackets" && entry.reading == "brackets")
+        .expect("bracketed definition entry");
+
+    assert_eq!(entry.annotation, "Keep [literal] definition text.");
+    assert!(!entry.annotation.contains("[it-basics]"));
 }
 
 #[test]

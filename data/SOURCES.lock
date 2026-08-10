@@ -26,6 +26,19 @@ ascii_left_id = 1851
 ascii_right_id = 1851
 base_word_cost = 4800
 
+[japanese_wordnet]
+release = "v1.1"
+official_page = "https://bond-lab.github.io/wnja/jpn/downloads.html"
+artifact_url = "https://github.com/bond-lab/wnja/releases/download/v1.1/jpn_wn_lmf.xml.gz"
+artifact_file = "jpn_wn_lmf.xml.gz"
+artifact_bytes = 12415268
+artifact_sha256 = "1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f9ecffafd7aa207aa0"
+license_url = "https://bond-lab.github.io/wnja/license.txt"
+license_file = "THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt"
+output_license = "LicenseRef-Japanese-WordNet-1.1"
+format = "WordNet-LMF XML, gzip-compressed"
+transform = "streaming Rust importer; exact unambiguous entry identity only"
+
 [sakura_curated]
 path = "data/curated-terms.tsv"
 license_file = "LICENSE"

@@ -1046,7 +1046,7 @@ read-only lives once per machine under Program Files.
   learning data viewer/reset, diagnostics (IPC timeouts, engine version).
 - All UI text localized ja/en.
 
-### 8.1 Candidate popup presentation (Issue #27 — automated verification complete, real-screen review pending)
+### 8.1 Candidate popup presentation (Issue #27 — automated and normal-light real-screen verification complete)
 
 The renderer owns the top-level Win32 candidate popup. It remains non-activating,
 click-through, caret-following, and per-monitor DPI-aware; it does not become a
@@ -1076,11 +1076,46 @@ raster assets nor consumes the separately managed mode-indicator assets.
 Automated unit and real-process integration coverage now verifies compact and
 expanded candidate semantics, bounded content-aware layout, DPI changes,
 non-activation, caret following, paging, digit selection, and UI Automation
-exposure. Final acceptance still requires real-screen inspection of the compact
-and expanded popup in light, dark, and Windows high-contrast modes, including
-candidate/annotation hierarchy, selection visibility, page metadata, and caret
-placement. The final evidence must also confirm that the popup change did not
+exposure. A screenshot from the latest reinstalled build verifies the normal-light
+popup's primary candidate text, right-hand annotation column, subtle selected-row
+surface and sakura rail, prediction footer, and `1–9/9` page display. Real-screen
+inspection of the dark and Windows high-contrast palettes remains outstanding.
+The Issue #27 verification record confirms that the popup change did not
 regenerate or alter mode-indicator assets.
+
+### 8.2 Selected-candidate dictionary detail (Issue #28)
+
+The renderer may show a non-interactive dictionary-detail panel only for the
+currently selected candidate, within the same Sakura-owned HWND as the candidate
+popup. It keeps the popup non-activating and click-through, uses the same
+low-contrast palette and GDI boundary, and must not alter candidate selection,
+ordering, paging, or TSF semantics. The definition is limited to two visual
+lines. Placement attempts the candidate popup's right, then left, then below;
+when no placement fits the monitor work area, the detail panel is absent.
+
+The compiled image keeps optional detail records keyed by the exact final ENTR
+ordinal, not by surface text. A detail is therefore omitted (fail closed) for a
+compound candidate, an unresolved candidate, a stale/mismatched ordinal, malformed
+detail data, or an old image without the optional tables. The source definition in
+the dictionary is not subject to a display-length limit. At the engine/protocol
+boundary, the producer derives an explicit UTF-8-safe bounded preview and carries
+a `definition_truncated` flag; neither encoding nor decoding silently shortens
+source text. UI Automation announces the selected detail and explicitly retains
+that truncation state when only a preview is available.
+
+Aliases, related words, synonyms, and antonyms are direct, source-backed links
+only. The compiler and renderer must not infer any of them from spelling,
+embedding similarity, category membership, or transitive graph traversal. Each
+group is optional and shows at most three direct terms. Acceptance must use
+fixed-seed generated tests for malformed detail tables, Unicode preview boundaries,
+duplicate/self/cyclic relations, exact-ordinal collisions, compound-candidate
+omission, wire-frame limits, DPI/work-area placement, and UI Automation exposure.
+The reproducible release build combines pinned smile-chat definitions, aliases,
+and resolved related terms with pinned Japanese WordNet 1.1 definitions and
+same-synset similar terms. The verified 14-category image contains 1,635,239
+entries and 36,606 exact-entry details in 94,737,211 bytes. Entries without an
+unambiguous source-backed meaning remain detail-free; this count is not a claim
+that every dictionary entry has a definition.
 
 ---
 

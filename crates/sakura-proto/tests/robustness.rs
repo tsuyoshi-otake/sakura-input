@@ -238,6 +238,7 @@ fn undo_commit_outcomes_are_strict_and_exact_text_is_bounded() {
         commit: None,
         delete_before: "a".repeat(MAX_COMMIT_BYTES + 1),
         candidates: None,
+        candidate_detail: None,
     });
     let mut output_frame = Vec::new();
     assert_eq!(
@@ -257,6 +258,7 @@ fn undo_commit_outcomes_are_strict_and_exact_text_is_bounded() {
         commit: None,
         delete_before: String::new(),
         candidates: None,
+        candidate_detail: None,
     });
     let mut oversized_decode_frame = Vec::new();
     encode_response(&valid, 9, &mut oversized_decode_frame).expect("encode valid output");
@@ -276,7 +278,11 @@ fn undo_commit_outcomes_are_strict_and_exact_text_is_bounded() {
 }
 
 fn sample_valid_response_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
-    use sakura_proto::{ErrorCode, Mode, Output, Preedit, Response, Segment, UnderlineKind};
+    use sakura_proto::types::CandidatePresentation;
+    use sakura_proto::{
+        Candidate, CandidateDetail, CandidateKind, CandidateList, ErrorCode, Mode, Output, Preedit,
+        Response, Segment, UnderlineKind,
+    };
     let responses = [
         Response::Hello {
             server_version: 1,
@@ -303,6 +309,34 @@ fn sample_valid_response_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
             commit: Some("commit".to_string()),
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
+        }),
+        Response::Output(Output {
+            consumed: true,
+            beep: false,
+            mode: None,
+            preedit: None,
+            commit: None,
+            delete_before: String::new(),
+            candidates: Some(CandidateList {
+                kind: CandidateKind::Conversion,
+                presentation: CandidatePresentation::Compact,
+                items: vec![Candidate {
+                    text: "Rust".to_owned(),
+                    annotation: "language".to_owned(),
+                }],
+                selected: 0,
+                page_size: 9,
+            }),
+            candidate_detail: Some(CandidateDetail {
+                reading: "らすと".to_owned(),
+                definition: "安全性と速度を重視するプログラミング言語。".to_owned(),
+                definition_truncated: false,
+                aliases: vec!["Rust language".to_owned()],
+                related: vec!["Cargo".to_owned()],
+                similar: vec!["C++".to_owned()],
+                antonyms: vec!["unsafe".to_owned()],
+            }),
         }),
         Response::Pong,
         Response::Ok,

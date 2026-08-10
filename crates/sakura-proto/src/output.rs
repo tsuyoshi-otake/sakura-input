@@ -14,13 +14,16 @@
 use crate::fixed::{FixedStr, FixedVec, Overflow};
 use crate::message::RES_OUTPUT;
 use crate::types::{
-    Candidate, CandidateKind, CandidateList, CandidatePresentation, Mode, Output, Preedit, Segment,
-    UnderlineKind,
+    Candidate, CandidateDetail, CandidateKind, CandidateList, CandidatePresentation, Mode, Output,
+    Preedit, Segment, UnderlineKind,
 };
 use crate::wire::{Error, Sink, SliceSink};
 use crate::{
-    RequestId, CANDIDATE_PAGE_SIZE, FRAME_HEADER_LEN, MAX_CANDIDATES, MAX_CANDIDATE_TEXT_BYTES,
-    MAX_COMMIT_BYTES, MAX_PAYLOAD, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
+    RequestId, CANDIDATE_PAGE_SIZE, FRAME_HEADER_LEN, MAX_CANDIDATES,
+    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
+    MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES,
+    MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES, MAX_CANDIDATE_TEXT_BYTES, MAX_COMMIT_BYTES,
+    MAX_PAYLOAD, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
 
 /// One segment's span within `OutputBuf`'s flat preedit text buffer.
@@ -43,6 +46,95 @@ struct CandidateSpan {
     annotation_start: u32,
     annotation_len: u32,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct DetailSpan {
+    start: u32,
+    len: u32,
+}
+
+/// Borrowed input for [`OutputBuf::set_candidate_detail`].
+///
+/// The struct keeps the mutation API small while making the bounded preview
+/// and its completeness flag impossible to confuse at the call site.
+#[derive(Debug, Clone, Copy)]
+pub struct CandidateDetailInput<'a> {
+    pub reading: &'a str,
+    pub definition: &'a str,
+    pub definition_truncated: bool,
+    pub aliases: &'a [&'a str],
+    pub related: &'a [&'a str],
+    pub similar: &'a [&'a str],
+    pub antonyms: &'a [&'a str],
+}
+
+/// Allocation-free borrowed view of selected-candidate detail.
+#[derive(Debug, Clone, Copy)]
+pub struct CandidateDetailRef<'a> {
+    pub reading: &'a str,
+    pub definition: &'a str,
+    pub definition_truncated: bool,
+    relation_text: &'a str,
+    aliases: &'a [DetailSpan],
+    related: &'a [DetailSpan],
+    similar: &'a [DetailSpan],
+    antonyms: &'a [DetailSpan],
+}
+
+impl<'a> CandidateDetailRef<'a> {
+    pub fn aliases(&self) -> CandidateDetailTerms<'a> {
+        CandidateDetailTerms::new(self.relation_text, self.aliases)
+    }
+
+    pub fn related(&self) -> CandidateDetailTerms<'a> {
+        CandidateDetailTerms::new(self.relation_text, self.related)
+    }
+
+    pub fn similar(&self) -> CandidateDetailTerms<'a> {
+        CandidateDetailTerms::new(self.relation_text, self.similar)
+    }
+
+    pub fn antonyms(&self) -> CandidateDetailTerms<'a> {
+        CandidateDetailTerms::new(self.relation_text, self.antonyms)
+    }
+}
+
+/// Cloneable, exact-size iterator over one bounded relation group.
+#[derive(Debug, Clone)]
+pub struct CandidateDetailTerms<'a> {
+    text: &'a str,
+    spans: core::slice::Iter<'a, DetailSpan>,
+}
+
+impl<'a> CandidateDetailTerms<'a> {
+    fn new(text: &'a str, spans: &'a [DetailSpan]) -> Self {
+        Self {
+            text,
+            spans: spans.iter(),
+        }
+    }
+}
+
+impl<'a> Iterator for CandidateDetailTerms<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let span = *self.spans.next()?;
+        let start = span.start as usize;
+        Some(
+            self.text
+                .get(start..start + span.len as usize)
+                .unwrap_or(""),
+        )
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.spans.size_hint()
+    }
+}
+
+impl ExactSizeIterator for CandidateDetailTerms<'_> {}
+impl core::iter::FusedIterator for CandidateDetailTerms<'_> {}
 
 /// A fixed-capacity, allocation-free builder for a `Response::Output`
 /// frame.
@@ -70,6 +162,15 @@ pub struct OutputBuf {
     candidates: FixedVec<CandidateSpan, MAX_CANDIDATES>,
     selected_candidate: u16,
     candidate_page_size: u16,
+    has_candidate_detail: bool,
+    detail_reading: FixedStr<MAX_CANDIDATE_DETAIL_READING_BYTES>,
+    detail_definition: FixedStr<MAX_CANDIDATE_DETAIL_DEFINITION_BYTES>,
+    detail_definition_truncated: bool,
+    detail_relations: FixedStr<MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES>,
+    detail_aliases: FixedVec<DetailSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
+    detail_related: FixedVec<DetailSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
+    detail_similar: FixedVec<DetailSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
+    detail_antonyms: FixedVec<DetailSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
 }
 
 impl OutputBuf {
@@ -94,6 +195,15 @@ impl OutputBuf {
             candidates: FixedVec::new(),
             selected_candidate: 0,
             candidate_page_size: CANDIDATE_PAGE_SIZE as u16,
+            has_candidate_detail: false,
+            detail_reading: FixedStr::new(),
+            detail_definition: FixedStr::new(),
+            detail_definition_truncated: false,
+            detail_relations: FixedStr::new(),
+            detail_aliases: FixedVec::new(),
+            detail_related: FixedVec::new(),
+            detail_similar: FixedVec::new(),
+            detail_antonyms: FixedVec::new(),
         }
     }
 
@@ -119,6 +229,7 @@ impl OutputBuf {
         self.candidates.clear();
         self.selected_candidate = 0;
         self.candidate_page_size = CANDIDATE_PAGE_SIZE as u16;
+        self.clear_candidate_detail();
     }
 
     /// Starts (or restarts) a preedit composition: marks a preedit as
@@ -279,6 +390,7 @@ impl OutputBuf {
         self.candidates.clear();
         self.selected_candidate = selected;
         self.candidate_page_size = page_size;
+        self.clear_candidate_detail();
         Ok(())
     }
 
@@ -338,6 +450,152 @@ impl OutputBuf {
         self.has_candidates.then_some(self.candidate_page_size)
     }
 
+    /// Sets source-backed detail for the selected candidate.
+    ///
+    /// An invalid, duplicate, or oversized field clears any preceding detail.
+    /// This fail-closed rule prevents a newly selected candidate from inheriting
+    /// stale explanatory text. Detail cannot outlive the candidate list it
+    /// describes.
+    pub fn set_candidate_detail(
+        &mut self,
+        detail: CandidateDetailInput<'_>,
+    ) -> Result<(), Overflow> {
+        let CandidateDetailInput {
+            reading,
+            definition,
+            definition_truncated,
+            aliases,
+            related,
+            similar,
+            antonyms,
+        } = detail;
+        // A detail describes one particular selected candidate. Never retain a
+        // previous one if this replacement cannot be built completely.
+        self.clear_candidate_detail();
+        if !self.has_candidates
+            || reading.is_empty()
+            || definition.is_empty()
+            || reading.len() > MAX_CANDIDATE_DETAIL_READING_BYTES
+            || definition.len() > MAX_CANDIDATE_DETAIL_DEFINITION_BYTES
+        {
+            return Err(Overflow);
+        }
+        let groups = [aliases, related, similar, antonyms];
+        let mut seen = [""; MAX_CANDIDATE_DETAIL_RELATIONS * 4];
+        let mut seen_len = 0;
+        let mut total_relation_bytes = 0usize;
+        for group in groups {
+            if group.len() > MAX_CANDIDATE_DETAIL_RELATIONS {
+                return Err(Overflow);
+            }
+            for value in group {
+                if value.is_empty()
+                    || value.len() > MAX_CANDIDATE_DETAIL_RELATION_BYTES
+                    || seen[..seen_len].contains(value)
+                {
+                    return Err(Overflow);
+                }
+                total_relation_bytes = match total_relation_bytes.checked_add(value.len()) {
+                    Some(total) if total <= MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES => total,
+                    _ => return Err(Overflow),
+                };
+                seen[seen_len] = value;
+                seen_len += 1;
+            }
+        }
+
+        // Every capacity check was performed first, so the following writes
+        // cannot fail. Keep `?` as a fail-closed guard against future
+        // representation changes.
+        self.detail_reading.push_str(reading)?;
+        self.detail_definition.push_str(definition)?;
+        self.detail_definition_truncated = definition_truncated;
+        Self::push_detail_group(
+            &mut self.detail_relations,
+            &mut self.detail_aliases,
+            aliases,
+        )?;
+        Self::push_detail_group(
+            &mut self.detail_relations,
+            &mut self.detail_related,
+            related,
+        )?;
+        Self::push_detail_group(
+            &mut self.detail_relations,
+            &mut self.detail_similar,
+            similar,
+        )?;
+        Self::push_detail_group(
+            &mut self.detail_relations,
+            &mut self.detail_antonyms,
+            antonyms,
+        )?;
+        self.has_candidate_detail = true;
+        Ok(())
+    }
+
+    /// Returns selected-candidate detail without allocating or copying text.
+    pub fn candidate_detail(&self) -> Option<CandidateDetailRef<'_>> {
+        self.has_candidate_detail.then_some(CandidateDetailRef {
+            reading: self.detail_reading.as_str(),
+            definition: self.detail_definition.as_str(),
+            definition_truncated: self.detail_definition_truncated,
+            relation_text: self.detail_relations.as_str(),
+            aliases: self.detail_aliases.as_slice(),
+            related: self.detail_related.as_slice(),
+            similar: self.detail_similar.as_slice(),
+            antonyms: self.detail_antonyms.as_slice(),
+        })
+    }
+
+    /// Drops selected-candidate detail while retaining the candidate list.
+    pub fn clear_candidate_detail(&mut self) {
+        self.has_candidate_detail = false;
+        self.detail_reading.clear();
+        self.detail_definition.clear();
+        self.detail_definition_truncated = false;
+        self.detail_relations.clear();
+        self.detail_aliases.clear();
+        self.detail_related.clear();
+        self.detail_similar.clear();
+        self.detail_antonyms.clear();
+    }
+
+    fn push_detail_group(
+        text: &mut FixedStr<MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES>,
+        spans: &mut FixedVec<DetailSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
+        values: &[&str],
+    ) -> Result<(), Overflow> {
+        for value in values {
+            let start = text.len();
+            text.push_str(value)?;
+            spans.push(DetailSpan {
+                start: start as u32,
+                len: value.len() as u32,
+            })?;
+        }
+        Ok(())
+    }
+
+    fn detail_text(&self, span: DetailSpan) -> &str {
+        let start = span.start as usize;
+        self.detail_relations
+            .as_str()
+            .get(start..start + span.len as usize)
+            .unwrap_or("")
+    }
+
+    fn owned_detail_group(
+        &self,
+        spans: &FixedVec<DetailSpan, MAX_CANDIDATE_DETAIL_RELATIONS>,
+    ) -> Vec<String> {
+        spans
+            .as_slice()
+            .iter()
+            .map(|span| self.detail_text(*span).to_owned())
+            .collect()
+    }
+
     fn candidate_text(&self, span: CandidateSpan) -> &str {
         let start = span.text_start as usize;
         let end = start + span.text_len as usize;
@@ -368,10 +626,11 @@ impl OutputBuf {
     }
 
     fn encode_body<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
-        if self.has_candidates
-            && (self.candidates.is_empty()
-                || usize::from(self.selected_candidate) >= self.candidates.len()
-                || self.candidate_page_size == 0)
+        if (self.has_candidate_detail && !self.has_candidates)
+            || (self.has_candidates
+                && (self.candidates.is_empty()
+                    || usize::from(self.selected_candidate) >= self.candidates.len()
+                    || self.candidate_page_size == 0))
         {
             return Err(Error::TooLarge);
         }
@@ -407,6 +666,25 @@ impl OutputBuf {
             }
             w.write_u16(self.selected_candidate)?;
             w.write_u16(self.candidate_page_size)?;
+        } else {
+            w.write_u8(0)?;
+        }
+        if self.has_candidate_detail {
+            w.write_u8(1)?;
+            w.write_str(self.detail_reading.as_str())?;
+            w.write_str(self.detail_definition.as_str())?;
+            w.write_bool(self.detail_definition_truncated)?;
+            for spans in [
+                &self.detail_aliases,
+                &self.detail_related,
+                &self.detail_similar,
+                &self.detail_antonyms,
+            ] {
+                w.write_count(spans.len())?;
+                for span in spans.as_slice() {
+                    w.write_str(self.detail_text(*span))?;
+                }
+            }
         } else {
             w.write_u8(0)?;
         }
@@ -479,6 +757,15 @@ impl OutputBuf {
         } else {
             None
         };
+        let candidate_detail = self.has_candidate_detail.then(|| CandidateDetail {
+            reading: self.detail_reading.as_str().to_owned(),
+            definition: self.detail_definition.as_str().to_owned(),
+            definition_truncated: self.detail_definition_truncated,
+            aliases: self.owned_detail_group(&self.detail_aliases),
+            related: self.owned_detail_group(&self.detail_related),
+            similar: self.owned_detail_group(&self.detail_similar),
+            antonyms: self.owned_detail_group(&self.detail_antonyms),
+        });
         Output {
             consumed: self.consumed,
             beep: self.beep,
@@ -487,6 +774,7 @@ impl OutputBuf {
             commit,
             delete_before: self.delete_before.as_str().to_owned(),
             candidates,
+            candidate_detail,
         }
     }
 }
@@ -651,6 +939,181 @@ mod tests {
         assert_eq!(candidates.page_size, 9);
         assert_eq!(candidates.items[1].text, "仮名");
         assert_eq!(candidates.items[1].annotation, "IT用語");
+    }
+
+    #[test]
+    fn selected_candidate_detail_roundtrips_and_clear_is_complete() {
+        let mut buf = OutputBuf::new();
+        buf.begin_candidates(0, 9).expect("begin candidates");
+        buf.push_candidate("Rust", "language")
+            .expect("push candidate");
+        buf.set_candidate_detail(CandidateDetailInput {
+            reading: "らすと",
+            definition: "安全性と速度を重視するプログラミング言語。",
+            definition_truncated: false,
+            aliases: &["Rust language"],
+            related: &["Cargo"],
+            similar: &["C++"],
+            antonyms: &["unsafe"],
+        })
+        .expect("detail");
+
+        let detail = buf.candidate_detail().expect("borrowed detail");
+        assert_eq!(detail.reading, "らすと");
+        assert_eq!(
+            detail.definition,
+            "安全性と速度を重視するプログラミング言語。"
+        );
+        assert!(!detail.definition_truncated);
+        assert!(detail.aliases().eq(["Rust language"]));
+        assert!(detail.related().eq(["Cargo"]));
+        assert!(detail.similar().eq(["C++"]));
+        assert!(detail.antonyms().eq(["unsafe"]));
+
+        let mut frame = [0u8; 4096];
+        let len = buf.encode_frame(19, &mut frame).expect("encode");
+        let (_, decoded) = decode_response(&frame[FRAME_HEADER_LEN..len]).expect("decode");
+        assert_eq!(decoded, Response::Output(buf.to_output()));
+        buf.clear();
+        assert!(buf.candidate_detail().is_none());
+    }
+
+    #[test]
+    fn selected_candidate_detail_failure_clears_stale_detail() {
+        let mut buf = OutputBuf::new();
+        buf.begin_candidates(0, 9).expect("begin candidates");
+        buf.push_candidate("Rust", "").expect("push candidate");
+        buf.set_candidate_detail(CandidateDetailInput {
+            reading: "reading",
+            definition: "definition",
+            definition_truncated: false,
+            aliases: &["one"],
+            related: &[],
+            similar: &[],
+            antonyms: &[],
+        })
+        .expect("detail");
+        assert!(buf.candidate_detail().is_some());
+
+        // A new selected index starts a new candidate snapshot. The prior
+        // detail must be gone before attempting to attach B's detail.
+        buf.begin_candidates(1, 9).expect("new selected candidate");
+        buf.push_candidate("A", "").expect("push A");
+        buf.push_candidate("B", "").expect("push B");
+        assert!(buf.candidate_detail().is_none());
+
+        let too_long = "x".repeat(MAX_CANDIDATE_DETAIL_READING_BYTES + 1);
+        assert_eq!(
+            buf.set_candidate_detail(CandidateDetailInput {
+                reading: &too_long,
+                definition: "definition",
+                definition_truncated: false,
+                aliases: &[],
+                related: &[],
+                similar: &[],
+                antonyms: &[],
+            }),
+            Err(Overflow)
+        );
+        assert!(buf.candidate_detail().is_none());
+        buf.set_candidate_detail(CandidateDetailInput {
+            reading: "new-reading",
+            definition: "new definition",
+            definition_truncated: false,
+            aliases: &["two"],
+            related: &[],
+            similar: &[],
+            antonyms: &[],
+        })
+        .expect("replacement detail");
+        assert_eq!(
+            buf.set_candidate_detail(CandidateDetailInput {
+                reading: "reading",
+                definition: "definition",
+                definition_truncated: false,
+                aliases: &["same"],
+                related: &["same"],
+                similar: &[],
+                antonyms: &[],
+            }),
+            Err(Overflow)
+        );
+        assert!(buf.candidate_detail().is_none());
+    }
+
+    #[test]
+    fn selected_candidate_detail_enforces_each_field_boundary() {
+        let mut buf = OutputBuf::new();
+        buf.begin_candidates(0, 9).expect("begin candidates");
+        buf.push_candidate("Rust", "").expect("push candidate");
+        let reading = "r".repeat(MAX_CANDIDATE_DETAIL_READING_BYTES);
+        let definition = "d".repeat(MAX_CANDIDATE_DETAIL_DEFINITION_BYTES);
+        let relation = "a".repeat(MAX_CANDIDATE_DETAIL_RELATION_BYTES);
+        buf.set_candidate_detail(CandidateDetailInput {
+            reading: &reading,
+            definition: &definition,
+            definition_truncated: false,
+            aliases: &[&relation],
+            related: &[],
+            similar: &[],
+            antonyms: &[],
+        })
+        .expect("all exact bounds fit");
+        assert!(buf.candidate_detail().is_some());
+
+        let too_long_relation = "a".repeat(MAX_CANDIDATE_DETAIL_RELATION_BYTES + 1);
+        assert_eq!(
+            buf.set_candidate_detail(CandidateDetailInput {
+                reading: "reading",
+                definition: "definition",
+                definition_truncated: false,
+                aliases: &[&too_long_relation],
+                related: &[],
+                similar: &[],
+                antonyms: &[],
+            }),
+            Err(Overflow)
+        );
+        assert!(buf.candidate_detail().is_none());
+    }
+
+    #[test]
+    fn selected_candidate_detail_preserves_explicit_definition_truncation() {
+        let source = "あ".repeat(342);
+        let (preview, truncated) = CandidateDetail::bounded_definition_preview(&source);
+        assert!(truncated);
+        let mut buf = OutputBuf::new();
+        buf.begin_candidates(0, 9).expect("begin candidates");
+        buf.push_candidate("Rust", "").expect("push candidate");
+        buf.set_candidate_detail(CandidateDetailInput {
+            reading: "reading",
+            definition: preview,
+            definition_truncated: truncated,
+            aliases: &[],
+            related: &[],
+            similar: &[],
+            antonyms: &[],
+        })
+        .expect("detail preview");
+
+        let mut frame = [0u8; 2048];
+        let len = buf.encode_frame(20, &mut frame).expect("encode");
+        let (_, decoded) = decode_response(&frame[FRAME_HEADER_LEN..len]).expect("decode");
+        let Response::Output(output) = decoded else {
+            panic!("expected output");
+        };
+        assert_eq!(
+            output.candidate_detail.expect("detail"),
+            CandidateDetail {
+                reading: "reading".to_owned(),
+                definition: preview.to_owned(),
+                definition_truncated: true,
+                aliases: Vec::new(),
+                related: Vec::new(),
+                similar: Vec::new(),
+                antonyms: Vec::new(),
+            }
+        );
     }
 
     #[test]

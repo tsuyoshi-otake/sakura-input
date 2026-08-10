@@ -48,6 +48,12 @@ $BuildTimeOnly = [ordered]@{
     'quote'         = 'token plumbing for windows-implement / windows-interface'
     'syn'           = 'token plumbing for windows-implement / windows-interface'
     'unicode-ident' = 'identifier validation used by syn'
+    'quick-xml'     = 'offline dictc build-tool streaming parser for pinned Japanese WordNet LMF'
+    'flate2'        = 'offline dictc build-tool gzip reader for pinned Japanese WordNet LMF'
+    'crc32fast'     = 'flate2 checksum implementation detail for offline WordNet archive validation'
+    'miniz_oxide'   = 'flate2 pure-Rust DEFLATE implementation detail for offline WordNet archive'
+    'adler2'        = 'miniz_oxide checksum implementation detail'
+    'simd-adler32'  = 'miniz_oxide checksum implementation detail'
 }
 
 # `windows`, `windows-core`, `windows_x86_64_msvc`, ... — one family, one rule.

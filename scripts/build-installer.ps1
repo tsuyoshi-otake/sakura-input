@@ -4,6 +4,8 @@ param(
 
     [string]$ReportPath = '',
 
+    [string]$DictionaryReportPath = '',
+
     [switch]$IncludeNeuralReranker
 )
 
@@ -13,8 +15,22 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $setupPath = Join-Path $repositoryRoot 'installer\setup.iss'
 $installerPath = Join-Path $repositoryRoot 'installer\out\sakura_setup.exe'
-$dictionaryReportPath = Join-Path $repositoryRoot 'artifacts\release\dictionary-build.report.json'
+$dictionaryReportPath = if ([string]::IsNullOrWhiteSpace($DictionaryReportPath)) {
+    Join-Path $repositoryRoot 'artifacts\release\dictionary-build.report.json'
+} else {
+    [IO.Path]::GetFullPath($DictionaryReportPath)
+}
 $neuralBuildScript = Join-Path $repositoryRoot 'scripts\build-neural-reranker.ps1'
+$dictionarySourceLockPath = Join-Path $repositoryRoot 'data\SOURCES.lock'
+$thirdPartyNoticesPath = Join-Path $repositoryRoot 'THIRD_PARTY_NOTICES.md'
+$japaneseWordNetLicensePath = Join-Path $repositoryRoot 'THIRD_PARTY_LICENSES\japanese-wordnet-1.1-NICT.txt'
+$japaneseWordNetLicenseRelativePath = 'THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt'
+$japaneseWordNetSourceLockRelativePath = 'data/SOURCES.lock'
+$japaneseWordNetArtifactUrl = 'https://github.com/bond-lab/wnja/releases/download/v1.1/jpn_wn_lmf.xml.gz'
+$japaneseWordNetArchiveSha256 = '1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f9ecffafd7aa207aa0'
+$japaneseWordNetArchiveBytes = 12415268L
+$japaneseWordNetRevision = 'v1.1'
+$japaneseWordNetLicenseId = 'LicenseRef-Japanese-WordNet-1.1'
 $neuralPayloadPaths = @(
     'artifacts\release\sakura_neural_worker.exe',
     'artifacts\release\onnxruntime.dll',
@@ -137,6 +153,33 @@ function Get-ArtifactRecord {
     }
 }
 
+function Require-TextContains {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Expected,
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    if (-not [IO.File]::Exists($Path)) { throw "$Description is missing: $Path" }
+    $text = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8)
+    if ($text.IndexOf($Expected, [StringComparison]::Ordinal) -lt 0) {
+        throw "$Description does not contain the required pinned value: $Expected"
+    }
+}
+
+function Get-RequiredJsonProperty {
+    param(
+        [Parameter(Mandatory)][object]$Object,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    if ($null -eq $Object) { throw "$Description is missing" }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { throw "$Description is missing" }
+    return $property.Value
+}
+
 $version = Get-CanonicalVersion
 $iscc = Resolve-Iscc
 $payloadPaths = @(
@@ -167,21 +210,82 @@ if ($IncludeNeuralReranker) {
     }
     $payloadPaths += $neuralPayloadPaths
 }
-$payloads = [Collections.Generic.List[object]]::new()
-foreach ($relativePath in $payloadPaths) {
-    $payloads.Add((Get-ArtifactRecord (Join-Path $repositoryRoot $relativePath)))
-}
-
 if (-not [IO.File]::Exists($dictionaryReportPath)) {
     throw "dictionary provenance report is missing: $dictionaryReportPath"
 }
+$dictionaryReportRecord = Get-ArtifactRecord $dictionaryReportPath
 $dictionaryReport = [IO.File]::ReadAllText($dictionaryReportPath) | ConvertFrom-Json
-if ($dictionaryReport.schema_version -ne 1 -or $dictionaryReport.deterministic_repeat -ne $true) {
+if ($dictionaryReport.schema_version -notin @(1, 2) -or $dictionaryReport.deterministic_repeat -ne $true) {
     throw 'dictionary provenance does not prove a deterministic repeat build'
 }
 if ($null -eq $dictionaryReport.inputs.system_category_dictionary -or
     @($dictionaryReport.inputs.system_category_dictionary.categories).Count -ne 14) {
     throw 'dictionary provenance does not prove that the canonical fourteen Sakura system categories were included'
+}
+$includesJapaneseWordNet = $false
+if ($dictionaryReport.schema_version -eq 2) {
+    $details = Get-RequiredJsonProperty $dictionaryReport 'details' 'dictionary detail provenance'
+    $detailsSchemaVersion = Get-RequiredJsonProperty $details 'schema_version' 'dictionary detail schema version'
+    $detailsSource = Get-RequiredJsonProperty $details 'source' 'dictionary detail source'
+    $fullDefinitionMaxBytes = Get-RequiredJsonProperty $details 'full_definition_max_bytes' 'dictionary detail full-definition limit'
+    $detailsCount = Get-RequiredJsonProperty $details 'count' 'dictionary detail count'
+    if ($detailsSchemaVersion -ne 1 -or $detailsSource -cne 'japanese-wordnet' -or
+        $null -ne $fullDefinitionMaxBytes -or $null -eq $detailsCount -or [long]$detailsCount -lt 0) {
+        throw 'dictionary detail provenance is missing or invalid'
+    }
+    $sources = Get-RequiredJsonProperty $dictionaryReport 'sources' 'dictionary source provenance'
+    $source = Get-RequiredJsonProperty $sources 'japanese_wordnet' 'Japanese WordNet source provenance'
+    $sourceId = Get-RequiredJsonProperty $source 'id' 'Japanese WordNet source id'
+    $sourceRevision = Get-RequiredJsonProperty $source 'revision' 'Japanese WordNet source revision'
+    $sourceArtifactUrl = Get-RequiredJsonProperty $source 'artifact_url' 'Japanese WordNet source artifact URL'
+    $sourceArchiveSha256 = Get-RequiredJsonProperty $source 'archive_sha256' 'Japanese WordNet source archive SHA-256'
+    $sourceArchiveBytes = Get-RequiredJsonProperty $source 'archive_bytes' 'Japanese WordNet source archive bytes'
+    $sourceLicenseId = Get-RequiredJsonProperty $source 'license_id' 'Japanese WordNet source license id'
+    $sourceLicenseFile = Get-RequiredJsonProperty $source 'license_file' 'Japanese WordNet source license file'
+    if ($sourceId -cne 'japanese-wordnet' -or $sourceRevision -cne $japaneseWordNetRevision -or
+        $sourceArtifactUrl -cne $japaneseWordNetArtifactUrl -or
+        $sourceArchiveSha256 -cne $japaneseWordNetArchiveSha256 -or
+        $null -eq $sourceArchiveBytes -or [long]$sourceArchiveBytes -ne $japaneseWordNetArchiveBytes -or
+        $sourceLicenseId -cne $japaneseWordNetLicenseId -or
+        $sourceLicenseFile -cne $japaneseWordNetLicenseRelativePath) {
+        throw 'Japanese WordNet provenance is missing, unpinned, or inconsistent'
+    }
+    $import = Get-RequiredJsonProperty $dictionaryReport 'wordnet_import' 'Japanese WordNet import accounting'
+    $importSchemaVersion = Get-RequiredJsonProperty $import 'schema_version' 'Japanese WordNet import schema version'
+    $importDetailCount = Get-RequiredJsonProperty $import 'detail_count' 'Japanese WordNet import detail count'
+    $unresolved = Get-RequiredJsonProperty $import 'unresolved' 'Japanese WordNet unresolved accounting'
+    $surfaceAmbiguous = Get-RequiredJsonProperty $unresolved 'surface_ambiguous' 'Japanese WordNet surface ambiguity count'
+    $senseAmbiguous = Get-RequiredJsonProperty $unresolved 'sense_ambiguous' 'Japanese WordNet sense ambiguity count'
+    $missingDefinition = Get-RequiredJsonProperty $unresolved 'missing_definition' 'Japanese WordNet missing definition count'
+    $relationAmbiguous = Get-RequiredJsonProperty $unresolved 'relation_ambiguous' 'Japanese WordNet relation ambiguity count'
+    $relationUnsupported = Get-RequiredJsonProperty $unresolved 'relation_unsupported' 'Japanese WordNet unsupported relation count'
+    if ($importSchemaVersion -ne 1 -or $null -eq $importDetailCount -or
+        [long]$importDetailCount -ne [long]$detailsCount -or
+        $null -eq $surfaceAmbiguous -or [long]$surfaceAmbiguous -lt 0 -or
+        $null -eq $senseAmbiguous -or [long]$senseAmbiguous -lt 0 -or
+        $null -eq $missingDefinition -or [long]$missingDefinition -lt 0 -or
+        $null -eq $relationAmbiguous -or [long]$relationAmbiguous -lt 0 -or
+        $null -eq $relationUnsupported -or [long]$relationUnsupported -lt 0) {
+        throw 'Japanese WordNet import accounting is missing or invalid'
+    }
+    Require-TextContains -Path $dictionarySourceLockPath -Expected '[japanese_wordnet]' -Description 'Japanese WordNet source lock'
+    Require-TextContains -Path $dictionarySourceLockPath -Expected $japaneseWordNetArtifactUrl -Description 'Japanese WordNet source lock'
+    Require-TextContains -Path $dictionarySourceLockPath -Expected $japaneseWordNetArchiveSha256 -Description 'Japanese WordNet source lock'
+    Require-TextContains -Path $dictionarySourceLockPath -Expected $japaneseWordNetLicenseRelativePath -Description 'Japanese WordNet source lock'
+    Require-TextContains -Path $thirdPartyNoticesPath -Expected $japaneseWordNetLicenseRelativePath -Description 'Japanese WordNet third-party notice'
+    if (-not [IO.File]::Exists($japaneseWordNetLicensePath)) {
+        throw "Japanese WordNet license file is missing: $japaneseWordNetLicensePath"
+    }
+    $payloadPaths += @(
+        $japaneseWordNetLicenseRelativePath.Replace('/', '\'),
+        $japaneseWordNetSourceLockRelativePath.Replace('/', '\')
+    )
+    $includesJapaneseWordNet = $true
+}
+
+$payloads = [Collections.Generic.List[object]]::new()
+foreach ($relativePath in $payloadPaths) {
+    $payloads.Add((Get-ArtifactRecord (Join-Path $repositoryRoot $relativePath)))
 }
 $dictionaryRecord = $payloads | Where-Object { $_.path -ceq 'artifacts/release/system.dic' }
 if ($null -eq $dictionaryReport.artifacts.dictionary -or
@@ -194,6 +298,7 @@ $fingerprintLines = [Collections.Generic.List[string]]::new()
 foreach ($payload in $payloads) {
     $fingerprintLines.Add("$($payload.path)|$($payload.bytes)|$($payload.sha256)")
 }
+$fingerprintLines.Add("dictionary-provenance|$($dictionaryReportRecord.bytes)|$($dictionaryReportRecord.sha256)")
 $buildIdInput = $version + "`n" + ($fingerprintLines -join "`n") + "`n"
 $buildId = (Get-TextSha256 -Text $buildIdInput).Substring(0, 16)
 
@@ -205,6 +310,9 @@ $isccArguments.Add("/dAppBuildId=$buildId")
 $isccArguments.Add("/dAppVersionedDir={app}\versions\$version-$buildId")
 if ($IncludeNeuralReranker) {
     $isccArguments.Add('/dIncludeNeuralReranker=1')
+}
+if ($includesJapaneseWordNet) {
+    $isccArguments.Add('/dIncludeJapaneseWordNet=1')
 }
 $isccArguments.Add(('"' + $setupPath.Replace('"', '\"') + '"'))
 # ProcessStartInfo.ArgumentList is unavailable in Windows PowerShell's .NET
@@ -270,7 +378,23 @@ $report = [ordered]@{
         output_sha256 = Get-TextSha256 $compilerOutput
         warnings = 0
     }
-    dictionary_provenance_sha256 = Get-Sha256 $dictionaryReportPath
+    # Retain the scalar for older release-bundle verification while the complete
+    # record is the build-id input and exposes the exact artifact in this report.
+    dictionary_provenance_sha256 = $dictionaryReportRecord.sha256
+    dictionary_provenance = $dictionaryReportRecord
+    dictionary_details = [ordered]@{
+        included = $includesJapaneseWordNet
+        source = if ($includesJapaneseWordNet) { 'japanese-wordnet' } else { $null }
+        provenance = if ($includesJapaneseWordNet) {
+            [ordered]@{
+                source_lock = Get-ArtifactRecord $dictionarySourceLockPath
+                notice = Get-ArtifactRecord $thirdPartyNoticesPath
+                license = Get-ArtifactRecord $japaneseWordNetLicensePath
+            }
+        } else {
+            $null
+        }
+    }
     neural_reranker = [ordered]@{
         included = [bool]$IncludeNeuralReranker
         manifest = if ($IncludeNeuralReranker) {

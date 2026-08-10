@@ -34,6 +34,15 @@ pub mod image_format {
     pub const TAG_ANNOTATIONS: [u8; 4] = *b"ANNO";
     pub const TAG_MATRIX: [u8; 4] = *b"MATR";
 
+    // Optional sparse, entry-ordinal-keyed detail data.  These tags deliberately do
+    // not change the stable 24-byte ENTR record: older images simply have no
+    // details and newer readers continue to ignore unknown future tables.
+    pub const TAG_DETAIL_INDEX: [u8; 4] = *b"DIDX";
+    pub const TAG_DETAIL_RECORDS: [u8; 4] = *b"DREC";
+    pub const TAG_DETAIL_RELATIONS: [u8; 4] = *b"DREL";
+    pub const TAG_DETAIL_TEXT_OFFSETS: [u8; 4] = *b"DTOF";
+    pub const TAG_DETAIL_TEXT: [u8; 4] = *b"DTXT";
+
     pub const NODE_LEN: usize = 16;
     pub const ENTRY_LEN: usize = 24;
     pub const SURFACE_RESTART_INTERVAL: usize = 16;
@@ -43,6 +52,32 @@ pub mod image_format {
     pub const MATRIX_HEADER_LEN: usize = 16;
     pub const MATRIX_ROW_LEN: usize = 8;
     pub const MATRIX_OVERRIDE_LEN: usize = 4;
+    pub const DETAIL_INDEX_LEN: usize = 8;
+    pub const DETAIL_RECORD_LEN: usize = 16;
+    pub const DETAIL_RELATION_LEN: usize = 8;
+}
+
+/// The deliberately small, source-backed relationship vocabulary shown with a
+/// dictionary detail.  The compiler never infers synonym or antonym edges.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DetailRelationKind {
+    Alias = 1,
+    Related = 2,
+    Synonym = 3,
+    Antonym = 4,
+}
+
+impl DetailRelationKind {
+    fn from_byte(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::Alias),
+            2 => Some(Self::Related),
+            3 => Some(Self::Synonym),
+            4 => Some(Self::Antonym),
+            _ => None,
+        }
+    }
 }
 
 /// Domain and prediction metadata packed into an entry record.
@@ -95,6 +130,9 @@ pub struct Entry {
 pub struct PrefixMatch {
     /// UTF-8 byte length of the matched reading prefix.
     pub matched_bytes: usize,
+    /// Stable ordinal into this dictionary image's ENTR table.  Optional detail
+    /// records are keyed by this exact ordinal, never by surface text alone.
+    pub entry_index: usize,
     pub entry: Entry,
 }
 
@@ -163,6 +201,26 @@ struct Table<'a> {
     count: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Details<'a> {
+    index: &'a [u8],
+    index_count: usize,
+    records: &'a [u8],
+    record_count: usize,
+    relations: &'a [u8],
+    relation_count: usize,
+    text_offsets: &'a [u8],
+    text_count: usize,
+    text: &'a [u8],
+}
+
+/// A borrowed detail record for one exact candidate entry.
+#[derive(Debug, Clone, Copy)]
+pub struct DictionaryDetail<'a> {
+    details: Details<'a>,
+    record_index: usize,
+}
+
 /// A validated set of borrowed fixed-layout views over one image.
 #[derive(Clone, Copy)]
 pub struct Dictionary<'a> {
@@ -181,6 +239,7 @@ pub struct Dictionary<'a> {
     annotation_count: usize,
     annotations: &'a [u8],
     matrix: &'a [u8],
+    details: Option<Details<'a>>,
 }
 
 impl fmt::Debug for Dictionary<'_> {
@@ -191,6 +250,10 @@ impl fmt::Debug for Dictionary<'_> {
             .field("node_count", &self.node_count)
             .field("surface_count", &self.surface_count)
             .field("annotation_count", &self.annotation_count)
+            .field(
+                "detail_count",
+                &self.details.map(|details| details.record_count),
+            )
             .finish()
     }
 }
@@ -251,6 +314,25 @@ impl<'a> Dictionary<'a> {
         let annotations = required_table(bytes, table_count, format::TAG_ANNOTATIONS)?;
         let matrix = required_table(bytes, table_count, format::TAG_MATRIX)?;
 
+        let detail_index = optional_table(bytes, table_count, format::TAG_DETAIL_INDEX)?;
+        let detail_records = optional_table(bytes, table_count, format::TAG_DETAIL_RECORDS)?;
+        let detail_relations = optional_table(bytes, table_count, format::TAG_DETAIL_RELATIONS)?;
+        let detail_text_offsets =
+            optional_table(bytes, table_count, format::TAG_DETAIL_TEXT_OFFSETS)?;
+        let detail_text = optional_table(bytes, table_count, format::TAG_DETAIL_TEXT)?;
+        let detail_tables_present = [
+            detail_index.is_some(),
+            detail_records.is_some(),
+            detail_relations.is_some(),
+            detail_text_offsets.is_some(),
+            detail_text.is_some(),
+        ];
+        if detail_tables_present.iter().any(|present| *present)
+            && detail_tables_present.iter().any(|present| !*present)
+        {
+            return Err(Error::BadTable(format::TAG_DETAIL_INDEX));
+        }
+
         expect_fixed_count(nodes, node_count, format::NODE_LEN)?;
         expect_fixed_count(labels, node_count, 4)?;
         expect_fixed_count(entries, entry_count, format::ENTRY_LEN)?;
@@ -261,6 +343,33 @@ impl<'a> Dictionary<'a> {
         if louds_table.bytes.len() < 4 {
             return Err(Error::BadTable(format::TAG_LOUDS));
         }
+
+        let details = if detail_tables_present[0] {
+            let index = detail_index.ok_or(Error::BadTable(format::TAG_DETAIL_INDEX))?;
+            let records = detail_records.ok_or(Error::BadTable(format::TAG_DETAIL_RECORDS))?;
+            let relations =
+                detail_relations.ok_or(Error::BadTable(format::TAG_DETAIL_RELATIONS))?;
+            let text_offsets =
+                detail_text_offsets.ok_or(Error::BadTable(format::TAG_DETAIL_TEXT_OFFSETS))?;
+            let text = detail_text.ok_or(Error::BadTable(format::TAG_DETAIL_TEXT))?;
+            expect_fixed_count(index, index.count, format::DETAIL_INDEX_LEN)?;
+            expect_fixed_count(records, records.count, format::DETAIL_RECORD_LEN)?;
+            expect_fixed_count(relations, relations.count, format::DETAIL_RELATION_LEN)?;
+            expect_fixed_count(text_offsets, text_offsets.count, 4)?;
+            Some(Details {
+                index: index.bytes,
+                index_count: index.count,
+                records: records.bytes,
+                record_count: records.count,
+                relations: relations.bytes,
+                relation_count: relations.count,
+                text_offsets: text_offsets.bytes,
+                text_count: text_offsets.count,
+                text: text.bytes,
+            })
+        } else {
+            None
+        };
         let louds_bits =
             to_usize(read_u32(louds_table.bytes, 0).ok_or(Error::BadTable(format::TAG_LOUDS))?)?;
         let louds_bytes = louds_bits
@@ -287,6 +396,7 @@ impl<'a> Dictionary<'a> {
             annotation_count: annotation_offsets.count,
             annotations: annotations.bytes,
             matrix: matrix.bytes,
+            details,
         };
         dictionary.validate_tables()?;
         Ok(dictionary)
@@ -367,6 +477,7 @@ impl<'a> Dictionary<'a> {
                 let entry = self.entry(entry_index)?;
                 if !visit(PrefixMatch {
                     matched_bytes,
+                    entry_index,
                     entry,
                 }) {
                     return Ok(());
@@ -642,6 +753,49 @@ impl<'a> Dictionary<'a> {
         sink.push_str(text).map_err(|_| Error::TextOverflow)
     }
 
+    /// Returns source-backed details for one exact ENTR-table ordinal.  Old
+    /// images return `Ok(None)`; surface-only lookup is intentionally absent
+    /// because homographs may have unrelated meanings.
+    pub fn detail_at(&self, entry_index: usize) -> Result<Option<DictionaryDetail<'a>>, Error> {
+        let Some(details) = self.details else {
+            return Ok(None);
+        };
+        if entry_index >= self.entry_count {
+            return Err(Error::BadEntry);
+        }
+        let wanted = entry_index;
+        let mut low = 0usize;
+        let mut high = details.index_count;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let at = middle
+                .checked_mul(image_format::DETAIL_INDEX_LEN)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_INDEX))?;
+            let indexed_entry = to_usize(
+                read_u32(details.index, at)
+                    .ok_or(Error::BadTable(image_format::TAG_DETAIL_INDEX))?,
+            )?;
+            match indexed_entry.cmp(&wanted) {
+                core::cmp::Ordering::Less => low = middle + 1,
+                core::cmp::Ordering::Greater => high = middle,
+                core::cmp::Ordering::Equal => {
+                    let record_index = to_usize(
+                        read_u32(details.index, at + 4)
+                            .ok_or(Error::BadTable(image_format::TAG_DETAIL_INDEX))?,
+                    )?;
+                    if record_index >= details.record_count {
+                        return Err(Error::BadTable(image_format::TAG_DETAIL_INDEX));
+                    }
+                    return Ok(Some(DictionaryDetail {
+                        details,
+                        record_index,
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     fn validate_tables(&self) -> Result<(), Error> {
         use image_format as format;
 
@@ -713,6 +867,10 @@ impl<'a> Dictionary<'a> {
             self.surfaces,
             format::TAG_SURFACES,
         )?;
+
+        if let Some(details) = self.details {
+            self.validate_details(details)?;
+        }
         self.validate_offsets(
             self.annotation_offsets,
             self.annotation_count,
@@ -732,6 +890,95 @@ impl<'a> Dictionary<'a> {
             }
         }
         Ok(())
+    }
+
+    fn validate_details(&self, details: Details<'a>) -> Result<(), Error> {
+        use image_format as format;
+
+        self.validate_offsets(
+            details.text_offsets,
+            details.text_count,
+            details.text,
+            format::TAG_DETAIL_TEXT,
+        )?;
+        let mut previous_entry = None;
+        for index in 0..details.index_count {
+            let at = index * format::DETAIL_INDEX_LEN;
+            let entry = to_usize(
+                read_u32(details.index, at).ok_or(Error::BadTable(format::TAG_DETAIL_INDEX))?,
+            )?;
+            let record = to_usize(
+                read_u32(details.index, at + 4).ok_or(Error::BadTable(format::TAG_DETAIL_INDEX))?,
+            )?;
+            if entry >= self.entry_count
+                || record >= details.record_count
+                || previous_entry.is_some_and(|previous| previous >= entry)
+            {
+                return Err(Error::BadTable(format::TAG_DETAIL_INDEX));
+            }
+            previous_entry = Some(entry);
+        }
+        for index in 0..details.record_count {
+            let at = index * format::DETAIL_RECORD_LEN;
+            let description = to_usize(
+                read_u32(details.records, at).ok_or(Error::BadTable(format::TAG_DETAIL_RECORDS))?,
+            )?;
+            let display = to_usize(
+                read_u32(details.records, at + 4)
+                    .ok_or(Error::BadTable(format::TAG_DETAIL_RECORDS))?,
+            )?;
+            let relation_start = to_usize(
+                read_u32(details.records, at + 8)
+                    .ok_or(Error::BadTable(format::TAG_DETAIL_RECORDS))?,
+            )?;
+            let relation_count = to_usize(
+                read_u32(details.records, at + 12)
+                    .ok_or(Error::BadTable(format::TAG_DETAIL_RECORDS))?,
+            )?;
+            if description >= details.text_count
+                || display >= details.text_count
+                || relation_start
+                    .checked_add(relation_count)
+                    .is_none_or(|end| end > details.relation_count)
+            {
+                return Err(Error::BadTable(format::TAG_DETAIL_RECORDS));
+            }
+            self.detail_text(details, description)?;
+            self.detail_text(details, display)?;
+        }
+        for index in 0..details.relation_count {
+            let at = index * format::DETAIL_RELATION_LEN;
+            if details.relations.get(at + 1..at + 4) != Some(&[0, 0, 0])
+                || DetailRelationKind::from_byte(
+                    *details
+                        .relations
+                        .get(at)
+                        .ok_or(Error::BadTable(format::TAG_DETAIL_RELATIONS))?,
+                )
+                .is_none()
+            {
+                return Err(Error::BadTable(format::TAG_DETAIL_RELATIONS));
+            }
+            let text = to_usize(
+                read_u32(details.relations, at + 4)
+                    .ok_or(Error::BadTable(format::TAG_DETAIL_RELATIONS))?,
+            )?;
+            if text >= details.text_count {
+                return Err(Error::BadTable(format::TAG_DETAIL_RELATIONS));
+            }
+            self.detail_text(details, text)?;
+        }
+        Ok(())
+    }
+
+    fn detail_text(&self, details: Details<'a>, index: usize) -> Result<&'a str, Error> {
+        let record = self.text_record(
+            details.text_offsets,
+            details.text_count,
+            details.text,
+            index,
+        )?;
+        core::str::from_utf8(record).map_err(|_| Error::BadUtf8)
     }
 
     fn validate_offsets(
@@ -836,6 +1083,129 @@ impl<'a> Dictionary<'a> {
     }
 }
 
+impl<'a> DictionaryDetail<'a> {
+    /// Writes the complete source description without UI-specific shortening.
+    pub fn write_description(&self, sink: &mut impl TextSink) -> Result<(), Error> {
+        self.write_text(0, sink)
+    }
+
+    /// Copies a bounded UTF-8 preview into a fixed caller buffer and reports
+    /// whether source text remains.  This never treats a long source
+    /// definition as malformed, allocates no memory, and never splits a UTF-8
+    /// scalar.  The caller owns its visible-line policy.
+    pub fn write_description_preview<const N: usize>(
+        &self,
+        sink: &mut FixedStr<N>,
+        maximum_bytes: usize,
+    ) -> Result<bool, Error> {
+        let text = self.description()?;
+        let remaining = sink.capacity().saturating_sub(sink.len());
+        let mut end = text.len().min(maximum_bytes).min(remaining);
+        while end != 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        sink.push_str(&text[..end])
+            .map_err(|_| Error::TextOverflow)?;
+        Ok(end != text.len())
+    }
+
+    /// Writes the complete description for callers that choose a display
+    /// channel.  Line limits are applied by the renderer, not the dictionary.
+    pub fn write_display_description(&self, sink: &mut impl TextSink) -> Result<(), Error> {
+        self.write_text(4, sink)
+    }
+
+    /// Visits explicit relationships in source order.  The target text is
+    /// borrowed from the mapped image and remains valid for the dictionary's
+    /// lifetime.
+    pub fn visit_relations(
+        &self,
+        mut visit: impl FnMut(DetailRelationKind, &str) -> bool,
+    ) -> Result<(), Error> {
+        let at = self.record_at()?;
+        let start = to_usize(
+            read_u32(self.details.records, at + 8)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_RECORDS))?,
+        )?;
+        let count = to_usize(
+            read_u32(self.details.records, at + 12)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_RECORDS))?,
+        )?;
+        for index in start
+            ..start
+                .checked_add(count)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_RECORDS))?
+        {
+            let relation_at = index
+                .checked_mul(image_format::DETAIL_RELATION_LEN)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_RELATIONS))?;
+            let kind = DetailRelationKind::from_byte(
+                *self
+                    .details
+                    .relations
+                    .get(relation_at)
+                    .ok_or(Error::BadTable(image_format::TAG_DETAIL_RELATIONS))?,
+            )
+            .ok_or(Error::BadTable(image_format::TAG_DETAIL_RELATIONS))?;
+            let text_id = to_usize(
+                read_u32(self.details.relations, relation_at + 4)
+                    .ok_or(Error::BadTable(image_format::TAG_DETAIL_RELATIONS))?,
+            )?;
+            let text = self.text(text_id)?;
+            if !visit(kind, text) {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_text(&self, field_offset: usize, sink: &mut impl TextSink) -> Result<(), Error> {
+        let at = self.record_at()?;
+        let text_id = to_usize(
+            read_u32(self.details.records, at + field_offset)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_RECORDS))?,
+        )?;
+        sink.push_str(self.text(text_id)?)
+            .map_err(|_| Error::TextOverflow)
+    }
+
+    fn description(&self) -> Result<&'a str, Error> {
+        let at = self.record_at()?;
+        let text_id = to_usize(
+            read_u32(self.details.records, at)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_RECORDS))?,
+        )?;
+        self.text(text_id)
+    }
+
+    fn record_at(&self) -> Result<usize, Error> {
+        self.record_index
+            .checked_mul(image_format::DETAIL_RECORD_LEN)
+            .filter(|at| *at + image_format::DETAIL_RECORD_LEN <= self.details.records.len())
+            .ok_or(Error::BadTable(image_format::TAG_DETAIL_RECORDS))
+    }
+
+    fn text(&self, index: usize) -> Result<&'a str, Error> {
+        if index >= self.details.text_count {
+            return Err(Error::BadTable(image_format::TAG_DETAIL_TEXT));
+        }
+        let start = read_offset(self.details.text_offsets, index)
+            .ok_or(Error::BadTable(image_format::TAG_DETAIL_TEXT))?;
+        let end = if index + 1 < self.details.text_count {
+            read_offset(self.details.text_offsets, index + 1)
+                .ok_or(Error::BadTable(image_format::TAG_DETAIL_TEXT))?
+        } else {
+            self.details.text.len()
+        };
+        let bytes = self
+            .details
+            .text
+            .get(start..end)
+            .ok_or(Error::BadTable(image_format::TAG_DETAIL_TEXT))?;
+        core::str::from_utf8(bytes).map_err(|_| Error::BadUtf8)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Node {
     first_child: usize,
@@ -875,6 +1245,20 @@ fn required_table<'a>(bytes: &'a [u8], count: usize, tag: [u8; 4]) -> Result<Tab
         }
     }
     Err(Error::MissingTable(tag))
+}
+
+fn optional_table<'a>(
+    bytes: &'a [u8],
+    count: usize,
+    tag: [u8; 4],
+) -> Result<Option<Table<'a>>, Error> {
+    for index in 0..count {
+        let table = directory_table(bytes, index)?;
+        if table.tag == tag {
+            return Ok(Some(table));
+        }
+    }
+    Ok(None)
 }
 
 fn directory_table(bytes: &[u8], index: usize) -> Result<Table<'_>, Error> {

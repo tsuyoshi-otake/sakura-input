@@ -18,7 +18,9 @@
 //! correlation ids a late reply to a timed-out request would be
 //! mis-attributed to the next one).
 
-use crate::types::{CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output, ScreenRect};
+use crate::types::{
+    CandidateDetail, CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output, ScreenRect,
+};
 use crate::wire::{Reader, Sink, VecSink};
 use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
 
@@ -246,6 +248,9 @@ pub struct UiState {
     /// not active. UI-less TSF hosts read the same list through
     /// `ITfCandidateListUIElement` in the DLL.
     pub candidates: Option<CandidateList>,
+    /// Optional detail for the selected candidate. It is absent whenever the
+    /// candidate list is absent, so renderers can fail closed without guessing.
+    pub candidate_detail: Option<CandidateDetail>,
     /// Screen rectangle of the active composition. The renderer anchors its
     /// popup below this rectangle and hides it until one is available.
     pub anchor: Option<ScreenRect>,
@@ -482,9 +487,13 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
             w.write_u64(*excluded_test_only_events)
         }
         Response::Ui(ui) => {
+            if ui.candidate_detail.is_some() && ui.candidates.is_none() {
+                return Err(Error::TooLarge);
+            }
             w.write_u64(ui.revision)?;
             w.write_option(&ui.mode, |w, mode| mode.encode(w))?;
             w.write_option(&ui.candidates, |w, candidates| candidates.encode(w))?;
+            w.write_option(&ui.candidate_detail, |w, detail| detail.encode(w))?;
             w.write_option(&ui.anchor, |w, rect| rect.encode(w))?;
             w.write_bool(ui.renderer_visible)?;
             w.write_bool(ui.stopping)
@@ -634,6 +643,10 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
             let revision = r.read_u64()?;
             let mode = r.read_option(Mode::decode)?;
             let candidates = r.read_option(CandidateList::decode)?;
+            let candidate_detail = r.read_option(CandidateDetail::decode)?;
+            if candidate_detail.is_some() && candidates.is_none() {
+                return Err(Error::TooLarge);
+            }
             let anchor = r.read_option(ScreenRect::decode)?;
             let renderer_visible = r.read_bool()?;
             let stopping = r.read_bool()?;
@@ -641,6 +654,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
                 revision,
                 mode,
                 candidates,
+                candidate_detail,
                 anchor,
                 renderer_visible,
                 stopping,
@@ -656,6 +670,37 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn detail() -> CandidateDetail {
+        CandidateDetail {
+            reading: "reading".to_owned(),
+            definition: "definition".to_owned(),
+            definition_truncated: false,
+            aliases: Vec::new(),
+            related: Vec::new(),
+            similar: Vec::new(),
+            antonyms: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn ui_rejects_detail_without_candidates_before_writing_a_frame() {
+        let response = Response::Ui(UiState {
+            revision: 1,
+            mode: None,
+            candidates: None,
+            candidate_detail: Some(detail()),
+            anchor: None,
+            renderer_visible: false,
+            stopping: false,
+        });
+        let mut frame = vec![1, 2, 3];
+        assert_eq!(
+            encode_response(&response, 1, &mut frame),
+            Err(Error::TooLarge)
+        );
+        assert!(frame.is_empty());
+    }
 
     #[test]
     fn payload_len_accepts_at_limit_and_rejects_above() {

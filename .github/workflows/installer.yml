@@ -49,6 +49,10 @@ jobs:
           -MozcSource .sources/mozc
           -GlossarySource .sources/smile-chat
           -OutputDirectory artifacts/release
+      # build-dictionary resolves the official, fixed Japanese WordNet LMF
+      # artifact itself. Its cache/download path still verifies the pinned size
+      # and SHA-256 before dictc can receive the source; do not replace this
+      # with an unchecked workflow download.
 
       # .cargo/config.toml pins [build] target = "x86_64-pc-windows-msvc"
       # (DESIGN 3.2: this product is x86_64-only), so a bare release build

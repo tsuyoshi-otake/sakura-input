@@ -142,6 +142,7 @@ fn every_response_variant_roundtrips() {
             commit: Some("commit".to_string()),
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
         }),
         Response::Pong,
         Response::Ok,
@@ -166,6 +167,7 @@ fn every_response_variant_roundtrips() {
                 selected: 0,
                 page_size: 9,
             }),
+            candidate_detail: None,
             anchor: Some(ScreenRect {
                 left: -100,
                 top: 10,
@@ -181,6 +183,7 @@ fn every_response_variant_roundtrips() {
             revision: u64::MAX,
             mode: None,
             candidates: None,
+            candidate_detail: None,
             anchor: None,
             renderer_visible: false,
             stopping: false,
@@ -191,6 +194,7 @@ fn every_response_variant_roundtrips() {
             revision: 2,
             mode: Some(Mode::Hiragana),
             candidates: None,
+            candidate_detail: None,
             anchor: None,
             renderer_visible: false,
             stopping: true,
@@ -219,6 +223,7 @@ fn commit_undo_output_roundtrips_with_exact_utf8_text() {
             commit: None,
             delete_before: "🍣かな".to_owned(),
             candidates: None,
+            candidate_detail: None,
         }),
         91,
     );
@@ -247,6 +252,7 @@ fn empty_strings_roundtrip() {
             commit: Some(String::new()),
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
         }),
         1,
     );
@@ -308,6 +314,7 @@ fn non_bmp_characters_roundtrip_in_every_position() {
         commit: Some(text),
         delete_before: String::new(),
         candidates: None,
+        candidate_detail: None,
     };
     roundtrip_response(&Response::Output(output), 1);
 }
@@ -325,6 +332,7 @@ fn cursor_and_session_at_u32_and_u64_max_roundtrip() {
         commit: None,
         delete_before: String::new(),
         candidates: None,
+        candidate_detail: None,
     };
     roundtrip_response(&Response::Output(output), 1);
     roundtrip_request(&Request::Commit { session: u64::MAX }, 1);
@@ -360,6 +368,7 @@ fn max_segments_roundtrips() {
         commit: None,
         delete_before: String::new(),
         candidates: None,
+        candidate_detail: None,
     };
     roundtrip_response(&Response::Output(output), 1);
 }
@@ -389,6 +398,7 @@ fn every_mode_roundtrips() {
             commit: None,
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
         };
         roundtrip_response(&Response::Output(output), 1);
     }
@@ -418,6 +428,7 @@ fn every_underline_kind_roundtrips() {
             commit: None,
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
         };
         roundtrip_response(&Response::Output(output), 1);
     }
@@ -438,18 +449,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v12_hello_roundtrips_and_v11_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 11;
+fn protocol_v13_hello_roundtrips_and_v12_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 12;
     assert_eq!(
-        PROTOCOL_VERSION, 12,
-        "input-mode status and SetMode change the wire contract"
+        PROTOCOL_VERSION, 13,
+        "selected-candidate detail changes the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v12 request");
+    encode_request(&request, 17, &mut request_frame).expect("encode v13 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -470,7 +481,7 @@ fn protocol_v12_hello_roundtrips_and_v11_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 17, &mut response_frame).expect("encode v12 response");
+    encode_response(&response, 17, &mut response_frame).expect("encode v13 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -562,6 +573,7 @@ fn output_buf_segments_match_hand_written_expectation() {
         commit: None,
         delete_before: String::new(),
         candidates: None,
+        candidate_detail: None,
     };
 
     let mut frame = [0u8; 512];
@@ -597,6 +609,7 @@ fn candidate_list_roundtrips_and_matches_output_buf() {
         commit: None,
         delete_before: String::new(),
         candidates: Some(candidates.clone()),
+        candidate_detail: None,
     };
     roundtrip_response(&Response::Output(output), 23);
 
@@ -639,6 +652,7 @@ fn expanded_conversion_candidate_list_roundtrips() {
             commit: None,
             delete_before: String::new(),
             candidates: Some(candidates),
+            candidate_detail: None,
         }),
         24,
     );

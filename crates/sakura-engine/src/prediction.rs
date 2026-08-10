@@ -58,6 +58,9 @@ pub struct PredictionCandidate {
     right_id: u16,
     flags: EntryFlags,
     source: PredictionSource,
+    /// Exact mapped-system ordinal. History and user candidates never carry
+    /// it, so selected-candidate detail cannot be inferred from a surface.
+    system_entry_index: Option<u32>,
 }
 
 impl PredictionCandidate {
@@ -84,6 +87,10 @@ impl PredictionCandidate {
     pub(crate) const fn source(&self) -> PredictionSource {
         self.source
     }
+
+    pub const fn system_entry_index(&self) -> Option<u32> {
+        self.system_entry_index
+    }
 }
 
 impl Default for PredictionCandidate {
@@ -95,6 +102,7 @@ impl Default for PredictionCandidate {
             right_id: 0,
             flags: EntryFlags::NONE,
             source: PredictionSource::System,
+            system_entry_index: None,
         }
     }
 }
@@ -714,6 +722,7 @@ impl PredictionIndex {
         candidate.right_id = entry.right_id;
         candidate.flags = entry.flags;
         candidate.source = PredictionSource::System;
+        candidate.system_entry_index = Some(indexed.entry_index);
         Some(candidate)
     }
 }
