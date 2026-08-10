@@ -12,11 +12,10 @@ use std::cell::{Cell, RefCell};
 use sakura_proto::Mode;
 use windows::Win32::Foundation::{COLORREF, E_FAIL, RECT, SIZE};
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
-    DeleteObject, DrawTextW, FillRect, GetDC, GetSysColor, ReleaseDC, SelectObject, SetBkMode,
-    SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, COLOR_WINDOW, COLOR_WINDOWTEXT,
+    CreateBitmap, CreateCompatibleDC, CreateFontW, DeleteDC, DeleteObject, DrawTextW, GetDC,
+    PatBlt, ReleaseDC, SelectObject, SetBkMode, SetTextColor, BLACKNESS, CLIP_DEFAULT_PRECIS,
     DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_SEMIBOLD,
-    HBITMAP, HDC, HFONT, OUT_TT_PRECIS, TRANSPARENT,
+    HBITMAP, HDC, HFONT, NONANTIALIASED_QUALITY, OUT_TT_PRECIS, TRANSPARENT, WHITENESS,
 };
 use windows::Win32::System::Ole::{
     CONNECT_E_ADVISELIMIT, CONNECT_E_CANNOTCONNECT, CONNECT_E_NOCONNECTION,
@@ -30,6 +29,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON, SM_CYSMICON,
 };
 use windows_core::{Error, Result, PCWSTR};
+
+#[cfg(test)]
+use windows::Win32::Graphics::Gdi::GetPixel;
+#[cfg(test)]
+use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo};
 
 /// Item ids are local to one [`ITfMenu`] invocation. Keep them stable so a
 /// future new menu entry cannot silently change what an old id means.
@@ -373,7 +377,6 @@ pub fn icon_for(mode: Mode) -> Result<HICON> {
 
 struct Canvas {
     memory: HDC,
-    color: HBITMAP,
     mask: HBITMAP,
 }
 
@@ -384,38 +387,37 @@ impl Canvas {
         unsafe {
             Self {
                 memory: CreateCompatibleDC(Some(screen)),
-                color: CreateCompatibleBitmap(screen, size.cx, size.cy),
-                mask: CreateCompatibleBitmap(screen, size.cx, size.cy),
+                // A monochrome HICON has no colour bitmap. Its single mask is
+                // twice the icon height: the upper half is the AND mask and
+                // the lower half is the XOR mask. This is also the format TSF
+                // requires for TF_LBI_STYLE_TEXTCOLORICON.
+                mask: CreateBitmap(size.cx, size.cy * 2, 1, 1, None),
             }
         }
     }
 
     fn compose(&self, size: SIZE, text: &str) -> Result<HICON> {
-        // SAFETY: `color` is selected only for the duration of drawing and is
+        // SAFETY: `mask` is selected only for the duration of drawing and is
         // restored before the canvas drops it.
-        let previous = unsafe { SelectObject(self.memory, self.color.into()) };
+        let previous = unsafe { SelectObject(self.memory, self.mask.into()) };
         let rect = RECT {
             left: 0,
             top: 0,
             right: size.cx,
             bottom: size.cy,
         };
-        // SAFETY: both system colour indices are valid. The brush is deleted
-        // after filling the live memory DC.
+        // SAFETY: the monochrome bitmap is selected into this live memory DC.
+        // For a monochrome icon, AND=1/XOR=0 leaves the taskbar pixel unchanged
+        // (transparent), while AND=0/XOR=0 produces black. TSF replaces those
+        // black glyph pixels with the selected Windows theme's text colour.
+        // Initializing both halves explicitly also avoids depending on bitmap
+        // allocation contents.
         unsafe {
-            let paper = COLORREF(GetSysColor(COLOR_WINDOW));
-            let brush = CreateSolidBrush(paper);
-            FillRect(self.memory, &rect, brush);
-            let _ = DeleteObject(brush.into());
+            let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy * 2, BLACKNESS);
+            let _ = PatBlt(self.memory, 0, 0, size.cx, size.cy, WHITENESS);
         }
-        draw_centered(
-            self.memory,
-            &rect,
-            text,
-            // SAFETY: `COLOR_WINDOWTEXT` is a documented system colour index.
-            COLORREF(unsafe { GetSysColor(COLOR_WINDOWTEXT) }),
-        );
-        // SAFETY: restores the previous GDI object before `color` is released.
+        draw_centered(self.memory, &rect, text, COLORREF(0));
+        // SAFETY: restores the previous GDI object before `mask` is released.
         unsafe { SelectObject(self.memory, previous) };
 
         let info = ICONINFO {
@@ -423,10 +425,10 @@ impl Canvas {
             xHotspot: 0,
             yHotspot: 0,
             hbmMask: self.mask,
-            hbmColor: self.color,
+            hbmColor: HBITMAP::default(),
         };
-        // SAFETY: both same-sized bitmaps are live and unselected. Windows
-        // copies them into the returned caller-owned icon.
+        // SAFETY: the double-height monochrome mask is live and unselected.
+        // Windows copies it into the returned caller-owned icon.
         unsafe { CreateIconIndirect(&info) }
     }
 }
@@ -435,7 +437,6 @@ impl Drop for Canvas {
     fn drop(&mut self) {
         // SAFETY: every handle came from `Canvas::new` and is released once.
         unsafe {
-            let _ = DeleteObject(self.color.into());
             let _ = DeleteObject(self.mask.into());
             let _ = DeleteDC(self.memory);
         }
@@ -443,12 +444,14 @@ impl Drop for Canvas {
 }
 
 fn draw_centered(dc: HDC, rect: &RECT, text: &str, color: COLORREF) {
-    let font = font_of_height(((rect.bottom - rect.top) * 2) / 3);
+    let font = font_of_height(((rect.bottom - rect.top) * 4) / 5);
     // SAFETY: the previous font is restored before the temporary font is
     // deleted. `wide` remains valid for the call.
     let previous = unsafe { SelectObject(dc, font.into()) };
     let mut wide: Vec<u16> = text.encode_utf16().collect();
     let mut area = *rect;
+    // SAFETY: the caller supplied a live DC and rectangle; the temporary font
+    // and UTF-16 buffer remain valid until the previous font is restored.
     unsafe {
         let _ = SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, color);
@@ -479,7 +482,7 @@ fn font_of_height(height: i32) -> HFONT {
             DEFAULT_CHARSET,
             OUT_TT_PRECIS,
             CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY,
+            NONANTIALIASED_QUALITY,
             (DEFAULT_PITCH.0 | FF_DONTCARE.0).into(),
             PCWSTR::null(),
         )
@@ -506,6 +509,63 @@ mod tests {
                 assert_ne!(description(*mode), description(*other));
             }
         }
+    }
+
+    #[test]
+    fn mode_icon_is_a_transparent_monochrome_glyph() -> Result<()> {
+        let icon = icon_for(Mode::Hiragana)?;
+        let mut info = ICONINFO::default();
+        // SAFETY: `icon` is live and `info` is a writable output structure.
+        unsafe { GetIconInfo(icon, &mut info)? };
+
+        let size = unsafe {
+            SIZE {
+                cx: GetSystemMetrics(SM_CXSMICON).max(16),
+                cy: GetSystemMetrics(SM_CYSMICON).max(16),
+            }
+        };
+        // A true monochrome HICON has no colour bitmap. Its upper mask half
+        // contains the transparent background and the glyph's opaque pixels.
+        let monochrome = info.hbmColor.is_invalid();
+        let dc = unsafe { CreateCompatibleDC(None) };
+        let previous = unsafe { SelectObject(dc, info.hbmMask.into()) };
+        let corners_are_transparent = [(0, 0), (size.cx - 1, 0), (0, size.cy - 1)]
+            .into_iter()
+            .all(|(x, y)| unsafe { GetPixel(dc, x, y).0 } == 0x00ff_ffff);
+        let mut glyph_pixels = 0usize;
+        for y in 0..size.cy {
+            for x in 0..size.cx {
+                if unsafe { GetPixel(dc, x, y).0 } == 0 {
+                    glyph_pixels += 1;
+                }
+            }
+        }
+        // SAFETY: restore the original DC object, then release every copied
+        // handle returned by GetIconInfo and finally the caller-owned icon.
+        unsafe {
+            SelectObject(dc, previous);
+            let _ = DeleteDC(dc);
+            let _ = DeleteObject(info.hbmMask.into());
+            if !info.hbmColor.is_invalid() {
+                let _ = DeleteObject(info.hbmColor.into());
+            }
+            let _ = DestroyIcon(icon);
+        }
+
+        assert!(monochrome, "text-colour icons must have no colour bitmap");
+        assert!(
+            corners_are_transparent,
+            "the taskbar background must remain visible around the glyph"
+        );
+        assert!(
+            glyph_pixels > 0,
+            "the monochrome mask must contain the glyph"
+        );
+        assert!(
+            glyph_pixels < (size.cx * size.cy) as usize,
+            "the glyph must not fill the entire icon"
+        );
+        Ok(())
     }
 
     #[test]
