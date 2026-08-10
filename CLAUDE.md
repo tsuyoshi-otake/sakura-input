@@ -7,13 +7,21 @@
 - `crates/sakura-tsf/src/mode_item.rs`はDPI境界でassetを選び、top-down 32-bit DIBからHICONを生成する。中間bitmapは必ず削除し、返却HICONの所有権はTSFへ渡す。
 - 直接入力は斜線付き`A`、半角英数は通常の`A`であり、同じassetへ統合しない。全モード・サイズ・テーマの透過、alpha、premultiplication、一意性、HICON生成を総当たりテストする。
 
-## Issue #27 Sakura候補ポップアップ（自動検証済み・実画面確認待ち）
+## Issue #27 Sakura候補ポップアップ（自動検証・通常light実画面確認済み）
 
 - 候補表示はrenderer所有のWin32ポップアップであり、non-activating、click-through、キャレット追従、DPI対応、UI Automation公開を維持する。engine／TSFが持つ候補順、選択、ページ、候補種別の意味をrendererが変更してはいけない。
 - Sakura独自の見た目は、low-contrastの暖色系neutral、Yu Gothic UI、28 logical px行、候補番号／文字列／注記の列、260–480 logical pxのcontent-aware幅、控えめな種別・ページfooter、passiveなページ位置rail、選択行のmuted sakura 2 logical px railである。候補文字列を主階層とし、注記・ページ情報は補助階層にする。
 - light／dark paletteに加え、Windows high-contrastではsystem roleを使う。UI-less hostには`ITfUIElement`候補データ経路を保ち、popupの可視性に依存させない。compact／expanded表示は既存のengine semanticsとキー操作を維持し、新しい候補定義や操作を追加しない。
 - 実装は通常のWin32 popupをGDI（`CreateFontW`／`DrawTextW`／brush）で描く。layered windowやDirectWriteを使う設計として説明しない。これはrendererの描画境界だけの変更で、候補用raster assetの再生成は不要であり、Issue #26のmode-indicator assetを変更・流用しない。
-- unit testと実renderer processのintegration testにより、compact／expanded semantics、260–480 logical px幅、DPI変更、non-activation、キャレット追従、ページ、数字選択、UI Automation公開は自動検証済み。残る受け入れ作業は、light／dark／Windows high-contrastの実画面で、文字階層、選択rail、注記・footer・ページrail、配置を目視確認し、mode-indicator assetに差分がないことを記録すること。
+- unit testと実renderer processのintegration testにより、compact／expanded semantics、260–480 logical px幅、DPI変更、non-activation、キャレット追従、ページ、数字選択、UI Automation公開は自動検証済み。最新版再インストール後の通常light実画面スクリーンショットでは、候補本文、右側annotation列、淡い選択面と桜色rail、予測footer、`1–9/9`ページ表示を目視確認済み。Issue #27の検証記録ではmode-indicator assetに差分がないことも確認済み。残る受け入れ作業はdark／Windows high-contrastの実画面確認だけである。
+
+## Issue #28 選択候補の辞書詳細（実装・実データ検証済み）
+
+- 詳細はSakura独自の候補ポップアップと同一HWNDで、選択中の候補1件だけに補助表示する。候補の順序、選択、ページ、入力フォーカス、click-through、GDI描画境界を変えない。説明は画面上で最大2行。配置は右、左、下の順に試し、収まらなければ表示しない。
+- 辞書の原文説明は表示用上限を持たない。一方、wireへはUTF-8安全なプレビューと明示的なtruncated flagだけを送り、暗黙に切り詰めない。UIAは選択候補の詳細を公開し、プレビューが省略されていることを保持する。候補全件へ詳細を複製しない。
+- detailは最終ENTR tableのexact entry ordinalで結び、surface文字列だけで照合しない。複合候補、ordinal不一致、旧辞書、壊れたoptional table、空または不正なdetailはfail-closedでdetailなしにする。
+- 別名／関連語／類似語／反対語は明示的な直接データだけであり、推測、表記類似、埋め込み類似、カテゴリ、推移的探索で補わない。表示は各種最大3語。固定したsmile-chatとJapanese WordNet 1.1を統合し、正規14カテゴリ・1,635,239 entriesに36,606 detailsを生成する。説明なし・同形異義・多義で一意に解決できないentryはdetailなしにする。
+- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。実データは2-pass決定性、94,737,211 bytes、SHA-256 `3bec6909000519ea706e15fbee1c1ba4c5391ef5fd790313f73190e3cfb944fe`を確認済みである。
 
 ## 最優先タスク：Issue #24 ローカル DeBERTa 長文変換 reranker（実装進行中）
 

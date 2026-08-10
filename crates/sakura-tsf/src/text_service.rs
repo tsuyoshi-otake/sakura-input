@@ -5392,6 +5392,7 @@ mod tests {
             commit: commit.map(str::to_owned),
             delete_before: String::new(),
             candidates: None,
+            candidate_detail: None,
         }
     }
 

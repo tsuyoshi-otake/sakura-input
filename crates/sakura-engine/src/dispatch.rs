@@ -34,6 +34,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use sakura_core::dictionary::DetailRelationKind;
 use sakura_core::keymap::{Action, KeyMap, KeyMapError, Preset, State};
 use sakura_core::romaji::{Table, TableError};
 use sakura_core::width::Normalizer;
@@ -43,9 +44,10 @@ use sakura_core::{
     SegmentTransform, SuggestAccept, TextSink,
 };
 use sakura_proto::{
-    ErrorCode, FixedStr, FixedVec, InputScope, KeyInput, Mode, OutputBuf, Overflow, Request,
-    Response, SessionId, UnderlineKind, UndoCommitOutcome, CANDIDATE_PAGE_SIZE, MAX_PREEDIT_BYTES,
-    MAX_SEGMENTS, PROTOCOL_VERSION,
+    CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope, KeyInput, Mode, OutputBuf,
+    Overflow, Request, Response, SessionId, UnderlineKind, UndoCommitOutcome, CANDIDATE_PAGE_SIZE,
+    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_RELATIONS,
+    MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
 
 use crate::dictionary::ConversionService;
@@ -1487,6 +1489,7 @@ fn apply_key(
         session_id,
         session,
         services.normalizer,
+        services.conversion,
         &prediction_cache,
         scratch,
         out,
@@ -3397,6 +3400,7 @@ fn render_suggestions(
     session_id: SessionId,
     session: &mut Session,
     normalizer: &Normalizer,
+    conversion: Option<&ConversionService>,
     cache: &PredictionCacheWork<'_>,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
@@ -3421,7 +3425,105 @@ fn render_suggestions(
         normalizer.normalize_into(candidate.surface(), session.mode, scratch)?;
         out.push_candidate(scratch.as_str(), candidate.annotation())?;
     }
+    if let (Some(service), Some(entry_index)) = (
+        conversion,
+        candidates
+            .get(selected)
+            .and_then(|candidate| candidate.system_entry_index()),
+    ) {
+        publish_system_candidate_detail(service, entry_index, candidates[selected].reading(), out);
+    }
     Ok(())
+}
+
+/// Publishes only an exact, source-backed system entry.  Any malformed mapped
+/// data, unavailable detail record, or relation that cannot fit the bounded
+/// protocol clears the optional panel instead of guessing from candidate text.
+fn publish_system_candidate_detail(
+    conversion: &ConversionService,
+    entry_index: u32,
+    reading: &str,
+    out: &mut OutputBuf,
+) {
+    out.clear_candidate_detail();
+    let Ok(entry_index) = usize::try_from(entry_index) else {
+        return;
+    };
+    let Ok(Some(detail)) = conversion.dictionary().detail_at(entry_index) else {
+        return;
+    };
+    let mut definition = FixedStr::<MAX_CANDIDATE_DETAIL_DEFINITION_BYTES>::new();
+    let Ok(truncated) =
+        detail.write_description_preview(&mut definition, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES)
+    else {
+        return;
+    };
+    if definition.is_empty() {
+        return;
+    }
+    let mut aliases = [[0u8; MAX_CANDIDATE_DETAIL_RELATION_BYTES]; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut related = [[0u8; MAX_CANDIDATE_DETAIL_RELATION_BYTES]; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut similar = [[0u8; MAX_CANDIDATE_DETAIL_RELATION_BYTES]; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut antonyms = [[0u8; MAX_CANDIDATE_DETAIL_RELATION_BYTES]; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut lengths = [0usize; 4];
+    let mut byte_lengths = [[0usize; MAX_CANDIDATE_DETAIL_RELATIONS]; 4];
+    let mut valid = true;
+    let relations = detail.visit_relations(|kind, text| {
+        if text.is_empty() || text.len() > MAX_CANDIDATE_DETAIL_RELATION_BYTES {
+            valid = false;
+            return false;
+        }
+        match kind {
+            DetailRelationKind::Alias if lengths[0] < aliases.len() => {
+                aliases[lengths[0]][..text.len()].copy_from_slice(text.as_bytes());
+                byte_lengths[0][lengths[0]] = text.len();
+                lengths[0] += 1;
+            }
+            DetailRelationKind::Related if lengths[1] < related.len() => {
+                related[lengths[1]][..text.len()].copy_from_slice(text.as_bytes());
+                byte_lengths[1][lengths[1]] = text.len();
+                lengths[1] += 1;
+            }
+            DetailRelationKind::Synonym if lengths[2] < similar.len() => {
+                similar[lengths[2]][..text.len()].copy_from_slice(text.as_bytes());
+                byte_lengths[2][lengths[2]] = text.len();
+                lengths[2] += 1;
+            }
+            DetailRelationKind::Antonym if lengths[3] < antonyms.len() => {
+                antonyms[lengths[3]][..text.len()].copy_from_slice(text.as_bytes());
+                byte_lengths[3][lengths[3]] = text.len();
+                lengths[3] += 1;
+            }
+            _ => {}
+        }
+        true
+    });
+    if relations.is_err() || !valid {
+        return;
+    }
+    let mut alias_terms = [""; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut related_terms = [""; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut similar_terms = [""; MAX_CANDIDATE_DETAIL_RELATIONS];
+    let mut antonym_terms = [""; MAX_CANDIDATE_DETAIL_RELATIONS];
+    for index in 0..MAX_CANDIDATE_DETAIL_RELATIONS {
+        alias_terms[index] =
+            core::str::from_utf8(&aliases[index][..byte_lengths[0][index]]).unwrap_or("");
+        related_terms[index] =
+            core::str::from_utf8(&related[index][..byte_lengths[1][index]]).unwrap_or("");
+        similar_terms[index] =
+            core::str::from_utf8(&similar[index][..byte_lengths[2][index]]).unwrap_or("");
+        antonym_terms[index] =
+            core::str::from_utf8(&antonyms[index][..byte_lengths[3][index]]).unwrap_or("");
+    }
+    let _ = out.set_candidate_detail(CandidateDetailInput {
+        reading,
+        definition: definition.as_str(),
+        definition_truncated: truncated,
+        aliases: &alias_terms[..lengths[0]],
+        related: &related_terms[..lengths[1]],
+        similar: &similar_terms[..lengths[2]],
+        antonyms: &antonym_terms[..lengths[3]],
+    });
 }
 
 /// Projects the focused prediction surface into the output preedit without
@@ -3672,6 +3774,9 @@ fn render_converted_segments(
                         )?;
                         out.push_candidate(scratch.as_str(), candidate.annotation())?;
                     }
+                    if let Some(entry_index) = candidates[selected].system_entry_index() {
+                        publish_system_candidate_detail(service, entry_index, reading, out);
+                    }
                 }
 
                 Ok(Some((
@@ -3749,6 +3854,77 @@ mod tests {
 
     fn conversion_dispatcher() -> Dispatcher {
         Dispatcher::new_with_conversion(conversion_fixture()).expect("shipped defaults")
+    }
+
+    fn detail_conversion_fixture() -> Arc<ConversionService> {
+        let source = concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "kana\tKana\t0\t0\t100\t100\t\tfixture\n",
+            "a\tA\t0\t0\t100\t100\t\tfixture\n",
+            "b\tB\t0\t0\t100\t100\t\tfixture\n",
+        );
+        let entries = dictc::parse_entries("details-conversion.tsv", source).expect("entries");
+        let matrix = dictc::parse_connection(
+            "details-conversion-matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let image = Box::leak(
+            dictc::compile_with_details(
+                &entries,
+                &matrix,
+                &[dictc::SourceDetail {
+                    reading: "kana".into(),
+                    surface: "Kana".into(),
+                    left_id: 0,
+                    right_id: 0,
+                    description: "A source-backed test definition.".into(),
+                    relations: vec![],
+                }],
+            )
+            .expect("detail image")
+            .into_boxed_slice(),
+        );
+        Arc::new(ConversionService::from_static_bytes(image).expect("detail conversion service"))
+    }
+
+    #[test]
+    fn only_one_exact_system_edge_publishes_its_source_backed_detail() {
+        let conversion = detail_conversion_fixture();
+        conversion
+            .with_candidates("kana", ConversionOptions::default(), |candidates| {
+                let candidate = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "Kana")
+                    .expect("exact dictionary candidate");
+                let mut output = OutputBuf::new();
+                output.begin_candidates(0, 9).expect("candidate list");
+                output
+                    .push_candidate(candidate.text(), candidate.annotation())
+                    .expect("candidate");
+                publish_system_candidate_detail(
+                    conversion.as_ref(),
+                    candidate.system_entry_index().expect("exact entry ordinal"),
+                    "kana",
+                    &mut output,
+                );
+                let detail = output.to_output().candidate_detail.expect("exact detail");
+                assert_eq!(detail.reading, "kana");
+                assert_eq!(detail.definition, "A source-backed test definition.");
+            })
+            .expect("conversion");
+
+        conversion
+            .with_candidates("ab", ConversionOptions::default(), |candidates| {
+                let compound = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "AB")
+                    .expect("compound candidate");
+                assert_eq!(compound.system_entry_index(), None);
+            })
+            .expect("compound conversion");
     }
 
     fn shifted_ascii_english_conversion_dispatcher() -> Dispatcher {
@@ -8012,15 +8188,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v10_version_is_rejected() {
+    fn hello_with_the_previous_v12_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 12,
-            "input-mode status and SetMode add v12 wire messages"
+            PROTOCOL_VERSION, 13,
+            "selected-candidate detail adds v13 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 10 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 12 }, &mut out);
 
         assert_eq!(
             reply,
@@ -8029,10 +8205,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v12_version_is_accepted() {
+    fn hello_with_v13_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 12,
-            "input-mode status and SetMode add v12 wire messages"
+            PROTOCOL_VERSION, 13,
+            "selected-candidate detail adds v13 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();

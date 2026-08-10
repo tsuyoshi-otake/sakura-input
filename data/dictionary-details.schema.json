@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sakura dictionary detail source",
+  "type": "object",
+  "required": ["reading", "surface", "left_id", "right_id", "description"],
+  "properties": {
+    "reading": { "type": "string", "minLength": 1 },
+    "surface": { "type": "string", "minLength": 1 },
+    "left_id": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "right_id": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "description": { "type": "string", "minLength": 1 },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "target"],
+        "properties": {
+          "kind": { "enum": ["alias", "related", "synonym", "antonym"] },
+          "target": { "type": "string", "minLength": 1, "maxLength": 16384 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

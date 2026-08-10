@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Japanese WordNet import report",
+  "type": "object",
+  "required": ["schema_version", "detail_count", "unresolved", "details"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "detail_count": { "type": "integer", "minimum": 0 },
+    "unresolved": {
+      "type": "object",
+      "required": ["surface_ambiguous", "sense_ambiguous", "missing_definition", "relation_ambiguous", "relation_unsupported", "relation_truncated"],
+      "additionalProperties": false,
+      "properties": {
+        "surface_ambiguous": { "type": "integer", "minimum": 0 },
+        "sense_ambiguous": { "type": "integer", "minimum": 0 },
+        "missing_definition": { "type": "integer", "minimum": 0 },
+        "relation_ambiguous": { "type": "integer", "minimum": 0 },
+        "relation_unsupported": { "type": "integer", "minimum": 0 },
+        "relation_truncated": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Relations omitted after the explicit three-per-kind compiled/UI structural limit."
+        }
+      }
+    },
+    "details": {
+      "type": "object",
+      "required": ["merged_count", "sources"],
+      "properties": {
+        "merged_count": { "type": "integer", "minimum": 0 },
+        "sources": {
+          "type": "object",
+          "required": ["smile-chat", "japanese-wordnet"],
+          "properties": {
+            "smile-chat": {
+              "type": "object",
+              "required": ["detail_count", "aliases", "related"],
+              "properties": {
+                "detail_count": { "type": "integer", "minimum": 0 },
+                "aliases": { "type": "integer", "minimum": 0 },
+                "related": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            },
+            "japanese-wordnet": {
+              "type": "object",
+              "required": ["detail_count", "similar", "antonyms", "suppressed_by_smile_chat"],
+              "properties": {
+                "detail_count": { "type": "integer", "minimum": 0 },
+                "similar": { "type": "integer", "minimum": 0 },
+                "antonyms": { "type": "integer", "minimum": 0 },
+                "suppressed_by_smile_chat": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

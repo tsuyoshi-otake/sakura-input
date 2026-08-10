@@ -34,7 +34,7 @@ function Get-Sha256 {
     $stream = [IO.File]::OpenRead($Path)
     try {
         $algorithm = [Security.Cryptography.SHA256]::Create()
-        try { return [Convert]::ToHexString($algorithm.ComputeHash($stream)).ToLowerInvariant() }
+        try { return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant() }
         finally { $algorithm.Dispose() }
     }
     finally { $stream.Dispose() }
@@ -235,14 +235,67 @@ function Test-ReleaseBundle {
         try {
             $packageReport = [IO.File]::ReadAllText($packageReportPath, [Text.Encoding]::UTF8) | ConvertFrom-Json
             $dictionaryReport = [IO.File]::ReadAllText($dictionaryReportPath, [Text.Encoding]::UTF8) | ConvertFrom-Json
+            $dictionarySchema = [int]$dictionaryReport.schema_version
+            if ($dictionarySchema -notin @(1, 2) -or $dictionaryReport.deterministic_repeat -ne $true -or
+                $packageReport.dictionary_provenance_sha256 -cne (Get-Sha256 $dictionaryReportPath)) {
+                throw 'dictionary provenance report is invalid or not linked from the installer build report'
+            }
+            $expectedPayloadCount = if ($dictionarySchema -eq 2) { 16 } else { 14 }
             if ($packageReport.schema_version -ne 1 -or $packageReport.version -cne '1.0.0' -or
-                $packageReport.compiler.warnings -ne 0 -or @($packageReport.payloads).Count -ne 14 -or
+                $packageReport.compiler.warnings -ne 0 -or @($packageReport.payloads).Count -ne $expectedPayloadCount -or
                 [string]::IsNullOrWhiteSpace([string]$packageReport.build_id)) {
                 throw 'installer build report schema, version, warning count, or payload count is invalid'
             }
-            if ($dictionaryReport.schema_version -ne 1 -or $dictionaryReport.deterministic_repeat -ne $true -or
-                $packageReport.dictionary_provenance_sha256 -cne (Get-Sha256 $dictionaryReportPath)) {
-                throw 'dictionary provenance report is invalid or not linked from the installer build report'
+
+            if ($dictionarySchema -eq 2) {
+                $wordNetUrl = 'https://github.com/bond-lab/wnja/releases/download/v1.1/jpn_wn_lmf.xml.gz'
+                $wordNetSha256 = '1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f9ecffafd7aa207aa0'
+                $wordNetLicense = 'THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt'
+                $details = $dictionaryReport.details
+                $source = $dictionaryReport.sources.japanese_wordnet
+                $wordNetImport = $dictionaryReport.wordnet_import
+                if ($null -eq $details -or $details.schema_version -ne 1 -or
+                    $details.source -cne 'japanese-wordnet' -or $null -ne $details.full_definition_max_bytes -or
+                    $null -eq $details.count -or [long]$details.count -lt 0 -or
+                    $null -eq $source -or $source.id -cne 'japanese-wordnet' -or $source.revision -cne 'v1.1' -or
+                    $source.artifact_url -cne $wordNetUrl -or $source.archive_sha256 -cne $wordNetSha256 -or
+                    [long]$source.archive_bytes -ne 12415268 -or
+                    $source.license_id -cne 'LicenseRef-Japanese-WordNet-1.1' -or $source.license_file -cne $wordNetLicense -or
+                    $null -eq $wordNetImport -or $wordNetImport.schema_version -ne 1 -or
+                    [long]$wordNetImport.detail_count -ne [long]$details.count) {
+                    throw 'schema-2 Japanese WordNet dictionary provenance is incomplete or inconsistent'
+                }
+
+                $detailProvenance = $packageReport.dictionary_details.provenance
+                if ($null -eq $packageReport.dictionary_details -or -not [bool]$packageReport.dictionary_details.included -or
+                    $packageReport.dictionary_details.source -cne 'japanese-wordnet' -or $null -eq $detailProvenance) {
+                    throw 'installer build report does not declare its schema-2 Japanese WordNet detail payload'
+                }
+                $provenanceFiles = @(
+                    [ordered]@{ name = 'source_lock'; path = 'data/SOURCES.lock'; bundle = 'provenance/data/SOURCES.lock'; required = @('[japanese_wordnet]', $wordNetUrl, $wordNetSha256, $wordNetLicense) },
+                    [ordered]@{ name = 'notice'; path = 'THIRD_PARTY_NOTICES.md'; bundle = 'provenance/THIRD_PARTY_NOTICES.md'; required = @($wordNetLicense) },
+                    [ordered]@{ name = 'license'; path = $wordNetLicense; bundle = 'provenance/THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt'; required = @('Japanese WordNet') }
+                )
+                foreach ($expectedProvenance in $provenanceFiles) {
+                    $record = $detailProvenance.PSObject.Properties[$expectedProvenance.name].Value
+                    $bundled = Join-Path $bundleRoot $expectedProvenance.bundle.Replace('/', '\\')
+                    if ($null -eq $record -or $record.path -cne $expectedProvenance.path -or
+                        -not [IO.File]::Exists($bundled) -or $record.sha256 -cne (Get-Sha256 $bundled) -or
+                        [long]$record.bytes -ne [IO.FileInfo]::new($bundled).Length) {
+                        throw "Japanese WordNet $($expectedProvenance.name) provenance does not match its release-bundle file"
+                    }
+                    $text = [IO.File]::ReadAllText($bundled, [Text.Encoding]::UTF8)
+                    foreach ($requiredText in $expectedProvenance.required) {
+                        if ($text.IndexOf($requiredText, [StringComparison]::Ordinal) -lt 0) {
+                            throw "Japanese WordNet $($expectedProvenance.name) provenance is missing pinned text '$requiredText'"
+                        }
+                    }
+                }
+                foreach ($payloadPath in @($wordNetLicense, 'data/SOURCES.lock')) {
+                    if (@($packageReport.payloads | Where-Object { $_.path -ceq $payloadPath }).Count -ne 1) {
+                        throw "schema-2 installer payload list is missing $payloadPath"
+                    }
+                }
             }
 
             $binaryNames = @(

@@ -2,6 +2,7 @@
 param(
     [string]$MozcSource,
     [string]$GlossarySource,
+    [string]$WordNetLmf,
     # Canonical Sakura system dictionary split into fourteen category files.
     # The source stays outside the repository and is included in the generated
     # image when explicitly supplied. Keep the old parameter as a compatibility
@@ -20,6 +21,10 @@ $MozcRepository = 'google/mozc'
 $MozcRevision = '3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732'
 $GlossaryRepository = 'systemexe-research-and-development/smile-chat'
 $GlossaryRevision = 'b5cada441b41c207ab49bf2cd5f1d9c5614c5b92'
+$WordNetRevision = 'v1.1'
+$WordNetArtifactUrl = 'https://github.com/bond-lab/wnja/releases/download/v1.1/jpn_wn_lmf.xml.gz'
+$WordNetArtifactBytes = 12415268L
+$WordNetArtifactSha256 = '1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f9ecffafd7aa207aa0'
 
 $RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
@@ -166,7 +171,7 @@ function Get-Sha256 {
         $algorithm = [Security.Cryptography.SHA256]::Create()
         try {
             $bytes = $algorithm.ComputeHash($stream)
-            return ([Convert]::ToHexString($bytes)).ToLowerInvariant()
+            return (([BitConverter]::ToString($bytes)).Replace('-', '')).ToLowerInvariant()
         }
         finally {
             $algorithm.Dispose()
@@ -189,6 +194,30 @@ function Get-ArtifactRecord {
         bytes = $item.Length
         sha256 = Get-Sha256 $item.FullName
     }
+}
+
+function Resolve-WordNetLmf {
+    param([AllowEmptyString()][string]$ProvidedPath)
+
+    if ([string]::IsNullOrWhiteSpace($ProvidedPath)) {
+        $cacheDirectory = Join-Path $env:USERPROFILE 'tmp\sakura-input-dictionary-sources\japanese-wordnet-v1.1'
+        [IO.Directory]::CreateDirectory($cacheDirectory) | Out-Null
+        $ProvidedPath = Join-Path $cacheDirectory 'jpn_wn_lmf.xml.gz'
+        if (-not [IO.File]::Exists($ProvidedPath)) {
+            Invoke-WebRequest -UseBasicParsing -Uri $WordNetArtifactUrl -OutFile $ProvidedPath
+        }
+    }
+    $resolved = [IO.Path]::GetFullPath($ProvidedPath)
+    $file = [IO.FileInfo]::new($resolved)
+    if (-not $file.Exists) { throw "Japanese WordNet LMF archive is missing: $resolved" }
+    if ($file.Length -ne $WordNetArtifactBytes) {
+        throw "Japanese WordNet LMF archive size mismatch: expected $WordNetArtifactBytes, got $($file.Length)"
+    }
+    $actualHash = Get-Sha256 $resolved
+    if ($actualHash -ne $WordNetArtifactSha256) {
+        throw "Japanese WordNet LMF archive SHA-256 mismatch: expected $WordNetArtifactSha256, got $actualHash"
+    }
+    return $resolved
 }
 
 function Resolve-SystemCategoryDictionary {
@@ -281,6 +310,7 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$MozcPosPath,
         [Parameter(Mandatory)][string]$CuratedTermsPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
+        [Parameter(Mandatory)][string]$WordNetLmfPath,
         [string[]]$SystemCategoryPaths = @()
     )
 
@@ -304,6 +334,7 @@ function Invoke-BuildPass {
     $overlayReport = Join-Path $OutputDirectory "it-terms$Suffix.report.json"
     $categoryDirectory = Join-Path $OutputDirectory "カテゴリ辞書$Suffix"
     $dictionary = Join-Path $OutputDirectory "system$Suffix.dic"
+    $wordNetReport = Join-Path $OutputDirectory "wordnet$Suffix.report.json"
 
     $mozcArguments = @('cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'mozc-trim', '--')
     foreach ($shard in $shards) {
@@ -364,6 +395,9 @@ function Invoke-BuildPass {
     }
     $dictionaryArguments += @(
         '--mozc-connection', $ConnectionPath,
+        '--glossary-dir', $GlossaryDirectory,
+        '--wordnet-lmf', $WordNetLmfPath,
+        '--wordnet-report', $wordNetReport,
         '--output', $dictionary
     )
     Invoke-Rtk -Arguments $dictionaryArguments
@@ -376,6 +410,7 @@ function Invoke-BuildPass {
         category_directory = $categoryDirectory
         category_files = $categoryFiles.ToArray()
         dictionary = $dictionary
+        wordnet_report = $wordNetReport
     }
 }
 
@@ -409,6 +444,7 @@ $MozcSource = Resolve-PinnedSource -ProvidedPath $MozcSource -Repository $MozcRe
 $GlossarySource = Resolve-PinnedSource -ProvidedPath $GlossarySource -Repository $GlossaryRepository `
     -Revision $GlossaryRevision -ManagedName 'smile-chat' -SparsePaths @('frontend/public')
 $SystemCategoryDictionary = Resolve-SystemCategoryDictionary -Directory $SystemCategoryDirectory
+$WordNetLmfPath = Resolve-WordNetLmf -ProvidedPath $WordNetLmf
 if ($UpdateCheckedInData -and $null -ne $SystemCategoryDictionary) {
     throw '-UpdateCheckedInData cannot be combined with -SystemCategoryDirectory; canonical category source files remain local only'
 }
@@ -421,7 +457,8 @@ $mozcPosPath = Join-Path $mozcDictionaryDirectory 'id.def'
 $requiredLicenseFiles = @(
     (Join-Path $MozcSource 'LICENSE'),
     (Join-Path $mozcDictionaryDirectory 'README.txt'),
-    (Join-Path $GlossarySource 'frontend\public\LICENSE')
+    (Join-Path $GlossarySource 'frontend\public\LICENSE'),
+    (Join-Path $RepositoryRoot 'THIRD_PARTY_LICENSES\japanese-wordnet-1.1-NICT.txt')
 )
 foreach ($path in $requiredLicenseFiles) {
     if (-not [IO.File]::Exists($path)) {
@@ -438,14 +475,14 @@ try {
     $primary = Invoke-BuildPass -Suffix '' -MozcDictionaryDirectory $mozcDictionaryDirectory `
         -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
         -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
-        -ConversionPrioritiesPath $ConversionPriorities -SystemCategoryPaths $SystemCategoryPaths
+        -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
 
-    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'dictionary')
+    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'dictionary', 'wordnet_report')
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-            -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
-            -ConversionPrioritiesPath $ConversionPriorities -SystemCategoryPaths $SystemCategoryPaths
+        -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+            -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
         foreach ($name in $scalarArtifactNames) {
             $firstHash = Get-Sha256 $primary[$name]
             $secondHash = Get-Sha256 $repeat[$name]
@@ -466,10 +503,32 @@ try {
         Remove-BuildDirectory $repeat.category_directory
     }
 
+    $wordNetImport = Get-Content -Raw -LiteralPath $primary.wordnet_report | ConvertFrom-Json
     $report = [ordered]@{
-        schema_version = 1
+        schema_version = 2
         mozc_revision = $MozcRevision
         glossary_revision = $GlossaryRevision
+        sources = [ordered]@{
+            japanese_wordnet = [ordered]@{
+                id = 'japanese-wordnet'
+                revision = $WordNetRevision
+                artifact_url = $WordNetArtifactUrl
+                archive_sha256 = $WordNetArtifactSha256
+                archive_bytes = $WordNetArtifactBytes
+                license_id = 'LicenseRef-Japanese-WordNet-1.1'
+                license_file = 'THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt'
+            }
+        }
+        details = [ordered]@{
+            schema_version = 1
+            # Backward-compatible primary source field. `sources` records all
+            # detail provenance after the smile-chat + WordNet exact merge.
+            source = 'japanese-wordnet'
+            full_definition_max_bytes = $null
+            count = $wordNetImport.details.merged_count
+            sources = $wordNetImport.details.sources
+        }
+        wordnet_import = $wordNetImport
         deterministic_repeat = -not $SkipDeterminismCheck
         inputs = [ordered]@{
             curated_terms = Get-ArtifactRecord $CuratedTerms

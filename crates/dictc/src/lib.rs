@@ -14,6 +14,7 @@ use sakura_proto::MAX_PREEDIT_BYTES;
 
 pub mod category;
 pub mod glossary;
+pub mod wordnet;
 
 /// Connection taxonomy from the pinned Mozc dictionary revision. The source
 /// has 2,672 classes (not the approximately 1,300 claimed by the initial
@@ -52,6 +53,27 @@ pub struct SourceEntry {
     pub annotation: String,
     source: Arc<str>,
     line: usize,
+}
+
+/// A source-backed relationship for a detail panel.  Only explicit source data
+/// may use `Synonym` or `Antonym`; the compiler never derives either from text
+/// similarity or shared spelling.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceDetailRelation {
+    pub kind: sakura_core::dictionary::DetailRelationKind,
+    pub target: String,
+}
+
+/// Optional sparse detail attached to one exact dictionary entry.  The source
+/// description is retained verbatim; visual line limits belong to the renderer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceDetail {
+    pub reading: String,
+    pub surface: String,
+    pub left_id: u16,
+    pub right_id: u16,
+    pub description: String,
+    pub relations: Vec<SourceDetailRelation>,
 }
 
 /// The dense `right_id × left_id` connection-cost matrix written to the image.
@@ -627,7 +649,19 @@ pub fn parse_connection(
 }
 
 /// Compiles entries and a dense connection matrix to one byte-deterministic image.
+/// This compatibility entry point emits no optional details.
 pub fn compile(entries: &[SourceEntry], connection: &ConnectionMatrix) -> Result<Vec<u8>, Error> {
+    compile_with_details(entries, connection, &[])
+}
+
+/// Compiles entries plus source-backed sparse detail records.  Detail lookup is
+/// final-entry-ordinal keyed so the fixed 24-byte entry ABI stays unchanged
+/// without attaching a description to a same-surface homograph.
+pub fn compile_with_details(
+    entries: &[SourceEntry],
+    connection: &ConnectionMatrix,
+    details: &[SourceDetail],
+) -> Result<Vec<u8>, Error> {
     let class_count = connection.class_count;
     let mut sorted = entries.to_vec();
     sorted.sort_by(|a, b| {
@@ -708,8 +742,30 @@ pub fn compile(entries: &[SourceEntry], connection: &ConnectionMatrix) -> Result
     let (surface_offsets, surface_data) = front_code(&surfaces)?;
     let (annotation_offsets, annotation_data) = raw_text_table(&annotations)?;
     let matrix = encode_matrix(connection)?;
+    let entry_ordinals = sorted
+        .iter()
+        .enumerate()
+        .map(|(source_index, entry)| {
+            let ordinal = *built
+                .source_to_image_entry
+                .get(source_index)
+                .ok_or_else(|| Error::build("compiled entry ordinal disappeared"))?;
+            if ordinal == usize::MAX {
+                return Err(Error::build("compiled entry ordinal was not emitted"));
+            }
+            Ok((
+                (
+                    entry.reading.as_str(),
+                    entry.surface.as_str(),
+                    entry.left_id,
+                    entry.right_id,
+                ),
+                ordinal,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, Error>>()?;
 
-    let tables = vec![
+    let mut tables = vec![
         TableData::new(format::TAG_LOUDS, built.louds, built.louds_bits),
         TableData::new(format::TAG_NODES, built.nodes, built.node_count),
         TableData::new(format::TAG_LABELS, built.labels, built.node_count),
@@ -724,6 +780,9 @@ pub fn compile(entries: &[SourceEntry], connection: &ConnectionMatrix) -> Result
         TableData::new(format::TAG_ANNOTATIONS, annotation_data, annotations.len()),
         TableData::new(format::TAG_MATRIX, matrix, usize::from(class_count)),
     ];
+    if !details.is_empty() {
+        tables.extend(encode_details(details, &entry_ordinals)?);
+    }
     assemble_image(class_count, sorted.len(), built.node_count, tables)
 }
 
@@ -1008,6 +1067,7 @@ struct Flattened {
     labels: Vec<u8>,
     entries: Vec<u8>,
     node_count: usize,
+    source_to_image_entry: Vec<usize>,
 }
 
 fn flatten_trie(
@@ -1039,6 +1099,7 @@ fn flatten_trie(
     let mut labels = Vec::with_capacity(trie.len() * 4);
     let mut entries = Vec::with_capacity(source_entries.len() * format::ENTRY_LEN);
     let mut emitted_entries = 0usize;
+    let mut source_to_image_entry = vec![usize::MAX; source_entries.len()];
 
     for (old_index, incoming) in &bfs {
         let node = &trie[*old_index];
@@ -1057,6 +1118,7 @@ fn flatten_trie(
                 surface_ids,
                 annotation_ids,
             )?;
+            source_to_image_entry[*entry_index] = emitted_entries;
             emitted_entries += 1;
         }
         put_u32(&mut nodes, as_u32(first_child, "node index")?);
@@ -1092,6 +1154,7 @@ fn flatten_trie(
         labels,
         entries,
         node_count: trie.len(),
+        source_to_image_entry,
     })
 }
 
@@ -1152,6 +1215,136 @@ fn raw_text_table(values: &[String]) -> Result<(Vec<u8>, Vec<u8>), Error> {
         data.extend_from_slice(value.as_bytes());
     }
     Ok((offsets, data))
+}
+
+fn encode_details(
+    source_details: &[SourceDetail],
+    entry_ordinals: &BTreeMap<(&str, &str, u16, u16), usize>,
+) -> Result<Vec<TableData>, Error> {
+    const MAX_RELATION_TARGET_BYTES: usize = 16 * 1024;
+    let mut details = source_details.to_vec();
+    details.sort_by(|left, right| {
+        (&left.reading, &left.surface, left.left_id, left.right_id).cmp(&(
+            &right.reading,
+            &right.surface,
+            right.left_id,
+            right.right_id,
+        ))
+    });
+    for pair in details.windows(2) {
+        if pair[0].reading == pair[1].reading
+            && pair[0].surface == pair[1].surface
+            && pair[0].left_id == pair[1].left_id
+            && pair[0].right_id == pair[1].right_id
+        {
+            return Err(Error::build(format!(
+                "duplicate detail for reading '{}' and surface '{}'",
+                pair[1].reading, pair[1].surface
+            )));
+        }
+    }
+
+    let mut all_text = BTreeSet::new();
+    for detail in &details {
+        if detail.reading.is_empty() || detail.surface.is_empty() || detail.description.is_empty() {
+            return Err(Error::build(
+                "detail identity and description must not be empty",
+            ));
+        }
+        if detail.description.contains('\0') {
+            return Err(Error::build("detail description contains NUL"));
+        }
+        if !entry_ordinals.contains_key(&(
+            detail.reading.as_str(),
+            detail.surface.as_str(),
+            detail.left_id,
+            detail.right_id,
+        )) {
+            return Err(Error::build(format!(
+                "detail for reading '{}' and surface '{}' is not in the compiled dictionary",
+                detail.reading, detail.surface
+            )));
+        }
+        all_text.insert(detail.description.clone());
+        for relation in &detail.relations {
+            if relation.target.is_empty()
+                || relation.target.contains('\0')
+                || relation.target.len() > MAX_RELATION_TARGET_BYTES
+            {
+                return Err(Error::build(
+                    "detail relation target is invalid or exceeds 16 KiB",
+                ));
+            }
+            all_text.insert(relation.target.clone());
+        }
+    }
+    let texts = all_text.into_iter().collect::<Vec<_>>();
+    let text_ids = texts
+        .iter()
+        .enumerate()
+        .map(|(index, text)| Ok((text.as_str(), as_u32(index, "detail text id")?)))
+        .collect::<Result<BTreeMap<_, _>, Error>>()?;
+    let (text_offsets, text) = raw_text_table(&texts)?;
+
+    let mut index_records = Vec::with_capacity(details.len());
+    let mut records = Vec::with_capacity(details.len() * format::DETAIL_RECORD_LEN);
+    let mut relations = Vec::new();
+    for (record_id, detail) in details.iter().enumerate() {
+        let image_entry = *entry_ordinals
+            .get(&(
+                detail.reading.as_str(),
+                detail.surface.as_str(),
+                detail.left_id,
+                detail.right_id,
+            ))
+            .ok_or_else(|| Error::build("detail identity disappeared during compilation"))?;
+        index_records.push((
+            as_u32(image_entry, "detail entry ordinal")?,
+            as_u32(record_id, "detail record id")?,
+        ));
+        let description_id = *text_ids
+            .get(detail.description.as_str())
+            .ok_or_else(|| Error::build("detail description disappeared during compilation"))?;
+        let display_id = description_id;
+        put_u32(&mut records, description_id);
+        put_u32(&mut records, display_id);
+        put_u32(
+            &mut records,
+            as_u32(
+                relations.len() / format::DETAIL_RELATION_LEN,
+                "detail relation start",
+            )?,
+        );
+        let mut unique = BTreeSet::<(u8, &str)>::new();
+        for relation in &detail.relations {
+            unique.insert((relation.kind as u8, relation.target.as_str()));
+        }
+        put_u32(&mut records, as_u32(unique.len(), "detail relation count")?);
+        for (kind, target) in unique {
+            relations.push(kind);
+            relations.extend_from_slice(&[0, 0, 0]);
+            let text_id = *text_ids
+                .get(target)
+                .ok_or_else(|| Error::build("detail relation disappeared during compilation"))?;
+            put_u32(&mut relations, text_id);
+        }
+    }
+    // DIDX is searched by final ENTR ordinal, not source spelling.  Detail
+    // records may remain source-sorted because their relation offsets are local.
+    index_records.sort_unstable_by_key(|(entry, _)| *entry);
+    let mut index = Vec::with_capacity(index_records.len() * format::DETAIL_INDEX_LEN);
+    for (entry, record) in index_records {
+        put_u32(&mut index, entry);
+        put_u32(&mut index, record);
+    }
+    let relation_count = relations.len() / format::DETAIL_RELATION_LEN;
+    Ok(vec![
+        TableData::new(format::TAG_DETAIL_INDEX, index, details.len()),
+        TableData::new(format::TAG_DETAIL_RECORDS, records, details.len()),
+        TableData::new(format::TAG_DETAIL_RELATIONS, relations, relation_count),
+        TableData::new(format::TAG_DETAIL_TEXT_OFFSETS, text_offsets, texts.len()),
+        TableData::new(format::TAG_DETAIL_TEXT, text, texts.len()),
+    ])
 }
 
 fn common_prefix_bytes(left: &str, right: &str) -> usize {

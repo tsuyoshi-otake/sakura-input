@@ -830,6 +830,7 @@ mod tests {
                 selected: 0,
                 page_size: 9,
             }),
+            candidate_detail: None,
             anchor: None,
             renderer_visible: true,
             stopping: false,

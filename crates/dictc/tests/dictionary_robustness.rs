@@ -4,8 +4,8 @@
 //! shard/iteration environment variables as CI's long campaigns, so a failure
 //! is reproducible without saving attacker-controlled files in the repository.
 
-use dictc::{compile, parse_connection, parse_entries};
-use sakura_core::dictionary::Dictionary;
+use dictc::{compile_with_details, parse_connection, parse_entries, SourceDetail};
+use sakura_core::dictionary::{DetailRelationKind, Dictionary};
 use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 
 const DEFAULT_ITERATIONS: u64 = 10_000;
@@ -59,7 +59,22 @@ fn fixture() -> Vec<u8> {
         false,
     )
     .expect("fixture matrix");
-    compile(&entries, &matrix).expect("fixture image")
+    compile_with_details(
+        &entries,
+        &matrix,
+        &[SourceDetail {
+            reading: "かな".to_owned(),
+            surface: "仮名".to_owned(),
+            left_id: 1,
+            right_id: 1,
+            description: "仮名の説明。".to_owned(),
+            relations: vec![dictc::SourceDetailRelation {
+                kind: DetailRelationKind::Related,
+                target: "関数".to_owned(),
+            }],
+        }],
+    )
+    .expect("fixture image")
 }
 
 fn random_bytes(random: &mut Random, maximum: usize) -> Vec<u8> {
@@ -109,6 +124,14 @@ fn exercise(image: &[u8]) {
     }
     for id in [0, 1, u16::MAX] {
         let _ = dictionary.connection_cost(id, id);
+    }
+    for ordinal in 0..dictionary.entry_count() {
+        if let Ok(Some(detail)) = dictionary.detail_at(ordinal) {
+            let mut description = FixedStr::<MAX_PREEDIT_BYTES>::new();
+            let _ = detail.write_description(&mut description);
+            let _ = detail.write_display_description(&mut description);
+            let _ = detail.visit_relations(|_, _| true);
+        }
     }
 }
 

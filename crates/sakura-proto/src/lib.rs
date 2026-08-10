@@ -48,16 +48,18 @@ pub use message::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
     Header, Request, Response, UiState, UndoCommitOutcome,
 };
-pub use output::{OutputBuf, SegSpan};
+pub use output::{
+    CandidateDetailInput, CandidateDetailRef, CandidateDetailTerms, OutputBuf, SegSpan,
+};
 pub use types::{
-    Candidate, CandidateKind, CandidateList, ErrorCode, InputScope, KeyCode, KeyInput, Mode,
-    Modifiers, Output, Preedit, ScreenRect, Segment, UnderlineKind,
+    Candidate, CandidateDetail, CandidateKind, CandidateList, ErrorCode, InputScope, KeyCode,
+    KeyInput, Mode, Modifiers, Output, Preedit, ScreenRect, Segment, UnderlineKind,
 };
 pub use wire::Error;
 
 /// The protocol version this crate implements. Carried in every payload;
 /// a decoder rejects any other value with `Error::UnsupportedVersion`.
-pub const PROTOCOL_VERSION: u16 = 12;
+pub const PROTOCOL_VERSION: u16 = 13;
 
 /// The largest payload (the bytes after the 4-byte frame length prefix)
 /// this protocol allows. A frame whose declared length exceeds this is
@@ -95,6 +97,25 @@ pub const MAX_CANDIDATES: usize = CANDIDATE_PAGE_SIZE * 2;
 
 /// Fixed storage for all candidate surfaces or annotations in an `OutputBuf`.
 pub const MAX_CANDIDATE_TEXT_BYTES: usize = MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE;
+
+/// Maximum UTF-8 byte length of a selected candidate's reading.
+pub const MAX_CANDIDATE_DETAIL_READING_BYTES: usize = 256;
+
+/// Maximum UTF-8 byte length of a full selected-candidate definition.
+///
+/// This exceeds common UI display limits deliberately: UI Automation receives
+/// the complete source-backed definition, never a silently truncated one.
+pub const MAX_CANDIDATE_DETAIL_DEFINITION_BYTES: usize = 1024;
+
+/// Maximum UTF-8 byte length of one related-term label.
+pub const MAX_CANDIDATE_DETAIL_RELATION_BYTES: usize = 128;
+
+/// Maximum related words in each of aliases, related, similar, and antonyms.
+pub const MAX_CANDIDATE_DETAIL_RELATIONS: usize = 3;
+
+/// Fixed backing storage for all relation strings in an [`OutputBuf`].
+pub const MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES: usize =
+    MAX_CANDIDATE_DETAIL_RELATION_BYTES * MAX_CANDIDATE_DETAIL_RELATIONS * 4;
 
 /// Identifies one editing session on the engine.
 pub type SessionId = u64;

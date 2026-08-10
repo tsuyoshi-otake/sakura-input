@@ -35,6 +35,10 @@ sakura-reg = { path = "crates/sakura-reg" }
 sakura-engine = { path = "crates/sakura-engine" }
 windows-core = "0.62"
 windows = "0.62"
+# Pinned, streaming-only parsers used exclusively by the offline `dictc` build
+# tool to read the official compressed Japanese WordNet LMF source.
+quick-xml = "=0.41.0"
+flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

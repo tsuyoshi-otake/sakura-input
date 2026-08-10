@@ -60,14 +60,19 @@ use watch::Signal;
 /// the pipe, and the renderer only holds the client end of it).
 const HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 
-/// Guards against two renderers in one logon session.
+/// Guards against two production renderers in one logon session.
 ///
 /// `Local\` scopes it to the session, which is the same scope the engine's
 /// pipe has. Two renderers would mean two tray icons, two indicators
 /// fighting over the same screen position, and two watchdogs racing to
 /// restart one engine — and the logon task that starts this can fire twice
 /// (a fast user switch, a repaired install) without anything being wrong.
-const SINGLE_INSTANCE: PCWSTR = windows::core::w!(r"Local\SakuraInputRenderer");
+const SINGLE_INSTANCE_NAME: &str = r"Local\SakuraInputRenderer";
+
+/// The narrow namespace reserved for a real-process renderer fixture. This is
+/// an argument, rather than an environment variable, so ordinary startup
+/// cannot accidentally be redirected away from the engine's production pipe.
+const TEST_PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputRendererTest-";
 
 /// The watcher reporting that the single-slot UI mailbox has new state.
 const WM_UI: u32 = WM_APP + 2;
@@ -86,13 +91,20 @@ struct App {
 }
 
 fn main() -> Result<()> {
+    let options = match startup_options(std::env::args().skip(1)) {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("sakura-renderer: {error}");
+            std::process::exit(1);
+        }
+    };
     let _com = accessibility::ComApartment::new()?;
     // SAFETY: called before any window is created. Failure means a manifest
     // or host policy already chose awareness; continuing is the safe fallback.
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
-    if already_running()? {
+    if already_running(options.test_pipe.as_deref())? {
         return Ok(());
     }
 
@@ -118,7 +130,12 @@ fn main() -> Result<()> {
     // hands it straight back to `PostMessageW`, which is documented to be
     // callable from any thread.
     let target = host.0 as isize;
-    watch::spawn(move |signal| report(target, &mailbox, signal));
+    match options.test_pipe {
+        Some(pipe_name) => {
+            watch::spawn_test_pipe(pipe_name, move |signal| report(target, &mailbox, signal))
+        }
+        None => watch::spawn(move |signal| report(target, &mailbox, signal)),
+    };
 
     pump();
 
@@ -131,16 +148,75 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+struct StartupOptions {
+    test_pipe: Option<String>,
+}
+
+fn startup_options(
+    arguments: impl IntoIterator<Item = String>,
+) -> std::result::Result<StartupOptions, String> {
+    let mut options = StartupOptions::default();
+    let mut arguments = arguments.into_iter();
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "--test-pipe" => {
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "--test-pipe requires a named-pipe path".to_owned())?;
+                if options
+                    .test_pipe
+                    .replace(validate_test_pipe(value)?)
+                    .is_some()
+                {
+                    return Err("--test-pipe may be supplied only once".to_owned());
+                }
+            }
+            // The production renderer historically has no command-line
+            // surface. Preserve its harmless ignoring of unrelated launcher
+            // arguments; only the explicit test override is interpreted.
+            _ => {}
+        }
+    }
+    Ok(options)
+}
+
+fn validate_test_pipe(value: String) -> std::result::Result<String, String> {
+    let suffix = value
+        .strip_prefix(TEST_PIPE_PREFIX)
+        .ok_or_else(|| format!("--test-pipe must start with {TEST_PIPE_PREFIX:?}"))?;
+    if suffix.is_empty()
+        || suffix.len() > 160
+        || !suffix
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(
+            "--test-pipe must have a non-empty ASCII alphanumeric, '-' or '_' suffix".to_owned(),
+        );
+    }
+    Ok(value)
+}
+
 /// Whether another renderer already holds this session's slot.
 ///
 /// The mutex handle is deliberately leaked: it must live exactly as long as
 /// the process, and the process ends by returning from `main` or by the
 /// system tearing it down at logoff. Closing it early would let a second
 /// renderer in.
-fn already_running() -> Result<bool> {
-    // SAFETY: the name is a static wide literal; the returned handle is
-    // intentionally never closed.
-    match unsafe { CreateMutexW(None, true, SINGLE_INSTANCE) } {
+fn already_running(test_pipe: Option<&str>) -> Result<bool> {
+    let mutex_name = match test_pipe {
+        Some(pipe_name) => format!(
+            "Local\\SakuraInputRendererTest-{}",
+            test_pipe_suffix(pipe_name)
+        ),
+        None => SINGLE_INSTANCE_NAME.to_owned(),
+    };
+    let mut wide: Vec<u16> = mutex_name.encode_utf16().collect();
+    wide.push(0);
+    // SAFETY: `wide` is NUL-terminated and remains live for the call; the
+    // returned handle is intentionally leaked for the process lifetime.
+    match unsafe { CreateMutexW(None, true, PCWSTR(wide.as_ptr())) } {
         Ok(_) => {
             // `CreateMutexW` succeeds whether or not the mutex already
             // existed; which case it was is only visible in the last error.
@@ -151,6 +227,14 @@ fn already_running() -> Result<bool> {
         // is worse than a duplicated one.
         Err(_) => Ok(false),
     }
+}
+
+fn test_pipe_suffix(pipe_name: &str) -> &str {
+    // `StartupOptions` contains this only after `validate_test_pipe` accepted
+    // it, so this cannot redirect a test mutex into the production namespace.
+    pipe_name
+        .strip_prefix(TEST_PIPE_PREFIX)
+        .expect("validated test pipe retains its prefix")
 }
 
 /// Creates the hidden watcher host window. It is a real top-level window so
@@ -195,7 +279,7 @@ fn report(target: isize, mailbox: &Mutex<Option<UiState>>, signal: Signal) {
             let mut slot = mailbox
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            *slot = Some(state);
+            *slot = Some(*state);
             WM_UI
         }
         Signal::Ended => WM_ENDED,
@@ -293,6 +377,40 @@ mod tests {
         assert_eq!(
             present.and_then(|mode| glyph::from_code(glyph::code(mode))),
             Some(Mode::Katakana)
+        );
+    }
+
+    #[test]
+    fn startup_accepts_only_the_private_test_pipe_override() {
+        assert_eq!(startup_options(Vec::new()), Ok(StartupOptions::default()));
+        let pipe = format!("{TEST_PIPE_PREFIX}worker-abc_123");
+        assert_eq!(
+            startup_options(["--test-pipe".to_owned(), pipe.clone()]),
+            Ok(StartupOptions {
+                test_pipe: Some(pipe)
+            })
+        );
+        assert!(startup_options(["--test-pipe".to_owned()]).is_err());
+        assert!(startup_options([
+            "--test-pipe".to_owned(),
+            r"\\.\pipe\sakura_input_production".to_owned()
+        ])
+        .is_err());
+        assert!(startup_options([
+            "--test-pipe".to_owned(),
+            format!("{TEST_PIPE_PREFIX}one"),
+            "--test-pipe".to_owned(),
+            format!("{TEST_PIPE_PREFIX}two"),
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn test_pipe_uses_a_distinct_per_fixture_instance_guard() {
+        let pipe = format!("{TEST_PIPE_PREFIX}worker-abc_123");
+        assert_eq!(
+            format!("Local\\SakuraInputRendererTest-{}", test_pipe_suffix(&pipe)),
+            r"Local\SakuraInputRendererTest-worker-abc_123"
         );
     }
 }

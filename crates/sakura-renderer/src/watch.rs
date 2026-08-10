@@ -66,7 +66,7 @@ const RELAUNCH_GAP: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Signal {
     /// New state to draw.
-    Ui(UiState),
+    Ui(Box<UiState>),
     /// The feed has ended for good and the renderer should exit: the engine
     /// said it was stopping, or it is gone and not coming back.
     Ended,
@@ -79,13 +79,46 @@ pub enum Signal {
 /// created them. It is meant to be a `PostMessageW`, which is the
 /// documented way to cross that boundary.
 pub fn spawn(sink: impl Fn(Signal) + Send + 'static) -> JoinHandle<()> {
+    spawn_on(PipeBinding::Production, sink)
+}
+
+/// Starts a fixture-only watcher on a caller-provided private pipe. Unlike the
+/// production watcher, any disconnect is terminal: a test must never launch
+/// the adjacent product engine as a recovery action.
+pub fn spawn_test_pipe(
+    pipe_name: String,
+    sink: impl Fn(Signal) + Send + 'static,
+) -> JoinHandle<()> {
+    spawn_on(PipeBinding::Test(pipe_name), sink)
+}
+
+fn spawn_on(binding: PipeBinding, sink: impl Fn(Signal) + Send + 'static) -> JoinHandle<()> {
     thread::Builder::new()
         .name("sakura-watch".to_owned())
-        .spawn(move || run(&sink))
+        .spawn(move || run(&sink, &binding))
         .expect("the renderer cannot work without its watcher thread")
 }
 
-fn run(sink: &impl Fn(Signal)) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PipeBinding {
+    Production,
+    Test(String),
+}
+
+impl PipeBinding {
+    fn connect(&self) -> Result<Client, Fault> {
+        match self {
+            Self::Production => Client::connect(PATIENT_CONNECT),
+            Self::Test(pipe_name) => Client::connect_to(pipe_name, PATIENT_CONNECT),
+        }
+    }
+
+    fn is_test(&self) -> bool {
+        matches!(self, Self::Test(_))
+    }
+}
+
+fn run(sink: &impl Fn(Signal), binding: &PipeBinding) {
     let mut backoff = RETRY_FLOOR;
     // Starts in the past so the first launch is never delayed, which
     // matters at logon: the renderer and the engine race to start, and the
@@ -93,10 +126,10 @@ fn run(sink: &impl Fn(Signal)) {
     let mut launched: Option<Instant> = None;
 
     loop {
-        match Client::connect(PATIENT_CONNECT) {
+        match binding.connect() {
             Ok(client) => {
                 let ending = follow(client, sink);
-                if ending == Ending::Deliberate {
+                if ending == Ending::Deliberate || binding.is_test() {
                     sink(Signal::Ended);
                     return;
                 }
@@ -111,6 +144,10 @@ fn run(sink: &impl Fn(Signal)) {
                 backoff = next;
             }
             Err(_) => {
+                if binding.is_test() {
+                    sink(Signal::Ended);
+                    return;
+                }
                 if !relaunch(&mut launched) {
                     sink(Signal::Ended);
                     return;
@@ -182,7 +219,7 @@ fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
                 // seconds while the user is idle.
                 if state.revision != since {
                     since = state.revision;
-                    sink(Signal::Ui(state));
+                    sink(Signal::Ui(Box::new(state)));
                 }
             }
             Ok(_) => return Ending::ConnectionLost,
