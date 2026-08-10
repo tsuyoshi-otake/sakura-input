@@ -7,7 +7,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::Client;
 use sakura_proto::{
-    KeyCode, KeyInput, Modifiers, Output, Request, Response, ScreenRect, CANDIDATE_PAGE_SIZE,
+    CandidateList, KeyCode, KeyInput, Modifiers, Output, Request, Response, ScreenRect,
+    CANDIDATE_PAGE_SIZE,
 };
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, RECT, RPC_E_CHANGED_MODE};
@@ -18,11 +19,19 @@ use windows::Win32::System::Com::{
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomationElement, UIA_ListControlTypeId,
 };
+use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GetForegroundWindow, GetWindowRect, IsWindowVisible, SendMessageW, WM_DPICHANGED,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
+const MIN_WIDTH_96: i32 = 260;
+const MAX_WIDTH_96: i32 = 480;
+const ROW_HEIGHT_96: i32 = 28;
+const FOOTER_HEIGHT_96: i32 = 22;
+// The observable HWND bounds can include a DPI-scaled non-client border. Keep
+// this allowance deliberately small so it cannot mask a logical layout drift.
+const NON_CLIENT_ALLOWANCE_96: i32 = 8;
 
 #[test]
 #[ignore = "real release engine/renderer; set SAKURA_PHASE2_DICTIONARY"]
@@ -78,6 +87,11 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     );
     let candidate_window = wait_for_candidate_window();
     let first_rect = window_rect(candidate_window);
+    assert_popup_geometry(
+        candidate_window,
+        first_rect,
+        first_candidates.visible_range().len(),
+    );
 
     let _apartment = ComApartment::new();
     // SAFETY: COM is initialized on this test thread and the requested class
@@ -95,6 +109,7 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     };
     let first_name = wait_for_name(&element, "page 1 of");
     assert!(first_name.contains("selected 1 of"));
+    assert_visible_annotation_is_exposed(&first_name, &first_candidates);
     assert_eq!(
         // SAFETY: `element` is a live UI Automation element proxy.
         unsafe { element.CurrentAutomationId().expect("AutomationId") }.to_string(),
@@ -198,6 +213,15 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     let second_name = wait_for_name(&element, "page 2 of");
     assert!(second_name.contains("selected 10 of"));
     assert!(second_name.contains(&second_candidates.items[CANDIDATE_PAGE_SIZE].text));
+    let second_page_rect =
+        wait_for_popup_geometry(candidate_window, second_candidates.visible_range().len());
+    assert_popup_geometry(
+        candidate_window,
+        second_page_rect,
+        second_candidates.visible_range().len(),
+    );
+    assert_visible_annotation_is_exposed(&second_name, &second_candidates);
+    assert_name_stable(&element, &second_name);
 
     let committed = send_key(&mut client, session, char_key('2'));
     assert_eq!(committed.commit.as_deref(), Some(expected_commit.as_str()));
@@ -354,6 +378,57 @@ fn window_rect(window: HWND) -> RECT {
     rect
 }
 
+fn wait_for_popup_geometry(window: HWND, visible_rows: usize) -> RECT {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let rect = window_rect(window);
+        if popup_geometry_matches(window, rect, visible_rows) {
+            return rect;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "candidate popup geometry did not reach the redesigned logical layout; last rectangle was {rect:?}"
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn assert_popup_geometry(window: HWND, rect: RECT, visible_rows: usize) {
+    assert!(
+        popup_geometry_matches(window, rect, visible_rows),
+        "candidate popup geometry must use a 260–480 logical px content-aware width and {ROW_HEIGHT_96} logical px rows plus a {FOOTER_HEIGHT_96} logical px footer; got {rect:?} for {visible_rows} visible rows at {} DPI",
+        window_dpi(window),
+    );
+}
+
+fn popup_geometry_matches(window: HWND, rect: RECT, visible_rows: usize) -> bool {
+    let dpi = window_dpi(window);
+    let allowance = scaled(NON_CLIENT_ALLOWANCE_96, dpi);
+    let width = rect.right.saturating_sub(rect.left);
+    let minimum_width = scaled(MIN_WIDTH_96, dpi).saturating_sub(allowance);
+    let maximum_width = scaled(MAX_WIDTH_96, dpi).saturating_add(allowance);
+    let expected_height = scaled(ROW_HEIGHT_96, dpi)
+        .saturating_mul(visible_rows as i32)
+        .saturating_add(scaled(FOOTER_HEIGHT_96, dpi));
+    let height = rect.bottom.saturating_sub(rect.top);
+
+    (minimum_width..=maximum_width).contains(&width)
+        && height.abs_diff(expected_height) <= allowance as u32
+}
+
+fn window_dpi(window: HWND) -> u32 {
+    // SAFETY: callers provide the live candidate HWND and the function neither
+    // retains it nor dereferences caller-owned memory.
+    match unsafe { GetDpiForWindow(window) } {
+        0 => 96,
+        dpi => dpi,
+    }
+}
+
+fn scaled(logical: i32, dpi: u32) -> i32 {
+    logical.saturating_mul(dpi as i32) / 96
+}
+
 fn wait_for_moved_window(window: HWND, previous: RECT) -> RECT {
     let deadline = Instant::now() + PATIENT;
     loop {
@@ -386,6 +461,36 @@ fn wait_for_name(element: &IUIAutomationElement, needle: &str) -> String {
             Instant::now() < deadline,
             "UIA name never contained {needle:?}; last value was {last:?}"
         );
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn assert_visible_annotation_is_exposed(name: &str, candidates: &CandidateList) {
+    let annotation = candidates.visible_range().find_map(|index| {
+        let annotation = candidates.items[index].annotation.trim();
+        (!annotation.is_empty()).then_some(annotation)
+    });
+    if let Some(annotation) = annotation {
+        assert!(
+            name.contains(annotation),
+            "UIA name must expose the non-empty annotation of the visible fixture candidate: {annotation:?}; name was {name:?}"
+        );
+    }
+}
+
+fn assert_name_stable(element: &IUIAutomationElement, expected: &str) {
+    let deadline = Instant::now() + Duration::from_millis(150);
+    loop {
+        // SAFETY: `element` is retained by the caller and remains a live UIA
+        // Automation proxy during this short bounded stability observation.
+        let actual = unsafe { element.CurrentName().expect("stable UIA name") }.to_string();
+        assert_eq!(
+            actual, expected,
+            "the second-page UIA state changed without a corresponding engine update"
+        );
+        if Instant::now() >= deadline {
+            return;
+        }
         sleep(Duration::from_millis(20));
     }
 }

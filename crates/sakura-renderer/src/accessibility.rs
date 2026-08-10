@@ -193,23 +193,40 @@ impl CandidateAccessibility {
 
 fn announcement(candidates: &CandidateList) -> String {
     let visible = candidates.visible_range();
-    let page_start = candidates.current_page_range().start;
     let page = candidates.current_page().saturating_add(1);
     let pages = candidates.page_count();
     let selected = usize::from(candidates.selected).saturating_add(1);
     let mut result = format!(
-        "Sakura Input candidates, page {page} of {pages}, selected {selected} of {}.",
+        "Sakura Input candidates, {} candidates, page {page} of {pages}, selected {selected} of {}.",
+        candidate_kind_name(candidates.kind),
         candidates.items.len()
     );
     for global_index in visible {
         let candidate = &candidates.items[global_index];
         result.push(' ');
-        result.push_str(&(global_index.saturating_sub(page_start) + 1).to_string());
-        result.push_str(". ");
+        result.push_str("Candidate ");
+        result.push_str(&(global_index + 1).to_string());
+        result.push_str(" of ");
+        result.push_str(&candidates.items.len().to_string());
+        if global_index == usize::from(candidates.selected) {
+            result.push_str(" (selected)");
+        }
+        result.push_str(": ");
         result.push_str(&candidate.text);
+        if !candidate.annotation.is_empty() {
+            result.push_str(" — ");
+            result.push_str(&candidate.annotation);
+        }
         result.push('.');
     }
     result
+}
+
+fn candidate_kind_name(kind: sakura_proto::CandidateKind) -> &'static str {
+    match kind {
+        sakura_proto::CandidateKind::Conversion => "conversion",
+        sakura_proto::CandidateKind::Suggestion => "suggestion",
+    }
 }
 
 #[cfg(test)]
@@ -219,7 +236,7 @@ mod tests {
     use sakura_proto::{Candidate, CandidateKind};
 
     #[test]
-    fn announcement_contains_only_the_visible_page_and_selected_position_without_annotations() {
+    fn announcement_exposes_annotation_kind_page_and_selected_position() {
         let candidates = CandidateList {
             kind: CandidateKind::Conversion,
             presentation: CandidatePresentation::Expanded,
@@ -238,11 +255,10 @@ mod tests {
         };
 
         let name = announcement(&candidates);
-        assert!(name.contains("page 2 of 2, selected 10 of 14"));
-        assert!(name.contains("1. candidate-10."));
-        assert!(name.contains("5. candidate-14."));
-        assert!(!name.contains("candidate-9."));
-        assert!(!name.contains("annotation"));
+        assert!(name.contains("conversion candidates, page 2 of 2, selected 10 of 14"));
+        assert!(name.contains("Candidate 10 of 14 (selected): candidate-10 — annotation."));
+        assert!(name.contains("Candidate 14 of 14: candidate-14."));
+        assert!(!name.contains("candidate-9"));
     }
 
     #[test]
@@ -261,8 +277,76 @@ mod tests {
         };
 
         let name = announcement(&candidates);
-        assert!(name.contains("2. candidate-2."));
-        assert!(!name.contains("candidate-1."));
-        assert!(!name.contains("candidate-3."));
+        assert!(name.contains("Candidate 2 of 3 (selected): candidate-2."));
+        assert!(!name.contains("candidate-1"));
+        assert!(!name.contains("candidate-3"));
+    }
+
+    #[test]
+    fn announcement_covers_candidate_semantics_across_kinds_presentations_pages_and_annotations() {
+        let kinds = [CandidateKind::Conversion, CandidateKind::Suggestion];
+        for kind in kinds {
+            for presentation in CandidatePresentation::ALL {
+                for annotations_present in [false, true] {
+                    for item_count in 1usize..=14 {
+                        for page_size in 1usize..=5 {
+                            for selected in 0..item_count {
+                                let candidates = CandidateList {
+                                    kind,
+                                    presentation,
+                                    items: (0..item_count)
+                                        .map(|index| Candidate {
+                                            text: format!("surface[{index}]"),
+                                            annotation: if annotations_present {
+                                                format!("annotation[{index}]")
+                                            } else {
+                                                String::new()
+                                            },
+                                        })
+                                        .collect(),
+                                    selected: selected as u16,
+                                    page_size: page_size as u16,
+                                };
+
+                                let name = announcement(&candidates);
+                                let expected_page = selected / page_size + 1;
+                                let expected_pages = item_count.div_ceil(page_size);
+                                assert!(name.starts_with("Sakura Input candidates,"));
+                                assert!(name.contains(&format!(
+                                    "{} candidates, page {expected_page} of {expected_pages}, selected {} of {item_count}",
+                                    candidate_kind_name(kind),
+                                    selected + 1,
+                                )));
+
+                                let visible = candidates.visible_range();
+                                for index in 0..item_count {
+                                    let row = format!("Candidate {} of {item_count}", index + 1);
+                                    assert_eq!(
+                                        name.contains(&row),
+                                        visible.contains(&index),
+                                        "{kind:?} {presentation:?}, annotation={annotations_present}, items={item_count}, page_size={page_size}, selected={selected}, index={index}: {name}"
+                                    );
+                                }
+
+                                let selected_row = format!(
+                                    "Candidate {} of {item_count} (selected): surface[{selected}]",
+                                    selected + 1
+                                );
+                                assert!(name.contains(&selected_row));
+                                if annotations_present {
+                                    for index in visible {
+                                        assert!(name.contains(&format!(
+                                            "surface[{index}] — annotation[{index}]."
+                                        )));
+                                    }
+                                } else {
+                                    assert!(!name.contains(" — "));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
