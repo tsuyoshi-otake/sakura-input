@@ -261,8 +261,11 @@ function Test-ReleaseBundle {
                     $source.artifact_url -cne $wordNetUrl -or $source.archive_sha256 -cne $wordNetSha256 -or
                     [long]$source.archive_bytes -ne 12415268 -or
                     $source.license_id -cne 'LicenseRef-Japanese-WordNet-1.1' -or $source.license_file -cne $wordNetLicense -or
-                    $null -eq $wordNetImport -or $wordNetImport.schema_version -ne 1 -or
-                    [long]$wordNetImport.detail_count -ne [long]$details.count) {
+                    $null -eq $wordNetImport -or $wordNetImport.schema_version -ne 2 -or
+                    [long]$wordNetImport.detail_count -ne [long]$wordNetImport.details.sources.'japanese-wordnet'.detail_count -or
+                    [long]$wordNetImport.details.merged_count -ne [long]$details.count -or
+                    $null -eq $wordNetImport.details.sources.'smile-chat'.detail_count -or
+                    [long]$wordNetImport.details.sources.'smile-chat'.detail_count -lt 0) {
                     throw 'schema-2 Japanese WordNet dictionary provenance is incomplete or inconsistent'
                 }
 

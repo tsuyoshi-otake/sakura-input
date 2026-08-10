@@ -259,13 +259,24 @@ if ($dictionaryReport.schema_version -eq 2) {
     $missingDefinition = Get-RequiredJsonProperty $unresolved 'missing_definition' 'Japanese WordNet missing definition count'
     $relationAmbiguous = Get-RequiredJsonProperty $unresolved 'relation_ambiguous' 'Japanese WordNet relation ambiguity count'
     $relationUnsupported = Get-RequiredJsonProperty $unresolved 'relation_unsupported' 'Japanese WordNet unsupported relation count'
-    if ($importSchemaVersion -ne 1 -or $null -eq $importDetailCount -or
-        [long]$importDetailCount -ne [long]$detailsCount -or
+    $relationTruncated = Get-RequiredJsonProperty $unresolved 'relation_truncated' 'Japanese WordNet truncated relation count'
+    $mergedDetails = Get-RequiredJsonProperty $import 'details' 'merged dictionary detail accounting'
+    $mergedDetailCount = Get-RequiredJsonProperty $mergedDetails 'merged_count' 'merged dictionary detail count'
+    $detailSources = Get-RequiredJsonProperty $mergedDetails 'sources' 'dictionary detail source accounting'
+    $wordNetDetailSource = Get-RequiredJsonProperty $detailSources 'japanese-wordnet' 'Japanese WordNet detail source accounting'
+    $smileChatDetailSource = Get-RequiredJsonProperty $detailSources 'smile-chat' 'smile-chat detail source accounting'
+    $wordNetSourceCount = Get-RequiredJsonProperty $wordNetDetailSource 'detail_count' 'Japanese WordNet source detail count'
+    $smileChatSourceCount = Get-RequiredJsonProperty $smileChatDetailSource 'detail_count' 'smile-chat source detail count'
+    if ($importSchemaVersion -ne 2 -or $null -eq $importDetailCount -or
+        [long]$importDetailCount -ne [long]$wordNetSourceCount -or
+        $null -eq $mergedDetailCount -or [long]$mergedDetailCount -ne [long]$detailsCount -or
+        $null -eq $smileChatSourceCount -or [long]$smileChatSourceCount -lt 0 -or
         $null -eq $surfaceAmbiguous -or [long]$surfaceAmbiguous -lt 0 -or
         $null -eq $senseAmbiguous -or [long]$senseAmbiguous -lt 0 -or
         $null -eq $missingDefinition -or [long]$missingDefinition -lt 0 -or
         $null -eq $relationAmbiguous -or [long]$relationAmbiguous -lt 0 -or
-        $null -eq $relationUnsupported -or [long]$relationUnsupported -lt 0) {
+        $null -eq $relationUnsupported -or [long]$relationUnsupported -lt 0 -or
+        $null -eq $relationTruncated -or [long]$relationTruncated -lt 0) {
         throw 'Japanese WordNet import accounting is missing or invalid'
     }
     Require-TextContains -Path $dictionarySourceLockPath -Expected '[japanese_wordnet]' -Description 'Japanese WordNet source lock'
