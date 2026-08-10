@@ -48,6 +48,10 @@ pub(crate) const REQ_INPUT_HISTORY_STATS: u16 = 0x0010;
 pub(crate) const REQ_UNDO_COMMIT: u16 = 0x0011;
 pub(crate) const REQ_PROBE_KEY: u16 = 0x0012;
 pub(crate) const REQ_SET_MODE: u16 = 0x0013;
+/// Deletes the exact learned prediction candidate in the renderer's current
+/// UI snapshot. This is separate from keyboard-driven deletion because the
+/// renderer owns no editing session and can only name a revision-stamped row.
+pub(crate) const REQ_DELETE_HISTORY_CANDIDATE: u16 = 0x0014;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -61,6 +65,7 @@ pub(crate) const RES_OK: u16 = 0x8005;
 pub(crate) const RES_UI: u16 = 0x8006;
 pub(crate) const RES_INPUT_HISTORY_STATS: u16 = 0x8007;
 pub(crate) const RES_INPUT_MODE: u16 = 0x8008;
+pub(crate) const RES_HISTORY_CANDIDATE_DELETED: u16 = 0x8009;
 pub(crate) const RES_ERROR: u16 = 0x80FF;
 
 /// A message sent from a client (the TSF DLL) to the engine.
@@ -126,6 +131,14 @@ pub enum Request {
     /// rejected while a composition is active or the field is not a known
     /// ordinary-text scope, so a menu callback can never own a document edit.
     SetMode { session: SessionId, mode: Mode },
+    /// Deletes one learned prediction candidate from the exact UI snapshot
+    /// previously published to the renderer. `revision` and
+    /// `candidate_index` are checked against engine-owned state; a surface or
+    /// reading never crosses this untrusted boundary.
+    DeleteHistoryCandidate {
+        revision: Revision,
+        candidate_index: u16,
+    },
     /// Ends a session and releases its resources.
     DeleteSession { session: SessionId },
     /// A liveness check; the engine answers with `Response::Pong`.
@@ -217,6 +230,11 @@ pub enum Response {
         excluded_sensitive_events: u64,
         excluded_test_only_events: u64,
     },
+    /// Answers [`Request::DeleteHistoryCandidate`]. `false` is a terminal,
+    /// fail-closed no-op for stale UI, a non-history row, disabled learning,
+    /// a duplicate click, or a persistence failure. The renderer must wait
+    /// for a later [`Response::Ui`] before changing what it draws.
+    HistoryCandidateDeleted { removed: bool },
     /// Answers `Request::WatchUi` with what the renderer should draw.
     Ui(UiState),
     /// The request could not be fulfilled.
@@ -363,6 +381,7 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::UndoCommit { .. } => REQ_UNDO_COMMIT,
         Request::SetInputScope { .. } => REQ_SET_INPUT_SCOPE,
         Request::SetMode { .. } => REQ_SET_MODE,
+        Request::DeleteHistoryCandidate { .. } => REQ_DELETE_HISTORY_CANDIDATE,
         Request::DeleteSession { .. } => REQ_DELETE_SESSION,
         Request::Ping => REQ_PING,
         Request::Shutdown => REQ_SHUTDOWN,
@@ -418,6 +437,13 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
             w.write_u64(*session)?;
             mode.encode(w)
         }
+        Request::DeleteHistoryCandidate {
+            revision,
+            candidate_index,
+        } => {
+            w.write_u64(*revision)?;
+            w.write_u16(*candidate_index)
+        }
         Request::DeleteSession { session } => w.write_u64(*session),
         Request::Ping => Ok(()),
         Request::Shutdown => Ok(()),
@@ -447,6 +473,7 @@ fn response_msg_type(res: &Response) -> u16 {
         Response::Ok => RES_OK,
         Response::InputHistoryStats { .. } => RES_INPUT_HISTORY_STATS,
         Response::InputMode { .. } => RES_INPUT_MODE,
+        Response::HistoryCandidateDeleted { .. } => RES_HISTORY_CANDIDATE_DELETED,
         Response::Ui(_) => RES_UI,
         Response::Error(_) => RES_ERROR,
     }
@@ -471,6 +498,7 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
         Response::Pong => Ok(()),
         Response::Ok => Ok(()),
         Response::InputMode { mode } => mode.encode(w),
+        Response::HistoryCandidateDeleted { removed } => w.write_bool(*removed),
         Response::InputHistoryStats {
             active,
             dropped_events,
@@ -578,6 +606,10 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
             session: r.read_u64()?,
             mode: Mode::decode(&mut r)?,
         },
+        REQ_DELETE_HISTORY_CANDIDATE => Request::DeleteHistoryCandidate {
+            revision: r.read_u64()?,
+            candidate_index: r.read_u16()?,
+        },
         REQ_DELETE_SESSION => Request::DeleteSession {
             session: r.read_u64()?,
         },
@@ -630,6 +662,9 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         RES_OK => Response::Ok,
         RES_INPUT_MODE => Response::InputMode {
             mode: Mode::decode(&mut r)?,
+        },
+        RES_HISTORY_CANDIDATE_DELETED => Response::HistoryCandidateDeleted {
+            removed: r.read_bool()?,
         },
         RES_INPUT_HISTORY_STATS => Response::InputHistoryStats {
             active: r.read_bool()?,

@@ -65,6 +65,10 @@ struct CandidateSpan {
     text_len: u32,
     annotation_start: u32,
     annotation_len: u32,
+    history_reading_start: u32,
+    history_reading_len: u32,
+    history_surface_start: u32,
+    history_surface_len: u32,
 }
 
 /// Candidate data in the board's allocation-free representation.
@@ -74,6 +78,8 @@ struct CandidateSnapshot {
     presentation: CandidatePresentation,
     text: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
     annotations: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    history_readings: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
+    history_surfaces: FixedStr<MAX_CANDIDATE_TEXT_BYTES>,
     spans: FixedVec<CandidateSpan, MAX_CANDIDATES>,
     selected: u16,
     page_size: u16,
@@ -86,6 +92,8 @@ impl CandidateSnapshot {
             presentation: CandidatePresentation::Compact,
             text: FixedStr::new(),
             annotations: FixedStr::new(),
+            history_readings: FixedStr::new(),
+            history_surfaces: FixedStr::new(),
             spans: FixedVec::new(),
             selected: 0,
             page_size: CANDIDATE_PAGE_SIZE as u16,
@@ -118,7 +126,18 @@ impl CandidateSnapshot {
             .enumerate()
             .all(|(index, span)| {
                 output.candidate(index).is_some_and(|(text, annotation)| {
-                    Self::slice(self.text.as_str(), span.text_start, span.text_len) == text
+                    let history_matches = match (
+                        self.history_identity(index),
+                        output.candidate_history_identity(index),
+                    ) {
+                        (None, None) => true,
+                        (Some((reading, surface)), Some((output_reading, output_surface))) => {
+                            reading == output_reading && surface == output_surface
+                        }
+                        _ => false,
+                    };
+                    history_matches
+                        && Self::slice(self.text.as_str(), span.text_start, span.text_len) == text
                         && Self::slice(
                             self.annotations.as_str(),
                             span.annotation_start,
@@ -150,8 +169,15 @@ impl CandidateSnapshot {
             };
             let text_start = self.text.len();
             let annotation_start = self.annotations.len();
+            let history_reading_start = self.history_readings.len();
+            let history_surface_start = self.history_surfaces.len();
+            let history = output.candidate_history_identity(index);
             if self.text.push_str(text).is_err()
                 || self.annotations.push_str(annotation).is_err()
+                || history
+                    .is_some_and(|(reading, _)| self.history_readings.push_str(reading).is_err())
+                || history
+                    .is_some_and(|(_, surface)| self.history_surfaces.push_str(surface).is_err())
                 || self
                     .spans
                     .push(CandidateSpan {
@@ -159,6 +185,10 @@ impl CandidateSnapshot {
                         text_len: text.len() as u32,
                         annotation_start: annotation_start as u32,
                         annotation_len: annotation.len() as u32,
+                        history_reading_start: history_reading_start as u32,
+                        history_reading_len: history.map_or(0, |(reading, _)| reading.len()) as u32,
+                        history_surface_start: history_surface_start as u32,
+                        history_surface_len: history.map_or(0, |(_, surface)| surface.len()) as u32,
                     })
                     .is_err()
             {
@@ -174,6 +204,8 @@ impl CandidateSnapshot {
         self.presentation = CandidatePresentation::Compact;
         self.text.clear();
         self.annotations.clear();
+        self.history_readings.clear();
+        self.history_surfaces.clear();
         self.spans.clear();
         self.selected = 0;
         self.page_size = CANDIDATE_PAGE_SIZE as u16;
@@ -187,6 +219,24 @@ impl CandidateSnapshot {
         source.get(start..end).unwrap_or("")
     }
 
+    fn history_identity(&self, index: usize) -> Option<(&str, &str)> {
+        let span = *self.spans.as_slice().get(index)?;
+        if span.history_reading_len == 0 || span.history_surface_len == 0 {
+            return None;
+        }
+        let reading = Self::slice(
+            self.history_readings.as_str(),
+            span.history_reading_start,
+            span.history_reading_len,
+        );
+        let surface = Self::slice(
+            self.history_surfaces.as_str(),
+            span.history_surface_start,
+            span.history_surface_len,
+        );
+        (!reading.is_empty() && !surface.is_empty()).then_some((reading, surface))
+    }
+
     fn to_owned(&self) -> CandidateList {
         let mut items = Vec::with_capacity(self.spans.len());
         for span in self.spans.as_slice() {
@@ -198,6 +248,7 @@ impl CandidateSnapshot {
                     span.annotation_len,
                 )
                 .to_owned(),
+                deletable_history: span.history_reading_len != 0 && span.history_surface_len != 0,
             });
         }
         CandidateList {
@@ -356,6 +407,11 @@ struct UiSnapshot {
     candidates: CandidateSnapshot,
     candidate_detail: CandidateDetailSnapshot,
     candidate_session: Option<SessionId>,
+    /// The process-wide learning generation used for this prediction list.
+    /// A successful history deletion advances it only after durable publish;
+    /// every older UI list is then stale and must disappear rather than show a
+    /// candidate that was already removed from disk.
+    candidate_learning_generation: u64,
     anchor: Option<ScreenRect>,
     renderer_visible: bool,
     stopping: bool,
@@ -370,6 +426,7 @@ impl UiSnapshot {
             candidates: CandidateSnapshot::new(),
             candidate_detail: CandidateDetailSnapshot::new(),
             candidate_session: None,
+            candidate_learning_generation: 0,
             anchor: None,
             renderer_visible: false,
             stopping: false,
@@ -472,7 +529,7 @@ impl UiBoard {
     /// no heap allocation on the keystroke path. A candidate list owned by a
     /// different session resets placement; an output without candidates
     /// explicitly terminates the previous popup state.
-    pub fn publish_output(&self, session: SessionId, output: &OutputBuf) {
+    pub fn publish_output(&self, session: SessionId, output: &OutputBuf, learning_generation: u64) {
         let has_candidates = CandidateSnapshot::output_is_valid(output);
         let candidate_session = has_candidates.then_some(session);
         let Ok(mut state) = self.state.lock() else {
@@ -484,7 +541,8 @@ impl UiBoard {
             || state.has_candidates != has_candidates
             || (has_candidates && !state.candidates.matches_output(output))
             || (has_candidates && !state.candidate_detail.matches_output(output))
-            || state.candidate_session != candidate_session;
+            || state.candidate_session != candidate_session
+            || (has_candidates && state.candidate_learning_generation != learning_generation);
         if !changed {
             return;
         }
@@ -500,6 +558,7 @@ impl UiBoard {
                 // a terminal hidden state rather than partial candidate data.
                 state.has_candidates = false;
                 state.candidate_session = None;
+                state.candidate_learning_generation = 0;
                 state.anchor = None;
                 state.renderer_visible = false;
                 state.revision = state.revision.wrapping_add(1);
@@ -516,11 +575,17 @@ impl UiBoard {
         } else {
             state.candidates.clear();
             state.candidate_detail.clear();
+            state.candidate_learning_generation = 0;
         }
         state.revision = state.revision.wrapping_add(1);
         state.mode = next_mode;
         state.has_candidates = has_candidates;
         state.candidate_session = candidate_session;
+        state.candidate_learning_generation = if has_candidates {
+            learning_generation
+        } else {
+            0
+        };
         drop(state);
         self.changed.notify_all();
     }
@@ -566,10 +631,60 @@ impl UiBoard {
         state.candidates.clear();
         state.candidate_detail.clear();
         state.candidate_session = None;
+        state.candidate_learning_generation = 0;
         state.anchor = None;
         state.renderer_visible = false;
         drop(state);
         self.changed.notify_all();
+    }
+
+    /// Returns the exact durable learning key for a renderer request only
+    /// when its revision names the current suggestion snapshot and its index
+    /// names an engine-marked history row. The renderer never supplies either
+    /// string, so a stale row cannot be redirected to a same-looking candidate.
+    pub fn history_candidate_identity(
+        &self,
+        revision: Revision,
+        candidate_index: u16,
+    ) -> Option<(String, String)> {
+        let state = self.state.lock().ok()?;
+        if state.revision != revision
+            || !state.has_candidates
+            || state.candidates.kind != CandidateKind::Suggestion
+        {
+            return None;
+        }
+        let (reading, surface) = state
+            .candidates
+            .history_identity(usize::from(candidate_index))?;
+        Some((reading.to_owned(), surface.to_owned()))
+    }
+
+    /// Removes the shared candidate snapshot after a learning operation has
+    /// durably advanced `learning_generation`. The generation check is what
+    /// keeps a concurrent, already-refreshed list visible while hiding every
+    /// pre-delete list (including one published by a different pipe worker).
+    pub fn invalidate_stale_prediction_candidates(&self, learning_generation: u64) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            return false;
+        };
+        if !state.has_candidates
+            || state.candidates.kind != CandidateKind::Suggestion
+            || state.candidate_learning_generation == learning_generation
+        {
+            return false;
+        }
+        state.revision = state.revision.wrapping_add(1);
+        state.has_candidates = false;
+        state.candidates.clear();
+        state.candidate_detail.clear();
+        state.candidate_session = None;
+        state.candidate_learning_generation = 0;
+        state.anchor = None;
+        state.renderer_visible = false;
+        drop(state);
+        self.changed.notify_all();
+        true
     }
 
     /// Announces that the engine is exiting on purpose.
@@ -713,6 +828,18 @@ mod tests {
         output
     }
 
+    fn history_suggestion_output() -> OutputBuf {
+        let mut output = OutputBuf::new();
+        output.begin_suggestions(0, 9).expect("suggestion list");
+        output
+            .push_history_candidate("表示名", "履歴", "よみ", "永続化された表記")
+            .expect("history candidate");
+        output
+            .push_candidate("通常候補", "一般")
+            .expect("ordinary candidate");
+        output
+    }
+
     #[test]
     fn a_fresh_watcher_is_answered_at_once() {
         let board = UiBoard::new();
@@ -740,7 +867,7 @@ mod tests {
     fn candidates_are_owned_only_when_a_watcher_collects_them() {
         let board = UiBoard::new();
         let output = candidate_output(1);
-        board.publish_output(7, &output);
+        board.publish_output(7, &output, 0);
         let state = look(&board, 1);
         let candidates = state.candidates.expect("published candidates");
         assert_eq!(candidates.selected, 1);
@@ -767,7 +894,7 @@ mod tests {
             })
             .is_err());
 
-        board.publish_output(7, &output);
+        board.publish_output(7, &output, 0);
         let state = look(&board, 1);
         assert_eq!(state.candidates.as_ref().map(|list| list.selected), Some(1));
         assert_eq!(
@@ -792,7 +919,7 @@ mod tests {
                 antonyms: &[],
             })
             .expect("valid detail");
-        board.publish_output(7, &selected_system_entry);
+        board.publish_output(7, &selected_system_entry, 0);
         let first = look(&board, 1);
         assert_eq!(
             first
@@ -802,7 +929,7 @@ mod tests {
             Some("selected system definition")
         );
 
-        board.publish_output(7, &candidate_output(1));
+        board.publish_output(7, &candidate_output(1), 0);
         let second = look(&board, first.revision);
         assert_eq!(
             second.candidates.as_ref().map(|list| list.selected),
@@ -814,7 +941,7 @@ mod tests {
     #[test]
     fn only_the_candidate_owner_can_move_or_show_the_popup() {
         let board = UiBoard::new();
-        board.publish_output(7, &candidate_output(0));
+        board.publish_output(7, &candidate_output(0), 0);
         let after_candidates = look(&board, 1);
         let anchor = ScreenRect {
             left: -200,
@@ -837,7 +964,7 @@ mod tests {
     #[test]
     fn a_terminal_output_clears_candidates_and_placement() {
         let board = UiBoard::new();
-        board.publish_output(7, &candidate_output(0));
+        board.publish_output(7, &candidate_output(0), 0);
         let candidates = look(&board, 1);
         board.publish_placement(
             7,
@@ -851,11 +978,61 @@ mod tests {
         );
         let placed = look(&board, candidates.revision);
 
-        board.publish_output(7, &OutputBuf::new());
+        board.publish_output(7, &OutputBuf::new(), 0);
         let cleared = look(&board, placed.revision);
         assert_eq!(cleared.candidates, None);
         assert_eq!(cleared.anchor, None);
         assert!(!cleared.renderer_visible);
+    }
+
+    #[test]
+    fn history_delete_capability_is_revision_bound_and_never_inferred_from_annotation() {
+        let board = UiBoard::new();
+        let output = history_suggestion_output();
+        board.publish_output(7, &output, 41);
+        let published = look(&board, 1);
+        let candidates = published.candidates.as_ref().expect("suggestions");
+        assert!(candidates.items[0].deletable_history);
+        assert!(!candidates.items[1].deletable_history);
+        assert_eq!(
+            board.history_candidate_identity(published.revision, 0),
+            Some(("よみ".to_owned(), "永続化された表記".to_owned()))
+        );
+
+        // Exercise every public index around the bounded list. No annotation,
+        // surface, or reading chosen by the caller can widen this authority.
+        for index in 0..=u16::try_from(MAX_CANDIDATES).expect("bounded") {
+            let expected = (index == 0).then(|| ("よみ".to_owned(), "永続化された表記".to_owned()));
+            assert_eq!(
+                board.history_candidate_identity(published.revision, index),
+                expected,
+                "index {index} must remain exact"
+            );
+        }
+        assert_eq!(
+            board.history_candidate_identity(published.revision.wrapping_add(1), 0),
+            None,
+            "a renderer snapshot from another revision is never authority"
+        );
+    }
+
+    #[test]
+    fn durable_history_generation_hides_only_stale_prediction_ui_and_is_idempotent() {
+        let board = UiBoard::new();
+        board.publish_output(7, &history_suggestion_output(), 41);
+        let before = look(&board, 1);
+        assert!(board.invalidate_stale_prediction_candidates(42));
+        let invalidated = look(&board, before.revision);
+        assert_eq!(invalidated.candidates, None);
+        assert!(!board.invalidate_stale_prediction_candidates(42));
+
+        // A snapshot already made after a different worker observed the
+        // durable generation is current and must not be hidden by the old
+        // renderer click completing late.
+        board.publish_output(7, &history_suggestion_output(), 42);
+        let fresh = look(&board, invalidated.revision);
+        assert!(!board.invalidate_stale_prediction_candidates(42));
+        assert_eq!(look(&board, 0), fresh);
     }
 
     #[test]

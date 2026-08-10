@@ -267,9 +267,13 @@ possible in Rust at all — arrive as `windows-implement` and
 `windows-interface`, which pull in `proc-macro2`, `quote`, `syn` and
 `unicode-ident`. Those four compile for the *host*, run once at build time to
 emit source text, and contribute no bytes to any shipped artifact. They
-therefore appear in `Cargo.lock` and never in a binary. `ci/dep-policy.ps1`
-encodes exactly this distinction: it allows the `windows-*` family plus that
-four-crate proc-macro closure by name, and fails the build on anything else.
+  therefore appear in `Cargo.lock` and never in a binary.  The offline `dictc`
+  compiler also uses closed `serde`/`serde_json`, SHA-256, and Unicode-NFC
+  dependency closures solely to reject malformed, duplicate-key, stale, or
+  schema-unknown LLM-detail JSONL release inputs and to make exact target
+  identities reproducible; none are linked by a shipping runtime crate.
+  `ci/dep-policy.ps1` encodes both exceptions and verifies the resolved graph
+  of every runtime crate does not contain the offline detail-parser closure.
 The list is closed, not a category — a new name gets added only with a written
 reason, so "it's just a build dependency" cannot become a loophole.
 
@@ -1108,8 +1112,9 @@ a `definition_truncated` flag; neither encoding nor decoding silently shortens
 source text. UI Automation announces the selected detail and explicitly retains
 that truncation state when only a preview is available.
 
-Aliases, related words, synonyms, and antonyms are direct, source-backed links
-only. The compiler and renderer must not infer any of them from spelling,
+Aliases, related words, synonyms, and antonyms are direct, manifest-pinned links
+from a source-backed import or an explicitly reviewed Sakura release. The compiler
+and renderer must not infer any of them from spelling,
 embedding similarity, category membership, or transitive graph traversal. Each
 group is optional and shows at most three direct terms. Acceptance must use
 fixed-seed generated tests for malformed detail tables, Unicode preview boundaries,
@@ -1117,10 +1122,22 @@ duplicate/self/cyclic relations, exact-ordinal collisions, compound-candidate
 omission, wire-frame limits, DPI/work-area placement, and UI Automation exposure.
 The reproducible release build combines pinned smile-chat definitions, aliases,
 and resolved related terms with pinned Japanese WordNet 1.1 definitions and
-same-synset similar terms. The verified 14-category image contains 1,635,239
-entries and 36,606 exact-entry details in 93,001,395 bytes. Entries without an
-unambiguous source-backed meaning remain detail-free; this count is not a claim
-that every dictionary entry has a definition.
+same-synset similar terms. That full-source merge contains 36,606 exact-entry
+details. A separate offline release gate may add Sakura-authored definitions and
+typed relations only
+from a manifest-pinned target batch and a matching reviewed release directory;
+drafts, stale dictionary identities, malformed provenance, and duplicate
+normalized `(surface, reading)` pairs fail closed. Release 000010 was generated
+against only the reproducible default dictionary identities: 242 targets were
+reviewed, 236 terms were approved into 246 exact-entry details, and six were held.
+Every approved record has a related term; the release additionally contains 43
+similar terms and 16 antonyms. One earlier candidate, `終わり`, was held before
+target creation because the default dictionary does not provide a unique safe
+identity. The semantic review used a separate prompt pass with the same model, not
+an independent model, because the user requested no delegated agent. Entries
+without an unambiguous meaning remain detail-free; these counts are not a claim
+that every dictionary entry has a definition. The measured default build contains
+29,229 details in 472,825 entries; it is distinct from the full-source build above.
 
 ---
 

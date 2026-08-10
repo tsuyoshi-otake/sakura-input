@@ -544,6 +544,8 @@ fn create_icon(asset: IconAsset) -> Result<HICON> {
     // SAFETY: both bitmaps are live and unselected. CreateIconIndirect copies
     // their pixels, after which this function owns and releases both handles.
     let icon = unsafe { CreateIconIndirect(&icon_info) };
+    // SAFETY: CreateIconIndirect has completed, both bitmap handles are still
+    // owned here, and neither is selected into a device context.
     unsafe {
         let _ = DeleteObject(mask.into());
         let _ = DeleteObject(color.into());
@@ -605,7 +607,10 @@ fn settings_path_from_loaded_module() -> Result<PathBuf> {
     if written == 0 || written >= buffer.len() {
         return Err(Error::from_thread());
     }
-    let module_path = PathBuf::from(OsString::from_wide(&buffer[..written]));
+    let module_units = buffer
+        .get(..written)
+        .ok_or_else(|| Error::from_hresult(E_FAIL))?;
+    let module_path = PathBuf::from(OsString::from_wide(module_units));
     settings_path_from_module_path(&module_path).ok_or_else(|| Error::from_hresult(E_FAIL))
 }
 
@@ -645,7 +650,7 @@ mod tests {
             assert!(!description(mode).is_empty());
         }
         for (index, mode) in Mode::ALL.iter().enumerate() {
-            for other in &Mode::ALL[index + 1..] {
+            for other in Mode::ALL.iter().skip(index + 1) {
                 assert_ne!(description(*mode), description(*other));
             }
         }

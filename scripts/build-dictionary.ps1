@@ -29,7 +29,13 @@ $WordNetArtifactSha256 = '1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f9ecffaf
 $RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $CuratedTerms = Join-Path $RepositoryRoot 'data\curated-terms.tsv'
+$CuratedPhrases = Join-Path $RepositoryRoot 'data\curated-phrases.tsv'
+$CuratedGeneralDetails = Join-Path $RepositoryRoot 'data\curated-general-details.tsv'
+$CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
+$CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
+$LlmDetailTargetDirectory = Join-Path $RepositoryRoot 'data\llm-detail-targets\000010'
+$LlmDetailReleaseDirectory = Join-Path $RepositoryRoot 'data\llm-details\releases\000010'
 $ExpectedSystemCategoryFiles = @(
     '01-grammar-function.tsv',
     '02-inflectional.tsv',
@@ -69,6 +75,19 @@ if (-not [IO.File]::Exists($CuratedTerms)) {
 }
 if (-not [IO.File]::Exists($ConversionPriorities)) {
     throw "conversion-priority dictionary layer is missing: $ConversionPriorities"
+}
+foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
+    if (-not [IO.File]::Exists($path)) {
+        throw "curated dictionary layer is missing: $path"
+    }
+}
+foreach ($path in @(
+    (Join-Path $LlmDetailTargetDirectory 'manifest.json'),
+    (Join-Path $LlmDetailReleaseDirectory 'manifest.json')
+)) {
+    if (-not [IO.File]::Exists($path)) {
+        throw "reviewed LLM detail release contract is missing: $path"
+    }
 }
 
 function Invoke-Rtk {
@@ -309,6 +328,10 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$ConnectionPath,
         [Parameter(Mandatory)][string]$MozcPosPath,
         [Parameter(Mandatory)][string]$CuratedTermsPath,
+        [Parameter(Mandatory)][string]$CuratedPhrasesPath,
+        [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
+        [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
+        [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
         [Parameter(Mandatory)][string]$WordNetLmfPath,
         [string[]]$SystemCategoryPaths = @()
@@ -335,6 +358,9 @@ function Invoke-BuildPass {
     $categoryDirectory = Join-Path $OutputDirectory "カテゴリ辞書$Suffix"
     $dictionary = Join-Path $OutputDirectory "system$Suffix.dic"
     $wordNetReport = Join-Path $OutputDirectory "wordnet$Suffix.report.json"
+    $curatedDetailReport = Join-Path $OutputDirectory "curated-details$Suffix.report.json"
+    $llmDetailReport = Join-Path $OutputDirectory "llm-details$Suffix.report.json"
+    $detailCoverage = Join-Path $OutputDirectory "detail-coverage$Suffix.tsv"
 
     $mozcArguments = @('cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'mozc-trim', '--')
     foreach ($shard in $shards) {
@@ -360,7 +386,11 @@ function Invoke-BuildPass {
         '--system', $systemTsv,
         '--overlay', $overlayTsv,
         '--overlay', $CuratedTermsPath,
+        '--overlay', $CuratedGeneralDetailsPath,
+        '--overlay', $CuratedGeneralTargetEntriesPath,
         '--overlay', $ConversionPrioritiesPath,
+        '--system-category', '4', $CuratedPhrasesPath,
+        '--system-category', '4', $CuratedPhraseTargetEntriesPath,
         '--output-dir', $categoryDirectory
     )
     # PowerShell unwraps an empty array passed through a parameter, so the
@@ -398,6 +428,13 @@ function Invoke-BuildPass {
         '--glossary-dir', $GlossaryDirectory,
         '--wordnet-lmf', $WordNetLmfPath,
         '--wordnet-report', $wordNetReport,
+        '--curated-detail-source', $CuratedPhrasesPath,
+        '--curated-detail-source', $CuratedGeneralDetailsPath,
+        '--curated-detail-report', $curatedDetailReport,
+        '--detail-coverage-output', $detailCoverage,
+        '--llm-detail-target-dir', $LlmDetailTargetDirectory,
+        '--llm-detail-release-dir', $LlmDetailReleaseDirectory,
+        '--llm-detail-report', $llmDetailReport,
         '--output', $dictionary
     )
     Invoke-Rtk -Arguments $dictionaryArguments
@@ -411,6 +448,9 @@ function Invoke-BuildPass {
         category_files = $categoryFiles.ToArray()
         dictionary = $dictionary
         wordnet_report = $wordNetReport
+        curated_detail_report = $curatedDetailReport
+        llm_detail_report = $llmDetailReport
+        detail_coverage = $detailCoverage
     }
 }
 
@@ -475,13 +515,21 @@ try {
     $primary = Invoke-BuildPass -Suffix '' -MozcDictionaryDirectory $mozcDictionaryDirectory `
         -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
         -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+        -CuratedPhrasesPath $CuratedPhrases `
+        -CuratedGeneralDetailsPath $CuratedGeneralDetails `
+        -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
+        -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
 
-    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'dictionary', 'wordnet_report')
+    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'detail_coverage')
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-        -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+            -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+            -CuratedPhrasesPath $CuratedPhrases `
+            -CuratedGeneralDetailsPath $CuratedGeneralDetails `
+            -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
+            -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
         foreach ($name in $scalarArtifactNames) {
             $firstHash = Get-Sha256 $primary[$name]
@@ -504,6 +552,8 @@ try {
     }
 
     $wordNetImport = Get-Content -Raw -LiteralPath $primary.wordnet_report | ConvertFrom-Json
+    $curatedDetailImport = Get-Content -Raw -LiteralPath $primary.curated_detail_report | ConvertFrom-Json
+    $llmDetailImport = Get-Content -Raw -LiteralPath $primary.llm_detail_report | ConvertFrom-Json
     $report = [ordered]@{
         schema_version = 2
         mozc_revision = $MozcRevision
@@ -525,13 +575,39 @@ try {
             # detail provenance after the smile-chat + WordNet exact merge.
             source = 'japanese-wordnet'
             full_definition_max_bytes = $null
-            count = $wordNetImport.details.merged_count
-            sources = $wordNetImport.details.sources
+            count = [int64]$wordNetImport.details.merged_count +
+                [int64]$curatedDetailImport.emitted_details +
+                [int64]$llmDetailImport.report.emitted_details
+            sources = @($wordNetImport.details.sources) + @(
+                [ordered]@{
+                    source = 'sakura-curated-entry-details'
+                    input_records = [int64]$curatedDetailImport.input_records
+                    emitted_details = [int64]$curatedDetailImport.emitted_details
+                    suppressed_by_existing = [int64]$curatedDetailImport.suppressed_by_existing
+                    inputs = @(
+                        Get-ArtifactRecord $CuratedPhrases
+                        Get-ArtifactRecord $CuratedGeneralDetails
+                    )
+                },
+                [ordered]@{
+                    source = 'sakura-llm-reviewed-details'
+                    validated_unique_terms = [int64]$llmDetailImport.report.validated_unique_terms
+                    emitted_details = [int64]$llmDetailImport.report.emitted_details
+                    target_manifest = Get-ArtifactRecord (Join-Path $LlmDetailTargetDirectory 'manifest.json')
+                    release_manifest = Get-ArtifactRecord (Join-Path $LlmDetailReleaseDirectory 'manifest.json')
+                }
+            )
         }
         wordnet_import = $wordNetImport
+        curated_detail_import = $curatedDetailImport
+        llm_detail_import = $llmDetailImport
         deterministic_repeat = -not $SkipDeterminismCheck
         inputs = [ordered]@{
             curated_terms = Get-ArtifactRecord $CuratedTerms
+            curated_phrases = Get-ArtifactRecord $CuratedPhrases
+            curated_general_details = Get-ArtifactRecord $CuratedGeneralDetails
+            curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
+            curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities
             system_category_dictionary = if ($null -eq $SystemCategoryDictionary) {
                 $null

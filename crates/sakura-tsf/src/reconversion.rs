@@ -202,10 +202,12 @@ mod tests {
                 Candidate {
                     text: "仮名".to_owned(),
                     annotation: "IT用語".to_owned(),
+                    deletable_history: false,
                 },
                 Candidate {
                     text: "加奈".to_owned(),
                     annotation: "人名".to_owned(),
+                    deletable_history: false,
                 },
             ],
         })

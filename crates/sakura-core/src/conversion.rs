@@ -268,8 +268,13 @@ impl Converter {
         self.build_lattice(dictionary, user_dictionary, reading, options)?;
         self.compute_suffix_costs(dictionary, reading.len());
         let best_node = self.best_final_node(dictionary, reading.len())?;
-        self.build_viterbi_candidate(dictionary, user_dictionary, reading, best_node)?;
-        if options.max_candidates > 1 {
+        if self.viterbi_path_is_coherent(best_node)? {
+            self.build_viterbi_candidate(dictionary, user_dictionary, reading, best_node)?;
+        }
+        // The cheapest lattice path can be rejected by the N-best quality
+        // gate. In that case still search for the ordinary reading/katakana
+        // fallback, even when the caller asked for just one candidate.
+        if self.candidates.len() < options.max_candidates {
             self.search_n_best(dictionary, user_dictionary, reading, options.max_candidates)?;
         }
         self.apply_it_completion_coherence(dictionary, reading, options)?;
@@ -726,6 +731,22 @@ impl Converter {
         Ok(())
     }
 
+    fn viterbi_path_is_coherent(&mut self, mut node: usize) -> Result<bool, ConversionError> {
+        self.path.clear();
+        loop {
+            self.path.push(node);
+            let previous = self.nodes[node].best_previous;
+            if previous == NONE {
+                break;
+            }
+            node = previous;
+        }
+        self.path.reverse();
+        (!self.path.is_empty())
+            .then(|| candidate_path_is_coherent(&self.nodes, &self.path))
+            .ok_or(ConversionError::NoPath)
+    }
+
     fn search_n_best(
         &mut self,
         dictionary: &Dictionary<'_>,
@@ -764,21 +785,20 @@ impl Converter {
                     state_index = path_state.parent;
                 }
                 self.path.reverse();
+                if !candidate_path_is_coherent(&self.nodes, &self.path) {
+                    continue;
+                }
                 let total = state.cost.saturating_add(connection_cost(
                     dictionary,
                     lattice_node.right_id,
                     0,
                 ));
-                // `build_viterbi_candidate` already pushed the single
-                // cheapest path before this search runs, so `self.candidates`
-                // is never empty here. A later (costlier) path stitching
-                // together to more than `MAX_PREEDIT_BYTES` is an
-                // unremarkable, expected outcome once enough alternatives
-                // exist -- not a reason to discard every candidate already
-                // found, including that guaranteed-good cheapest one.
-                // Skipping it and continuing the search for a smaller
-                // alternative keeps this in the same "degrade gracefully"
-                // family as the lattice-node and search-state budgets below.
+                // A later (costlier) path stitching together to more than
+                // `MAX_PREEDIT_BYTES` is an unremarkable, expected outcome
+                // once enough alternatives exist. Skipping it and continuing
+                // the search for a smaller alternative keeps this in the same
+                // "degrade gracefully" family as the lattice-node and
+                // search-state budgets below.
                 let candidate = match make_candidate(
                     dictionary,
                     user_dictionary,
@@ -864,6 +884,44 @@ fn connection_cost(dictionary: &Dictionary<'_>, right_id: u16, left_id: u16) -> 
             .connection_cost(right_id, left_id)
             .unwrap_or(u16::MAX),
     )
+}
+
+/// Reject a path that splices a fallback spelling into lexical dictionary
+/// entries. A partial match is not evidence that the adjacent unmatched kana
+/// belongs to the same word: otherwise an OOV reading such as `ぷろんふと`
+/// produces candidates like `プロん富と`. A synthetic fallback must also use
+/// one spelling consistently; partial hiragana/katakana mosaics are equally
+/// unhelpful. Keep wholly lexical multiword paths (normal Japanese
+/// segmentation) and wholly synthetic reading/katakana fallbacks, so
+/// conversion always has a safe, lossless result.
+fn candidate_path_is_coherent(nodes: &[Node], path: &[usize]) -> bool {
+    let mut has_lexical_edge = false;
+    let mut fallback = None;
+    for &index in path {
+        match nodes[index].surface {
+            Surface::Dictionary { .. } | Surface::User(_) => has_lexical_edge = true,
+            Surface::Reading => {
+                if fallback.is_some_and(|surface| surface != SurfaceKind::Reading) {
+                    return false;
+                }
+                fallback = Some(SurfaceKind::Reading);
+            }
+            Surface::Katakana => {
+                if fallback.is_some_and(|surface| surface != SurfaceKind::Katakana) {
+                    return false;
+                }
+                fallback = Some(SurfaceKind::Katakana);
+            }
+            Surface::Literal(_) => {}
+        }
+    }
+    !(has_lexical_edge && fallback.is_some())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SurfaceKind {
+    Reading,
+    Katakana,
 }
 
 fn make_candidate(

@@ -155,6 +155,10 @@ fn sample_valid_request_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
             session: 42,
             mode: Mode::HalfAlnum,
         },
+        Request::DeleteHistoryCandidate {
+            revision: rng.next_u64(),
+            candidate_index: rng.next_u32() as u16,
+        },
         Request::DeleteSession { session: 42 },
         Request::Ping,
         Request::Shutdown,
@@ -207,6 +211,31 @@ fn probe_key_fresh_context_bool_rejects_nonzero_nonone_wire_values() {
             decode_request(&mutated[FRAME_HEADER_LEN..]),
             Err(Error::BadBool),
             "fresh_context wire byte {invalid} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn history_delete_response_bool_rejects_noncanonical_wire_values() {
+    let mut frame = Vec::new();
+    encode_response(
+        &Response::HistoryCandidateDeleted { removed: false },
+        7,
+        &mut frame,
+    )
+    .expect("encode history deletion response");
+
+    // This compact response ends with its only body field. Strict decoding is
+    // important because the renderer must treat every non-success outcome as
+    // a terminal no-op, not silently coerce an unknown status to `true`.
+    assert_eq!(frame.last(), Some(&0));
+    for invalid in [2u8, u8::MAX] {
+        let mut mutated = frame.clone();
+        *mutated.last_mut().expect("response bool") = invalid;
+        assert_eq!(
+            decode_response(&mutated[FRAME_HEADER_LEN..]),
+            Err(Error::BadBool),
+            "history delete status byte {invalid} must be rejected"
         );
     }
 }
@@ -324,6 +353,7 @@ fn sample_valid_response_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
                 items: vec![Candidate {
                     text: "Rust".to_owned(),
                     annotation: "language".to_owned(),
+                    deletable_history: false,
                 }],
                 selected: 0,
                 page_size: 9,

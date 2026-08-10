@@ -17,34 +17,69 @@
     "schema_version": 1,
     "source": "japanese-wordnet",
     "full_definition_max_bytes": null,
-    "count": 28501,
-    "sources": {
-      "smile-chat": {
-        "detail_count": 14080,
-        "aliases": 10583,
-        "related": 26440
+    "count": 29229,
+    "sources": [
+      {
+        "smile-chat": {
+          "detail_count": 14080,
+          "aliases": 10583,
+          "related": 26440
+        },
+        "japanese-wordnet": {
+          "detail_count": 14657,
+          "similar": 24045,
+          "antonyms": 0,
+          "suppressed_by_smile_chat": 235
+        }
       },
-      "japanese-wordnet": {
-        "detail_count": 14656,
-        "similar": 24044,
-        "antonyms": 0,
-        "suppressed_by_smile_chat": 235
+      {
+        "source": "sakura-curated-entry-details",
+        "input_records": 482,
+        "emitted_details": 481,
+        "suppressed_by_existing": 1,
+        "inputs": [
+          {
+            "file": "curated-phrases.tsv",
+            "bytes": 100644,
+            "sha256": "72b6e61e569fb0a84f34b66f430970e998433c70f9957248d1a139937a0eb660"
+          },
+          {
+            "file": "curated-general-details.tsv",
+            "bytes": 248,
+            "sha256": "16b36634e58cb71255160b58d2831193ce523fab9bf07076be522eb8e9d8ff9c"
+          }
+        ]
+      },
+      {
+        "source": "sakura-llm-reviewed-details",
+        "validated_unique_terms": 236,
+        "emitted_details": 246,
+        "target_manifest": {
+          "file": "manifest.json",
+          "bytes": 21211,
+          "sha256": "bf01e44d2c26aab9bb80b42fa409700ff8756ff4672408ef7ad3afd091bdef01"
+        },
+        "release_manifest": {
+          "file": "manifest.json",
+          "bytes": 36406,
+          "sha256": "e19324eb8ec84160882b8fff69961b9d78645bd1fd91a1089ae45acaab52fc8e"
+        }
       }
-    }
+    ]
   },
   "wordnet_import": {
     "schema_version": 2,
-    "detail_count": 14656,
+    "detail_count": 14657,
     "unresolved": {
       "surface_ambiguous": 7662,
-      "sense_ambiguous": 14259,
+      "sense_ambiguous": 14262,
       "missing_definition": 505,
       "relation_ambiguous": 0,
       "relation_unsupported": 286250,
       "relation_truncated": 57451
     },
     "details": {
-      "merged_count": 28501,
+      "merged_count": 28502,
       "sources": {
         "smile-chat": {
           "detail_count": 14080,
@@ -52,11 +87,41 @@
           "related": 26440
         },
         "japanese-wordnet": {
-          "detail_count": 14656,
-          "similar": 24044,
+          "detail_count": 14657,
+          "similar": 24045,
           "antonyms": 0,
           "suppressed_by_smile_chat": 235
         }
+      }
+    }
+  },
+  "curated_detail_import": {
+    "schema_version": "sakura.curated-detail-import.v1",
+    "input_records": 482,
+    "emitted_details": 481,
+    "suppressed_by_existing": 1
+  },
+  "llm_detail_import": {
+    "schema_version": "sakura.llm-detail-import-report.v1",
+    "report": {
+      "available_targets": 242,
+      "input_records": 236,
+      "accepted_records": 236,
+      "validated_unique_terms": 236,
+      "uncovered_targets": 6,
+      "emitted_details": 246,
+      "suppressed_by_curated": 0,
+      "suppressed_by_existing_pair": 0,
+      "exact_identity_fill_candidates": 0,
+      "rejections": {
+        "malformed_records": 0,
+        "unknown_targets": 0,
+        "stale_targets": 0,
+        "duplicate_records": 0,
+        "unsafe_text": 0,
+        "insufficient_confidence": 0,
+        "verification_disagreed": 0,
+        "dictionary_mismatch": 0
       }
     }
   },
@@ -66,6 +131,26 @@
       "file": "curated-terms.tsv",
       "bytes": 10110,
       "sha256": "8fa9b141bb4db0e68e8e6a8a829fec1c7072d14458bf482229c59fd1aa9f6d72"
+    },
+    "curated_phrases": {
+      "file": "curated-phrases.tsv",
+      "bytes": 100644,
+      "sha256": "72b6e61e569fb0a84f34b66f430970e998433c70f9957248d1a139937a0eb660"
+    },
+    "curated_general_details": {
+      "file": "curated-general-details.tsv",
+      "bytes": 248,
+      "sha256": "16b36634e58cb71255160b58d2831193ce523fab9bf07076be522eb8e9d8ff9c"
+    },
+    "curated_phrase_target_entries": {
+      "file": "curated-phrase-target-entries.tsv",
+      "bytes": 1178,
+      "sha256": "e5fe3b302f3a4276154ca59eda1553fe9f54629c0327d0c16aede4809ae81507"
+    },
+    "curated_general_target_entries": {
+      "file": "curated-general-target-entries.tsv",
+      "bytes": 377,
+      "sha256": "c31931f2a5ff5c25f9c2b241cfcf0b493d659194ca66a05d2d0c1fbf338712ec"
     },
     "conversion_priorities": {
       "file": "conversion-priorities.tsv",
@@ -97,13 +182,28 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 38247521,
-      "sha256": "dafef81c3d310ff98cec6cfac9b9eacdf2fd754e90c07ba779ef0c49b692902e"
+      "bytes": 38456565,
+      "sha256": "6d34364b5354d3c67efefaf15b50142b1365b21140ec8eee0f77570d828544ad"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
       "bytes": 530,
-      "sha256": "2f2bfb28717c0be4aee7bdb55215feced7a548d5ab09031cee6cad3e7eac8e2a"
+      "sha256": "8ee6d36b0aa439fbefa8bbb6d89fc47876822355775d021ffa114e853365dbac"
+    },
+    "curated_detail_report": {
+      "file": "curated-details.report.json",
+      "bytes": 139,
+      "sha256": "49eb999698e16ca554103dd882b31601498edc410fc5ba5e22e9196e8bc17ce8"
+    },
+    "llm_detail_report": {
+      "file": "llm-details.report.json",
+      "bytes": 593,
+      "sha256": "e67d8b1e3da20344c32e79da4e356416cb6c6486154dfd3797f83c6f371e6b9d"
+    },
+    "detail_coverage": {
+      "file": "detail-coverage.tsv",
+      "bytes": 1253973,
+      "sha256": "c5726985b92273c3fe7ec827ddb40136380a190ea5b55796eba13386a41ad313"
     },
     "category_dictionaries": [
       {
@@ -118,13 +218,13 @@
       },
       {
         "file": "03_一般語.tsv",
-        "bytes": 6072439,
-        "sha256": "8407153098af623320c3ffd2d3050bdfd75b20b46aad4bcdacadc2616d77ba86"
+        "bytes": 6072682,
+        "sha256": "219c829ca00d0fd49f9c3e4e500568956d094068341d5b4f1b6a29ec1660282a"
       },
       {
         "file": "04_慣用句・定型表現.tsv",
-        "bytes": 129,
-        "sha256": "fa1bfe760f8fcefed18b336bc05c3b8b429c1efb6f9cf858e2c8d760c8c5843e"
+        "bytes": 97020,
+        "sha256": "bbb5be3d4e2a2a4539eca8ea2677afc08a47907835b7ec5c8f4e5824ecaaa82c"
       },
       {
         "file": "05_数値・日付・単位.tsv",

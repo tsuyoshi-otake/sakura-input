@@ -1,0 +1,30 @@
+{
+  "schema_version": "sakura.llm-detail-release-manifest.v1",
+  "target_manifest_schema_version": "sakura.llm-detail-target.v1",
+  "target_manifest_sha256": "4f6fc1e8a46c30d466c4721107c647f5befeca84ea3b699694146c162e9e0254",
+  "target_batch_count": 1,
+  "batches": [
+    {
+      "batch_index": 1,
+      "file": "000001.release.jsonl",
+      "record_count": 6,
+      "sha256": "4754e13840d3b94b9253fca59766e57bfd29b6b0470ac118f5b6a8d5aa3ef61e",
+      "target_hashes": [
+        "e6546a9c22392c36a83dfeddfefd0bc2652521c2d62e72f86ba09abce4e38fd2",
+        "9bc8ef71948208bbfa644bf4ed1bf5b87e954aa966be6629370921d440c46bd5",
+        "9a49aab4b9099cd96a7e6b2af5991531d8817290a0c05ffa9b923456a7c642cd",
+        "dd873b6f7baa4893d338843007853a35f6eebfc465339434e80077f41c7b288d",
+        "baee7acff41287b64b3fc11e938ccf2d0a4ea70c1967528db8b73d3dda7ad9cd",
+        "2fcdbf799add43b2cd7b9a0911b8c53483811ca5d872ddbe3e5f68ab5fc7290d"
+      ],
+      "generation_fingerprints": [
+        "279318cf3d797af9edd2222af6d8b58d8f7026488a292bc4c6180aa7a0693256",
+        "2838d3b846adbdb02b4194ca3f43da5a62c288744f1f15288c8f3f73cbebbb2f",
+        "eaf11740218c9131143f30050a91493eabc1d981095a3e9834fe5b9b82bcad55",
+        "d4d5ff7b5bc4f837aa871594c79690765519dca6031e5acd8b199a71bbefa9a1",
+        "b6a898854c3c35387faec870c910685e1c3589608f59f314cc0efee5ea59740d",
+        "99552719ae6531813302c7f7c19130c28539979023b16943d32d00c8503555bc"
+      ]
+    }
+  ]
+}

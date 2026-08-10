@@ -271,9 +271,11 @@ impl Mailbox {
         let sequence = self.next_sequence()?;
         destination.reset(sequence, session, generation);
         if script.available {
-            let mut candidate = PredictionCandidate::default();
-            candidate.reading = script.reading;
-            candidate.surface = script.surface;
+            let mut candidate = PredictionCandidate {
+                reading: script.reading,
+                surface: script.surface,
+                ..PredictionCandidate::default()
+            };
             candidate.annotation.push_str("test").ok()?;
             let _ = destination.push(candidate);
         }

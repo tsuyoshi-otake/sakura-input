@@ -52,7 +52,7 @@ use sakura_ipc::{security, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::input_history::InputHistoryService;
-use crate::learning::LearningService;
+use crate::learning::{ForgetPredictionOutcome, LearningService};
 use crate::long_conversion::LongConversionService;
 use crate::prediction::PredictionService;
 use crate::ui::UiBoard;
@@ -520,7 +520,7 @@ impl Buffers {
             // Candidate buffers are intentionally large and bounded. Keep
             // them off the 128 KiB pipe-worker stack; this allocation happens
             // once per worker, never on a keystroke.
-            out: Box::new(OutputBuf::new()),
+            out: OutputBuf::new_boxed(),
         }
     }
 }
@@ -604,6 +604,30 @@ fn serve(
             continue;
         }
 
+        // The renderer is a separate pipe client and therefore has no
+        // dispatcher-owned editing session. It can only ask the shared board
+        // to resolve a row from the exact revision it displayed; the board
+        // supplies the private learning identity after validating it. Do not
+        // route this through a fresh Dispatcher, which would have neither the
+        // source candidate nor the selected session cache needed to make the
+        // operation safe.
+        if let Request::DeleteHistoryCandidate {
+            revision,
+            candidate_index,
+        } = request
+        {
+            let removed = delete_history_candidate(shared, revision, candidate_index);
+            if let Err(fault) = send(
+                instance,
+                &Response::HistoryCandidateDeleted { removed },
+                id,
+                &mut bufs.reply,
+            ) {
+                return end(fault);
+            }
+            continue;
+        }
+
         let output_session = match &request {
             Request::SendKey { session, key } if !key.test_only => Some(*session),
             Request::Commit { session } => Some(*session),
@@ -616,24 +640,27 @@ fn serve(
         };
         let clears_candidates = match &request {
             Request::Revert { session } | Request::DeleteSession { session } => Some(*session),
-            Request::SetInputScope { session, scope }
-                if matches!(
-                    scope,
+            Request::SetInputScope {
+                session,
+                scope:
                     sakura_proto::InputScope::Password
-                        | sakura_proto::InputScope::Url
-                        | sakura_proto::InputScope::Email
-                        | sakura_proto::InputScope::Digits
-                ) =>
-            {
-                Some(*session)
-            }
+                    | sakura_proto::InputScope::Url
+                    | sakura_proto::InputScope::Email
+                    | sakura_proto::InputScope::Digits,
+            } => Some(*session),
             _ => None,
         };
 
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
                 if let Some(session) = output_session {
-                    shared.ui.publish_output(session, &bufs.out);
+                    let learning_generation = shared
+                        .learning
+                        .as_ref()
+                        .map_or(0, |learning| learning.generation());
+                    shared
+                        .ui
+                        .publish_output(session, &bufs.out, learning_generation);
                 } else if let Some(mode) = bufs.out.mode {
                     shared.ui.publish(mode);
                 }
@@ -683,6 +710,38 @@ fn serve(
     }
 }
 
+/// Resolves and removes one renderer-selected history prediction. The first
+/// step is a revision/index capability check in [`UiBoard`]; persistence is
+/// the commit point. Only after it succeeds does the advanced learning
+/// generation invalidate cached prediction UI. Every failed path is a
+/// terminal no-op, including duplicate clicks after the first removal.
+fn delete_history_candidate(shared: &Shared, revision: u64, candidate_index: u16) -> bool {
+    let Some((reading, surface)) = shared
+        .ui
+        .history_candidate_identity(revision, candidate_index)
+    else {
+        return false;
+    };
+    let Some(learning) = shared.learning.as_deref() else {
+        return false;
+    };
+    match learning.forget_prediction_exact(&reading, &surface) {
+        Ok(ForgetPredictionOutcome::Removed) => {
+            // Every Dispatcher observes this process-wide generation before
+            // serving its next non-probe request. Hide the old shared snapshot
+            // now; it was built before the durable removal and must not remain
+            // clickable while a worker refreshes its bounded cache.
+            shared
+                .ui
+                .invalidate_stale_prediction_candidates(learning.generation());
+            true
+        }
+        Ok(ForgetPredictionOutcome::NotFound | ForgetPredictionOutcome::Unavailable) | Err(_) => {
+            false
+        }
+    }
+}
+
 fn end(fault: Fault) -> Outcome {
     match fault {
         Fault::Disconnected => Outcome::Closed,
@@ -715,6 +774,139 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_shared(learning: Arc<LearningService>) -> Shared {
+        let (shutdown, _stopped) = mpsc::channel();
+        Shared {
+            name: "sakura-engine-history-delete-test".to_owned(),
+            sddl: String::new(),
+            created: AtomicU32::new(0),
+            idle: AtomicU32::new(0),
+            shutdown,
+            ui: UiBoard::new(),
+            conversion: None,
+            learning: Some(learning),
+            input_history: None,
+            prediction: None,
+            long_conversion: None,
+            preferences: Preferences::default(),
+            profiles: Arc::from([]),
+            verbose: false,
+        }
+    }
+
+    fn test_learning_path() -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after the Unix epoch")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "sakura_input_history_delete_{}_{}",
+            std::process::id(),
+            nonce
+        ));
+        fs::create_dir_all(&directory).expect("test learning directory");
+        directory.join("learning.bin")
+    }
+
+    fn history_suggestion_output() -> OutputBuf {
+        let mut output = OutputBuf::new();
+        output.begin_suggestions(0, 9).expect("suggestion list");
+        output
+            .push_history_candidate("表示名", "履歴", "よみ", "永続化された表記")
+            .expect("history candidate");
+        output
+    }
+
+    fn look(board: &UiBoard, since: u64) -> sakura_proto::UiState {
+        let (state, delivery) = board.wait_past(since);
+        drop(delivery);
+        state
+    }
+
+    fn history_contains(learning: &LearningService, reading: &str, surface: &str) -> bool {
+        let mut found = false;
+        learning.visit_prediction_history(reading, |candidate_reading, candidate_surface, _, _| {
+            found |= candidate_reading == reading && candidate_surface == surface;
+            true
+        });
+        found
+    }
+
+    #[test]
+    fn history_delete_is_snapshot_bound_durable_and_idempotent() {
+        let path = test_learning_path();
+        let learning = Arc::new(LearningService::open(&path).expect("open learning"));
+        learning.learn("よみ", "永続化された表記", 1, 2);
+        let published_generation = learning.generation();
+        let shared = test_shared(Arc::clone(&learning));
+        let output = history_suggestion_output();
+        shared.ui.publish_output(9, &output, published_generation);
+        let published = look(&shared.ui, 0);
+
+        assert!(history_contains(&learning, "よみ", "永続化された表記"));
+        assert!(delete_history_candidate(&shared, published.revision, 0));
+        assert!(
+            !history_contains(&learning, "よみ", "永続化された表記"),
+            "the UI must not be invalidated until this durable store no longer contains the row"
+        );
+        let invalidated = look(&shared.ui, published.revision);
+        assert!(invalidated.candidates.is_none());
+        assert!(
+            !delete_history_candidate(&shared, published.revision, 0),
+            "a duplicate click must fail closed after the first durable removal"
+        );
+
+        drop(shared);
+        drop(learning);
+        let reopened = LearningService::open(&path).expect("reopen durable learning store");
+        assert!(
+            !history_contains(&reopened, "よみ", "永続化された表記"),
+            "the deletion must survive reopening the durable learning store"
+        );
+        drop(reopened);
+        fs::remove_dir_all(path.parent().expect("test directory")).expect("remove test directory");
+    }
+
+    #[test]
+    fn history_delete_rejects_stale_and_annotation_only_candidates() {
+        let path = test_learning_path();
+        let learning = Arc::new(LearningService::open(&path).expect("open learning"));
+        learning.learn("よみ", "永続化された表記", 1, 2);
+        let shared = test_shared(Arc::clone(&learning));
+
+        let history = history_suggestion_output();
+        shared.ui.publish_output(9, &history, learning.generation());
+        let stale = look(&shared.ui, 0);
+
+        let mut annotation_only = OutputBuf::new();
+        annotation_only
+            .begin_suggestions(0, 9)
+            .expect("suggestion list");
+        annotation_only
+            .push_candidate("同じ見た目でも履歴ではない", "履歴")
+            .expect("ordinary candidate");
+        shared
+            .ui
+            .publish_output(9, &annotation_only, learning.generation());
+        let current = look(&shared.ui, stale.revision);
+
+        assert!(
+            !delete_history_candidate(&shared, stale.revision, 0),
+            "an old revision must never target the replacement row"
+        );
+        assert!(
+            !delete_history_candidate(&shared, current.revision, 0),
+            "a display annotation is not a deletion capability"
+        );
+        assert!(history_contains(&learning, "よみ", "永続化された表記"));
+
+        drop(shared);
+        drop(learning);
+        fs::remove_dir_all(path.parent().expect("test directory")).expect("remove test directory");
+    }
 
     /// The two values [`worker`] builds on its own stack have to fit in the
     /// stack it was given, with room left for the frames underneath them.
@@ -739,6 +931,26 @@ mod tests {
              {budget} by boxing whatever just grew, not by raising the \
              reservation (that multiplies by {MAX_INSTANCES} threads)"
         );
+    }
+
+    /// `Buffers::new` runs on the pipe worker's 128 KiB stack.  Keep this
+    /// runtime guard in addition to the size budget above: `Box::new(T::new())`
+    /// first constructs all of `T` on that stack, which can overflow even
+    /// when `Buffers` itself contains only a pointer to `T`.
+    #[test]
+    fn worker_buffers_are_initialized_directly_on_the_reserved_stack() {
+        std::thread::Builder::new()
+            .name("sakura-engine-buffer-stack-test".to_owned())
+            .stack_size(WORKER_STACK_BYTES)
+            .spawn(|| {
+                let mut buffers = Buffers::new();
+                buffers.out.consumed = true;
+                buffers.out.clear();
+                assert!(!buffers.out.consumed);
+            })
+            .expect("create bounded-stack worker")
+            .join()
+            .expect("bounded-stack worker must not overflow while constructing Buffers");
     }
 
     #[test]
@@ -826,6 +1038,7 @@ mod tests {
                 items: vec![Candidate {
                     text: "a".repeat(MAX_STRING_BYTES + 1),
                     annotation: String::new(),
+                    deletable_history: false,
                 }],
                 selected: 0,
                 page_size: 9,

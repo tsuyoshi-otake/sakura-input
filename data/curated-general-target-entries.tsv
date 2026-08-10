@@ -1,0 +1,6 @@
+# license: LicenseRef-Sakura-InHouse
+# Entry-only rows accepted after review. Definitions and typed relations are supplied by the pinned LLM-detail release.
+reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
+かおり	薫り	1851	1851	7600	2147483647		
+しゃぜつ	謝絶	1851	1851	7600	2147483647		
+はいしょう	拝承	1851	1851	7600	2147483647		

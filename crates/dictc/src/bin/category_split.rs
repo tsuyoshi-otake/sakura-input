@@ -296,6 +296,9 @@ mod tests {
 
     use super::run;
 
+    // The immediately invoked closure keeps fixture setup and assertions in a
+    // single scope so cleanup remains an explicit terminal step below.
+    #[allow(clippy::let_unit_value, clippy::redundant_closure_call)]
     #[test]
     fn emits_one_header_only_file_per_category_after_precedence() {
         let root = std::env::temp_dir().join(format!(

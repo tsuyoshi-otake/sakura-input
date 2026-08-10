@@ -460,6 +460,7 @@ mod tests {
                 .map(|index| Candidate {
                     text: format!("candidate-{index}"),
                     annotation: format!("annotation-{index}"),
+                    deletable_history: false,
                 })
                 .collect(),
             selected: 9,

@@ -1,0 +1,73 @@
+{
+  "schema_version": "sakura.llm-detail-target-manifest.v2",
+  "target_schema_version": "sakura.llm-detail-target.v1",
+  "prompt_version": "issue30.japanese-detail.v2",
+  "batch_size": 250,
+  "target_count": 2,
+  "eligible_targets_before_limit": 329218,
+  "target_limit": null,
+  "allowlist_sha256": "91ae624ee6cec3ade3657a009ece96dc855717099abf3d91cfed2ee6b85af0de",
+  "source_sha256": {
+    "category/01_文法・機能語.tsv": "01d9f74f679cb1c4e896785081e88cded502bc6701c4e6521f2a4919ea9ccd7c",
+    "category/02_活用語.tsv": "35a861d79693a09ddcdf8ee282782a77ce75b32a52cc55ff8ed8b9c0227b48ab",
+    "category/03_一般語.tsv": "c166f81a3b5faa492a04bee9e7b09abbc4dafd3647ce59223aaaa84eba551862",
+    "category/04_慣用句・定型表現.tsv": "6c917d7e5d17ee2adba8d5bb34554dd730722f3522489e384818c315b55cc82f",
+    "category/05_数値・日付・単位.tsv": "ee4cc10771af23afe1454e3f15e4dc132119c04cdb02ef838f9479753debfc5e",
+    "category/06_人名.tsv": "d1807c14f6abfe8f7320d6300a03e8b37167585b5d3430beb0e54848e10c9e03",
+    "category/07_地名.tsv": "cbf0be406bd1ba04397d026db51fe40a2fc3a18b2d6ba4b6c58bb7e6fcb81aaf",
+    "category/08_組織名・製品名.tsv": "980b6678bca2c5e1389e79e0f77d8985c1b6f3c338be25bea7412d2567de1b8f",
+    "category/09_外来語・カタカナ語.tsv": "d5f7dd44d179701885a2284d2ebea14db5e21a1a9554a10320ddc8169cc0e789",
+    "category/10_略語・英数字.tsv": "bf543dc845256005f83caa95e6481f4da1b53bae1c6098b41719f0512f9f387f",
+    "category/11_IT・技術用語.tsv": "15a2b9f8d1d857971ca69050dda4cf4761d0d4896e648ff0c49f3983c6a0c34e",
+    "category/12_専門用語.tsv": "cbf0be406bd1ba04397d026db51fe40a2fc3a18b2d6ba4b6c58bb7e6fcb81aaf",
+    "category/13_記号・絵文字.tsv": "4e537307e32251e21e51baad4560161fb27cfbc4891a0a4cafd412107c53ca93",
+    "category/14_表記ゆれ.tsv": "a74971ed2d9c0796166a01845bfb9868ab56fc1816ff3c3bb5cdf2e58ecc0b6b",
+    "curated-source-details-2026-08-10": "c5726985b92273c3fe7ec827ddb40136380a190ea5b55796eba13386a41ad313",
+    "full-source-details-2026-08-10": "f106c48906df9fefd1b8477991dfbe155d1872e5c83e5f87557ab8ab4affb3d0",
+    "repo/artifacts/release/カテゴリ辞書/01_文法・機能語.tsv": "6f0f542d1e458aa1c28cae41f8c9eb11511e088c2e6aeddf223ae4755bdf1f09",
+    "repo/artifacts/release/カテゴリ辞書/02_活用語.tsv": "35a861d79693a09ddcdf8ee282782a77ce75b32a52cc55ff8ed8b9c0227b48ab",
+    "repo/artifacts/release/カテゴリ辞書/03_一般語.tsv": "1f09f8809aa2746f509bdb44a23083828eb8534d8334e5f01b9ca1a7a0582d85",
+    "repo/artifacts/release/カテゴリ辞書/04_慣用句・定型表現.tsv": "e72c7964f38d750405e4e662e1d3f819f7520717eff2f4b2e494f2fda29d6d24",
+    "repo/artifacts/release/カテゴリ辞書/05_数値・日付・単位.tsv": "cb0d9c309121fe8c62bd596db2dab8acf2e6902877862ce86c1623fe12846c0e",
+    "repo/artifacts/release/カテゴリ辞書/06_人名.tsv": "793c7a008824945cc0c18d5e023031a4781451fa7f4f1539e8906a9d9b70c674",
+    "repo/artifacts/release/カテゴリ辞書/07_地名.tsv": "1410ec80f17d5f8aae06e78b6b1c2254ae3dd612fbb0171efcaeba4758a39489",
+    "repo/artifacts/release/カテゴリ辞書/08_組織名・製品名.tsv": "2fbff78fcbc8fdf45f797cc6a1c65607aa423230ef7bd0256fd710ee3d30b5fa",
+    "repo/artifacts/release/カテゴリ辞書/09_外来語・カタカナ語.tsv": "fcc1b16f8ad278b6bed99344020b8840bc08e07888b7d1fe2275f6181e89c2c7",
+    "repo/artifacts/release/カテゴリ辞書/10_略語・英数字.tsv": "fb1fe48f85cee609b2945bf00de09b26a473ccbfcf17122a4ad5f1a254ef9609",
+    "repo/artifacts/release/カテゴリ辞書/11_IT・技術用語.tsv": "27ca2166d983d618714347ecefb052594e36e1860e417bf11b8528a8c5f9ec20",
+    "repo/artifacts/release/カテゴリ辞書/12_専門用語.tsv": "c9be5106d82fb762e1da2e8adaeff2fd40f6e8b30f06421e15381b7246cd5b86",
+    "repo/artifacts/release/カテゴリ辞書/13_記号・絵文字.tsv": "4a0e21f044efc24cded1f1905b6872d26921718bdcdedfe108535f5f3f99f0cc",
+    "repo/artifacts/release/カテゴリ辞書/14_表記ゆれ.tsv": "6e04345481aa9e99de2062ecd582bf8f73ccbe660969e1075b647dd9961f3ab1"
+  },
+  "filter_counts": {
+    "input_entries": 2108047,
+    "duplicate_identities": 125914,
+    "already_detailed": 0,
+    "already_detailed_pairs": 48107,
+    "non_lexical": 370699,
+    "proper_name": 943813,
+    "spelling_or_variant": 238,
+    "abnormal_length": 354,
+    "reading_mismatch": 709,
+    "ambiguous_surface": 263745,
+    "selected_targets": 2,
+    "held_targets": 1188810
+  },
+  "held_audit": {
+    "record_count": 1188810,
+    "sha256": "58fb52b20afe32bc8d881be6ff6e5d91ede08c06c4b5114254a07f1a63e30d19",
+    "materialization": "external_nonmaterialized"
+  },
+  "batches": [
+    {
+      "batch_index": 1,
+      "file": "000001.targets.jsonl",
+      "record_count": 2,
+      "input_sha256": "a3ed58a8043dfbb8b680d18fe38a0a122e022205ee692bda4aaf321d27956570",
+      "input_hashes": [
+        "5c8de3aa33aa77eaba5f10aa8dba8a5bebb860ef6abedf597189c95ff713d1a2",
+        "49e186aead4736abcbe4bcf6dbf4c44e7dd9b21036c4e3772cd6a02e72362e22"
+      ]
+    }
+  ]
+}

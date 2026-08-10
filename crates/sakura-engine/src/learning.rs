@@ -1421,7 +1421,7 @@ enum ForgetFaultPoint {
 
 #[cfg(test)]
 thread_local! {
-    static FORGET_FAULTS: RefCell<Vec<ForgetFaultPoint>> = RefCell::new(Vec::new());
+    static FORGET_FAULTS: RefCell<Vec<ForgetFaultPoint>> = const { RefCell::new(Vec::new()) };
 }
 
 #[cfg(test)]

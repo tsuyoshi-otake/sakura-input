@@ -304,7 +304,11 @@ where
     delete_before_host_calls(
         &expected_wide,
         authority,
+        // SAFETY: `range` belongs to this context and `ec` is the live edit
+        // cookie under which the range was obtained.
         || unsafe { range.IsEmpty(ec).map(|value| value.as_bool()) },
+        // SAFETY: the same owned range and edit cookie remain valid for the
+        // duration of this synchronous host call.
         || unsafe { range.Collapse(ec, TF_ANCHOR_END) },
         |shifted| unsafe {
             // SAFETY: `range` remains owned by this live context and edit
@@ -312,8 +316,16 @@ where
             // position requests TSF's normal context boundary.
             range.ShiftStart(ec, -units, shifted, core::ptr::null())
         },
-        |actual, copied| unsafe { range.GetText(ec, 0, actual, copied) },
-        || unsafe { range.SetText(ec, 0, &[]) },
+        |actual, copied| {
+            // SAFETY: `actual` and `copied` are writable buffers owned by the
+            // caller, while `range` and `ec` remain valid as above.
+            unsafe { range.GetText(ec, 0, actual, copied) }
+        },
+        || {
+            // SAFETY: the verified range is still owned by this context and
+            // the empty slice requests deletion under the live edit cookie.
+            unsafe { range.SetText(ec, 0, &[]) }
+        },
     )
 }
 
@@ -898,6 +910,13 @@ mod commit_undo_delete_sequence_tests {
         Error::from_hresult(E_UNEXPECTED)
     }
 
+    fn copy_fixture_text(actual: &mut [u16], text: &[u16]) {
+        actual
+            .get_mut(..text.len())
+            .expect("host fixture buffer fits the supplied UTF-16 text")
+            .copy_from_slice(text);
+    }
+
     #[test]
     fn commit_undo_non_empty_selection_stops_before_any_range_mutation() {
         let expected: Vec<u16> = "行った".encode_utf16().collect();
@@ -922,7 +941,7 @@ mod commit_undo_delete_sequence_tests {
             },
             |actual, copied| {
                 trace.borrow_mut().push(DeleteCall::GetText);
-                actual[..expected.len()].copy_from_slice(&expected);
+                copy_fixture_text(actual, &expected);
                 *copied = expected.len() as u32;
                 Ok(())
             },
@@ -1039,7 +1058,7 @@ mod commit_undo_delete_sequence_tests {
                 Ok(())
             },
             |actual, copied| {
-                actual[..actual_text.len()].copy_from_slice(&actual_text);
+                copy_fixture_text(actual, &actual_text);
                 *copied = actual_text.len() as u32;
                 Ok(())
             },
@@ -1070,7 +1089,7 @@ mod commit_undo_delete_sequence_tests {
                 Ok(())
             },
             |actual, copied| {
-                actual[..expected.len()].copy_from_slice(&expected);
+                copy_fixture_text(actual, &expected);
                 *copied = expected.len() as u32;
                 Ok(())
             },
@@ -1109,7 +1128,7 @@ mod commit_undo_delete_sequence_tests {
                 Ok(())
             },
             |actual, copied| {
-                actual[..expected.len()].copy_from_slice(&expected);
+                copy_fixture_text(actual, &expected);
                 *copied = expected.len() as u32;
                 Ok(())
             },
@@ -1149,7 +1168,7 @@ mod commit_undo_delete_sequence_tests {
                 Ok(())
             },
             |actual, copied| {
-                actual[..expected.len()].copy_from_slice(&expected);
+                copy_fixture_text(actual, &expected);
                 *copied = expected.len() as u32;
                 Ok(())
             },
@@ -1180,7 +1199,7 @@ mod commit_undo_delete_sequence_tests {
                 Ok(())
             },
             |actual, copied| {
-                actual[..expected.len()].copy_from_slice(&expected);
+                copy_fixture_text(actual, &expected);
                 *copied = expected.len() as u32;
                 Ok(())
             },
@@ -1210,7 +1229,7 @@ mod commit_undo_delete_sequence_tests {
                 Ok(())
             },
             |actual, copied| {
-                actual[..expected.len()].copy_from_slice(&expected);
+                copy_fixture_text(actual, &expected);
                 *copied = expected.len() as u32;
                 Ok(())
             },
@@ -1453,7 +1472,11 @@ mod display_attribute_tests {
                 underline: UnderlineKind::Raw,
             }]
         );
-        let only = spans[0];
+        let only = spans.first().copied().unwrap_or(SegmentRange {
+            start: u32::MAX,
+            end: u32::MAX,
+            underline: UnderlineKind::Raw,
+        });
         assert!(spans.len() == 1 && only.start == 0 && only.end as usize == wide.len());
         assert_eq!(
             display_attribute_guid(only.underline),
@@ -1498,12 +1521,12 @@ mod display_attribute_tests {
                 },
             ]
         );
+        let actual_guids = spans
+            .iter()
+            .map(|span| display_attribute_guid(span.underline))
+            .collect::<Vec<_>>();
         assert_eq!(
-            [
-                display_attribute_guid(spans[0].underline),
-                display_attribute_guid(spans[1].underline),
-                display_attribute_guid(spans[2].underline),
-            ],
+            actual_guids,
             [
                 GUID_DISPLAY_ATTRIBUTE_CONVERTED,
                 GUID_DISPLAY_ATTRIBUTE_FOCUSED,

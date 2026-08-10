@@ -254,6 +254,11 @@ function Test-ReleaseBundle {
                 $details = $dictionaryReport.details
                 $source = $dictionaryReport.sources.japanese_wordnet
                 $wordNetImport = $dictionaryReport.wordnet_import
+                $curatedImport = $dictionaryReport.curated_detail_import
+                $llmImport = $dictionaryReport.llm_detail_import
+                $expectedDetailCount = [long]$wordNetImport.details.merged_count +
+                    [long]$curatedImport.emitted_details +
+                    [long]$llmImport.report.emitted_details
                 if ($null -eq $details -or $details.schema_version -ne 1 -or
                     $details.source -cne 'japanese-wordnet' -or $null -ne $details.full_definition_max_bytes -or
                     $null -eq $details.count -or [long]$details.count -lt 0 -or
@@ -263,7 +268,9 @@ function Test-ReleaseBundle {
                     $source.license_id -cne 'LicenseRef-Japanese-WordNet-1.1' -or $source.license_file -cne $wordNetLicense -or
                     $null -eq $wordNetImport -or $wordNetImport.schema_version -ne 2 -or
                     [long]$wordNetImport.detail_count -ne [long]$wordNetImport.details.sources.'japanese-wordnet'.detail_count -or
-                    [long]$wordNetImport.details.merged_count -ne [long]$details.count -or
+                    $null -eq $curatedImport -or $curatedImport.schema_version -cne 'sakura.curated-detail-import.v1' -or
+                    [long]$curatedImport.input_records -ne ([long]$curatedImport.emitted_details + [long]$curatedImport.suppressed_by_existing) -or
+                    $null -eq $llmImport -or $expectedDetailCount -ne [long]$details.count -or
                     $null -eq $wordNetImport.details.sources.'smile-chat'.detail_count -or
                     [long]$wordNetImport.details.sources.'smile-chat'.detail_count -lt 0) {
                     throw 'schema-2 Japanese WordNet dictionary provenance is incomplete or inconsistent'

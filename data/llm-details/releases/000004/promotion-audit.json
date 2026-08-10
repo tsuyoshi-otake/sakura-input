@@ -1,0 +1,12 @@
+{
+  "schema_version": "sakura.llm-detail-promotion-audit.v1",
+  "draft_sha256": "d105167b4db2e8263766237ef1d1d175f60b5b9469d90ee55671eb6aca9fa5ef",
+  "target_manifest_sha256": "4f6fc1e8a46c30d466c4721107c647f5befeca84ea3b699694146c162e9e0254",
+  "reviewer": {"model": "gpt-5.6-terra", "prompt_version": "sakura.llm-detail-review-prompt.v1", "schema_version": "sakura.llm-detail.v1"},
+  "counts": {"reviewed": 26, "approved": 6, "held": 20, "rejected": 0, "suppressed": 0, "validated_new_unique": 6},
+  "approved": ["クリック", "メモ", "リセット", "スクロール", "コンパイル", "プリコネクト"],
+  "held": {
+    "サービス": "cross-domain meaning is not uniquely bounded", "ページ": "cross-domain meaning is not uniquely bounded", "ラベル": "cross-domain meaning is not uniquely bounded", "ステップ": "cross-domain meaning is not uniquely bounded", "エラー": "cross-domain meaning is not uniquely bounded", "フォーカス": "multiple senses", "ボルト": "multiple senses", "ヘルメット": "definition is narrower than the term", "ナット": "multiple senses", "ストリーミング": "definition is narrower than the term", "クローン": "multiple senses", "クラスタ": "multiple senses", "スクラッチ": "multiple senses", "コールバック": "multiple senses", "エディタ": "multiple senses", "コロン": "multiple senses", "スワイプ": "multiple senses", "サブミット": "multiple senses", "ドライラン": "cross-domain meaning is not uniquely bounded", "イメージタグ": "multiple technical meanings"
+  },
+  "relations": "all drafts had empty typed relation arrays; no inferred relations were introduced"
+}

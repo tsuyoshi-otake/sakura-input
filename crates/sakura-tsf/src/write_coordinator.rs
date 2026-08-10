@@ -296,11 +296,11 @@ impl<T> WriteCoordinator<T> {
     /// supplied predicate. TextService uses this bounded query to distinguish
     /// an ordinary full journal from an exact-text undo whose host document
     /// boundary must fence all later input.
-    pub(crate) fn any_payload(&self, mut predicate: impl FnMut(&T) -> bool) -> bool {
+    pub(crate) fn any_payload(&self, predicate: impl FnMut(&T) -> bool) -> bool {
         self.operations
             .iter()
             .filter_map(|operation| operation.payload.as_ref())
-            .any(|payload| predicate(payload))
+            .any(predicate)
     }
 
     /// A pending payload-specific transaction can impose a stricter admission
