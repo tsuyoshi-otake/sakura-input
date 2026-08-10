@@ -7,6 +7,14 @@
 - `crates/sakura-tsf/src/mode_item.rs`はDPI境界でassetを選び、top-down 32-bit DIBからHICONを生成する。中間bitmapは必ず削除し、返却HICONの所有権はTSFへ渡す。
 - 直接入力は斜線付き`A`、半角英数は通常の`A`であり、同じassetへ統合しない。全モード・サイズ・テーマの透過、alpha、premultiplication、一意性、HICON生成を総当たりテストする。
 
+## Issue #27 Sakura候補ポップアップ（自動検証済み・実画面確認待ち）
+
+- 候補表示はrenderer所有のWin32ポップアップであり、non-activating、click-through、キャレット追従、DPI対応、UI Automation公開を維持する。engine／TSFが持つ候補順、選択、ページ、候補種別の意味をrendererが変更してはいけない。
+- Sakura独自の見た目は、low-contrastの暖色系neutral、Yu Gothic UI、28 logical px行、候補番号／文字列／注記の列、260–480 logical pxのcontent-aware幅、控えめな種別・ページfooter、passiveなページ位置rail、選択行のmuted sakura 2 logical px railである。候補文字列を主階層とし、注記・ページ情報は補助階層にする。
+- light／dark paletteに加え、Windows high-contrastではsystem roleを使う。UI-less hostには`ITfUIElement`候補データ経路を保ち、popupの可視性に依存させない。compact／expanded表示は既存のengine semanticsとキー操作を維持し、新しい候補定義や操作を追加しない。
+- 実装は通常のWin32 popupをGDI（`CreateFontW`／`DrawTextW`／brush）で描く。layered windowやDirectWriteを使う設計として説明しない。これはrendererの描画境界だけの変更で、候補用raster assetの再生成は不要であり、Issue #26のmode-indicator assetを変更・流用しない。
+- unit testと実renderer processのintegration testにより、compact／expanded semantics、260–480 logical px幅、DPI変更、non-activation、キャレット追従、ページ、数字選択、UI Automation公開は自動検証済み。残る受け入れ作業は、light／dark／Windows high-contrastの実画面で、文字階層、選択rail、注記・footer・ページrail、配置を目視確認し、mode-indicator assetに差分がないことを記録すること。
+
 ## 最優先タスク：Issue #24 ローカル DeBERTa 長文変換 reranker（実装進行中）
 
 Issue #24 は、候補生成を置き換えず、長文変換の確定前候補をローカルで再順位付けする**任意**機能である。Rust worker、engine統合、固定artifact生成、実model IPC E2E、opt-in installer buildは確認済み。順位品質、レイテンシ、working setはまだ受け入れ計測前で、既定installerもneural payloadを含めない。これらを「確認済みの性能」や既定有効の機能として説明しないこと。

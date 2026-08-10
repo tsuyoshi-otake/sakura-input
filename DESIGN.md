@@ -220,8 +220,8 @@ Why out-of-process (all four reasons matter):
 
 The renderer is separate from the engine so a UI hang can't block
 conversion, and separate from the host so candidate windows work even in
-sandboxed/fullscreen apps (drawn as a top-level layered window positioned
-via the text service's `ITfContextView` rects).
+sandboxed/fullscreen apps (drawn as a top-level Win32 popup positioned via
+the text service's `ITfContextView` rects).
 
 ### Component inventory
 
@@ -1028,16 +1028,14 @@ read-only lives once per machine under Program Files.
 
 ## 8. UI
 
-- **Candidate window** (`sakura_renderer.exe`): borderless layered window,
-  DirectWrite text, positioned from the composition's screen rect
+- **Candidate window** (`sakura_renderer.exe`): borderless Win32 popup window,
+  GDI text (`CreateFontW` / `DrawTextW`), positioned from the composition's screen rect
   (received via the DLL → engine → renderer), never steals focus,
   per-monitor DPI aware (including DPI changes mid-composition, §4.2).
-  Shows: candidates with shortcut digits, page indicator, annotation
-  pane (homophone hints) on the side, toggled by a key. Vertical-writing
-  hosts (Word 縦書き) report rotated layout rects — placement logic
-  handles both orientations. The window is exposed to UI Automation
-  (screen readers announce candidates), alongside the `ITfUIElement`
-  data path for UI-less hosts.
+  Shows: shortcut digits, primary candidate surfaces, an annotation column,
+  a quiet kind/page footer, and a passive page-position rail. The window is
+  exposed to UI Automation (screen readers announce candidates), alongside
+  the `ITfUIElement` data path for UI-less hosts.
 - **Mode indicator**: small floating "あ/A" near the caret on mode change,
   plus the Windows 11 focused `GUID_LBI_INPUTMODE` taskbar item. The taskbar
   item exists only while an editable caret is focused; its menu offers the
@@ -1047,6 +1045,42 @@ read-only lives once per machine under Program Files.
   manager (user dict CRUD, import/export ATOK/Mozc/MS-IME formats),
   learning data viewer/reset, diagnostics (IPC timeouts, engine version).
 - All UI text localized ja/en.
+
+### 8.1 Candidate popup presentation (Issue #27 — automated verification complete, real-screen review pending)
+
+The renderer owns the top-level Win32 candidate popup. It remains non-activating,
+click-through, caret-following, and per-monitor DPI-aware; it does not become a
+host-owned control or change TSF/engine candidate state. The renderer receives
+the existing candidate snapshot, selected index, kind, and page information and
+only presents them. In particular, compact prediction and expanded conversion
+presentations retain their current engine semantics and keyboard commands: the
+visual layer must not invent hierarchy, definitions, or candidate interactions.
+
+The Sakura presentation uses low-contrast warm-neutral light and dark palettes,
+Yu Gothic UI, and 28 logical-pixel rows. Candidate number, surface, and
+annotation form stable columns; candidate text is the primary hierarchy, while
+annotations, a quiet kind/page footer, and a passive page-position rail are secondary.
+A muted sakura 2 logical-pixel selection rail identifies the selected row.
+Content determines a 260–480 logical-pixel width, rather than a fixed wide
+panel. This keeps short prediction lists quiet while allowing an expanded table
+to expose useful annotations without obscuring the editor.
+
+High-contrast mode substitutes the relevant Windows system colors and preserves
+legible selection state. The same candidates remain exposed through UI
+Automation for screen readers and through `ITfUIElement` data for UI-less hosts;
+those paths must not depend on the popup being visible. The popup uses Win32 GDI
+(`CreateFontW`, `DrawTextW`, and native brushes) rather than a layered-window or
+DirectWrite rendering path. Its implementation neither requires regenerated
+raster assets nor consumes the separately managed mode-indicator assets.
+
+Automated unit and real-process integration coverage now verifies compact and
+expanded candidate semantics, bounded content-aware layout, DPI changes,
+non-activation, caret following, paging, digit selection, and UI Automation
+exposure. Final acceptance still requires real-screen inspection of the compact
+and expanded popup in light, dark, and Windows high-contrast modes, including
+candidate/annotation hierarchy, selection visibility, page metadata, and caret
+placement. The final evidence must also confirm that the popup change did not
+regenerate or alter mode-indicator assets.
 
 ---
 
