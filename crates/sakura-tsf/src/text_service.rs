@@ -2161,6 +2161,10 @@ impl TextService {
                     };
                     let _ = engine.set_input_mode(target);
                 }
+                // Settings is handled before this document-scoped command
+                // path. Keep the defensive terminal arm explicit in case a
+                // future caller bypasses OnMenuSelect.
+                MenuCommand::OpenSettings => {}
                 _ => {}
             }
         }
@@ -4567,6 +4571,9 @@ impl ITfLangBarItemButton_Impl for TextService_Impl {
 
     fn OnMenuSelect(&self, wid: u32) -> Result<()> {
         if let Some(command) = mode_item::menu_command(wid) {
+            if command == MenuCommand::OpenSettings {
+                return mode_item::open_settings();
+            }
             self.get_impl().select_mode_menu_command(command);
         }
         Ok(())
