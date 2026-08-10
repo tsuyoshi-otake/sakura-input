@@ -1,0 +1,31 @@
+ku-nlp/deberta-v2-tiny-japanese-char-wwm
+=========================================
+
+Upstream project and source:
+https://huggingface.co/ku-nlp/deberta-v2-tiny-japanese-char-wwm
+
+Pinned revision used by Sakura Input:
+41bcb8a393383a039c7ee18ded6893ca82e668b7
+
+Authors / provider: Kyoto University NLP (ku-nlp)
+
+License: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+Sakura Input distributes an ONNX conversion of the upstream model weights and
+the tokenizer vocabulary. The ONNX conversion is Adapted Material for the
+purposes of CC BY-SA 4.0. It is distributed under CC BY-SA 4.0 (or a compatible
+license as permitted by that license); redistribution must retain attribution,
+the license notice/link, and the applicable ShareAlike terms.
+
+Changes consist only of exporting the masked-language-model inference graph to
+ONNX with Optimum O2 graph optimizations. The learned weights are not fine-tuned
+or otherwise modified. The build procedure records hashes for release artifacts
+in its manifest; those hashes identify a build and do not replace this notice.
+
+Attribution notice:
+"deberta-v2-tiny-japanese-char-wwm" by Kyoto University NLP, used and converted to ONNX
+by Sakura Input under CC BY-SA 4.0. Source revision:
+41bcb8a393383a039c7ee18ded6893ca82e668b7.
+
+No endorsement by the upstream authors is implied.

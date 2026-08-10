@@ -30,6 +30,7 @@ pub mod dispatch;
 pub mod event_log;
 pub mod input_history;
 pub mod learning;
+pub mod long_conversion;
 pub mod prediction;
 pub mod server;
 pub mod session;

@@ -2,9 +2,10 @@
 
 A Japanese Input Method Editor (IME) in the spirit of ATOK, **specialized
 for IT engineers**: fast, accurate kana-kanji conversion with strong
-personalization, built Windows-first on a portable core — implemented in
-**pure Rust, from scratch**, with no third-party runtime dependencies and
-the smallest achievable footprint.
+personalization, built Windows-first on a portable core. The TSF DLL and
+engine core are implemented in **pure Rust, from scratch**. The optional,
+out-of-process long-conversion reranker is also a Rust binary, while its
+separately isolated ONNX Runtime DLL and model are external runtime artifacts.
 
 Status: **v1.0 — final** (2026-07-31; hardened by three independent
 adversarial review passes: TSF/installer feasibility, engine/performance
@@ -22,16 +23,21 @@ realism, product/plan consistency)
 - **Conversion quality first.** Multi-segment kana-kanji conversion whose
   accuracy on *technical Japanese* beats generalist IMEs, and that
   *improves with use* through per-user learning (ATOK's defining trait).
-- **Pure Rust, full scratch.** Every component — TSF COM glue, tries,
-  Viterbi, IPC codec, config parser — is hand-written Rust. No MeCab, no
-  NLP/dictionary/serialization crates. The only permitted dependency is
-  the `windows`/`windows-sys` FFI bindings (§3.1).
-- **Fastest and lightest.** Every keystroke must feel instantaneous:
+- **Rust Sakura code, isolated optional runtime.** TSF COM glue, tries, Viterbi,
+  engine IPC codec, config parser, and `sakura_neural_worker.exe` are
+  hand-written Rust. The core has no MeCab or runtime NLP dependency beyond
+  `windows`/`windows-sys` FFI bindings. The optional worker (§5.2.1) is outside
+  the TSF DLL and engine process and dynamically loads an installer-provided
+  ONNX Runtime DLL plus a separately attributed model; the product therefore
+  does not claim to have no native third-party runtime dependencies.
+- **Fastest and lightest.** Every engine key path must feel instantaneous:
   ≤ 5 ms for kana composition, ≤ 20 ms for full conversion, ≤ 10 ms for
   prediction updates — with the smallest achievable footprint: engine
   private working set ≤ 15 MB (the dictionary is a file-backed mmap that
   stays out of private memory), zero heap allocation per keystroke at
-  steady state. Budgets are enforced by tests (§10).
+  steady state. This is an engine-process budget; it deliberately excludes the
+  optional neural worker's model/runtime memory. Budgets are enforced by tests
+  (§10).
 - **Never lose user text, never crash the host app.** The in-process
   component must be minimal and fail-safe; all real work happens
   out-of-process.
@@ -223,6 +229,7 @@ via the text service's `ITfContextView` rects).
 |----------------------|-----------------|--------------------|-----------------------------------------|
 | `sakura_tsf.dll`     | Rust (COM)      | every host app     | TSF glue, IPC client, zero logic         |
 | `sakura_engine.exe`  | Rust            | per user session   | all conversion, dictionaries, learning   |
+| `sakura_neural_worker.exe` | Rust + dynamically loaded ONNX Runtime | on demand, local child process | optional long-conversion N-best reranking only |
 | `sakura_renderer.exe`| Rust (Win32)    | per user session   | candidate window, mode indicator, engine watchdog |
 | `sakura_settings.exe`| Rust (Win32)    | on demand          | settings, user-dictionary editor         |
 | `sakura_setup.exe`   | Inno Setup      | install/update     | installer (declarative script, §12)      |
@@ -231,8 +238,8 @@ via the text service's `ITfContextView` rects).
 
 ### 3.1 Dependency policy (the full-scratch rule)
 
-Everything is Rust, and everything is ours. The only crates allowed in any
-shipping binary are `windows`/`windows-sys` — auto-generated Windows
+Every Sakura-authored shipping binary is Rust, including the isolated neural
+worker. Core shipping binaries allow only `windows`/`windows-sys` — auto-generated Windows
 API/COM bindings; that *is* the platform, not a library. Everything else
 is `std`-only, hand-written:
 
@@ -265,6 +272,18 @@ encodes exactly this distinction: it allows the `windows-*` family plus that
 four-crate proc-macro closure by name, and fails the build on anything else.
 The list is closed, not a category — a new name gets added only with a written
 reason, so "it's just a build dependency" cannot become a loophole.
+
+There is one separately reviewed exception for the optional
+`crates/sakura-neural-worker` workspace member. Its closed
+`$IsolatedWorkerRuntime` allowlist in `ci/dep-policy.ps1` admits the
+`ort` binding, strict JSON/SHA manifest validation, Unicode tokenizer support,
+and their closed dependency closure solely for that Rust worker; the binding is
+configured for `load-dynamic`, rather than for a bundled ONNX Runtime. The
+intended release payload keeps `onnxruntime.dll` beside
+`sakura_neural_worker.exe` and keeps the model as a separate artifact. Neither
+the TSF DLL nor `sakura_engine.exe` links this runtime. This is isolation, not
+a claim that the complete installed product has no native third-party runtime
+dependencies.
 
 ### 3.2 Target platform and instruction set
 
@@ -544,6 +563,57 @@ tokenizer, trie, or model crates (§3.1).
 
 Personalization enters as **cost adjustments layered on top** (§5.4), never
 by mutating the base dictionary.
+
+### 5.2.1 Optional local long-conversion reranker
+
+**Implementation status:** the Rust worker, engine integration, reproducible
+artifact path, real ONNX Runtime/model IPC fixture, and opt-in installer build
+have been exercised. The default installer remains opt-out while ranking
+quality, cold/warm latency, and worker private working set await acceptance
+measurement; this is not a claim that the reranker is active by default.
+
+The normal converter remains the lattice/Viterbi N-best generator. The optional
+reranker never generates a candidate and is not a per-keystroke prediction
+service: it may score only the first six candidates of an existing normal
+`Space` conversion. The engine keeps a one-slot latest-wins mailbox and one
+long-conversion thread. That thread starts the Rust `sakura_neural_worker.exe`
+lazily as a local child process and communicates through versioned, bounded
+binary frames on standard input/output. The worker dynamically resolves the
+installer-provided ONNX Runtime DLL; the TSF DLL and engine neither load that
+DLL nor the model, and the synchronous conversion path never waits for the
+worker.
+
+The installed worker is discovered beside `sakura_engine.exe`. Its model
+directory is `neural/deberta-v2-tiny-japanese-char-wwm/`, containing `model.onnx`,
+`vocab.txt`, and `manifest.json`. A missing worker or model, invalid frame,
+process crash, start failure, response timeout, or unavailable exact result is a
+local-fallback outcome; the existing dictionary ranking remains final.
+
+A request is eligible only for a classified `Normal` input scope, at a complete
+non-direct preedit, and only if the reading/candidate snapshot satisfies the
+long-conversion threshold (at least ten Unicode scalar values or a first path of
+at least three segments) and has at least two candidates. Password, URL, Email,
+Digits, unknown/unclassified scopes, and `test_only` input are excluded before
+the worker boundary. The engine uses the reading locally to build that immutable
+snapshot; the worker request contains candidate surfaces, costs, and
+fingerprints needed to score it. The worker has no access to the document,
+composition, user dictionary, or learning store.
+
+The engine consumes a score only when owner, session, composition generation,
+reading, and candidate-set fingerprint match exactly. Backspace, Escape, commit,
+focus/deactivation, or later input makes an older result unusable. Once the
+conversion candidate UI is shown, its ordering is frozen: no asynchronous result
+may reorder it. Explicit user learning, exact cache, and user-dictionary
+precedence are applied outside this worker and remain authoritative. Worker
+restarts are bounded with exponential backoff and deterministic jitter.
+
+The pinned source model is `ku-nlp/deberta-v2-tiny-japanese-char-wwm` revision
+`41bcb8a393383a039c7ee18ded6893ca82e668b7`. The build-only export script fetches
+that revision and produces the ONNX graph; the installed IME does not import
+Python, PyTorch, Transformers, Hugging Face Hub, or Optimum. The release build
+records model/runtime artifact hashes in a manifest. Reproducibility means
+re-running the pinned export/build procedure and checking those hashes, not
+claiming that an unmeasured exported binary has a particular size or latency.
 
 ### 5.3 Prediction
 
@@ -971,6 +1041,11 @@ read-only lives once per machine under Program Files.
   developer input-history store is an explicit local-development exception;
   it is DPAPI-protected, bounded, exportable, and never records sensitive
   scopes.
+- The optional neural reranker is local-only. Its child-process IPC carries an
+  eligible candidate snapshot solely for scoring; it has no network transport,
+  and the worker's standard error is not retained by the engine. Input text is
+  not added to ordinary diagnostics. Sensitive, unknown, unclassified, and
+  `test_only` inputs do not cross this boundary.
 - Crash handling: local minidumps via WER LocalDumps for our processes,
   never uploaded automatically; dumps are treated as sensitive since they
   may contain composition text. Retention is capped (`DumpCount=5`) —
@@ -1009,6 +1084,7 @@ Memory budgets (steady state, measured in CI on the reference VM):
 |-----------------------------------------------|---------|
 | `sakura_tsf.dll` binary size                  | ≤ 1 MB  |
 | Engine private working set (dict mmap excluded, file-backed) | ≤ 15 MB |
+| Optional neural worker private working set / model and runtime size | Working set not yet measured and excluded from the engine budget; 2026-08-10 x64 artifacts: worker 0.39 MiB, ORT DLL 15.08 MiB, model 40.37 MiB |
 | Renderer private working set                  | ≤ 10 MB |
 | Heap allocations per keystroke (steady state, kana + conversion + prediction hand-off) | 0 |
 | Dictionary image on disk                      | ≤ 35 MB |

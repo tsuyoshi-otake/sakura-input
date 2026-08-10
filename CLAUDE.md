@@ -1,5 +1,32 @@
 # Sakura Input 引き継ぎ指示書
 
+## 最優先タスク：Issue #24 ローカル DeBERTa 長文変換 reranker（実装進行中）
+
+Issue #24 は、候補生成を置き換えず、長文変換の確定前候補をローカルで再順位付けする**任意**機能である。Rust worker、engine統合、固定artifact生成、実model IPC E2E、opt-in installer buildは確認済み。順位品質、レイテンシ、working setはまだ受け入れ計測前で、既定installerもneural payloadを含めない。これらを「確認済みの性能」や既定有効の機能として説明しないこと。
+
+### 現在の実装境界
+
+- Sakura の TSF、engine、および worker のコードは Rust。worker の workspace member は `crates/sakura-neural-worker`、バイナリ名は `sakura_neural_worker.exe` である。
+- worker 専用の `ort` crate は `load-dynamic` で使い、ONNX Runtime DLL とモデルは Sakura コードとは分離した外部 runtime/artifact である。これは製品全体が native dependency を持たない、または全体が pure Rust であるという意味ではない。
+- worker は型付き JSON schema で manifest の未知・欠落・重複 field を拒否し、モデルと vocabulary を streaming SHA-256 で検証する。tokenizer 契約は BasicTokenizer + character、`do_lower_case=false` であり、NFKC を行うという古い宣言を復活させない。
+- 固定 `vocab.txt` はtoken文字列の重複を含む。Transformersの`load_vocab`と同じく最後の出現位置をIDとして採用し、重複自体をartifact破損として拒否しない。manifestのsize/SHA-256で固定ファイルそのものを検証する。
+- 予定する同梱配置は engine の隣に `sakura_neural_worker.exe` と `onnxruntime.dll`、モデルは `neural/deberta-v2-tiny-japanese-char-wwm/{model.onnx,vocab.txt,manifest.json}` である。engine の discover/manifest 検証と installer への実際の配置は、最終 diff を読んで確認してからのみ「実装済み」と記録する。
+- model の一次情報は `ku-nlp/deberta-v2-tiny-japanese-char-wwm`、固定 revision は `41bcb8a393383a039c7ee18ded6893ca82e668b7`。export/manifest はこの snapshot を再現可能にし、モデルおよび ONNX 変換物の attribution・ライセンス境界は `THIRD_PARTY_NOTICES.md` と `THIRD_PARTY_LICENSES/ku-nlp-deberta-v2-tiny-japanese-char-wwm.txt` に従う。CC BY-SA 4.0 の share-alike は、変換した ONNX artifact を含む adaptation に適用される。
+
+### プライバシーとフォールバックの不変条件
+
+- cloud 送信はしない。worker が受け取るのは、表示前の候補スナップショットだけであり、本文・入力履歴・ユーザー辞書・学習ストアを渡さない。
+- `Password`、`URL`、`Email`、`Digits`、未分類または未知の scope、`test_only` 入力は除外する。worker 不在、runtime/model/manifest の不備、検証失敗、timeout、異常応答では元順位を保持して fail closed する。
+- UI は worker を待たず、候補を表示した後に非同期で並べ替えない。TSF/engine 本体の 15 MiB 予算と任意 worker のメモリは別境界であり、worker の実測値は未測定として扱う。
+
+### 再開時の検証と未解決の E2E
+
+- Rust の protocol/SIMD の unit test と `sakura_neural_worker.exe --self-test` は、実モデルを使わずに実行できる。`scripts/build-neural-reranker.ps1 -ValidateOnly` は既存 payload の検証用で、download/build を行わない。`scripts/build-installer.ps1 -IncludeNeuralReranker` は opt-in payload に対してこの validate-only 経路を呼び、report の neural manifest fingerprint を記録する。
+- 外部 PBT crate は full-scratch dependency policy に追加しない。固定 seed の生成テストで、任意 IPC frame のpanic-free rejection、生成token列のsequence/special-token不変条件、生成finite logitsのscalar/AVX/AVX2 parityを再現可能に検証する。
+- 実 ONNX Runtime 1.28.0と固定モデルを読み込み、2候補のIPC scoreを返すignored E2E、およびneural payloadを含むinstaller buildは2026-08-10に成功した。これは順位品質、engine snapshot全経路、cold/warm latency、working setの証拠ではないため、別途実測・記録する。
+- 推論は候補最大 6 件、sequence 最大 128 token、mask row 最大 48（最大 8 batch call）で fail closed にする。400 ms の worker 内 deadline と engine の 500 ms process kill 境界だけを負荷上限の代わりにしない。
+- 確認コマンドはまず `rtk cargo test -p sakura-neural-worker`、既存 payload がある場合は `rtk proxy powershell -NoProfile -File scripts/build-neural-reranker.ps1 -ValidateOnly`、続いて installer の opt-in payload と release fingerprint の最終 diff を確認する。テスト・ビルドの成功は、プロセス終了も確認してから記録する。
+
 このファイルは、別セッションでSakura Inputの作業を再開するAI／開発者向けの引き継ぎメモです。まずこのファイルと`README.md`を読み、必要に応じて`DESIGN.md`、`PLAN.md`、ユーザーが提示した`AGENTS.md`相当の指示を確認してください。
 
 ## 最優先タスク：VS Codeで文字入力中に落ちる問題（調査未完了）

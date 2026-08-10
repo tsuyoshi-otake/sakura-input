@@ -2,7 +2,9 @@
 param(
     [string]$IsccPath,
 
-    [string]$ReportPath = (Join-Path $PSScriptRoot '..\installer\out\installer-build.report.json')
+    [string]$ReportPath = '',
+
+    [switch]$IncludeNeuralReranker
 )
 
 Set-StrictMode -Version Latest
@@ -12,6 +14,20 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $setupPath = Join-Path $repositoryRoot 'installer\setup.iss'
 $installerPath = Join-Path $repositoryRoot 'installer\out\sakura_setup.exe'
 $dictionaryReportPath = Join-Path $repositoryRoot 'artifacts\release\dictionary-build.report.json'
+$neuralBuildScript = Join-Path $repositoryRoot 'scripts\build-neural-reranker.ps1'
+$neuralPayloadPaths = @(
+    'artifacts\release\sakura_neural_worker.exe',
+    'artifacts\release\onnxruntime.dll',
+    'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\model.onnx',
+    'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\vocab.txt',
+    'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.json',
+    'artifacts\release\licenses\onnxruntime-MIT.txt',
+    'artifacts\release\licenses\onnxruntime-ThirdPartyNotices.txt',
+    'artifacts\release\licenses\ku-nlp-deberta-v2-tiny-japanese-char-wwm.txt'
+)
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    $ReportPath = Join-Path $repositoryRoot 'installer\out\installer-build.report.json'
+}
 $ReportPath = [IO.Path]::GetFullPath($ReportPath)
 
 function Get-Sha256 {
@@ -21,7 +37,7 @@ function Get-Sha256 {
     try {
         $algorithm = [Security.Cryptography.SHA256]::Create()
         try {
-            return [Convert]::ToHexString($algorithm.ComputeHash($stream)).ToLowerInvariant()
+            return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
         }
         finally {
             $algorithm.Dispose()
@@ -37,9 +53,9 @@ function Get-TextSha256 {
 
     $algorithm = [Security.Cryptography.SHA256]::Create()
     try {
-        return [Convert]::ToHexString(
+        return ([BitConverter]::ToString(
             $algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))
-        ).ToLowerInvariant()
+        )).Replace('-', '').ToLowerInvariant()
     }
     finally {
         $algorithm.Dispose()
@@ -110,8 +126,12 @@ function Get-ArtifactRecord {
 
     $item = [IO.FileInfo]::new($Path)
     if (-not $item.Exists) { throw "release payload is missing: $Path" }
+    $repositoryPrefix = $repositoryRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    if (-not $item.FullName.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "release payload is outside the repository: $($item.FullName)"
+    }
     return [ordered]@{
-        path = [IO.Path]::GetRelativePath($repositoryRoot, $item.FullName).Replace('\', '/')
+        path = $item.FullName.Substring($repositoryPrefix.Length).Replace('\', '/')
         bytes = $item.Length
         sha256 = Get-Sha256 $item.FullName
     }
@@ -135,6 +155,18 @@ $payloadPaths = @(
     'THIRD_PARTY_LICENSES\mozc-dictionary.txt',
     'THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt'
 )
+if ($IncludeNeuralReranker) {
+    if (-not [IO.File]::Exists($neuralBuildScript)) {
+        throw "neural reranker payload validator is missing: $neuralBuildScript"
+    }
+    try {
+        & $neuralBuildScript -OutputDirectory (Join-Path $repositoryRoot 'artifacts\release') -ValidateOnly
+    }
+    catch {
+        throw "neural reranker payload validation failed; refusing declared neural installer build: $($_.Exception.Message)"
+    }
+    $payloadPaths += $neuralPayloadPaths
+}
 $payloads = [Collections.Generic.List[object]]::new()
 foreach ($relativePath in $payloadPaths) {
     $payloads.Add((Get-ArtifactRecord (Join-Path $repositoryRoot $relativePath)))
@@ -168,9 +200,17 @@ $buildId = (Get-TextSha256 -Text $buildIdInput).Substring(0, 16)
 $buildStarted = [DateTime]::UtcNow
 $startInfo = [Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $iscc
-$startInfo.ArgumentList.Add("/dAppBuildId=$buildId")
-$startInfo.ArgumentList.Add("/dAppVersionedDir={app}\versions\$version-$buildId")
-$startInfo.ArgumentList.Add($setupPath)
+$isccArguments = [Collections.Generic.List[string]]::new()
+$isccArguments.Add("/dAppBuildId=$buildId")
+$isccArguments.Add("/dAppVersionedDir={app}\versions\$version-$buildId")
+if ($IncludeNeuralReranker) {
+    $isccArguments.Add('/dIncludeNeuralReranker=1')
+}
+$isccArguments.Add(('"' + $setupPath.Replace('"', '\"') + '"'))
+# ProcessStartInfo.ArgumentList is unavailable in Windows PowerShell's .NET
+# Framework. All values above are internally generated and the only path is
+# quoted, so the compatible Arguments form preserves exact ISCC semantics.
+$startInfo.Arguments = $isccArguments -join ' '
 $startInfo.WorkingDirectory = Join-Path $repositoryRoot 'installer'
 $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $true
@@ -231,22 +271,37 @@ $report = [ordered]@{
         warnings = 0
     }
     dictionary_provenance_sha256 = Get-Sha256 $dictionaryReportPath
+    neural_reranker = [ordered]@{
+        included = [bool]$IncludeNeuralReranker
+        manifest = if ($IncludeNeuralReranker) {
+            Get-ArtifactRecord (Join-Path $repositoryRoot 'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.json')
+        } else {
+            $null
+        }
+    }
     payloads = @($payloads)
     installer = Get-ArtifactRecord $installer.FullName
 }
 $reportDirectory = [IO.Path]::GetDirectoryName($ReportPath)
 [IO.Directory]::CreateDirectory($reportDirectory) | Out-Null
 $temporaryReport = Join-Path $reportDirectory ('.installer-build.' + [guid]::NewGuid().ToString('N') + '.tmp')
+$backupReport = Join-Path $reportDirectory ('.installer-build.' + [guid]::NewGuid().ToString('N') + '.bak')
 try {
     [IO.File]::WriteAllText(
         $temporaryReport,
         (($report | ConvertTo-Json -Depth 6) + [Environment]::NewLine),
         [Text.UTF8Encoding]::new($false)
     )
-    [IO.File]::Move($temporaryReport, $ReportPath, $true)
+    if ([IO.File]::Exists($ReportPath)) {
+        [IO.File]::Replace($temporaryReport, $ReportPath, $backupReport)
+    }
+    else {
+        [IO.File]::Move($temporaryReport, $ReportPath)
+    }
 }
 finally {
     if ([IO.File]::Exists($temporaryReport)) { [IO.File]::Delete($temporaryReport) }
+    if ([IO.File]::Exists($backupReport)) { [IO.File]::Delete($backupReport) }
 }
 
 Write-Host "installer built and audited: $installerPath"
