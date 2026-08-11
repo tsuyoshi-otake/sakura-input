@@ -20,6 +20,7 @@ pub mod payloads;
 pub mod profile;
 pub mod registry;
 pub mod user_profile;
+pub mod vscode_diagnostics;
 pub mod wide;
 
 use std::path::Path;

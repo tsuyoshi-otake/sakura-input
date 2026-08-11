@@ -28,6 +28,15 @@ pub enum Wow64 {
     Skip,
 }
 
+/// Explicit diagnostic operation for the machine-wide VS Code WER policy.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum VscodeDumps {
+    Configure,
+    Status,
+    Remove,
+    Clear { confirmed: bool },
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
     /// Machine-wide: COM class, TSF categories, language profile.
@@ -56,6 +65,10 @@ pub enum Command {
     ConfigureDiagnostics,
     /// Remove the WER policy but retain existing dumps.
     RemoveDiagnostics,
+    /// Explicit administrator-only VS Code host diagnostics.
+    DiagnosticsVscodeDumps {
+        operation: VscodeDumps,
+    },
     /// Ask a running engine to exit, and wait until it has.
     Stop {
         budget: Duration,
@@ -98,6 +111,21 @@ MACHINE-WIDE (requires administrator):
                             processes (DumpCount=5; never uploaded).
     --remove-diagnostics    Remove that WER policy but keep existing dumps.
 
+    DIAGNOSTICS (EXPLICIT, MACHINE-WIDE, REQUIRES ADMINISTRATOR):
+    diagnostics vscode-dumps configure
+                            Configure HKLM LocalDumps\\Code.exe only when no
+                            existing Code.exe values are present.
+    diagnostics vscode-dumps status
+                            Report registry ownership and current-user ACL probe.
+    diagnostics vscode-dumps remove
+                            Remove only Sakura-owned Code.exe values and marker.
+    diagnostics vscode-dumps clear --confirm
+                            Irreversibly delete the validated VS Code dump folder.
+                            This does not remove the registry policy.
+    These commands affect all users and same-name Code.exe processes on this
+    machine. Dumps can contain process memory and input text; Sakura never uploads
+    or shares them automatically.
+
 PER-USER (must run as the signed-in user, not as an elevated installer):
     --enable-profile        Add the text service to this user's input list
                             and register the logon task that starts the
@@ -129,7 +157,11 @@ pub fn parse<I>(args: I) -> Result<Command, String>
 where
     I: IntoIterator<Item = String>,
 {
-    let mut args = args.into_iter();
+    let raw_args: Vec<String> = args.into_iter().collect();
+    if let Some(command) = parse_vscode_dumps(&raw_args)? {
+        return Ok(command);
+    }
+    let mut args = raw_args.into_iter();
     let mut verb: Option<String> = None;
     let mut seen: Vec<&'static str> = Vec::new();
     let mut dll = None;
@@ -227,6 +259,27 @@ where
     };
 
     Ok(command)
+}
+
+fn parse_vscode_dumps(args: &[String]) -> Result<Option<Command>, String> {
+    if args.first().map(String::as_str) != Some("diagnostics") {
+        return Ok(None);
+    }
+    if args.get(1).map(String::as_str) != Some("vscode-dumps") {
+        return Err("diagnostics currently supports only vscode-dumps".into());
+    }
+    let operation = match args.get(2).map(String::as_str) {
+        Some("configure") if args.len() == 3 => VscodeDumps::Configure,
+        Some("status") if args.len() == 3 => VscodeDumps::Status,
+        Some("remove") if args.len() == 3 => VscodeDumps::Remove,
+        Some("clear") if args.len() == 3 => VscodeDumps::Clear { confirmed: false },
+        Some("clear") if args.len() == 4 && args[3] == "--confirm" => {
+            VscodeDumps::Clear { confirmed: true }
+        }
+        Some(other) => return Err(format!("unknown vscode-dumps operation {other:?}")),
+        None => return Err("diagnostics vscode-dumps needs an operation".into()),
+    };
+    Ok(Some(Command::DiagnosticsVscodeDumps { operation }))
 }
 
 /// An option that belongs to a different verb is a mistake worth naming.
@@ -352,5 +405,51 @@ mod tests {
             Ok(Command::RemoveDiagnostics)
         );
         assert!(parse_args(&["--configure-diagnostics", "--timeout", "1"]).is_err());
+    }
+
+    #[test]
+    fn vscode_dump_commands_have_explicit_operations() {
+        assert_eq!(
+            parse_args(&["diagnostics", "vscode-dumps", "configure"]),
+            Ok(Command::DiagnosticsVscodeDumps {
+                operation: VscodeDumps::Configure
+            })
+        );
+        assert_eq!(
+            parse_args(&["diagnostics", "vscode-dumps", "status"]),
+            Ok(Command::DiagnosticsVscodeDumps {
+                operation: VscodeDumps::Status
+            })
+        );
+        assert_eq!(
+            parse_args(&["diagnostics", "vscode-dumps", "remove"]),
+            Ok(Command::DiagnosticsVscodeDumps {
+                operation: VscodeDumps::Remove
+            })
+        );
+        assert_eq!(
+            parse_args(&["diagnostics", "vscode-dumps", "clear", "--confirm"]),
+            Ok(Command::DiagnosticsVscodeDumps {
+                operation: VscodeDumps::Clear { confirmed: true }
+            })
+        );
+    }
+
+    #[test]
+    fn vscode_dump_clear_requires_explicit_confirmation() {
+        assert_eq!(
+            parse_args(&["diagnostics", "vscode-dumps", "clear"]),
+            Ok(Command::DiagnosticsVscodeDumps {
+                operation: VscodeDumps::Clear { confirmed: false }
+            })
+        );
+        assert!(parse_args(&["diagnostics", "vscode-dumps", "clear", "--force"]).is_err());
+        assert!(parse_args(&["diagnostics", "vscode-dumps", "status", "--confirm"]).is_err());
+    }
+
+    #[test]
+    fn diagnostics_rejects_unknown_subcommands() {
+        assert!(parse_args(&["diagnostics", "other", "status"]).is_err());
+        assert!(parse_args(&["diagnostics", "vscode-dumps"]).is_err());
     }
 }
