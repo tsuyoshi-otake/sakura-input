@@ -31,6 +31,7 @@ authors = ["Sakura Input contributors"]
 [workspace.dependencies]
 sakura-core = { path = "crates/sakura-core" }
 sakura-proto = { path = "crates/sakura-proto" }
+sakura-neural-proto = { path = "crates/sakura-neural-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
 sakura-engine = { path = "crates/sakura-engine" }
