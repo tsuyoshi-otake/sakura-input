@@ -25,6 +25,7 @@
 #![cfg(windows)]
 
 pub mod configuration;
+pub mod context_baseline;
 pub mod context_intelligence;
 pub mod dictionary;
 pub mod dispatch;
