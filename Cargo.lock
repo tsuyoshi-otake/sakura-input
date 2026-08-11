@@ -311,6 +311,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sakura-neural-proto"
+version = "1.0.0"
+
+[[package]]
 name = "sakura-neural-worker"
 version = "1.0.0"
 dependencies = [

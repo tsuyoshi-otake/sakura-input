@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/sakura-core",
     "crates/sakura-proto",
+    "crates/sakura-neural-proto",
     "crates/sakura-ipc",
     "crates/sakura-reg",
     "crates/sakura-tsf",

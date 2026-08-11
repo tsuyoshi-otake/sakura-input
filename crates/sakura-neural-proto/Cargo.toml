@@ -1,0 +1,15 @@
+[package]
+name = "sakura-neural-proto"
+description = "Dormant std-only contract for Sakura Context Intelligence tasks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
