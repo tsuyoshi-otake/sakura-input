@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 sakura-core.workspace = true
 sakura-ipc.workspace = true
+sakura-neural-proto.workspace = true
 sakura-proto.workspace = true
 
 # The engine itself touches almost no Win32: the pipe — creation, security,

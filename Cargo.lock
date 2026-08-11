@@ -290,6 +290,7 @@ dependencies = [
  "dictc",
  "sakura-core",
  "sakura-ipc",
+ "sakura-neural-proto",
  "sakura-proto",
  "windows",
 ]
