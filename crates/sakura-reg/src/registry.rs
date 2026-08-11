@@ -245,6 +245,35 @@ impl RegKey {
         Ok(Some(u32::from_le_bytes(bytes)))
     }
 
+    /// Reads the registry kind without decoding its data. Ownership-sensitive
+    /// callers use this to distinguish Sakura's `REG_EXPAND_SZ` path from an
+    /// otherwise identical user-created `REG_SZ` value.
+    pub fn get_value_type(&self, name: Option<&str>) -> Result<Option<REG_VALUE_TYPE>> {
+        let name_w = name.map(to_wide_nul);
+        let name_ptr = name_w
+            .as_ref()
+            .map_or(PCWSTR::null(), |value| PCWSTR(value.as_ptr()));
+        let mut value_type = REG_VALUE_TYPE(0);
+        let mut byte_count = 0u32;
+        // SAFETY: the name is either null (the default value) or NUL-terminated
+        // storage alive for this synchronous query; output pointers are valid.
+        let status = unsafe {
+            RegQueryValueExW(
+                self.0,
+                name_ptr,
+                None,
+                Some(&mut value_type),
+                None,
+                Some(&mut byte_count),
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        status.ok()?;
+        Ok(Some(value_type))
+    }
+
     /// Counts direct values and subkeys without exposing their names.
     pub fn counts(&self) -> Result<RegistryCounts> {
         let mut subkeys = 0u32;
