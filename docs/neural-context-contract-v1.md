@@ -1,8 +1,9 @@
 # Sakura Context Intelligence Contract v1
 
 Status: dormant contract draft for Issue #34. The corresponding Rust types and
-codec are in `sakura-neural-proto`; no production engine, renderer, TSF, or
-worker binary uses this contract yet.
+codec are in `sakura-neural-proto`. The engine now compiles a dormant Phase 2A
+context lifecycle and offline-only local baseline, but no dispatch, prediction,
+renderer, TSF, or worker runtime calls either path yet.
 
 ## Purpose and non-goals
 
