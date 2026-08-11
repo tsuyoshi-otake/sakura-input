@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
-use cli::{Command, Wow64};
+use cli::{Command, VscodeDumps, Wow64};
 use sakura_reg::RegistryView;
 use sakura_reg::{com_server, launcher, maintenance, payloads, user_profile, ComApartment};
 use windows::core::{Error, HRESULT};
@@ -79,6 +79,7 @@ fn run(command: Command) -> Result<(), String> {
         Command::CleanupPayloads => cleanup_payloads(),
         Command::ConfigureDiagnostics => configure_diagnostics(),
         Command::RemoveDiagnostics => remove_diagnostics(),
+        Command::DiagnosticsVscodeDumps { operation } => vscode_dumps(operation),
         Command::EnableProfile { logon_stub } => enable_profile(logon_stub),
         Command::RemoveLogonTask => remove_logon_task(),
         Command::DisableProfile => disable_profile(),
@@ -102,6 +103,47 @@ fn remove_diagnostics() -> Result<(), String> {
         .map_err(|error| explain("WER LocalDumps removal", &error))?;
     println!("removed Sakura Input WER policy; existing dump files were retained");
     Ok(())
+}
+
+fn vscode_dumps(operation: VscodeDumps) -> Result<(), String> {
+    let report = match operation {
+        VscodeDumps::Configure => sakura_reg::vscode_diagnostics::configure(),
+        VscodeDumps::Status => sakura_reg::vscode_diagnostics::status(),
+        VscodeDumps::Remove => sakura_reg::vscode_diagnostics::remove(),
+        VscodeDumps::Clear { confirmed: false } => sakura_reg::vscode_diagnostics::Report {
+            outcome: sakura_reg::vscode_diagnostics::TerminalOutcome::ConfirmationRequired,
+            acl: sakura_reg::vscode_diagnostics::AclVerification::Unverified,
+            error_code: None,
+        },
+        VscodeDumps::Clear { confirmed: true } => sakura_reg::vscode_diagnostics::clear(),
+    };
+    let error = report.error_code.map(|code| format!(", error_code={code}"));
+    println!(
+        "vscode-dumps: outcome={}, acl={}{}",
+        report.outcome.name(),
+        report.acl.name(),
+        error.as_deref().unwrap_or_default()
+    );
+    match report.outcome {
+        sakura_reg::vscode_diagnostics::TerminalOutcome::Configured
+        | sakura_reg::vscode_diagnostics::TerminalOutcome::AlreadyConfigured
+        | sakura_reg::vscode_diagnostics::TerminalOutcome::Removed
+        | sakura_reg::vscode_diagnostics::TerminalOutcome::NotConfigured
+        | sakura_reg::vscode_diagnostics::TerminalOutcome::Cleared => Ok(()),
+        sakura_reg::vscode_diagnostics::TerminalOutcome::ConfirmationRequired => {
+            Err("dump deletion is irreversible; repeat with diagnostics vscode-dumps clear --confirm".into())
+        }
+        sakura_reg::vscode_diagnostics::TerminalOutcome::AccessDenied => Err(
+            "vscode-dumps requires an elevated administrator command prompt for HKLM LocalDumps"
+                .into(),
+        ),
+        sakura_reg::vscode_diagnostics::TerminalOutcome::UnmanagedConflict => Err(
+            "existing Code.exe LocalDumps values or marker are unmanaged; Sakura did not overwrite or remove them".into(),
+        ),
+        sakura_reg::vscode_diagnostics::TerminalOutcome::Failed => {
+            Err("vscode-dumps operation failed; inspect the terminal outcome and error code".into())
+        }
+    }
 }
 
 fn register(dll: Option<PathBuf>, wow64: Wow64, enabled_by_default: bool) -> Result<(), String> {

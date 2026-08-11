@@ -6,9 +6,10 @@
 
 use windows::Win32::Foundation::{ERROR_DATATYPE_MISMATCH, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
-    HKEY, KEY_ALL_ACCESS, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY, KEY_WRITE, REG_DWORD,
-    REG_EXPAND_SZ, REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ, REG_VALUE_TYPE,
+    RegCloseKey, RegCreateKeyExW, RegDeleteKeyExW, RegDeleteTreeW, RegDeleteValueW, RegOpenKeyExW,
+    RegQueryInfoKeyW, RegQueryValueExW, RegSetValueExW, HKEY, KEY_ALL_ACCESS, KEY_READ,
+    KEY_WOW64_32KEY, KEY_WOW64_64KEY, KEY_WRITE, REG_CREATED_NEW_KEY, REG_DWORD, REG_EXPAND_SZ,
+    REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ, REG_VALUE_TYPE,
 };
 use windows_core::{Result, PCWSTR};
 
@@ -43,11 +44,33 @@ impl RegistryView {
 #[derive(Debug)]
 pub struct RegKey(HKEY);
 
+/// Counts the direct children of a key without enumerating or deleting them.
+///
+/// The counts are used by ownership checks so a Sakura removal can delete only
+/// values it created and leave user or third-party additions untouched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegistryCounts {
+    pub subkeys: u32,
+    pub values: u32,
+}
+
 impl RegKey {
     /// Creates the key if absent, opens it if present.
     pub fn create(root: HKEY, subkey: &str, view: RegistryView) -> Result<Self> {
+        Ok(Self::create_with_disposition(root, subkey, view)?.0)
+    }
+
+    /// Creates a key and reports whether this call created it. Callers that
+    /// protect user-owned registry values must use the disposition instead of
+    /// blindly treating an opened existing key as writable.
+    pub fn create_with_disposition(
+        root: HKEY,
+        subkey: &str,
+        view: RegistryView,
+    ) -> Result<(Self, bool)> {
         let path = to_wide_nul(subkey);
         let mut handle = HKEY::default();
+        let mut disposition = REG_CREATED_NEW_KEY;
         // SAFETY: `path` is NUL-terminated and outlives the call; `handle` is a
         // valid writable out-parameter. Every optional argument is None.
         let status = unsafe {
@@ -60,11 +83,11 @@ impl RegKey {
                 KEY_WRITE | view.sam(),
                 None,
                 &mut handle,
-                None,
+                Some(&mut disposition),
             )
         };
         status.ok()?;
-        Ok(Self(handle))
+        Ok((Self(handle), disposition == REG_CREATED_NEW_KEY))
     }
 
     /// Opens an existing key for full access, or returns `Ok(None)` if it is not
@@ -113,6 +136,30 @@ impl RegKey {
         Ok(Some(Self(handle)))
     }
 
+    /// Opens an existing key with write access. This is used for an explicit
+    /// elevation probe before destructive machine-wide operations; it never
+    /// creates a missing key.
+    pub fn open_for_write(root: HKEY, subkey: &str, view: RegistryView) -> Result<Option<Self>> {
+        let path = to_wide_nul(subkey);
+        let mut handle = HKEY::default();
+        // SAFETY: the path is NUL-terminated and the output handle is valid
+        // storage for the synchronous registry call.
+        let status = unsafe {
+            RegOpenKeyExW(
+                root,
+                PCWSTR(path.as_ptr()),
+                None,
+                KEY_WRITE | view.sam(),
+                &mut handle,
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        status.ok()?;
+        Ok(Some(Self(handle)))
+    }
+
     /// Writes a `REG_SZ` value. `name` of `None` writes the key's default value.
     pub fn set_string(&self, name: Option<&str>, value: &str) -> Result<()> {
         self.set_wide_string(name, value, REG_SZ)
@@ -151,6 +198,91 @@ impl RegKey {
         let status =
             unsafe { RegSetValueExW(self.0, PCWSTR(name.as_ptr()), None, REG_DWORD, Some(&data)) };
         status.ok()
+    }
+
+    /// Reads a `REG_DWORD` value, returning `None` when the value is absent.
+    pub fn get_dword(&self, name: &str) -> Result<Option<u32>> {
+        let name = to_wide_nul(name);
+        let mut value_type = REG_VALUE_TYPE(0);
+        let mut byte_count = 0u32;
+        // SAFETY: the name is NUL-terminated and the size/type pointers are
+        // valid for this synchronous query.
+        let status = unsafe {
+            RegQueryValueExW(
+                self.0,
+                PCWSTR(name.as_ptr()),
+                None,
+                Some(&mut value_type),
+                None,
+                Some(&mut byte_count),
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        status.ok()?;
+        if value_type != REG_DWORD || byte_count != 4 {
+            return Err(ERROR_DATATYPE_MISMATCH.into());
+        }
+
+        let mut bytes = [0u8; 4];
+        // SAFETY: `bytes` is the exact DWORD size reported above and remains
+        // alive for the duration of the call.
+        let status = unsafe {
+            RegQueryValueExW(
+                self.0,
+                PCWSTR(name.as_ptr()),
+                None,
+                Some(&mut value_type),
+                Some(bytes.as_mut_ptr()),
+                Some(&mut byte_count),
+            )
+        };
+        status.ok()?;
+        if byte_count != bytes.len() as u32 {
+            return Err(ERROR_DATATYPE_MISMATCH.into());
+        }
+        Ok(Some(u32::from_le_bytes(bytes)))
+    }
+
+    /// Counts direct values and subkeys without exposing their names.
+    pub fn counts(&self) -> Result<RegistryCounts> {
+        let mut subkeys = 0u32;
+        let mut values = 0u32;
+        // SAFETY: all optional output pointers are either valid local storage
+        // or `None`; no class/name buffers are requested.
+        let status = unsafe {
+            RegQueryInfoKeyW(
+                self.0,
+                None,
+                None,
+                None,
+                Some(&mut subkeys),
+                None,
+                None,
+                Some(&mut values),
+                None,
+                None,
+                None,
+                None,
+            )
+        };
+        status.ok()?;
+        Ok(RegistryCounts { subkeys, values })
+    }
+
+    /// Deletes one direct value. Missing is success; other values and subkeys
+    /// are never touched.
+    pub fn delete_value(&self, name: &str) -> Result<()> {
+        let name = to_wide_nul(name);
+        // SAFETY: the key is owned by this wrapper and the value name remains
+        // alive for the synchronous call.
+        let status = unsafe { RegDeleteValueW(self.0, PCWSTR(name.as_ptr())) };
+        if status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND {
+            Ok(())
+        } else {
+            Err(status.into())
+        }
     }
 
     /// Reads a `REG_SZ` or `REG_EXPAND_SZ` value.  Registry strings are
@@ -223,6 +355,21 @@ impl RegKey {
         // SAFETY: `self.0` is an open key held by this wrapper and `path` is
         // NUL-terminated storage alive for the call.
         let status = unsafe { RegDeleteTreeW(self.0, PCWSTR(path.as_ptr())) };
+        if status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND {
+            Ok(())
+        } else {
+            Err(status.into())
+        }
+    }
+
+    /// Deletes one empty direct subkey without recursively touching children.
+    /// A concurrent/user-owned value or subkey makes the operation fail rather
+    /// than broadening Sakura's deletion scope.
+    pub fn delete_empty_subkey(&self, subkey: &str, view: RegistryView) -> Result<()> {
+        let path = to_wide_nul(subkey);
+        // SAFETY: `self.0` is an open parent key and `path` is NUL terminated
+        // storage alive for the synchronous call.
+        let status = unsafe { RegDeleteKeyExW(self.0, PCWSTR(path.as_ptr()), view.sam().0, None) };
         if status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND {
             Ok(())
         } else {
