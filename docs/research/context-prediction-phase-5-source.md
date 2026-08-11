@@ -59,7 +59,7 @@ distribution plan before any artifact leaves the private build environment.
 - Stream-extract namespace-zero article/revision records without materializing
   the complete XML tree.
 - Generate negatives from actual Sakura candidate snapshots, not random words.
-- Define stable sample/candidate ids and article-level frozen splits.
-- Reject exact and defined near-duplicate leakage across splits.
-- Produce hash-bound external manifests and stratified Tier A/B/C audit input.
+- Implement the actual offline Sakura replay adapter against the bounded schema.
+- Run the stable-id, article-split, exact/near-deduplication, hash-bound manifest,
+  and Tier A/B/C audit gate now defined by `context-dataset` on that replay.
 - Meet the Issue #34 audit and label-precision gates before model claims.

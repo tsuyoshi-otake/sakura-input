@@ -64,6 +64,7 @@ dependencies = [
  "flate2",
  "quick-xml",
  "sakura-core",
+ "sakura-neural-proto",
  "sakura-proto",
  "serde",
  "serde_json",

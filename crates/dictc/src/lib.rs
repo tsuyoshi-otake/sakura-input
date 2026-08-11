@@ -13,6 +13,7 @@ use sakura_core::dictionary::{image_format as format, Dictionary, EntryFlags};
 use sakura_proto::MAX_PREEDIT_BYTES;
 
 pub mod category;
+pub mod context_dataset;
 pub mod glossary;
 pub mod llm_detail_targets;
 pub mod llm_details;
