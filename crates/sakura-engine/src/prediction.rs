@@ -955,6 +955,105 @@ mod tests {
         started.elapsed().as_secs_f64() * 1e9 / ROUNDS as f64
     }
 
+    fn sample_nanos(mut body: impl FnMut()) -> Vec<u128> {
+        const WARMUP: usize = 200;
+        const SAMPLES: usize = 2_000;
+
+        for _ in 0..WARMUP {
+            body();
+        }
+        let mut samples = Vec::with_capacity(SAMPLES);
+        for _ in 0..SAMPLES {
+            let started = Instant::now();
+            body();
+            samples.push(started.elapsed().as_nanos());
+        }
+        samples
+    }
+
+    fn percentile(samples: &mut [u128], percentile: usize) -> u128 {
+        assert!(!samples.is_empty());
+        assert!(percentile <= 100);
+        samples.sort_unstable();
+        let index = ((samples.len() - 1) * percentile).div_ceil(100);
+        samples[index]
+    }
+
+    #[test]
+    #[ignore = "timing evaluation: run with --release --ignored --nocapture and record the table"]
+    fn prediction_latency_percentiles() {
+        const HIRAGANA_DIGITS: [char; 10] = [
+            '\u{3042}', '\u{3044}', '\u{3046}', '\u{3048}', '\u{304A}', '\u{304B}', '\u{304D}',
+            '\u{304F}', '\u{3051}', '\u{3053}',
+        ];
+        let conversion = conversion();
+        let entries = (0..1_000)
+            .map(|number| {
+                let mut value = number;
+                let mut reading = String::from('\u{3055}');
+                for _ in 0..4 {
+                    reading.push(HIRAGANA_DIGITS[value % HIRAGANA_DIGITS.len()]);
+                    value /= HIRAGANA_DIGITS.len();
+                }
+                UserDictionaryEntry {
+                    reading,
+                    surface: format!("candidate-{number:04}"),
+                    part_of_speech: UserPartOfSpeech::Noun,
+                    comment: String::new(),
+                }
+            })
+            .collect();
+        let user_dictionary = UserDictionary::from_entries(entries).expect("user dictionary");
+        conversion.replace_user_dictionary(user_dictionary);
+        let index = PredictionIndex::build(conversion.dictionary()).expect("prediction index");
+        let mut prefix = FixedStr::new();
+        prefix.push_str("\u{3055}").expect("benchmark prefix");
+        let query = Query {
+            sequence: 1,
+            session: 1,
+            generation: 1,
+            prefix,
+            domain_it_per_mille: 1_000,
+        };
+        let user_dictionary = conversion.user_dictionary_snapshot();
+
+        let mut ranked = PredictionResult::default();
+        let mut ranking = sample_nanos(|| {
+            index.predict_into(&query, user_dictionary.as_ref(), None, &mut ranked);
+            std::hint::black_box(ranked.candidates().len());
+        });
+
+        let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
+        let service = runtime.service();
+        let mut worker_result = PredictionResult::default();
+        let mut generation = 1u64;
+        let mut worker = sample_nanos(|| {
+            generation += 1;
+            assert!(service.request_into(
+                1,
+                generation,
+                query.prefix.as_str(),
+                query.domain_it_per_mille,
+                Duration::from_secs(1),
+                &mut worker_result,
+            ));
+            std::hint::black_box(worker_result.candidates().len());
+        });
+        runtime.stop().expect("joined worker");
+
+        println!("prediction latency percentiles: 2,000 samples, release");
+        println!("path       p50 ns  p95 ns  p99 ns  max ns");
+        for (name, samples) in [("ranking", &mut ranking), ("worker", &mut worker)] {
+            println!(
+                "{name:8} {:>7} {:>7} {:>7} {:>7}",
+                percentile(samples, 50),
+                percentile(samples, 95),
+                percentile(samples, 99),
+                percentile(samples, 100),
+            );
+        }
+    }
+
     #[test]
     fn persistent_worker_merges_system_and_user_predictions_and_joins() {
         let conversion = conversion();
