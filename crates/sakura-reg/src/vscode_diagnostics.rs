@@ -10,7 +10,7 @@ use std::io;
 use std::path::PathBuf;
 
 use windows::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND};
-use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
+use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, REG_EXPAND_SZ, REG_SZ};
 use windows_core::{Error, Result};
 
 use crate::registry::{RegKey, RegistryView};
@@ -374,11 +374,33 @@ fn inspect_marker() -> Result<Presence> {
     else {
         return Ok(Presence::Absent);
     };
-    let exact = marker.get_string(Some(OWNER_VALUE))?.as_deref() == Some(OWNER_MARKER)
-        && marker.get_string(Some(TARGET_VALUE))?.as_deref() == Some(TARGET_NAME)
-        && marker.get_string(Some(MARKER_FOLDER_VALUE))?.as_deref() == Some(DUMP_FOLDER)
-        && marker.get_dword(MARKER_TYPE_VALUE)? == Some(DUMP_TYPE)
-        && marker.get_dword(MARKER_COUNT_VALUE)? == Some(DUMP_COUNT);
+    let exact = marker.get_value_type(Some(OWNER_VALUE)).ok().flatten() == Some(REG_SZ)
+        && marker.get_value_type(Some(TARGET_VALUE)).ok().flatten() == Some(REG_SZ)
+        && marker
+            .get_value_type(Some(MARKER_FOLDER_VALUE))
+            .ok()
+            .flatten()
+            == Some(REG_EXPAND_SZ)
+        && marker
+            .get_string(Some(OWNER_VALUE))
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some(OWNER_MARKER)
+        && marker
+            .get_string(Some(TARGET_VALUE))
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some(TARGET_NAME)
+        && marker
+            .get_string(Some(MARKER_FOLDER_VALUE))
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some(DUMP_FOLDER)
+        && marker.get_dword(MARKER_TYPE_VALUE).ok().flatten() == Some(DUMP_TYPE)
+        && marker.get_dword(MARKER_COUNT_VALUE).ok().flatten() == Some(DUMP_COUNT);
     Ok(if exact {
         Presence::Exact
     } else {
@@ -392,11 +414,16 @@ fn inspect_target() -> Result<Presence> {
         return Ok(Presence::Absent);
     };
     let exact = target
-        .get_string(Some(DUMP_FOLDER_VALUE))
+        .get_value_type(Some(DUMP_FOLDER_VALUE))
         .ok()
         .flatten()
-        .as_deref()
-        == Some(DUMP_FOLDER)
+        == Some(REG_EXPAND_SZ)
+        && target
+            .get_string(Some(DUMP_FOLDER_VALUE))
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some(DUMP_FOLDER)
         && target.get_dword(DUMP_TYPE_VALUE).ok().flatten() == Some(DUMP_TYPE)
         && target.get_dword(DUMP_COUNT_VALUE).ok().flatten() == Some(DUMP_COUNT)
         && target.counts()?.values >= 3;
