@@ -91,8 +91,20 @@ pub(crate) struct Ticket {
 }
 
 impl Ticket {
+    pub(crate) fn id(self) -> u64 {
+        self.id.0
+    }
+
     pub(crate) fn context(self) -> ContextId {
         self.epoch.context
+    }
+
+    pub(crate) fn focus_generation(self) -> u64 {
+        self.epoch.focus
+    }
+
+    pub(crate) fn document_revision(self) -> u64 {
+        self.epoch.revision
     }
 }
 

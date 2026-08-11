@@ -21,6 +21,7 @@
 mod candidate_ui;
 mod class_factory;
 mod composition;
+pub mod diagnostic_ring;
 mod display_attributes;
 mod edit_session;
 mod engine;

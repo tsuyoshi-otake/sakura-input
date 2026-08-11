@@ -67,6 +67,7 @@ use sakura_reg::{CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DE
 
 use crate::candidate_ui::CandidateUi;
 use crate::composition::{self, DocumentEdit, Update};
+use crate::diagnostic_ring;
 use crate::display_attributes;
 use crate::edit_session;
 use crate::engine::{Answer, Engine};
@@ -1444,6 +1445,49 @@ impl TextService {
         }
     }
 
+    /// Emits only the fixed-width metadata allowed by the diagnostic ring. The
+    /// fast disabled path does not borrow any TSF state.
+    fn record_diagnostic_write(
+        &self,
+        ticket: Ticket,
+        path: diagnostic_ring::RequestPath,
+        outcome: diagnostic_ring::TerminalOutcome,
+        error_code: i32,
+    ) {
+        if !diagnostic_ring::is_enabled() {
+            return;
+        }
+        let composition_generation = self
+            .composition
+            .try_borrow()
+            .map(|state| state.write_owner.lifecycle)
+            .unwrap_or(0);
+        diagnostic_ring::record(diagnostic_ring::Metadata::request(
+            ticket.context().0 as u64,
+            ticket.focus_generation(),
+            ticket.document_revision(),
+            composition_generation,
+            ticket.id(),
+            diagnostic_ring::RequestKind::KeyWrite,
+            path,
+            outcome,
+            error_code,
+        ));
+    }
+
+    fn record_diagnostic_lifecycle(
+        &self,
+        event: diagnostic_ring::LifecycleEvent,
+        context_identity: u64,
+    ) {
+        if diagnostic_ring::is_enabled() {
+            diagnostic_ring::record(diagnostic_ring::Metadata::lifecycle(
+                event,
+                context_identity,
+            ));
+        }
+    }
+
     fn activate_write_journal(&self) -> Result<()> {
         if !self.try_settle_deferred_undo_terminalization() {
             return Err(reentrancy());
@@ -1617,6 +1661,12 @@ impl TextService {
         };
         if cancelled.is_empty() && !composition_context_changed && !context_replaced {
             return Ok(());
+        }
+        if composition_context_changed || context_replaced {
+            self.record_diagnostic_lifecycle(
+                diagnostic_ring::LifecycleEvent::ContextReplaced,
+                incoming_context.0 as u64,
+            );
         }
         // Context replacement is a lifecycle boundary. Revoke any callback's
         // local handle before candidate teardown or engine reset can re-enter.
@@ -2000,6 +2050,7 @@ impl TextService {
     }
 
     fn detach(&self) -> Result<()> {
+        self.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::Deactivate, 0);
         // The focused indicator has a stricter lifetime than the background
         // engine connection: focus loss/deactivation hides it immediately,
         // before any deferred composition settlement can re-enter TSF.
@@ -2743,7 +2794,18 @@ impl TextService {
         let Some(flight) = state.write_owner.begin() else {
             return Ok(None);
         };
-        Ok(Some((state.handle.clone(), flight)))
+        let context_identity = state
+            .context
+            .as_ref()
+            .map(|context| context_id(context).0 as u64)
+            .unwrap_or(0);
+        let result = Some((state.handle.clone(), flight));
+        drop(state);
+        self.record_diagnostic_lifecycle(
+            diagnostic_ring::LifecycleEvent::CompositionStarted,
+            context_identity,
+        );
+        Ok(result)
     }
 
     /// Arms the one lifecycle notification expected from this callback's own
@@ -3084,6 +3146,22 @@ fn reentrancy() -> Error {
 /// intentionally COM-free.
 fn context_id(context: &ITfContext) -> ContextId {
     ContextId(context.as_raw() as usize)
+}
+
+fn diagnostic_cancel_code(reason: CancelReason) -> i32 {
+    match reason {
+        CancelReason::ActivationChanged => 1,
+        CancelReason::Deactivated => 2,
+        CancelReason::FocusChanged => 3,
+        CancelReason::CompositionTerminated => 4,
+        CancelReason::ContextReplaced => 5,
+        CancelReason::RevisionMismatch => 6,
+        CancelReason::StaleCallback => 7,
+        CancelReason::EngineUnavailable => 8,
+        CancelReason::DeferredUnavailable => 9,
+        CancelReason::PredecessorFailed => 10,
+        CancelReason::RequestRejected => 11,
+    }
 }
 
 fn composition_identity(composition: &ITfComposition) -> CompositionIdentity {
@@ -4027,6 +4105,12 @@ impl TextService_Impl {
         let client_id = match service.client_id() {
             Ok(client_id) => client_id,
             Err(_) => {
+                service.record_diagnostic_write(
+                    request.ticket,
+                    diagnostic_ring::RequestPath::None,
+                    diagnostic_ring::TerminalOutcome::Failed,
+                    1,
+                );
                 self.reject_requested_write(request.ticket, false, None);
                 return Ok(());
             }
@@ -4034,6 +4118,7 @@ impl TextService_Impl {
         let context = request.payload.context.clone();
         let payload = request.payload.clone();
         let ticket = request.ticket;
+        let synchronous_first = payload.synchronous_first;
         let owner = self.to_object();
         let requested = edit_session::write_in_document_with_mode(
             &context,
@@ -4041,6 +4126,34 @@ impl TextService_Impl {
             payload.synchronous_first,
             move |ec| owner.apply_queued_write(ticket, payload, ec),
         );
+        let path = match &requested {
+            Ok(edit_session::EditRequestState::Ran) if synchronous_first => {
+                diagnostic_ring::RequestPath::Sync
+            }
+            Ok(edit_session::EditRequestState::Ran)
+            | Ok(edit_session::EditRequestState::Queued) => diagnostic_ring::RequestPath::Async,
+            Err(_) => diagnostic_ring::RequestPath::Async,
+        };
+        match &requested {
+            Ok(edit_session::EditRequestState::Ran) => service.record_diagnostic_write(
+                ticket,
+                path,
+                diagnostic_ring::TerminalOutcome::Admitted,
+                0,
+            ),
+            Ok(edit_session::EditRequestState::Queued) => service.record_diagnostic_write(
+                ticket,
+                path,
+                diagnostic_ring::TerminalOutcome::Deferred,
+                0,
+            ),
+            Err(error) => service.record_diagnostic_write(
+                ticket,
+                path,
+                diagnostic_ring::TerminalOutcome::Failed,
+                error.code().0,
+            ),
+        }
         if requested.is_err() {
             // If DoEditSession ran, it already terminalized the ticket.  If it
             // did not, this is the complete RequestEditSession rejection owner.
@@ -4070,6 +4183,12 @@ impl TextService_Impl {
             }
         };
         if let Some(completion) = completion {
+            service.record_diagnostic_write(
+                request.ticket,
+                diagnostic_ring::RequestPath::None,
+                diagnostic_ring::TerminalOutcome::Applied,
+                0,
+            );
             self.settle_applied_write(completion);
         }
         Ok(())
@@ -4275,6 +4394,16 @@ impl TextService_Impl {
             }
         };
         let applied = if let Some(completion) = completion {
+            service.record_diagnostic_write(
+                ticket,
+                diagnostic_ring::RequestPath::None,
+                if completion.outcome == TerminalOutcome::Applied {
+                    diagnostic_ring::TerminalOutcome::Applied
+                } else {
+                    diagnostic_ring::TerminalOutcome::Unknown
+                },
+                0,
+            );
             self.settle_applied_write(completion);
             true
         } else {
@@ -4355,6 +4484,16 @@ impl TextService_Impl {
         undo_outcome: Option<UndoCommitOutcome>,
     ) {
         let service = self.get_impl();
+        service.record_diagnostic_write(
+            ticket,
+            diagnostic_ring::RequestPath::None,
+            if undo_outcome == Some(UndoCommitOutcome::Unknown) {
+                diagnostic_ring::TerminalOutcome::Unknown
+            } else {
+                diagnostic_ring::TerminalOutcome::Cancelled
+            },
+            diagnostic_cancel_code(reason),
+        );
         let cancelled = match service.writes.try_borrow_mut() {
             Ok(mut writes) => writes.cancel_ticket(ticket, reason),
             Err(_) => {
@@ -4387,6 +4526,22 @@ impl TextService_Impl {
         undo_outcome: Option<UndoCommitOutcome>,
     ) {
         let service = self.get_impl();
+        service.record_diagnostic_write(
+            ticket,
+            diagnostic_ring::RequestPath::None,
+            if document_may_have_changed {
+                diagnostic_ring::TerminalOutcome::Unknown
+            } else {
+                diagnostic_ring::TerminalOutcome::Rejected
+            },
+            undo_outcome
+                .map(|outcome| match outcome {
+                    UndoCommitOutcome::Applied => 0,
+                    UndoCommitOutcome::Rejected => 1,
+                    UndoCommitOutcome::Unknown => 2,
+                })
+                .unwrap_or(0),
+        );
         let terminal = match service.writes.try_borrow_mut() {
             Ok(mut writes) => writes.reject(ticket, document_may_have_changed, known_prefix),
             Err(_) => {
@@ -4469,6 +4624,7 @@ impl ITfTextInputProcessor_Impl for TextService_Impl {
 
 impl ITfTextInputProcessorEx_Impl for TextService_Impl {
     fn ActivateEx(&self, ptim: Ref<'_, ITfThreadMgr>, tid: u32, _dwflags: u32) -> Result<()> {
+        diagnostic_ring::initialize_from_environment();
         let thread_mgr = ptim.ok()?;
         let key_sink: ITfKeyEventSink = self.to_interface();
         let function_provider: ITfFunctionProvider = self.to_interface();
@@ -4493,6 +4649,7 @@ impl ITfTextInputProcessorEx_Impl for TextService_Impl {
         // leave a connection behind, and a slow engine must not delay the
         // point at which keys start being delivered correctly.
         service.warm_up();
+        service.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::Activate, 0);
         Ok(())
     }
 }
@@ -4802,6 +4959,7 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
     fn OnSetFocus(&self, fforeground: BOOL) -> Result<()> {
         if fforeground.as_bool() {
             let service = self.get_impl();
+            service.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::FocusChanged, 0);
             service.resume_after_focus_gain();
             service.focus_foreground.set(true);
             service.refresh_mode_item_for_focus();
@@ -4809,6 +4967,7 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         }
 
         let service = self.get_impl();
+        service.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::FocusChanged, 0);
         // The OS indicator follows the caret, not the engine lifetime. Hide it
         // before scheduling focus-loss finalization, which can run after a
         // different document has already acquired focus.
@@ -4889,6 +5048,7 @@ impl ITfCompositionSink_Impl for TextService_Impl {
         if expected_self_termination {
             return Ok(());
         }
+        service.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::CompositionEnded, 0);
         service.invalidate_for_composition_termination();
         let _ = service.queue_end_candidates();
         service.ask_to_finalize();
