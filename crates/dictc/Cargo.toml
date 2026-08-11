@@ -44,8 +44,13 @@ path = "src/bin/llm_detail_drafts.rs"
 name = "llm-detail-promote"
 path = "src/bin/llm_detail_promote.rs"
 
+[[bin]]
+name = "context-dataset"
+path = "src/bin/context_dataset.rs"
+
 [dependencies]
 sakura-core.workspace = true
+sakura-neural-proto.workspace = true
 sakura-proto.workspace = true
 quick-xml.workspace = true
 flate2.workspace = true
