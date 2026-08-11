@@ -2,8 +2,12 @@
 
 use std::collections::BTreeMap;
 use std::env;
+use std::fs;
+use std::io;
 use std::path::{Component, Path, PathBuf};
 
+use dictc::context_corpus::{commit_extraction, extract_articles, verify_extraction};
+use dictc::context_dataset::load_pinned_source;
 use dictc::context_dataset::{build_dataset, verify_dataset, BuildConfig};
 
 const DEFAULT_TIER_A_AUDIT: usize = 1_000;
@@ -30,8 +34,93 @@ fn run(arguments: Vec<String>) -> Result<(), String> {
     match command.as_str() {
         "build" => build(&flags),
         "verify" => verify(&flags),
+        "extract" => extract(&flags),
+        "verify-extraction" => verify_extracted(&flags),
         _ => Err(format!("unknown command {command:?}\n{}", usage())),
     }
+}
+
+fn extract(flags: &BTreeMap<String, String>) -> Result<(), String> {
+    reject_unknown(
+        flags,
+        &[
+            "--xml",
+            "--source-manifest",
+            "--output-dir",
+            "--extractor-sha256",
+            "--repo-root",
+        ],
+    )?;
+    let repo_root = canonical_existing(
+        flags
+            .get("--repo-root")
+            .map(PathBuf::from)
+            .unwrap_or(env::current_dir().map_err(|error| error.to_string())?),
+        "repository root",
+    )?;
+    let source_manifest =
+        canonical_existing(required(flags, "--source-manifest")?, "source manifest")?;
+    let source = load_pinned_source(&source_manifest)?;
+    let output_directory = canonical_new_directory(required(flags, "--output-dir")?)?;
+    require_external(&repo_root, &output_directory, "output directory")?;
+    let xml_path = flags
+        .get("--xml")
+        .map(|path| canonical_existing(PathBuf::from(path), "decompressed XML"))
+        .transpose()?;
+    if let Some(path) = &xml_path {
+        require_external(&repo_root, path, "decompressed XML")?;
+    }
+    fs::create_dir(&output_directory)
+        .map_err(|error| format!("create {}: {error}", output_directory.display()))?;
+    let article_path = output_directory.join("articles.jsonl");
+    let mut article_file = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&article_path)
+        .map_err(|error| format!("create {}: {error}", article_path.display()))?;
+    let result = if let Some(path) = xml_path {
+        let input =
+            fs::File::open(&path).map_err(|error| format!("open {}: {error}", path.display()))?;
+        extract_articles(input, &mut article_file, &source.source_id)?
+    } else {
+        let stdin = io::stdin();
+        extract_articles(stdin.lock(), &mut article_file, &source.source_id)?
+    };
+    article_file
+        .sync_all()
+        .map_err(|error| format!("sync {}: {error}", article_path.display()))?;
+    let extractor_sha256 = required(flags, "--extractor-sha256")?
+        .to_string_lossy()
+        .into_owned();
+    let manifest = commit_extraction(
+        &output_directory,
+        &source.source_id,
+        &source.snapshot,
+        &source.manifest_sha256,
+        &extractor_sha256,
+        result,
+    )?;
+    println!(
+        "extracted {}/{} namespace-zero articles; redirects {}, oversized {}, incomplete {}",
+        manifest.report.articles_written,
+        manifest.report.namespace_zero_seen,
+        manifest.report.redirects_skipped,
+        manifest.report.oversized_skipped,
+        manifest.report.incomplete_skipped
+    );
+    Ok(())
+}
+
+fn verify_extracted(flags: &BTreeMap<String, String>) -> Result<(), String> {
+    reject_unknown(flags, &["--extraction-dir"])?;
+    let directory =
+        canonical_existing(required(flags, "--extraction-dir")?, "extraction directory")?;
+    let manifest = verify_extraction(&directory)?;
+    println!(
+        "verified {} extracted articles from {} pages",
+        manifest.report.articles_written, manifest.report.pages_seen
+    );
+    Ok(())
 }
 
 fn build(flags: &BTreeMap<String, String>) -> Result<(), String> {
@@ -209,7 +298,7 @@ fn require_external(repo_root: &Path, path: &Path, label: &str) -> Result<(), St
 }
 
 fn usage() -> String {
-    "usage:\n  context-dataset build --records <external.jsonl> --source-manifest <source-manifest.json> --output-dir <new-external-dir> --generator-sha256 <hex> --dictionary-sha256 <hex> [--audit-tier-a 1000] [--audit-tier-b 100] [--audit-tier-c 100] [--repo-root <dir>]\n  context-dataset verify --dataset-dir <dir>".into()
+    "usage:\n  context-dataset extract [--xml <external-decompressed.xml>] --source-manifest <source-manifest.json> --output-dir <new-external-dir> --extractor-sha256 <hex> [--repo-root <dir>]\n  context-dataset verify-extraction --extraction-dir <dir>\n  context-dataset build --records <external.jsonl> --source-manifest <source-manifest.json> --output-dir <new-external-dir> --generator-sha256 <hex> --dictionary-sha256 <hex> [--audit-tier-a 1000] [--audit-tier-b 100] [--audit-tier-c 100] [--repo-root <dir>]\n  context-dataset verify --dataset-dir <dir>\n\nOmit --xml to stream decompressed MediaWiki XML from stdin.".into()
 }
 
 #[cfg(test)]

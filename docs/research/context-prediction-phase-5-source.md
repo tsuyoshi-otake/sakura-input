@@ -56,8 +56,6 @@ distribution plan before any artifact leaves the private build environment.
 
 ## Remaining Phase 5 gates
 
-- Stream-extract namespace-zero article/revision records without materializing
-  the complete XML tree.
 - Generate negatives from actual Sakura candidate snapshots, not random words.
 - Implement the actual offline Sakura replay adapter against the bounded schema.
 - Run the stable-id, article-split, exact/near-deduplication, hash-bound manifest,

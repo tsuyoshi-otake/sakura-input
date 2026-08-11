@@ -13,6 +13,7 @@ by `context-dataset`.
 See:
 
 - `docs/research/context-prediction-phase-5-source.md`
+- `docs/research/context-prediction-phase-5-extraction.md`
 - `docs/research/context-prediction-phase-5-dataset.md`
 - `scripts/verify-context-prediction-source.ps1`
 - `crates/dictc/src/bin/context_dataset.rs`
