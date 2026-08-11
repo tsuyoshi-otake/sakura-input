@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source_id": "wikimedia-jawiki-20260801-pages-articles-multistream",
+  "database": "jawiki",
+  "language": "ja",
+  "snapshot": "20260801",
+  "source_page": "https://dumps.wikimedia.org/jawiki/20260801/",
+  "usage_boundary": "offline-research-only-not-shipped",
+  "license_review_status": "required-before-dataset-or-model-distribution",
+  "license_reference": "https://dumps.wikimedia.org/legal.html",
+  "files": [
+    {
+      "role": "articles",
+      "name": "jawiki-20260801-pages-articles-multistream.xml.bz2",
+      "url": "https://dumps.wikimedia.org/jawiki/20260801/jawiki-20260801-pages-articles-multistream.xml.bz2",
+      "bytes": 4827732824,
+      "hash_algorithm": "sha1",
+      "hash": "6c917b51d6f6b53a34eaebcb2a675c0769054343"
+    },
+    {
+      "role": "index",
+      "name": "jawiki-20260801-pages-articles-multistream-index.txt.bz2",
+      "url": "https://dumps.wikimedia.org/jawiki/20260801/jawiki-20260801-pages-articles-multistream-index.txt.bz2",
+      "bytes": 31277924,
+      "hash_algorithm": "sha1",
+      "hash": "81443fd2f4e4c462464b965a4b0d2704c659cfc0"
+    },
+    {
+      "role": "official-checksums",
+      "name": "jawiki-20260801-sha1sums.txt",
+      "url": "https://dumps.wikimedia.org/jawiki/20260801/jawiki-20260801-sha1sums.txt",
+      "bytes": 24743,
+      "hash_algorithm": "sha256",
+      "hash": "ef06c6fd50e598f07cdaeaff8dd2f0e6fdee1e0b6f6d3a594793c3fc6810747a"
+    }
+  ]
+}
