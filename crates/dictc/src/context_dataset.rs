@@ -37,6 +37,13 @@ pub struct BuildConfig {
     pub audit_tier_c: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinnedSource {
+    pub source_id: String,
+    pub snapshot: String,
+    pub manifest_sha256: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Tier {
     A,
@@ -256,12 +263,7 @@ pub fn build_dataset(config: &BuildConfig) -> Result<DatasetManifest, String> {
         ));
     }
 
-    let source_bytes = fs::read(&config.source_manifest)
-        .map_err(|error| format!("read {}: {error}", config.source_manifest.display()))?;
-    let source: SourceManifest = serde_json::from_slice(&source_bytes)
-        .map_err(|error| format!("invalid source manifest: {error}"))?;
-    validate_source_manifest(&source)?;
-    let source_manifest_sha256 = sha256_hex(&source_bytes);
+    let source = load_pinned_source(&config.source_manifest)?;
 
     let input_bytes = fs::read(&config.records)
         .map_err(|error| format!("read {}: {error}", config.records.display()))?;
@@ -345,7 +347,7 @@ pub fn build_dataset(config: &BuildConfig) -> Result<DatasetManifest, String> {
         schema_version: DATASET_SCHEMA_VERSION,
         record_schema_version: RECORD_SCHEMA_VERSION,
         source_id: source.source_id,
-        source_manifest_sha256,
+        source_manifest_sha256: source.manifest_sha256,
         input_records_sha256,
         generator_sha256: config.generator_sha256.clone(),
         dictionary_sha256: config.dictionary_sha256.clone(),
@@ -378,6 +380,18 @@ pub fn build_dataset(config: &BuildConfig) -> Result<DatasetManifest, String> {
         ));
     }
     Ok(manifest)
+}
+
+pub fn load_pinned_source(path: &Path) -> Result<PinnedSource, String> {
+    let bytes = fs::read(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    let source: SourceManifest = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("invalid source manifest: {error}"))?;
+    validate_source_manifest(&source)?;
+    Ok(PinnedSource {
+        source_id: source.source_id,
+        snapshot: source.snapshot,
+        manifest_sha256: sha256_hex(&bytes),
+    })
 }
 
 pub fn verify_dataset(directory: &Path) -> Result<DatasetManifest, String> {
