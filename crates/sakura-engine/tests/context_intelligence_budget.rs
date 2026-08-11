@@ -5,7 +5,12 @@ use std::cell::Cell;
 use std::hint::black_box;
 use std::time::Instant;
 
+use sakura_engine::context_evaluation::{evaluate_replay, ReplayObservation};
 use sakura_engine::context_intelligence::{ContextClearReason, SessionSemanticContext};
+use sakura_engine::prediction_snapshot::{
+    DictionaryIdentity, PredictionSnapshot, SnapshotCandidateInput, SnapshotSource,
+};
+use sakura_neural_proto::CandidateAuthority;
 use sakura_proto::InputScope;
 
 thread_local! {
@@ -65,6 +70,58 @@ fn context_append_snapshot_and_clear_allocate_nothing() {
             black_box(context.snapshot());
         }
         black_box(context.clear(ContextClearReason::Explicit));
+    });
+
+    assert_eq!(observed, 0);
+}
+
+#[test]
+fn prediction_snapshot_and_replay_evaluation_allocate_nothing() {
+    let inputs = [
+        SnapshotCandidateInput {
+            reading: "かな",
+            surface: "仮名",
+            dictionary_identity: Some(DictionaryIdentity::SystemEntry(1)),
+            base_cost: 100,
+            authority: CandidateAuthority::Ordinary,
+            source: SnapshotSource::SystemDictionary,
+            right_id: 1,
+            is_it: false,
+        },
+        SnapshotCandidateInput {
+            reading: "かな",
+            surface: "かな",
+            dictionary_identity: None,
+            base_cost: 50,
+            authority: CandidateAuthority::ExactLearning,
+            source: SnapshotSource::History,
+            right_id: 1,
+            is_it: false,
+        },
+    ];
+    let snapshot = PredictionSnapshot::build(1, 1, 1, InputScope::Normal, true, false, &inputs)
+        .expect("warm snapshot");
+    let ranked = [
+        snapshot.candidates()[1].candidate_id,
+        snapshot.candidates()[0].candidate_id,
+    ];
+
+    let observed = allocations(|| {
+        let snapshot = black_box(
+            PredictionSnapshot::build(1, 1, 1, InputScope::Normal, true, false, black_box(&inputs))
+                .expect("valid snapshot"),
+        );
+        black_box(
+            evaluate_replay(&[ReplayObservation {
+                snapshot: &snapshot,
+                ranked_candidate_ids: black_box(&ranked),
+                expected_candidate_id: Some(ranked[0]),
+                response_correlation: snapshot.correlation(),
+                keystrokes_without_prediction: 4,
+                keystrokes_with_prediction: 2,
+            }])
+            .expect("valid replay"),
+        );
     });
 
     assert_eq!(observed, 0);
