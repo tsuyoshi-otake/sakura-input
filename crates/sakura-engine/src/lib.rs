@@ -26,6 +26,7 @@
 
 pub mod configuration;
 pub mod context_baseline;
+pub mod context_evaluation;
 pub mod context_intelligence;
 pub mod dictionary;
 pub mod dispatch;
@@ -34,6 +35,7 @@ pub mod input_history;
 pub mod learning;
 pub mod long_conversion;
 pub mod prediction;
+pub mod prediction_snapshot;
 pub mod server;
 pub mod session;
 pub mod ui;
