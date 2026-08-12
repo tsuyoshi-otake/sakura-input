@@ -27,6 +27,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 const HOST_CLASS: windows::core::PCWSTR = w!("SakuraInputTsfTestHost");
 const HOST_TITLE: windows::core::PCWSTR = w!("Sakura Input TSF Test Host");
+const HOST_STARTING_TITLE: windows::core::PCWSTR = w!("Sakura Input TSF Test Host (starting)");
 const SNAPSHOT_EDIT_TEXT: u32 = WM_APP + 37;
 
 fn main() -> Result<()> {
@@ -40,6 +41,14 @@ fn main() -> Result<()> {
     unsafe {
         let _ = ShowWindow(window, SW_SHOW);
         let _ = SetForegroundWindow(window);
+        let edit = HWND(GetWindowLongPtrW(window, GWLP_USERDATA) as *mut _);
+        if !edit.0.is_null() {
+            let _ = SetFocus(Some(edit));
+        }
+        // The controller finds the final title only after the UI thread has
+        // completed its own foreground/focus initialization. Publishing that
+        // title is the host's explicit ready boundary.
+        let _ = SetWindowTextW(window, HOST_TITLE);
     }
 
     let mut message = MSG::default();
@@ -76,7 +85,7 @@ fn create_host_window() -> Result<HWND> {
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             HOST_CLASS,
-            HOST_TITLE,
+            HOST_STARTING_TITLE,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
