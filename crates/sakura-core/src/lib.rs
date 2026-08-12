@@ -46,14 +46,16 @@ pub use keymap::{Action, KeyMap, KeyMapError, KeyMapErrorKind, Preset, State};
 pub use preferences::{
     default_app_profiles, is_valid_profile_process_name, parse_preferences,
     resolve_context_preferences, serialize_preferences, serialize_preferences_with_profiles,
-    AppProfile, ContextPreferences, ParsedPreferences, Preferences, SuggestAccept,
+    AppProfile, ContextPreferences, ConversionMethod, InputMethod, NeuralRerankerScope,
+    ParsedPreferences, Preferences, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
     CONFIG_FORMAT_VERSION,
 };
 pub use romaji::{Input, Table, TableError, TableErrorKind};
+pub use sakura_proto::AppearanceTheme;
 pub use simd::{KernelMetadata, KernelSet, WidthScanStrategy, WidthScanStrategyId};
 pub use text::TextSink;
 pub use user_dictionary::{
     UserDictionary, UserDictionaryEntry, UserDictionaryError, UserDictionaryErrorKind,
     UserPartOfSpeech, UserPosSpec, MAX_USER_DICTIONARY_ENTRIES, USER_DICTIONARY_FORMAT_VERSION,
 };
-pub use width::{Normalizer, PunctuationStyle, Width, WidthPolicy};
+pub use width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};

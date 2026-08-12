@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use sakura_core::{AppProfile, Preset, SuggestAccept, UserDictionaryEntry, UserPartOfSpeech};
+use sakura_core::{
+    AppProfile, AppearanceTheme, ConversionMethod, InputMethod, NeuralRerankerScope, Preset,
+    ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionaryEntry, UserPartOfSpeech,
+};
 use sakura_proto::Mode;
 use sakura_settings::user_dictionary::{self, ImportMode};
 use sakura_settings::{
@@ -13,8 +16,15 @@ Usage: sakura_settings <command>\n\
 \n\
   config show\n\
   config set keymap <ms-ime|atok>\n\
+  config set input-method <romaji|kana>\n\
+  config set default-mode <direct|hiragana|katakana|half-katakana|full-alnum|half-alnum>\n\
+  config set conversion-method <multi-segment|single-segment>\n\
   config set prediction <on|off>\n\
   config set suggest <tab|shift-enter|disabled>\n\
+  config set neural-reranker-scope <off|long-text-only|all-normal-conversions>\n\
+  config set appearance <auto|light|dark>\n\
+  config set space-width <same-as-input|full|half>\n\
+  config set shift-space <opposite|full|half>\n\
   config set developer-mode <on|off>\n\
   profile list\n\
   profile set <process.exe> <mode> <on|off> <suggest>\n\
@@ -110,8 +120,15 @@ pub enum Command {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigSetting {
     Keymap,
+    InputMethod,
+    DefaultMode,
+    ConversionMethod,
     Prediction,
     Suggest,
+    NeuralRerankerScope,
+    Appearance,
+    SpaceWidth,
+    ShiftSpace,
     DeveloperMode,
 }
 
@@ -124,8 +141,15 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
         ["config", "set", setting, value] => Ok(Command::ConfigSet {
             setting: match *setting {
                 "keymap" => ConfigSetting::Keymap,
+                "input-method" => ConfigSetting::InputMethod,
+                "default-mode" => ConfigSetting::DefaultMode,
+                "conversion-method" => ConfigSetting::ConversionMethod,
                 "prediction" => ConfigSetting::Prediction,
                 "suggest" => ConfigSetting::Suggest,
+                "neural-reranker-scope" => ConfigSetting::NeuralRerankerScope,
+                "appearance" => ConfigSetting::Appearance,
+                "space-width" => ConfigSetting::SpaceWidth,
+                "shift-space" => ConfigSetting::ShiftSpace,
                 "developer-mode" => ConfigSetting::DeveloperMode,
                 _ => return Err(format!("unknown configuration setting {setting:?}")),
             },
@@ -255,11 +279,35 @@ pub fn run(command: Command) -> Result<(), String> {
                     document.preferences.keymap_preset = Preset::from_name(&value)
                         .ok_or_else(|| format!("unknown keymap preset {value:?}"))?;
                 }
+                ConfigSetting::InputMethod => {
+                    document.preferences.input_method = InputMethod::from_name(&value)
+                        .ok_or_else(|| format!("unknown input method {value:?}"))?;
+                }
+                ConfigSetting::DefaultMode => {
+                    document.preferences.default_mode = parse_mode(&value)?;
+                }
+                ConfigSetting::ConversionMethod => {
+                    document.preferences.conversion_method = ConversionMethod::from_name(&value)
+                        .ok_or_else(|| format!("unknown conversion method {value:?}"))?;
+                }
                 ConfigSetting::Prediction => {
                     document.preferences.prediction_enabled = parse_switch(&value)?;
                 }
                 ConfigSetting::Suggest => {
                     document.preferences.suggest_accept = parse_suggest(&value)?;
+                }
+                ConfigSetting::NeuralRerankerScope => {
+                    document.preferences.neural_reranker_scope =
+                        parse_neural_reranker_scope(&value)?;
+                }
+                ConfigSetting::Appearance => {
+                    document.preferences.appearance_theme = parse_appearance(&value)?;
+                }
+                ConfigSetting::SpaceWidth => {
+                    document.preferences.space_width = parse_space_width(&value)?;
+                }
+                ConfigSetting::ShiftSpace => {
+                    document.preferences.shift_space_behavior = parse_shift_space(&value)?;
                 }
                 ConfigSetting::DeveloperMode => {
                     let enabled = parse_switch(&value)?;
@@ -526,11 +574,33 @@ pub fn run(command: Command) -> Result<(), String> {
 fn print_configuration(document: &ConfigurationDocument) {
     println!("format-version\t{}", document.source_version);
     println!("keymap\t{}", document.preferences.keymap_preset.name());
+    println!("input-method\t{}", document.preferences.input_method.name());
+    println!(
+        "default-mode\t{}",
+        mode_name(document.preferences.default_mode)
+    );
+    println!(
+        "conversion-method\t{}",
+        document.preferences.conversion_method.name()
+    );
     println!(
         "prediction\t{}",
         switch_name(document.preferences.prediction_enabled)
     );
     println!("suggest\t{}", document.preferences.suggest_accept.name());
+    println!(
+        "neural-reranker-scope\t{}",
+        document.preferences.neural_reranker_scope.name()
+    );
+    println!(
+        "appearance\t{}",
+        document.preferences.appearance_theme.name()
+    );
+    println!("space-width\t{}", document.preferences.space_width.name());
+    println!(
+        "shift-space\t{}",
+        document.preferences.shift_space_behavior.name()
+    );
     println!(
         "developer-mode\t{}",
         switch_name(document.preferences.developer_mode)
@@ -576,6 +646,27 @@ fn parse_switch(value: &str) -> Result<bool, String> {
 
 fn parse_suggest(value: &str) -> Result<SuggestAccept, String> {
     SuggestAccept::from_name(value).ok_or_else(|| format!("unknown suggest binding {value:?}"))
+}
+
+fn parse_neural_reranker_scope(value: &str) -> Result<NeuralRerankerScope, String> {
+    NeuralRerankerScope::from_name(value).ok_or_else(|| {
+        format!("expected off, long-text-only, or all-normal-conversions, got {value:?}")
+    })
+}
+
+fn parse_appearance(value: &str) -> Result<AppearanceTheme, String> {
+    AppearanceTheme::from_name(value)
+        .ok_or_else(|| format!("expected auto, light, or dark, got {value:?}"))
+}
+
+fn parse_space_width(value: &str) -> Result<SpaceWidth, String> {
+    SpaceWidth::from_name(value)
+        .ok_or_else(|| format!("expected same-as-input, full, or half, got {value:?}"))
+}
+
+fn parse_shift_space(value: &str) -> Result<ShiftSpaceBehavior, String> {
+    ShiftSpaceBehavior::from_name(value)
+        .ok_or_else(|| format!("expected opposite, full, or half, got {value:?}"))
 }
 
 fn parse_mode(value: &str) -> Result<Mode, String> {
@@ -641,11 +732,65 @@ mod tests {
             })
         ));
         assert!(matches!(
+            parse_words(&["config", "set", "input-method", "kana"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::InputMethod,
+                value,
+            }) if value == "kana"
+        ));
+        assert!(matches!(
+            parse_words(&["config", "set", "default-mode", "katakana"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::DefaultMode,
+                value,
+            }) if value == "katakana"
+        ));
+        assert!(matches!(
+            parse_words(&["config", "set", "conversion-method", "single-segment"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::ConversionMethod,
+                value,
+            }) if value == "single-segment"
+        ));
+        assert!(matches!(
             parse_words(&["config", "set", "developer-mode", "on"]),
             Ok(Command::ConfigSet {
                 setting: ConfigSetting::DeveloperMode,
                 value,
             }) if value == "on"
+        ));
+        assert!(matches!(
+            parse_words(&["config", "set", "appearance", "dark"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::Appearance,
+                value,
+            }) if value == "dark"
+        ));
+        assert!(matches!(
+            parse_words(&["config", "set", "space-width", "half"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::SpaceWidth,
+                value,
+            }) if value == "half"
+        ));
+        assert!(matches!(
+            parse_words(&["config", "set", "shift-space", "opposite"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::ShiftSpace,
+                value,
+            }) if value == "opposite"
+        ));
+        assert!(matches!(
+            parse_words(&[
+                "config",
+                "set",
+                "neural-reranker-scope",
+                "all-normal-conversions"
+            ]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::NeuralRerankerScope,
+                value,
+            }) if value == "all-normal-conversions"
         ));
         assert!(matches!(
             parse_words(&[
@@ -782,6 +927,33 @@ mod tests {
             developer_history_terminal(false, stats(true, false)),
             "inactive"
         );
+    }
+
+    #[test]
+    fn appearance_uses_only_the_canonical_theme_names() {
+        assert_eq!(parse_appearance("auto"), Ok(AppearanceTheme::Auto));
+        assert_eq!(parse_appearance("light"), Ok(AppearanceTheme::Light));
+        assert_eq!(parse_appearance("dark"), Ok(AppearanceTheme::Dark));
+        assert!(parse_appearance("system").is_err());
+        assert!(parse_appearance("Dark").is_err());
+    }
+
+    #[test]
+    fn neural_reranker_scope_uses_only_canonical_scope_names() {
+        assert_eq!(
+            parse_neural_reranker_scope("off"),
+            Ok(NeuralRerankerScope::Off)
+        );
+        assert_eq!(
+            parse_neural_reranker_scope("long-text-only"),
+            Ok(NeuralRerankerScope::LongTextOnly)
+        );
+        assert_eq!(
+            parse_neural_reranker_scope("all-normal-conversions"),
+            Ok(NeuralRerankerScope::AllNormalConversions)
+        );
+        assert!(parse_neural_reranker_scope("all").is_err());
+        assert!(parse_neural_reranker_scope("LongTextOnly").is_err());
     }
 
     #[test]

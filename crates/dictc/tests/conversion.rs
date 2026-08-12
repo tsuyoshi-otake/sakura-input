@@ -2,6 +2,7 @@ use dictc::{compile, parse_connection, parse_entries};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::Dictionary;
 use sakura_core::user_dictionary::UserDictionary;
+use sakura_core::ConversionMethod;
 
 const ENTRIES: &str = "# license: BSD-3-Clause\n\
 reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
@@ -46,6 +47,7 @@ fn viterbi_finds_a_multiword_path_and_astar_returns_unique_n_best() {
             "きょうは",
             ConversionOptions {
                 max_candidates: 5,
+                method: ConversionMethod::MultiSegment,
                 it_bias_per_mille: 0,
                 max_it_boost: 0,
                 initial_right_id: 0,
@@ -79,6 +81,33 @@ fn viterbi_finds_a_multiword_path_and_astar_returns_unique_n_best() {
             candidate.text()
         );
     }
+}
+
+#[test]
+fn single_segment_method_builds_only_whole_reading_candidates() {
+    let bytes = fixture();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(
+            &dictionary,
+            "きょうは",
+            ConversionOptions {
+                method: ConversionMethod::SingleSegment,
+                ..ConversionOptions::default()
+            },
+        )
+        .expect("single-segment conversion");
+
+    assert!(!candidates.is_empty());
+    assert!(candidates
+        .iter()
+        .all(|candidate| candidate.segments().len() == 1));
+    assert!(candidates
+        .iter()
+        .all(|candidate| candidate.segments()[0].reading_start == 0
+            && candidate.segments()[0].reading_end
+                == u16::try_from("きょうは".len()).expect("fixture fits")));
 }
 
 #[test]
@@ -117,6 +146,7 @@ fn bounded_it_prior_can_change_a_close_choice_but_zero_bias_cannot() {
             "かんすう",
             ConversionOptions {
                 max_candidates: 2,
+                method: ConversionMethod::MultiSegment,
                 it_bias_per_mille: 0,
                 max_it_boost: 0,
                 initial_right_id: 0,
@@ -131,6 +161,7 @@ fn bounded_it_prior_can_change_a_close_choice_but_zero_bias_cannot() {
             "かんすう",
             ConversionOptions {
                 max_candidates: 2,
+                method: ConversionMethod::MultiSegment,
                 it_bias_per_mille: 200,
                 max_it_boost: 800,
                 initial_right_id: 0,

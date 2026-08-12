@@ -26,23 +26,24 @@
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, ClientToScreen, CreateSolidBrush, DeleteObject, EndPaint, FillRect, GetSysColor,
-    InvalidateRect, COLOR_WINDOW, COLOR_WINDOWTEXT, HBRUSH, PAINTSTRUCT,
+    BeginPaint, ClientToScreen, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint,
+    FillRect, InvalidateRect, SelectObject, SetBkMode, SetTextColor, CLEARTYPE_QUALITY,
+    CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE,
+    DT_VCENTER, FF_DONTCARE, FW_NORMAL, HBRUSH, OUT_TT_PRECIS, PAINTSTRUCT, TRANSPARENT,
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetGUIThreadInfo,
     GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, KillTimer,
-    RegisterClassW, SetLayeredWindowAttributes, SetTimer, SetWindowLongPtrW, SetWindowPos,
-    ShowWindow, CS_HREDRAW, CS_VREDRAW, GUITHREADINFO, GWLP_USERDATA, HWND_TOPMOST, LWA_ALPHA,
-    SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SW_HIDE, SW_SHOWNOACTIVATE, WM_DESTROY, WM_PAINT,
-    WM_TIMER, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_POPUP,
+    RegisterClassW, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW,
+    GUITHREADINFO, GWLP_USERDATA, HWND_TOPMOST, SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SW_HIDE,
+    SW_SHOWNOACTIVATE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_PAINT, WM_TIMER, WNDCLASSW,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
-use sakura_proto::Mode;
+use sakura_proto::{AppearanceTheme, Mode};
 
-use crate::glyph;
+use crate::{candidate, glyph};
 
 /// The window class the popup registers.
 const CLASS: PCWSTR = windows::core::w!("SakuraInputIndicator");
@@ -57,16 +58,23 @@ const LINGER_MS: u32 = 1_200;
 /// The timer that hides it. Any non-zero id; the window has only one.
 const HIDE_TIMER: usize = 1;
 
-/// The popup's size at 96 DPI, in pixels. Scaled per monitor on show.
-const EDGE_AT_96_DPI: i32 = 56;
+/// Compact horizontal mode bar measurements at 96 DPI.
+const WIDTH_AT_96_DPI: i32 = 220;
+
+const fn logical_size() -> (i32, i32) {
+    (WIDTH_AT_96_DPI, candidate::ROW_HEIGHT_96)
+}
 
 /// How far from the caret the popup sits, at 96 DPI.
 const CARET_GAP_AT_96_DPI: i32 = 8;
 
-/// Uniform opacity. Not fully opaque, so a glyph that lands on top of text
-/// obscures it less; not so faint that it is hard to read on a busy
-/// background.
-const OPACITY: u8 = 235;
+fn popup_ex_style() -> WINDOW_EX_STYLE {
+    WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE
+}
+
+fn popup_style() -> WINDOW_STYLE {
+    WS_POPUP
+}
 
 /// The floating mode indicator.
 #[derive(Debug)]
@@ -99,26 +107,20 @@ impl Indicator {
         // plain value or `None`.
         let window = unsafe {
             CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED,
+                popup_ex_style(),
                 CLASS,
                 PCWSTR::null(),
-                WS_POPUP,
+                popup_style(),
                 0,
                 0,
-                EDGE_AT_96_DPI,
-                EDGE_AT_96_DPI,
+                logical_size().0,
+                logical_size().1,
                 None,
                 None,
                 None,
                 None,
             )?
         };
-
-        // SAFETY: `window` is live and layered, which is what this call
-        // requires.
-        unsafe {
-            SetLayeredWindowAttributes(window, COLORREF(0), OPACITY, LWA_ALPHA)?;
-        }
 
         Ok(Indicator { window })
     }
@@ -128,15 +130,17 @@ impl Indicator {
     /// Restarting rather than ignoring a change while one is already up:
     /// the last mode pressed is the one the user is in, and it is the one
     /// they need to see for the full interval.
-    pub fn show(&self, mode: Mode) {
+    pub fn show(&self, mode: Mode, theme: AppearanceTheme) {
         // SAFETY: `window` is live for this type's lifetime. The stored
         // value is read back only by `painted_mode`, which validates it.
         unsafe {
-            SetWindowLongPtrW(self.window, GWLP_USERDATA, glyph::code(mode));
+            SetWindowLongPtrW(self.window, GWLP_USERDATA, encode_state(mode, theme));
         }
 
-        let edge = scaled(self.window, EDGE_AT_96_DPI);
-        let (x, y) = self.placement(edge);
+        let (logical_width, logical_height) = logical_size();
+        let width = scaled(self.window, logical_width);
+        let height = scaled(self.window, logical_height);
+        let (x, y) = self.placement(width, height);
         // SAFETY: every argument is a plain value; `HWND_TOPMOST` is the
         // documented ordering handle.
         unsafe {
@@ -145,8 +149,8 @@ impl Indicator {
                 Some(HWND_TOPMOST),
                 x,
                 y,
-                edge,
-                edge,
+                width,
+                height,
                 SWP_NOACTIVATE,
             );
             let _ = InvalidateRect(Some(self.window), None, true);
@@ -156,9 +160,9 @@ impl Indicator {
         }
     }
 
-    /// Where an `edge`-sized popup should sit: beside the caret if there is
+    /// Where the popup should sit: beside the caret if there is
     /// one, near the foreground window if not, and on screen either way.
-    fn placement(&self, edge: i32) -> (i32, i32) {
+    fn placement(&self, width: i32, height: i32) -> (i32, i32) {
         let gap = scaled(self.window, CARET_GAP_AT_96_DPI);
         let anchor = caret_point().or_else(foreground_point);
         // SAFETY: no arguments; these are the primary monitor's dimensions.
@@ -169,16 +173,50 @@ impl Indicator {
             Some(point) => (point.x + gap, point.y + gap),
             // Bottom centre, which is where a user looks for a mode
             // indicator when there is no caret to attach it to.
-            None => ((screen_w - edge) / 2, screen_h - edge * 3),
+            None => ((screen_w - width) / 2, screen_h - height * 3),
         };
 
         // Clamped rather than flipped: a popup that jumps to the other side
         // of the caret near a screen edge reads as a glitch, and the only
         // thing that actually matters is that all of it is visible.
         (
-            x.clamp(0, (screen_w - edge).max(0)),
-            y.clamp(0, (screen_h - edge).max(0)),
+            x.clamp(0, (screen_w - width).max(0)),
+            y.clamp(0, (screen_h - height).max(0)),
         )
+    }
+}
+
+fn encode_state(mode: Mode, theme: AppearanceTheme) -> isize {
+    glyph::code(mode) | (theme_code(theme) << 8)
+}
+
+fn decode_state(stored: isize) -> Option<(Mode, AppearanceTheme)> {
+    let mode = glyph::from_code(stored & 0xff)?;
+    let theme = match (stored >> 8) & 0xff {
+        1 => AppearanceTheme::Auto,
+        2 => AppearanceTheme::Light,
+        3 => AppearanceTheme::Dark,
+        _ => return None,
+    };
+    Some((mode, theme))
+}
+
+const fn theme_code(theme: AppearanceTheme) -> isize {
+    match theme {
+        AppearanceTheme::Auto => 1,
+        AppearanceTheme::Light => 2,
+        AppearanceTheme::Dark => 3,
+    }
+}
+
+fn description(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Hiragana => "ひらがなで入力します",
+        Mode::Katakana => "全角カタカナで入力します",
+        Mode::HalfKatakana => "半角カタカナで入力します",
+        Mode::Direct => "直接入力します",
+        Mode::HalfAlnum => "半角英数で入力します",
+        Mode::FullAlnum => "全角英数で入力します",
     }
 }
 
@@ -295,12 +333,9 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
     }
 }
 
-/// Fills the background and draws the glyph.
-///
-/// Colours come from the system rather than being chosen here, so the
-/// indicator follows a light or dark theme without knowing which one it is
-/// in — and stays legible under a high-contrast theme, where hard-coded
-/// colours are exactly what makes an overlay unreadable.
+/// Paints the same warm neutral Sakura surface as the candidate popup.
+/// High contrast and automatic Windows theme resolution remain centralized in
+/// `candidate::palette`, so the two renderer-owned surfaces cannot disagree.
 fn paint(window: HWND) {
     let mut ps = PAINTSTRUCT::default();
     // SAFETY: `window` is live; `EndPaint` is called with the same struct
@@ -315,26 +350,177 @@ fn paint(window: HWND) {
     let sized = unsafe { GetClientRect(window, &mut rect) }.is_ok();
 
     if sized {
-        // SAFETY: `GetSysColor` takes a documented index; the brush is
-        // deleted immediately after the fill.
-        unsafe {
-            let paper: HBRUSH = CreateSolidBrush(COLORREF(GetSysColor(COLOR_WINDOW)));
-            FillRect(dc, &rect, paper);
-            let _ = DeleteObject(paper.into());
-        }
-        // SAFETY: reads back only what `show` wrote; `glyph::from_code`
-        // rejects anything else, including the zero of a window that has
-        // not been shown yet.
+        // SAFETY: reads back only what `show` wrote; `decode_state` rejects
+        // anything else, including an indicator that has never been shown.
         let stored = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) };
-        if let Some(mode) = glyph::from_code(stored) {
-            // SAFETY: `GetSysColor` takes a documented index.
-            let ink = COLORREF(unsafe { GetSysColor(COLOR_WINDOWTEXT) });
-            glyph::draw_centered(dc, &rect, glyph::label(mode), ink);
+        if let Some((mode, theme)) = decode_state(stored) {
+            let palette = candidate::palette(theme);
+            fill(dc, &rect, palette.surface);
+
+            let accent = RECT {
+                right: rect.left + scaled(window, candidate::RAIL_WIDTH_96),
+                ..rect
+            };
+            fill(dc, &accent, palette.rail);
+            draw_border(dc, rect, palette.border);
+
+            let glyph_rect = RECT {
+                left: accent.right,
+                right: accent.right + scaled(window, candidate::NUMBER_WIDTH_96),
+                top: rect.top + scaled(window, 2),
+                bottom: rect.bottom - scaled(window, 2),
+            };
+            glyph::draw_centered(dc, &glyph_rect, glyph::label(mode), palette.ink);
+
+            let label_rect = RECT {
+                left: glyph_rect.right + scaled(window, candidate::GAP_96),
+                right: rect.right - scaled(window, candidate::PADDING_96),
+                ..rect
+            };
+            draw_description(
+                dc,
+                label_rect,
+                description(mode),
+                palette.annotation,
+                window,
+            );
         }
     }
 
     // SAFETY: pairs with the `BeginPaint` above, with the struct it filled.
     unsafe {
         let _ = EndPaint(window, &ps);
+    }
+}
+
+fn fill(dc: windows::Win32::Graphics::Gdi::HDC, rect: &RECT, color: COLORREF) {
+    // SAFETY: the brush is owned by this call and is deleted after the fill.
+    unsafe {
+        let brush: HBRUSH = CreateSolidBrush(color);
+        if !brush.is_invalid() {
+            let _ = FillRect(dc, rect, brush);
+            let _ = DeleteObject(brush.into());
+        }
+    }
+}
+
+fn draw_border(dc: windows::Win32::Graphics::Gdi::HDC, rect: RECT, color: COLORREF) {
+    let edges = [
+        RECT {
+            bottom: rect.top + 1,
+            ..rect
+        },
+        RECT {
+            top: rect.bottom - 1,
+            ..rect
+        },
+        RECT {
+            right: rect.left + 1,
+            ..rect
+        },
+        RECT {
+            left: rect.right - 1,
+            ..rect
+        },
+    ];
+    for edge in edges {
+        fill(dc, &edge, color);
+    }
+}
+
+fn draw_description(
+    dc: windows::Win32::Graphics::Gdi::HDC,
+    mut rect: RECT,
+    text: &str,
+    color: COLORREF,
+    window: HWND,
+) {
+    let face: Vec<u16> = "Yu Gothic UI\0".encode_utf16().collect();
+    // SAFETY: the face string is NUL-terminated and all numeric font
+    // attributes are fixed UI values scaled for the current monitor.
+    let font = unsafe {
+        CreateFontW(
+            -scaled(window, candidate::SUPPORT_FONT_96),
+            0,
+            0,
+            0,
+            FW_NORMAL.0 as i32,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_TT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY,
+            (DEFAULT_PITCH.0 | FF_DONTCARE.0).into(),
+            PCWSTR(face.as_ptr()),
+        )
+    };
+    if font.is_invalid() {
+        return;
+    }
+    // SAFETY: the font and DC are live. The previous object is restored before
+    // deleting the font, and DrawTextW receives a live UTF-16 buffer.
+    unsafe {
+        let previous = SelectObject(dc, font.into());
+        let _ = SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, color);
+        let mut wide: Vec<u16> = text.encode_utf16().collect();
+        DrawTextW(
+            dc,
+            &mut wide,
+            &mut rect,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
+        );
+        SelectObject(dc, previous);
+        let _ = DeleteObject(font.into());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_mode_and_theme_survives_the_window_word() {
+        for mode in Mode::ALL {
+            for theme in AppearanceTheme::ALL {
+                assert_eq!(decode_state(encode_state(mode, theme)), Some((mode, theme)));
+            }
+        }
+        assert_eq!(decode_state(0), None);
+        assert_eq!(decode_state(isize::MAX), None);
+    }
+
+    #[test]
+    fn every_mode_has_a_specific_nonempty_description() {
+        let labels: Vec<_> = Mode::ALL.into_iter().map(description).collect();
+        assert!(labels.iter().all(|label| !label.is_empty()));
+        for (index, label) in labels.iter().enumerate() {
+            assert!(!labels[..index].contains(label), "duplicate label: {label}");
+        }
+        assert_eq!(description(Mode::Hiragana), "ひらがなで入力します");
+    }
+
+    #[test]
+    fn popup_is_horizontal_and_remains_nonactivating() {
+        let (width, height) = logical_size();
+        assert!(width > height * 4);
+        let ex = popup_ex_style();
+        assert_ne!(ex.0 & WS_EX_NOACTIVATE.0, 0);
+        assert_ne!(ex.0 & WS_EX_TOOLWINDOW.0, 0);
+        assert_ne!(ex.0 & WS_EX_TOPMOST.0, 0);
+        assert_eq!(popup_style(), WS_POPUP);
+    }
+
+    #[test]
+    fn candidate_palette_is_the_indicator_palette_for_light_and_dark() {
+        let light = candidate::palette(AppearanceTheme::Light);
+        let dark = candidate::palette(AppearanceTheme::Dark);
+        assert_ne!(light.surface, dark.surface);
+        assert_ne!(light.ink, dark.ink);
+        assert_ne!(light.annotation, dark.annotation);
+        assert_ne!(light.rail, dark.rail);
+        assert_ne!(light.border, dark.border);
     }
 }

@@ -7,9 +7,11 @@
 
 use crate::config::{self, Document, ParseError};
 use crate::keymap::Preset;
-use crate::width::{Normalizer, PunctuationStyle, Width, WidthPolicy};
-use sakura_proto::Mode;
+use crate::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
+use sakura_proto::{AppearanceTheme, Mode};
 
+// The appearance section is optional, so adding its theme key remains
+// compatible with v4 readers and does not require a format-version bump.
 pub const CONFIG_FORMAT_VERSION: u16 = 4;
 pub const PREVIOUS_CONFIG_FORMAT_VERSION: u16 = 3;
 const LEGACY_CONFIG_FORMAT_VERSION: u16 = 1;
@@ -20,6 +22,150 @@ pub enum SuggestAccept {
     Tab,
     ShiftEnter,
     Disabled,
+}
+
+/// Selects how ordinary kana input is interpreted before conversion.
+///
+/// `Romaji` keeps the shipped romaji table path. `Kana` accepts the kana
+/// character reported by the active Windows keyboard layout directly, which
+/// is the same boundary used by the TSF key translator. The setting is
+/// optional in the v4 document and therefore remains backwards compatible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InputMethod {
+    #[default]
+    Romaji,
+    Kana,
+}
+
+impl InputMethod {
+    pub const ALL: [Self; 2] = [Self::Romaji, Self::Kana];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Romaji => "romaji",
+            Self::Kana => "kana",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "romaji" => Some(Self::Romaji),
+            "kana" => Some(Self::Kana),
+            _ => None,
+        }
+    }
+}
+
+/// Selects the segmentation contract used for ordinary conversion.
+///
+/// `MultiSegment` is the existing Viterbi/N-best path and may expose several
+/// bunsetsu segments. `SingleSegment` asks the converter to build only paths
+/// that cover the entire reading with one segment; it is not a presentation
+/// toggle and therefore cannot silently discard trailing segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConversionMethod {
+    #[default]
+    MultiSegment,
+    SingleSegment,
+}
+
+impl ConversionMethod {
+    pub const ALL: [Self; 2] = [Self::MultiSegment, Self::SingleSegment];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::MultiSegment => "multi-segment",
+            Self::SingleSegment => "single-segment",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "multi-segment" => Some(Self::MultiSegment),
+            "single-segment" => Some(Self::SingleSegment),
+            _ => None,
+        }
+    }
+}
+
+/// Selects the width emitted for an idle Space key in an ordinary IME mode.
+/// This is separate from `WidthPolicy::symbol` so punctuation and other
+/// symbols do not change when a user only changes spaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SpaceWidth {
+    /// Full-width in Japanese/full-width modes, half-width in half-width mode.
+    #[default]
+    SameAsInput,
+    Full,
+    Half,
+}
+
+impl SpaceWidth {
+    pub const ALL: [Self; 3] = [Self::SameAsInput, Self::Full, Self::Half];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::SameAsInput => "same-as-input",
+            Self::Full => "full",
+            Self::Half => "half",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "same-as-input" => Some(Self::SameAsInput),
+            "full" => Some(Self::Full),
+            "half" => Some(Self::Half),
+            _ => None,
+        }
+    }
+
+    pub const fn is_full(self, mode: Mode) -> bool {
+        match self {
+            Self::SameAsInput => !matches!(mode, Mode::HalfAlnum | Mode::Direct),
+            Self::Full => true,
+            Self::Half => false,
+        }
+    }
+}
+
+/// Selects how Shift+Space modifies the base space width.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShiftSpaceBehavior {
+    /// Emit the opposite of the configured ordinary Space width.
+    #[default]
+    Opposite,
+    Full,
+    Half,
+}
+
+impl ShiftSpaceBehavior {
+    pub const ALL: [Self; 3] = [Self::Opposite, Self::Full, Self::Half];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Opposite => "opposite",
+            Self::Full => "full",
+            Self::Half => "half",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "opposite" => Some(Self::Opposite),
+            "full" => Some(Self::Full),
+            "half" => Some(Self::Half),
+            _ => None,
+        }
+    }
+
+    pub const fn is_full(self, base_is_full: bool) -> bool {
+        match self {
+            Self::Opposite => !base_is_full,
+            Self::Full => true,
+            Self::Half => false,
+        }
+    }
 }
 
 impl SuggestAccept {
@@ -43,12 +189,71 @@ impl SuggestAccept {
     }
 }
 
+/// Controls which ordinary conversions may use the optional local neural
+/// reranker. The reranker itself still fails closed when its isolated runtime
+/// or artifact is unavailable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NeuralRerankerScope {
+    /// Never invoke the optional reranker.
+    Off,
+    /// Preserve the established behavior for configurations that predate this
+    /// setting: rerank only long normal conversions.
+    #[default]
+    LongTextOnly,
+    /// Allow every classified normal conversion to be considered for reranking.
+    AllNormalConversions,
+}
+
+impl NeuralRerankerScope {
+    pub const ALL: [Self; 3] = [Self::Off, Self::LongTextOnly, Self::AllNormalConversions];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::LongTextOnly => "long-text-only",
+            Self::AllNormalConversions => "all-normal-conversions",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "off" => Some(Self::Off),
+            "long-text-only" => Some(Self::LongTextOnly),
+            "all-normal-conversions" => Some(Self::AllNormalConversions),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Preferences {
     pub keymap_preset: Preset,
+    /// Whether ordinary kana keys go through the romaji FSM or are accepted
+    /// directly from the active keyboard layout.
+    pub input_method: InputMethod,
+    /// Segmentation contract used by new conversion contexts.
+    pub conversion_method: ConversionMethod,
+    /// Character type used when a new ordinary input context starts.
+    ///
+    /// Application profiles may override this value; this global setting is
+    /// the fallback for every host without a matching profile.
+    pub default_mode: Mode,
     pub normalizer: Normalizer,
+    /// Width of an idle Space key in ordinary input modes.
+    pub space_width: SpaceWidth,
+    /// Width policy applied to Shift+Space in ordinary input modes.
+    pub shift_space_behavior: ShiftSpaceBehavior,
     pub prediction_enabled: bool,
     pub suggest_accept: SuggestAccept,
+    /// Enables the bounded grammar/context pass used by associative conversion.
+    /// This is a preference rather than a new candidate source: the converter
+    /// still owns candidate order and simply receives the previous segment's
+    /// right-connection class when the option is enabled.
+    pub association_enabled: bool,
+    /// Scope for the optional, local neural conversion reranker.
+    pub neural_reranker_scope: NeuralRerankerScope,
+    /// Appearance selection shared by Sakura-owned settings and renderer UI.
+    pub appearance_theme: AppearanceTheme,
     /// Enables the explicitly opt-in developer interaction history. The
     /// engine keeps this separate from ordinary learning so a normal install
     /// never records raw key events.
@@ -59,9 +264,17 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             keymap_preset: Preset::MsIme,
+            input_method: InputMethod::Romaji,
+            conversion_method: ConversionMethod::MultiSegment,
+            default_mode: Mode::Hiragana,
             normalizer: Normalizer::default(),
+            space_width: SpaceWidth::SameAsInput,
+            shift_space_behavior: ShiftSpaceBehavior::Opposite,
             prediction_enabled: true,
             suggest_accept: SuggestAccept::Tab,
+            association_enabled: true,
+            neural_reranker_scope: NeuralRerankerScope::LongTextOnly,
+            appearance_theme: AppearanceTheme::Auto,
             developer_mode: false,
         }
     }
@@ -86,7 +299,7 @@ impl AppProfile {
     fn inherited(process_name: &str, preferences: Preferences) -> Self {
         Self {
             process_name: process_name.to_owned(),
-            default_mode: Mode::Hiragana,
+            default_mode: preferences.default_mode,
             normalizer: preferences.normalizer,
             prediction_enabled: preferences.prediction_enabled,
             suggest_accept: preferences.suggest_accept,
@@ -102,9 +315,14 @@ impl AppProfile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContextPreferences {
     pub default_mode: Mode,
+    pub input_method: InputMethod,
+    pub conversion_method: ConversionMethod,
     pub normalizer: Normalizer,
+    pub space_width: SpaceWidth,
+    pub shift_space_behavior: ShiftSpaceBehavior,
     pub prediction_enabled: bool,
     pub suggest_accept: SuggestAccept,
+    pub association_enabled: bool,
 }
 
 /// Shipped profiles protect shell/IDE Tab completion before a user has opened
@@ -138,16 +356,26 @@ pub fn resolve_context_preferences(
     {
         return ContextPreferences {
             default_mode: profile.default_mode,
+            input_method: preferences.input_method,
+            conversion_method: preferences.conversion_method,
             normalizer: profile.normalizer,
+            space_width: preferences.space_width,
+            shift_space_behavior: preferences.shift_space_behavior,
             prediction_enabled: profile.prediction_enabled,
             suggest_accept: profile.suggest_accept,
+            association_enabled: preferences.association_enabled,
         };
     }
     ContextPreferences {
-        default_mode: Mode::Hiragana,
+        default_mode: preferences.default_mode,
+        input_method: preferences.input_method,
+        conversion_method: preferences.conversion_method,
         normalizer: preferences.normalizer,
+        space_width: preferences.space_width,
+        shift_space_behavior: preferences.shift_space_behavior,
         prediction_enabled: preferences.prediction_enabled,
         suggest_accept: preferences.suggest_accept,
+        association_enabled: preferences.association_enabled,
     }
 }
 
@@ -185,6 +413,19 @@ pub fn parse_preferences(source: &str) -> Result<ParsedPreferences, ParseError> 
     {
         preferences.keymap_preset = preset;
     }
+    if let Some(input_method) =
+        text(&document, input_section, "input-method").and_then(InputMethod::from_name)
+    {
+        preferences.input_method = input_method;
+    }
+    if let Some(method) =
+        text(&document, input_section, "conversion-method").and_then(ConversionMethod::from_name)
+    {
+        preferences.conversion_method = method;
+    }
+    if let Some(mode) = text(&document, input_section, "default-mode").and_then(parse_mode) {
+        preferences.default_mode = mode;
+    }
     if let Some(enabled) = text(&document, input_section, "prediction-enabled")
         .or_else(|| text(&document, input_section, "prediction"))
         .and_then(parse_bool)
@@ -196,8 +437,41 @@ pub fn parse_preferences(source: &str) -> Result<ParsedPreferences, ParseError> 
     {
         preferences.suggest_accept = accept;
     }
+    if let Some(enabled) =
+        text(&document, input_section, "association-enabled").and_then(parse_bool)
+    {
+        preferences.association_enabled = enabled;
+    }
+    if let Some(value) = document.section(input_section).and_then(|entries| {
+        entries
+            .iter()
+            .find(|entry| entry.key == "neural-reranker-scope")
+    }) {
+        // Omission retains the pre-setting long-text behavior. In contrast, a
+        // value the current build cannot validate is an explicit request it
+        // must not guess at, so disable reranking rather than broadening it.
+        preferences.neural_reranker_scope = value
+            .value
+            .as_text()
+            .and_then(NeuralRerankerScope::from_name)
+            .unwrap_or(NeuralRerankerScope::Off);
+    }
     if let Some(enabled) = text(&document, input_section, "developer-mode").and_then(parse_bool) {
         preferences.developer_mode = enabled;
+    }
+    if let Some(space_width) =
+        text(&document, input_section, "space-width").and_then(SpaceWidth::from_name)
+    {
+        preferences.space_width = space_width;
+    }
+    if let Some(behavior) =
+        text(&document, input_section, "shift-space").and_then(ShiftSpaceBehavior::from_name)
+    {
+        preferences.shift_space_behavior = behavior;
+    }
+    if let Some(theme) = text(&document, "appearance", "theme").and_then(AppearanceTheme::from_name)
+    {
+        preferences.appearance_theme = theme;
     }
 
     let mut width = WidthPolicy::default();
@@ -213,7 +487,15 @@ pub fn parse_preferences(source: &str) -> Result<ParsedPreferences, ParseError> 
     let punctuation = text(&document, "width", "punctuation")
         .and_then(parse_punctuation)
         .unwrap_or_default();
-    preferences.normalizer = Normalizer { width, punctuation };
+    let brackets = text(&document, "width", "brackets")
+        .or_else(|| text(&document, "punctuation", "brackets"))
+        .and_then(BracketStyle::from_name)
+        .unwrap_or_default();
+    preferences.normalizer = Normalizer {
+        width,
+        punctuation,
+        brackets,
+    };
 
     let profiles = parse_app_profiles(&document, preferences);
 
@@ -236,23 +518,32 @@ pub fn serialize_preferences_with_profiles(
     profiles: &[AppProfile],
 ) -> String {
     let mut output = format!(
-        "[meta]\nformat-version = \"{}\"\n\n[input]\nkeymap-preset = \"{}\"\nprediction-enabled = \"{}\"\nsuggest-accept = \"{}\"\ndeveloper-mode = \"{}\"\n\n[width]\nalnum = \"{}\"\nnumber = \"{}\"\nsymbol = \"{}\"\npunctuation = \"{}\"\n",
+        "[meta]\nformat-version = \"{}\"\n\n[input]\nkeymap-preset = \"{}\"\ninput-method = \"{}\"\nconversion-method = \"{}\"\ndefault-mode = \"{}\"\nprediction-enabled = \"{}\"\nsuggest-accept = \"{}\"\nassociation-enabled = \"{}\"\nneural-reranker-scope = \"{}\"\ndeveloper-mode = \"{}\"\nspace-width = \"{}\"\nshift-space = \"{}\"\n\n[appearance]\ntheme = \"{}\"\n\n[width]\nalnum = \"{}\"\nnumber = \"{}\"\nsymbol = \"{}\"\npunctuation = \"{}\"\nbrackets = \"{}\"\n",
         CONFIG_FORMAT_VERSION,
         preferences.keymap_preset.name(),
+        preferences.input_method.name(),
+        preferences.conversion_method.name(),
+        mode_name(preferences.default_mode),
         bool_name(preferences.prediction_enabled),
         preferences.suggest_accept.name(),
+        bool_name(preferences.association_enabled),
+        preferences.neural_reranker_scope.name(),
         bool_name(preferences.developer_mode),
+        preferences.space_width.name(),
+        preferences.shift_space_behavior.name(),
+        preferences.appearance_theme.name(),
         width_name(preferences.normalizer.width.alnum),
         width_name(preferences.normalizer.width.number),
         width_name(preferences.normalizer.width.symbol),
         punctuation_name(preferences.normalizer.punctuation),
+        brackets_name(preferences.normalizer.brackets),
     );
     for profile in profiles {
         if !is_valid_profile_process_name(&profile.process_name) {
             continue;
         }
         output.push_str(&format!(
-            "\n[profile.{}]\ndefault-mode = \"{}\"\nprediction-enabled = \"{}\"\nsuggest-accept = \"{}\"\nalnum = \"{}\"\nnumber = \"{}\"\nsymbol = \"{}\"\npunctuation = \"{}\"\n",
+            "\n[profile.{}]\ndefault-mode = \"{}\"\nprediction-enabled = \"{}\"\nsuggest-accept = \"{}\"\nalnum = \"{}\"\nnumber = \"{}\"\nsymbol = \"{}\"\npunctuation = \"{}\"\nbrackets = \"{}\"\n",
             profile.process_name,
             mode_name(profile.default_mode),
             bool_name(profile.prediction_enabled),
@@ -261,6 +552,7 @@ pub fn serialize_preferences_with_profiles(
             width_name(profile.normalizer.width.number),
             width_name(profile.normalizer.width.symbol),
             punctuation_name(profile.normalizer.punctuation),
+            brackets_name(profile.normalizer.brackets),
         ));
     }
     output
@@ -315,6 +607,9 @@ fn parse_app_profiles(document: &Document, preferences: Preferences) -> Vec<AppP
         }
         if let Some(value) = text(document, section, "punctuation").and_then(parse_punctuation) {
             profile.normalizer.punctuation = value;
+        }
+        if let Some(value) = text(document, section, "brackets").and_then(BracketStyle::from_name) {
+            profile.normalizer.brackets = value;
         }
         if let Some(index) = existing {
             profiles[index] = profile;
@@ -395,6 +690,7 @@ fn parse_punctuation(value: &str) -> Option<PunctuationStyle> {
         "kuten-touten" => Some(PunctuationStyle::KutenTouten),
         "comma-period" => Some(PunctuationStyle::CommaPeriod),
         "mixed" => Some(PunctuationStyle::Mixed),
+        "comma-kuten" => Some(PunctuationStyle::CommaKuten),
         _ => None,
     }
 }
@@ -404,7 +700,12 @@ const fn punctuation_name(value: PunctuationStyle) -> &'static str {
         PunctuationStyle::KutenTouten => "kuten-touten",
         PunctuationStyle::CommaPeriod => "comma-period",
         PunctuationStyle::Mixed => "mixed",
+        PunctuationStyle::CommaKuten => "comma-kuten",
     }
+}
+
+const fn brackets_name(value: BracketStyle) -> &'static str {
+    value.name()
 }
 
 #[cfg(test)]
@@ -415,6 +716,9 @@ mod tests {
     fn current_format_roundtrips_every_setting() {
         let preferences = Preferences {
             keymap_preset: Preset::Atok,
+            input_method: InputMethod::Kana,
+            default_mode: Mode::Katakana,
+            conversion_method: ConversionMethod::SingleSegment,
             normalizer: Normalizer {
                 width: WidthPolicy {
                     alnum: Width::Full,
@@ -422,15 +726,65 @@ mod tests {
                     symbol: Width::Half,
                 },
                 punctuation: PunctuationStyle::CommaPeriod,
+                brackets: BracketStyle::Square,
             },
+            space_width: SpaceWidth::Full,
+            shift_space_behavior: ShiftSpaceBehavior::Half,
             prediction_enabled: false,
             suggest_accept: SuggestAccept::ShiftEnter,
+            association_enabled: false,
+            neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
+            appearance_theme: AppearanceTheme::Dark,
             developer_mode: true,
         };
         let parsed = parse_preferences(&serialize_preferences(preferences)).expect("parse");
         assert_eq!(parsed.source_version, CONFIG_FORMAT_VERSION);
         assert_eq!(parsed.preferences, preferences);
         assert!(!parsed.needs_upgrade());
+    }
+
+    #[test]
+    fn punctuation_config_accepts_the_independent_comma_kuten_variant() {
+        let parsed = parse_preferences(
+            r#"
+[meta]
+format-version = "4"
+[width]
+punctuation = "comma-kuten"
+"#,
+        )
+        .expect("parse independent punctuation");
+        assert_eq!(
+            parsed.preferences.normalizer.punctuation,
+            PunctuationStyle::CommaKuten
+        );
+        let serialized = serialize_preferences(parsed.preferences);
+        assert!(serialized.contains("punctuation = \"comma-kuten\""));
+    }
+
+    #[test]
+    fn space_preferences_roundtrip_and_resolve_without_touching_symbol_width() {
+        let parsed = parse_preferences(
+            r#"
+[meta]
+format-version = "4"
+[input]
+space-width = "half"
+shift-space = "full"
+[width]
+symbol = "full"
+"#,
+        )
+        .expect("space preferences");
+        assert_eq!(parsed.preferences.space_width, SpaceWidth::Half);
+        assert_eq!(
+            parsed.preferences.shift_space_behavior,
+            ShiftSpaceBehavior::Full
+        );
+        assert_eq!(parsed.preferences.normalizer.width.symbol, Width::Full);
+        let serialized = serialize_preferences(parsed.preferences);
+        assert!(serialized.contains("space-width = \"half\""));
+        assert!(serialized.contains("shift-space = \"full\""));
     }
 
     #[test]
@@ -536,14 +890,202 @@ format-version = "99"
 [input]
 keymap-preset = "future-map"
 prediction-enabled = "maybe"
+neural-reranker-scope = "future-scope"
 future-field = "ignored"
+[appearance]
+theme = "future-theme"
 [future-section]
 anything = "ignored"
 "#,
         )
         .expect("forward-compatible document");
         assert_eq!(parsed.source_version, 99);
-        assert_eq!(parsed.preferences, Preferences::default());
+        assert_eq!(
+            parsed.preferences,
+            Preferences {
+                neural_reranker_scope: NeuralRerankerScope::Off,
+                ..Preferences::default()
+            }
+        );
         assert!(parsed.needs_upgrade());
+    }
+
+    #[test]
+    fn appearance_theme_names_roundtrip_exhaustively() {
+        for theme in AppearanceTheme::ALL {
+            assert_eq!(AppearanceTheme::from_name(theme.name()), Some(theme));
+        }
+        assert_eq!(AppearanceTheme::from_name("system"), None);
+    }
+
+    #[test]
+    fn appearance_theme_roundtrips_all_variants() {
+        for appearance_theme in AppearanceTheme::ALL {
+            let preferences = Preferences {
+                appearance_theme,
+                ..Preferences::default()
+            };
+            let serialized = serialize_preferences(preferences);
+            assert!(serialized.contains(&format!(
+                "[appearance]\ntheme = \"{}\"",
+                appearance_theme.name()
+            )));
+            let parsed = parse_preferences(&serialized).expect("parse");
+            assert_eq!(parsed.preferences.appearance_theme, appearance_theme);
+        }
+    }
+
+    #[test]
+    fn old_or_unknown_appearance_theme_fails_closed_to_auto() {
+        let absent = parse_preferences("[settings]\nformat-version = \"1\"\n").expect("old");
+        assert_eq!(absent.source_version, 1);
+        assert_eq!(absent.preferences.appearance_theme, AppearanceTheme::Auto);
+
+        let unknown = parse_preferences("[appearance]\ntheme = \"system\"\n").expect("unknown");
+        assert_eq!(unknown.preferences.appearance_theme, AppearanceTheme::Auto);
+    }
+
+    #[test]
+    fn input_method_roundtrips_and_missing_values_keep_romaji_default() {
+        for input_method in InputMethod::ALL {
+            assert_eq!(
+                InputMethod::from_name(input_method.name()),
+                Some(input_method)
+            );
+            let serialized = serialize_preferences(Preferences {
+                input_method,
+                ..Preferences::default()
+            });
+            assert!(serialized.contains(&format!("input-method = \"{}\"", input_method.name())));
+            let parsed = parse_preferences(&serialized).expect("input method roundtrip");
+            assert_eq!(parsed.preferences.input_method, input_method);
+        }
+        let missing = parse_preferences("[input]\nkeymap-preset = \"ms-ime\"\n")
+            .expect("missing input method");
+        assert_eq!(missing.preferences.input_method, InputMethod::Romaji);
+        let unknown = parse_preferences("[input]\ninput-method = \"future\"\n")
+            .expect("unknown input method");
+        assert_eq!(unknown.preferences.input_method, InputMethod::Romaji);
+    }
+
+    #[test]
+    fn default_mode_roundtrips_and_missing_or_unknown_values_keep_hiragana() {
+        for mode in [
+            Mode::Direct,
+            Mode::Hiragana,
+            Mode::Katakana,
+            Mode::HalfKatakana,
+            Mode::FullAlnum,
+            Mode::HalfAlnum,
+        ] {
+            let serialized = serialize_preferences(Preferences {
+                default_mode: mode,
+                ..Preferences::default()
+            });
+            assert!(serialized.contains(&format!("default-mode = \"{}\"", mode_name(mode))));
+            let parsed = parse_preferences(&serialized).expect("default mode roundtrip");
+            assert_eq!(parsed.preferences.default_mode, mode);
+        }
+        let missing = parse_preferences("[input]\nkeymap-preset = \"ms-ime\"\n")
+            .expect("missing default mode");
+        assert_eq!(missing.preferences.default_mode, Mode::Hiragana);
+        let unknown = parse_preferences("[input]\ndefault-mode = \"future\"\n")
+            .expect("unknown default mode");
+        assert_eq!(unknown.preferences.default_mode, Mode::Hiragana);
+    }
+
+    #[test]
+    fn global_default_mode_is_used_for_hosts_without_a_profile() {
+        let preferences = Preferences {
+            default_mode: Mode::HalfKatakana,
+            ..Preferences::default()
+        };
+        let resolved = resolve_context_preferences(preferences, &[], "notepad.exe");
+        assert_eq!(resolved.default_mode, Mode::HalfKatakana);
+        let profiles = default_app_profiles(preferences);
+        assert_eq!(
+            resolve_context_preferences(preferences, &profiles, "notepad.exe").default_mode,
+            Mode::HalfKatakana
+        );
+        assert_eq!(
+            resolve_context_preferences(preferences, &profiles, "Code.exe").default_mode,
+            Mode::Direct
+        );
+    }
+
+    #[test]
+    fn neural_reranker_scope_names_roundtrip_exhaustively() {
+        for scope in NeuralRerankerScope::ALL {
+            assert_eq!(NeuralRerankerScope::from_name(scope.name()), Some(scope));
+        }
+        assert_eq!(NeuralRerankerScope::from_name("all"), None);
+    }
+
+    #[test]
+    fn neural_reranker_scope_roundtrips_all_variants() {
+        for neural_reranker_scope in NeuralRerankerScope::ALL {
+            let preferences = Preferences {
+                neural_reranker_scope,
+                ..Preferences::default()
+            };
+            let serialized = serialize_preferences(preferences);
+            assert!(serialized.contains(&format!(
+                "neural-reranker-scope = \"{}\"",
+                neural_reranker_scope.name()
+            )));
+            let parsed = parse_preferences(&serialized).expect("parse");
+            assert_eq!(
+                parsed.preferences.neural_reranker_scope,
+                neural_reranker_scope
+            );
+        }
+    }
+
+    #[test]
+    fn missing_scope_preserves_long_text_only_but_explicit_unknown_values_fail_closed() {
+        let missing = parse_preferences(
+            "[meta]\nformat-version = \"4\"\n\n[input]\nprediction-enabled = \"true\"\n",
+        )
+        .expect("existing configuration");
+        assert_eq!(
+            missing.preferences.neural_reranker_scope,
+            NeuralRerankerScope::LongTextOnly
+        );
+
+        let unknown = parse_preferences("[input]\nneural-reranker-scope = \"future-scope\"\n")
+            .expect("unknown scope");
+        assert_eq!(
+            unknown.preferences.neural_reranker_scope,
+            NeuralRerankerScope::Off
+        );
+
+        let malformed =
+            parse_preferences("[input]\nneural-reranker-scope = [\"long-text-only\"]\n")
+                .expect("list value is structurally valid but not a scope");
+        assert_eq!(
+            malformed.preferences.neural_reranker_scope,
+            NeuralRerankerScope::Off
+        );
+    }
+
+    #[test]
+    fn association_conversion_setting_roundtrips_and_defaults_on() {
+        let enabled = Preferences::default();
+        assert!(enabled.association_enabled);
+        let disabled = Preferences {
+            association_enabled: false,
+            ..enabled
+        };
+        let serialized = serialize_preferences(disabled);
+        assert!(serialized.contains("association-enabled = \"false\""));
+        assert!(
+            !parse_preferences(&serialized)
+                .expect("parse")
+                .preferences
+                .association_enabled
+        );
+        let missing = parse_preferences("[meta]\nformat-version = \"4\"\n")
+            .expect("missing optional setting");
+        assert!(missing.preferences.association_enabled);
     }
 }

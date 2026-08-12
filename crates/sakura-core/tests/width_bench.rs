@@ -23,7 +23,7 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use sakura_core::text::TextSink;
-use sakura_core::width::{Normalizer, PunctuationStyle, Width, WidthPolicy};
+use sakura_core::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
 use sakura_proto::{FixedStr, Mode};
 
 /// Sized for the longest corpus at its worst case: every ASCII byte becoming
@@ -107,6 +107,7 @@ fn what_the_run_scanner_costs_and_saves() {
             symbol: Width::Full,
         },
         punctuation: PunctuationStyle::KutenTouten,
+        brackets: BracketStyle::default(),
     };
     // `Width::Full` ignores the mode, so one mode covers both policies and
     // the two rows differ only in the thing being measured.

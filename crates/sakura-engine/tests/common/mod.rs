@@ -328,7 +328,13 @@ fn test_dictionary(local_app_data: &Path) -> PathBuf {
     let path = directory.join("system.dic");
     let mut entries = dictc::parse_entries(
         "engine-fixture.tsv",
-        "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t0\t100\t100\tit\tIT用語\n",
+        concat!(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "かな\t仮名\t0\t0\t100\t100\tit\tIT用語\n",
+            "きょう\t今日\t0\t0\t100\t100\t\tfixture\n",
+            "は\tは\t0\t0\t100\t100\t\tfixture\n",
+            "きょうは\t今日は\t0\t0\t500\t500\t\tfixture\n",
+        ),
     )
     .expect("parse engine fixture entries");
     entries.extend(

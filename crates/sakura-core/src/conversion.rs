@@ -14,6 +14,7 @@ use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
 use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::editing::{identifier_into, IdentifierStyle};
+use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
 use crate::TextSink;
 
@@ -59,6 +60,8 @@ const COUNTER_FORMS: [(&str, &str); 15] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConversionOptions {
     pub max_candidates: usize,
+    /// Whether candidates may contain several bunsetsu segments.
+    pub method: ConversionMethod,
     /// Proportional reduction for entries tagged `IT`, in thousandths.
     pub it_bias_per_mille: u16,
     /// Absolute ceiling on the IT reduction, preserving base-cost precedence.
@@ -72,6 +75,7 @@ impl Default for ConversionOptions {
     fn default() -> Self {
         Self {
             max_candidates: MAX_CONVERSION_CANDIDATES,
+            method: ConversionMethod::MultiSegment,
             it_bias_per_mille: 100,
             max_it_boost: 800,
             initial_right_id: 0,
@@ -564,6 +568,14 @@ impl Converter {
         reading: &str,
         options: ConversionOptions,
     ) -> Result<(), ConversionError> {
+        if options.method == ConversionMethod::SingleSegment {
+            return self.build_single_segment_lattice(
+                dictionary,
+                user_dictionary,
+                reading,
+                options,
+            );
+        }
         let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
             DEFAULT_NOUN_ID
         } else {
@@ -743,6 +755,155 @@ impl Converter {
                         },
                     )?;
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// Builds the intentionally narrow single-bunsetsu lattice. Restricting
+    /// nodes at construction time keeps N-best, learning metadata, and the
+    /// candidate UI honest: no multi-segment path is generated and later
+    /// hidden merely for presentation.
+    fn build_single_segment_lattice(
+        &mut self,
+        dictionary: &Dictionary<'_>,
+        user_dictionary: Option<&UserDictionary>,
+        reading: &str,
+        options: ConversionOptions,
+    ) -> Result<(), ConversionError> {
+        let reading_len = reading.len();
+        let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
+            DEFAULT_NOUN_ID
+        } else {
+            0
+        };
+        let mut failure = None;
+        dictionary
+            .common_prefix_search(reading, |matched| {
+                if matched.matched_bytes != reading_len {
+                    return true;
+                }
+                let boost = if matched.entry.flags.contains(EntryFlags::IT) {
+                    let proportional = i64::from(matched.entry.word_cost.max(0))
+                        .saturating_mul(i64::from(options.it_bias_per_mille))
+                        / 1_000;
+                    proportional.min(i64::from(options.max_it_boost))
+                } else {
+                    0
+                };
+                let local_cost = i64::from(matched.entry.word_cost).saturating_sub(boost);
+                let Ok(entry_index) = u32::try_from(matched.entry_index) else {
+                    return true;
+                };
+                if let Err(error) = self.add_node(
+                    dictionary,
+                    NodeSpec {
+                        start: 0,
+                        end: reading_len,
+                        left_id: matched.entry.left_id,
+                        right_id: matched.entry.right_id,
+                        local_cost,
+                        surface: Surface::Dictionary {
+                            entry: matched.entry,
+                            entry_index,
+                        },
+                    },
+                ) {
+                    failure = Some(error);
+                    return false;
+                }
+                true
+            })
+            .map_err(ConversionError::Dictionary)?;
+        if let Some(error) = failure {
+            return Err(error);
+        }
+
+        if let Some(user_dictionary) = user_dictionary {
+            let mut user_failure = None;
+            user_dictionary.common_prefix_search(reading, |matched_bytes, entry_index| {
+                if matched_bytes != reading_len {
+                    return true;
+                }
+                let Some(entry) = user_dictionary.entry(entry_index) else {
+                    return true;
+                };
+                let left_id = if usize::from(entry.left_id()) < dictionary.class_count() {
+                    entry.left_id()
+                } else {
+                    0
+                };
+                let right_id = if usize::from(entry.right_id()) < dictionary.class_count() {
+                    entry.right_id()
+                } else {
+                    0
+                };
+                if let Err(error) = self.add_node(
+                    dictionary,
+                    NodeSpec {
+                        start: 0,
+                        end: reading_len,
+                        left_id,
+                        right_id,
+                        local_cost: i64::from(entry.word_cost()),
+                        surface: Surface::User(entry_index),
+                    },
+                ) {
+                    user_failure = Some(error);
+                    return false;
+                }
+                true
+            });
+            if let Some(error) = user_failure {
+                return Err(error);
+            }
+        }
+
+        let chars = reading.chars().count();
+        self.add_node(
+            dictionary,
+            NodeSpec {
+                start: 0,
+                end: reading_len,
+                left_id: synthetic_id,
+                right_id: synthetic_id,
+                local_cost: synthetic_run_cost(RUN_BASE_COST, RUN_COST_PER_CHAR, chars),
+                surface: Surface::Reading,
+            },
+        )?;
+        if reading
+            .chars()
+            .all(|character| char_class(character) == CharClass::Hiragana)
+        {
+            self.add_node(
+                dictionary,
+                NodeSpec {
+                    start: 0,
+                    end: reading_len,
+                    left_id: synthetic_id,
+                    right_id: synthetic_id,
+                    local_cost: synthetic_run_cost(
+                        KATAKANA_BASE_COST,
+                        KATAKANA_COST_PER_CHAR,
+                        chars,
+                    ),
+                    surface: Surface::Katakana,
+                },
+            )?;
+        }
+        for (counter_reading, surface) in COUNTER_FORMS {
+            if counter_reading == reading {
+                self.add_node(
+                    dictionary,
+                    NodeSpec {
+                        start: 0,
+                        end: reading_len,
+                        left_id: synthetic_id,
+                        right_id: synthetic_id,
+                        local_cost: COUNTER_WORD_COST,
+                        surface: Surface::Literal(surface),
+                    },
+                )?;
             }
         }
         Ok(())

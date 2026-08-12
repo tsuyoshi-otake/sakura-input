@@ -313,6 +313,64 @@ impl Mode {
     }
 }
 
+/// Controls whether Sakura-owned UI follows the system appearance or uses an
+/// explicit light or dark palette.
+///
+/// This is part of the renderer protocol because the engine is the authority
+/// that loads the user-wide preference while the renderer owns the popup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum AppearanceTheme {
+    #[default]
+    Auto = 0,
+    Light = 1,
+    Dark = 2,
+}
+
+impl AppearanceTheme {
+    /// All supported appearance themes, in declaration order.
+    pub const ALL: [AppearanceTheme; 3] = [
+        AppearanceTheme::Auto,
+        AppearanceTheme::Light,
+        AppearanceTheme::Dark,
+    ];
+
+    /// The canonical name used in preference files and settings surfaces.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+
+    /// Parses the canonical preference-file name.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "auto" => Some(Self::Auto),
+            "light" => Some(Self::Light),
+            "dark" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+
+    /// Encodes as one byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly: an unrecognised value is
+    /// [`Error::BadEnum`], never a guessed palette.
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(Self::Auto),
+            1 => Ok(Self::Light),
+            2 => Ok(Self::Dark),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
 /// The input scope of the focused text field (DESIGN.md §9): password and
 /// similar sensitive scopes disable learning and the commit-cache history
 /// layer.
@@ -946,6 +1004,23 @@ mod tests {
         VecSink::new(&mut buf).write_u8(200).expect("write");
         let mut r = Reader::new(&buf);
         assert_eq!(Mode::decode(&mut r), Err(Error::BadEnum));
+    }
+
+    #[test]
+    fn appearance_theme_roundtrips_all_variants_and_rejects_unknown_values() {
+        for expected in AppearanceTheme::ALL {
+            let mut buf = Vec::new();
+            expected
+                .encode(&mut VecSink::new(&mut buf))
+                .expect("encode");
+            let mut reader = Reader::new(&buf);
+            assert_eq!(AppearanceTheme::decode(&mut reader), Ok(expected));
+        }
+
+        let mut buf = Vec::new();
+        VecSink::new(&mut buf).write_u8(3).expect("write");
+        let mut reader = Reader::new(&buf);
+        assert_eq!(AppearanceTheme::decode(&mut reader), Err(Error::BadEnum));
     }
 
     #[test]

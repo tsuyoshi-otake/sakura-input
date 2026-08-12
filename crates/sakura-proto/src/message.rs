@@ -19,7 +19,8 @@
 //! mis-attributed to the next one).
 
 use crate::types::{
-    CandidateDetail, CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output, ScreenRect,
+    AppearanceTheme, CandidateDetail, CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output,
+    ScreenRect,
 };
 use crate::wire::{Reader, Sink, VecSink};
 use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
@@ -259,6 +260,10 @@ pub struct UiState {
     /// Starts at 1, so `since: 0` is always stale and always answers at
     /// once — that is a fresh renderer asking "what is true right now?".
     pub revision: Revision,
+    /// User-wide appearance preference for Sakura-owned renderer UI. It is
+    /// present even while the popup is hidden so a later candidate state
+    /// cannot be drawn with an assumed palette.
+    pub appearance_theme: AppearanceTheme,
     /// The mode to show, or `None` when no field is composing and the
     /// indicator should be hidden.
     pub mode: Option<Mode>,
@@ -519,6 +524,7 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
                 return Err(Error::TooLarge);
             }
             w.write_u64(ui.revision)?;
+            ui.appearance_theme.encode(w)?;
             w.write_option(&ui.mode, |w, mode| mode.encode(w))?;
             w.write_option(&ui.candidates, |w, candidates| candidates.encode(w))?;
             w.write_option(&ui.candidate_detail, |w, detail| detail.encode(w))?;
@@ -676,6 +682,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         },
         RES_UI => {
             let revision = r.read_u64()?;
+            let appearance_theme = AppearanceTheme::decode(&mut r)?;
             let mode = r.read_option(Mode::decode)?;
             let candidates = r.read_option(CandidateList::decode)?;
             let candidate_detail = r.read_option(CandidateDetail::decode)?;
@@ -687,6 +694,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
             let stopping = r.read_bool()?;
             Response::Ui(UiState {
                 revision,
+                appearance_theme,
                 mode,
                 candidates,
                 candidate_detail,
@@ -722,6 +730,7 @@ mod tests {
     fn ui_rejects_detail_without_candidates_before_writing_a_frame() {
         let response = Response::Ui(UiState {
             revision: 1,
+            appearance_theme: AppearanceTheme::Auto,
             mode: None,
             candidates: None,
             candidate_detail: Some(detail()),

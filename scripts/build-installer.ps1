@@ -31,21 +31,28 @@ $japaneseWordNetArchiveSha256 = '1ed18d08f6f311ebd05c15344b2ebb4ece6752cccfcfe6f
 $japaneseWordNetArchiveBytes = 12415268L
 $japaneseWordNetRevision = 'v1.1'
 $japaneseWordNetLicenseId = 'LicenseRef-Japanese-WordNet-1.1'
+# Windows PowerShell 5.1 treats a UTF-8 script without a BOM as the active
+# ANSI code page. Keep the canonical Japanese filenames as UTF-8 bytes so the
+# provenance check has identical semantics under both powershell and pwsh.
+function Decode-Utf8Literal {
+    param([Parameter(Mandatory)][string]$Base64)
+    return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Base64))
+}
 $canonicalCategoryDictionaryFiles = @(
-    '01_文法・機能語.tsv',
-    '02_活用語.tsv',
-    '03_一般語.tsv',
-    '04_慣用句・定型表現.tsv',
-    '05_数値・日付・単位.tsv',
-    '06_人名.tsv',
-    '07_地名.tsv',
-    '08_組織名・製品名.tsv',
-    '09_外来語・カタカナ語.tsv',
-    '10_略語・英数字.tsv',
-    '11_IT・技術用語.tsv',
-    '12_専門用語.tsv',
-    '13_記号・絵文字.tsv',
-    '14_表記ゆれ.tsv'
+    (Decode-Utf8Literal 'MDFf5paH5rOV44O75qmf6IO96KqeLnRzdg=='),
+    (Decode-Utf8Literal 'MDJf5rS755So6KqeLnRzdg=='),
+    (Decode-Utf8Literal 'MDNf5LiA6Iis6KqeLnRzdg=='),
+    (Decode-Utf8Literal 'MDRf5oWj55So5Y+l44O75a6a5Z6L6KGo54++LnRzdg=='),
+    (Decode-Utf8Literal 'MDVf5pWw5YCk44O75pel5LuY44O75Y2Y5L2NLnRzdg=='),
+    (Decode-Utf8Literal 'MDZf5Lq65ZCNLnRzdg=='),
+    (Decode-Utf8Literal 'MDdf5Zyw5ZCNLnRzdg=='),
+    (Decode-Utf8Literal 'MDhf57WE57mU5ZCN44O76KO95ZOB5ZCNLnRzdg=='),
+    (Decode-Utf8Literal 'MDlf5aSW5p2l6Kqe44O744Kr44K/44Kr44OK6KqeLnRzdg=='),
+    (Decode-Utf8Literal 'MTBf55Wl6Kqe44O76Iux5pWw5a2XLnRzdg=='),
+    (Decode-Utf8Literal 'MTFfSVTjg7vmioDooZPnlKjoqp4udHN2'),
+    (Decode-Utf8Literal 'MTJf5bCC6ZaA55So6KqeLnRzdg=='),
+    (Decode-Utf8Literal 'MTNf6KiY5Y+344O757W15paH5a2XLnRzdg=='),
+    (Decode-Utf8Literal 'MTRf6KGo6KiY44KG44KMLnRzdg==')
 )
 $neuralPayloadPaths = @(
     'artifacts\release\sakura_neural_worker.exe',

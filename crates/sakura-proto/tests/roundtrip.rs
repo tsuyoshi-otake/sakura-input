@@ -5,10 +5,10 @@
 
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
-    decode_request, decode_response, encode_request, encode_response, payload_len, Candidate,
-    CandidateKind, CandidateList, Error, ErrorCode, InputScope, KeyCode, KeyInput, Mode, Modifiers,
-    Output, OutputBuf, Preedit, Request, Response, ScreenRect, Segment, UiState, UnderlineKind,
-    UndoCommitOutcome, FRAME_HEADER_LEN, MAX_STRING_BYTES, PROTOCOL_VERSION,
+    decode_request, decode_response, encode_request, encode_response, payload_len, AppearanceTheme,
+    Candidate, CandidateKind, CandidateList, Error, ErrorCode, InputScope, KeyCode, KeyInput, Mode,
+    Modifiers, Output, OutputBuf, Preedit, Request, Response, ScreenRect, Segment, UiState,
+    UnderlineKind, UndoCommitOutcome, FRAME_HEADER_LEN, MAX_STRING_BYTES, PROTOCOL_VERSION,
 };
 
 /// Encodes `req`, decodes it back, and asserts the id and value match.
@@ -188,6 +188,7 @@ fn every_response_variant_roundtrips() {
         },
         Response::Ui(UiState {
             revision: 1,
+            appearance_theme: AppearanceTheme::Dark,
             mode: Some(Mode::HalfAlnum),
             candidates: Some(CandidateList {
                 kind: CandidateKind::Conversion,
@@ -214,6 +215,7 @@ fn every_response_variant_roundtrips() {
         // wire as distinctly as any mode does.
         Response::Ui(UiState {
             revision: u64::MAX,
+            appearance_theme: AppearanceTheme::Auto,
             mode: None,
             candidates: None,
             candidate_detail: None,
@@ -225,6 +227,7 @@ fn every_response_variant_roundtrips() {
         // uninstall into a watchdog restarting the engine being removed.
         Response::Ui(UiState {
             revision: 2,
+            appearance_theme: AppearanceTheme::Light,
             mode: Some(Mode::Hiragana),
             candidates: None,
             candidate_detail: None,
@@ -482,18 +485,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v14_hello_roundtrips_and_v13_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 13;
+fn protocol_v15_hello_roundtrips_and_v14_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 14;
     assert_eq!(
-        PROTOCOL_VERSION, 14,
-        "renderer history deletion changes the wire contract"
+        PROTOCOL_VERSION, 15,
+        "the UiState appearance field changes the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v14 request");
+    encode_request(&request, 17, &mut request_frame).expect("encode v15 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -514,7 +517,7 @@ fn protocol_v14_hello_roundtrips_and_v13_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 17, &mut response_frame).expect("encode v14 response");
+    encode_response(&response, 17, &mut response_frame).expect("encode v15 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()

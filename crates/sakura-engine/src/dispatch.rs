@@ -40,13 +40,14 @@ use sakura_core::romaji::{Table, TableError};
 use sakura_core::width::Normalizer;
 use sakura_core::{
     default_app_profiles, resolve_context_preferences, transform_into, AppProfile,
-    ConversionCandidate, ConversionOptions, ConversionSegment, EntryFlags, Input, Preferences,
-    SegmentTransform, SuggestAccept, TextSink,
+    ConversionCandidate, ConversionMethod, ConversionOptions, ConversionSegment, EntryFlags, Input,
+    InputMethod, NeuralRerankerScope, Preferences, SegmentTransform, ShiftSpaceBehavior,
+    SpaceWidth, SuggestAccept, TextSink,
 };
 use sakura_proto::{
-    CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope, KeyInput, Mode, OutputBuf,
-    Overflow, Request, Response, SessionId, UnderlineKind, UndoCommitOutcome, CANDIDATE_PAGE_SIZE,
-    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_RELATIONS,
+    CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope, KeyCode, KeyInput, Mode,
+    OutputBuf, Overflow, Request, Response, SessionId, UnderlineKind, UndoCommitOutcome,
+    CANDIDATE_PAGE_SIZE, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_RELATIONS,
     MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
 
@@ -124,13 +125,23 @@ pub enum Reply {
 pub struct Dispatcher {
     table: Table,
     keymap: KeyMap,
+    /// The preset currently backing `keymap`, when this dispatcher was built
+    /// from a production configuration. Test-only custom maps intentionally
+    /// keep this as `None` so a live preference refresh cannot replace them.
+    keymap_preset: Option<Preset>,
     normalizer: Normalizer,
+    input_method: InputMethod,
+    default_mode: Mode,
+    conversion_method: ConversionMethod,
+    space_width: SpaceWidth,
+    shift_space_behavior: ShiftSpaceBehavior,
     conversion: Option<Arc<ConversionService>>,
     learning: Option<Arc<LearningService>>,
     input_history: Option<Arc<InputHistoryService>>,
     prediction: Option<Arc<PredictionService>>,
     long_conversion: Option<Arc<LongConversionService>>,
     long_conversion_owner: u64,
+    neural_reranker_scope: NeuralRerankerScope,
     prediction_enabled: bool,
     suggest_accept: SuggestAccept,
     app_profiles: Arc<[AppProfile]>,
@@ -157,7 +168,9 @@ impl Dispatcher {
     pub fn new() -> Result<Self, NewError> {
         let table = Table::builtin().map_err(NewError::Romaji)?;
         let keymap = KeyMap::preset(Preset::MsIme).map_err(NewError::KeyMap)?;
-        Ok(Self::with_parts(table, keymap, Normalizer::default()))
+        let mut dispatcher = Self::with_parts(table, keymap, Normalizer::default());
+        dispatcher.keymap_preset = Some(Preset::MsIme);
+        Ok(dispatcher)
     }
 
     /// Builds the shipped dispatcher with dictionary conversion enabled.
@@ -197,9 +210,16 @@ impl Dispatcher {
         let table = Table::builtin().map_err(NewError::Romaji)?;
         let keymap = KeyMap::preset(preferences.keymap_preset).map_err(NewError::KeyMap)?;
         let mut dispatcher = Self::with_parts(table, keymap, preferences.normalizer);
+        dispatcher.keymap_preset = Some(preferences.keymap_preset);
+        dispatcher.input_method = preferences.input_method;
+        dispatcher.default_mode = preferences.default_mode;
+        dispatcher.conversion_method = preferences.conversion_method;
+        dispatcher.space_width = preferences.space_width;
+        dispatcher.shift_space_behavior = preferences.shift_space_behavior;
         dispatcher.conversion = Some(conversion);
         dispatcher.observed_learning_generation = learning.generation();
         dispatcher.learning = Some(learning);
+        dispatcher.neural_reranker_scope = preferences.neural_reranker_scope;
         dispatcher.prediction_enabled = preferences.prediction_enabled;
         dispatcher.suggest_accept = preferences.suggest_accept;
         dispatcher.app_profiles = profiles;
@@ -240,9 +260,32 @@ impl Dispatcher {
         self.input_history = Some(input_history);
     }
 
-    pub(crate) fn set_long_conversion(&mut self, long_conversion: Arc<LongConversionService>) {
-        self.long_conversion_owner = long_conversion.allocate_owner();
-        self.long_conversion = Some(long_conversion);
+    /// Replaces the process-wide prediction service at a request boundary.
+    ///
+    /// A configuration reload can enable or disable prediction after this
+    /// dispatcher was created. Clearing the service also clears any result
+    /// cache so a value produced under the old policy cannot leak into the
+    /// newly configured session.
+    pub(crate) fn set_prediction(&mut self, prediction: Option<Arc<PredictionService>>) {
+        if self.prediction.as_ref().map(Arc::as_ptr) != prediction.as_ref().map(Arc::as_ptr) {
+            self.prediction = prediction;
+            self.prediction_cache.clear();
+        }
+    }
+
+    pub(crate) fn set_long_conversion(
+        &mut self,
+        long_conversion: Option<Arc<LongConversionService>>,
+    ) {
+        let changed = self.long_conversion.as_ref().map(Arc::as_ptr)
+            != long_conversion.as_ref().map(Arc::as_ptr);
+        if !changed {
+            return;
+        }
+        self.long_conversion_owner = long_conversion
+            .as_ref()
+            .map_or(0, |service| service.allocate_owner());
+        self.long_conversion = long_conversion;
     }
 
     /// Builds a dispatcher from already-built parts. Used by tests that need
@@ -254,13 +297,20 @@ impl Dispatcher {
         Dispatcher {
             table,
             keymap,
+            keymap_preset: None,
             normalizer,
+            input_method: InputMethod::Romaji,
+            default_mode: Mode::Hiragana,
+            conversion_method: ConversionMethod::MultiSegment,
+            space_width: SpaceWidth::SameAsInput,
+            shift_space_behavior: ShiftSpaceBehavior::Opposite,
             conversion: None,
             learning: None,
             input_history: None,
             prediction: None,
             long_conversion: None,
             long_conversion_owner: 0,
+            neural_reranker_scope: NeuralRerankerScope::Off,
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,
             app_profiles: Arc::from([]),
@@ -280,6 +330,49 @@ impl Dispatcher {
     pub fn reset(&mut self) {
         self.sessions.clear();
         self.prediction_cache.clear();
+    }
+
+    /// Applies a complete, validated settings snapshot at a request boundary.
+    /// Existing sessions retain their mode and composition, while profile-
+    /// resolved policies (normalization, prediction, suggestion acceptance and
+    /// association) are refreshed immediately for the next key.
+    pub(crate) fn apply_runtime_configuration(
+        &mut self,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+    ) -> Result<(), NewError> {
+        let prediction_policy_changed = self.prediction_enabled != preferences.prediction_enabled
+            || self.suggest_accept != preferences.suggest_accept
+            || self.app_profiles.as_ref() != profiles.as_ref();
+        if let Some(current) = self.keymap_preset {
+            if current != preferences.keymap_preset {
+                self.keymap =
+                    KeyMap::preset(preferences.keymap_preset).map_err(NewError::KeyMap)?;
+                self.keymap_preset = Some(preferences.keymap_preset);
+            }
+        }
+        self.normalizer = preferences.normalizer;
+        self.input_method = preferences.input_method;
+        self.default_mode = preferences.default_mode;
+        self.conversion_method = preferences.conversion_method;
+        self.space_width = preferences.space_width;
+        self.shift_space_behavior = preferences.shift_space_behavior;
+        self.neural_reranker_scope = preferences.neural_reranker_scope;
+        self.prediction_enabled = preferences.prediction_enabled;
+        self.suggest_accept = preferences.suggest_accept;
+        self.app_profiles = profiles.clone();
+        // The server applies its immutable snapshot before every request,
+        // including OnTestKeyDown's ProbeKey and the following real SendKey.
+        // Clearing unconditionally here made each prediction navigation key
+        // forget its predecessor and re-focus candidate zero forever. Preserve
+        // the cache for an identical snapshot; a changed prediction policy (or
+        // `set_prediction` replacing the worker) still invalidates it.
+        if prediction_policy_changed {
+            self.prediction_cache.clear();
+        }
+        self.sessions
+            .apply_runtime_preferences(preferences, &profiles);
+        Ok(())
     }
 
     /// Answers one request, writing `Output` replies into `out`.
@@ -413,10 +506,16 @@ impl Dispatcher {
             Ok(session) => {
                 let global = Preferences {
                     keymap_preset: Preset::MsIme,
+                    input_method: self.input_method,
+                    default_mode: self.default_mode,
+                    conversion_method: self.conversion_method,
                     normalizer: self.normalizer,
+                    space_width: self.space_width,
+                    shift_space_behavior: self.shift_space_behavior,
                     prediction_enabled: self.prediction_enabled,
                     suggest_accept: self.suggest_accept,
                     developer_mode: self.input_history.is_some(),
+                    ..Preferences::default()
                 };
                 let resolved =
                     resolve_context_preferences(global, &self.app_profiles, process_name);
@@ -584,6 +683,7 @@ impl Dispatcher {
             prediction: self.prediction.as_deref(),
             long_conversion: self.long_conversion.as_deref(),
             long_conversion_owner: self.long_conversion_owner,
+            neural_reranker_scope: self.neural_reranker_scope,
             prediction_enabled: session.prediction_enabled,
             suggest_accept: session.suggest_accept,
         };
@@ -737,10 +837,16 @@ impl Dispatcher {
             let process_name = existing.process_name();
             let global = Preferences {
                 keymap_preset: Preset::MsIme,
+                input_method: self.input_method,
+                default_mode: self.default_mode,
+                conversion_method: self.conversion_method,
                 normalizer: self.normalizer,
+                space_width: self.space_width,
+                shift_space_behavior: self.shift_space_behavior,
                 prediction_enabled: self.prediction_enabled,
                 suggest_accept: self.suggest_accept,
                 developer_mode: self.input_history.is_some(),
+                ..Preferences::default()
             };
             let resolved = resolve_context_preferences(global, &self.app_profiles, process_name);
             let mut fresh = Session::new(process_name);
@@ -775,6 +881,7 @@ impl Dispatcher {
             prediction: self.prediction.as_deref(),
             long_conversion: None,
             long_conversion_owner: 0,
+            neural_reranker_scope: NeuralRerankerScope::Off,
             prediction_enabled: probe.prediction_enabled,
             suggest_accept: probe.suggest_accept,
         };
@@ -978,6 +1085,7 @@ struct KeyServices<'a> {
     prediction: Option<&'a PredictionService>,
     long_conversion: Option<&'a LongConversionService>,
     long_conversion_owner: u64,
+    neural_reranker_scope: NeuralRerankerScope,
     prediction_enabled: bool,
     suggest_accept: SuggestAccept,
 }
@@ -1148,7 +1256,12 @@ impl PredictionCache {
 
 fn conversion_options(session: &Session, initial_right_id: u16) -> ConversionOptions {
     let mut options = ConversionOptions {
-        initial_right_id,
+        method: session.conversion_method,
+        initial_right_id: if session.association_enabled {
+            initial_right_id
+        } else {
+            0
+        },
         ..ConversionOptions::default()
     };
     // The recent IT ratio strengthens the shipped prior gradually and with a
@@ -1160,9 +1273,29 @@ fn conversion_options(session: &Session, initial_right_id: u16) -> ConversionOpt
     options
 }
 
+#[cfg(test)]
+mod associative_conversion_setting_tests {
+    use super::*;
+
+    #[test]
+    fn association_setting_controls_the_previous_connection_class() {
+        let mut session = Session::new("association-test.exe");
+        session.association_enabled = true;
+        assert_eq!(conversion_options(&session, 7).initial_right_id, 7);
+
+        session.association_enabled = false;
+        assert_eq!(conversion_options(&session, 7).initial_right_id, 0);
+    }
+}
+
 fn schedule_long_conversion(session_id: SessionId, session: &Session, services: &KeyServices<'_>) {
     let Some(long_conversion) = services.long_conversion else {
         return;
+    };
+    let allow_short_reading = match services.neural_reranker_scope {
+        NeuralRerankerScope::Off => return,
+        NeuralRerankerScope::LongTextOnly => false,
+        NeuralRerankerScope::AllNormalConversions => true,
     };
     if !session.scope_classified()
         || session.scope() != InputScope::Normal
@@ -1180,6 +1313,7 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
         session.prediction_generation,
         session.preedit.as_str(),
         options,
+        allow_short_reading,
     );
 }
 
@@ -1402,6 +1536,11 @@ fn apply_key(
         out.consumed = false;
         return Ok(());
     }
+    let idle_space_commit = action.is_none()
+        && state == State::Idle
+        && key.code == KeyCode::Space
+        && !key.modifiers.ctrl()
+        && !key.modifiers.alt();
     let prediction_direction = match action {
         Some(Action::PredictNext) => Some(1),
         Some(Action::PredictPrev) => Some(-1),
@@ -1421,6 +1560,17 @@ fn apply_key(
             scratch,
             out,
         )?,
+
+        None if idle_space_commit => {
+            let base_is_full = session.space_width.is_full(session.mode);
+            let is_full = if key.modifiers.shift() {
+                session.shift_space_behavior.is_full(base_is_full)
+            } else {
+                base_is_full
+            };
+            out.set_commit(if is_full { "　" } else { " " })?;
+            out.consumed = true;
+        }
 
         // A Ctrl or Alt chord the key map did not claim is an application
         // shortcut. The DLL reports it as the letter plus the modifier
@@ -1448,7 +1598,7 @@ fn apply_key(
                 out,
             )?;
             out.consumed = true;
-            feed_character(
+            feed_input_character(
                 session,
                 services.table,
                 key.ch.expect("guarded by is_some"),
@@ -1467,7 +1617,7 @@ fn apply_key(
         None => match key.ch {
             Some(ch) => {
                 out.consumed = true;
-                feed_character(session, services.table, ch, key.modifiers.shift(), scratch)?;
+                feed_input_character(session, services.table, ch, key.modifiers.shift(), scratch)?;
             }
             None => out.consumed = false,
         },
@@ -1954,6 +2104,49 @@ fn feed_character(
     session.romaji = romaji;
     session.preedit = preedit;
     session.cursor = cursor;
+    session.invalidate_prediction();
+    Ok(())
+}
+
+/// Feeds one ordinary character according to the configured input method.
+///
+/// The TSF translator already supplies the character produced by the active
+/// Windows keyboard layout. In Kana mode that character is accepted directly;
+/// no synthetic JIS mapping is invented in the engine. If a setting changes
+/// while a romaji sequence is still pending, the existing sequence wins until
+/// it is committed or cancelled, preserving the raw-input provenance
+/// invariants of the romaji path.
+fn feed_input_character(
+    session: &mut Session,
+    table: &Table,
+    character: char,
+    shifted: bool,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+) -> Result<(), Overflow> {
+    let direct = session.input_method == InputMethod::Kana
+        && matches!(
+            session.mode,
+            Mode::Hiragana | Mode::Katakana | Mode::HalfKatakana
+        )
+        && session.romaji.is_empty()
+        && session.raw_input.is_empty()
+        && !session.shifted_ascii;
+    if direct {
+        feed_kana_character(session, character)
+    } else {
+        feed_character(session, table, character, shifted, scratch)
+    }
+}
+
+fn feed_kana_character(session: &mut Session, character: char) -> Result<(), Overflow> {
+    let mut preedit = session.preedit.clone();
+    let at = preedit
+        .byte_index(usize::from(session.cursor))
+        .unwrap_or(preedit.len());
+    let mut buf = [0u8; 4];
+    preedit.insert_str(at, character.encode_utf8(&mut buf))?;
+    session.preedit = preedit;
+    session.cursor = session.cursor.saturating_add(1);
     session.invalidate_prediction();
     Ok(())
 }
@@ -3848,10 +4041,121 @@ mod tests {
 
     use crate::input_history::{InputHistoryRecord, InputHistoryService, ScopeClass};
     use sakura_core::keymap::{KeyMap, State};
-    use sakura_core::width::{PunctuationStyle, Width, WidthPolicy};
+    use sakura_core::width::{BracketStyle, PunctuationStyle, Width, WidthPolicy};
     use sakura_core::UserDictionary;
     use sakura_proto::types::CandidatePresentation;
     use sakura_proto::{CandidateKind, KeyCode, Modifiers, CANDIDATE_PAGE_SIZE};
+
+    #[test]
+    fn runtime_configuration_changes_the_production_keymap_and_policies() {
+        let mut dispatcher = Dispatcher::new().expect("built-in dispatcher");
+        let preferences = Preferences {
+            keymap_preset: Preset::Atok,
+            prediction_enabled: false,
+            association_enabled: false,
+            neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
+            ..Preferences::default()
+        };
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::from([]))
+            .expect("valid runtime configuration");
+
+        assert_eq!(dispatcher.keymap_preset, Some(Preset::Atok));
+        assert_eq!(dispatcher.normalizer, preferences.normalizer);
+        assert!(!dispatcher.prediction_enabled);
+        assert_eq!(
+            dispatcher.neural_reranker_scope,
+            NeuralRerankerScope::AllNormalConversions
+        );
+        assert!(dispatcher.app_profiles.is_empty());
+    }
+
+    #[test]
+    fn identical_runtime_snapshots_preserve_prediction_navigation_state() {
+        let (mut dispatcher, runtime) = prediction_dispatcher();
+        let mut out = OutputBuf::new();
+        let preferences = Preferences::default();
+        let profiles: Arc<[AppProfile]> = Arc::from(default_app_profiles(preferences));
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+            .expect("initial runtime snapshot");
+        let session = create_session(&mut dispatcher, &mut out, "snapshot-navigation.exe");
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+
+        for expected in [0, 1] {
+            let prediction = dispatcher.prediction.clone();
+            dispatcher.set_prediction(prediction);
+            dispatcher
+                .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+                .expect("unchanged runtime snapshot");
+            dispatcher.dispatch(
+                &Request::ProbeKey {
+                    session,
+                    scope: InputScope::Normal,
+                    fresh_context: false,
+                    key: named_key(KeyCode::Tab),
+                },
+                &mut out,
+            );
+            dispatcher
+                .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+                .expect("scope request runtime snapshot");
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            );
+            dispatcher
+                .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+                .expect("real-key runtime snapshot");
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Tab),
+                },
+                &mut out,
+            );
+            assert_eq!(out.selected_candidate(), Some(expected));
+        }
+
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn changed_runtime_prediction_policy_invalidates_cached_candidates() {
+        let (mut dispatcher, runtime) = prediction_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "snapshot-policy.exe");
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        let generation = dispatcher
+            .sessions
+            .get(session)
+            .expect("live session")
+            .prediction_generation;
+        assert!(dispatcher
+            .prediction_cache
+            .candidates(session, generation)
+            .is_some());
+
+        dispatcher
+            .apply_runtime_configuration(
+                Preferences {
+                    suggest_accept: SuggestAccept::ShiftEnter,
+                    ..Preferences::default()
+                },
+                Arc::from([]),
+            )
+            .expect("changed runtime snapshot");
+        assert!(dispatcher
+            .prediction_cache
+            .candidates(session, generation)
+            .is_none());
+
+        runtime.stop().expect("prediction worker joins");
+    }
 
     fn builtin_dispatcher() -> Dispatcher {
         Dispatcher::new().expect("the shipped defaults must compile")
@@ -4222,6 +4526,50 @@ mod tests {
         )
         .expect("raw preedit renders");
         out.preedit_text().to_owned()
+    }
+
+    #[test]
+    fn kana_input_method_accepts_layout_characters_without_romaji_conversion() {
+        let mut dispatcher = builtin_dispatcher();
+        let preferences = Preferences {
+            input_method: InputMethod::Kana,
+            ..Preferences::default()
+        };
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::from([]))
+            .expect("valid kana input configuration");
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        for character in ['か', 'な'] {
+            let reply = dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+            assert!(matches!(reply, Reply::Output));
+        }
+        assert_eq!(out.preedit_text(), "かな");
+        assert!(dispatcher
+            .sessions
+            .get(session)
+            .expect("live kana session")
+            .romaji
+            .is_empty());
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "か");
+
+        dispatcher.dispatch(&Request::Commit { session }, &mut out);
+        assert_eq!(out.commit_text(), Some("か"));
     }
 
     #[test]
@@ -5182,6 +5530,7 @@ mod tests {
                     symbol: Width::FollowMode,
                 },
                 punctuation: PunctuationStyle::CommaPeriod,
+                brackets: BracketStyle::default(),
             },
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,
@@ -7941,6 +8290,59 @@ mod tests {
         );
     }
 
+    #[test]
+    fn idle_space_and_shift_space_follow_the_configured_width_policy() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert_eq!(out.commit_text(), Some("　"));
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: modified_named_key(KeyCode::Space, Modifiers::SHIFT),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert_eq!(out.commit_text(), Some(" "));
+
+        let preferences = Preferences {
+            space_width: SpaceWidth::Half,
+            shift_space_behavior: ShiftSpaceBehavior::Opposite,
+            ..Preferences::default()
+        };
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::from([]))
+            .expect("runtime space settings");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some(" "));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: modified_named_key(KeyCode::Space, Modifiers::SHIFT),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("　"));
+    }
+
     /// The issue #16 finding E keymap fix bound specific named keys in
     /// `[composing]`, `[converting]` and `[predicting]` -- it must not have
     /// widened into "always consume named keys". `[idle]` never binds
@@ -8128,6 +8530,7 @@ mod tests {
                     symbol: Width::FollowMode,
                 },
                 punctuation: PunctuationStyle::default(),
+                brackets: BracketStyle::default(),
             },
         );
         let mut out = OutputBuf::new();
@@ -8221,15 +8624,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v13_version_is_rejected() {
+    fn hello_with_the_previous_v14_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 14,
-            "history deletion capability adds v14 wire data"
+            PROTOCOL_VERSION, 15,
+            "the UiState appearance field adds v15 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 13 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 14 }, &mut out);
 
         assert_eq!(
             reply,
@@ -8238,10 +8641,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v14_version_is_accepted() {
+    fn hello_with_v15_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 14,
-            "history deletion capability adds v14 wire data"
+            PROTOCOL_VERSION, 15,
+            "the UiState appearance field adds v15 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
@@ -8757,6 +9160,7 @@ mod tests {
                 symbol: Width::FollowMode,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         let mut dispatcher = Dispatcher::with_parts(table, keymap, normalizer);
         let mut out = OutputBuf::new();
@@ -9178,6 +9582,7 @@ mod tests {
                     symbol: Width::Half,
                 },
                 punctuation: PunctuationStyle::default(),
+                brackets: BracketStyle::default(),
             },
             prediction_enabled: true,
             suggest_accept: SuggestAccept::Tab,
@@ -9458,6 +9863,7 @@ mod tests {
                     symbol: Width::Half,
                 },
                 punctuation: PunctuationStyle::default(),
+                brackets: BracketStyle::default(),
             },
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,

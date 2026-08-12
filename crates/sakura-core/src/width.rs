@@ -12,7 +12,7 @@
 //! This module is a pure, platform-free, allocation-free `char -> char`
 //! transform plus the plumbing to walk a `&str` through it into a
 //! [`TextSink`]. It knows nothing about romaji, dictionaries, or TSF — only
-//! Unicode code points and the two settings that govern them.
+//! Unicode code points and the three settings that govern them.
 
 use crate::editing::{half_katakana, katakana_char};
 use crate::simd;
@@ -75,6 +75,38 @@ pub enum PunctuationStyle {
     /// `、` and `．` — the mixed convention some engineers prefer: Japanese
     /// comma, Western period.
     Mixed,
+    /// `，` and `。` — Western comma with Japanese period.
+    CommaKuten,
+}
+
+impl PunctuationStyle {
+    /// Stable order used by settings controls and persistence tests.
+    pub const ALL: [Self; 4] = [
+        Self::KutenTouten,
+        Self::CommaPeriod,
+        Self::Mixed,
+        Self::CommaKuten,
+    ];
+
+    /// Returns `(comma_is_full_width, period_is_full_width)`.
+    pub const fn parts(self) -> (bool, bool) {
+        match self {
+            Self::KutenTouten => (false, false),
+            Self::CommaPeriod => (true, true),
+            Self::Mixed => (false, true),
+            Self::CommaKuten => (true, false),
+        }
+    }
+
+    /// Builds a style from the independent comma and period choices.
+    pub const fn from_parts(comma_is_full_width: bool, period_is_full_width: bool) -> Self {
+        match (comma_is_full_width, period_is_full_width) {
+            (false, false) => Self::KutenTouten,
+            (true, true) => Self::CommaPeriod,
+            (false, true) => Self::Mixed,
+            (true, false) => Self::CommaKuten,
+        }
+    }
 }
 
 impl Default for PunctuationStyle {
@@ -85,8 +117,42 @@ impl Default for PunctuationStyle {
     }
 }
 
+/// Which bracket pair the width-policy choke point emits.
+///
+/// Brackets are deliberately independent from the generic symbol-width
+/// channel.  Japanese text normally uses corner brackets (`「」`), while
+/// technical prose often wants full-width square brackets (`［］`).  ASCII,
+/// full-width square, and Japanese corner/double-corner source forms all map
+/// to the selected pair so a pasted candidate cannot bypass the setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BracketStyle {
+    #[default]
+    Corner,
+    Square,
+}
+
+impl BracketStyle {
+    /// Stable order used by settings controls and persistence tests.
+    pub const ALL: [Self; 2] = [Self::Corner, Self::Square];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Corner => "corner",
+            Self::Square => "square",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "corner" => Some(Self::Corner),
+            "square" => Some(Self::Square),
+            _ => None,
+        }
+    }
+}
+
 /// The width-policy choke point itself: a pure `(text, mode) -> text`
-/// transform parameterized by the two DESIGN §2 settings. Stateless and
+/// transform parameterized by the three DESIGN §2 settings. Stateless and
 /// `Copy` — callers are expected to hold one of these per session (or one
 /// globally, if width policy is not per-app) and reuse it for every output
 /// path.
@@ -94,6 +160,7 @@ impl Default for PunctuationStyle {
 pub struct Normalizer {
     pub width: WidthPolicy,
     pub punctuation: PunctuationStyle,
+    pub brackets: BracketStyle,
 }
 
 impl Normalizer {
@@ -224,10 +291,10 @@ impl Normalizer {
             // how long it is may be a vector load. Japanese text stops a run
             // at every character, so checking first is what keeps kana from
             // paying vector cost to be told zero.
-            if simd::admits(lut, first) {
+            if simd::admits(&lut, first) {
                 // Sound because a run only ever covers ASCII bytes, so both
                 // ends are character boundaries (see `simd`'s module docs).
-                let (run, tail) = rest.split_at(scan(rest.as_bytes(), lut));
+                let (run, tail) = rest.split_at(scan(rest.as_bytes(), &lut));
                 if dst.push_str(run).is_err() {
                     // `push_str` is all-or-nothing, so nothing landed — and
                     // this function promises the prefix that fits, not an
@@ -283,12 +350,18 @@ impl Normalizer {
     }
 
     /// The set of single-byte characters this policy leaves alone in `mode`.
-    fn passthrough_lut(&self, mode: Mode) -> &'static simd::Lut {
-        simd::passthrough_lut(
+    fn passthrough_lut(&self, mode: Mode) -> simd::Lut {
+        let mut lut = *simd::passthrough_lut(
             wants_full(self.width.alnum, mode),
             wants_full(self.width.number, mode),
             wants_full(self.width.symbol, mode),
-        )
+        );
+        // `[`/`]` are otherwise admitted by the ASCII symbol LUT.  They are
+        // owned by the bracket setting, so stop SIMD runs at both bytes and
+        // let `normalize_char` map them just like the non-ASCII pairs.
+        lut[0x0B] &= !(1 << 5); // '[' (0x5B)
+        lut[0x0D] &= !(1 << 5); // ']' (0x5D)
+        lut
     }
 
     /// Normalizes one character. This is the entire policy in one pure
@@ -307,6 +380,9 @@ impl Normalizer {
         // fall through untouched to ordinary symbol-width handling below.
         if let Some(role) = punct_role(c) {
             return map_punct(role, self.punctuation);
+        }
+        if let Some(role) = bracket_role(c) {
+            return map_bracket(role, self.brackets);
         }
         match classify(c) {
             CharClass::Alpha => apply_width(c, wants_full(self.width.alnum, mode)),
@@ -409,6 +485,29 @@ enum PunctRole {
     Period,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BracketRole {
+    Open,
+    Close,
+}
+
+fn bracket_role(c: char) -> Option<BracketRole> {
+    match c {
+        '[' | '［' | '「' | '『' => Some(BracketRole::Open),
+        ']' | '］' | '」' | '』' => Some(BracketRole::Close),
+        _ => None,
+    }
+}
+
+fn map_bracket(role: BracketRole, style: BracketStyle) -> char {
+    match (style, role) {
+        (BracketStyle::Corner, BracketRole::Open) => '「',
+        (BracketStyle::Corner, BracketRole::Close) => '」',
+        (BracketStyle::Square, BracketRole::Open) => '［',
+        (BracketStyle::Square, BracketRole::Close) => '］',
+    }
+}
+
 /// Identifies the four code points the punctuation choke point owns
 /// (DESIGN §2). Returns `None` for every other character, including ASCII
 /// `,`/`.`, which are ordinary symbols governed by `width.symbol` instead.
@@ -429,6 +528,8 @@ fn map_punct(role: PunctRole, style: PunctuationStyle) -> char {
         (PunctuationStyle::CommaPeriod, PunctRole::Period) => '\u{FF0E}', // ．
         (PunctuationStyle::Mixed, PunctRole::Comma) => '\u{3001}',       // 、
         (PunctuationStyle::Mixed, PunctRole::Period) => '\u{FF0E}',      // ．
+        (PunctuationStyle::CommaKuten, PunctRole::Comma) => '\u{FF0C}',  // ，
+        (PunctuationStyle::CommaKuten, PunctRole::Period) => '\u{3002}', // 。
     }
 }
 
@@ -446,6 +547,7 @@ mod tests {
                 symbol: Width::Full,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         assert_eq!(full.normalize_char('a', Mode::Direct), 'ａ');
         assert_eq!(full.normalize_char('0', Mode::Direct), '０');
@@ -470,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn ascii_printable_half_to_full_to_half_is_identity_except_comma_and_period() {
+    fn ascii_printable_half_to_full_to_half_is_identity_except_owned_punctuation_and_brackets() {
         let full = Normalizer {
             width: WidthPolicy {
                 alnum: Width::Full,
@@ -478,6 +580,7 @@ mod tests {
                 symbol: Width::Full,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         let half = Normalizer::default();
         for cp in 0x21u32..=0x7E {
@@ -488,7 +591,7 @@ mod tests {
             // tripping them through the *symbol* channel is impossible by
             // design — see `comma_and_period_full_width_forms_are_owned_by_punctuation`
             // below for the actual, documented, correct behavior.
-            if c == ',' || c == '.' {
+            if matches!(c, ',' | '.' | '[' | ']') {
                 continue;
             }
             let widened = full.normalize_char(c, Mode::Direct);
@@ -510,6 +613,7 @@ mod tests {
                 symbol: Width::Full,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         assert_eq!(full_symbol.normalize_char(',', Mode::Direct), '\u{FF0C}');
         assert_eq!(full_symbol.normalize_char('.', Mode::Direct), '\u{FF0E}');
@@ -540,6 +644,7 @@ mod tests {
                 symbol: Width::Full,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         let half = Normalizer::default();
         assert_eq!(full.normalize_char(' ', Mode::Direct), '\u{3000}');
@@ -567,6 +672,7 @@ mod tests {
                 symbol: Width::Half,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         let mut out = String::new();
         normalizer
@@ -584,6 +690,7 @@ mod tests {
                 symbol: Width::FollowMode,
             },
             punctuation: PunctuationStyle::default(),
+            brackets: BracketStyle::default(),
         };
         assert_eq!(normalizer.normalize_char('a', Mode::FullAlnum), 'ａ');
         for mode in Mode::ALL {
@@ -605,7 +712,7 @@ mod tests {
         // covering the "backward" direction too, e.g. ，-> 、 under
         // KutenTouten, not just the forward 、-> 、 identity.
         let sources = ['\u{3001}', '\u{3002}', '\u{FF0C}', '\u{FF0E}'];
-        let cases: [(PunctuationStyle, [char; 4]); 3] = [
+        let cases: [(PunctuationStyle, [char; 4]); 4] = [
             (
                 PunctuationStyle::KutenTouten,
                 ['\u{3001}', '\u{3002}', '\u{3001}', '\u{3002}'],
@@ -618,11 +725,16 @@ mod tests {
                 PunctuationStyle::Mixed,
                 ['\u{3001}', '\u{FF0E}', '\u{3001}', '\u{FF0E}'],
             ),
+            (
+                PunctuationStyle::CommaKuten,
+                ['\u{FF0C}', '\u{3002}', '\u{FF0C}', '\u{3002}'],
+            ),
         ];
         for (style, expected) in cases {
             let normalizer = Normalizer {
                 width: WidthPolicy::default(),
                 punctuation: style,
+                brackets: BracketStyle::default(),
             };
             for (src, want) in sources.iter().zip(expected.iter()) {
                 assert_eq!(
@@ -631,6 +743,42 @@ mod tests {
                     "style {style:?} src {src:?}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn bracket_style_normalizes_all_supported_source_pairs() {
+        let sources = ['[', ']', '［', '］', '「', '」', '『', '』'];
+        for style in BracketStyle::ALL {
+            let expected = match style {
+                BracketStyle::Corner => ['「', '」', '「', '」', '「', '」', '「', '」'],
+                BracketStyle::Square => ['［', '］', '［', '］', '［', '］', '［', '］'],
+            };
+            let normalizer = Normalizer {
+                width: WidthPolicy::default(),
+                punctuation: PunctuationStyle::default(),
+                brackets: style,
+            };
+            for (source, want) in sources.into_iter().zip(expected) {
+                assert_eq!(normalizer.normalize_char(source, Mode::Direct), want);
+            }
+
+            // Keep the SIMD fast path honest too: a long ASCII run must stop
+            // at the bracket bytes so normalize_char owns them rather than
+            // copying them through unchanged.
+            let source = "[x]".repeat(16);
+            let mut rendered = String::new();
+            normalizer
+                .normalize_into(&source, Mode::Direct, &mut rendered)
+                .expect("growable output accepts the long bracket sample");
+            let (open, close) = match style {
+                BracketStyle::Corner => ('\u{300c}', '\u{300d}'),
+                BracketStyle::Square => ('\u{ff3b}', '\u{ff3d}'),
+            };
+            assert!(rendered.contains(open));
+            assert!(rendered.contains(close));
+            assert!(!rendered.contains('['));
+            assert!(!rendered.contains(']'));
         }
     }
 
@@ -646,6 +794,7 @@ mod tests {
                 symbol: Width::Half,
             },
             punctuation: PunctuationStyle::CommaPeriod,
+            brackets: BracketStyle::default(),
         };
         assert_eq!(
             normalizer.normalize_char('\u{3001}', Mode::Direct),
@@ -679,6 +828,7 @@ mod tests {
                 symbol: Width::Full,
             },
             punctuation: PunctuationStyle::CommaPeriod,
+            brackets: BracketStyle::default(),
         };
         for c in ['あ', 'ア', '漢', '𠮷', '🍣'] {
             assert_eq!(normalizer.normalize_char(c, Mode::Direct), c);
@@ -689,24 +839,24 @@ mod tests {
     /// all eight passthrough tables rather than the default one.
     fn every_normalizer() -> Vec<Normalizer> {
         let widths = [Width::Half, Width::Full, Width::FollowMode];
-        let styles = [
-            PunctuationStyle::KutenTouten,
-            PunctuationStyle::CommaPeriod,
-            PunctuationStyle::Mixed,
-        ];
+        let styles = PunctuationStyle::ALL;
+        let bracket_styles = BracketStyle::ALL;
         let mut all = Vec::new();
         for alnum in widths {
             for number in widths {
                 for symbol in widths {
                     for punctuation in styles {
-                        all.push(Normalizer {
-                            width: WidthPolicy {
-                                alnum,
-                                number,
-                                symbol,
-                            },
-                            punctuation,
-                        });
+                        for brackets in bracket_styles {
+                            all.push(Normalizer {
+                                width: WidthPolicy {
+                                    alnum,
+                                    number,
+                                    symbol,
+                                },
+                                punctuation,
+                                brackets,
+                            });
+                        }
                     }
                 }
             }
@@ -795,6 +945,7 @@ mod tests {
                     symbol: Width::Full,
                 },
                 punctuation: PunctuationStyle::CommaPeriod,
+                brackets: BracketStyle::default(),
             },
         ];
         for normalizer in policies {
@@ -840,6 +991,7 @@ mod tests {
                 symbol: Width::Half,
             },
             punctuation: PunctuationStyle::KutenTouten,
+            brackets: BracketStyle::default(),
         };
         // "abc" is a run; 、is three bytes and does not fit in the last one.
         let mut dst = FixedStr::<4>::new();
@@ -881,12 +1033,27 @@ mod tests {
             }
         );
         assert_eq!(PunctuationStyle::default(), PunctuationStyle::KutenTouten);
+        assert_eq!(BracketStyle::default(), BracketStyle::Corner);
         assert_eq!(
             Normalizer::default(),
             Normalizer {
                 width: WidthPolicy::default(),
                 punctuation: PunctuationStyle::default(),
+                brackets: BracketStyle::default(),
             }
+        );
+    }
+
+    #[test]
+    fn punctuation_parts_cover_all_independent_combinations() {
+        assert_eq!(PunctuationStyle::ALL.len(), 4);
+        for style in PunctuationStyle::ALL {
+            let (comma_full, period_full) = style.parts();
+            assert_eq!(PunctuationStyle::from_parts(comma_full, period_full), style);
+        }
+        assert_eq!(
+            PunctuationStyle::from_parts(true, false),
+            PunctuationStyle::CommaKuten
         );
     }
 }

@@ -34,7 +34,12 @@ const RANKED_SCRATCH: usize = MAX_SUGGESTIONS * 4;
 const USER_DICTIONARY_BONUS: i64 = 3_000;
 const BASE_IT_BIAS_PER_MILLE: u16 = 100;
 const MAX_IT_BOOST: i64 = 800;
-const MAX_HISTORY_SUGGESTIONS: usize = 4;
+/// Maximum retained-history candidates copied into one prediction result.
+///
+/// This output boundary is intentionally independent from learning's 128-slot
+/// in-memory retention window: history keeps a broader ranking window while a
+/// single result reserves room for dictionary and user suggestions.
+const MAX_HISTORY_SUGGESTIONS_PER_RESULT: usize = 4;
 
 /// Engine-internal provenance assigned before merged prediction results are
 /// deduplicated. It never crosses the protocol boundary: the renderer and TSF
@@ -648,7 +653,7 @@ impl PredictionIndex {
                             accepted += 1;
                         }
                     }
-                    accepted < MAX_HISTORY_SUGGESTIONS
+                    accepted < MAX_HISTORY_SUGGESTIONS_PER_RESULT
                 },
             );
         }
@@ -1221,6 +1226,54 @@ mod tests {
             .candidates()
             .iter()
             .any(|candidate| candidate.surface() == "関数"));
+        runtime.stop().expect("joined worker");
+    }
+
+    #[test]
+    fn prediction_limits_displayed_history_candidates_without_trimming_retention() {
+        let conversion = conversion();
+        let learning = Arc::new(LearningService::memory());
+        for index in 0..(MAX_HISTORY_SUGGESTIONS_PER_RESULT + 2) {
+            learning.learn(
+                &format!("history-{index}"),
+                &format!("history-surface-{index}"),
+                0,
+                0,
+            );
+        }
+
+        let mut retained = Vec::new();
+        learning.visit_prediction_history("history-", |reading, surface, _, _| {
+            retained.push((reading.to_owned(), surface.to_owned()));
+            true
+        });
+        assert_eq!(
+            retained.len(),
+            MAX_HISTORY_SUGGESTIONS_PER_RESULT + 2,
+            "the retained history window remains broader than one displayed result"
+        );
+
+        let runtime =
+            PredictionRuntime::start_with_learning(Arc::clone(&conversion), Arc::clone(&learning))
+                .expect("runtime");
+        let result = runtime
+            .service()
+            .request(1, 1, "history-", 0, Duration::from_millis(100))
+            .expect("prediction");
+
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.source() == PredictionSource::History)
+                .count(),
+            MAX_HISTORY_SUGGESTIONS_PER_RESULT
+        );
+        assert_eq!(
+            result.candidates().len(),
+            MAX_HISTORY_SUGGESTIONS_PER_RESULT,
+            "no dictionary fixture entry matches the dedicated history prefix"
+        );
         runtime.stop().expect("joined worker");
     }
 
