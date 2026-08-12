@@ -9,6 +9,9 @@ use std::path::{Component, Path, PathBuf};
 use dictc::context_corpus::{commit_extraction, extract_articles, verify_extraction};
 use dictc::context_dataset::load_pinned_source;
 use dictc::context_dataset::{build_dataset, verify_dataset, BuildConfig};
+use dictc::context_rerank_import::{
+    import_rerank_snapshot, verify_rerank_import, RerankImportConfig,
+};
 
 const DEFAULT_TIER_A_AUDIT: usize = 1_000;
 const DEFAULT_TIER_B_AUDIT: usize = 100;
@@ -36,8 +39,88 @@ fn run(arguments: Vec<String>) -> Result<(), String> {
         "verify" => verify(&flags),
         "extract" => extract(&flags),
         "verify-extraction" => verify_extracted(&flags),
+        "import-rerank" => import_rerank(&flags),
+        "verify-rerank-import" => verify_import(&flags),
         _ => Err(format!("unknown command {command:?}\n{}", usage())),
     }
+}
+
+fn import_rerank(flags: &BTreeMap<String, String>) -> Result<(), String> {
+    reject_unknown(
+        flags,
+        &[
+            "--source-spans",
+            "--source-span-manifest",
+            "--source-span-manifest-sha256",
+            "--exporter-records",
+            "--snapshot-manifest",
+            "--snapshot-manifest-sha256",
+            "--source-id",
+            "--output-dir",
+            "--repo-root",
+        ],
+    )?;
+    let repo_root = canonical_existing(
+        flags
+            .get("--repo-root")
+            .map(PathBuf::from)
+            .unwrap_or(env::current_dir().map_err(|error| error.to_string())?),
+        "repository root",
+    )?;
+    let source_spans = canonical_existing(required(flags, "--source-spans")?, "source spans")?;
+    let source_span_manifest = canonical_existing(
+        required(flags, "--source-span-manifest")?,
+        "source span manifest",
+    )?;
+    let expected_source_span_manifest_sha256 = required(flags, "--source-span-manifest-sha256")?
+        .to_string_lossy()
+        .into_owned();
+    let exporter_records =
+        canonical_existing(required(flags, "--exporter-records")?, "exporter records")?;
+    let snapshot_manifest =
+        canonical_existing(required(flags, "--snapshot-manifest")?, "snapshot manifest")?;
+    let expected_snapshot_manifest_sha256 = required(flags, "--snapshot-manifest-sha256")?
+        .to_string_lossy()
+        .into_owned();
+    let output_directory = canonical_new_directory(required(flags, "--output-dir")?)?;
+    for (path, label) in [
+        (&source_spans, "source spans"),
+        (&source_span_manifest, "source span manifest"),
+        (&exporter_records, "exporter records"),
+        (&snapshot_manifest, "snapshot manifest"),
+        (&output_directory, "output directory"),
+    ] {
+        require_external(&repo_root, path, label)?;
+    }
+    let source_id = required(flags, "--source-id")?
+        .to_string_lossy()
+        .into_owned();
+    let manifest = import_rerank_snapshot(&RerankImportConfig {
+        source_spans,
+        source_span_manifest,
+        expected_source_span_manifest_sha256,
+        exporter_records,
+        snapshot_manifest,
+        expected_snapshot_manifest_sha256,
+        source_id,
+        output_directory,
+    })?;
+    println!(
+        "imported {} records and {} candidates (Tier A {}, Tier C {})",
+        manifest.records, manifest.candidates, manifest.tier_a_records, manifest.tier_c_records
+    );
+    Ok(())
+}
+
+fn verify_import(flags: &BTreeMap<String, String>) -> Result<(), String> {
+    reject_unknown(flags, &["--import-dir"])?;
+    let directory = canonical_existing(required(flags, "--import-dir")?, "import directory")?;
+    let manifest = verify_rerank_import(&directory)?;
+    println!(
+        "verified {} imported records and {} candidates",
+        manifest.records, manifest.candidates
+    );
+    Ok(())
 }
 
 fn extract(flags: &BTreeMap<String, String>) -> Result<(), String> {
@@ -298,7 +381,7 @@ fn require_external(repo_root: &Path, path: &Path, label: &str) -> Result<(), St
 }
 
 fn usage() -> String {
-    "usage:\n  context-dataset extract [--xml <external-decompressed.xml>] --source-manifest <source-manifest.json> --output-dir <new-external-dir> --extractor-sha256 <hex> [--repo-root <dir>]\n  context-dataset verify-extraction --extraction-dir <dir>\n  context-dataset build --records <external.jsonl> --source-manifest <source-manifest.json> --output-dir <new-external-dir> --generator-sha256 <hex> --dictionary-sha256 <hex> [--audit-tier-a 1000] [--audit-tier-b 100] [--audit-tier-c 100] [--repo-root <dir>]\n  context-dataset verify --dataset-dir <dir>\n\nOmit --xml to stream decompressed MediaWiki XML from stdin.".into()
+    "usage:\n  context-dataset extract [--xml <external-decompressed.xml>] --source-manifest <source-manifest.json> --output-dir <new-external-dir> --extractor-sha256 <hex> [--repo-root <dir>]\n  context-dataset verify-extraction --extraction-dir <dir>\n  context-dataset import-rerank --source-spans <external.jsonl> --source-span-manifest <external.json> --source-span-manifest-sha256 <hex> --exporter-records <external.jsonl> --snapshot-manifest <external.json> --snapshot-manifest-sha256 <hex> --source-id <id> --output-dir <new-external-dir> [--repo-root <dir>]\n  context-dataset verify-rerank-import --import-dir <dir>\n  context-dataset build --records <external.jsonl> --source-manifest <source-manifest.json> --output-dir <new-external-dir> --generator-sha256 <hex> --dictionary-sha256 <hex> [--audit-tier-a 1000] [--audit-tier-b 100] [--audit-tier-c 100] [--repo-root <dir>]\n  context-dataset verify --dataset-dir <dir>\n\nOmit --xml to stream decompressed MediaWiki XML from stdin.".into()
 }
 
 #[cfg(test)]

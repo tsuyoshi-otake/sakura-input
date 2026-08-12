@@ -1,6 +1,6 @@
 # Context Prediction — Phase 5B Deterministic Dataset Gate
 
-Status: offline schema, split, deduplication, audit-selection, and verification
+Status: offline schema v2, split, deduplication, audit-selection, and verification
 tooling for Issue #34. This change does not contain a Wikipedia dump, a real
 Sakura replay, a generated dataset, a completed human audit, or a model.
 
@@ -16,10 +16,12 @@ The gate deliberately rejects random dictionary-word negatives. Candidate
 records must carry the transient values and structural fields from an actual
 Sakura prediction replay: runtime candidate id, reading, surface, dictionary
 entry ordinal, base cost, authority, source, right id, and IT-domain marker.
-Only ordinary system-dictionary candidates are accepted. Learned history and
-user-dictionary candidates are rejected so private per-user data cannot enter
-the public-corpus lane. Their production priority is evaluated separately and
-must still have zero loss at the Issue #34 quality gate.
+Only ordinary public converter paths are accepted: exact or compound system
+dictionary paths and explicitly classified generated fallback paths. Learned
+history and user-dictionary candidates are rejected so private per-user data
+cannot enter the public-corpus lane. Generated paths carry no invented exact
+dictionary ordinal. Production priority for protected candidates is evaluated
+separately and must still have zero loss at the Issue #34 quality gate.
 
 The producer owns Tier assignment and must preserve its evidence for human
 review:
@@ -106,7 +108,8 @@ is detected.
 
 Still required before the data gate can pass:
 
-- stream-extract the pinned dump and implement the actual Sakura replay adapter;
+- stream-extract the pinned dump and run the implemented Sakura-Rerank import
+  adapter against externally held verified artifacts;
 - bind the adapter executable and stock dictionary hashes to a real run;
 - generate and independently review the external Tier A/B/C audit artifacts;
 - record at least 1,000 Tier A decisions, >=99.5% point precision, and >=99.0%

@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
 
-pub const RECORD_SCHEMA_VERSION: u16 = 1;
-pub const DATASET_SCHEMA_VERSION: u16 = 1;
+pub const RECORD_SCHEMA_VERSION: u16 = 2;
+pub const DATASET_SCHEMA_VERSION: u16 = 2;
 pub const SPLIT_ALGORITHM: &str = "sha256-article-80-10-10-v1";
 pub const IDENTITY_ALGORITHM: &str = "sha256-nfc-length-framed-v1";
 pub const NEAR_DUPLICATE_ALGORITHM: &str = "nfc-alphanumeric-layout-insensitive-v1";
@@ -74,6 +74,9 @@ pub enum CandidateAuthority {
 pub enum CandidateSource {
     History,
     SystemDictionary,
+    /// A public-corpus-safe converter path containing generated literal,
+    /// reading, or katakana fallback edges and no personal dictionary edges.
+    GeneratedFallback,
     UserDictionary,
 }
 
@@ -774,20 +777,17 @@ fn validate_candidate_contract(candidate: &CandidateRecord) -> Result<(), String
         DictionaryKind::None => candidate.dictionary_ordinal.is_none(),
         DictionaryKind::System | DictionaryKind::User => candidate.dictionary_ordinal.is_some(),
     };
-    let structural_valid = matches!(
-        (
-            candidate.source,
-            candidate.authority,
-            candidate.dictionary_kind
-        ),
-        (
-            CandidateSource::SystemDictionary,
-            CandidateAuthority::Ordinary,
-            DictionaryKind::System
-        )
-    );
+    let structural_valid = candidate.authority == CandidateAuthority::Ordinary
+        && matches!(
+            (candidate.source, candidate.dictionary_kind),
+            (CandidateSource::SystemDictionary, DictionaryKind::System)
+                | (CandidateSource::SystemDictionary, DictionaryKind::None)
+                | (CandidateSource::GeneratedFallback, DictionaryKind::None)
+        );
     if !dictionary_valid || !structural_valid {
-        return Err("offline corpus candidates must be ordinary system-dictionary entries".into());
+        return Err(
+            "offline corpus candidates must be ordinary public system or generated paths".into(),
+        );
     }
     Ok(())
 }

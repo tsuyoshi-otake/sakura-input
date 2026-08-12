@@ -15,6 +15,7 @@ use sakura_proto::MAX_PREEDIT_BYTES;
 pub mod category;
 pub mod context_corpus;
 pub mod context_dataset;
+pub mod context_rerank_import;
 pub mod glossary;
 pub mod llm_detail_targets;
 pub mod llm_details;
