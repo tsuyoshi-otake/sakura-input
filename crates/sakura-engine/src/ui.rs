@@ -38,13 +38,14 @@
 //! the distinction; the two methods here are what make it reliable rather
 //! than a race the uninstaller loses sometimes.
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
-    Candidate, CandidateDetail, CandidateKind, CandidateList, FixedStr, FixedVec, Mode, OutputBuf,
-    Revision, ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES,
+    AppearanceTheme, Candidate, CandidateDetail, CandidateKind, CandidateList, FixedStr, FixedVec,
+    Mode, OutputBuf, Revision, ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES,
     MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
     MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_CANDIDATE_TEXT_BYTES,
 };
@@ -402,6 +403,7 @@ impl CandidateDetailSnapshot {
 #[derive(Debug)]
 struct UiSnapshot {
     revision: Revision,
+    appearance_theme: AppearanceTheme,
     mode: Option<Mode>,
     has_candidates: bool,
     candidates: CandidateSnapshot,
@@ -418,9 +420,10 @@ struct UiSnapshot {
 }
 
 impl UiSnapshot {
-    fn initial() -> Self {
+    fn initial(appearance_theme: AppearanceTheme) -> Self {
         Self {
             revision: 1,
+            appearance_theme,
             mode: None,
             has_candidates: false,
             candidates: CandidateSnapshot::new(),
@@ -436,6 +439,7 @@ impl UiSnapshot {
     fn to_owned(&self) -> UiState {
         UiState {
             revision: self.revision,
+            appearance_theme: self.appearance_theme,
             mode: self.mode,
             candidates: self.has_candidates.then(|| self.candidates.to_owned()),
             candidate_detail: self
@@ -452,6 +456,10 @@ impl UiSnapshot {
 /// The current UI state, and a way to wait for the next one.
 #[derive(Debug)]
 pub struct UiBoard {
+    /// Last successfully published process-wide preference. This is separate
+    /// from `state` only so the poisoned-lock fallback can still describe the
+    /// last known-good palette without guessing from the Windows theme.
+    appearance_theme: AtomicU8,
     state: Mutex<UiSnapshot>,
     changed: Condvar,
     /// Watchers that have been handed a state but have not finished
@@ -481,12 +489,44 @@ impl UiBoard {
     /// indicator to draw: DESIGN 8 specifies the あ/A indicator as
     /// something that appears *on mode change*, not a permanent overlay.
     pub fn new() -> Self {
+        Self::with_appearance_theme(AppearanceTheme::Auto)
+    }
+
+    /// A board whose every state carries the configured global appearance.
+    /// App profiles deliberately do not participate: popup appearance is a
+    /// process-wide renderer setting, not per-document input behavior.
+    pub fn with_appearance_theme(appearance_theme: AppearanceTheme) -> Self {
         UiBoard {
-            state: Mutex::new(UiSnapshot::initial()),
+            appearance_theme: AtomicU8::new(appearance_theme as u8),
+            state: Mutex::new(UiSnapshot::initial(appearance_theme)),
             changed: Condvar::new(),
             delivering: Mutex::new(0),
             quiet: Condvar::new(),
         }
+    }
+
+    /// Replaces the global popup appearance after a validated configuration
+    /// reload. A no-op does not advance the revision, while a real change is
+    /// published even if no candidate popup is currently visible so a later
+    /// popup cannot use the old palette.
+    ///
+    /// Returns `true` only when a new state was published. A poisoned state
+    /// lock is retained unchanged: configuration reload must not turn a UI
+    /// recovery path into a guessed theme change.
+    pub fn set_appearance_theme(&self, appearance_theme: AppearanceTheme) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            return false;
+        };
+        if state.appearance_theme == appearance_theme {
+            return false;
+        }
+        state.revision = state.revision.wrapping_add(1);
+        state.appearance_theme = appearance_theme;
+        self.appearance_theme
+            .store(appearance_theme as u8, Ordering::Release);
+        drop(state);
+        self.changed.notify_all();
+        true
     }
 
     /// The delivery count, readable even if a panic poisoned it.
@@ -755,6 +795,9 @@ impl UiBoard {
             return (
                 UiState {
                     revision: since,
+                    appearance_theme: appearance_theme_from_u8(
+                        self.appearance_theme.load(Ordering::Acquire),
+                    ),
                     mode: None,
                     candidates: None,
                     candidate_detail: None,
@@ -770,6 +813,15 @@ impl UiBoard {
             .wait_timeout_while(state, HEARTBEAT, |state| state.revision == since)
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         (state.to_owned(), delivery)
+    }
+}
+
+fn appearance_theme_from_u8(value: u8) -> AppearanceTheme {
+    match value {
+        0 => AppearanceTheme::Auto,
+        1 => AppearanceTheme::Light,
+        2 => AppearanceTheme::Dark,
+        _ => AppearanceTheme::Auto,
     }
 }
 
@@ -852,6 +904,33 @@ mod tests {
         assert_eq!(state.revision, 1);
         assert_eq!(state.mode, None);
         assert!(!state.stopping);
+    }
+
+    #[test]
+    fn configured_appearance_theme_is_present_in_every_ui_state() {
+        let board = UiBoard::with_appearance_theme(AppearanceTheme::Dark);
+        let initial = look(&board, 0);
+        assert_eq!(initial.appearance_theme, AppearanceTheme::Dark);
+
+        board.publish(Mode::Hiragana);
+        assert_eq!(
+            look(&board, initial.revision).appearance_theme,
+            AppearanceTheme::Dark
+        );
+    }
+
+    #[test]
+    fn reloaded_appearance_publishes_only_a_real_change() {
+        let board = UiBoard::with_appearance_theme(AppearanceTheme::Dark);
+        let initial = look(&board, 0);
+
+        assert!(!board.set_appearance_theme(AppearanceTheme::Dark));
+        assert!(board.set_appearance_theme(AppearanceTheme::Light));
+
+        let updated = look(&board, initial.revision);
+        assert_eq!(updated.appearance_theme, AppearanceTheme::Light);
+        assert_ne!(updated.revision, initial.revision);
+        assert!(!board.set_appearance_theme(AppearanceTheme::Light));
     }
 
     #[test]

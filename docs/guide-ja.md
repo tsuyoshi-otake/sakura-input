@@ -71,6 +71,8 @@ Windows 11 では、Sakura Input が編集可能な入力欄のキャレット�
 sakura_settings.exe config show
 sakura_settings.exe config set keymap ms-ime
 sakura_settings.exe config set prediction on
+sakura_settings.exe config set space-width same-as-input
+sakura_settings.exe config set shift-space opposite
 sakura_settings.exe profile set WindowsTerminal.exe hiragana off disabled
 sakura_settings.exe dictionary add さくら "Sakura Input" proper-noun project
 sakura_settings.exe dictionary import user.txt auto merge
@@ -78,6 +80,10 @@ sakura_settings.exe dictionary export backup.txt mozc
 sakura_settings.exe learning export learning.tsv
 sakura_settings.exe diagnostics show tsv
 ```
+
+通常の空白幅は `same-as-input`、`full`、`half` から選べます。Shift+スペースは
+`opposite`、`full`、`half` から選べます。いずれも変換中の Space 操作ではなく、
+アイドル時に確定する空白文字だけを対象にします。
 
 ユーザー辞書の自動判定は Sakura、MS-IME、ATOK、Mozc 形式を対象にします。置換インポートは既存辞書を入れ替えるため、先にエクスポートして退避してください。書き込みは一時ファイルを検証してから原子的に置換し、失敗時に半分だけ更新された状態を残しません。
 

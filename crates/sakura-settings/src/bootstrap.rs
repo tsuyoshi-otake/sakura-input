@@ -11,12 +11,18 @@
 #![cfg(windows)]
 
 use std::ffi::OsString;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 
 use sakura_reg::{com_server, RegistryView};
 use sakura_settings::CALLER_DIRECTORY_VARIABLE;
 
 const PAYLOAD_NAME: &str = "sakura_settings_payload.exe";
+// The payload binary also serves the scriptable CLI and therefore remains a
+// console-subsystem executable.  GUI launches must explicitly suppress a new
+// console; CREATE_NO_WINDOW is inherited neither from the TSF caller nor from
+// this short-lived bootstrap process.
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn main() {
     let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -41,7 +47,8 @@ fn main() {
     if let Ok(directory) = std::env::current_dir() {
         command.env(CALLER_DIRECTORY_VARIABLE, directory);
     }
-    if arguments.is_empty() || is_update_apply(&arguments) {
+    if is_gui_or_update_launch(&arguments) {
+        command.creation_flags(CREATE_NO_WINDOW);
         if let Err(error) = command.spawn() {
             eprintln!(
                 "sakura_settings: could not start {}: {error}",
@@ -69,6 +76,10 @@ fn is_update_apply(arguments: &[OsString]) -> bool {
     arguments.len() == 2 && arguments[0] == "update" && arguments[1] == "apply"
 }
 
+fn is_gui_or_update_launch(arguments: &[OsString]) -> bool {
+    arguments.is_empty() || is_update_apply(arguments)
+}
+
 fn active_payload() -> Result<std::path::PathBuf, String> {
     let directory = com_server::registered_payload_dir(RegistryView::Native)
         .map_err(|error| format!("could not read the active TSF registration: {error}"))?
@@ -81,4 +92,23 @@ fn active_payload() -> Result<std::path::PathBuf, String> {
         ));
     }
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_gui_or_update_launch;
+    use std::ffi::OsString;
+
+    #[test]
+    fn gui_and_update_payloads_are_console_free_but_cli_keeps_console_io() {
+        assert!(is_gui_or_update_launch(&[]));
+        assert!(is_gui_or_update_launch(&[
+            OsString::from("update"),
+            OsString::from("apply"),
+        ]));
+        assert!(!is_gui_or_update_launch(&[
+            OsString::from("config"),
+            OsString::from("show"),
+        ]));
+    }
 }

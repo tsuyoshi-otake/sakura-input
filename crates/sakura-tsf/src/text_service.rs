@@ -47,8 +47,8 @@ use windows::Win32::UI::TextServices::{
     ITfSource_Impl, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
     ITfTextInputProcessor_Impl, ITfTextLayoutSink, ITfTextLayoutSink_Impl, ITfThreadMgr,
     InputScope as TfInputScope, TfLBIClick, TfLayoutCode, GUID_LBI_INPUTMODE, GUID_PROP_INPUTSCOPE,
-    TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_MENU, TF_LBI_STYLE_HIDDENSTATUSCONTROL,
-    TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
+    TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_BUTTON, TF_LBI_STYLE_BTN_MENU,
+    TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, PostMessageW,
@@ -4662,7 +4662,13 @@ impl ITfLangBarItem_Impl for TextService_Impl {
         let mut info = TF_LANGBARITEMINFO {
             clsidService: CLSID_SAKURA_TSF,
             guidItem: GUID_LBI_INPUTMODE,
-            dwStyle: TF_LBI_STYLE_BTN_MENU
+            // The combined styles make this a split button: the language bar
+            // owns the mode menu through `InitMenu`, while `OnClick` receives
+            // the click identity so a right-click can safely expose Settings.
+            // Do not remove BTN_BUTTON: a menu-only item never receives
+            // `OnClick`, so taskbar right-clicks would have no route here.
+            dwStyle: TF_LBI_STYLE_BTN_BUTTON
+                | TF_LBI_STYLE_BTN_MENU
                 | TF_LBI_STYLE_HIDDENSTATUSCONTROL
                 | TF_LBI_STYLE_TEXTCOLORICON,
             ulSort: 0,
@@ -4710,12 +4716,16 @@ impl ITfLangBarItem_Impl for TextService_Impl {
 impl ITfLangBarItemButton_Impl for TextService_Impl {
     fn OnClick(
         &self,
-        _click: TfLBIClick,
+        click: TfLBIClick,
         _point: &windows::Win32::Foundation::POINT,
         _area: *const windows::Win32::Foundation::RECT,
     ) -> Result<()> {
-        // This is a menu button. Its left-click semantics deliberately remain
-        // a no-op until Sakura has a document-safe command to expose here.
+        // Keep every non-context interaction free of engine or document work.
+        // The context action is process-only and cannot retain this COM service
+        // or request an edit session.
+        if mode_item::is_settings_click(click) {
+            mode_item::open_settings()?;
+        }
         Ok(())
     }
 
@@ -7021,5 +7031,20 @@ mod tests {
             unsafe { provider.GetDescription().expect("description") }.to_string(),
             TEXT_SERVICE_DESCRIPTION
         );
+    }
+
+    #[test]
+    fn input_mode_item_exposes_a_split_menu_button_to_tsf() {
+        let service: IUnknown = TextService::new().into();
+        let item: ITfLangBarItem = service.cast().expect("language-bar item");
+        let mut info = TF_LANGBARITEMINFO::default();
+
+        // SAFETY: `item` is a live in-process COM object and `info` is a
+        // writable output structure for the duration of this call.
+        unsafe { item.GetInfo(&mut info).expect("language-bar info") };
+
+        assert_eq!(info.guidItem, GUID_LBI_INPUTMODE);
+        assert_ne!(info.dwStyle & TF_LBI_STYLE_BTN_BUTTON, 0);
+        assert_ne!(info.dwStyle & TF_LBI_STYLE_BTN_MENU, 0);
     }
 }

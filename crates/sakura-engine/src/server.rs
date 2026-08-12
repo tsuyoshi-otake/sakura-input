@@ -39,10 +39,10 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-use sakura_core::{default_app_profiles, AppProfile, Preferences};
+use sakura_core::{default_app_profiles, AppProfile, AppearanceTheme, Preferences};
 use sakura_proto::{
     encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
 };
@@ -53,9 +53,34 @@ use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::input_history::InputHistoryService;
 use crate::learning::{ForgetPredictionOutcome, LearningService};
-use crate::long_conversion::LongConversionService;
-use crate::prediction::PredictionService;
+use crate::long_conversion::{LongConversionRuntime, LongConversionService};
+use crate::prediction::{PredictionRuntime, PredictionService};
 use crate::ui::UiBoard;
+
+#[derive(Debug, Clone)]
+struct RuntimeConfiguration {
+    preferences: Preferences,
+    profiles: Arc<[AppProfile]>,
+}
+
+/// Optional workers are process-wide, but their policy is user-configurable.
+/// The startup path may already own a runtime (the normal fast path); the
+/// dynamic slots cover an engine that started with the feature disabled and is
+/// later enabled from Settings. A worker is created at most once per enabled
+/// configuration and is joined when the slot is dropped.
+#[derive(Debug, Default)]
+struct DynamicRuntimes {
+    prediction: Option<PredictionRuntime>,
+    long_conversion: Option<LongConversionRuntime>,
+    prediction_failed: bool,
+    long_conversion_failed: bool,
+}
+
+#[derive(Debug, Default)]
+struct RuntimeServiceSnapshot {
+    prediction: Option<Arc<PredictionService>>,
+    long_conversion: Option<Arc<LongConversionService>>,
+}
 
 /// Everything a worker thread needs that is not its own pipe instance.
 #[derive(Debug)]
@@ -80,9 +105,127 @@ struct Shared {
     prediction: Option<Arc<PredictionService>>,
     /// Optional isolated ONNX reranker; its child process remains lazy.
     long_conversion: Option<Arc<LongConversionService>>,
-    preferences: Preferences,
-    profiles: Arc<[AppProfile]>,
+    /// Owners for optional runtimes started after the process booted. The
+    /// startup owners remain in `main` for their existing shutdown ordering.
+    dynamic_runtimes: Mutex<DynamicRuntimes>,
+    /// Last complete configuration snapshot accepted by the watcher. Workers
+    /// copy this at connection/request boundaries; no lock is held in the
+    /// dispatcher while it handles a keystroke.
+    configuration: RwLock<RuntimeConfiguration>,
     verbose: bool,
+}
+
+impl Shared {
+    fn configuration_snapshot(&self) -> RuntimeConfiguration {
+        match self.configuration.read() {
+            Ok(configuration) => configuration.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
+
+    fn publish_configuration(&self, preferences: Preferences, profiles: Vec<AppProfile>) {
+        let configuration = RuntimeConfiguration {
+            preferences,
+            profiles: Arc::from(profiles),
+        };
+        match self.configuration.write() {
+            Ok(mut current) => *current = configuration,
+            Err(poisoned) => *poisoned.into_inner() = configuration,
+        }
+        // Appearance is carried in the same atomic snapshot, but the renderer
+        // board still gets its narrow notification so an open popup repaints
+        // without waiting for a key request.
+        self.ui.set_appearance_theme(preferences.appearance_theme);
+    }
+
+    fn runtime_services(
+        &self,
+        preferences: &Preferences,
+        profiles: &[AppProfile],
+    ) -> RuntimeServiceSnapshot {
+        let prediction_requested = preferences.prediction_enabled
+            || profiles.iter().any(|profile| profile.prediction_enabled);
+        let long_requested =
+            preferences.neural_reranker_scope != sakura_core::NeuralRerankerScope::Off;
+        let mut dynamic = match self.dynamic_runtimes.lock() {
+            Ok(dynamic) => dynamic,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if !prediction_requested {
+            // Dropping the owner stops the worker; a dispatcher that still
+            // holds the old Arc is detached below before its next request.
+            dynamic.prediction = None;
+            dynamic.prediction_failed = false;
+        } else if self.prediction.is_none()
+            && dynamic.prediction.is_none()
+            && !dynamic.prediction_failed
+        {
+            if let (Some(conversion), Some(learning)) =
+                (self.conversion.as_ref(), self.learning.as_ref())
+            {
+                match PredictionRuntime::start_with_learning(
+                    Arc::clone(conversion),
+                    Arc::clone(learning),
+                ) {
+                    Ok(runtime) => dynamic.prediction = Some(runtime),
+                    Err(error) => {
+                        dynamic.prediction_failed = true;
+                        report(
+                            self,
+                            format_args!(
+                                "prediction worker could not be enabled from settings: {error}"
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+
+        if !long_requested {
+            dynamic.long_conversion = None;
+            dynamic.long_conversion_failed = false;
+        } else if self.long_conversion.is_none()
+            && dynamic.long_conversion.is_none()
+            && !dynamic.long_conversion_failed
+        {
+            if let Some(conversion) = self.conversion.as_ref() {
+                match LongConversionRuntime::discover(Arc::clone(conversion)) {
+                    Ok(Some(runtime)) => dynamic.long_conversion = Some(runtime),
+                    Ok(None) => dynamic.long_conversion_failed = true,
+                    Err(error) => {
+                        dynamic.long_conversion_failed = true;
+                        report(
+                            self,
+                            format_args!(
+                                "long-conversion reranker could not be enabled from settings: {error}"
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+
+        RuntimeServiceSnapshot {
+            prediction: if prediction_requested {
+                self.prediction
+                    .clone()
+                    .or_else(|| dynamic.prediction.as_ref().map(PredictionRuntime::service))
+            } else {
+                None
+            },
+            long_conversion: if long_requested {
+                self.long_conversion.clone().or_else(|| {
+                    dynamic
+                        .long_conversion
+                        .as_ref()
+                        .map(LongConversionRuntime::service)
+                })
+            } else {
+                None
+            },
+        }
+    }
 }
 
 /// The engine's pipe server.
@@ -272,14 +415,17 @@ impl Server {
                 created: AtomicU32::new(0),
                 idle: AtomicU32::new(0),
                 shutdown,
-                ui: UiBoard::new(),
+                ui: UiBoard::with_appearance_theme(preferences.appearance_theme),
                 conversion,
                 learning,
                 input_history,
                 prediction,
                 long_conversion: None,
-                preferences,
-                profiles,
+                dynamic_runtimes: Mutex::new(DynamicRuntimes::default()),
+                configuration: RwLock::new(RuntimeConfiguration {
+                    preferences,
+                    profiles,
+                }),
                 verbose,
             }),
             stopped,
@@ -289,6 +435,26 @@ impl Server {
     /// The pipe this server listens on.
     pub fn pipe_name(&self) -> &str {
         &self.shared.name
+    }
+
+    /// Returns the narrow theme-only callback kept for callers that already
+    /// have an appearance edge. The complete configuration watcher should use
+    /// [`Self::configuration_publisher`] so keymap and conversion policy are
+    /// applied at the next input boundary as well.
+    pub fn appearance_theme_publisher(&self) -> impl Fn(AppearanceTheme) + Send + 'static {
+        let shared = Arc::clone(&self.shared);
+        move |appearance_theme| {
+            shared.ui.set_appearance_theme(appearance_theme);
+        }
+    }
+
+    /// Callback used by the complete configuration watcher. The snapshot is
+    /// replaced as one unit, then the renderer receives the appearance edge.
+    pub fn configuration_publisher(
+        &self,
+    ) -> impl Fn(Preferences, Vec<AppProfile>) + Send + 'static {
+        let shared = Arc::clone(&self.shared);
+        move |preferences, profiles| shared.publish_configuration(preferences, profiles)
     }
 
     /// Replaces the name before [`run`](Self::run) creates any pipe instance.
@@ -399,6 +565,7 @@ fn thread_failure(error: &std::io::Error) -> windows::core::Error {
 
 /// One instance's whole life: accept, serve, disconnect, repeat.
 fn worker(shared: Arc<Shared>, instance: PipeInstance) {
+    let configuration = shared.configuration_snapshot();
     let dispatcher = match (
         shared.conversion.as_ref(),
         shared.learning.as_ref(),
@@ -409,16 +576,16 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance) {
                 Arc::clone(conversion),
                 Arc::clone(learning),
                 Arc::clone(prediction),
-                shared.preferences,
-                Arc::clone(&shared.profiles),
+                configuration.preferences,
+                Arc::clone(&configuration.profiles),
             )
         }
         (Some(conversion), Some(learning), None) => {
             Dispatcher::new_with_configuration_and_profiles(
                 Arc::clone(conversion),
                 Arc::clone(learning),
-                shared.preferences,
-                Arc::clone(&shared.profiles),
+                configuration.preferences,
+                Arc::clone(&configuration.profiles),
             )
         }
         (Some(conversion), None, _) => Dispatcher::new_with_conversion(Arc::clone(conversion)),
@@ -435,7 +602,7 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance) {
         dispatcher.set_input_history(Arc::clone(history));
     }
     if let Some(long_conversion) = shared.long_conversion.as_ref() {
-        dispatcher.set_long_conversion(Arc::clone(long_conversion));
+        dispatcher.set_long_conversion(Some(Arc::clone(long_conversion)));
     }
     let mut connection = Buffers::new();
 
@@ -651,6 +818,20 @@ fn serve(
             _ => None,
         };
 
+        let configuration = shared.configuration_snapshot();
+        let runtime_services =
+            shared.runtime_services(&configuration.preferences, &configuration.profiles);
+        dispatcher.set_prediction(runtime_services.prediction);
+        dispatcher.set_long_conversion(runtime_services.long_conversion);
+        if let Err(error) = dispatcher
+            .apply_runtime_configuration(configuration.preferences, configuration.profiles)
+        {
+            report(
+                shared,
+                format_args!("configuration update rejected: {error}"),
+            );
+        }
+
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
                 if let Some(session) = output_session {
@@ -791,10 +972,123 @@ mod tests {
             input_history: None,
             prediction: None,
             long_conversion: None,
-            preferences: Preferences::default(),
-            profiles: Arc::from([]),
+            dynamic_runtimes: Mutex::new(DynamicRuntimes::default()),
+            configuration: RwLock::new(RuntimeConfiguration {
+                preferences: Preferences::default(),
+                profiles: Arc::from([]),
+            }),
             verbose: false,
         }
+    }
+
+    #[test]
+    fn configured_dark_appearance_reaches_the_ui_state() {
+        let preferences = Preferences {
+            appearance_theme: sakura_core::AppearanceTheme::Dark,
+            ..Preferences::default()
+        };
+        let server = Server::build(false, None, None, None, None, preferences, Arc::from([]))
+            .expect("server");
+
+        assert_eq!(
+            look(&server.shared.ui, 0).appearance_theme,
+            sakura_core::AppearanceTheme::Dark
+        );
+    }
+
+    #[test]
+    fn configuration_publisher_replaces_input_snapshot_and_repaints_theme() {
+        let server = Server::build(
+            false,
+            None,
+            None,
+            None,
+            None,
+            Preferences::default(),
+            Arc::from([]),
+        )
+        .expect("server");
+        let publish = server.configuration_publisher();
+        let preferences = Preferences {
+            appearance_theme: sakura_core::AppearanceTheme::Dark,
+            association_enabled: false,
+            prediction_enabled: false,
+            ..Preferences::default()
+        };
+        publish(preferences, Vec::new());
+
+        let snapshot = server.shared.configuration_snapshot();
+        assert_eq!(snapshot.preferences, preferences);
+        assert!(snapshot.profiles.is_empty());
+        assert_eq!(
+            look(&server.shared.ui, 0).appearance_theme,
+            preferences.appearance_theme
+        );
+    }
+
+    fn prediction_conversion_fixture() -> Arc<ConversionService> {
+        let entries = dictc::parse_entries(
+            "server-prediction.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t0\t100\t100\tit\tIT用語\n",
+        )
+        .expect("prediction entries");
+        let matrix = dictc::parse_connection(
+            "server-prediction-matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("prediction matrix");
+        let image = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("prediction dictionary")
+                .into_boxed_slice(),
+        );
+        Arc::new(
+            ConversionService::from_static_bytes(image).expect("prediction conversion service"),
+        )
+    }
+
+    #[test]
+    fn optional_prediction_worker_follows_a_live_configuration_change() {
+        let conversion = prediction_conversion_fixture();
+        let learning = Arc::new(LearningService::memory());
+        let server = Server::with_configuration_and_profiles(
+            false,
+            conversion,
+            Arc::clone(&learning),
+            Preferences::default(),
+            Arc::from([]),
+        )
+        .expect("server");
+
+        let enabled = Preferences {
+            prediction_enabled: true,
+            ..Preferences::default()
+        };
+        let services = server.shared.runtime_services(&enabled, &[]);
+        assert!(
+            services.prediction.is_some(),
+            "enabling prediction must start the optional worker on demand"
+        );
+
+        let disabled = Preferences {
+            prediction_enabled: false,
+            ..Preferences::default()
+        };
+        let services = server.shared.runtime_services(&disabled, &[]);
+        assert!(
+            services.prediction.is_none(),
+            "disabling prediction must detach the service before the next key"
+        );
+        let dynamic = server
+            .shared
+            .dynamic_runtimes
+            .lock()
+            .expect("dynamic runtime lock");
+        assert!(
+            dynamic.prediction.is_none(),
+            "disabled worker must be joined"
+        );
     }
 
     fn test_learning_path() -> std::path::PathBuf {
@@ -1031,6 +1325,7 @@ mod tests {
 
         Response::Ui(UiState {
             revision: 1,
+            appearance_theme: sakura_proto::AppearanceTheme::Auto,
             mode: None,
             candidates: Some(CandidateList {
                 kind: CandidateKind::Conversion,

@@ -11,8 +11,8 @@
 //! # M0 scope
 //!
 //! Phase 1 has no conversion (DESIGN's later phases add the dictionary and
-//! candidate list): a session only ever accumulates a romaji-derived kana
-//! reading and commits or discards it whole. That means the
+//! candidate list): a session only ever accumulates a romaji-derived or
+//! keyboard-layout kana reading and commits or discards it whole. That means the
 //! [`sakura_core::keymap::State`] a session reports is always either
 //! [`State::Idle`] or [`State::Composing`] — never `Converting` or
 //! `Predicting` — which is deliberate, not a placeholder still to be wired
@@ -21,16 +21,17 @@
 //! `Mode::Katakana` and `Mode::HalfKatakana` are tracked here (a session can
 //! be *in* either mode) but M0 has no glyph-level hiragana → katakana
 //! transform anywhere in the workspace (`sakura_core` ships none), so a
-//! session in either mode still composes through the same hiragana-only
-//! romaji FSM as `Mode::Hiragana` does. Callers should not read a session
-//! reporting `Mode::Katakana` as a promise that its preedit text is
-//! katakana yet — see `crate::dispatch`'s module docs for how the
-//! dispatcher handles this seam.
+//! session in either mode uses either the hiragana-only romaji FSM or the
+//! configured direct-layout path. Callers should not read a session reporting
+//! `Mode::Katakana` as a promise that its preedit text is katakana yet — see
+//! `crate::dispatch`'s module docs for how the dispatcher handles this seam.
 
 use sakura_core::keymap::State;
 use sakura_core::romaji;
 use sakura_core::{
-    ContextPreferences, ConversionSegment, Normalizer, SegmentTransform, SuggestAccept,
+    resolve_context_preferences, AppProfile, ContextPreferences, ConversionMethod,
+    ConversionSegment, InputMethod, Normalizer, Preferences, SegmentTransform, ShiftSpaceBehavior,
+    SpaceWidth, SuggestAccept,
 };
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
@@ -130,9 +131,19 @@ pub struct Session {
     pub(crate) mode: Mode,
     /// Width and punctuation policy resolved once from the host profile.
     pub(crate) normalizer: Normalizer,
+    /// Space-key policy resolved once from the host profile.
+    pub(crate) space_width: SpaceWidth,
+    pub(crate) shift_space_behavior: ShiftSpaceBehavior,
+    /// Ordinary kana input path resolved once from the host profile.
+    pub(crate) input_method: InputMethod,
+    /// Whether conversion may produce several bunsetsu segments.
+    pub(crate) conversion_method: ConversionMethod,
     /// Prediction policy resolved once from the host profile.
     pub(crate) prediction_enabled: bool,
     pub(crate) suggest_accept: SuggestAccept,
+    /// Whether conversion may carry the previous grammatical connection into
+    /// the next segment. This is the bounded L1 associative-conversion switch.
+    pub(crate) association_enabled: bool,
     /// The input scope of the field this session belongs to (DESIGN 9).
     pub(crate) scope: InputScope,
     /// `true` only after TSF has positively classified the scope. A default
@@ -224,8 +235,13 @@ impl Session {
             process_name: name,
             mode: Mode::Hiragana,
             normalizer: Normalizer::default(),
+            space_width: SpaceWidth::SameAsInput,
+            shift_space_behavior: ShiftSpaceBehavior::Opposite,
+            input_method: InputMethod::Romaji,
+            conversion_method: ConversionMethod::MultiSegment,
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,
+            association_enabled: true,
             scope: InputScope::Normal,
             scope_classified: false,
             history_session_id: 0,
@@ -268,9 +284,14 @@ impl Session {
     /// call this, so a user-selected mode remains authoritative.
     pub(crate) fn apply_context_preferences(&mut self, preferences: ContextPreferences) {
         self.mode = preferences.default_mode;
+        self.input_method = preferences.input_method;
+        self.conversion_method = preferences.conversion_method;
         self.normalizer = preferences.normalizer;
+        self.space_width = preferences.space_width;
+        self.shift_space_behavior = preferences.shift_space_behavior;
         self.prediction_enabled = preferences.prediction_enabled;
         self.suggest_accept = preferences.suggest_accept;
+        self.association_enabled = preferences.association_enabled;
     }
 
     /// The current IME mode.
@@ -1158,6 +1179,34 @@ impl SessionTable {
         }
         self.len = 0;
     }
+
+    /// Applies settings that are safe to change while a host context remains
+    /// alive. The user's current mode and composition are deliberately left
+    /// untouched; only the policies that are resolved from the process profile
+    /// are refreshed for the next request.
+    pub(crate) fn apply_runtime_preferences(
+        &mut self,
+        preferences: Preferences,
+        profiles: &[AppProfile],
+    ) {
+        for slot in self.slots.iter_mut().flatten() {
+            let resolved =
+                resolve_context_preferences(preferences, profiles, slot.1.process_name());
+            slot.1.normalizer = resolved.normalizer;
+            slot.1.space_width = resolved.space_width;
+            slot.1.shift_space_behavior = resolved.shift_space_behavior;
+            slot.1.input_method = resolved.input_method;
+            // Do not alter an active composition's lattice policy halfway
+            // through conversion. The new value is picked up by the next
+            // idle context; this keeps the candidate snapshot coherent.
+            if slot.1.preedit.is_empty() && !slot.1.converting {
+                slot.1.conversion_method = resolved.conversion_method;
+            }
+            slot.1.prediction_enabled = resolved.prediction_enabled;
+            slot.1.suggest_accept = resolved.suggest_accept;
+            slot.1.association_enabled = resolved.association_enabled;
+        }
+    }
 }
 
 impl Default for SessionTable {
@@ -1179,6 +1228,34 @@ mod tests {
         assert_eq!(session.scope(), InputScope::Normal);
         assert_eq!(session.state(), State::Idle);
         assert!(!session.is_composing());
+    }
+
+    #[test]
+    fn runtime_preferences_update_live_policy_without_resetting_mode_or_text() {
+        let mut table = SessionTable::new();
+        let id = table.create("notepad.exe").expect("session");
+        let session = table.get_mut(id).expect("live session");
+        session.mode = Mode::Katakana;
+        session.preedit.push_str("かな").expect("preedit");
+
+        let mut normalizer = Normalizer::default();
+        normalizer.width.alnum = sakura_core::Width::Full;
+        let preferences = Preferences {
+            normalizer,
+            prediction_enabled: false,
+            association_enabled: false,
+            suggest_accept: SuggestAccept::ShiftEnter,
+            ..Preferences::default()
+        };
+        table.apply_runtime_preferences(preferences, &[]);
+
+        let session = table.get(id).expect("live session");
+        assert_eq!(session.mode, Mode::Katakana);
+        assert_eq!(session.preedit.as_str(), "かな");
+        assert_eq!(session.normalizer.width.alnum, sakura_core::Width::Full);
+        assert!(!session.prediction_enabled);
+        assert_eq!(session.suggest_accept, SuggestAccept::ShiftEnter);
+        assert!(!session.association_enabled);
     }
 
     #[test]

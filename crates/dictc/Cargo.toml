@@ -29,6 +29,10 @@ name = "corpus-eval"
 path = "src/bin/corpus_eval.rs"
 
 [[bin]]
+name = "neural-eval"
+path = "src/bin/neural_eval.rs"
+
+[[bin]]
 name = "category-split"
 path = "src/bin/category_split.rs"
 

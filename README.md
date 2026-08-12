@@ -57,10 +57,16 @@ Sakura Input は、Windows 11 x64 向けの日本語入力システムです。M
 ```text
 sakura_settings.exe config show
 sakura_settings.exe config set keymap atok
+sakura_settings.exe config set space-width half
+sakura_settings.exe config set shift-space opposite
 sakura_settings.exe dictionary import user.txt auto merge
 sakura_settings.exe diagnostics show text
 sakura_settings.exe update status
 ```
+
+`space-width` は通常の空白キー（入力文字種と同じ／常に全角／常に半角）、
+`shift-space` は Shift+スペース（スペースの逆／常に全角／常に半角）を設定します。
+変換中の Space は候補・文節操作を優先し、これらのアイドル時空白設定で上書きしません。
 
 自動更新は既定で無効です。設定画面または `sakura_settings.exe update enable` で明示的に有効化した場合だけ、設定アプリ起動時に更新を確認します。インストーラーは HTTPS で取得し、固定された配布元、サイズ、SHA-256、Authenticode 署名をすべて検証してから実行します。設定の root 実行ファイルは安定ランチャーで、実体は現在の versioned payload から起動します。
 

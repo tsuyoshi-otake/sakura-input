@@ -76,10 +76,15 @@ pub struct HistoryDeleteRequest {
     pub candidate_index: u16,
 }
 
-/// Completion proves only that the engine answered the deletion request. It
-/// never authorizes a renderer-side candidate mutation.
+/// Terminal outcome of one bounded deletion attempt. `removed` is true only
+/// when the engine authoritatively removed the row; every connection,
+/// handshake, call, or negative-response failure is reported as false so the
+/// UI can release duplicate-click suppression and allow a retry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HistoryDeleteCompletion(pub HistoryDeleteRequest);
+pub struct HistoryDeleteCompletion {
+    pub request: HistoryDeleteRequest,
+    pub removed: bool,
+}
 
 /// Starts one bounded command worker separate from the long-poll watcher.
 ///
@@ -106,45 +111,41 @@ pub fn spawn_history_deleter(
         .name("sakura-history-delete".to_owned())
         .spawn(move || {
             while let Ok(request) = receiver.recv() {
-                let Ok(mut client) = binding.connect() else {
-                    continue;
-                };
-                if !matches!(
-                    client.call(
-                        &Request::Hello {
-                            client_version: PROTOCOL_VERSION,
-                        },
-                        HISTORY_DELETE_BUDGET,
-                    ),
-                    Ok(Response::Hello { server_version, .. }) if server_version == PROTOCOL_VERSION
-                ) {
-                    continue;
-                }
-                // `removed: false` is a terminal no-op. Either response only
-                // clears click de-duplication; the current popup remains until
-                // WatchUi sends an engine-authored snapshot.
-                if matches!(
-                    client.call(
-                        &Request::DeleteHistoryCandidate {
-                            revision: request.revision,
-                            candidate_index: request.candidate_index,
-                        },
-                        HISTORY_DELETE_BUDGET,
-                    ),
-                    Ok(Response::HistoryCandidateDeleted { .. })
-                ) {
-                    let _ = completed_sender.send(HistoryDeleteCompletion(request));
-                    // SAFETY: this numeric HWND is the main thread's live host
-                    // until process teardown. A failed post only means it has
-                    // already gone away and the completion can be dropped.
-                    unsafe {
-                        let _ = PostMessageW(
-                            Some(HWND(notify_target as *mut c_void)),
-                            notify_message,
-                            WPARAM(0),
-                            LPARAM(0),
-                        );
+                let removed = binding.connect().ok().is_some_and(|mut client| {
+                    if !matches!(
+                        client.call(
+                            &Request::Hello {
+                                client_version: PROTOCOL_VERSION,
+                            },
+                            HISTORY_DELETE_BUDGET,
+                        ),
+                        Ok(Response::Hello { server_version, .. })
+                            if server_version == PROTOCOL_VERSION
+                    ) {
+                        return false;
                     }
+                    matches!(
+                        client.call(
+                            &Request::DeleteHistoryCandidate {
+                                revision: request.revision,
+                                candidate_index: request.candidate_index,
+                            },
+                            HISTORY_DELETE_BUDGET,
+                        ),
+                        Ok(Response::HistoryCandidateDeleted { removed: true })
+                    )
+                });
+                let _ = completed_sender.send(HistoryDeleteCompletion { request, removed });
+                // SAFETY: this numeric HWND is the main thread's live host
+                // until process teardown. A failed post only means it has
+                // already gone away and the completion can be dropped.
+                unsafe {
+                    let _ = PostMessageW(
+                        Some(HWND(notify_target as *mut c_void)),
+                        notify_message,
+                        WPARAM(0),
+                        LPARAM(0),
+                    );
                 }
             }
         })

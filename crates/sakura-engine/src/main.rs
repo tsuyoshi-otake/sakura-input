@@ -246,7 +246,10 @@ fn run(
     } else {
         None
     };
-    let long_conversion_runtime =
+    // `Off` is stronger than a no-op request gate: do not inspect the
+    // deployment, allocate a coordination thread, or create a worker owner.
+    // The child itself remains lazy for the two opt-in scopes.
+    let long_conversion_runtime = if neural_reranker_requested(preferences.neural_reranker_scope) {
         match sakura_engine::long_conversion::LongConversionRuntime::discover(Arc::clone(
             &conversion,
         )) {
@@ -259,7 +262,10 @@ fn run(
                 }
                 None
             }
-        };
+        }
+    } else {
+        None
+    };
     let server = match (prediction_runtime.as_ref(), input_history.as_ref()) {
         (Some(runtime), Some(history)) => {
             Server::with_runtime_configuration_and_profiles_and_history(
@@ -304,6 +310,20 @@ fn run(
         Some(pipe_name) => server.with_explicit_test_pipe(pipe_name.to_owned()),
         None => server,
     };
+    let configuration_watcher = config_path.as_ref().and_then(|path| {
+        match sakura_engine::configuration::ConfigurationWatcher::start(
+            path.clone(),
+            server.configuration_publisher(),
+        ) {
+            Ok(watcher) => Some(watcher),
+            Err(error) => {
+                if verbose {
+                    eprintln!("sakura-engine: configuration watcher unavailable: {error}");
+                }
+                None
+            }
+        }
+    });
     if verbose {
         eprintln!("sakura-engine: dictionary: {}", dictionary_path.display());
         if let Some(path) = learning_path {
@@ -334,6 +354,9 @@ fn run(
         },
     );
     let result = server.run();
+    // The configuration watcher owns a polling thread and callbacks into the
+    // dispatcher/UI state. Stop and join it before runtime services release.
+    drop(configuration_watcher);
     drop(long_conversion_runtime);
     // The watcher owns a polling thread; dropping it here signals and joins
     // that thread before the engine process reaches its terminal state.
@@ -432,6 +455,10 @@ fn attach_parent_console() {
     }
 }
 
+const fn neural_reranker_requested(scope: sakura_core::NeuralRerankerScope) -> bool {
+    !matches!(scope, sakura_core::NeuralRerankerScope::Off)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,5 +500,16 @@ mod tests {
             format!("{TEST_PIPE_PREFIX}two"),
         ])
         .is_err());
+    }
+
+    #[test]
+    fn off_scope_skips_neural_discovery_and_coordination() {
+        use sakura_core::NeuralRerankerScope;
+
+        assert!(!neural_reranker_requested(NeuralRerankerScope::Off));
+        assert!(neural_reranker_requested(NeuralRerankerScope::LongTextOnly));
+        assert!(neural_reranker_requested(
+            NeuralRerankerScope::AllNormalConversions
+        ));
     }
 }

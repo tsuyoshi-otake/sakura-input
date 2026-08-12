@@ -80,8 +80,9 @@ const WM_UI: u32 = WM_APP + 2;
 /// The watcher reporting that the feed has ended for good.
 const WM_ENDED: u32 = WM_APP + 3;
 
-/// A bounded delete request received an engine response. This only releases
-/// duplicate-click suppression; it never changes candidates locally.
+/// A bounded delete attempt reached a terminal outcome. Failed or negative
+/// outcomes release duplicate-click suppression; successful removal still
+/// waits for the next authoritative UI revision.
 const WM_HISTORY_DELETE_FINISHED: u32 = WM_APP + 4;
 
 /// The windows the main thread owns, reached from the window procedure
@@ -333,7 +334,7 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 .take();
             if let Some(state) = state {
                 if let Some(mode) = state.mode {
-                    app.indicator.show(mode);
+                    app.indicator.show(mode, state.appearance_theme);
                 }
                 app.candidates.update(&state);
             }
@@ -343,10 +344,10 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
             // SAFETY: as in the WM_UI arm, the main window procedure is the
             // sole mutable owner of `app`.
             let app = unsafe { &mut *app };
-            while let Ok(HistoryDeleteCompletion(request)) =
+            while let Ok(HistoryDeleteCompletion { request, removed }) =
                 app.history_delete_completions.try_recv()
             {
-                app.candidates.history_delete_finished(request);
+                app.candidates.history_delete_finished(request, removed);
             }
             LRESULT(0)
         }

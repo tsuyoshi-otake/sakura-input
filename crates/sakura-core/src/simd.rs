@@ -1894,6 +1894,7 @@ mod tests {
                 symbol: Width::Full,
             },
             punctuation: PunctuationStyle::KutenTouten,
+            brackets: crate::width::BracketStyle::default(),
         };
         let baseline = scan_avx2 as ScanStrategy;
         let selected = startup().expect("the benchmark requires the compatibility floor");

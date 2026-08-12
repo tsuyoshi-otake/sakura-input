@@ -36,7 +36,12 @@ const WAYS: usize = 3;
 const SLOT_COUNT: usize = BUCKETS * WAYS;
 pub const MAX_LEARNING_ENTRIES: usize = SLOT_COUNT;
 pub const MAX_LEARNING_LOG_BYTES: u64 = 20 * 1024 * 1024;
-const MAX_HISTORY_PREDICTIONS: usize = 128;
+/// Fixed number of exact `(reading, surface)` entries retained for prediction.
+///
+/// This is a storage and ranking window, not a per-result display limit.  The
+/// prediction module independently caps how many retained entries can appear
+/// in one suggestion result.
+const MAX_PREDICTION_HISTORY_ENTRIES: usize = 128;
 const MAX_HISTORY_TEXT_BYTES: usize = 512;
 const COMPACTION_TRIGGER_BYTES: u64 = 16 * 1024 * 1024;
 const COMPACTION_TARGET_BYTES: usize = 8 * 1024 * 1024;
@@ -417,8 +422,8 @@ struct PredictionHistory {
 
 impl PredictionHistory {
     fn new() -> Self {
-        let mut entries = Vec::with_capacity(MAX_HISTORY_PREDICTIONS);
-        entries.resize_with(MAX_HISTORY_PREDICTIONS, HistoryEntry::default);
+        let mut entries = Vec::with_capacity(MAX_PREDICTION_HISTORY_ENTRIES);
+        entries.resize_with(MAX_PREDICTION_HISTORY_ENTRIES, HistoryEntry::default);
         Self {
             entries: entries.into_boxed_slice(),
         }
@@ -2373,6 +2378,50 @@ mod tests {
         assert_eq!(matches[1].2, 11);
         assert!(matches[0].3 < matches[1].3);
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    #[test]
+    fn prediction_history_retains_128_entries_and_evicts_the_oldest() {
+        let mut history = PredictionHistory::new();
+        for sequence in 1..=MAX_PREDICTION_HISTORY_ENTRIES as u64 {
+            history.learn(
+                &format!("reading-{sequence:03}"),
+                &format!("surface-{sequence:03}"),
+                0,
+                0,
+                sequence,
+            );
+        }
+
+        assert_eq!(history.entries.len(), MAX_PREDICTION_HISTORY_ENTRIES);
+        assert!(
+            history.entries.iter().all(|entry| entry.occupied),
+            "the fixed window is full"
+        );
+
+        history.learn(
+            "reading-overflow",
+            "surface-overflow",
+            0,
+            0,
+            MAX_PREDICTION_HISTORY_ENTRIES as u64 + 1,
+        );
+
+        assert_eq!(
+            history.entries.len(),
+            MAX_PREDICTION_HISTORY_ENTRIES,
+            "retention remains bounded independently of prediction display limits"
+        );
+        assert!(!history.entries.iter().any(|entry| {
+            entry.occupied
+                && entry.reading.as_str() == "reading-001"
+                && entry.surface.as_str() == "surface-001"
+        }));
+        assert!(history.entries.iter().any(|entry| {
+            entry.occupied
+                && entry.reading.as_str() == "reading-overflow"
+                && entry.surface.as_str() == "surface-overflow"
+        }));
     }
 
     #[test]

@@ -57,6 +57,10 @@ struct WorkRequest {
     key: RequestKey,
     reading: String,
     options: ConversionOptions,
+    /// `false` retains the original long-reading / multi-segment gate.  The
+    /// all-normal-conversions setting may opt into otherwise short readings,
+    /// but never widens the worker's candidate-count or frame-size limits.
+    allow_short_reading: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -111,8 +115,9 @@ impl LongConversionService {
         generation: u64,
         reading: &str,
         options: ConversionOptions,
+        allow_short_reading: bool,
     ) -> RerankState {
-        if !reading_can_have_three_segments(reading) || reading.len() > u16::MAX as usize {
+        if !reading_is_eligible(reading, allow_short_reading) || reading.len() > u16::MAX as usize {
             return RerankState::NotEligible;
         }
         let request = WorkRequest {
@@ -125,6 +130,7 @@ impl LongConversionService {
             },
             reading: reading.to_owned(),
             options,
+            allow_short_reading,
         };
         *lock(&self.shared.pending) = Some(request);
         self.shared.ready.notify_one();
@@ -346,11 +352,12 @@ fn build_candidates(
     conversion
         .with_candidates(&work.reading, options, |candidates| {
             if candidates.len() < 2
-                || (work.reading.chars().count() < MINIMUM_LONG_READING_CHARS
-                    && candidates
-                        .first()
-                        .map_or(0, |candidate| candidate.segments().len())
-                        < 3)
+                || (!work.allow_short_reading
+                    && (work.reading.chars().count() < MINIMUM_LONG_READING_CHARS
+                        && candidates
+                            .first()
+                            .map_or(0, |candidate| candidate.segments().len())
+                            < 3))
             {
                 return None;
             }
@@ -372,6 +379,10 @@ fn build_candidates(
 
 fn reading_can_have_three_segments(reading: &str) -> bool {
     reading.chars().count() >= MINIMUM_SEGMENTED_READING_CHARS
+}
+
+fn reading_is_eligible(reading: &str, allow_short_reading: bool) -> bool {
+    !reading.is_empty() && (allow_short_reading || reading_can_have_three_segments(reading))
 }
 
 fn publish_terminal(shared: &Shared, key: &RequestKey, state: RerankState) {
@@ -685,5 +696,13 @@ mod tests {
     fn precompute_skips_readings_that_cannot_have_three_segments() {
         assert!(!reading_can_have_three_segments("かな"));
         assert!(reading_can_have_three_segments("かな文"));
+    }
+
+    #[test]
+    fn all_normal_scope_keeps_short_readings_eligible_without_widening_empty_input() {
+        assert!(!reading_is_eligible("", true));
+        assert!(!reading_is_eligible("かな", false));
+        assert!(reading_is_eligible("かな", true));
+        assert!(reading_is_eligible("かな文", false));
     }
 }

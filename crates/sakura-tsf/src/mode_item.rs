@@ -11,6 +11,7 @@ use std::cell::{Cell, RefCell};
 use std::ffi::{c_void, OsString};
 use std::mem::size_of;
 use std::os::windows::ffi::OsStringExt;
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -28,16 +29,19 @@ use windows::Win32::System::Ole::{
     CONNECT_E_ADVISELIMIT, CONNECT_E_CANNOTCONNECT, CONNECT_E_NOCONNECTION,
 };
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 use windows::Win32::UI::TextServices::{
-    ITfLangBarItemSink, ITfMenu, TF_LBI_ICON, TF_LBI_STATUS, TF_LBI_STATUS_HIDDEN, TF_LBI_TEXT,
-    TF_LBI_TOOLTIP, TF_LBMENUF_GRAYED, TF_LBMENUF_RADIOCHECKED, TF_LBMENUF_SEPARATOR,
-    TF_LBMENUF_SUBMENU,
+    ITfLangBarItemSink, ITfMenu, TfLBIClick, TF_LBI_CLK_RIGHT, TF_LBI_ICON, TF_LBI_STATUS,
+    TF_LBI_STATUS_HIDDEN, TF_LBI_TEXT, TF_LBI_TOOLTIP, TF_LBMENUF_GRAYED, TF_LBMENUF_RADIOCHECKED,
+    TF_LBMENUF_SEPARATOR, TF_LBMENUF_SUBMENU,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON,
 };
 use windows_core::{w, Error, Result, PCWSTR};
 
+#[cfg(test)]
+use windows::Win32::UI::TextServices::TF_LBI_CLK_LEFT;
 #[cfg(test)]
 use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo};
 
@@ -55,6 +59,12 @@ pub const MENU_MODE_HALF_ALNUM: u32 = 14;
 pub const MENU_MODE_DIRECT: u32 = 15;
 
 const SINK_COOKIE: u32 = 1;
+
+// `sakura_settings.exe` is a console-subsystem binary so direct invocations
+// such as `sakura_settings.exe config ...` retain their CLI stdout and exit
+// semantics. The TSF GUI launcher is the one exception: it must not attach or
+// allocate a console in the host application's session.
+const SETTINGS_LAUNCH_CREATION_FLAGS: u32 = CREATE_NO_WINDOW.0;
 
 /// A selected menu operation. The text service validates the focus generation
 /// and asks the active engine session to execute it.
@@ -217,6 +227,13 @@ pub const fn menu_command(id: u32) -> Option<MenuCommand> {
         MENU_MODE_DIRECT => Some(MenuCommand::SetMode(Mode::Direct)),
         _ => None,
     }
+}
+
+/// A split language-bar button receives mouse-button identity through
+/// `OnClick`. Only a right click is a context action; every other click keeps
+/// the existing no-op behavior and must not launch a process.
+pub fn is_settings_click(click: TfLBIClick) -> bool {
+    click == TF_LBI_CLK_RIGHT
 }
 
 /// Builds Sakura's menu from the current snapshot. This follows the useful
@@ -583,10 +600,16 @@ fn system_uses_light_theme() -> bool {
 /// hosted by an older process still opens the newly installed settings UI.
 pub fn open_settings() -> Result<()> {
     let settings = settings_path_from_loaded_module()?;
-    Command::new(settings)
+    settings_command(&settings)
         .spawn()
         .map(|_| ())
         .map_err(|_| Error::from_hresult(E_FAIL))
+}
+
+fn settings_command(settings: &Path) -> Command {
+    let mut command = Command::new(settings);
+    command.creation_flags(SETTINGS_LAUNCH_CREATION_FLAGS);
+    command
 }
 
 fn settings_path_from_loaded_module() -> Result<PathBuf> {
@@ -791,6 +814,13 @@ mod tests {
     }
 
     #[test]
+    fn only_a_right_click_requests_settings() {
+        assert!(is_settings_click(TF_LBI_CLK_RIGHT));
+        assert!(!is_settings_click(TF_LBI_CLK_LEFT));
+        assert!(!is_settings_click(TfLBIClick(0)));
+    }
+
+    #[test]
     fn settings_bootstrap_is_derived_only_from_the_versioned_tsf_layout() {
         let module =
             Path::new(r"C:\Program Files\Sakura Input\versions\1.0.0-build\sakura_tsf.dll");
@@ -810,5 +840,19 @@ mod tests {
             )),
             None
         );
+    }
+
+    #[test]
+    fn settings_gui_launch_suppresses_console_creation() {
+        assert_eq!(SETTINGS_LAUNCH_CREATION_FLAGS, CREATE_NO_WINDOW.0);
+
+        let command = settings_command(Path::new(
+            r"C:\Program Files\Sakura Input\sakura_settings.exe",
+        ));
+        assert_eq!(
+            command.get_program(),
+            Path::new(r"C:\Program Files\Sakura Input\sakura_settings.exe")
+        );
+        assert_eq!(command.get_args().count(), 0);
     }
 }

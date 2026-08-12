@@ -19,7 +19,7 @@ use std::cell::Cell;
 
 use sakura_core::keymap::{KeyMap, Preset, State};
 use sakura_core::romaji::{Input, Table};
-use sakura_core::width::{Normalizer, PunctuationStyle, Width, WidthPolicy};
+use sakura_core::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
 use sakura_proto::{FixedStr, KeyCode, KeyInput, Mode, Modifiers};
 
 thread_local! {
@@ -131,6 +131,7 @@ fn normalizing_width_allocates_nothing() {
             symbol: Width::Half,
         },
         punctuation: PunctuationStyle::CommaPeriod,
+        brackets: BracketStyle::default(),
     };
     let mut out = FixedStr::<512>::new();
 

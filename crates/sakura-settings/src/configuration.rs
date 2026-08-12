@@ -142,7 +142,7 @@ fn validate_process_name(process_name: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_core::{Preset, SuggestAccept};
+    use sakura_core::{AppearanceTheme, Preset, PunctuationStyle, SuggestAccept, Width};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_FILE: AtomicU64 = AtomicU64::new(1);
@@ -164,6 +164,11 @@ mod tests {
         document.preferences.keymap_preset = Preset::Atok;
         document.preferences.prediction_enabled = false;
         document.preferences.suggest_accept = SuggestAccept::ShiftEnter;
+        document.preferences.appearance_theme = AppearanceTheme::Dark;
+        document.preferences.normalizer.width.alnum = Width::Full;
+        document.preferences.normalizer.width.number = Width::FollowMode;
+        document.preferences.normalizer.width.symbol = Width::Half;
+        document.preferences.normalizer.punctuation = PunctuationStyle::Mixed;
         let mut profile = document.profiles[0].clone();
         profile.process_name = "notes.exe".to_owned();
         profile.prediction_enabled = true;
@@ -174,6 +179,28 @@ mod tests {
         assert_eq!(loaded.preferences, document.preferences);
         assert!(loaded.profiles.contains(&profile));
         assert_eq!(loaded.source_version, CONFIG_FORMAT_VERSION);
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    #[test]
+    fn missing_or_unknown_appearance_theme_falls_back_to_auto() {
+        assert_eq!(
+            ConfigurationDocument::default()
+                .preferences
+                .appearance_theme,
+            AppearanceTheme::Auto
+        );
+
+        let path = temporary_file("appearance-default");
+        fs::create_dir_all(path.parent().expect("parent")).expect("directory");
+        fs::write(
+            &path,
+            "[meta]\nformat-version = \"4\"\n\n[appearance]\ntheme = \"future-theme\"\n",
+        )
+        .expect("fixture");
+
+        let document = ConfigurationDocument::load(&path).expect("load");
+        assert_eq!(document.preferences.appearance_theme, AppearanceTheme::Auto);
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 
