@@ -16,6 +16,7 @@ use crate::user_dictionary::UserDictionary;
 use crate::TextSink;
 
 const NONE: usize = usize::MAX;
+const NONE_STATE: u32 = u32::MAX;
 const MAX_LATTICE_NODES: usize = 32_768;
 const MAX_SEARCH_STATES: usize = 65_536;
 const MAX_DICTIONARY_EDGES_PER_READING: usize = 12;
@@ -73,6 +74,41 @@ impl Default for ConversionOptions {
     }
 }
 
+/// Explicit terminal condition for the bounded N-best search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversionSearchTerminal {
+    CandidateLimitReached,
+    SearchExhausted,
+    StateBudgetReached,
+    LatticeBudgetReached,
+}
+
+/// Aggregate, text-free evidence about one conversion attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConversionDiagnostics {
+    pub terminal: ConversionSearchTerminal,
+    pub states_pushed: usize,
+    pub incoherent_prefixes_pruned: usize,
+    pub lossless_fallback_inserted: bool,
+}
+
+/// Candidates and their bounded-search terminal condition.
+#[derive(Debug)]
+pub struct ConversionResult<'a> {
+    candidates: &'a [ConversionCandidate],
+    diagnostics: ConversionDiagnostics,
+}
+
+impl<'a> ConversionResult<'a> {
+    pub fn candidates(&self) -> &'a [ConversionCandidate] {
+        self.candidates
+    }
+
+    pub const fn diagnostics(&self) -> ConversionDiagnostics {
+        self.diagnostics
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversionCandidate {
     text: FixedStr<MAX_PREEDIT_BYTES>,
@@ -126,6 +162,7 @@ pub enum ConversionError {
     LatticeFull,
     NoPath,
     OutputTooLong,
+    TooManySegments,
 }
 
 impl core::fmt::Display for ConversionError {
@@ -138,6 +175,7 @@ impl core::fmt::Display for ConversionError {
             Self::LatticeFull => f.write_str("conversion lattice reached its fixed node limit"),
             Self::NoPath => f.write_str("conversion lattice has no complete path"),
             Self::OutputTooLong => f.write_str("converted output exceeds the preedit limit"),
+            Self::TooManySegments => f.write_str("converted path exceeds the segment limit"),
         }
     }
 }
@@ -170,16 +208,34 @@ struct Node {
 
 #[derive(Debug, Clone, Copy)]
 struct SearchState {
-    node: usize,
     cost: i64,
-    parent: usize,
+    node: u32,
+    parent: u32,
+    class: PathClass,
+    depth: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct HeapItem {
     estimate: i64,
     sequence: u64,
-    state: usize,
+    state: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum PathClass {
+    Neutral,
+    Lexical,
+    Reading,
+    Katakana,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SearchRun {
+    terminal: ConversionSearchTerminal,
+    states_pushed: usize,
+    incoherent_prefixes_pruned: usize,
 }
 
 impl Ord for HeapItem {
@@ -210,6 +266,8 @@ pub struct Converter {
     candidates: Vec<ConversionCandidate>,
     sequence: u64,
     initial_right_id: u16,
+    lattice_node_budget: usize,
+    search_state_budget: usize,
 }
 
 impl Converter {
@@ -226,7 +284,21 @@ impl Converter {
             ),
             sequence: 0,
             initial_right_id: 0,
+            lattice_node_budget: MAX_LATTICE_NODES,
+            search_state_budget: MAX_SEARCH_STATES,
         }
+    }
+
+    /// Reduces the search budget only in test-support builds. Production always
+    /// uses the fixed `MAX_SEARCH_STATES` arena.
+    #[cfg(any(test, feature = "conversion-test-support"))]
+    pub fn set_search_state_budget_for_test(&mut self, budget: usize) {
+        self.search_state_budget = budget.min(MAX_SEARCH_STATES);
+    }
+
+    #[cfg(any(test, feature = "conversion-test-support"))]
+    pub fn set_lattice_node_budget_for_test(&mut self, budget: usize) {
+        self.lattice_node_budget = budget.min(MAX_LATTICE_NODES);
     }
 
     pub fn convert<'a>(
@@ -235,7 +307,18 @@ impl Converter {
         reading: &str,
         options: ConversionOptions,
     ) -> Result<&'a [ConversionCandidate], ConversionError> {
-        self.convert_with_user_dictionary(dictionary, None, reading, options)
+        Ok(self
+            .convert_detailed(dictionary, reading, options)?
+            .candidates())
+    }
+
+    pub fn convert_detailed<'a>(
+        &'a mut self,
+        dictionary: &Dictionary<'_>,
+        reading: &str,
+        options: ConversionOptions,
+    ) -> Result<ConversionResult<'a>, ConversionError> {
+        self.convert_with_user_dictionary_detailed(dictionary, None, reading, options)
     }
 
     /// Converts against the mapped system dictionary plus an optional
@@ -249,6 +332,18 @@ impl Converter {
         reading: &str,
         options: ConversionOptions,
     ) -> Result<&'a [ConversionCandidate], ConversionError> {
+        Ok(self
+            .convert_with_user_dictionary_detailed(dictionary, user_dictionary, reading, options)?
+            .candidates())
+    }
+
+    pub fn convert_with_user_dictionary_detailed<'a>(
+        &'a mut self,
+        dictionary: &Dictionary<'_>,
+        user_dictionary: Option<&UserDictionary>,
+        reading: &str,
+        options: ConversionOptions,
+    ) -> Result<ConversionResult<'a>, ConversionError> {
         if reading.is_empty() {
             return Err(ConversionError::EmptyReading);
         }
@@ -265,23 +360,78 @@ impl Converter {
 
         self.reset(reading.len());
         self.initial_right_id = options.initial_right_id;
-        self.build_lattice(dictionary, user_dictionary, reading, options)?;
-        self.compute_suffix_costs(dictionary, reading.len());
-        let best_node = self.best_final_node(dictionary, reading.len())?;
-        if self.viterbi_path_is_coherent(best_node)? {
-            self.build_viterbi_candidate(dictionary, user_dictionary, reading, best_node)?;
+        let fallback = make_lossless_fallback(dictionary, reading, self.initial_right_id)?;
+        let mut search = SearchRun {
+            terminal: ConversionSearchTerminal::SearchExhausted,
+            states_pushed: 0,
+            incoherent_prefixes_pruned: 0,
+        };
+        match self.build_lattice(dictionary, user_dictionary, reading, options) {
+            Ok(()) => {
+                self.compute_suffix_costs(dictionary, reading.len());
+                if let Ok(best_node) = self.best_final_node(dictionary, reading.len()) {
+                    if self.viterbi_path_is_coherent(best_node)? {
+                        match self.build_viterbi_candidate(
+                            dictionary,
+                            user_dictionary,
+                            reading,
+                            best_node,
+                        ) {
+                            Ok(())
+                            | Err(ConversionError::OutputTooLong)
+                            | Err(ConversionError::TooManySegments) => {}
+                            Err(error) => return Err(error),
+                        }
+                    }
+                    if self.candidates.len() < options.max_candidates {
+                        search = self.search_n_best(
+                            dictionary,
+                            user_dictionary,
+                            reading,
+                            options.max_candidates,
+                        )?;
+                    } else {
+                        search.terminal = ConversionSearchTerminal::CandidateLimitReached;
+                    }
+                    self.apply_it_completion_coherence(dictionary, reading, options)?;
+                    self.add_identifier_variants(reading)?;
+                }
+            }
+            Err(ConversionError::LatticeFull) => {
+                search.terminal = ConversionSearchTerminal::LatticeBudgetReached;
+            }
+            Err(error) => return Err(error),
         }
-        // The cheapest lattice path can be rejected by the N-best quality
-        // gate. In that case still search for the ordinary reading/katakana
-        // fallback, even when the caller asked for just one candidate.
-        if self.candidates.len() < options.max_candidates {
-            self.search_n_best(dictionary, user_dictionary, reading, options.max_candidates)?;
-        }
-        self.apply_it_completion_coherence(dictionary, reading, options)?;
-        self.add_identifier_variants(reading)?;
         self.candidates.sort_by_key(|candidate| candidate.cost);
         self.candidates.truncate(options.max_candidates);
-        Ok(&self.candidates)
+        let lossless_fallback_inserted =
+            self.ensure_lossless_fallback(fallback, options.max_candidates);
+        self.candidates.sort_by_key(|candidate| candidate.cost);
+        debug_assert!(!self.candidates.is_empty());
+        Ok(ConversionResult {
+            candidates: &self.candidates,
+            diagnostics: ConversionDiagnostics {
+                terminal: search.terminal,
+                states_pushed: search.states_pushed,
+                incoherent_prefixes_pruned: search.incoherent_prefixes_pruned,
+                lossless_fallback_inserted,
+            },
+        })
+    }
+
+    fn ensure_lossless_fallback(&mut self, fallback: ConversionCandidate, wanted: usize) -> bool {
+        if self
+            .candidates
+            .iter()
+            .any(|candidate| candidate.text() == fallback.text())
+        {
+            return false;
+        }
+        if self.candidates.len() >= wanted {
+            return false;
+        }
+        self.candidates.push(fallback);
+        true
     }
 
     /// A longer technical dictionary term is bounded evidence for the spelling
@@ -376,7 +526,7 @@ impl Converter {
                         right_id: last.right_id,
                         flags: first.flags,
                     })
-                    .map_err(|_| ConversionError::LatticeFull)?;
+                    .map_err(|_| ConversionError::TooManySegments)?;
                 self.candidates.push(ConversionCandidate {
                     text,
                     annotation,
@@ -598,7 +748,7 @@ impl Converter {
         dictionary: &Dictionary<'_>,
         spec: NodeSpec,
     ) -> Result<(), ConversionError> {
-        if self.nodes.len() >= MAX_LATTICE_NODES {
+        if self.nodes.len() >= self.lattice_node_budget {
             return Err(ConversionError::LatticeFull);
         }
         let (best_cost, best_previous) = if spec.start == 0 {
@@ -753,33 +903,41 @@ impl Converter {
         user_dictionary: Option<&UserDictionary>,
         reading: &str,
         wanted: usize,
-    ) -> Result<(), ConversionError> {
+    ) -> Result<SearchRun, ConversionError> {
+        let mut budget_reached = false;
+        let mut incoherent_prefixes_pruned = 0usize;
         let mut node = self.starts_at[0];
         while node != NONE {
             let lattice_node = self.nodes[node];
             if lattice_node.suffix_cost != i64::MAX {
                 let cost = connection_cost(dictionary, self.initial_right_id, lattice_node.left_id)
                     .saturating_add(lattice_node.local_cost);
-                self.push_state(
+                if !self.push_state(
                     node,
                     cost,
-                    NONE,
+                    NONE_STATE,
                     cost.saturating_add(lattice_node.suffix_cost),
-                );
+                    PathClass::Neutral
+                        .extend(lattice_node.surface)
+                        .expect("a first edge always defines a coherent class"),
+                    1,
+                ) {
+                    budget_reached = true;
+                }
             }
             node = lattice_node.next_from_start;
         }
 
         while let Some(item) = self.queue.pop() {
-            let state = self.states[item.state];
-            let lattice_node = self.nodes[state.node];
+            let state = self.states[item.state as usize];
+            let lattice_node = self.nodes[state.node as usize];
             if lattice_node.end == reading.len() {
                 self.path.clear();
                 let mut state_index = item.state;
                 loop {
-                    let path_state = self.states[state_index];
-                    self.path.push(path_state.node);
-                    if path_state.parent == NONE {
+                    let path_state = self.states[state_index as usize];
+                    self.path.push(path_state.node as usize);
+                    if path_state.parent == NONE_STATE {
                         break;
                     }
                     state_index = path_state.parent;
@@ -808,7 +966,9 @@ impl Converter {
                     total,
                 ) {
                     Ok(candidate) => candidate,
-                    Err(ConversionError::OutputTooLong) => continue,
+                    Err(ConversionError::OutputTooLong | ConversionError::TooManySegments) => {
+                        continue;
+                    }
                     Err(error) => return Err(error),
                 };
                 if self
@@ -818,9 +978,17 @@ impl Converter {
                 {
                     self.candidates.push(candidate);
                     if self.candidates.len() >= wanted {
-                        break;
+                        return Ok(SearchRun {
+                            terminal: ConversionSearchTerminal::CandidateLimitReached,
+                            states_pushed: self.states.len(),
+                            incoherent_prefixes_pruned,
+                        });
                     }
                 }
+                continue;
+            }
+
+            if usize::from(state.depth) >= MAX_SEGMENTS {
                 continue;
             }
 
@@ -828,6 +996,11 @@ impl Converter {
             while next != NONE {
                 let following = self.nodes[next];
                 if following.suffix_cost != i64::MAX {
+                    let Some(class) = state.class.extend(following.surface) else {
+                        incoherent_prefixes_pruned = incoherent_prefixes_pruned.saturating_add(1);
+                        next = following.next_from_start;
+                        continue;
+                    };
                     let cost = state
                         .cost
                         .saturating_add(connection_cost(
@@ -837,28 +1010,63 @@ impl Converter {
                         ))
                         .saturating_add(following.local_cost);
                     let estimate = cost.saturating_add(following.suffix_cost);
-                    if self.states.len() < MAX_SEARCH_STATES {
-                        self.push_state(next, cost, item.state, estimate);
+                    if !self.push_state(
+                        next,
+                        cost,
+                        item.state,
+                        estimate,
+                        class,
+                        state.depth.saturating_add(1),
+                    ) {
+                        budget_reached = true;
                     }
                 }
                 next = following.next_from_start;
             }
         }
-        Ok(())
+        Ok(SearchRun {
+            terminal: if budget_reached {
+                ConversionSearchTerminal::StateBudgetReached
+            } else {
+                ConversionSearchTerminal::SearchExhausted
+            },
+            states_pushed: self.states.len(),
+            incoherent_prefixes_pruned,
+        })
     }
 
-    fn push_state(&mut self, node: usize, cost: i64, parent: usize, estimate: i64) {
-        if self.states.len() >= MAX_SEARCH_STATES {
-            return;
+    fn push_state(
+        &mut self,
+        node: usize,
+        cost: i64,
+        parent: u32,
+        estimate: i64,
+        class: PathClass,
+        depth: u8,
+    ) -> bool {
+        if self.states.len() >= self.search_state_budget {
+            return false;
         }
-        let state = self.states.len();
-        self.states.push(SearchState { node, cost, parent });
+        let Ok(node) = u32::try_from(node) else {
+            return false;
+        };
+        let Ok(state) = u32::try_from(self.states.len()) else {
+            return false;
+        };
+        self.states.push(SearchState {
+            cost,
+            node,
+            parent,
+            class,
+            depth,
+        });
         self.queue.push(HeapItem {
             estimate,
             sequence: self.sequence,
             state,
         });
         self.sequence = self.sequence.wrapping_add(1);
+        true
     }
 }
 
@@ -922,6 +1130,67 @@ fn candidate_path_is_coherent(nodes: &[Node], path: &[usize]) -> bool {
 enum SurfaceKind {
     Reading,
     Katakana,
+}
+
+impl PathClass {
+    fn extend(self, surface: Surface) -> Option<Self> {
+        let next = match surface {
+            Surface::Dictionary { .. } | Surface::User(_) => Self::Lexical,
+            Surface::Reading => Self::Reading,
+            Surface::Katakana => Self::Katakana,
+            Surface::Literal(_) => Self::Neutral,
+        };
+        match (self, next) {
+            (current, Self::Neutral) => Some(current),
+            (Self::Neutral, next) => Some(next),
+            (current, next) if current == next => Some(current),
+            _ => None,
+        }
+    }
+}
+
+fn make_lossless_fallback(
+    dictionary: &Dictionary<'_>,
+    reading: &str,
+    initial_right_id: u16,
+) -> Result<ConversionCandidate, ConversionError> {
+    let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
+        DEFAULT_NOUN_ID
+    } else {
+        0
+    };
+    let characters = reading.chars().count();
+    let local_cost = if characters == 1 {
+        FALLBACK_WORD_COST
+    } else {
+        synthetic_run_cost(RUN_BASE_COST, RUN_COST_PER_CHAR, characters)
+    };
+    let cost = connection_cost(dictionary, initial_right_id, synthetic_id)
+        .saturating_add(local_cost)
+        .saturating_add(connection_cost(dictionary, synthetic_id, 0));
+    let mut text = FixedStr::new();
+    text.push_str(reading)
+        .map_err(|_| ConversionError::OutputTooLong)?;
+    let mut segments = FixedVec::new();
+    segments
+        .push(ConversionSegment {
+            reading_start: 0,
+            reading_end: u16::try_from(reading.len())
+                .map_err(|_| ConversionError::ReadingTooLong)?,
+            text_start: 0,
+            text_end: u16::try_from(text.len()).map_err(|_| ConversionError::OutputTooLong)?,
+            left_id: synthetic_id,
+            right_id: synthetic_id,
+            flags: EntryFlags::NONE,
+        })
+        .map_err(|_| ConversionError::TooManySegments)?;
+    Ok(ConversionCandidate {
+        text,
+        annotation: FixedStr::new(),
+        segments,
+        system_entry_index: None,
+        cost,
+    })
 }
 
 fn make_candidate(
@@ -989,7 +1258,7 @@ fn make_candidate(
                 right_id: node.right_id,
                 flags,
             })
-            .map_err(|_| ConversionError::LatticeFull)?;
+            .map_err(|_| ConversionError::TooManySegments)?;
     }
     let system_entry_index = if path.len() == 1 {
         match nodes[path[0]].surface {

@@ -18,6 +18,9 @@ sakura-proto.workspace = true
 # Retains otherwise bench-only SIMD kernels only in the isolated assembly
 # audit artifact. It is never enabled by the shipping workspace build.
 simd-assembly-audit = []
+# Exposes deterministic budget injection to cross-crate regression tests only.
+# Shipping builds never enable it.
+conversion-test-support = []
 
 [lints]
 workspace = true

@@ -451,3 +451,98 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
     assert_eq!(candidates[0].text(), "愛上尾");
     assert_eq!(candidates[0].segments().len(), 2);
 }
+
+#[cfg(feature = "conversion-test-support")]
+#[test]
+fn state_budget_exhaustion_is_explicit_and_keeps_the_lossless_reading() {
+    use sakura_core::conversion::ConversionSearchTerminal;
+
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+あ\t亜\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    converter.set_search_state_budget_for_test(0);
+
+    let result = converter
+        .convert_detailed(&dictionary, "あいう", ConversionOptions::default())
+        .expect("budget exhaustion degrades to the lossless fallback");
+
+    assert_eq!(
+        result.diagnostics().terminal,
+        ConversionSearchTerminal::StateBudgetReached
+    );
+    assert_eq!(result.diagnostics().states_pushed, 0);
+    assert!(result.diagnostics().lossless_fallback_inserted);
+    assert_eq!(result.candidates().len(), 1);
+    assert_eq!(result.candidates()[0].text(), "あいう");
+    assert_eq!(result.candidates()[0].segments().len(), 1);
+}
+
+#[cfg(feature = "conversion-test-support")]
+#[test]
+fn lattice_budget_exhaustion_is_explicit_and_keeps_the_lossless_reading() {
+    use sakura_core::conversion::ConversionSearchTerminal;
+
+    let bytes = fixture();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    converter.set_lattice_node_budget_for_test(0);
+
+    let result = converter
+        .convert_detailed(&dictionary, "さくら", ConversionOptions::default())
+        .expect("lattice exhaustion degrades to the lossless fallback");
+
+    assert_eq!(
+        result.diagnostics().terminal,
+        ConversionSearchTerminal::LatticeBudgetReached
+    );
+    assert!(result.diagnostics().lossless_fallback_inserted);
+    assert_eq!(result.candidates().len(), 1);
+    assert_eq!(result.candidates()[0].text(), "さくら");
+}
+
+#[test]
+fn incoherent_prefixes_are_pruned_before_they_consume_search_states() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+あ\t亜\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let result = converter
+        .convert_detailed(&dictionary, "あいう", ConversionOptions::default())
+        .expect("conversion");
+
+    assert!(result.diagnostics().incoherent_prefixes_pruned > 0);
+    assert!(result
+        .candidates()
+        .iter()
+        .all(|candidate| candidate.text() == "あいう" || candidate.text() == "アイウ"));
+}
+
+#[test]
+fn over_segmented_lexical_paths_degrade_to_one_lossless_segment() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+あ\t亜\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let reading = "あ".repeat(sakura_proto::MAX_SEGMENTS + 1);
+
+    let candidates = converter
+        .convert(&dictionary, &reading, ConversionOptions::default())
+        .expect("segment overflow degrades to the lossless fallback");
+
+    let fallback = candidates
+        .iter()
+        .find(|candidate| candidate.text() == reading)
+        .expect("lossless fallback");
+    assert_eq!(fallback.segments().len(), 1);
+}

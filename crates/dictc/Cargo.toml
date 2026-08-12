@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+conversion-test-support = ["sakura-core/conversion-test-support"]
+
 [[bin]]
 name = "dictc"
 path = "src/main.rs"
