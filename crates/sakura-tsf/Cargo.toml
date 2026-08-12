@@ -12,6 +12,17 @@ authors.workspace = true
 name = "sakura_tsf"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+e2e-host = []
+
+[[bin]]
+name = "sakura_tsf_test_host"
+path = "src/bin/sakura_tsf_test_host.rs"
+required-features = ["e2e-host"]
+test = false
+bench = false
+
 [dependencies]
 sakura-ipc.workspace = true
 sakura-proto.workspace = true
@@ -33,6 +44,8 @@ features = [
     "Win32_System_Pipes",
     "Win32_Storage_FileSystem",
     "Win32_UI_TextServices",
+    "Win32_UI_Accessibility",
+    "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
