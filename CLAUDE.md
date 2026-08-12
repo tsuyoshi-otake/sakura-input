@@ -121,7 +121,7 @@ rtk proxy powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' 
 - `TextService::write_at_range_mode`は`RequestEditSession`の実行前に`composition.context`を記録する。
 - 書き込み計画を作る`plan()`は、実際のdocument edit成功が確定する前に`CompositionState.text`を更新する。
 - キー入力からの`write()`は最初に`TF_ES_SYNC`を要求するが、`edit_session::in_document`は同期要求が拒否されると`TF_ES_ASYNC`へフォールバックする。
-- 非同期closureはcontextとserviceを保持する一方、activation generation／document revision／focus generation等による失効判定が見当たらない。遅延実行がfocus変更、deactivate、後続キー処理の後に走れば、古い状態で文書を変更する可能性がある。
+- 【2026-08-13訂正】以前ここに「非同期closureに失効判定が見当たらない」と書いていたが、現行コードと一致しない。非同期フォールバックの書き込みは`crates/sakura-tsf/src/write_coordinator.rs`のticket／epoch journalを経由し、`validate_callback`（同ファイル469行付近）がdocument・UIアクセス前にDeactivated／ActivationChanged／FocusChanged／ContextReplaced／RevisionMismatch／StaleCallbackを検証して失効callbackを拒否する。stale callback仮説を前提にした調査・修正を再開しないこと。クラッシュ原因は依然未特定であり、再開時はログ／ダンプ取得から始める。
 - `composition.rs`には、以前の`ITfInsertAtSelection`経路がVS Code Stable／ElectronのTextInputFrameworkでクラッシュしたため、現在はcontextの`GetSelection`を使うという既存コメントがある。既知のElectron固有境界を壊さないこと。
 
 ただし、上記から実際のVS Codeクラッシュまでの因果は未証明である。候補UI、COM lifetime、renderer、engine IPCなどを除外したわけでもない。ログ／ダンプ／再現試験なしで断定して修正しないこと。
