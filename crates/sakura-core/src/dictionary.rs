@@ -43,6 +43,13 @@ pub mod image_format {
     pub const TAG_DETAIL_TEXT_OFFSETS: [u8; 4] = *b"DTOF";
     pub const TAG_DETAIL_TEXT: [u8; 4] = *b"DTXT";
 
+    // Optional bunsetsu-boundary matrix compiled from the pinned Mozc
+    // segmenter rules.  Bit (rid, lid) tells whether a segment boundary
+    // separates a word ending with `rid` from a word starting with `lid`;
+    // conversion fuses adjacent path words when the bit is clear.  Images
+    // without this table keep morpheme-granularity segments.
+    pub const TAG_BOUNDARIES: [u8; 4] = *b"BNDR";
+
     pub const NODE_LEN: usize = 16;
     pub const ENTRY_LEN: usize = 24;
     pub const SURFACE_RESTART_INTERVAL: usize = 16;
@@ -52,6 +59,10 @@ pub mod image_format {
     pub const MATRIX_HEADER_LEN: usize = 16;
     pub const MATRIX_ROW_LEN: usize = 8;
     pub const MATRIX_OVERRIDE_LEN: usize = 4;
+    /// Boundary rows are byte-aligned: each of the `class_count` rows spans
+    /// `ceil(class_count / 8)` bytes with zero padding bits at the row tail.
+    pub const BOUNDARY_MAGIC: [u8; 4] = *b"SBD1";
+    pub const BOUNDARY_HEADER_LEN: usize = 8;
     pub const DETAIL_INDEX_LEN: usize = 8;
     pub const DETAIL_RECORD_LEN: usize = 16;
     pub const DETAIL_RELATION_LEN: usize = 8;
@@ -239,6 +250,9 @@ pub struct Dictionary<'a> {
     annotation_count: usize,
     annotations: &'a [u8],
     matrix: &'a [u8],
+    /// Byte-aligned bunsetsu-boundary rows without their table header, or
+    /// `None` for images compiled before the segmenter table existed.
+    boundaries: Option<&'a [u8]>,
     details: Option<Details<'a>>,
 }
 
@@ -313,6 +327,11 @@ impl<'a> Dictionary<'a> {
             required_table(bytes, table_count, format::TAG_ANNOTATION_OFFSETS)?;
         let annotations = required_table(bytes, table_count, format::TAG_ANNOTATIONS)?;
         let matrix = required_table(bytes, table_count, format::TAG_MATRIX)?;
+
+        let boundaries = match optional_table(bytes, table_count, format::TAG_BOUNDARIES)? {
+            Some(table) => Some(validate_boundary_table(table, class_count)?),
+            None => None,
+        };
 
         let detail_index = optional_table(bytes, table_count, format::TAG_DETAIL_INDEX)?;
         let detail_records = optional_table(bytes, table_count, format::TAG_DETAIL_RECORDS)?;
@@ -396,6 +415,7 @@ impl<'a> Dictionary<'a> {
             annotation_count: annotation_offsets.count,
             annotations: annotations.bytes,
             matrix: matrix.bytes,
+            boundaries,
             details,
         };
         dictionary.validate_tables()?;
@@ -412,6 +432,31 @@ impl<'a> Dictionary<'a> {
 
     pub const fn node_count(&self) -> usize {
         self.node_count
+    }
+
+    /// Whether this image carries the optional bunsetsu-boundary table.
+    pub const fn has_bunsetsu_boundaries(&self) -> bool {
+        self.boundaries.is_some()
+    }
+
+    /// Whether a segment boundary separates a word ending with connection
+    /// class `right_id` from a following word starting with class `left_id`.
+    ///
+    /// `None` means the image predates the boundary table; callers must keep
+    /// their existing segment granularity instead of guessing.  Out-of-range
+    /// classes report a boundary so corruption can only ever split segments,
+    /// never fuse text across a real boundary.
+    pub fn bunsetsu_boundary(&self, right_id: u16, left_id: u16) -> Option<bool> {
+        let rows = self.boundaries?;
+        let (rid, lid) = (usize::from(right_id), usize::from(left_id));
+        if rid >= self.class_count || lid >= self.class_count {
+            return Some(true);
+        }
+        let row_bytes = (self.class_count + 7) / 8;
+        Some(
+            rows.get(rid * row_bytes + lid / 8)
+                .is_none_or(|byte| byte & (1u8 << (lid % 8)) != 0),
+        )
     }
 
     /// Encoded connection-table bytes, exposed for the release size gate.
@@ -1294,6 +1339,47 @@ fn expect_fixed_count(table: Table<'_>, expected_count: usize, stride: usize) ->
         return Err(Error::BadTable(table.tag));
     }
     Ok(())
+}
+
+/// Validates the optional bunsetsu-boundary table and returns its row bytes.
+///
+/// The invariants enforced here let conversion index the bitmap without any
+/// further bounds thinking: exact length, zeroed row-tail padding bits, and an
+/// unconditional boundary on both sides of BOS/EOS (class 0), matching the
+/// Mozc segmenter this table is generated from.
+fn validate_boundary_table<'a>(table: Table<'a>, class_count: usize) -> Result<&'a [u8], Error> {
+    use image_format as format;
+
+    let bad = || Error::BadTable(format::TAG_BOUNDARIES);
+    let row_bytes = class_count.checked_add(7).ok_or_else(bad)? / 8;
+    let rows_len = class_count.checked_mul(row_bytes).ok_or_else(bad)?;
+    let expected_len = format::BOUNDARY_HEADER_LEN
+        .checked_add(rows_len)
+        .ok_or_else(bad)?;
+    if table.count != class_count
+        || table.bytes.len() != expected_len
+        || table.bytes.get(..4) != Some(format::BOUNDARY_MAGIC.as_slice())
+        || usize::from(read_u16(table.bytes, 4).ok_or_else(bad)?) != class_count
+        || read_u16(table.bytes, 6).ok_or_else(bad)? != 0
+    {
+        return Err(bad());
+    }
+    let rows = &table.bytes[format::BOUNDARY_HEADER_LEN..];
+    let boundary_bit = |rid: usize, lid: usize| {
+        rows.get(rid * row_bytes + lid / 8)
+            .is_some_and(|byte| byte & (1u8 << (lid % 8)) != 0)
+    };
+    for rid in 0..class_count {
+        if !boundary_bit(rid, 0) || !boundary_bit(0, rid) {
+            return Err(bad());
+        }
+        for padding_bit in class_count..row_bytes * 8 {
+            if boundary_bit(rid, padding_bit) {
+                return Err(bad());
+            }
+        }
+    }
+    Ok(rows)
 }
 
 fn validate_matrix_table(table: Table<'_>, class_count: usize) -> Result<(), Error> {

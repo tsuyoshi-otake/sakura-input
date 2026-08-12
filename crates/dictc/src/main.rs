@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use dictc::{
-    compile_with_details, extract_entry_details, merge_entries, parse_category_entries,
+    compile_with_tables, extract_entry_details, merge_entries, parse_category_entries,
     parse_connection, parse_entries, parse_mozc_connection, parse_mozc_entries,
     wordnet::import_lmf_gzip, SourceDetail, SourceEntry, MAX_DICTIONARY_IMAGE_BYTES,
 };
@@ -78,6 +78,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let mut curated_detail_paths = Vec::new();
     let mut curated_detail_report_path = None;
     let mut detail_coverage_output = None;
+    let mut mozc_id_def_path = None;
+    let mut mozc_segmenter_path = None;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         match argument.to_str() {
@@ -174,6 +176,16 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 next_path(&mut args, &argument)?,
                 "detail coverage output",
             )?,
+            Some("--mozc-id-def") => set_once(
+                &mut mozc_id_def_path,
+                next_path(&mut args, &argument)?,
+                "Mozc id.def taxonomy",
+            )?,
+            Some("--mozc-segmenter") => set_once(
+                &mut mozc_segmenter_path,
+                next_path(&mut args, &argument)?,
+                "Mozc segmenter rules",
+            )?,
             Some("--help" | "-h") => {
                 println!(
                     "Usage: dictc (--category FILE | --system FILE | --supplement FILE | --mozc-system FILE)... \
@@ -181,7 +193,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                        [--wordnet-lmf FILE --wordnet-report FILE] [--glossary-dir DIR] \
                        [--curated-detail-source FILE... --curated-detail-report FILE] \
                        [--llm-detail-release-dir DIR --llm-detail-target-dir DIR --llm-detail-report FILE] \
-                       [--detail-coverage-output FILE]"
+                       [--detail-coverage-output FILE] [--mozc-id-def FILE --mozc-segmenter FILE]"
                 );
                 return Ok(());
             }
@@ -217,6 +229,9 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
             "--curated-detail-source and --curated-detail-report must be specified together"
                 .to_owned(),
         );
+    }
+    if mozc_id_def_path.is_some() != mozc_segmenter_path.is_some() {
+        return Err("--mozc-id-def and --mozc-segmenter must be specified together".to_owned());
     }
 
     let mut supplement_entries = Vec::<SourceEntry>::new();
@@ -338,8 +353,27 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
             .as_bytes(),
         )?;
     }
-    let image =
-        compile_with_details(&entries, &connection, &details).map_err(|error| error.to_string())?;
+    let boundaries = match (mozc_id_def_path.as_deref(), mozc_segmenter_path.as_deref()) {
+        (Some(id_def_path), Some(segmenter_path)) => {
+            let id_source = id_def_path.display().to_string();
+            let features =
+                dictc::segmenter::parse_mozc_pos_features(&id_source, &read_utf8(id_def_path)?)
+                    .map_err(|error| error.to_string())?;
+            let rules_source = segmenter_path.display().to_string();
+            let rules = dictc::segmenter::parse_mozc_segmenter_rules(
+                &rules_source,
+                &read_utf8(segmenter_path)?,
+            )
+            .map_err(|error| error.to_string())?;
+            Some(
+                dictc::segmenter::build_boundaries(&rules_source, &features, &rules)
+                    .map_err(|error| error.to_string())?,
+            )
+        }
+        _ => None,
+    };
+    let image = compile_with_tables(&entries, &connection, &details, boundaries.as_ref())
+        .map_err(|error| error.to_string())?;
     if image.len() > MAX_DICTIONARY_IMAGE_BYTES {
         return Err(format!(
             "compiled image is {} bytes, exceeding the {}-byte release gate",
@@ -349,12 +383,17 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     }
     atomic_write(&output_path, &image)?;
     println!(
-        "wrote {} entries, {} detail records, {} classes, {} bytes to {}",
+        "wrote {} entries, {} detail records, {} classes, {} bytes to {} ({} bunsetsu boundary table)",
         entries.len(),
         details.len(),
         connection.class_count(),
         image.len(),
-        output_path.display()
+        output_path.display(),
+        if boundaries.is_some() {
+            "with"
+        } else {
+            "without"
+        }
     );
     Ok(())
 }

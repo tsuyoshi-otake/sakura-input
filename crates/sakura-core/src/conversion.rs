@@ -1411,20 +1411,39 @@ fn make_candidate(
                 .push_str(value)
                 .map_err(|_| ConversionError::OutputTooLong)?,
         }
-        segments
-            .push(ConversionSegment {
-                reading_start: u16::try_from(node.start)
-                    .map_err(|_| ConversionError::ReadingTooLong)?,
-                reading_end: u16::try_from(node.end)
-                    .map_err(|_| ConversionError::ReadingTooLong)?,
-                text_start: u16::try_from(text_start)
-                    .map_err(|_| ConversionError::OutputTooLong)?,
-                text_end: u16::try_from(text.len()).map_err(|_| ConversionError::OutputTooLong)?,
-                left_id: node.left_id,
-                right_id: node.right_id,
-                flags,
-            })
-            .map_err(|_| ConversionError::TooManySegments)?;
+        // Fuse this word into the previous segment when the dictionary's
+        // segmenter table says no bunsetsu boundary separates them (e.g. an
+        // ancillary 助動詞 after a verb).  Images without the table keep
+        // one-word segments, exactly as before the table existed.
+        let fuse = segments.last().is_some_and(|previous: &ConversionSegment| {
+            dictionary.bunsetsu_boundary(previous.right_id, node.left_id) == Some(false)
+        });
+        if fuse {
+            let last = segments.len() - 1;
+            let previous = segments.get_mut(last).ok_or(ConversionError::NoPath)?;
+            previous.reading_end =
+                u16::try_from(node.end).map_err(|_| ConversionError::ReadingTooLong)?;
+            previous.text_end =
+                u16::try_from(text.len()).map_err(|_| ConversionError::OutputTooLong)?;
+            previous.right_id = node.right_id;
+            previous.flags = previous.flags | flags;
+        } else {
+            segments
+                .push(ConversionSegment {
+                    reading_start: u16::try_from(node.start)
+                        .map_err(|_| ConversionError::ReadingTooLong)?,
+                    reading_end: u16::try_from(node.end)
+                        .map_err(|_| ConversionError::ReadingTooLong)?,
+                    text_start: u16::try_from(text_start)
+                        .map_err(|_| ConversionError::OutputTooLong)?,
+                    text_end: u16::try_from(text.len())
+                        .map_err(|_| ConversionError::OutputTooLong)?,
+                    left_id: node.left_id,
+                    right_id: node.right_id,
+                    flags,
+                })
+                .map_err(|_| ConversionError::TooManySegments)?;
+        }
     }
     let system_entry_index = if path.len() == 1 {
         match nodes[path[0]].surface {

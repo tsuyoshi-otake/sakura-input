@@ -19,6 +19,7 @@ pub mod context_rerank_import;
 pub mod glossary;
 pub mod llm_detail_targets;
 pub mod llm_details;
+pub mod segmenter;
 pub mod wordnet;
 
 /// Connection taxonomy from the pinned Mozc dictionary revision. The source
@@ -667,6 +668,18 @@ pub fn compile_with_details(
     connection: &ConnectionMatrix,
     details: &[SourceDetail],
 ) -> Result<Vec<u8>, Error> {
+    compile_with_tables(entries, connection, details, None)
+}
+
+/// Compiles entries, details, and the optional frozen bunsetsu-boundary
+/// table.  The boundary table lets conversion fuse morphemes into bunsetsu
+/// segments; omitting it keeps the historical morpheme-granularity image.
+pub fn compile_with_tables(
+    entries: &[SourceEntry],
+    connection: &ConnectionMatrix,
+    details: &[SourceDetail],
+    boundaries: Option<&segmenter::BunsetsuBoundaries>,
+) -> Result<Vec<u8>, Error> {
     let class_count = connection.class_count;
     let mut sorted = entries.to_vec();
     sorted.sort_by(|a, b| {
@@ -788,7 +801,30 @@ pub fn compile_with_details(
     if !details.is_empty() {
         tables.extend(encode_details(details, &entry_ordinals)?);
     }
+    if let Some(boundaries) = boundaries {
+        if boundaries.class_count() != class_count {
+            return Err(Error::build(format!(
+                "bunsetsu boundary table has {} classes, connection matrix has {class_count}",
+                boundaries.class_count()
+            )));
+        }
+        tables.push(TableData::new(
+            format::TAG_BOUNDARIES,
+            encode_boundaries(boundaries),
+            usize::from(class_count),
+        ));
+    }
     assemble_image(class_count, sorted.len(), built.node_count, tables)
+}
+
+/// Encodes the frozen boundary matrix as the optional `BNDR` image table.
+fn encode_boundaries(boundaries: &segmenter::BunsetsuBoundaries) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(format::BOUNDARY_HEADER_LEN + boundaries.rows().len());
+    bytes.extend_from_slice(&format::BOUNDARY_MAGIC);
+    bytes.extend_from_slice(&boundaries.class_count().to_le_bytes());
+    bytes.extend_from_slice(&0u16.to_le_bytes());
+    bytes.extend_from_slice(boundaries.rows());
+    bytes
 }
 
 /// Writes the licensed Sakura TSV consumed by [`parse_entries`].

@@ -5,6 +5,8 @@ repository = "https://github.com/google/mozc"
 revision = "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732"
 dictionary_glob = "src/data/dictionary_oss/dictionary??.txt"
 connection = "src/data/dictionary_oss/connection_single_column.txt"
+pos_ids = "src/data/dictionary_oss/id.def"
+segmenter_rules = "src/data/rules/segmenter.def"
 license_files = ["LICENSE", "src/data/dictionary_oss/README.txt"]
 output_license = "LicenseRef-Mozc-Dictionary"
 
