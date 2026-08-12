@@ -32,9 +32,9 @@ use windows::Win32::UI::TextServices::{
     TF_IPPMF_FORSESSION, TF_PROFILETYPE_INPUTPROCESSOR,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, FindWindowExW, FindWindowW, GetForegroundWindow, GetParent, GetWindowTextW,
-    GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW, SetForegroundWindow,
-    WM_APP, WM_CLOSE,
+    BringWindowToTop, FindWindowExW, FindWindowW, GetClassNameW, GetForegroundWindow, GetParent,
+    GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW,
+    SetForegroundWindow, WM_APP, WM_CLOSE,
 };
 
 const PATIENT: Duration = Duration::from_secs(8);
@@ -82,7 +82,9 @@ unsafe extern "system" {
 #[test]
 #[ignore = "moves foreground focus and requires the installed Sakura TSF/engine/renderer"]
 fn physical_tab_and_arrows_move_prediction_selection_and_enter_commits() {
-    let _serial = PHYSICAL_E2E.lock().expect("physical E2E lock");
+    let _serial = PHYSICAL_E2E
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     assert!(
         !candidate_window_visible(),
         "close any existing Sakura candidate popup before running the physical E2E"
@@ -128,6 +130,7 @@ fn physical_tab_and_arrows_move_prediction_selection_and_enter_commits() {
         "test prefix must expose at least two candidates: {initial:?}"
     );
     let first_candidate = candidate_surface(&initial, 1, total);
+    assert_edit_focus(host_window, edit);
 
     // The first Tab transfers logical focus to candidate zero. Because the
     // visible popup already publishes row one as selected, this step can be
@@ -159,7 +162,9 @@ fn physical_tab_and_arrows_move_prediction_selection_and_enter_commits() {
 #[test]
 #[ignore = "moves foreground focus and requires the installed Sakura TSF/engine/renderer"]
 fn physical_arrows_and_tab_navigate_conversion_and_enter_commits() {
-    let _serial = PHYSICAL_E2E.lock().expect("physical E2E lock");
+    let _serial = PHYSICAL_E2E
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     assert!(
         !candidate_window_visible(),
         "close any existing Sakura candidate popup before running the physical E2E"
@@ -203,32 +208,34 @@ fn physical_arrows_and_tab_navigate_conversion_and_enter_commits() {
             .expect("conversion popup UIA element")
     };
     let initial = wait_for_candidate_kind(&candidate_element, "conversion candidates");
-    let total = selection_total(&initial);
+    let (initial_selected, total) = selection_metadata(&initial);
     assert!(
         total >= 2,
         "conversion fixture needs at least two candidates: {initial:?}"
     );
 
+    let next_selected = initial_selected % total + 1;
     press_key(host_window, VK_DOWN);
-    wait_for_selection(&candidate_element, 2);
+    wait_for_selection(&candidate_element, next_selected);
     press_key(host_window, VK_UP);
-    wait_for_selection(&candidate_element, 1);
+    wait_for_selection(&candidate_element, initial_selected);
 
     // Under the installed MS-IME preset Tab expands the compact conversion
     // list. The ATOK preset maps Tab to CandidateNext; this acceptance host is
     // intentionally run against the active installed preset reported with the
     // test evidence.
     press_key(host_window, VK_TAB);
-    let expanded = wait_for_candidate_row(&candidate_element, 2, total);
+    let expansion_probe = if initial_selected == 1 { 2 } else { 1 };
+    let expanded = wait_for_candidate_row(&candidate_element, expansion_probe, total);
     press_key(host_window, VK_DOWN);
-    let selected = wait_for_selection(&candidate_element, 2);
+    let selected = wait_for_selection(&candidate_element, next_selected);
     let committed = candidate_surface(
-        if selected.contains(&format!("Candidate 2 of {total}")) {
+        if selected.contains(&format!("Candidate {next_selected} of {total}")) {
             &selected
         } else {
             &expanded
         },
-        2,
+        next_selected,
         total,
     );
 
@@ -385,6 +392,49 @@ fn force_foreground(window: HWND, edit: HWND) {
     }
 }
 
+fn assert_edit_focus(window: HWND, edit: HWND) {
+    // Read the host thread's focus without changing it. Attaching input queues
+    // lets GetFocus observe the other GUI thread; the attachment is always
+    // released before the assertion.
+    let host_thread = unsafe { GetWindowThreadProcessId(window, None) };
+    let current_thread = unsafe { GetCurrentThreadId() };
+    assert_ne!(host_thread, 0, "dedicated host must have a GUI thread");
+    let attached = host_thread != current_thread;
+    let focused = unsafe {
+        if attached {
+            assert!(
+                AttachThreadInput(current_thread, host_thread, true).as_bool(),
+                "attach current input queue to inspect host focus"
+            );
+        }
+        let focused = GetFocus();
+        if attached {
+            let _ = AttachThreadInput(current_thread, host_thread, false);
+        }
+        focused
+    };
+    assert_eq!(
+        focused,
+        edit,
+        "dedicated EDIT lost keyboard focus to {}",
+        describe_window(focused)
+    );
+}
+
+fn describe_window(window: HWND) -> String {
+    let mut class = [0u16; 128];
+    let mut title = [0u16; 256];
+    let mut process_id = 0u32;
+    let class_len = unsafe { GetClassNameW(window, &mut class) }.max(0) as usize;
+    let title_len = unsafe { GetWindowTextW(window, &mut title) }.max(0) as usize;
+    unsafe { GetWindowThreadProcessId(window, Some(&mut process_id)) };
+    format!(
+        "HWND={window:?} class={:?} title={:?} pid={process_id}",
+        String::from_utf16_lossy(&class[..class_len]),
+        String::from_utf16_lossy(&title[..title_len])
+    )
+}
+
 fn candidate_window_visible() -> bool {
     // SAFETY: the class pointer has static lifetime and no title is required.
     unsafe {
@@ -467,15 +517,26 @@ fn wait_for_uia_name(
 }
 
 fn selection_total(name: &str) -> usize {
-    let marker = "selected 1 of ";
+    selection_metadata(name).1
+}
+
+fn selection_metadata(name: &str) -> (usize, usize) {
     let tail = name
-        .split_once(marker)
+        .split_once("selected ")
         .unwrap_or_else(|| panic!("UIA name lacks selection metadata: {name:?}"))
         .1;
-    tail.split(|character: char| !character.is_ascii_digit())
+    let (selected, tail) = tail
+        .split_once(" of ")
+        .unwrap_or_else(|| panic!("UIA selection metadata is malformed: {name:?}"));
+    let selected = selected
+        .parse::<usize>()
+        .unwrap_or_else(|_| panic!("UIA selected index is malformed: {name:?}"));
+    let total = tail
+        .split(|character: char| !character.is_ascii_digit())
         .next()
         .and_then(|digits| digits.parse().ok())
-        .unwrap_or_else(|| panic!("UIA name has malformed selection total: {name:?}"))
+        .unwrap_or_else(|| panic!("UIA name has malformed selection total: {name:?}"));
+    (selected, total)
 }
 
 fn candidate_surface(name: &str, index: usize, total: usize) -> String {
