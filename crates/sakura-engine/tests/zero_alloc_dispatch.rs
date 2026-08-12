@@ -400,19 +400,63 @@ fn prediction_handoff_into_reused_buffers_allocates_nothing() {
     );
     out.clear();
 
-    let observed = allocations(|| {
-        let reply = dispatcher.dispatch(
-            &Request::SendKey {
-                session,
-                key: char_key('a'),
-            },
-            &mut out,
-        );
-        assert_eq!(reply, Reply::Output);
-    });
+    // The engine waits at most its 10 ms prediction window per keystroke and
+    // fails open with no candidates — deliberately, so a keystroke is never
+    // blocked on the worker. On a loaded test host the worker can miss that
+    // window, so the test retypes the keystroke until the handoff really
+    // happens instead of betting everything on one window. What it asserts
+    // unconditionally is the property under test: no attempt — delivering
+    // or not — allocates on the dispatch thread.
+    let mut delivered = false;
+    for attempt in 0..50 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            // Backspace removes the whole resolved か, so retype the k to
+            // put the composition back where the measured keystroke expects.
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: KeyInput {
+                        code: KeyCode::Backspace,
+                        ch: None,
+                        modifiers: Modifiers::NONE,
+                        repeat: false,
+                        test_only: false,
+                    },
+                },
+                &mut out,
+            );
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key('k'),
+                },
+                &mut out,
+            );
+            out.clear();
+        }
+        let observed = allocations(|| {
+            let reply = dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key('a'),
+                },
+                &mut out,
+            );
+            assert_eq!(reply, Reply::Output);
+        });
+        assert_eq!(observed, 0, "prediction dispatch allocated");
+        if out.has_candidates() {
+            delivered = true;
+            break;
+        }
+        out.clear();
+    }
 
-    assert_eq!(observed, 0, "prediction dispatch allocated");
-    assert!(out.has_candidates());
+    assert!(
+        delivered,
+        "the prediction worker never delivered candidates"
+    );
     assert_eq!(out.candidate(0).map(|candidate| candidate.0), Some("関数"));
     runtime.stop().expect("prediction worker joins");
 }

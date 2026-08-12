@@ -1020,6 +1020,11 @@ impl Dispatcher {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
         };
         self.prediction_cache.clear_if_session(id);
+        // `build_reconversion` switches the persistent mode to Hiragana for
+        // the recovered composition. `Session::reset` deliberately preserves
+        // `mode`, so a failed request must restore the pre-request mode or a
+        // Katakana typist would be left silently stuck in Hiragana.
+        let mode_before_reconversion = session.mode;
         match build_reconversion(
             session,
             text,
@@ -1032,6 +1037,7 @@ impl Dispatcher {
             Ok(()) => Reply::Output,
             Err(code) => {
                 session.reset();
+                session.mode = mode_before_reconversion;
                 out.clear();
                 Reply::Message(Response::Error(code))
             }
@@ -1378,16 +1384,20 @@ struct CommitSegmentMeta {
 
 fn candidate_meta(candidate: &ConversionCandidate) -> CommitSegmentMeta {
     let segments = candidate.segments();
+    // Per-word counters, not segment counts: bunsetsu fusion merges an IT
+    // content word and its non-IT ancillary into one OR-flagged segment,
+    // which would otherwise shrink the denominator of the domain ratio
+    // while keeping its numerator.
+    let (it_words, total_words) = segments.iter().fold((0u8, 0u8), |(it, total), segment| {
+        (
+            it.saturating_add(segment.it_word_count),
+            total.saturating_add(segment.word_count),
+        )
+    });
     CommitSegmentMeta {
         right_id: segments.last().map_or(0, |segment| segment.right_id),
-        it_words: u8::try_from(
-            segments
-                .iter()
-                .filter(|segment| segment.flags.contains(EntryFlags::IT))
-                .count(),
-        )
-        .unwrap_or(u8::MAX),
-        total_words: u8::try_from(segments.len()).unwrap_or(u8::MAX),
+        it_words,
+        total_words,
     }
 }
 
@@ -2525,7 +2535,16 @@ fn apply_action(
             out,
         )?,
         Action::UndoCommit => match session.undo_commit() {
-            Some(surface) => out.set_delete_before(surface.as_str())?,
+            Some(surface) => {
+                if out.set_delete_before(surface.as_str()).is_err() {
+                    // The host never received a delete request, which is
+                    // exactly a rejection: restore the post-commit idle
+                    // state and keep the record so a retry stays possible,
+                    // instead of leaving the undo wedged pending forever.
+                    session.reject_undo_commit();
+                    return Err(Overflow);
+                }
+            }
             None => out.consumed = false,
         },
         Action::Reconvert => {
@@ -3077,11 +3096,9 @@ fn build_reconversion(
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
 ) -> Result<(), ErrorCode> {
-    session.reset();
-    session.mode = Mode::Hiragana;
-    out.consumed = true;
-    out.mode = Some(session.mode);
-
+    // Recover the reading before touching the session at all, so a failed
+    // reverse scan leaves the live composition exactly as it was and the
+    // caller's error reset never has partially-replaced state to clean up.
     let recovered = conversion
         .reconversion_reading(selected_text, scratch)
         .map_err(|_| ErrorCode::Internal)?;
@@ -3091,6 +3108,12 @@ fn build_reconversion(
             .push_str(selected_text)
             .map_err(|_| ErrorCode::TooLarge)?;
     }
+
+    session.reset();
+    session.mode = Mode::Hiragana;
+    out.consumed = true;
+    out.mode = Some(session.mode);
+
     session
         .preedit
         .push_str(scratch.as_str())
@@ -5615,6 +5638,39 @@ mod tests {
         let live = dispatcher.sessions.get(session).expect("session");
         assert_eq!(live.state(), State::Converting);
         assert_eq!(live.preedit.as_str(), "かな");
+    }
+
+    #[test]
+    fn a_failed_reconversion_restores_the_pre_request_input_mode() {
+        // `build_reconversion` switches the persistent mode to Hiragana for
+        // the recovered composition, and `Session::reset` deliberately keeps
+        // `mode`. A reconversion that fails after that switch used to leave a
+        // Katakana typist silently stuck in Hiragana. The fixture's 600-byte
+        // ASCII surface recovers the reading です, whose sole candidate
+        // overflows the render scratch under the profile's full-width alnum
+        // policy, so the request always errors after entering conversion.
+        let mut dispatcher = oversized_render_segment_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        dispatcher.sessions.get_mut(session).expect("session").mode = Mode::Katakana;
+
+        let reply = dispatcher.dispatch(
+            &Request::Reconvert {
+                session,
+                text: "x".repeat(600),
+                preview: false,
+            },
+            &mut out,
+        );
+
+        assert_eq!(reply, Reply::Message(Response::Error(ErrorCode::TooLarge)));
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.state(), State::Idle);
+        assert_eq!(
+            live.mode,
+            Mode::Katakana,
+            "a failed reconversion must not leave the session in Hiragana"
+        );
     }
 
     #[test]

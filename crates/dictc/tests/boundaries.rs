@@ -100,12 +100,18 @@ fn conversion_fuses_morphemes_into_bunsetsu_segments() {
     assert_eq!((segment.left_id, segment.right_id), (1, 2));
     assert!(segment.flags.contains(EntryFlags::IT));
     assert!(segment.flags.contains(EntryFlags::PREDICTION));
+    // The OR-merged flags above must not let the non-IT 助動詞 count as an
+    // IT word: the fused segment still knows it covers two words, one IT.
+    assert_eq!(segment.word_count, 2);
+    assert_eq!(segment.it_word_count, 1);
 
     let whole_word = candidates
         .iter()
         .find(|candidate| candidate.text() == "下")
         .expect("whole-reading candidate is listed");
     assert_eq!(whole_word.segments().len(), 1);
+    assert_eq!(whole_word.segments()[0].word_count, 1);
+    assert_eq!(whole_word.segments()[0].it_word_count, 0);
 }
 
 #[test]
@@ -118,6 +124,11 @@ fn images_without_the_table_keep_morpheme_segments() {
         .expect("convert");
     assert_eq!(candidates[0].text(), "試た");
     assert_eq!(candidates[0].segments().len(), 2);
+    for segment in candidates[0].segments() {
+        assert_eq!(segment.word_count, 1);
+    }
+    assert_eq!(candidates[0].segments()[0].it_word_count, 1);
+    assert_eq!(candidates[0].segments()[1].it_word_count, 0);
 }
 
 #[test]

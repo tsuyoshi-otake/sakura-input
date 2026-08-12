@@ -452,7 +452,7 @@ impl<'a> Dictionary<'a> {
         if rid >= self.class_count || lid >= self.class_count {
             return Some(true);
         }
-        let row_bytes = (self.class_count + 7) / 8;
+        let row_bytes = self.class_count.div_ceil(8);
         Some(
             rows.get(rid * row_bytes + lid / 8)
                 .is_none_or(|byte| byte & (1u8 << (lid % 8)) != 0),

@@ -358,13 +358,17 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 .take();
             if let Some(state) = state {
                 let next = state.mode.map(|mode| (mode, state.appearance_theme));
+                // The candidate popup places itself first so the indicator
+                // can avoid the rectangle it actually took — including the
+                // flip above the composition near the bottom of the screen.
+                app.candidates.update(&state);
                 if let (Some((mode, theme)), true) =
                     (next, indicator_change_shows(app.shown_indicator, next))
                 {
-                    app.indicator.show(mode, theme, &state);
+                    app.indicator
+                        .show(mode, theme, &state, app.candidates.popup_rect());
                 }
                 app.shown_indicator = next;
-                app.candidates.update(&state);
             }
             LRESULT(0)
         }

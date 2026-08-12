@@ -196,3 +196,19 @@ for something it never checked is worse than not having one.
 `installer/setup.iss` has never been compiled locally (Inno Setup is not
 installed on this machine); `.github/workflows/installer.yml` is what actually
 runs ISCC over it, and it passes.
+
+## 2026-08-13 — load-sensitive flake: TSF handshake tests under `--workspace`
+
+`text_service::tests::local_reconvert_encode_failure_rejects_only_that_operation`
+failed once during a full `cargo test --workspace` run ("the handshake must
+have completed", text_service.rs:5493) and then passed 10/10 in isolation.
+Root cause is load sensitivity, not the code under test: `Engine::attached_to`
+runs connect + Hello + CreateSession against the fake named-pipe engine inside
+the wall-clock `RECONNECT_BUDGET` of 50 ms (engine.rs), and a parallel
+workspace run can delay scheduling of the fake server thread past that budget.
+Same category as the prediction-handoff flake fixed in #42 (that one retries
+in the test while keeping the engine's 10 ms fail-open window untouched). Any
+TSF test asserting `is_connected()` right after `attached_to` shares this
+exposure. If it recurs, make the *test* tolerate load (retry the attach), do
+not widen the product's 50 ms reconnect budget — the budget is deliberately
+no larger than a keystroke budget.

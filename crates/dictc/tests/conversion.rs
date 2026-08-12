@@ -172,6 +172,42 @@ fn bounded_it_prior_can_change_a_close_choice_but_zero_bias_cannot() {
 }
 
 #[test]
+fn an_oversized_identifier_variant_is_skipped_without_discarding_the_conversion() {
+    // A dictc-legal 1536-byte ASCII surface with exactly one camelCase
+    // boundary: snake/kebab/screaming variants need at least one extra
+    // separator byte, overflowing the 1536-byte candidate text buffer.
+    // The oversized cosmetic variants must be skipped; propagating the
+    // overflow used to abort the whole conversion and discard every valid
+    // candidate that search_n_best had already produced.
+    let surface = format!("{}B{}", "a".repeat(768), "b".repeat(767));
+    assert_eq!(surface.len(), 1536);
+    let entries = format!(
+        "# license: BSD-3-Clause\n\
+         reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+         てすと\t{surface}\t1\t1\t100\t-\t\t\n"
+    );
+    let bytes = compile_fixture(&entries);
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "てすと", ConversionOptions::default())
+        .expect("an oversized cosmetic variant must not abort the conversion");
+
+    assert!(
+        candidates
+            .iter()
+            .any(|candidate| candidate.text() == surface),
+        "the base dictionary candidate must survive"
+    );
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| !candidate.text().contains('_') && !candidate.text().contains('-')),
+        "no partially built identifier variant may appear"
+    );
+}
+
+#[test]
 fn irregular_counter_and_katakana_synthetic_edges_are_available() {
     let bytes = fixture();
     let dictionary = Dictionary::parse(&bytes).expect("dictionary");

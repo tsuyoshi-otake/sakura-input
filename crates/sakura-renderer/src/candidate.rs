@@ -28,12 +28,12 @@ use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetWindowLongPtrW,
-    RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW, CS_HREDRAW,
-    CS_VREDRAW, GWLP_USERDATA, HTCLIENT, HWND_TOPMOST, MA_NOACTIVATE, SPI_GETHIGHCONTRAST,
-    SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW, WS_DISABLED,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetWindowRect, RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    SystemParametersInfoW, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HTCLIENT, HWND_TOPMOST,
+    MA_NOACTIVATE, SPI_GETHIGHCONTRAST, SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE,
+    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED,
+    WM_ERASEBKGND, WM_GETOBJECT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST,
+    WM_PAINT, WNDCLASSW, WS_DISABLED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 #[cfg(test)]
@@ -361,6 +361,23 @@ impl CandidateWindow {
             hide_delete_overlay(self.delete_overlay);
             let _ = ShowWindow(self.window, SW_HIDE);
         }
+    }
+
+    /// The popup's current screen rectangle, only while it is visible.
+    ///
+    /// The mode indicator places itself around this exact rectangle rather
+    /// than guessing which side of the composition the popup chose, so the
+    /// window itself — not a copy that could go stale across a DPI
+    /// reposition — is the source of truth.
+    pub fn popup_rect(&self) -> Option<RECT> {
+        if !self.state.visible {
+            return None;
+        }
+        let mut rect = RECT::default();
+        // SAFETY: the popup is live for this object's lifetime and `rect`
+        // outlives the call.
+        unsafe { GetWindowRect(self.window, &mut rect) }.ok()?;
+        Some(rect)
     }
 
     /// An authoritative removal remains suppressed until the engine publishes

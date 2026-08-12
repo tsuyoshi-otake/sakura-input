@@ -26,9 +26,11 @@
 //! process.) When nothing reports a caret at all, the bar sits at the
 //! bottom centre of the foreground monitor's work area — a deliberate,
 //! recognisable resting place, where a corner of the foreground window
-//! reads as a misplaced popup. When the candidate popup is up it owns the
-//! space below the composition, so the bar steps to the space above
-//! instead of covering the first candidate row.
+//! reads as a misplaced popup. When the candidate popup is up, the bar is
+//! handed the rectangle the popup actually placed itself into and takes
+//! the caret-adjacent spot the popup left free — which is the space above
+//! in the usual popup-below layout, and the space below when the popup
+//! itself flipped above the composition near the bottom of the screen.
 
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
@@ -139,9 +141,17 @@ impl Indicator {
     /// they need to see for the full interval.
     ///
     /// `ui` supplies the composition rectangle TSF measured, when there is
-    /// one, and whether the candidate popup is about to occupy the space
-    /// below it. See the module docs for the whole placement story.
-    pub fn show(&self, mode: Mode, theme: AppearanceTheme, ui: &UiState) {
+    /// one, and `candidate_popup` the candidate popup's actual on-screen
+    /// rectangle while it is visible — the popup places itself first, so
+    /// the bar avoids the spot it really took rather than guessing which
+    /// side it chose. See the module docs for the whole placement story.
+    pub fn show(
+        &self,
+        mode: Mode,
+        theme: AppearanceTheme,
+        ui: &UiState,
+        candidate_popup: Option<RECT>,
+    ) {
         // SAFETY: `window` is live for this type's lifetime. The stored
         // value is read back only by `paint`, which validates it.
         unsafe {
@@ -158,16 +168,10 @@ impl Indicator {
             .filter(|rect| rect.is_valid())
             .map(rect_of)
             .or_else(caret_rect);
-        let candidates_below = anchor.is_some()
-            && ui.renderer_visible
-            && ui
-                .candidates
-                .as_ref()
-                .is_some_and(|list| !list.items.is_empty());
         let work = candidate::monitor_work_area(screen_rect_of(
             anchor.or_else(foreground_rect).unwrap_or_default(),
         ));
-        let (x, y) = placement_in(anchor, candidates_below, width, height, gap, work);
+        let (x, y) = placement_in(anchor, candidate_popup, width, height, gap, work);
         // SAFETY: every argument is a plain value; `HWND_TOPMOST` is the
         // documented ordering handle.
         unsafe {
@@ -192,14 +196,17 @@ impl Indicator {
 /// appear on.
 ///
 /// With an anchor: aligned to the caret's left edge, directly below it,
-/// flipping above only when the work area leaves no room below — and the
-/// other way around while the candidate popup owns the space below the
-/// composition. Without one: bottom centre of the work area. Clamped into
-/// the work area either way, because all that ultimately matters is that
-/// the whole bar is readable.
+/// flipping above only when the work area leaves no room below — or when
+/// the spot below is the one the candidate popup actually occupies.
+/// `candidate_popup` is the popup's placed rectangle, so a popup that
+/// itself flipped above the composition near the bottom of the screen
+/// leaves the bar below, not stacked on top of the popup. Without an
+/// anchor: bottom centre of the work area. Clamped into the work area
+/// either way, because all that ultimately matters is that the whole bar
+/// is readable.
 fn placement_in(
     anchor: Option<RECT>,
-    candidates_below: bool,
+    candidate_popup: Option<RECT>,
     width: i32,
     height: i32,
     gap: i32,
@@ -207,24 +214,36 @@ fn placement_in(
 ) -> (i32, i32) {
     let (x, y) = match anchor {
         Some(anchor) => {
+            let x = anchor
+                .left
+                .clamp(work.left, (work.right.saturating_sub(width)).max(work.left));
             let below = anchor.bottom.saturating_add(gap);
             let above = anchor.top.saturating_sub(gap).saturating_sub(height);
             let below_fits = below.saturating_add(height) <= work.bottom;
             let above_fits = above >= work.top;
-            let y = if candidates_below {
-                // The candidate popup is anchored below the composition;
-                // covering its first row with a mode bar helps nobody.
-                if above_fits {
-                    above
-                } else {
-                    below
-                }
+            let covers_popup = |top: i32| {
+                candidate_popup.is_some_and(|popup| {
+                    x < popup.right
+                        && popup.left < x.saturating_add(width)
+                        && top < popup.bottom
+                        && popup.top < top.saturating_add(height)
+                })
+            };
+            // Covering a candidate row with a mode bar helps nobody, so the
+            // bar takes the caret-adjacent spot the popup left free. Only
+            // when both spots collide or overflow does plain fit-driven
+            // placement decide — staying readable inside the work area
+            // beats dodging the popup.
+            let y = if below_fits && !covers_popup(below) {
+                below
+            } else if above_fits && !covers_popup(above) {
+                above
             } else if below_fits || !above_fits {
                 below
             } else {
                 above
             };
-            (anchor.left, y)
+            (x, y)
         }
         // Bottom centre, which is where a user looks for a mode indicator
         // when there is no caret to attach it to.
@@ -611,7 +630,7 @@ mod tests {
             bottom: 324,
         };
         assert_eq!(
-            placement_in(Some(caret), false, 220, 28, 8, WORK),
+            placement_in(Some(caret), None, 220, 28, 8, WORK),
             (400, 332)
         );
     }
@@ -625,7 +644,7 @@ mod tests {
             bottom: 1_024,
         };
         assert_eq!(
-            placement_in(Some(caret), false, 220, 28, 8, WORK),
+            placement_in(Some(caret), None, 220, 28, 8, WORK),
             (400, 1_000 - 8 - 28)
         );
     }
@@ -638,8 +657,14 @@ mod tests {
             right: 402,
             bottom: 324,
         };
+        let popup_below = RECT {
+            left: 400,
+            top: 332,
+            right: 800,
+            bottom: 620,
+        };
         assert_eq!(
-            placement_in(Some(caret), true, 220, 28, 8, WORK),
+            placement_in(Some(caret), Some(popup_below), 220, 28, 8, WORK),
             (400, 300 - 8 - 28)
         );
         // Unless there is no room above, where below is still the answer.
@@ -649,9 +674,74 @@ mod tests {
             right: 402,
             bottom: 28,
         };
+        let popup_below_top_caret = RECT {
+            left: 400,
+            top: 36,
+            right: 800,
+            bottom: 320,
+        };
         assert_eq!(
-            placement_in(Some(top_caret), true, 220, 28, 8, WORK),
+            placement_in(
+                Some(top_caret),
+                Some(popup_below_top_caret),
+                220,
+                28,
+                8,
+                WORK
+            ),
             (400, 36)
+        );
+    }
+
+    /// The regression this placement exists for: near the bottom of the
+    /// screen the candidate popup flips *above* the composition, and the
+    /// bar must then keep the still-free space below instead of stacking
+    /// itself on top of the popup.
+    #[test]
+    fn the_bar_stays_below_when_the_popup_flipped_above_the_caret() {
+        let caret = RECT {
+            left: 400,
+            top: 956,
+            right: 402,
+            bottom: 980,
+        };
+        // A 300-px popup no longer fits below `caret`, so `candidate::place`
+        // put it above; the bar's 28 px still fit below.
+        let popup_above = RECT {
+            left: 400,
+            top: 956 - 8 - 300,
+            right: 800,
+            bottom: 956 - 8,
+        };
+        assert_eq!(
+            placement_in(Some(caret), Some(popup_above), 220, 28, 8, WORK),
+            (400, 988)
+        );
+        // The old presence-only check chose the space above here, which is
+        // exactly where the popup is.
+        let (_, wrong_y) = (400, 956 - 8 - 28);
+        assert!(wrong_y < popup_above.bottom && wrong_y + 28 > popup_above.top);
+    }
+
+    /// A bar left of the popup shares no horizontal span with it, so the
+    /// spot below the caret stays usable even while the popup is below too.
+    #[test]
+    fn a_popup_beside_the_bar_does_not_force_it_above() {
+        let caret = RECT {
+            left: 100,
+            top: 300,
+            right: 102,
+            bottom: 324,
+        };
+        let popup_to_the_right = RECT {
+            left: 600,
+            top: 332,
+            right: 1_000,
+            bottom: 620,
+        };
+        assert_eq!(
+            placement_in(Some(caret), Some(popup_to_the_right), 220, 28, 8, WORK),
+            (100, 332)
         );
     }
 
@@ -669,14 +759,14 @@ mod tests {
             right: -98,
             bottom: 524,
         };
-        let (x, y) = placement_in(Some(caret), false, 220, 28, 8, work);
+        let (x, y) = placement_in(Some(caret), None, 220, 28, 8, work);
         assert_eq!((x, y), (-220, 532));
         assert!(x >= work.left && x + 220 <= work.right);
     }
 
     #[test]
     fn no_caret_rests_at_the_bottom_centre_of_the_work_area() {
-        let (x, y) = placement_in(None, false, 220, 28, 8, WORK);
+        let (x, y) = placement_in(None, None, 220, 28, 8, WORK);
         assert_eq!(x, (1_920 - 220) / 2);
         assert_eq!(y, 1_040 - 28 * 3);
     }
@@ -695,7 +785,7 @@ mod tests {
             right: 2,
             bottom: 24,
         };
-        let (x, y) = placement_in(Some(caret), false, 220, 28, 8, tiny);
+        let (x, y) = placement_in(Some(caret), None, 220, 28, 8, tiny);
         assert_eq!((x, y), (10, 10));
     }
 

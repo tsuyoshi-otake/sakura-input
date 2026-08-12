@@ -198,7 +198,7 @@ pub fn build_boundaries(
         if rid != 0 {
             let mut undecided = vec![!0u64; words];
             undecided[0] &= !1u64; // lid 0 is always a boundary
-            if classes % 64 != 0 {
+            if !classes.is_multiple_of(64) {
                 undecided[words - 1] &= (1u64 << (classes % 64)) - 1;
             }
             for rule in &compiled {

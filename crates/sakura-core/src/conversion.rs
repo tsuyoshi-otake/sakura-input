@@ -142,6 +142,12 @@ pub struct ConversionSegment {
     pub left_id: u16,
     pub right_id: u16,
     pub flags: EntryFlags,
+    /// How many dictionary path words this segment covers. Bunsetsu fusion
+    /// OR-merges `flags`, which would otherwise let one flagged word count
+    /// as the whole fused segment in per-word statistics.
+    pub word_count: u8,
+    /// How many of those words carried [`EntryFlags::IT`] on their own.
+    pub it_word_count: u8,
 }
 
 impl ConversionCandidate {
@@ -506,8 +512,14 @@ impl Converter {
             let base = self.candidates[base_index].clone();
             for (style_index, style) in IdentifierStyle::ALL.into_iter().enumerate() {
                 let mut text = FixedStr::new();
-                if !identifier_into(base.text(), style, &mut text)
-                    .map_err(|_| ConversionError::OutputTooLong)?
+                // A cosmetic variant that overflows its buffer (a near-capacity
+                // base with separators inserted) is skipped like search_n_best
+                // skips an oversized N-best candidate; it must not discard the
+                // valid candidate list that was already produced.
+                let Ok(produced) = identifier_into(base.text(), style, &mut text) else {
+                    continue;
+                };
+                if !produced
                     || text.as_str() == base.text()
                     || self
                         .candidates
@@ -517,12 +529,24 @@ impl Converter {
                     continue;
                 }
                 let mut annotation = FixedStr::new();
-                annotation
-                    .push_str(style.annotation())
-                    .map_err(|_| ConversionError::OutputTooLong)?;
+                if annotation.push_str(style.annotation()).is_err() {
+                    continue;
+                }
                 let mut segments = FixedVec::new();
                 let first = base.segments().first().copied().unwrap_or_default();
                 let last = base.segments().last().copied().unwrap_or(first);
+                // The variant re-spells the same words the base candidate
+                // covered, so its single segment keeps the base's per-word
+                // statistics rather than counting as one word.
+                let (word_count, it_word_count) =
+                    base.segments()
+                        .iter()
+                        .fold((0u8, 0u8), |(words, it_words), segment| {
+                            (
+                                words.saturating_add(segment.word_count),
+                                it_words.saturating_add(segment.it_word_count),
+                            )
+                        });
                 segments
                     .push(ConversionSegment {
                         reading_start: 0,
@@ -534,6 +558,8 @@ impl Converter {
                         left_id: first.left_id,
                         right_id: last.right_id,
                         flags: first.flags,
+                        word_count,
+                        it_word_count,
                     })
                     .map_err(|_| ConversionError::TooManySegments)?;
                 self.candidates.push(ConversionCandidate {
@@ -1348,6 +1374,8 @@ fn make_lossless_fallback(
             left_id: synthetic_id,
             right_id: synthetic_id,
             flags: EntryFlags::NONE,
+            word_count: 1,
+            it_word_count: 0,
         })
         .map_err(|_| ConversionError::TooManySegments)?;
     Ok(ConversionCandidate {
@@ -1418,6 +1446,7 @@ fn make_candidate(
         let fuse = segments.last().is_some_and(|previous: &ConversionSegment| {
             dictionary.bunsetsu_boundary(previous.right_id, node.left_id) == Some(false)
         });
+        let it_word = u8::from(flags.contains(EntryFlags::IT));
         if fuse {
             let last = segments.len() - 1;
             let previous = segments.get_mut(last).ok_or(ConversionError::NoPath)?;
@@ -1427,6 +1456,8 @@ fn make_candidate(
                 u16::try_from(text.len()).map_err(|_| ConversionError::OutputTooLong)?;
             previous.right_id = node.right_id;
             previous.flags = previous.flags | flags;
+            previous.word_count = previous.word_count.saturating_add(1);
+            previous.it_word_count = previous.it_word_count.saturating_add(it_word);
         } else {
             segments
                 .push(ConversionSegment {
@@ -1441,6 +1472,8 @@ fn make_candidate(
                     left_id: node.left_id,
                     right_id: node.right_id,
                     flags,
+                    word_count: 1,
+                    it_word_count: it_word,
                 })
                 .map_err(|_| ConversionError::TooManySegments)?;
         }

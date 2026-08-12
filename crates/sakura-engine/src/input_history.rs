@@ -13,7 +13,7 @@
 
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Seek, SeekFrom, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -951,12 +951,21 @@ fn open_append(path: &Path) -> io::Result<File> {
 }
 
 fn repair_file(path: &Path) -> io::Result<()> {
-    let bytes = fs::read(path)?;
+    // Every append enforces MAX_INPUT_HISTORY_BYTES, so bytes past the cap
+    // can only be corruption or external tampering. Reading is bounded to
+    // the cap so an oversized file cannot force an unbounded allocation at
+    // engine startup; the scan then truncates to the last valid frame,
+    // which also discards the entire over-cap tail.
+    let file_len = fs::metadata(path)?.len();
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_INPUT_HISTORY_BYTES)
+        .read_to_end(&mut bytes)?;
     if bytes.is_empty() {
         return ensure_file(path);
     }
     let (_, valid_end) = scan_bytes(&bytes)?;
-    if valid_end < bytes.len() {
+    if (valid_end as u64) < file_len {
         let file = OpenOptions::new().write(true).open(path)?;
         file.set_len(valid_end as u64)?;
     }
@@ -1373,6 +1382,28 @@ mod tests {
             assert_eq!(line.split('\t').count(), 25);
         }
         service.stop().expect("stop");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn repair_reads_at_most_the_size_cap_and_truncates_an_over_cap_history_file() {
+        // Appends enforce MAX_INPUT_HISTORY_BYTES, so an over-cap file can
+        // only come from corruption or external tampering. Repair must not
+        // load the oversized tail (the read is capped) and must still
+        // truncate the file back to its last valid frame.
+        let path = temporary_path("overcap");
+        append_records(&path, &[key_record(1, 1), key_record(2, 2)]);
+        let valid_len = fs::metadata(&path).expect("metadata").len();
+        let file = OpenOptions::new().write(true).open(&path).expect("open");
+        file.set_len(MAX_INPUT_HISTORY_BYTES + 4096).expect("grow");
+        drop(file);
+
+        repair_file(&path).expect("repair");
+
+        assert_eq!(fs::metadata(&path).expect("metadata").len(), valid_len);
+        let snapshot = read_snapshot(&path).expect("snapshot");
+        assert_eq!(snapshot.records.len(), 2);
+        assert_eq!(snapshot.ignored_tail_bytes, 0);
         let _ = fs::remove_file(path);
     }
 
