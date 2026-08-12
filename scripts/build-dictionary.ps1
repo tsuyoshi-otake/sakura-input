@@ -162,6 +162,12 @@ function Resolve-PinnedSource {
         Invoke-Rtk -Arguments (@('git', '-C', $resolved, 'sparse-checkout', 'set') + $SparsePaths)
         Invoke-Rtk -Arguments @('git', '-C', $resolved, 'checkout', '--detach', $Revision)
     }
+    else {
+        # Re-assert the sparse profile so checkouts provisioned before a new
+        # pinned path was added materialize it. Blobs come from the same
+        # pinned revision, so build inputs stay deterministic.
+        Invoke-Rtk -Arguments (@('git', '-C', $resolved, 'sparse-checkout', 'set') + $SparsePaths)
+    }
 
     $rtk = Get-Command rtk -ErrorAction SilentlyContinue
     if ($null -ne $rtk) {
@@ -327,6 +333,7 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$GlossaryDirectory,
         [Parameter(Mandatory)][string]$ConnectionPath,
         [Parameter(Mandatory)][string]$MozcPosPath,
+        [Parameter(Mandatory)][string]$MozcSegmenterPath,
         [Parameter(Mandatory)][string]$CuratedTermsPath,
         [Parameter(Mandatory)][string]$CuratedPhrasesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
@@ -425,6 +432,8 @@ function Invoke-BuildPass {
     }
     $dictionaryArguments += @(
         '--mozc-connection', $ConnectionPath,
+        '--mozc-id-def', $MozcPosPath,
+        '--mozc-segmenter', $MozcSegmenterPath,
         '--glossary-dir', $GlossaryDirectory,
         '--wordnet-lmf', $WordNetLmfPath,
         '--wordnet-report', $wordNetReport,
@@ -480,7 +489,8 @@ function Remove-BuildDirectory {
 
 $stopwatch = [Diagnostics.Stopwatch]::StartNew()
 $MozcSource = Resolve-PinnedSource -ProvidedPath $MozcSource -Repository $MozcRepository `
-    -Revision $MozcRevision -ManagedName 'mozc' -SparsePaths @('LICENSE', 'src/data/dictionary_oss')
+    -Revision $MozcRevision -ManagedName 'mozc' `
+    -SparsePaths @('src/data/dictionary_oss', 'src/data/rules')
 $GlossarySource = Resolve-PinnedSource -ProvidedPath $GlossarySource -Repository $GlossaryRepository `
     -Revision $GlossaryRevision -ManagedName 'smile-chat' -SparsePaths @('frontend/public')
 $SystemCategoryDictionary = Resolve-SystemCategoryDictionary -Directory $SystemCategoryDirectory
@@ -494,6 +504,7 @@ $mozcDictionaryDirectory = Join-Path $MozcSource 'src\data\dictionary_oss'
 $glossaryDirectory = Join-Path $GlossarySource 'frontend\public\glossaries'
 $connectionPath = Join-Path $mozcDictionaryDirectory 'connection_single_column.txt'
 $mozcPosPath = Join-Path $mozcDictionaryDirectory 'id.def'
+$mozcSegmenterPath = Join-Path $MozcSource 'src\data\rules\segmenter.def'
 $requiredLicenseFiles = @(
     (Join-Path $MozcSource 'LICENSE'),
     (Join-Path $mozcDictionaryDirectory 'README.txt'),
@@ -508,13 +519,16 @@ foreach ($path in $requiredLicenseFiles) {
 if (-not [IO.File]::Exists($mozcPosPath)) {
     throw "Mozc POS taxonomy is missing: $mozcPosPath"
 }
+if (-not [IO.File]::Exists($mozcSegmenterPath)) {
+    throw "Mozc segmenter rules are missing: $mozcSegmenterPath"
+}
 
 $env:CARGO_HTTP_CHECK_REVOKE = 'false'
 Push-Location $RepositoryRoot
 try {
     $primary = Invoke-BuildPass -Suffix '' -MozcDictionaryDirectory $mozcDictionaryDirectory `
         -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-        -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+        -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath -CuratedTermsPath $CuratedTerms `
         -CuratedPhrasesPath $CuratedPhrases `
         -CuratedGeneralDetailsPath $CuratedGeneralDetails `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
@@ -525,7 +539,7 @@ try {
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-            -MozcPosPath $mozcPosPath -CuratedTermsPath $CuratedTerms `
+            -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath -CuratedTermsPath $CuratedTerms `
             -CuratedPhrasesPath $CuratedPhrases `
             -CuratedGeneralDetailsPath $CuratedGeneralDetails `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
