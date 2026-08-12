@@ -1,4 +1,10 @@
 #![cfg(all(windows, feature = "e2e-host"))]
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::undocumented_unsafe_blocks
+)]
 
 //! Physical-key prediction navigation through a real Win32 TSF host.
 //!
