@@ -17,11 +17,18 @@
 //!
 //! # Placement
 //!
-//! Beside the caret when the foreground thread reports one, and near the
-//! foreground window otherwise. The caret rectangle comes from
-//! `GetGUIThreadInfo`, which reports it for any thread — that is the point
-//! of it — where `GetCaretPos` only ever answers for the calling thread and
-//! would report nothing useful from this process.
+//! Directly below the caret, from the best rectangle anyone can report.
+//! The engine's UI state carries the composition rectangle TSF measured
+//! with `GetTextExt` — the only source that works in hosts that draw their
+//! own caret, such as Electron applications — and `GetGUIThreadInfo` covers
+//! classic windows when no composition is active. (`GetCaretPos` only ever
+//! answers for the calling thread and would report nothing useful from this
+//! process.) When nothing reports a caret at all, the bar sits at the
+//! bottom centre of the foreground monitor's work area — a deliberate,
+//! recognisable resting place, where a corner of the foreground window
+//! reads as a misplaced popup. When the candidate popup is up it owns the
+//! space below the composition, so the bar steps to the space above
+//! instead of covering the first candidate row.
 
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
@@ -34,14 +41,14 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetGUIThreadInfo,
-    GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, KillTimer,
-    RegisterClassW, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW,
-    GUITHREADINFO, GWLP_USERDATA, HWND_TOPMOST, SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SW_HIDE,
-    SW_SHOWNOACTIVATE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_PAINT, WM_TIMER, WNDCLASSW,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, KillTimer, RegisterClassW,
+    SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW, GUITHREADINFO,
+    GWLP_USERDATA, HWND_TOPMOST, SWP_NOACTIVATE, SW_HIDE, SW_SHOWNOACTIVATE, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_DESTROY, WM_PAINT, WM_TIMER, WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP,
 };
 
-use sakura_proto::{AppearanceTheme, Mode};
+use sakura_proto::{AppearanceTheme, Mode, ScreenRect, UiState};
 
 use crate::{candidate, glyph};
 
@@ -125,14 +132,18 @@ impl Indicator {
         Ok(Indicator { window })
     }
 
-    /// Shows the glyph for `mode` beside the caret, restarting the timer.
+    /// Shows the glyph for `mode` below the caret, restarting the timer.
     ///
     /// Restarting rather than ignoring a change while one is already up:
     /// the last mode pressed is the one the user is in, and it is the one
     /// they need to see for the full interval.
-    pub fn show(&self, mode: Mode, theme: AppearanceTheme) {
+    ///
+    /// `ui` supplies the composition rectangle TSF measured, when there is
+    /// one, and whether the candidate popup is about to occupy the space
+    /// below it. See the module docs for the whole placement story.
+    pub fn show(&self, mode: Mode, theme: AppearanceTheme, ui: &UiState) {
         // SAFETY: `window` is live for this type's lifetime. The stored
-        // value is read back only by `painted_mode`, which validates it.
+        // value is read back only by `paint`, which validates it.
         unsafe {
             SetWindowLongPtrW(self.window, GWLP_USERDATA, encode_state(mode, theme));
         }
@@ -140,7 +151,23 @@ impl Indicator {
         let (logical_width, logical_height) = logical_size();
         let width = scaled(self.window, logical_width);
         let height = scaled(self.window, logical_height);
-        let (x, y) = self.placement(width, height);
+        let gap = scaled(self.window, CARET_GAP_AT_96_DPI);
+
+        let anchor = ui
+            .anchor
+            .filter(|rect| rect.is_valid())
+            .map(rect_of)
+            .or_else(caret_rect);
+        let candidates_below = anchor.is_some()
+            && ui.renderer_visible
+            && ui
+                .candidates
+                .as_ref()
+                .is_some_and(|list| !list.items.is_empty());
+        let work = candidate::monitor_work_area(screen_rect_of(
+            anchor.or_else(foreground_rect).unwrap_or_default(),
+        ));
+        let (x, y) = placement_in(anchor, candidates_below, width, height, gap, work);
         // SAFETY: every argument is a plain value; `HWND_TOPMOST` is the
         // documented ordering handle.
         unsafe {
@@ -159,30 +186,74 @@ impl Indicator {
             SetTimer(Some(self.window), HIDE_TIMER, LINGER_MS, None);
         }
     }
+}
 
-    /// Where the popup should sit: beside the caret if there is
-    /// one, near the foreground window if not, and on screen either way.
-    fn placement(&self, width: i32, height: i32) -> (i32, i32) {
-        let gap = scaled(self.window, CARET_GAP_AT_96_DPI);
-        let anchor = caret_point().or_else(foreground_point);
-        // SAFETY: no arguments; these are the primary monitor's dimensions.
-        let (screen_w, screen_h) =
-            unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
+/// Where the bar sits inside `work`, the work area of the monitor it will
+/// appear on.
+///
+/// With an anchor: aligned to the caret's left edge, directly below it,
+/// flipping above only when the work area leaves no room below — and the
+/// other way around while the candidate popup owns the space below the
+/// composition. Without one: bottom centre of the work area. Clamped into
+/// the work area either way, because all that ultimately matters is that
+/// the whole bar is readable.
+fn placement_in(
+    anchor: Option<RECT>,
+    candidates_below: bool,
+    width: i32,
+    height: i32,
+    gap: i32,
+    work: RECT,
+) -> (i32, i32) {
+    let (x, y) = match anchor {
+        Some(anchor) => {
+            let below = anchor.bottom.saturating_add(gap);
+            let above = anchor.top.saturating_sub(gap).saturating_sub(height);
+            let below_fits = below.saturating_add(height) <= work.bottom;
+            let above_fits = above >= work.top;
+            let y = if candidates_below {
+                // The candidate popup is anchored below the composition;
+                // covering its first row with a mode bar helps nobody.
+                if above_fits {
+                    above
+                } else {
+                    below
+                }
+            } else if below_fits || !above_fits {
+                below
+            } else {
+                above
+            };
+            (anchor.left, y)
+        }
+        // Bottom centre, which is where a user looks for a mode indicator
+        // when there is no caret to attach it to.
+        None => (
+            work.left + (work.right.saturating_sub(work.left).saturating_sub(width)).max(0) / 2,
+            work.bottom.saturating_sub(height.saturating_mul(3)),
+        ),
+    };
+    (
+        x.clamp(work.left, (work.right.saturating_sub(width)).max(work.left)),
+        y.clamp(work.top, (work.bottom.saturating_sub(height)).max(work.top)),
+    )
+}
 
-        let (x, y) = match anchor {
-            Some(point) => (point.x + gap, point.y + gap),
-            // Bottom centre, which is where a user looks for a mode
-            // indicator when there is no caret to attach it to.
-            None => ((screen_w - width) / 2, screen_h - height * 3),
-        };
+fn rect_of(rect: ScreenRect) -> RECT {
+    RECT {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+    }
+}
 
-        // Clamped rather than flipped: a popup that jumps to the other side
-        // of the caret near a screen edge reads as a glitch, and the only
-        // thing that actually matters is that all of it is visible.
-        (
-            x.clamp(0, (screen_w - width).max(0)),
-            y.clamp(0, (screen_h - height).max(0)),
-        )
+fn screen_rect_of(rect: RECT) -> ScreenRect {
+    ScreenRect {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
     }
 }
 
@@ -240,9 +311,9 @@ fn scaled(window: HWND, at_96: i32) -> i32 {
     (at_96 * dpi as i32) / 96
 }
 
-/// The caret's bottom-left corner in screen coordinates, if the foreground
-/// thread has one.
-fn caret_point() -> Option<POINT> {
+/// The caret's rectangle in screen coordinates, if the foreground thread
+/// has one.
+fn caret_rect() -> Option<RECT> {
     let foreground = glyph::foreground()?;
     // SAFETY: `foreground` is a window handle from the OS; passing `None`
     // asks only for the thread id, which is all this needs.
@@ -265,8 +336,12 @@ fn caret_point() -> Option<POINT> {
         return None;
     }
 
-    let mut point = POINT {
+    let mut top_left = POINT {
         x: caret.left,
+        y: caret.top,
+    };
+    let mut bottom_right = POINT {
+        x: caret.right,
         y: caret.bottom,
     };
     // The rectangle is in the client coordinates of the window that owns
@@ -276,26 +351,33 @@ fn caret_point() -> Option<POINT> {
     } else {
         info.hwndCaret
     };
-    // SAFETY: `owner` is live and `point` outlives the call.
-    if !unsafe { ClientToScreen(owner, &mut point) }.as_bool() {
-        // The window died between being reported and being asked about. The
-        // caller falls back to the foreground window's corner, which is
-        // where the indicator would have gone had there been no caret.
+    // SAFETY: `owner` is live and both points outlive their call.
+    let converted = unsafe {
+        ClientToScreen(owner, &mut top_left).as_bool()
+            && ClientToScreen(owner, &mut bottom_right).as_bool()
+    };
+    if !converted {
+        // The window died between being reported and being asked about.
+        // The caller falls back to the anchorless resting place.
         return None;
     }
-    Some(point)
+    Some(RECT {
+        left: top_left.x,
+        top: top_left.y,
+        right: bottom_right.x,
+        bottom: bottom_right.y,
+    })
 }
 
-/// The foreground window's bottom-left corner, for when there is no caret.
-fn foreground_point() -> Option<POINT> {
+/// The foreground window's rectangle. Never an anchor — a window corner is
+/// nowhere near the caret — but it names the monitor whose work area the
+/// anchorless resting place belongs to.
+fn foreground_rect() -> Option<RECT> {
     let window = glyph::foreground()?;
     let mut rect = RECT::default();
     // SAFETY: `window` is live and `rect` outlives the call.
     unsafe { GetWindowRect(window, &mut rect) }.ok()?;
-    Some(POINT {
-        x: rect.left,
-        y: rect.bottom,
-    })
+    Some(rect)
 }
 
 /// The popup's message handler.
@@ -511,6 +593,110 @@ mod tests {
         assert_ne!(ex.0 & WS_EX_TOOLWINDOW.0, 0);
         assert_ne!(ex.0 & WS_EX_TOPMOST.0, 0);
         assert_eq!(popup_style(), WS_POPUP);
+    }
+
+    const WORK: RECT = RECT {
+        left: 0,
+        top: 0,
+        right: 1_920,
+        bottom: 1_040,
+    };
+
+    #[test]
+    fn the_bar_sits_directly_below_the_caret_at_its_left_edge() {
+        let caret = RECT {
+            left: 400,
+            top: 300,
+            right: 402,
+            bottom: 324,
+        };
+        assert_eq!(
+            placement_in(Some(caret), false, 220, 28, 8, WORK),
+            (400, 332)
+        );
+    }
+
+    #[test]
+    fn the_bar_flips_above_when_the_work_area_ends_below_the_caret() {
+        let caret = RECT {
+            left: 400,
+            top: 1_000,
+            right: 402,
+            bottom: 1_024,
+        };
+        assert_eq!(
+            placement_in(Some(caret), false, 220, 28, 8, WORK),
+            (400, 1_000 - 8 - 28)
+        );
+    }
+
+    #[test]
+    fn the_bar_steps_above_while_the_candidate_popup_owns_the_space_below() {
+        let caret = RECT {
+            left: 400,
+            top: 300,
+            right: 402,
+            bottom: 324,
+        };
+        assert_eq!(
+            placement_in(Some(caret), true, 220, 28, 8, WORK),
+            (400, 300 - 8 - 28)
+        );
+        // Unless there is no room above, where below is still the answer.
+        let top_caret = RECT {
+            left: 400,
+            top: 4,
+            right: 402,
+            bottom: 28,
+        };
+        assert_eq!(
+            placement_in(Some(top_caret), true, 220, 28, 8, WORK),
+            (400, 36)
+        );
+    }
+
+    #[test]
+    fn the_bar_stays_on_the_carets_own_monitor_in_negative_coordinates() {
+        let work = RECT {
+            left: -1_920,
+            top: 0,
+            right: 0,
+            bottom: 1_040,
+        };
+        let caret = RECT {
+            left: -100,
+            top: 500,
+            right: -98,
+            bottom: 524,
+        };
+        let (x, y) = placement_in(Some(caret), false, 220, 28, 8, work);
+        assert_eq!((x, y), (-220, 532));
+        assert!(x >= work.left && x + 220 <= work.right);
+    }
+
+    #[test]
+    fn no_caret_rests_at_the_bottom_centre_of_the_work_area() {
+        let (x, y) = placement_in(None, false, 220, 28, 8, WORK);
+        assert_eq!(x, (1_920 - 220) / 2);
+        assert_eq!(y, 1_040 - 28 * 3);
+    }
+
+    #[test]
+    fn a_degenerate_work_area_still_yields_a_clamped_position() {
+        let tiny = RECT {
+            left: 10,
+            top: 10,
+            right: 20,
+            bottom: 20,
+        };
+        let caret = RECT {
+            left: 0,
+            top: 0,
+            right: 2,
+            bottom: 24,
+        };
+        let (x, y) = placement_in(Some(caret), false, 220, 28, 8, tiny);
+        assert_eq!((x, y), (10, 10));
     }
 
     #[test]

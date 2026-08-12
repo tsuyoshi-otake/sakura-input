@@ -400,7 +400,18 @@ fn scaled(value: i32, dpi: u32) -> i32 {
     value.saturating_mul(dpi as i32).saturating_add(48) / 96
 }
 
-fn monitor_work_area(anchor: ScreenRect) -> RECT {
+/// Whether a proposed popup rectangle overlaps the composition rectangle.
+///
+/// Exclusive on the edges: a pane sitting flush against the composition
+/// touches it without covering a pixel of it, and that is fine.
+fn covers_composition(rect: RECT, anchor: ScreenRect) -> bool {
+    rect.left < anchor.right
+        && rect.right > anchor.left
+        && rect.top < anchor.bottom
+        && rect.bottom > anchor.top
+}
+
+pub(crate) fn monitor_work_area(anchor: ScreenRect) -> RECT {
     let rect = RECT {
         left: anchor.left,
         top: anchor.top,
@@ -424,6 +435,13 @@ fn monitor_work_area(anchor: ScreenRect) -> RECT {
 
 /// Places below the composition when possible, flips above when needed, and
 /// clamps to the selected monitor's (possibly negative) work coordinates.
+///
+/// The one thing this must never do avoidably is cover the composition the
+/// user is still typing. Below and above both leave it clear; only when the
+/// popup is taller than the free space on *both* sides — where covering it
+/// is a geometric certainty — does the popup take the roomier side, pinned
+/// inside the work area, so as much of the composition's neighbourhood as
+/// possible stays readable.
 fn place(anchor: ScreenRect, width: i32, height: i32, work: RECT, gap: i32) -> RECT {
     let max_x = (work.right.saturating_sub(width)).max(work.left);
     let x = anchor.left.clamp(work.left, max_x);
@@ -435,7 +453,13 @@ fn place(anchor: ScreenRect, width: i32, height: i32, work: RECT, gap: i32) -> R
     } else if above >= work.top {
         above
     } else {
-        below.clamp(work.top, max_y)
+        let space_below = work.bottom.saturating_sub(below);
+        let space_above = anchor.top.saturating_sub(gap).saturating_sub(work.top);
+        if space_above > space_below {
+            work.top
+        } else {
+            max_y
+        }
     };
     RECT {
         left: x,
@@ -447,7 +471,9 @@ fn place(anchor: ScreenRect, width: i32, height: i32, work: RECT, gap: i32) -> R
 
 /// Keeps the established candidate rectangle intact, then attaches the
 /// selected-candidate detail to its right, left, or bottom. The detail is
-/// omitted when no complete placement fits the current monitor work area.
+/// omitted when no complete placement fits the current monitor work area —
+/// or when every placement that fits would cover the composition the user
+/// is typing, which an auxiliary pane is never worth.
 fn popup_placement(
     anchor: ScreenRect,
     candidate_layout: Layout,
@@ -482,7 +508,10 @@ fn popup_placement(
             right: candidates.right.saturating_add(detail_layout.width),
             bottom: detail_top.saturating_add(detail_layout.height),
         };
-        if right.right <= work.right && right.bottom <= work.bottom {
+        if right.right <= work.right
+            && right.bottom <= work.bottom
+            && !covers_composition(right, anchor)
+        {
             return Some(right);
         }
 
@@ -492,7 +521,8 @@ fn popup_placement(
             right: candidates.left,
             bottom: detail_top.saturating_add(detail_layout.height),
         };
-        if left.left >= work.left && left.bottom <= work.bottom {
+        if left.left >= work.left && left.bottom <= work.bottom && !covers_composition(left, anchor)
+        {
             return Some(left);
         }
 
@@ -507,7 +537,7 @@ fn popup_placement(
                 .saturating_add(candidate_layout.gap)
                 .saturating_add(detail_layout.height),
         };
-        (below.bottom <= work.bottom).then_some(below)
+        (below.bottom <= work.bottom && !covers_composition(below, anchor)).then_some(below)
     });
 
     let window = detail.map_or(candidates, |detail| RECT {
@@ -2525,6 +2555,103 @@ mod tests {
         };
         let popup = place(anchor, 600, 600, work, 4);
         assert_eq!((popup.left, popup.top), (work.left, work.top));
+    }
+
+    /// When the popup is taller than the free space both below and above the
+    /// composition, covering it is unavoidable — but the popup must take the
+    /// roomier side, not blindly slide up over the caret line from below.
+    #[test]
+    fn placement_covers_from_the_roomier_side_only_when_nothing_fits() {
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_000,
+            bottom: 600,
+        };
+        let low_anchor = ScreenRect {
+            left: 100,
+            top: 500,
+            right: 300,
+            bottom: 524,
+        };
+        let pinned_top = place(low_anchor, 300, 550, work, 8);
+        assert_eq!(pinned_top.top, work.top);
+
+        let high_anchor = ScreenRect {
+            left: 100,
+            top: 30,
+            right: 300,
+            bottom: 54,
+        };
+        let pinned_bottom = place(high_anchor, 300, 550, work, 8);
+        assert_eq!(pinned_bottom.bottom, work.bottom);
+    }
+
+    /// A candidate list that flipped above the composition leaves the
+    /// bottom detail slot sitting exactly on the text being typed. The
+    /// detail must go absent rather than cover it — while a side placement
+    /// that stays clear of the composition is still taken.
+    #[test]
+    fn detail_below_is_omitted_rather_than_covering_the_composition() {
+        let list = candidates(vec![item("候補", "")], 0, CandidateKind::Conversion);
+        let candidate_layout = layout(&list, 96);
+        let detail_layout = detail_layout("候補", &detail(), 96, 148);
+        assert_eq!(detail_layout.height, 148);
+        // A composition wrapped over several lines, ending near the bottom
+        // of a short work area, so the candidate list flips above it.
+        let anchor = ScreenRect {
+            left: 20,
+            top: 200,
+            right: 260,
+            bottom: 340,
+        };
+        let narrow = RECT {
+            left: 0,
+            top: 0,
+            right: 480,
+            bottom: 390,
+        };
+        let placement = popup_placement(anchor, candidate_layout, Some(detail_layout), narrow);
+        assert_eq!(placement.window.bottom, anchor.top - candidate_layout.gap);
+        assert!(placement.layout.detail.is_none());
+
+        // The identical geometry with room on the right keeps the detail:
+        // the pane beside the list never touches the composition.
+        let wide = RECT {
+            left: 0,
+            top: 0,
+            right: 1_000,
+            bottom: 390,
+        };
+        let control = popup_placement(anchor, candidate_layout, Some(detail_layout), wide);
+        let control_detail = control.layout.detail.expect("side detail stays clear");
+        assert_eq!(control_detail.left, control.layout.candidates.right);
+    }
+
+    /// A tall detail pane beside the list slides up to fit the work area.
+    /// When the composition is wide enough that the slide would put the pane
+    /// on top of it, the pane goes absent instead.
+    #[test]
+    fn side_detail_that_would_slide_over_the_composition_is_omitted() {
+        let list = candidates(vec![item("候補", "")], 0, CandidateKind::Conversion);
+        let candidate_layout = layout(&list, 96);
+        let mut long = detail();
+        long.definition = "全文を折り返して表示する長い日本語説明。".repeat(1_000);
+        let detail_layout = detail_layout("候補", &long, 96, 340);
+        let anchor = ScreenRect {
+            left: 20,
+            top: 300,
+            right: 700,
+            bottom: 324,
+        };
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_200,
+            bottom: 400,
+        };
+        let placement = popup_placement(anchor, candidate_layout, Some(detail_layout), work);
+        assert!(placement.layout.detail.is_none());
     }
 
     #[test]

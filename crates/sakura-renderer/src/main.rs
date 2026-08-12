@@ -34,7 +34,7 @@ mod watch;
 use std::ffi::c_void;
 use std::sync::{mpsc::Receiver, Arc, Mutex};
 
-use sakura_proto::UiState;
+use sakura_proto::{AppearanceTheme, Mode, UiState};
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::Threading::CreateMutexW;
@@ -90,6 +90,14 @@ const WM_HISTORY_DELETE_FINISHED: u32 = WM_APP + 4;
 struct App {
     indicator: Indicator,
     candidates: CandidateWindow,
+    /// The mode and theme of the previous UI state. The engine retains the
+    /// mode on every revision — candidate updates included — so the
+    /// indicator must compare against this to show only on an actual
+    /// change, or it would sit re-triggered beside the caret for as long as
+    /// the user types. The theme is part of the key because a system
+    /// light/dark switch must repaint an indicator the mode alone would
+    /// leave stale.
+    shown_indicator: Option<(Mode, AppearanceTheme)>,
     /// A latest-value mailbox shared with the blocking watcher. Multiple
     /// engine revisions can coalesce while the UI thread is busy painting.
     mailbox: Arc<Mutex<Option<UiState>>>,
@@ -124,6 +132,7 @@ fn main() -> Result<()> {
     let mut app = App {
         indicator: Indicator::new()?,
         candidates: CandidateWindow::new(history_delete)?,
+        shown_indicator: None,
         mailbox: Arc::clone(&mailbox),
         history_delete_completions,
     };
@@ -280,6 +289,21 @@ fn create_host() -> Result<HWND> {
     }
 }
 
+/// Whether a fresh UI state means the mode indicator should appear.
+///
+/// Only an actual change of mode or theme does. The engine bumps its UI
+/// revision for every candidate update while typing and each of those
+/// states carries the unchanged current mode, so showing on every state
+/// would keep the indicator permanently beside the text the user is trying
+/// to read. A theme flip with the same mode still shows: the indicator may
+/// be on screen in the old palette and must repaint.
+fn indicator_change_shows(
+    shown: Option<(Mode, AppearanceTheme)>,
+    next: Option<(Mode, AppearanceTheme)>,
+) -> bool {
+    next.is_some() && next != shown
+}
+
 /// Hands a watcher signal to the UI thread.
 fn report(target: isize, mailbox: &Mutex<Option<UiState>>, signal: Signal) {
     let window = HWND(target as *mut c_void);
@@ -333,9 +357,13 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .take();
             if let Some(state) = state {
-                if let Some(mode) = state.mode {
-                    app.indicator.show(mode, state.appearance_theme);
+                let next = state.mode.map(|mode| (mode, state.appearance_theme));
+                if let (Some((mode, theme)), true) =
+                    (next, indicator_change_shows(app.shown_indicator, next))
+                {
+                    app.indicator.show(mode, theme, &state);
                 }
+                app.shown_indicator = next;
                 app.candidates.update(&state);
             }
             LRESULT(0)
@@ -385,6 +413,30 @@ mod tests {
                 assert_ne!(a, b);
             }
         }
+    }
+
+    /// The indicator appears on a change of mode or theme and only on a
+    /// change: a candidate update that repeats the current pair must not
+    /// re-trigger it, or it never leaves the screen while the user types.
+    #[test]
+    fn the_indicator_shows_on_mode_or_theme_changes_and_not_on_repeats() {
+        let hira = |theme| Some((Mode::Hiragana, theme));
+        let kata = |theme| Some((Mode::Katakana, theme));
+        assert!(indicator_change_shows(None, hira(AppearanceTheme::Light)));
+        assert!(indicator_change_shows(
+            hira(AppearanceTheme::Light),
+            kata(AppearanceTheme::Light)
+        ));
+        assert!(
+            indicator_change_shows(hira(AppearanceTheme::Light), hira(AppearanceTheme::Dark)),
+            "a system theme switch must repaint an indicator in the stale palette"
+        );
+        assert!(!indicator_change_shows(
+            hira(AppearanceTheme::Light),
+            hira(AppearanceTheme::Light)
+        ));
+        assert!(!indicator_change_shows(hira(AppearanceTheme::Light), None));
+        assert!(!indicator_change_shows(None, None));
     }
 
     /// A state without a mode does not fabricate one for the indicator.
