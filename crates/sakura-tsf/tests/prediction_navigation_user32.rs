@@ -13,6 +13,7 @@
 
 use std::mem::size_of;
 use std::process::{Child, Command};
+use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -47,6 +48,8 @@ const VK_UP: u16 = 0x26;
 const VK_DOWN: u16 = 0x28;
 const SNAPSHOT_EDIT_TEXT: u32 = WM_APP + 37;
 
+static PHYSICAL_E2E: Mutex<()> = Mutex::new(());
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct TestKeyboardInput {
@@ -79,6 +82,7 @@ unsafe extern "system" {
 #[test]
 #[ignore = "moves foreground focus and requires the installed Sakura TSF/engine/renderer"]
 fn physical_tab_and_arrows_move_prediction_selection_and_enter_commits() {
+    let _serial = PHYSICAL_E2E.lock().expect("physical E2E lock");
     assert!(
         !candidate_window_visible(),
         "close any existing Sakura candidate popup before running the physical E2E"
@@ -147,6 +151,93 @@ fn physical_tab_and_arrows_move_prediction_selection_and_enter_commits() {
         window_text(edit),
         first_candidate,
         "Enter must retain the selected prediction as committed host text"
+    );
+
+    host.close(host_window);
+}
+
+#[test]
+#[ignore = "moves foreground focus and requires the installed Sakura TSF/engine/renderer"]
+fn physical_arrows_and_tab_navigate_conversion_and_enter_commits() {
+    let _serial = PHYSICAL_E2E.lock().expect("physical E2E lock");
+    assert!(
+        !candidate_window_visible(),
+        "close any existing Sakura candidate popup before running the physical E2E"
+    );
+
+    let _apartment = ComApartment::new();
+    let _profile = ActiveProfileGuard::activate_sakura();
+    let child = Command::new(env!("CARGO_BIN_EXE_sakura_tsf_test_host"))
+        .spawn()
+        .expect("launch the dedicated Win32 TSF host");
+    let mut host = OwnedHost::new(child);
+    let host_window = wait_for_window(
+        windows::core::w!("SakuraInputTsfTestHost"),
+        windows::core::w!("Sakura Input TSF Test Host"),
+    );
+    host.set_window(host_window);
+    let edit = wait_for_child_edit(host_window);
+    force_foreground(host_window, edit);
+    wait_for_foreground(host_window);
+
+    for key in [b'K', b'A', b'N', b'A'] {
+        press_key(host_window, u16::from(key));
+    }
+    let suggestion_window = wait_for_candidate_window();
+    press_key(host_window, 0x20); // VK_SPACE: enter ordinary dictionary conversion.
+
+    let conversion_window = wait_for_candidate_window();
+    assert_eq!(
+        conversion_window, suggestion_window,
+        "the renderer must update its owned popup instead of leaking another HWND"
+    );
+    // SAFETY: COM is initialized and this is the system UI Automation class.
+    let automation: IUIAutomation = unsafe {
+        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+            .expect("create UI Automation client")
+    };
+    // SAFETY: the candidate HWND is live and retained by the running renderer.
+    let candidate_element = unsafe {
+        automation
+            .ElementFromHandle(conversion_window)
+            .expect("conversion popup UIA element")
+    };
+    let initial = wait_for_candidate_kind(&candidate_element, "conversion candidates");
+    let total = selection_total(&initial);
+    assert!(
+        total >= 2,
+        "conversion fixture needs at least two candidates: {initial:?}"
+    );
+
+    press_key(host_window, VK_DOWN);
+    wait_for_selection(&candidate_element, 2);
+    press_key(host_window, VK_UP);
+    wait_for_selection(&candidate_element, 1);
+
+    // Under the installed MS-IME preset Tab expands the compact conversion
+    // list. The ATOK preset maps Tab to CandidateNext; this acceptance host is
+    // intentionally run against the active installed preset reported with the
+    // test evidence.
+    press_key(host_window, VK_TAB);
+    let expanded = wait_for_candidate_row(&candidate_element, 2, total);
+    press_key(host_window, VK_DOWN);
+    let selected = wait_for_selection(&candidate_element, 2);
+    let committed = candidate_surface(
+        if selected.contains(&format!("Candidate 2 of {total}")) {
+            &selected
+        } else {
+            &expanded
+        },
+        2,
+        total,
+    );
+
+    press_key(host_window, VK_RETURN);
+    wait_until_hidden(conversion_window);
+    assert_eq!(
+        window_text(edit),
+        committed,
+        "Enter must retain the selected conversion as committed host text"
     );
 
     host.close(host_window);
@@ -338,6 +429,38 @@ fn wait_for_selection(element: &IUIAutomationElement, selected: usize) -> String
         assert!(
             Instant::now() < deadline,
             "candidate selection never reached {selected}; last UIA name was {last:?}"
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn wait_for_candidate_kind(element: &IUIAutomationElement, kind: &str) -> String {
+    wait_for_uia_name(element, |name| name.contains(kind), kind)
+}
+
+fn wait_for_candidate_row(element: &IUIAutomationElement, index: usize, total: usize) -> String {
+    let marker = format!("Candidate {index} of {total}");
+    wait_for_uia_name(element, |name| name.contains(&marker), &marker)
+}
+
+fn wait_for_uia_name(
+    element: &IUIAutomationElement,
+    accept: impl Fn(&str) -> bool,
+    expected: &str,
+) -> String {
+    let deadline = Instant::now() + PATIENT;
+    let mut last = String::new();
+    loop {
+        // SAFETY: the caller retains the live UIA element for this bounded poll.
+        if let Ok(name) = unsafe { element.CurrentName() } {
+            last = name.to_string();
+            if accept(&last) {
+                return last;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "candidate UIA name never exposed {expected:?}; last name was {last:?}"
         );
         sleep(Duration::from_millis(20));
     }
