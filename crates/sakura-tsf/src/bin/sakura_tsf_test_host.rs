@@ -181,6 +181,7 @@ unsafe extern "system" fn window_procedure(
             // top-level caption, Windows does not expose another process's EDIT
             // text through GetWindowTextW. Copying it to our own caption gives
             // the controller a bounded, pointer-free User32 observation path.
+            // SAFETY: the value was written by this UI thread during WM_CREATE.
             let edit = HWND(unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut _);
             if !edit.0.is_null() {
                 let mut text = [0u16; 2048];
@@ -188,7 +189,10 @@ unsafe extern "system" fn window_procedure(
                 // retained as writable UTF-16 storage for both calls.
                 unsafe {
                     let copied = GetWindowTextW(edit, &mut text) as usize;
-                    text[copied.min(text.len() - 1)] = 0;
+                    let terminator_index = copied.min(text.len() - 1);
+                    if let Some(terminator) = text.get_mut(terminator_index) {
+                        *terminator = 0;
+                    }
                     let _ = SetWindowTextW(window, windows::core::PCWSTR(text.as_ptr()));
                 }
             }
