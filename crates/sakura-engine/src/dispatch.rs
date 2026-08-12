@@ -50,7 +50,7 @@ use sakura_proto::{
     MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
 
-use crate::dictionary::ConversionService;
+use crate::dictionary::{ConversionService, ConvertFailure};
 use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
 use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
 use crate::long_conversion::LongConversionService;
@@ -2759,8 +2759,10 @@ fn begin_conversion(
     let options = conversion_options(session, initial_context);
     let mut chosen_selection = initial_selection;
     let initialized = conversion.and_then(|service| {
-        service
-            .with_candidates(session.preedit.as_str(), options, |candidates| {
+        match service.with_conversion(
+            session.preedit.as_str(),
+            options,
+            |candidates, _diagnostics| {
                 if candidates.is_empty() {
                     return false;
                 }
@@ -2808,8 +2810,12 @@ fn begin_conversion(
                     }
                 }
                 true
-            })
-            .ok()
+            },
+        ) {
+            Ok(initialized) => Some(initialized),
+            Err(ConvertFailure::Busy) => None,
+            Err(ConvertFailure::Conversion(_)) => None,
+        }
     });
     if !matches!(initialized, Some(true)) || !session.set_segments(segments.as_slice()) {
         session.cancel_conversion();

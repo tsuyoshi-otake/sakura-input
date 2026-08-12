@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock, TryLockError};
 
 use sakura_core::{
-    ConversionCandidate, ConversionError, ConversionOptions, Converter, Dictionary, UserDictionary,
+    ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions, Converter,
+    Dictionary, UserDictionary,
 };
 use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
@@ -184,6 +185,20 @@ impl ConversionService {
         options: ConversionOptions,
         consume: impl FnOnce(&[ConversionCandidate]) -> R,
     ) -> Result<R, ConvertFailure> {
+        self.with_conversion(reading, options, |candidates, _diagnostics| {
+            consume(candidates)
+        })
+    }
+
+    /// Runs one conversion and exposes its text-free bounded-search terminal.
+    /// Hard failures remain `Err`, while fallback and budget exhaustion are
+    /// successful results with explicit diagnostics.
+    pub fn with_conversion<R>(
+        &self,
+        reading: &str,
+        options: ConversionOptions,
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
         let user_dictionary = self.user_dictionary_snapshot();
         let mut consume = Some(consume);
         for slot in &self.converters {
@@ -194,8 +209,8 @@ impl ConversionService {
                 // after a test-only unwind cannot expose half-built state.
                 Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
             };
-            let candidates = converter
-                .convert_with_user_dictionary(
+            let result = converter
+                .convert_with_user_dictionary_detailed(
                     &self.dictionary,
                     (!user_dictionary.is_empty()).then_some(user_dictionary.as_ref()),
                     reading,
@@ -205,7 +220,7 @@ impl ConversionService {
             let use_candidates = consume
                 .take()
                 .expect("closure is consumed by one slot only");
-            return Ok(use_candidates(candidates));
+            return Ok(use_candidates(result.candidates(), result.diagnostics()));
         }
         Err(ConvertFailure::Busy)
     }
@@ -310,15 +325,23 @@ mod tests {
     #[test]
     fn static_image_converts_with_a_bounded_slot() {
         let service = ConversionService::from_static_bytes(image()).expect("service");
-        let texts = service
-            .with_candidates("かな", ConversionOptions::default(), |candidates| {
-                candidates
-                    .iter()
-                    .map(|candidate| candidate.text().to_owned())
-                    .collect::<Vec<_>>()
-            })
+        let (texts, diagnostics) = service
+            .with_conversion(
+                "かな",
+                ConversionOptions::default(),
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| candidate.text().to_owned())
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
             .expect("conversion");
         assert_eq!(texts.first().map(String::as_str), Some("仮名"));
+        assert!(diagnostics.states_pushed > 0);
     }
 
     #[test]

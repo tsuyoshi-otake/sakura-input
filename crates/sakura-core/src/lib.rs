@@ -36,7 +36,8 @@ pub mod width;
 
 pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
 pub use conversion::{
-    ConversionCandidate, ConversionError, ConversionOptions, ConversionSegment, Converter,
+    ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions,
+    ConversionResult, ConversionSearchTerminal, ConversionSegment, Converter,
 };
 pub use cpu::{CpuFeatures, UnsupportedCpu};
 pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};
