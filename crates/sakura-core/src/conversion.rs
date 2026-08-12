@@ -8,7 +8,9 @@
 use core::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use sakura_proto::{FixedStr, FixedVec, MAX_CANDIDATES, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
+#[cfg(not(feature = "research-top32"))]
+use sakura_proto::MAX_CANDIDATES;
+use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
 use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::editing::{identifier_into, IdentifierStyle};
@@ -20,7 +22,10 @@ const NONE_STATE: u32 = u32::MAX;
 const MAX_LATTICE_NODES: usize = 32_768;
 const MAX_SEARCH_STATES: usize = 65_536;
 const MAX_DICTIONARY_EDGES_PER_READING: usize = 12;
+#[cfg(not(feature = "research-top32"))]
 pub const MAX_CONVERSION_CANDIDATES: usize = MAX_CANDIDATES;
+#[cfg(feature = "research-top32")]
+pub const MAX_CONVERSION_CANDIDATES: usize = 32;
 const GENERATED_IDENTIFIER_VARIANTS: usize = 4;
 const FALLBACK_WORD_COST: i64 = 8_000;
 const RUN_BASE_COST: i64 = 6_000;

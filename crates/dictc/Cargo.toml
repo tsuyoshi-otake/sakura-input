@@ -10,6 +10,7 @@ authors.workspace = true
 
 [features]
 conversion-test-support = ["sakura-core/conversion-test-support"]
+research-top32 = ["sakura-core/research-top32"]
 
 [[bin]]
 name = "dictc"

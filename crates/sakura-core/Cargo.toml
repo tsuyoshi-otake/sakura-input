@@ -21,6 +21,9 @@ simd-assembly-audit = []
 # Exposes deterministic budget injection to cross-crate regression tests only.
 # Shipping builds never enable it.
 conversion-test-support = []
+# Raises only the isolated evaluation candidate bound. Shipping targets never
+# enable this feature; search diagnostics are shared with production.
+research-top32 = []
 
 [lints]
 workspace = true

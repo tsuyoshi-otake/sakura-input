@@ -546,3 +546,28 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
         .expect("lossless fallback");
     assert_eq!(fallback.segments().len(), 1);
 }
+
+#[test]
+fn a_full_top_one_result_is_not_displaced_by_the_reserved_fallback() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+かな\t仮名\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let candidates = converter
+        .convert(
+            &dictionary,
+            "かな",
+            ConversionOptions {
+                max_candidates: 1,
+                ..ConversionOptions::default()
+            },
+        )
+        .expect("conversion");
+
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].text(), "仮名");
+}
