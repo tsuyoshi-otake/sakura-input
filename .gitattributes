@@ -1,6 +1,7 @@
 # The eighth TSV column is an optional annotation. An empty value is encoded
 # by the schema-required final tab, so it is data rather than trailing padding.
 data/it-terms.tsv whitespace=-blank-at-eol
+data/conversion-priorities.tsv whitespace=-blank-at-eol
 
 # These directories contain manifest-bound JSON/JSONL artifacts. Keep their
 # bytes stable across Windows checkouts because manifests store SHA-256 values.

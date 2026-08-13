@@ -154,8 +154,8 @@
     },
     "conversion_priorities": {
       "file": "conversion-priorities.tsv",
-      "bytes": 971,
-      "sha256": "243d0187c6a0e2de9a127d7f6a3611ba1c30edf20b8ea22ca797de31d476d424"
+      "bytes": 2232,
+      "sha256": "9dbb9b55a4030e96f734d344595febd9f1a31a10f1fd2409bf3a4e5916eade75"
     },
     "system_category_dictionary": null
   },
@@ -182,8 +182,8 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 38456565,
-      "sha256": "6d34364b5354d3c67efefaf15b50142b1365b21140ec8eee0f77570d828544ad"
+      "bytes": 39349040,
+      "sha256": "b7d08643395181f6d214866f9bb98646de366dc71caa15320effe774bc4c1d90"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
@@ -228,8 +228,8 @@
       },
       {
         "file": "05_数値・日付・単位.tsv",
-        "bytes": 323074,
-        "sha256": "ee4cc10771af23afe1454e3f15e4dc132119c04cdb02ef838f9479753debfc5e"
+        "bytes": 323096,
+        "sha256": "04496ffe0e561102fee0b062f8cd4343934905cc13073953509b0482af294997"
       },
       {
         "file": "06_人名.tsv",

@@ -21,7 +21,7 @@
 - 辞書の原文説明は表示用上限を持たない。一方、wireへはUTF-8安全なプレビューと明示的なtruncated flagだけを送り、暗黙に切り詰めない。UIAは選択候補の詳細を公開し、プレビューが省略されていることを保持する。候補全件へ詳細を複製しない。
 - detailは最終ENTR tableのexact entry ordinalで結び、surface文字列だけで照合しない。複合候補、ordinal不一致、旧辞書、壊れたoptional table、空または不正なdetailはfail-closedでdetailなしにする。
 - 別名／関連語／類似語／反対語はmanifest固定済みの直接データだけであり、実行時の推測、表記類似、埋め込み類似、カテゴリ、推移的探索で補わない。表示は各種最大3語。固定したsmile-chatとJapanese WordNet 1.1を統合したfull-source構成は36,606 source-backed details。通常の既定ビルドは、curated sourceとIssue #30のreview済み000010 releaseを合わせ、472,825 entries中29,229 exact-entry detailsを生成する。000010の承認236語は246 exact-entry detailsとなり、全レコードに関連語、合計43件の類似語、16件の反対語がある。説明なし・同形異義・多義で一意に解決できないentryと未審査draftはdetailなしにする。
-- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。full-source実データの既存検証値は93,001,395 bytes、SHA-256 `f8894a485c6e2ae98d499a74dc72dad74b2f6260f40cc4a00c5f4c86765c5a2f`。000010を含む通常の既定ビルドは2-pass決定性、38,456,565 bytes、SHA-256 `6d34364b5354d3c67efefaf15b50142b1365b21140ec8eee0f77570d828544ad`を2026-08-11に確認した。両構成の件数・hashを混同しない。
+- 固定seed／総当たり型テストでUnicode・絵文字・wire frame境界、ordinal collision、compound omission、relationの自己参照／重複／循環、UIA、DPI、画面端を確認済み。full-source実データの既存検証値は93,001,395 bytes、SHA-256 `f8894a485c6e2ae98d499a74dc72dad74b2f6260f40cc4a00c5f4c86765c5a2f`。000010を含む通常の既定ビルドは2-pass決定性、39,349,040 bytes、SHA-256 `b7d08643395181f6d214866f9bb98646de366dc71caa15320effe774bc4c1d90`を2026-08-14に確認した。両構成の件数・hashを混同しない。以前記録していた38,456,565 bytes、SHA-256 `6d34364b...`は60eb263（bunsetsu boundary table、2026-08-12）より前の値であり、`data/dictionary-build.report.json`もその時点で更新されていなかった。サイズ増はboundary table由来で、Issue #48の一桁数字校正は内容hashだけを変える（HEAD overlayだけで作ったbaselineも39,349,040 bytes）。
 
 ## Issue #30 重要辞書のSakura作成説明
 
