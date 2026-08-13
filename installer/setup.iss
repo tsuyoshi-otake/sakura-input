@@ -23,9 +23,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "1.0.0"
+#define AppProductVersion "1.0.1"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\1.0.0-dev"
+#define AppVersionedDir "{app}\versions\1.0.1-dev"
 #endif
 ; Neural reranking is an explicit release-pipeline opt-in. Keeping the default
 ; off lets normal installer builds remain independent of the optional native
