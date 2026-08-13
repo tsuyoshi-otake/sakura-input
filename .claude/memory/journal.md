@@ -235,3 +235,33 @@ with `\r?$` and added `crates/sakura-regtool/tests/packaging_version.rs`,
 whose third test reads the gate files and fails if a version anchor stops
 allowing the CR. Proved non-vacuous by reintroducing the old anchor.
 Distilled → `rules.md`.
+
+## 2026-08-14 — A latch that describes a composition outlived one (#51)
+
+User report: "Shift を押して英語入力したあとにさ、復帰しない場合があるね。
+なにしても日本語打てない。他の IME に切り替えて戻ると復旧する。"
+
+`Session::shifted_ascii` is the temporary English composition latch. Set in
+`feed_character`; cleared in exactly two places, `Session::reset` and the
+`shifted_ascii && !character.is_ascii()` arm. Erasing the composition with
+Backspace reaches neither: `apply_backspace`'s shifted branch pops the
+buffers and returns, `is_composing` stops counting the latch once `raw_input`
+is empty so the session reports `Idle`, and `commit_pending` returns early on
+`!is_composing()` — so Enter never reaches `reset`. The non-ASCII arm cannot
+fire because every romaji keystroke is ASCII.
+
+The severity claim in the report was worth measuring rather than assuming. A
+probe pressed each plausible recovery key from the latched-idle state and then
+typed `ka`: Escape, Enter, Space, Muhenkan, Henkan, KanaMode and Backspace all
+left the latch set and produced `ka`. That is the literal "なにしても", and the
+IME switch recovers because deactivation ends the text service and the next
+activation builds a fresh `Session`.
+
+Fixed by restoring the invariant once per key in `apply_key`, before
+prediction and rendering, rather than adding a clear to each erase path —
+`Session::reset`'s own doc comment already argues against the list-of-cases
+shape, and forward Delete proved the point by having the same leak.
+
+Three of the four new tests fail with the one-line fix commented out; the
+fourth is the opposite polarity (a partly erased composition stays English)
+and correctly passes either way.
