@@ -344,7 +344,11 @@ fn parse_sakura_entries(
             continue;
         }
 
-        let columns: Vec<&str> = line.splitn(8, '\t').collect();
+        // Split the row completely rather than capping the split at eight: a
+        // capped split folds every extra column into the annotation instead of
+        // failing the count check below, and the annotation is shown to the
+        // user as a candidate note.
+        let columns: Vec<&str> = line.split('\t').collect();
         if columns.len() != 8 {
             return Err(Error::at(
                 source,
