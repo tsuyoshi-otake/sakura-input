@@ -1,11 +1,34 @@
 # license: LicenseRef-Sakura-InHouse
 # This layer calibrates context-free top-1 conversion for common readings.
 # It replaces an existing lattice edge; it does not add a second edge.
+#
+# Single-digit rows: upstream prices every Arabic digit in one numeral class
+# (left/right id 2044, BOS cost 2508) far below the words that share its
+# reading, so a bare digit won the top-1 for most number readings -- typing
+# はち offered 8 ahead of 鉢, 蜂 and 八. A digit is a spelling of the numeral,
+# not a word of its own, so each digit edge is priced 60 above the same
+# reading's kanji numeral (八 for はち), or above its last ordinary spelling
+# where the trimmed lexicon carries no kanji numeral (よん, ぜろ). The digit
+# then follows its numeral on the first candidate page instead of leading it.
+# Costs are lattice totals minus the shared 2508 BOS cost; prediction cost
+# keeps upstream's +1200 offset. These rows carry an empty annotation on
+# purpose: the annotation column is shown to the user as a candidate note.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 あさごはん	朝ご飯	1851	1851	4300	5500	predict	[calibration] common spelling preferred over hiragana-only form
+いち	1	2044	2044	3639	4839	predict	
 かいぎょう	改行	1841	1841	2500	3700	predict	[calibration] technical reading in the Sakura corpus
 かんじ	漢字	1851	1851	2500	3700	predict	[calibration] common noun spelling in the Sakura corpus
 きのう	昨日	1841	1841	1100	2300	predict	[calibration] date expression, noun connection
 きのう	昨日	1909	1909	1100	2300	predict	[calibration] date expression, standalone connection
+きゅう	9	2044	2044	5531	6731	predict	
+ご	5	2044	2044	4809	6009	predict	
+さん	3	2044	2044	4176	5376	predict	
 してき	指摘	1841	1841	2000	3200	it,predict	[calibration] engineering review vocabulary
 しりあらいず	シリアライズ	1920	1920	2000	3200	it,predict	[calibration] engineering terminology
+ぜろ	0	2044	2044	2707	3907	predict	
+なな	7	2044	2044	5211	6411	predict	
+に	2	2044	2044	5725	6925	predict	
+はち	8	2044	2044	5310	6510	predict	
+よん	4	2044	2044	4462	5662	predict	
+れい	0	2044	2044	3905	5105	predict	
+ろく	6	2044	2044	5157	6357	predict	
