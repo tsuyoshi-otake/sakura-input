@@ -31,12 +31,28 @@ jobs:
             LICENSE
             src/data/dictionary_oss
 
+      # The glossary source is a private repository, so the job's default
+      # GITHUB_TOKEN cannot read it: it is scoped to this repository alone and
+      # the checkout fails as `remote: Repository not found`, which reads like
+      # a deleted or renamed repository rather than a missing credential.
+      # Check the secret first so the real cause is the first thing in the log.
+      - name: Require access to the pinned IT glossary source
+        shell: pwsh
+        env:
+          SMILE_CHAT_TOKEN: ${{ secrets.SMILE_CHAT_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SMILE_CHAT_TOKEN)) {
+            Write-Host '::error::SMILE_CHAT_TOKEN is not configured. The pinned IT glossary lives in the private repository systemexe-research-and-development/smile-chat, which the default GITHUB_TOKEN cannot read. Add a fine-grained personal access token with Contents:Read on that repository as the SMILE_CHAT_TOKEN secret.'
+            exit 1
+          }
+
       - name: Check out pinned IT glossary data
         uses: actions/checkout@v4
         with:
           repository: systemexe-research-and-development/smile-chat
           ref: b5cada441b41c207ab49bf2cd5f1d9c5614c5b92
           path: .sources/smile-chat
+          token: ${{ secrets.SMILE_CHAT_TOKEN }}
           sparse-checkout: |
             frontend/public
 
