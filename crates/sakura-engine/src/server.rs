@@ -82,6 +82,23 @@ struct RuntimeServiceSnapshot {
     long_conversion: Option<Arc<LongConversionService>>,
 }
 
+/// Why the engine stopped waiting for work.
+///
+/// The two are not interchangeable to a watcher. A requested stop is
+/// announced to the renderer (`UiState::stopping`), which is what stops its
+/// watchdog from restarting an engine the user or the uninstaller just
+/// stopped. An engine that ran out of instances must get the opposite
+/// treatment: it is broken, a restart is the fix, and announcing a
+/// deliberate stop would be the one thing that prevents one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StopReason {
+    /// A client sent [`Request::Shutdown`].
+    Requested,
+    /// The last pipe instance was released, so nothing is left to accept on
+    /// and nothing can create a replacement.
+    LastInstanceGone,
+}
+
 /// Everything a worker thread needs that is not its own pipe instance.
 #[derive(Debug)]
 struct Shared {
@@ -99,8 +116,9 @@ struct Shared {
     created: AtomicU32,
     /// Acceptors currently blocked waiting for a client.
     idle: AtomicU32,
-    /// Set once, when a client asks the engine to stop.
-    shutdown: Sender<()>,
+    /// Ends [`Server::run`]. Sent when a client asks the engine to stop, and
+    /// when the last instance is released — see [`StopReason`].
+    shutdown: Sender<StopReason>,
     /// What the renderer draws. The one thing every connection shares.
     ui: UiBoard,
     /// Read-only dictionary plus the bounded process-wide conversion pool.
@@ -240,7 +258,7 @@ impl Shared {
 #[derive(Debug)]
 pub struct Server {
     shared: Arc<Shared>,
-    stopped: Receiver<()>,
+    stopped: Receiver<StopReason>,
 }
 
 impl Server {
@@ -493,17 +511,32 @@ impl Server {
     /// our clients' keystrokes.
     pub fn run(self) -> windows::core::Result<()> {
         spawn_worker(&self.shared, true)?;
-        // The only sender lives in `shared`, which the worker threads hold,
-        // so `recv` returns either when a client asks for shutdown or when
-        // every worker is gone.
-        let _ = self.stopped.recv();
-        // Tell the renderer this was deliberate before the pipe breaks
-        // under it, and hold the exit open just long enough for that to
-        // reach the wire. Without it the renderer's watchdog sees only a
-        // dead engine and restarts the one `--stop` just stopped — which
-        // during an uninstall means relaunching the file being deleted.
-        self.shared.ui.stop();
-        self.shared.ui.settle(SHUTDOWN_GRACE);
+        // `recv` returns when a client asks for shutdown, or when the last
+        // pipe instance is released — see [`InstanceSlot::drop`], which is
+        // what makes the second case an explicit send. It cannot come from
+        // the channel disconnecting: the sender lives in `shared`, and this
+        // function holds `shared` for the whole wait, so a reason is the only
+        // thing that ends it.
+        let reason = self.stopped.recv().unwrap_or(StopReason::LastInstanceGone);
+        if reason == StopReason::Requested {
+            // Tell the renderer this was deliberate before the pipe breaks
+            // under it, and hold the exit open just long enough for that to
+            // reach the wire. Without it the renderer's watchdog sees only a
+            // dead engine and restarts the one `--stop` just stopped — which
+            // during an uninstall means relaunching the file being deleted.
+            self.shared.ui.stop();
+            self.shared.ui.settle(SHUTDOWN_GRACE);
+        } else {
+            // The opposite case, and the announcement above would be exactly
+            // wrong for it: nobody asked for this exit, the engine is leaving
+            // because it can no longer accept anything, and a restart is the
+            // repair. Saying nothing lets the watchdog see a dead engine and
+            // start a healthy one, which is the recovery it already has.
+            report(
+                &self.shared,
+                format_args!("no pipe instances left; ending so a fresh engine can take over"),
+            );
+        }
         Ok(())
     }
 }
@@ -557,8 +590,33 @@ impl InstanceSlot {
 }
 
 impl Drop for InstanceSlot {
+    /// Releases the slot, and ends the engine when it was the last one.
+    ///
+    /// Nothing can bring an instance back once the count reaches zero:
+    /// [`ensure_spare_instance`] runs only inside a worker, after an accept
+    /// has succeeded, so with no worker left there is no caller. A process
+    /// in that state accepts nothing while looking perfectly healthy — a
+    /// client blocks in `CreateFileW`, and the renderer's watchdog sees a
+    /// live engine and leaves it alone.
+    ///
+    /// Ending the process instead hands recovery to that watchdog, which
+    /// already restarts an engine that is gone and is tested for it. It also
+    /// avoids the failure a retry here would have: the exits that reach this
+    /// point are `engine data is unusable`, a wedged instance, and an OS
+    /// accept fault, and re-creating an instance for the first two produces
+    /// a worker that fails the same way immediately — a spawn loop at 100%
+    /// of a core rather than a restart.
+    ///
+    /// This lives in `Drop` rather than at [`worker`]'s exits so that a
+    /// worker which panics reaches it too: unwinding drops the slot, and a
+    /// panicked acceptor leaves exactly the same hole as a returned one.
     fn drop(&mut self) {
-        self.shared.created.fetch_sub(1, Ordering::Relaxed);
+        // `fetch_sub` returns the value from before this release, so `1`
+        // means this was the last instance. `AcqRel` pairs the releases so
+        // exactly one dropped slot can observe that.
+        if self.shared.created.fetch_sub(1, Ordering::AcqRel) == 1 {
+            let _ = self.shared.shutdown.send(StopReason::LastInstanceGone);
+        }
     }
 }
 
@@ -706,7 +764,11 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
             Outcome::Failed(fault) => report(&shared, format_args!("{fault}")),
             Outcome::Shutdown => {
                 instance.disconnect();
-                let _ = shared.shutdown.send(());
+                // Sent before this worker returns, so it is the reason `run`
+                // sees: the slot this worker gives up on the way out sends
+                // one of its own when it happens to be the last instance,
+                // and a requested stop must not be mistaken for a failure.
+                let _ = shared.shutdown.send(StopReason::Requested);
                 return;
             }
         }
@@ -1041,6 +1103,7 @@ mod tests {
     use super::*;
     use sakura_ipc::Client;
     use std::fs;
+    use std::sync::mpsc::TryRecvError;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_shared(learning: Arc<LearningService>) -> Shared {
@@ -1399,6 +1462,45 @@ mod tests {
         );
     }
 
+    /// Releasing the last slot has to end the engine, because nothing can
+    /// create an instance once there is no worker to call
+    /// `ensure_spare_instance`. Without this the process stayed alive with
+    /// no acceptor: arriving clients blocked in `CreateFileW` and the
+    /// renderer's watchdog, which only restarts an engine that is gone,
+    /// left it exactly where it was.
+    ///
+    /// The reason matters as much as the wakeup. `run` announces a stop to
+    /// the renderer only for [`StopReason::Requested`]; announcing this one
+    /// would tell the watchdog the exit was deliberate and leave the user
+    /// with no engine at all.
+    #[test]
+    fn the_last_instance_leaving_ends_the_engine() {
+        let server = Server::new(false).expect("this process has a token");
+        drop(InstanceSlot::claim(&server.shared));
+
+        assert_eq!(
+            server.stopped.try_recv(),
+            Ok(StopReason::LastInstanceGone),
+            "the engine kept waiting with nothing left to accept on"
+        );
+    }
+
+    /// The other half: an instance leaving a pool that still has one is
+    /// ordinary — every worker that finishes does it — and must not take
+    /// the engine down with it.
+    #[test]
+    fn an_instance_leaving_a_pool_that_still_has_one_does_not() {
+        let server = Server::new(false).expect("this process has a token");
+        let _kept = InstanceSlot::claim(&server.shared);
+        drop(InstanceSlot::claim(&server.shared));
+
+        assert_eq!(
+            server.stopped.try_recv(),
+            Err(TryRecvError::Empty),
+            "one worker ending stopped an engine that was still accepting"
+        );
+    }
+
     /// The same rule through the real worker: a served connection that ends
     /// the worker must give the slot back, not merely stop using it.
     #[test]
@@ -1435,6 +1537,12 @@ mod tests {
             0,
             "a worker that ended kept its instance slot"
         );
+        // Both stops are sent here — the requested one from the worker, then
+        // the slot's own as it is released — and the order decides what the
+        // renderer is told. The requested one must arrive first, or a
+        // user-asked shutdown would look like a fault and be restarted.
+        assert_eq!(server.stopped.try_recv(), Ok(StopReason::Requested));
+        assert_eq!(server.stopped.try_recv(), Ok(StopReason::LastInstanceGone));
     }
 
     /// A client that connects and is gone before it can be served is

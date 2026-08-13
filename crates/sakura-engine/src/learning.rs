@@ -756,10 +756,29 @@ impl LearningService {
         // Counted against the real file length, not the buffer: the bytes
         // never read are discarded by the truncation below and have to be
         // reported as recovered, or an oversized log would look clean.
-        let over_cap = file_len.saturating_sub(bytes.len() as u64);
+        let mut over_cap = file_len.saturating_sub(bytes.len() as u64);
         let version = read_header(&bytes)?;
         if matches!(version, FORMAT_VERSION_1 | FORMAT_VERSION_2) {
             bytes = upgrade_to_current(&bytes, version)?;
+            // The upgrade gives every record the context fields the older
+            // formats had no room for, so a log that was inside the ceiling
+            // can be over it once upgraded. Publishing it whole would leave
+            // behind a file no rewrite can read again: the compaction a few
+            // lines below goes through `read_within_bound`, which refuses an
+            // over-cap file, so `open` itself would fail and the engine would
+            // spend that entire session on volatile learning.
+            //
+            // Publish only what fits instead. `replay` stops at the record
+            // the cap cut in half and the truncation below drops it, which is
+            // the handling a torn tail already gets. The excess joins
+            // `over_cap` because both are the same thing to a reader of
+            // `recovered_tail_bytes` — bytes this open discarded — even
+            // though one is counted before the upgrade and one after.
+            let cap = usize::try_from(MAX_LEARNING_LOG_BYTES).unwrap_or(usize::MAX);
+            if bytes.len() > cap {
+                over_cap = over_cap.saturating_add((bytes.len() - cap) as u64);
+                bytes.truncate(cap);
+            }
             publish_upgrade(path, &bytes, version)?;
         } else if version != LEARNING_FORMAT_VERSION {
             return Err(io::Error::new(
@@ -903,7 +922,7 @@ impl LearningService {
         })?;
         file.sync_data()?;
 
-        let source = read_bounded_for_rewrite(&path)?;
+        let source = read_within_bound(&path)?;
         if read_header(&source)? != LEARNING_FORMAT_VERSION {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1335,15 +1354,19 @@ pub fn default_path() -> io::Result<PathBuf> {
         .join("log.bin"))
 }
 
-/// Reads a learning log that a caller is about to rewrite from.
+/// Reads a whole learning log, refusing one that is over the ceiling.
 ///
-/// Unlike [`LearningService::open`], compaction and exact prediction deletion
-/// replace the file with what they read, so a file larger than the ceiling
-/// must refuse the operation rather than quietly write a truncated prefix
-/// over records the user has not been told were lost. Reading one byte past
-/// the ceiling is what makes the check an answer about the file rather than
-/// about a `metadata` call that could race the read.
-fn read_bounded_for_rewrite(path: &Path) -> io::Result<Vec<u8>> {
+/// Unlike [`LearningService::open`], every caller of this either rewrites the
+/// file from what it read (compaction, exact prediction deletion) or reports
+/// it verbatim ([`read_snapshot`]). Neither may quietly work from a truncated
+/// prefix: the first would write it back over records the user was never told
+/// were lost, and the second would describe a damaged log as complete.
+///
+/// Reading one byte past the ceiling is what makes the refusal an answer
+/// about the file rather than about a `metadata` call that could race the
+/// read — which is why the bound lives in the read itself and not in a size
+/// check before it.
+fn read_within_bound(path: &Path) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     File::open(path)?
         .take(MAX_LEARNING_LOG_BYTES.saturating_add(1))
@@ -1361,14 +1384,7 @@ fn read_bounded_for_rewrite(path: &Path) -> io::Result<Vec<u8>> {
 /// Previous supported formats remain viewable even before the engine has had
 /// an opportunity to upgrade the file.
 pub fn read_snapshot(path: &Path) -> io::Result<LearningSnapshot> {
-    let metadata = fs::metadata(path)?;
-    if metadata.len() > MAX_LEARNING_LOG_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "learning log exceeds its hard size bound",
-        ));
-    }
-    let bytes = fs::read(path)?;
+    let bytes = read_within_bound(path)?;
     let version = read_header(&bytes)?;
     if !matches!(
         version,
@@ -1919,7 +1935,7 @@ fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) ->
     if let Some(file) = state.log.file.as_ref() {
         file.sync_data()?;
     }
-    let source = read_bounded_for_rewrite(&path)?;
+    let source = read_within_bound(&path)?;
     if read_header(&source)? != LEARNING_FORMAT_VERSION {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2538,8 +2554,76 @@ mod tests {
     fn a_rewrite_refuses_a_log_past_its_ceiling() {
         let path = temporary_log("rewrite-bound");
         fs::write(&path, vec![0u8; (MAX_LEARNING_LOG_BYTES + 1) as usize]).expect("oversized log");
-        let error = read_bounded_for_rewrite(&path).expect_err("an oversized log was accepted");
+        let error = read_within_bound(&path).expect_err("an oversized log was accepted");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    /// The snapshot reader used to size the file with `metadata` and then
+    /// read it with no bound at all, which is the race the bounded read
+    /// exists to answer: a log that grows between the two calls was read
+    /// whole. It goes through the same bound now.
+    #[test]
+    fn a_snapshot_refuses_a_log_past_its_ceiling() {
+        let path = temporary_log("snapshot-bound");
+        fs::write(&path, vec![0u8; (MAX_LEARNING_LOG_BYTES + 1) as usize]).expect("oversized log");
+        let error = read_snapshot(&path).expect_err("an oversized log was accepted");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    /// The upgrade adds context fields to every record, so an old log near
+    /// the ceiling lands over it once upgraded. Publishing it whole left a
+    /// file the startup compaction then refused to read, which failed `open`
+    /// and cost the whole session its durable learning — a session's worth of
+    /// learning lost to a repair that was supposed to be invisible.
+    #[test]
+    fn an_upgrade_that_would_land_over_the_ceiling_is_published_within_it() {
+        let path = temporary_log("upgrade-over-cap");
+        let reading = "かな";
+        let surface = "加奈";
+        let mut payload = Vec::new();
+        payload.push(RECORD_COMMIT);
+        payload.extend_from_slice(&unix_day().to_le_bytes());
+        payload.extend_from_slice(&3u16.to_le_bytes());
+        payload.extend_from_slice(&(reading.len() as u16).to_le_bytes());
+        payload.extend_from_slice(&(surface.len() as u16).to_le_bytes());
+        payload.extend_from_slice(reading.as_bytes());
+        payload.extend_from_slice(surface.as_bytes());
+        let mut frame = (payload.len() as u32).to_le_bytes().to_vec();
+        frame.extend_from_slice(&crc32(&payload).to_le_bytes());
+        frame.extend_from_slice(&payload);
+
+        // Over the ceiling to begin with, so the capped read keeps a whole
+        // ceiling's worth of records and the upgrade — four bytes of context
+        // per record — is guaranteed to grow that past the ceiling again.
+        let mut old = header(FORMAT_VERSION_2).to_vec();
+        while (old.len() as u64) < MAX_LEARNING_LOG_BYTES + 4_096 {
+            old.extend_from_slice(&frame);
+        }
+        fs::write(&path, &old).expect("old log");
+
+        let upgraded = LearningService::open(&path).expect("an upgraded log must still open");
+
+        assert!(
+            fs::metadata(&path).expect("metadata").len() <= MAX_LEARNING_LOG_BYTES,
+            "the upgrade published a log no rewrite could read again"
+        );
+        assert_eq!(
+            read_header(&fs::read(&path).expect("read")).unwrap(),
+            LEARNING_FORMAT_VERSION
+        );
+        assert_eq!(
+            upgraded
+                .preference(reading, 3, [("仮名", 0), (surface, 0)])
+                .exact,
+            Some(1),
+            "the records that fit were lost with the ones that did not"
+        );
+        assert!(
+            upgraded.recovered_tail_bytes() > 0,
+            "an open that discarded a tail reported none"
+        );
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 
