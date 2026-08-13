@@ -703,6 +703,7 @@ mod tests {
                 right: left + 2,
                 bottom: top + 24,
             }),
+            document: None,
             renderer_visible: true,
             stopping: false,
         }

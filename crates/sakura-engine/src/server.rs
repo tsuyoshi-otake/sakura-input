@@ -905,12 +905,13 @@ fn serve(
         if let Request::SetUiPlacement {
             session,
             anchor,
+            document,
             renderer_visible,
         } = request
         {
             let _ = shared
                 .ui
-                .publish_placement(session, anchor, renderer_visible);
+                .publish_placement(session, anchor, document, renderer_visible);
             if let Err(fault) = send(instance, &Response::Ok, id, &mut bufs.reply) {
                 return end(fault);
             }
@@ -1620,6 +1621,7 @@ mod tests {
             }),
             candidate_detail: None,
             anchor: None,
+            document: None,
             renderer_visible: true,
             stopping: false,
         })

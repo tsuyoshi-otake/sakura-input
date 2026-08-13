@@ -524,6 +524,7 @@ fn history_delete_uses_typed_index_keeps_popup_until_next_ui_state_and_never_act
         candidates: None,
         candidate_detail: None,
         anchor: None,
+        document: None,
         renderer_visible: false,
         stopping: false,
     });
@@ -856,6 +857,7 @@ fn state_with_theme(
         }),
         candidate_detail,
         anchor: Some(anchor),
+        document: None,
         renderer_visible: true,
         stopping: false,
     }
@@ -886,6 +888,7 @@ fn history_state(revision: u64, anchor: ScreenRect) -> UiState {
         }),
         candidate_detail: None,
         anchor: Some(anchor),
+        document: None,
         renderer_visible: true,
         stopping: false,
     }

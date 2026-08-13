@@ -340,6 +340,7 @@ fn set_placement(client: &mut Client, session: u64, anchor: ScreenRect) {
             &Request::SetUiPlacement {
                 session,
                 anchor: Some(anchor),
+                document: None,
                 renderer_visible: true,
             },
             PATIENT,

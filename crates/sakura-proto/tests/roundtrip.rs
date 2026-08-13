@@ -110,6 +110,12 @@ fn every_request_variant_roundtrips() {
                 right: -1800,
                 bottom: 8,
             }),
+            document: Some(ScreenRect {
+                left: -1920,
+                top: -64,
+                right: -1600,
+                bottom: 240,
+            }),
             renderer_visible: true,
         },
     ];
@@ -208,6 +214,12 @@ fn every_response_variant_roundtrips() {
                 right: -40,
                 bottom: 34,
             }),
+            document: Some(ScreenRect {
+                left: -120,
+                top: 4,
+                right: 200,
+                bottom: 300,
+            }),
             renderer_visible: true,
             stopping: false,
         }),
@@ -220,6 +232,7 @@ fn every_response_variant_roundtrips() {
             candidates: None,
             candidate_detail: None,
             anchor: None,
+            document: None,
             renderer_visible: false,
             stopping: false,
         }),
@@ -232,6 +245,7 @@ fn every_response_variant_roundtrips() {
             candidates: None,
             candidate_detail: None,
             anchor: None,
+            document: None,
             renderer_visible: false,
             stopping: true,
         }),
@@ -485,18 +499,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v15_hello_roundtrips_and_v14_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 14;
+fn protocol_v16_hello_roundtrips_and_v15_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 15;
     assert_eq!(
-        PROTOCOL_VERSION, 15,
-        "the UiState appearance field changes the wire contract"
+        PROTOCOL_VERSION, 16,
+        "the UiState document field changes the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v15 request");
+    encode_request(&request, 17, &mut request_frame).expect("encode v16 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -517,7 +531,7 @@ fn protocol_v15_hello_roundtrips_and_v14_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 17, &mut response_frame).expect("encode v15 response");
+    encode_response(&response, 17, &mut response_frame).expect("encode v16 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()

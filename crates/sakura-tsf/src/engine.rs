@@ -406,13 +406,19 @@ impl Engine {
     /// This never reconnects and a timeout does not desynchronize conversion:
     /// unlike a key request it mutates no session text. A broken pipe still
     /// drops the link so the next real keystroke can rebuild it normally.
-    pub fn set_ui_placement(&mut self, anchor: Option<ScreenRect>, renderer_visible: bool) -> bool {
+    pub fn set_ui_placement(
+        &mut self,
+        anchor: Option<ScreenRect>,
+        document: Option<ScreenRect>,
+        renderer_visible: bool,
+    ) -> bool {
         let Some(link) = self.link.as_mut() else {
             return false;
         };
         let request = Request::SetUiPlacement {
             session: link.session,
             anchor,
+            document,
             renderer_visible,
         };
         match link.client.call(&request, UI_BUDGET) {

@@ -170,6 +170,12 @@ fn sample_valid_request_frames(rng: &mut Xorshift64Star) -> Vec<Vec<u8>> {
                 right: 25,
                 bottom: 30,
             }),
+            document: Some(ScreenRect {
+                left: -60,
+                top: 0,
+                right: 120,
+                bottom: 200,
+            }),
             renderer_visible: true,
         },
     ];
