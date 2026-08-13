@@ -306,3 +306,24 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   either constant (or widening the expansion ratio) fails loudly here instead
   of silently reopening the corruption `commit_suggestion_at`'s
   stage-before-mutate ordering was written to prevent.
+
+- **Any regex in the packaging scripts that anchors on a line of a tracked
+  text file must allow the carriage return (`\r?$`, or `\s*$`).** The
+  repository stores LF; this machine and the GitHub Actions Windows runners
+  both check out with `core.autocrlf=true`, so the working tree is CRLF and
+  .NET's multiline `$` matches before the `\n`, leaving the `\r` unmatched.
+  Verified 2026-08-14 (#50): `scripts/build-installer.ps1` and
+  `.github/workflows/release.yml` each refused a correct tree this way. The
+  trap is that the same file builds fine until a `git checkout` touches it —
+  a working copy written by an editor keeps LF and hides the bug, so "it
+  worked last release" is not evidence. `crates/sakura-regtool/tests/
+  packaging_version.rs::every_packaging_version_gate_allows_a_carriage_return`
+  guards the two known gates; extend its table when adding a new one.
+
+- **Do not trust MSYS/Git Bash `cat -A`, `sed`, or `hexdump` to tell you a
+  file's line endings.** Those tools opened `installer/setup.iss` in text mode
+  and showed `22 0a` (LF) for a line that .NET read as `22 0d` (CRLF).
+  Verified 2026-08-14 (#50) — the LF reading sent the investigation the wrong
+  way for several minutes. Read the bytes through the runtime that actually
+  consumes the file: `[IO.File]::ReadAllText` in PowerShell for the packaging
+  scripts, `std::fs::read_to_string` in Rust for the tests.
