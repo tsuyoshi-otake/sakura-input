@@ -212,3 +212,26 @@ TSF test asserting `is_connected()` right after `attached_to` shares this
 exposure. If it recurs, make the *test* tolerate load (retry the attach), do
 not widen the product's 50 ms reconnect budget — the budget is deliberately
 no larger than a keystroke budget.
+
+## 2026-08-14 — the packaging version gate depended on the checkout (#50)
+
+`scripts/build-installer.ps1` refused to build 1.0.2 with "setup.iss must
+contain exactly one AppProductVersion" on a tree where the file declared
+exactly one, correctly. `installer/setup.iss` is stored with LF; this machine
+has `core.autocrlf=true`, so a checkout materializes CRLF. The gate anchored
+its regex with `(?m)^#define AppProductVersion "([^"]+)"$`, and .NET's
+multiline `$` matches immediately before the `\n`, leaving the `\r` unmatched.
+
+What made it confusing: the same file had built fine for the 1.0.1 release a
+few hours earlier. The difference was not the content but the provenance of
+the working copy — 1.0.1's setup.iss had been written by an editor (LF
+preserved), while 1.0.2's had been materialized by `git checkout main`
+followed by a fast-forward, which runs the smudge filter. So the failure only
+appeared after a checkout touched the file, which is exactly the case a CI
+runner always hits.
+
+`.github/workflows/release.yml` carried the same shape twice. Fixed all three
+with `\r?$` and added `crates/sakura-regtool/tests/packaging_version.rs`,
+whose third test reads the gate files and fails if a version anchor stops
+allowing the CR. Proved non-vacuous by reintroducing the old anchor.
+Distilled → `rules.md`.
