@@ -148,9 +148,13 @@ function Get-CanonicalVersion {
     }
 
     $setupText = [IO.File]::ReadAllText($setupPath)
+    # `\r?$`: setup.iss is stored with LF, and a Windows checkout with the
+    # default core.autocrlf=true hands this script CRLF. Anchoring on a bare
+    # `$` made the version gate depend on how the tree happened to be checked
+    # out rather than on what the file says.
     $setupMatches = [regex]::Matches(
         $setupText,
-        '(?m)^#define AppProductVersion "(?<version>[^"]+)"$'
+        '(?m)^#define AppProductVersion "(?<version>[^"]+)"\r?$'
     )
     if ($setupMatches.Count -ne 1) { throw 'setup.iss must contain exactly one AppProductVersion' }
     $setupVersion = $setupMatches[0].Groups['version'].Value.Trim()
