@@ -739,6 +739,14 @@ impl Dispatcher {
             },
         ) {
             Ok(()) => {
+                // A mode staged by reconversion is put back by whichever
+                // `Session::reset` ends the composition, deep inside the key
+                // handling. The host only learns a mode from `out.mode`, so
+                // publish it here — after the handler, which may have set
+                // `out.mode` itself and whose value then already agrees.
+                if let Some(restored) = session.take_mode_restored() {
+                    out.mode.get_or_insert(restored);
+                }
                 schedule_long_conversion(id, session, &services);
                 if let Some(history) = services.input_history {
                     history.record_key(
@@ -1020,11 +1028,6 @@ impl Dispatcher {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
         };
         self.prediction_cache.clear_if_session(id);
-        // `build_reconversion` switches the persistent mode to Hiragana for
-        // the recovered composition. `Session::reset` deliberately preserves
-        // `mode`, so a failed request must restore the pre-request mode or a
-        // Katakana typist would be left silently stuck in Hiragana.
-        let mode_before_reconversion = session.mode;
         match build_reconversion(
             session,
             text,
@@ -1036,8 +1039,11 @@ impl Dispatcher {
         ) {
             Ok(()) => Reply::Output,
             Err(code) => {
+                // `build_reconversion` stages the pre-request mode before it
+                // switches to Hiragana, and `reset` is where a staged mode is
+                // put back — so the failure path needs no restore of its own.
                 session.reset();
-                session.mode = mode_before_reconversion;
+                session.take_mode_restored();
                 out.clear();
                 Reply::Message(Response::Error(code))
             }
@@ -1055,8 +1061,16 @@ impl Dispatcher {
         }
         session.disarm_commit_undo();
         session.reset();
+        let restored = session.take_mode_restored();
         self.prediction_cache.clear_if_session(id);
-        Reply::Message(Response::Ok)
+        // Reverting a reconversion is a terminal path like any other, so the
+        // reset above has already put the user's mode back. This reply carries
+        // no `Output`, so the mode has to ride out on the message itself or
+        // the host would keep showing the Hiragana reconversion imposed.
+        match restored {
+            Some(mode) => Reply::Message(Response::InputMode { mode }),
+            None => Reply::Message(Response::Ok),
+        }
     }
 
     fn undo_commit_outcome(&mut self, id: SessionId, outcome: UndoCommitOutcome) -> Reply {
@@ -3109,7 +3123,15 @@ fn build_reconversion(
             .map_err(|_| ErrorCode::TooLarge)?;
     }
 
+    // Order matters: reset first, stage second. `Session::reset` is the one
+    // place a staged mode is put back, so staging before the reset would have
+    // that very reset consume the stage and leave the Hiragana below permanent.
+    // The mode itself has to change — commit-time normalization reads
+    // `session.mode`, and a Katakana session would katakana-ise the okurigana
+    // this reading just recovered — so what is staged is the way back out.
     session.reset();
+    session.take_mode_restored();
+    session.stage_reconversion_mode(session.mode);
     session.mode = Mode::Hiragana;
     out.consumed = true;
     out.mode = Some(session.mode);
@@ -5670,6 +5692,141 @@ mod tests {
             live.mode,
             Mode::Katakana,
             "a failed reconversion must not leave the session in Hiragana"
+        );
+    }
+
+    #[test]
+    fn committing_a_reconversion_puts_the_pre_request_input_mode_back() {
+        // Reconversion has to force Hiragana: commit-time normalization reads
+        // `session.mode`, so a Katakana session would katakana-ise the
+        // okurigana the reverse scan just recovered. The forced mode is the
+        // composition's, not the user's, and must not outlive the composition.
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        dispatcher.sessions.get_mut(session).expect("session").mode = Mode::Katakana;
+
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::Reconvert {
+                    session,
+                    text: "仮名".to_owned(),
+                    preview: false,
+                },
+                &mut out,
+            ),
+            Reply::Output
+        );
+        assert_eq!(out.mode, Some(Mode::Hiragana), "the composition's mode");
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").mode,
+            Mode::Hiragana
+        );
+
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Enter),
+                },
+                &mut out,
+            ),
+            Reply::Output
+        );
+
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.state(), State::Idle);
+        assert_eq!(
+            live.mode,
+            Mode::Katakana,
+            "committing a reconversion must not leave the user in Hiragana"
+        );
+        assert_eq!(
+            out.mode,
+            Some(Mode::Katakana),
+            "the host only learns a mode it is told about"
+        );
+    }
+
+    #[test]
+    fn cancelling_a_reconversion_puts_the_pre_request_input_mode_back() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        dispatcher.sessions.get_mut(session).expect("session").mode = Mode::HalfKatakana;
+
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::Reconvert {
+                    session,
+                    text: "仮名".to_owned(),
+                    preview: false,
+                },
+                &mut out,
+            ),
+            Reply::Output
+        );
+        // Conversion swallows the first Escape to fall back to the reading;
+        // the second ends the composition for good.
+        for _ in 0..2 {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Escape),
+                },
+                &mut out,
+            );
+        }
+
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.state(), State::Idle);
+        assert_eq!(live.mode, Mode::HalfKatakana);
+        assert_eq!(out.mode, Some(Mode::HalfKatakana));
+    }
+
+    #[test]
+    fn reverting_a_reconversion_answers_with_the_restored_input_mode() {
+        // `Revert` carries no `Output`, so the reply itself is the only place
+        // the restored mode can reach the host.
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        dispatcher.sessions.get_mut(session).expect("session").mode = Mode::Katakana;
+
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::Reconvert {
+                    session,
+                    text: "仮名".to_owned(),
+                    preview: false,
+                },
+                &mut out,
+            ),
+            Reply::Output
+        );
+
+        assert_eq!(
+            dispatcher.dispatch(&Request::Revert { session }, &mut out),
+            Reply::Message(Response::InputMode {
+                mode: Mode::Katakana
+            })
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.state(), State::Idle);
+        assert_eq!(live.mode, Mode::Katakana);
+    }
+
+    #[test]
+    fn reverting_an_ordinary_composition_still_answers_plain_ok() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        type_word(&mut dispatcher, session, "kana", &mut out);
+
+        assert_eq!(
+            dispatcher.dispatch(&Request::Revert { session }, &mut out),
+            Reply::Message(Response::Ok),
+            "only a reconversion has a mode to give back"
         );
     }
 

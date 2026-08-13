@@ -31,4 +31,4 @@ pub mod transport;
 
 pub use client::{Client, PATIENT_CONNECT};
 pub use security::{pipe_name, sddl, Descriptor, CLIENT_ACCESS};
-pub use transport::{Fault, PipeInstance, MAX_INSTANCES};
+pub use transport::{Accept, Fault, PipeInstance, MAX_INSTANCES};

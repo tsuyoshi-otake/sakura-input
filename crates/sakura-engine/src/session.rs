@@ -26,6 +26,8 @@
 //! `Mode::Katakana` as a promise that its preedit text is katakana yet — see
 //! `crate::dispatch`'s module docs for how the dispatcher handles this seam.
 
+use std::mem;
+
 use sakura_core::keymap::State;
 use sakura_core::romaji;
 use sakura_core::{
@@ -156,6 +158,24 @@ pub struct Session {
     /// later scope-read failure or normal field must not strand the session in
     /// direct mode.
     sensitive_mode_restore: Option<Mode>,
+    /// The mode to put back when the composition recovered by reconversion
+    /// reaches any terminal state.
+    ///
+    /// Reconversion forces [`Mode::Hiragana`] because the reading it
+    /// recovers is hiragana and the width normalizer reads `mode` at commit
+    /// — a Katakana session would katakana-ise the recovered okurigana. That
+    /// substitution belongs to the recovered composition, not to the user,
+    /// so it is staged here and restored by [`Session::reset`], the one
+    /// point every terminal path already passes through. Restoring it only
+    /// where a request happened to fail is how a successful reconversion
+    /// used to leave a Katakana typist in Hiragana.
+    reconversion_mode_restore: Option<Mode>,
+    /// Set when [`Session::reset`] actually restored a staged mode, and
+    /// cleared by the dispatcher once it has published the session's final
+    /// mode. Without it a mode the engine changed on its own would never
+    /// reach the host, whose cached mode would then disagree with the one
+    /// keystrokes are interpreted under.
+    mode_restored: bool,
     /// Romaji typed but not yet resolved to kana (the FSM's own state).
     pub(crate) romaji: romaji::Input,
     /// Kana (and any unmapped passthrough characters) resolved so far,
@@ -246,6 +266,8 @@ impl Session {
             scope_classified: false,
             history_session_id: 0,
             sensitive_mode_restore: None,
+            reconversion_mode_restore: None,
+            mode_restored: false,
             romaji: romaji::Input::new(),
             preedit: FixedStr::new(),
             raw_input: FixedStr::new(),
@@ -369,6 +391,36 @@ impl Session {
         }
     }
 
+    /// Records the mode to put back once the reconversion composition ends.
+    ///
+    /// Must be called *after* the [`Session::reset`] that clears the way for
+    /// the reconversion, never before: `reset` is itself the restore point,
+    /// so staging first would have it consume the stage on the spot and
+    /// leave nothing to put back.
+    ///
+    /// Staging keeps the earlier value if one is somehow still there. With
+    /// the reset ordering above there should not be, but the mode worth
+    /// keeping in a back-to-back reconversion is the one the user chose, not
+    /// the Hiragana the previous reconversion imposed.
+    pub(crate) fn stage_reconversion_mode(&mut self, mode: Mode) {
+        if self.reconversion_mode_restore.is_none() {
+            self.reconversion_mode_restore = Some(mode);
+        }
+    }
+
+    /// Takes the "a staged mode was just restored" flag, if one was.
+    ///
+    /// The dispatcher consumes this to publish the restored mode, because
+    /// the host only ever learns a mode from an explicit `mode` in the
+    /// reply — a session field changing on its own is invisible to it.
+    pub(crate) fn take_mode_restored(&mut self) -> Option<Mode> {
+        if mem::take(&mut self.mode_restored) {
+            Some(self.mode)
+        } else {
+            None
+        }
+    }
+
     /// The keymap state this session is in.
     ///
     /// M0 has no conversion, so the only two states a session can ever
@@ -404,7 +456,19 @@ impl Session {
     /// about. A `Cancel` action (Escape) that quietly reset the mode back
     /// to Hiragana out from under someone typing in Katakana mode would be
     /// a surprise bug wearing a "just resetting" disguise.
+    ///
+    /// The single exception is the mode reconversion staged on its way in
+    /// (see [`Session::stage_reconversion_mode`]), which is the *user's*
+    /// mode being put back rather than a composition's mode being imposed.
+    /// It is restored here because every terminal path — commit, cancel,
+    /// revert, focus loss, session teardown — already ends here, which is
+    /// what makes the restore unconditional instead of a list of cases
+    /// somebody has to keep complete.
     pub fn reset(&mut self) {
+        if let Some(previous) = self.reconversion_mode_restore.take() {
+            self.mode = previous;
+            self.mode_restored = true;
+        }
         self.romaji.clear();
         self.preedit.clear();
         self.raw_input.clear();

@@ -1,6 +1,6 @@
 use dictc::{compile, parse_connection, parse_entries};
 use sakura_core::conversion::{ConversionOptions, Converter};
-use sakura_core::dictionary::Dictionary;
+use sakura_core::dictionary::{Dictionary, EntryFlags};
 use sakura_core::user_dictionary::UserDictionary;
 use sakura_core::ConversionMethod;
 
@@ -204,6 +204,47 @@ fn an_oversized_identifier_variant_is_skipped_without_discarding_the_conversion(
             .iter()
             .all(|candidate| !candidate.text().contains('_') && !candidate.text().contains('-')),
         "no partially built identifier variant may appear"
+    );
+}
+
+#[test]
+fn an_identifier_variant_keeps_the_flags_of_every_word_it_re_spells() {
+    // The variant collapses a multi-word path into one segment, so its flags
+    // have to be the union of the words it covers. Taking only the first
+    // segment's flags lost the IT term sitting in second position, and with
+    // it every downstream decision that reads `EntryFlags::IT` — the IT bias
+    // and the learning statistics among them.
+    let entries = "# license: BSD-3-Clause\n\
+         reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+         てすと\tTest\t1\t1\t100\t-\t\t\n\
+         えーぴーあい\tAPI\t1\t1\t100\t-\tit,predict\tinterface\n";
+    let bytes = compile_fixture(entries);
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(
+            &dictionary,
+            "てすとえーぴーあい",
+            ConversionOptions::default(),
+        )
+        .expect("conversion");
+
+    let base = candidates
+        .iter()
+        .find(|candidate| candidate.text() == "TestAPI")
+        .expect("the multi-word path itself");
+    assert_eq!(base.segments().len(), 2);
+    assert!(!base.segments()[0].flags.contains(EntryFlags::IT));
+    assert!(base.segments()[1].flags.contains(EntryFlags::IT));
+
+    let variant = candidates
+        .iter()
+        .find(|candidate| candidate.text() == "test_api")
+        .expect("the snake_case variant");
+    assert_eq!(variant.segments().len(), 1);
+    assert!(
+        variant.segments()[0].flags.contains(EntryFlags::IT),
+        "a variant of an IT term is still an IT term"
     );
 }
 
