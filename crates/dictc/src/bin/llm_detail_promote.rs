@@ -245,7 +245,9 @@ fn load_decisions(path: &Path) -> Result<BTreeMap<(String, String), Decision>, S
         if zero_based == 0 && line == "surface\treading\tstatus\treason" {
             continue;
         }
-        let fields = line.splitn(4, '\t').collect::<Vec<_>>();
+        // A complete split, so a fifth column fails the count check below
+        // instead of disappearing into the free-text reason.
+        let fields = line.split('\t').collect::<Vec<_>>();
         if fields.len() != 4 || fields[0].is_empty() || fields[1].is_empty() {
             return Err(format!(
                 "{}:{}: malformed review decision",

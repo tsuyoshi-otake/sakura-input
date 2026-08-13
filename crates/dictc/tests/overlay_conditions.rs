@@ -299,17 +299,17 @@ fn parser_cases() -> Vec<ParseCase> {
             doc(DIGIT_ROW),
             Outcome::Rows(&[DIGIT_RENDERED]),
         ),
-        // `splitn(8, '\t')`: a ninth column cannot fail the count check, it
-        // lands inside the annotation instead. The writer refuses it later;
-        // `a_ninth_column_survives_parsing_but_never_reaches_a_file` pins that.
+        // Issue #49: the split has to be complete. A capped `splitn(8, '\t')`
+        // could not fail the count check here -- the ninth column landed in
+        // the annotation, which the user reads as a candidate note.
         licensed(
-            "a ninth column folds into the annotation",
+            "a ninth column is counted rather than absorbed",
             true,
             doc("いち\t1\t2044\t2044\t3639\t4839\tpredict\tnote\textra\n"),
-            Outcome::Rows(&["いち|1|2044|2044|3639|4839|predict|note\textra"]),
+            Outcome::Rejected("expected 8 tab-separated columns, found 9"),
         ),
         licensed(
-            "a ninth column folds into the annotation",
+            "a ninth column is counted rather than absorbed",
             false,
             doc("いち\t1\t2044\t2044\t3639\t4839\tpredict\tnote\n"),
             Outcome::Rows(&["いち|1|2044|2044|3639|4839|predict|note"]),
@@ -852,18 +852,43 @@ fn assert_both_polarities<'a>(
     );
 }
 
-/// The parser folds a ninth column into the annotation, but a field carrying a
-/// tab can never be written back out -- so such a row cannot reach a category
-/// file, and the round trip stays lossless.
+/// Issue #49. A row with a ninth column used to be accepted, with everything
+/// past the eighth column folded into the annotation -- the column the user
+/// reads as a candidate note. The writer refused such a row, which made the
+/// hole look contained, but the dictionary build compiles parsed entries
+/// directly and never passes through that writer. Both entry points now reject
+/// the row instead, at any width.
 #[test]
-fn a_ninth_column_survives_parsing_but_never_reaches_a_file() {
+fn a_row_wider_than_the_schema_is_rejected_by_both_entry_points() {
+    let body = "いち\t1\t2044\t2044\t3639\t4839\tpredict\tnote\textra\n";
+    for (label, parsed) in [
+        ("licensed", parse_entries("ninth.tsv", &doc(body))),
+        (
+            "category",
+            parse_category_entries("ninth.tsv", &format!("{HEADER}{body}")),
+        ),
+    ] {
+        match parsed {
+            Ok(entries) => panic!(
+                "{label}: a ninth column was absorbed instead of counted, annotation {:?}",
+                entries[0].annotation
+            ),
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    message.contains("expected 8 tab-separated columns, found 9"),
+                    "{label}: unexpected rejection '{message}'"
+                );
+            }
+        }
+    }
+    // The same row one column narrower is ordinary data, so the check is a
+    // width check rather than a ban on the word `extra`.
     let entries = parse_entries(
-        "ninth.tsv",
-        &doc("いち\t1\t2044\t2044\t3639\t4839\tpredict\tnote\textra\n"),
+        "eighth.tsv",
+        &doc("いち\t1\t2044\t2044\t3639\t4839\tpredict\tnote\n"),
     )
-    .expect("the count check cannot see past the eighth column");
-    assert_eq!(entries[0].annotation, "note\textra");
-    let error = entries_to_category_tsv(&entries)
-        .expect_err("a field holding a tab must not be written back");
-    assert!(error.to_string().contains("must not contain tabs"));
+    .expect("an eight-column row still parses");
+    assert_eq!(entries[0].annotation, "note");
+    assert!(entries_to_category_tsv(&entries).is_ok());
 }
