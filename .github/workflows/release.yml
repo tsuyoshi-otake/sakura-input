@@ -69,14 +69,18 @@ jobs:
         run: |
           $cargo = [IO.File]::ReadAllText('Cargo.toml')
           $setup = [IO.File]::ReadAllText('installer/setup.iss')
-          if ($cargo -notmatch '(?m)^version = "([0-9]+\.[0-9]+\.[0-9]+)"$') {
+          # `\r?$` throughout: both files are stored with LF, and this runner
+          # checks out with core.autocrlf=true, so the line ends in CRLF here.
+          # A bare `$` made the gate pass or fail on the checkout rather than
+          # on the declared version.
+          if ($cargo -notmatch '(?m)^version = "([0-9]+\.[0-9]+\.[0-9]+)"\r?$') {
             throw 'workspace package version is missing or noncanonical'
           }
           $version = $Matches[1]
           if ($env:RELEASE_TAG -cne "v$version") {
             throw "tag '$env:RELEASE_TAG' does not match workspace version '$version'"
           }
-          if ($setup -notmatch "(?m)^#define AppProductVersion \"$([regex]::Escape($version))\"$") {
+          if ($setup -notmatch "(?m)^#define AppProductVersion \"$([regex]::Escape($version))\"\r?$") {
             throw 'installer AppProductVersion does not match workspace version'
           }
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
