@@ -1647,6 +1647,13 @@ fn apply_key(
         },
     }
 
+    // The temporary English composition is a property of a composition, so it
+    // ends with one however the composition ended -- committed, cancelled, or
+    // simply erased character by character (#51). Restored here, once, rather
+    // than in each handler that can empty the buffers, and before prediction
+    // and rendering so both see the same session the next key will.
+    session.release_shifted_ascii_without_composition();
+
     let explicit_prediction = prediction_direction.filter(|_| out.consumed);
     refresh_prediction(
         session_id,
@@ -8962,6 +8969,270 @@ mod tests {
         let live = dispatcher.sessions.get(session).expect("session");
         assert_eq!(live.raw_input.as_str(), "K");
         assert!(live.shifted_ascii);
+    }
+
+    /// Issue #51. Erasing the temporary English composition instead of
+    /// committing it used to leave the latch set with every buffer empty:
+    /// the session reported `Idle`, so neither Enter nor Escape reached
+    /// `Session::reset`, and no other key cleared it either. Everything
+    /// typed afterwards came out as verbatim English until the user
+    /// switched to another IME and back, which builds a new session.
+    #[test]
+    fn erasing_the_english_composition_returns_the_session_to_japanese() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        for character in ['K', 'A'] {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: shifted_char_key(character),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(out.preedit_text(), "KA");
+
+        for _ in 0..2 {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Backspace),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(out.preedit_text(), "", "the composition is fully erased");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.state(), State::Idle);
+        assert!(
+            !live.shifted_ascii,
+            "the temporary English mode must not outlive the composition it describes"
+        );
+
+        for character in ['k', 'a'] {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(out.preedit_text(), "か");
+    }
+
+    /// The same leak through the other erase path. Forward Delete has the
+    /// same shape as Backspace -- remove one character and return -- so it
+    /// reaches an empty composition without passing `Session::reset` too.
+    #[test]
+    fn forward_deleting_the_english_composition_away_ends_the_temporary_mode() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: shifted_char_key('K'),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('a'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "Ka");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Left),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Delete),
+            },
+            &mut out,
+        );
+
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert!(
+            live.raw_input.is_empty() && live.preedit.is_empty() && live.romaji.is_empty(),
+            "forward Delete is expected to leave nothing behind here: raw={:?} preedit={:?}",
+            live.raw_input.as_str(),
+            live.preedit.as_str()
+        );
+        assert!(!live.shifted_ascii);
+
+        for character in ['k', 'a'] {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(out.preedit_text(), "か");
+    }
+
+    /// The other polarity: releasing the latch is conditional on the
+    /// composition actually being gone. Erasing back to a shorter English
+    /// composition keeps typing English, which is what the mode is for.
+    #[test]
+    fn a_partly_erased_english_composition_stays_english() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: shifted_char_key('K'),
+            },
+            &mut out,
+        );
+        for character in ['a', 'b'] {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(out.preedit_text(), "Kab");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "Ka");
+        assert!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .shifted_ascii,
+            "a composition that is only partly erased is still being typed in English"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('c'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "Kac");
+    }
+
+    /// The invariant behind #51, over generated key sequences rather than
+    /// the two erase paths that happened to break it: the temporary English
+    /// mode never survives an empty composition, whatever route emptied it.
+    ///
+    /// Fixed seed, in-house generator -- no external property-testing crate
+    /// is on this workspace's dependency list.
+    #[test]
+    fn the_english_latch_never_survives_an_empty_composition() {
+        struct Random {
+            state: u64,
+        }
+
+        impl Random {
+            fn next(&mut self) -> u64 {
+                self.state ^= self.state << 13;
+                self.state ^= self.state >> 7;
+                self.state ^= self.state << 17;
+                self.state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            }
+
+            fn usize(&mut self, exclusive_end: usize) -> usize {
+                usize::try_from(self.next() % exclusive_end as u64).unwrap_or(0)
+            }
+        }
+
+        enum Stroke {
+            Shifted(char),
+            Plain(char),
+            Named(KeyCode),
+        }
+
+        let strokes = [
+            Stroke::Shifted('K'),
+            Stroke::Shifted('S'),
+            Stroke::Plain('a'),
+            Stroke::Plain('b'),
+            Stroke::Plain('n'),
+            Stroke::Plain('o'),
+            Stroke::Plain('。'),
+            Stroke::Named(KeyCode::Backspace),
+            Stroke::Named(KeyCode::Backspace),
+            Stroke::Named(KeyCode::Delete),
+            Stroke::Named(KeyCode::Left),
+            Stroke::Named(KeyCode::Right),
+            Stroke::Named(KeyCode::Escape),
+            Stroke::Named(KeyCode::Enter),
+            Stroke::Named(KeyCode::Space),
+        ];
+
+        let mut random = Random {
+            state: 0x5A4B_5552_0000_0051 ^ 0x9E37_79B9_7F4A_7C15,
+        };
+        let mut latched = 0usize;
+        let mut released_by_emptying = 0usize;
+
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        for step in 0..4_000 {
+            let key = match &strokes[random.usize(strokes.len())] {
+                Stroke::Shifted(character) => shifted_char_key(*character),
+                Stroke::Plain(character) => char_key(*character),
+                Stroke::Named(code) => named_key(*code),
+            };
+            let was_latched = dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .shifted_ascii;
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+
+            let live = dispatcher.sessions.get(session).expect("session");
+            let empty =
+                live.raw_input.is_empty() && live.preedit.is_empty() && live.romaji.is_empty();
+            assert!(
+                !(live.shifted_ascii && empty),
+                "step {step}: the temporary English mode outlived its composition"
+            );
+            if live.shifted_ascii {
+                latched += 1;
+            }
+            if was_latched && !live.shifted_ascii && empty {
+                released_by_emptying += 1;
+            }
+        }
+
+        assert!(
+            latched > 0,
+            "the campaign never entered the temporary English mode, so it proves nothing"
+        );
+        assert!(
+            released_by_emptying > 0,
+            "the campaign never emptied a latched composition, so it never exercised the fix"
+        );
     }
 
     #[test]

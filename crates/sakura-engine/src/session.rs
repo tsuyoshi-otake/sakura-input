@@ -481,6 +481,37 @@ impl Session {
         self.clear_segments();
     }
 
+    /// Releases the temporary English composition once there is no
+    /// composition left for it to describe.
+    ///
+    /// `shifted_ascii` says "this composition is being typed as English",
+    /// so it cannot outlive the composition. [`Session::reset`] ends it on
+    /// every terminal path, but a composition can also disappear without
+    /// reaching one: Backspace and forward Delete erase the last character
+    /// and simply return, leaving all three buffers empty. The latch left
+    /// behind is invisible -- `is_composing` ignores it once `raw_input` is
+    /// empty, so the session reports `Idle` with nothing on screen -- and it
+    /// is sticky, because the only other way out is a non-ASCII character
+    /// and every romaji keystroke is ASCII. Every later keystroke then came
+    /// out as verbatim English, with no key able to recover; switching to
+    /// another IME and back was the only way out, because that builds a new
+    /// `Session` (#51).
+    ///
+    /// This restores the invariant at one point after each key rather than
+    /// clearing the latch in each erase path, which would be exactly the
+    /// "list of cases somebody has to keep complete" that [`Session::reset`]
+    /// avoids above.
+    pub(crate) fn release_shifted_ascii_without_composition(&mut self) {
+        if self.shifted_ascii
+            && !self.converting
+            && self.romaji.is_empty()
+            && self.preedit.is_empty()
+            && self.raw_input.is_empty()
+        {
+            self.shifted_ascii = false;
+        }
+    }
+
     pub(crate) fn cancel_conversion(&mut self) {
         self.converting = false;
         self.conversion_presentation = CandidatePresentation::Compact;

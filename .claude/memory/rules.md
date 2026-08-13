@@ -327,3 +327,27 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   way for several minutes. Read the bytes through the runtime that actually
   consumes the file: `[IO.File]::ReadAllText` in PowerShell for the packaging
   scripts, `std::fs::read_to_string` in Rust for the tests.
+
+## Session state that describes a composition
+
+- **A flag that qualifies a composition must not be able to outlive one.**
+  `Session::shifted_ascii` (the temporary English composition) was cleared
+  only by `Session::reset` and by receiving a non-ASCII character. Erasing the
+  composition with Backspace or forward Delete reached neither, and the
+  resulting `Idle`-with-latch state was invisible, sticky (every romaji
+  keystroke is ASCII), and unrecoverable by any key (#51). Restore such an
+  invariant at one point per key in `apply_key`, before prediction and
+  rendering — not by adding a clear to each erase path, which is the
+  list-of-cases shape `Session::reset`'s doc comment already argues against.
+
+- **`is_composing()` is not a safe proxy for "this flag is still meaningful".**
+  It deliberately ignores `shifted_ascii` once `raw_input` is empty, and
+  `commit_pending` returns early on `!is_composing()`. Any state that both
+  gates on `is_composing()` and is only cleared inside it can strand itself.
+
+- **Measure a "nothing works" report instead of reasoning about it.** Pressing
+  each plausible recovery key from the stuck state and recording consumed /
+  resulting preedit / flag turned an unfalsifiable severity claim into a table
+  that named the two keys that *would* have recovered (Escape, Enter) and why
+  neither could fire. That table is what proved the root cause was the whole
+  cause and not one of several.
