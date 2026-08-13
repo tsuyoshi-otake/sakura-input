@@ -59,7 +59,7 @@ dependencies = [
 
 [[package]]
 name = "dictc"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "flate2",
  "quick-xml",
@@ -279,14 +279,14 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sakura-core"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-proto",
 ]
 
 [[package]]
 name = "sakura-engine"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "dictc",
  "sakura-core",
@@ -298,7 +298,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-ipc"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-proto",
  "windows",
@@ -307,18 +307,18 @@ dependencies = [
 
 [[package]]
 name = "sakura-logon"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-reg",
 ]
 
 [[package]]
 name = "sakura-neural-proto"
-version = "1.0.1"
+version = "1.0.2"
 
 [[package]]
 name = "sakura-neural-worker"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "ort",
  "serde",
@@ -329,11 +329,11 @@ dependencies = [
 
 [[package]]
 name = "sakura-proto"
-version = "1.0.1"
+version = "1.0.2"
 
 [[package]]
 name = "sakura-reg"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "windows",
  "windows-core",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-regtool"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-renderer"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-settings"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-core",
  "sakura-engine",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-tsf"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
