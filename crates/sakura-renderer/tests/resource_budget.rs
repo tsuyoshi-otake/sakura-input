@@ -83,6 +83,7 @@ fn renderer_with_candidates_stays_within_its_footprint_budget() {
                     right: 120,
                     bottom: 124,
                 }),
+                document: None,
                 renderer_visible: true,
             },
             PATIENT,

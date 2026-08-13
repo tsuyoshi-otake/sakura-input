@@ -415,6 +415,7 @@ struct UiSnapshot {
     /// candidate that was already removed from disk.
     candidate_learning_generation: u64,
     anchor: Option<ScreenRect>,
+    document: Option<ScreenRect>,
     renderer_visible: bool,
     stopping: bool,
 }
@@ -431,6 +432,7 @@ impl UiSnapshot {
             candidate_session: None,
             candidate_learning_generation: 0,
             anchor: None,
+            document: None,
             renderer_visible: false,
             stopping: false,
         }
@@ -447,6 +449,7 @@ impl UiSnapshot {
                 .then(|| self.candidate_detail.to_owned())
                 .flatten(),
             anchor: self.anchor,
+            document: self.document,
             renderer_visible: self.renderer_visible,
             stopping: self.stopping,
         }
@@ -589,6 +592,7 @@ impl UiBoard {
 
         if state.candidate_session != candidate_session || !has_candidates {
             state.anchor = None;
+            state.document = None;
             state.renderer_visible = false;
         }
         if has_candidates {
@@ -600,6 +604,7 @@ impl UiBoard {
                 state.candidate_session = None;
                 state.candidate_learning_generation = 0;
                 state.anchor = None;
+                state.document = None;
                 state.renderer_visible = false;
                 state.revision = state.revision.wrapping_add(1);
                 drop(state);
@@ -636,20 +641,26 @@ impl UiBoard {
         &self,
         session: SessionId,
         anchor: Option<ScreenRect>,
+        document: Option<ScreenRect>,
         renderer_visible: bool,
     ) -> bool {
         let anchor = anchor.filter(|rect| rect.is_valid());
+        let document = document.filter(|rect| rect.is_valid());
         let Ok(mut state) = self.state.lock() else {
             return false;
         };
         if state.candidate_session != Some(session) {
             return false;
         }
-        if state.anchor == anchor && state.renderer_visible == renderer_visible {
+        if state.anchor == anchor
+            && state.document == document
+            && state.renderer_visible == renderer_visible
+        {
             return true;
         }
         state.revision = state.revision.wrapping_add(1);
         state.anchor = anchor;
+        state.document = document;
         state.renderer_visible = renderer_visible;
         drop(state);
         self.changed.notify_all();
@@ -673,6 +684,7 @@ impl UiBoard {
         state.candidate_session = None;
         state.candidate_learning_generation = 0;
         state.anchor = None;
+        state.document = None;
         state.renderer_visible = false;
         drop(state);
         self.changed.notify_all();
@@ -721,6 +733,7 @@ impl UiBoard {
         state.candidate_session = None;
         state.candidate_learning_generation = 0;
         state.anchor = None;
+        state.document = None;
         state.renderer_visible = false;
         drop(state);
         self.changed.notify_all();
@@ -802,6 +815,7 @@ impl UiBoard {
                     candidates: None,
                     candidate_detail: None,
                     anchor: None,
+                    document: None,
                     renderer_visible: false,
                     stopping: false,
                 },
@@ -1029,12 +1043,12 @@ mod tests {
             bottom: 34,
         };
 
-        assert!(!board.publish_placement(8, Some(anchor), true));
+        assert!(!board.publish_placement(8, Some(anchor), None, true));
         let unchanged = look(&board, 0);
         assert_eq!(unchanged.revision, after_candidates.revision);
         assert_eq!(unchanged.anchor, None);
 
-        assert!(board.publish_placement(7, Some(anchor), true));
+        assert!(board.publish_placement(7, Some(anchor), None, true));
         let placed = look(&board, after_candidates.revision);
         assert_eq!(placed.anchor, Some(anchor));
         assert!(placed.renderer_visible);
@@ -1053,6 +1067,7 @@ mod tests {
                 right: 30,
                 bottom: 40,
             }),
+            None,
             true,
         );
         let placed = look(&board, candidates.revision);

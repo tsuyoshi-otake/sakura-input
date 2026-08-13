@@ -173,6 +173,9 @@ pub enum Request {
     SetUiPlacement {
         session: SessionId,
         anchor: Option<ScreenRect>,
+        /// Screen rectangle of the host's editable area, when the host
+        /// reports one. See [`UiState::document`].
+        document: Option<ScreenRect>,
         renderer_visible: bool,
     },
 }
@@ -277,6 +280,14 @@ pub struct UiState {
     /// Screen rectangle of the active composition. The renderer anchors its
     /// popup below this rectangle and hides it until one is available.
     pub anchor: Option<ScreenRect>,
+    /// Screen rectangle of the host's editable area, when the host reports
+    /// one. "Below the composition" is still inside the box the user is
+    /// typing into whenever that box is taller than one caret line, so the
+    /// renderer needs the box itself to avoid covering it.
+    ///
+    /// `None` whenever the host does not answer, which leaves the renderer
+    /// with exactly the composition-only placement it used before.
+    pub document: Option<ScreenRect>,
     /// `false` when TSF's UI-element manager elected to render candidates
     /// itself. The external renderer must then stay hidden.
     pub renderer_visible: bool,
@@ -460,10 +471,12 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
         Request::SetUiPlacement {
             session,
             anchor,
+            document,
             renderer_visible,
         } => {
             w.write_u64(*session)?;
             w.write_option(anchor, |w, rect| rect.encode(w))?;
+            w.write_option(document, |w, rect| rect.encode(w))?;
             w.write_bool(*renderer_visible)
         }
     }
@@ -529,6 +542,7 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
             w.write_option(&ui.candidates, |w, candidates| candidates.encode(w))?;
             w.write_option(&ui.candidate_detail, |w, detail| detail.encode(w))?;
             w.write_option(&ui.anchor, |w, rect| rect.encode(w))?;
+            w.write_option(&ui.document, |w, rect| rect.encode(w))?;
             w.write_bool(ui.renderer_visible)?;
             w.write_bool(ui.stopping)
         }
@@ -631,6 +645,7 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
         REQ_SET_UI_PLACEMENT => Request::SetUiPlacement {
             session: r.read_u64()?,
             anchor: r.read_option(ScreenRect::decode)?,
+            document: r.read_option(ScreenRect::decode)?,
             renderer_visible: r.read_bool()?,
         },
         other => return Err(Error::BadMsgType(other)),
@@ -690,6 +705,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
                 return Err(Error::TooLarge);
             }
             let anchor = r.read_option(ScreenRect::decode)?;
+            let document = r.read_option(ScreenRect::decode)?;
             let renderer_visible = r.read_bool()?;
             let stopping = r.read_bool()?;
             Response::Ui(UiState {
@@ -699,6 +715,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
                 candidates,
                 candidate_detail,
                 anchor,
+                document,
                 renderer_visible,
                 stopping,
             })
@@ -735,6 +752,7 @@ mod tests {
             candidates: None,
             candidate_detail: Some(detail()),
             anchor: None,
+            document: None,
             renderer_visible: false,
             stopping: false,
         });

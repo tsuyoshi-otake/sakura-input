@@ -283,7 +283,7 @@ impl CandidateWindow {
                 work.bottom.saturating_sub(work.top),
             )
         });
-        let placed = popup_placement(anchor, candidate_layout, detail_layout, work);
+        let placed = popup_placement(anchor, ui.document, candidate_layout, detail_layout, work);
         clear_pending_history_deletes_for_new_revision(
             &mut self.state.pending_history_deletes,
             self.state.revision,
@@ -450,6 +450,14 @@ pub(crate) fn monitor_work_area(anchor: ScreenRect) -> RECT {
     rect
 }
 
+/// Whether a proposed popup rectangle overlaps the host's editable area.
+///
+/// Same exclusive-edge rule as [`covers_composition`]: a popup resting flush
+/// against the box is not covering it.
+fn covers_document(rect: RECT, document: Option<ScreenRect>) -> bool {
+    document.is_some_and(|document| covers_composition(rect, document))
+}
+
 /// Places below the composition when possible, flips above when needed, and
 /// clamps to the selected monitor's (possibly negative) work coordinates.
 ///
@@ -486,6 +494,82 @@ fn place(anchor: ScreenRect, width: i32, height: i32, work: RECT, gap: i32) -> R
     }
 }
 
+/// Chooses the candidate rectangle, preferring one that leaves the host's
+/// editable area uncovered.
+///
+/// Below the composition is the natural place and stays the first choice. It
+/// is only wrong when the box being typed into extends past the caret line —
+/// exactly what `document` describes — because there the popup lands on top
+/// of the text the user is entering. The alternatives then walk outward:
+/// above the composition, just outside the box's bottom or top edge, and
+/// finally beside it, each taken only if it fits the work area whole.
+///
+/// A document that fills the work area — a full-window editor — has no such
+/// alternative, and manufacturing one would drag the popup to a screen edge
+/// far from the caret. That case falls back to [`place`] on purpose: it is
+/// the behaviour every host had before the editable area was known at all,
+/// and the same fallback covers a host that reports no document.
+fn place_candidates(
+    anchor: ScreenRect,
+    document: Option<ScreenRect>,
+    width: i32,
+    height: i32,
+    work: RECT,
+    gap: i32,
+) -> RECT {
+    let fallback = place(anchor, width, height, work, gap);
+    let Some(document) = document else {
+        return fallback;
+    };
+    if !covers_composition(fallback, document) {
+        return fallback;
+    }
+
+    let max_x = (work.right.saturating_sub(width)).max(work.left);
+    let max_y = (work.bottom.saturating_sub(height)).max(work.top);
+    let anchored_x = anchor.left.clamp(work.left, max_x);
+    // Beside the box, the popup can no longer follow the caret horizontally,
+    // so it follows it vertically instead and stays level with the anchor.
+    let anchored_y = anchor.top.clamp(work.top, max_y);
+    let proposals = [
+        // Above the composition: still the closest place to the caret.
+        (
+            anchored_x,
+            anchor.top.saturating_sub(gap).saturating_sub(height),
+        ),
+        // Just outside the box, below then above.
+        (anchored_x, document.bottom.saturating_add(gap)),
+        (
+            anchored_x,
+            document.top.saturating_sub(gap).saturating_sub(height),
+        ),
+        // Beside the box, right then left.
+        (document.right.saturating_add(gap), anchored_y),
+        (
+            document.left.saturating_sub(gap).saturating_sub(width),
+            anchored_y,
+        ),
+    ];
+    for (left, top) in proposals {
+        let rect = RECT {
+            left,
+            top,
+            right: left.saturating_add(width),
+            bottom: top.saturating_add(height),
+        };
+        if rect.left >= work.left
+            && rect.right <= work.right
+            && rect.top >= work.top
+            && rect.bottom <= work.bottom
+            && !covers_composition(rect, document)
+            && !covers_composition(rect, anchor)
+        {
+            return rect;
+        }
+    }
+    fallback
+}
+
 /// Keeps the established candidate rectangle intact, then attaches the
 /// selected-candidate detail to its right, left, or bottom. The detail is
 /// omitted when no complete placement fits the current monitor work area —
@@ -493,17 +577,26 @@ fn place(anchor: ScreenRect, width: i32, height: i32, work: RECT, gap: i32) -> R
 /// is typing, which an auxiliary pane is never worth.
 fn popup_placement(
     anchor: ScreenRect,
+    document: Option<ScreenRect>,
     candidate_layout: Layout,
     detail_layout: Option<DetailLayout>,
     work: RECT,
 ) -> PopupPlacement {
-    let candidates = place(
+    let candidates = place_candidates(
         anchor,
+        document,
         candidate_layout.width,
         candidate_layout.height,
         work,
         candidate_layout.gap,
     );
+    // An auxiliary pane is never worth covering the editable area either --
+    // but only while the list itself managed to clear it. Once the list had
+    // to fall back and cover the box, suppressing the detail as well would
+    // cost the definition without buying back any of the covered text.
+    let keep_document_clear = (!covers_document(candidates, document))
+        .then_some(document)
+        .flatten();
     let detail = detail_layout.and_then(|detail_layout| {
         if detail_layout.width > work.right.saturating_sub(work.left)
             || detail_layout.height > work.bottom.saturating_sub(work.top)
@@ -528,6 +621,7 @@ fn popup_placement(
         if right.right <= work.right
             && right.bottom <= work.bottom
             && !covers_composition(right, anchor)
+            && !covers_document(right, keep_document_clear)
         {
             return Some(right);
         }
@@ -538,7 +632,10 @@ fn popup_placement(
             right: candidates.left,
             bottom: detail_top.saturating_add(detail_layout.height),
         };
-        if left.left >= work.left && left.bottom <= work.bottom && !covers_composition(left, anchor)
+        if left.left >= work.left
+            && left.bottom <= work.bottom
+            && !covers_composition(left, anchor)
+            && !covers_document(left, keep_document_clear)
         {
             return Some(left);
         }
@@ -554,7 +651,10 @@ fn popup_placement(
                 .saturating_add(candidate_layout.gap)
                 .saturating_add(detail_layout.height),
         };
-        (below.bottom <= work.bottom && !covers_composition(below, anchor)).then_some(below)
+        (below.bottom <= work.bottom
+            && !covers_composition(below, anchor)
+            && !covers_document(below, keep_document_clear))
+        .then_some(below)
     });
 
     let window = detail.map_or(candidates, |detail| RECT {
@@ -2604,6 +2704,158 @@ mod tests {
         assert_eq!(pinned_bottom.bottom, work.bottom);
     }
 
+    /// The reported bug, at its measured geometry: a multi-line box whose
+    /// caret sits near the top. "Below the composition" clears the caret
+    /// line and still lands inside the box the user is typing into.
+    #[test]
+    fn a_popup_below_the_caret_line_does_not_land_inside_the_editable_box() {
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_920,
+            bottom: 1_032,
+        };
+        let document = ScreenRect {
+            left: 208,
+            top: 191,
+            right: 1_092,
+            bottom: 772,
+        };
+        let anchor = ScreenRect {
+            left: 216,
+            top: 195,
+            right: 280,
+            bottom: 225,
+        };
+
+        let unaware = place(anchor, 260, 274, work, 4);
+        assert!(
+            covers_composition(unaware, document),
+            "the composition-only placement is the one being fixed"
+        );
+
+        let aware = place_candidates(anchor, Some(document), 260, 274, work, 4);
+        assert!(!covers_composition(aware, document));
+        assert!(!covers_composition(aware, anchor));
+        assert!(aware.left >= work.left && aware.right <= work.right);
+        assert!(aware.top >= work.top && aware.bottom <= work.bottom);
+    }
+
+    /// Each rung of the ladder in turn, so a later one cannot silently
+    /// become the answer for a case an earlier one should have taken.
+    #[test]
+    fn placement_walks_outward_from_the_composition_one_step_at_a_time() {
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_000,
+            bottom: 600,
+        };
+        let gap = 4;
+
+        // A box no taller than the caret line: below is already clear, and
+        // the popup must not move off it.
+        let short = ScreenRect {
+            left: 100,
+            top: 100,
+            right: 400,
+            bottom: 130,
+        };
+        let anchor = ScreenRect {
+            left: 100,
+            top: 100,
+            right: 160,
+            bottom: 130,
+        };
+        assert_eq!(
+            place_candidates(anchor, Some(short), 200, 200, work, gap),
+            place(anchor, 200, 200, work, gap),
+        );
+
+        // A tall box with room under it: the popup clears the box's bottom
+        // edge, which is the nearest placement that leaves the box readable.
+        let high_box = ScreenRect {
+            left: 100,
+            top: 100,
+            right: 400,
+            bottom: 300,
+        };
+        let caret_in_high_box = ScreenRect {
+            left: 100,
+            top: 105,
+            right: 160,
+            bottom: 135,
+        };
+        let below_box = place_candidates(caret_in_high_box, Some(high_box), 200, 100, work, gap);
+        assert_eq!(below_box.top, high_box.bottom + gap);
+
+        // The same box pushed down, so only the space above it is left.
+        let low_box = ScreenRect {
+            left: 100,
+            top: 300,
+            right: 400,
+            bottom: 560,
+        };
+        let caret_in_low_box = ScreenRect {
+            left: 100,
+            top: 305,
+            right: 160,
+            bottom: 335,
+        };
+        let above_box = place_candidates(caret_in_low_box, Some(low_box), 200, 100, work, gap);
+        assert_eq!(above_box.bottom, low_box.top - gap);
+
+        // A box with no room above or below it. Beside it keeps the popup
+        // level with the caret instead of covering what is being typed.
+        let deep_box = ScreenRect {
+            left: 100,
+            top: 50,
+            right: 400,
+            bottom: 550,
+        };
+        let caret_in_deep_box = ScreenRect {
+            left: 100,
+            top: 60,
+            right: 160,
+            bottom: 90,
+        };
+        let beside = place_candidates(caret_in_deep_box, Some(deep_box), 200, 100, work, gap);
+        assert_eq!(beside.left, deep_box.right + gap);
+        assert_eq!(beside.top, caret_in_deep_box.top);
+    }
+
+    /// A document filling the work area — a full-window editor — has no
+    /// placement that clears it. That must cost nothing: the popup keeps
+    /// exactly the geometry it had before the editable area was known.
+    #[test]
+    fn a_document_with_no_clear_placement_keeps_the_previous_behaviour() {
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_000,
+            bottom: 600,
+        };
+        let anchor = ScreenRect {
+            left: 100,
+            top: 100,
+            right: 160,
+            bottom: 130,
+        };
+        let whole_screen = ScreenRect {
+            left: 0,
+            top: 0,
+            right: 1_000,
+            bottom: 600,
+        };
+        let expected = place(anchor, 200, 200, work, 4);
+        assert_eq!(
+            place_candidates(anchor, Some(whole_screen), 200, 200, work, 4),
+            expected,
+        );
+        // And a host that reports no editable area at all is the same case.
+        assert_eq!(place_candidates(anchor, None, 200, 200, work, 4), expected);
+    }
+
     /// A candidate list that flipped above the composition leaves the
     /// bottom detail slot sitting exactly on the text being typed. The
     /// detail must go absent rather than cover it — while a side placement
@@ -2628,7 +2880,8 @@ mod tests {
             right: 480,
             bottom: 390,
         };
-        let placement = popup_placement(anchor, candidate_layout, Some(detail_layout), narrow);
+        let placement =
+            popup_placement(anchor, None, candidate_layout, Some(detail_layout), narrow);
         assert_eq!(placement.window.bottom, anchor.top - candidate_layout.gap);
         assert!(placement.layout.detail.is_none());
 
@@ -2640,7 +2893,7 @@ mod tests {
             right: 1_000,
             bottom: 390,
         };
-        let control = popup_placement(anchor, candidate_layout, Some(detail_layout), wide);
+        let control = popup_placement(anchor, None, candidate_layout, Some(detail_layout), wide);
         let control_detail = control.layout.detail.expect("side detail stays clear");
         assert_eq!(control_detail.left, control.layout.candidates.right);
     }
@@ -2667,7 +2920,7 @@ mod tests {
             right: 1_200,
             bottom: 400,
         };
-        let placement = popup_placement(anchor, candidate_layout, Some(detail_layout), work);
+        let placement = popup_placement(anchor, None, candidate_layout, Some(detail_layout), work);
         assert!(placement.layout.detail.is_none());
     }
 
@@ -2736,6 +2989,7 @@ mod tests {
                     right: 120,
                     bottom: 124,
                 },
+                None,
                 candidate_layout,
                 Some(detail_layout("候補", &detail, dpi, work.bottom - work.top)),
                 work,
@@ -2769,6 +3023,7 @@ mod tests {
                 right: 120,
                 bottom: 104,
             },
+            None,
             candidate_layout,
             Some(detail_layout),
             RECT {
@@ -2790,6 +3045,7 @@ mod tests {
                 right: 420,
                 bottom: 104,
             },
+            None,
             candidate_layout,
             Some(detail_layout),
             RECT {
@@ -2811,6 +3067,7 @@ mod tests {
                 right: 40,
                 bottom: 104,
             },
+            None,
             candidate_layout,
             Some(detail_layout),
             RECT {
@@ -2829,6 +3086,7 @@ mod tests {
                 right: 40,
                 bottom: 624,
             },
+            None,
             candidate_layout,
             Some(detail_layout),
             RECT {

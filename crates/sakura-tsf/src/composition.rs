@@ -14,8 +14,8 @@ use core::mem::ManuallyDrop;
 use windows::Win32::Foundation::{E_UNEXPECTED, RECT};
 use windows::Win32::UI::TextServices::{
     ITfCategoryMgr, ITfComposition, ITfCompositionSink, ITfContext, ITfContextComposition,
-    ITfProperty, ITfRange, GUID_PROP_ATTRIBUTE, TF_AE_NONE, TF_ANCHOR_END, TF_DEFAULT_SELECTION,
-    TF_SELECTION, TF_SELECTIONSTYLE, TS_E_NOLAYOUT,
+    ITfContextView, ITfProperty, ITfRange, GUID_PROP_ATTRIBUTE, TF_AE_NONE, TF_ANCHOR_END,
+    TF_DEFAULT_SELECTION, TF_SELECTION, TF_SELECTIONSTYLE, TS_E_NOLAYOUT,
 };
 use windows_core::{Error, Interface, Result, GUID};
 
@@ -69,6 +69,30 @@ where
             view.GetTextExt(ec, range, &mut rect, &mut clipped)?;
             Ok(rect)
         },
+    )
+}
+
+/// Queries the screen rectangle the host draws this document into.
+///
+/// This is the editable area itself, not the composition inside it. The
+/// renderer needs it because "below the composition" is still inside the box
+/// the user is typing into whenever that box is taller than one caret line,
+/// and a popup there covers the very text being entered.
+///
+/// It fails closed to `Unavailable`: a host that does not answer leaves the
+/// renderer with exactly the composition-only placement it had before.
+pub fn document_rect<Authority>(context: &ITfContext, authority: &mut Authority) -> GeometryResult
+where
+    Authority: FnMut() -> Result<()>,
+{
+    query_document_rect_host_calls(
+        authority,
+        // SAFETY: `context` is the live edit-session context while authority
+        // grants this callback permission to inspect its active view.
+        || unsafe { context.GetActiveView() },
+        // SAFETY: the view came from this current context, and `GetScreenExt`
+        // reads the view's own display surface rather than any range.
+        |view: &ITfContextView| unsafe { view.GetScreenExt() },
     )
 }
 
@@ -257,11 +281,34 @@ where
     GetActiveView: FnOnce() -> Result<View>,
     GetTextExt: FnOnce(&View, &Range) -> Result<RECT>,
 {
-    let queried = (|| {
+    geometry_from((|| {
         let range = checked_host_call(authority, get_range)?;
         let view = checked_host_call(authority, get_active_view)?;
         checked_host_call(authority, || get_text_ext(&view, &range))
-    })();
+    })())
+}
+
+/// The two host calls behind [`document_rect`], gated the same way as the
+/// candidate-geometry sequence so an invalidation during `GetActiveView`
+/// cannot continue into `GetScreenExt`.
+fn query_document_rect_host_calls<View, Authority, GetActiveView, GetScreenExt>(
+    authority: &mut Authority,
+    get_active_view: GetActiveView,
+    get_screen_ext: GetScreenExt,
+) -> GeometryResult
+where
+    Authority: FnMut() -> Result<()>,
+    GetActiveView: FnOnce() -> Result<View>,
+    GetScreenExt: FnOnce(&View) -> Result<RECT>,
+{
+    geometry_from((|| {
+        let view = checked_host_call(authority, get_active_view)?;
+        checked_host_call(authority, || get_screen_ext(&view))
+    })())
+}
+
+/// Turns a host geometry call's outcome into the tri-state the callers act on.
+fn geometry_from(queried: Result<RECT>) -> GeometryResult {
     match queried {
         Ok(rect) => {
             let rect = ScreenRect {

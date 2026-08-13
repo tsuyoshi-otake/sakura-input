@@ -8837,15 +8837,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v14_version_is_rejected() {
+    fn hello_with_the_previous_v15_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 15,
-            "the UiState appearance field adds v15 wire data"
+            PROTOCOL_VERSION, 16,
+            "the UiState document field adds v16 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 14 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 15 }, &mut out);
 
         assert_eq!(
             reply,
@@ -8854,10 +8854,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v15_version_is_accepted() {
+    fn hello_with_v16_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 15,
-            "the UiState appearance field adds v15 wire data"
+            PROTOCOL_VERSION, 16,
+            "the UiState document field adds v16 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();

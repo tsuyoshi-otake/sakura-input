@@ -703,6 +703,9 @@ struct LayoutState {
     /// Preserved across `TS_E_NOLAYOUT`; the popup stays at its last valid
     /// anchor until the subscribed layout callback owns one retry.
     last_anchor: Option<ScreenRect>,
+    /// The editable area the anchor sits inside, kept beside it so a popup
+    /// held at its last valid anchor keeps the box it must not cover.
+    last_document: Option<ScreenRect>,
 }
 
 impl LayoutState {
@@ -712,6 +715,7 @@ impl LayoutState {
     fn retire_geometry_for_lease_rollover(&mut self) {
         self.phase = GeometryPhase::Idle;
         self.last_anchor = None;
+        self.last_document = None;
     }
 }
 
@@ -2433,6 +2437,7 @@ impl TextService {
         let subscription = self.layout.try_borrow_mut().ok().and_then(|mut layout| {
             layout.phase = GeometryPhase::Idle;
             layout.last_anchor = None;
+            layout.last_document = None;
             self.layout_abandon_pending.set(None);
             layout.subscription.take()
         });
@@ -2624,6 +2629,7 @@ impl TextService {
         abandon_matching_geometry(&mut layout.phase, installed, claimed);
         if previous != layout.phase {
             layout.last_anchor = None;
+            layout.last_document = None;
         }
         Ok(())
     }
@@ -2650,6 +2656,7 @@ impl TextService {
         let terminalized = previous != layout.phase;
         if terminalized {
             layout.last_anchor = None;
+            layout.last_document = None;
         }
         self.layout_abandon_pending.set(None);
         Ok(Some(terminalized))
@@ -2686,6 +2693,7 @@ impl TextService {
         context: &ITfContext,
         lease: UiLease,
         result: composition::GeometryResult,
+        document: Option<ScreenRect>,
     ) -> Result<()> {
         if !self.ui_lease_is_current(context, lease) {
             self.terminalize_layout_query(context, lease);
@@ -2700,7 +2708,7 @@ impl TextService {
             self.terminalize_layout_query(context, lease);
             return Ok(());
         }
-        let anchor = {
+        let (anchor, document) = {
             let mut layout = self.layout.try_borrow_mut().map_err(|_| reentrancy())?;
             let is_current = layout.subscription.as_ref().is_some_and(|subscription| {
                 subscription.context.as_raw() == context.as_raw() && subscription.lease == lease
@@ -2712,6 +2720,7 @@ impl TextService {
                 composition::GeometryResult::Ready(rect) => {
                     layout.phase = GeometryPhase::Ready;
                     layout.last_anchor = Some(rect);
+                    layout.last_document = document;
                 }
                 composition::GeometryResult::NoLayout => {
                     // No immediate retry. `ITfTextLayoutSink::OnLayoutChange`
@@ -2721,16 +2730,17 @@ impl TextService {
                 composition::GeometryResult::Unavailable => {
                     layout.phase = GeometryPhase::Unavailable;
                     layout.last_anchor = None;
+                    layout.last_document = None;
                 }
             }
-            layout.last_anchor
+            (layout.last_anchor, layout.last_document)
         };
         if !self.ui_lease_is_current(context, lease) {
             self.terminalize_layout_query(context, lease);
             return Ok(());
         }
         let mut engine = self.engine.try_borrow_mut().map_err(|_| reentrancy())?;
-        let _ = engine.set_ui_placement(anchor, visible);
+        let _ = engine.set_ui_placement(anchor, document, visible);
         Ok(())
     }
 
@@ -3614,6 +3624,7 @@ impl TextService_Impl {
                             context,
                             lease,
                             composition::GeometryResult::Unavailable,
+                            None,
                         )
                         .is_err()
                     {
@@ -3650,6 +3661,21 @@ impl TextService_Impl {
             // running at all.
             let result =
                 composition::candidate_rect(&owned_context, ec, handle.as_ref(), &mut authority);
+            // The editable area only matters when there is a composition to
+            // place a popup against, and it is strictly supplementary: any
+            // non-ready outcome leaves the renderer with the composition-only
+            // placement rather than blocking the anchor it already has.
+            let document = match result {
+                composition::GeometryResult::Ready(_) => {
+                    match composition::document_rect(&owned_context, &mut authority) {
+                        composition::GeometryResult::Ready(rect) => Some(rect),
+                        composition::GeometryResult::NoLayout
+                        | composition::GeometryResult::Unavailable => None,
+                    }
+                }
+                composition::GeometryResult::NoLayout
+                | composition::GeometryResult::Unavailable => None,
+            };
             // Any failed geometry authority gate produces a non-ready safe
             // terminal outcome. Recheck here to distinguish a stale lease,
             // which must abandon the claimed query rather than publish
@@ -3660,9 +3686,10 @@ impl TextService_Impl {
                     .terminalize_layout_query(&owned_context, lease);
                 return Ok(());
             }
-            let completed = owner
-                .get_impl()
-                .complete_layout_query(&owned_context, lease, result);
+            let completed =
+                owner
+                    .get_impl()
+                    .complete_layout_query(&owned_context, lease, result, document);
             if completed.is_err() {
                 // The asynchronous caller cannot observe this delayed error.
                 // Transfer it to the bounded deferred/lifecycle terminal owner
@@ -3679,7 +3706,12 @@ impl TextService_Impl {
             // gives us another opportunity.
             if service.ui_lease_is_current(context, lease) {
                 if service
-                    .complete_layout_query(context, lease, composition::GeometryResult::Unavailable)
+                    .complete_layout_query(
+                        context,
+                        lease,
+                        composition::GeometryResult::Unavailable,
+                        None,
+                    )
                     .is_err()
                 {
                     service.terminalize_layout_query(context, lease);
