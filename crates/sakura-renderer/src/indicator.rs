@@ -43,11 +43,11 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetGUIThreadInfo,
-    GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, KillTimer, RegisterClassW,
-    SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW, GUITHREADINFO,
-    GWLP_USERDATA, HWND_TOPMOST, SWP_NOACTIVATE, SW_HIDE, SW_SHOWNOACTIVATE, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_DESTROY, WM_PAINT, WM_TIMER, WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_POPUP,
+    GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, KillTimer,
+    RegisterClassW, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW,
+    GUITHREADINFO, GWLP_USERDATA, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE,
+    SW_SHOWNOACTIVATE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_PAINT, WM_TIMER, WNDCLASSW,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use sakura_proto::{AppearanceTheme, Mode, ScreenRect, UiState};
@@ -158,20 +158,7 @@ impl Indicator {
             SetWindowLongPtrW(self.window, GWLP_USERDATA, encode_state(mode, theme));
         }
 
-        let (logical_width, logical_height) = logical_size();
-        let width = scaled(self.window, logical_width);
-        let height = scaled(self.window, logical_height);
-        let gap = scaled(self.window, CARET_GAP_AT_96_DPI);
-
-        let anchor = ui
-            .anchor
-            .filter(|rect| rect.is_valid())
-            .map(rect_of)
-            .or_else(caret_rect);
-        let work = candidate::monitor_work_area(screen_rect_of(
-            anchor.or_else(foreground_rect).unwrap_or_default(),
-        ));
-        let (x, y) = placement_in(anchor, candidate_popup, width, height, gap, work);
+        let (x, y, width, height) = self.geometry(ui, candidate_popup);
         // SAFETY: every argument is a plain value; `HWND_TOPMOST` is the
         // documented ordering handle.
         unsafe {
@@ -189,6 +176,60 @@ impl Indicator {
             let _ = ShowWindow(self.window, SW_SHOWNOACTIVATE);
             SetTimer(Some(self.window), HIDE_TIMER, LINGER_MS, None);
         }
+    }
+
+    /// Moves an already-visible bar to where it now belongs, without
+    /// reviving a hidden one or extending the linger of a visible one.
+    ///
+    /// The bar places itself once, at the moment the mode changes, against
+    /// whatever was on screen then. Everything it avoids can move
+    /// afterwards: the caret travels as the user keeps typing, and the
+    /// candidate popup can appear, resize, or move under the bar during the
+    /// same linger. Without this the bar would sit at its original spot
+    /// covering the popup — the exact overlap `placement_in` exists to
+    /// prevent — until the timer eventually took it away.
+    ///
+    /// The visibility check is the whole safety story: no `ShowWindow` and
+    /// no `SetTimer` here means a UI update can never make the bar appear,
+    /// reappear, or linger past the interval `show` set for it.
+    pub fn reposition_if_visible(&self, ui: &UiState, candidate_popup: Option<RECT>) {
+        // SAFETY: `window` is live for this type's lifetime.
+        if !unsafe { IsWindowVisible(self.window) }.as_bool() {
+            return;
+        }
+        let (x, y, width, height) = self.geometry(ui, candidate_popup);
+        // SAFETY: plain values. `SWP_NOZORDER` keeps the topmost position
+        // `show` established rather than re-asserting it on every update.
+        unsafe {
+            let _ = SetWindowPos(
+                self.window,
+                None,
+                x,
+                y,
+                width,
+                height,
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
+        }
+    }
+
+    /// Where and how big the bar should be right now, in physical pixels.
+    fn geometry(&self, ui: &UiState, candidate_popup: Option<RECT>) -> (i32, i32, i32, i32) {
+        let (logical_width, logical_height) = logical_size();
+        let width = scaled(self.window, logical_width);
+        let height = scaled(self.window, logical_height);
+        let gap = scaled(self.window, CARET_GAP_AT_96_DPI);
+
+        let anchor = ui
+            .anchor
+            .filter(|rect| rect.is_valid())
+            .map(rect_of)
+            .or_else(caret_rect);
+        let work = candidate::monitor_work_area(screen_rect_of(
+            anchor.or_else(foreground_rect).unwrap_or_default(),
+        ));
+        let (x, y) = placement_in(anchor, candidate_popup, width, height, gap, work);
+        (x, y, width, height)
     }
 }
 
@@ -646,6 +687,65 @@ mod tests {
         assert_eq!(
             placement_in(Some(caret), None, 220, 28, 8, WORK),
             (400, 1_000 - 8 - 28)
+        );
+    }
+
+    fn ui_state_anchored_at(left: i32, top: i32) -> UiState {
+        UiState {
+            revision: 1,
+            appearance_theme: AppearanceTheme::Light,
+            mode: Some(Mode::Hiragana),
+            candidates: None,
+            candidate_detail: None,
+            anchor: Some(ScreenRect {
+                left,
+                top,
+                right: left + 2,
+                bottom: top + 24,
+            }),
+            renderer_visible: true,
+            stopping: false,
+        }
+    }
+
+    /// The two halves of the guarantee, on a real window: a hidden bar is
+    /// never moved (and never shown) by a repositioning, and a visible one
+    /// follows the caret without the linger timer being touched.
+    #[test]
+    #[ignore = "creates a real top-level window on the desktop"]
+    fn repositioning_moves_a_visible_bar_and_leaves_a_hidden_one_alone() {
+        let indicator = Indicator::new().expect("indicator window");
+        let window = indicator.window;
+        let rect_now = || {
+            let mut rect = RECT::default();
+            // SAFETY: the window is alive for `indicator`'s lifetime.
+            unsafe { GetWindowRect(window, &mut rect) }.expect("window rect");
+            rect
+        };
+        // SAFETY: as above.
+        let visible = || unsafe { IsWindowVisible(window) }.as_bool();
+
+        let before = rect_now();
+        indicator.reposition_if_visible(&ui_state_anchored_at(500, 400), None);
+        assert!(!visible(), "repositioning must never show the bar");
+        assert_eq!(rect_now(), before, "a hidden bar has no placement to keep");
+
+        indicator.show(
+            Mode::Hiragana,
+            AppearanceTheme::Light,
+            &ui_state_anchored_at(500, 400),
+            None,
+        );
+        assert!(visible());
+        let placed = rect_now();
+
+        indicator.reposition_if_visible(&ui_state_anchored_at(500, 700), None);
+        let moved = rect_now();
+        assert!(visible(), "repositioning must never hide the bar");
+        assert_eq!(moved.bottom - moved.top, placed.bottom - placed.top);
+        assert!(
+            moved.top > placed.top,
+            "the bar must follow the caret it was placed against: {placed:?} -> {moved:?}"
         );
     }
 

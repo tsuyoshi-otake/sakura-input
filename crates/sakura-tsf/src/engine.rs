@@ -354,6 +354,15 @@ impl Engine {
                 link.desynchronized = false;
                 true
             }
+            // The reverted composition may have been one reconversion had
+            // forced to Hiragana, in which case the engine puts the user's
+            // mode back and says so here. There is no `Output` on this path
+            // to carry it, so the reply is the only place the mode appears.
+            Ok(Response::InputMode { mode }) => {
+                link.mode = mode;
+                link.desynchronized = false;
+                true
+            }
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Revert);
                 link.desynchronized = true;

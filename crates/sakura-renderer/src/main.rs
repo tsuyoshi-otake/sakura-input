@@ -367,6 +367,13 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 {
                     app.indicator
                         .show(mode, theme, &state, app.candidates.popup_rect());
+                } else {
+                    // No new mode to announce, but the caret and the popup
+                    // this update just moved are exactly what a bar already
+                    // on screen was placed against. Repositioning keeps that
+                    // placement true; it cannot show or re-linger the bar.
+                    app.indicator
+                        .reposition_if_visible(&state, app.candidates.popup_rect());
                 }
                 app.shown_indicator = next;
             }

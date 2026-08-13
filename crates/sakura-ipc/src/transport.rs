@@ -58,6 +58,23 @@ pub const MAX_INSTANCES: u32 = 64;
 /// write. It is a hint: the kernel grows past it when it has to.
 const PIPE_BUFFER_BYTES: u32 = 8 * 1024;
 
+/// How an accept ended.
+///
+/// Separating "no client on the other end" from a genuine failure is what
+/// keeps a routine client race from costing an acceptor: the server's whole
+/// worker used to end on any error [`PipeInstance::wait_for_client`]
+/// returned, so a host process that connected and exited immediately took a
+/// pipe instance with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Accept {
+    /// A client is on the other end and the connection can be served.
+    Connected,
+    /// A client reached the instance and was gone before it could be
+    /// served. The instance is still healthy; it has to be disconnected
+    /// before it can accept again.
+    ClientGone,
+}
+
 /// Why an operation on a connection stopped.
 #[derive(Debug)]
 pub enum Fault {
@@ -195,13 +212,22 @@ impl PipeInstance {
     /// won the race between `CreateNamedPipeW` and this call and is
     /// already on the other end. Treating it as an error is the classic way
     /// to drop every connection that arrives too quickly.
-    pub fn wait_for_client(&self) -> windows::core::Result<()> {
+    ///
+    /// `ERROR_NO_DATA` is the other end of that same race and is not a
+    /// failure either: a client connected and closed its handle before this
+    /// call ran, so the instance is holding a connection that no longer has
+    /// anyone on it. Windows' remedy is to disconnect and accept again,
+    /// which is why it is reported as [`Accept::ClientGone`] rather than as
+    /// an error — a host process that exits the instant it connects must
+    /// cost nothing more than one wasted accept.
+    pub fn wait_for_client(&self) -> windows::core::Result<Accept> {
         // SAFETY: `handle` is a live pipe instance owned by this struct.
         // The overlapped pointer is null, which is what makes the call
         // block, as the pipe was created without `FILE_FLAG_OVERLAPPED`.
         match unsafe { ConnectNamedPipe(self.handle, None) } {
-            Ok(()) => Ok(()),
-            Err(error) if is(&error, ERROR_PIPE_CONNECTED) => Ok(()),
+            Ok(()) => Ok(Accept::Connected),
+            Err(error) if is(&error, ERROR_PIPE_CONNECTED) => Ok(Accept::Connected),
+            Err(error) if is(&error, ERROR_NO_DATA) => Ok(Accept::ClientGone),
             Err(error) => Err(error),
         }
     }
@@ -397,6 +423,59 @@ mod tests {
             Err(Fault::Disconnected) => {}
             other => panic!("expected a disconnect, got {other:?}"),
         }
+        client.join().expect("client thread");
+    }
+
+    /// A host process that connects and exits before the server reaches
+    /// the accept leaves the instance holding a connection to nobody.
+    /// Windows answers the accept with `ERROR_NO_DATA`, and reporting that
+    /// as an error used to end the engine's acceptor — and leak its
+    /// instance slot — over an ordinary client race.
+    #[test]
+    fn a_client_gone_before_the_accept_is_reported_rather_than_failing() {
+        let name = scratch_name("gone_before_accept");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let server = PipeInstance::create(&name, &security, true).expect("create");
+
+        // SAFETY: the handle came from `CreateFileW` and is closed once,
+        // before the server has accepted anything on the instance.
+        unsafe {
+            let handle = connect(&name).expect("connect");
+            let _ = CloseHandle(handle);
+        }
+
+        match server.wait_for_client() {
+            Ok(Accept::ClientGone) => {}
+            other => panic!("expected a departed client, got {other:?}"),
+        }
+
+        // And the instance is still usable, which is the whole point: the
+        // race costs one accept, not the acceptor.
+        server.disconnect();
+        let client_name = name.clone();
+        let client = std::thread::spawn(move || {
+            let handle = connect(&client_name).expect("connect");
+            let mut frame = Vec::new();
+            encode_request(&Request::Ping, 11, &mut frame).expect("encode");
+            let mut written = 0u32;
+            // SAFETY: `frame` outlives the call and `written` is a valid
+            // out-parameter.
+            unsafe {
+                WriteFile(handle, Some(&frame), Some(&mut written), None).expect("write");
+                let _ = CloseHandle(handle);
+            }
+        });
+
+        assert_eq!(
+            server.wait_for_client().expect("accept"),
+            Accept::Connected,
+            "the instance stopped accepting after a departed client"
+        );
+        let mut buf = Vec::new();
+        let payload = server.read_frame(&mut buf).expect("read");
+        let (id, request) = sakura_proto::decode_request(payload).expect("decode");
+        assert_eq!(id, 11);
+        assert_eq!(request, Request::Ping);
         client.join().expect("client thread");
     }
 

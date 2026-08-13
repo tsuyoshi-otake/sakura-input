@@ -47,7 +47,7 @@ use sakura_proto::{
     encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
 };
 
-use sakura_ipc::{security, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
+use sakura_ipc::{security, Accept, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
@@ -87,7 +87,15 @@ struct RuntimeServiceSnapshot {
 struct Shared {
     name: String,
     sddl: String,
-    /// Instances created so far, capped at [`MAX_INSTANCES`].
+    /// Instances that exist right now, capped at [`MAX_INSTANCES`].
+    ///
+    /// This is a live count, not a total: [`InstanceSlot`] gives the slot
+    /// back when a worker ends, however it ends. It used to be incremented
+    /// only, which made every worker that returned early — a failed accept,
+    /// unusable engine data — a permanent loss of capacity, until
+    /// [`ensure_spare_instance`] could no longer keep an acceptor waiting
+    /// and arriving clients blocked in `CreateFileW` against a server that
+    /// still looked healthy.
     created: AtomicU32,
     /// Acceptors currently blocked waiting for a client.
     idle: AtomicU32,
@@ -525,26 +533,55 @@ const SHUTDOWN_GRACE: Duration = Duration::from_millis(250);
 /// from rediscovering this at runtime.
 const WORKER_STACK_BYTES: usize = 128 * 1024;
 
+/// One instance's claim on the [`MAX_INSTANCES`] cap.
+///
+/// The claim is released in `Drop` rather than at each exit, because
+/// [`worker`] has several of those and the next one added would otherwise
+/// silently leak a slot. A leaked slot has no symptom until the cap is
+/// reached, at which point the engine stops accepting new clients while
+/// every existing connection keeps working — the hardest kind of failure to
+/// attribute after the fact.
+struct InstanceSlot {
+    shared: Arc<Shared>,
+}
+
+impl InstanceSlot {
+    /// Claims a slot. Paired with the instance the caller just created, so
+    /// the count and the live instances move together.
+    fn claim(shared: &Arc<Shared>) -> Self {
+        shared.created.fetch_add(1, Ordering::Relaxed);
+        InstanceSlot {
+            shared: Arc::clone(shared),
+        }
+    }
+}
+
+impl Drop for InstanceSlot {
+    fn drop(&mut self) {
+        self.shared.created.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 /// Creates one pipe instance and the thread that serves it.
 fn spawn_worker(shared: &Arc<Shared>, first: bool) -> windows::core::Result<()> {
     let descriptor = Descriptor::from_sddl(&shared.sddl)?;
     let instance = PipeInstance::create(&shared.name, &descriptor, first)?;
-    shared.created.fetch_add(1, Ordering::Relaxed);
+    // Claimed before the thread exists so the cap can never be exceeded by
+    // a spawn that is still in flight; released by `Drop` on either path
+    // below — the failed spawn here, or the worker ending later.
+    let slot = InstanceSlot::claim(shared);
     let owned = Arc::clone(shared);
     let spawned = std::thread::Builder::new()
         .name("sakura-pipe".to_owned())
         .stack_size(WORKER_STACK_BYTES)
-        .spawn(move || worker(owned, instance));
+        .spawn(move || worker(owned, instance, slot));
 
     match spawned {
         Ok(_) => Ok(()),
-        Err(error) => {
-            // The instance has no thread to accept on it, so it must not
-            // count towards the cap. Its handle is already closed: the
-            // closure that owned it was dropped when the spawn failed.
-            shared.created.fetch_sub(1, Ordering::Relaxed);
-            Err(thread_failure(&error))
-        }
+        // The instance has no thread to accept on it, so it must not count
+        // towards the cap. Both it and the slot are already released: the
+        // closure that owned them was dropped when the spawn failed.
+        Err(error) => Err(thread_failure(&error)),
     }
 }
 
@@ -563,8 +600,33 @@ fn thread_failure(error: &std::io::Error) -> windows::core::Error {
     }
 }
 
+/// How many accepts in a row may end with no client on the other end
+/// before the instance is treated as unusable.
+///
+/// A client that connects and exits immediately is ordinary and must cost
+/// nothing but one wasted accept. An instance that reports it without ever
+/// producing a client is not ordinary, and retrying it forever would be a
+/// spin at 100% of a core — the failure mode that makes an IME feel like a
+/// hardware fault. The count resets on every served connection, so a busy
+/// engine cannot reach it by accumulating unrelated races.
+const MAX_CONSECUTIVE_EMPTY_ACCEPTS: u32 = 16;
+
+/// Whether an accept that produced no client should end the worker.
+///
+/// The count is of *consecutive* empty accepts and is reset by every served
+/// connection, so this asks "is this instance producing clients at all",
+/// not "has this engine seen many client races".
+const fn empty_accept_is_fatal(consecutive: u32) -> bool {
+    consecutive >= MAX_CONSECUTIVE_EMPTY_ACCEPTS
+}
+
 /// One instance's whole life: accept, serve, disconnect, repeat.
-fn worker(shared: Arc<Shared>, instance: PipeInstance) {
+///
+/// `slot` is this instance's claim on the [`MAX_INSTANCES`] cap. It is
+/// owned here and nowhere else, so every way out of this function — a
+/// return below, a panic, the loop ending — gives the slot back.
+fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
+    let _slot = slot;
     let configuration = shared.configuration_snapshot();
     let dispatcher = match (
         shared.conversion.as_ref(),
@@ -606,13 +668,35 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance) {
     }
     let mut connection = Buffers::new();
 
+    let mut empty_accepts = 0u32;
     loop {
         shared.idle.fetch_add(1, Ordering::Relaxed);
         let accepted = instance.wait_for_client();
         shared.idle.fetch_sub(1, Ordering::Relaxed);
-        if let Err(error) = accepted {
-            report(&shared, format_args!("accept failed: {error}"));
-            return;
+        match accepted {
+            Ok(Accept::Connected) => empty_accepts = 0,
+            // The client was gone before it could be served. The instance
+            // is still healthy, but it is holding a connection to nobody
+            // and `ConnectNamedPipe` would report the same thing again
+            // until it is released — so disconnect first, then accept
+            // again. Serving nothing here would read from a dead peer and
+            // reach the same place by a longer route.
+            Ok(Accept::ClientGone) => {
+                empty_accepts += 1;
+                if empty_accept_is_fatal(empty_accepts) {
+                    report(
+                        &shared,
+                        format_args!("accept produced no client {empty_accepts} times in a row"),
+                    );
+                    return;
+                }
+                instance.disconnect();
+                continue;
+            }
+            Err(error) => {
+                report(&shared, format_args!("accept failed: {error}"));
+                return;
+            }
         }
 
         ensure_spare_instance(&shared);
@@ -955,6 +1039,7 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sakura_ipc::Client;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1294,6 +1379,93 @@ mod tests {
             MAX_INSTANCES,
             "the pool grew past the cap the pipe was created with"
         );
+    }
+
+    /// The cap only means anything if a slot comes back. `created` used to
+    /// be incremented only, so every worker that ended took a slot with it
+    /// and the engine crept towards refusing new clients while looking
+    /// perfectly healthy.
+    #[test]
+    fn an_instance_slot_is_released_when_it_is_dropped() {
+        let server = Server::new(false).expect("this process has a token");
+        {
+            let _slot = InstanceSlot::claim(&server.shared);
+            assert_eq!(server.shared.created.load(Ordering::Relaxed), 1);
+        }
+        assert_eq!(
+            server.shared.created.load(Ordering::Relaxed),
+            0,
+            "an instance that no longer exists still counts against the cap"
+        );
+    }
+
+    /// The same rule through the real worker: a served connection that ends
+    /// the worker must give the slot back, not merely stop using it.
+    #[test]
+    fn a_worker_that_ends_gives_its_instance_slot_back() {
+        let name = unique_test_pipe("slot-release");
+        let server = Server::new(false)
+            .expect("this process has a token")
+            .with_explicit_test_pipe(name.clone());
+        let shared = Arc::clone(&server.shared);
+        // Claim an acceptor is already waiting, so serving the connection
+        // below does not make this worker add a second instance: the
+        // assertion is about the one slot this worker owns.
+        shared.idle.store(1, Ordering::Relaxed);
+
+        let descriptor = Descriptor::from_sddl(&shared.sddl).expect("a valid descriptor");
+        let instance =
+            PipeInstance::create(&shared.name, &descriptor, true).expect("the first instance");
+        let slot = InstanceSlot::claim(&shared);
+        assert_eq!(shared.created.load(Ordering::Relaxed), 1);
+
+        let owned = Arc::clone(&shared);
+        let serving = std::thread::spawn(move || worker(owned, instance, slot));
+
+        let mut client = Client::connect_to(&name, Duration::from_secs(5)).expect("a connection");
+        let reply = client
+            .call(&Request::Shutdown, Duration::from_secs(5))
+            .expect("an answer to the shutdown request");
+        assert!(matches!(reply, Response::Ok));
+        drop(client);
+        serving.join().expect("the worker thread ended");
+
+        assert_eq!(
+            shared.created.load(Ordering::Relaxed),
+            0,
+            "a worker that ended kept its instance slot"
+        );
+    }
+
+    /// A client that connects and is gone before it can be served is
+    /// ordinary — a host process exiting at the wrong moment — and must
+    /// cost one wasted accept, not the acceptor. The bound is what keeps
+    /// the same answer from an unusable instance from becoming a spin.
+    #[test]
+    fn one_departed_client_keeps_the_acceptor_and_a_stuck_instance_does_not() {
+        assert!(
+            !empty_accept_is_fatal(1),
+            "an ordinary client race ended the acceptor"
+        );
+        assert!(
+            !empty_accept_is_fatal(MAX_CONSECUTIVE_EMPTY_ACCEPTS - 1),
+            "the bound must be a ceiling, not a hair trigger"
+        );
+        assert!(
+            empty_accept_is_fatal(MAX_CONSECUTIVE_EMPTY_ACCEPTS),
+            "an instance that never produces a client would be retried forever"
+        );
+    }
+
+    fn unique_test_pipe(purpose: &str) -> String {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|since| since.as_nanos())
+            .unwrap_or_default();
+        format!(
+            r"\\.\pipe\SakuraInputEngineTest-{purpose}-{}-{stamp}",
+            std::process::id()
+        )
     }
 
     /// The other half of the same rule: a worker only adds an instance

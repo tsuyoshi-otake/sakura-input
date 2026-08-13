@@ -964,7 +964,9 @@ fn repair_file(path: &Path) -> io::Result<()> {
     if bytes.is_empty() {
         return ensure_file(path);
     }
-    let (_, valid_end) = scan_bytes(&bytes)?;
+    // The offset is the whole answer here, so the records are decoded for
+    // validation and dropped rather than collected.
+    let valid_end = scan_frames(&bytes, None)?;
     if (valid_end as u64) < file_len {
         let file = OpenOptions::new().write(true).open(path)?;
         file.set_len(valid_end as u64)?;
@@ -982,6 +984,24 @@ fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
 }
 
 fn scan_bytes(bytes: &[u8]) -> io::Result<(Vec<InputHistoryRecord>, usize)> {
+    let mut records = Vec::new();
+    let valid_end = scan_frames(bytes, Some(&mut records))?;
+    Ok((records, valid_end))
+}
+
+/// Walks the frames and returns the offset one past the last valid one.
+///
+/// `records` is where the decoded records go when the caller wants them.
+/// Passing `None` decodes and drops each one instead, which is what
+/// [`repair_file`] needs: it only ever uses the offset, and materializing a
+/// 64 MiB file's worth of records — hundreds of megabytes of `String`s —
+/// just to ask where the damage starts is an allocation spike at engine
+/// startup for an answer nobody reads. Decoding still happens either way;
+/// a record that will not decode is exactly what ends the valid region.
+fn scan_frames(
+    bytes: &[u8],
+    mut records: Option<&mut Vec<InputHistoryRecord>>,
+) -> io::Result<usize> {
     if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
         return Err(invalid_data("invalid input history header"));
     }
@@ -989,7 +1009,6 @@ fn scan_bytes(bytes: &[u8]) -> io::Result<(Vec<InputHistoryRecord>, usize)> {
     if version != INPUT_HISTORY_FORMAT_VERSION {
         return Err(invalid_data("unsupported input history format"));
     }
-    let mut records = Vec::new();
     let mut offset = HEADER_LEN;
     while offset + FRAME_HEADER_LEN <= bytes.len() {
         let length = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
@@ -1011,10 +1030,12 @@ fn scan_bytes(bytes: &[u8]) -> io::Result<(Vec<InputHistoryRecord>, usize)> {
         let Ok(record) = InputHistoryRecord::decode(&payload) else {
             break;
         };
-        records.push(record);
+        if let Some(records) = records.as_deref_mut() {
+            records.push(record);
+        }
         offset = payload_end;
     }
-    Ok((records, offset))
+    Ok(offset)
 }
 
 fn compact_file(path: &Path) -> io::Result<()> {

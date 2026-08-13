@@ -537,16 +537,22 @@ impl Converter {
                 let last = base.segments().last().copied().unwrap_or(first);
                 // The variant re-spells the same words the base candidate
                 // covered, so its single segment keeps the base's per-word
-                // statistics rather than counting as one word.
-                let (word_count, it_word_count) =
-                    base.segments()
-                        .iter()
-                        .fold((0u8, 0u8), |(words, it_words), segment| {
-                            (
-                                words.saturating_add(segment.word_count),
-                                it_words.saturating_add(segment.it_word_count),
-                            )
-                        });
+                // statistics rather than counting as one word. Its flags are
+                // the union for the same reason the fused-segment path takes
+                // a union: a property that held for any word the variant
+                // covers still holds for the one segment now covering it, and
+                // taking only the first segment's flags silently dropped
+                // whatever the later ones carried.
+                let (word_count, it_word_count, flags) = base.segments().iter().fold(
+                    (0u8, 0u8, EntryFlags::NONE),
+                    |(words, it_words, flags), segment| {
+                        (
+                            words.saturating_add(segment.word_count),
+                            it_words.saturating_add(segment.it_word_count),
+                            flags | segment.flags,
+                        )
+                    },
+                );
                 segments
                     .push(ConversionSegment {
                         reading_start: 0,
@@ -557,7 +563,7 @@ impl Converter {
                             .map_err(|_| ConversionError::OutputTooLong)?,
                         left_id: first.left_id,
                         right_id: last.right_id,
-                        flags: first.flags,
+                        flags,
                         word_count,
                         it_word_count,
                     })

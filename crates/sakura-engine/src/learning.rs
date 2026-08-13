@@ -9,7 +9,7 @@
 #[cfg(test)]
 use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 #[cfg(windows)]
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -741,7 +741,22 @@ impl LearningService {
         let forget_artifacts = recover_forget_artifacts_at_startup(path)?;
         create_if_missing(path)?;
 
-        let mut bytes = fs::read(path)?;
+        // Every append checks the same ceiling, so bytes past it can only be
+        // corruption or external tampering — and startup is the one place
+        // that must survive them. Reading is bounded here rather than
+        // refused, because `open` is allowed to discard an unusable tail:
+        // that is what its recovery does, and `replay`/`upgrade_to_current`
+        // both stop at the first record they cannot parse, so a cap landing
+        // mid-record loses nothing beyond the tail being dropped anyway.
+        let file_len = fs::metadata(path)?.len();
+        let mut bytes = Vec::new();
+        File::open(path)?
+            .take(MAX_LEARNING_LOG_BYTES)
+            .read_to_end(&mut bytes)?;
+        // Counted against the real file length, not the buffer: the bytes
+        // never read are discarded by the truncation below and have to be
+        // reported as recovered, or an oversized log would look clean.
+        let over_cap = file_len.saturating_sub(bytes.len() as u64);
         let version = read_header(&bytes)?;
         if matches!(version, FORMAT_VERSION_1 | FORMAT_VERSION_2) {
             bytes = upgrade_to_current(&bytes, version)?;
@@ -761,7 +776,12 @@ impl LearningService {
             &mut index,
             &mut prediction_history,
         )?;
-        let recovered = bytes.len().saturating_sub(last_good);
+        // `over_cap` is zero unless the file was oversized; when it is not,
+        // `last_good` indexes the capped buffer (or, after an upgrade, the
+        // rewritten one), so the truncation below drops both the unparseable
+        // tail and everything past the cap in a single `set_len`.
+        let recovered = over_cap
+            .saturating_add(u64::try_from(bytes.len().saturating_sub(last_good)).unwrap_or(0));
         let file = OpenOptions::new().read(true).write(true).open(path)?;
         if recovered > 0 {
             file.set_len(u64::try_from(last_good).unwrap_or(u64::MAX))?;
@@ -787,7 +807,7 @@ impl LearningService {
             state: Mutex::new(state),
             generation: AtomicU64::new(0),
             skipped_writes: AtomicU64::new(0),
-            recovered_tail_bytes: AtomicU64::new(u64::try_from(recovered).unwrap_or(u64::MAX)),
+            recovered_tail_bytes: AtomicU64::new(recovered),
             maintenance_failures: AtomicU64::new(0),
         })
     }
@@ -883,7 +903,7 @@ impl LearningService {
         })?;
         file.sync_data()?;
 
-        let source = fs::read(&path)?;
+        let source = read_bounded_for_rewrite(&path)?;
         if read_header(&source)? != LEARNING_FORMAT_VERSION {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1313,6 +1333,28 @@ pub fn default_path() -> io::Result<PathBuf> {
         .join("SakuraInput")
         .join("learning")
         .join("log.bin"))
+}
+
+/// Reads a learning log that a caller is about to rewrite from.
+///
+/// Unlike [`LearningService::open`], compaction and exact prediction deletion
+/// replace the file with what they read, so a file larger than the ceiling
+/// must refuse the operation rather than quietly write a truncated prefix
+/// over records the user has not been told were lost. Reading one byte past
+/// the ceiling is what makes the check an answer about the file rather than
+/// about a `metadata` call that could race the read.
+fn read_bounded_for_rewrite(path: &Path) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_LEARNING_LOG_BYTES.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_LEARNING_LOG_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "learning log exceeds its hard size bound",
+        ));
+    }
+    Ok(bytes)
 }
 
 /// Reads the verified portion of a learning log without mutating it.
@@ -1877,7 +1919,7 @@ fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) ->
     if let Some(file) = state.log.file.as_ref() {
         file.sync_data()?;
     }
-    let source = fs::read(&path)?;
+    let source = read_bounded_for_rewrite(&path)?;
     if read_header(&source)? != LEARNING_FORMAT_VERSION {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2444,6 +2486,60 @@ mod tests {
         assert_eq!(fs::metadata(&path).expect("metadata").len(), good_len);
         let preference = recovered.preference("かな", 3, [("仮名", 4), ("加奈", 4)]);
         assert_eq!(preference.exact, Some(1));
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    /// The read that runs at every engine start used to be unbounded, so a
+    /// log grown past its ceiling by corruption or tampering was loaded
+    /// whole into memory. The excess is discarded now — and counted, since
+    /// a recovery total that omits it would describe an oversized log as
+    /// clean.
+    #[test]
+    fn an_oversized_log_is_read_within_its_bound_and_the_excess_is_counted() {
+        let path = temporary_log("oversized");
+        {
+            let service = LearningService::open(&path).expect("open");
+            service.learn("かな", "加奈", 3, 4);
+        }
+        let good_len = fs::metadata(&path).expect("metadata").len();
+        let excess = MAX_LEARNING_LOG_BYTES + 4_096 - good_len;
+        OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("append")
+            .write_all(&vec![0xAA; excess as usize])
+            .expect("oversized tail");
+
+        let recovered = LearningService::open(&path).expect("recover");
+        assert_eq!(
+            fs::metadata(&path).expect("metadata").len(),
+            good_len,
+            "the log kept bytes past its ceiling"
+        );
+        assert_eq!(
+            recovered.recovered_tail_bytes(),
+            excess,
+            "the discarded excess was left out of the recovery total"
+        );
+        let preference = recovered.preference("かな", 3, [("仮名", 4), ("加奈", 4)]);
+        assert_eq!(
+            preference.exact,
+            Some(1),
+            "recovery lost a record that was inside the bound"
+        );
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    /// Compaction and exact prediction deletion rewrite the file from what
+    /// they read, so for them an oversized log is a refusal, not a
+    /// recovery: writing back a truncated prefix would destroy records
+    /// nobody was told about.
+    #[test]
+    fn a_rewrite_refuses_a_log_past_its_ceiling() {
+        let path = temporary_log("rewrite-bound");
+        fs::write(&path, vec![0u8; (MAX_LEARNING_LOG_BYTES + 1) as usize]).expect("oversized log");
+        let error = read_bounded_for_rewrite(&path).expect_err("an oversized log was accepted");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 
