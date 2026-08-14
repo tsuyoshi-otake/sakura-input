@@ -49,6 +49,7 @@ use sakura_proto::{
 
 use sakura_ipc::{security, Accept, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 
+use crate::ai_text::AiTextService;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::input_history::InputHistoryService;
@@ -127,6 +128,9 @@ struct Shared {
     learning: Option<Arc<LearningService>>,
     /// Explicitly enabled developer interaction history.
     input_history: Option<Arc<InputHistoryService>>,
+    /// One process-wide AI job owner. Its fixed capacity of one prevents
+    /// separate TSF pipe connections from multiplying outbound requests.
+    ai_text: Arc<AiTextService>,
     /// Request side of the one process-wide prediction worker.
     prediction: Option<Arc<PredictionService>>,
     /// Optional isolated ONNX reranker; its child process remains lazy.
@@ -445,6 +449,7 @@ impl Server {
                 conversion,
                 learning,
                 input_history,
+                ai_text: Arc::new(AiTextService::default()),
                 prediction,
                 long_conversion: None,
                 dynamic_runtimes: Mutex::new(DynamicRuntimes::default()),
@@ -721,6 +726,7 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
     if let Some(history) = shared.input_history.as_ref() {
         dispatcher.set_input_history(Arc::clone(history));
     }
+    dispatcher.set_ai_text(Arc::clone(&shared.ai_text));
     if let Some(long_conversion) = shared.long_conversion.as_ref() {
         dispatcher.set_long_conversion(Some(Arc::clone(long_conversion)));
     }
@@ -950,6 +956,7 @@ fn serve(
                 preview: false,
                 ..
             } => Some(*session),
+            Request::ApplyAiComposition { session, .. } => Some(*session),
             _ => None,
         };
         let clears_candidates = match &request {
@@ -1119,6 +1126,7 @@ mod tests {
             conversion: None,
             learning: Some(learning),
             input_history: None,
+            ai_text: Arc::new(AiTextService::default()),
             prediction: None,
             long_conversion: None,
             dynamic_runtimes: Mutex::new(DynamicRuntimes::default()),

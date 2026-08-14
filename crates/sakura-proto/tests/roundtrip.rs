@@ -191,6 +191,11 @@ fn every_response_variant_roundtrips() {
             excluded_unclassified_events: 11,
             excluded_sensitive_events: 13,
             excluded_test_only_events: 17,
+            ai_requests: 19,
+            ai_attempts: 23,
+            ai_input_tokens: 29,
+            ai_output_tokens: 31,
+            ai_cached_tokens: 37,
         },
         Response::Ui(UiState {
             revision: 1,
@@ -499,18 +504,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v16_hello_roundtrips_and_v15_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 15;
+fn protocol_v17_hello_roundtrips_and_v16_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 16;
     assert_eq!(
-        PROTOCOL_VERSION, 16,
-        "the UiState document field changes the wire contract"
+        PROTOCOL_VERSION, 17,
+        "AI text operations change the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v16 request");
+    encode_request(&request, 17, &mut request_frame).expect("encode v17 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()

@@ -7,6 +7,7 @@
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::path::PathBuf;
+use std::process::Command;
 
 use sakura_core::{
     AppProfile, AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, NeuralRerankerScope,
@@ -14,6 +15,9 @@ use sakura_core::{
     UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
+use sakura_reg::user_preferences::{
+    self, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle, AiTextKey, AiTextPreferences,
+};
 use sakura_settings::configuration::ConfigurationDocument;
 use sakura_settings::formats::DictionaryFormat;
 use sakura_settings::user_dictionary::{self, ImportMode};
@@ -39,6 +43,7 @@ use windows::Win32::UI::Controls::{
 use windows::Win32::UI::HiDpi::{
     GetDpiForWindow, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
+use windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessageW,
     GetParent, GetWindow, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
@@ -47,11 +52,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX,
     BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_GROUPBOX, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK,
     CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT,
-    ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, ES_WANTRETURN, GWLP_USERDATA,
-    GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, IDC_ARROW, IDYES, LBN_SELCHANGE,
-    LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL,
-    MB_ICONERROR, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOW,
+    ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN,
+    GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, IDC_ARROW, IDYES,
+    LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT,
+    LB_SETCURSEL, MB_ICONERROR, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOW,
     SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
     WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETTINGCHANGE,
@@ -133,14 +138,16 @@ const INPUT_TOPIC_PREDICTION: usize = 4;
 const INPUT_TOPIC_ASSOCIATION: usize = 5;
 const INPUT_TOPIC_DISPLAY: usize = 6;
 const INPUT_TOPIC_NORMALIZER: usize = 7;
+const INPUT_TOPIC_AI_TEXT: usize = 8;
 const TREE_GROUP: usize = usize::MAX;
 // Keep the familiar property-sheet hierarchy through 連想変換, but do not
 // invent ATOK-only pages or map a label to an unrelated Sakura setting. Each
 // leaf owns the panel the user sees on the right; category rows normalize to
 // their first leaf so the TreeView highlight and right-hand page agree.
-const INPUT_TREE_LABELS: [&str; 10] = [
+const INPUT_TREE_LABELS: [&str; 11] = [
     "基本",
     "入力補助",
+    "AI文章変換",
     "変換補助",
     "文節変換",
     "文字幅・句読点",
@@ -160,6 +167,7 @@ struct GeneralControls {
     basic_panel: HWND,
     profile_panel: HWND,
     input_assist_panel: HWND,
+    ai_text_panel: HWND,
     segment_panel: HWND,
     normalizer_panel: HWND,
     prediction_panel: HWND,
@@ -171,6 +179,17 @@ struct GeneralControls {
     default_mode: HWND,
     input_assist_space_width: HWND,
     input_assist_shift_space: HWND,
+    ai_text_key: HWND,
+    ai_provider: HWND,
+    ai_endpoint: HWND,
+    ai_auth: HWND,
+    ai_api_key: HWND,
+    ai_api_key_status: HWND,
+    ai_api_key_clear: HWND,
+    ai_style: HWND,
+    ai_effort: HWND,
+    ai_service_tier: HWND,
+    ai_providers: Vec<AiProvider>,
     conversion_assist_method: HWND,
     prediction: HWND,
     suggest: HWND,
@@ -731,6 +750,30 @@ impl App {
             self.preview_appearance()?;
             return Ok(());
         }
+        if source == self.general.ai_provider && notification == CBN_SELCHANGE as u16 {
+            let provider = self.selected_ai_provider()?;
+            set_text(self.general.ai_endpoint, provider.default_endpoint());
+            select_combo(
+                self.general.ai_auth,
+                enum_index(&AiAuth::ALL, provider.default_auth()),
+            );
+            self.refresh_ai_provider_controls(provider);
+            return Ok(());
+        }
+        if source == self.general.ai_auth && notification == CBN_SELCHANGE as u16 {
+            let provider = self.selected_ai_provider()?;
+            self.refresh_ai_provider_controls(provider);
+            return Ok(());
+        }
+        if source == self.general.ai_api_key_clear {
+            if confirm("保存済みのAI APIキーを削除しますか？") {
+                user_preferences::clear_api_key().map_err(display)?;
+                set_text(self.general.ai_api_key, "");
+                self.refresh_ai_provider_controls(self.selected_ai_provider()?);
+                self.set_status("保存済みのAI APIキーを削除しました。");
+            }
+            return Ok(());
+        }
         if source == self.general.normalizer_reset {
             self.reset_normalizer_controls();
             return Ok(());
@@ -876,59 +919,66 @@ impl App {
             INPUT_TOPIC_INPUT_ASSIST,
             false,
         );
-        let conversion_assist = insert_input_tree_item(
+        let _ = insert_input_tree_item(
             self.input_tree,
             Default::default(),
             INPUT_TREE_LABELS[2],
+            INPUT_TOPIC_AI_TEXT,
+            false,
+        );
+        let conversion_assist = insert_input_tree_item(
+            self.input_tree,
+            Default::default(),
+            INPUT_TREE_LABELS[3],
             TREE_GROUP,
             true,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             conversion_assist,
-            INPUT_TREE_LABELS[3],
+            INPUT_TREE_LABELS[4],
             INPUT_TOPIC_SEGMENT,
             false,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             conversion_assist,
-            INPUT_TREE_LABELS[4],
+            INPUT_TREE_LABELS[5],
             INPUT_TOPIC_NORMALIZER,
             false,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             Default::default(),
-            INPUT_TREE_LABELS[5],
+            INPUT_TREE_LABELS[6],
             INPUT_TOPIC_DISPLAY,
             false,
         );
         let input_support = insert_input_tree_item(
             self.input_tree,
             Default::default(),
-            INPUT_TREE_LABELS[6],
+            INPUT_TREE_LABELS[7],
             TREE_GROUP,
             true,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             input_support,
-            INPUT_TREE_LABELS[7],
+            INPUT_TREE_LABELS[8],
             INPUT_TOPIC_PREDICTION,
             false,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             input_support,
-            INPUT_TREE_LABELS[8],
+            INPUT_TREE_LABELS[9],
             INPUT_TOPIC_ASSOCIATION,
             false,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             Default::default(),
-            INPUT_TREE_LABELS[9],
+            INPUT_TREE_LABELS[10],
             INPUT_TOPIC_PROFILE,
             false,
         );
@@ -958,6 +1008,14 @@ impl App {
                     let _ = ShowWindow(
                         self.general.input_assist_panel,
                         if topic == INPUT_TOPIC_INPUT_ASSIST {
+                            SW_SHOW
+                        } else {
+                            SW_HIDE
+                        },
+                    );
+                    let _ = ShowWindow(
+                        self.general.ai_text_panel,
+                        if topic == INPUT_TOPIC_AI_TEXT {
                             SW_SHOW
                         } else {
                             SW_HIDE
@@ -1083,6 +1141,31 @@ impl App {
             self.general.input_assist_shift_space,
             shift_space_behavior_index(self.configuration.preferences.shift_space_behavior),
         );
+        select_combo(
+            self.general.ai_text_key,
+            ai_text_key_index(user_preferences::read_ai_text_key()),
+        );
+        let ai = user_preferences::read_ai_text_preferences();
+        let provider_index = self
+            .general
+            .ai_providers
+            .iter()
+            .position(|candidate| *candidate == ai.provider)
+            .unwrap_or(0);
+        select_combo(self.general.ai_provider, provider_index);
+        set_text(self.general.ai_endpoint, &ai.endpoint);
+        select_combo(self.general.ai_auth, enum_index(&AiAuth::ALL, ai.auth));
+        set_text(self.general.ai_api_key, "");
+        select_combo(self.general.ai_style, enum_index(&AiStyle::ALL, ai.style));
+        select_combo(
+            self.general.ai_effort,
+            enum_index(&AiEffort::ALL, ai.effort),
+        );
+        select_combo(
+            self.general.ai_service_tier,
+            enum_index(&AiServiceTier::ALL, ai.service_tier),
+        );
+        self.refresh_ai_provider_controls(ai.provider);
         set_checked(
             self.general.prediction,
             self.configuration.preferences.prediction_enabled,
@@ -1175,6 +1258,34 @@ impl App {
             space_width_from_index(combo_index(self.general.input_assist_space_width))?;
         self.configuration.preferences.shift_space_behavior =
             shift_space_behavior_from_index(combo_index(self.general.input_assist_shift_space))?;
+        let ai_text_key = ai_text_key_from_index(combo_index(self.general.ai_text_key))?;
+        let ai_provider = self.selected_ai_provider()?;
+        let ai_endpoint = window_text(self.general.ai_endpoint).trim().to_owned();
+        validate_ai_endpoint(ai_provider, &ai_endpoint)?;
+        let ai_preferences = AiTextPreferences {
+            provider: ai_provider,
+            endpoint: if ai_provider == AiProvider::ChatGptCodex {
+                String::new()
+            } else {
+                ai_endpoint
+            },
+            auth: enum_from_index(&AiAuth::ALL, combo_index(self.general.ai_auth), "認証")?,
+            style: enum_from_index(
+                &AiStyle::ALL,
+                combo_index(self.general.ai_style),
+                "変換スタイル",
+            )?,
+            effort: enum_from_index(
+                &AiEffort::ALL,
+                combo_index(self.general.ai_effort),
+                "Effort",
+            )?,
+            service_tier: enum_from_index(
+                &AiServiceTier::ALL,
+                combo_index(self.general.ai_service_tier),
+                "Tier",
+            )?,
+        };
         let mut normalizer = self.configuration.preferences.normalizer;
         normalizer.width.alnum = width_from_index(combo_index(self.general.normalizer_alnum))?;
         normalizer.width.number = width_from_index(combo_index(self.general.normalizer_number))?;
@@ -1189,8 +1300,67 @@ impl App {
         self.configuration
             .save(&self.configuration_path)
             .map_err(display)?;
+        user_preferences::write_ai_text_key(ai_text_key).map_err(display)?;
+        user_preferences::write_ai_text_preferences(&ai_preferences).map_err(display)?;
+        let mut api_key = window_text(self.general.ai_api_key);
+        if !api_key.trim().is_empty() {
+            user_preferences::write_api_key(&api_key).map_err(display)?;
+            // The credential API has copied the value. Erase the edit control
+            // and this temporary buffer instead of retaining a second copy.
+            set_text(self.general.ai_api_key, "");
+            // SAFETY: zero is valid UTF-8, and the String is not observed until
+            // it is dropped immediately after this block.
+            unsafe { api_key.as_bytes_mut() }.fill(0);
+            api_key.clear();
+        }
+        self.refresh_ai_provider_controls(ai_provider);
         self.set_status("既定の設定を保存しました。");
         Ok(())
+    }
+
+    fn selected_ai_provider(&self) -> Result<AiProvider, String> {
+        self.general
+            .ai_providers
+            .get(
+                combo_index(self.general.ai_provider)
+                    .ok_or_else(|| "AIプロバイダーを選択してください。".to_owned())?,
+            )
+            .copied()
+            .ok_or_else(|| "AIプロバイダーの値が不正です。".to_owned())
+    }
+
+    fn refresh_ai_provider_controls(&self, provider: AiProvider) {
+        let subscription = provider == AiProvider::ChatGptCodex;
+        let auth = enum_from_index(&AiAuth::ALL, combo_index(self.general.ai_auth), "認証")
+            .unwrap_or_default();
+        // SAFETY: every HWND belongs to this live settings window.
+        unsafe {
+            let _ = EnableWindow(self.general.ai_endpoint, !subscription);
+            let _ = EnableWindow(self.general.ai_auth, !subscription);
+            let _ = EnableWindow(
+                self.general.ai_api_key,
+                !subscription && auth != AiAuth::None,
+            );
+            let _ = EnableWindow(
+                self.general.ai_api_key_clear,
+                !subscription && user_preferences::api_key_is_saved(),
+            );
+            let _ = EnableWindow(self.general.ai_service_tier, !subscription);
+        }
+        let status = if subscription {
+            if codex_cli_available() {
+                "Codex CLIのChatGPTログインを使用します（APIキー不要）。"
+            } else {
+                "Codex CLIが見つかりません。インストール後に利用できます。"
+            }
+        } else if auth == AiAuth::None {
+            "この設定ではAPIキーを送信しません。"
+        } else if user_preferences::api_key_is_saved() {
+            "APIキーはWindows資格情報マネージャーに保存済みです。"
+        } else {
+            "APIキーは未設定です。空欄のまま保存しても既存値は変更しません。"
+        };
+        set_text(self.general.ai_api_key_status, status);
     }
 
     fn reset_normalizer_controls(&mut self) {
@@ -2076,6 +2246,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     let basic_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let profile_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let input_assist_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
+    let ai_text_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let segment_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let normalizer_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let prediction_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
@@ -2135,6 +2306,57 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     add_combo(input_assist_shift_space, "スペースの逆");
     add_combo(input_assist_shift_space, "常に全角");
     add_combo(input_assist_shift_space, "常に半角");
+
+    label(parent, "文章変換キー", 12, 132, 96, 20)?;
+    let ai_text_key = combo(parent, 116, 128, 190, 120)?;
+    add_combo(ai_text_key, "変換（Spaceの右・既定）");
+    add_combo(ai_text_key, "Caps Lock");
+    add_combo(ai_text_key, "使わない");
+
+    let parent = ai_text_panel;
+    label(parent, "AI文章変換", 4, 2, 190, 20)?;
+    label(
+        parent,
+        "明示操作した文章だけをGPT-5.6 Lunaへ送信します。",
+        4,
+        20,
+        358,
+        18,
+    )?;
+    label(parent, "プロバイダー", 12, 56, 92, 20)?;
+    let ai_provider = combo(parent, 110, 52, 220, 150)?;
+    let ai_providers = available_ai_providers();
+    for provider in &ai_providers {
+        add_combo(ai_provider, ai_provider_label(*provider));
+    }
+    label(parent, "モデル", 12, 84, 92, 20)?;
+    let _ai_model = edit(parent, sakura_ai_proto::MODEL, 110, 80, 220, 24, true)?;
+    label(parent, "Endpoint", 12, 112, 92, 20)?;
+    let ai_endpoint = edit(parent, "", 110, 108, 260, 24, false)?;
+    label(parent, "認証", 12, 140, 92, 20)?;
+    let ai_auth = combo(parent, 110, 136, 130, 120)?;
+    for auth in AiAuth::ALL {
+        add_combo(ai_auth, ai_auth_label(auth));
+    }
+    label(parent, "APIキー", 12, 168, 92, 20)?;
+    let ai_api_key = password_edit(parent, 110, 164, 190, 24)?;
+    let ai_api_key_clear = button(parent, "削除", 306, 164, 64, 24, false)?;
+    let ai_api_key_status = label(parent, "", 110, 190, 260, 18)?;
+    label(parent, "変換スタイル", 12, 220, 92, 20)?;
+    let ai_style = combo(parent, 110, 216, 190, 180)?;
+    for style in AiStyle::ALL {
+        add_combo(ai_style, ai_style_label(style));
+    }
+    label(parent, "Effort", 12, 248, 92, 20)?;
+    let ai_effort = combo(parent, 110, 244, 130, 180)?;
+    for effort in AiEffort::ALL {
+        add_combo(ai_effort, ai_effort_label(effort));
+    }
+    label(parent, "Tier", 250, 248, 36, 20)?;
+    let ai_service_tier = combo(parent, 286, 244, 84, 120)?;
+    for tier in AiServiceTier::ALL {
+        add_combo(ai_service_tier, ai_service_tier_label(tier));
+    }
 
     let parent = prediction_panel;
     label(parent, "推測変換", 4, 2, 190, 20)?;
@@ -2328,6 +2550,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         basic_panel,
         profile_panel,
         input_assist_panel,
+        ai_text_panel,
         segment_panel,
         normalizer_panel,
         prediction_panel,
@@ -2339,6 +2562,17 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         default_mode,
         input_assist_space_width,
         input_assist_shift_space,
+        ai_text_key,
+        ai_provider,
+        ai_endpoint,
+        ai_auth,
+        ai_api_key,
+        ai_api_key_status,
+        ai_api_key_clear,
+        ai_style,
+        ai_effort,
+        ai_service_tier,
+        ai_providers,
         conversion_assist_method,
         prediction,
         suggest,
@@ -3188,6 +3422,157 @@ fn shift_space_behavior_from_index(index: Option<usize>) -> Result<ShiftSpaceBeh
         .ok_or_else(|| "Shift+スペースの動作が不正です。".to_owned())
 }
 
+fn password_edit(parent: HWND, x: i32, y: i32, width: i32, height: i32) -> WindowsResult<HWND> {
+    control(
+        parent,
+        windows::core::w!("EDIT"),
+        "",
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE((ES_AUTOHSCROLL | ES_PASSWORD) as u32),
+        WS_EX_CLIENTEDGE,
+        x,
+        y,
+        width,
+        height,
+    )
+}
+
+fn ai_text_key_index(value: AiTextKey) -> usize {
+    AiTextKey::ALL
+        .iter()
+        .position(|candidate| *candidate == value)
+        .unwrap_or(0)
+}
+
+fn ai_text_key_from_index(index: Option<usize>) -> Result<AiTextKey, String> {
+    AiTextKey::ALL
+        .get(index.ok_or_else(|| "文章変換キーを選択してください。".to_owned())?)
+        .copied()
+        .ok_or_else(|| "文章変換キーの値が不正です。".to_owned())
+}
+
+fn available_ai_providers() -> Vec<AiProvider> {
+    let persisted = user_preferences::read_ai_text_preferences().provider;
+    AiProvider::ALL
+        .into_iter()
+        .filter(|provider| {
+            *provider != AiProvider::ChatGptCodex
+                || codex_cli_available()
+                || persisted == AiProvider::ChatGptCodex
+        })
+        .collect()
+}
+
+fn codex_cli_available() -> bool {
+    ["codex.exe", "codex.cmd"].into_iter().any(|name| {
+        Command::new("where.exe")
+            .arg(name)
+            .output()
+            .map(|output| output.status.success() && !output.stdout.is_empty())
+            .unwrap_or(false)
+    })
+}
+
+fn enum_index<T: Copy + PartialEq>(values: &[T], value: T) -> usize {
+    values
+        .iter()
+        .position(|candidate| *candidate == value)
+        .unwrap_or(0)
+}
+
+fn enum_from_index<T: Copy>(values: &[T], index: Option<usize>, label: &str) -> Result<T, String> {
+    values
+        .get(index.ok_or_else(|| format!("{label}を選択してください。"))?)
+        .copied()
+        .ok_or_else(|| format!("{label}の値が不正です。"))
+}
+
+const fn ai_provider_label(value: AiProvider) -> &'static str {
+    match value {
+        AiProvider::OpenAi => "OpenAI",
+        AiProvider::AzureOpenAi => "Azure OpenAI",
+        AiProvider::AwsBedrock => "AWS Bedrock",
+        AiProvider::Cloudflare => "Cloudflare",
+        AiProvider::Custom => "カスタム（Responses互換）",
+        AiProvider::ChatGptCodex => "ChatGPT Subscription（Codex CLI）",
+    }
+}
+
+const fn ai_auth_label(value: AiAuth) -> &'static str {
+    match value {
+        AiAuth::Bearer => "Bearer",
+        AiAuth::ApiKey => "api-key",
+        AiAuth::None => "なし",
+    }
+}
+
+const fn ai_style_label(value: AiStyle) -> &'static str {
+    match value {
+        AiStyle::Spoken => "話し言葉",
+        AiStyle::Polite => "丁寧語",
+        AiStyle::Business => "ビジネス",
+        AiStyle::Government => "公文書",
+        AiStyle::Technical => "技術文書",
+        AiStyle::Academic => "論文",
+        AiStyle::Contract => "契約",
+        AiStyle::Novel => "小説",
+        AiStyle::Social => "SNS",
+    }
+}
+
+const fn ai_effort_label(value: AiEffort) -> &'static str {
+    match value {
+        AiEffort::ProviderDefault => "プロバイダー既定",
+        AiEffort::None => "none",
+        AiEffort::Low => "low",
+        AiEffort::Medium => "medium",
+        AiEffort::High => "high",
+        AiEffort::XHigh => "xhigh",
+        AiEffort::Max => "max",
+    }
+}
+
+const fn ai_service_tier_label(value: AiServiceTier) -> &'static str {
+    match value {
+        AiServiceTier::ProviderDefault => "既定",
+        AiServiceTier::Priority => "Priority",
+    }
+}
+
+fn validate_ai_endpoint(provider: AiProvider, endpoint: &str) -> Result<(), String> {
+    if provider == AiProvider::ChatGptCodex {
+        return Ok(());
+    }
+    if endpoint.is_empty() {
+        return Err("Endpointを入力してください。".to_owned());
+    }
+    if endpoint.chars().any(char::is_control)
+        || endpoint.chars().any(char::is_whitespace)
+        || endpoint.contains(['?', '#', '@'])
+    {
+        return Err("Endpointに使用できない文字が含まれています。".to_owned());
+    }
+    if let Some(rest) = endpoint.strip_prefix("https://") {
+        return (!rest.is_empty() && !rest.starts_with('/'))
+            .then_some(())
+            .ok_or_else(|| "Endpointのホスト名を入力してください。".to_owned());
+    }
+    if let Some(rest) = endpoint.strip_prefix("http://") {
+        let authority = rest.split('/').next().unwrap_or_default();
+        let host = if authority.starts_with('[') {
+            authority
+                .split_once(']')
+                .map(|(host, _)| format!("{host}]"))
+                .unwrap_or_default()
+        } else {
+            authority.split(':').next().unwrap_or_default().to_owned()
+        };
+        if matches!(host.as_str(), "localhost" | "127.0.0.1" | "[::1]") {
+            return Ok(());
+        }
+    }
+    Err("EndpointはHTTPSにしてください（HTTPはlocalhostのみ許可）。".to_owned())
+}
+
 const fn width_label(value: Width) -> &'static str {
     match value {
         Width::Half => "半角",
@@ -3831,6 +4216,12 @@ mod tests {
                 Ok(binding)
             );
         }
+        for key in AiTextKey::ALL {
+            assert_eq!(
+                ai_text_key_from_index(Some(ai_text_key_index(key))),
+                Ok(key)
+            );
+        }
         for scope in NeuralRerankerScope::ALL {
             assert_eq!(
                 neural_reranker_scope_from_index(Some(neural_reranker_scope_index(scope))),
@@ -4130,6 +4521,7 @@ mod tests {
             [
                 "基本",
                 "入力補助",
+                "AI文章変換",
                 "変換補助",
                 "文節変換",
                 "文字幅・句読点",

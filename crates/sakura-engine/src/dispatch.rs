@@ -45,12 +45,14 @@ use sakura_core::{
     SpaceWidth, SuggestAccept, TextSink,
 };
 use sakura_proto::{
-    CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope, KeyCode, KeyInput, Mode,
-    OutputBuf, Overflow, Request, Response, SessionId, UnderlineKind, UndoCommitOutcome,
-    CANDIDATE_PAGE_SIZE, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_RELATIONS,
-    MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
+    AiTextOperation, AiTextStatus, CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope,
+    KeyCode, KeyInput, Mode, OutputBuf, Overflow, Request, Response, SessionId, UnderlineKind,
+    UndoCommitOutcome, CANDIDATE_PAGE_SIZE, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES,
+    MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_COMMIT_BYTES,
+    MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
 
+use crate::ai_text::{AiTextService, Poll as AiPoll, StartError as AiStartError};
 use crate::dictionary::{ConversionService, ConvertFailure};
 use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
 use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
@@ -142,6 +144,8 @@ pub struct Dispatcher {
     conversion: Option<Arc<ConversionService>>,
     learning: Option<Arc<LearningService>>,
     input_history: Option<Arc<InputHistoryService>>,
+    ai_text: Arc<AiTextService>,
+    ai_text_owner: u64,
     prediction: Option<Arc<PredictionService>>,
     long_conversion: Option<Arc<LongConversionService>>,
     long_conversion_owner: u64,
@@ -264,6 +268,12 @@ impl Dispatcher {
         self.input_history = Some(input_history);
     }
 
+    pub(crate) fn set_ai_text(&mut self, ai_text: Arc<AiTextService>) {
+        self.ai_text.cancel_owner(self.ai_text_owner);
+        self.ai_text_owner = ai_text.allocate_owner();
+        self.ai_text = ai_text;
+    }
+
     /// Replaces the process-wide prediction service at a request boundary.
     ///
     /// A configuration reload can enable or disable prediction after this
@@ -298,6 +308,8 @@ impl Dispatcher {
     /// mode-switch action, so exercising `Mode::FullAlnum` needs a key map
     /// that does).
     pub fn with_parts(table: Table, keymap: KeyMap, normalizer: Normalizer) -> Self {
+        let ai_text = Arc::new(AiTextService::default());
+        let ai_text_owner = ai_text.allocate_owner();
         Dispatcher {
             table,
             keymap,
@@ -311,6 +323,8 @@ impl Dispatcher {
             conversion: None,
             learning: None,
             input_history: None,
+            ai_text,
+            ai_text_owner,
             prediction: None,
             long_conversion: None,
             long_conversion_owner: 0,
@@ -332,6 +346,8 @@ impl Dispatcher {
     /// `crate::server`'s `worker`, which calls this between connections on
     /// the same pipe instance.
     pub fn reset(&mut self) {
+        self.ai_text.cancel_owner(self.ai_text_owner);
+        self.ai_text_owner = self.ai_text.allocate_owner();
         self.sessions.clear();
         self.prediction_cache.clear();
     }
@@ -433,6 +449,49 @@ impl Dispatcher {
             Request::InputHistoryStats => self.input_history_stats(),
             Request::SetInputScope { session, scope } => self.set_input_scope(*session, *scope),
             Request::SetMode { session, mode } => self.set_mode(*session, *mode),
+            Request::ApplyAiComposition { session, result } => {
+                self.apply_ai_composition(*session, result, out)
+            }
+            Request::RecordAiText {
+                session,
+                operation,
+                status,
+                source,
+                result,
+                model,
+                provider,
+                style,
+                error_code,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                attempts,
+                test_only,
+            } => self.record_ai_text(
+                *session,
+                *operation,
+                *status,
+                source,
+                result,
+                model,
+                provider,
+                style,
+                error_code,
+                *latency_ms,
+                *input_tokens,
+                *output_tokens,
+                *cached_tokens,
+                *attempts,
+                *test_only,
+            ),
+            Request::StartAiText {
+                session,
+                operation,
+                text,
+            } => self.start_ai_text(*session, *operation, text),
+            Request::PollAiText { session, job } => self.poll_ai_text(*session, *job),
+            Request::CancelAiText { session, job } => self.cancel_ai_text(*session, *job),
             // The renderer has no dispatcher-owned session. `server` resolves
             // this request through its shared revision-stamped UiBoard before
             // it reaches a worker; a direct dispatcher call must remain a
@@ -464,6 +523,8 @@ impl Dispatcher {
             | Request::Revert { session }
             | Request::SetInputScope { session, .. }
             | Request::SetMode { session, .. }
+            | Request::ApplyAiComposition { session, .. }
+            | Request::StartAiText { session, .. }
             | Request::DeleteSession { session } => *session,
             Request::Hello { .. }
             | Request::CreateSession { .. }
@@ -472,6 +533,9 @@ impl Dispatcher {
             | Request::ClearInputHistory
             | Request::FlushInputHistory
             | Request::InputHistoryStats
+            | Request::RecordAiText { .. }
+            | Request::PollAiText { .. }
+            | Request::CancelAiText { .. }
             | Request::DeleteHistoryCandidate { .. }
             | Request::Ping
             | Request::Shutdown
@@ -550,6 +614,7 @@ impl Dispatcher {
             return Reply::Message(Response::Error(ErrorCode::Busy));
         }
         if self.sessions.delete(id) {
+            self.ai_text.cancel_session(self.ai_text_owner, id);
             self.prediction_cache.clear_if_session(id);
             Reply::Message(Response::Ok)
         } else {
@@ -612,6 +677,11 @@ impl Dispatcher {
             excluded_unclassified_events: stats.excluded_unclassified_events,
             excluded_sensitive_events: stats.excluded_sensitive_events,
             excluded_test_only_events: stats.excluded_test_only_events,
+            ai_requests: stats.ai_requests,
+            ai_attempts: stats.ai_attempts,
+            ai_input_tokens: stats.ai_input_tokens,
+            ai_output_tokens: stats.ai_output_tokens,
+            ai_cached_tokens: stats.ai_cached_tokens,
         })
     }
 
@@ -655,6 +725,132 @@ impl Dispatcher {
         }
         session.mode = mode;
         Reply::Message(Response::InputMode { mode })
+    }
+
+    fn apply_ai_composition(&mut self, id: SessionId, result: &str, out: &mut OutputBuf) -> Reply {
+        let Some(session) = self.sessions.get_mut(id) else {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if session.undo_pending()
+            || !session.is_composing()
+            || !session.scope_classified()
+            || session.scope() != InputScope::Normal
+            || result.is_empty()
+        {
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
+        if result.len() > MAX_COMMIT_BYTES || out.set_commit(result).is_err() {
+            out.clear();
+            return Reply::Message(Response::Error(ErrorCode::TooLarge));
+        }
+        out.consumed = true;
+        session.disarm_commit_undo();
+        session.reset();
+        if let Some(mode) = session.take_mode_restored() {
+            out.mode = Some(mode);
+        }
+        self.prediction_cache.clear_if_session(id);
+        Reply::Output
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_ai_text(
+        &self,
+        id: SessionId,
+        operation: AiTextOperation,
+        status: AiTextStatus,
+        source: &str,
+        result: &str,
+        model: &str,
+        provider: &str,
+        style: &str,
+        error_code: &str,
+        latency_ms: u64,
+        input_tokens: u32,
+        output_tokens: u32,
+        cached_tokens: u32,
+        attempts: u32,
+        test_only: bool,
+    ) -> Reply {
+        let Some(session) = self.sessions.get(id) else {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if let Some(history) = self.input_history.as_deref() {
+            history.record_ai_text(
+                session.history_session_id(),
+                ScopeClass::from_scope(session.scope(), session.scope_classified()),
+                operation,
+                status,
+                source,
+                result,
+                model,
+                provider,
+                style,
+                error_code,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                attempts,
+                test_only,
+            );
+        }
+        Reply::Message(Response::Ok)
+    }
+
+    fn start_ai_text(&self, id: SessionId, operation: AiTextOperation, text: &str) -> Reply {
+        let Some(session) = self.sessions.get(id) else {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if session.undo_pending()
+            || !session.scope_classified()
+            || session.scope() != InputScope::Normal
+        {
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
+        match self.ai_text.start(self.ai_text_owner, id, operation, text) {
+            Ok(job) => Reply::Message(Response::AiTextStarted { job }),
+            Err(AiStartError::Duplicate | AiStartError::Capacity) => {
+                Reply::Message(Response::Error(ErrorCode::Busy))
+            }
+            Err(AiStartError::Invalid) => Reply::Message(Response::Error(ErrorCode::TooLarge)),
+            Err(AiStartError::Spawn) => Reply::Message(Response::Error(ErrorCode::Internal)),
+        }
+    }
+
+    fn poll_ai_text(&self, id: SessionId, job: u64) -> Reply {
+        if self.sessions.get(id).is_none() {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        }
+        match self.ai_text.poll(self.ai_text_owner, id, job) {
+            AiPoll::Pending => Reply::Message(Response::AiTextPending { job }),
+            AiPoll::Complete(result) => Reply::Message(Response::AiTextResult {
+                job,
+                status: result.status,
+                result: result.result,
+                model: result.model,
+                provider: result.provider,
+                style: result.style,
+                error_code: result.error_code,
+                latency_ms: result.latency_ms,
+                input_tokens: result.input_tokens,
+                output_tokens: result.output_tokens,
+                cached_tokens: result.cached_tokens,
+                attempts: result.attempts,
+            }),
+            AiPoll::Missing => Reply::Message(Response::Error(ErrorCode::Malformed)),
+        }
+    }
+
+    fn cancel_ai_text(&self, id: SessionId, job: u64) -> Reply {
+        if self.sessions.get(id).is_none() {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        }
+        if self.ai_text.cancel(self.ai_text_owner, id, job) {
+            Reply::Message(Response::Ok)
+        } else {
+            Reply::Message(Response::Error(ErrorCode::Malformed))
+        }
     }
 
     fn send_key(&mut self, id: SessionId, key: &KeyInput, out: &mut OutputBuf) -> Reply {
@@ -4876,7 +5072,7 @@ mod tests {
         );
         let commit = records.iter().find_map(|record| match record {
             InputHistoryRecord::Commit(record) => Some(record),
-            InputHistoryRecord::Key(_) => None,
+            InputHistoryRecord::Key(_) | InputHistoryRecord::AiText(_) => None,
         });
         assert_eq!(commit.map(|record| record.reading.as_str()), Some(reading));
         assert_eq!(learning.generation(), generation_before + 1);
@@ -8878,15 +9074,12 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v15_version_is_rejected() {
-        assert_eq!(
-            PROTOCOL_VERSION, 16,
-            "the UiState document field adds v16 wire data"
-        );
+    fn hello_with_the_previous_v16_version_is_rejected() {
+        assert_eq!(PROTOCOL_VERSION, 17, "AI text operations add v17 wire data");
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 15 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 16 }, &mut out);
 
         assert_eq!(
             reply,
@@ -8895,11 +9088,8 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v16_version_is_accepted() {
-        assert_eq!(
-            PROTOCOL_VERSION, 16,
-            "the UiState document field adds v16 wire data"
-        );
+    fn hello_with_v17_version_is_accepted() {
+        assert_eq!(PROTOCOL_VERSION, 17, "AI text operations add v17 wire data");
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 

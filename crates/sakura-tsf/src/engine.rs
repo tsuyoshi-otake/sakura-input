@@ -41,8 +41,8 @@ use std::time::{Duration, Instant};
 use sakura_ipc::diagnostics::{self, TimeoutOperation};
 use sakura_ipc::{Client, Fault};
 use sakura_proto::{
-    ErrorCode, InputScope, KeyInput, Mode, Output, Request, Response, ScreenRect, SessionId,
-    UndoCommitOutcome, PROTOCOL_VERSION,
+    AiTextOperation, AiTextStatus, ErrorCode, InputScope, KeyInput, Mode, Output, Request,
+    Response, ScreenRect, SessionId, UndoCommitOutcome, PROTOCOL_VERSION,
 };
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 
@@ -110,6 +110,47 @@ pub(crate) struct InputModeStatus {
     pub can_restore: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AiTextRecord {
+    pub operation: AiTextOperation,
+    pub status: AiTextStatus,
+    pub source: String,
+    pub result: String,
+    pub model: String,
+    pub provider: String,
+    pub style: String,
+    pub error_code: String,
+    pub latency_ms: u64,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cached_tokens: u32,
+    pub attempts: u32,
+    pub test_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AiTextResult {
+    pub status: AiTextStatus,
+    pub result: String,
+    pub model: String,
+    pub provider: String,
+    pub style: String,
+    pub error_code: String,
+    pub latency_ms: u64,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cached_tokens: u32,
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AiTextPoll {
+    Pending,
+    Complete(AiTextResult),
+    Missing,
+    Unavailable,
+}
+
 /// One connection to the engine, plus the policy for not having one.
 #[derive(Debug, Default)]
 pub struct Engine {
@@ -174,6 +215,159 @@ impl Engine {
             None => return Answer::Unavailable,
         };
         self.request(&Request::SendKey { session, key })
+    }
+
+    pub(crate) fn apply_ai_composition(&mut self, result: String) -> Answer {
+        let session = match self.link() {
+            Some(link) => link.session,
+            None => return Answer::Unavailable,
+        };
+        self.request(&Request::ApplyAiComposition { session, result })
+    }
+
+    pub(crate) fn record_ai_text(&mut self, record: &AiTextRecord) -> bool {
+        let Some(link) = self.link.as_mut() else {
+            return false;
+        };
+        if link.input_scope != Some(InputScope::Normal) {
+            return false;
+        }
+        let request = Request::RecordAiText {
+            session: link.session,
+            operation: record.operation,
+            status: record.status,
+            source: record.source.clone(),
+            result: record.result.clone(),
+            model: record.model.clone(),
+            provider: record.provider.clone(),
+            style: record.style.clone(),
+            error_code: record.error_code.clone(),
+            latency_ms: record.latency_ms,
+            input_tokens: record.input_tokens,
+            output_tokens: record.output_tokens,
+            cached_tokens: record.cached_tokens,
+            attempts: record.attempts,
+            test_only: record.test_only,
+        };
+        match link.client.call(&request, KEY_BUDGET) {
+            Ok(Response::Ok) => true,
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                link.desynchronized = true;
+                false
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
+    }
+
+    pub(crate) fn start_ai_text(
+        &mut self,
+        operation: AiTextOperation,
+        text: String,
+    ) -> core::result::Result<u64, ErrorCode> {
+        let link = self.link().ok_or(ErrorCode::Internal)?;
+        if link.input_scope != Some(InputScope::Normal) {
+            return Err(ErrorCode::Busy);
+        }
+        match link.client.call(
+            &Request::StartAiText {
+                session: link.session,
+                operation,
+                text,
+            },
+            KEY_BUDGET,
+        ) {
+            Ok(Response::AiTextStarted { job }) => Ok(job),
+            Ok(Response::Error(code)) => Err(code),
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                link.desynchronized = true;
+                Err(ErrorCode::Internal)
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                Err(ErrorCode::Internal)
+            }
+        }
+    }
+
+    pub(crate) fn poll_ai_text(&mut self, job: u64) -> AiTextPoll {
+        let Some(link) = self.link.as_mut() else {
+            return AiTextPoll::Unavailable;
+        };
+        match link.client.call(
+            &Request::PollAiText {
+                session: link.session,
+                job,
+            },
+            UI_BUDGET,
+        ) {
+            Ok(Response::AiTextPending { job: returned }) if returned == job => AiTextPoll::Pending,
+            Ok(Response::AiTextResult {
+                job: returned,
+                status,
+                result,
+                model,
+                provider,
+                style,
+                error_code,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                attempts,
+            }) if returned == job => AiTextPoll::Complete(AiTextResult {
+                status,
+                result,
+                model,
+                provider,
+                style,
+                error_code,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                attempts,
+            }),
+            Ok(Response::Error(ErrorCode::Malformed | ErrorCode::UnknownSession)) => {
+                AiTextPoll::Missing
+            }
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                AiTextPoll::Pending
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                AiTextPoll::Unavailable
+            }
+        }
+    }
+
+    pub(crate) fn cancel_ai_text(&mut self, job: u64) -> bool {
+        let Some(link) = self.link.as_mut() else {
+            return false;
+        };
+        match link.client.call(
+            &Request::CancelAiText {
+                session: link.session,
+                job,
+            },
+            UI_BUDGET,
+        ) {
+            Ok(Response::Ok) => true,
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                false
+            }
+            Ok(Response::Error(_)) => false,
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
     }
 
     /// Returns the cached status of the active engine session without opening
@@ -659,7 +853,7 @@ fn open(name: Option<&str>) -> Option<Link> {
 fn timeout_operation(request: &Request) -> TimeoutOperation {
     match request {
         Request::SendKey { .. } | Request::ProbeKey { .. } => TimeoutOperation::Key,
-        Request::Commit { .. } => TimeoutOperation::Commit,
+        Request::Commit { .. } | Request::ApplyAiComposition { .. } => TimeoutOperation::Commit,
         Request::Reconvert { .. } => TimeoutOperation::Reconvert,
         Request::Revert { .. } => TimeoutOperation::Revert,
         Request::UndoCommit { .. } => TimeoutOperation::Revert,
@@ -672,6 +866,10 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::DeleteHistoryCandidate { .. }
         | Request::SetInputScope { .. }
         | Request::SetMode { .. }
+        | Request::RecordAiText { .. }
+        | Request::StartAiText { .. }
+        | Request::PollAiText { .. }
+        | Request::CancelAiText { .. }
         | Request::DeleteSession { .. }
         | Request::Ping
         | Request::Shutdown => TimeoutOperation::Administration,

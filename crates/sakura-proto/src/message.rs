@@ -53,6 +53,11 @@ pub(crate) const REQ_SET_MODE: u16 = 0x0013;
 /// UI snapshot. This is separate from keyboard-driven deletion because the
 /// renderer owns no editing session and can only name a revision-stamped row.
 pub(crate) const REQ_DELETE_HISTORY_CANDIDATE: u16 = 0x0014;
+pub(crate) const REQ_APPLY_AI_COMPOSITION: u16 = 0x0015;
+pub(crate) const REQ_RECORD_AI_TEXT: u16 = 0x0016;
+pub(crate) const REQ_START_AI_TEXT: u16 = 0x0017;
+pub(crate) const REQ_POLL_AI_TEXT: u16 = 0x0018;
+pub(crate) const REQ_CANCEL_AI_TEXT: u16 = 0x0019;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -67,6 +72,9 @@ pub(crate) const RES_UI: u16 = 0x8006;
 pub(crate) const RES_INPUT_HISTORY_STATS: u16 = 0x8007;
 pub(crate) const RES_INPUT_MODE: u16 = 0x8008;
 pub(crate) const RES_HISTORY_CANDIDATE_DELETED: u16 = 0x8009;
+pub(crate) const RES_AI_TEXT_STARTED: u16 = 0x800A;
+pub(crate) const RES_AI_TEXT_PENDING: u16 = 0x800B;
+pub(crate) const RES_AI_TEXT_RESULT: u16 = 0x800C;
 pub(crate) const RES_ERROR: u16 = 0x80FF;
 
 /// A message sent from a client (the TSF DLL) to the engine.
@@ -74,11 +82,18 @@ pub(crate) const RES_ERROR: u16 = 0x80FF;
 pub enum Request {
     /// The first message on a new connection: negotiates the protocol
     /// version.
-    Hello { client_version: u16 },
+    Hello {
+        client_version: u16,
+    },
     /// Starts a new editing session for a host process.
-    CreateSession { process_name: String },
+    CreateSession {
+        process_name: String,
+    },
     /// Delivers one key event to a session.
-    SendKey { session: SessionId, key: KeyInput },
+    SendKey {
+        session: SessionId,
+        key: KeyInput,
+    },
     /// Evaluates one key against a throwaway session state after applying the
     /// supplied host scope. Unlike `SetInputScope`, this never changes the
     /// live session or the link's applied-scope cache. When `fresh_context` is
@@ -92,9 +107,13 @@ pub enum Request {
         key: KeyInput,
     },
     /// Commits the current composition.
-    Commit { session: SessionId },
+    Commit {
+        session: SessionId,
+    },
     /// Reverts the current composition (cancels it).
-    Revert { session: SessionId },
+    Revert {
+        session: SessionId,
+    },
     /// Completes the two-phase exact-text commit undo transaction. The TSF
     /// side sends `Applied` only after the host deleted the verified text;
     /// `Rejected` means validation failed before mutation, and `Unknown`
@@ -131,7 +150,51 @@ pub enum Request {
     /// event. This is reserved for the focused TSF input-mode menu and is
     /// rejected while a composition is active or the field is not a known
     /// ordinary-text scope, so a menu callback can never own a document edit.
-    SetMode { session: SessionId, mode: Mode },
+    SetMode {
+        session: SessionId,
+        mode: Mode,
+    },
+    /// Commits an isolated worker result in place of the still-active Sakura
+    /// composition. The TSF frontend validates the captured visible source
+    /// before issuing this request; the engine independently requires a known
+    /// normal scope and a live composition.
+    ApplyAiComposition {
+        session: SessionId,
+        result: String,
+    },
+    /// Appends one terminal AI text operation to opt-in developer history.
+    /// Persistence applies the session's authoritative scope classification;
+    /// the frontend cannot opt sensitive or test traffic into the store.
+    RecordAiText {
+        session: SessionId,
+        operation: AiTextOperation,
+        status: AiTextStatus,
+        source: String,
+        result: String,
+        model: String,
+        provider: String,
+        style: String,
+        error_code: String,
+        latency_ms: u64,
+        input_tokens: u32,
+        output_tokens: u32,
+        cached_tokens: u32,
+        attempts: u32,
+        test_only: bool,
+    },
+    StartAiText {
+        session: SessionId,
+        operation: AiTextOperation,
+        text: String,
+    },
+    PollAiText {
+        session: SessionId,
+        job: u64,
+    },
+    CancelAiText {
+        session: SessionId,
+        job: u64,
+    },
     /// Deletes one learned prediction candidate from the exact UI snapshot
     /// previously published to the renderer. `revision` and
     /// `candidate_index` are checked against engine-owned state; a surface or
@@ -141,7 +204,9 @@ pub enum Request {
         candidate_index: u16,
     },
     /// Ends a session and releases its resources.
-    DeleteSession { session: SessionId },
+    DeleteSession {
+        session: SessionId,
+    },
     /// A liveness check; the engine answers with `Response::Pong`.
     Ping,
     /// Asks the engine to flush state and exit.
@@ -164,7 +229,9 @@ pub enum Request {
     ///
     /// `since` of 0 means "answer immediately with whatever is current",
     /// which is what a renderer that just connected wants.
-    WatchUi { since: Revision },
+    WatchUi {
+        since: Revision,
+    },
     /// Updates the renderer-owned candidate window's caret rectangle and
     /// whether TSF's UI-element manager permits the renderer to show it.
     ///
@@ -204,6 +271,58 @@ impl UndoCommitOutcome {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AiTextOperation {
+    Transform = 1,
+    Proofread = 2,
+}
+
+impl AiTextOperation {
+    fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            1 => Ok(Self::Transform),
+            2 => Ok(Self::Proofread),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AiTextStatus {
+    Applied = 1,
+    Cancelled = 2,
+    Timeout = 3,
+    MissingKey = 4,
+    WorkerError = 5,
+    ApiError = 6,
+    Rejected = 7,
+}
+
+impl AiTextStatus {
+    fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            1 => Ok(Self::Applied),
+            2 => Ok(Self::Cancelled),
+            3 => Ok(Self::Timeout),
+            4 => Ok(Self::MissingKey),
+            5 => Ok(Self::WorkerError),
+            6 => Ok(Self::ApiError),
+            7 => Ok(Self::Rejected),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
 /// A message sent from the engine back to a client.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
@@ -216,7 +335,10 @@ pub enum Response {
     /// profile-resolved initial mode. The TSF input-mode item needs this before
     /// the user types a key, because a visible caret must immediately show the
     /// actual per-application mode rather than a guessed default.
-    SessionCreated { session: SessionId, mode: Mode },
+    SessionCreated {
+        session: SessionId,
+        mode: Mode,
+    },
     /// The result of a key event or editing command.
     Output(Output),
     /// Answers `Request::Ping`.
@@ -224,7 +346,9 @@ pub enum Response {
     /// A generic success acknowledgement (e.g. for `Commit`/`Revert`).
     Ok,
     /// The current mode after a successful [`Request::SetMode`].
-    InputMode { mode: Mode },
+    InputMode {
+        mode: Mode,
+    },
     /// Live counters for the developer input-history writer.
     InputHistoryStats {
         active: bool,
@@ -233,12 +357,39 @@ pub enum Response {
         excluded_unclassified_events: u64,
         excluded_sensitive_events: u64,
         excluded_test_only_events: u64,
+        ai_requests: u64,
+        ai_attempts: u64,
+        ai_input_tokens: u64,
+        ai_output_tokens: u64,
+        ai_cached_tokens: u64,
     },
     /// Answers [`Request::DeleteHistoryCandidate`]. `false` is a terminal,
     /// fail-closed no-op for stale UI, a non-history row, disabled learning,
     /// a duplicate click, or a persistence failure. The renderer must wait
     /// for a later [`Response::Ui`] before changing what it draws.
-    HistoryCandidateDeleted { removed: bool },
+    HistoryCandidateDeleted {
+        removed: bool,
+    },
+    AiTextStarted {
+        job: u64,
+    },
+    AiTextPending {
+        job: u64,
+    },
+    AiTextResult {
+        job: u64,
+        status: AiTextStatus,
+        result: String,
+        model: String,
+        provider: String,
+        style: String,
+        error_code: String,
+        latency_ms: u64,
+        input_tokens: u32,
+        output_tokens: u32,
+        cached_tokens: u32,
+        attempts: u32,
+    },
     /// Answers `Request::WatchUi` with what the renderer should draw.
     Ui(UiState),
     /// The request could not be fulfilled.
@@ -397,6 +548,11 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::UndoCommit { .. } => REQ_UNDO_COMMIT,
         Request::SetInputScope { .. } => REQ_SET_INPUT_SCOPE,
         Request::SetMode { .. } => REQ_SET_MODE,
+        Request::ApplyAiComposition { .. } => REQ_APPLY_AI_COMPOSITION,
+        Request::RecordAiText { .. } => REQ_RECORD_AI_TEXT,
+        Request::StartAiText { .. } => REQ_START_AI_TEXT,
+        Request::PollAiText { .. } => REQ_POLL_AI_TEXT,
+        Request::CancelAiText { .. } => REQ_CANCEL_AI_TEXT,
         Request::DeleteHistoryCandidate { .. } => REQ_DELETE_HISTORY_CANDIDATE,
         Request::DeleteSession { .. } => REQ_DELETE_SESSION,
         Request::Ping => REQ_PING,
@@ -453,6 +609,56 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
             w.write_u64(*session)?;
             mode.encode(w)
         }
+        Request::ApplyAiComposition { session, result } => {
+            w.write_u64(*session)?;
+            w.write_str(result)
+        }
+        Request::RecordAiText {
+            session,
+            operation,
+            status,
+            source,
+            result,
+            model,
+            provider,
+            style,
+            error_code,
+            latency_ms,
+            input_tokens,
+            output_tokens,
+            cached_tokens,
+            attempts,
+            test_only,
+        } => {
+            w.write_u64(*session)?;
+            operation.encode(w)?;
+            status.encode(w)?;
+            w.write_str(source)?;
+            w.write_str(result)?;
+            w.write_str(model)?;
+            w.write_str(provider)?;
+            w.write_str(style)?;
+            w.write_str(error_code)?;
+            w.write_u64(*latency_ms)?;
+            w.write_u32(*input_tokens)?;
+            w.write_u32(*output_tokens)?;
+            w.write_u32(*cached_tokens)?;
+            w.write_u32(*attempts)?;
+            w.write_bool(*test_only)
+        }
+        Request::StartAiText {
+            session,
+            operation,
+            text,
+        } => {
+            w.write_u64(*session)?;
+            operation.encode(w)?;
+            w.write_str(text)
+        }
+        Request::PollAiText { session, job } | Request::CancelAiText { session, job } => {
+            w.write_u64(*session)?;
+            w.write_u64(*job)
+        }
         Request::DeleteHistoryCandidate {
             revision,
             candidate_index,
@@ -492,6 +698,9 @@ fn response_msg_type(res: &Response) -> u16 {
         Response::InputHistoryStats { .. } => RES_INPUT_HISTORY_STATS,
         Response::InputMode { .. } => RES_INPUT_MODE,
         Response::HistoryCandidateDeleted { .. } => RES_HISTORY_CANDIDATE_DELETED,
+        Response::AiTextStarted { .. } => RES_AI_TEXT_STARTED,
+        Response::AiTextPending { .. } => RES_AI_TEXT_PENDING,
+        Response::AiTextResult { .. } => RES_AI_TEXT_RESULT,
         Response::Ui(_) => RES_UI,
         Response::Error(_) => RES_ERROR,
     }
@@ -517,6 +726,34 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
         Response::Ok => Ok(()),
         Response::InputMode { mode } => mode.encode(w),
         Response::HistoryCandidateDeleted { removed } => w.write_bool(*removed),
+        Response::AiTextStarted { job } | Response::AiTextPending { job } => w.write_u64(*job),
+        Response::AiTextResult {
+            job,
+            status,
+            result,
+            model,
+            provider,
+            style,
+            error_code,
+            latency_ms,
+            input_tokens,
+            output_tokens,
+            cached_tokens,
+            attempts,
+        } => {
+            w.write_u64(*job)?;
+            status.encode(w)?;
+            w.write_str(result)?;
+            w.write_str(model)?;
+            w.write_str(provider)?;
+            w.write_str(style)?;
+            w.write_str(error_code)?;
+            w.write_u64(*latency_ms)?;
+            w.write_u32(*input_tokens)?;
+            w.write_u32(*output_tokens)?;
+            w.write_u32(*cached_tokens)?;
+            w.write_u32(*attempts)
+        }
         Response::InputHistoryStats {
             active,
             dropped_events,
@@ -524,13 +761,23 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
             excluded_unclassified_events,
             excluded_sensitive_events,
             excluded_test_only_events,
+            ai_requests,
+            ai_attempts,
+            ai_input_tokens,
+            ai_output_tokens,
+            ai_cached_tokens,
         } => {
             w.write_bool(*active)?;
             w.write_u64(*dropped_events)?;
             w.write_u64(*persistence_failures)?;
             w.write_u64(*excluded_unclassified_events)?;
             w.write_u64(*excluded_sensitive_events)?;
-            w.write_u64(*excluded_test_only_events)
+            w.write_u64(*excluded_test_only_events)?;
+            w.write_u64(*ai_requests)?;
+            w.write_u64(*ai_attempts)?;
+            w.write_u64(*ai_input_tokens)?;
+            w.write_u64(*ai_output_tokens)?;
+            w.write_u64(*ai_cached_tokens)
         }
         Response::Ui(ui) => {
             if ui.candidate_detail.is_some() && ui.candidates.is_none() {
@@ -626,6 +873,40 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
             session: r.read_u64()?,
             mode: Mode::decode(&mut r)?,
         },
+        REQ_APPLY_AI_COMPOSITION => Request::ApplyAiComposition {
+            session: r.read_u64()?,
+            result: r.read_str()?.to_string(),
+        },
+        REQ_RECORD_AI_TEXT => Request::RecordAiText {
+            session: r.read_u64()?,
+            operation: AiTextOperation::decode(&mut r)?,
+            status: AiTextStatus::decode(&mut r)?,
+            source: r.read_str()?.to_string(),
+            result: r.read_str()?.to_string(),
+            model: r.read_str()?.to_string(),
+            provider: r.read_str()?.to_string(),
+            style: r.read_str()?.to_string(),
+            error_code: r.read_str()?.to_string(),
+            latency_ms: r.read_u64()?,
+            input_tokens: r.read_u32()?,
+            output_tokens: r.read_u32()?,
+            cached_tokens: r.read_u32()?,
+            attempts: r.read_u32()?,
+            test_only: r.read_bool()?,
+        },
+        REQ_START_AI_TEXT => Request::StartAiText {
+            session: r.read_u64()?,
+            operation: AiTextOperation::decode(&mut r)?,
+            text: r.read_str()?.to_string(),
+        },
+        REQ_POLL_AI_TEXT => Request::PollAiText {
+            session: r.read_u64()?,
+            job: r.read_u64()?,
+        },
+        REQ_CANCEL_AI_TEXT => Request::CancelAiText {
+            session: r.read_u64()?,
+            job: r.read_u64()?,
+        },
         REQ_DELETE_HISTORY_CANDIDATE => Request::DeleteHistoryCandidate {
             revision: r.read_u64()?,
             candidate_index: r.read_u16()?,
@@ -687,6 +968,22 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         RES_HISTORY_CANDIDATE_DELETED => Response::HistoryCandidateDeleted {
             removed: r.read_bool()?,
         },
+        RES_AI_TEXT_STARTED => Response::AiTextStarted { job: r.read_u64()? },
+        RES_AI_TEXT_PENDING => Response::AiTextPending { job: r.read_u64()? },
+        RES_AI_TEXT_RESULT => Response::AiTextResult {
+            job: r.read_u64()?,
+            status: AiTextStatus::decode(&mut r)?,
+            result: r.read_str()?.to_string(),
+            model: r.read_str()?.to_string(),
+            provider: r.read_str()?.to_string(),
+            style: r.read_str()?.to_string(),
+            error_code: r.read_str()?.to_string(),
+            latency_ms: r.read_u64()?,
+            input_tokens: r.read_u32()?,
+            output_tokens: r.read_u32()?,
+            cached_tokens: r.read_u32()?,
+            attempts: r.read_u32()?,
+        },
         RES_INPUT_HISTORY_STATS => Response::InputHistoryStats {
             active: r.read_bool()?,
             dropped_events: r.read_u64()?,
@@ -694,6 +991,11 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
             excluded_unclassified_events: r.read_u64()?,
             excluded_sensitive_events: r.read_u64()?,
             excluded_test_only_events: r.read_u64()?,
+            ai_requests: r.read_u64()?,
+            ai_attempts: r.read_u64()?,
+            ai_input_tokens: r.read_u64()?,
+            ai_output_tokens: r.read_u64()?,
+            ai_cached_tokens: r.read_u64()?,
         },
         RES_UI => {
             let revision = r.read_u64()?;

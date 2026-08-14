@@ -14,6 +14,8 @@ members = [
     "crates/sakura-settings",
     "crates/dictc",
     "crates/sakura-neural-worker",
+    "crates/sakura-ai-proto",
+    "crates/sakura-ai-worker",
 ]
 
 [workspace.package]
@@ -32,6 +34,7 @@ authors = ["Sakura Input contributors"]
 sakura-core = { path = "crates/sakura-core" }
 sakura-proto = { path = "crates/sakura-proto" }
 sakura-neural-proto = { path = "crates/sakura-neural-proto" }
+sakura-ai-proto = { path = "crates/sakura-ai-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
 sakura-engine = { path = "crates/sakura-engine" }
