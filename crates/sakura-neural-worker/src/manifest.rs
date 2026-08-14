@@ -9,6 +9,8 @@ use std::{
 pub const MODEL_ID: &str = "Sakura-Rerank-Tiny-v1-research-prototype";
 pub const SOURCE_MANIFEST_SHA256: &str =
     "07f1c54cbe361e117b547f47511de960977f1d0f754f051f44b9447a591d96b9";
+pub const RUNTIME_STATUS: &str = "release_experimental_gate_a_failed";
+pub const MODEL_LICENSE: &str = "MIT";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidatedManifest {
@@ -45,6 +47,7 @@ struct Research {
     gate_a_status: String,
     final_holdout_used: bool,
     artifact_distribution_authorized: bool,
+    license: String,
 }
 
 #[derive(Deserialize)]
@@ -88,7 +91,7 @@ pub fn validate(dir: &Path) -> Result<ValidatedManifest, String> {
         serde_json::from_slice(&source).map_err(|_| "malformed manifest".to_owned())?;
     if manifest.schema_version != 1
         || manifest.manifest_kind != "sakura_rerank_runtime_model"
-        || manifest.status != "research_only_gate_a_failed"
+        || manifest.status != RUNTIME_STATUS
         || manifest.model.id != MODEL_ID
         || manifest.model.contract_version != 1
         || manifest.model.format != "onnx-fp32"
@@ -98,7 +101,8 @@ pub fn validate(dir: &Path) -> Result<ValidatedManifest, String> {
         || manifest.research.source_manifest_sha256 != SOURCE_MANIFEST_SHA256
         || manifest.research.gate_a_status != "gate_a_failed"
         || manifest.research.final_holdout_used
-        || manifest.research.artifact_distribution_authorized
+        || !manifest.research.artifact_distribution_authorized
+        || manifest.research.license != MODEL_LICENSE
         || manifest.raw_text_in_manifest
         || manifest.raw_stable_ids_in_manifest
     {
@@ -142,10 +146,12 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
         fs::write(path.join("model.onnx"), b"a").unwrap();
         let manifest = format!(
-            "{{\"files\":[{{\"bytes\":1,\"path\":\"model.onnx\",\"sha256\":\"{}\"}}],\"manifest_kind\":\"sakura_rerank_runtime_model\",\"model\":{{\"contract_version\":1,\"format\":\"onnx-fp32\",\"id\":\"{}\",\"opset\":18}},\"raw_stable_ids_in_manifest\":false,\"raw_text_in_manifest\":false,\"research\":{{\"artifact_distribution_authorized\":false,\"final_holdout_used\":false,\"gate_a_status\":\"gate_a_failed\",\"source_manifest_sha256\":\"{}\"}},\"runtime\":{{\"name\":\"onnxruntime\",\"version\":\"1.28.0\"}},\"schema_version\":1,\"status\":\"research_only_gate_a_failed\"}}",
+            "{{\"files\":[{{\"bytes\":1,\"path\":\"model.onnx\",\"sha256\":\"{}\"}}],\"manifest_kind\":\"sakura_rerank_runtime_model\",\"model\":{{\"contract_version\":1,\"format\":\"onnx-fp32\",\"id\":\"{}\",\"opset\":18}},\"raw_stable_ids_in_manifest\":false,\"raw_text_in_manifest\":false,\"research\":{{\"artifact_distribution_authorized\":true,\"final_holdout_used\":false,\"gate_a_status\":\"gate_a_failed\",\"license\":\"{}\",\"source_manifest_sha256\":\"{}\"}},\"runtime\":{{\"name\":\"onnxruntime\",\"version\":\"1.28.0\"}},\"schema_version\":1,\"status\":\"{}\"}}",
             hex(&path.join("model.onnx")).unwrap(),
             MODEL_ID,
+            MODEL_LICENSE,
             SOURCE_MANIFEST_SHA256,
+            RUNTIME_STATUS,
         );
         fs::write(path.join("manifest.json"), manifest).unwrap();
         path
@@ -165,6 +171,28 @@ mod tests {
     fn rejects_changed_artifact() {
         let path = directory();
         fs::write(path.join("model.onnx"), b"x").unwrap();
+        assert!(validate(&path).is_err());
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn rejects_unapproved_or_mislicensed_distribution_metadata() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replace(
+                "\"artifact_distribution_authorized\":true",
+                "\"artifact_distribution_authorized\":false",
+            ),
+        )
+        .unwrap();
+        assert!(validate(&path).is_err());
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replace("\"license\":\"MIT\"", "\"license\":\"unknown\""),
+        )
+        .unwrap();
         assert!(validate(&path).is_err());
         fs::remove_dir_all(path).unwrap();
     }

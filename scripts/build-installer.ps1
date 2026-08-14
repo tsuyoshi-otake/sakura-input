@@ -13,6 +13,9 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $setupPath = Join-Path $repositoryRoot 'installer\setup.iss'
 $installerPath = Join-Path $repositoryRoot 'installer\out\sakura_setup.exe'
+$neuralBuildScript = Join-Path $repositoryRoot 'scripts\build-sakura-reranker.ps1'
+$neuralPayloadDirectory = Join-Path $repositoryRoot 'artifacts\release\neural-payload'
+$neuralManifestPath = Join-Path $neuralPayloadDirectory 'neural\sakura-rerank-tiny-v1\manifest.json'
 $dictionaryReportPath = if ([string]::IsNullOrWhiteSpace($DictionaryReportPath)) {
     Join-Path $repositoryRoot 'artifacts\release\dictionary-build.report.json'
 } else {
@@ -196,6 +199,11 @@ function Get-RequiredJsonProperty {
 
 $version = Get-CanonicalVersion
 $iscc = Resolve-Iscc
+if (-not [IO.File]::Exists($neuralBuildScript)) {
+    throw "Sakura reranker payload builder is missing: $neuralBuildScript"
+}
+& $neuralBuildScript
+
 $payloadPaths = @(
     'target\x86_64-pc-windows-msvc\release\sakura_tsf.dll',
     'target\x86_64-pc-windows-msvc\release\sakura_engine.exe',
@@ -210,8 +218,16 @@ $payloadPaths = @(
     'docs\guide-ja.md',
     'THIRD_PARTY_NOTICES.md',
     'THIRD_PARTY_LICENSES\mozc-dictionary.txt',
-    'THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt'
+    'THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt',
+    'artifacts\release\neural-payload\sakura_neural_worker.exe',
+    'artifacts\release\neural-payload\onnxruntime.dll',
+    'artifacts\release\neural-payload\neural\sakura-rerank-tiny-v1\model.onnx',
+    'artifacts\release\neural-payload\neural\sakura-rerank-tiny-v1\manifest.json',
+    'artifacts\release\neural-payload\licenses\onnxruntime-MIT.txt',
+    'artifacts\release\neural-payload\licenses\onnxruntime-ThirdPartyNotices.txt',
+    'artifacts\release\neural-payload\licenses\sakura-rerank-tiny-v1-MIT.txt'
 )
+$neuralManifestRecord = Get-ArtifactRecord $neuralManifestPath
 if (-not [IO.File]::Exists($dictionaryReportPath)) {
     throw "dictionary provenance report is missing: $dictionaryReportPath"
 }
@@ -429,8 +445,10 @@ $report = [ordered]@{
         }
     }
     neural_reranker = [ordered]@{
-        included = $false
-        manifest = $null
+        included = $true
+        manifest = $neuralManifestRecord
+        status = 'release_experimental_gate_a_failed'
+        default_scope = 'long-text-only'
     }
     payloads = @($payloads)
     installer = Get-ArtifactRecord $installer.FullName

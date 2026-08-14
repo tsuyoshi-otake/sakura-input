@@ -66,10 +66,11 @@ fn main() {
         cli::Command::Probe(model) => {
             let (dispatch, hash, _runtime) = initialize(&model);
             println!(
-                "{{\"tier\":\"{}\",\"runtime\":\"onnxruntime\",\"model\":\"{}\",\"model_sha256\":\"{}\",\"status\":\"research_only_gate_a_failed\"}}",
+                "{{\"tier\":\"{}\",\"runtime\":\"onnxruntime\",\"model\":\"{}\",\"model_sha256\":\"{}\",\"status\":\"{}\"}}",
                 dispatch.tier().name(),
                 manifest::MODEL_ID,
-                hash
+                hash,
+                manifest::RUNTIME_STATUS,
             );
         }
         cli::Command::Stdio(model) => {

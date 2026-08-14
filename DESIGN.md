@@ -594,10 +594,11 @@ by mutating the base dictionary.
 ### 5.2.1 Optional local long-conversion reranker
 
 **Implementation status:** the former DeBERTa Tiny runtime and installer path
-have been removed. The Rust worker now admits only the research
-`Sakura-Rerank-Tiny-v1` contract. Its Gate A is not accepted and redistribution
-is not authorized, so no installer build includes it and it is not a production
-default. Local staging exists only for explicit engineering verification.
+have been removed. The Rust worker now admits only the content-addressed
+`Sakura-Rerank-Tiny-v1` contract. The self-authored model is distributed under
+MIT in the normal installer and defaults to long-conversion scope. Gate A is
+still not accepted and the final holdout remains unused; release inclusion is
+an owner product decision, not a claim that those quality gates passed.
 
 The normal converter remains the lattice/Viterbi N-best generator. The optional
 reranker never generates a candidate and is not a per-keystroke prediction
@@ -638,7 +639,8 @@ The admitted research artifact is `Sakura-Rerank-Tiny-v1-research-prototype`,
 contract version 1, FP32 SHA-256
 `b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd`.
 The runtime manifest also binds the reviewed research manifest, Gate A failure,
-final-holdout non-use, and distribution prohibition. Protocol v1 supplies only
+final-holdout non-use, MIT licensing, and explicit distribution authorization.
+Protocol v1 supplies only
 the existing candidate surfaces, local costs, and fingerprints. Context and
 reading tensors are zeroed; available features are normalized local cost,
 candidate order, and surface length. The listwise model score is the complete
