@@ -57,6 +57,10 @@ use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningServi
 use crate::long_conversion::LongConversionService;
 use crate::prediction::{PredictionResult, PredictionService, PredictionSource};
 use crate::session::{scope_is_sensitive, text_hash, Session, SessionTable};
+use crate::shift_ascii_space::{
+    decide_shift_ascii_convert, ConversionTrigger, ShiftAsciiConvertDecision,
+    ShiftAsciiConvertFacts,
+};
 
 /// Reported to a client that asks `Hello`. Not the protocol version (that is
 /// [`PROTOCOL_VERSION`], checked separately by `sakura_proto::decode_request`
@@ -1578,6 +1582,7 @@ fn apply_key(
             session_id,
             session,
             action,
+            key,
             services,
             policy,
             &mut prediction_cache,
@@ -2221,6 +2226,7 @@ fn apply_action(
     session_id: SessionId,
     session: &mut Session,
     action: Action,
+    key: &KeyInput,
     services: &KeyServices<'_>,
     policy: ExecutionPolicy,
     prediction_cache: &mut PredictionCacheWork<'_>,
@@ -2415,6 +2421,10 @@ fn apply_action(
                 services.long_conversion_owner,
                 scratch,
                 0,
+                ConversionTrigger {
+                    is_space: key.code == KeyCode::Space,
+                    shifted: key.modifiers.shift(),
+                },
                 out,
             )?;
         }
@@ -2429,6 +2439,10 @@ fn apply_action(
                 services.long_conversion_owner,
                 scratch,
                 -1,
+                ConversionTrigger {
+                    is_space: key.code == KeyCode::Space,
+                    shifted: key.modifiers.shift(),
+                },
                 out,
             )?;
         }
@@ -2959,6 +2973,7 @@ fn begin_conversion(
     long_conversion_owner: u64,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     initial_selection: i16,
+    trigger: ConversionTrigger,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
     if session.converting {
@@ -2975,14 +2990,32 @@ fn begin_conversion(
         out.beep = true;
         return Ok(());
     }
-    let shifted_ascii_dictionary_hit = prepare_shifted_ascii_reading(session, conversion)?;
-    if session.shifted_ascii && !shifted_ascii_dictionary_hit {
-        // A Shift-started ASCII sequence is an explicit English composition. Never
-        // reinterpret an unknown word as kana merely because the romaji table
-        // can produce a phonetic fallback; keep the raw text available for
-        // Enter/commit instead.
-        out.beep = true;
-        return Ok(());
+    let skip_dictionary_lookup = session.shifted_ascii && trigger.is_space && trigger.shifted;
+    let shifted_ascii_dictionary_hit = if skip_dictionary_lookup {
+        false
+    } else {
+        prepare_shifted_ascii_reading(session, conversion)?
+    };
+    match decide_shift_ascii_convert(ShiftAsciiConvertFacts {
+        shifted_ascii: session.shifted_ascii,
+        trigger_is_space: trigger.is_space,
+        shift_modifier: trigger.shifted,
+        dictionary_hit: shifted_ascii_dictionary_hit,
+    }) {
+        ShiftAsciiConvertDecision::InsertLiteralSpace => {
+            // The temporary English composition owns this key, so keep the
+            // space in the same preedit/raw-input provenance rather than
+            // committing around it or passing it underneath to the host.
+            feed_character(session, table, ' ', false, scratch)?;
+            return Ok(());
+        }
+        ShiftAsciiConvertDecision::RejectUnknown => {
+            // A non-Space conversion request for an unknown Shift-started ASCII
+            // sequence must not reinterpret it as kana.
+            out.beep = true;
+            return Ok(());
+        }
+        ShiftAsciiConvertDecision::Convert => {}
     }
     session.begin_conversion();
     session.selected_candidate = initial_selection;
@@ -3160,6 +3193,7 @@ fn build_reconversion(
         0,
         scratch,
         0,
+        ConversionTrigger::default(),
         out,
     )
     .map_err(|_| ErrorCode::TooLarge)?;
@@ -9292,7 +9326,7 @@ mod tests {
     }
 
     #[test]
-    fn shift_started_ascii_without_dictionary_hit_never_falls_back_to_kana() {
+    fn shift_started_ascii_without_dictionary_hit_inserts_literal_plain_space() {
         let mut dispatcher = shifted_ascii_english_conversion_dispatcher();
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
@@ -9319,14 +9353,25 @@ mod tests {
             Reply::Output
         );
         assert!(out.consumed);
-        assert!(out.beep);
+        assert!(!out.beep);
         assert_eq!(out.commit_text(), None);
-        assert_eq!(out.preedit_text(), "Aiamu");
+        assert_eq!(out.preedit_text(), "Aiamu ");
         assert_eq!(out.candidate_kind(), None);
         assert_eq!(
             dispatcher.sessions.get(session).expect("session").state(),
             State::Composing
         );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert!(!out.beep);
+        assert_eq!(out.preedit_text(), "Aiamu  ");
 
         assert_eq!(
             dispatcher.dispatch(
@@ -9338,7 +9383,38 @@ mod tests {
             ),
             Reply::Output
         );
-        assert_eq!(out.commit_text(), Some("Aiamu"));
+        assert_eq!(out.commit_text(), Some("Aiamu  "));
+    }
+
+    #[test]
+    fn shift_space_in_shifted_ascii_is_literal_even_for_a_known_dictionary_term() {
+        let mut dispatcher = shifted_ascii_english_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        for (index, character) in "Claude".chars().enumerate() {
+            let key = if index == 0 {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: modified_named_key(KeyCode::Space, Modifiers::SHIFT),
+            },
+            &mut out,
+        );
+
+        assert!(out.consumed);
+        assert!(!out.beep);
+        assert_eq!(out.preedit_text(), "Claude ");
+        assert_eq!(out.candidate_kind(), None);
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_input.as_str(), "Claude ");
+        assert!(live.shifted_ascii);
     }
 
     #[test]

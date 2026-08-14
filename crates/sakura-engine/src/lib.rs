@@ -38,5 +38,8 @@ pub mod prediction;
 pub mod prediction_snapshot;
 pub mod server;
 pub mod session;
+mod shift_ascii_space;
+#[cfg(test)]
+mod shift_ascii_space_tests;
 pub mod ui;
 pub mod user_dictionary;
