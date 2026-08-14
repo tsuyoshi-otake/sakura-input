@@ -70,12 +70,18 @@ length/segmentation gate; the static corpus itself is the Normal-scope input.
 In either mode a missing, invalid, timed-out, or malformed worker response is
 recorded as `worker-fallback`, retaining dictionary Top-1.
 
+The old DeBERTa payload is no longer supported. For an explicit research run,
+first use `scripts/stage-sakura-rerank.ps1` with the reviewed research manifest
+and an isolated output directory. The Sakura artifact has not passed Gate A and
+is not authorized for redistribution, so this remains an engineering evaluation
+rather than release or production-default evidence.
+
 ```powershell
 rtk cargo run --locked --release -p dictc --bin neural-eval -- `
   --dictionary <system.dic> `
   --corpus corpus\held-out.tsv `
-  --worker artifacts\release\sakura_neural_worker.exe `
-  --model-dir artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm `
+  --worker <staging-dir>\sakura_neural_worker.exe `
+  --model-dir <staging-dir>\neural\sakura-rerank-tiny-v1 `
   --mode long `
   --exploratory `
   --report <neural-long.json>

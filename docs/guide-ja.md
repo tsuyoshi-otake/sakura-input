@@ -145,12 +145,10 @@ WER minidump はローカルにだけ保存され、自動送信されません�
 
 ### 任意のローカル長文再順位付けとプライバシー
 
-Issue #24 の任意 neural reranker はRust worker、engine統合、固定artifactの実 ONNX Runtime/model IPC E2E、opt-in installer buildまで確認済みです。既定installerにはまだ同梱せず、順位品質、cold/warm latency、private working setの受け入れ計測後にrolloutを決めます。配布 payload に任意の neural rerankerがある場合、長い読みを `Space` で通常変換するときだけ、既存の辞書 N-best 候補を補助的に再順位付けできます。これは候補生成や `Tab` の推測候補ではありません。engine は Rust 製の `sakura_neural_worker.exe` を必要になったときだけローカル子プロセスとして起動し、`neural/deberta-v2-tiny-japanese-char-wwm/` の `model.onnx`、`vocab.txt`、`manifest.json` を使用します。worker は同じディレクトリの ONNX Runtime DLL を動的に読み込みます。TSF DLL や engine 本体へ ONNX Runtime やモデルを読み込みません。
+Issue #32 の実験的 neural reranker は、研究リポジトリの `Sakura-Rerank-Tiny-v1` をRust workerでローカル実行します。旧DeBERTa Tinyのruntimeとinstaller経路は除去済みです。SakuraモデルはGate A未通過・配布未承認のため、通常installerには同梱せずproduction defaultにも設定しません。長い読みを `Space` で通常変換するとき、既存の辞書N-best候補を最大6件までlistwiseに再順位付けします。これは候補生成や `Tab` の推測候補ではありません。engineは `sakura_neural_worker.exe` を必要なときだけローカル子プロセスとして起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使用します。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLやengine本体へONNX Runtimeやモデルを読み込みません。
 
 この worker はネットワークへ送信しません。engine が分類済み `Normal` scope の通常変換の読みからローカルで作った候補 snapshot だけを、同一マシン内の IPC で渡します。Password、URL、Email、Digits、未知または未分類 scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は worker を起動せず、入力内容も送信しません。通常の診断ログへ入力文字列を記録せず、自動アップロードもしません。
 
 変換のキー経路は worker の応答を待ちません。worker／モデルの欠落、起動失敗、異常応答、timeout、または一致しない古い結果では、従来のローカル順位のまま表示します。候補表示後に遅い結果で順序を変更することはありません。明示的な学習、完全一致 cache、ユーザー辞書の優先順位はモデルより上です。
 
-`15 MiB` の private working-set 予算は TSF/engine 本体の予算であり、任意 worker のモデル、ONNX Runtime、working setは含みません。2026-08-10のx64 release artifactはworker 0.39 MiB、ONNX Runtime DLL 15.08 MiB、model 40.37 MiB、neural同梱installer 55.45 MiBでした。working setとcold/warm latencyは未計測です。開発者は `scripts/export-neural-model.py` と `scripts/build-neural-reranker.ps1` で、固定 revision `41bcb8a393383a039c7ee18ded6893ca82e668b7` の artifact を再生成し、manifest に記録された SHA-256 を確認できます。
-
-ONNX へ変換して配布する Kyoto University NLP の `ku-nlp/deberta-v2-tiny-japanese-char-wwm` model と vocabulary は CC BY-SA 4.0 の対象です。変換物を再配布する場合は、`THIRD_PARTY_LICENSES/ku-nlp-deberta-v2-tiny-japanese-char-wwm.txt` の attribution、CC BY-SA 4.0 の license notice/link、および ShareAlike 条件を保持してください。詳細は Third-party notices を参照してください。
+`15 MiB` の private working-set 予算は TSF/engine 本体の予算であり、任意 worker のモデル、ONNX Runtime、working setは含みません。Sakuraモデルのworking setとcold/warm latencyは別途計測します。モデルはライセンス未選定・配布未承認の研究artifactであり、release assetやinstallerへ追加しません。開発者は `scripts/stage-sakura-rerank.ps1` で、明示指定したモデル、研究manifest、worker、ONNX Runtimeをハッシュ検証し、隔離stagingへ配置できます。

@@ -593,11 +593,11 @@ by mutating the base dictionary.
 
 ### 5.2.1 Optional local long-conversion reranker
 
-**Implementation status:** the Rust worker, engine integration, reproducible
-artifact path, real ONNX Runtime/model IPC fixture, and opt-in installer build
-have been exercised. The default installer remains opt-out while ranking
-quality, cold/warm latency, and worker private working set await acceptance
-measurement; this is not a claim that the reranker is active by default.
+**Implementation status:** the former DeBERTa Tiny runtime and installer path
+have been removed. The Rust worker now admits only the research
+`Sakura-Rerank-Tiny-v1` contract. Its Gate A is not accepted and redistribution
+is not authorized, so no installer build includes it and it is not a production
+default. Local staging exists only for explicit engineering verification.
 
 The normal converter remains the lattice/Viterbi N-best generator. The optional
 reranker never generates a candidate and is not a per-keystroke prediction
@@ -610,9 +610,9 @@ installer-provided ONNX Runtime DLL; the TSF DLL and engine neither load that
 DLL nor the model, and the synchronous conversion path never waits for the
 worker.
 
-The installed worker is discovered beside `sakura_engine.exe`. Its model
-directory is `neural/deberta-v2-tiny-japanese-char-wwm/`, containing `model.onnx`,
-`vocab.txt`, and `manifest.json`. A missing worker or model, invalid frame,
+The worker is discovered beside `sakura_engine.exe`. Its research model
+directory is `neural/sakura-rerank-tiny-v1/`, containing `model.onnx` and
+`manifest.json`. A missing worker or model, invalid frame,
 process crash, start failure, response timeout, or unavailable exact result is a
 local-fallback outcome; the existing dictionary ranking remains final.
 
@@ -634,13 +634,16 @@ may reorder it. Explicit user learning, exact cache, and user-dictionary
 precedence are applied outside this worker and remain authoritative. Worker
 restarts are bounded with exponential backoff and deterministic jitter.
 
-The pinned source model is `ku-nlp/deberta-v2-tiny-japanese-char-wwm` revision
-`41bcb8a393383a039c7ee18ded6893ca82e668b7`. The build-only export script fetches
-that revision and produces the ONNX graph; the installed IME does not import
-Python, PyTorch, Transformers, Hugging Face Hub, or Optimum. The release build
-records model/runtime artifact hashes in a manifest. Reproducibility means
-re-running the pinned export/build procedure and checking those hashes, not
-claiming that an unmeasured exported binary has a particular size or latency.
+The admitted research artifact is `Sakura-Rerank-Tiny-v1-research-prototype`,
+contract version 1, FP32 SHA-256
+`b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd`.
+The runtime manifest also binds the reviewed research manifest, Gate A failure,
+final-holdout non-use, and distribution prohibition. Protocol v1 supplies only
+the existing candidate surfaces, local costs, and fingerprints. Context and
+reading tensors are zeroed; available features are normalized local cost,
+candidate order, and surface length. The listwise model score is the complete
+selection signal, not a residual penalty added to local cost. The installed IME
+does not import Python, PyTorch, or training dependencies.
 
 ### 5.3 Prediction
 

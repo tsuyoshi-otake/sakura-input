@@ -106,7 +106,6 @@ $IsolatedWorkerRuntime = [ordered]@{
     'version_check'         = 'sha2 build-time configuration'
     'cpufeatures'           = 'sha2 CPU dispatch'
     'libc'                  = 'transitive platform support for isolated worker'
-    'unicode-general-category' = 'isolated worker reproduces Transformers BasicTokenizer Unicode categories'
     'serde'                 = 'isolated worker strict model-manifest deserialization'
     'serde_derive'          = 'derive-only manifest schema implementation'
     'serde_json'            = 'isolated worker strict JSON manifest parser'
@@ -203,7 +202,7 @@ function Invoke-SelfTest {
         'sakura-core', 'sakura-tsf',
         'windows', 'windows-core', 'windows_x86_64_msvc', 'windows-implement',
         'proc-macro2', 'quote', 'syn', 'unicode-ident',
-        'ort', 'serde', 'serde_json', 'sha2', 'unicode-general-category'
+        'ort', 'serde', 'serde_json', 'sha2'
     )
     $flagged = Get-DisallowedPackage -PackageName $allowed -WorkspaceCrate $workspace
     if ($flagged.Count -ne 0) {
