@@ -23,9 +23,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "1.0.3"
+#define AppProductVersion "1.0.4"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\1.0.3-dev"
+#define AppVersionedDir "{app}\versions\1.0.4-dev"
 #endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0
