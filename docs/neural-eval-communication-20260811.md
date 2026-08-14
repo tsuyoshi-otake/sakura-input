@@ -1,5 +1,9 @@
 # Tiny / 文節変換 600件評価（2026-08-12 再評価）
 
+> Historical evidence: this report measured the former DeBERTa Tiny payload.
+> That runtime and installer path were removed under Issue #32; the commands
+> below are retained for provenance and are not current build instructions.
+
 ## 結論
 
 この再評価では、Tiny の候補再順位付けは文節変換の Top-1 を改善しなかった。両モードとも正解は 544/600（90.67%）で、勝敗は 0 勝 / 0 敗 / 600 引き分けだった。候補生成側は Recall@6 が 600/600（100%）、MRR@6 が 0.950 だった。したがって、現時点で「Tiny の方が良い」とは言えず、候補生成と文節変換を土台にし、Tiny は設定で任意に有効化する再順位付けとして扱う。

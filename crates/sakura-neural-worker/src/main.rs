@@ -1,48 +1,32 @@
 mod cli;
 mod manifest;
 mod protocol;
-mod runtime;
-mod scorer;
+mod sakura_runtime;
+mod sakura_scorer;
 mod simd;
-mod tokenizer;
 
-use std::{env, fs, io, path::Path};
+use std::{env, io, path::Path};
 
 fn fatal(message: impl std::fmt::Display) -> ! {
     eprintln!("sakura_neural_worker fatal: {message}");
     std::process::exit(1)
 }
 
-fn initialize(
-    model: &Path,
-) -> (
-    simd::Dispatch,
-    String,
-    tokenizer::Tokenizer,
-    runtime::ModelRuntime,
-) {
-    let hash = manifest::validate(model).unwrap_or_else(|error| fatal(error));
-    let vocabulary = fs::read_to_string(model.join("vocab.txt"))
-        .unwrap_or_else(|_| fatal("unable to read model vocabulary"));
-    let tokenizer =
-        tokenizer::Tokenizer::from_vocab(&vocabulary).unwrap_or_else(|error| fatal(error));
+fn initialize(model: &Path) -> (simd::Dispatch, String, sakura_runtime::ModelRuntime) {
+    let validated = manifest::validate(model).unwrap_or_else(|error| fatal(error));
     let dispatch = simd::Dispatch::startup().unwrap_or_else(|error| fatal(error));
-    let runtime = runtime::ModelRuntime::load(model).unwrap_or_else(|error| fatal(error));
-    (dispatch, hash, tokenizer, runtime)
+    let runtime = sakura_runtime::ModelRuntime::load(model).unwrap_or_else(|error| fatal(error));
+    (dispatch, validated.model_hash, runtime)
 }
 
-fn run_stdio(
-    dispatch: simd::Dispatch,
-    tokenizer: tokenizer::Tokenizer,
-    runtime: runtime::ModelRuntime,
-) {
+fn run_stdio(dispatch: simd::Dispatch, runtime: sakura_runtime::ModelRuntime) {
     let mut input = io::stdin().lock();
     let mut output = io::stdout().lock();
     loop {
         match protocol::read(&mut input) {
             Ok(Some(request)) => {
-                let deadline = std::time::Instant::now() + scorer::REQUEST_DEADLINE;
-                let result = scorer::score(&request, &tokenizer, &dispatch, &runtime, deadline);
+                let deadline = std::time::Instant::now() + sakura_scorer::REQUEST_DEADLINE;
+                let result = sakura_scorer::score(&request, &runtime, deadline);
                 let write = match result {
                     Ok(scores) => protocol::write_success(
                         &mut output,
@@ -69,9 +53,8 @@ fn main() {
     match cli::parse(&args).unwrap_or_else(|error| fatal(error)) {
         cli::Command::SelfTest(force) => {
             assert!(protocol::decode(&[0]).is_err());
-            tokenizer::self_test().unwrap_or_else(|error| fatal(error));
-            scorer::self_test().unwrap_or_else(|error| fatal(error));
-            runtime::self_test().unwrap_or_else(|error| fatal(error));
+            sakura_scorer::self_test().unwrap_or_else(|error| fatal(error));
+            sakura_runtime::self_test().unwrap_or_else(|error| fatal(error));
             let dispatch = match force {
                 Some(tier) => simd::Dispatch::force_for_self_test(&tier),
                 None => simd::Dispatch::startup(),
@@ -81,16 +64,17 @@ fn main() {
             println!("self-test passed");
         }
         cli::Command::Probe(model) => {
-            let (dispatch, hash, _tokenizer, _runtime) = initialize(&model);
+            let (dispatch, hash, _runtime) = initialize(&model);
             println!(
-                "{{\"tier\":\"{}\",\"runtime\":\"onnxruntime\",\"model_sha256\":\"{}\"}}",
+                "{{\"tier\":\"{}\",\"runtime\":\"onnxruntime\",\"model\":\"{}\",\"model_sha256\":\"{}\",\"status\":\"research_only_gate_a_failed\"}}",
                 dispatch.tier().name(),
+                manifest::MODEL_ID,
                 hash
             );
         }
         cli::Command::Stdio(model) => {
-            let (dispatch, _, tokenizer, runtime) = initialize(&model);
-            run_stdio(dispatch, tokenizer, runtime);
+            let (dispatch, _, runtime) = initialize(&model);
+            run_stdio(dispatch, runtime);
         }
     }
 }

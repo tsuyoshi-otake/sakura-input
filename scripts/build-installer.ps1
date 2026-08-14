@@ -4,9 +4,7 @@ param(
 
     [string]$ReportPath = '',
 
-    [string]$DictionaryReportPath = '',
-
-    [switch]$IncludeNeuralReranker
+    [string]$DictionaryReportPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -20,7 +18,6 @@ $dictionaryReportPath = if ([string]::IsNullOrWhiteSpace($DictionaryReportPath))
 } else {
     [IO.Path]::GetFullPath($DictionaryReportPath)
 }
-$neuralBuildScript = Join-Path $repositoryRoot 'scripts\build-neural-reranker.ps1'
 $dictionarySourceLockPath = Join-Path $repositoryRoot 'data\SOURCES.lock'
 $thirdPartyNoticesPath = Join-Path $repositoryRoot 'THIRD_PARTY_NOTICES.md'
 $japaneseWordNetLicensePath = Join-Path $repositoryRoot 'THIRD_PARTY_LICENSES\japanese-wordnet-1.1-NICT.txt'
@@ -53,16 +50,6 @@ $canonicalCategoryDictionaryFiles = @(
     (Decode-Utf8Literal 'MTJf5bCC6ZaA55So6KqeLnRzdg=='),
     (Decode-Utf8Literal 'MTNf6KiY5Y+344O757W15paH5a2XLnRzdg=='),
     (Decode-Utf8Literal 'MTRf6KGo6KiY44KG44KMLnRzdg==')
-)
-$neuralPayloadPaths = @(
-    'artifacts\release\sakura_neural_worker.exe',
-    'artifacts\release\onnxruntime.dll',
-    'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\model.onnx',
-    'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\vocab.txt',
-    'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.json',
-    'artifacts\release\licenses\onnxruntime-MIT.txt',
-    'artifacts\release\licenses\onnxruntime-ThirdPartyNotices.txt',
-    'artifacts\release\licenses\ku-nlp-deberta-v2-tiny-japanese-char-wwm.txt'
 )
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = Join-Path $repositoryRoot 'installer\out\installer-build.report.json'
@@ -225,18 +212,6 @@ $payloadPaths = @(
     'THIRD_PARTY_LICENSES\mozc-dictionary.txt',
     'THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt'
 )
-if ($IncludeNeuralReranker) {
-    if (-not [IO.File]::Exists($neuralBuildScript)) {
-        throw "neural reranker payload validator is missing: $neuralBuildScript"
-    }
-    try {
-        & $neuralBuildScript -OutputDirectory (Join-Path $repositoryRoot 'artifacts\release') -ValidateOnly
-    }
-    catch {
-        throw "neural reranker payload validation failed; refusing declared neural installer build: $($_.Exception.Message)"
-    }
-    $payloadPaths += $neuralPayloadPaths
-}
 if (-not [IO.File]::Exists($dictionaryReportPath)) {
     throw "dictionary provenance report is missing: $dictionaryReportPath"
 }
@@ -369,9 +344,6 @@ $startInfo.FileName = $iscc
 $isccArguments = [Collections.Generic.List[string]]::new()
 $isccArguments.Add("/dAppBuildId=$buildId")
 $isccArguments.Add("/dAppVersionedDir={app}\versions\$version-$buildId")
-if ($IncludeNeuralReranker) {
-    $isccArguments.Add('/dIncludeNeuralReranker=1')
-}
 if ($includesJapaneseWordNet) {
     $isccArguments.Add('/dIncludeJapaneseWordNet=1')
 }
@@ -457,12 +429,8 @@ $report = [ordered]@{
         }
     }
     neural_reranker = [ordered]@{
-        included = [bool]$IncludeNeuralReranker
-        manifest = if ($IncludeNeuralReranker) {
-            Get-ArtifactRecord (Join-Path $repositoryRoot 'artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.json')
-        } else {
-            $null
-        }
+        included = $false
+        manifest = $null
     }
     payloads = @($payloads)
     installer = Get-ArtifactRecord $installer.FullName

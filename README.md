@@ -97,15 +97,15 @@ Password、URL、Email、Digitsの入力スコープ、未分類・未知のス�
 
 ### 任意のローカル長文再順位付け
 
-Issue #24 の任意 neural reranker は、Rust worker、engine の非同期統合、固定artifact生成、実 ONNX Runtime/model IPC E2E、opt-in installer buildまで実装・確認済みです。既定installerはまだ同梱しないrollout境界であり、順位品質とcold/warm latency、private working setの受け入れ計測は未完了です。同梱した場合、長い読みの通常の `Space` 変換でのみ、既存の辞書 N-best 候補をローカルの DeBERTa V2 tiny Japanese モデルで補助的に再順位付けできます。これは候補生成器や `Tab` の推測候補ではなく、既存の最大 6 件の変換候補に対する任意の処理です。worker またはモデルが存在しない、起動・IPC・推論が失敗する、または結果が期限内に ready でないときは、入力を待たずに従来のローカル順位で変換します。
+Issue #32 の実験的 neural reranker は、研究リポジトリで学習した `Sakura-Rerank-Tiny-v1` を Rust worker からローカル実行します。旧 DeBERTa Tiny の実装と配布経路は除去済みです。SakuraモデルはGate A未通過の研究artifactであり、通常installerには同梱せず、production defaultにも設定しません。候補生成器や `Tab` の推測候補ではなく、既存の最大6件の辞書N-best候補だけをlistwiseに再順位付けします。workerまたはモデルが存在しない、manifest不一致、起動・IPC・推論が失敗する、または結果が期限内にreadyでないときは、入力を待たずに従来のローカル順位で変換します。
 
-この機能は Rust 製の `sakura_neural_worker.exe` を `sakura_engine.exe` と同じディレクトリから遅延起動し、`neural/deberta-v2-tiny-japanese-char-wwm/` の `model.onnx`、`vocab.txt`、および `manifest.json` を使います。worker は同じディレクトリの ONNX Runtime DLL を動的に読み込みます。TSF DLL と engine 本体に ML runtime やモデルを読み込ませません。worker との通信は同一マシン内の標準入出力 IPC だけで、クラウド送信、入力内容の診断ログへの記録、自動アップロードは行いません。
+この機能は Rust 製の `sakura_neural_worker.exe` を `sakura_engine.exe` と同じディレクトリから遅延起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使います。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLとengine本体にML runtimeやモデルを読み込ませません。workerとの通信は同一マシン内の標準入出力IPCだけで、クラウド送信、入力内容の診断ログへの記録、自動アップロードは行いません。
 
-manifest は固定 model/revision、ONNX opset/runtime、Basic + character tokenizer（`do_lower_case=false`）、artifact のサイズと SHA-256 を Rust worker 起動時に厳密検証します。推論量は候補最大 6 件、sequence 最大 128 token、mask row 最大 48 に制限し、上限超過時は従来順位へ戻します。
+manifestは固定モデル名、contract version、ONNX opset/runtime、研究manifestのSHA-256、Gate A失敗・final holdout未使用・配布未承認の状態、artifactのサイズとSHA-256をworker起動時に厳密検証します。入力はprotocol v1で既に渡していた候補表記とlocal costだけです。最大6候補、表記32 Unicode scalar、固定feature 6次元に制限し、上限超過時は従来順位へ戻します。
 
 engine は分類済みの `Normal` scope にある通常変換の読みをローカルで候補 snapshot にし、worker へは再順位付けに必要な候補 snapshot だけを渡します。Password、URL、Email、Digits、未知または未分類の scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は除外されます。候補 UI を表示した後には、遅い worker 結果で順位を並べ替えません。モデルの結果は session、composition generation、reading、candidate set が完全一致する場合だけ利用し、明示的な学習・完全一致 cache・ユーザー辞書の優先順位を上書きしません。
 
-`15 MiB` の private working-set 予算は TSF/engine 本体の予算です。任意 worker のプロセス working setとcold/warm latencyはこの予算に含めず、受け入れ計測も未完了です。2026-08-10のx64 release artifactはworker 0.39 MiB、ONNX Runtime DLL 15.08 MiB、model 40.37 MiB、neural同梱installer 55.45 MiBでした（toolchain/buildごとに再計測が必要です）。配布 artifact の再生成には [scripts/export-neural-model.py](scripts/export-neural-model.py) と [scripts/build-neural-reranker.ps1](scripts/build-neural-reranker.ps1) を使用し、固定 revision と生成 manifest の SHA-256 記録を検証してください。
+`15 MiB`のprivate working-set予算はTSF/engine本体の予算です。任意workerのprocess working setとcold/warm latencyはこの予算に含めず、Sakuraモデルについて別途計測します。モデルは研究リポジトリにのみ存在し、ライセンス選定と配布承認が完了するまでrelease assetやinstallerへ追加しません。ローカル検証は `scripts/stage-sakura-rerank.ps1` で、明示指定したモデル・研究manifest・worker・ONNX Runtimeをハッシュ検証して隔離されたstaging directoryへ配置します。
 
 ## アンインストール
 
@@ -113,7 +113,7 @@ Windows の「インストールされているアプリ」からアンインス
 
 ## ライセンス
 
-プログラム本体は [MIT License](LICENSE) です。辞書由来データと任意のニューラル再順位付け artifact のライセンス・出典は [Third-party notices](THIRD_PARTY_NOTICES.md)、[Mozc 辞書 notice](THIRD_PARTY_LICENSES/mozc-dictionary.txt)、[smile-chat public glossary notice](THIRD_PARTY_LICENSES/smile-chat-public-MIT.txt)、[Kyoto University NLP model notice](THIRD_PARTY_LICENSES/ku-nlp-deberta-v2-tiny-japanese-char-wwm.txt) に記載しています。変換済みの ONNX model artifact は CC BY-SA 4.0 の条件に従います。該当 artifact と notice はインストーラーにも同梱されます。
+プログラム本体は [MIT License](LICENSE) です。配布する辞書由来データのライセンス・出典は [Third-party notices](THIRD_PARTY_NOTICES.md)、[Mozc 辞書 notice](THIRD_PARTY_LICENSES/mozc-dictionary.txt)、[smile-chat public glossary notice](THIRD_PARTY_LICENSES/smile-chat-public-MIT.txt) に記載しています。`Sakura-Rerank-Tiny-v1` はライセンス未選定・配布未承認の研究artifactであり、このリポジトリやinstallerには同梱しません。
 
 ## 開発者向け
 

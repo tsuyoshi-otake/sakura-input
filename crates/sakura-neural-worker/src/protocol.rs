@@ -10,6 +10,7 @@ const VERSION: u16 = 1;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Candidate {
     pub fingerprint: u64,
+    pub local_cost: i32,
     pub text: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +60,7 @@ pub(crate) fn decode(payload: &[u8]) -> Result<Request, &'static str> {
     let mut candidates = Vec::with_capacity(count);
     for _ in 0..count {
         let fingerprint = u64_at(payload, &mut p)?;
-        let _cost = u32_at(payload, &mut p)?;
+        let local_cost = i32::from_le_bytes(take(payload, &mut p)?);
         let n = u32_at(payload, &mut p)? as usize;
         if n == 0 || n > MAX_CANDIDATE_BYTES {
             return Err("invalid candidate length");
@@ -71,7 +72,11 @@ pub(crate) fn decode(payload: &[u8]) -> Result<Request, &'static str> {
         let text = std::str::from_utf8(raw)
             .map_err(|_| "candidate is not UTF-8")?
             .to_owned();
-        candidates.push(Candidate { fingerprint, text });
+        candidates.push(Candidate {
+            fingerprint,
+            local_cost,
+            text,
+        });
     }
     if p != payload.len() {
         return Err("trailing request bytes");
@@ -161,7 +166,9 @@ mod tests {
     }
     #[test]
     fn valid_wire() {
-        assert_eq!(decode(&wire()).unwrap().id, 7);
+        let request = decode(&wire()).unwrap();
+        assert_eq!(request.id, 7);
+        assert_eq!(request.candidates[0].local_cost, 1);
     }
     #[test]
     fn malformed_is_rejected() {

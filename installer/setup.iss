@@ -27,22 +27,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 #ifndef AppVersionedDir
 #define AppVersionedDir "{app}\versions\1.0.3-dev"
 #endif
-; Neural reranking is an explicit release-pipeline opt-in. Keeping the default
-; off lets normal installer builds remain independent of the optional native
-; worker and large model. A build that opts in must include the generated,
-; hash-pinned payload manifest below; a missing or stale manifest is a compile
-; failure, never a partial installer.
-#ifndef IncludeNeuralReranker
-#define IncludeNeuralReranker 0
-#endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0
-#endif
-#if IncludeNeuralReranker
-#include "..\artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.iss"
-#if NeuralPayloadCount != 8
-#error Neural reranker installer manifest must describe exactly eight payload files
-#endif
 #endif
 
 [Setup]
@@ -139,21 +125,6 @@ Source: "..\THIRD_PARTY_LICENSES\smile-chat-public-MIT.txt"; DestDir: "{#AppVers
 ; derived system.dic so an offline installation retains its provenance.
 Source: "..\THIRD_PARTY_LICENSES\japanese-wordnet-1.1-NICT.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
 Source: "..\data\SOURCES.lock"; DestDir: "{#AppVersionedDir}\licenses"; DestName: "dictionary-sources.lock"; Flags: ignoreversion
-#endif
-
-#if IncludeNeuralReranker
-; The worker resolves onnxruntime.dll beside its executable. The model, tokenizer
-; and JSON manifest live in the engine's fixed sibling directory; no root-level
-; mutable payload or network download is involved. manifest.iss is compile-time
-; evidence only and is deliberately not installed.
-Source: "..\artifacts\release\sakura_neural_worker.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
-Source: "..\artifacts\release\onnxruntime.dll"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
-Source: "..\artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\model.onnx"; DestDir: "{#AppVersionedDir}\neural\deberta-v2-tiny-japanese-char-wwm"; Flags: ignoreversion
-Source: "..\artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\vocab.txt"; DestDir: "{#AppVersionedDir}\neural\deberta-v2-tiny-japanese-char-wwm"; Flags: ignoreversion
-Source: "..\artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm\manifest.json"; DestDir: "{#AppVersionedDir}\neural\deberta-v2-tiny-japanese-char-wwm"; Flags: ignoreversion
-Source: "..\artifacts\release\licenses\onnxruntime-MIT.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
-Source: "..\artifacts\release\licenses\onnxruntime-ThirdPartyNotices.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
-Source: "..\artifacts\release\licenses\ku-nlp-deberta-v2-tiny-japanese-char-wwm.txt"; DestDir: "{#AppVersionedDir}\licenses"; Flags: ignoreversion
 #endif
 
 [Run]
@@ -286,48 +257,6 @@ const
 var
   UninstallTeardownState: Integer;
 
-#if IncludeNeuralReranker
-function VerifyNeuralPayloadFile(const RelativePath, ExpectedSha256: String;
-  const ExpectedBytes: Int64): Boolean;
-var
-  Path: String;
-  ActualBytes: Int64;
-begin
-  Path := ExpandConstant('{#AppVersionedDir}\') + RelativePath;
-  Result := FileExists(Path) and FileSize64(Path, ActualBytes) and
-    (ActualBytes = ExpectedBytes) and
-    (CompareText(GetSHA256OfFile(Path), ExpectedSha256) = 0);
-  if not Result then
-    Log('neural reranker payload verification failed: ' + RelativePath);
-end;
-
-// This runs after [Files] copied the new side-by-side generation but before
-// registration switches Windows to it. The generated .iss constants are tied
-// exactly to the JSON manifest by build-neural-reranker.ps1, so a missing,
-// truncated, swapped, or stale worker/runtime/model/tokenizer/license payload
-// leaves the existing text-service registration untouched.
-function VerifyNeuralPayloadOrAbort(): Boolean;
-begin
-  Result :=
-    VerifyNeuralPayloadFile('{#NeuralPayload0Path}', '{#NeuralPayload0Sha256}', {#NeuralPayload0Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload1Path}', '{#NeuralPayload1Sha256}', {#NeuralPayload1Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload2Path}', '{#NeuralPayload2Sha256}', {#NeuralPayload2Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload3Path}', '{#NeuralPayload3Sha256}', {#NeuralPayload3Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload4Path}', '{#NeuralPayload4Sha256}', {#NeuralPayload4Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload5Path}', '{#NeuralPayload5Sha256}', {#NeuralPayload5Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload6Path}', '{#NeuralPayload6Sha256}', {#NeuralPayload6Bytes}) and
-    VerifyNeuralPayloadFile('{#NeuralPayload7Path}', '{#NeuralPayload7Sha256}', {#NeuralPayload7Bytes});
-  if not Result then
-  begin
-    SuppressibleMsgBox(
-      'Sakura Input could not verify the optional neural reranker payload. ' +
-      'The existing text-service registration was left unchanged.',
-      mbCriticalError, MB_OK, IDOK);
-    Abort;
-  end;
-end;
-#endif
-
 // Runs before Setup shows its first wizard page, i.e. before anything in
 // [Files] is touched. Deliberately checks the full AVX+SSSE3 compatibility
 // floor, but not AVX2 or AVX-512: those concrete strategies are resolved at
@@ -382,9 +311,6 @@ var
   Launched: Boolean;
   Parameters: String;
 begin
-#if IncludeNeuralReranker
-  VerifyNeuralPayloadOrAbort();
-#endif
   Parameters := '--register --dll "' +
     ExpandConstant('{#AppVersionedDir}\sakura_tsf.dll') + '" --no-wow64';
   Launched := Exec(RegToolPath(), Parameters, ExpandConstant('{app}'), SW_HIDE,
