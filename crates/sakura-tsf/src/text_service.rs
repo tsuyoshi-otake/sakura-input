@@ -71,6 +71,9 @@ use crate::diagnostic_ring;
 use crate::display_attributes;
 use crate::edit_session;
 use crate::engine::{Answer, Engine};
+use crate::engine_recovery::{
+    EngineRecoveryFence, RecoveryKeyDisposition, RecoveryStart, RecoveryTerminal, RecoveryToken,
+};
 use crate::exports::{on_object_created, on_object_destroyed};
 use crate::key_handler;
 use crate::mode_item::{self, MenuCommand};
@@ -309,6 +312,9 @@ struct PendingWrite {
     /// The engine has a restored preedit and a pending exact-text undo record
     /// that must receive an explicit host outcome at journal terminalization.
     undo_commit: bool,
+    /// Identifies the one engine-timeout finalizer whose lifetime fences host
+    /// keys. Ordinary engine outputs and focus finalizers carry no token.
+    engine_recovery: Option<RecoveryToken>,
 }
 
 #[derive(Debug)]
@@ -420,12 +426,15 @@ enum RealFenceAction {
 fn decide_real_fence(
     deferred_terminalization: bool,
     undo_write_pending: bool,
+    engine_recovery_pending: bool,
     input_blocked: bool,
     context_replacement: bool,
 ) -> RealFenceAction {
     if deferred_terminalization {
         RealFenceAction::DeferredTerminalization
     } else if undo_write_pending {
+        RealFenceAction::Consume
+    } else if engine_recovery_pending {
         RealFenceAction::Consume
     } else if input_blocked {
         RealFenceAction::Decline
@@ -446,9 +455,10 @@ fn decide_probe_fence<T>(
     writes: &WriteCoordinator<T>,
     context: ContextId,
     is_undo: impl FnMut(&T) -> bool,
+    engine_recovery_pending: bool,
     input_blocked: bool,
 ) -> ProbeFence {
-    if undo_terminalization.is_some() || writes.any_payload(is_undo) {
+    if undo_terminalization.is_some() || writes.any_payload(is_undo) || engine_recovery_pending {
         ProbeFence::Busy
     } else if input_blocked {
         ProbeFence::Declined
@@ -811,6 +821,10 @@ pub struct TextService {
     /// later callback can drain the journal, and an Unknown outcome never
     /// becomes an accidental retryable state.
     undo_terminalization: Cell<Option<UndoCommitOutcome>>,
+    /// Tokenized one-slot fence for a finalizer queued after an engine key
+    /// timeout. It lives outside the write RefCell so re-entrant key probes can
+    /// fail closed without borrowing the journal currently in a callback.
+    engine_recovery: Cell<EngineRecoveryFence>,
     writes: RefCell<WriteCoordinator<PendingWrite>>,
     engine: RefCell<Engine>,
     /// The TSF input-mode item is deliberately visible only while a document
@@ -835,6 +849,7 @@ impl TextService {
             candidate_end_pending: Cell::new(false),
             focus_gain_reconciliation_pending: Cell::new(false),
             undo_terminalization: Cell::new(None),
+            engine_recovery: Cell::new(EngineRecoveryFence::default()),
             writes: RefCell::new(WriteCoordinator::new(DEFAULT_WRITE_CAPACITY)),
             engine: RefCell::new(Engine::new()),
             focus_foreground: Cell::new(false),
@@ -1132,6 +1147,33 @@ impl TextService {
             || composition_unknown
     }
 
+    fn begin_engine_recovery(&self) -> RecoveryStart {
+        let mut fence = self.engine_recovery.get();
+        let started = fence.begin();
+        self.engine_recovery.set(fence);
+        started
+    }
+
+    fn finish_engine_recovery(&self, token: RecoveryToken, outcome: RecoveryTerminal) {
+        let mut fence = self.engine_recovery.get();
+        let _ = fence.finish(token, outcome);
+        self.engine_recovery.set(fence);
+    }
+
+    fn cancel_engine_recovery(&self) {
+        let mut fence = self.engine_recovery.get();
+        let _ = fence.cancel_pending();
+        self.engine_recovery.set(fence);
+    }
+
+    fn engine_recovery_pending(&self) -> bool {
+        self.engine_recovery.get().is_pending()
+    }
+
+    fn engine_recovery_disposition(&self, token: RecoveryToken) -> RecoveryKeyDisposition {
+        self.engine_recovery.get().disposition_after_request(token)
+    }
+
     fn probe_fence(&self, context: ContextId) -> Result<ProbeFence> {
         let input_blocked = self.input_blocked();
         let writes = self.writes.try_borrow().map_err(|_| reentrancy())?;
@@ -1140,6 +1182,7 @@ impl TextService {
             &writes,
             context,
             |payload| payload.undo_commit,
+            self.engine_recovery_pending(),
             input_blocked,
         ))
     }
@@ -1844,6 +1887,9 @@ impl TextService {
         undo_outcome: Option<UndoCommitOutcome>,
         undo_already_settled: bool,
     ) {
+        for completion in &completions {
+            self.settle_engine_recovery_completion(completion);
+        }
         // A pending exact-text undo owns an engine transaction in addition to
         // its journal ticket. Resolve that transaction before any generic
         // disconnect/reset path can discard the link. Missing an outcome here
@@ -1890,6 +1936,22 @@ impl TextService {
             return;
         }
         self.terminalize_cancelled_state(reset_engine);
+    }
+
+    fn settle_engine_recovery_completion(&self, completion: &Completion<PendingWrite>) {
+        let Some(token) = completion
+            .payload
+            .as_ref()
+            .and_then(|payload| payload.engine_recovery)
+        else {
+            return;
+        };
+        let outcome = match completion.outcome {
+            TerminalOutcome::Applied => RecoveryTerminal::Applied,
+            TerminalOutcome::Rejected => RecoveryTerminal::Rejected,
+            TerminalOutcome::Cancelled(_) => RecoveryTerminal::Cancelled,
+        };
+        self.finish_engine_recovery(token, outcome);
     }
     fn attach(
         &self,
@@ -2061,6 +2123,10 @@ impl TextService {
         self.focus_foreground.set(false);
         self.mode_item.hide();
         self.deactivate_write_journal();
+        // Detach is the final lifecycle owner even if a re-entrant journal
+        // borrow prevented ordinary completion settlement above. No callback
+        // may keep fencing keys after this text-service instance is detached.
+        self.cancel_engine_recovery();
         // Deactivation is the last chance to drop the composition handle. The
         // document is going away with it, so there is nothing to end — holding
         // the reference longer would just outlive the context it belongs to.
@@ -3817,6 +3883,7 @@ impl TextService_Impl {
         match decide_real_fence(
             deferred_terminalization,
             undo_write_pending,
+            service.engine_recovery_pending(),
             input_blocked,
             context_replacement,
         ) {
@@ -3879,10 +3946,10 @@ impl TextService_Impl {
         let answer = match service.ask(key) {
             Ok(answer) => answer,
             Err(_) => {
-                if self.recover_from_engine_unavailable(context).is_err() {
-                    service.disconnect();
-                }
-                return Ok(false.into());
+                let disposition = self
+                    .recover_from_engine_unavailable(context)
+                    .unwrap_or(RecoveryKeyDisposition::Consume);
+                return Ok(matches!(disposition, RecoveryKeyDisposition::Consume).into());
             }
         };
         let output = match answer {
@@ -3907,10 +3974,10 @@ impl TextService_Impl {
             // previous async output may already own the head, so this has to
             // terminalize the full journal rather than only this reservation.
             Answer::Unavailable => {
-                if self.recover_from_engine_unavailable(context).is_err() {
-                    service.disconnect();
-                }
-                return Ok(false.into());
+                let disposition = self
+                    .recover_from_engine_unavailable(context)
+                    .unwrap_or(RecoveryKeyDisposition::Consume);
+                return Ok(matches!(disposition, RecoveryKeyDisposition::Consume).into());
             }
         };
 
@@ -3935,10 +4002,6 @@ impl TextService_Impl {
     /// when focus is leaving, both of which are moments where a live
     /// composition would otherwise be stranded — underlined text attached
     /// to a conversation that will never produce a result for it.
-    fn finalize_visible_text(&self, context: &ITfContext) -> Result<()> {
-        self.enqueue_finalization(context, true, true)
-    }
-
     fn finalize_visible_text_async(&self, context: &ITfContext) -> Result<()> {
         self.enqueue_finalization(context, false, false)
     }
@@ -3946,7 +4009,10 @@ impl TextService_Impl {
     /// The engine can fail after an earlier async output was accepted.  One
     /// owner must terminalize that entire speculative tail before a rescue
     /// commit is planned from the actually committed composition state.
-    fn recover_from_engine_unavailable(&self, context: &ITfContext) -> Result<()> {
+    fn recover_from_engine_unavailable(
+        &self,
+        context: &ITfContext,
+    ) -> Result<RecoveryKeyDisposition> {
         let service = self.get_impl();
         // An already-running callback is part of the speculative tail too. Its
         // document effect is not yet committed in CompositionState, so recovery
@@ -3958,14 +4024,42 @@ impl TextService_Impl {
         // engine failure itself is still authoritative when the queue was
         // empty, so reset it unconditionally.
         service.disconnect();
-        if let Err(finalize_error) = self.finalize_visible_text(context) {
+
+        let visible = match service.composition_projection() {
+            Ok(visible) => visible,
+            Err(_) => {
+                service.abandon_composition_projection(CancelReason::RevisionMismatch)?;
+                return Ok(RecoveryKeyDisposition::Host);
+            }
+        };
+        if visible.text.is_empty() && !visible.has_composition {
+            service.finish_focus_finalization();
+            return Ok(RecoveryKeyDisposition::Host);
+        }
+
+        let recovery = service.begin_engine_recovery();
+        let token = recovery.token();
+        if recovery.is_deduplicated() {
+            return Ok(RecoveryKeyDisposition::Consume);
+        }
+
+        if let Err(finalize_error) =
+            self.enqueue_finalization_for_visible(context, true, true, visible, Some(token))
+        {
+            service.finish_engine_recovery(token, RecoveryTerminal::Rejected);
             // A projection mismatch is not an ignorable finalization failure:
             // retire both owners before the next key can be admitted.
             service
                 .abandon_composition_projection(CancelReason::RevisionMismatch)
                 .map_err(|_| finalize_error)?;
+            return Ok(RecoveryKeyDisposition::Host);
         }
-        Ok(())
+
+        // A synchronous callback terminalized the token before
+        // RequestEditSession returned, so the host can receive this physical
+        // key in order. A queued callback still owns the old composition and
+        // must fence this key (and following keys) until terminalization.
+        Ok(service.engine_recovery_disposition(token))
     }
 
     fn enqueue_finalization(
@@ -3985,7 +4079,22 @@ impl TextService_Impl {
                 return Ok(());
             }
         };
+        self.enqueue_finalization_for_visible(context, synchronous_first, start_now, visible, None)
+    }
+
+    fn enqueue_finalization_for_visible(
+        &self,
+        context: &ITfContext,
+        synchronous_first: bool,
+        start_now: bool,
+        visible: VisibleState,
+        engine_recovery: Option<RecoveryToken>,
+    ) -> Result<()> {
+        let service = self.get_impl();
         if visible.text.is_empty() && !visible.has_composition {
+            if let Some(token) = engine_recovery {
+                service.finish_engine_recovery(token, RecoveryTerminal::Cancelled);
+            }
             service.finish_focus_finalization();
             return Ok(());
         }
@@ -4017,6 +4126,7 @@ impl TextService_Impl {
             synchronous_first,
             candidates: CandidateEffect::Hide,
             undo_commit: false,
+            engine_recovery,
         };
         self.submit_pending_write(reservation, payload, start_now)
     }
@@ -4059,6 +4169,7 @@ impl TextService_Impl {
             synchronous_first,
             candidates,
             undo_commit,
+            engine_recovery: None,
         };
         self.submit_pending_write(reservation, payload, start_now)
     }
@@ -4586,6 +4697,7 @@ impl TextService_Impl {
 
     fn settle_applied_write(&self, completion: Completion<PendingWrite>) {
         let service = self.get_impl();
+        service.settle_engine_recovery_completion(&completion);
         if completion.outcome != TerminalOutcome::Applied {
             service.settle_cancelled_writes(
                 vec![completion],
@@ -4981,6 +5093,7 @@ impl ITfFnReconversion_Impl for TextService_Impl {
             synchronous_first: true,
             candidates: CandidateEffect::Show(candidates.clone()),
             undo_commit: false,
+            engine_recovery: None,
         };
         if let Err(error) = self.submit_pending_write(reservation, payload, true) {
             service.revert_engine();
@@ -5348,7 +5461,7 @@ mod tests {
     /// `TooLarge` there can never reach this rescue path with a live
     /// composition on screen, and `enqueue_finalization`'s early return for
     /// an idle/empty projection means the one step this test cannot exercise
-    /// (`finalize_visible_text`, which needs a real `ITfContext` this
+    /// (`finalize_visible_text_async`, which needs a real `ITfContext` this
     /// crate's test suite has no way to construct without a live COM host)
     /// is a documented no-op in that exact case. What remains observable
     /// here is the blast radius of the first three steps: do they discard
@@ -5699,6 +5812,7 @@ mod tests {
                 context_id,
                 |payload| *payload,
                 false,
+                false,
             ),
             ProbeFence::Busy
         );
@@ -5781,7 +5895,7 @@ mod tests {
             .expect("same-context reservation");
         assert!(!same_context_full.can_admit_for_context(first));
         assert_eq!(
-            decide_probe_fence(None, &same_context_full, first, |_| false, false),
+            decide_probe_fence(None, &same_context_full, first, |_| false, false, false),
             ProbeFence::Declined,
             "a same-context full/reserved journal remains an ordinary host decline"
         );
@@ -5801,7 +5915,14 @@ mod tests {
             .expect("different-context reservation");
         assert!(different_context_full.can_admit_for_context(second));
         assert_eq!(
-            decide_probe_fence(None, &different_context_full, second, |_| false, false),
+            decide_probe_fence(
+                None,
+                &different_context_full,
+                second,
+                |_| false,
+                false,
+                false,
+            ),
             ProbeFence::ContextReplacement,
             "Probe must fence a replacement instead of using the old session"
         );
@@ -5820,7 +5941,14 @@ mod tests {
         assert!(different_context_non_full.observe_context(first).is_empty());
         assert!(different_context_non_full.can_admit_for_context(second));
         assert_eq!(
-            decide_probe_fence(None, &different_context_non_full, second, |_| false, false),
+            decide_probe_fence(
+                None,
+                &different_context_non_full,
+                second,
+                |_| false,
+                false,
+                false,
+            ),
             ProbeFence::ContextReplacement,
             "a non-full replacement is still a context transition, not an old-session Probe"
         );
@@ -5870,7 +5998,7 @@ mod tests {
         ] {
             assert!(!key.test_only, "{name} must use the real-key action");
             assert_eq!(
-                decide_real_fence(false, false, false, true),
+                decide_real_fence(false, false, false, false, true),
                 RealFenceAction::ReplaceAndApply,
                 "successful context replacement must continue {name} to Apply"
             );
@@ -5881,7 +6009,7 @@ mod tests {
         assert_eq!(journal.pending_len(), 0);
         assert!(!journal.is_context_replacement(second));
         assert_eq!(
-            decide_real_fence(false, false, false, false),
+            decide_real_fence(false, false, false, false, false),
             RealFenceAction::Apply,
             "after successful cleanup the same callback reaches Apply"
         );
@@ -5889,15 +6017,15 @@ mod tests {
         // Every non-Apply branch remains an explicit terminal result; none
         // may silently fall through to a raw host key or a second Apply.
         assert_eq!(
-            decide_real_fence(true, true, true, true),
+            decide_real_fence(true, true, true, true, true),
             RealFenceAction::DeferredTerminalization
         );
         assert_eq!(
-            decide_real_fence(false, true, true, true),
+            decide_real_fence(false, true, true, true, true),
             RealFenceAction::Consume
         );
         assert_eq!(
-            decide_real_fence(false, false, true, true),
+            decide_real_fence(false, false, false, true, true),
             RealFenceAction::Decline
         );
 
@@ -5907,6 +6035,25 @@ mod tests {
         assert!(journal
             .cancel_reservation(reservation, CancelReason::PredecessorFailed)
             .is_empty());
+    }
+
+    #[test]
+    fn queued_engine_recovery_consumes_keys_until_the_finalizer_terminates() {
+        assert_eq!(
+            decide_real_fence(false, false, true, false, false),
+            RealFenceAction::Consume,
+            "returning the key to the host while the old composition finalizer is queued allows stale text to be replayed after host edits"
+        );
+
+        let context = ContextId(57);
+        let mut journal = WriteCoordinator::<()>::new(1);
+        assert!(journal.activate().is_empty());
+        assert!(journal.observe_context(context).is_empty());
+        assert_eq!(
+            decide_probe_fence(None, &journal, context, |_| false, true, false),
+            ProbeFence::Busy,
+            "OnTestKeyDown must report the same recovery fence without mutating it"
+        );
     }
 
     #[test]
@@ -6012,6 +6159,7 @@ mod tests {
                 &journal,
                 case.requested_context,
                 |payload| *payload,
+                false,
                 case.input_blocked,
             );
             assert_eq!(actual, case.expected, "{}", case.name);
