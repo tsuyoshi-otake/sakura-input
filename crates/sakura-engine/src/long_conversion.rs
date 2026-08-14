@@ -21,8 +21,6 @@ use crate::dictionary::ConversionService;
 const MINIMUM_LONG_READING_CHARS: usize = 10;
 const MINIMUM_SEGMENTED_READING_CHARS: usize = 3;
 const MAXIMUM_MODEL_CANDIDATES: usize = 6;
-const MODEL_PENALTY_PER_NAT: f32 = 240.0;
-const MAXIMUM_MODEL_PENALTY: i64 = 1_200;
 const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_millis(500);
 const MAXIMUM_FRAME_BYTES: usize = 32 * 1024;
 const REQUEST_MAGIC: u32 = 0x524E_4B53; // SKNR
@@ -167,38 +165,33 @@ impl LongConversionService {
             return None;
         }
 
-        let maximum_score = result
-            .scores
-            .iter()
-            .map(|score| score.log_probability)
-            .reduce(f32::max)?;
-        if !maximum_score.is_finite() {
-            return None;
-        }
-
-        let mut selected = 0usize;
-        let mut selected_cost = i64::MAX;
-        for (index, candidate) in candidates[..model_count].iter().enumerate() {
-            let expected_fingerprint = candidate_fingerprint(candidate);
-            let score = result
-                .scores
-                .iter()
-                .find(|score| score.fingerprint == expected_fingerprint)?;
+        for (candidate, score) in candidates[..model_count].iter().zip(&result.scores) {
+            if score.fingerprint != candidate_fingerprint(candidate) {
+                return None;
+            }
             if !score.log_probability.is_finite() {
                 return None;
             }
-            let penalty = ((maximum_score - score.log_probability) * MODEL_PENALTY_PER_NAT)
-                .round()
-                .clamp(0.0, MAXIMUM_MODEL_PENALTY as f32) as i64;
-            let combined = candidate.cost.saturating_add(penalty);
-            if combined < selected_cost {
-                selected = index;
-                selected_cost = combined;
-            }
         }
+        let selected = direct_listwise_index(&result.scores)?;
         result.state = RerankState::Applied;
         Some(selected)
     }
+}
+
+fn direct_listwise_index(scores: &[CandidateScore]) -> Option<usize> {
+    let mut selected = None;
+    let mut selected_score = f32::NEG_INFINITY;
+    for (index, score) in scores.iter().enumerate() {
+        if !score.log_probability.is_finite() {
+            return None;
+        }
+        if selected.is_none() || score.log_probability > selected_score {
+            selected = Some(index);
+            selected_score = score.log_probability;
+        }
+    }
+    selected
 }
 
 /// Owns the bounded worker thread and its exact child-process cleanup.
@@ -214,17 +207,9 @@ impl LongConversionRuntime {
         let Some(directory) = executable.parent() else {
             return Ok(None);
         };
-        let worker = directory.join("sakura_neural_worker.exe");
-        let model = directory
-            .join("neural")
-            .join("deberta-v2-tiny-japanese-char-wwm");
-        if !worker.is_file()
-            || !model.join("model.onnx").is_file()
-            || !model.join("vocab.txt").is_file()
-            || !model.join("manifest.json").is_file()
-        {
+        let Some((worker, model)) = discover_payload(directory) else {
             return Ok(None);
-        }
+        };
         Self::start(conversion, worker, model).map(Some)
     }
 
@@ -257,6 +242,15 @@ impl LongConversionRuntime {
     pub fn service(&self) -> Arc<LongConversionService> {
         Arc::clone(&self.service)
     }
+}
+
+fn discover_payload(directory: &Path) -> Option<(PathBuf, PathBuf)> {
+    let worker = directory.join("sakura_neural_worker.exe");
+    let model = directory.join("neural").join("sakura-rerank-tiny-v1");
+    (worker.is_file()
+        && model.join("model.onnx").is_file()
+        && model.join("manifest.json").is_file())
+    .then_some((worker, model))
 }
 
 impl Drop for LongConversionRuntime {
@@ -680,6 +674,65 @@ mod tests {
         assert!(retry_delay(1, 1) >= Duration::from_millis(250));
         assert!(retry_delay(100, 2) <= Duration::from_millis(8_000));
         assert_ne!(retry_delay(2, 1), retry_delay(2, 2));
+    }
+
+    #[test]
+    fn sakura_scores_select_the_highest_and_keep_first_tie() {
+        let scores = [
+            CandidateScore {
+                fingerprint: 1,
+                log_probability: -2.0,
+            },
+            CandidateScore {
+                fingerprint: 2,
+                log_probability: 4.0,
+            },
+            CandidateScore {
+                fingerprint: 3,
+                log_probability: 4.0,
+            },
+        ];
+        assert_eq!(direct_listwise_index(&scores), Some(1));
+        assert_eq!(
+            direct_listwise_index(&[CandidateScore {
+                fingerprint: 1,
+                log_probability: f32::NAN,
+            }]),
+            None
+        );
+        assert_eq!(direct_listwise_index(&[]), None);
+    }
+
+    #[test]
+    fn discovery_accepts_only_the_complete_sakura_payload() {
+        let root = std::env::temp_dir().join(format!(
+            "sakura-input-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let legacy = root
+            .join("neural")
+            .join("deberta-v2-tiny-japanese-char-wwm");
+        std::fs::create_dir_all(&legacy).unwrap();
+        for name in ["model.onnx", "manifest.json", "vocab.txt"] {
+            std::fs::write(legacy.join(name), b"legacy").unwrap();
+        }
+        std::fs::write(root.join("sakura_neural_worker.exe"), b"worker").unwrap();
+        assert!(discover_payload(&root).is_none());
+
+        let sakura = root.join("neural").join("sakura-rerank-tiny-v1");
+        std::fs::create_dir_all(&sakura).unwrap();
+        std::fs::write(sakura.join("model.onnx"), b"model").unwrap();
+        assert!(discover_payload(&root).is_none());
+        std::fs::write(sakura.join("manifest.json"), b"manifest").unwrap();
+        assert_eq!(
+            discover_payload(&root),
+            Some((root.join("sakura_neural_worker.exe"), sakura))
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
