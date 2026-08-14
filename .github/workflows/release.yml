@@ -2,13 +2,13 @@ name: Signed release candidate
 
 on:
   push:
-    tags: ["v1.0.0"]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.0
+        default: v1.0.5
 
 permissions:
   contents: read
@@ -146,7 +146,8 @@ jobs:
             "$root/sakura_regtool.exe",
             "$root/sakura_logon.exe",
             "$root/sakura_settings.exe",
-            "$root/sakura_settings_payload.exe"
+            "$root/sakura_settings_payload.exe",
+            "$root/sakura_neural_worker.exe"
           )
           ./scripts/sign-release.ps1 `
             -CertificatePath '${{ steps.certificate.outputs.path }}' `
@@ -183,7 +184,7 @@ jobs:
           [IO.Directory]::CreateDirectory('release-bundle/payload') | Out-Null
           [IO.File]::Copy('installer/out/sakura_setup.exe', 'release-bundle/sakura_setup.exe', $true)
           [IO.File]::Copy('installer/out/release-manifest.txt', 'release-bundle/release-manifest.txt', $true)
-          [IO.File]::Copy('docs/release-notes-v1.0.0.md', 'release-bundle/release-notes.md', $true)
+          [IO.File]::Copy("docs/release-notes-v$env:RELEASE_VERSION.md", 'release-bundle/release-notes.md', $true)
           [IO.File]::Copy('artifacts/release/dictionary-build.report.json', 'release-bundle/dictionary-build.report.json', $true)
           [IO.File]::Copy('installer/out/installer-build.report.json', 'release-bundle/installer-build.report.json', $true)
           [IO.Directory]::CreateDirectory('release-bundle/provenance/data') | Out-Null
@@ -196,8 +197,16 @@ jobs:
             $true
           )
           $release = 'target/x86_64-pc-windows-msvc/release'
-          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe')) {
+          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe', 'sakura_neural_worker.exe')) {
             [IO.File]::Copy((Join-Path $release $name), (Join-Path 'release-bundle/payload' $name), $true)
+          }
+          [IO.Directory]::CreateDirectory('release-bundle/payload/neural/sakura-rerank-tiny-v1') | Out-Null
+          [IO.Directory]::CreateDirectory('release-bundle/payload/licenses') | Out-Null
+          [IO.File]::Copy('artifacts/release/neural-payload/onnxruntime.dll', 'release-bundle/payload/onnxruntime.dll', $true)
+          [IO.File]::Copy('artifacts/release/neural-payload/neural/sakura-rerank-tiny-v1/model.onnx', 'release-bundle/payload/neural/sakura-rerank-tiny-v1/model.onnx', $true)
+          [IO.File]::Copy('artifacts/release/neural-payload/neural/sakura-rerank-tiny-v1/manifest.json', 'release-bundle/payload/neural/sakura-rerank-tiny-v1/manifest.json', $true)
+          foreach ($name in @('onnxruntime-MIT.txt', 'onnxruntime-ThirdPartyNotices.txt', 'sakura-rerank-tiny-v1-MIT.txt')) {
+            [IO.File]::Copy((Join-Path 'artifacts/release/neural-payload/licenses' $name), (Join-Path 'release-bundle/payload/licenses' $name), $true)
           }
 
       - name: Upload signed release candidate

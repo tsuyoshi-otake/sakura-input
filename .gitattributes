@@ -8,3 +8,7 @@ data/conversion-priorities.tsv whitespace=-blank-at-eol
 /data/llm-detail-targets/** text eol=lf
 /data/llm-details/** text eol=lf
 /corpus/** text eol=lf
+
+# The release reranker is a content-addressed runtime artifact. Never apply
+# newline or encoding conversion to its ONNX bytes.
+/models/**/*.onnx binary

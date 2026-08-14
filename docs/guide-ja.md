@@ -145,10 +145,10 @@ WER minidump はローカルにだけ保存され、自動送信されません�
 
 ### 任意のローカル長文再順位付けとプライバシー
 
-Issue #32 の実験的 neural reranker は、研究リポジトリの `Sakura-Rerank-Tiny-v1` をRust workerでローカル実行します。旧DeBERTa Tinyのruntimeとinstaller経路は除去済みです。SakuraモデルはGate A未通過・配布未承認のため、通常installerには同梱せずproduction defaultにも設定しません。長い読みを `Space` で通常変換するとき、既存の辞書N-best候補を最大6件までlistwiseに再順位付けします。これは候補生成や `Tab` の推測候補ではありません。engineは `sakura_neural_worker.exe` を必要なときだけローカル子プロセスとして起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使用します。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLやengine本体へONNX Runtimeやモデルを読み込みません。
+Issue #32 の実験的 neural reranker は、自作の `Sakura-Rerank-Tiny-v1` をRust workerでローカル実行します。旧DeBERTa Tinyのruntimeとinstaller経路は除去済みです。Sakuraモデル、worker、ONNX Runtimeは通常installerに同梱され、既定では長い読みを `Space` で通常変換するときだけ、既存の辞書N-best候補を最大6件までlistwiseに再順位付けします。これは候補生成や `Tab` の推測候補ではありません。engineは `sakura_neural_worker.exe` を必要なときだけローカル子プロセスとして起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使用します。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLやengine本体へONNX Runtimeやモデルを読み込みません。
 
 この worker はネットワークへ送信しません。engine が分類済み `Normal` scope の通常変換の読みからローカルで作った候補 snapshot だけを、同一マシン内の IPC で渡します。Password、URL、Email、Digits、未知または未分類 scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は worker を起動せず、入力内容も送信しません。通常の診断ログへ入力文字列を記録せず、自動アップロードもしません。
 
 変換のキー経路は worker の応答を待ちません。worker／モデルの欠落、起動失敗、異常応答、timeout、または一致しない古い結果では、従来のローカル順位のまま表示します。候補表示後に遅い結果で順序を変更することはありません。明示的な学習、完全一致 cache、ユーザー辞書の優先順位はモデルより上です。
 
-`15 MiB` の private working-set 予算は TSF/engine 本体の予算であり、任意 worker のモデル、ONNX Runtime、working setは含みません。Sakuraモデルのworking setとcold/warm latencyは別途計測します。モデルはライセンス未選定・配布未承認の研究artifactであり、release assetやinstallerへ追加しません。開発者は `scripts/stage-sakura-rerank.ps1` で、明示指定したモデル、研究manifest、worker、ONNX Runtimeをハッシュ検証し、隔離stagingへ配置できます。
+`15 MiB` の private working-set 予算は TSF/engine 本体の予算であり、任意 worker のモデル、ONNX Runtime、working setは含みません。Sakuraモデルのworking setとcold/warm latencyは別途計測します。自作モデルはMITライセンスで配布承認済みですが、既存評価ではGate A未通過・final holdout未使用です。これは品質合格を示すものではありません。設定の neural reranker scope を `off` にすると無効化でき、`all-normal-conversions` にすると短い読みを含む通常変換へ広げられます。
