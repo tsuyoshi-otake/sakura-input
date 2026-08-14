@@ -25,6 +25,9 @@ pub mod diagnostic_ring;
 mod display_attributes;
 mod edit_session;
 mod engine;
+mod engine_recovery;
+#[cfg(test)]
+mod engine_recovery_tests;
 mod exports;
 mod key_handler;
 mod mode_item;
