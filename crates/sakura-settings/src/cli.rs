@@ -506,6 +506,11 @@ pub fn run(command: Command) -> Result<(), String> {
                 "excluded-test-only-events\t{}",
                 stats.excluded_test_only_events
             );
+            println!("ai-requests\t{}", stats.ai_requests);
+            println!("ai-attempts\t{}", stats.ai_attempts);
+            println!("ai-input-tokens\t{}", stats.ai_input_tokens);
+            println!("ai-output-tokens\t{}", stats.ai_output_tokens);
+            println!("ai-cached-tokens\t{}", stats.ai_cached_tokens);
         }
         Command::DiagnosticsShow { tsv } => {
             let data = diagnostics::load(&paths::timeout_diagnostics().map_err(display)?)
@@ -905,6 +910,11 @@ mod tests {
             excluded_unclassified_events: 0,
             excluded_sensitive_events: 0,
             excluded_test_only_events: 0,
+            ai_requests: 0,
+            ai_attempts: 0,
+            ai_input_tokens: 0,
+            ai_output_tokens: 0,
+            ai_cached_tokens: 0,
         };
 
         assert_eq!(

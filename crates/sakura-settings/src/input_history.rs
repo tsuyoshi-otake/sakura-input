@@ -36,6 +36,11 @@ pub struct HistoryStats {
     pub excluded_unclassified_events: u64,
     pub excluded_sensitive_events: u64,
     pub excluded_test_only_events: u64,
+    pub ai_requests: u64,
+    pub ai_attempts: u64,
+    pub ai_input_tokens: u64,
+    pub ai_output_tokens: u64,
+    pub ai_cached_tokens: u64,
     pub live: bool,
 }
 
@@ -99,6 +104,11 @@ pub fn stats(_path: &Path) -> io::Result<HistoryStats> {
                 excluded_unclassified_events: 0,
                 excluded_sensitive_events: 0,
                 excluded_test_only_events: 0,
+                ai_requests: 0,
+                ai_attempts: 0,
+                ai_input_tokens: 0,
+                ai_output_tokens: 0,
+                ai_cached_tokens: 0,
                 live: false,
             })
         }
@@ -113,6 +123,11 @@ pub fn stats(_path: &Path) -> io::Result<HistoryStats> {
             excluded_unclassified_events,
             excluded_sensitive_events,
             excluded_test_only_events,
+            ai_requests,
+            ai_attempts,
+            ai_input_tokens,
+            ai_output_tokens,
+            ai_cached_tokens,
         }) => Ok(HistoryStats {
             active,
             dropped_events,
@@ -120,6 +135,11 @@ pub fn stats(_path: &Path) -> io::Result<HistoryStats> {
             excluded_unclassified_events,
             excluded_sensitive_events,
             excluded_test_only_events,
+            ai_requests,
+            ai_attempts,
+            ai_input_tokens,
+            ai_output_tokens,
+            ai_cached_tokens,
             live: true,
         }),
         Ok(Response::Error(code)) => Err(io::Error::other(format!(

@@ -51,26 +51,30 @@ use windows::Win32::UI::TextServices::{
     TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, PostMessageW,
-    RegisterClassW, SetWindowLongPtrW, GWLP_USERDATA, WINDOW_EX_STYLE, WM_APP, WNDCLASSW,
-    WS_OVERLAPPED,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, KillTimer, PostMessageW,
+    RegisterClassW, SetTimer, SetWindowLongPtrW, GWLP_USERDATA, WINDOW_EX_STYLE, WM_APP, WM_TIMER,
+    WNDCLASSW, WS_OVERLAPPED,
 };
 use windows_core::{
     implement, Error, IUnknown, IUnknownImpl, Interface, OutRef, Ref, Result, BOOL, BSTR, GUID,
 };
 
 use sakura_proto::{
-    CandidateKind, CandidateList as EngineCandidateList, InputScope, KeyCode, KeyInput, Mode,
-    Output, Preedit, ScreenRect, UndoCommitOutcome, MAX_PREEDIT_BYTES,
+    AiTextOperation, AiTextStatus, CandidateKind, CandidateList as EngineCandidateList, InputScope,
+    KeyCode, KeyInput, Mode, Modifiers, Output, Preedit, ScreenRect, UndoCommitOutcome,
+    MAX_PREEDIT_BYTES,
 };
-use sakura_reg::{CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DESCRIPTION};
+use sakura_reg::{
+    user_preferences::{read_ai_text_key, AiTextKey},
+    CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DESCRIPTION,
+};
 
 use crate::candidate_ui::CandidateUi;
 use crate::composition::{self, DocumentEdit, Update};
 use crate::diagnostic_ring;
 use crate::display_attributes;
 use crate::edit_session;
-use crate::engine::{Answer, Engine};
+use crate::engine::{AiTextPoll, AiTextRecord, AiTextResult, Answer, Engine};
 use crate::engine_recovery::{
     EngineRecoveryFence, RecoveryKeyDisposition, RecoveryStart, RecoveryTerminal, RecoveryToken,
 };
@@ -84,6 +88,8 @@ use crate::write_coordinator::{
 };
 
 const DEFERRED_WORK_MESSAGE: u32 = WM_APP + 29;
+const AI_TEXT_TIMER_ID: usize = 2;
+const AI_TEXT_POLL_MS: u32 = 50;
 const DEFERRED_WINDOW_CLASS: windows_core::PCWSTR = windows_core::w!(r##"SakuraInputTsfDeferred"##);
 
 /// What the text service holds while it is attached to a thread manager.
@@ -315,6 +321,47 @@ struct PendingWrite {
     /// Identifies the one engine-timeout finalizer whose lifetime fences host
     /// keys. Ordinary engine outputs and focus finalizers carry no token.
     engine_recovery: Option<RecoveryToken>,
+    /// Selected-text AI writes must still target the exact text that was sent
+    /// to the provider. The range and source are re-read under the eventual
+    /// write cookie immediately before any host mutation.
+    ai_source_validation: Option<(ITfRange, String)>,
+    /// Developer-history data is terminalized only after the host write has a
+    /// journal outcome, never merely when the provider returned a result.
+    ai_record: Option<PendingAiRecord>,
+}
+
+#[derive(Debug, Clone)]
+enum AiTextTarget {
+    Composition,
+    Selection(ITfRange),
+}
+
+#[derive(Debug, Clone)]
+struct PendingAiText {
+    job: u64,
+    operation: AiTextOperation,
+    context: ITfContext,
+    source: String,
+    target: AiTextTarget,
+}
+
+#[derive(Debug, Default)]
+struct AiTextState {
+    pending: Option<PendingAiText>,
+}
+
+#[derive(Debug, Clone)]
+struct PendingAiRecord {
+    operation: AiTextOperation,
+    source: String,
+    result: AiTextResult,
+}
+
+struct OutputSubmission {
+    target_range: Option<ITfRange>,
+    synchronous_first: bool,
+    start_now: bool,
+    ai_record: Option<PendingAiRecord>,
 }
 
 #[derive(Debug)]
@@ -432,9 +479,7 @@ fn decide_real_fence(
 ) -> RealFenceAction {
     if deferred_terminalization {
         RealFenceAction::DeferredTerminalization
-    } else if undo_write_pending {
-        RealFenceAction::Consume
-    } else if engine_recovery_pending {
+    } else if undo_write_pending || engine_recovery_pending {
         RealFenceAction::Consume
     } else if input_blocked {
         RealFenceAction::Decline
@@ -831,6 +876,9 @@ pub struct TextService {
     /// caret belongs to this service. `Cell` keeps focus loss authoritative
     /// even if the shell re-enters a language-bar callback.
     focus_foreground: Cell<bool>,
+    ai_text: RefCell<AiTextState>,
+    ai_key_latched: Cell<bool>,
+    last_ai_error: RefCell<Option<String>>,
     mode_item: mode_item::ModeItemState,
 }
 
@@ -853,6 +901,9 @@ impl TextService {
             writes: RefCell::new(WriteCoordinator::new(DEFAULT_WRITE_CAPACITY)),
             engine: RefCell::new(Engine::new()),
             focus_foreground: Cell::new(false),
+            ai_text: RefCell::new(AiTextState::default()),
+            ai_key_latched: Cell::new(false),
+            last_ai_error: RefCell::new(None),
             mode_item: mode_item::ModeItemState::default(),
         }
     }
@@ -946,10 +997,41 @@ impl TextService {
         // SAFETY: the window was created on this thread and its user data is
         // cleared before destruction so no queued callback can use `self`.
         unsafe {
+            let _ = KillTimer(Some(window), AI_TEXT_TIMER_ID);
             SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             let _ = DestroyWindow(window);
         }
         Ok(())
+    }
+
+    fn arm_ai_text_timer(&self) -> Result<()> {
+        let window = self
+            .deferred
+            .try_borrow()
+            .map_err(|_| reentrancy())?
+            .window
+            .ok_or_else(|| Error::new(E_UNEXPECTED, "AI poll window is unavailable"))?;
+        // SAFETY: this thread owns the hidden window. A null timer callback
+        // routes WM_TIMER through its existing window procedure.
+        let timer = unsafe { SetTimer(Some(window), AI_TEXT_TIMER_ID, AI_TEXT_POLL_MS, None) };
+        if timer == 0 {
+            return Err(Error::from_thread());
+        }
+        Ok(())
+    }
+
+    fn stop_ai_text_timer(&self) {
+        let window = self
+            .deferred
+            .try_borrow()
+            .ok()
+            .and_then(|state| state.window);
+        if let Some(window) = window {
+            // SAFETY: the timer belongs to this hidden window and thread.
+            unsafe {
+                let _ = KillTimer(Some(window), AI_TEXT_TIMER_ID);
+            }
+        }
     }
 
     fn post_deferred_work(&self) -> Result<()> {
@@ -1889,6 +1971,18 @@ impl TextService {
     ) {
         for completion in &completions {
             self.settle_engine_recovery_completion(completion);
+            if let Some(record) = completion
+                .payload
+                .as_ref()
+                .and_then(|payload| payload.ai_record.clone())
+            {
+                let (status, reason) = match completion.outcome {
+                    TerminalOutcome::Rejected => (AiTextStatus::Rejected, "host_rejected"),
+                    TerminalOutcome::Cancelled(_) => (AiTextStatus::Cancelled, "host_cancelled"),
+                    TerminalOutcome::Applied => (AiTextStatus::Rejected, "host_terminal_mismatch"),
+                };
+                self.terminalize_pending_ai_record(record, status, Some(reason));
+            }
         }
         // A pending exact-text undo owns an engine transaction in addition to
         // its journal ticket. Resolve that transaction before any generic
@@ -2135,6 +2229,8 @@ impl TextService {
         // and this method below is the explicit terminal owner. Continue
         // unadvising even when retirement is re-entrantly refused, then return
         // that error rather than silently stranding the blocked phase.
+        self.cancel_pending_ai("service_detached");
+        self.ai_key_latched.set(false);
         let deferred_window_result = self.destroy_deferred_window();
         self.end_candidates();
         let composition_result = self.forget_composition();
@@ -2288,6 +2384,7 @@ impl TextService {
                 // path. Keep the defensive terminal arm explicit in case a
                 // future caller bypasses OnMenuSelect.
                 MenuCommand::OpenSettings => {}
+                MenuCommand::AiTransform | MenuCommand::AiProofread => {}
                 _ => {}
             }
         }
@@ -2364,6 +2461,236 @@ impl TextService {
         drop(engine);
         self.sync_mode_item();
         Ok(published)
+    }
+
+    fn ai_trigger_matches(&self, key: KeyInput) -> bool {
+        if key.modifiers.without_locks() != Modifiers::NONE {
+            return false;
+        }
+        matches!(
+            (read_ai_text_key(), key.code),
+            (AiTextKey::Henkan, KeyCode::Henkan) | (AiTextKey::CapsLock, KeyCode::CapsLock)
+        )
+    }
+
+    fn capture_ai_target(
+        &self,
+        context: &ITfContext,
+        operation: AiTextOperation,
+    ) -> Result<Option<(String, AiTextTarget)>> {
+        if operation == AiTextOperation::Proofread {
+            let composition = self.composition.try_borrow().map_err(|_| reentrancy())?;
+            if composition.handle.is_some()
+                && composition
+                    .context
+                    .as_ref()
+                    .is_some_and(|owned| context_id(owned) == context_id(context))
+            {
+                return Ok(None);
+            }
+        }
+        if operation == AiTextOperation::Transform {
+            let composition = self.composition.try_borrow().map_err(|_| reentrancy())?;
+            if composition.known
+                && composition.handle.is_some()
+                && composition
+                    .context
+                    .as_ref()
+                    .is_some_and(|owned| context_id(owned) == context_id(context))
+                && !composition.text.is_empty()
+            {
+                return Ok(Some((composition.text.clone(), AiTextTarget::Composition)));
+            }
+        }
+
+        let client_id = self.client_id()?;
+        let owned_context = context.clone();
+        match edit_session::read_in_document_sync(context, client_id, move |ec| {
+            let range = composition::current_selection_range(&owned_context, ec, &mut || Ok(()))?;
+            let text = read_range_text(&range, ec)?;
+            Ok((text, AiTextTarget::Selection(range)))
+        }) {
+            Ok(target) => Ok(Some(target)),
+            // Empty, oversized, malformed, or unavailable selections are not
+            // AI targets. The key is then left to its existing IME behavior.
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn set_ai_error(&self, message: Option<String>) {
+        let message = message.map(|mut value| {
+            if value.len() > 192 {
+                value.truncate(192);
+            }
+            value
+        });
+        if let Ok(mut slot) = self.last_ai_error.try_borrow_mut() {
+            *slot = message;
+        }
+        self.mode_item.notify_tooltip();
+    }
+
+    fn record_ai_result(
+        &self,
+        operation: AiTextOperation,
+        source: String,
+        result: AiTextResult,
+        status: AiTextStatus,
+        error_override: Option<&str>,
+    ) {
+        let error_code = error_override
+            .map(str::to_owned)
+            .unwrap_or_else(|| result.error_code.clone());
+        let record = AiTextRecord {
+            operation,
+            status,
+            source,
+            result: result.result,
+            model: result.model,
+            provider: result.provider,
+            style: result.style,
+            error_code,
+            latency_ms: result.latency_ms,
+            input_tokens: result.input_tokens,
+            output_tokens: result.output_tokens,
+            cached_tokens: result.cached_tokens,
+            attempts: result.attempts,
+            test_only: false,
+        };
+        if let Ok(mut engine) = self.engine.try_borrow_mut() {
+            let _ = engine.record_ai_text(&record);
+        }
+    }
+
+    fn record_cancelled_ai(&self, pending: PendingAiText, reason: &str) {
+        self.record_ai_result(
+            pending.operation,
+            pending.source,
+            AiTextResult {
+                status: AiTextStatus::Cancelled,
+                result: String::new(),
+                model: "gpt-5.6-luna".to_owned(),
+                provider: String::new(),
+                style: String::new(),
+                error_code: reason.to_owned(),
+                latency_ms: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_tokens: 0,
+                attempts: 0,
+            },
+            AiTextStatus::Cancelled,
+            Some(reason),
+        );
+    }
+
+    fn terminalize_pending_ai_record(
+        &self,
+        record: PendingAiRecord,
+        status: AiTextStatus,
+        reason: Option<&str>,
+    ) {
+        self.record_ai_result(
+            record.operation,
+            record.source,
+            record.result,
+            status,
+            reason,
+        );
+    }
+
+    fn cancel_pending_ai(&self, reason: &str) {
+        let pending = self
+            .ai_text
+            .try_borrow_mut()
+            .ok()
+            .and_then(|mut state| state.pending.take());
+        let Some(pending) = pending else {
+            return;
+        };
+        self.stop_ai_text_timer();
+        if let Ok(mut engine) = self.engine.try_borrow_mut() {
+            let _ = engine.cancel_ai_text(pending.job);
+        }
+        self.record_cancelled_ai(pending, reason);
+    }
+
+    fn start_ai_text_request(
+        &self,
+        context: &ITfContext,
+        operation: AiTextOperation,
+    ) -> Result<bool> {
+        if !self.focus_foreground.get() {
+            return Ok(false);
+        }
+        if self
+            .ai_text
+            .try_borrow()
+            .map_err(|_| reentrancy())?
+            .pending
+            .is_some()
+        {
+            return Ok(true);
+        }
+        if self.read_input_scope(context)? != InputScope::Normal {
+            return Ok(false);
+        }
+        let Some((source, target)) = self.capture_ai_target(context, operation)? else {
+            return Ok(false);
+        };
+        if !self.publish_input_scope(context)? {
+            self.set_ai_error(Some("AI機能を利用できない入力欄です".to_owned()));
+            return Ok(true);
+        }
+        let started = self
+            .engine
+            .try_borrow_mut()
+            .map_err(|_| reentrancy())?
+            .start_ai_text(operation, source.clone());
+        let job = match started {
+            Ok(job) => job,
+            Err(code) => {
+                let error = format!("AIリクエストを開始できませんでした ({code:?})");
+                self.set_ai_error(Some(error));
+                self.record_ai_result(
+                    operation,
+                    source,
+                    AiTextResult {
+                        status: AiTextStatus::Rejected,
+                        result: String::new(),
+                        model: "gpt-5.6-luna".to_owned(),
+                        provider: String::new(),
+                        style: String::new(),
+                        error_code: format!("start_{code:?}").to_ascii_lowercase(),
+                        latency_ms: 0,
+                        input_tokens: 0,
+                        output_tokens: 0,
+                        cached_tokens: 0,
+                        attempts: 0,
+                    },
+                    AiTextStatus::Rejected,
+                    None,
+                );
+                return Ok(true);
+            }
+        };
+        self.ai_text
+            .try_borrow_mut()
+            .map_err(|_| reentrancy())?
+            .pending = Some(PendingAiText {
+            job,
+            operation,
+            context: context.clone(),
+            source,
+            target,
+        });
+        if let Err(error) = self.arm_ai_text_timer() {
+            self.cancel_pending_ai("timer_unavailable");
+            self.set_ai_error(Some("AI結果の監視を開始できませんでした".to_owned()));
+            return Err(error);
+        }
+        self.set_ai_error(None);
+        Ok(true)
     }
 
     fn ask_reconversion(&self, text: String, preview: bool) -> Result<Answer> {
@@ -3207,6 +3534,18 @@ unsafe extern "system" fn deferred_window_procedure(
         }
         return LRESULT(0);
     }
+    if message == WM_TIMER && wparam.0 == AI_TEXT_TIMER_ID {
+        // SAFETY: ownership is identical to the deferred-work message above.
+        let owner = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *const TextService_Impl;
+        if !owner.is_null() {
+            // SAFETY: the pointer remains installed until the timer is killed
+            // and user data is cleared during window destruction.
+            unsafe {
+                (*owner).dispatch_ai_text_poll();
+            }
+        }
+        return LRESULT(0);
+    }
     // SAFETY: forwarding the untouched window message to the default procedure
     // is the standard Win32 window-procedure contract.
     unsafe { DefWindowProcW(window, message, wparam, lparam) }
@@ -3428,6 +3767,44 @@ fn visible_text(preedit: &Preedit) -> String {
     text
 }
 
+fn ai_terminal_result(status: AiTextStatus, error_code: &str) -> AiTextResult {
+    AiTextResult {
+        status,
+        result: String::new(),
+        model: "gpt-5.6-luna".to_owned(),
+        provider: String::new(),
+        style: String::new(),
+        error_code: error_code.to_owned(),
+        latency_ms: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cached_tokens: 0,
+        attempts: 0,
+    }
+}
+
+fn ai_error_message(status: AiTextStatus, error_code: &str) -> String {
+    let reason = match status {
+        AiTextStatus::Timeout => "AIリクエストがタイムアウトしました",
+        AiTextStatus::MissingKey => "APIキーが設定されていません",
+        AiTextStatus::ApiError => "APIがリクエストを拒否しました",
+        AiTextStatus::WorkerError => "AIワーカーを実行できませんでした",
+        AiTextStatus::Cancelled => "AIリクエストをキャンセルしました",
+        AiTextStatus::Rejected => "AI結果を適用できませんでした",
+        AiTextStatus::Applied => "AIから空の結果が返されました",
+    };
+    let safe_code: String = error_code
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+        .take(64)
+        .collect();
+    if safe_code.is_empty() {
+        reason.to_owned()
+    } else {
+        format!("{reason} ({safe_code})")
+    }
+}
+
 fn read_range_text(range: &ITfRange, ec: u32) -> Result<String> {
     // One extra UTF-16 unit makes truncation observable without an unbounded
     // allocation: anything that fills it cannot fit the engine's UTF-8 bound.
@@ -3544,6 +3921,214 @@ impl TextService_Impl {
             });
             if let Some((context, lease)) = context {
                 let _ = self.request_candidate_layout(&context, lease);
+            }
+        }
+    }
+
+    fn dispatch_ai_text_poll(&self) {
+        let service = self.get_impl();
+        let job = match service.ai_text.try_borrow() {
+            Ok(state) => state.pending.as_ref().map(|pending| pending.job),
+            Err(_) => None,
+        };
+        let Some(job) = job else {
+            service.stop_ai_text_timer();
+            return;
+        };
+        let poll = match service.engine.try_borrow_mut() {
+            Ok(mut engine) => engine.poll_ai_text(job),
+            Err(_) => return,
+        };
+        if poll == AiTextPoll::Pending {
+            return;
+        }
+        let pending = match service.ai_text.try_borrow_mut() {
+            Ok(mut state) if state.pending.as_ref().is_some_and(|value| value.job == job) => {
+                state.pending.take()
+            }
+            _ => None,
+        };
+        let Some(pending) = pending else {
+            return;
+        };
+        service.stop_ai_text_timer();
+
+        let result = match poll {
+            AiTextPoll::Complete(result) => result,
+            AiTextPoll::Missing => ai_terminal_result(AiTextStatus::WorkerError, "job_missing"),
+            AiTextPoll::Unavailable => {
+                ai_terminal_result(AiTextStatus::WorkerError, "engine_unavailable")
+            }
+            AiTextPoll::Pending => return,
+        };
+        if result.status != AiTextStatus::Applied || result.result.is_empty() {
+            let status = if result.status == AiTextStatus::Applied {
+                AiTextStatus::WorkerError
+            } else {
+                result.status
+            };
+            let error_code = if result.result.is_empty() && result.error_code.is_empty() {
+                "empty_result".to_owned()
+            } else {
+                result.error_code.clone()
+            };
+            service.set_ai_error(Some(ai_error_message(status, &error_code)));
+            service.record_ai_result(
+                pending.operation,
+                pending.source,
+                result,
+                status,
+                Some(&error_code),
+            );
+            return;
+        }
+
+        let focus_matches = service
+            .focused_context()
+            .ok()
+            .is_some_and(|focused| context_id(&focused) == context_id(&pending.context));
+        if !service.focus_foreground.get()
+            || !focus_matches
+            || service.read_input_scope(&pending.context).ok() != Some(InputScope::Normal)
+        {
+            service.record_ai_result(
+                pending.operation,
+                pending.source,
+                result,
+                AiTextStatus::Cancelled,
+                Some("focus_or_scope_changed"),
+            );
+            return;
+        }
+
+        if self.apply_completed_ai_text(pending, result).is_err() {
+            service.set_ai_error(Some("AI結果を文書へ安全に適用できませんでした".to_owned()));
+        }
+    }
+
+    fn apply_completed_ai_text(&self, pending: PendingAiText, result: AiTextResult) -> Result<()> {
+        let service = self.get_impl();
+        match pending.target.clone() {
+            AiTextTarget::Composition => {
+                let visible = service.composition_projection()?;
+                if !visible.has_composition || visible.text != pending.source {
+                    service.record_ai_result(
+                        pending.operation,
+                        pending.source,
+                        result,
+                        AiTextStatus::Cancelled,
+                        Some("composition_changed"),
+                    );
+                    return Ok(());
+                }
+                service.observe_write_context(&pending.context)?;
+                let reservation = service.reserve_write(&pending.context)?;
+                let output = match service
+                    .engine
+                    .try_borrow_mut()
+                    .map_err(|_| reentrancy())?
+                    .apply_ai_composition(result.result.clone())
+                {
+                    Answer::Ready(output) => output,
+                    Answer::Busy => {
+                        service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
+                        service.record_ai_result(
+                            pending.operation,
+                            pending.source,
+                            result,
+                            AiTextStatus::Rejected,
+                            Some("composition_busy"),
+                        );
+                        return Ok(());
+                    }
+                    Answer::Rejected | Answer::Unavailable => {
+                        service.cancel_reservation(reservation, CancelReason::RequestRejected);
+                        service.record_ai_result(
+                            pending.operation,
+                            pending.source,
+                            result,
+                            AiTextStatus::Rejected,
+                            Some("composition_apply_failed"),
+                        );
+                        return Ok(());
+                    }
+                };
+                let record = PendingAiRecord {
+                    operation: pending.operation,
+                    source: pending.source,
+                    result,
+                };
+                self.submit_output(
+                    &pending.context,
+                    reservation,
+                    output,
+                    OutputSubmission {
+                        target_range: None,
+                        synchronous_first: true,
+                        start_now: true,
+                        ai_record: Some(record),
+                    },
+                )
+            }
+            AiTextTarget::Selection(range) => {
+                let client_id = service.client_id()?;
+                let validation_range = range.clone();
+                let expected = pending.source.clone();
+                let unchanged =
+                    edit_session::read_in_document_sync(&pending.context, client_id, move |ec| {
+                        Ok(read_range_text(&validation_range, ec)? == expected)
+                    })
+                    .unwrap_or(false);
+                if !unchanged || service.composition_projection()?.has_composition {
+                    service.record_ai_result(
+                        pending.operation,
+                        pending.source,
+                        result,
+                        AiTextStatus::Cancelled,
+                        Some("selection_changed"),
+                    );
+                    return Ok(());
+                }
+                service.observe_write_context(&pending.context)?;
+                let reservation = service.reserve_write(&pending.context)?;
+                let before = service
+                    .writes
+                    .try_borrow()
+                    .map_err(|_| reentrancy())?
+                    .tail_visible();
+                if before.has_composition || !before.text.is_empty() {
+                    service.cancel_reservation(reservation, CancelReason::RevisionMismatch);
+                    service.record_ai_result(
+                        pending.operation,
+                        pending.source,
+                        result,
+                        AiTextStatus::Cancelled,
+                        Some("composition_started"),
+                    );
+                    return Ok(());
+                }
+                let record = PendingAiRecord {
+                    operation: pending.operation,
+                    source: pending.source.clone(),
+                    result: result.clone(),
+                };
+                let payload = PendingWrite {
+                    context: pending.context,
+                    plan: WritePlan {
+                        updates: vec![Update::Commit(result.result)],
+                        before,
+                        after: VisibleState::empty(),
+                    },
+                    target_range: Some(range.clone()),
+                    query_layout: false,
+                    synchronous_first: true,
+                    candidates: CandidateEffect::Hide,
+                    undo_commit: false,
+                    engine_recovery: None,
+                    ai_source_validation: Some((range, pending.source)),
+                    ai_record: Some(record),
+                };
+                self.submit_pending_write(reservation, payload, true)
             }
         }
     }
@@ -3824,6 +4409,30 @@ impl TextService_Impl {
         }
 
         let service = self.get_impl();
+        if service.ai_trigger_matches(key) {
+            let already_owned = service.ai_key_latched.get()
+                || service
+                    .ai_text
+                    .try_borrow()
+                    .map(|state| state.pending.is_some())
+                    .unwrap_or(true);
+            if already_owned {
+                return Ok(true.into());
+            }
+            if key.test_only {
+                if service.focus_foreground.get()
+                    && service.read_input_scope(context)? == InputScope::Normal
+                    && service
+                        .capture_ai_target(context, AiTextOperation::Transform)?
+                        .is_some()
+                {
+                    return Ok(true.into());
+                }
+            } else if service.start_ai_text_request(context, AiTextOperation::Transform)? {
+                service.ai_key_latched.set(true);
+                return Ok(true.into());
+            }
+        }
         let current_context = context_id(context);
         if key.test_only {
             // Probe is deliberately decided before every live settlement,
@@ -3983,7 +4592,17 @@ impl TextService_Impl {
 
         let consumed = output.consumed;
         if self
-            .submit_output(context, reservation, output, None, true, true)
+            .submit_output(
+                context,
+                reservation,
+                output,
+                OutputSubmission {
+                    target_range: None,
+                    synchronous_first: true,
+                    start_now: true,
+                    ai_record: None,
+                },
+            )
             .is_err()
         {
             // The engine has already advanced, so giving a consumed key back to
@@ -4127,6 +4746,8 @@ impl TextService_Impl {
             candidates: CandidateEffect::Hide,
             undo_commit: false,
             engine_recovery,
+            ai_source_validation: None,
+            ai_record: None,
         };
         self.submit_pending_write(reservation, payload, start_now)
     }
@@ -4139,11 +4760,15 @@ impl TextService_Impl {
         context: &ITfContext,
         reservation: Reservation,
         output: Output,
-        target_range: Option<ITfRange>,
-        synchronous_first: bool,
-        start_now: bool,
+        submission: OutputSubmission,
     ) -> Result<()> {
         let service = self.get_impl();
+        let OutputSubmission {
+            target_range,
+            synchronous_first,
+            start_now,
+            ai_record,
+        } = submission;
         let undo_commit = !output.delete_before.is_empty();
         let plan = match service.plan(&output) {
             Ok(plan) => plan,
@@ -4170,6 +4795,8 @@ impl TextService_Impl {
             candidates,
             undo_commit,
             engine_recovery: None,
+            ai_source_validation: None,
+            ai_record,
         };
         self.submit_pending_write(reservation, payload, start_now)
     }
@@ -4349,6 +4976,21 @@ impl TextService_Impl {
         if let Err(reason) = self.validate_pending_write(ticket) {
             self.cancel_stale_write(ticket, reason);
             return Ok(());
+        }
+
+        if let Some((range, expected)) = payload.ai_source_validation.as_ref() {
+            let actual = read_range_text(range, ec);
+            if let Err(reason) = self.validate_pending_write(ticket) {
+                self.cancel_stale_write(ticket, reason);
+                return Ok(());
+            }
+            if actual.as_deref() != Ok(expected.as_str()) {
+                service.set_ai_error(Some(
+                    "選択範囲が変わったためAI結果を適用しませんでした".to_owned(),
+                ));
+                self.reject_requested_write(ticket, false, None);
+                return Ok(());
+            }
         }
 
         // Category-manager creation can itself enter COM.  Finish it before the
@@ -4722,6 +5364,10 @@ impl TextService_Impl {
             service.disconnect();
             return;
         }
+        if let Some(record) = payload.ai_record.clone() {
+            service.terminalize_pending_ai_record(record, AiTextStatus::Applied, None);
+            service.set_ai_error(None);
+        }
         match payload.candidates {
             CandidateEffect::Show(candidates) => {
                 let shown = completion.ui_lease.is_some_and(|lease| {
@@ -4848,11 +5494,18 @@ impl ITfLangBarItem_Impl for TextService_Impl {
     }
 
     fn GetTooltipString(&self) -> Result<BSTR> {
-        let state = self.get_impl().mode_item.snapshot();
-        let text = match state.mode {
+        let service = self.get_impl();
+        let state = service.mode_item.snapshot();
+        let mut text = match state.mode {
             Some(mode) => format!("Sakura Input — {}", mode_item::description(mode)),
             None => "Sakura Input".to_owned(),
         };
+        if let Ok(error) = service.last_ai_error.try_borrow() {
+            if let Some(error) = error.as_ref() {
+                text.push_str(" / AIエラー: ");
+                text.push_str(error);
+            }
+        }
         Ok(BSTR::from(text))
     }
 }
@@ -4886,13 +5539,39 @@ impl ITfLangBarItemButton_Impl for TextService_Impl {
                 can_restore: false,
             }
         };
-        mode_item::populate_menu(menu, state)
+        let last_error = service
+            .last_ai_error
+            .try_borrow()
+            .ok()
+            .and_then(|value| value.clone());
+        mode_item::populate_menu(menu, state, last_error.as_deref())
     }
 
     fn OnMenuSelect(&self, wid: u32) -> Result<()> {
         if let Some(command) = mode_item::menu_command(wid) {
             if command == MenuCommand::OpenSettings {
                 return mode_item::open_settings();
+            }
+            if matches!(command, MenuCommand::AiTransform | MenuCommand::AiProofread) {
+                let service = self.get_impl();
+                let operation = if command == MenuCommand::AiProofread {
+                    AiTextOperation::Proofread
+                } else {
+                    AiTextOperation::Transform
+                };
+                let started = service
+                    .focused_context()
+                    .and_then(|context| service.start_ai_text_request(&context, operation))
+                    .unwrap_or(false);
+                if !started {
+                    let message = if operation == AiTextOperation::Proofread {
+                        "校正する文字列を選択してください"
+                    } else {
+                        "変換する入力中または選択中の文字列がありません"
+                    };
+                    service.set_ai_error(Some(message.to_owned()));
+                }
+                return Ok(());
             }
             self.get_impl().select_mode_menu_command(command);
         }
@@ -5094,6 +5773,8 @@ impl ITfFnReconversion_Impl for TextService_Impl {
             candidates: CandidateEffect::Show(candidates.clone()),
             undo_commit: false,
             engine_recovery: None,
+            ai_source_validation: None,
+            ai_record: None,
         };
         if let Err(error) = self.submit_pending_write(reservation, payload, true) {
             service.revert_engine();
@@ -5126,6 +5807,8 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         // The OS indicator follows the caret, not the engine lifetime. Hide it
         // before scheduling focus-loss finalization, which can run after a
         // different document has already acquired focus.
+        service.cancel_pending_ai("focus_changed");
+        service.ai_key_latched.set(false);
         service.focus_foreground.set(false);
         service.mode_item.hide();
         service.invalidate_for_focus_change();
@@ -5150,13 +5833,21 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
     fn OnTestKeyUp(
         &self,
         _pic: Ref<'_, ITfContext>,
-        _wparam: WPARAM,
-        _lparam: LPARAM,
+        wparam: WPARAM,
+        lparam: LPARAM,
     ) -> Result<BOOL> {
-        Ok(false.into())
+        let key = key_handler::translate((wparam.0 & 0xFFFF) as u16, lparam.0, true);
+        let service = self.get_impl();
+        Ok((service.ai_key_latched.get() && service.ai_trigger_matches(key)).into())
     }
 
-    fn OnKeyUp(&self, _pic: Ref<'_, ITfContext>, _wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
+    fn OnKeyUp(&self, _pic: Ref<'_, ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
+        let key = key_handler::translate((wparam.0 & 0xFFFF) as u16, lparam.0, false);
+        let service = self.get_impl();
+        if service.ai_key_latched.get() && service.ai_trigger_matches(key) {
+            service.ai_key_latched.set(false);
+            return Ok(true.into());
+        }
         Ok(false.into())
     }
 

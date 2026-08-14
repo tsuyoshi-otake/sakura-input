@@ -51,6 +51,9 @@ pub const MENU_RESTORE_MODE: u32 = 1;
 pub const MENU_INPUT_MODE: u32 = 2;
 pub const MENU_IME_TOGGLE: u32 = 3;
 pub const MENU_SETTINGS: u32 = 4;
+pub const MENU_AI_TRANSFORM: u32 = 5;
+pub const MENU_AI_PROOFREAD: u32 = 6;
+pub const MENU_AI_ERROR: u32 = 7;
 pub const MENU_MODE_HIRAGANA: u32 = 10;
 pub const MENU_MODE_KATAKANA: u32 = 11;
 pub const MENU_MODE_HALF_KATAKANA: u32 = 12;
@@ -73,6 +76,8 @@ pub enum MenuCommand {
     RestoreMode,
     SetMode(Mode),
     ToggleIme,
+    AiTransform,
+    AiProofread,
     OpenSettings,
 }
 
@@ -131,6 +136,12 @@ impl ModeItemState {
 
     pub fn hide(&self) {
         self.update(false, None, false, false);
+    }
+
+    /// Notifies the shell that auxiliary tooltip text (for example the most
+    /// recent AI request error) changed without changing the input mode.
+    pub fn notify_tooltip(&self) {
+        self.queue_update(TF_LBI_TOOLTIP);
     }
 
     pub fn status(&self) -> u32 {
@@ -218,6 +229,8 @@ pub const fn menu_command(id: u32) -> Option<MenuCommand> {
     match id {
         MENU_RESTORE_MODE => Some(MenuCommand::RestoreMode),
         MENU_IME_TOGGLE => Some(MenuCommand::ToggleIme),
+        MENU_AI_TRANSFORM => Some(MenuCommand::AiTransform),
+        MENU_AI_PROOFREAD => Some(MenuCommand::AiProofread),
         MENU_SETTINGS => Some(MenuCommand::OpenSettings),
         MENU_MODE_HIRAGANA => Some(MenuCommand::SetMode(Mode::Hiragana)),
         MENU_MODE_KATAKANA => Some(MenuCommand::SetMode(Mode::Katakana)),
@@ -240,7 +253,7 @@ pub fn is_settings_click(click: TfLBIClick) -> bool {
 /// hierarchy of familiar IMEs (a focused input-mode submenu and a one-shot
 /// restore), while intentionally using Sakura labels and only operations the
 /// engine can carry out safely.
-pub fn populate_menu(menu: &ITfMenu, state: Snapshot) -> Result<()> {
+pub fn populate_menu(menu: &ITfMenu, state: Snapshot, last_ai_error: Option<&str>) -> Result<()> {
     let mut unused = None;
     let restore_flags = if state.can_restore && state.can_change {
         0
@@ -324,6 +337,30 @@ pub fn populate_menu(menu: &ITfMenu, state: Snapshot) -> Result<()> {
         TF_LBMENUF_GRAYED
     };
     add(menu, MENU_IME_TOGGLE, toggle_flags, ime_label, &mut unused)?;
+    add(menu, 0, TF_LBMENUF_SEPARATOR, "", &mut unused)?;
+    let ai_flags = if state.can_change {
+        0
+    } else {
+        TF_LBMENUF_GRAYED
+    };
+    add(
+        menu,
+        MENU_AI_TRANSFORM,
+        ai_flags,
+        "GPT-5.6 Lunaで文章変換",
+        &mut unused,
+    )?;
+    add(
+        menu,
+        MENU_AI_PROOFREAD,
+        ai_flags,
+        "選択中文字列を校正",
+        &mut unused,
+    )?;
+    if let Some(error) = last_ai_error.filter(|value| !value.is_empty()) {
+        let label = format!("前回のAIエラー: {error}");
+        add(menu, MENU_AI_ERROR, TF_LBMENUF_GRAYED, &label, &mut unused)?;
+    }
     add(menu, 0, TF_LBMENUF_SEPARATOR, "", &mut unused)?;
     add(menu, MENU_SETTINGS, 0, "Sakura Input の設定", &mut unused)
 }

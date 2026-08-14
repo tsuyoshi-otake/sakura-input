@@ -24,6 +24,7 @@
 
 #![cfg(windows)]
 
+pub mod ai_text;
 pub mod configuration;
 pub mod context_baseline;
 pub mod context_evaluation;

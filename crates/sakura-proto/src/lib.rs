@@ -46,7 +46,7 @@ pub mod wire;
 pub use fixed::{FixedStr, FixedVec, Overflow};
 pub use message::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
-    Header, Request, Response, UiState, UndoCommitOutcome,
+    AiTextOperation, AiTextStatus, Header, Request, Response, UiState, UndoCommitOutcome,
 };
 pub use output::{
     CandidateDetailInput, CandidateDetailRef, CandidateDetailTerms, OutputBuf, SegSpan,
@@ -60,7 +60,7 @@ pub use wire::Error;
 
 /// The protocol version this crate implements. Carried in every payload;
 /// a decoder rejects any other value with `Error::UnsupportedVersion`.
-pub const PROTOCOL_VERSION: u16 = 16;
+pub const PROTOCOL_VERSION: u16 = 17;
 
 /// The largest payload (the bytes after the 4-byte frame length prefix)
 /// this protocol allows. A frame whose declared length exceeds this is

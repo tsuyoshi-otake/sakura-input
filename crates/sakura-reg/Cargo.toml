@@ -18,6 +18,7 @@ features = [
     # RegCreateKeyExW takes a SECURITY_ATTRIBUTES pointer, so its binding is
     # gated behind Win32_Security even though registration passes None.
     "Win32_Security",
+    "Win32_Security_Credentials",
     "Win32_System_Com",
     "Win32_System_Registry",
     "Win32_System_LibraryLoader",

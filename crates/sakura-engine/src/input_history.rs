@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_proto::InputScope;
+use sakura_proto::{AiTextOperation, AiTextStatus, InputScope};
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
@@ -41,6 +41,7 @@ pub const MAX_INPUT_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 
 const RECORD_KEY: u8 = 1;
 const RECORD_COMMIT: u8 = 2;
+const RECORD_AI_TEXT: u8 = 3;
 
 /// Scope classification attached to every persisted record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +87,46 @@ impl ScopeClass {
     }
 }
 
+const fn ai_operation_name(operation: AiTextOperation) -> &'static str {
+    match operation {
+        AiTextOperation::Transform => "transform",
+        AiTextOperation::Proofread => "proofread",
+    }
+}
+
+fn decode_ai_operation(value: u8) -> io::Result<AiTextOperation> {
+    match value {
+        1 => Ok(AiTextOperation::Transform),
+        2 => Ok(AiTextOperation::Proofread),
+        _ => Err(invalid_data("unknown AI text operation")),
+    }
+}
+
+const fn ai_status_name(status: AiTextStatus) -> &'static str {
+    match status {
+        AiTextStatus::Applied => "applied",
+        AiTextStatus::Cancelled => "cancelled",
+        AiTextStatus::Timeout => "timeout",
+        AiTextStatus::MissingKey => "missing-key",
+        AiTextStatus::WorkerError => "worker-error",
+        AiTextStatus::ApiError => "api-error",
+        AiTextStatus::Rejected => "rejected",
+    }
+}
+
+fn decode_ai_status(value: u8) -> io::Result<AiTextStatus> {
+    match value {
+        1 => Ok(AiTextStatus::Applied),
+        2 => Ok(AiTextStatus::Cancelled),
+        3 => Ok(AiTextStatus::Timeout),
+        4 => Ok(AiTextStatus::MissingKey),
+        5 => Ok(AiTextStatus::WorkerError),
+        6 => Ok(AiTextStatus::ApiError),
+        7 => Ok(AiTextStatus::Rejected),
+        _ => Err(invalid_data("unknown AI text status")),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyHistoryRecord {
     pub sequence: u64,
@@ -123,9 +164,31 @@ pub struct CommitHistoryRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiTextHistoryRecord {
+    pub sequence: u64,
+    pub timestamp_ms: u64,
+    pub session: u64,
+    pub scope: ScopeClass,
+    pub operation: AiTextOperation,
+    pub status: AiTextStatus,
+    pub source: String,
+    pub result: String,
+    pub model: String,
+    pub provider: String,
+    pub style: String,
+    pub error_code: String,
+    pub latency_ms: u64,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cached_tokens: u32,
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputHistoryRecord {
     Key(KeyHistoryRecord),
     Commit(CommitHistoryRecord),
+    AiText(AiTextHistoryRecord),
 }
 
 impl InputHistoryRecord {
@@ -133,6 +196,7 @@ impl InputHistoryRecord {
         match self {
             Self::Key(record) => record.sequence,
             Self::Commit(record) => record.sequence,
+            Self::AiText(record) => record.sequence,
         }
     }
 
@@ -140,6 +204,7 @@ impl InputHistoryRecord {
         match self {
             Self::Key(record) => record.timestamp_ms,
             Self::Commit(record) => record.timestamp_ms,
+            Self::AiText(record) => record.timestamp_ms,
         }
     }
 
@@ -182,6 +247,26 @@ impl InputHistoryRecord {
                 put_u16(&mut bytes, record.right_context);
                 put_string(&mut bytes, &record.reading)?;
                 put_string(&mut bytes, &record.surface)?;
+            }
+            Self::AiText(record) => {
+                bytes.push(RECORD_AI_TEXT);
+                put_u64(&mut bytes, record.sequence);
+                put_u64(&mut bytes, record.timestamp_ms);
+                put_u64(&mut bytes, record.session);
+                bytes.push(record.scope as u8);
+                bytes.push(record.operation as u8);
+                bytes.push(record.status as u8);
+                put_string(&mut bytes, &record.source)?;
+                put_string(&mut bytes, &record.result)?;
+                put_string(&mut bytes, &record.model)?;
+                put_string(&mut bytes, &record.provider)?;
+                put_string(&mut bytes, &record.style)?;
+                put_string(&mut bytes, &record.error_code)?;
+                put_u64(&mut bytes, record.latency_ms);
+                put_u32(&mut bytes, record.input_tokens);
+                put_u32(&mut bytes, record.output_tokens);
+                put_u32(&mut bytes, record.cached_tokens);
+                put_u32(&mut bytes, record.attempts);
             }
         }
         if bytes.len() > MAX_RECORD_BYTES {
@@ -254,6 +339,25 @@ impl InputHistoryRecord {
                 reading: reader.string()?,
                 surface: reader.string()?,
             }),
+            RECORD_AI_TEXT => Self::AiText(AiTextHistoryRecord {
+                sequence,
+                timestamp_ms,
+                session,
+                scope,
+                operation: decode_ai_operation(reader.u8()?)?,
+                status: decode_ai_status(reader.u8()?)?,
+                source: reader.string()?,
+                result: reader.string()?,
+                model: reader.string()?,
+                provider: reader.string()?,
+                style: reader.string()?,
+                error_code: reader.string()?,
+                latency_ms: reader.u64()?,
+                input_tokens: reader.u32()?,
+                output_tokens: reader.u32()?,
+                cached_tokens: reader.u32()?,
+                attempts: reader.u32()?,
+            }),
             _ => return Err(invalid_data("unknown input history record")),
         };
         reader.finish()?;
@@ -275,7 +379,9 @@ impl InputHistorySnapshot {
 kind\tsequence\ttimestamp-ms\tsession\tscope\tkey-code\tcharacter\tmodifiers\t\
 repeat\tconsumed\tstate-before\tstate-after\tmode-before\tmode-after\tpreedit-before\t\
 preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsurface\t\
-left-context\tright-context\n",
+             left-context\tright-context\tai-operation\tai-status\tai-source\tai-result\tai-model\t\
+ ai-provider\tai-style\tai-error-code\tai-latency-ms\tai-input-tokens\tai-output-tokens\t\
+ ai-cached-tokens\tai-http-attempts\n",
         );
         for record in &self.records {
             match record {
@@ -305,7 +411,7 @@ left-context\tright-context\n",
                         escape(&record.action),
                         record.dropped_before.to_string(),
                     ];
-                    fields.extend((0..4).map(|_| String::new()));
+                    fields.extend((0..17).map(|_| String::new()));
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -324,6 +430,34 @@ left-context\tright-context\n",
                         record.left_context.to_string(),
                         record.right_context.to_string(),
                     ]);
+                    fields.extend((0..13).map(|_| String::new()));
+                    output.push_str(&fields.join("\t"));
+                    output.push('\n');
+                }
+                InputHistoryRecord::AiText(record) => {
+                    let mut fields = vec![
+                        "ai-text".to_owned(),
+                        record.sequence.to_string(),
+                        record.timestamp_ms.to_string(),
+                        record.session.to_string(),
+                        record.scope.name().to_owned(),
+                    ];
+                    fields.extend((0..20).map(|_| String::new()));
+                    fields.extend([
+                        ai_operation_name(record.operation).to_owned(),
+                        ai_status_name(record.status).to_owned(),
+                        escape(&record.source),
+                        escape(&record.result),
+                        escape(&record.model),
+                        escape(&record.provider),
+                        escape(&record.style),
+                        escape(&record.error_code),
+                        record.latency_ms.to_string(),
+                        record.input_tokens.to_string(),
+                        record.output_tokens.to_string(),
+                        record.cached_tokens.to_string(),
+                        record.attempts.to_string(),
+                    ]);
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -340,6 +474,11 @@ pub struct InputHistoryStats {
     excluded_unclassified_events: AtomicU64,
     excluded_sensitive_events: AtomicU64,
     excluded_test_only_events: AtomicU64,
+    ai_requests: AtomicU64,
+    ai_attempts: AtomicU64,
+    ai_input_tokens: AtomicU64,
+    ai_output_tokens: AtomicU64,
+    ai_cached_tokens: AtomicU64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -349,6 +488,11 @@ pub struct InputHistoryStatsSnapshot {
     pub excluded_unclassified_events: u64,
     pub excluded_sensitive_events: u64,
     pub excluded_test_only_events: u64,
+    pub ai_requests: u64,
+    pub ai_attempts: u64,
+    pub ai_input_tokens: u64,
+    pub ai_output_tokens: u64,
+    pub ai_cached_tokens: u64,
 }
 
 impl InputHistoryStats {
@@ -379,6 +523,11 @@ impl InputHistoryStats {
             excluded_unclassified_events: self.excluded_unclassified_events(),
             excluded_sensitive_events: self.excluded_sensitive_events(),
             excluded_test_only_events: self.excluded_test_only_events(),
+            ai_requests: self.ai_requests.load(Ordering::Relaxed),
+            ai_attempts: self.ai_attempts.load(Ordering::Relaxed),
+            ai_input_tokens: self.ai_input_tokens.load(Ordering::Relaxed),
+            ai_output_tokens: self.ai_output_tokens.load(Ordering::Relaxed),
+            ai_cached_tokens: self.ai_cached_tokens.load(Ordering::Relaxed),
         }
     }
 
@@ -598,6 +747,85 @@ impl InputHistoryService {
             surface: surface.to_owned(),
             left_context,
             right_context,
+        });
+        let Ok(payload) = record.encode() else {
+            self.stats
+                .persistence_failures
+                .fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        let command = Command::Append {
+            epoch: self.epoch.load(Ordering::Acquire),
+            payload,
+        };
+        match self.sender.try_send(command) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                self.stats
+                    .persistence_failures
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_ai_text(
+        &self,
+        session: u64,
+        scope: ScopeClass,
+        operation: AiTextOperation,
+        status: AiTextStatus,
+        source: &str,
+        result: &str,
+        model: &str,
+        provider: &str,
+        style: &str,
+        error_code: &str,
+        latency_ms: u64,
+        input_tokens: u32,
+        output_tokens: u32,
+        cached_tokens: u32,
+        attempts: u32,
+        test_only: bool,
+    ) {
+        if self.stats.excludes(scope, test_only) || source.is_empty() {
+            return;
+        }
+        self.stats.ai_requests.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .ai_attempts
+            .fetch_add(u64::from(attempts), Ordering::Relaxed);
+        self.stats
+            .ai_input_tokens
+            .fetch_add(u64::from(input_tokens), Ordering::Relaxed);
+        self.stats
+            .ai_output_tokens
+            .fetch_add(u64::from(output_tokens), Ordering::Relaxed);
+        self.stats
+            .ai_cached_tokens
+            .fetch_add(u64::from(cached_tokens), Ordering::Relaxed);
+        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        let record = InputHistoryRecord::AiText(AiTextHistoryRecord {
+            sequence,
+            timestamp_ms: now_ms(),
+            session,
+            scope,
+            operation,
+            status,
+            source: source.to_owned(),
+            result: result.to_owned(),
+            model: model.to_owned(),
+            provider: provider.to_owned(),
+            style: style.to_owned(),
+            error_code: error_code.to_owned(),
+            latency_ms,
+            input_tokens,
+            output_tokens,
+            cached_tokens,
+            attempts,
         });
         let Ok(payload) = record.encode() else {
             self.stats
@@ -1100,6 +1328,7 @@ fn next_session_id(path: &Path) -> io::Result<u64> {
         .map(|record| match record {
             InputHistoryRecord::Key(record) => record.session,
             InputHistoryRecord::Commit(record) => record.session,
+            InputHistoryRecord::AiText(record) => record.session,
         })
         .max()
         .unwrap_or(0))
@@ -1397,11 +1626,62 @@ mod tests {
         let tsv = snapshot.to_tsv();
         let tsv_lines: Vec<_> = tsv.lines().collect();
         assert_eq!(tsv_lines.len(), 5);
-        assert_eq!(tsv_lines[2].split('\t').count(), 25);
+        assert_eq!(tsv_lines[2].split('\t').count(), 38);
         assert!(tsv_lines[3].contains("\t\\t\t"));
         for line in &tsv_lines[3..] {
-            assert_eq!(line.split('\t').count(), 25);
+            assert_eq!(line.split('\t').count(), 38);
         }
+        service.stop().expect("stop");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn ai_records_roundtrip_and_aggregate_logical_requests_attempts_and_tokens() {
+        let path = temporary_path("ai-roundtrip");
+        let service = InputHistoryService::open(&path).expect("open");
+        service.record_ai_text(
+            9,
+            ScopeClass::Normal,
+            AiTextOperation::Proofread,
+            AiTextStatus::Applied,
+            "元",
+            "結果",
+            "gpt-5.6-luna",
+            "openai",
+            "technical",
+            "",
+            123,
+            17,
+            5,
+            3,
+            2,
+            false,
+        );
+        let stats = service.stats().snapshot();
+        assert_eq!(stats.ai_requests, 1);
+        assert_eq!(stats.ai_attempts, 2);
+        assert_eq!(stats.ai_input_tokens, 17);
+        assert_eq!(stats.ai_output_tokens, 5);
+        assert_eq!(stats.ai_cached_tokens, 3);
+        service.flush().expect("flush");
+        let snapshot = read_snapshot(&path).expect("read");
+        let [InputHistoryRecord::AiText(record)] = snapshot.records.as_slice() else {
+            panic!("expected one AI record");
+        };
+        assert_eq!(record.operation, AiTextOperation::Proofread);
+        assert_eq!(record.status, AiTextStatus::Applied);
+        assert_eq!(record.model, "gpt-5.6-luna");
+        assert_eq!(record.attempts, 2);
+        assert_eq!(
+            snapshot
+                .to_tsv()
+                .lines()
+                .last()
+                .expect("TSV")
+                .split('\t')
+                .count(),
+            38
+        );
         service.stop().expect("stop");
         let _ = fs::remove_file(path);
     }

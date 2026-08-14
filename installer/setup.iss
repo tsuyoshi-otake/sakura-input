@@ -105,6 +105,7 @@ Source: "..\target\x86_64-pc-windows-msvc\release\sakura_tsf.dll"; DestDir: "{#A
 ; the version directory so tasks and shortcuts do not change on every update.
 ; The settings bootstrap dispatches to the versioned payload.
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_engine.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_ai_worker.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_renderer.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_regtool.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_logon.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -209,6 +210,14 @@ Filename: "{app}\sakura_regtool.exe"; Parameters: "--configure-diagnostics"; Fla
 ; both the task definition and the input-list entry, then starts the engine and
 ; renderer. Every failed step is reflected in its exit bitmask and status file.
 Filename: "{app}\sakura_regtool.exe"; Parameters: "--enable-profile"; Flags: runhidden waituntilterminated runasoriginaluser; StatusMsg: "Adding Sakura Input to your input methods..."
+
+; The optional post-install step runs the ordinary settings application under
+; the original desktop user's token. Provider, endpoint, protected API key,
+; transformation style, effort, and trigger key are therefore configured in
+; that user's HKCU/Credential Manager rather than the elevated installer's.
+; The settings save path performs no network request; an empty key preserves
+; any credential from an earlier installation.
+Filename: "{app}\sakura_settings.exe"; Description: "Sakura InputのAI文章変換を設定する"; Flags: postinstall skipifsilent nowait runasoriginaluser
 
 [UninstallRun]
 ; The safety-critical maintenance-task removal and TSF deregistration run from

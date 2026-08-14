@@ -278,6 +278,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "sakura-ai-proto"
+version = "1.0.5"
+
+[[package]]
+name = "sakura-ai-worker"
+version = "1.0.5"
+dependencies = [
+ "sakura-ai-proto",
+ "serde_json",
+ "windows",
+]
+
+[[package]]
 name = "sakura-core"
 version = "1.0.5"
 dependencies = [
@@ -289,10 +302,12 @@ name = "sakura-engine"
 version = "1.0.5"
 dependencies = [
  "dictc",
+ "sakura-ai-proto",
  "sakura-core",
  "sakura-ipc",
  "sakura-neural-proto",
  "sakura-proto",
+ "sakura-reg",
  "windows",
 ]
 
@@ -362,6 +377,7 @@ dependencies = [
 name = "sakura-settings"
 version = "1.0.5"
 dependencies = [
+ "sakura-ai-proto",
  "sakura-core",
  "sakura-engine",
  "sakura-ipc",
