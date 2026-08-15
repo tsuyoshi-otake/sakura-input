@@ -1117,4 +1117,37 @@ mod tests {
             .cancel_reservation(later, CancelReason::StaleCallback)
             .is_empty());
     }
+
+    #[test]
+    fn shift_latin_backspace_retype_plans_commit_in_order_and_never_aiuoeo() {
+        let mut journal = active(4);
+        for (payload, after) in [
+            ("type-aiueo", "AIUEO"),
+            ("shift-backspace", "AIUE"),
+            ("retype-o", "AIUEO"),
+        ] {
+            reserve_and_attach(&mut journal, payload, true, state(after, true));
+            let request = request(&mut journal);
+            assert_eq!(journal.validate_callback(request.ticket), Ok(()));
+            assert!(journal.complete_applied(request.ticket).is_some());
+            assert_ne!(
+                journal.committed_visible().text,
+                "AIUOEO",
+                "a host-stolen Backspace projection must not become committed"
+            );
+        }
+        assert_eq!(journal.committed_visible(), state("AIUEO", true));
+        assert_eq!(journal.tail_visible(), state("AIUEO", true));
+
+        let stolen = journal.reserve(FIRST).expect("host-stolen reservation");
+        let attach = journal.attach(
+            stolen,
+            "host-stolen-aiuoeo",
+            true,
+            state("AIUE", true),
+            state("AIUOEO", true),
+        );
+        assert_eq!(attach, Err(AdmissionError::ProjectionMismatch));
+        assert_eq!(journal.committed_visible(), state("AIUEO", true));
+    }
 }

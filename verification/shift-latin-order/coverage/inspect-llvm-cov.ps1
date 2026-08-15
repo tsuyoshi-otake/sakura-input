@@ -1,0 +1,15 @@
+$ErrorActionPreference = 'Stop'
+$path = Join-Path $PSScriptRoot 'llvm-cov.json'
+$json = Get-Content -Raw -Path $path | ConvertFrom-Json
+Write-Output ("data_count={0}" -f @($json.data).Count)
+$file = @($json.data[0].files | Where-Object { $_.filename -match 'dispatch\.rs$' })[0]
+Write-Output ("filename={0}" -f $file.filename)
+Write-Output ("fn_count={0}" -f @($file.functions).Count)
+$first = @($file.functions)[0]
+Write-Output ("first_keys={0}" -f (($first | Get-Member -MemberType NoteProperty).Name -join ','))
+Write-Output ("first_json={0}" -f ($first | ConvertTo-Json -Depth 4 -Compress))
+$names = @($file.functions | ForEach-Object { $_.name })
+Write-Output ("sample_names={0}" -f (($names | Select-Object -First 8) -join ' || '))
+$hit = $names | Where-Object { $_ -match 'feed|backspace|preedit|resync|latin' }
+Write-Output ("hit_count={0}" -f @($hit).Count)
+Write-Output ("hits={0}" -f (($hit | Select-Object -First 20) -join ' || '))

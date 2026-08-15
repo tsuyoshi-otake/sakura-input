@@ -192,7 +192,9 @@ pub struct Session {
     /// This is the narrow signal used to try an English dictionary reading;
     /// ordinary romaji remains on the kana path.
     pub(crate) shifted_ascii: bool,
-    /// Character cursor in `preedit`; pending romaji is always at this point.
+    /// Character cursor in the visible composition. For a Shift-started
+    /// English buffer that is `raw_input`; otherwise it is `preedit`, and
+    /// pending romaji sits at this point.
     pub(crate) cursor: u16,
     /// Whether the reading has entered dictionary conversion.
     pub(crate) converting: bool,

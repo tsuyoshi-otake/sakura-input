@@ -1032,6 +1032,25 @@ mod tests {
         (name, handle)
     }
 
+    fn latin_preedit(text: &str) -> Output {
+        Output {
+            consumed: true,
+            beep: false,
+            mode: None,
+            preedit: Some(Preedit {
+                segments: vec![Segment {
+                    text: text.to_owned(),
+                    underline: sakura_proto::UnderlineKind::Raw,
+                }],
+                cursor: text.chars().count() as u32,
+            }),
+            commit: None,
+            delete_before: String::new(),
+            candidates: None,
+            candidate_detail: None,
+        }
+    }
+
     fn some_output() -> Output {
         Output {
             consumed: true,
@@ -1080,6 +1099,100 @@ mod tests {
             }
             other => panic!("expected an answer, got {other:?}"),
         }
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn shift_latin_then_shift_backspace_roundtrip_keeps_press_order() {
+        let (name, server) = fake_engine("shift-latin-bs", |pipe, buffer| {
+            let expected = [
+                (KeyCode::Char, Some('A'), true, "A"),
+                (KeyCode::Char, Some('I'), true, "AI"),
+                (KeyCode::Char, Some('U'), true, "AIU"),
+                (KeyCode::Char, Some('E'), true, "AIUE"),
+                (KeyCode::Char, Some('O'), true, "AIUEO"),
+                (KeyCode::Backspace, None, true, "AIUE"),
+                (KeyCode::Char, Some('O'), true, "AIUEO"),
+            ];
+            for (code, ch, shift, preedit) in expected {
+                let payload = pipe.read_frame(buffer).expect("shift-latin request");
+                let (id, request) = decode_request(payload).expect("decodable shift-latin request");
+                match request {
+                    Request::SendKey { key, .. } => {
+                        assert_eq!(key.code, code, "unexpected key {key:?}");
+                        assert_eq!(key.ch, ch, "unexpected character {key:?}");
+                        assert_eq!(
+                            key.modifiers.contains(Modifiers::SHIFT),
+                            shift,
+                            "Shift bit for {key:?}"
+                        );
+                    }
+                    other => panic!("expected SendKey, got {other:?}"),
+                }
+                let mut reply = Vec::new();
+                encode_response(&Response::Output(latin_preedit(preedit)), id, &mut reply)
+                    .expect("encode shift-latin output");
+                pipe.write_all(&reply).expect("write shift-latin output");
+            }
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(engine.is_connected(), "the handshake must have completed");
+        let keys = [
+            KeyInput {
+                modifiers: Modifiers::SHIFT,
+                ..a_key('A')
+            },
+            KeyInput {
+                modifiers: Modifiers::SHIFT,
+                ..a_key('I')
+            },
+            KeyInput {
+                modifiers: Modifiers::SHIFT,
+                ..a_key('U')
+            },
+            KeyInput {
+                modifiers: Modifiers::SHIFT,
+                ..a_key('E')
+            },
+            KeyInput {
+                modifiers: Modifiers::SHIFT,
+                ..a_key('O')
+            },
+            KeyInput {
+                code: KeyCode::Backspace,
+                ch: None,
+                modifiers: Modifiers::SHIFT,
+                repeat: false,
+                test_only: false,
+            },
+            KeyInput {
+                modifiers: Modifiers::SHIFT,
+                ..a_key('O')
+            },
+        ];
+        let mut last = String::new();
+        for key in keys {
+            match engine.send_key(key) {
+                Answer::Ready(output) => {
+                    assert!(
+                        output.consumed,
+                        "Shift+Latin / Shift+Backspace must be consumed"
+                    );
+                    last = output
+                        .preedit
+                        .as_ref()
+                        .and_then(|preedit| preedit.segments.first())
+                        .map(|segment| segment.text.clone())
+                        .unwrap_or_default();
+                    assert_ne!(last, "AIUOEO");
+                }
+                other => panic!("expected an answer, got {other:?}"),
+            }
+        }
+        assert_eq!(last, "AIUEO");
 
         drop(engine);
         server.join().expect("the server thread");

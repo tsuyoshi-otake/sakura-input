@@ -7905,6 +7905,27 @@ mod tests {
     }
 
     #[test]
+    fn shift_latin_backspace_retype_plans_chain_to_aiueo_not_aiuoeo() {
+        let typed = plan_from_visible(VisibleState::empty(), &output(None, Some(&["AIUEO"])))
+            .expect("type AIUEO");
+        assert!(
+            matches!(typed.updates.as_slice(), [Update::Show(segments)] if segments_text(segments) == "AIUEO")
+        );
+        let erased = plan_from_visible(typed.after.clone(), &output(None, Some(&["AIUE"])))
+            .expect("Shift+Backspace");
+        assert!(
+            matches!(erased.updates.as_slice(), [Update::Show(segments)] if segments_text(segments) == "AIUE")
+        );
+        let retyped = plan_from_visible(erased.after.clone(), &output(None, Some(&["AIUEO"])))
+            .expect("retype O");
+        assert!(
+            matches!(retyped.updates.as_slice(), [Update::Show(segments)] if segments_text(segments) == "AIUEO")
+        );
+        assert_ne!(retyped.after.text, "AIUOEO");
+        assert_eq!(retyped.after, state("AIUEO", true));
+    }
+
+    #[test]
     fn plans_chain_through_explicit_projections() {
         let first = plan_from_visible(VisibleState::empty(), &output(None, Some(&["かん"])))
             .expect("first plan");

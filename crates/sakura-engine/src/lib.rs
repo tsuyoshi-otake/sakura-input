@@ -42,5 +42,11 @@ pub mod session;
 mod shift_ascii_space;
 #[cfg(test)]
 mod shift_ascii_space_tests;
+mod shift_latin_oracle;
+#[cfg(test)]
+mod shift_latin_oracle_tests;
+#[cfg(test)]
+#[path = "shift_latin_order_tests.rs"]
+mod shift_latin_order;
 pub mod ui;
 pub mod user_dictionary;

@@ -977,6 +977,39 @@ mod tests {
     }
 
     #[test]
+    fn ms_ime_composing_shift_backspace_deletes_back() {
+        assert_binding(
+            Preset::MsIme,
+            State::Composing,
+            KeyCode::Backspace,
+            Modifiers::SHIFT,
+            Action::DeleteBack,
+        );
+    }
+
+    #[test]
+    fn atok_composing_shift_backspace_deletes_back() {
+        assert_binding(
+            Preset::Atok,
+            State::Composing,
+            KeyCode::Backspace,
+            Modifiers::SHIFT,
+            Action::DeleteBack,
+        );
+    }
+
+    #[test]
+    fn ms_ime_converting_shift_backspace_cancels() {
+        assert_binding(
+            Preset::MsIme,
+            State::Converting,
+            KeyCode::Backspace,
+            Modifiers::SHIFT,
+            Action::Cancel,
+        );
+    }
+
+    #[test]
     fn ms_ime_converting_delete_is_bound_to_swallow() {
         assert_binding(
             Preset::MsIme,
