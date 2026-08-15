@@ -351,3 +351,59 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   that named the two keys that *would* have recovered (Escape, Enter) and why
   neither could fire. That table is what proved the root cause was the whole
   cause and not one of several.
+
+- **Key-map modifiers match exactly, so a held Shift turns Backspace into a
+  different key.** `[composing] backspace = delete_back` does not consume
+  Shift+Backspace. Holding Shift to type English therefore leaked Backspace
+  (and Left/Right) to the host unless those chords were bound. Verified by
+  `KeyMap::lookup(State::Composing, shift+backspace)` and the AIUEO repair
+  tests in `shift_latin_order_tests`.
+
+- **When visible English text is `raw_input`, the caret must be a raw-input
+  index.** `render_preedit` used to pin the caret at `raw_input.len()` while
+  Backspace popped the last raw byte and deleted `preedit[cursor-1]`. After
+  Left, that pair produced AIUEO → AIUOE / AIUOEO. Verified by
+  `production_left_then_backspace_deletes_the_character_before_the_caret`
+  and by a mutant that restored end-append (`AIUOE`).
+
+- **`resync_shifted_ascii_from_raw` is what makes later English conversion
+  possible, even though the user sees `raw_input`.** `begin_conversion`
+  beeps when `preedit` is empty. A no-op resync leaves `preedit` empty after
+  Shift+Latin typing, so Space never reaches the IT-flag dictionary path.
+  Visible-text tests cannot kill that mutant; a convert-after-CLAUDE test
+  can. Verified by cargo-mutants 27.1.0
+  (`replace resync_shifted_ascii_from_raw -> Ok(())` caught) and
+  `resync_is_required_for_shifted_ascii_dictionary_conversion`.
+
+- **`WriteCoordinator::attach` refuses a plan whose `before` is not the
+  journal tail.** After engine plans commit `AIUEO`, a host-stolen
+  `AIUE`→`AIUOEO` attach is `ProjectionMismatch`. This is the strongest
+  COM-free stand-in for “Shift+Backspace must not be applied by the host
+  while the engine still owns the key.” Verified by
+  `shift_latin_backspace_retype_plans_commit_in_order_and_never_aiuoeo`.
+
+- **Whole-function llvm-cov of `feed_character` / `apply_backspace` /
+  `render_preedit` is not Shift-Latin coverage.** Each function returns
+  early on `shifted_ascii`; the remaining regions are kana / pending-romaji
+  / CJK normalize. Measure the early-return arm line ranges separately
+  (2278–2326, 3502–3512, 4165–4193) and list the rest as out of scope.
+  Verified 2026-08-15: `shift_latin` filter, 45 tests, arm 98.5 / 90.0 /
+  75.5 while whole-function backspace stayed 25.0% (20/80). `mcdc_records`
+  were 0.
+
+- **Escape after Convert is not convert-cancel.** Production Escape clears
+  the English buffer; converting Backspace cancels conversion without
+  deleting a letter. A coverage PBT that maps `Convert` to Space after
+  punctuation also diverges: `decide_shift_ascii_convert` inserts a literal
+  U+0020. Verified by the first fail of
+  `production_convert_cancel_then_home_backspace_keeps_press_order` (got
+  `"X"` vs `"XAIUEO"`) and coverage-neighbor case 1 (`"AIUEO--IEUA "` vs
+  `"AIUEO--IEUA"`).
+
+- **`sakura_tsf_test_host` / `e2e-host` is the installed language profile,
+  not a Sakura-only HWND.** The next automated layer that does not touch
+  the installed IME is a process-local EDIT plus `checked_host_call` /
+  `plan_from_visible`. A live `ITfContext` / `ITfRange` still cannot be
+  constructed in this crate. Verified by
+  `shift_latin_settext_payloads_reach_a_process_local_edit_hwnd_and_never_aiuoeo`
+  and the recovery-test comment in `text_service.rs`.

@@ -845,6 +845,96 @@ mod authority_gate_tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod shift_latin_hwnd_projection_tests {
+    use std::cell::{Cell, RefCell};
+
+    use windows::core::w;
+    use windows::Win32::Foundation::{E_UNEXPECTED, HWND};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, GetWindowTextW, SetWindowTextW, WINDOW_EX_STYLE,
+        WS_OVERLAPPED,
+    };
+    use windows_core::{Error, Result};
+
+    use super::checked_host_call;
+
+    fn create_projection_edit() -> Result<HWND> {
+        unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("EDIT"),
+                w!(""),
+                WS_OVERLAPPED,
+                0,
+                0,
+                0,
+                0,
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+    }
+
+    fn set_edit_text(window: HWND, text: &str) -> Result<()> {
+        let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe { SetWindowTextW(window, windows::core::PCWSTR(wide.as_ptr())) }
+    }
+
+    fn read_edit_text(window: HWND) -> Result<String> {
+        let mut text = [0u16; 64];
+        let copied = unsafe { GetWindowTextW(window, &mut text) } as usize;
+        Ok(String::from_utf16_lossy(&text[..copied]))
+    }
+
+    /// Process-local stand-in for `ITfRange::SetText`: a real EDIT HWND plus
+    /// the same `checked_host_call` gate `write_text` uses. A live COM
+    /// `ITfContext` still cannot be constructed without a host, and the
+    /// installed IME is not touched.
+    #[test]
+    fn shift_latin_settext_payloads_reach_a_process_local_edit_hwnd_and_never_aiuoeo() {
+        let window = create_projection_edit().expect("process-local EDIT");
+        let document = RefCell::new(String::new());
+        let invalidated = Cell::new(false);
+        let mut authority = || {
+            if invalidated.get() {
+                Err(Error::from_hresult(E_UNEXPECTED))
+            } else {
+                Ok(())
+            }
+        };
+
+        for payload in ["AIUEO", "AIUE", "AIUEO"] {
+            checked_host_call(&mut authority, || {
+                document.borrow_mut().clear();
+                document.borrow_mut().push_str(payload);
+                set_edit_text(window, payload)
+            })
+            .expect("authorized SetText stand-in");
+            assert_eq!(read_edit_text(window).expect("read projection"), payload);
+            assert_ne!(document.borrow().as_str(), "AIUOEO");
+        }
+
+        invalidated.set(true);
+        let stolen = checked_host_call(&mut authority, || {
+            document.borrow_mut().clear();
+            document.borrow_mut().push_str("AIUOEO");
+            set_edit_text(window, "AIUOEO")
+        });
+        assert!(stolen.is_err(), "invalidated authority must skip SetText");
+        assert_eq!(
+            read_edit_text(window).expect("unchanged projection"),
+            "AIUEO"
+        );
+        assert_ne!(document.borrow().as_str(), "AIUOEO");
+
+        let _ = unsafe { DestroyWindow(window) };
+    }
+}
+
+#[cfg(test)]
 mod candidate_geometry_authority_tests {
     use std::cell::{Cell, RefCell};
 

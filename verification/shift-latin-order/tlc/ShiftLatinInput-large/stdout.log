@@ -1,0 +1,400 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 0 and seed 20260815 with 4 workers on 16 cores with 15768MB heap and 64MB offheap memory [pid: 53360] (Windows 11 10.0 amd64, Microsoft 11.0.31 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file C:\Codes\tsuyoshi-otake\sakura-input\verification\tla\ShiftLatinInput.tla
+Parsing file C:\Users\developer\AppData\Local\Temp\Naturals.tla
+Parsing file C:\Users\developer\AppData\Local\Temp\Sequences.tla
+Parsing file C:\Users\developer\AppData\Local\Temp\FiniteSets.tla
+Parsing file C:\Users\developer\AppData\Local\Temp\TLC.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module ShiftLatinInput
+Starting... (2026-08-15 14:52:21)
+Implied-temporal checking--satisfiability problem has 1 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-08-15 14:52:22.
+Checking temporal properties for the current state space with 215226 total distinct states at (2026-08-15 14:52:25)
+Finished checking temporal properties in 01s at 2026-08-15 14:52:27
+Progress(10) at 2026-08-15 14:52:27: 558,171 states generated (558,171 s/min), 215,226 distinct states found (215,226 ds/min), 176,857 states left on queue.
+Progress(11) at 2026-08-15 14:53:27: 15,831,889 states generated (15,273,718 s/min), 5,048,906 distinct states found (4,833,680 ds/min), 2,744,064 states left on queue.
+The coverage statistics at 2026-08-15 14:53:27
+<Init line 61, col 1 to line 61, col 4 of module ShiftLatinInput>: 1:1
+  line 62, col 5 to line 69, col 25 of module ShiftLatinInput: 1
+<ShiftDown line 73, col 1 to line 73, col 9 of module ShiftLatinInput>: 12:1240321
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1240323
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352025
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352025
+  line 75, col 8 to line 75, col 24 of module ShiftLatinInput: 1240323
+  line 76, col 8 to line 76, col 35 of module ShiftLatinInput: 1240323
+  line 77, col 8 to line 77, col 82 of module ShiftLatinInput: 1240323
+<ShiftUp line 79, col 1 to line 79, col 7 of module ShiftLatinInput>: 47206:1240323
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1240323
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352025
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352025
+  line 81, col 8 to line 81, col 25 of module ShiftLatinInput: 1240323
+  line 82, col 8 to line 82, col 35 of module ShiftLatinInput: 1240323
+  line 83, col 8 to line 83, col 82 of module ShiftLatinInput: 1240323
+<TypeLetter line 91, col 1 to line 91, col 14 of module ShiftLatinInput>: 3606608:7153750
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 4029895
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 11760125
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 11760125
+  line 93, col 8 to line 93, col 21 of module ShiftLatinInput: 10231510
+  |line 93, col 8 to line 93, col 9 of module ShiftLatinInput: 6201615
+  |line 93, col 15 to line 93, col 21 of module ShiftLatinInput: 6201615
+  line 94, col 8 to line 94, col 18 of module ShiftLatinInput: 10231510
+  |line 94, col 9 to line 94, col 18 of module ShiftLatinInput: 6201615
+  line 95, col 8 to line 95, col 30 of module ShiftLatinInput: 4029895
+  |line 95, col 8 to line 95, col 21 of module ShiftLatinInput: 5137000
+  |line 95, col 25 to line 95, col 30 of module ShiftLatinInput: 5137000
+  line 96, col 11 to line 96, col 19 of module ShiftLatinInput: 3343575
+  line 97, col 11 to line 97, col 17 of module ShiftLatinInput: 3810175
+  line 98, col 8 to line 98, col 51 of module ShiftLatinInput: 7153750
+  line 99, col 8 to line 99, col 27 of module ShiftLatinInput: 7153750
+  line 100, col 8 to line 100, col 22 of module ShiftLatinInput: 7153750
+  line 101, col 8 to line 101, col 35 of module ShiftLatinInput: 7153750
+  line 102, col 8 to line 102, col 65 of module ShiftLatinInput: 7153750
+<CommitAndType line 104, col 1 to line 104, col 17 of module ShiftLatinInput>: 104921:521255
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 521255
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 11760124
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 11760124
+  line 106, col 8 to line 106, col 21 of module ShiftLatinInput: 6722869
+  |line 106, col 8 to line 106, col 9 of module ShiftLatinInput: 6201614
+  |line 106, col 15 to line 106, col 21 of module ShiftLatinInput: 6201614
+  line 107, col 8 to line 107, col 17 of module ShiftLatinInput: 521255
+  line 108, col 8 to line 108, col 47 of module ShiftLatinInput: 521255
+  |line 108, col 8 to line 108, col 38 of module ShiftLatinInput: 1064615
+  |line 108, col 42 to line 108, col 47 of module ShiftLatinInput: 1064615
+  line 109, col 8 to line 109, col 42 of module ShiftLatinInput: 521255
+  line 110, col 8 to line 110, col 26 of module ShiftLatinInput: 521255
+  line 111, col 8 to line 111, col 18 of module ShiftLatinInput: 521255
+  line 112, col 8 to line 112, col 22 of module ShiftLatinInput: 521255
+  line 113, col 8 to line 113, col 26 of module ShiftLatinInput: 521255
+  line 114, col 8 to line 114, col 35 of module ShiftLatinInput: 521255
+  line 115, col 8 to line 115, col 42 of module ShiftLatinInput: 521255
+<Backspace line 117, col 1 to line 117, col 9 of module ShiftLatinInput>: 0:1146375
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1146375
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352025
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352025
+  line 119, col 11 to line 119, col 20 of module ShiftLatinInput: 1240323
+  line 120, col 16 to line 120, col 34 of module ShiftLatinInput: 212923
+  line 121, col 16 to line 121, col 55 of module ShiftLatinInput: 212923
+  line 122, col 16 to line 122, col 25 of module ShiftLatinInput: 933452
+  |line 122, col 16 to line 122, col 21 of module ShiftLatinInput: 1027400
+  line 123, col 16 to line 123, col 59 of module ShiftLatinInput: 933452
+  line 124, col 16 to line 124, col 35 of module ShiftLatinInput: 933452
+  line 125, col 16 to line 125, col 72 of module ShiftLatinInput: 933452
+  |line 125, col 27 to line 125, col 72 of module ShiftLatinInput: 933452
+  ||line 125, col 30 to line 125, col 48 of module ShiftLatinInput: 933452
+  ||line 125, col 55 to line 125, col 59 of module ShiftLatinInput: 159533
+  ||line 125, col 66 to line 125, col 72 of module ShiftLatinInput: 773919
+  line 126, col 16 to line 126, col 34 of module ShiftLatinInput: 933452
+  line 127, col 8 to line 127, col 35 of module ShiftLatinInput: 1146375
+  line 128, col 8 to line 128, col 26 of module ShiftLatinInput: 1146375
+  line 129, col 8 to line 129, col 41 of module ShiftLatinInput: 1146375
+<DeleteForward line 131, col 1 to line 131, col 13 of module ShiftLatinInput>: 0:210904
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 210904
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352025
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352025
+  line 133, col 8 to line 133, col 18 of module ShiftLatinInput: 1451227
+  |line 133, col 9 to line 133, col 18 of module ShiftLatinInput: 1240323
+  line 134, col 8 to line 134, col 30 of module ShiftLatinInput: 210904
+  |line 134, col 8 to line 134, col 13 of module ShiftLatinInput: 1027400
+  |line 134, col 17 to line 134, col 30 of module ShiftLatinInput: 1027400
+  line 135, col 8 to line 135, col 55 of module ShiftLatinInput: 210904
+  line 136, col 8 to line 136, col 64 of module ShiftLatinInput: 210904
+  |line 136, col 19 to line 136, col 64 of module ShiftLatinInput: 210904
+  ||line 136, col 22 to line 136, col 40 of module ShiftLatinInput: 210904
+  ||line 136, col 47 to line 136, col 51 of module ShiftLatinInput: 22472
+  ||line 136, col 58 to line 136, col 64 of module ShiftLatinInput: 188432
+  line 137, col 8 to line 137, col 35 of module ShiftLatinInput: 210904
+  line 138, col 8 to line 138, col 73 of module ShiftLatinInput: 210904
+<MoveLeft line 140, col 1 to line 140, col 8 of module ShiftLatinInput>: 267869:933452
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 933452
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352026
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352027
+  line 142, col 8 to line 142, col 18 of module ShiftLatinInput: 2173778
+  |line 142, col 9 to line 142, col 18 of module ShiftLatinInput: 1240325
+  line 143, col 8 to line 143, col 17 of module ShiftLatinInput: 933453
+  |line 143, col 8 to line 143, col 13 of module ShiftLatinInput: 1027401
+  line 144, col 8 to line 144, col 27 of module ShiftLatinInput: 933453
+  line 145, col 8 to line 145, col 35 of module ShiftLatinInput: 933453
+  line 146, col 8 to line 146, col 85 of module ShiftLatinInput: 933452
+<MoveRight line 148, col 1 to line 148, col 9 of module ShiftLatinInput>: 0:210904
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 210904
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352031
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352031
+  line 150, col 8 to line 150, col 18 of module ShiftLatinInput: 1451233
+  |line 150, col 9 to line 150, col 18 of module ShiftLatinInput: 1240331
+  line 151, col 8 to line 151, col 30 of module ShiftLatinInput: 210904
+  |line 151, col 8 to line 151, col 13 of module ShiftLatinInput: 1027407
+  |line 151, col 17 to line 151, col 30 of module ShiftLatinInput: 1027407
+  line 152, col 8 to line 152, col 27 of module ShiftLatinInput: 210905
+  line 153, col 8 to line 153, col 35 of module ShiftLatinInput: 210905
+  line 154, col 8 to line 154, col 85 of module ShiftLatinInput: 210904
+<Convert line 156, col 1 to line 156, col 7 of module ShiftLatinInput>: 915017:962178
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 962179
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352040
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352040
+  line 158, col 8 to line 158, col 18 of module ShiftLatinInput: 2202518
+  |line 158, col 9 to line 158, col 18 of module ShiftLatinInput: 1240340
+  line 159, col 8 to line 159, col 25 of module ShiftLatinInput: 962181
+  |line 159, col 8 to line 159, col 21 of module ShiftLatinInput: 1027417
+  line 160, col 8 to line 160, col 25 of module ShiftLatinInput: 962183
+  |line 160, col 22 to line 160, col 25 of module ShiftLatinInput: 962183
+  line 161, col 8 to line 161, col 35 of module ShiftLatinInput: 962184
+  line 162, col 8 to line 162, col 81 of module ShiftLatinInput: 962179
+<Cancel line 164, col 1 to line 164, col 6 of module ShiftLatinInput>: 0:1240346
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1240350
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352053
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352054
+  line 166, col 11 to line 166, col 20 of module ShiftLatinInput: 1240352
+  line 167, col 16 to line 167, col 34 of module ShiftLatinInput: 212927
+  line 168, col 16 to line 168, col 55 of module ShiftLatinInput: 212927
+  line 169, col 16 to line 169, col 33 of module ShiftLatinInput: 1027427
+  line 170, col 16 to line 170, col 26 of module ShiftLatinInput: 1027428
+  line 171, col 16 to line 171, col 31 of module ShiftLatinInput: 1027428
+  |line 171, col 27 to line 171, col 31 of module ShiftLatinInput: 1027429
+  line 172, col 16 to line 172, col 34 of module ShiftLatinInput: 1027430
+  line 173, col 8 to line 173, col 35 of module ShiftLatinInput: 1240359
+  line 174, col 8 to line 174, col 53 of module ShiftLatinInput: 1240350
+<Commit line 176, col 1 to line 176, col 6 of module ShiftLatinInput>: 107400:615219
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 615219
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 2352065
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 2352065
+  line 178, col 8 to line 178, col 18 of module ShiftLatinInput: 1855583
+  |line 178, col 9 to line 178, col 18 of module ShiftLatinInput: 1240365
+  line 179, col 8 to line 179, col 25 of module ShiftLatinInput: 615219
+  |line 179, col 8 to line 179, col 21 of module ShiftLatinInput: 1027437
+  line 180, col 8 to line 180, col 48 of module ShiftLatinInput: 615219
+  |line 180, col 8 to line 180, col 38 of module ShiftLatinInput: 962204
+  |line 180, col 43 to line 180, col 48 of module ShiftLatinInput: 962205
+  line 181, col 8 to line 181, col 42 of module ShiftLatinInput: 615219
+  line 182, col 8 to line 182, col 25 of module ShiftLatinInput: 615219
+  line 183, col 8 to line 183, col 18 of module ShiftLatinInput: 615219
+  line 184, col 8 to line 184, col 23 of module ShiftLatinInput: 615219
+  line 185, col 8 to line 185, col 35 of module ShiftLatinInput: 615219
+  line 186, col 8 to line 186, col 54 of module ShiftLatinInput: 615219
+<Idle line 188, col 1 to line 188, col 4 of module ShiftLatinInput>: 0:1111702
+  line 189, col 8 to line 189, col 29 of module ShiftLatinInput: 3463777
+  |line 189, col 8 to line 189, col 17 of module ShiftLatinInput: 2352076
+  |line 189, col 21 to line 189, col 29 of module ShiftLatinInput: 2352076
+  line 190, col 8 to line 190, col 21 of module ShiftLatinInput: 1111702
+<TypeOK line 48, col 1 to line 48, col 6 of module ShiftLatinInput>
+  line 49, col 5 to line 59, col 29 of module ShiftLatinInput: 5049290
+  |line 49, col 8 to line 49, col 33 of module ShiftLatinInput: 5049291
+  |line 50, col 8 to line 50, col 31 of module ShiftLatinInput: 5049294
+  |line 51, col 8 to line 51, col 27 of module ShiftLatinInput: 5049297
+  |line 52, col 8 to line 52, col 31 of module ShiftLatinInput: 5049297
+  |line 53, col 8 to line 53, col 26 of module ShiftLatinInput: 5049297
+  |line 54, col 8 to line 54, col 29 of module ShiftLatinInput: 5049297
+  |line 55, col 8 to line 55, col 28 of module ShiftLatinInput: 5049297
+  |line 56, col 8 to line 56, col 33 of module ShiftLatinInput: 5049297
+  |line 57, col 8 to line 57, col 31 of module ShiftLatinInput: 5049299
+  ||line 57, col 8 to line 57, col 21 of module ShiftLatinInput: 5049301
+  ||line 57, col 26 to line 57, col 31 of module ShiftLatinInput: 5049304
+  |line 58, col 8 to line 58, col 34 of module ShiftLatinInput: 5049306
+  |line 59, col 8 to line 59, col 29 of module ShiftLatinInput: 5049308
+<CursorInRange line 211, col 1 to line 211, col 13 of module ShiftLatinInput>
+  line 211, col 18 to line 211, col 41 of module ShiftLatinInput: 5049309
+<NoHostSteal line 212, col 1 to line 212, col 11 of module ShiftLatinInput>
+  line 212, col 16 to line 212, col 33 of module ShiftLatinInput: 5049309
+<LatchImpliesBuffer line 213, col 1 to line 213, col 18 of module ShiftLatinInput>
+  line 213, col 23 to line 213, col 67 of module ShiftLatinInput: 5049309
+  |line 213, col 23 to line 213, col 29 of module ShiftLatinInput: 5049309
+  |line 213, col 35 to line 213, col 66 of module ShiftLatinInput: 4941888
+<EmptyReleasesLatch line 214, col 1 to line 214, col 18 of module ShiftLatinInput>
+  line 214, col 23 to line 214, col 69 of module ShiftLatinInput: 5049309
+  |line 214, col 24 to line 214, col 56 of module ShiftLatinInput: 5049309
+  ||line 214, col 24 to line 214, col 41 of module ShiftLatinInput: 5049309
+  ||line 214, col 46 to line 214, col 56 of module ShiftLatinInput: 107421
+  |line 214, col 62 to line 214, col 69 of module ShiftLatinInput: 107421
+End of statistics.
+Progress(11) at 2026-08-15 14:53:54: 23,139,035 states generated, 6,341,996 distinct states found, 0 states left on queue.
+Checking temporal properties for the complete state space with 6341996 total distinct states at (2026-08-15 14:53:54)
+Finished checking temporal properties in 03min 09s at 2026-08-15 14:57:03
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 5.8E-6
+  based on the actual fingerprints:  val = 9.4E-8
+The coverage statistics at 2026-08-15 14:57:04
+<Init line 61, col 1 to line 61, col 4 of module ShiftLatinInput>: 1:1
+  line 62, col 5 to line 69, col 25 of module ShiftLatinInput: 1
+<ShiftDown line 73, col 1 to line 73, col 9 of module ShiftLatinInput>: 12:1532904
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1532904
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 75, col 8 to line 75, col 24 of module ShiftLatinInput: 1532904
+  line 76, col 8 to line 76, col 35 of module ShiftLatinInput: 1532904
+  line 77, col 8 to line 77, col 82 of module ShiftLatinInput: 1532904
+<ShiftUp line 79, col 1 to line 79, col 7 of module ShiftLatinInput>: 78181:1532904
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1532904
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 81, col 8 to line 81, col 25 of module ShiftLatinInput: 1532904
+  line 82, col 8 to line 82, col 35 of module ShiftLatinInput: 1532904
+  line 83, col 8 to line 83, col 82 of module ShiftLatinInput: 1532904
+<TypeLetter line 91, col 1 to line 91, col 14 of module ShiftLatinInput>: 4576227:9373645
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 5185845
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 32100655
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 32100655
+  line 93, col 8 to line 93, col 21 of module ShiftLatinInput: 12850365
+  |line 93, col 8 to line 93, col 9 of module ShiftLatinInput: 7664520
+  |line 93, col 15 to line 93, col 21 of module ShiftLatinInput: 7664520
+  line 94, col 8 to line 94, col 18 of module ShiftLatinInput: 12850365
+  |line 94, col 9 to line 94, col 18 of module ShiftLatinInput: 7664520
+  line 95, col 8 to line 95, col 30 of module ShiftLatinInput: 5185845
+  |line 95, col 8 to line 95, col 21 of module ShiftLatinInput: 6401670
+  |line 95, col 25 to line 95, col 30 of module ShiftLatinInput: 6401670
+  line 96, col 11 to line 96, col 19 of module ShiftLatinInput: 4407520
+  line 97, col 11 to line 97, col 17 of module ShiftLatinInput: 4966125
+  line 98, col 8 to line 98, col 51 of module ShiftLatinInput: 9373645
+  line 99, col 8 to line 99, col 27 of module ShiftLatinInput: 9373645
+  line 100, col 8 to line 100, col 22 of module ShiftLatinInput: 9373645
+  line 101, col 8 to line 101, col 35 of module ShiftLatinInput: 9373645
+  line 102, col 8 to line 102, col 65 of module ShiftLatinInput: 9373645
+<CommitAndType line 104, col 1 to line 104, col 17 of module ShiftLatinInput>: 104921:559725
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 559725
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 32100655
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 32100655
+  line 106, col 8 to line 106, col 21 of module ShiftLatinInput: 8224245
+  |line 106, col 8 to line 106, col 9 of module ShiftLatinInput: 7664520
+  |line 106, col 15 to line 106, col 21 of module ShiftLatinInput: 7664520
+  line 107, col 8 to line 107, col 17 of module ShiftLatinInput: 559725
+  line 108, col 8 to line 108, col 47 of module ShiftLatinInput: 559725
+  |line 108, col 8 to line 108, col 38 of module ShiftLatinInput: 1262850
+  |line 108, col 42 to line 108, col 47 of module ShiftLatinInput: 1262850
+  line 109, col 8 to line 109, col 42 of module ShiftLatinInput: 559725
+  line 110, col 8 to line 110, col 26 of module ShiftLatinInput: 559725
+  line 111, col 8 to line 111, col 18 of module ShiftLatinInput: 559725
+  line 112, col 8 to line 112, col 22 of module ShiftLatinInput: 559725
+  line 113, col 8 to line 113, col 26 of module ShiftLatinInput: 559725
+  line 114, col 8 to line 114, col 35 of module ShiftLatinInput: 559725
+  line 115, col 8 to line 115, col 42 of module ShiftLatinInput: 559725
+<Backspace line 117, col 1 to line 117, col 9 of module ShiftLatinInput>: 0:1427530
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1427530
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 119, col 11 to line 119, col 20 of module ShiftLatinInput: 1532904
+  line 120, col 16 to line 120, col 34 of module ShiftLatinInput: 252570
+  line 121, col 16 to line 121, col 55 of module ShiftLatinInput: 252570
+  line 122, col 16 to line 122, col 25 of module ShiftLatinInput: 1174960
+  |line 122, col 16 to line 122, col 21 of module ShiftLatinInput: 1280334
+  line 123, col 16 to line 123, col 59 of module ShiftLatinInput: 1174960
+  line 124, col 16 to line 124, col 35 of module ShiftLatinInput: 1174960
+  line 125, col 16 to line 125, col 72 of module ShiftLatinInput: 1174960
+  |line 125, col 27 to line 125, col 72 of module ShiftLatinInput: 1174960
+  ||line 125, col 30 to line 125, col 48 of module ShiftLatinInput: 1174960
+  ||line 125, col 55 to line 125, col 59 of module ShiftLatinInput: 224610
+  ||line 125, col 66 to line 125, col 72 of module ShiftLatinInput: 950350
+  line 126, col 16 to line 126, col 34 of module ShiftLatinInput: 1174960
+  line 127, col 8 to line 127, col 35 of module ShiftLatinInput: 1427530
+  line 128, col 8 to line 128, col 26 of module ShiftLatinInput: 1427530
+  line 129, col 8 to line 129, col 41 of module ShiftLatinInput: 1427530
+<DeleteForward line 131, col 1 to line 131, col 13 of module ShiftLatinInput>: 0:245165
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 245165
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 133, col 8 to line 133, col 18 of module ShiftLatinInput: 1778069
+  |line 133, col 9 to line 133, col 18 of module ShiftLatinInput: 1532904
+  line 134, col 8 to line 134, col 30 of module ShiftLatinInput: 245165
+  |line 134, col 8 to line 134, col 13 of module ShiftLatinInput: 1280334
+  |line 134, col 17 to line 134, col 30 of module ShiftLatinInput: 1280334
+  line 135, col 8 to line 135, col 55 of module ShiftLatinInput: 245165
+  line 136, col 8 to line 136, col 64 of module ShiftLatinInput: 245165
+  |line 136, col 19 to line 136, col 64 of module ShiftLatinInput: 245165
+  ||line 136, col 22 to line 136, col 40 of module ShiftLatinInput: 245165
+  ||line 136, col 47 to line 136, col 51 of module ShiftLatinInput: 29290
+  ||line 136, col 58 to line 136, col 64 of module ShiftLatinInput: 215875
+  line 137, col 8 to line 137, col 35 of module ShiftLatinInput: 245165
+  line 138, col 8 to line 138, col 73 of module ShiftLatinInput: 245165
+<MoveLeft line 140, col 1 to line 140, col 8 of module ShiftLatinInput>: 341415:1174960
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1174960
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 142, col 8 to line 142, col 18 of module ShiftLatinInput: 2707864
+  |line 142, col 9 to line 142, col 18 of module ShiftLatinInput: 1532904
+  line 143, col 8 to line 143, col 17 of module ShiftLatinInput: 1174960
+  |line 143, col 8 to line 143, col 13 of module ShiftLatinInput: 1280334
+  line 144, col 8 to line 144, col 27 of module ShiftLatinInput: 1174960
+  line 145, col 8 to line 145, col 35 of module ShiftLatinInput: 1174960
+  line 146, col 8 to line 146, col 85 of module ShiftLatinInput: 1174960
+<MoveRight line 148, col 1 to line 148, col 9 of module ShiftLatinInput>: 0:245165
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 245165
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 150, col 8 to line 150, col 18 of module ShiftLatinInput: 1778069
+  |line 150, col 9 to line 150, col 18 of module ShiftLatinInput: 1532904
+  line 151, col 8 to line 151, col 30 of module ShiftLatinInput: 245165
+  |line 151, col 8 to line 151, col 13 of module ShiftLatinInput: 1280334
+  |line 151, col 17 to line 151, col 30 of module ShiftLatinInput: 1280334
+  line 152, col 8 to line 152, col 27 of module ShiftLatinInput: 245165
+  line 153, col 8 to line 153, col 35 of module ShiftLatinInput: 245165
+  line 154, col 8 to line 154, col 85 of module ShiftLatinInput: 245165
+<Convert line 156, col 1 to line 156, col 7 of module ShiftLatinInput>: 1133839:1211975
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1211975
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 158, col 8 to line 158, col 18 of module ShiftLatinInput: 2744879
+  |line 158, col 9 to line 158, col 18 of module ShiftLatinInput: 1532904
+  line 159, col 8 to line 159, col 25 of module ShiftLatinInput: 1211975
+  |line 159, col 8 to line 159, col 21 of module ShiftLatinInput: 1280334
+  line 160, col 8 to line 160, col 25 of module ShiftLatinInput: 1211975
+  line 161, col 8 to line 161, col 35 of module ShiftLatinInput: 1211975
+  line 162, col 8 to line 162, col 81 of module ShiftLatinInput: 1211975
+<Cancel line 164, col 1 to line 164, col 6 of module ShiftLatinInput>: 0:1532904
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 1532904
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 166, col 11 to line 166, col 20 of module ShiftLatinInput: 1532904
+  line 167, col 16 to line 167, col 34 of module ShiftLatinInput: 252570
+  line 168, col 16 to line 168, col 55 of module ShiftLatinInput: 252570
+  line 169, col 13 to line 172, col 34 of module ShiftLatinInput: 1280334
+  line 173, col 8 to line 173, col 35 of module ShiftLatinInput: 1532904
+  line 174, col 8 to line 174, col 53 of module ShiftLatinInput: 1532904
+<Commit line 176, col 1 to line 176, col 6 of module ShiftLatinInput>: 107400:665100
+  line 71, col 17 to line 71, col 38 of module ShiftLatinInput: 665100
+  |line 71, col 17 to line 71, col 26 of module ShiftLatinInput: 6420131
+  |line 71, col 30 to line 71, col 38 of module ShiftLatinInput: 6420131
+  line 178, col 8 to line 178, col 18 of module ShiftLatinInput: 2198004
+  |line 178, col 9 to line 178, col 18 of module ShiftLatinInput: 1532904
+  line 179, col 8 to line 179, col 25 of module ShiftLatinInput: 665100
+  |line 179, col 8 to line 179, col 21 of module ShiftLatinInput: 1280334
+  line 180, col 8 to line 180, col 48 of module ShiftLatinInput: 665100
+  |line 180, col 8 to line 180, col 38 of module ShiftLatinInput: 1211975
+  |line 180, col 43 to line 180, col 48 of module ShiftLatinInput: 1211975
+  line 181, col 8 to line 181, col 42 of module ShiftLatinInput: 665100
+  line 182, col 8 to line 182, col 25 of module ShiftLatinInput: 665100
+  line 183, col 8 to line 183, col 18 of module ShiftLatinInput: 665100
+  line 184, col 8 to line 184, col 23 of module ShiftLatinInput: 665100
+  line 185, col 8 to line 185, col 35 of module ShiftLatinInput: 665100
+  line 186, col 8 to line 186, col 54 of module ShiftLatinInput: 665100
+<Idle line 188, col 1 to line 188, col 4 of module ShiftLatinInput>: 0:4887227
+  line 189, col 8 to line 189, col 29 of module ShiftLatinInput: 11307358
+  |line 189, col 8 to line 189, col 17 of module ShiftLatinInput: 6420131
+  |line 189, col 21 to line 189, col 29 of module ShiftLatinInput: 6420131
+  line 190, col 8 to line 190, col 21 of module ShiftLatinInput: 4887227
+<TypeOK line 48, col 1 to line 48, col 6 of module ShiftLatinInput>
+  line 49, col 5 to line 59, col 29 of module ShiftLatinInput: 6341996
+<CursorInRange line 211, col 1 to line 211, col 13 of module ShiftLatinInput>
+  line 211, col 18 to line 211, col 41 of module ShiftLatinInput: 6341996
+<NoHostSteal line 212, col 1 to line 212, col 11 of module ShiftLatinInput>
+  line 212, col 16 to line 212, col 33 of module ShiftLatinInput: 6341996
+<LatchImpliesBuffer line 213, col 1 to line 213, col 18 of module ShiftLatinInput>
+  line 213, col 23 to line 213, col 67 of module ShiftLatinInput: 6341996
+  |line 213, col 23 to line 213, col 29 of module ShiftLatinInput: 6341996
+  |line 213, col 35 to line 213, col 66 of module ShiftLatinInput: 6234575
+<EmptyReleasesLatch line 214, col 1 to line 214, col 18 of module ShiftLatinInput>
+  line 214, col 23 to line 214, col 69 of module ShiftLatinInput: 6341996
+  |line 214, col 24 to line 214, col 56 of module ShiftLatinInput: 6341996
+  ||line 214, col 24 to line 214, col 41 of module ShiftLatinInput: 6341996
+  ||line 214, col 46 to line 214, col 56 of module ShiftLatinInput: 107421
+  |line 214, col 62 to line 214, col 69 of module ShiftLatinInput: 107421
+End of statistics.
+23139035 states generated, 6341996 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 11.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 10 and the 95th percentile is 7).
+Finished in 04min 43s at (2026-08-15 14:57:04)

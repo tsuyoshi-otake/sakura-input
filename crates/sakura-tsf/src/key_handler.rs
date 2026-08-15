@@ -323,6 +323,15 @@ mod tests {
     }
 
     #[test]
+    fn shift_backspace_is_named_backspace_and_carries_an_injected_shift_bit() {
+        let mut key = translate(VK_BACK.0, 0, false);
+        key.modifiers = Modifiers::SHIFT;
+        assert_eq!(key.code, KeyCode::Backspace);
+        assert_eq!(key.ch, None);
+        assert!(key.modifiers.contains(Modifiers::SHIFT));
+    }
+
+    #[test]
     fn no_virtual_key_is_named_twice() {
         for (index, &(vk, _)) in NAMED_KEYS.iter().enumerate() {
             let duplicate = NAMED_KEYS

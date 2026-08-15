@@ -1,0 +1,22 @@
+# Scoped to Shift-Latin / backspace / resync / render in dispatch.rs.
+# Do not point this at the whole workspace.
+examine_re = [
+    "feed_character",
+    "apply_backspace",
+    "render_preedit",
+    "resync_shifted",
+]
+exclude_re = [
+    "Preferences",
+    "ConversionOptions",
+    "ConversionSegment",
+    "create_session",
+    "probe_key",
+    "conversion_options",
+    "apply_transform",
+]
+additional_cargo_test_args = [
+    "--lib",
+    "shift_latin",
+]
+test_tool = "cargo"

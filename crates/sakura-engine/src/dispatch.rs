@@ -2297,6 +2297,33 @@ fn feed_character(
     } else {
         session.shifted_ascii
     };
+    if session.shifted_ascii && !shifted_ascii {
+        session.cursor =
+            u16::try_from(session.preedit.as_str().chars().count()).unwrap_or(u16::MAX);
+    }
+
+    if shifted_ascii && character.is_ascii() {
+        // Visible English text is `raw_input`. Insert at the raw caret, then
+        // rebuild kana provenance from the whole buffer so a later convert
+        // still has a faithful reading. Using the romaji caret (`next_raw_boundary`)
+        // here is what turned "AIUEO, Left, Backspace, O" into AIUOEO: the
+        // displayed caret stayed at the end while the kana cursor moved.
+        let mut raw_input = session.raw_input.clone();
+        let at = raw_input
+            .byte_index(usize::from(session.cursor))
+            .unwrap_or(raw_input.len());
+        let mut buf = [0u8; 4];
+        raw_input.insert_str(at, character.encode_utf8(&mut buf))?;
+        let cursor = session
+            .cursor
+            .saturating_add(1)
+            .min(u16::try_from(raw_input.as_str().chars().count()).unwrap_or(u16::MAX));
+        session.shifted_ascii = true;
+        session.raw_input = raw_input;
+        session.cursor = cursor;
+        resync_shifted_ascii_from_raw(session, table, scratch)?;
+        return Ok(());
+    }
 
     let mut raw_input = session.raw_input.clone();
     if character.is_ascii() {
@@ -2728,8 +2755,8 @@ fn apply_action(
         Action::CaretRight => move_caret(session, services.table, scratch, CaretMove::Right)?,
         Action::CaretHome => move_caret(session, services.table, scratch, CaretMove::Home)?,
         Action::CaretEnd => move_caret(session, services.table, scratch, CaretMove::End)?,
-        Action::DeleteBack => apply_backspace(session, services.table),
-        Action::DeleteForward => apply_delete_forward(session, services.table),
+        Action::DeleteBack => apply_backspace(session, services.table, scratch)?,
+        Action::DeleteForward => apply_delete_forward(session, services.table, scratch)?,
         Action::TransformHiragana => apply_transform(
             session,
             services.table,
@@ -3446,23 +3473,43 @@ fn apply_transform(
 /// tracks underneath it (see `render_preedit`, `commit_pending`), so there
 /// one Backspace undoes exactly one typed letter -- the unit the user is
 /// looking at -- matching the historical behaviour this mode already had.
-fn apply_backspace(session: &mut Session, table: &Table) {
+fn resync_shifted_ascii_from_raw(
+    session: &mut Session,
+    table: &Table,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+) -> Result<(), Overflow> {
+    let raw_cursor = session.cursor;
+    let mut romaji = Input::new();
+    let mut preedit = FixedStr::<MAX_PREEDIT_BYTES>::new();
+    for character in session.raw_input.as_str().chars() {
+        scratch.clear();
+        table.feed(&mut romaji, character, scratch)?;
+        preedit.push_str(scratch.as_str())?;
+    }
+    session.romaji = romaji;
+    session.preedit = preedit;
+    session.cursor = raw_cursor
+        .min(u16::try_from(session.raw_input.as_str().chars().count()).unwrap_or(u16::MAX));
+    session.invalidate_prediction();
+    Ok(())
+}
+
+fn apply_backspace(
+    session: &mut Session,
+    table: &Table,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+) -> Result<(), Overflow> {
     if session.shifted_ascii {
-        let _ = session.raw_input.pop_char();
-        if session.romaji.backspace() {
-            session.invalidate_prediction();
-            return;
-        }
         let cursor = usize::from(session.cursor);
         if cursor == 0 {
-            return;
+            return Ok(());
         }
-        if let Some(at) = session.preedit.byte_index(cursor - 1) {
-            let _ = session.preedit.remove_char_at(at);
+        if let Some(at) = session.raw_input.byte_index(cursor - 1) {
+            let _ = session.raw_input.remove_char_at(at);
             session.cursor = session.cursor.saturating_sub(1);
-            session.invalidate_prediction();
         }
-        return;
+        resync_shifted_ascii_from_raw(session, table, scratch)?;
+        return Ok(());
     }
     if !session.romaji.is_empty() {
         // Pending romaji has not resolved into `preedit` yet, so the raw
@@ -3491,11 +3538,11 @@ fn apply_backspace(session: &mut Session, table: &Table) {
         }
         session.romaji.backspace();
         session.invalidate_prediction();
-        return;
+        return Ok(());
     }
     let cursor = usize::from(session.cursor);
     if cursor == 0 {
-        return;
+        return Ok(());
     }
     let before = raw_chars_for_emitted(
         table,
@@ -3515,6 +3562,7 @@ fn apply_backspace(session: &mut Session, table: &Table) {
         session.cursor = session.cursor.saturating_sub(1);
         session.invalidate_prediction();
     }
+    Ok(())
 }
 
 /// Mirrors `apply_backspace`'s kana-group-wise removal on the raw side: the
@@ -3525,7 +3573,19 @@ fn apply_backspace(session: &mut Session, table: &Table) {
 /// the deleted character -- possible once the caret has moved -- is left
 /// untouched instead of being folded into the deleted span (#16 finding
 /// B/C).
-fn apply_delete_forward(session: &mut Session, table: &Table) {
+fn apply_delete_forward(
+    session: &mut Session,
+    table: &Table,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+) -> Result<(), Overflow> {
+    if session.shifted_ascii {
+        let cursor = usize::from(session.cursor);
+        if let Some(at) = session.raw_input.byte_index(cursor) {
+            let _ = session.raw_input.remove_char_at(at);
+        }
+        resync_shifted_ascii_from_raw(session, table, scratch)?;
+        return Ok(());
+    }
     let cursor = usize::from(session.cursor);
     if let Some(range) = raw_range_for_next_emitted(table, session) {
         remove_raw_range(&mut session.raw_input, range);
@@ -3534,6 +3594,7 @@ fn apply_delete_forward(session: &mut Session, table: &Table) {
         let _ = session.preedit.remove_char_at(at);
         session.invalidate_prediction();
     }
+    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -3550,6 +3611,17 @@ fn move_caret(
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     movement: CaretMove,
 ) -> Result<(), Overflow> {
+    if session.shifted_ascii {
+        let end = u16::try_from(session.raw_input.as_str().chars().count()).unwrap_or(u16::MAX);
+        session.cursor = match movement {
+            CaretMove::Left => session.cursor.saturating_sub(1),
+            CaretMove::Right => session.cursor.saturating_add(1).min(end),
+            CaretMove::Home => 0,
+            CaretMove::End => end,
+        };
+        session.hide_suggestions();
+        return Ok(());
+    }
     flush_pending(session, table, scratch)?;
     let end = u16::try_from(session.preedit.as_str().chars().count()).unwrap_or(u16::MAX);
     session.cursor = match movement {
@@ -4114,9 +4186,9 @@ fn render_preedit(
     if session.shifted_ascii && !session.raw_input.is_empty() {
         out.begin_preedit();
         out.push_segment(session.raw_input.as_str(), UnderlineKind::Raw)?;
-        out.set_cursor(
-            u32::try_from(session.raw_input.as_str().chars().count()).unwrap_or(u32::MAX),
-        );
+        let end = session.raw_input.as_str().chars().count();
+        let cursor = usize::from(session.cursor).min(end);
+        out.set_cursor(u32::try_from(cursor).unwrap_or(u32::MAX));
         return Ok(());
     }
 
@@ -9272,20 +9344,25 @@ mod tests {
         );
         assert_eq!(out.preedit_text(), "Ka");
 
+        // Visible English units are raw letters. Home then two forward
+        // Deletes empties "Ka"; a single Left+Delete only removes the
+        // letter after the caret.
         dispatcher.dispatch(
             &Request::SendKey {
                 session,
-                key: named_key(KeyCode::Left),
+                key: named_key(KeyCode::Home),
             },
             &mut out,
         );
-        dispatcher.dispatch(
-            &Request::SendKey {
-                session,
-                key: named_key(KeyCode::Delete),
-            },
-            &mut out,
-        );
+        for _ in 0..2 {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Delete),
+                },
+                &mut out,
+            );
+        }
 
         let live = dispatcher.sessions.get(session).expect("session");
         assert!(
