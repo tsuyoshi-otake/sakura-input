@@ -59,8 +59,28 @@ pub fn profile_spec() -> String {
 /// responsible for getting that right, because from inside the process
 /// there is no reliable way to tell.
 pub fn enable() -> Result<()> {
-    install(&profile_spec(), 0)?;
-    crate::profile::activate_profile_for_session()
+    // InstallLayoutOrTip returns FALSE both for a real failure and when the
+    // tip is already on the user's list. Logon repair calls this every sign-in,
+    // so treating that FALSE as fatal skipped ActivateProfile and left the
+    // session on the previous IME — sakura_tsf.dll never loaded.
+    combine_enable_results(
+        install(&profile_spec(), 0),
+        crate::profile::activate_profile_for_session(),
+    )
+}
+
+/// `InstallLayoutOrTip` may return FALSE when the tip is already listed.
+/// Session activation is the operation that actually loads the text service,
+/// so a successful `ActivateProfile` wins. If activation fails, a real install
+/// error is preserved instead of being replaced by the later failure.
+fn combine_enable_results<E>(
+    installed: core::result::Result<(), E>,
+    activated: core::result::Result<(), E>,
+) -> core::result::Result<(), E> {
+    match activated {
+        Ok(()) => Ok(()),
+        Err(activate_error) => installed.and(Err(activate_error)),
+    }
 }
 
 /// Removes Sakura Input from the calling user's input methods.
@@ -154,5 +174,26 @@ mod tests {
     fn install_layout_or_tip_is_still_exported() {
         let library = Library::load("input.dll").expect("input.dll is a system component");
         assert!(library.symbol(c"InstallLayoutOrTip").is_ok());
+    }
+
+    #[test]
+    fn already_listed_tip_does_not_block_successful_activation() {
+        assert!(combine_enable_results(Err("already listed"), Ok(())).is_ok());
+    }
+
+    #[test]
+    fn activation_failure_keeps_a_real_install_error() {
+        assert_eq!(
+            combine_enable_results(Err("install"), Err("activate")),
+            Err("install")
+        );
+    }
+
+    #[test]
+    fn activation_failure_after_install_success_is_reported() {
+        assert_eq!(
+            combine_enable_results(Ok(()), Err("activate")),
+            Err("activate")
+        );
     }
 }

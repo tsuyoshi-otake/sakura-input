@@ -87,7 +87,7 @@ pub fn execute(request: &Request) -> Execution {
         }
         if !(200..=299).contains(&response.status) {
             return Execution {
-                outcome: failure(Status::ApiError, "api_error"),
+                outcome: failure(Status::ApiError, http_error_code(response.status)),
                 attempts,
             };
         }
@@ -229,6 +229,16 @@ fn retry_delay(id: u64, attempt: u32, retry_after: Option<Duration>) -> Duration
 
 fn failure(status: Status, code: &'static str) -> Outcome {
     Outcome::Failure { status, code }
+}
+
+fn http_error_code(status: u32) -> &'static str {
+    match status {
+        400 => "http_400",
+        401 => "http_401",
+        403 => "http_403",
+        404 => "http_404",
+        _ => "api_error",
+    }
 }
 
 struct Handle(*mut c_void);
@@ -587,6 +597,15 @@ mod tests {
     }
 
     #[test]
+    fn client_http_failures_use_content_free_status_codes() {
+        assert_eq!(http_error_code(400), "http_400");
+        assert_eq!(http_error_code(401), "http_401");
+        assert_eq!(http_error_code(403), "http_403");
+        assert_eq!(http_error_code(404), "http_404");
+        assert_eq!(http_error_code(418), "api_error");
+    }
+
+    #[test]
     fn retry_delay_is_bounded_and_honors_larger_server_window() {
         assert!(retry_delay(1, 0, Some(Duration::from_secs(1))) >= Duration::from_secs(1));
         assert!(retry_delay(1, 2, Some(Duration::from_secs(20))) <= Duration::from_millis(2_127));
@@ -670,7 +689,7 @@ mod tests {
             execution.outcome,
             Outcome::Failure {
                 status: Status::ApiError,
-                code: "api_error"
+                code: "http_400"
             }
         ));
     }
