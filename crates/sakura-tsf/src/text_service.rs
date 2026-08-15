@@ -880,6 +880,10 @@ pub struct TextService {
     ai_key_latched: Cell<bool>,
     last_ai_error: RefCell<Option<String>>,
     mode_item: mode_item::ModeItemState,
+    /// Last scope read under a live edit cookie. A dedicated synchronous
+    /// read session is often refused during OnKeyDown (E_FAIL); the write
+    /// callback still has a cookie and refreshes this cache.
+    cached_input_scope: Cell<Option<sakura_proto::InputScope>>,
 }
 
 impl TextService {
@@ -905,6 +909,7 @@ impl TextService {
             ai_key_latched: Cell::new(false),
             last_ai_error: RefCell::new(None),
             mode_item: mode_item::ModeItemState::default(),
+            cached_input_scope: Cell::new(None),
         }
     }
 
@@ -1671,6 +1676,7 @@ impl TextService {
             self.require_focus_reconciliation();
         }
         self.settle_cancelled_writes(cancelled, false, None);
+        self.cached_input_scope.set(None);
     }
 
     fn resume_after_focus_gain(&self) {
@@ -2436,20 +2442,28 @@ impl TextService {
     fn read_input_scope(&self, context: &ITfContext) -> Result<sakura_proto::InputScope> {
         let client_id = self.client_id()?;
         let owned_context = context.clone();
-        Ok(
-            edit_session::read_in_document_sync(context, client_id, move |ec| {
-                let range =
-                    composition::current_selection_range(&owned_context, ec, &mut || Ok(()))?;
-                // SAFETY: `owned_context` and `range` are supplied by the same
-                // synchronous TSF read session and remain alive for the call.
-                let property = unsafe { owned_context.GetProperty(&GUID_PROP_INPUTSCOPE)? };
-                // SAFETY: the property and range belong to this context and `ec`
-                // is the active read cookie.
-                let value = unsafe { property.GetValue(ec, &range)? };
-                classify_input_scope_variant(value)
-            })
-            .unwrap_or(sakura_proto::InputScope::Unclassified),
-        )
+        match edit_session::read_in_document_sync(context, client_id, move |ec| {
+            classify_input_scope_with_cookie(&owned_context, ec)
+        }) {
+            Ok(scope) => {
+                self.cached_input_scope.set(Some(scope));
+                Ok(scope)
+            }
+            Err(_) => Ok(self
+                .cached_input_scope
+                .get()
+                .unwrap_or(sakura_proto::InputScope::Unclassified)),
+        }
+    }
+
+    fn remember_input_scope_from_cookie(&self, context: &ITfContext, ec: u32) {
+        let Ok(scope) = classify_input_scope_with_cookie(context, ec) else {
+            return;
+        };
+        self.cached_input_scope.set(Some(scope));
+        if let Ok(mut engine) = self.engine.try_borrow_mut() {
+            let _ = engine.set_input_scope(scope);
+        }
     }
 
     /// Publishes the focused field's scope before a real key request. Probe
@@ -3621,6 +3635,29 @@ fn cancelled_outputs_require_focus_reconciliation<T>(completions: &[Completion<T
     completions
         .iter()
         .any(|completion| completion.payload.is_some())
+}
+
+fn classify_input_scope_with_cookie(context: &ITfContext, ec: u32) -> Result<InputScope> {
+    let range = match composition::current_selection_range(context, ec, &mut || Ok(())) {
+        Ok(range) => range,
+        Err(_) => unsafe { context.GetStart(ec)? },
+    };
+    // SAFETY: `context` and `range` belong to the active edit session that
+    // issued `ec`.
+    let property = match unsafe { context.GetProperty(&GUID_PROP_INPUTSCOPE) } {
+        Ok(property) => property,
+        // WinForms and classic EDIT often refuse the property object with
+        // E_FAIL instead of handing back VT_EMPTY. That is "no restriction",
+        // not a classification failure.
+        Err(_) => return Ok(InputScope::Normal),
+    };
+    // SAFETY: the property and range belong to this context and `ec` is the
+    // active edit cookie.
+    let value = match unsafe { property.GetValue(ec, &range) } {
+        Ok(value) => value,
+        Err(_) => return Ok(InputScope::Normal),
+    };
+    classify_input_scope_variant(value)
 }
 
 fn classify_input_scope_variant(mut value: VARIANT) -> Result<InputScope> {
@@ -4977,6 +5014,7 @@ impl TextService_Impl {
             self.cancel_stale_write(ticket, reason);
             return Ok(());
         }
+        service.remember_input_scope_from_cookie(&payload.context, ec);
 
         if let Some((range, expected)) = payload.ai_source_validation.as_ref() {
             let actual = read_range_text(range, ec);
