@@ -90,7 +90,7 @@ const SAFE_READINGS: &[&str] = &[
 const SAFE_SURFACES: &[&str] = &[
     "1", "2", "3", "0", "一", "二", "三", "零", "漢字", "カナ", "Sakura", "🌸",
 ];
-const SAFE_ANNOTATIONS: &[&str] = &["", "note", "[calibration] common spelling", "注記", "🌸"];
+const SAFE_ANNOTATIONS: &[&str] = &["", "note", "common spelling", "注記", "🌸"];
 /// The ranking campaign types kana only. An ASCII or symbol reading also offers
 /// its own spelling back as a candidate, which says nothing about lattice cost.
 const KANA_READINGS: &[&str] = &[

@@ -1,7 +1,10 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use dictc::{compile_with_details, extract_entry_details, parse_connection, parse_entries};
+use dictc::{
+    clear_candidate_list_annotations, compile, compile_with_details, extract_entry_details,
+    parse_category_entries, parse_connection, parse_entries,
+};
 use sakura_core::dictionary::Dictionary;
 
 const HEADER: &str = concat!(
@@ -161,4 +164,66 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
     ] {
         assert!(identities.contains(&required), "missing {required:?}");
     }
+}
+
+#[test]
+fn leftover_bracket_tag_is_stripped_before_the_image_ships() {
+    let mut dictionary = parse_category_entries(
+        "baked.tsv",
+        concat!(
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "きのう\t昨日\t1\t1\t1100\t2300\tpredict\t[calibration] date expression\n",
+        ),
+    )
+    .expect("generated category files may still carry a baked tag");
+    assert_eq!(dictionary[0].annotation, "[calibration] date expression");
+
+    clear_candidate_list_annotations(&mut dictionary);
+    assert!(dictionary[0].annotation.is_empty());
+
+    let connection = parse_connection(
+        "connection.tsv",
+        "# license: LicenseRef-Sakura-InHouse\nclasses\t2\ndefault\t7\n",
+        false,
+    )
+    .expect("connection");
+    let image = compile(&dictionary, &connection).expect("compiled without a list note");
+    let runtime = Dictionary::parse(&image).expect("runtime dictionary");
+    let mut matched = None;
+    runtime
+        .common_prefix_search("きのう", |candidate| {
+            matched = Some(candidate.entry);
+            false
+        })
+        .expect("lookup");
+    let mut annotation = String::new();
+    runtime
+        .write_annotation(matched.expect("yesterday"), &mut annotation)
+        .expect("candidate annotation");
+    assert!(annotation.is_empty());
+}
+
+#[test]
+fn compile_rejects_a_bracket_tag_that_escaped_the_strip() {
+    let dictionary = parse_category_entries(
+        "baked.tsv",
+        concat!(
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "きのう\t昨日\t1\t1\t1100\t2300\tpredict\t[calibration] date expression\n",
+        ),
+    )
+    .expect("generated category files may still carry a baked tag");
+    let connection = parse_connection(
+        "connection.tsv",
+        "# license: LicenseRef-Sakura-InHouse\nclasses\t2\ndefault\t7\n",
+        false,
+    )
+    .expect("connection");
+    let error = compile(&dictionary, &connection).expect_err("bracket tag must not compile");
+    assert!(
+        error
+            .to_string()
+            .contains("candidate annotation must not start with '['"),
+        "got {error}"
+    );
 }

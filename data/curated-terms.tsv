@@ -1,94 +1,97 @@
 # license: MIT
+# Canonical Shift+ASCII surfaces. The annotation column is the candidate
+# note the user sees, so it stays empty. Category labels such as [rust]
+# belong in comments or in a reviewed detail source, not in this column.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
-actix	Actix	1851	1851	7010	7310	it,predict	[rust] Rust向けWebフレームワークの正規表記。
-amazon	Amazon	1851	1851	7010	7310	it,predict	[company] クラウド・EC企業名の正規表記。
-android	Android	1851	1851	7010	7310	it,predict	[mobile] モバイルOS名の正規表記。
-apple	Apple	1851	1851	7010	7310	it,predict	[company] ハードウェア・ソフトウェア企業名の正規表記。
-astro	Astro	1851	1851	7010	7310	it,predict	[frontend] Webフレームワーク名の正規表記。
-axum	Axum	1851	1851	7010	7310	it,predict	[rust] Rust向けWebフレームワークの正規表記。
-biome	Biome	1851	1851	7010	7310	it,predict	[tooling] Web開発ツール名の正規表記。
-bitbucket	Bitbucket	1851	1851	7010	7310	it,predict	[software-engineering] コードホスティングサービス名の正規表記。
-bun	Bun	1851	1851	7115	7415	it,predict	[javascript] JavaScriptランタイム名の正規表記。
-cargo	Cargo	1851	1851	7115	7415	it,predict	[rust] Rustパッケージ管理ツール名の正規表記。
-chrome	Google Chrome	1851	1851	7185	7485	it,predict	[browser] Google製ブラウザー名の正規表記。
-claude	Claude Desktop	1851	1851	7340	7640	it,predict	[ai] Anthropic製デスクトップアプリ名の正規表記。
-claudedesktop	Claude Desktop	1851	1851	7185	7485	it,predict	[ai] Anthropic製デスクトップアプリ名の正規表記。
-cloudflare	Cloudflare	1851	1851	7010	7310	it,predict	[cloud] クラウドサービス企業名の正規表記。
-cursor	Cursor	1851	1851	7010	7310	it,predict	[software-engineering] AIコードエディター名の正規表記。
-dart	Dart	1851	1851	7010	7310	it,predict	[programming] プログラミング言語名の正規表記。
-discord	Discord	1851	1851	7010	7310	it,predict	[collaboration] コミュニケーションサービス名の正規表記。
-django	Django	1851	1851	7010	7310	it,predict	[python] Python向けWebフレームワーク名の正規表記。
-dropbox	Dropbox	1851	1851	7010	7310	it,predict	[cloud] クラウドストレージ名の正規表記。
-electron	Electron	1851	1851	7010	7310	it,predict	[desktop] デスクトップアプリ基盤名の正規表記。
-eslint	ESLint	1851	1851	7010	7310	it,predict	[javascript] JavaScript静的解析ツール名の正規表記。
-excel	Excel	1851	1851	7010	7310	it,predict	[productivity] Microsoft製表計算ソフト名の正規表記。
-firefox	Firefox	1851	1851	7010	7310	it,predict	[browser] Mozilla製ブラウザー名の正規表記。
-flask	Flask	1851	1851	7010	7310	it,predict	[python] Python向けWebフレームワーク名の正規表記。
-gitlab	GitLab	1851	1851	7010	7310	it,predict	[software-engineering] コードホスティングサービス名の正規表記。
-gmail	Gmail	1851	1851	7010	7310	it,predict	[productivity] Google製メールサービス名の正規表記。
-go	Go	1851	1851	7305	7605	it,predict	[programming] プログラミング言語名の正規表記。
-google	Google	1851	1851	7010	7310	it,predict	[company] 検索・クラウド企業名の正規表記。
-googlechrome	Google Chrome	1851	1851	7185	7485	it,predict	[browser] Google製ブラウザー名の正規表記。
-googledrive	Google Drive	1851	1851	7185	7485	it,predict	[productivity] Google製クラウドストレージ名の正規表記。
-grok	Grok	1851	1851	7010	7310	it,predict	[ai] AIアシスタント名の正規表記。
-heroku	Heroku	1851	1851	7010	7310	it,predict	[cloud] アプリケーション実行基盤名の正規表記。
-homebrew	Homebrew	1851	1851	7010	7310	it,predict	[tooling] macOS向けパッケージ管理ツール名の正規表記。
-intel	Intel	1851	1851	7010	7310	it,predict	[company] 半導体企業名の正規表記。
-intellij	IntelliJ IDEA	1851	1851	7185	7485	it,predict	[software-engineering] JetBrains製IDE名の正規表記。
-intellijidea	IntelliJ IDEA	1851	1851	7185	7485	it,predict	[software-engineering] JetBrains製IDE名の正規表記。
-ios	iOS	1851	1851	7010	7310	it,predict	[mobile] Apple製モバイルOS名の正規表記。
-jira	Jira	1851	1851	7010	7310	it,predict	[collaboration] 課題管理サービス名の正規表記。
-keras	Keras	1851	1851	7010	7310	it,predict	[ai] 機械学習ライブラリ名の正規表記。
-langchain	LangChain	1851	1851	7010	7310	it,predict	[ai] LLMアプリケーション開発基盤名の正規表記。
-linkedin	LinkedIn	1851	1851	7010	7310	it,predict	[service] ビジネス向けSNS名の正規表記。
-llama	Llama	1851	1851	7010	7310	it,predict	[ai] Meta製AIモデル系列名の正規表記。
-llamaindex	LlamaIndex	1851	1851	7010	7310	it,predict	[ai] LLMデータ連携基盤名の正規表記。
-meta	Meta	1851	1851	7115	7415	it,predict	[company] テクノロジー企業名の正規表記。
-microsoft	Microsoft	1851	1851	7010	7310	it,predict	[company] ソフトウェア・クラウド企業名の正規表記。
-microsoft365	Microsoft 365	1851	1851	7185	7485	it,predict	[productivity] Microsoft製業務サービス群の正規表記。
-microsoftedge	Microsoft Edge	1851	1851	7185	7485	it,predict	[browser] Microsoft製ブラウザー名の正規表記。
-microsoftteams	Microsoft Teams	1851	1851	7185	7485	it,predict	[collaboration] Microsoft製共同作業サービス名の正規表記。
-mistral	Mistral	1851	1851	7010	7310	it,predict	[ai] AIモデル・企業名の正規表記。
-mozilla	Mozilla	1851	1851	7010	7310	it,predict	[company] Web技術団体名の正規表記。
-netlify	Netlify	1851	1851	7010	7310	it,predict	[cloud] Webアプリ配信基盤名の正規表記。
-notion	Notion	1851	1851	7010	7310	it,predict	[productivity] 情報共有サービス名の正規表記。
-npm	npm	1851	1851	7045	7345	it,predict	[javascript] JavaScriptパッケージ管理ツール名の正規表記。
-office365	Office 365	1851	1851	7185	7485	it,predict	[productivity] Microsoft製業務サービスの名称表記。
-ollama	Ollama	1851	1851	7010	7310	it,predict	[ai] ローカルAIモデル実行ツール名の正規表記。
-onedrive	OneDrive	1851	1851	7010	7310	it,predict	[productivity] Microsoft製クラウドストレージ名の正規表記。
-onenote	OneNote	1851	1851	7010	7310	it,predict	[productivity] Microsoft製ノートアプリ名の正規表記。
-openaiapi	OpenAI API	1851	1851	7185	7485	it,predict	[ai] OpenAI開発者向けAPI名の正規表記。
-oracle	Oracle	1851	1851	7010	7310	it,predict	[company] データベース・クラウド企業名の正規表記。
-outlook	Outlook	1851	1851	7010	7310	it,predict	[productivity] Microsoft製メール・予定表アプリ名の正規表記。
-perplexity	Perplexity	1851	1851	7010	7310	it,predict	[ai] AI検索サービス名の正規表記。
-pnpm	pnpm	1851	1851	7045	7345	it,predict	[javascript] JavaScriptパッケージ管理ツール名の正規表記。
-prettier	Prettier	1851	1851	7010	7310	it,predict	[tooling] コード整形ツール名の正規表記。
-pytorch	PyTorch	1851	1851	7010	7310	it,predict	[ai] 機械学習フレームワーク名の正規表記。
-rails	Rails	1851	1851	7115	7415	it,predict	[ruby] Ruby向けWebフレームワークの通称表記。
-reddit	Reddit	1851	1851	7010	7310	it,predict	[service] コミュニティサービス名の正規表記。
-remix	Remix	1851	1851	7010	7310	it,predict	[frontend] Webフレームワーク名の正規表記。
-ruby	Ruby	1851	1851	7010	7310	it,predict	[programming] プログラミング言語名の正規表記。
-ruff	Ruff	1851	1851	7010	7310	it,predict	[python] Python向け解析・整形ツール名の正規表記。
-rust	Rust	1851	1851	7010	7310	it,predict	[programming] プログラミング言語名の正規表記。
-safari	Safari	1851	1851	7010	7310	it,predict	[browser] Apple製ブラウザー名の正規表記。
-sakurainput	Sakura Input	1851	1851	6905	7205	it,predict	[sakura-input] 本IME製品名の正規表記。
-serde	Serde	1851	1851	7010	7310	it,predict	[rust] Rust向けシリアライズ基盤名の正規表記。
-sharepoint	SharePoint	1851	1851	7010	7310	it,predict	[productivity] Microsoft製情報共有サービス名の正規表記。
-slack	Slack	1851	1851	7010	7310	it,predict	[collaboration] チームコミュニケーションサービス名の正規表記。
-supabase	Supabase	1851	1851	7010	7310	it,predict	[cloud] アプリケーション向けバックエンド基盤名の正規表記。
-svelte	Svelte	1851	1851	7010	7310	it,predict	[frontend] Web UIフレームワーク名の正規表記。
-tauri	Tauri	1851	1851	7010	7310	it,predict	[desktop] デスクトップアプリ基盤名の正規表記。
-tensorflow	TensorFlow	1851	1851	7010	7310	it,predict	[ai] 機械学習フレームワーク名の正規表記。
-tiktok	TikTok	1851	1851	7010	7310	it,predict	[service] 動画共有サービス名の正規表記。
-tokio	Tokio	1851	1851	7010	7310	it,predict	[rust] Rust向け非同期ランタイム名の正規表記。
-uv	uv	1851	1851	7305	7605	it,predict	[python] Pythonパッケージ管理ツール名の正規表記。
-vercel	Vercel	1851	1851	7010	7310	it,predict	[cloud] Webアプリ配信基盤名の正規表記。
-vue	Vue.js	1851	1851	7010	7310	it,predict	[frontend] Web UIフレームワーク名の正規表記。
-vuejs	Vue.js	1851	1851	7010	7310	it,predict	[frontend] Web UIフレームワーク名の正規表記。
-whatsapp	WhatsApp	1851	1851	7010	7310	it,predict	[service] メッセージングサービス名の正規表記。
-windsurf	Windsurf	1851	1851	7010	7310	it,predict	[software-engineering] AIコードエディター名の正規表記。
-word	Word	1851	1851	7305	7605	it,predict	[productivity] Microsoft製文書作成ソフト名の正規表記。
-xai	xAI	1851	1851	7010	7310	it,predict	[ai] AI企業名の正規表記。
-yarn	Yarn	1851	1851	7010	7310	it,predict	[javascript] JavaScriptパッケージ管理ツール名の正規表記。
-youtube	YouTube	1851	1851	7010	7310	it,predict	[service] 動画共有サービス名の正規表記。
-zoom	Zoom	1851	1851	7115	7415	it,predict	[collaboration] ビデオ会議サービス名の正規表記。
+actix	Actix	1851	1851	7010	7310	it,predict	
+amazon	Amazon	1851	1851	7010	7310	it,predict	
+android	Android	1851	1851	7010	7310	it,predict	
+apple	Apple	1851	1851	7010	7310	it,predict	
+astro	Astro	1851	1851	7010	7310	it,predict	
+axum	Axum	1851	1851	7010	7310	it,predict	
+biome	Biome	1851	1851	7010	7310	it,predict	
+bitbucket	Bitbucket	1851	1851	7010	7310	it,predict	
+bun	Bun	1851	1851	7115	7415	it,predict	
+cargo	Cargo	1851	1851	7115	7415	it,predict	
+chrome	Google Chrome	1851	1851	7185	7485	it,predict	
+claude	Claude Desktop	1851	1851	7340	7640	it,predict	
+claudedesktop	Claude Desktop	1851	1851	7185	7485	it,predict	
+cloudflare	Cloudflare	1851	1851	7010	7310	it,predict	
+cursor	Cursor	1851	1851	7010	7310	it,predict	
+dart	Dart	1851	1851	7010	7310	it,predict	
+discord	Discord	1851	1851	7010	7310	it,predict	
+django	Django	1851	1851	7010	7310	it,predict	
+dropbox	Dropbox	1851	1851	7010	7310	it,predict	
+electron	Electron	1851	1851	7010	7310	it,predict	
+eslint	ESLint	1851	1851	7010	7310	it,predict	
+excel	Excel	1851	1851	7010	7310	it,predict	
+firefox	Firefox	1851	1851	7010	7310	it,predict	
+flask	Flask	1851	1851	7010	7310	it,predict	
+gitlab	GitLab	1851	1851	7010	7310	it,predict	
+gmail	Gmail	1851	1851	7010	7310	it,predict	
+go	Go	1851	1851	7305	7605	it,predict	
+google	Google	1851	1851	7010	7310	it,predict	
+googlechrome	Google Chrome	1851	1851	7185	7485	it,predict	
+googledrive	Google Drive	1851	1851	7185	7485	it,predict	
+grok	Grok	1851	1851	7010	7310	it,predict	
+heroku	Heroku	1851	1851	7010	7310	it,predict	
+homebrew	Homebrew	1851	1851	7010	7310	it,predict	
+intel	Intel	1851	1851	7010	7310	it,predict	
+intellij	IntelliJ IDEA	1851	1851	7185	7485	it,predict	
+intellijidea	IntelliJ IDEA	1851	1851	7185	7485	it,predict	
+ios	iOS	1851	1851	7010	7310	it,predict	
+jira	Jira	1851	1851	7010	7310	it,predict	
+keras	Keras	1851	1851	7010	7310	it,predict	
+langchain	LangChain	1851	1851	7010	7310	it,predict	
+linkedin	LinkedIn	1851	1851	7010	7310	it,predict	
+llama	Llama	1851	1851	7010	7310	it,predict	
+llamaindex	LlamaIndex	1851	1851	7010	7310	it,predict	
+meta	Meta	1851	1851	7115	7415	it,predict	
+microsoft	Microsoft	1851	1851	7010	7310	it,predict	
+microsoft365	Microsoft 365	1851	1851	7185	7485	it,predict	
+microsoftedge	Microsoft Edge	1851	1851	7185	7485	it,predict	
+microsoftteams	Microsoft Teams	1851	1851	7185	7485	it,predict	
+mistral	Mistral	1851	1851	7010	7310	it,predict	
+mozilla	Mozilla	1851	1851	7010	7310	it,predict	
+netlify	Netlify	1851	1851	7010	7310	it,predict	
+notion	Notion	1851	1851	7010	7310	it,predict	
+npm	npm	1851	1851	7045	7345	it,predict	
+office365	Office 365	1851	1851	7185	7485	it,predict	
+ollama	Ollama	1851	1851	7010	7310	it,predict	
+onedrive	OneDrive	1851	1851	7010	7310	it,predict	
+onenote	OneNote	1851	1851	7010	7310	it,predict	
+openaiapi	OpenAI API	1851	1851	7185	7485	it,predict	
+oracle	Oracle	1851	1851	7010	7310	it,predict	
+outlook	Outlook	1851	1851	7010	7310	it,predict	
+perplexity	Perplexity	1851	1851	7010	7310	it,predict	
+pnpm	pnpm	1851	1851	7045	7345	it,predict	
+prettier	Prettier	1851	1851	7010	7310	it,predict	
+pytorch	PyTorch	1851	1851	7010	7310	it,predict	
+rails	Rails	1851	1851	7115	7415	it,predict	
+reddit	Reddit	1851	1851	7010	7310	it,predict	
+remix	Remix	1851	1851	7010	7310	it,predict	
+ruby	Ruby	1851	1851	7010	7310	it,predict	
+ruff	Ruff	1851	1851	7010	7310	it,predict	
+rust	Rust	1851	1851	7010	7310	it,predict	
+safari	Safari	1851	1851	7010	7310	it,predict	
+sakurainput	Sakura Input	1851	1851	6905	7205	it,predict	
+serde	Serde	1851	1851	7010	7310	it,predict	
+sharepoint	SharePoint	1851	1851	7010	7310	it,predict	
+slack	Slack	1851	1851	7010	7310	it,predict	
+supabase	Supabase	1851	1851	7010	7310	it,predict	
+svelte	Svelte	1851	1851	7010	7310	it,predict	
+tauri	Tauri	1851	1851	7010	7310	it,predict	
+tensorflow	TensorFlow	1851	1851	7010	7310	it,predict	
+tiktok	TikTok	1851	1851	7010	7310	it,predict	
+tokio	Tokio	1851	1851	7010	7310	it,predict	
+uv	uv	1851	1851	7305	7605	it,predict	
+vercel	Vercel	1851	1851	7010	7310	it,predict	
+vue	Vue.js	1851	1851	7010	7310	it,predict	
+vuejs	Vue.js	1851	1851	7010	7310	it,predict	
+whatsapp	WhatsApp	1851	1851	7010	7310	it,predict	
+windsurf	Windsurf	1851	1851	7010	7310	it,predict	
+word	Word	1851	1851	7305	7605	it,predict	
+xai	xAI	1851	1851	7010	7310	it,predict	
+yarn	Yarn	1851	1851	7010	7310	it,predict	
+youtube	YouTube	1851	1851	7010	7310	it,predict	
+zoom	Zoom	1851	1851	7115	7415	it,predict	

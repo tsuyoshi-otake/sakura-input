@@ -137,6 +137,11 @@ fn curated_terms_cover_canonical_shift_input_without_shadow_duplicates() {
             entry.surface
         );
         assert!(
+            entry.annotation.is_empty(),
+            "{} carries a user-visible candidate note",
+            entry.surface
+        );
+        assert!(
             identities.insert((entry.reading.as_str(), entry.surface.as_str())),
             "duplicate curated edge {} -> {}",
             entry.reading,
