@@ -270,8 +270,8 @@ impl Dispatcher {
     /// stops new durable records; existing sessions keep their allocated
     /// history session ids until the next attach reallocates them.
     pub(crate) fn set_input_history(&mut self, input_history: Option<Arc<InputHistoryService>>) {
-        let changed = self.input_history.as_ref().map(Arc::as_ptr)
-            != input_history.as_ref().map(Arc::as_ptr);
+        let changed =
+            self.input_history.as_ref().map(Arc::as_ptr) != input_history.as_ref().map(Arc::as_ptr);
         if !changed {
             return;
         }

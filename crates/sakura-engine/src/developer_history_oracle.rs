@@ -28,20 +28,14 @@ pub enum DomainEvent {
     SetDeveloperMode { on: bool },
     WatcherPublish,
     RequestBoundary,
-    Classify {
-        scope: ScopeKind,
-    },
-    Key {
-        test_only: bool,
-    },
+    Classify { scope: ScopeKind },
+    Key { test_only: bool },
     Flush,
     Clear,
     QueueFull,
     PersistFail,
     Crash,
-    Restart {
-        restore_setting: bool,
-    },
+    Restart { restore_setting: bool },
     Shutdown,
 }
 
@@ -112,9 +106,7 @@ impl OracleState {
     }
 
     pub fn attach_matches_published_after_request(&self) -> bool {
-        !self.live
-            || !self.request_after_publish
-            || self.service_attached == self.published_on
+        !self.live || !self.request_after_publish || self.service_attached == self.published_on
     }
 }
 

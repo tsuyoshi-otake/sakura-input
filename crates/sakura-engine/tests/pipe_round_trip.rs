@@ -1002,10 +1002,7 @@ punctuation = "kuten-touten"
     let mut active = false;
     while Instant::now() < deadline {
         match client.call(&Request::InputHistoryStats, PATIENT) {
-            Ok(Response::InputHistoryStats {
-                active: true,
-                ..
-            }) => {
+            Ok(Response::InputHistoryStats { active: true, .. }) => {
                 active = true;
                 break;
             }
@@ -1085,10 +1082,7 @@ punctuation = "kuten-touten"
     let mut inactive = false;
     while Instant::now() < deadline {
         match client.call(&Request::InputHistoryStats, PATIENT) {
-            Ok(Response::InputHistoryStats {
-                active: false,
-                ..
-            }) => {
+            Ok(Response::InputHistoryStats { active: false, .. }) => {
                 inactive = true;
                 break;
             }
