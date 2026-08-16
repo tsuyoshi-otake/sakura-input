@@ -1,0 +1,1953 @@
+[
+  {
+    "term": "減る",
+    "reading": "へる",
+    "senses": [
+      {
+        "definition": "数や量が小さくなることです。結果としての変化を表します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "reduction",
+          "decrease",
+          "change"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "減らす",
+    "reading": "へらす",
+    "senses": [
+      {
+        "definition": "意図して小さくすることです。改善活動でもよく使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "reduction",
+          "optimization",
+          "improvement"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "増える",
+    "reading": "ふえる",
+    "senses": [
+      {
+        "definition": "量が自然に大きくなることです。問題の広がりにも使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "increase",
+          "expansion",
+          "change"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "増やす",
+    "reading": "ふやす",
+    "senses": [
+      {
+        "definition": "意図して増やすことです。文脈によって良し悪しは変わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "addition",
+          "increase",
+          "scale"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "短くする",
+    "reading": "みじかくする",
+    "senses": [
+      {
+        "definition": "長さや量を短くすることです。ただし短ければよいとは限らず、意味の明確さが先です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "concise",
+          "shorten",
+          "refactoring"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "置き換える",
+    "reading": "おきかえる",
+    "senses": [
+      {
+        "definition": "別のものへ変えることです。表現、設計、実装の改善でよく使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "replacement",
+          "replace",
+          "change"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "踏み込む",
+    "reading": "ふみこむ",
+    "senses": [
+      {
+        "definition": "表面的ではなく、より深く考えることです。分析や説明で使われる表現です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "deep dive",
+          "detailed analysis",
+          "consideration"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "詰め込みすぎない",
+    "reading": "つめこみすぎない",
+    "senses": [
+      {
+        "definition": "一か所に責務を詰め込みすぎないことです。単一責任の原則に近い実務表現です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "single responsibility",
+          "excess",
+          "separation"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "増やしすぎない",
+    "reading": "ふやしすぎない",
+    "senses": [
+      {
+        "definition": "分岐や例外を必要以上に増やさないことです。複雑さの増大を抑える基本姿勢です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "excess",
+          "complexity",
+          "design"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "間違えにくい",
+    "reading": "まちがえにくい",
+    "senses": [
+      {
+        "definition": "誤りが起きにくいことです。優れた設計の重要な特徴です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "robust",
+          "design",
+          "safety"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "読み手",
+    "reading": "よみて",
+    "senses": [
+      {
+        "definition": "文書やコードを読む人です。書き手より受け手の視点を意識させる語です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "receiver",
+          "reader",
+          "user"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "迷わない",
+    "reading": "まよわない",
+    "senses": [
+      {
+        "definition": "解釈や判断に迷わないことです。良い命名と明快な構造がこれを支えます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "intuitiveness",
+          "clear",
+          "clarity"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "見つけやすい",
+    "reading": "みつけやすい",
+    "senses": [
+      {
+        "definition": "問題や注目箇所を見つけやすいことです。保守性や調査効率に関わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "searchability",
+          "discoverability",
+          "maintainability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "直しやすい",
+    "reading": "なおしやすい",
+    "senses": [
+      {
+        "definition": "安全かつ容易に修正できることです。分離と小ささが効きます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "ease of modification",
+          "maintainability",
+          "changeability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "壊れにくい",
+    "reading": "こわれにくい",
+    "senses": [
+      {
+        "definition": "変更や負荷で不具合が出にくいことです。堅牢な設計と十分な検証が必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "robustness",
+          "stability",
+          "fault tolerance"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "測りやすい",
+    "reading": "はかりやすい",
+    "senses": [
+      {
+        "definition": "状態や結果を把握しやすいことです。監視や改善サイクルで重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "observability",
+          "metrics",
+          "monitoring"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "学びやすい",
+    "reading": "まなびやすい",
+    "senses": [
+      {
+        "definition": "新しい人でも理解しやすいことです。属人化の防止にもつながります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "learning cost",
+          "onboarding",
+          "readability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "伝わりやすい",
+    "reading": "つたわりやすい",
+    "senses": [
+      {
+        "definition": "意図や意味が相手に伝わりやすいことです。文章、命名、設計に共通します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "readability",
+          "communication",
+          "clarity"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "使いやすい",
+    "reading": "つかいやすい",
+    "senses": [
+      {
+        "definition": "利用者側の負担が少ないことです。最終的な価値に直結する大切な品質です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "usability",
+          "UX",
+          "intuitiveness"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "考え",
+    "reading": "かんがえ",
+    "senses": [
+      {
+        "definition": "人が頭の中で組み立てる内容です。設計や判断の出発点になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "thinking",
+          "idea",
+          "judgement"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "理由",
+    "reading": "りゆう",
+    "senses": [
+      {
+        "definition": "なぜそのようにするのかを説明する根拠です。理由の明確化は良い判断に不可欠です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "rationale",
+          "why",
+          "decision basis"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "目的",
+    "reading": "もくてき",
+    "senses": [
+      {
+        "definition": "何のために行うかという行き先です。目的が曖昧だと手段がぶれやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "goal",
+          "objective",
+          "direction"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "目標",
+    "reading": "もくひょう",
+    "senses": [
+      {
+        "definition": "目的を実際の行動に落とした達成基準です。計画や評価と結び付きます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "KPI",
+          "milestone",
+          "achievement criterion"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "計画",
+    "reading": "けいかく",
+    "senses": [
+      {
+        "definition": "何をいつどのように進めるかを整理したものです。不確実さを減らす役割があります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "plan",
+          "schedule",
+          "roadmap"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "準備",
+    "reading": "じゅんび",
+    "senses": [
+      {
+        "definition": "本番の前に必要なものを整えることです。準備不足は後の混乱につながります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "setup",
+          "preparation",
+          "environment setup"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "注意",
+    "reading": "ちゅうい",
+    "senses": [
+      {
+        "definition": "見落としや事故を防ぐために意識を向けることです。安全と品質に直結します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "warning",
+          "caution",
+          "risk"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工夫",
+    "reading": "くふう",
+    "senses": [
+      {
+        "definition": "より良くするための具体的な知恵です。小さな工夫の積み重ねが差になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "improvement",
+          "idea",
+          "optimization"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "努力",
+    "reading": "どりょく",
+    "senses": [
+      {
+        "definition": "目的達成のために力を注ぐことです。ただし努力だけでは構造的な問題は解けません。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "endeavor",
+          "continuation",
+          "growth"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "失敗例",
+    "reading": "しっぱいれい",
+    "senses": [
+      {
+        "definition": "うまくいかなかった具体例です。抽象論より学びが大きいことがよくあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "anti-pattern",
+          "bad example",
+          "lesson"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "成功例",
+    "reading": "せいこうれい",
+    "senses": [
+      {
+        "definition": "うまくいった事例です。再現条件まで見ると単なる自慢ではなくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "best practice",
+          "case study",
+          "pattern"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "反省",
+    "reading": "はんせい",
+    "senses": [
+      {
+        "definition": "自分の行動や結果を振り返ることです。改善の入り口になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "retrospective",
+          "reflection",
+          "introspection"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "改善点",
+    "reading": "かいぜんてん",
+    "senses": [
+      {
+        "definition": "次に直すべき点です。問題を行動につなぐ大事な橋渡しです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "improvement",
+          "action item",
+          "feedback"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "やり方",
+    "reading": "やりかた",
+    "senses": [
+      {
+        "definition": "物事の進め方です。同じ目的でもやり方で品質と速度が変わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "method",
+          "technique",
+          "approach"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "順番",
+    "reading": "じゅんばん",
+    "senses": [
+      {
+        "definition": "物事を並べる順序です。順番が悪いと余計な手戻りが増えます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "order",
+          "sequence",
+          "step"
+        ]
+      }
+    ],
+    "aliases": [
+      "順序"
+    ]
+  },
+  {
+    "term": "流れ",
+    "reading": "ながれ",
+    "senses": [
+      {
+        "definition": "一連の工程がつながって動く様子です。全体像の理解に重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "flow",
+          "process",
+          "sequence"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "区切り",
+    "reading": "くぎり",
+    "senses": [
+      {
+        "definition": "作業や内容を分ける境目です。区切りがあると理解もしやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "division",
+          "boundary",
+          "separator"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "まとまり",
+    "senses": [
+      {
+        "definition": "関連するものが集まっている状態です。まとまりがあると理解しやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "cohesion",
+          "group",
+          "summary"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ばらつき",
+    "senses": [
+      {
+        "definition": "そろっていない状態です。品質や判断基準のばらつきは管理を難しくします。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "variance",
+          "non-uniform",
+          "quality"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "約束",
+    "reading": "やくそく",
+    "senses": [
+      {
+        "definition": "関係者の間で守ると決めたことです。ルールや仕様の土台になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "contract",
+          "convention",
+          "agreement"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "決まり",
+    "reading": "きまり",
+    "senses": [
+      {
+        "definition": "行動や判断の基準になるものです。決まりが曖昧だと混乱が起きます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "rule",
+          "guideline",
+          "standard"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "手本",
+    "reading": "てほん",
+    "senses": [
+      {
+        "definition": "参考にする見本です。ただし手本がそのまま最適解とは限りません。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "reference example",
+          "model",
+          "sample"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "例",
+    "reading": "れい",
+    "senses": [
+      {
+        "definition": "説明を分かりやすくする具体例です。抽象的な内容の理解を助けます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "sample",
+          "concrete example",
+          "illustration"
+        ]
+      }
+    ],
+    "aliases": [
+      "具体例"
+    ]
+  },
+  {
+    "term": "たとえ",
+    "senses": [
+      {
+        "definition": "難しい話を身近なものに置き換える表現です。教育や説明で効果的です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "metaphor",
+          "analogy",
+          "example"
+        ]
+      }
+    ],
+    "aliases": [
+      "比喩",
+      "アナロジー"
+    ]
+  },
+  {
+    "term": "見方",
+    "reading": "みかた",
+    "senses": [
+      {
+        "definition": "物事を捉える視点です。見方が変わると結論も変わりえます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "perspective",
+          "viewpoint",
+          "angle"
+        ]
+      }
+    ],
+    "aliases": [
+      "視点",
+      "観点"
+    ]
+  },
+  {
+    "term": "考え方",
+    "reading": "かんがえかた",
+    "senses": [
+      {
+        "definition": "判断や理解の土台になる考えです。技術力の差は考え方の差として表れやすいです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "way of thinking",
+          "mindset",
+          "approach"
+        ]
+      }
+    ],
+    "aliases": [
+      "思考法",
+      "マインドセット"
+    ]
+  },
+  {
+    "term": "選び方",
+    "reading": "えらびかた",
+    "senses": [
+      {
+        "definition": "複数候補から選ぶための決め方です。基準のない選択には再現性がありません。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "selection",
+          "decision",
+          "criterion"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "使い方",
+    "reading": "つかいかた",
+    "senses": [
+      {
+        "definition": "道具や仕組みの扱い方です。良い道具でも使い方で結果は変わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "operation",
+          "usage",
+          "usability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "直し方",
+    "reading": "なおしかた",
+    "senses": [
+      {
+        "definition": "問題が起きたときの修正の進め方です。場当たり対応は再発につながりやすいです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "fix method",
+          "debugging",
+          "countermeasure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "覚え方",
+    "reading": "おぼえかた",
+    "senses": [
+      {
+        "definition": "知識を定着させるための覚え方です。理解を伴う記憶ほど長く残ります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "memory",
+          "learning",
+          "memorization"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "伝え方",
+    "reading": "つたえかた",
+    "senses": [
+      {
+        "definition": "相手に意味が届くように話したり書いたりする方法です。内容だけでなく構造も大切です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "communication",
+          "explanation",
+          "writing"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "聞き方",
+    "reading": "ききかた",
+    "senses": [
+      {
+        "definition": "相手の意図を正しく受け取るための聞く姿勢です。質問の質にも関わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "active listening",
+          "question",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "読み方",
+    "reading": "よみかた",
+    "senses": [
+      {
+        "definition": "文書やコードを理解するための読み進め方です。表面だけでなく構造を見る視点が必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "code reading",
+          "comprehension",
+          "understanding"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "書き方",
+    "reading": "かきかた",
+    "senses": [
+      {
+        "definition": "他者に伝わる形で内容を書く方法です。正確さと読みやすさの両方が求められます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "writing",
+          "text",
+          "coding"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "話し方",
+    "reading": "はなしかた",
+    "senses": [
+      {
+        "definition": "口頭での伝え方です。同じ内容でも話し方で印象や理解が変わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "presentation",
+          "explanation",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "見せ方",
+    "reading": "みせかた",
+    "senses": [
+      {
+        "definition": "相手にどう見せるかという工夫です。資料、画面、説明順に影響します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "presentation",
+          "UI",
+          "visual"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "まとめ方",
+    "reading": "まとめかた",
+    "senses": [
+      {
+        "definition": "情報を伝わる形に整理する方法です。要点を抜き出す力が必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "summary",
+          "organization",
+          "structure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "比べ方",
+    "reading": "くらべかた",
+    "senses": [
+      {
+        "definition": "違いと共通点を見る比べ方です。比較軸が曖昧だと判断を誤ります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "comparison",
+          "evaluation",
+          "criterion"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分け方",
+    "reading": "わけかた",
+    "senses": [
+      {
+        "definition": "内容を分類する分け方です。良い分類基準は整理を容易にします。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "classification",
+          "category",
+          "organization"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "つなぎ方",
+    "reading": "つなぎかた",
+    "senses": [
+      {
+        "definition": "別々のものをどう関係付けるかです。システム連携でも論理構成でも大切です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "integration",
+          "combination",
+          "connection"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "組み方",
+    "reading": "くみかた",
+    "senses": [
+      {
+        "definition": "部品や考えをどう組み合わせるかです。全体の質に大きく影響します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "combination",
+          "composition",
+          "design"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "置き場所",
+    "reading": "おきばしょ",
+    "senses": [
+      {
+        "definition": "何をどこに置くかという考え方です。物理的にも論理的にも整理と関わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "placement",
+          "storage location",
+          "directory"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "使い道",
+    "reading": "つかいみち",
+    "senses": [
+      {
+        "definition": "何のために使うかという用途です。使い道が明確だと選択しやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "use case",
+          "application",
+          "purpose"
+        ]
+      }
+    ],
+    "aliases": [
+      "用途"
+    ]
+  },
+  {
+    "term": "向き不向き",
+    "reading": "むきふむき",
+    "senses": [
+      {
+        "definition": "ある用途に向くか向かないかの差です。万能な道具は少ないという前提で見るべきです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "suitability",
+          "strengths",
+          "weaknesses"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "得意",
+    "reading": "とくい",
+    "senses": [
+      {
+        "definition": "うまくできること、強みです。役割分担や適材適所で重要になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "strength",
+          "advantage",
+          "specialty"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "苦手",
+    "reading": "にがて",
+    "senses": [
+      {
+        "definition": "うまく扱いにくいことです。苦手を理解することが対策の出発点です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "weakness",
+          "shortcoming",
+          "disadvantage"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "得意分野",
+    "reading": "とくいぶんや",
+    "senses": [
+      {
+        "definition": "特に強みを発揮できる領域です。個人にも技術にも当てはまります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "specialty",
+          "strength",
+          "skill"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "長所",
+    "reading": "ちょうしょ",
+    "senses": [
+      {
+        "definition": "価値を出しやすい良い点です。比較や選択では条件とセットで見る必要があります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "merit",
+          "strength",
+          "advantage"
+        ]
+      }
+    ],
+    "aliases": [
+      "メリット",
+      "利点"
+    ]
+  },
+  {
+    "term": "短所",
+    "reading": "たんしょ",
+    "senses": [
+      {
+        "definition": "不利になりやすい点です。短所を理解すると過信を防げます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "demerit",
+          "weakness",
+          "deficiency"
+        ]
+      }
+    ],
+    "aliases": [
+      "デメリット",
+      "欠点"
+    ]
+  },
+  {
+    "term": "違い",
+    "reading": "ちがい",
+    "senses": [
+      {
+        "definition": "複数の対象の間にある差です。違いを整理することが比較の基礎になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "difference",
+          "divergence",
+          "comparison"
+        ]
+      }
+    ],
+    "aliases": [
+      "差異",
+      "相違"
+    ]
+  },
+  {
+    "term": "共通点",
+    "reading": "きょうつうてん",
+    "senses": [
+      {
+        "definition": "複数の対象に共通して見られる性質です。抽象化の入口になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "commonality",
+          "similarity",
+          "abstraction"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "似ている点",
+    "reading": "にているてん",
+    "senses": [
+      {
+        "definition": "完全には同じでないが近い特徴です。混同しやすいため差分確認も必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "similarity",
+          "commonality",
+          "comparison"
+        ]
+      }
+    ],
+    "aliases": [
+      "類似点"
+    ]
+  },
+  {
+    "term": "大事",
+    "reading": "だいじ",
+    "senses": [
+      {
+        "definition": "重要で優先すべきことです。時間が限られるほど何を大事にするかが結果を決めます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "important",
+          "priority",
+          "value"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "大切",
+    "reading": "たいせつ",
+    "senses": [
+      {
+        "definition": "価値があり丁寧に扱うべきことです。技術にも人間関係にも使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "important",
+          "value",
+          "respect"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "必要",
+    "reading": "ひつよう",
+    "senses": [
+      {
+        "definition": "それがないと困るものです。必要条件と十分条件は分けて考える必要があります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "requirement",
+          "mandatory",
+          "condition"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "便利",
+    "reading": "べんり",
+    "senses": [
+      {
+        "definition": "手間を減らし使いやすくする性質です。便利なだけでは正しさは保証されません。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "convenience",
+          "efficiency",
+          "tool"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "不便",
+    "reading": "ふべん",
+    "senses": [
+      {
+        "definition": "使いにくく余計な手間がかかることです。小さな不便の積み重ねは大きな負担になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "UX",
+          "friction",
+          "dissatisfaction"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "安心",
+    "reading": "あんしん",
+    "senses": [
+      {
+        "definition": "大きな不安なく使える感覚です。技術では信頼性と透明性が土台になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "safety",
+          "trust",
+          "reliability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "不安",
+    "reading": "ふあん",
+    "senses": [
+      {
+        "definition": "問題が起きるかもしれないという感覚です。不安の内容を言語化すると動きやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "concern",
+          "risk",
+          "psychological safety"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "心配",
+    "reading": "しんぱい",
+    "senses": [
+      {
+        "definition": "悪い結果を気に掛けることです。心配しすぎは停滞を生み、軽視は事故を招きます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "concern",
+          "anxiety",
+          "risk"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "自信",
+    "reading": "じしん",
+    "senses": [
+      {
+        "definition": "うまくできるはずだという期待です。根拠ある自信はよいですが、過信は危険です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "conviction",
+          "basis",
+          "skill"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "経験",
+    "reading": "けいけん",
+    "senses": [
+      {
+        "definition": "実際にやったことで得た知見です。経験は強力ですが偏りも持ちます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "track record",
+          "knowledge",
+          "skill"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "知識",
+    "reading": "ちしき",
+    "senses": [
+      {
+        "definition": "学んで得た情報と理解です。経験と結び付くと実践力になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "knowledge",
+          "learning",
+          "information"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "学習",
+    "reading": "がくしゅう",
+    "senses": [
+      {
+        "definition": "新しい知識や技能を身に付けることです。続けなければすぐ古くなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "learning",
+          "training",
+          "skill up"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "練習",
+    "reading": "れんしゅう",
+    "senses": [
+      {
+        "definition": "繰り返しによって身に付けることです。理解と反復の両方が必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "training",
+          "repetition",
+          "mastery"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "成長",
+    "reading": "せいちょう",
+    "senses": [
+      {
+        "definition": "以前よりできることが増えることです。量だけでなく質の向上も含みます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "skill up",
+          "improvement",
+          "development"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "変化",
+    "reading": "へんか",
+    "senses": [
+      {
+        "definition": "以前と異なる状態になることです。変化への適応力は実務で重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "change",
+          "difference",
+          "modification"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "習慣",
+    "reading": "しゅうかん",
+    "senses": [
+      {
+        "definition": "繰り返しで定着した行動です。良い習慣が品質を支えます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "routine",
+          "continuation",
+          "behavior"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "くせ",
+    "senses": [
+      {
+        "definition": "無意識に出る行動の傾向です。良いくせも悪いくせもあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "tendency",
+          "habit",
+          "mannerism"
+        ]
+      }
+    ],
+    "aliases": [
+      "癖"
+    ]
+  },
+  {
+    "term": "失礼",
+    "reading": "しつれい",
+    "senses": [
+      {
+        "definition": "相手への配慮を欠くことです。技術職でも対話品質に影響します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "etiquette",
+          "consideration",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "礼儀",
+    "reading": "れいぎ",
+    "senses": [
+      {
+        "definition": "相手を尊重する振る舞いです。信頼関係の土台になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "manner",
+          "respect",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": [
+      "マナー"
+    ]
+  },
+  {
+    "term": "協力",
+    "reading": "きょうりょく",
+    "senses": [
+      {
+        "definition": "複数人が力を合わせることです。仕事が複雑になるほど協力が重要になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "teamwork",
+          "coordination",
+          "collaboration"
+        ]
+      }
+    ],
+    "aliases": [
+      "コラボレーション"
+    ]
+  },
+  {
+    "term": "相談",
+    "reading": "そうだん",
+    "senses": [
+      {
+        "definition": "一人で抱え込まず意見を求めることです。早めの相談は損失を小さくします。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "question",
+          "mentoring",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "質問",
+    "reading": "しつもん",
+    "senses": [
+      {
+        "definition": "分からないことを確認する行為です。良い質問は理解を一気に進めます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "Q&A",
+          "confirmation",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "返事",
+    "reading": "へんじ",
+    "senses": [
+      {
+        "definition": "相手に応答を返すことです。返事が遅いと不安や停滞を生みます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "response",
+          "reply",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "連絡",
+    "reading": "れんらく",
+    "senses": [
+      {
+        "definition": "必要な情報を相手へ伝えることです。漏れを防ぐための基本です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "notification",
+          "information sharing",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "報告",
+    "reading": "ほうこく",
+    "senses": [
+      {
+        "definition": "起きたことを整理して伝えることです。事実と解釈を分けると質が上がります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "report",
+          "status report",
+          "information sharing"
+        ]
+      }
+    ],
+    "aliases": [
+      "レポート"
+    ]
+  },
+  {
+    "term": "相談役",
+    "reading": "そうだんやく",
+    "senses": [
+      {
+        "definition": "困ったときに意見をもらう相手です。経験共有の仕組みとして重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "mentor",
+          "advisor",
+          "consultation"
+        ]
+      }
+    ],
+    "aliases": [
+      "メンター"
+    ]
+  },
+  {
+    "term": "仲間",
+    "reading": "なかま",
+    "senses": [
+      {
+        "definition": "同じ目的に向かう人たちです。心理的安全性や協働関係とも関わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "team",
+          "colleague",
+          "community"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "相手",
+    "reading": "あいて",
+    "senses": [
+      {
+        "definition": "やり取りの対象となる人です。自分視点だけでなく相手視点が必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "user",
+          "customer",
+          "communication"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "立場",
+    "reading": "たちば",
+    "senses": [
+      {
+        "definition": "その人の役割や置かれた状況です。立場が違えば優先事項も変わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "perspective",
+          "stakeholder",
+          "role"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "役目",
+    "reading": "やくめ",
+    "senses": [
+      {
+        "definition": "果たすべき務めです。責任より日常的な表現です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "role",
+          "responsibility",
+          "assignment"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "責任感",
+    "reading": "せきにんかん",
+    "senses": [
+      {
+        "definition": "役目を果たそうとする意識です。ただし構造的な不足を個人の責任感だけで埋めるのは危険です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "responsibility",
+          "awareness",
+          "professionalism"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "約束事",
+    "reading": "やくそくごと",
+    "senses": [
+      {
+        "definition": "事前に決めて守る内容です。チーム作業の安定化に効きます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "convention",
+          "agreement",
+          "consensus"
+        ]
+      }
+    ],
+    "aliases": [
+      "コンベンション"
+    ]
+  },
+  {
+    "term": "信号",
+    "reading": "しんごう",
+    "senses": [
+      {
+        "definition": "何かを伝える信号です。システムでは状態変化や警告の比喩にもなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "signal",
+          "warning",
+          "notification"
+        ]
+      }
+    ],
+    "aliases": [
+      "シグナル"
+    ]
+  },
+  {
+    "term": "合図",
+    "reading": "あいず",
+    "senses": [
+      {
+        "definition": "動き出すきっかけになる知らせです。言葉を使わない連携にも使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "trigger",
+          "event",
+          "notification"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "手がかり",
+    "reading": "てがかり",
+    "senses": [
+      {
+        "definition": "問題解決のヒントになる情報です。ログや異常も手がかりになります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "hint",
+          "evidence",
+          "debugging"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ヒント",
+    "senses": [
+      {
+        "definition": "答えに近づくための助けです。教えすぎず導くときに有効です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "clue",
+          "guide",
+          "advice"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "答え",
+    "reading": "こたえ",
+    "senses": [
+      {
+        "definition": "問いに対する結論です。ただし文脈によっては一つとは限りません。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "answer",
+          "conclusion",
+          "solution"
+        ]
+      }
+    ],
+    "aliases": [
+      "解答"
+    ]
+  },
+  {
+    "term": "正解",
+    "reading": "せいかい",
+    "senses": [
+      {
+        "definition": "条件に照らして正しい答えです。現実には正解が複数あることも珍しくありません。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "correct answer",
+          "optimal solution",
+          "answer"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "まちがい",
+    "senses": [
+      {
+        "definition": "期待や基準から外れていることです。早く見つかるほど損失を小さくできます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "error",
+          "mistake",
+          "wrong"
+        ]
+      }
+    ],
+    "aliases": [
+      "間違い",
+      "誤り"
+    ]
+  },
+  {
+    "term": "見直し",
+    "reading": "みなおし",
+    "senses": [
+      {
+        "definition": "一度作ったものをもう一度確認することです。品質向上に直結する地味だが大切な作業です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "review",
+          "re-check",
+          "confirmation"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "やり直し",
+    "reading": "やりなおし",
+    "senses": [
+      {
+        "definition": "誤りや不足のためにもう一度やることです。防げる手戻りは減らすべきです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "rework",
+          "correction",
+          "retry"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "手助け",
+    "reading": "てだすけ",
+    "senses": [
+      {
+        "definition": "他の人の作業を支えることです。チーム全体の力を高めます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "assistance",
+          "support",
+          "cooperation"
+        ]
+      }
+    ],
+    "aliases": [
+      "サポート"
+    ]
+  },
+  {
+    "term": "助言",
+    "reading": "じょげん",
+    "senses": [
+      {
+        "definition": "経験や判断に基づく助言です。受け手の解釈力も重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "advice",
+          "feedback",
+          "coaching"
+        ]
+      }
+    ],
+    "aliases": [
+      "アドバイス"
+    ]
+  },
+  {
+    "term": "見本",
+    "reading": "みほん",
+    "senses": [
+      {
+        "definition": "実際に参照できる具体例です。抽象説明より分かりやすいことが多いです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "sample",
+          "template",
+          "reference"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "土台",
+    "reading": "どだい",
+    "senses": [
+      {
+        "definition": "上に積まれるものを支える基礎です。設計、組織、学習のどれでも重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "foundation",
+          "base",
+          "underpinning"
+        ]
+      }
+    ],
+    "aliases": [
+      "基盤",
+      "基礎"
+    ]
+  },
+  {
+    "term": "積み重ね",
+    "reading": "つみかさね",
+    "senses": [
+      {
+        "definition": "小さな行動や改善を積み上げ続けることです。長期的な差はここから生まれます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "continuation",
+          "repetition",
+          "improvement"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バグ",
+    "senses": [
+      {
+        "definition": "意図と異なる動作や誤りです。設計、実装、運用のどこでも起こりえます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "defect",
+          "malfunction",
+          "error"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "欠陥",
+    "reading": "けっかん",
+    "senses": [
+      {
+        "definition": "品質上の弱点や問題です。仕様、設計、実装のいずれにも存在しえます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "defect",
+          "malfunction",
+          "bug"
+        ]
+      }
+    ],
+    "aliases": [
+      "デフェクト"
+    ]
+  }
+]

@@ -1,0 +1,1742 @@
+[
+  {
+    "term": "EC2インスタンスタイプ",
+    "reading": "いーしーつーいんすたんすたいぷ",
+    "aliases": [
+      "EC2 Instance Type",
+      "instance type"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon EC2で選択できるCPU・メモリ・ストレージ・ネットワーク帯域の組み合わせ仕様。汎用(M系)、コンピュート最適化(C系)、メモリ最適化(R系)、ストレージ最適化(I系)などファミリーが分かれており、ワークロードに応じて選択する。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "コンピュート",
+          "インスタンスファミリー",
+          "vCPU",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EC2 Auto Scaling",
+    "reading": "いーしーつーおーとすけーりんぐ",
+    "aliases": [
+      "Auto Scaling Group",
+      "ASG"
+    ],
+    "senses": [
+      {
+        "definition": "負荷に応じてEC2インスタンス数を自動的に増減させるサービス。最小・希望・最大台数を設定し、CloudWatchメトリクスやスケジュールに基づいてスケールアウト/インを行い、可用性とコストを最適化する。",
+        "domain": "aws",
+        "keywords": [
+          "スケーリング",
+          "可用性",
+          "コスト最適化",
+          "CloudWatch",
+          "Auto Scaling Group"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Lambda@Edge",
+    "reading": "らむだあっとえっじ",
+    "aliases": [
+      "CloudFront Lambda@Edge"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon CloudFrontのエッジロケーションでLambda関数を実行する機能。視聴者リクエスト・オリジンリクエスト・オリジンレスポンス・視聴者レスポンスの4フェーズで動作し、低レイテンシーなコンテンツカスタマイズやA/Bテストを実現する。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "エッジ",
+          "Lambda",
+          "低レイテンシー",
+          "コンテンツカスタマイズ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Lightsail",
+    "reading": "あまぞんらいとせいる",
+    "aliases": [
+      "Lightsail"
+    ],
+    "senses": [
+      {
+        "definition": "仮想サーバー・ストレージ・データベース・ネットワークをまとめて提供するシンプルなクラウドサービス。月額固定料金で利用でき、WordPress等のウェブサイトや小規模アプリケーションを簡単に起動できる初心者向けサービス。",
+        "domain": "aws",
+        "keywords": [
+          "VPS",
+          "シンプル",
+          "固定料金",
+          "WordPress",
+          "小規模"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Elastic Beanstalk",
+    "reading": "えーだぶりゅーえすえらすてぃっくびーんすとーく",
+    "aliases": [
+      "Elastic Beanstalk",
+      "EB"
+    ],
+    "senses": [
+      {
+        "definition": "アプリケーションコードをアップロードするだけでEC2・ELB・Auto Scalingなどのインフラを自動的にプロビジョニングするPaaSサービス。Java、Python、Node.js等の主要言語をサポートし、インフラの詳細を意識せずにアプリを展開できる。",
+        "domain": "aws",
+        "keywords": [
+          "PaaS",
+          "自動プロビジョニング",
+          "デプロイ",
+          "インフラ管理",
+          "マルチ言語"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3バケットポリシー",
+    "reading": "えすさんばけっとぽりしー",
+    "aliases": [
+      "S3 Bucket Policy",
+      "バケットポリシー"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon S3バケットとそのオブジェクトへのアクセスをJSON形式で制御するリソースベースのポリシー。特定のAWSアカウント・IAMユーザー・IPアドレスからのアクセス許可・拒否を細かく設定でき、パブリックアクセスの制御にも使われる。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "アクセス制御",
+          "IAM",
+          "JSON",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3ライフサイクルポリシー",
+    "reading": "えすさんらいふさいくるぽりしー",
+    "aliases": [
+      "S3 Lifecycle Policy",
+      "ライフサイクルルール"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon S3オブジェクトの保存クラスを経過日数に応じて自動的に移行したり、期限切れオブジェクトを削除したりするルール。Standard→Standard-IA→Glacierという階層移行でコストを最適化できる。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "コスト最適化",
+          "ストレージクラス",
+          "自動移行",
+          "Glacier"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3 Glacier",
+    "reading": "えすさんぐれいしゃー",
+    "aliases": [
+      "Glacier"
+    ],
+    "senses": [
+      {
+        "definition": "長期アーカイブ向けの低コストストレージサービス。Instant Retrieval・Flexible Retrieval・Deep Archiveの3ティアがあり、取り出し時間とコストのトレードオフで選択する。監査目的の長期データ保管に最適。",
+        "domain": "aws",
+        "keywords": [
+          "アーカイブ",
+          "低コスト",
+          "長期保管",
+          "S3",
+          "コンプライアンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3 Intelligent-Tiering",
+    "reading": "えすさんいんてりじぇんとてぃありんぐ",
+    "aliases": [
+      "S3 Intelligent Tiering",
+      "インテリジェントティアリング"
+    ],
+    "senses": [
+      {
+        "definition": "アクセスパターンを自動的に分析し、頻繁・低頻度・アーカイブの各ストレージクラスにオブジェクトを自動移動するS3ストレージクラス。アクセスパターンが予測できないデータのコスト最適化に有効。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "自動階層化",
+          "コスト最適化",
+          "アクセスパターン",
+          "ストレージクラス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3 Transfer Acceleration",
+    "reading": "えすさんとらんすふぁーあくせられーしょん",
+    "aliases": [
+      "Transfer Acceleration",
+      "転送高速化"
+    ],
+    "senses": [
+      {
+        "definition": "CloudFrontのエッジロケーション経由でAmazon S3へのファイルアップロードを高速化する機能。地理的に離れたクライアントからの大容量データ転送を最適化されたネットワーク経路で行い、転送速度を大幅に改善する。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "高速転送",
+          "CloudFront",
+          "エッジ",
+          "大容量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3 Object Lock",
+    "reading": "えすさんおぶじぇくとろっく",
+    "aliases": [
+      "Object Lock",
+      "オブジェクトロック"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon S3オブジェクトを指定期間または無期限に削除・上書きできないよう保護するWORM（Write Once Read Many）機能。金融・医療などの規制対応やランサムウェア対策に利用され、Governance・Complianceの2モードがある。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "WORM",
+          "コンプライアンス",
+          "不変性",
+          "ランサムウェア対策"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Storage Gateway",
+    "reading": "えーだぶりゅーえすすとれーじげーとうぇい",
+    "aliases": [
+      "Storage Gateway",
+      "ストレージゲートウェイ"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスのアプリケーションとAWSクラウドストレージをシームレスに統合するハイブリッドクラウドストレージサービス。ファイルゲートウェイ・ボリュームゲートウェイ・テープゲートウェイの3種類があり、既存システムをクラウドに拡張する。",
+        "domain": "aws",
+        "keywords": [
+          "ハイブリッドクラウド",
+          "オンプレミス",
+          "S3",
+          "統合",
+          "バックアップ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon FSx",
+    "reading": "あまぞんえふえすえっくす",
+    "aliases": [
+      "FSx"
+    ],
+    "senses": [
+      {
+        "definition": "フルマネージドのサードパーティファイルシステムサービス。Windows File Server・Lustre・NetApp ONTAP・OpenZFSに対応しており、既存のワークロードやアプリケーションを最小限の変更でAWS上で実行できる。",
+        "domain": "aws",
+        "keywords": [
+          "ファイルシステム",
+          "フルマネージド",
+          "Windows",
+          "Lustre",
+          "ハイパフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RDSマルチAZ",
+    "reading": "あーるでぃーえすまるちえーぜっと",
+    "aliases": [
+      "RDS Multi-AZ",
+      "Multi-AZ配置"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon RDSのプライマリDBインスタンスを別のアベイラビリティゾーンにスタンバイレプリカと同期させる高可用性構成。プライマリ障害時に自動フェイルオーバーが発生し、ダウンタイムを最小化する。",
+        "domain": "aws",
+        "keywords": [
+          "RDS",
+          "高可用性",
+          "フェイルオーバー",
+          "冗長化",
+          "アベイラビリティゾーン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RDSリードレプリカ",
+    "reading": "あーるでぃーえすりーどれぷりか",
+    "aliases": [
+      "RDS Read Replica"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon RDSプライマリDBインスタンスから非同期レプリケーションで作成される読み取り専用のレプリカ。読み取りクエリをレプリカに分散させることでプライマリの負荷を軽減し、読み取りスループットをスケールさせる。",
+        "domain": "aws",
+        "keywords": [
+          "RDS",
+          "読み取りスケール",
+          "レプリケーション",
+          "負荷分散",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DynamoDBグローバルテーブル",
+    "reading": "だいなもでぃーびーぐろーばるてーぶる",
+    "aliases": [
+      "DynamoDB Global Tables",
+      "グローバルテーブル"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon DynamoDBのテーブルを複数のAWSリージョンに自動レプリケーションする機能。各リージョンで読み書き可能なマルチアクティブ構成により、グローバルに低レイテンシーアクセスとディザスタリカバリを実現する。",
+        "domain": "aws",
+        "keywords": [
+          "DynamoDB",
+          "マルチリージョン",
+          "レプリケーション",
+          "グローバル",
+          "低レイテンシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon MemoryDB",
+    "reading": "あまぞんめもりでぃーびー",
+    "aliases": [
+      "Amazon MemoryDB for Redis",
+      "MemoryDB"
+    ],
+    "senses": [
+      {
+        "definition": "Redisと互換性を持つ超高速でデュラブルなインメモリデータベースサービス。Redisと同じAPIを使いながらマルチAZトランザクションログで耐久性を保証し、プライマリデータベースとして利用できる。",
+        "domain": "aws",
+        "keywords": [
+          "Redis",
+          "インメモリ",
+          "耐久性",
+          "マルチAZ",
+          "高速"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Neptune",
+    "reading": "あまぞんねぷちゅーん",
+    "aliases": [
+      "Neptune"
+    ],
+    "senses": [
+      {
+        "definition": "フルマネージドのグラフデータベースサービス。Property Graph（Gremlin）とRDF（SPARQL）の両方をサポートし、ソーシャルネットワーク・レコメンデーションエンジン・不正検出などの関係性が重要なユースケースに最適。",
+        "domain": "aws",
+        "keywords": [
+          "グラフDB",
+          "Gremlin",
+          "SPARQL",
+          "フルマネージド",
+          "関係性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Timestream",
+    "reading": "あまぞんたいむすとりーむ",
+    "aliases": [
+      "Timestream",
+      "時系列データベース"
+    ],
+    "senses": [
+      {
+        "definition": "IoTやアプリケーション監視向けのフルマネージド時系列データベースサービス。時系列データに最適化されたストレージと自動データ階層化により、リレーショナルDBの10倍以上の効率でデータを管理しコストを削減する。",
+        "domain": "aws",
+        "keywords": [
+          "時系列",
+          "IoT",
+          "フルマネージド",
+          "監視",
+          "コスト最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon QLDB",
+    "reading": "あまぞんきゅーえるでぃーびー",
+    "aliases": [
+      "QLDB",
+      "Quantum Ledger Database"
+    ],
+    "senses": [
+      {
+        "definition": "改ざん防止の検証可能なトランザクション履歴を持つフルマネージド台帳データベース。暗号学的に検証可能なジャーナルにすべての変更を記録し、金融取引・サプライチェーン・保険など監査証跡が必要な用途に適する。",
+        "domain": "aws",
+        "keywords": [
+          "台帳DB",
+          "改ざん防止",
+          "暗号検証",
+          "フルマネージド",
+          "監査証跡"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Keyspaces",
+    "reading": "あまぞんきーすぺーしーず",
+    "aliases": [
+      "Keyspaces",
+      "Amazon Keyspaces for Apache Cassandra"
+    ],
+    "senses": [
+      {
+        "definition": "Apache Cassandraと互換性を持つフルマネージドのワイドカラムデータベースサービス。既存のCassandraアプリケーションをコード変更なしに移行でき、自動スケーリングと高可用性を提供する。",
+        "domain": "aws",
+        "keywords": [
+          "Cassandra",
+          "ワイドカラム",
+          "フルマネージド",
+          "互換性",
+          "自動スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon DocumentDB",
+    "reading": "あまぞんどきゅめんとでぃーびー",
+    "aliases": [
+      "DocumentDB",
+      "Amazon DocumentDB with MongoDB compatibility"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBと互換性を持つフルマネージドのドキュメントデータベースサービス。JSON形式のデータを柔軟に保存・検索でき、既存のMongoDBドライバやツールをそのまま利用できる。ストレージは6つのコピーで自動レプリケーション。",
+        "domain": "aws",
+        "keywords": [
+          "MongoDB",
+          "ドキュメントDB",
+          "JSON",
+          "フルマネージド",
+          "互換性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Redshift Spectrum",
+    "reading": "れっどしふとすぺくとらむ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Amazon RedshiftからAmazon S3上のデータを直接クエリできる機能。データをRedshiftに取り込まずにS3のエクサバイト規模のデータを分析でき、データレイクとデータウェアハウスを統合したアーキテクチャを実現する。",
+        "domain": "aws",
+        "keywords": [
+          "Redshift",
+          "S3",
+          "データレイク",
+          "クエリ",
+          "分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Redshift Serverless",
+    "reading": "れっどしふとさーばーれす",
+    "aliases": [
+      "Amazon Redshift Serverless"
+    ],
+    "senses": [
+      {
+        "definition": "クラスターのプロビジョニング不要でRedshiftの分析機能を利用できるサーバーレスオプション。使用した分だけ課金されるため、断続的なワークロードやアドホッククエリに適しており、自動的にスケールする。",
+        "domain": "aws",
+        "keywords": [
+          "Redshift",
+          "サーバーレス",
+          "自動スケール",
+          "従量課金",
+          "分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VPCピアリング",
+    "reading": "ぶいぴーしーぴありんぐ",
+    "aliases": [
+      "VPC Peering",
+      "VPC Peering Connection"
+    ],
+    "senses": [
+      {
+        "definition": "異なるVPC間をプライベートIPアドレスで通信させる接続方法。同一アカウント・異なるアカウント・異なるリージョン間でも設定可能だが、ルーティングは推移的ではなく直接接続したVPC間のみ通信できる。",
+        "domain": "aws",
+        "keywords": [
+          "VPC",
+          "プライベート接続",
+          "マルチVPC",
+          "ルーティング",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFrontオリジンアクセス",
+    "reading": "くらうどふろんとおりじんあくせす",
+    "aliases": [
+      "Origin Access Control",
+      "Origin Access Identity",
+      "OAI"
+    ],
+    "senses": [
+      {
+        "definition": "CloudFrontからS3バケットへのアクセスを制限し、CloudFront経由のみコンテンツを配信できるようにする仕組み。OAI（旧）とOAC（新）があり、S3バケットへの直接アクセスを防いでセキュリティを向上させる。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "S3",
+          "セキュリティ",
+          "アクセス制限",
+          "OAC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Route 53ヘルスチェック",
+    "reading": "るーとごじゅうさんへるすちぇっく",
+    "aliases": [
+      "Route 53 Health Check",
+      "ヘルスチェック"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Route 53がエンドポイントの正常性を定期的に確認し、障害時に自動的にDNSフェイルオーバーを実行する機能。HTTP・HTTPS・TCPの各プロトコルに対応し、フェイルオーバーやレイテンシーベースルーティングと組み合わせて使用する。",
+        "domain": "aws",
+        "keywords": [
+          "Route53",
+          "DNS",
+          "ヘルスチェック",
+          "フェイルオーバー",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NLB",
+    "reading": "えぬえるびー",
+    "aliases": [
+      "NLB (Network Load Balancer)"
+    ],
+    "senses": [
+      {
+        "definition": "レイヤー4（TCPおよびUDP）で動作するAWSのロードバランサー。超高スループットと低レイテンシーが特徴で、静的IPまたはElastic IPを割り当てられる。TCP・UDP・TLSトラフィックを処理し、ゲームや金融等のリアルタイムアプリに適する。",
+        "domain": "aws",
+        "keywords": [
+          "ロードバランサー",
+          "TCP",
+          "UDP",
+          "L4",
+          "高スループット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GLB",
+    "reading": "じーえるびー",
+    "aliases": [
+      "Gateway Load Balancer",
+      "GWLB"
+    ],
+    "senses": [
+      {
+        "definition": "サードパーティのネットワーク仮想アプライアンス（ファイアウォール・IDS/IPS等）をスケーラブルに展開するためのAWSロードバランサー。GENEVE プロトコルを使用してトラフィックをアプライアンスに透過的に転送し、ネットワークセキュリティを集中管理する。",
+        "domain": "aws",
+        "keywords": [
+          "ロードバランサー",
+          "ネットワークアプライアンス",
+          "セキュリティ",
+          "GENEVE",
+          "透過的"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Elastic IP",
+    "reading": "えらすてぃっくあいぴー",
+    "aliases": [
+      "EIP",
+      "Elastic IP Address"
+    ],
+    "senses": [
+      {
+        "definition": "AWSアカウントに割り当てられる静的なパブリックIPv4アドレス。インスタンスを停止・起動してもIPが変わらず、障害発生時に別インスタンスに即座に付け替えることで迅速なフェイルオーバーが可能。使用していない場合は課金される。",
+        "domain": "aws",
+        "keywords": [
+          "静的IP",
+          "パブリックIP",
+          "フェイルオーバー",
+          "EC2",
+          "IPv4"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EC2スポットインスタンス",
+    "reading": "いーしーつーすぽっといんすたんす",
+    "aliases": [
+      "Spot Instance",
+      "EC2 Spot"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの余剰コンピューティング容量を最大90%割引で利用できるEC2インスタンス購入オプション。AWSがキャパシティを必要とする際に2分前通知で中断されるため、耐障害性のあるバッチ処理や機械学習トレーニングに適する。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "コスト削減",
+          "スポット",
+          "割引",
+          "バッチ処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EC2リザーブドインスタンス",
+    "reading": "いーしーつーりざーぶどいんすたんす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "1年または3年のコミットメントと引き換えにEC2インスタンスを最大72%割引で利用できる購入オプション。スタンダード型・コンバーティブル型・スケジュールド型があり、長期的に安定した需要のあるワークロードのコスト最適化に有効。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "コスト最適化",
+          "コミットメント",
+          "割引",
+          "長期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EC2専有ホスト",
+    "reading": "いーしーつーせんゆうほすと",
+    "aliases": [
+      "専有ホスト"
+    ],
+    "senses": [
+      {
+        "definition": "特定の顧客のみが使用する物理EC2サーバー。ソフトウェアライセンスのコンプライアンス要件（BYOL）や規制上の要件でハードウェアの占有が必要な場合に使用する。ソケット・コア・VM単位でのライセンス管理が可能。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "専有",
+          "BYOL",
+          "コンプライアンス",
+          "ライセンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Batch",
+    "reading": "えーだぶりゅーえすばっち",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "数十万件規模のバッチコンピューティングジョブを効率的に実行するフルマネージドサービス。最適なコンピュートリソース量と種類を動的にプロビジョニングし、ジョブキューと依存関係管理によって大規模バッチ処理を自動化する。",
+        "domain": "aws",
+        "keywords": [
+          "バッチ処理",
+          "フルマネージド",
+          "ジョブキュー",
+          "コスト最適化",
+          "大規模"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon WorkSpaces",
+    "reading": "あまぞんわーくすぺーしーず",
+    "aliases": [
+      "WorkSpaces",
+      "DaaS"
+    ],
+    "senses": [
+      {
+        "definition": "クラウド上でフルマネージドのWindows・Linuxデスクトップを提供するVDI（Desktop as a Service）サービス。物理PCの代わりにブラウザやクライアントアプリからデスクトップ環境にアクセスでき、リモートワーク環境の構築に利用される。",
+        "domain": "aws",
+        "keywords": [
+          "VDI",
+          "DaaS",
+          "仮想デスクトップ",
+          "リモートワーク",
+          "フルマネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Snowball",
+    "reading": "えーだぶりゅーえすすのーぼーる",
+    "aliases": [
+      "Snowball",
+      "AWS Snow Family"
+    ],
+    "senses": [
+      {
+        "definition": "ペタバイト規模のデータを物理デバイスを使ってAWSに移行するデータ転送サービス。インターネット経由での転送が困難な大量データをデバイスに書き込み、物理的にAWSデータセンターに送付することで高速にS3へ取り込める。",
+        "domain": "aws",
+        "keywords": [
+          "データ移行",
+          "物理転送",
+          "S3",
+          "ペタバイト",
+          "オフライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS DataSync",
+    "reading": "えーだぶりゅーえすでーたしんく",
+    "aliases": [
+      "DataSync"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスやエッジのストレージとAWSストレージサービス間でデータを高速かつ自動的に転送・同期するサービス。NFS・SMB・S3互換ストレージをサポートし、帯域最適化・暗号化・整合性検証を自動で行う。",
+        "domain": "aws",
+        "keywords": [
+          "データ移行",
+          "同期",
+          "オンプレミス",
+          "S3",
+          "高速転送"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3マルチパートアップロード",
+    "reading": "えすさんまるちぱーとあっぷろーど",
+    "aliases": [
+      "Multipart Upload",
+      "マルチパートアップロード"
+    ],
+    "senses": [
+      {
+        "definition": "大容量ファイルを複数のパートに分割して並列アップロードするS3の機能。100MB以上のファイルに推奨され、転送失敗時に該当パートのみ再送できるため効率的。5MB以上のパートに分割して最大10,000パートまで並列転送できる。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "大容量",
+          "並列",
+          "高速",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3レプリケーション",
+    "reading": "えすさんれぷりけーしょん",
+    "aliases": [
+      "S3 Replication",
+      "SRR"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon S3バケット間でオブジェクトを自動的にレプリケーションする機能。同一リージョン内のSRR（Same-Region Replication）と異なるリージョンへのCRR（Cross-Region Replication）があり、ディザスタリカバリやデータローカライゼーションに利用する。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "レプリケーション",
+          "CRR",
+          "ディザスタリカバリ",
+          "マルチリージョン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EBSボリュームタイプ",
+    "reading": "いーびーえすぼりゅーむたいぷ",
+    "aliases": [
+      "EBS Volume Type",
+      "ボリュームタイプ"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon EBSが提供するストレージ種別。汎用SSD（gp2/gp3）・プロビジョンドIOPS SSD（io1/io2）・スループット最適化HDD（st1）・コールドHDD（sc1）があり、IOPS・スループット・コストのバランスでワークロードに応じて選択する。",
+        "domain": "aws",
+        "keywords": [
+          "EBS",
+          "SSD",
+          "HDD",
+          "IOPS",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Aurora グローバルデータベース",
+    "reading": "おーろらぐろーばるでーたべーす",
+    "aliases": [
+      "Aurora Global Database",
+      "Auroraグローバルデータベース"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Auroraのプライマリリージョンから最大5つのセカンダリリージョンにデータをレプリケーションするグローバル展開機能。専用インフラでレプリケーションを行いラグを1秒未満に保ち、リージョン障害時のフェイルオーバーをサポートする。",
+        "domain": "aws",
+        "keywords": [
+          "Aurora",
+          "マルチリージョン",
+          "レプリケーション",
+          "低レイテンシー",
+          "ディザスタリカバリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DynamoDB オンデマンドモード",
+    "reading": "だいなもでぃーびーおんでまんどもーど",
+    "aliases": [
+      "DynamoDB On-Demand",
+      "オンデマンドキャパシティモード"
+    ],
+    "senses": [
+      {
+        "definition": "事前にキャパシティを設定せず実際のリクエスト数に応じて自動的にスケールし、処理したリクエスト数のみ課金されるDynamoDBの課金モード。トラフィックが予測困難なアプリや開発・テスト環境に適する。",
+        "domain": "aws",
+        "keywords": [
+          "DynamoDB",
+          "従量課金",
+          "自動スケール",
+          "キャパシティ",
+          "サーバーレス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ElastiCache Serverless",
+    "reading": "えらすてぃきゃっしゅさーばーれす",
+    "aliases": [
+      "Amazon ElastiCache Serverless"
+    ],
+    "senses": [
+      {
+        "definition": "キャパシティのプロビジョニング不要でRedisおよびMemcachedキャッシュを即座に作成・スケールできるElastiCacheのサーバーレスオプション。数秒でキャッシュを作成でき、使用量に基づいて自動スケールと従量課金を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "ElastiCache",
+          "サーバーレス",
+          "Redis",
+          "Memcached",
+          "自動スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Network Firewall",
+    "reading": "えーだぶりゅーえすねっとわーくふぁいあうぉーる",
+    "aliases": [
+      "Network Firewall"
+    ],
+    "senses": [
+      {
+        "definition": "VPCを保護するフルマネージドのネットワークファイアウォールサービス。ステートフルインスペクション・侵入検知・防止（IDS/IPS）・Webフィルタリングを提供し、Transit GatewayやGLBと組み合わせてセントラライズドネットワーク保護を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "セキュリティ",
+          "ファイアウォール",
+          "IDS/IPS",
+          "VPC",
+          "フルマネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Route 53リゾルバー",
+    "reading": "るーとごじゅうさんりぞるばー",
+    "aliases": [
+      "Route 53 Resolver",
+      "Amazon Route 53 Resolver"
+    ],
+    "senses": [
+      {
+        "definition": "VPCとオンプレミスネットワーク間のDNS解決を可能にするマネージドDNSリゾルバー。インバウンドエンドポイントとアウトバウンドエンドポイントを設定することでハイブリッド環境でのDNSクエリ転送を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "DNS",
+          "VPC",
+          "ハイブリッド",
+          "オンプレミス",
+          "名前解決"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ALB リスナールール",
+    "reading": "えーえるびーりすなーるーる",
+    "aliases": [
+      "ALB Listener Rule",
+      "リスナールール"
+    ],
+    "senses": [
+      {
+        "definition": "Application Load Balancerのリスナーに設定するルールで、HTTPリクエストのパス・ホスト・ヘッダー・クエリ文字列などの条件に応じてターゲットグループへのルーティングを制御する。パスベースルーティングやホストベースルーティングに利用される。",
+        "domain": "aws",
+        "keywords": [
+          "ALB",
+          "ルーティング",
+          "リスナー",
+          "パスベース",
+          "ロードバランサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ターゲットグループ",
+    "reading": "たーげっとぐるーぷ",
+    "aliases": [
+      "Target Group"
+    ],
+    "senses": [
+      {
+        "definition": "ELBが受信したリクエストをルーティングするEC2インスタンス・コンテナ・Lambda関数などのエンドポイントのグループ。ヘルスチェックを設定して正常なターゲットのみにトラフィックを送り、負荷分散とヘルスモニタリングを行う。",
+        "domain": "aws",
+        "keywords": [
+          "ELB",
+          "ロードバランサー",
+          "ルーティング",
+          "ヘルスチェック",
+          "EC2"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コネクションドレイニング",
+    "reading": "こねくしょんどれいにんぐ",
+    "aliases": [
+      "Connection Draining",
+      "Deregistration Delay"
+    ],
+    "senses": [
+      {
+        "definition": "ロードバランサーからターゲットを登録解除する際、既存の接続が完了するまで待機する機能。デフォルト300秒のタイムアウト内に既存リクエストを処理し完了させてから、ターゲットを安全に取り外しダウンタイムを防ぐ。",
+        "domain": "aws",
+        "keywords": [
+          "ELB",
+          "ロードバランサー",
+          "グレースフルシャットダウン",
+          "可用性",
+          "タイムアウト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クロスゾーン負荷分散",
+    "reading": "くろすぞーんふかぶんさん",
+    "aliases": [
+      "Cross-Zone Load Balancing"
+    ],
+    "senses": [
+      {
+        "definition": "ロードバランサーがすべてのアベイラビリティゾーンの登録済みターゲットにトラフィックを均等に分散する設定。ALBではデフォルト有効、NLBはデフォルト無効。複数AZにターゲット数の差異がある場合も均等にリクエストを配分できる。",
+        "domain": "aws",
+        "keywords": [
+          "ELB",
+          "ロードバランサー",
+          "AZ",
+          "負荷分散",
+          "均等"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFront ディストリビューション",
+    "reading": "くらうどふろんとでぃすとりびゅーしょん",
+    "aliases": [
+      "CloudFront Distribution"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon CloudFrontのコンテンツ配信設定の単位。オリジン・キャッシュ動作・エラーページ・アクセス制限・SSL証明書などを設定し、固有のドメイン（xxx.cloudfront.net）でコンテンツを世界中のエッジロケーションから配信する。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "CDN",
+          "配信設定",
+          "エッジ",
+          "SSL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFront キャッシュポリシー",
+    "reading": "くらうどふろんときゃっしゅぽりしー",
+    "aliases": [
+      "CloudFront Cache Policy",
+      "キャッシュポリシー"
+    ],
+    "senses": [
+      {
+        "definition": "CloudFrontがコンテンツをキャッシュする際の動作を定義するポリシー。TTL・キャッシュキーに含めるヘッダー・クエリ文字列・Cookieを設定し、キャッシュヒット率の最適化とコンテンツの適切な差別化を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "キャッシュ",
+          "TTL",
+          "パフォーマンス",
+          "CDN"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFront 署名付きURL",
+    "reading": "くらうどふろんとしょめいつきゆーあーるえる",
+    "aliases": [
+      "Signed URL",
+      "CloudFront Signed URL",
+      "署名付きURL"
+    ],
+    "senses": [
+      {
+        "definition": "特定のCloudFrontコンテンツへのアクセスを有効期限・IPアドレス・パス等で制限するURL。プレミアムコンテンツや一時的なファイル共有に使用し、署名付きCookieはサイト全体の保護に向く。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "アクセス制限",
+          "有効期限",
+          "プライベートコンテンツ",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オリジンシールド",
+    "reading": "おりじんしーるど",
+    "aliases": [
+      "Origin Shield",
+      "CloudFront Origin Shield"
+    ],
+    "senses": [
+      {
+        "definition": "CloudFrontのキャッシュレイヤーとオリジン間に追加するキャッシュレイヤー。エッジロケーションからのリクエストをオリジンシールドに集約することでオリジンへのリクエスト数を削減し、オリジンの負荷とコストを最小化する。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "キャッシュ",
+          "オリジン負荷軽減",
+          "CDN",
+          "コスト最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VPC CIDRブロック",
+    "reading": "ぶいぴーしーしーあいでぃーあーるぶろっく",
+    "aliases": [
+      "VPC CIDR",
+      "CIDR Block",
+      "CIDRブロック"
+    ],
+    "senses": [
+      {
+        "definition": "VPCに割り当てるIPアドレス範囲をCIDR表記で定義したもの。例えば10.0.0.0/16は65,536個のIPアドレスを表す。VPC作成後に変更できないため適切な範囲を設計段階で決定することが重要で、オンプレミスや他VPCとの重複を避ける必要がある。",
+        "domain": "aws",
+        "keywords": [
+          "VPC",
+          "ネットワーク設計",
+          "IPアドレス",
+          "CIDR",
+          "サブネット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS App Mesh",
+    "reading": "えーだぶりゅーえすあっぷめっしゅ",
+    "aliases": [
+      "App Mesh"
+    ],
+    "senses": [
+      {
+        "definition": "マイクロサービス間の通信を可視化・制御するフルマネージドのサービスメッシュ。Envoyプロキシをサイドカーとして各サービスに付加し、トラフィックルーティング・ヘルスチェック・テレメトリーを一元管理する。",
+        "domain": "aws",
+        "keywords": [
+          "サービスメッシュ",
+          "マイクロサービス",
+          "Envoy",
+          "可観測性",
+          "トラフィック制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Service Discovery",
+    "reading": "えーだぶりゅーえすさーびすでぃすかばりー",
+    "aliases": [
+      "Service Discovery",
+      "Cloud Map"
+    ],
+    "senses": [
+      {
+        "definition": "マイクロサービスがDNSまたはAPIを通じて動的に他のサービスを検索・接続できるようにするサービス検出機能。ECSやEKSのサービスを自動登録し、ヘルスチェックに連動して正常なエンドポイントのみを返す。",
+        "domain": "aws",
+        "keywords": [
+          "マイクロサービス",
+          "サービス検出",
+          "DNS",
+          "ECS",
+          "動的登録"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon EC2 Image Builder",
+    "reading": "あまぞんいーしーつーいめーじびるだー",
+    "aliases": [
+      "EC2 Image Builder",
+      "Image Builder"
+    ],
+    "senses": [
+      {
+        "definition": "安全で最新のAMI（Amazon Machine Image）やコンテナイメージを自動的に作成・テスト・配布するフルマネージドサービス。パイプラインで定義したコンポーネントを自動適用してイメージをビルドし、脆弱性スキャン後に配布できる。",
+        "domain": "aws",
+        "keywords": [
+          "AMI",
+          "イメージ自動化",
+          "セキュリティ",
+          "パイプライン",
+          "コンテナ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Outposts",
+    "reading": "えーだぶりゅーえすあうとぽすと",
+    "aliases": [
+      "Outposts"
+    ],
+    "senses": [
+      {
+        "definition": "AWSのインフラ・サービス・API・ツールをオンプレミスのデータセンターや施設に拡張するフルマネージドサービス。低レイテンシー要件・データレジデンシー要件・ローカル処理が必要なワークロードをオンプレミスでAWS環境と統一的に管理できる。",
+        "domain": "aws",
+        "keywords": [
+          "ハイブリッドクラウド",
+          "オンプレミス",
+          "低レイテンシー",
+          "データレジデンシー",
+          "フルマネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Elastic Network Interface",
+    "reading": "えらすてぃっくねっとわーくいんたーふぇーす",
+    "aliases": [
+      "ENI",
+      "仮想ネットワークインターフェース"
+    ],
+    "senses": [
+      {
+        "definition": "VPC内の仮想ネットワークカード。プライマリプライベートIPv4アドレス・セカンダリIPアドレス・Elastic IP・MACアドレス・セキュリティグループを持ち、EC2インスタンスへのアタッチ・デタッチが可能。ネットワーク管理の柔軟性を高める。",
+        "domain": "aws",
+        "keywords": [
+          "VPC",
+          "ネットワーク",
+          "EC2",
+          "IPアドレス",
+          "セキュリティグループ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プレイスメントグループ",
+    "reading": "ぷれいすめんとぐるーぷ",
+    "aliases": [
+      "Placement Group",
+      "配置グループ"
+    ],
+    "senses": [
+      {
+        "definition": "EC2インスタンスの物理的な配置を制御する機能。クラスター（同一ラック内で低レイテンシー・高スループット）・パーティション（異なるハードウェアに分散）・スプレッド（個別ラックに分散して高可用性）の3種類がある。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "低レイテンシー",
+          "高可用性",
+          "HPC",
+          "配置"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Local Zones",
+    "reading": "えーだぶりゅーえすろーかるぞーん",
+    "aliases": [
+      "Local Zones"
+    ],
+    "senses": [
+      {
+        "definition": "特定の都市圏でAWSの計算・ストレージ・データベースサービスをユーザーの近くで提供するインフラ拡張。主要リージョンから地理的に離れた場所でも1桁ミリ秒のレイテンシーが必要なアプリケーションに利用する。",
+        "domain": "aws",
+        "keywords": [
+          "低レイテンシー",
+          "エッジコンピューティング",
+          "リージョン拡張",
+          "地理分散",
+          "メディア"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "S3バージョニング",
+    "reading": "えすさんばーじょにんぐ",
+    "aliases": [
+      "S3 Versioning",
+      "バージョニング"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon S3バケット内のオブジェクトの全バージョンを保持する機能。誤削除や上書きからデータを保護し、以前のバージョンに随時復元できる。MFADeleteと組み合わせることでセキュリティをさらに強化できる。",
+        "domain": "aws",
+        "keywords": [
+          "S3",
+          "バージョン管理",
+          "データ保護",
+          "復元",
+          "誤削除防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon EBS最適化インスタンス",
+    "reading": "あまぞんいーびーえすさいてきかいんすたんす",
+    "aliases": [
+      "EBS-Optimized Instance",
+      "EBS最適化"
+    ],
+    "senses": [
+      {
+        "definition": "EBSとEC2インスタンス間の通信に専用帯域幅を確保したインスタンスタイプ。通常のネットワーク帯域と分離された専用スループットでEBSボリュームにアクセスでき、I/Oパフォーマンスを最大化してレイテンシーを安定させる。",
+        "domain": "aws",
+        "keywords": [
+          "EBS",
+          "EC2",
+          "I/O",
+          "パフォーマンス",
+          "専用帯域"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Lambda関数URL",
+    "reading": "えーだぶりゅーえすらむだかんすうゆーあーるえる",
+    "aliases": [
+      "Lambda Function URL",
+      "関数URL"
+    ],
+    "senses": [
+      {
+        "definition": "Lambda関数にHTTPS専用エンドポイントを直接付与する機能。API Gatewayなしにブラウザやcurlから関数を呼び出せるようになり、シンプルなWebhookやAPIに適する。認証なし（NONE）またはAWS_IAM認証を選択できる。",
+        "domain": "aws",
+        "keywords": [
+          "Lambda",
+          "HTTPS",
+          "エンドポイント",
+          "API",
+          "Webhook"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロビジョニングされた同時実行",
+    "reading": "ぷろびじょにんぐされたどうじじっこう",
+    "aliases": [
+      "Provisioned Concurrency",
+      "プロビジョニング済み同時実行"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Lambda関数のコールドスタートを排除するために、関数インスタンスを事前に初期化済みの状態で維持する機能。レスポンスタイムの予測可能性が重要なユーザー向けAPIや低レイテンシーが要件のアプリケーションで使用する。",
+        "domain": "aws",
+        "keywords": [
+          "Lambda",
+          "コールドスタート",
+          "レイテンシー",
+          "パフォーマンス",
+          "初期化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンテナイメージLambda",
+    "reading": "こんてないめーじらむだ",
+    "aliases": [
+      "Container Image Lambda",
+      "Lambda Container Image"
+    ],
+    "senses": [
+      {
+        "definition": "DockerコンテナイメージとしてパッケージングしてAWS Lambdaにデプロイする方法。最大10GBのコンテナイメージをサポートし、既存のコンテナツールチェーンを活用しつつLambdaのサーバーレス実行モデルの恩恵を受けられる。",
+        "domain": "aws",
+        "keywords": [
+          "Lambda",
+          "コンテナ",
+          "Docker",
+          "デプロイ",
+          "大容量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon EC2ユーザーデータ",
+    "reading": "あまぞんいーしーつーゆーざーでーた",
+    "aliases": [
+      "EC2 User Data",
+      "User Data",
+      "ユーザーデータ"
+    ],
+    "senses": [
+      {
+        "definition": "EC2インスタンス起動時に自動実行されるスクリプトやデータ。シェルスクリプトやCloud-initディレクティブを渡してソフトウェアのインストールや設定を自動化するブートストラップに使用する。初回起動時のみ実行される。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "初期化",
+          "ブートストラップ",
+          "自動化",
+          "Cloud-init"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EC2メタデータサービス",
+    "reading": "いーしーつーめたでーたさーびす",
+    "aliases": [
+      "Instance Metadata Service",
+      "IMDS",
+      "EC2 Metadata"
+    ],
+    "senses": [
+      {
+        "definition": "EC2インスタンスから169.254.169.254にHTTPアクセスしてインスタンス自身の情報（インスタンスID・タイプ・IAMロール認証情報等）を取得するサービス。IMDSv2ではセッショントークンが必要でSSRF攻撃への耐性が向上している。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "メタデータ",
+          "IAM",
+          "IMDS",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Graviton",
+    "reading": "えーだぶりゅーえすぐらびとん",
+    "aliases": [
+      "Graviton",
+      "ARM-based processor"
+    ],
+    "senses": [
+      {
+        "definition": "AWSが独自設計したARMベースのプロセッサ。Graviton2・Graviton3・Graviton4と世代が進み、x86ベースインスタンスと比較して最大40%のコストパフォーマンス向上を実現。EC2・RDS・ElastiCache等で対応インスタンスを選択できる。",
+        "domain": "aws",
+        "keywords": [
+          "EC2",
+          "ARM",
+          "コストパフォーマンス",
+          "独自プロセッサ",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DynamoDB TTL",
+    "reading": "だいなもでぃーびーてぃーてぃーえる",
+    "aliases": [
+      "DynamoDB Time to Live",
+      "有効期限"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon DynamoDBのアイテムに有効期限（Unix時刻）を設定し、期限切れアイテムを自動削除する機能。追加コストなしで古いセッションデータや一時データを自動的にパージでき、テーブルのサイズとコストを管理する。",
+        "domain": "aws",
+        "keywords": [
+          "DynamoDB",
+          "自動削除",
+          "有効期限",
+          "セッション管理",
+          "コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DynamoDB プロビジョンドスループット",
+    "reading": "だいなもでぃーびーぷろびじょんどすとるーぷっと",
+    "aliases": [
+      "Provisioned Throughput",
+      "プロビジョンドキャパシティ"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon DynamoDBで事前に読み取りキャパシティユニット（RCU）と書き込みキャパシティユニット（WCU）を指定して確保するキャパシティモード。予測可能なトラフィックパターンのワークロードでコストを抑えるために使用する。",
+        "domain": "aws",
+        "keywords": [
+          "DynamoDB",
+          "RCU",
+          "WCU",
+          "キャパシティ",
+          "コスト最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Aurora レプリカ",
+    "reading": "おーろられぷりか",
+    "aliases": [
+      "Aurora Replica",
+      "Auroraレプリカ",
+      "Aurora Read Replica"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Aurora クラスター内でプライマリインスタンスと同一ストレージを共有する読み取り専用レプリカ。最大15個作成でき、プライマリ障害時のフェイルオーバーターゲットとしても機能する。レプリカへの読み取り分散でパフォーマンスを向上させる。",
+        "domain": "aws",
+        "keywords": [
+          "Aurora",
+          "読み取りスケール",
+          "フェイルオーバー",
+          "高可用性",
+          "共有ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RDS スナップショット",
+    "reading": "あーるでぃーえすすなっぷしょっと",
+    "aliases": [
+      "RDS Snapshot",
+      "DBスナップショット"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon RDSデータベースインスタンスの特定時点のバックアップ。手動スナップショットはユーザーが作成・管理し、自動スナップショットは保持期間（最大35日）内で任意の時点に復元（PITR）できる。スナップショットからリージョン間コピーも可能。",
+        "domain": "aws",
+        "keywords": [
+          "RDS",
+          "バックアップ",
+          "PITR",
+          "復元",
+          "ディザスタリカバリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon FSx for Windows",
+    "reading": "あまぞんえふえすえっくすふぉーうぃんどうず",
+    "aliases": [
+      "FSx for Windows File Server",
+      "FSx Windows"
+    ],
+    "senses": [
+      {
+        "definition": "Windows Server上のSMBプロトコルに対応したフルマネージドWindowsファイルシステム。Active Directory統合・DFS・VSS（Volume Shadow Copy Service）をサポートし、Windowsワークロードのリフト&シフト移行に最適。",
+        "domain": "aws",
+        "keywords": [
+          "Windows",
+          "SMB",
+          "ファイルシステム",
+          "Active Directory",
+          "フルマネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon FSx for Lustre",
+    "reading": "あまぞんえふえすえっくすふぉーらすたー",
+    "aliases": [
+      "FSx for Lustre",
+      "Lustre"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習・HPC・メディア処理・ゲノム解析向けのフルマネージド高性能並列ファイルシステム。サブミリ秒レイテンシーと数百GB/sのスループットを提供し、S3と直接統合してデータを透過的に利用できる。",
+        "domain": "aws",
+        "keywords": [
+          "HPC",
+          "機械学習",
+          "並列ファイルシステム",
+          "高スループット",
+          "S3統合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VPCフローログ分析",
+    "reading": "ぶいぴーしーふろーろぐぶんせき",
+    "aliases": [
+      "VPC Flow Logs Analysis",
+      "フローログ分析"
+    ],
+    "senses": [
+      {
+        "definition": "VPCフローログをAthena・CloudWatch Logs Insights・Amazon OpenSearch Serviceで分析するプロセス。異常なIPアドレスからの接続・ポートスキャン・帯域異常などのセキュリティインシデントを検出し、ネットワーク最適化にも活用する。",
+        "domain": "aws",
+        "keywords": [
+          "VPCフローログ",
+          "セキュリティ",
+          "Athena",
+          "異常検知",
+          "ネットワーク監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFront オリジングループ",
+    "reading": "くらうどふろんとおりじんぐるーぷ",
+    "aliases": [
+      "Origin Group",
+      "CloudFront Origin Group"
+    ],
+    "senses": [
+      {
+        "definition": "CloudFrontで複数のオリジンをグループ化してフェイルオーバーを構成する機能。プライマリオリジンが特定のHTTPステータスコードを返した場合に自動的にセカンダリオリジンにフェイルオーバーし、高可用性のコンテンツ配信を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFront",
+          "フェイルオーバー",
+          "高可用性",
+          "オリジン",
+          "CDN"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Route 53トラフィックポリシー",
+    "reading": "るーとごじゅうさんとらふぃっくぽりしー",
+    "aliases": [
+      "Route 53 Traffic Policy",
+      "トラフィックポリシー"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Route 53の高度なルーティング設定をビジュアルエディタや設定ファイルで定義するポリシー。レイテンシーベース・地理的・加重・フェイルオーバールーティングを組み合わせた複雑なトラフィック管理シナリオを再利用可能な形で構成できる。",
+        "domain": "aws",
+        "keywords": [
+          "Route53",
+          "DNS",
+          "トラフィック管理",
+          "ルーティング",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Wavelength",
+    "reading": "えーだぶりゅーえすうぇーぶれんぐす",
+    "aliases": [
+      "Wavelength"
+    ],
+    "senses": [
+      {
+        "definition": "5G通信事業者のネットワーク内にAWSのコンピュート・ストレージを組み込むサービス。モバイルデバイスや5Gエンドポイントからのトラフィックがキャリアネットワーク外に出ることなくAWSサービスにアクセスでき、1桁ミリ秒の超低レイテンシーを実現する。",
+        "domain": "aws",
+        "keywords": [
+          "5G",
+          "超低レイテンシー",
+          "エッジコンピューティング",
+          "モバイル",
+          "キャリア"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Compute Optimizer",
+    "reading": "えーだぶりゅーえすこんぴゅーとおぷてぃまいざー",
+    "aliases": [
+      "Compute Optimizer"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習を使ってEC2・Lambda・ECS・EBSの使用状況を分析し、最適なリソース構成を推奨するサービス。過剰プロビジョニングや過少プロビジョニングを検出し、パフォーマンスとコストのバランスが取れた推奨インスタンスタイプを提示する。",
+        "domain": "aws",
+        "keywords": [
+          "コスト最適化",
+          "EC2",
+          "機械学習",
+          "右サイジング",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Inspector",
+    "reading": "あまぞんいんすぺくたー",
+    "aliases": [
+      "Inspector"
+    ],
+    "senses": [
+      {
+        "definition": "EC2インスタンス・コンテナイメージ・Lambda関数のソフトウェア脆弱性やネットワーク露出を自動的に継続スキャンするセキュリティサービス。CVEデータベースに基づいてリスクスコアを算出し、優先度の高い脆弱性を特定してセキュリティ態勢を改善する。",
+        "domain": "aws",
+        "keywords": [
+          "脆弱性スキャン",
+          "セキュリティ",
+          "CVE",
+          "EC2",
+          "コンテナ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS CloudShell",
+    "reading": "えーだぶりゅーえすくらうどしぇる",
+    "aliases": [
+      "CloudShell"
+    ],
+    "senses": [
+      {
+        "definition": "AWSマネジメントコンソールから直接起動できるブラウザベースのシェル環境。AWS CLIやよく使うツールがプリインストールされており、認証情報の設定なしに現在のコンソールセッションの権限でAWSコマンドを実行できる。",
+        "domain": "aws",
+        "keywords": [
+          "CLI",
+          "ブラウザ",
+          "シェル",
+          "開発環境",
+          "AWS CLI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon EC2 Savings Plans",
+    "reading": "あまぞんいーしーつーせいびんぐすぷらんず",
+    "aliases": [
+      "EC2 Savings Plans",
+      "セイビングスプラン"
+    ],
+    "senses": [
+      {
+        "definition": "1年または3年間の一定コンピュート使用量をコミットする代わりに最大66%割引を受けられるAWSの柔軟な料金モデル。リザーブドインスタンスより柔軟でインスタンスファミリー・リージョン・OSを問わず適用されるCompute Savings Plansもある。",
+        "domain": "aws",
+        "keywords": [
+          "コスト最適化",
+          "コミットメント",
+          "割引",
+          "EC2",
+          "Lambda"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Auroraクローン",
+    "reading": "おーろらくろーん",
+    "aliases": [
+      "Aurora Clone",
+      "Aurora Fast Clone",
+      "クローンデータベース"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Auroraのデータベースクラスターを実際のデータをコピーせずに即座に複製するコピーオンライト方式の機能。本番データのコピーを数秒で作成でき、開発・テスト・データ分析環境の迅速な構築に活用できる。",
+        "domain": "aws",
+        "keywords": [
+          "Aurora",
+          "クローン",
+          "コピーオンライト",
+          "開発環境",
+          "高速"
+        ]
+      }
+    ]
+  }
+]

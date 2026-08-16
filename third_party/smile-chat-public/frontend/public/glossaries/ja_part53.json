@@ -1,0 +1,1747 @@
+[
+  {
+    "term": "Pod",
+    "reading": "ぽっど",
+    "aliases": [
+      "ポッド"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetesにおけるデプロイの最小単位。1つ以上のコンテナを同じネットワーク名前空間とストレージを共有してまとめたグループであり、スケジューリングの基本単位となる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "コンテナ",
+          "スケジューリング",
+          "ネットワーク",
+          "ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ReplicaSet",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "指定した数のPodレプリカが常に稼働していることを保証するKubernetesリソース。セレクタで管理対象Podを特定し、不足・過剰があれば自動的にPodを作成・削除する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "レプリカ",
+          "可用性",
+          "セレクタ",
+          "自動修復"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Deployment",
+    "reading": "でぷろいめんと",
+    "aliases": [
+      "デプロイメント"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesでReplicaSetを管理し、ローリングアップデートやロールバックを宣言的に制御するリソース。アプリケーションのバージョン管理とゼロダウンタイムデプロイを実現する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ローリングアップデート",
+          "ロールバック",
+          "宣言的",
+          "バージョン管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CronJob",
+    "aliases": [
+      "CronJob(K8s)"
+    ],
+    "senses": [
+      {
+        "definition": "cron形式のスケジュールに従ってJobを定期実行するKubernetesリソース。バッチ処理やレポート生成など定時実行が必要なタスクを宣言的に定義・管理できる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジュール",
+          "バッチ",
+          "定期実行",
+          "ジョブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Service",
+    "aliases": [
+      "Service(K8s)"
+    ],
+    "senses": [
+      {
+        "definition": "複数のPodへの安定したネットワークアクセスを提供するKubernetesリソース。PodのIPアドレスが変動してもServiceのDNS名と仮想IPで透過的にアクセスでき、負荷分散も行う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ネットワーク",
+          "DNS",
+          "負荷分散",
+          "仮想IP"
+        ]
+      },
+      {
+        "definition": "ControllerやRepositoryの間でユースケースや業務処理の流れをまとめるアプリケーション層の部品。入力検証の後段で処理を組み立て、トランザクション境界や外部連携を担うことが多い。",
+        "domain": "architecture",
+        "keywords": [
+          "Spring",
+          "Service層",
+          "業務ロジック",
+          "Controller",
+          "ユースケース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ClusterIP",
+    "reading": "くらすたーあいぴー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "KubernetesのServiceタイプの一つで、クラスター内部からのみアクセス可能な仮想IPを割り当てるデフォルトタイプ。クラスター外部には公開されず、内部サービス間通信に使用される。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "service",
+          "内部通信",
+          "仮想IP",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NodePort",
+    "reading": "のーどぽーと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "KubernetesのServiceタイプの一つで、クラスター内の全ノードの特定ポートにServiceを公開する方式。外部から<NodeIP>:<NodePort>でアクセス可能になるが、本番では通常LoadBalancerを使う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "service",
+          "外部公開",
+          "ポート",
+          "ノード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LoadBalancer",
+    "aliases": [
+      "LoadBalancer(K8s)"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドプロバイダーの外部ロードバランサーをプロビジョニングしてServiceを公開するKubernetesのServiceタイプ。クラウド環境でアプリケーションを外部に安全に公開する際に使用される。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "service",
+          "外部公開",
+          "クラウド",
+          "ロードバランサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gateway API",
+    "reading": "げーとうぇいえーぴーあい",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Ingressを発展させたKubernetesのネットワーキングAPIセット。Gateway、HTTPRoute、TCPRouteなどのリソースで高度なトラフィック管理を表現でき、役割分担による管理が可能。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ネットワーク",
+          "ルーティング",
+          "ingress",
+          "トラフィック管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Secret",
+    "reading": "しーくれっと",
+    "aliases": [
+      "Secret(K8s)"
+    ],
+    "senses": [
+      {
+        "definition": "パスワード、トークン、TLS証明書などの機密データをBase64エンコードして保存するKubernetesリソース。Podに環境変数やボリュームとして注入でき、ConfigMapとは異なり暗号化保存が推奨される。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "機密情報",
+          "セキュリティ",
+          "環境変数",
+          "暗号化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PersistentVolume",
+    "reading": "ぱーしすてんとぼりゅーむ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "クラスター管理者がプロビジョニングしたストレージリソースを表すKubernetesオブジェクト。NFS、クラウドディスク、ローカルストレージなどをPodから切り離した形で管理し、ライフサイクルをPodに依存させない。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ストレージ",
+          "永続化",
+          "プロビジョニング",
+          "ボリューム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PersistentVolumeClaim",
+    "reading": "ぱーしすてんとぼりゅーむくれーむ",
+    "aliases": [
+      "PVC"
+    ],
+    "senses": [
+      {
+        "definition": "PodがPersistentVolumeに対してストレージを要求するためのKubernetesリソース。必要なストレージ容量やアクセスモードを指定し、条件を満たすPVに動的または静的にバインドされる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ストレージ",
+          "PV",
+          "動的プロビジョニング",
+          "アクセスモード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "StorageClass",
+    "reading": "すとれーじくらす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "PersistentVolumeを動的にプロビジョニングするためのKubernetesリソース。ストレージの種類（SSD/HDD）、プロビジョナー、再利用ポリシーなどを定義し、PVCから参照することで自動的にPVを作成する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "動的プロビジョニング",
+          "ストレージ",
+          "PV",
+          "PVC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Selector",
+    "reading": "せれくたー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kubernetesでラベルによってリソースのグループをフィルタリングするためのメカニズム。ServiceがルーティングするPodの集合や、ReplicaSetが管理するPodを特定する際に使用される。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ラベル",
+          "フィルタ",
+          "Pod",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Annotation",
+    "reading": "あのてーしょん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kubernetesリソースに任意のメタデータを付与するキーと値のペア。ラベルと異なりセレクタには使えないが、ツールや外部システムが読み取るための情報（デプロイ担当者、ビルドバージョンなど）を保存するのに使う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "メタデータ",
+          "ラベル",
+          "リソース",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Taint",
+    "reading": "ていんと",
+    "aliases": [
+      "テイント"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetesのノードに設定するマーカーで、特定のTolerationを持たないPodのスケジューリングを拒否・回避させる仕組み。専用ノードや特殊ハードウェアを持つノードへの意図しないPod配置を防ぐ。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "ノード",
+          "Toleration",
+          "制約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Toleration",
+    "reading": "とれれーしょん",
+    "aliases": [
+      "トレレーション"
+    ],
+    "senses": [
+      {
+        "definition": "PodがノードのTaintを許容することを宣言するKubernetesの設定。対応するTaintがあるノードにもスケジューリングを許可することで、専用ノードへのPod配置を制御する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "Taint",
+          "ノード",
+          "制約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pod Affinity",
+    "reading": "ぽっどあふぃにてぃ",
+    "aliases": [
+      "ポッドアフィニティ"
+    ],
+    "senses": [
+      {
+        "definition": "Podをどのノードにスケジュールするかをラベルが一致する他のPodの存在に基づいて制御するKubernetes機能。同じノードへの配置（アフィニティ）や異なるノードへの分散（アンチアフィニティ）を指定できる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "ノード",
+          "アフィニティ",
+          "配置"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "KEDA",
+    "reading": "けだ",
+    "aliases": [
+      "Kubernetes Event-driven Autoscaling"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetesにおいてイベントドリブンなオートスケーリングを実現するOSSコンポーネント。メッセージキューの深さ、HTTPリクエスト数、外部メトリクスなど様々なイベントソースに基づいてPodスケールを制御する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "オートスケーリング",
+          "イベント",
+          "スケール",
+          "OSS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Operator",
+    "reading": "おぺれーたー",
+    "aliases": [
+      "Operator(K8s)",
+      "Kubernetesオペレーター"
+    ],
+    "senses": [
+      {
+        "definition": "カスタムリソースとカスタムコントローラーを組み合わせ、アプリケーションの運用ノウハウをコードで表現するKubernetesのパターン。データベースのスケールアウトやバックアップなど複雑な運用を自動化する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "CRD",
+          "カスタムコントローラー",
+          "自動化",
+          "運用"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CRD",
+    "reading": "しーあーるでぃー",
+    "aliases": [
+      "CustomResourceDefinition",
+      "カスタムリソース定義"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetes APIを拡張してユーザー定義のリソース型を追加するためのリソース。CRDを登録することで独自のオブジェクトをKubernetes APIで管理でき、Operatorパターンの基盤となる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "API拡張",
+          "カスタムリソース",
+          "Operator",
+          "スキーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Custom Controller",
+    "reading": "かすたむこんとろーらー",
+    "aliases": [
+      "カスタムコントローラー"
+    ],
+    "senses": [
+      {
+        "definition": "独自のKubernetesリソース（CRD）の状態を監視し、宣言的に定義された望ましい状態と現在の状態の差分を解消するコントローラーループを実装したコンポーネント。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "CRD",
+          "調整ループ",
+          "宣言的",
+          "Operator"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Admission Webhook",
+    "reading": "あどみっしょんうぇぶふっく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "KubernetesのAPI Serverがリソースを永続化する前後にカスタム検証・変換処理を注入できる拡張ポイント。Mutating Admission WebhookとValidating Admission Webhookの2種類があり、ポリシー適用に使われる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "拡張",
+          "ポリシー",
+          "APIサーバー",
+          "検証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Network Policy",
+    "reading": "ねっとわーくぽりしー",
+    "aliases": [
+      "ネットワークポリシー"
+    ],
+    "senses": [
+      {
+        "definition": "Pod間の通信を制限するKubernetesリソース。ラベルセレクタとポートを使ってIngress/Egressトラフィックを許可または拒否する。デフォルトは全通信許可のため、最小権限原則には明示的な設定が必要。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "セキュリティ",
+          "ネットワーク",
+          "Pod",
+          "通信制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Istio",
+    "reading": "いすてぃお",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Envoyをサイドカープロキシとして使用するオープンソースのService Mesh実装。トラフィック管理、セキュリティ（mTLS）、テレメトリー収集をKubernetesクラスター上のマイクロサービスに提供する。",
+        "domain": "container",
+        "keywords": [
+          "service mesh",
+          "envoy",
+          "mTLS",
+          "トラフィック管理",
+          "可観測性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Envoy",
+    "reading": "えんぼい",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Lyft社が開発したL7プロキシで、Service Meshのデータプレーンとして広く採用されているOSS。動的な設定変更（xDS API）、高度なロードバランシング、可観測性に対応し、IstioやLinkerdのサイドカーとしても使われる。",
+        "domain": "container",
+        "keywords": [
+          "proxy",
+          "service mesh",
+          "l7",
+          "ロードバランシング",
+          "xDS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Linkerd",
+    "reading": "りんかーど",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "軽量さとシンプルさを重視したKubernetes向けオープンソースService Mesh。Rustで書かれた専用マイクロプロキシを使い、IstioよりもリソースフットプリントとOperational complexityが小さい。",
+        "domain": "container",
+        "keywords": [
+          "service mesh",
+          "kubernetes",
+          "proxy",
+          "mTLS",
+          "軽量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Startup Probe",
+    "reading": "すたーとあっぷぷろーぶ",
+    "aliases": [
+      "スタートアッププローブ"
+    ],
+    "senses": [
+      {
+        "definition": "起動に時間がかかるコンテナの初期化完了を確認するKubernetesのヘルスチェック機構。Startup Probeが成功するまでLiveness/Readiness Probeは実行されず、起動タイムアウトによる誤再起動を防ぐ。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ヘルスチェック",
+          "起動",
+          "Liveness",
+          "Readiness"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Container Runtime",
+    "reading": "こんてならんたいむ",
+    "aliases": [
+      "コンテナランタイム"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナイメージを実際のプロセスとして起動・管理するソフトウェア。KubernetesはCRI（Container Runtime Interface）を通じてランタイムと通信し、containerd、CRI-Oなどが代表的な実装。",
+        "domain": "container",
+        "keywords": [
+          "コンテナ",
+          "CRI",
+          "containerd",
+          "実行環境",
+          "kubernetes"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "containerd",
+    "reading": "こんてなでぃ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DockerやKubernetesが採用するCNCFのコンテナランタイム。イメージの取得・保存・コンテナ実行をシンプルなAPIで提供し、元はDockerのデーモンから切り出されてスタンドアロンプロジェクトとなった。",
+        "domain": "container",
+        "keywords": [
+          "コンテナランタイム",
+          "CRI",
+          "kubernetes",
+          "CNCF",
+          "docker"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CRI-O",
+    "reading": "しーあーるあいおー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kubernetes専用に設計されたCRI（Container Runtime Interface）準拠の軽量コンテナランタイム。OCI互換イメージを実行でき、Red Hat/OpenShiftで採用されている。containerdと同様のCRIを実装する。",
+        "domain": "container",
+        "keywords": [
+          "コンテナランタイム",
+          "CRI",
+          "kubernetes",
+          "OCI",
+          "軽量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dockerfile",
+    "reading": "どっかーふぁいる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Dockerコンテナイメージをビルドするための命令を記述したテキストファイル。FROM、RUN、COPY、CMDなどのディレクティブを使い、ベースイメージからアプリケーション実行環境を層状に構築する。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "コンテナ",
+          "イメージ",
+          "ビルド",
+          "FROM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "multi-stage build",
+    "reading": "まるちすてーじびるど",
+    "aliases": [
+      "マルチステージビルド"
+    ],
+    "senses": [
+      {
+        "definition": "1つのDockerfileに複数のFROMステートメントを使い、ビルド環境と実行環境を分離するDockerのビルド手法。コンパイラや開発ツールを最終イメージに含めず、イメージサイズを大幅に削減できる。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "Dockerfile",
+          "イメージサイズ",
+          "ビルド",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Docker Compose",
+    "reading": "どっかーこんぽーず",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数のコンテナから構成されるアプリケーションをYAMLファイル（docker-compose.yml）で定義し、一括管理するツール。ローカル開発環境やCI環境でマイクロサービスの依存関係を手軽に再現するのに使われる。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "コンテナ",
+          "ローカル開発",
+          "YAML",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Registry",
+    "reading": "れじすとり",
+    "aliases": [
+      "レジストリ"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナイメージを保存・配布するためのリポジトリサービス。Docker Hub、Amazon ECR、Google Artifact Registryなどが代表例で、イメージのバージョン管理とアクセス制御を提供する。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "コンテナ",
+          "イメージ",
+          "配布",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Image Tag",
+    "reading": "いめーじたぐ",
+    "aliases": [
+      "イメージタグ"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナイメージの特定バージョンを識別するラベル。`image:tag`の形式で参照し、`latest`タグは最新ビルドを示すが内容が変わるため、本番環境では具体的なバージョンタグかダイジェストを使うべきとされる。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "コンテナ",
+          "バージョン",
+          "イメージ",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Image Digest",
+    "reading": "いめーじだいじぇすと",
+    "aliases": [
+      "イメージダイジェスト"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナイメージの内容から算出したSHA256ハッシュ値による不変の識別子。タグと異なりダイジェストは内容が変わると変化するため、再現性が重要な本番デプロイでイメージを正確に固定できる。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "コンテナ",
+          "SHA256",
+          "不変",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Layer Cache",
+    "reading": "れいやーきゃっしゅ",
+    "aliases": [
+      "レイヤーキャッシュ"
+    ],
+    "senses": [
+      {
+        "definition": "Dockerイメージビルド時に変更のない中間レイヤーを再利用する仕組み。Dockerfileの命令順を工夫して変更頻度の低いレイヤーを上位に置くことでキャッシュヒット率を高め、ビルド時間を短縮できる。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "Dockerfile",
+          "ビルド最適化",
+          "キャッシュ",
+          "イメージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "distroless",
+    "reading": "でぃすとろーれす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "シェル・パッケージマネージャー・OSユーティリティを含まず、アプリケーションと最低限のランタイムのみを持つコンテナイメージの種類。攻撃面を最小化しイメージサイズを削減できるが、デバッグには追加工夫が必要。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "セキュリティ",
+          "イメージ",
+          "軽量",
+          "ベースイメージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "alpine",
+    "reading": "あるぱいん",
+    "aliases": [
+      "Alpine Linux"
+    ],
+    "senses": [
+      {
+        "definition": "musl libcとBusyBoxをベースにした非常に小さなLinuxディストリビューションで、コンテナのベースイメージとして広く使われる。数MBのサイズでセキュリティリスクを抑えつつ、apkパッケージマネージャーを使ったパッケージ追加が可能。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "ベースイメージ",
+          "軽量",
+          "linux",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "scratch",
+    "reading": "すくらっち",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Dockerの空のベースイメージ。ファイルシステムが完全に空で、静的バイナリやGoの実行ファイルを直接配置することで最小サイズのコンテナイメージを作成できる。OSライブラリへの依存がないアプリケーション向け。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "ベースイメージ",
+          "最小化",
+          "静的バイナリ",
+          "Go"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "etcd",
+    "reading": "えてぃーしーでぃー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kubernetesのクラスター状態（Pod定義、Secret、ConfigMapなど）をすべて保存する分散キーバリューストア。Raftアルゴリズムで強整合性を保証し、etcdの可用性がクラスター全体の可用性に直結する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "分散ストレージ",
+          "Control Plane",
+          "Raft",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kubelet",
+    "reading": "きゅーぶれっと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "各ノードで稼働するKubernetesのノードエージェント。API Serverからスケジュールされたマニフェストを受け取り、コンテナランタイムを通じてPodを起動・監視・終了する。ノードの状態をAPI Serverに定期的に報告する役割も持つ。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ノード",
+          "エージェント",
+          "Pod",
+          "コンテナランタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kube-proxy",
+    "reading": "きゅーぶぷろきしー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "各ノードで稼働し、KubernetesのServiceに対するネットワークルール（iptables/ipvsルール）を管理するコンポーネント。ServiceのClusterIPへのトラフィックを適切なPodにルーティングする機能を担う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ネットワーク",
+          "Service",
+          "iptables",
+          "ノード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kube-scheduler",
+    "reading": "きゅーぶすけじゅーらー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "新たに作成されたPodをどのノードで実行するかを決定するKubernetesのControl Planeコンポーネント。ノードのリソース空き状況、Affinity/Anti-Affinity、Taint/Tolerationなどを考慮してスケジューリングを行う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "Control Plane",
+          "ノード",
+          "Pod"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kube-apiserver",
+    "reading": "きゅーぶえーぴーあいさーばー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kubernetesクラスターの全操作のエントリポイントとなるRESTful APIサーバー。kubectlや他のコンポーネントはすべてAPIサーバーを通じてetcdとやり取りし、認証・認可・Admission制御も担う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "APIサーバー",
+          "Control Plane",
+          "REST",
+          "認証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Control Plane",
+    "reading": "こんとろーるぷれーん",
+    "aliases": [
+      "コントロールプレーン"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetesクラスターの管理を担うコンポーネント群の総称。kube-apiserver、etcd、kube-scheduler、kube-controller-managerで構成され、クラスターの望ましい状態を維持する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "管理",
+          "kube-apiserver",
+          "etcd",
+          "スケジューラー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Worker Node",
+    "reading": "わーかーのーど",
+    "aliases": [
+      "ワーカーノード"
+    ],
+    "senses": [
+      {
+        "definition": "実際のアプリケーションコンテナ（Pod）を実行するKubernetesのノード。kubelet、kube-proxy、コンテナランタイムが稼働し、Control Planeからの指示に従ってワークロードを処理する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ノード",
+          "Pod",
+          "kubelet",
+          "実行環境"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kubectl",
+    "reading": "きゅーぶしーてぃーえる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kubernetesクラスターを操作するためのCLIツール。リソースの作成・取得・更新・削除、ログ確認、Podへのexecなど日常的なクラスター管理操作を提供する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "CLI",
+          "管理",
+          "リソース",
+          "操作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kubeconfig",
+    "reading": "きゅーぶこんふぃぐ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "kubectlがどのKubernetesクラスターに接続するかを定義する設定ファイル（通常~/.kube/config）。クラスターのAPIサーバーアドレス、認証情報、コンテキスト（クラスター+ユーザー+名前空間の組み合わせ）を管理する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "kubectl",
+          "設定",
+          "認証",
+          "クラスター"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CNI",
+    "reading": "しーえぬあい",
+    "aliases": [
+      "Container Network Interface"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナのネットワーク設定を行うプラグインのインターフェース仕様。Kubernetesはこの仕様に準拠したプラグイン（Calico、Flannel、Weave等）を使ってPodネットワークを実装し、クラスター間通信を実現する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ネットワーク",
+          "プラグイン",
+          "Pod",
+          "インターフェース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Flannel",
+    "reading": "ふらねる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "CoreOS（現Red Hat）が開発したシンプルなKubernetes向けCNIプラグイン。オーバーレイネットワークを使ってノード間でPodのルーティングを実現し、設定が簡単なためシンプルなクラスター構成に向く。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "CNI",
+          "ネットワーク",
+          "オーバーレイ",
+          "Pod"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Calico",
+    "reading": "かりこ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "BGPを使ってネイティブIPルーティングを実現するKubernetes向けの高性能CNIプラグイン。Network Policyの強力な実装でも知られ、オーバーレイ不要で高速なPod間通信と細かいセキュリティ制御を提供する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "CNI",
+          "BGP",
+          "Network Policy",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Volume Mount",
+    "reading": "ぼりゅーむまうんと",
+    "aliases": [
+      "ボリュームマウント"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesのPodにボリュームをファイルシステムの特定パスとして接続する設定。ConfigMap、Secret、PVC、emptyDirなど様々なボリュームタイプをコンテナのディレクトリにマウントできる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ストレージ",
+          "Pod",
+          "ConfigMap",
+          "PVC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "emptyDir",
+    "reading": "えんぷてぃでぃあー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "同じPod内の複数コンテナがデータを共有するための一時ボリューム。Podが起動する際に空で作成され、Pod削除時にデータは消えるため永続化には適さないが、サイドカー間のデータ共有に使われる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ボリューム",
+          "一時ストレージ",
+          "Pod",
+          "共有"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSI Driver",
+    "reading": "しーえすあいどらいばー",
+    "aliases": [
+      "Container Storage Interface Driver"
+    ],
+    "senses": [
+      {
+        "definition": "ストレージシステムをKubernetesに接続するためのContainer Storage Interface仕様準拠のプラグイン。クラウドプロバイダーやストレージベンダーが独自のCSIドライバーを実装することでPVの動的プロビジョニングを実現する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "ストレージ",
+          "PV",
+          "CSI",
+          "プラグイン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Resource Quota",
+    "reading": "りそーすくおーた",
+    "aliases": [
+      "リソースクォータ"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetesの名前空間ごとにCPU、メモリ、オブジェクト数などの総使用量に上限を設けるリソース。複数チームが同一クラスターを共有するマルチテナント環境での公平なリソース分配に使われる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "マルチテナント",
+          "名前空間",
+          "CPU",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Limit Range",
+    "reading": "りみっとれんじ",
+    "aliases": [
+      "リミットレンジ"
+    ],
+    "senses": [
+      {
+        "definition": "名前空間内のコンテナやPodに対するCPU・メモリのリクエスト/リミットのデフォルト値と許容範囲を設定するKubernetesリソース。指定なしのPodに自動でリソース設定を付与し、ノードの過負荷を防ぐ。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "リソース制限",
+          "名前空間",
+          "CPU",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Priority Class",
+    "reading": "ぷらいおりてぃくらす",
+    "aliases": [
+      "プライオリティクラス"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesでPodの優先度を定義するリソース。ノードのリソースが不足した場合、優先度が低いPodが退去（プリエンプション）させられ、優先度が高いPodがスケジューリングされるよう制御する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "優先度",
+          "スケジューリング",
+          "プリエンプション",
+          "リソース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pod Security Admission",
+    "reading": "ぽっどせきゅりてぃあどみっしょん",
+    "aliases": [
+      "PSA"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesのビルトインAdmission ControllerでPodのセキュリティ設定をポリシーに基づき検証する機能。Privileged・Baseline・Restrictedの3つのプロファイルを名前空間単位で適用し、特権コンテナなどを制限する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "セキュリティ",
+          "Admission",
+          "ポリシー",
+          "名前空間"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cluster Role",
+    "reading": "くらすたーろーる",
+    "aliases": [
+      "クラスターロール"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesのRBACでクラスター全体に適用される権限セットを定義するリソース。名前空間に限定されないRoleと異なり、クラスター全体のリソース（Node、PV等）やすべての名前空間のリソースに対する権限を定義できる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "RBAC",
+          "権限",
+          "セキュリティ",
+          "認可"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Role Binding",
+    "reading": "ろーるばいんでぃんぐ",
+    "aliases": [
+      "ロールバインディング"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesのRBACでRoleまたはClusterRoleをユーザー・グループ・ServiceAccountに紐付けるリソース。RoleBindingは名前空間内、ClusterRoleBindingはクラスター全体に権限を付与する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "RBAC",
+          "権限",
+          "ServiceAccount",
+          "認可"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Image Pull Secret",
+    "reading": "いめーじぷるしーくれっと",
+    "aliases": [
+      "イメージプルシークレット"
+    ],
+    "senses": [
+      {
+        "definition": "プライベートコンテナレジストリからイメージをプルするための認証情報を保持するKubernetesのSecret。PodのspecやServiceAccountに設定することで、非公開レジストリのイメージをノードが取得できるようにする。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "レジストリ",
+          "認証",
+          "Secret",
+          "コンテナイメージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pod Phase",
+    "reading": "ぽっどふぇーず",
+    "aliases": [
+      "Podフェーズ"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesにおけるPodのライフサイクルの現在の状態を表す高レベルな要約。Pending、Running、Succeeded、Failed、Unknownの5つの状態があり、kubectl get podsのSTATUSで確認できる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "Pod",
+          "ライフサイクル",
+          "状態",
+          "監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Termination Grace Period",
+    "reading": "たーみねーしょんぐれーすぴりおど",
+    "aliases": [
+      "終了猶予期間"
+    ],
+    "senses": [
+      {
+        "definition": "Podが削除要求を受けてからコンテナに強制終了（SIGKILL）が送られるまでの猶予時間（デフォルト30秒）。この間にSIGTERMを受けたアプリケーションはコネクションを安全にクローズし、グレースフルシャットダウンを完了できる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "Pod",
+          "グレースフルシャットダウン",
+          "SIGTERM",
+          "ライフサイクル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Preemption",
+    "reading": "ぷりえんぷしょん",
+    "aliases": [
+      "プリエンプション"
+    ],
+    "senses": [
+      {
+        "definition": "ノードのリソースが不足している場合に、優先度の低いPodを退去させることで高優先度のPodをスケジューリングできるようにするKubernetesの機能。Priority Classと組み合わせて使われる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "優先度",
+          "リソース",
+          "Priority Class"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dry Run",
+    "reading": "どらいらん",
+    "aliases": [
+      "ドライラン"
+    ],
+    "senses": [
+      {
+        "definition": "実際にリソースを変更せずにkubectlコマンドやAPIリクエストの結果をシミュレートする機能。`--dry-run=client`または`--dry-run=server`フラグで使い、マニフェストの検証やAdmission Webhookのテストに活用する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "kubectl",
+          "検証",
+          "シミュレーション",
+          "マニフェスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Manifest",
+    "reading": "まにふぇすと",
+    "aliases": [
+      "マニフェスト",
+      "Kubernetesマニフェスト"
+    ],
+    "senses": [
+      {
+        "definition": "Kubernetesリソースの望ましい状態をYAMLまたはJSONで記述した設定ファイル。apiVersion、kind、metadata、specの4つのフィールドを基本構造として持ち、GitOpsではこれをバージョン管理する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "YAML",
+          "宣言的",
+          "設定",
+          "GitOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Container Layer",
+    "reading": "こんてなれいやー",
+    "aliases": [
+      "コンテナレイヤー"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナイメージを構成するUnion Filesystemの各層。Dockerfileの各命令が1つのレイヤーを作り、書き込み可能なコンテナレイヤーが最上位に追加される。レイヤーは共有・再利用されストレージ効率を高める。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "Union Filesystem",
+          "イメージ",
+          "Dockerfile",
+          "レイヤーキャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Base Image",
+    "reading": "べーすいめーじ",
+    "aliases": [
+      "ベースイメージ"
+    ],
+    "senses": [
+      {
+        "definition": "Dockerfileの`FROM`命令で指定する、コンテナイメージのビルドの出発点となるイメージ。OSの基盤環境（ubuntu、alpine等）やランタイム（node、python等）を含む公式イメージが利用される。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "Dockerfile",
+          "FROM",
+          "alpine",
+          "イメージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "BuildKit",
+    "reading": "びるどきっと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Docker社が開発したDockerイメージのビルドエンジン。並列ビルド、キャッシュマウント、マルチプラットフォームビルド、シークレットマウントなど、従来のdocker buildを大幅に高速化・強化した機能を持つ。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "ビルド",
+          "並列",
+          "キャッシュ",
+          "マルチプラットフォーム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Kaniko",
+    "reading": "かにこ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Dockerデーモンなしにコンテナ内でDockerfileからイメージをビルドできるツール。Kubernetesクラスター上でDockerデーモンなしにイメージをビルドしてレジストリにプッシュするCI/CDパイプラインで使われる。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "kubernetes",
+          "CI/CD",
+          "ビルド",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cloud Native Buildpacks",
+    "reading": "くらうどねいてぃぶびるどぱっくす",
+    "aliases": [
+      "Buildpacks",
+      "CNB"
+    ],
+    "senses": [
+      {
+        "definition": "Dockerfileなしにアプリケーションのソースコードから自動的にコンテナイメージを生成するOSSのビルドシステム。言語・フレームワークを自動検出してベストプラクティスに沿ったイメージを作成する。",
+        "domain": "container",
+        "keywords": [
+          "docker",
+          "コンテナ",
+          "ビルド",
+          "Dockerfile不要",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Helm Release",
+    "reading": "へるむりりーす",
+    "aliases": [
+      "Helmリリース"
+    ],
+    "senses": [
+      {
+        "definition": "Helm ChartをKubernetesクラスターにデプロイした個々のインスタンス。同じChartから異なる設定で複数のReleaseを作成でき、それぞれ独立してアップグレード・ロールバック・削除が可能。",
+        "domain": "container",
+        "keywords": [
+          "helm",
+          "デプロイ",
+          "インスタンス",
+          "バージョン",
+          "ロールバック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Helm Repository",
+    "reading": "へるむりぽじとり",
+    "aliases": [
+      "Helmリポジトリ"
+    ],
+    "senses": [
+      {
+        "definition": "Helm Chartを配布・保存するHTTPサーバーまたはOCIレジストリ。`helm repo add`でリポジトリを追加し、`helm search repo`で利用可能なChartを検索できる。Artifact Hubでパブリックリポジトリを検索できる。",
+        "domain": "container",
+        "keywords": [
+          "helm",
+          "Chart",
+          "配布",
+          "リポジトリ",
+          "パッケージ管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "values.yaml",
+    "reading": "ばりゅーずやむる",
+    "aliases": [
+      "Helmバリュー"
+    ],
+    "senses": [
+      {
+        "definition": "Helm Chartのデフォルト設定値を定義するYAMLファイル。デプロイ時に`--set`フラグや別ファイルで上書きでき、環境ごとの差分（開発/本番の違いなど）をChartのテンプレートから分離して管理する。",
+        "domain": "container",
+        "keywords": [
+          "helm",
+          "設定",
+          "YAML",
+          "テンプレート",
+          "環境差分"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Kustomization",
+    "reading": "かすたまいぜーしょん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Kustomizeが処理するリソース定義ファイル（kustomization.yaml）またはその設定の概念。bases（ベースマニフェスト）、resources、patches、generatorsなどを宣言してカスタマイズの内容を記述する。",
+        "domain": "container",
+        "keywords": [
+          "kustomize",
+          "kubernetes",
+          "マニフェスト",
+          "カスタマイズ",
+          "YAML"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Overlay",
+    "reading": "おーばーれい",
+    "aliases": [
+      "オーバーレイ"
+    ],
+    "senses": [
+      {
+        "definition": "Kustomizeにおいてベースのマニフェストに環境固有の差分を重ね合わせるレイヤー。dev/staging/productionなど環境ごとのオーバーレイディレクトリを作り、ベースに最小限の変更だけを記述できる。",
+        "domain": "container",
+        "keywords": [
+          "kustomize",
+          "kubernetes",
+          "環境差分",
+          "マニフェスト",
+          "base"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "kubectl rollout",
+    "reading": "きゅーぶしーてぃーえるろーるあうと",
+    "aliases": [
+      "kubectl rollout コマンド"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesのDeploymentやDaemonSetなどのロールアウト状態を管理するkubectlのサブコマンド。`rollout status`で進捗確認、`rollout history`で履歴表示、`rollout undo`で以前のリビジョンへのロールバックを行う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "kubectl",
+          "Deployment",
+          "ロールバック",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Metrics Server",
+    "reading": "めとりくすさーばー",
+    "aliases": [
+      "メトリクスサーバー"
+    ],
+    "senses": [
+      {
+        "definition": "KubernetesクラスターのPodとノードのリソース使用率（CPU・メモリ）をリアルタイムに収集するクラスターアドオン。HPAやVPA、`kubectl top`コマンドのメトリクスソースとして機能する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "モニタリング",
+          "HPA",
+          "CPU",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Custom Metrics",
+    "reading": "かすたむめとりくす",
+    "aliases": [
+      "カスタムメトリクス"
+    ],
+    "senses": [
+      {
+        "definition": "CPU・メモリ以外のアプリケーション固有のメトリクス（リクエスト数、キュー深さ等）をHPAのスケーリング基準として使えるようにするKubernetesの拡張機構。custom.metrics.k8s.io APIを通じてPrometheusアダプターなどと連携する。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "HPA",
+          "スケーリング",
+          "Prometheus",
+          "メトリクス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Headless Service",
+    "reading": "へっどれすさーびす",
+    "aliases": [
+      "ヘッドレスサービス"
+    ],
+    "senses": [
+      {
+        "definition": "ClusterIPを持たず、Podの個別IPをDNSレコードで直接返すKubernetesのServiceタイプ（spec.clusterIP: None）。StatefulSetで各Podに固定DNSを与えたり、サービスディスカバリーでPod一覧を取得したい場合に使う。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "DNS",
+          "StatefulSet",
+          "Service",
+          "サービスディスカバリー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Topology Spread Constraints",
+    "reading": "とぽろじすぷれっどせいやく",
+    "aliases": [
+      "トポロジー分散制約"
+    ],
+    "senses": [
+      {
+        "definition": "Podをゾーン・ノードなどのトポロジードメイン全体に均等に分散させるためのKubernetes機能。特定ゾーンへの集中を防ぎ、可用性を高める。maxSkewパラメータで許容する不均衡度を制御できる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "可用性",
+          "ゾーン",
+          "分散"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Grafana",
+    "reading": "ぐらふぁな",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Prometheusなどのデータソースからメトリクスをビジュアライズするオープンソースのダッシュボードツール。Kubernetesのリソース使用状況やアプリケーションのパフォーマンスを直感的なグラフで可視化できる。",
+        "domain": "container",
+        "keywords": [
+          "モニタリング",
+          "可視化",
+          "Prometheus",
+          "ダッシュボード",
+          "kubernetes"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Image",
+    "reading": "おーしーあいいめーじ",
+    "aliases": [
+      "OCIイメージ"
+    ],
+    "senses": [
+      {
+        "definition": "Open Container Initiative（OCI）が定める標準仕様に準拠したコンテナイメージ形式。DockerイメージもOCI仕様を満たすよう進化しており、コンテナランタイムやレジストリ間の相互運用性を保証する。",
+        "domain": "container",
+        "keywords": [
+          "OCI",
+          "コンテナ",
+          "標準仕様",
+          "イメージ",
+          "相互運用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ExternalName Service",
+    "reading": "えくすたーなるねーむさーびす",
+    "aliases": [
+      "ExternalName"
+    ],
+    "senses": [
+      {
+        "definition": "クラスター外の外部DNSホスト名へのエイリアスを提供するKubernetesのServiceタイプ。CNAMEレコードとして機能し、クラスター内のPodが外部サービスに統一したDNS名でアクセスできるようにする。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "Service",
+          "DNS",
+          "CNAME",
+          "外部サービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Inter-Pod Anti-Affinity",
+    "reading": "いんたーぽっどあんちあふぃにてぃ",
+    "aliases": [
+      "Pod間アンチアフィニティ"
+    ],
+    "senses": [
+      {
+        "definition": "特定ラベルを持つPodと同じノードまたはゾーンへのスケジューリングを避けるようKubernetesに指示する設定。同一コンポーネントのレプリカを異なるノードに分散させて可用性を高める際に使われる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "スケジューリング",
+          "可用性",
+          "Pod",
+          "分散"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pod Template",
+    "reading": "ぽっどてんぷれーと",
+    "aliases": [
+      "Podテンプレート"
+    ],
+    "senses": [
+      {
+        "definition": "DeploymentやStatefulSetなどのワークロードリソースが新しいPodを作成する際に使用するPodの設計図。spec.templateフィールドに記述され、コンテナ定義・ラベル・リソース設定などが含まれる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "Deployment",
+          "StatefulSet",
+          "Pod",
+          "仕様"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Container Lifecycle",
+    "reading": "こんてならいふさいくる",
+    "aliases": [
+      "コンテナライフサイクル"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナの起動（PostStart）から終了（PreStop）までの状態遷移とフックイベントの総称。PostStart/PreStopフックを使ってコンテナ起動後・終了前に独自の処理を実行でき、グレースフルな管理が可能になる。",
+        "domain": "container",
+        "keywords": [
+          "kubernetes",
+          "コンテナ",
+          "PostStart",
+          "PreStop",
+          "ライフサイクル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Node Exporter",
+    "reading": "のーどえくすぽーたー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "PrometheusエコシステムのエージェントでLinuxノードのCPU・メモリ・ディスク・ネットワークなどハードウェアレベルのメトリクスを収集してHTTPエンドポイントで公開するOSS。Kubernetesクラスターのノード監視に使われる。",
+        "domain": "container",
+        "keywords": [
+          "Prometheus",
+          "モニタリング",
+          "kubernetes",
+          "ノード",
+          "メトリクス"
+        ]
+      }
+    ]
+  }
+]

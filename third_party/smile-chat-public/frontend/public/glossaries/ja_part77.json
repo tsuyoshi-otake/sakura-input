@@ -1,0 +1,546 @@
+[
+  {
+    "term": "請求書送付",
+    "reading": "せいきゅうしょそうふ",
+    "aliases": [
+      "Invoice Sending",
+      "Invoice Delivery"
+    ],
+    "senses": [
+      {
+        "definition": "作成した請求書を相手へ送ること。郵送・メール・電子請求システム経由などの方法がある。送付日時・送付先・送付方法を記録し、未入金の場合の督促管理にも活用する。",
+        "domain": "operations",
+        "keywords": [
+          "送付",
+          "郵送",
+          "メール",
+          "電子請求",
+          "督促"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "入出金伝票",
+    "reading": "にゅうしゅっきんでんぴょう",
+    "aliases": [
+      "Payment Slip",
+      "Receipt Slip",
+      "Cash Voucher"
+    ],
+    "senses": [
+      {
+        "definition": "入金や支払の内容を記録するための伝票。入金伝票と出金伝票を合わせた総称。金額・日付・取引先・勘定科目などを記載し、会計処理の基礎資料となる。",
+        "domain": "operations",
+        "keywords": [
+          "入金",
+          "出金",
+          "伝票",
+          "会計",
+          "取引先"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "入金伝票作成",
+    "reading": "にゅうきんでんぴょうさくせい",
+    "aliases": [
+      "Receipt Voucher Creation",
+      "Payment Receipt Creation"
+    ],
+    "senses": [
+      {
+        "definition": "入金内容を記録するための伝票を作成すること。入金確認後に金額・日付・取引先・勘定科目を記載した入金伝票を起票し、会計システムへ登録する。",
+        "domain": "operations",
+        "keywords": [
+          "入金",
+          "伝票",
+          "起票",
+          "会計",
+          "登録"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "入出金伝票一覧",
+    "reading": "にゅうしゅっきんでんぴょういちらん",
+    "aliases": [
+      "Payment Voucher List",
+      "Cash Voucher List"
+    ],
+    "senses": [
+      {
+        "definition": "入出金伝票を一覧で確認するための画面または資料。期間・取引先・金額などで絞り込み、入出金の状況を把握・確認するために使う。",
+        "domain": "operations",
+        "keywords": [
+          "一覧",
+          "入出金",
+          "絞り込み",
+          "確認",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "相手先",
+    "reading": "あいてさき",
+    "aliases": [
+      "Counterparty",
+      "Business Partner",
+      "Trading Partner"
+    ],
+    "senses": [
+      {
+        "definition": "契約や取引の相手となる個人、法人、または組織。顧客・仕入先・委託先などを含む広い概念で、契約管理システムでは相手先マスタとして管理する。",
+        "domain": "operations",
+        "keywords": [
+          "取引先",
+          "顧客",
+          "法人",
+          "マスタ",
+          "契約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "新規相手先",
+    "reading": "しんきあいてさき",
+    "aliases": [
+      "New Counterparty",
+      "New Business Partner"
+    ],
+    "senses": [
+      {
+        "definition": "まだ登録されていない新しい相手先。新規相手先との取引開始時は、相手先情報の収集・与信確認・マスタ登録が必要になる。",
+        "domain": "operations",
+        "keywords": [
+          "新規",
+          "登録",
+          "与信",
+          "マスタ",
+          "未登録"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "相手先情報",
+    "reading": "あいてさきじょうほう",
+    "aliases": [
+      "Counterparty Information",
+      "Partner Information"
+    ],
+    "senses": [
+      {
+        "definition": "相手先に関する基本情報。社名・住所・連絡先・担当者・振込先・与信限度額などを含む。契約管理・請求管理・与信管理で参照される基礎データ。",
+        "domain": "operations",
+        "keywords": [
+          "社名",
+          "住所",
+          "連絡先",
+          "与信",
+          "マスタ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "相手先登録",
+    "reading": "あいてさきとうろく",
+    "aliases": [
+      "Counterparty Registration",
+      "Partner Registration"
+    ],
+    "senses": [
+      {
+        "definition": "相手先に関する情報を新たに登録すること。所定の申請書または相手先登録画面から情報を入力し、審査・承認を経てマスタに追加する。登録後は各種業務で相手先を参照できる。",
+        "domain": "operations",
+        "keywords": [
+          "登録",
+          "マスタ",
+          "審査",
+          "承認",
+          "入力"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "店舗",
+    "reading": "てんぽ",
+    "aliases": [
+      "Store",
+      "Branch",
+      "Location"
+    ],
+    "senses": [
+      {
+        "definition": "商品の販売やサービス提供を行う場所。本社・支社・工場などの拠点とは区別して、顧客対応の場として管理される。契約管理では店舗ごとに担当・契約・請求を紐づけることが多い。",
+        "domain": "operations",
+        "keywords": [
+          "拠点",
+          "販売",
+          "サービス",
+          "顧客対応",
+          "管理"
+        ]
+      },
+      {
+        "definition": "処理後の遷移先を決める定義。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ページ",
+          "Branch"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "新規店舗",
+    "reading": "しんきてんぽ",
+    "aliases": [
+      "New Store",
+      "New Branch",
+      "New Location"
+    ],
+    "senses": [
+      {
+        "definition": "まだ登録されていない新しい拠点。新規店舗の開設時は、店舗情報の登録・担当者割り当て・関連する契約の紐づけが必要になる。",
+        "domain": "operations",
+        "keywords": [
+          "新規",
+          "登録",
+          "開設",
+          "拠点",
+          "マスタ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "店舗情報",
+    "reading": "てんぽじょうほう",
+    "aliases": [
+      "Store Information",
+      "Branch Information"
+    ],
+    "senses": [
+      {
+        "definition": "店舗に関する基本情報。店舗名・住所・電話番号・担当者・営業時間などを含む。契約管理・請求管理・進捗管理で参照される。",
+        "domain": "operations",
+        "keywords": [
+          "店舗名",
+          "住所",
+          "担当者",
+          "営業時間",
+          "マスタ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "店舗登録",
+    "reading": "てんぽとうろく",
+    "aliases": [
+      "Store Registration",
+      "Branch Registration"
+    ],
+    "senses": [
+      {
+        "definition": "店舗に関する情報を新たに登録すること。所定の申請書または登録画面から情報を入力し、審査を経てマスタに追加する。登録後は各種業務で店舗を参照できる。",
+        "domain": "operations",
+        "keywords": [
+          "登録",
+          "マスタ",
+          "入力",
+          "審査",
+          "新規"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "添付資料",
+    "reading": "てんぷしりょう",
+    "aliases": [
+      "Attachment",
+      "Supplementary Material",
+      "Enclosure"
+    ],
+    "senses": [
+      {
+        "definition": "文書に添付する補足資料。契約書に添付する仕様書・見積書・図面など、本文を補完する資料全般を指す。添付資料は契約の一部を構成することがある。",
+        "domain": "operations",
+        "keywords": [
+          "補足",
+          "仕様書",
+          "見積書",
+          "添付",
+          "契約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "添付ファイル",
+    "reading": "てんぷふぁいる",
+    "aliases": [
+      "Attached File",
+      "Email Attachment",
+      "File Attachment"
+    ],
+    "senses": [
+      {
+        "definition": "文書や申請に添付する電子ファイル。メール送付・システムアップロードなどの形式で添付し、PDF・Excel・Word・画像などの形式が多い。ファイル名・バージョン・容量の管理が必要。",
+        "domain": "operations",
+        "keywords": [
+          "電子ファイル",
+          "PDF",
+          "アップロード",
+          "ファイル名",
+          "バージョン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "図面一式",
+    "reading": "ずめんいっしき",
+    "aliases": [
+      "Complete Drawings",
+      "Drawing Set",
+      "Blueprint Set"
+    ],
+    "senses": [
+      {
+        "definition": "図面類をまとめた資料一式。建設・設備・工事関連の契約では平面図・立面図・配管図などをまとめて添付し、工事範囲や仕様を明確にするために使う。",
+        "domain": "operations",
+        "keywords": [
+          "図面",
+          "平面図",
+          "立面図",
+          "工事",
+          "仕様"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "工事区分表",
+    "reading": "こうじくぶんひょう",
+    "aliases": [
+      "Construction Division Table",
+      "Work Scope Table"
+    ],
+    "senses": [
+      {
+        "definition": "工事の範囲、担当区分、費用負担区分などを整理した表。建設・リノベーション・設備工事の契約で使われ、発注者・施工者・テナントそれぞれの役割と負担を明確にする。",
+        "domain": "operations",
+        "keywords": [
+          "工事範囲",
+          "担当区分",
+          "費用負担",
+          "発注者",
+          "施工者"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "経費一覧表",
+    "reading": "けいひいちらんひょう",
+    "aliases": [
+      "Expense List",
+      "Cost Summary"
+    ],
+    "senses": [
+      {
+        "definition": "費用項目や内容を一覧で整理した表。見積・精算・予算管理の文脈で使われ、項目名・単価・数量・金額を記載する。契約添付資料や申請書の付属資料として提出されることが多い。",
+        "domain": "operations",
+        "keywords": [
+          "費用",
+          "項目",
+          "見積",
+          "精算",
+          "一覧"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "規則抜粋",
+    "reading": "きそくばっすい",
+    "aliases": [
+      "Rule Excerpt",
+      "Regulation Extract"
+    ],
+    "senses": [
+      {
+        "definition": "規則や規程のうち、必要な部分だけを抜き出して示した資料。契約の根拠となる社内規程・法令・業界ルールの関連箇所を提示する際に使い、全文でなく関係条文のみを共有する。",
+        "domain": "operations",
+        "keywords": [
+          "規則",
+          "規程",
+          "法令",
+          "条文",
+          "根拠"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "謄本",
+    "reading": "とうほん",
+    "aliases": [
+      "Certified Copy",
+      "Official Transcript",
+      "登記謄本"
+    ],
+    "senses": [
+      {
+        "definition": "登記や登録の内容を証明するための書類。法人登記簿謄本（登記事項証明書）は法人との契約締結時に相手先の実在確認・代表者確認のために必要とされることが多い。",
+        "domain": "operations",
+        "keywords": [
+          "登記",
+          "法人確認",
+          "代表者",
+          "証明書",
+          "登記事項"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "印鑑証明",
+    "reading": "いんかんしょうめい",
+    "aliases": [
+      "Seal Certificate",
+      "Seal Registration Certificate"
+    ],
+    "senses": [
+      {
+        "definition": "印鑑登録された印影を証明する書類。法人との正式な契約締結時に、押印された印鑑が登録印であることを証明するために添付が求められる。市区町村や法務局が発行する。",
+        "domain": "operations",
+        "keywords": [
+          "印鑑",
+          "登録印",
+          "証明書",
+          "契約",
+          "法人"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "押印申請",
+    "reading": "おういんしんせい",
+    "aliases": [
+      "Seal Approval Request",
+      "Stamping Request"
+    ],
+    "senses": [
+      {
+        "definition": "文書に押印するための社内申請。代表印・角印・社印など重要な印鑑の使用は事前申請が必要な企業が多く、申請書に押印する文書・目的・相手先を記載して承認を得る。",
+        "domain": "operations",
+        "keywords": [
+          "押印",
+          "申請",
+          "代表印",
+          "承認",
+          "社内手続き"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "押印",
+    "reading": "おういん",
+    "aliases": [
+      "Stamping",
+      "Sealing",
+      "Signing with Seal"
+    ],
+    "senses": [
+      {
+        "definition": "文書に印を付すこと。契約書・申請書・請求書などの正式な文書に会社の印鑑を押すことで、内容への同意や権限の行使を示す。電子化が進む中でも法的効力の観点から押印が必要な場面は多い。",
+        "domain": "operations",
+        "keywords": [
+          "印鑑",
+          "署名",
+          "同意",
+          "法的効力",
+          "契約書"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "印影印刷",
+    "reading": "いんえいいんさつ",
+    "aliases": [
+      "Seal Impression Printing",
+      "Stamp Image Printing"
+    ],
+    "senses": [
+      {
+        "definition": "印影を文書上に印字すること。電子契約や PDF 出力の際に、登録された印影画像を文書に埋め込む処理。電子印鑑とも呼ばれ、実印による押印の代替として使われることがある。",
+        "domain": "operations",
+        "keywords": [
+          "電子印鑑",
+          "印影",
+          "PDF",
+          "電子契約",
+          "印字"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "押印済書類",
+    "reading": "おういんずみしょるい",
+    "aliases": [
+      "Stamped Documents",
+      "Sealed Documents"
+    ],
+    "senses": [
+      {
+        "definition": "押印が完了した文書。契約書・申請書など、必要な押印が全て終わった状態の書類を指す。押印済書類は原本として保管され、コピーは写しとして管理される。",
+        "domain": "operations",
+        "keywords": [
+          "押印完了",
+          "原本",
+          "保管",
+          "写し",
+          "書類"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PDF化",
+    "reading": "ぴーでぃーえふか",
+    "aliases": [
+      "PDF Conversion",
+      "Save as PDF"
+    ],
+    "senses": [
+      {
+        "definition": "文書、帳票、画像などを PDF 形式に変換すること。契約書・請求書・申請書などを電子ファイルとして送付・保管するために行う。改ざん防止・閲覧の統一性・長期保存の観点から多くの業務で標準的に行われる。",
+        "domain": "operations",
+        "keywords": [
+          "PDF",
+          "変換",
+          "電子化",
+          "送付",
+          "保管"
+        ]
+      }
+    ]
+  }
+]

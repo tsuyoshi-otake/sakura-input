@@ -1,0 +1,949 @@
+[
+  {
+    "term": "多値従属性",
+    "reading": "たちじゅうぞくせい",
+    "senses": [
+      {
+        "definition": "多値従属性とは、ひとつの属性が複数の独立した値の集合を決定するリレーション内の従属の一種です。第4正規化で除去対象となります。",
+        "domain": "fe-database",
+        "keywords": [
+          "従属性",
+          "正規化",
+          "リレーション",
+          "データベース設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Multivalued Dependency"
+    ]
+  },
+  {
+    "term": "部分関数従属性",
+    "reading": "ぶぶんかんすうじゅうぞくせい",
+    "senses": [
+      {
+        "definition": "部分関数従属性とは、複合キーの一部にのみ非キー属性が依存している状態です。第2正規形への変換で除去します。",
+        "domain": "fe-database",
+        "keywords": [
+          "関数従属",
+          "複合キー",
+          "2NF",
+          "正規化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Partial Functional Dependency"
+    ]
+  },
+  {
+    "term": "推移的関数従属性",
+    "reading": "すいいてきかんすうじゅうぞくせい",
+    "senses": [
+      {
+        "definition": "推移的関数従属性とは、非キー属性が別の非キー属性を経由してキーに依存している状態です。第3正規形への変換で除去します。",
+        "domain": "fe-database",
+        "keywords": [
+          "推移的依存",
+          "関数従属",
+          "3NF",
+          "正規化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Transitive Functional Dependency"
+    ]
+  },
+  {
+    "term": "候補キー",
+    "reading": "こうほきー",
+    "senses": [
+      {
+        "definition": "候補キーとは、テーブルの各行を一意に識別できる最小限の属性集合です。複数存在する場合がありその中から主キーが選ばれます。",
+        "domain": "fe-database",
+        "keywords": [
+          "一意識別",
+          "キー",
+          "リレーション",
+          "スーパーキー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Candidate Key"
+    ]
+  },
+  {
+    "term": "主キー制約",
+    "reading": "しゅきーせいやく",
+    "senses": [
+      {
+        "definition": "主キー制約とは、選択された行識別子に対して一意性とNULL禁止を強制するデータベース制約です。テーブルに必ず1つ設定します。",
+        "domain": "fe-database",
+        "keywords": [
+          "主キー",
+          "制約",
+          "整合性",
+          "NULL禁止"
+        ]
+      }
+    ],
+    "aliases": [
+      "Primary Key Constraint"
+    ]
+  },
+  {
+    "term": "ドメイン制約",
+    "reading": "どめいんせいやく",
+    "senses": [
+      {
+        "definition": "ドメイン制約とは、属性値を有効なデータ型・範囲・許容値の集合に限定するデータベース制約です。データの正確性を保証します。",
+        "domain": "fe-database",
+        "keywords": [
+          "データ型",
+          "バリデーション",
+          "制約",
+          "値ドメイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Domain Constraint"
+    ]
+  },
+  {
+    "term": "参照アクション",
+    "reading": "さんしょうあくしょん",
+    "senses": [
+      {
+        "definition": "参照アクションとは、参照先レコードが更新・削除された際に参照元レコードに対して実行される動作（CASCADE・RESTRICTなど）を定義したものです。",
+        "domain": "fe-database",
+        "keywords": [
+          "外部キー",
+          "CASCADE",
+          "参照整合性",
+          "アクション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Referential Action"
+    ]
+  },
+  {
+    "term": "エンティティ整合性",
+    "reading": "えんてぃてぃせいごうせい",
+    "senses": [
+      {
+        "definition": "エンティティ整合性とは、テーブルの各行が一意かつNULLでない主キーを持つことを要求するデータ整合性のルールです。",
+        "domain": "fe-database",
+        "keywords": [
+          "主キー",
+          "整合性",
+          "エンティティ",
+          "NULL禁止"
+        ]
+      }
+    ],
+    "aliases": [
+      "Entity Integrity"
+    ]
+  },
+  {
+    "term": "第1正規化",
+    "reading": "だいいちせいきか",
+    "senses": [
+      {
+        "definition": "第1正規形（1NF）は、各列がアトミックな値を持ち繰り返しグループを含まないことを要求する正規化の第1段階です。",
+        "domain": "fe-database",
+        "keywords": [
+          "1NF",
+          "アトミック",
+          "正規化",
+          "繰り返し除去"
+        ]
+      }
+    ],
+    "aliases": [
+      "First Normal Form"
+    ]
+  },
+  {
+    "term": "第2正規化",
+    "reading": "だいにせいきか",
+    "senses": [
+      {
+        "definition": "第2正規形（2NF）は、部分関数従属性を除去し非キー属性がキー全体に依存するよう変換した正規化の第2段階です。",
+        "domain": "fe-database",
+        "keywords": [
+          "2NF",
+          "部分従属",
+          "正規化",
+          "複合キー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Second Normal Form"
+    ]
+  },
+  {
+    "term": "第3正規化",
+    "reading": "だいさんせいきか",
+    "senses": [
+      {
+        "definition": "第3正規形（3NF）は、推移的関数従属性を除去し非キー属性同士の依存関係をなくした正規化の第3段階です。",
+        "domain": "fe-database",
+        "keywords": [
+          "3NF",
+          "推移的依存",
+          "正規化",
+          "データ設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Third Normal Form"
+    ]
+  },
+  {
+    "term": "BCNF",
+    "reading": "びーしーえぬえふ",
+    "senses": [
+      {
+        "definition": "BCNF（ボイスコッド正規形）は、すべての関数従属の決定項が候補キーである第3正規形より厳格な正規形です。",
+        "domain": "fe-database",
+        "keywords": [
+          "正規化",
+          "関数従属",
+          "候補キー",
+          "データ設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Boyce-Codd Normal Form"
+    ]
+  },
+  {
+    "term": "逆正規化戦略",
+    "reading": "ぎゃくせいきかせんりゃく",
+    "senses": [
+      {
+        "definition": "逆正規化戦略とは、読み取りパフォーマンス向上やクエリ簡素化のために意図的に冗長性を導入するデータベース設計手法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "パフォーマンス",
+          "冗長性",
+          "スキーマ設計",
+          "トレードオフ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Denormalization Strategy"
+    ]
+  },
+  {
+    "term": "IDEF1Xモデル",
+    "reading": "あいでふいちえっくすもでる",
+    "senses": [
+      {
+        "definition": "IDEF1Xはエンティティ・キー・関連を形式的に表現するデータモデリング手法で、データベース設計に使用される標準表記法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "データモデリング",
+          "エンティティ",
+          "関連",
+          "DB設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "IDEF1X Model"
+    ]
+  },
+  {
+    "term": "実体関連図",
+    "reading": "じったいかんれんず",
+    "senses": [
+      {
+        "definition": "ER図（実体関連図）はエンティティ・属性・関連を視覚的に表現した図で、データベース設計の出発点として広く使われます。",
+        "domain": "fe-database",
+        "keywords": [
+          "ER図",
+          "エンティティ",
+          "関連",
+          "データモデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "参加制約",
+    "reading": "さんかせいやく",
+    "senses": [
+      {
+        "definition": "参加制約とは、エンティティがリレーションシップへの参加が必須か任意かを指定するERモデルの制約です。全参加と部分参加に分類されます。",
+        "domain": "fe-database",
+        "keywords": [
+          "カーディナリティ",
+          "ER図",
+          "制約",
+          "必須任意"
+        ]
+      }
+    ],
+    "aliases": [
+      "Participation Constraint"
+    ]
+  },
+  {
+    "term": "多対多関連",
+    "reading": "たたいたかんれん",
+    "senses": [
+      {
+        "definition": "多対多関連（M:N）とは、両側のエンティティが複数の相手と対応できる関係で、通常は中間テーブル（交差テーブル）を使って解消します。",
+        "domain": "fe-database",
+        "keywords": [
+          "M:N",
+          "交差テーブル",
+          "リレーションシップ",
+          "DB設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Many-to-Many Relationship"
+    ]
+  },
+  {
+    "term": "スーパータイプ",
+    "reading": "すーぱーたいぷ",
+    "senses": [
+      {
+        "definition": "スーパータイプとは、サブタイプに共通する属性を保持する汎化されたエンティティです。継承関係の上位に位置します。",
+        "domain": "fe-database",
+        "keywords": [
+          "継承",
+          "汎化",
+          "エンティティ",
+          "サブタイプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Supertype"
+    ]
+  },
+  {
+    "term": "サブタイプ",
+    "reading": "さぶたいぷ",
+    "senses": [
+      {
+        "definition": "サブタイプとは、スーパータイプから共通属性を継承しながら固有の属性を追加した特化されたエンティティです。",
+        "domain": "fe-database",
+        "keywords": [
+          "特化",
+          "継承",
+          "エンティティ",
+          "スーパータイプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Subtype"
+    ]
+  },
+  {
+    "term": "論理データ設計",
+    "reading": "ろんりでーたせっけい",
+    "senses": [
+      {
+        "definition": "論理データ設計は、特定のDBMS実装に依存しないエンティティと関係を定義する設計活動です。",
+        "domain": "fe-database",
+        "keywords": [
+          "論理モデル",
+          "スキーマ",
+          "DB設計",
+          "ER図"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logical Data Design"
+    ]
+  },
+  {
+    "term": "物理データ設計",
+    "reading": "ぶつりでーたせっけい",
+    "senses": [
+      {
+        "definition": "物理データ設計は、論理モデルを実際のテーブル・インデックス・ストレージ・DBMS固有の設定にマッピングする設計活動です。",
+        "domain": "fe-database",
+        "keywords": [
+          "ストレージ",
+          "インデックス",
+          "DBMS",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Physical Data Design"
+    ]
+  },
+  {
+    "term": "インデックス選択性",
+    "reading": "いんでっくすせんたくせい",
+    "senses": [
+      {
+        "definition": "インデックス選択性とは、インデックス値が行を一意に識別できる度合いを表す指標です。選択性が高いほどインデックスが有効に機能します。",
+        "domain": "fe-database",
+        "keywords": [
+          "インデックス",
+          "カーディナリティ",
+          "クエリ最適化",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Index Selectivity"
+    ]
+  },
+  {
+    "term": "クラスタ化インデックス",
+    "reading": "くらすたかいんでっくす",
+    "senses": [
+      {
+        "definition": "クラスタ化インデックスとは、テーブルの行をインデックスキーの順序と同じ物理順序で格納するインデックスです。テーブルに1つのみ作成できます。",
+        "domain": "fe-database",
+        "keywords": [
+          "クラスタ",
+          "物理順序",
+          "インデックス",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Clustered Index"
+    ]
+  },
+  {
+    "term": "非クラスタ化インデックス",
+    "reading": "ひくらすたかいんでっくす",
+    "senses": [
+      {
+        "definition": "非クラスタ化インデックスとは、キーの順序と行の物理順序を別々に保持し行の場所をポインタで参照するインデックスです。複数作成できます。",
+        "domain": "fe-database",
+        "keywords": [
+          "非クラスタ",
+          "インデックス",
+          "行ポインタ",
+          "検索最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Nonclustered Index"
+    ]
+  },
+  {
+    "term": "前方一致検索最適化",
+    "reading": "ぜんぽういっちけんさくさいてきか",
+    "senses": [
+      {
+        "definition": "前方一致検索最適化は、文字列の先頭一致クエリをインデックスを活用したパターンで効率化する手法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "前方一致",
+          "LIKEクエリ",
+          "インデックス",
+          "検索性能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Prefix Search Optimization"
+    ]
+  },
+  {
+    "term": "INCLUDE列インデックス",
+    "reading": "いんくるーどれつのいんでっくす",
+    "senses": [
+      {
+        "definition": "INCLUDE列インデックスとは、非キー列をインデックスに付加しテーブルへの追加ルックアップなしにクエリを満たせるカバリングインデックスです。",
+        "domain": "fe-database",
+        "keywords": [
+          "カバリングインデックス",
+          "INCLUDE",
+          "クエリ性能",
+          "インデックス設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Included-Column Index"
+    ]
+  },
+  {
+    "term": "実行計画解析",
+    "reading": "じっこうけいかくかいせき",
+    "senses": [
+      {
+        "definition": "実行計画解析は、データベースエンジンがクエリに対してデータアクセスとジョイン処理をどのように行うかを調査する活動です。",
+        "domain": "fe-database",
+        "keywords": [
+          "クエリ計画",
+          "オプティマイザ",
+          "性能",
+          "EXPLAIN"
+        ]
+      }
+    ],
+    "aliases": [
+      "Execution Plan Analysis"
+    ]
+  },
+  {
+    "term": "統計情報更新",
+    "reading": "とうけいじょうほうこうしん",
+    "senses": [
+      {
+        "definition": "統計情報更新とは、データベースオプティマイザ向けにテーブルのデータ分布・行数などの統計情報を最新化する操作です。クエリ実行計画の精度維持に重要です。",
+        "domain": "fe-database",
+        "keywords": [
+          "統計情報",
+          "オプティマイザ",
+          "クエリ計画",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Statistics Update"
+    ]
+  },
+  {
+    "term": "ビュー定義",
+    "reading": "びゅーていぎ",
+    "senses": [
+      {
+        "definition": "ビュー定義とは、基底テーブルに対して保存されたクエリをもとに仮想テーブルを作成する仕組みです。クエリの再利用やアクセス制御に活用されます。",
+        "domain": "fe-database",
+        "keywords": [
+          "ビュー",
+          "仮想テーブル",
+          "SQL",
+          "アクセス制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "View Definition"
+    ]
+  },
+  {
+    "term": "インクリメンタルビュー更新",
+    "reading": "いんくりめんたるびゅーこうしん",
+    "senses": [
+      {
+        "definition": "インクリメンタルビュー更新とは、マテリアライズドビューの全体を再計算せず変更された部分のみを更新することで効率的にビューを最新化する手法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "マテリアライズドビュー",
+          "差分更新",
+          "効率化",
+          "DB性能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incremental View Maintenance"
+    ]
+  },
+  {
+    "term": "ストアドファンクション（拡張1）",
+    "reading": "すとあどふぁんくしょん（かくちょう1）",
+    "senses": [
+      {
+        "definition": "ストアドファンクションはデータベース内に保存された再利用可能なルーチンであり、SQL文の中で呼び出して値を返します。ロジックをDB側に集約することでコード重複を削減できます。",
+        "domain": "fe-database",
+        "keywords": [
+          "ストアドルーチン",
+          "SQL関数",
+          "データベースロジック",
+          "再利用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stored Function (Extended 1)"
+    ]
+  },
+  {
+    "term": "トリガ処理",
+    "reading": "とりがしょり",
+    "senses": [
+      {
+        "definition": "トリガ処理とは、INSERT・UPDATE・DELETEなどのイベント発生時に自動的に定義済みのロジックを実行するデータベースの仕組みです。",
+        "domain": "fe-database",
+        "keywords": [
+          "トリガ",
+          "イベント",
+          "自動化",
+          "DB処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Trigger Processing"
+    ]
+  },
+  {
+    "term": "分離レベル調整",
+    "reading": "ぶんりれべるちょうせい",
+    "senses": [
+      {
+        "definition": "分離レベル調整とは、トランザクションの並行処理における一貫性と競合のバランスを取るために適切なアイソレーションレベルを選択する作業です。",
+        "domain": "fe-database",
+        "keywords": [
+          "トランザクション",
+          "並行処理",
+          "アイソレーション",
+          "DB設定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Isolation Level Tuning"
+    ]
+  },
+  {
+    "term": "ダーティライト",
+    "reading": "だーてぃらいと",
+    "senses": [
+      {
+        "definition": "ダーティライトとは、あるトランザクションが別のトランザクションによるコミット前のデータを上書きしてしまう並行処理異常です。",
+        "domain": "fe-database",
+        "keywords": [
+          "並行処理異常",
+          "トランザクション",
+          "一貫性",
+          "競合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dirty Write"
+    ]
+  },
+  {
+    "term": "読取り一貫性",
+    "senses": [
+      {
+        "definition": "読取り一貫性とは、トランザクションが実行中に参照するデータが一貫した時点のスナップショットとして見える性質です。MVCCで実現されます。",
+        "domain": "fe-database",
+        "keywords": [
+          "一貫性",
+          "MVCC",
+          "スナップショット",
+          "トランザクション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Read Consistency"
+    ]
+  },
+  {
+    "term": "ギャップロック",
+    "reading": "ぎゃっぷろっく",
+    "senses": [
+      {
+        "definition": "ギャップロックとは、インデックスレコード間の範囲をロックしてトランザクション中のファントム挿入を防ぐロック機構です。",
+        "domain": "fe-database",
+        "keywords": [
+          "範囲ロック",
+          "ファントムリード",
+          "トランザクション",
+          "InnoDB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gap Lock"
+    ]
+  },
+  {
+    "term": "ロックエスカレーション",
+    "reading": "ろっくえすかれーしょん",
+    "senses": [
+      {
+        "definition": "ロックエスカレーションとは、多数の細粒度ロックをより粗粒度のロックに昇格させることでロック管理のオーバーヘッドを削減する仕組みです。",
+        "domain": "fe-database",
+        "keywords": [
+          "ロック",
+          "並行処理",
+          "オーバーヘッド",
+          "DB性能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lock Escalation"
+    ]
+  },
+  {
+    "term": "行共有ロック",
+    "reading": "ぎょうきょうゆうろっく",
+    "senses": [
+      {
+        "definition": "行共有ロックとは、更新候補の行に対して制御された同時読取りを許可しながら潜在的な更新をマークするロックです。",
+        "domain": "fe-database",
+        "keywords": [
+          "行ロック",
+          "共有ロック",
+          "並行処理",
+          "SELECT FOR UPDATE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Row Share Lock"
+    ]
+  },
+  {
+    "term": "バージョン列制御",
+    "reading": "ばーじょんれつせいぎょ",
+    "senses": [
+      {
+        "definition": "バージョン列制御とは、更新競合を検知するためにバージョン番号列のインクリメントを利用する楽観的並行性制御の手法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "楽観的ロック",
+          "バージョン",
+          "競合検知",
+          "同時実行制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Version Column Control"
+    ]
+  },
+  {
+    "term": "2相ロック",
+    "reading": "にそうろっく",
+    "senses": [
+      {
+        "definition": "2相ロック（2PL）とは、拡張フェーズでロックを取得し収縮フェーズで解放することで直列可能性を保証するトランザクション管理プロトコルです。",
+        "domain": "fe-database",
+        "keywords": [
+          "2PL",
+          "直列可能性",
+          "トランザクション",
+          "ロック管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Two-Phase Locking"
+    ]
+  },
+  {
+    "term": "コミットログ",
+    "reading": "こみっとろぐ",
+    "senses": [
+      {
+        "definition": "コミットログとは、コミット済みの変更を耐久的に記録するログファイルです。クラッシュリカバリやレプリケーションの基盤となります。",
+        "domain": "fe-database",
+        "keywords": [
+          "耐久性",
+          "WAL",
+          "リカバリ",
+          "レプリケーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Commit Log"
+    ]
+  },
+  {
+    "term": "チェックポイント処理",
+    "reading": "ちぇっくぽいんとしょり",
+    "senses": [
+      {
+        "definition": "チェックポイント処理とは、定期的に一貫した状態マーカーをディスクに書き込むことでクラッシュリカバリを高速化する仕組みです。",
+        "domain": "fe-database",
+        "keywords": [
+          "リカバリ",
+          "チェックポイント",
+          "耐久性",
+          "バッファ管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Checkpoint Processing"
+    ]
+  },
+  {
+    "term": "レプリケーション構成",
+    "reading": "れぷりけーしょんこうせい",
+    "senses": [
+      {
+        "definition": "レプリケーション構成とは、可用性とスケールのためにプライマリとレプリカ間でデータをコピーする方式・設定を定義したものです。",
+        "domain": "fe-database",
+        "keywords": [
+          "レプリケーション",
+          "プライマリレプリカ",
+          "可用性",
+          "読取りスケール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Replication Configuration"
+    ]
+  },
+  {
+    "term": "シャーディング設計",
+    "reading": "しゃーでぃんぐせっけい",
+    "senses": [
+      {
+        "definition": "シャーディング設計は、シャードキーに基づいてデータを複数ノードに分散し水平スケーリングを実現する設計手法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "シャーディング",
+          "パーティショニング",
+          "スケーラビリティ",
+          "分散DB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sharding Design"
+    ]
+  },
+  {
+    "term": "PACELC定理",
+    "reading": "ぱせるくていり",
+    "senses": [
+      {
+        "definition": "PACELC定理とは、分散システムがパーティション時のCAトレードオフに加え平常時の待ち時間と一貫性のトレードオフも持つことを説明する定理です。",
+        "domain": "fe-database",
+        "keywords": [
+          "分散システム",
+          "一貫性",
+          "レイテンシ",
+          "CAP定理"
+        ]
+      }
+    ],
+    "aliases": [
+      "PACELC Theorem"
+    ]
+  },
+  {
+    "term": "ドキュメントストア",
+    "reading": "どきゅめんとすとあ",
+    "senses": [
+      {
+        "definition": "ドキュメントストアとは、JSONに類似した半構造化レコードを格納するNoSQLデータベースです。スキーマの柔軟性が高がMongoDBが代表例です。",
+        "domain": "fe-database",
+        "keywords": [
+          "NoSQL",
+          "JSON",
+          "スキーマ柔軟性",
+          "文書型DB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Document Store"
+    ]
+  },
+  {
+    "term": "列指向データベース",
+    "reading": "れつしこうでーたべーす",
+    "senses": [
+      {
+        "definition": "列指向データベースとは、値を列単位で格納するデータベースです。大規模データセットの圧縮と分析クエリに優れており，DWHで広く使われます。",
+        "domain": "fe-database",
+        "keywords": [
+          "カラムナー",
+          "分析",
+          "圧縮",
+          "DWH"
+        ]
+      }
+    ],
+    "aliases": [
+      "Column-Oriented Database"
+    ]
+  },
+  {
+    "term": "時系列圧縮",
+    "reading": "じけいれつあっしゅく",
+    "senses": [
+      {
+        "definition": "時系列圧縮とは、タイムスタンプ付きメトリクスデータを時間的パターンを利用して圧縮しストレージと転送コストを削減する手法です。",
+        "domain": "fe-database",
+        "keywords": [
+          "時系列",
+          "圧縮",
+          "メトリクス",
+          "InfluxDB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Time-Series Compression"
+    ]
+  },
+  {
+    "term": "プロパティグラフモデル",
+    "reading": "ぷろぱてぃぐらふもでる",
+    "senses": [
+      {
+        "definition": "プロパティグラフモデルとは、ノードとエッジにキーバリューのプロパティを付与してデータを表現するグラフデータベースのデータモデルです。",
+        "domain": "fe-database",
+        "keywords": [
+          "グラフDB",
+          "ノードエッジ",
+          "プロパティ",
+          "Neo4j"
+        ]
+      }
+    ],
+    "aliases": [
+      "Property Graph Model"
+    ]
+  },
+  {
+    "term": "メダリオンアーキテクチャ（拡張1）",
+    "reading": "めだりおんあーきてくちゃ（かくちょう1）",
+    "senses": [
+      {
+        "definition": "メダリオンアーキテクチャはデータパイプラインをブロンズ・シルバー・ゴールドなどの段階的なゾーンに整理し、データ品質を段階的に高める設計パターンです。データレイクハウスで広く採用されています。",
+        "domain": "fe-database",
+        "keywords": [
+          "データレイクハウス",
+          "パイプラインレイヤ",
+          "ブロンズシルバーゴールド",
+          "データ品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Medallion Architecture (Extended 1)"
+    ]
+  }
+]

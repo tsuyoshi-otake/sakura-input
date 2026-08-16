@@ -1,0 +1,1074 @@
+[
+  {
+    "term": "レイヤードモノリス",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "層ごとに責務を分けつつ、1つのアプリケーションとして一体で開発・デプロイするモノリシックな構成です。",
+        "domain": "architecture",
+        "keywords": [
+          "レイヤー",
+          "モノリス",
+          "単一デプロイ"
+        ]
+      }
+    ],
+    "reading": "れいやーどものりす"
+  },
+  {
+    "term": "テスト基盤",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "自動テストの実行、テストデータ準備、結果収集を支える共通の仕組みや環境です。",
+        "domain": "testing",
+        "keywords": [
+          "自動テスト",
+          "CI",
+          "レポート"
+        ]
+      }
+    ],
+    "reading": "てすときばん"
+  },
+  {
+    "term": "SVN trunk 一本運用",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ブランチをほとんど使わず、SVNのtrunkに変更を集中させて進める版管理運用です。",
+        "domain": "version-control",
+        "keywords": [
+          "SVN",
+          "trunk",
+          "コミット"
+        ]
+      }
+    ],
+    "reading": "えすぶいえぬとらんくいっぽんうんよう"
+  },
+  {
+    "term": "認証情報のハードコード",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "パスワードやAPIキーなどの認証情報をソースコードや設定値に固定で埋め込むことです。",
+        "domain": "security",
+        "keywords": [
+          "パスワード",
+          "トークン",
+          "ソースコード"
+        ]
+      }
+    ],
+    "reading": "にんしょうじょうほうのはーどこーど"
+  },
+  {
+    "term": "責務分離不全",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "本来分けるべき役割が同じクラスや層に混在し、変更理由が整理されていない状態です。",
+        "domain": "design"
+      }
+    ],
+    "reading": "せきむぶんりふぜん"
+  },
+  {
+    "term": "個人情報漏洩",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "氏名や連絡先など個人を識別できる情報が、本来許可されていない相手へ流出することです。",
+        "domain": "security"
+      }
+    ],
+    "reading": "こじんじょうほうろうえい"
+  },
+  {
+    "term": "回帰不具合の量産",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "改修のたびに既存機能を壊し、多数の回帰不具合を繰り返し発生させる状態です。",
+        "domain": "quality"
+      }
+    ],
+    "reading": "かいきふぐあいのりょうさん"
+  },
+  {
+    "term": "障害時",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "システム障害やサービス停止などの異常が発生している場面を指す表現です。",
+        "domain": "operations"
+      }
+    ],
+    "reading": "しょうがいじ"
+  },
+  {
+    "term": "原因追跡不能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ログや証跡が不足していて、障害や不具合の原因をたどって特定できない状態です。",
+        "domain": "operations"
+      }
+    ],
+    "reading": "げんいんついせきふのう"
+  },
+  {
+    "term": "改修速度",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "不具合修正や機能改善を実装して反映するまでの速さです。",
+        "domain": "development"
+      }
+    ],
+    "reading": "かいしゅうそくど"
+  },
+  {
+    "term": "機密ログ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "認証情報や個人情報など、秘匿すべき内容を含んでしまっているログです。",
+        "domain": "security",
+        "keywords": [
+          "ログ",
+          "個人情報",
+          "認証情報"
+        ]
+      }
+    ],
+    "reading": "きみつろぐ"
+  },
+  {
+    "term": "シークレット",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "パスワード、APIキー、秘密鍵のように厳格な管理が必要な秘密情報です。",
+        "domain": "security",
+        "keywords": [
+          "APIキー",
+          "パスワード",
+          "トークン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ローテーション",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "鍵やトークンや証明書を定期的または緊急時に新しいものへ切り替える運用です。",
+        "domain": "security",
+        "keywords": [
+          "鍵",
+          "トークン",
+          "証明書"
+        ]
+      }
+    ],
+    "reading": "ろーてーしょん"
+  },
+  {
+    "term": "ローカル",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "各開発者の手元の端末や、その端末上で動かす開発環境を指します。",
+        "domain": "development",
+        "keywords": [
+          "開発端末",
+          "手元",
+          "環境"
+        ]
+      }
+    ],
+    "reading": "ろーかる"
+  },
+  {
+    "term": "再現可能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "同じ条件をそろえると、同じ不具合や現象を繰り返し確認できる状態です。",
+        "domain": "quality"
+      }
+    ],
+    "reading": "さいげんかのう"
+  },
+  {
+    "term": "総合評価",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数の観点や証拠を踏まえて、全体としてどう判断するかを示した評価です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "そうごうひょうか"
+  },
+  {
+    "term": "作業消化",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "計画した作業項目をどれだけ完了させたかという進み具合です。",
+        "domain": "project-management"
+      }
+    ],
+    "reading": "さぎょうしょうか"
+  },
+  {
+    "term": "継続開発可能性",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "現状の設計や運用のままで、今後も安全かつ効率的に開発を続けられる見込みです。",
+        "domain": "maintainability"
+      }
+    ],
+    "reading": "けいぞくかいはつかのうせい"
+  },
+  {
+    "term": "報告書",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "調査結果、根拠、評価、提案を整理して関係者へ共有する文書です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "ほうこくしょ"
+  },
+  {
+    "term": "技術監査",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "システム、コード、運用、開発プロセスを技術面から点検し、問題点や改善点を評価することです。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "ぎじゅつかんさ"
+  },
+  {
+    "term": "ファイル数",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "対象範囲に含まれるソースコードや設定ファイルの総数です。",
+        "domain": "metrics"
+      }
+    ],
+    "reading": "ふぁいるすう"
+  },
+  {
+    "term": "クラス行数",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "あるクラスの実装が何行で構成されているかを表す規模指標です。",
+        "domain": "metrics"
+      }
+    ],
+    "reading": "くらすぎょうすう"
+  },
+  {
+    "term": "DI数",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "依存性注入で外部から渡している依存先の数や注入箇所の数です。",
+        "domain": "metrics"
+      }
+    ],
+    "reading": "でぃーあいすう"
+  },
+  {
+    "term": "ログ出力箇所",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリケーション内でログを書き出している場所や文の数です。",
+        "domain": "logging"
+      }
+    ],
+    "reading": "ろぐしゅつりょくかしょ"
+  },
+  {
+    "term": "モジュール依存",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "あるモジュールが他のモジュールにどのように依存しているかという関係です。",
+        "domain": "architecture"
+      }
+    ],
+    "reading": "もじゅーるいそん"
+  },
+  {
+    "term": "テスト実態",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "計画書上の記載ではなく、実際にどのテストが存在し、実行され、維持されているかという現状です。",
+        "domain": "testing"
+      }
+    ],
+    "reading": "てすとじったい"
+  },
+  {
+    "term": "依存管理",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ライブラリやプラグインの追加、更新、削除、バージョン整合を管理することです。",
+        "domain": "build"
+      }
+    ],
+    "reading": "いそんかんり"
+  },
+  {
+    "term": "開発フロー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "要件整理から実装、レビュー、テスト、リリースまでの作業手順やルールです。",
+        "domain": "software-engineering"
+      }
+    ],
+    "reading": "かいはつふろー"
+  },
+  {
+    "term": "重大問題",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "放置した場合の影響が大きく、優先的な対処が必要な問題です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "じゅうだいもんだい"
+  },
+  {
+    "term": "是正済み",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "指摘された問題に対する修正や対策が、すでに完了している状態です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "ぜせいずみ"
+  },
+  {
+    "term": "本番",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "実際の利用者が使う稼働中の環境やサービスを指します。",
+        "domain": "operations",
+        "keywords": [
+          "本番環境",
+          "production",
+          "運用"
+        ]
+      }
+    ],
+    "reading": "ほんばん"
+  },
+  {
+    "term": "失効済み",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "トークン、証明書、認証情報などが有効期限切れや無効化により使えなくなっている状態です。",
+        "domain": "security"
+      }
+    ],
+    "reading": "しっこうずみ"
+  },
+  {
+    "term": "時系列",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "出来事を発生した順番に並べた時間の流れです。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "じけいれつ"
+  },
+  {
+    "term": "実施状況",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "対象施策や作業がどこまで行われているかという実行状況です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "じっしじょうきょう"
+  },
+  {
+    "term": "進捗率",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "計画全体に対して、どの程度完了しているかを割合で示した値です。",
+        "domain": "project-management"
+      }
+    ],
+    "reading": "しんちょくりつ"
+  },
+  {
+    "term": "ビルド",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ソースコードから実行可能な成果物を生成する処理です。",
+        "domain": "build",
+        "keywords": [
+          "コンパイル",
+          "成果物",
+          "CI"
+        ]
+      }
+    ],
+    "reading": "びるど"
+  },
+  {
+    "term": "現在進行形",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "過去に終わった事象ではなく、現在も継続して発生または未解決の状態を示す表現です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "げんざいしんこうけい"
+  },
+  {
+    "term": "Service層",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Controllerから受けた要求に対し、ユースケースの流れや業務処理をまとめるアプリケーション層です。",
+        "domain": "architecture",
+        "keywords": [
+          "Service",
+          "Controller",
+          "業務ロジック"
+        ]
+      }
+    ],
+    "reading": "さーびすそう"
+  },
+  {
+    "term": "Controller",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "HTTPリクエストを受け取り、入力を受理して必要な処理へ渡し、レスポンスを返す入口の層です。",
+        "domain": "web",
+        "keywords": [
+          "HTTP",
+          "エンドポイント",
+          "リクエスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リクエストボディ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "HTTPリクエストで送る本文データです。JSONやフォームデータなどが入ります。",
+        "domain": "web",
+        "keywords": [
+          "HTTP",
+          "JSON",
+          "POST"
+        ]
+      }
+    ],
+    "reading": "りくえすとぼでぃ"
+  },
+  {
+    "term": "DEBUG",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "詳細な調査用情報を出すためのデバッグ向けログレベルや設定値です。",
+        "domain": "logging",
+        "keywords": [
+          "ログレベル",
+          "デバッグ",
+          "出力"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "改善余地",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "現状でも動作はしているが、より良くできる余地が残っている状態です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "かいぜんよち"
+  },
+  {
+    "term": "是正必須",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "放置不可であり、必ず修正や対策を実施すべきと判断された状態です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "ぜせいひっす"
+  },
+  {
+    "term": "Gradle",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "JVM系プロジェクトでビルド、依存管理、テスト実行を自動化するツールです。",
+        "domain": "java",
+        "keywords": [
+          "Java",
+          "ビルド",
+          "依存関係"
+        ]
+      }
+    ],
+    "reading": "ぐれいどる"
+  },
+  {
+    "term": "マルチモジュール",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "1つのリポジトリやビルド設定の中で、複数のモジュールに分けて管理する構成です。",
+        "domain": "build",
+        "keywords": [
+          "モジュール",
+          "Gradle",
+          "依存"
+        ]
+      }
+    ],
+    "reading": "まるちもじゅーる"
+  },
+  {
+    "term": "突然",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "十分な事前兆候や予告がないまま、急に起きる様子を表す言葉です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "とつぜん"
+  },
+  {
+    "term": "貧血ドメインモデル",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "データだけを持ち、業務ルールや振る舞いをほとんど持たないドメインモデルです。",
+        "domain": "design",
+        "keywords": [
+          "ドメイン",
+          "振る舞い",
+          "エンティティ"
+        ]
+      }
+    ],
+    "reading": "ひんけつどめいんもでる"
+  },
+  {
+    "term": "@Getter",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Lombokでgetterメソッドを自動生成するためのアノテーションです。",
+        "domain": "java",
+        "keywords": [
+          "Lombok",
+          "getter",
+          "アノテーション"
+        ]
+      }
+    ],
+    "reading": "あっとげったー"
+  },
+  {
+    "term": "@Setter",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Lombokでsetterメソッドを自動生成するためのアノテーションです。",
+        "domain": "java",
+        "keywords": [
+          "Lombok",
+          "setter",
+          "アノテーション"
+        ]
+      }
+    ],
+    "reading": "あっとせったー"
+  },
+  {
+    "term": "手続き型",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "データに対して順番に処理手順を適用していくことを中心にした設計やプログラミングの考え方です。",
+        "domain": "design"
+      }
+    ],
+    "reading": "てつづきがた"
+  },
+  {
+    "term": "TODO",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "未実装や後で対応すべき作業が残っていることを示すコメントや印です。",
+        "domain": "development",
+        "keywords": [
+          "未対応",
+          "コメント",
+          "後回し"
+        ]
+      }
+    ],
+    "reading": "とぅーどぅー"
+  },
+  {
+    "term": "FIXMEコメント",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "既知の問題があり、修正が必要だと示すためにコードへ残すコメントです。",
+        "domain": "development",
+        "keywords": [
+          "コメント",
+          "不具合",
+          "修正"
+        ]
+      }
+    ],
+    "reading": "ふぃっくすみーこめんと"
+  },
+  {
+    "term": "マスキング",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "個人情報や認証情報の一部を伏せて、そのまま見えないように加工することです。",
+        "domain": "security",
+        "keywords": [
+          "ログ",
+          "個人情報",
+          "伏字"
+        ]
+      }
+    ],
+    "reading": "ますきんぐ"
+  },
+  {
+    "term": "ServiceAspect",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Serviceメソッドの前後で共通処理を差し込むためのAspectクラスやその実装です。",
+        "domain": "spring",
+        "keywords": [
+          "AOP",
+          "Spring",
+          "横断関心"
+        ]
+      }
+    ],
+    "reading": "さーびすあすぺくと"
+  },
+  {
+    "term": "例外ハンドラ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "発生した例外を受け取り、ログ記録やエラーレスポンス変換を行う仕組みです。",
+        "domain": "web",
+        "keywords": [
+          "例外",
+          "エラー応答",
+          "ハンドリング"
+        ]
+      }
+    ],
+    "reading": "れいがいはんどら"
+  },
+  {
+    "term": "パラメータダンプ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "受け取った引数や入力値を、そのままログや画面へ出力することです。",
+        "domain": "logging",
+        "keywords": [
+          "ログ",
+          "パラメータ",
+          "出力"
+        ]
+      }
+    ],
+    "reading": "ぱらめーただんぷ"
+  },
+  {
+    "term": "DEBUG出力",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "デバッグ目的でのみ出す詳細なログやコンソール出力です。",
+        "domain": "logging",
+        "keywords": [
+          "デバッグ",
+          "ログ",
+          "出力"
+        ]
+      }
+    ],
+    "reading": "でばっぐしゅつりょく"
+  },
+  {
+    "term": "外部API通信",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "自システムの外にあるサービスとAPI経由でデータや処理をやり取りすることです。",
+        "domain": "integration",
+        "keywords": [
+          "HTTP",
+          "連携",
+          "外部サービス"
+        ]
+      }
+    ],
+    "reading": "がいぶえーぴーあいつうしん"
+  },
+  {
+    "term": "ボディ出力",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "リクエストやレスポンスの本文全体をログや標準出力へ書き出すことです。",
+        "domain": "logging",
+        "keywords": [
+          "リクエスト",
+          "レスポンス",
+          "ログ"
+        ]
+      }
+    ],
+    "reading": "ぼでぃしゅつりょく"
+  },
+  {
+    "term": "マジックストリング多用",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "意味のある定数化をせず、同じ文字列リテラルを各所へ直接書き散らしている状態です。",
+        "domain": "design"
+      }
+    ],
+    "reading": "まじっくすとりんぐたよう"
+  },
+  {
+    "term": "カバレッジツール",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "どのコードがテストで実行されたかを計測し、網羅率を集計するツールです。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "網羅率",
+          "JaCoCo"
+        ]
+      }
+    ],
+    "reading": "かばれっじつーる"
+  },
+  {
+    "term": "printStackTrace",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Javaで例外のスタックトレースを標準エラー出力へ直接書き出すメソッドです。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "stderr",
+          "Java"
+        ]
+      }
+    ],
+    "reading": "ぷりんとすたっくとれーす"
+  },
+  {
+    "term": "バージョン散在",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "依存ライブラリやプラグインのバージョン指定が複数箇所に散らばり、一元管理できていない状態です。",
+        "domain": "build"
+      }
+    ],
+    "reading": "ばーじょんさんざい"
+  },
+  {
+    "term": "不整合",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "関連する定義、実装、設定、データの間で内容が食い違っている状態です。",
+        "domain": "quality"
+      }
+    ],
+    "reading": "ふせいごう"
+  },
+  {
+    "term": "未適用",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "必要と判断された修正、設定変更、パッチがまだ反映されていない状態です。",
+        "domain": "audit"
+      }
+    ],
+    "reading": "みてきよう"
+  },
+  {
+    "term": "変更影響の把握",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ある変更がどの機能、クラス、モジュール、運用に波及するかを見極めることです。",
+        "domain": "maintainability"
+      }
+    ],
+    "reading": "へんこうえいきょうのはあく"
+  },
+  {
+    "term": "リファクタリング不能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "構造の結合が強すぎるなどの理由で、安全に内部改善を進めにくい状態です。",
+        "domain": "maintainability"
+      }
+    ],
+    "reading": "りふぁくたりんぐふのう"
+  },
+  {
+    "term": "コンフリクト頻発構造",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "同じファイルや同じ責務に変更が集中し、マージコンフリクトが起きやすい構造です。",
+        "domain": "version-control"
+      }
+    ],
+    "reading": "こんふりくとひんぱつこうぞう"
+  },
+  {
+    "term": "CodeBuild",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AWSが提供するマネージドなビルド・テスト実行サービスです。",
+        "domain": "aws",
+        "keywords": [
+          "AWS",
+          "ビルド",
+          "CI"
+        ]
+      }
+    ],
+    "reading": "こーどびるど"
+  },
+  {
+    "term": "テストレポート",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "テストの実行件数、成功・失敗、エラー詳細などをまとめた結果報告です。",
+        "domain": "testing",
+        "keywords": [
+          "テスト結果",
+          "失敗",
+          "レポート"
+        ]
+      }
+    ],
+    "reading": "てすとれぽーと"
+  },
+  {
+    "term": "カバレッジ計測",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "テストでどのコードが実行されたかを測定し、網羅率として可視化することです。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "網羅率",
+          "JaCoCo"
+        ]
+      }
+    ],
+    "reading": "かばれっじけいそく"
+  },
+  {
+    "term": "カバレッジ計測なし",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "テスト網羅率を測定する仕組みがなく、実行範囲を把握できていない状態です。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "未計測",
+          "網羅率"
+        ]
+      }
+    ],
+    "reading": "かばれっじけいそくなし"
+  },
+  {
+    "term": "テストゼロ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "対象機能や対象モジュールに自動テストが1件も存在しない状態です。",
+        "domain": "testing"
+      }
+    ],
+    "reading": "てすとぜろ"
+  },
+  {
+    "term": "テストなし",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "確認すべき対象に対して、作成済みまたは実行中のテストが存在しない状態です。",
+        "domain": "testing"
+      }
+    ],
+    "reading": "てすとなし"
+  },
+  {
+    "term": "God Classの変更影響",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "責務を抱え込みすぎた巨大クラスを変更したときに、多方面へ波及してしまう影響です。",
+        "domain": "design"
+      }
+    ],
+    "reading": "ごっどくらすのへんこうえいきょう"
+  },
+  {
+    "term": "ApiExceptionHandler",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "API向けの例外をまとめて処理し、統一したエラーレスポンスへ変換するクラス名によく使われる名称です。",
+        "domain": "spring",
+        "keywords": [
+          "例外",
+          "API",
+          "Spring"
+        ]
+      }
+    ],
+    "reading": "えーぴーあいえくせぷしょんはんどらー"
+  },
+  {
+    "term": "Testcontainers",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "テスト実行時にデータベースなどの依存サービスを使い捨てコンテナで起動するためのライブラリです。",
+        "domain": "testing",
+        "keywords": [
+          "Docker",
+          "テスト",
+          "コンテナ"
+        ]
+      }
+    ],
+    "reading": "てすとこんてなーず"
+  },
+  {
+    "term": "JaCoCo",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Java向けのテストカバレッジ計測ツールです。",
+        "domain": "testing",
+        "keywords": [
+          "Java",
+          "カバレッジ",
+          "テスト"
+        ]
+      }
+    ],
+    "reading": "じゃここ"
+  },
+  {
+    "term": "javax",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Java EE時代から使われてきたJava系APIの名前空間プレフィックスです。",
+        "domain": "java",
+        "keywords": [
+          "Java EE",
+          "名前空間",
+          "パッケージ"
+        ]
+      }
+    ],
+    "reading": "じゃばえっくす"
+  },
+  {
+    "term": "jakarta",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Jakarta EEで採用されたJava系APIの新しい名前空間プレフィックスです。",
+        "domain": "java",
+        "keywords": [
+          "Jakarta EE",
+          "名前空間",
+          "移行"
+        ]
+      }
+    ],
+    "reading": "じゃかるた"
+  }
+]

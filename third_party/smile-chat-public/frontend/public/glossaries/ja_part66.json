@@ -1,0 +1,1512 @@
+[
+  {
+    "term": "IAMユーザー",
+    "reading": "あいえーえむゆーざー",
+    "aliases": [
+      "IAM User"
+    ],
+    "senses": [
+      {
+        "definition": "AWSアカウント内で作成する個人またはアプリケーションを表すエンティティ。長期的なアクセスキーやパスワードを持ち、ポリシーをアタッチして権限を付与する。人間のユーザーにはIAMロールやIAM Identity Centerの利用が推奨される。",
+        "domain": "aws",
+        "keywords": [
+          "IAM",
+          "認証",
+          "アクセスキー",
+          "エンティティ",
+          "認証情報"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "IAMグループ",
+    "reading": "あいえーえむぐるーぷ",
+    "aliases": [
+      "IAM Group"
+    ],
+    "senses": [
+      {
+        "definition": "複数のIAMユーザーをまとめて管理するためのコレクション。グループにポリシーをアタッチすることで、メンバー全員に同じ権限を一括付与・剥奪できる。グループはネストできない。",
+        "domain": "aws",
+        "keywords": [
+          "IAM",
+          "グループ",
+          "権限管理",
+          "ポリシー",
+          "ユーザー管理"
+        ]
+      },
+      {
+        "definition": "権限付与の対象となるユーザー集合。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "IAM Group"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS SSO",
+    "reading": "えーだぶりゅーえすえすえすおー",
+    "aliases": [
+      "AWS Single Sign-On",
+      "IAM Identity Center"
+    ],
+    "senses": [
+      {
+        "definition": "複数のAWSアカウントやビジネスアプリケーションへのシングルサインオンアクセスを一元管理するサービス。現在はIAM Identity Centerに名称変更されており、SSOポータルから複数アカウントへのアクセスを提供する。",
+        "domain": "aws",
+        "keywords": [
+          "SSO",
+          "シングルサインオン",
+          "IAM Identity Center",
+          "アクセス管理",
+          "マルチアカウント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS GuardDuty",
+    "reading": "えーだぶりゅーえすがーどでゅーてぃ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "機械学習とインテリジェンスフィードを使ってAWSアカウント・ワークロードへの脅威を継続的に検出するマネージド脅威検出サービス。VPCフローログ・DNS・CloudTrailを分析し、不審な活動を自動的にアラートする。",
+        "domain": "aws",
+        "keywords": [
+          "脅威検出",
+          "セキュリティ",
+          "機械学習",
+          "SIEM",
+          "不審活動"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Macie",
+    "reading": "あまぞんめいしー",
+    "aliases": [
+      "Macie"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習を使ってS3バケット内の機密データ（個人情報・クレジットカード番号など）を自動検出・分類・保護するデータセキュリティサービス。データプライバシーリスクの可視化とコンプライアンス対応を支援する。",
+        "domain": "aws",
+        "keywords": [
+          "データ保護",
+          "機密データ",
+          "S3",
+          "PII",
+          "コンプライアンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudWatch Logs",
+    "reading": "くらうどうぉっちろぐず",
+    "aliases": [
+      "Amazon CloudWatch Logs"
+    ],
+    "senses": [
+      {
+        "definition": "AWSリソースやアプリケーションからログデータを収集・保存・監視するサービス。Lambdaの実行ログ、EC2のシステムログ、カスタムアプリログをリアルタイムで収集し、Insights機能でクエリ分析が可能。",
+        "domain": "aws",
+        "keywords": [
+          "ログ管理",
+          "監視",
+          "CloudWatch",
+          "Insights",
+          "保存"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudWatch Alarms",
+    "reading": "くらうどうぉっちあらーむず",
+    "aliases": [
+      "Amazon CloudWatch Alarms"
+    ],
+    "senses": [
+      {
+        "definition": "CloudWatchメトリクスが閾値を超えた場合に通知やアクションを自動実行するアラーム機能。SNSによるメール通知、Auto ScalingアクションのトリガーやEC2インスタンスの自動停止・復旧に使用される。",
+        "domain": "aws",
+        "keywords": [
+          "アラーム",
+          "閾値",
+          "メトリクス",
+          "通知",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudWatch Metrics",
+    "reading": "くらうどうぉっちめとりくす",
+    "aliases": [
+      "Amazon CloudWatch Metrics"
+    ],
+    "senses": [
+      {
+        "definition": "AWSサービスやカスタムアプリケーションから収集される時系列の監視データ。CPU使用率・リクエスト数・エラー率などの標準メトリクスと、PutMetricData APIで送信するカスタムメトリクスで構成される。",
+        "domain": "aws",
+        "keywords": [
+          "メトリクス",
+          "監視",
+          "時系列",
+          "カスタムメトリクス",
+          "ダッシュボード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Kinesis Data Streams",
+    "reading": "きねしすでーたすとりーむず",
+    "aliases": [
+      "Amazon Kinesis Data Streams",
+      "KDS"
+    ],
+    "senses": [
+      {
+        "definition": "大規模なリアルタイムデータストリームをミリ秒単位で収集・処理するAWSサービス。シャードという並列処理単位でスループットをスケールし、複数のコンシューマーが同一ストリームを並行処理できる。",
+        "domain": "aws",
+        "keywords": [
+          "ストリーミング",
+          "リアルタイム",
+          "シャード",
+          "Kinesis",
+          "並列処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Kinesis Data Firehose",
+    "reading": "きねしすでーたふぁいあほーす",
+    "aliases": [
+      "Amazon Kinesis Data Firehose"
+    ],
+    "senses": [
+      {
+        "definition": "ストリームデータをS3・Redshift・OpenSearch・Splunkなどに自動的にロードするフルマネージドETLサービス。バッファリング・圧縮・暗号化・変換を自動処理し、サーバーレスで運用負担なくデータレイクに配信する。",
+        "domain": "aws",
+        "keywords": [
+          "ETL",
+          "データ配信",
+          "S3",
+          "Redshift",
+          "ストリーミング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Kinesis Data Analytics",
+    "reading": "きねしすでーたあなりてぃくす",
+    "aliases": [
+      "Amazon Kinesis Data Analytics",
+      "Amazon Managed Service for Apache Flink"
+    ],
+    "senses": [
+      {
+        "definition": "ストリーミングデータをSQLまたはApache Flinkを使用してリアルタイムに分析するマネージドサービス。集計・フィルタリング・異常検知をストリームデータに対してリアルタイム実行できる。",
+        "domain": "aws",
+        "keywords": [
+          "リアルタイム分析",
+          "ストリーム",
+          "Flink",
+          "SQL",
+          "Kinesis"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Lake Formation",
+    "reading": "えーだぶりゅーえすれいくふぉーめーしょん",
+    "aliases": [
+      "Lake Formation"
+    ],
+    "senses": [
+      {
+        "definition": "データレイクの構築・保護・管理を簡素化するAWSサービス。S3上のデータカタログ管理、細かいアクセス制御（列・行レベル）、データ共有をGlueと連携して提供し、ガバナンスを強化する。",
+        "domain": "aws",
+        "keywords": [
+          "データレイク",
+          "データガバナンス",
+          "S3",
+          "Glue",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon QuickSight",
+    "reading": "あまぞんくいっくさいと",
+    "aliases": [
+      "QuickSight"
+    ],
+    "senses": [
+      {
+        "definition": "BIダッシュボードと分析レポートをブラウザやモバイルで提供するクラウドネイティブBIサービス。SPICE（インメモリエンジン）で高速クエリを実現し、ML洞察機能で異常検知や予測を自動提示する。",
+        "domain": "aws",
+        "keywords": [
+          "BI",
+          "ダッシュボード",
+          "SPICE",
+          "可視化",
+          "データ分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon EMR",
+    "reading": "あまぞんいーえむあーる",
+    "aliases": [
+      "Elastic MapReduce"
+    ],
+    "senses": [
+      {
+        "definition": "Apache Spark・Hadoop・HBase・Prestoなどのオープンソースビッグデータフレームワークをマネージドクラスターで実行するサービス。EC2・EKS・Serverlessの実行環境を選択でき、大規模データ処理を低コストで実現する。",
+        "domain": "aws",
+        "keywords": [
+          "Spark",
+          "Hadoop",
+          "ビッグデータ",
+          "クラスター",
+          "マネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Data Pipeline",
+    "reading": "えーだぶりゅーえすでーたぱいぷらいん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "オンプレミスとAWSサービス間でデータを定期的に移動・変換するワークフロー自動化サービス。S3・RDS・DynamoDB・Redshiftへのデータ転送をスケジュール実行し、依存関係を管理する。",
+        "domain": "aws",
+        "keywords": [
+          "ETL",
+          "ワークフロー",
+          "データ移動",
+          "スケジュール",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon SageMaker",
+    "reading": "あまぞんせーじめーかー",
+    "aliases": [
+      "SageMaker"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習モデルの構築・トレーニング・デプロイをエンドツーエンドで支援するフルマネージドMLプラットフォーム。データ準備からモデル監視まで一貫したワークフローを提供し、MLOpsを加速する。",
+        "domain": "aws",
+        "keywords": [
+          "機械学習",
+          "MLOps",
+          "トレーニング",
+          "デプロイ",
+          "フルマネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SageMaker Studio",
+    "reading": "せーじめーかーすたじお",
+    "aliases": [
+      "Amazon SageMaker Studio"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習開発のためのウェブベース統合開発環境（IDE）。Jupyter Labをベースに、データ探索・実験管理・モデルデプロイ・MLパイプライン構築を一つのUIから操作できるSageMakerのフロントエンド。",
+        "domain": "aws",
+        "keywords": [
+          "IDE",
+          "JupyterLab",
+          "機械学習",
+          "実験管理",
+          "SageMaker"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SageMaker Endpoints",
+    "reading": "せーじめーかーえんどぽいんと",
+    "aliases": [
+      "Amazon SageMaker Endpoints"
+    ],
+    "senses": [
+      {
+        "definition": "トレーニング済み機械学習モデルをリアルタイム推論または非同期推論として公開するRESTエンドポイント。オートスケーリング、マルチモデルエンドポイント、A/Bテスト用の本番バリアント機能を持つ。",
+        "domain": "aws",
+        "keywords": [
+          "推論",
+          "エンドポイント",
+          "リアルタイム",
+          "オートスケーリング",
+          "MLデプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Rekognition",
+    "reading": "あまぞんれこぐにしょん",
+    "aliases": [
+      "Rekognition"
+    ],
+    "senses": [
+      {
+        "definition": "画像・動画から顔認識・物体検出・テキスト抽出・コンテンツモデレーションを行うAIサービス。事前トレーニング済みモデルをAPIで利用でき、顔コレクションを作成してカスタム顔検索も可能。",
+        "domain": "aws",
+        "keywords": [
+          "画像認識",
+          "顔認証",
+          "物体検出",
+          "コンピュータビジョン",
+          "AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Comprehend",
+    "reading": "あまぞんこんぷりへんど",
+    "aliases": [
+      "Comprehend"
+    ],
+    "senses": [
+      {
+        "definition": "自然言語処理（NLP）を使ってテキストからエンティティ・感情・キーフレーズ・言語・トピックを抽出するAIサービス。カスタム分類モデルのトレーニングにも対応し、大量テキスト分析を自動化する。",
+        "domain": "aws",
+        "keywords": [
+          "NLP",
+          "自然言語処理",
+          "感情分析",
+          "エンティティ認識",
+          "テキスト分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Polly",
+    "reading": "あまぞんぽりー",
+    "aliases": [
+      "Polly"
+    ],
+    "senses": [
+      {
+        "definition": "テキストを人間らしい音声に変換するテキスト読み上げ（TTS）サービス。多数の言語・音声に対応し、ニューラルTTSエンジンで自然な抑揚を実現する。音声ガイドやポッドキャスト自動生成に活用される。",
+        "domain": "aws",
+        "keywords": [
+          "TTS",
+          "テキスト読み上げ",
+          "音声合成",
+          "多言語",
+          "ニューラルTTS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Transcribe",
+    "reading": "あまぞんとらんすくらいぶ",
+    "aliases": [
+      "Transcribe"
+    ],
+    "senses": [
+      {
+        "definition": "音声をテキストに自動変換する音声認識（ASR）サービス。話者識別・カスタム語彙・チャンネル識別・リアルタイム文字起こしをサポートし、コールセンター分析や会議議事録作成に活用される。",
+        "domain": "aws",
+        "keywords": [
+          "音声認識",
+          "文字起こし",
+          "ASR",
+          "話者識別",
+          "リアルタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Translate",
+    "reading": "あまぞんとらんすれーと",
+    "aliases": [
+      "Translate"
+    ],
+    "senses": [
+      {
+        "definition": "ニューラル機械翻訳を使ってテキストを75以上の言語間でリアルタイム・バッチ翻訳するサービス。カスタム用語集で専門用語の翻訳を制御でき、多言語コンテンツのローカライズを自動化する。",
+        "domain": "aws",
+        "keywords": [
+          "機械翻訳",
+          "多言語",
+          "ニューラル翻訳",
+          "ローカライズ",
+          "バッチ翻訳"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Lex",
+    "reading": "あまぞんれっくす",
+    "aliases": [
+      "Lex"
+    ],
+    "senses": [
+      {
+        "definition": "音声とテキストを使った会話インターフェース（チャットボット・音声ボット）を構築するAIサービス。Alexaと同じエンジンを使い、インテント・スロット・フルフィルメントロジックでダイアログを設計する。",
+        "domain": "aws",
+        "keywords": [
+          "チャットボット",
+          "会話AI",
+          "インテント",
+          "NLU",
+          "音声インターフェース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Textract",
+    "reading": "あまぞんてきすとらくと",
+    "aliases": [
+      "Textract"
+    ],
+    "senses": [
+      {
+        "definition": "ドキュメント画像からテキスト・テーブル・フォームデータを自動抽出するAIサービス。OCRを超えてフォームのフィールドと値のペアやテーブル構造を認識し、請求書・申請書の処理自動化に活用される。",
+        "domain": "aws",
+        "keywords": [
+          "OCR",
+          "ドキュメント処理",
+          "テーブル抽出",
+          "フォーム認識",
+          "AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS CodeArtifact",
+    "reading": "えーだぶりゅーえすこーどあーてぃふぁくと",
+    "aliases": [
+      "CodeArtifact"
+    ],
+    "senses": [
+      {
+        "definition": "npm・PyPI・Maven・NuGetなどのパッケージをセキュアに保存・共有・配布するマネージドアーティファクトリポジトリ。社内パッケージの公開と外部リポジトリのプロキシ・キャッシュ機能を提供する。",
+        "domain": "aws",
+        "keywords": [
+          "パッケージ管理",
+          "アーティファクト",
+          "npm",
+          "PyPI",
+          "Maven"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFormation StackSets",
+    "reading": "くらうどふぉーめーしょんすたっくせっつ",
+    "aliases": [
+      "AWS CloudFormation StackSets"
+    ],
+    "senses": [
+      {
+        "definition": "単一のCloudFormationテンプレートを複数のAWSアカウントおよびリージョンに一括デプロイする機能。AWS Organizationsと統合して組織全体への統一インフラ展開や、ガードレールの一括適用に使用される。",
+        "domain": "aws",
+        "keywords": [
+          "CloudFormation",
+          "マルチアカウント",
+          "マルチリージョン",
+          "Organizations",
+          "一括デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Well-Architected Tool",
+    "reading": "えーだぶりゅーえすうぇるあーきてくてっどつーる",
+    "aliases": [
+      "Well-Architected Tool",
+      "WAT"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Well-Architectedフレームワークの質問に回答することでアーキテクチャのリスクを評価するセルフサービスツール。6つの柱（運用卓越性・セキュリティ・信頼性・パフォーマンス・コスト最適化・持続可能性）に基づいて改善点を特定する。",
+        "domain": "aws",
+        "keywords": [
+          "Well-Architected",
+          "アーキテクチャレビュー",
+          "リスク評価",
+          "ベストプラクティス",
+          "6本柱"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Service Catalog",
+    "reading": "えーだぶりゅーえすさーびすかたろぐ",
+    "aliases": [
+      "Service Catalog"
+    ],
+    "senses": [
+      {
+        "definition": "ITサービスの承認済みカタログを作成・管理・配布するサービス。CloudFormationテンプレートを製品として登録し、エンドユーザーがセルフサービスで規定のリソースをプロビジョニングできる環境を構築する。",
+        "domain": "aws",
+        "keywords": [
+          "ガバナンス",
+          "セルフサービス",
+          "プロビジョニング",
+          "コンプライアンス",
+          "IT管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Proton",
+    "reading": "えーだぶりゅーえすぷろとん",
+    "aliases": [
+      "Proton"
+    ],
+    "senses": [
+      {
+        "definition": "プラットフォームエンジニアリングチームがサービステンプレートを定義し、開発チームがそれを使って標準化されたマイクロサービスインフラを自律的にデプロイできる自動化サービス。",
+        "domain": "aws",
+        "keywords": [
+          "プラットフォームエンジニアリング",
+          "マイクロサービス",
+          "テンプレート",
+          "自動化",
+          "標準化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Connect",
+    "reading": "あまぞんこねくと",
+    "aliases": [
+      "Connect"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドベースのコンタクトセンタープラットフォーム。音声通話・チャット・タスク管理を統合し、AIによる自動応答（Lex連携）・エージェント支援・通話分析を提供する従量課金型サービス。",
+        "domain": "aws",
+        "keywords": [
+          "コンタクトセンター",
+          "クラウドCCaaS",
+          "IVR",
+          "エージェント",
+          "音声AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Pinpoint",
+    "reading": "あまぞんぴんぽいんと",
+    "aliases": [
+      "Pinpoint"
+    ],
+    "senses": [
+      {
+        "definition": "メール・SMS・プッシュ通知・音声メッセージを使ったユーザーエンゲージメントキャンペーンを管理するマーケティングコミュニケーションサービス。セグメンテーション・A/Bテスト・配信分析機能を備える。",
+        "domain": "aws",
+        "keywords": [
+          "マーケティング",
+          "メッセージング",
+          "プッシュ通知",
+          "SMS",
+          "エンゲージメント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Amplify",
+    "reading": "えーだぶりゅーえすあんぷりふぁい",
+    "aliases": [
+      "Amplify"
+    ],
+    "senses": [
+      {
+        "definition": "フロントエンド（React・Vue・Next.js・モバイル）からAWSバックエンドを素早く構築・デプロイするフルスタック開発プラットフォーム。認証・API・ストレージ・ホスティングをライブラリとCLIで抽象化する。",
+        "domain": "aws",
+        "keywords": [
+          "フルスタック",
+          "フロントエンド",
+          "ホスティング",
+          "モバイル",
+          "CI/CD"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SageMaker Training",
+    "reading": "せーじめーかーとれーにんぐ",
+    "aliases": [
+      "Amazon SageMaker Training"
+    ],
+    "senses": [
+      {
+        "definition": "マネージドインフラ上で機械学習モデルのトレーニングジョブを実行するSageMakerの機能。組み込みアルゴリズム・独自スクリプト・分散トレーニング・スポットインスタンス活用による大規模トレーニングを支援する。",
+        "domain": "aws",
+        "keywords": [
+          "機械学習",
+          "トレーニングジョブ",
+          "分散学習",
+          "スポットインスタンス",
+          "SageMaker"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SageMaker Pipelines",
+    "reading": "せーじめーかーぱいぷらいんず",
+    "aliases": [
+      "Amazon SageMaker Pipelines"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習ワークフローをコードで定義・実行・追跡するMLOpsパイプラインサービス。データ処理・トレーニング・評価・デプロイの各ステップを有向非巡回グラフ（DAG）で管理し、実験の再現性を確保する。",
+        "domain": "aws",
+        "keywords": [
+          "MLOps",
+          "パイプライン",
+          "DAG",
+          "実験管理",
+          "再現性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Forecast",
+    "reading": "あまぞんふぉーきゃすと",
+    "aliases": [
+      "Forecast"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習を使って時系列データから高精度な需要予測・在庫予測を生成するフルマネージド予測サービス。DeepAR・NPTS・ETS・ARIMAなど複数アルゴリズムを自動選択し、外部変数（天候・休日）も考慮する。",
+        "domain": "aws",
+        "keywords": [
+          "需要予測",
+          "時系列",
+          "機械学習",
+          "DeepAR",
+          "予測分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Personalize",
+    "reading": "あまぞんぱーそならいず",
+    "aliases": [
+      "Personalize"
+    ],
+    "senses": [
+      {
+        "definition": "EC・メディア・広告向けのリアルタイムパーソナライズ推薦システムを構築するマネージドMLサービス。ユーザー行動データを学習してレコメンデーションAPIを提供し、MLの専門知識なしに実装できる。",
+        "domain": "aws",
+        "keywords": [
+          "レコメンデーション",
+          "パーソナライズ",
+          "推薦システム",
+          "機械学習",
+          "EC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Kendra",
+    "reading": "あまぞんけんどら",
+    "aliases": [
+      "Kendra"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習を使った企業向けインテリジェント検索サービス。S3・SharePoint・Salesforceなど多様なデータソースから文書をインデックス化し、自然言語の質問に対して正確な回答と関連ドキュメントを返す。",
+        "domain": "aws",
+        "keywords": [
+          "エンタープライズ検索",
+          "自然言語検索",
+          "インデックス",
+          "ドキュメント検索",
+          "機械学習"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon CodeWhisperer",
+    "reading": "あまぞんこーどうぃすぱらー",
+    "aliases": [
+      "CodeWhisperer",
+      "Amazon Q Developer"
+    ],
+    "senses": [
+      {
+        "definition": "AWSが提供するAIコードアシスタント。コードの文脈からリアルタイムに次のコード候補を提案し、セキュリティスキャン・オープンソースライセンスの帰属追跡も提供する。現在はAmazon Q Developerに統合されている。",
+        "domain": "aws",
+        "keywords": [
+          "AIコーディング",
+          "コード補完",
+          "セキュリティスキャン",
+          "開発者ツール",
+          "Amazon Q"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Managed Workflows for Apache Airflow",
+    "reading": "あまぞんまねーじどわーくふろーずふぉーあぱっちえあーふろー",
+    "aliases": [
+      "Amazon MWAA",
+      "MWAA"
+    ],
+    "senses": [
+      {
+        "definition": "Apache AirflowをフルマネージドEnvironmentで実行するサービス。DagのS3格納・ワーカーのオートスケーリング・VPCネットワーク分離を提供し、データパイプラインのオーケストレーションをサーバーレスで運用できる。",
+        "domain": "aws",
+        "keywords": [
+          "Airflow",
+          "ワークフロー",
+          "DAG",
+          "データパイプライン",
+          "マネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Detective",
+    "reading": "あまぞんでてくてぃぶ",
+    "aliases": [
+      "Detective"
+    ],
+    "senses": [
+      {
+        "definition": "VPCフローログ・CloudTrailログ・GuardDutyの検知結果を機械学習でグラフ分析し、セキュリティインシデントの根本原因調査を支援するサービス。関係するエンティティの行動パターンを時系列で可視化する。",
+        "domain": "aws",
+        "keywords": [
+          "セキュリティ調査",
+          "グラフ分析",
+          "インシデント対応",
+          "GuardDuty",
+          "フォレンジック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Firewall Manager",
+    "reading": "えーだぶりゅーえすふぁいあうぉーるまねーじゃー",
+    "aliases": [
+      "Firewall Manager"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Organizations全体のWAF・Shield Advanced・セキュリティグループ・Network Firewallポリシーを一元管理・自動適用するセキュリティ管理サービス。新規アカウントにも自動でポリシーを適用してコンプライアンスを維持する。",
+        "domain": "aws",
+        "keywords": [
+          "WAF",
+          "セキュリティポリシー",
+          "Organizations",
+          "一元管理",
+          "ファイアウォール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Resource Access Manager",
+    "reading": "えーだぶりゅーえすりそーすあくせすまねーじゃー",
+    "aliases": [
+      "Resource Access Manager"
+    ],
+    "senses": [
+      {
+        "definition": "AWSリソースを複数アカウント間または組織内でセキュアに共有するサービス。VPCサブネット・Transit Gateway・Route 53 Resolver・License Managerライセンスなどを複製なしに共有できる。",
+        "domain": "aws",
+        "keywords": [
+          "リソース共有",
+          "マルチアカウント",
+          "VPC",
+          "Organizations",
+          "コスト削減"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS License Manager",
+    "reading": "えーだぶりゅーえすらいせんすまねーじゃー",
+    "aliases": [
+      "License Manager"
+    ],
+    "senses": [
+      {
+        "definition": "Microsoft・Oracle・SAPなどのソフトウェアライセンスをAWSおよびオンプレミスで一元追跡・管理するサービス。ライセンスルールを設定してコンプライアンス違反を防止し、使用状況レポートを生成する。",
+        "domain": "aws",
+        "keywords": [
+          "ライセンス管理",
+          "コンプライアンス",
+          "Microsoft",
+          "Oracle",
+          "コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Cost and Usage Report",
+    "reading": "えーだぶりゅーえすこすとあんどゆーせーじれぽーと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AWSのコストと使用量の詳細データをCSVまたはParquet形式でS3に定期出力するレポートサービス。リソースレベルの時間単位コスト、タグ・Savings Plans・リザーブドインスタンスの適用情報を含む最詳細なコストデータ。",
+        "domain": "aws",
+        "keywords": [
+          "コストレポート",
+          "詳細分析",
+          "S3",
+          "Parquet",
+          "FinOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Private CA",
+    "reading": "えーだぶりゅーえすぷらいべーとしーえー",
+    "aliases": [
+      "AWS Private Certificate Authority",
+      "ACM PCA"
+    ],
+    "senses": [
+      {
+        "definition": "組織内部のプライベートPKIインフラを構築するマネージドプライベート認証局サービス。内部サービス間のTLS証明書・コード署名証明書・IoTデバイス証明書を発行・管理し、CAの運用負担を削減する。",
+        "domain": "aws",
+        "keywords": [
+          "PKI",
+          "プライベート認証局",
+          "TLS",
+          "証明書",
+          "内部CA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Signer",
+    "reading": "えーだぶりゅーえすさいなー",
+    "aliases": [
+      "Signer"
+    ],
+    "senses": [
+      {
+        "definition": "Lambda関数パッケージとコンテナイメージのコード署名を管理するサービス。承認された署名プロファイルで署名されたコードのみをデプロイするポリシーを設定でき、サプライチェーン攻撃を防止する。",
+        "domain": "aws",
+        "keywords": [
+          "コード署名",
+          "サプライチェーン",
+          "Lambda",
+          "セキュリティ",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Security Lake",
+    "reading": "あまぞんせきゅりてぃれいく",
+    "aliases": [
+      "Security Lake"
+    ],
+    "senses": [
+      {
+        "definition": "AWSサービス・SaaSアプリ・オンプレミスから収集したセキュリティログをOCSF（Open Cybersecurity Schema Framework）形式に正規化してS3に集約するセキュリティデータレイクサービス。",
+        "domain": "aws",
+        "keywords": [
+          "セキュリティデータレイク",
+          "OCSF",
+          "ログ集約",
+          "SIEM",
+          "脅威分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Artifact",
+    "reading": "えーだぶりゅーえすあーてぃふぁくと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AWSのコンプライアンスレポート（SOC・PCI DSS・ISO・FedRAMPなど）と契約書類をオンデマンドでダウンロードできるコンプライアンス文書ポータル。監査対応や規制要件の証拠収集に使用する。",
+        "domain": "aws",
+        "keywords": [
+          "コンプライアンス",
+          "SOC",
+          "ISO",
+          "PCI DSS",
+          "監査"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Audit Manager",
+    "reading": "えーだぶりゅーえすおーでぃっとまねーじゃー",
+    "aliases": [
+      "Audit Manager"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの使用状況を継続的に評価し、PCI DSS・HIPAA・SOC2などのコンプライアンスフレームワークに対するエビデンスを自動収集するサービス。監査準備作業の工数を大幅に削減する。",
+        "domain": "aws",
+        "keywords": [
+          "監査",
+          "コンプライアンス",
+          "エビデンス",
+          "フレームワーク",
+          "自動評価"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Health Dashboard",
+    "reading": "えーだぶりゅーえすへるすだっしゅぼーど",
+    "aliases": [
+      "AWS Personal Health Dashboard",
+      "PHD"
+    ],
+    "senses": [
+      {
+        "definition": "AWSサービスの障害・メンテナンス・アカウント固有のアラートをリアルタイムで通知するダッシュボード。EventBridgeと連携して自動復旧アクションをトリガーでき、影響を受けるリソースを特定できる。",
+        "domain": "aws",
+        "keywords": [
+          "サービス状態",
+          "障害通知",
+          "メンテナンス",
+          "可用性",
+          "アラート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Cognito",
+    "reading": "あまぞんこぐにーと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ウェブ・モバイルアプリにユーザー認証・認可・ユーザー管理機能を追加するAWSサービス。ユーザープール（認証）とIDプール（AWS認証情報の取得）の2つのコンポーネントで構成され、ソーシャルログインとSAMLフェデレーションに対応する。",
+        "domain": "aws",
+        "keywords": [
+          "認証",
+          "ユーザー管理",
+          "フェデレーション",
+          "OAuth",
+          "モバイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Cognito User Pool",
+    "reading": "あまぞんこぐにーとゆーざーぷーる",
+    "aliases": [
+      "Cognito User Pool"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Cognitoのユーザーディレクトリ機能。ユーザー登録・サインイン・パスワード管理・多要素認証・カスタム認証フローを提供し、JWTトークンをアプリに返すOAuth 2.0/OpenID Connect準拠のIdP。",
+        "domain": "aws",
+        "keywords": [
+          "ユーザーディレクトリ",
+          "認証",
+          "MFA",
+          "JWT",
+          "OIDC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Cognito Identity Pool",
+    "reading": "あまぞんこぐにーとあいでんてぃてぃぷーる",
+    "aliases": [
+      "Cognito Identity Pool",
+      "Cognito Federated Identities"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon Cognitoの認証情報ブローカー機能。認証済みユーザー（CognitoユーザープールやGoogle等）と未認証ゲストに一時的なAWS認証情報（IAMロール経由）を払い出し、S3やDynamoDBへの直接アクセスを実現する。",
+        "domain": "aws",
+        "keywords": [
+          "フェデレーション",
+          "IAMロール",
+          "一時認証情報",
+          "STS",
+          "モバイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS IAM Access Analyzer",
+    "reading": "えーだぶりゅーえすあいえーえむあくせすあなりざー",
+    "aliases": [
+      "IAM Access Analyzer",
+      "Access Analyzer"
+    ],
+    "senses": [
+      {
+        "definition": "S3・IAMロール・KMSキー・Lambdaなどのリソースポリシーを分析し、外部エンティティからアクセス可能なリソース（意図しない公開）を自動検出するセキュリティツール。最小権限ポリシーの生成も支援する。",
+        "domain": "aws",
+        "keywords": [
+          "最小権限",
+          "ポリシー分析",
+          "パブリックアクセス",
+          "セキュリティ",
+          "IAM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Verified Permissions",
+    "reading": "あまぞんべりふぁいどぱーみっしょんず",
+    "aliases": [
+      "Verified Permissions",
+      "AVP"
+    ],
+    "senses": [
+      {
+        "definition": "Cedar言語を使ってアプリケーション内のきめ細かい認可（AuthZ）ロジックを外部化・管理するポリシーエンジン。属性ベースアクセス制御（ABAC）を実装し、認可ロジックのコードからの分離を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "認可",
+          "Cedar",
+          "ABAC",
+          "ポリシーエンジン",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Resilience Hub",
+    "reading": "えーだぶりゅーえすれじりえんすはぶ",
+    "aliases": [
+      "Resilience Hub"
+    ],
+    "senses": [
+      {
+        "definition": "アプリケーションの耐障害性を定義・検証・追跡するサービス。RTO/RPO目標を設定して現状のアーキテクチャを評価し、耐障害性スコアと改善推奨を提供してWell-Architectedの信頼性向上を支援する。",
+        "domain": "aws",
+        "keywords": [
+          "耐障害性",
+          "RTO",
+          "RPO",
+          "Well-Architected",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Fault Injection Simulator",
+    "reading": "えーだぶりゅーえすふぉーるといんじぇくしょんしみゅれーたー",
+    "aliases": [
+      "FIS",
+      "AWS FIS"
+    ],
+    "senses": [
+      {
+        "definition": "本番ライクな環境でCPUスパイク・ネットワーク遅延・インスタンス停止などの障害を意図的に注入してシステムの回復力を検証するカオスエンジニアリングサービス。実験テンプレートでセーフガードを設定できる。",
+        "domain": "aws",
+        "keywords": [
+          "カオスエンジニアリング",
+          "耐障害性テスト",
+          "障害注入",
+          "実験",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon DevOps Guru",
+    "reading": "あまぞんでーぼっぷすぐるー",
+    "aliases": [
+      "DevOps Guru"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習でアプリケーションの運用データを継続的に分析し、パフォーマンス問題・障害の予兆を自動検出するAIOpsサービス。CloudWatch・X-Ray・CloudTrailを横断分析して異常の根本原因と推奨アクションを提示する。",
+        "domain": "aws",
+        "keywords": [
+          "AIOps",
+          "異常検知",
+          "運用インサイト",
+          "機械学習",
+          "予兆検知"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Fraud Detector",
+    "reading": "あまぞんふろーどでてくたー",
+    "aliases": [
+      "Fraud Detector"
+    ],
+    "senses": [
+      {
+        "definition": "Amazonが培った機械学習モデルを使ってオンライン詐欺（不正アカウント登録・不正決済など）をリアルタイムで検出するマネージドサービス。過去の取引データを学習してカスタム詐欺検知ロジックを構築できる。",
+        "domain": "aws",
+        "keywords": [
+          "不正検知",
+          "詐欺対策",
+          "機械学習",
+          "リアルタイム",
+          "リスクスコア"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Comprehend Medical",
+    "reading": "あまぞんこんぷりへんどめでぃかる",
+    "aliases": [
+      "Comprehend Medical"
+    ],
+    "senses": [
+      {
+        "definition": "医療テキスト（カルテ・処方箋・臨床メモ）から疾患名・薬剤名・医療処置・解剖部位などの医療エンティティとその関係性を自動抽出するNLPサービス。ICD-10・RxNormとのマッピングも提供する。",
+        "domain": "aws",
+        "keywords": [
+          "医療NLP",
+          "エンティティ抽出",
+          "電子カルテ",
+          "ICD-10",
+          "ヘルスケアAI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Application Composer",
+    "reading": "えーだぶりゅーえすあぷりけーしょんこんぽーざー",
+    "aliases": [
+      "Application Composer"
+    ],
+    "senses": [
+      {
+        "definition": "サーバーレスアプリケーションのアーキテクチャをビジュアルキャンバスで設計し、SAM/CloudFormationテンプレートをリアルタイムで生成するドラッグ＆ドロップツール。LambdaやAPI GatewayをGUI操作で接続できる。",
+        "domain": "aws",
+        "keywords": [
+          "ビジュアル設計",
+          "サーバーレス",
+          "SAM",
+          "CloudFormation",
+          "インフラ設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Chatbot",
+    "reading": "えーだぶりゅーえすちゃっとぼっと",
+    "aliases": [
+      "Chatbot"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの通知をSlackやAmazon Chimeのチャンネルに配信し、チャット経由でAWSリソースを操作できるChatOpsサービス。CloudWatchアラームやSecurity Hubの検知をチャンネルに自動投稿し、RunBookの実行もできる。",
+        "domain": "aws",
+        "keywords": [
+          "ChatOps",
+          "Slack",
+          "通知",
+          "運用",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Support",
+    "reading": "えーだぶりゅーえすさぽーと",
+    "aliases": [
+      "AWS Support Plans"
+    ],
+    "senses": [
+      {
+        "definition": "AWSが提供する技術サポートプランの総称。Basic・Developer・Business・Enterprise On-Ramp・Enterpriseの5段階があり、上位プランほど応答時間・TAM対応・運用レビューなどのサポートレベルが向上する。",
+        "domain": "aws",
+        "keywords": [
+          "サポートプラン",
+          "TAM",
+          "技術サポート",
+          "Enterprise",
+          "SLA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Security Token Service",
+    "reading": "えーだぶりゅーえすせきゅりてぃとーくんさーびす",
+    "aliases": [
+      "STS"
+    ],
+    "senses": [
+      {
+        "definition": "IAMユーザーやフェデレーションユーザーに一時的なセキュリティ認証情報を発行するウェブサービス。AssumeRole・AssumeRoleWithWebIdentity・GetFederationTokenなどのAPIで短期間有効なアクセスキーを取得できる。",
+        "domain": "aws",
+        "keywords": [
+          "一時認証情報",
+          "AssumeRole",
+          "フェデレーション",
+          "IAM",
+          "ロール切り替え"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Directory Service",
+    "reading": "えーだぶりゅーえすでぃれくとりさーびす",
+    "aliases": [
+      "Directory Service"
+    ],
+    "senses": [
+      {
+        "definition": "AWS上でMicrosoft Active DirectoryをマネージドまたはAD Connectorで利用するサービス。WorkSpaces・RDS・FSx for Windowsとの統合や、オンプレミスADとの信頼関係構築でハイブリッド認証を実現する。",
+        "domain": "aws",
+        "keywords": [
+          "Active Directory",
+          "LDAP",
+          "認証",
+          "ハイブリッド",
+          "WorkSpaces"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Transfer Family",
+    "reading": "えーだぶりゅーえすとらんすふぁみりー",
+    "aliases": [
+      "Transfer Family"
+    ],
+    "senses": [
+      {
+        "definition": "SFTP・FTPS・FTP・AS2プロトコルを使ってファイルをS3またはEFSに転送するマネージドファイル転送サービス。既存のファイル転送ワークフローをコード変更なしにAWSへ移行でき、既存のIAM・Active Directory認証と統合する。",
+        "domain": "aws",
+        "keywords": [
+          "SFTP",
+          "ファイル転送",
+          "S3",
+          "マネージド",
+          "マイグレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon OpenSearch Service",
+    "reading": "あまぞんおーぷんさーちさーびす",
+    "aliases": [
+      "OpenSearch Service",
+      "Amazon Elasticsearch Service"
+    ],
+    "senses": [
+      {
+        "definition": "OpenSearch（Elasticsearch互換）クラスターをフルマネージドで提供するサービス。ログ分析・全文検索・リアルタイムアプリケーション監視に使用され、Dashboards（Kibana互換）で可視化できる。",
+        "domain": "aws",
+        "keywords": [
+          "全文検索",
+          "ログ分析",
+          "Elasticsearch",
+          "Kibana",
+          "リアルタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon DynamoDB Streams",
+    "reading": "あまぞんだいなもでぃびーすとりーむず",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DynamoDBテーブルのアイテム変更（追加・更新・削除）をリアルタイムにキャプチャして時系列で保持する変更データキャプチャ機能。Lambdaトリガーと組み合わせてイベント駆動アーキテクチャを実現する。",
+        "domain": "aws",
+        "keywords": [
+          "CDC",
+          "変更データキャプチャ",
+          "DynamoDB",
+          "イベント駆動",
+          "Lambda"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon DynamoDB Accelerator",
+    "reading": "あまぞんだいなもでぃびーあくせられーたー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DynamoDBと互換性のあるインメモリキャッシュサービス。マイクロ秒レベルのレイテンシで読み取りを高速化し、DynamoDB APIをそのまま使用できる。読み取り集中型ワークロードのスループット向上に最適。",
+        "domain": "aws",
+        "keywords": [
+          "インメモリキャッシュ",
+          "DynamoDB",
+          "マイクロ秒",
+          "高速化",
+          "読み取り最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Database Migration Service",
+    "reading": "えーだぶりゅーえすでーたべーすまいぐれーしょんさーびす",
+    "aliases": [
+      "DMS",
+      "Database Migration Service"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle・SQL Server・MySQL・PostgreSQLなどをAWSデータベースへ最小ダウンタイムで移行するマネージドサービス。継続的レプリケーション（CDC）で移行中もソースDBを稼働させ、異種DB間の変換にはSchema Conversion Toolと組み合わせる。",
+        "domain": "aws",
+        "keywords": [
+          "データベース移行",
+          "CDC",
+          "マイグレーション",
+          "異種DB",
+          "最小ダウンタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Lambda Extensions",
+    "reading": "えーだぶりゅーえすらむだえくすてんしょんず",
+    "aliases": [
+      "Lambda Extensions"
+    ],
+    "senses": [
+      {
+        "definition": "Lambda実行環境に外部ツール（監視エージェント・セキュリティスキャナー・設定管理）をサイドカーとして統合するための拡張機構。Lambdaのライフサイクルイベントにフックして初期化・実行・シャットダウン処理を挿入できる。",
+        "domain": "aws",
+        "keywords": [
+          "Lambda",
+          "サイドカー",
+          "拡張",
+          "監視",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS AppSync",
+    "reading": "えーだぶりゅーえすあっぷしんく",
+    "aliases": [
+      "AppSync"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQL APIをフルマネージドで構築・ホスティングするサービス。リアルタイムデータ同期・オフライン対応・複数データソース（DynamoDB・Lambda・RDS・HTTP）へのリゾルバー設定を提供し、モバイル・Webアプリに最適。",
+        "domain": "aws",
+        "keywords": [
+          "GraphQL",
+          "リアルタイム",
+          "サブスクリプション",
+          "API",
+          "モバイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon AppStream",
+    "reading": "あまぞんあっぷすとりーむ",
+    "aliases": [
+      "AppStream 2.0"
+    ],
+    "senses": [
+      {
+        "definition": "デスクトップアプリケーションをAWSからHTML5ブラウザにストリーミング配信するフルマネージドサービス。CAD・医療画像・開発ツールなどインストール不要でどの端末からも利用でき、データはAWS側に保持される。",
+        "domain": "aws",
+        "keywords": [
+          "アプリストリーミング",
+          "仮想化",
+          "ブラウザ配信",
+          "エンタープライズ",
+          "DaaS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon VPC Lattice",
+    "reading": "あまぞんぶいぴーしーらてぃす",
+    "aliases": [
+      "VPC Lattice"
+    ],
+    "senses": [
+      {
+        "definition": "VPC・アカウント・オーバーレイネットワークの壁を越えてサービス間通信を簡素化するアプリケーションネットワーキングサービス。サービスディスカバリー・認証認可・観測性をVPCピアリングなしに実現する。",
+        "domain": "aws",
+        "keywords": [
+          "サービスネットワーキング",
+          "マイクロサービス",
+          "VPC",
+          "認可",
+          "サービスディスカバリー"
+        ]
+      }
+    ]
+  }
+]

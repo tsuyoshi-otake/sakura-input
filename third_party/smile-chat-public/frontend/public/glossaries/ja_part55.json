@@ -1,0 +1,1788 @@
+[
+  {
+    "term": "SAST",
+    "senses": [
+      {
+        "definition": "静的アプリケーションセキュリティテストの略。ソースコードやバイトコードをコンパイル・実行せずに解析し、SQLインジェクションやバッファオーバーフローなどの脆弱性パターンを検出する手法。CIパイプラインに組み込んで早期発見に活用する。",
+        "domain": "security",
+        "keywords": [
+          "静的解析",
+          "脆弱性検出",
+          "シフトレフト",
+          "CI",
+          "コード品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Static Application Security Testing",
+      "静的アプリケーションセキュリティテスト"
+    ]
+  },
+  {
+    "term": "DAST",
+    "senses": [
+      {
+        "definition": "動的アプリケーションセキュリティテストの略。実際に動作しているアプリケーションに対してリクエストを送信し、レスポンスを解析して脆弱性を発見する手法。実行時の動作を検査するためSASTでは検出できない問題も発見できる。",
+        "domain": "security",
+        "keywords": [
+          "動的解析",
+          "ブラックボックス",
+          "脆弱性検出",
+          "実行時",
+          "Webアプリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dynamic Application Security Testing",
+      "動的アプリケーションセキュリティテスト"
+    ]
+  },
+  {
+    "term": "IAST",
+    "senses": [
+      {
+        "definition": "インタラクティブアプリケーションセキュリティテストの略。アプリケーションにエージェントを組み込み、実行中に内部の処理フローを監視して脆弱性を検出する手法。SASTとDASTの利点を組み合わせた中間的アプローチ。",
+        "domain": "security",
+        "keywords": [
+          "インタラクティブ",
+          "エージェント",
+          "実行時解析",
+          "ハイブリッド",
+          "脆弱性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Interactive Application Security Testing",
+      "インタラクティブアプリケーションセキュリティテスト"
+    ]
+  },
+  {
+    "term": "RASP",
+    "senses": [
+      {
+        "definition": "ランタイムアプリケーション自己防御の略。アプリケーション自体にセキュリティ制御を組み込み、実行時に攻撃を検知・ブロックする技術。インジェクション攻撃やパストラバーサルなどをリアルタイムで防御できる。",
+        "domain": "security",
+        "keywords": [
+          "ランタイム防御",
+          "自己防御",
+          "実行時",
+          "インライン",
+          "攻撃ブロック"
+        ]
+      }
+    ],
+    "aliases": [
+      "Runtime Application Self-Protection",
+      "ランタイムアプリケーション自己防御"
+    ]
+  },
+  {
+    "term": "STRIDE",
+    "senses": [
+      {
+        "definition": "マイクロソフトが開発した脅威モデリングフレームワーク。Spoofing・Tampering・Repudiation・Information Disclosure・Denial of Service・Elevation of Privilegeの6カテゴリで脅威を分類する設計段階向けの手法。",
+        "domain": "security",
+        "keywords": [
+          "脅威モデリング",
+          "分類",
+          "設計",
+          "なりすまし",
+          "権限昇格"
+        ]
+      }
+    ],
+    "aliases": [
+      "STRIDE脅威モデル"
+    ]
+  },
+  {
+    "term": "DREAD",
+    "senses": [
+      {
+        "definition": "脆弱性のリスクを定量化するスコアリングモデル。Damage（被害）・Reproducibility（再現性）・Exploitability（悪用可能性）・Affected Users（影響ユーザー数）・Discoverability（発見容易性）の各軸で1〜10点を付け合計点でリスクを評価する。",
+        "domain": "security",
+        "keywords": [
+          "リスク評価",
+          "スコアリング",
+          "脆弱性",
+          "定量化",
+          "優先度"
+        ]
+      }
+    ],
+    "aliases": [
+      "DREADリスクモデル"
+    ]
+  },
+  {
+    "term": "OWASP ASVS",
+    "senses": [
+      {
+        "definition": "OWASPが定めるアプリケーションセキュリティ検証標準。Webアプリケーションのセキュリティ要件を3段階のレベルで体系化した標準仕様で、設計・開発・テスト・調達の各フェーズで参照される。ASVS はApplication Security Verification Standardの略。",
+        "domain": "security",
+        "keywords": [
+          "OWASP",
+          "セキュリティ標準",
+          "検証",
+          "要件定義",
+          "レベル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Application Security Verification Standard"
+    ]
+  },
+  {
+    "term": "CWE",
+    "senses": [
+      {
+        "definition": "Common Weakness Enumerationの略。ソフトウェアのセキュリティ上の弱点（脆弱性の根本原因となる設計・実装上の欠陥）を体系的に分類した辞書。MITREが管理しており、SASTツールの検出カテゴリや脆弱性報告の共通言語として使われる。",
+        "domain": "security",
+        "keywords": [
+          "脆弱性分類",
+          "MITRE",
+          "弱点",
+          "辞書",
+          "共通言語"
+        ]
+      }
+    ],
+    "aliases": [
+      "Common Weakness Enumeration"
+    ]
+  },
+  {
+    "term": "NVD",
+    "senses": [
+      {
+        "definition": "National Vulnerability Databaseの略。米国国立標準技術研究所（NIST）が管理する脆弱性データベース。CVE番号ごとにCVSSスコア・参照情報・パッチ情報を提供しており、脆弱性管理や優先度付けの基盤として広く利用される。",
+        "domain": "security",
+        "keywords": [
+          "脆弱性DB",
+          "NIST",
+          "CVE",
+          "CVSSスコア",
+          "パッチ管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "National Vulnerability Database",
+      "米国国立脆弱性データベース"
+    ]
+  },
+  {
+    "term": "X-Content-Type-Options",
+    "senses": [
+      {
+        "definition": "HTTPレスポンスヘッダーの一つ。`nosniff`を指定することで、ブラウザがContent-Typeを無視してレスポンスのコンテンツ種別を推測（MIMEスニッフィング）する動作を防止する。スクリプトとして不正に解釈されるリスクを軽減するセキュリティヘッダー。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティヘッダ",
+          "MIMEスニッフィング",
+          "nosniff",
+          "ブラウザ",
+          "XSS防止"
+        ]
+      }
+    ],
+    "aliases": [
+      "nosniff",
+      "MIMEタイプスニッフィング防止"
+    ]
+  },
+  {
+    "term": "X-Frame-Options",
+    "senses": [
+      {
+        "definition": "HTTPレスポンスヘッダーの一つ。ページをiframe内に埋め込むことを制限しクリックジャッキング攻撃を防ぐ。DENY・SAMEORIGIN・ALLOW-FROMの値を指定する。現代ではCSPのframe-ancestorsが推奨される。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティヘッダ",
+          "クリックジャッキング",
+          "iframe",
+          "埋め込み防止",
+          "CSP"
+        ]
+      }
+    ],
+    "aliases": [
+      "フレームオプション",
+      "クリックジャッキング防止ヘッダ"
+    ]
+  },
+  {
+    "term": "Referrer-Policy",
+    "senses": [
+      {
+        "definition": "HTTPレスポンスヘッダーの一つ。リンクやリダイレクトの際にRefererヘッダーでどの程度の情報を送信するかを制御する。`strict-origin-when-cross-origin`や`no-referrer`などのポリシーで機密URLの漏洩やプライバシー侵害を防ぐ。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティヘッダ",
+          "Referer",
+          "プライバシー",
+          "情報漏洩",
+          "クロスオリジン"
+        ]
+      }
+    ],
+    "aliases": [
+      "リファラーポリシー",
+      "参照元ポリシー"
+    ]
+  },
+  {
+    "term": "Permissions-Policy",
+    "senses": [
+      {
+        "definition": "HTTPレスポンスヘッダーの一つ（旧Feature-Policy）。カメラ・マイク・位置情報・全画面表示などブラウザ機能へのアクセス権限をオリジンごとに制御する。埋め込みコンテンツや第三者スクリプトによる不正なデバイスアクセスを防止する。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティヘッダ",
+          "ブラウザ機能",
+          "権限制御",
+          "Feature-Policy",
+          "プライバシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Feature-Policy",
+      "パーミッションポリシー"
+    ]
+  },
+  {
+    "term": "SRI",
+    "senses": [
+      {
+        "definition": "Subresource Integrityの略。CDNなど外部から読み込むスクリプトやスタイルシートのハッシュ値をHTML内に記述し、取得したリソースが改ざんされていないことをブラウザが検証する仕組み。サプライチェーン攻撃対策として有効。",
+        "domain": "security",
+        "keywords": [
+          "整合性検証",
+          "CDN",
+          "ハッシュ",
+          "改ざん検知",
+          "サプライチェーン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Subresource Integrity",
+      "サブリソース完全性"
+    ]
+  },
+  {
+    "term": "SSRF",
+    "senses": [
+      {
+        "definition": "Server-Side Request Forgeryの略。攻撃者がサーバーに細工したURLを送りつけ、サーバー自身に内部ネットワークやクラウドのメタデータエンドポイントへのリクエストを発行させる脆弱性。AWSメタデータサービスへのアクセスによるクレデンシャル窃取が典型例。",
+        "domain": "security",
+        "keywords": [
+          "サーバーサイドリクエスト偽造",
+          "内部ネットワーク",
+          "クラウド",
+          "メタデータ",
+          "脆弱性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Server-Side Request Forgery",
+      "サーバーサイドリクエストフォージェリ"
+    ]
+  },
+  {
+    "term": "XXE",
+    "senses": [
+      {
+        "definition": "XML External Entity Injectionの略。XMLパーサーが外部エンティティ参照を処理する際、攻撃者が細工したXMLを送ることでサーバー上のファイル読み込みやSSRF、DoSを引き起こす脆弱性。外部エンティティ処理を無効化することで防止できる。",
+        "domain": "security",
+        "keywords": [
+          "XML",
+          "エンティティ",
+          "外部ファイル読込",
+          "SSRF",
+          "インジェクション"
+        ]
+      }
+    ],
+    "aliases": [
+      "XML External Entity",
+      "XMLエクスターナルエンティティ攻撃"
+    ]
+  },
+  {
+    "term": "デシリアライゼーション攻撃",
+    "reading": "でしりあらいぜーしょんこうげき",
+    "senses": [
+      {
+        "definition": "信頼できないデータをデシリアライズ（復元）する際に任意コード実行やオブジェクト操作を引き起こす脆弱性を悪用した攻撃。JavaのネイティブシリアライゼーションやPHPのunserialize()が標的になりやすく、入力検証と型検証が対策の基本。",
+        "domain": "security",
+        "keywords": [
+          "安全でないデシリアライゼーション",
+          "任意コード実行",
+          "RCE",
+          "OWASP",
+          "オブジェクト操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "Insecure Deserialization",
+      "安全でないデシリアライゼーション"
+    ]
+  },
+  {
+    "term": "パストラバーサル",
+    "reading": "ぱすとらばーさる",
+    "senses": [
+      {
+        "definition": "ファイルパスに`../`などのディレクトリ移動シーケンスを挿入し、Webサーバーのドキュメントルート外の任意ファイルにアクセスする攻撃。設定ファイルやパスワードファイルの読み取りに悪用される。パス正規化と絶対パス検証で防ぐ。",
+        "domain": "security",
+        "keywords": [
+          "ディレクトリトラバーサル",
+          "ファイルアクセス",
+          "パス操作",
+          "任意ファイル読込",
+          "入力検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Path Traversal",
+      "Directory Traversal",
+      "ディレクトリトラバーサル"
+    ]
+  },
+  {
+    "term": "コマンドインジェクション",
+    "reading": "こまんどいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "ユーザー入力がOSコマンドの一部として実行される脆弱性。セミコロンやパイプなどのシェルメタキャラクタを混入させ任意コマンドを実行させる。パラメータ化コマンド実行APIや入力の厳格なサニタイズで防止する。",
+        "domain": "security",
+        "keywords": [
+          "OSコマンド",
+          "任意コード実行",
+          "シェル",
+          "サニタイズ",
+          "RCE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Command Injection",
+      "OSコマンドインジェクション"
+    ]
+  },
+  {
+    "term": "LDAPインジェクション",
+    "reading": "えるだっぷいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "LDAPクエリに悪意ある入力を挿入し、認証バイパスや不正なディレクトリ情報取得を引き起こす脆弱性。SQLインジェクションのLDAP版。特殊文字をエスケープしたパラメータ化LDAPクエリで防止する。",
+        "domain": "security",
+        "keywords": [
+          "LDAP",
+          "ディレクトリサービス",
+          "認証バイパス",
+          "インジェクション",
+          "エスケープ"
+        ]
+      }
+    ],
+    "aliases": [
+      "LDAP Injection"
+    ]
+  },
+  {
+    "term": "ログインジェクション",
+    "reading": "ろぐいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "ログファイルに改行文字などを含む悪意ある文字列を挿入し、ログ記録を改ざんしたり解析ツールを誤動作させる攻撃。フォレンジックの妨害や不正操作の隠蔽に使われる。ログ出力前に改行・制御文字をサニタイズすることで防ぐ。",
+        "domain": "security",
+        "keywords": [
+          "ログ改ざん",
+          "インジェクション",
+          "フォレンジック",
+          "サニタイズ",
+          "ログ管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Log Injection",
+      "ログ偽装"
+    ]
+  },
+  {
+    "term": "レースコンディション攻撃",
+    "reading": "れーすこんでぃしょんこうげき",
+    "senses": [
+      {
+        "definition": "並行処理における時間的競合（TOCTOU: Time-Of-Check to Time-Of-Use）を悪用した攻撃。チェックと使用の間に状態を改変することで権限昇格や二重処理を引き起こす。適切なロック機構やアトミック操作で防止する。",
+        "domain": "security",
+        "keywords": [
+          "TOCTOU",
+          "競合状態",
+          "並行処理",
+          "権限昇格",
+          "アトミック"
+        ]
+      }
+    ],
+    "aliases": [
+      "Time-Of-Check Time-Of-Use",
+      "TOCTOU"
+    ]
+  },
+  {
+    "term": "オープンリダイレクト",
+    "reading": "おーぷんりだいれくと",
+    "senses": [
+      {
+        "definition": "Webアプリケーションがユーザー指定のURLにリダイレクトする機能を悪用し、フィッシングサイトや悪意あるページへ誘導する攻撃。信頼できるドメインのURLに見せかけて被害者を騙す。リダイレクト先URLを許可リストで厳格に制限することが対策。",
+        "domain": "security",
+        "keywords": [
+          "フィッシング",
+          "URL偽装",
+          "リダイレクト",
+          "入力検証",
+          "許可リスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Open Redirect",
+      "オープンリダイレクト脆弱性"
+    ]
+  },
+  {
+    "term": "マスアサインメント",
+    "reading": "まささいんめんと",
+    "senses": [
+      {
+        "definition": "HTTPリクエストのパラメータをモデルのフィールドに一括代入する機能が悪用され、本来変更不可な属性（管理者フラグ・ロールなど）を書き換えられる脆弱性。許可するフィールドを明示的に指定する許可リスト方式で対策する。",
+        "domain": "security",
+        "keywords": [
+          "一括代入",
+          "モデルバインディング",
+          "権限昇格",
+          "入力検証",
+          "許可リスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mass Assignment",
+      "一括代入脆弱性"
+    ]
+  },
+  {
+    "term": "IDOR",
+    "senses": [
+      {
+        "definition": "Insecure Direct Object Referenceの略。URLやパラメータに含まれるオブジェクトID（ユーザーID・注文番号など）を変更することで、認可チェックなしに他ユーザーのリソースへアクセスできる脆弱性。アクセスごとに認可を検証することで防止する。",
+        "domain": "security",
+        "keywords": [
+          "安全でないオブジェクト参照",
+          "認可",
+          "アクセス制御",
+          "水平権限昇格",
+          "OWASP"
+        ]
+      }
+    ],
+    "aliases": [
+      "Insecure Direct Object Reference",
+      "安全でない直接オブジェクト参照"
+    ]
+  },
+  {
+    "term": "アクセス制御不備",
+    "reading": "あくせすせいぎょふび",
+    "senses": [
+      {
+        "definition": "認証済みユーザーが本来アクセスできないリソースや機能にアクセスできる脆弱性カテゴリ。OWASP Top 10で常に上位を占める。水平・垂直権限昇格、IDOR、強制ブラウジングなどが含まれ、すべてのリクエストで認可チェックを実施することが基本対策。",
+        "domain": "security",
+        "keywords": [
+          "認可",
+          "権限昇格",
+          "OWASP",
+          "Broken Access Control",
+          "アクセス管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Broken Access Control",
+      "壊れたアクセス制御"
+    ]
+  },
+  {
+    "term": "セキュリティ設定ミス",
+    "reading": "せきゅりてぃせっていみす",
+    "senses": [
+      {
+        "definition": "クラウド・サーバー・フレームワークのデフォルト設定の放置、不要なサービスの有効化、エラー詳細の露出など、不適切な設定に起因するセキュリティリスク。OWASP Top 10に含まれ、インフラをコード化（IaC）して設定のレビューと自動チェックを行うことが対策。",
+        "domain": "security",
+        "keywords": [
+          "OWASP",
+          "設定管理",
+          "デフォルト設定",
+          "IaC",
+          "ハードニング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Misconfiguration",
+      "セキュリティミスコンフィグレーション"
+    ]
+  },
+  {
+    "term": "暗号化の失敗",
+    "reading": "あんごうかのしっぱい",
+    "senses": [
+      {
+        "definition": "機密データの平文保存・送信、弱い暗号アルゴリズムの使用、鍵管理の不備など、暗号化に関する設計・実装上の欠陥の総称。OWASP Top 10に含まれ（旧称: 機密データの露出）。TLSの適切な利用とAES-256・bcryptなどの強固なアルゴリズム選択が対策の基本。",
+        "domain": "security",
+        "keywords": [
+          "OWASP",
+          "暗号",
+          "機密データ",
+          "TLS",
+          "鍵管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cryptographic Failures",
+      "機密データの露出"
+    ]
+  },
+  {
+    "term": "サーバーサイドテンプレートインジェクション",
+    "reading": "さーばーさいどてんぷれーといんじぇくしょん",
+    "senses": [
+      {
+        "definition": "ユーザー入力がサーバー側のテンプレートエンジン（Jinja2・Twig・Freemarkerなど）に直接埋め込まれ、任意のテンプレート式を実行させる脆弱性。リモートコード実行に発展することが多く、入力をテンプレートに直接結合しないことが対策。",
+        "domain": "security",
+        "keywords": [
+          "テンプレートエンジン",
+          "RCE",
+          "インジェクション",
+          "SSTI",
+          "任意コード実行"
+        ]
+      }
+    ],
+    "aliases": [
+      "SSTI",
+      "Server-Side Template Injection"
+    ]
+  },
+  {
+    "term": "プロトタイプ汚染",
+    "reading": "ぷろとたいぷおせん",
+    "senses": [
+      {
+        "definition": "JavaScriptのプロトタイプチェーンを悪用し、Object.prototypeなど基底オブジェクトのプロパティを変更することで、アプリケーション全体の動作を改ざんする脆弱性。ライブラリのオブジェクトマージ処理が攻撃ベクターになりやすい。",
+        "domain": "security",
+        "keywords": [
+          "JavaScript",
+          "プロトタイプチェーン",
+          "オブジェクト汚染",
+          "Node.js",
+          "RCE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Prototype Pollution",
+      "プロトタイプポリューション"
+    ]
+  },
+  {
+    "term": "ReDoS",
+    "senses": [
+      {
+        "definition": "Regular Expression Denial of Serviceの略。バックトラッキングが爆発的に増加する正規表現（カタストロフィックバックトラッキング）に悪意ある入力を与え、CPUを枯渇させるDoS攻撃。複雑な繰り返しパターンを避け、入力長を制限することで対策する。",
+        "domain": "security",
+        "keywords": [
+          "正規表現",
+          "DoS",
+          "バックトラッキング",
+          "CPU枯渇",
+          "入力検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Regular Expression Denial of Service",
+      "正規表現DoS"
+    ]
+  },
+  {
+    "term": "サプライチェーン攻撃",
+    "reading": "さぷらいちぇーんこうげき",
+    "senses": [
+      {
+        "definition": "ソフトウェアの開発・配布プロセスに侵入し、依存ライブラリ・ビルドツール・更新システムを通じてマルウェアを配布する攻撃。SolarWinds事件やEvent-Stream事件が著名な例。SBOMの整備、依存関係の固定、SRI検証が対策の基本。",
+        "domain": "security",
+        "keywords": [
+          "SBOM",
+          "依存関係",
+          "ビルドパイプライン",
+          "マルウェア配布",
+          "ソフトウェアサプライチェーン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Supply Chain Attack",
+      "ソフトウェアサプライチェーン攻撃"
+    ]
+  },
+  {
+    "term": "依存関係の混乱",
+    "reading": "いぞんかんけいのこんらん",
+    "senses": [
+      {
+        "definition": "プライベートパッケージと同名のパブリックパッケージを高いバージョン番号でnpmなど公開リポジトリに登録し、ビルドシステムが誤って悪意あるパッケージをインストールするサプライチェーン攻撃の一種。",
+        "domain": "security",
+        "keywords": [
+          "npm",
+          "パッケージマネージャ",
+          "サプライチェーン",
+          "ネームスペース",
+          "プライベートレジストリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dependency Confusion",
+      "依存関係混乱攻撃"
+    ]
+  },
+  {
+    "term": "タイポスクワッティング",
+    "reading": "たいぽすくわっていんぐ",
+    "senses": [
+      {
+        "definition": "正規パッケージ名のタイプミスを狙い、類似した名前の悪意あるパッケージを公開リポジトリに登録してインストールを誘導するサプライチェーン攻撃。`cros`（cross）、`reuqest`（request）などの変名が使われる。パッケージ名を慎重に確認し固定バージョンを使用することが対策。",
+        "domain": "security",
+        "keywords": [
+          "パッケージマネージャ",
+          "npm",
+          "サプライチェーン",
+          "悪意あるパッケージ",
+          "ミスタイプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Typosquatting",
+      "タイポスクワット攻撃"
+    ]
+  },
+  {
+    "term": "IDS",
+    "senses": [
+      {
+        "definition": "Intrusion Detection Systemの略。ネットワークトラフィックやシステムのログを監視し、不正アクセスや攻撃の兆候を検知してアラートを生成するシステム。IPSとは異なりトラフィックの遮断は行わない。シグネチャベースと異常検知ベースの2方式がある。",
+        "domain": "security",
+        "keywords": [
+          "侵入検知",
+          "ネットワーク監視",
+          "アラート",
+          "シグネチャ",
+          "異常検知"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intrusion Detection System",
+      "侵入検知システム"
+    ]
+  },
+  {
+    "term": "IPS",
+    "senses": [
+      {
+        "definition": "Intrusion Prevention Systemの略。IDSの検知機能に加えて、不正なトラフィックをリアルタイムで自動的に遮断・ブロックする機能を持つシステム。インラインで動作しネットワーク境界での多層防御を実現するが、誤検知による正常通信のブロックリスクもある。",
+        "domain": "security",
+        "keywords": [
+          "侵入防止",
+          "トラフィック遮断",
+          "リアルタイム",
+          "インライン",
+          "多層防御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intrusion Prevention System",
+      "侵入防止システム"
+    ]
+  },
+  {
+    "term": "XDR",
+    "senses": [
+      {
+        "definition": "Extended Detection and Responseの略。エンドポイント・ネットワーク・クラウド・メールなど複数のセキュリティレイヤーからデータを統合収集し、相関分析によって高精度な脅威検知と対応を実現するセキュリティプラットフォーム。EDRを発展させたアプローチ。",
+        "domain": "security",
+        "keywords": [
+          "拡張検知対応",
+          "統合",
+          "相関分析",
+          "EDR",
+          "マルチレイヤ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Extended Detection and Response",
+      "拡張型検知対応"
+    ]
+  },
+  {
+    "term": "SOAR",
+    "senses": [
+      {
+        "definition": "SIEMなどからアラートを受け取り、定義済みプレイブックに従ってインシデント対応を自動化・オーケストレーションするプラットフォーム。Security Orchestration, Automation and Responseの略。アナリスト工数を削減しMTTRを短縮する。",
+        "domain": "security",
+        "keywords": [
+          "自動化",
+          "オーケストレーション",
+          "プレイブック",
+          "インシデント対応",
+          "SIEM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Orchestration Automation and Response",
+      "セキュリティオーケストレーション自動化対応"
+    ]
+  },
+  {
+    "term": "MITRE ATT&CK",
+    "senses": [
+      {
+        "definition": "実際の攻撃者の戦術・技術・手順（TTP）を体系化したナレッジベース。MITREが管理し、偵察からデータ窃取・影響工作まで14の戦術カテゴリに攻撃技術を分類する。脅威ハンティング・レッドチーム演習・インシデント対応の共通言語として使われる。",
+        "domain": "security",
+        "keywords": [
+          "TTP",
+          "戦術",
+          "技術",
+          "脅威ハンティング",
+          "レッドチーム"
+        ]
+      }
+    ],
+    "aliases": [
+      "ATT&CK",
+      "MITRE ATT and CK",
+      "MITREアタック"
+    ]
+  },
+  {
+    "term": "キルチェーン",
+    "reading": "きるちぇーん",
+    "senses": [
+      {
+        "definition": "ロッキード・マーティンが提唱したサイバー攻撃の段階モデル。偵察・武器化・デリバリー・エクスプロイト・インストール・C2（指揮統制）・目的実行の7段階で構成され、各フェーズで防御策を講じることでキルチェーンを断ち切る概念。",
+        "domain": "security",
+        "keywords": [
+          "攻撃フェーズ",
+          "防御",
+          "偵察",
+          "C2",
+          "APT"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cyber Kill Chain",
+      "サイバーキルチェーン"
+    ]
+  },
+  {
+    "term": "バグバウンティ",
+    "reading": "ばぐばうんてぃ",
+    "senses": [
+      {
+        "definition": "企業が外部のセキュリティ研究者に自社サービスの脆弱性発見を依頼し、報告された脆弱性の深刻度に応じて報奨金（バウンティ）を支払うプログラム。HackerOneやBugcrowdなどのプラットフォームが仲介し、内部のみでは見つけられない脆弱性を発見する手段として普及している。",
+        "domain": "security",
+        "keywords": [
+          "報奨金",
+          "脆弱性報告",
+          "ホワイトハット",
+          "セキュリティ研究",
+          "HackerOne"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bug Bounty",
+      "バグバウンティプログラム"
+    ]
+  },
+  {
+    "term": "責任ある脆弱性開示",
+    "reading": "せきにんあるぜいじゃくせいかいじ",
+    "senses": [
+      {
+        "definition": "セキュリティ研究者が発見した脆弱性を即時公開せず、まず影響を受けるベンダーに報告し修正の猶予（通常90日）を与えた後に公開するプロセス。Coordinated Vulnerability Disclosureとも呼ばれ、修正前の悪用を防ぎながら情報共有を実現するバランスを取る。",
+        "domain": "security",
+        "keywords": [
+          "CVD",
+          "脆弱性報告",
+          "ベンダー",
+          "修正",
+          "90日ルール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Responsible Disclosure",
+      "Coordinated Vulnerability Disclosure",
+      "CVD",
+      "協調的脆弱性開示"
+    ]
+  },
+  {
+    "term": "ISO 27001",
+    "senses": [
+      {
+        "definition": "情報セキュリティマネジメントシステム（ISMS）の要求事項を定めた国際標準。リスクベースのアプローチでリスクアセスメント・管理策の実施・継続的改善のサイクルを回すことを要求する。取得認証は取引先への信頼性証明として広く活用される。",
+        "domain": "security",
+        "keywords": [
+          "ISMS",
+          "国際標準",
+          "リスク管理",
+          "認証",
+          "情報セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "ISO/IEC 27001",
+      "ISMS",
+      "情報セキュリティマネジメントシステム"
+    ]
+  },
+  {
+    "term": "SOC 2",
+    "senses": [
+      {
+        "definition": "米国公認会計士協会（AICPA）が定めるサービス組織のセキュリティ・可用性・処理の完全性・機密性・プライバシーに関する監査基準。SaaS企業が顧客に対してセキュリティ態勢を証明するために取得し、Type IとType IIがある。",
+        "domain": "security",
+        "keywords": [
+          "AICPA",
+          "監査",
+          "SaaS",
+          "Trust Services Criteria",
+          "コンプライアンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "SOC2",
+      "Service Organization Control 2"
+    ]
+  },
+  {
+    "term": "NIST CSF",
+    "senses": [
+      {
+        "definition": "米国国立標準技術研究所（NIST）が策定したサイバーセキュリティフレームワーク。識別・防御・検知・対応・復旧の5機能で組織のサイバーセキュリティリスク管理を体系化するガイドライン。重要インフラ保護を起源に持ち、業界横断で活用される。",
+        "domain": "security",
+        "keywords": [
+          "フレームワーク",
+          "NIST",
+          "リスク管理",
+          "識別",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": [
+      "NIST Cybersecurity Framework",
+      "Cybersecurity Framework",
+      "CSF"
+    ]
+  },
+  {
+    "term": "GDPR",
+    "senses": [
+      {
+        "definition": "EU一般データ保護規則の略。EU域内の個人データを処理するすべての組織に適用されるプライバシー法規制。忘れられる権利・データポータビリティ・プライバシーバイデザインを要求し、違反時は全世界売上高の4%相当の制裁金が科される。",
+        "domain": "security",
+        "keywords": [
+          "個人情報保護",
+          "プライバシー",
+          "EU",
+          "コンプライアンス",
+          "データ主体の権利"
+        ]
+      }
+    ],
+    "aliases": [
+      "General Data Protection Regulation",
+      "EU一般データ保護規則"
+    ]
+  },
+  {
+    "term": "PCI DSS",
+    "senses": [
+      {
+        "definition": "クレジットカード情報を取り扱う事業者が準拠すべきセキュリティ標準。Payment Card Industry Data Security Standardの略。カード会員データ保護・ネットワーク分離・脆弱性管理・アクセス制御など12の要件から構成される。",
+        "domain": "security",
+        "keywords": [
+          "クレジットカード",
+          "決済",
+          "コンプライアンス",
+          "カード会員データ",
+          "ネットワーク分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "PCI-DSS",
+      "Payment Card Industry Data Security Standard",
+      "ペイメントカード業界データセキュリティ標準"
+    ]
+  },
+  {
+    "term": "HIPAA",
+    "senses": [
+      {
+        "definition": "米国の医療情報プライバシー法。保護対象医療情報（PHI）の取り扱い・アクセス制御・監査・暗号化を要求する。クラウドサービスプロバイダーも医療機関と締結するBAA（Business Associate Agreement）の締結により対象となる。",
+        "domain": "security",
+        "keywords": [
+          "医療情報",
+          "PHI",
+          "プライバシー",
+          "米国法",
+          "コンプライアンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "医療情報ポータビリティ・説明責任法",
+      "Health Insurance Portability and Accountability Act"
+    ]
+  },
+  {
+    "term": "リフレクトXSS",
+    "reading": "りふれくとくろすさいとすくりぷてぃんぐ",
+    "senses": [
+      {
+        "definition": "攻撃スクリプトがURLパラメータ等に含まれ、サーバーがその内容をそのままHTMLに出力する形のXSS（クロスサイトスクリプティング）。悪意あるリンクを踏んだユーザーのブラウザ上でスクリプトが実行される。出力時のエスケープとCSPで防止する。",
+        "domain": "security",
+        "keywords": [
+          "XSS",
+          "クロスサイトスクリプティング",
+          "反射型",
+          "URL",
+          "出力エスケープ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reflected XSS",
+      "反射型XSS"
+    ]
+  },
+  {
+    "term": "ストアドXSS",
+    "reading": "すとあどくろすさいとすくりぷてぃんぐ",
+    "senses": [
+      {
+        "definition": "攻撃スクリプトがデータベースやサーバーに保存され、ページを閲覧したすべてのユーザーに対してスクリプトが実行されるXSSの一形態。掲示板やコメント欄が典型的な攻撃対象。永続型XSSとも呼ばれ、影響範囲が広い。",
+        "domain": "security",
+        "keywords": [
+          "XSS",
+          "クロスサイトスクリプティング",
+          "蓄積型",
+          "データベース",
+          "永続型"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stored XSS",
+      "蓄積型XSS",
+      "永続型XSS"
+    ]
+  },
+  {
+    "term": "DOMベースXSS",
+    "reading": "どむべーすくろすさいとすくりぷてぃんぐ",
+    "senses": [
+      {
+        "definition": "サーバーを介さず、クライアントサイドのJavaScriptがURLフラグメントやlocation.hashなどを読み取りDOMを動的に書き換える際に発生するXSS。サーバーのレスポンスには攻撃コードが含まれないため従来のサーバーサイドフィルタでは検出できない。",
+        "domain": "security",
+        "keywords": [
+          "XSS",
+          "DOM",
+          "クライアントサイド",
+          "JavaScript",
+          "DOMサニタイズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "DOM-based XSS",
+      "DOM型XSS"
+    ]
+  },
+  {
+    "term": "脅威ハンティング",
+    "reading": "きょういつはんてぃんぐ",
+    "senses": [
+      {
+        "definition": "SIEMやEDRのアラートに頼らず、仮説を立てて積極的に環境内の未検知脅威を探索するプロアクティブなセキュリティ活動。MITRE ATT&CKのTTPを参照しつつアナリストが手動・半自動でログやエンドポイントを調査する。",
+        "domain": "security",
+        "keywords": [
+          "プロアクティブ",
+          "MITRE ATT&CK",
+          "EDR",
+          "未検知脅威",
+          "仮説主導"
+        ]
+      }
+    ],
+    "aliases": [
+      "Threat Hunting",
+      "プロアクティブ脅威検出"
+    ]
+  },
+  {
+    "term": "ハニーポット",
+    "reading": "はにーぽっと",
+    "senses": [
+      {
+        "definition": "攻撃者を意図的に誘い込むために設置された囮システム。実際の被害なく攻撃者の手法や目的を観察・分析でき、早期警戒やTTP収集に活用される。ハニーネット・ハニートークンなどの派生形もある。",
+        "domain": "security",
+        "keywords": [
+          "おとり",
+          "早期警戒",
+          "TTP収集",
+          "攻撃観察",
+          "デセプション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Honeypot",
+      "おとりシステム"
+    ]
+  },
+  {
+    "term": "FIDO2",
+    "senses": [
+      {
+        "definition": "Fast Identity Onlineアライアンスが策定したパスワードレス認証標準。WebAuthn（W3C標準）とCTAP（デバイス通信プロトコル）で構成され、生体認証や物理セキュリティキーを使ってフィッシング耐性の高い認証を実現する。",
+        "domain": "security",
+        "keywords": [
+          "パスワードレス",
+          "WebAuthn",
+          "生体認証",
+          "セキュリティキー",
+          "フィッシング耐性"
+        ]
+      }
+    ],
+    "aliases": [
+      "WebAuthn",
+      "パスキー",
+      "Passkey",
+      "FIDO",
+      "Fast Identity Online"
+    ]
+  },
+  {
+    "term": "最小権限の原則",
+    "reading": "さいしょうけんげんのげんそく",
+    "senses": [
+      {
+        "definition": "ユーザー・プロセス・サービスに対して業務遂行に必要な最小限の権限のみを付与するセキュリティ原則。権限の過剰付与を防ぎ、侵害された場合の被害範囲を限定する。ゼロトラストアーキテクチャの基本原則の一つ。",
+        "domain": "security",
+        "keywords": [
+          "PoLP",
+          "権限管理",
+          "ゼロトラスト",
+          "アクセス制御",
+          "被害最小化"
+        ]
+      }
+    ],
+    "aliases": [
+      "PoLP",
+      "最小特権の原則"
+    ]
+  },
+  {
+    "term": "多層防御",
+    "reading": "たそうぼうえい",
+    "senses": [
+      {
+        "definition": "単一の防御策への依存を避け、ネットワーク・ホスト・アプリケーション・データなど複数レイヤーに独立したセキュリティ制御を配置する防御戦略。1つの防御が突破されても次の層が攻撃を阻止できるよう設計する。",
+        "domain": "security",
+        "keywords": [
+          "Defense in Depth",
+          "レイヤードセキュリティ",
+          "冗長化",
+          "リスク低減",
+          "縦深防御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Defense in Depth",
+      "DiD",
+      "縦深防御"
+    ]
+  },
+  {
+    "term": "ゼロデイ脆弱性",
+    "reading": "ぜろでいぜいじゃくせい",
+    "senses": [
+      {
+        "definition": "ベンダーが把握する前または修正パッチが提供される前に悪用可能な未知の脆弱性。発見から修正まで防御側の対策が困難なため非常に危険。仮想パッチ（WAFルールなど）や振る舞い検知で被害を軽減する。",
+        "domain": "security",
+        "keywords": [
+          "未知脆弱性",
+          "パッチ未適用",
+          "APT",
+          "エクスプロイト",
+          "仮想パッチ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zero-day Vulnerability",
+      "0-day",
+      "ゼロデイ攻撃"
+    ]
+  },
+  {
+    "term": "CVSSスコア",
+    "reading": "しーぶいえすえすすこあ",
+    "senses": [
+      {
+        "definition": "Common Vulnerability Scoring Systemによる脆弱性の深刻度を0.0〜10.0で数値化したスコア。攻撃経路・攻撃の複雑さ・必要権限・ユーザー操作・影響範囲・機密性/完全性/可用性への影響を元にベーススコアを計算し、パッチ適用の優先順位付けに使う。",
+        "domain": "security",
+        "keywords": [
+          "CVSS",
+          "深刻度",
+          "優先順位",
+          "脆弱性管理",
+          "ベーススコア"
+        ]
+      }
+    ],
+    "aliases": [
+      "Common Vulnerability Scoring System",
+      "脆弱性深刻度スコア"
+    ]
+  },
+  {
+    "term": "ネットワークセグメンテーション",
+    "reading": "ねっとわーくせぐめんてーしょん",
+    "senses": [
+      {
+        "definition": "ネットワークをVLAN・ファイアウォール・マイクロセグメンテーションで論理的・物理的に分割し、侵害されたセグメントから他への横断移動（ラテラルムーブメント）を制限するセキュリティ設計。ゼロトラストの主要な実装技術の一つ。",
+        "domain": "security",
+        "keywords": [
+          "VLAN",
+          "マイクロセグメンテーション",
+          "ラテラルムーブメント",
+          "ゼロトラスト",
+          "境界防御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Network Segmentation",
+      "ネットワーク分割"
+    ]
+  },
+  {
+    "term": "セキュア開発ライフサイクル",
+    "reading": "せきゅあかいはつらいふさいくる",
+    "senses": [
+      {
+        "definition": "ソフトウェア開発プロセスの全フェーズにセキュリティ活動を統合したフレームワーク。マイクロソフトのSDLが有名で、要件定義での脅威モデリング・設計レビュー・実装時のSASTツール・テスト時のペネトレーション・運用時の脆弱性管理を含む。",
+        "domain": "security",
+        "keywords": [
+          "SDL",
+          "セキュリティ",
+          "SDLC",
+          "開発プロセス",
+          "マイクロソフト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Secure Development Lifecycle"
+    ]
+  },
+  {
+    "term": "中間者攻撃",
+    "reading": "ちゅうかんしゃこうげき",
+    "senses": [
+      {
+        "definition": "通信の途中に割り込み、送受信者が直接通信していると思わせながら内容を盗聴・改ざんする攻撃。公衆Wi-Fiを利用したARP毒化や偽の証明書を用いたSSLインターセプトが典型例。TLSの適切な実装と証明書検証が対策の基本。",
+        "domain": "security",
+        "keywords": [
+          "MitM",
+          "盗聴",
+          "改ざん",
+          "TLS",
+          "ARP毒化"
+        ]
+      }
+    ],
+    "aliases": [
+      "MitM",
+      "Man-in-the-Middle Attack",
+      "MITM攻撃"
+    ]
+  },
+  {
+    "term": "エクスプロイト",
+    "reading": "えくすぷろいと",
+    "senses": [
+      {
+        "definition": "脆弱性を実際に悪用するためのコード・手法・ツールの総称。PoC（概念実証）エクスプロイトはセキュリティ研究で使われ、実際の攻撃に使用されるものをExploit kitと呼ぶ。CVEエントリには既知エクスプロイトの有無が記載される。",
+        "domain": "security",
+        "keywords": [
+          "脆弱性悪用",
+          "PoC",
+          "攻撃コード",
+          "CVE",
+          "攻撃ツール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Exploit",
+      "エクスプロイトコード",
+      "脆弱性悪用コード"
+    ]
+  },
+  {
+    "term": "ラテラルムーブメント",
+    "reading": "られたるむーぶめんと",
+    "senses": [
+      {
+        "definition": "侵害した端末を足がかりに内部ネットワークを横断して他のシステムへ感染・侵入を広げる攻撃者の行動。パスザハッシュ・パスザチケット・ワームによる自動拡散などが手法として知られる。セグメンテーションとEDRで検知・制限する。",
+        "domain": "security",
+        "keywords": [
+          "横断侵害",
+          "Pass-the-Hash",
+          "内部移動",
+          "APT",
+          "ネットワーク分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lateral Movement",
+      "水平移動",
+      "横断移動"
+    ]
+  },
+  {
+    "term": "権限昇格",
+    "reading": "けんげんしょうかく",
+    "senses": [
+      {
+        "definition": "低権限のアカウントやプロセスが管理者・rootレベルの権限を不正に取得する攻撃。カーネルの脆弱性悪用・SUIDビットの誤設定・ sudo設定ミスなどが経路となる。垂直権限昇格（一般→管理者）と水平権限昇格（別ユーザーへのなりすまし）がある。",
+        "domain": "security",
+        "keywords": [
+          "特権昇格",
+          "root",
+          "管理者",
+          "カーネル脆弱性",
+          "sudo"
+        ]
+      }
+    ],
+    "aliases": [
+      "Privilege Escalation",
+      "特権昇格",
+      "EoP"
+    ]
+  },
+  {
+    "term": "C2",
+    "senses": [
+      {
+        "definition": "Command and Control（指揮統制）の略。攻撃者がマルウェアに感染したシステムを遠隔操作するためのインフラ。HTTP/HTTPS・DNS・IRC・Slack APIなど正規プロトコルに偽装して通信しファイアウォールを回避することが多い。",
+        "domain": "security",
+        "keywords": [
+          "指揮統制",
+          "マルウェア",
+          "ボットネット",
+          "遠隔操作",
+          "ビーコン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Command and Control",
+      "C&C",
+      "コマンドアンドコントロール"
+    ]
+  },
+  {
+    "term": "フィッシング",
+    "reading": "ふぃっしんぐ",
+    "senses": [
+      {
+        "definition": "銀行・企業・政府機関などを装った偽メールやWebサイトでユーザーを騙し、認証情報やクレジットカード番号を詐取する攻撃。スピアフィッシング（標的型）・スミッシング（SMS）・ビッシング（音声）などの変種がある。MFAとセキュリティ教育が主要な対策。",
+        "domain": "security",
+        "keywords": [
+          "詐欺",
+          "認証情報窃取",
+          "偽サイト",
+          "スピアフィッシング",
+          "メールセキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Phishing",
+      "フィッシング詐欺",
+      "スピアフィッシング"
+    ]
+  },
+  {
+    "term": "ランサムウェア",
+    "reading": "らんさむうぇあ",
+    "senses": [
+      {
+        "definition": "感染した端末・ファイルサーバーのデータを暗号化しロックし、復号鍵と引き換えに身代金（ランサム）を要求する悪意あるソフトウェア。二重脅迫型（暗号化＋データ公開脅迫）が主流。オフラインバックアップ・EDR・MFAが主要な対策。",
+        "domain": "security",
+        "keywords": [
+          "マルウェア",
+          "暗号化",
+          "身代金",
+          "バックアップ",
+          "EDR"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ransomware",
+      "ランサム攻撃"
+    ]
+  },
+  {
+    "term": "マルウェア分析",
+    "reading": "まるうぇあぶんせき",
+    "senses": [
+      {
+        "definition": "悪意あるソフトウェアの動作・目的・感染手法を明らかにするための技術的調査。静的分析（逆アセンブル・文字列抽出）と動的分析（サンドボックス実行・ネットワーク監視）を組み合わせる。C2ドメインやIOCを特定して防御に活用する。",
+        "domain": "security",
+        "keywords": [
+          "リバースエンジニアリング",
+          "サンドボックス",
+          "静的分析",
+          "動的分析",
+          "IOC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Malware Analysis",
+      "マルウェア解析"
+    ]
+  },
+  {
+    "term": "脆弱性管理",
+    "reading": "ぜいじゃくせいかんり",
+    "senses": [
+      {
+        "definition": "システム・アプリケーション・ライブラリの脆弱性を継続的に特定・評価・修正・報告するプロセス。脆弱性スキャナーによる定期検査・CVSSを用いた優先度付け・パッチ管理・SLAに基づく修正期限設定が主要な活動。",
+        "domain": "security",
+        "keywords": [
+          "パッチ管理",
+          "CVSSスコア",
+          "スキャン",
+          "優先度",
+          "SLA"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vulnerability Management",
+      "脆弱性管理プログラム"
+    ]
+  },
+  {
+    "term": "セキュリティ監査",
+    "reading": "せきゅりてぃかんさ",
+    "senses": [
+      {
+        "definition": "組織のセキュリティポリシー・手順・実装が適切に機能しているかを体系的に評価するプロセス。内部監査と外部監査があり、ISO 27001・SOC 2・PCI DSSなどのコンプライアンス認証取得の根拠にもなる。発見された不備は是正計画を策定して改善する。",
+        "domain": "security",
+        "keywords": [
+          "コンプライアンス",
+          "内部監査",
+          "外部監査",
+          "ISO 27001",
+          "リスク評価"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Audit",
+      "情報セキュリティ監査"
+    ]
+  },
+  {
+    "term": "リスクアセスメント",
+    "reading": "りすくあせすめんと",
+    "senses": [
+      {
+        "definition": "組織の情報資産に対する脅威・脆弱性・影響を体系的に識別・評価し、リスクの大きさと許容可能かどうかを判断するプロセス。ISO 27001・NIST SP 800-30などのフレームワークを参照し、リスク受容・軽減・移転・回避の処理策を決定する。",
+        "domain": "security",
+        "keywords": [
+          "脅威",
+          "脆弱性",
+          "影響評価",
+          "リスク処理",
+          "ISO 27001"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk Assessment",
+      "セキュリティリスク評価"
+    ]
+  },
+  {
+    "term": "暗号スイート",
+    "reading": "あんごうすいーと",
+    "senses": [
+      {
+        "definition": "TLS通信で使用する鍵交換・認証・暗号・ハッシュアルゴリズムの組み合わせ。TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384のように表記される。脆弱な暗号スイート（RC4・3DES・NULLなど）を無効化し、前方秘匿性を持つECDHEを使うことが推奨される。",
+        "domain": "security",
+        "keywords": [
+          "TLS",
+          "暗号化",
+          "鍵交換",
+          "前方秘匿性",
+          "プロトコル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cipher Suite",
+      "TLS暗号スイート"
+    ]
+  },
+  {
+    "term": "完全転送秘密",
+    "reading": "かんぜんてんそうひみつ",
+    "senses": [
+      {
+        "definition": "TLSセッションごとに一時鍵ペアを生成し、長期秘密鍵が後から漏洩しても過去のセッションを復号できないようにする性質。ECDHE（楕円曲線ディフィー・ヘルマン鍵交換）で実現する。録音済みトラフィックの後日解読攻撃に対して有効。",
+        "domain": "security",
+        "keywords": [
+          "PFS",
+          "ECDHE",
+          "TLS",
+          "前方秘匿性",
+          "鍵交換"
+        ]
+      }
+    ],
+    "aliases": [
+      "PFS",
+      "Perfect Forward Secrecy",
+      "前方秘匿性"
+    ]
+  },
+  {
+    "term": "TLSバージョン管理",
+    "reading": "てぃーえるえすばーじょんかんり",
+    "senses": [
+      {
+        "definition": "TLS 1.0・1.1は既知の脆弱性（BEAST・POODLEなど）があり非推奨。TLS 1.2が広く使われ、TLS 1.3は古い機能を削除しハンドシェイクを高速化した最新版。サーバーでは1.2以上を強制し1.3を優先する設定が推奨される。",
+        "domain": "security",
+        "keywords": [
+          "TLS",
+          "プロトコルバージョン",
+          "BEAST",
+          "POODLE",
+          "暗号"
+        ]
+      }
+    ],
+    "aliases": [
+      "TLS Version",
+      "TLSバージョン"
+    ]
+  },
+  {
+    "term": "セキュリティテスト",
+    "reading": "せきゅりてぃてすと",
+    "senses": [
+      {
+        "definition": "アプリケーションやインフラの脆弱性を体系的に発見するためのテスト活動の総称。SAST・DAST・IAST・ペネトレーションテスト・脅威モデリング・コードレビューなどを組み合わせてSDLCの各フェーズで実施する。",
+        "domain": "security",
+        "keywords": [
+          "SAST",
+          "DAST",
+          "ペネトレーションテスト",
+          "脆弱性",
+          "品質保証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Testing",
+      "Application Security Testing"
+    ]
+  },
+  {
+    "term": "コンテナセキュリティ",
+    "reading": "こんてなせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "Dockerコンテナ・Kubernetesクラスターを安全に運用するためのセキュリティ対策の総称。ベースイメージの脆弱性スキャン・最小権限のコンテナ実行・ネットワークポリシー・Secretsの外部管理・実行時の異常検知などが主要な要素。",
+        "domain": "security",
+        "keywords": [
+          "Docker",
+          "Kubernetes",
+          "イメージスキャン",
+          "ネットワークポリシー",
+          "RBAC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Container Security",
+      "Kubernetes Security"
+    ]
+  },
+  {
+    "term": "クラウドセキュリティ",
+    "reading": "くらうどせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "クラウド環境（AWS・Azure・GCP）特有のセキュリティ課題に対応する実践の総称。責任共有モデルに基づき、IAMの最小権限設定・セキュリティグループの適切な設定・ストレージの公開設定ミス防止・CloudTrail等による監査ログ取得が基本となる。",
+        "domain": "security",
+        "keywords": [
+          "責任共有モデル",
+          "IAM",
+          "AWS",
+          "Azure",
+          "CSPM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cloud Security",
+      "クラウドセキュリティ態勢管理"
+    ]
+  },
+  {
+    "term": "CSPM",
+    "senses": [
+      {
+        "definition": "Cloud Security Posture Managementの略。クラウドインフラの設定を継続的にスキャンし、S3バケット公開設定・過剰IAM権限などのセキュリティミスコンフィギュレーションを自動検出・修正するツール・プラクティス。",
+        "domain": "security",
+        "keywords": [
+          "クラウドセキュリティ",
+          "設定管理",
+          "IaC",
+          "自動修正",
+          "AWS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cloud Security Posture Management"
+    ]
+  },
+  {
+    "term": "インフラストラクチャーアズコード セキュリティ",
+    "reading": "いんふらすとらくちゃーあずこーどせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "Terraform・CloudFormationなどのIaCテンプレートに対してセキュリティスキャンを実施し、デプロイ前に設定ミスや脆弱性を検出するアプローチ。tfsec・Checkov・CFN-Nag等のツールをCIパイプラインに組み込んで使用する。",
+        "domain": "security",
+        "keywords": [
+          "IaC",
+          "Terraform",
+          "シフトレフト",
+          "設定ミス",
+          "Checkov"
+        ]
+      }
+    ],
+    "aliases": [
+      "IaC Security",
+      "Infrastructure as Code Security"
+    ]
+  },
+  {
+    "term": "セキュリティチャンピオン",
+    "reading": "せきゅりてぃちゃんぴおん",
+    "senses": [
+      {
+        "definition": "開発チームにセキュリティの窓口・推進役として組み込まれた開発者。セキュリティチームの代わりに各チームでセキュリティ意識向上・脅威モデリング支援・コードレビューを担う。スケーラブルなセキュリティ文化の構築に有効なアプローチ。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ文化",
+          "DevSecOps",
+          "推進役",
+          "組織",
+          "教育"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Champion",
+      "セキュリティエバンジェリスト"
+    ]
+  },
+  {
+    "term": "ゼロトラストネットワークアクセス",
+    "reading": "ぜろとらすとねっとわーくあくせす",
+    "senses": [
+      {
+        "definition": "ユーザーとデバイスのアイデンティティ・ヘルス状態をリアルタイムに検証したうえで最小権限のアクセスを動的に付与するネットワークアクセス制御アーキテクチャ。従来のVPNによる境界防御に代わり、場所に依存しないセキュアアクセスを実現する。",
+        "domain": "security",
+        "keywords": [
+          "ゼロトラスト",
+          "ZTNA",
+          "VPN代替",
+          "アイデンティティ",
+          "最小権限"
+        ]
+      }
+    ],
+    "aliases": [
+      "ZTNA",
+      "Zero Trust Network Access"
+    ]
+  },
+  {
+    "term": "特権アクセス管理",
+    "reading": "とっけんあくせすかんり",
+    "senses": [
+      {
+        "definition": "管理者アカウントや特権クレデンシャルの使用を厳格に管理・監査するセキュリティプラクティス。特権セッションの記録・一時的な特権付与・just-in-timeアクセス・多要素認証の強制などを通じて内部不正やクレデンシャル窃取のリスクを低減する。",
+        "domain": "security",
+        "keywords": [
+          "PAM",
+          "管理者アカウント",
+          "特権",
+          "監査",
+          "JIT"
+        ]
+      }
+    ],
+    "aliases": [
+      "Privileged Access Management"
+    ]
+  },
+  {
+    "term": "暗号化アルゴリズム",
+    "reading": "あんごうかあるごりずむ",
+    "senses": [
+      {
+        "definition": "データを読めない形式に変換するための数学的手法の総称。対称暗号（AES-256-GCM）・非対称暗号（RSA-2048・ECDSA）・ハッシュ関数（SHA-256・SHA-3）・鍵導出関数（bcrypt・PBKDF2・Argon2）などがある。用途に応じて適切なアルゴリズムを選択することが重要。",
+        "domain": "security",
+        "keywords": [
+          "AES",
+          "RSA",
+          "ハッシュ",
+          "暗号",
+          "鍵長"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cryptographic Algorithm",
+      "暗号アルゴリズム"
+    ]
+  },
+  {
+    "term": "ハッシュ関数",
+    "reading": "はっしゅかんすう",
+    "senses": [
+      {
+        "definition": "任意長のデータを固定長のダイジェスト値に変換する一方向性関数。MD5・SHA-1は衝突耐性の脆弱性から非推奨。セキュリティ用途ではSHA-256以上を使用する。パスワード保存にはbcrypt・Argon2などの低速ハッシュ（key stretching）が必須。",
+        "domain": "security",
+        "keywords": [
+          "SHA-256",
+          "bcrypt",
+          "Argon2",
+          "衝突耐性",
+          "パスワードハッシュ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hash Function",
+      "暗号ハッシュ関数"
+    ]
+  },
+  {
+    "term": "CORSセキュリティ",
+    "reading": "くろすおりじんりそーすしぇありんぐせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "CORSは同一オリジンポリシーを安全に緩和する仕組みだが、Access-Control-Allow-Origin: *の設定やOriginの無検証反射はデータ漏洩リスクを生む。許可オリジンを許可リストで厳格に管理しcredentials付きリクエストに注意が必要。",
+        "domain": "security",
+        "keywords": [
+          "CORS",
+          "クロスオリジン",
+          "Access-Control",
+          "SOP",
+          "APIセキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "CORS Security",
+      "CORSセキュリティ設定"
+    ]
+  },
+  {
+    "term": "HSTSプリロード",
+    "reading": "えいちえすてぃーえすぷりろーど",
+    "senses": [
+      {
+        "definition": "HSTSはWebサーバーがHTTPS接続を強制するポリシーをブラウザにキャッシュさせる仕組み。プリロードはブラウザ管理リストへのドメイン登録で初回からHTTPSを強制する。max-ageを長く設定しincludeSubDomainsとpreloadの指定が推奨。",
+        "domain": "security",
+        "keywords": [
+          "HSTS",
+          "HTTPS強制",
+          "プリロードリスト",
+          "ダウングレード攻撃",
+          "TLS"
+        ]
+      }
+    ],
+    "aliases": [
+      "HSTSプリロードリスト",
+      "HTTP Strict Transport Security詳細"
+    ]
+  }
+]

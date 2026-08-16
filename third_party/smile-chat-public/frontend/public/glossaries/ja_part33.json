@@ -1,0 +1,1125 @@
+[
+  {
+    "term": "要望",
+    "reading": "ようぼう",
+    "senses": [
+      {
+        "definition": "ステークホルダーが持つ望ましい状態や機能に関する意見・希望。要件定義の入力となる。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ニーズ",
+          "ステークホルダー",
+          "要件",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "要件トレーサビリティ",
+    "reading": "ようけんとれーさびりてぃ",
+    "senses": [
+      {
+        "definition": "要望から設計・実装・テストまで各要件がどのように反映されているかを追跡できる性質。",
+        "domain": "methodology",
+        "keywords": [
+          "追跡",
+          "要件",
+          "テスト",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "2020年民法改正",
+    "reading": "にせんにじゅうねんみんぽうかいせい",
+    "senses": [
+      {
+        "definition": "2020年施行の民法改正。請負・委任・瑕疵担保責任が見直されソフトウェア開発契約に影響。",
+        "domain": "business-analysis",
+        "keywords": [
+          "民法",
+          "契約",
+          "請負",
+          "瑕疵担保"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "関心事の分離",
+    "reading": "かんしんじのぶんり",
+    "senses": [
+      {
+        "definition": "ソフトウェアをそれぞれ異なる関心事（責務）に基づいて分割する設計原則。Separation of Concernsとも呼ぶ。",
+        "domain": "architecture",
+        "keywords": [
+          "SoC",
+          "責務",
+          "分割",
+          "設計原則"
+        ]
+      }
+    ],
+    "aliases": [
+      "Separation of Concerns"
+    ]
+  },
+  {
+    "term": "コンテキスト境界",
+    "reading": "こんてきすとさかい",
+    "senses": [
+      {
+        "definition": "DDD（ドメイン駆動設計）においてドメインモデルの適用範囲を明示的に区切った境界。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "境界",
+          "ドメイン",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "用語分析",
+    "reading": "ようごぶんせき",
+    "senses": [
+      {
+        "definition": "ドメインで使われる用語を収集・整理し共有理解を確立する活動。ユビキタス言語の基礎となる。",
+        "domain": "modeling",
+        "keywords": [
+          "用語",
+          "ドメイン",
+          "ユビキタス言語",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "jargon",
+    "senses": [
+      {
+        "definition": "特定の専門分野や組織内で使われる専門用語・業界用語。ユーザーとの共通理解形成で重要。",
+        "domain": "business-analysis",
+        "keywords": [
+          "専門用語",
+          "業界語",
+          "ドメイン",
+          "コミュニケーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ドメインモデリング",
+    "reading": "どめいんもでりんぐ",
+    "senses": [
+      {
+        "definition": "対象業務の概念・ルール・関係をオブジェクトモデルとして表現する活動。",
+        "domain": "modeling",
+        "keywords": [
+          "DDD",
+          "ドメイン",
+          "オブジェクト",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能要求",
+    "reading": "ひきのうようきゅう",
+    "senses": [
+      {
+        "definition": "システムの品質・性能・信頼性・セキュリティ・保守性など機能以外の要求。",
+        "domain": "business-analysis",
+        "keywords": [
+          "品質",
+          "性能",
+          "信頼性",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能要件定義",
+    "reading": "ひきのうようけんていぎ",
+    "senses": [
+      {
+        "definition": "非機能要求を定量的・定性的に定義しシステム要件として確定させる活動。",
+        "domain": "business-analysis",
+        "keywords": [
+          "品質",
+          "定量",
+          "定性",
+          "要件定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JIS X 0129-1",
+    "senses": [
+      {
+        "definition": "ソフトウェア品質特性と副特性を定義したJIS規格。ISO/IEC 9126の日本語版。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "JIS",
+          "ISO",
+          "標準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ソフトウェア品質特性モデル",
+    "reading": "そふとうぇあひんしつとくせいもでる",
+    "senses": [
+      {
+        "definition": "ソフトウェアの品質を体系的に定義するモデル。JIS X 0129-1やISO 25010が代表例。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "特性",
+          "ISO",
+          "JIS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "機能性",
+    "reading": "きのうせい",
+    "senses": [
+      {
+        "definition": "JIS X 0129-1における品質特性の一つ。規定された要求を満足する機能を持つ度合い。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "JIS",
+          "機能",
+          "要求"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "使用性",
+    "reading": "しようせい",
+    "senses": [
+      {
+        "definition": "JIS X 0129-1における品質特性の一つ。特定の利用状況でユーザーが目標を達成できる度合い。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "JIS",
+          "使いやすさ",
+          "ユーザー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "効率性",
+    "reading": "こうりつせい",
+    "senses": [
+      {
+        "definition": "JIS X 0129-1における品質特性の一つ。性能と資源使用量のバランスに関する品質特性。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "JIS",
+          "性能",
+          "資源"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "移植性",
+    "reading": "いしょくせい",
+    "senses": [
+      {
+        "definition": "JIS X 0129-1における品質特性の一つ。異なる環境へ移行できる度合い。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "JIS",
+          "移行",
+          "環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "有効性",
+    "reading": "ゆうこうせい",
+    "senses": [
+      {
+        "definition": "JIS X 0129-1における利用時品質の一つ。ユーザーが目標を達成できる正確さと完全さ。",
+        "domain": "methodology",
+        "keywords": [
+          "利用時品質",
+          "JIS",
+          "目標",
+          "正確さ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "安全性",
+    "reading": "あんぜんせい",
+    "senses": [
+      {
+        "definition": "JIS X 0129-1における品質特性の一つ。人・財産・環境へのリスクを許容レベルに抑える度合い。",
+        "domain": "security",
+        "keywords": [
+          "品質",
+          "JIS",
+          "リスク",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "満足度",
+    "reading": "まんぞくど",
+    "senses": [
+      {
+        "definition": "利用時品質の一つ。ユーザーがシステム利用時に感じる肯定的な感情の度合い。",
+        "domain": "methodology",
+        "keywords": [
+          "利用時品質",
+          "ユーザー",
+          "感情",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JUASガイドライン",
+    "senses": [
+      {
+        "definition": "JUAS（日本情報システム・ユーザー協会）が公開する情報システム開発に関するガイドライン群。",
+        "domain": "methodology",
+        "keywords": [
+          "JUAS",
+          "ガイドライン",
+          "標準",
+          "情報システム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能要求指標",
+    "reading": "ひきのうようきゅうしひょう",
+    "senses": [
+      {
+        "definition": "非機能要求を定量的に表現するための測定可能な指標。応答時間・可用率などが代表例。",
+        "domain": "business-analysis",
+        "keywords": [
+          "定量",
+          "指標",
+          "KPI",
+          "非機能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能要求グレード",
+    "reading": "ひきのうようきゅうぐれーど",
+    "senses": [
+      {
+        "definition": "非機能要求をA〜Eなどのグレードで段階的に表現するアプローチ。比較・合意形成を容易にする。",
+        "domain": "business-analysis",
+        "keywords": [
+          "グレード",
+          "非機能",
+          "段階",
+          "合意"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能要求グレード活用シート",
+    "reading": "ひきのうようきゅうぐれーどかつようしーと",
+    "senses": [
+      {
+        "definition": "非機能要求グレードを記入・共有するための標準的なワークシート。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ワークシート",
+          "非機能",
+          "グレード",
+          "成果物"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "複数の非機能要求セット",
+    "reading": "ふくすうのひきのうようきゅうせっと",
+    "senses": [
+      {
+        "definition": "システムの機能領域ごとに異なる非機能要求を定義し複数セットとして管理するアプローチ。",
+        "domain": "business-analysis",
+        "keywords": [
+          "非機能",
+          "複数",
+          "管理",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ITガバナンス要求",
+    "reading": "いーてぃがばなんすようきゅう",
+    "senses": [
+      {
+        "definition": "情報システムの統制・管理・方針に関する組織レベルの要求。コンプライアンスやリスク管理を含む。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ガバナンス",
+          "コンプライアンス",
+          "リスク",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サービスレベル",
+    "reading": "さーびすれべる",
+    "senses": [
+      {
+        "definition": "ITサービスの品質・可用性・性能などを定量的に定めた合意事項。SLAとして文書化される。",
+        "domain": "business-analysis",
+        "keywords": [
+          "SLA",
+          "可用性",
+          "品質",
+          "合意"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "要件のレベル定義",
+    "reading": "ようけんのれべるていぎ",
+    "senses": [
+      {
+        "definition": "要件をビジネス・ユーザー・システム・実装などの階層ごとに定義する枠組み。",
+        "domain": "business-analysis",
+        "keywords": [
+          "要件",
+          "階層",
+          "定義",
+          "レベル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "グレード表",
+    "reading": "ぐれーどひょう",
+    "senses": [
+      {
+        "definition": "非機能要求のグレードをまとめた一覧表。各特性の評価基準と対応するグレードを定義する。",
+        "domain": "business-analysis",
+        "keywords": [
+          "非機能",
+          "グレード",
+          "一覧",
+          "評価基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "規模見積もり",
+    "reading": "きぼみつもり",
+    "senses": [
+      {
+        "definition": "ソフトウェアのファンクションポイント・ステップ数・ユースケース数などで開発規模を定量化すること。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "規模",
+          "FP",
+          "工数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "生産性数値",
+    "reading": "せいさんせいすうち",
+    "senses": [
+      {
+        "definition": "単位規模あたりの工数（人月/FPなど）を表す値。組織・プロジェクト特性ごとに異なる。",
+        "domain": "project-management",
+        "keywords": [
+          "工数",
+          "FP",
+          "効率",
+          "見積もり"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "材料費",
+    "reading": "ざいりょうひ",
+    "senses": [
+      {
+        "definition": "システム開発で必要なハードウェア・ソフトウェア・クラウドサービスなどの物品・サービス費用。",
+        "domain": "project-management",
+        "keywords": [
+          "費用",
+          "ハードウェア",
+          "ソフトウェア",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "作業費用",
+    "reading": "さぎょうひよう",
+    "senses": [
+      {
+        "definition": "開発作業に従事する人員の人件費・外注費など労務系のコスト。",
+        "domain": "project-management",
+        "keywords": [
+          "人件費",
+          "外注",
+          "コスト",
+          "工数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "管理費",
+    "reading": "かんりひ",
+    "senses": [
+      {
+        "definition": "プロジェクト管理・品質管理・環境管理などの間接費用。",
+        "domain": "project-management",
+        "keywords": [
+          "間接費",
+          "プロジェクト管理",
+          "コスト",
+          "オーバーヘッド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "超概算見積もり",
+    "reading": "ちょうがいさんみつもり",
+    "senses": [
+      {
+        "definition": "プロジェクト初期に最低限の情報で行う粗い見積もり。精度は±50%程度。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "概算",
+          "精度",
+          "初期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "予算見積もり",
+    "reading": "よさんみつもり",
+    "senses": [
+      {
+        "definition": "予算確保のために行う見積もり。精度は±25%程度。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "予算",
+          "精度",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "確定見積もり",
+    "reading": "かくていみつもり",
+    "senses": [
+      {
+        "definition": "契約・実施計画に用いる精度の高い見積もり。精度は±10%程度。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "確定",
+          "契約",
+          "精度"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "計画見積もり",
+    "reading": "けいかくみつもり",
+    "senses": [
+      {
+        "definition": "プロジェクト計画策定のために詳細な分析をもとに行う見積もり。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "計画",
+          "詳細",
+          "精度"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "見積もり期待精度",
+    "reading": "みつもりきたいせいど",
+    "senses": [
+      {
+        "definition": "見積もり手法ごとに期待できる精度の範囲。プロジェクトフェーズや情報量で変わる。",
+        "domain": "project-management",
+        "keywords": [
+          "精度",
+          "見積もり",
+          "範囲",
+          "フェーズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "標準値法",
+    "reading": "ひょうじゅんちほう",
+    "senses": [
+      {
+        "definition": "過去の類似プロジェクトの実績データから標準的な工数・期間を算出する見積もり手法。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "標準",
+          "実績",
+          "工数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "標準タスク法",
+    "reading": "ひょうじゅんたすくほう",
+    "senses": [
+      {
+        "definition": "プロジェクトを標準タスクに分解し各タスクの工数を積み上げて総工数を算出する見積もり手法。",
+        "domain": "project-management",
+        "keywords": [
+          "WBS",
+          "タスク",
+          "積み上げ",
+          "工数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "COCOMO II",
+    "senses": [
+      {
+        "definition": "Barry Boehm提唱のコスト見積もりモデル。コードステップ数とコスト係数から工数を算出する。",
+        "domain": "project-management",
+        "keywords": [
+          "見積もり",
+          "Boehm",
+          "工数",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ユースケースポイント法",
+    "reading": "ゆーすけーすぽいんとほう",
+    "senses": [
+      {
+        "definition": "ユースケースの複雑度とアクターの複雑度から開発規模・工数を見積もる手法。",
+        "domain": "project-management",
+        "keywords": [
+          "ユースケース",
+          "見積もり",
+          "規模",
+          "工数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ファンクションポイント法",
+    "reading": "ふぁんくしょんぽいんとほう",
+    "senses": [
+      {
+        "definition": "システムの機能的規模をファンクションポイント（FP）で計測する国際標準の規模計測手法。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "規模",
+          "見積もり",
+          "標準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IFPUG法",
+    "senses": [
+      {
+        "definition": "IFPUGが標準化したファンクションポイント計測手法。データファンクションとトランザクションファンクションを計測する。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "IFPUG",
+          "規模",
+          "計測"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データファンクション",
+    "reading": "でーたふぁんくしょん",
+    "senses": [
+      {
+        "definition": "ファンクションポイント法における内部論理ファイル（ILF）と外部インターフェースファイル（EIF）の総称。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "ILF",
+          "EIF",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "トランザクションファンクション",
+    "reading": "とらんざくしょんふぁんくしょん",
+    "senses": [
+      {
+        "definition": "ファンクションポイント法における外部入力（EI）・外部出力（EO）・外部照会（EQ）の総称。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "EI",
+          "EO",
+          "EQ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ILF",
+    "senses": [
+      {
+        "definition": "Internal Logical Fileの略。システム内部で管理・使用するデータの論理的なグループ。FP計測の対象。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "データ",
+          "ファイル",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EIF",
+    "senses": [
+      {
+        "definition": "External Interface Fileの略。他システムが管理するデータをシステムが参照するファイル。FP計測の対象。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "外部",
+          "インターフェース",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EI",
+    "senses": [
+      {
+        "definition": "External Inputの略。外部からデータを受け取り内部ファイルを更新するトランザクション。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "入力",
+          "トランザクション",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EO",
+    "senses": [
+      {
+        "definition": "External Outputの略。処理結果を外部に出力するトランザクション。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "出力",
+          "トランザクション",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EQ",
+    "senses": [
+      {
+        "definition": "External Inquiryの略。外部からの照会に対してデータを取得・表示するトランザクション。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "照会",
+          "トランザクション",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DET",
+    "senses": [
+      {
+        "definition": "Data Element Typeの略。FP計測においてファイルまたはトランザクション内のデータ項目数。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "データ項目",
+          "計測",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RET",
+    "senses": [
+      {
+        "definition": "Record Element Typeの略。ILF/EIF内の論理的サブグループ数。FP計測に使用。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "サブグループ",
+          "計測",
+          "ILF"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FTR",
+    "senses": [
+      {
+        "definition": "File Type Referencedの略。トランザクションが参照するファイル（ILF/EIF）の数。FP計測に使用。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "参照",
+          "ファイル",
+          "計測"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オブジェクトポイント法",
+    "reading": "おぶじぇくとぽいんとほう",
+    "senses": [
+      {
+        "definition": "アプリケーションのオブジェクト（画面・帳票・モジュール）数から規模を見積もる手法。",
+        "domain": "project-management",
+        "keywords": [
+          "オブジェクト",
+          "規模",
+          "見積もり",
+          "画面"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工数ものさし",
+    "reading": "こうすうものさし",
+    "senses": [
+      {
+        "definition": "プロジェクトの難易度・規模に応じた工数の目安を示すリファレンス。見積もりの基準値として使う。",
+        "domain": "project-management",
+        "keywords": [
+          "工数",
+          "基準",
+          "見積もり",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "最適工期",
+    "reading": "さいてきこうき",
+    "senses": [
+      {
+        "definition": "プロジェクトの工数規模に対して統計的に最適とされる開発期間。",
+        "domain": "project-management",
+        "keywords": [
+          "工期",
+          "最適",
+          "スケジュール",
+          "見積もり"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工期配分",
+    "reading": "こうきはいぶん",
+    "senses": [
+      {
+        "definition": "プロジェクト全体の工期を各工程に割り当てる活動。工程間のバランスを考慮する。",
+        "domain": "project-management",
+        "keywords": [
+          "工期",
+          "工程",
+          "スケジュール",
+          "配分"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工数配分",
+    "reading": "こうすうはいぶん",
+    "senses": [
+      {
+        "definition": "総工数を各工程・作業項目に割り当てる活動。生産性や難易度を考慮して配分する。",
+        "domain": "project-management",
+        "keywords": [
+          "工数",
+          "配分",
+          "工程",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プロセスフロー設計",
+    "reading": "ぷろせすふろーせっけい",
+    "senses": [
+      {
+        "definition": "プロジェクトの各工程の順序・インプット・アウトプット・承認条件を設計する活動。",
+        "domain": "project-management",
+        "keywords": [
+          "工程",
+          "プロセス",
+          "設計",
+          "フロー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IPA",
+    "senses": [
+      {
+        "definition": "情報処理推進機構の略。日本のIT人材育成・情報セキュリティ・ソフトウェア品質向上を推進する独立行政法人。",
+        "domain": "methodology",
+        "keywords": [
+          "情報処理",
+          "資格",
+          "政府",
+          "IT推進"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JUAS",
+    "senses": [
+      {
+        "definition": "日本情報システム・ユーザー協会の略。ユーザー企業のIT活用を支援する日本の業界団体。",
+        "domain": "methodology",
+        "keywords": [
+          "ユーザー",
+          "IT",
+          "協会",
+          "ガイドライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JFPUG",
+    "senses": [
+      {
+        "definition": "Japan Function Point Users Groupの略。日本でのファンクションポイント普及・研究を行う団体。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "ユーザーグループ",
+          "日本",
+          "規模計測"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IFPUG",
+    "senses": [
+      {
+        "definition": "International Function Point Users Groupの略。ファンクションポイント計測手法を国際標準化する団体。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "国際標準",
+          "計測",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NESMA",
+    "senses": [
+      {
+        "definition": "Netherlands Software Metrics Associationの略。ソフトウェア計測の標準化を推進するオランダの団体。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "規模計測",
+          "標準",
+          "オランダ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ソフトウェア規模",
+    "reading": "そふとうぇあきぼ",
+    "senses": [
+      {
+        "definition": "ソフトウェアの大きさをFP・LOC・ユースケース数などで定量的に表した値。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "LOC",
+          "計測",
+          "見積もり"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工数変換係数",
+    "reading": "こうすうへんかんけいすう",
+    "senses": [
+      {
+        "definition": "ファンクションポイントなどの規模指標から人月に変換するための係数。組織・技術スタックで異なる。",
+        "domain": "project-management",
+        "keywords": [
+          "FP",
+          "工数",
+          "変換",
+          "係数"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

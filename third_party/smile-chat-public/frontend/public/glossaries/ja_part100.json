@@ -1,0 +1,1316 @@
+[
+  {
+    "term": "不正アクセス",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "許可されていない利用者や経路によるシステムへのアクセスです。",
+        "domain": "security",
+        "keywords": [
+          "システム",
+          "アクセス",
+          "利用者",
+          "許可"
+        ]
+      }
+    ],
+    "reading": "ふせいあくせす"
+  },
+  {
+    "term": "ログイン画面",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "利用者が認証情報を入力してログインする画面です。",
+        "domain": "security",
+        "keywords": [
+          "ログイン",
+          "認証情報",
+          "利用者",
+          "入力"
+        ]
+      }
+    ],
+    "reading": "ろぐいんがめん"
+  },
+  {
+    "term": "処理能力",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "一定時間内に処理できる仕事量や性能の大きさです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "一定時間内",
+          "仕事量",
+          "性能"
+        ]
+      }
+    ],
+    "reading": "しょりのうりょく"
+  },
+  {
+    "term": "画面表示時間",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "操作してから画面の内容が表示されるまでの時間です。",
+        "domain": "frontend",
+        "keywords": [
+          "画面",
+          "表示",
+          "操作",
+          "時間"
+        ]
+      }
+    ],
+    "reading": "がめんひょうじじかん"
+  },
+  {
+    "term": "API応答時間",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APIに要求を送ってから応答を受け取るまでの時間です。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "要求",
+          "応答",
+          "時間"
+        ]
+      }
+    ],
+    "reading": "えーぴーあいおうとうじかん"
+  },
+  {
+    "term": "1秒あたりの処理件数",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "1秒間に処理できる件数を表す指標です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "秒間",
+          "件数",
+          "指標"
+        ]
+      }
+    ],
+    "reading": "いちびょうあたりのしょりけんすう"
+  },
+  {
+    "term": "同時接続ユーザー数",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "同じ時点で同時に接続している利用者数です。",
+        "domain": "integration",
+        "keywords": [
+          "接続",
+          "利用者数",
+          "時点",
+          "同時"
+        ]
+      }
+    ],
+    "reading": "どうじせつぞくゆーざーすう"
+  },
+  {
+    "term": "性能を維持",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "負荷や構成変更があっても必要な性能を保つことです。",
+        "domain": "performance",
+        "keywords": [
+          "性能",
+          "構成変更",
+          "負荷"
+        ]
+      }
+    ],
+    "reading": "せいのうをいじ"
+  },
+  {
+    "term": "通常時",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ピークではない平常時の利用状況です。",
+        "domain": "Generic",
+        "keywords": [
+          "ピーク",
+          "利用状況",
+          "平常時"
+        ]
+      }
+    ],
+    "reading": "つうじょうじ"
+  },
+  {
+    "term": "ピーク時",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "利用量や負荷が最も高くなる時間帯や状態です。",
+        "domain": "operations",
+        "keywords": [
+          "負荷",
+          "利用量",
+          "時間帯"
+        ]
+      }
+    ],
+    "reading": "ぴーくじ"
+  },
+  {
+    "term": "業務継続可能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "障害や負荷があっても業務を続けられる状態です。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "負荷",
+          "業務"
+        ]
+      }
+    ],
+    "reading": "ぎょうむけいぞくかのう"
+  },
+  {
+    "term": "止まりにくさ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "障害や負荷があっても停止しにくい性質です。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "負荷",
+          "停止",
+          "性質"
+        ]
+      }
+    ],
+    "reading": "とまりにくさ"
+  },
+  {
+    "term": "99.9%",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "可用性や成功率の目標値として使われる三九の水準です。",
+        "domain": "operations",
+        "keywords": [
+          "可用性",
+          "成功率",
+          "目標値",
+          "三九"
+        ]
+      }
+    ],
+    "reading": "すりーないん"
+  },
+  {
+    "term": "99.99%",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "可用性や成功率の目標値として使われる四九の水準です。",
+        "domain": "operations",
+        "keywords": [
+          "可用性",
+          "成功率",
+          "目標値",
+          "四九"
+        ]
+      }
+    ],
+    "reading": "ふぉーないん"
+  },
+  {
+    "term": "稼働率",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "全時間のうちサービスが正常に使えた割合です。",
+        "domain": "operations",
+        "keywords": [
+          "サービス",
+          "全時間",
+          "正常",
+          "割合"
+        ]
+      }
+    ],
+    "reading": "かどうりつ"
+  },
+  {
+    "term": "複数AZ配置",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数のアベイラビリティゾーンに分けてシステムを配置する構成です。",
+        "domain": "cloud",
+        "keywords": [
+          "アベイラビリティゾーン",
+          "システム",
+          "配置",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "ふくすうえーぜっとはいち"
+  },
+  {
+    "term": "サービス全体",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "個別部品ではなく利用者から見たサービスの全体範囲です。",
+        "domain": "Generic",
+        "keywords": [
+          "サービス",
+          "個別部品",
+          "全体範囲",
+          "利用者"
+        ]
+      }
+    ],
+    "reading": "さーびすぜんたい"
+  },
+  {
+    "term": "途中失敗",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "処理の完了前に一部の段階で失敗することです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "完了前",
+          "一部",
+          "段階"
+        ]
+      }
+    ],
+    "reading": "とちゅうしっぱい"
+  },
+  {
+    "term": "再実行",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "失敗や中断の後に同じ処理をもう一度実行することです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "一度実行",
+          "失敗",
+          "中断"
+        ]
+      }
+    ],
+    "reading": "さいじっこう"
+  },
+  {
+    "term": "再試行時",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "処理や通信を再試行する場面やタイミングです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "タイミング",
+          "再試行",
+          "通信"
+        ]
+      }
+    ],
+    "reading": "さいしこうじ"
+  },
+  {
+    "term": "新機能追加",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "既存システムに新しい機能を加えることです。",
+        "domain": "Generic",
+        "keywords": [
+          "存システム",
+          "既存",
+          "機能"
+        ]
+      }
+    ],
+    "reading": "しんきのうついか"
+  },
+  {
+    "term": "地域展開",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サービス提供範囲を複数の地域へ広げることです。",
+        "domain": "Generic",
+        "keywords": [
+          "サービス提供範囲",
+          "地域"
+        ]
+      }
+    ],
+    "reading": "ちいきてんかい"
+  },
+  {
+    "term": "複数インスタンス",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "同じ役割の実行単位を複数台で動かす構成です。",
+        "domain": "team",
+        "keywords": [
+          "役割",
+          "実行単位",
+          "複数台",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "ふくすういんすたんす"
+  },
+  {
+    "term": "負荷増加",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アクセス量や処理量が増えてシステム負荷が高まることです。",
+        "domain": "operations",
+        "keywords": [
+          "負荷",
+          "アクセス量",
+          "システム",
+          "処理量"
+        ]
+      }
+    ],
+    "reading": "ふかぞうか"
+  },
+  {
+    "term": "アクセスが急増",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "短時間で利用者や要求数が急に増えることです。",
+        "domain": "requirements",
+        "keywords": [
+          "短時間",
+          "利用者",
+          "要求数"
+        ]
+      }
+    ],
+    "reading": "あくせすがきゅうぞう"
+  },
+  {
+    "term": "秘密情報管理",
+    "aliases": [
+      "Secrets管理"
+    ],
+    "senses": [
+      {
+        "definition": "パスワードや鍵などの秘密情報を安全に保管し制御することです。",
+        "domain": "security",
+        "keywords": [
+          "パスワード",
+          "秘密情報",
+          "安全",
+          "保管"
+        ]
+      }
+    ],
+    "reading": "ひみつじょうほうかんり"
+  },
+  {
+    "term": "ネットワーク分離",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "通信経路や接続範囲を分けて影響や侵入を抑える設計です。",
+        "domain": "network",
+        "keywords": [
+          "通信経路",
+          "接続範囲",
+          "侵入",
+          "設計"
+        ]
+      }
+    ],
+    "reading": "ねっとわーくぶんり"
+  },
+  {
+    "term": "管理操作",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "設定変更や権限付与など管理者向けの操作です。",
+        "domain": "Generic",
+        "keywords": [
+          "設定変更",
+          "権限付与",
+          "管理者向",
+          "操作"
+        ]
+      }
+    ],
+    "reading": "かんりそうさ"
+  },
+  {
+    "term": "設定変更",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "システムやサービスの設定値を変更することです。",
+        "domain": "Generic",
+        "keywords": [
+          "システム",
+          "サービス",
+          "設定値",
+          "変更"
+        ]
+      }
+    ],
+    "reading": "せっていへんこう"
+  },
+  {
+    "term": "コード修正",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "不具合対応や改善のためにソースコードを直すことです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ソースコード",
+          "不具合対応",
+          "改善"
+        ]
+      }
+    ],
+    "reading": "こーどしゅうせい"
+  },
+  {
+    "term": "手作業",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "自動化せず人が直接実施する作業です。",
+        "domain": "devops",
+        "keywords": [
+          "自動化",
+          "直接実施"
+        ]
+      }
+    ],
+    "reading": "てさぎょう"
+  },
+  {
+    "term": "コード管理",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ソースコードの版管理や変更履歴を扱う運用です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ソースコード",
+          "変更履歴",
+          "版管理",
+          "運用"
+        ]
+      }
+    ],
+    "reading": "こーどかんり"
+  },
+  {
+    "term": "ログ出力",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "処理状況や異常情報を記録として残すことです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理状況",
+          "異常情報",
+          "記録"
+        ]
+      }
+    ],
+    "reading": "ろぐしゅつりょく"
+  },
+  {
+    "term": "証明書更新",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "期限切れや切替に備えて証明書を新しいものへ更新することです。",
+        "domain": "security",
+        "keywords": [
+          "証明書",
+          "期限切",
+          "切替",
+          "更新"
+        ]
+      }
+    ],
+    "reading": "しょうめいしょこうしん"
+  },
+  {
+    "term": "証明書",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "通信相手や公開鍵の正当性を示す電子的な証明情報です。",
+        "domain": "security",
+        "keywords": [
+          "通信相手",
+          "証明情報",
+          "公開鍵",
+          "正当性"
+        ]
+      }
+    ],
+    "reading": "しょうめいしょ"
+  },
+  {
+    "term": "異常の原因",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "障害や不具合を引き起こした直接または根本の要因です。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "不具合",
+          "直接",
+          "根本"
+        ]
+      }
+    ],
+    "reading": "いじょうのげんいん"
+  },
+  {
+    "term": "分散構成",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "処理や役割を複数のノードに分けて動かす構成です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "ノード",
+          "役割",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "ぶんさんこうせい"
+  },
+  {
+    "term": "障害解析",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "障害の発生条件や原因を調べて特定する作業です。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "発生条件",
+          "原因"
+        ]
+      }
+    ],
+    "reading": "しょうがいかいせき"
+  },
+  {
+    "term": "データ形式",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "データをどのような構造や表現で扱うかの形式です。",
+        "domain": "Generic",
+        "keywords": [
+          "データ",
+          "構造",
+          "形式"
+        ]
+      }
+    ],
+    "reading": "でーたけいしき"
+  },
+  {
+    "term": "文字コード",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "文字を数値として表現するための符号化方式です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "符号化方式",
+          "文字",
+          "数値"
+        ]
+      }
+    ],
+    "reading": "もじこーど"
+  },
+  {
+    "term": "認証方式",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "利用者やシステムの正当性を確認する方法です。",
+        "domain": "security",
+        "keywords": [
+          "システム",
+          "利用者",
+          "正当性"
+        ]
+      }
+    ],
+    "reading": "にんしょうほうしき"
+  },
+  {
+    "term": "ブラウザ対応",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数のブラウザで正しく利用できるようにする対応です。",
+        "domain": "frontend",
+        "keywords": [
+          "ブラウザ"
+        ]
+      }
+    ],
+    "reading": "ぶらうざたいおう"
+  },
+  {
+    "term": "モバイル対応",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "スマートフォンやタブレットでも使いやすくする対応です。",
+        "domain": "frontend",
+        "keywords": [
+          "スマートフォン",
+          "タブレット",
+          "モバイル"
+        ]
+      }
+    ],
+    "reading": "もばいるたいおう"
+  },
+  {
+    "term": "SaaS連携",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部のSaaSとデータや処理を連携することです。",
+        "domain": "integration",
+        "keywords": [
+          "連携",
+          "SaaS",
+          "データ",
+          "外部"
+        ]
+      }
+    ],
+    "reading": "さーすれんけい"
+  },
+  {
+    "term": "非機能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "性能や可用性や運用性など機能以外の要求領域です。",
+        "domain": "operations",
+        "keywords": [
+          "可用性",
+          "機能以外",
+          "要求領域",
+          "運用性"
+        ]
+      }
+    ],
+    "reading": "ひきのう"
+  },
+  {
+    "term": "並行稼働",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "旧環境と新環境を同時に動かして比較や移行を行う状態です。",
+        "domain": "migration",
+        "keywords": [
+          "移行",
+          "旧環境",
+          "新環境",
+          "同時"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "切戻し",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "切替後に問題があれば元の状態へ戻すことです。",
+        "domain": "migration",
+        "keywords": [
+          "切替後",
+          "切戻"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "停止時間",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サービスが利用できない停止中の時間です。",
+        "domain": "Generic",
+        "keywords": [
+          "サービス",
+          "停止中",
+          "時間"
+        ]
+      }
+    ],
+    "reading": "ていしじかん"
+  },
+  {
+    "term": "本番切替",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "新しい環境や構成を本番利用へ切り替える作業です。",
+        "domain": "migration",
+        "keywords": [
+          "本番利用",
+          "環境",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "ほんばんきりかえ"
+  },
+  {
+    "term": "個人情報保護",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "個人情報を適切に取得し利用し保護することです。",
+        "domain": "security",
+        "keywords": [
+          "保護",
+          "個人情報",
+          "適切",
+          "取得"
+        ]
+      }
+    ],
+    "reading": "こじんじょうほうほご"
+  },
+  {
+    "term": "業界規制",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "業界ごとに求められる規制や基準です。",
+        "domain": "compliance",
+        "keywords": [
+          "規制",
+          "業界",
+          "基準"
+        ]
+      }
+    ],
+    "reading": "ぎょうかいきせい"
+  },
+  {
+    "term": "法令順守",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "法律や規則に従って運用や開発を行うことです。",
+        "domain": "compliance",
+        "keywords": [
+          "法律",
+          "規則",
+          "運用",
+          "開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "監査証跡",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "誰がいつ何をしたかを追跡できる記録です。",
+        "domain": "security",
+        "keywords": [
+          "追跡",
+          "記録"
+        ]
+      }
+    ],
+    "reading": "かんさしょうせき"
+  },
+  {
+    "term": "設定ミス",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "設定値や構成の誤りによる不具合やリスクです。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "設定値",
+          "不具合",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "せっていみす"
+  },
+  {
+    "term": "要件未達",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "定めた要件や目標を満たしていない状態です。",
+        "domain": "requirements",
+        "keywords": [
+          "要件",
+          "目標"
+        ]
+      }
+    ],
+    "reading": "ようけんみたつ"
+  },
+  {
+    "term": "設計段階",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "実装前に構成や仕様を決める工程です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "仕様",
+          "工程",
+          "実装前",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "せっけいだんかい"
+  },
+  {
+    "term": "月間稼働率",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "1か月のうちサービスが利用可能だった割合です。",
+        "domain": "operations",
+        "keywords": [
+          "サービス",
+          "利用可能",
+          "割合"
+        ]
+      }
+    ],
+    "reading": "げっかんかどうりつ"
+  },
+  {
+    "term": "継続運転可能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "長時間停止せず運用を続けられる状態です。",
+        "domain": "operations",
+        "keywords": [
+          "運用",
+          "長時間停止"
+        ]
+      }
+    ],
+    "reading": "けいぞくうんてんかのう"
+  },
+  {
+    "term": "管理者機能",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "管理者だけが使える設定や運用向けの機能です。",
+        "domain": "operations",
+        "keywords": [
+          "管理者",
+          "運用向",
+          "設定",
+          "機能"
+        ]
+      }
+    ],
+    "reading": "かんりしゃきのう"
+  },
+  {
+    "term": "全通信",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "対象システムで発生するすべての通信です。",
+        "domain": "network",
+        "keywords": [
+          "通信",
+          "象システム",
+          "対象",
+          "発生"
+        ]
+      }
+    ],
+    "reading": "ぜんつうしん"
+  },
+  {
+    "term": "業務停止許容",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "業務が停止しても許容できる時間や条件の範囲です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "条件",
+          "業務",
+          "停止",
+          "許容"
+        ]
+      }
+    ],
+    "reading": "ぎょうむていしきょよう"
+  },
+  {
+    "term": "複数AZ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数のアベイラビリティゾーンを使って冗長化する構成です。",
+        "domain": "cloud",
+        "keywords": [
+          "アベイラビリティゾーン",
+          "冗長化",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "ふくすうえーぜっと"
+  },
+  {
+    "term": "DB冗長化",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "データベースを冗長構成にして障害耐性を高めることです。",
+        "domain": "database",
+        "keywords": [
+          "データベース",
+          "冗長構成",
+          "障害耐性"
+        ]
+      }
+    ],
+    "reading": "でぃーびーじょうちょうか"
+  },
+  {
+    "term": "日本時間",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "日本標準時を基準にした時刻です。",
+        "domain": "Generic",
+        "keywords": [
+          "日本標準時",
+          "基準",
+          "時刻"
+        ]
+      }
+    ],
+    "reading": "にほんじかん"
+  },
+  {
+    "term": "効期限判定",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "証明書やトークンが有効期限内かを判定することです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "判定",
+          "トークン",
+          "有効期限内",
+          "証明書"
+        ]
+      }
+    ],
+    "reading": "こうきげんはんてい"
+  },
+  {
+    "term": "時刻がずれると",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "機器間の時刻差が原因で認証や記録に不整合が起きる条件です。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "機器間",
+          "時刻差",
+          "不整合"
+        ]
+      }
+    ],
+    "reading": "じこくがずれると"
+  },
+  {
+    "term": "Network Time Protocol",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "機器の時刻を同期するための標準的なプロトコルです。",
+        "domain": "backend",
+        "keywords": [
+          "同期",
+          "プロトコル",
+          "標準的",
+          "機器"
+        ]
+      }
+    ],
+    "reading": "ねっとわーくたいむぷろとこる"
+  },
+  {
+    "term": "障害調査",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "障害の再現条件や影響範囲や原因を調べる活動です。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "再現条件",
+          "影響範囲",
+          "原因"
+        ]
+      }
+    ],
+    "reading": "しょうがいちょうさ"
+  },
+  {
+    "term": "往復遅延",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "要求送信から応答受信までの往復にかかる遅延時間です。",
+        "domain": "requirements",
+        "keywords": [
+          "要求送信",
+          "応答受信",
+          "遅延時間",
+          "往復"
+        ]
+      }
+    ],
+    "reading": "おうふくちえん"
+  },
+  {
+    "term": "高精度",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "誤差が小さく正確さが高い状態です。",
+        "domain": "ai",
+        "keywords": [
+          "誤差",
+          "正確"
+        ]
+      }
+    ],
+    "reading": "こうせいど"
+  },
+  {
+    "term": "基盤技術",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "システム全体を支える共通の技術要素です。",
+        "domain": "Generic",
+        "keywords": [
+          "システム全体",
+          "技術要素",
+          "共通"
+        ]
+      }
+    ],
+    "reading": "きばんぎじゅつ"
+  },
+  {
+    "term": "思考速度",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "状況を理解して判断や発想を進める速さです。",
+        "domain": "Generic",
+        "keywords": [
+          "理解",
+          "判断",
+          "発想"
+        ]
+      }
+    ],
+    "reading": "しこうそくど"
+  },
+  {
+    "term": "実装方針",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "どの方法や構成で実装するかの基本方針です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "実装",
+          "基本方針",
+          "構成"
+        ]
+      }
+    ],
+    "reading": "じっそうほうしん"
+  },
+  {
+    "term": "テスト期待値",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "テストで正しい結果として期待する値や状態です。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "期待",
+          "期待値"
+        ]
+      }
+    ],
+    "reading": "てすときたいち"
+  },
+  {
+    "term": "命名確認",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "名前が意味や規約に沿っているかを確認することです。",
+        "domain": "compliance",
+        "keywords": [
+          "規約",
+          "名前"
+        ]
+      }
+    ],
+    "reading": "めいめいかくにん"
+  },
+  {
+    "term": "API仕様確認",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APIの入出力や制約や契約内容を確認することです。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "契約内容",
+          "入出力",
+          "制約"
+        ]
+      }
+    ],
+    "reading": "えーぴーあいしようかくにん"
+  },
+  {
+    "term": "Agent",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "指示や状況に応じて処理を進める実行主体です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "処理",
+          "実行主体",
+          "指示"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Spec駆動",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "仕様を起点に設計や実装や検証を進める考え方です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "仕様",
+          "設計",
+          "実装",
+          "起点"
+        ]
+      }
+    ],
+    "reading": "すぺっくくどう"
+  },
+  {
+    "term": "自動テスト",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "人手ではなくツールで自動実行するテストです。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "ツール",
+          "自動実行",
+          "人手"
+        ]
+      }
+    ],
+    "reading": "じどうてすと"
+  },
+  {
+    "term": "組織設計",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "役割分担や責任範囲や意思決定の構造を設計することです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計",
+          "役割分担",
+          "責任範囲",
+          "意思決定"
+        ]
+      }
+    ],
+    "reading": "そしきせっけい"
+  }
+]

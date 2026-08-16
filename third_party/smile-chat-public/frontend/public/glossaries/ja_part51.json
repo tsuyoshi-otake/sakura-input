@@ -1,0 +1,1619 @@
+[
+  {
+    "term": "GraphQLクエリ",
+    "reading": "ぐらふきゅーえるくえり",
+    "aliases": [
+      "GraphQL Query"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLでクライアントがサーバーから必要なデータを宣言的に取得するための操作。RESTと異なりフィールドを指定して過不足なくデータを取得でき、アンダーフェッチやオーバーフェッチを防ぐ。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "データ取得",
+          "宣言的",
+          "フィールド指定",
+          "クライアント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLミューテーション",
+    "reading": "ぐらふきゅーえるみゅーてーしょん",
+    "aliases": [
+      "GraphQL Mutation"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLでデータの作成・更新・削除などの副作用を伴う操作を行うための操作タイプ。クエリと区別することでAPIの意図を明確にし、クライアントが変更結果を受け取れる。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "データ変更",
+          "副作用",
+          "CRUD",
+          "操作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLサブスクリプション",
+    "reading": "ぐらふきゅーえるさぶすくりぷしょん",
+    "aliases": [
+      "GraphQL Subscription"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLでリアルタイムデータ更新を実現する操作タイプ。WebSocketなどの持続的接続を使いサーバーからクライアントへイベント発生時にデータをプッシュする。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "リアルタイム",
+          "WebSocket",
+          "プッシュ",
+          "イベント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLフラグメント",
+    "reading": "ぐらふきゅーえるふらぐめんと",
+    "aliases": [
+      "GraphQL Fragment"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLで再利用可能なフィールド選択セットを定義する仕組み。複数のクエリやミューテーションで共通のフィールド群を使い回し、コードの重複を排除して保守性を高める。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "再利用",
+          "フィールド",
+          "コード共有",
+          "保守性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLディレクティブ",
+    "reading": "ぐらふきゅーえるでぃれくてぃぶ",
+    "aliases": [
+      "GraphQL Directive"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLのスキーマやクエリに付加情報や実行制御を加えるアノテーション機能。@include、@skipなどの組み込みディレクティブや、カスタムディレクティブを定義して認可や変換処理を実装できる。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "アノテーション",
+          "@include",
+          "@skip",
+          "カスタム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DataLoader",
+    "reading": "でーたろーだー",
+    "aliases": [
+      "GraphQL DataLoader"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLにおけるN+1問題を解決するバッチ処理ライブラリ。複数の個別リクエストをまとめて一括取得し、キャッシュと組み合わせてデータベースへのクエリ数を大幅に削減する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "N+1問題",
+          "バッチ",
+          "キャッシュ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Schema Stitching",
+    "reading": "すきーますてぃっちんぐ",
+    "aliases": [
+      "GraphQL Schema Stitching"
+    ],
+    "senses": [
+      {
+        "definition": "複数のGraphQLスキーマをプログラム的に結合して単一のAPIエンドポイントを提供する手法。Federationの前身として使われ、異なるGraphQLサービスを透過的に統合する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "スキーマ統合",
+          "マイクロサービス",
+          "API統合",
+          "エンドポイント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Protocol Buffers",
+    "reading": "ぷろとこるばっふぁーず",
+    "aliases": [
+      "Protobuf",
+      "proto"
+    ],
+    "senses": [
+      {
+        "definition": "Googleが開発したバイナリシリアライゼーション形式とIDL。gRPCのデフォルトシリアライザとして使われ、.protoファイルにスキーマを定義すると複数言語のコードを自動生成できる。JSONより高速かつコンパクト。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "シリアライゼーション",
+          "バイナリ",
+          "コード生成",
+          "IDL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "unary RPC",
+    "reading": "ゆーなりあーるぴーしー",
+    "aliases": [
+      "単項RPC"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCの最も基本的な通信パターン。クライアントが単一のリクエストを送信し、サーバーが単一のレスポンスを返す従来のリクエスト/レスポンス型のRPC呼び出し形式。REST APIの1回の呼び出しに相当する。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "RPC",
+          "リクエスト",
+          "レスポンス",
+          "通信パターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "サーバーストリーミングRPC",
+    "reading": "さーばーすとりーみんぐあーるぴーしー",
+    "aliases": [
+      "Server Streaming RPC",
+      "gRPC Server Streaming"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCの通信パターンの一つ。クライアントが1件のリクエストを送信し、サーバーが複数のレスポンスをストリームで返す方式。大量データの逐次配信やリアルタイムイベント更新に適している。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "ストリーミング",
+          "サーバープッシュ",
+          "リアルタイム",
+          "通信パターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gRPCインターセプター",
+    "reading": "じーあーるぴーしーいんたーせぷたー",
+    "aliases": [
+      "gRPC Interceptor"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCのリクエスト/レスポンスパイプラインに挿入されるミドルウェア的な仕組み。認証トークン付与、ログ記録、メトリクス収集、リトライ処理などを横断的に実装するために使用する。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "ミドルウェア",
+          "認証",
+          "ログ",
+          "横断関心事"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebSocketハンドシェイク",
+    "reading": "うぇぶそけっとはんどしぇいく",
+    "aliases": [
+      "WebSocket Handshake",
+      "WebSocket Upgrade"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocket接続を確立するためのHTTPアップグレード手続き。クライアントがUpgrade: websocketヘッダーを含むHTTPリクエストを送り、サーバーが101 Switching Protocolsで応答して持続的双方向接続を開始する。",
+        "domain": "api",
+        "keywords": [
+          "WebSocket",
+          "HTTP",
+          "接続確立",
+          "アップグレード",
+          "101"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebSocketフレーム",
+    "reading": "うぇぶそけっとふれーむ",
+    "aliases": [
+      "WebSocket Frame"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocket通信における最小データ転送単位。テキスト、バイナリ、制御フレーム（ping/pong/close）などのタイプがあり、ヘッダーにオペコードとマスクフラグを含む軽量なプロトコル構造を持つ。",
+        "domain": "api",
+        "keywords": [
+          "WebSocket",
+          "フレーム",
+          "プロトコル",
+          "バイナリ",
+          "テキスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ping/pong",
+    "reading": "ぴんぐぽんぐ",
+    "aliases": [
+      "WebSocket Ping/Pong",
+      "Heartbeat"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocket接続の生存確認に使う制御フレーム。サーバーまたはクライアントがpingフレームを送り、相手がpongで応答することで接続が維持されていることを確認する。ハートビートとも呼ばれる。",
+        "domain": "api",
+        "keywords": [
+          "WebSocket",
+          "生存確認",
+          "ハートビート",
+          "接続維持",
+          "制御フレーム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebSocket再接続",
+    "reading": "うぇぶそけっとさいせつぞく",
+    "aliases": [
+      "WebSocket Reconnection",
+      "Reconnect Logic"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocket接続が切断された際に自動的に再接続を試みる実装パターン。指数バックオフを用いた再試行間隔の制御、接続状態管理、再接続時のメッセージ再送処理が必要となる。",
+        "domain": "api",
+        "keywords": [
+          "WebSocket",
+          "再接続",
+          "バックオフ",
+          "接続管理",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HATEOAS",
+    "reading": "はてぃおあす",
+    "aliases": [
+      "Hypermedia as the Engine of Application State"
+    ],
+    "senses": [
+      {
+        "definition": "RESTfulアーキテクチャの制約の一つ。APIレスポンスに次に実行可能な操作へのリンクを含め、クライアントがAPIドキュメントを事前に知らなくてもAPIを探索・利用できるようにする設計原則。",
+        "domain": "api",
+        "keywords": [
+          "REST",
+          "ハイパーメディア",
+          "リンク",
+          "自己記述",
+          "REST成熟度"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIバージョニング戦略",
+    "reading": "えーぴーあいばーじょにんぐせんりゃく",
+    "aliases": [
+      "API Versioning Strategy",
+      "API Version Management"
+    ],
+    "senses": [
+      {
+        "definition": "APIの後方互換性を維持しながら変更を管理するための手法。URLパス（/v1/）、クエリパラメータ（?version=1）、カスタムヘッダー、Content-Typeなど複数のアプローチがある。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "バージョン管理",
+          "後方互換性",
+          "URL",
+          "ヘッダー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIキー管理",
+    "reading": "えーぴーあいきーかんり",
+    "aliases": [
+      "API Key Management",
+      "API Key Rotation"
+    ],
+    "senses": [
+      {
+        "definition": "APIキーのライフサイクルを安全に管理する一連の実践。発行、スコープ制限、ローテーション、失効処理を含み、キーの漏洩リスクを最小化する。シークレットマネージャーでの安全な保管が推奨される。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "セキュリティ",
+          "認証",
+          "キーローテーション",
+          "シークレット管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Authorization Code Flow",
+    "reading": "おーとらいぜーしょんこーどふろー",
+    "aliases": [
+      "認可コードフロー",
+      "OAuth Authorization Code"
+    ],
+    "senses": [
+      {
+        "definition": "OAuth 2.0の認可フローの一つ。ブラウザベースのアプリで利用され、認可サーバーから認可コードを受け取りサーバーサイドでアクセストークンと交換する。コードの傍受を防ぐためPKCEと組み合わせて使う。",
+        "domain": "api",
+        "keywords": [
+          "OAuth2",
+          "認可",
+          "アクセストークン",
+          "セキュリティ",
+          "PKCE"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PKCE",
+    "reading": "ぴくしー",
+    "aliases": [
+      "Proof Key for Code Exchange",
+      "コード検証鍵"
+    ],
+    "senses": [
+      {
+        "definition": "OAuth 2.0の認可コードフローを強化する拡張機能。クライアントシークレットを安全に保持できないSPA・モバイルアプリのために認可コード横取り攻撃を防ぐ。code_verifierとcode_challengeのペアを使う。",
+        "domain": "api",
+        "keywords": [
+          "OAuth2",
+          "セキュリティ",
+          "SPA",
+          "モバイル",
+          "認可コード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Client Credentials Flow",
+    "reading": "くらいあんとくれでんしゃるずふろー",
+    "aliases": [
+      "Client Credentials",
+      "クライアント認証フロー"
+    ],
+    "senses": [
+      {
+        "definition": "OAuth 2.0のフローの一つ。ユーザーが介在しないサービス間通信（M2M）で使用する。クライアントID・シークレットを認可サーバーに送り、直接アクセストークンを取得する最もシンプルなフロー。",
+        "domain": "api",
+        "keywords": [
+          "OAuth2",
+          "M2M",
+          "サービス間通信",
+          "アクセストークン",
+          "バックエンド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OAuthスコープ",
+    "reading": "おーおーすぺースこーぷ",
+    "aliases": [
+      "OAuth Scope",
+      "Scope"
+    ],
+    "senses": [
+      {
+        "definition": "OAuth 2.0でアクセストークンが持つ権限の範囲を定義するパラメータ。read、write、admin などのスコープをスペース区切りで指定し、最小権限の原則に基づいてトークンのアクセス範囲を制限する。",
+        "domain": "api",
+        "keywords": [
+          "OAuth2",
+          "権限",
+          "最小権限",
+          "アクセス制御",
+          "トークン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Bearer Token",
+    "reading": "べあらーとーくん",
+    "aliases": [
+      "ベアラートークン",
+      "Bearer認証"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPの認証スキームの一つ。AuthorizationヘッダーにBearer プレフィックスとトークンを含めて送信する方式。OAuth 2.0やJWTと組み合わせて使われ、トークン所持者に対してアクセスを許可する。",
+        "domain": "api",
+        "keywords": [
+          "認証",
+          "HTTP",
+          "OAuth2",
+          "JWT",
+          "Authorization"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JWTクレーム",
+    "reading": "じぇいだぶりゅーてぃくれーむ",
+    "aliases": [
+      "JWT Claims",
+      "JWTペイロード"
+    ],
+    "senses": [
+      {
+        "definition": "JSON Web Tokenのペイロードに含まれるキーバリューペア。sub（主体）、exp（有効期限）、iss（発行者）などの標準クレームと、アプリケーション固有のカスタムクレームでユーザー情報や権限を表現する。",
+        "domain": "api",
+        "keywords": [
+          "JWT",
+          "認証",
+          "認可",
+          "ペイロード",
+          "標準クレーム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JWKS",
+    "reading": "じぇいだぶりゅーけーえす",
+    "aliases": [
+      "JSON Web Key Set",
+      "JWKエンドポイント"
+    ],
+    "senses": [
+      {
+        "definition": "JWTの署名検証に使う公開鍵の集合をJSON形式で公開するエンドポイントの仕様。認証プロバイダが/.well-known/jwks.jsonで公開し、リソースサーバーが動的に公開鍵を取得してトークンを検証する。",
+        "domain": "api",
+        "keywords": [
+          "JWT",
+          "公開鍵",
+          "署名検証",
+          "JWK",
+          "OIDC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オフセットページネーション",
+    "reading": "おふせっとぺーじねーしょん",
+    "aliases": [
+      "Offset Pagination",
+      "Offset-Based Pagination"
+    ],
+    "senses": [
+      {
+        "definition": "APIページネーションの手法の一つ。skip/limit またはpage/per_pageパラメータで取得位置を指定する。実装が簡単だがデータ変更時に重複や欠損が発生しやすく、大量データでは性能が低下する。",
+        "domain": "api",
+        "keywords": [
+          "ページネーション",
+          "API",
+          "オフセット",
+          "LIMIT",
+          "OFFSET"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIフィルタリング",
+    "reading": "えーぴーあいふぃるたりんぐ",
+    "aliases": [
+      "API Filtering",
+      "Query Filtering"
+    ],
+    "senses": [
+      {
+        "definition": "APIで返すリソースの絞り込み条件をクライアントから指定できる機能。クエリパラメータ（?status=active）やフィルタ専用パラメータ構文（?filter[status]=active）で実装し、不要なデータ転送を削減する。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "検索",
+          "絞り込み",
+          "クエリパラメータ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIソート",
+    "reading": "えーぴーあいそーと",
+    "aliases": [
+      "API Sorting",
+      "sort parameter"
+    ],
+    "senses": [
+      {
+        "definition": "REST APIで返すリソースの並び順をクライアントから指定できる機能。?sort=created_at&order=descのようなクエリパラメータや?sort=-created_atの短縮記法で昇順・降順を指定する。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "並び替え",
+          "クエリパラメータ",
+          "REST",
+          "レスポンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Sparse Fieldsets",
+    "reading": "すぱーすふぃーるどせっつ",
+    "aliases": [
+      "スパースフィールドセット",
+      "部分レスポンス"
+    ],
+    "senses": [
+      {
+        "definition": "REST APIでクライアントが必要なフィールドのみ選択して取得できる機能。JSON:APIなどで?fields[article]=title,bodyのように指定する。不要フィールドの転送を省きパフォーマンスを向上させる。",
+        "domain": "api",
+        "keywords": [
+          "REST",
+          "パフォーマンス",
+          "フィールド選択",
+          "JSON:API",
+          "帯域節約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Acceptヘッダー",
+    "reading": "あくせぷとへっだー",
+    "aliases": [
+      "Accept Header",
+      "HTTPアクセプト"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPリクエストでクライアントが受け入れ可能なメディアタイプを指定するヘッダー。Accept: application/json, text/htmlのように複数指定でき、q値で優先度を示す。コンテントネゴシエーションの基盤となる。",
+        "domain": "api",
+        "keywords": [
+          "HTTP",
+          "メディアタイプ",
+          "コンテントネゴシエーション",
+          "ヘッダー",
+          "q値"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ポーリング",
+    "reading": "ぽーりんぐ",
+    "aliases": [
+      "Polling",
+      "Short Polling"
+    ],
+    "senses": [
+      {
+        "definition": "クライアントが一定間隔でAPIにリクエストを繰り返し送ってリソースの変化を確認する方式。実装が簡単だがリアルタイム性が低く不要なリクエストが発生する。Long PollingやWebSocketで改善できる。",
+        "domain": "api",
+        "keywords": [
+          "HTTP",
+          "リアルタイム",
+          "定期実行",
+          "非効率",
+          "クライアント主導"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Request ID",
+    "reading": "りくえすとあいでぃー",
+    "aliases": [
+      "リクエストID",
+      "X-Request-ID"
+    ],
+    "senses": [
+      {
+        "definition": "個々のHTTPリクエストを一意に識別するためにヘッダーに付与するID。X-Request-IDヘッダーで送受信され、ログの照合やデバッグ、サポート問い合わせ時の問題追跡に活用される。",
+        "domain": "api",
+        "keywords": [
+          "HTTP",
+          "デバッグ",
+          "ログ",
+          "追跡",
+          "ヘッダー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIドキュメント",
+    "reading": "えーぴーあいどきゅめんと",
+    "aliases": [
+      "API Documentation",
+      "APIリファレンス"
+    ],
+    "senses": [
+      {
+        "definition": "APIの利用方法をエンドポイント、パラメータ、レスポンス形式、認証方法などとともに記述した文書。OpenAPI仕様から自動生成したり、インタラクティブなサンドボックスを提供することで開発者体験を向上させる。",
+        "domain": "api",
+        "keywords": [
+          "OpenAPI",
+          "ドキュメント",
+          "開発者体験",
+          "SDK",
+          "Swagger"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SDK自動生成",
+    "reading": "えすでぃーけいじどうせいせい",
+    "aliases": [
+      "SDK Generation",
+      "Code Generation",
+      "OpenAPI Generator"
+    ],
+    "senses": [
+      {
+        "definition": "OpenAPI仕様などのAPIスキーマ定義から複数プログラミング言語のクライアントSDKを自動的に生成する手法。手動実装の手間を省き、型安全なAPIクライアントを一貫して提供できる。",
+        "domain": "api",
+        "keywords": [
+          "OpenAPI",
+          "コード生成",
+          "SDK",
+          "型安全",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIゲートウェイパターン",
+    "reading": "えーぴーあいげーとうぇいぱたーん",
+    "aliases": [
+      "API Gateway Pattern"
+    ],
+    "senses": [
+      {
+        "definition": "クライアントとバックエンドマイクロサービスの間に単一のエントリポイントを置くアーキテクチャパターン。認証、レート制限、ルーティング、プロトコル変換、レスポンス集約を一元管理する。",
+        "domain": "api",
+        "keywords": [
+          "マイクロサービス",
+          "エントリポイント",
+          "認証",
+          "ルーティング",
+          "集約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLN+1問題",
+    "reading": "ぐらふきゅーえるえぬぷらすいちもんだい",
+    "aliases": [
+      "GraphQL N+1",
+      "N+1クエリ問題"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLリゾルバが親リソース1件につき子リソース取得のクエリをN回発行してしまう性能問題。DataLoaderによるバッチ処理とキャッシュを使ってN+1をN回のクエリを1回にまとめることで解決する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "N+1",
+          "DataLoader",
+          "パフォーマンス",
+          "クエリ最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gRPCサービス定義",
+    "reading": "じーあーるぴーしーさーびすていぎ",
+    "aliases": [
+      "gRPC Service Definition",
+      "proto service"
+    ],
+    "senses": [
+      {
+        "definition": "Protocol Buffersの.protoファイルにgRPCのサービスとRPCメソッドを定義する仕組み。serviceブロックにrpc宣言を記述し、protoc ツールでサーバー・クライアントのスタブコードを生成する。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "Protocol Buffers",
+          "proto",
+          "コード生成",
+          "インターフェース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クライアントストリーミングRPC",
+    "reading": "くらいあんとすとりーみんぐあーるぴーしー",
+    "aliases": [
+      "Client Streaming RPC",
+      "gRPC Client Streaming"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCの通信パターンの一つ。クライアントが複数のリクエストをストリームで送信し、サーバーが全て受信後に1つのレスポンスを返す。ファイルアップロードや大量データの一括送信に適する。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "ストリーミング",
+          "クライアント主導",
+          "アップロード",
+          "通信パターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLスキーマ設計",
+    "reading": "ぐらふきゅーえるすきーませっけい",
+    "aliases": [
+      "GraphQL Schema Design",
+      "SDL",
+      "Schema Definition Language"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQL APIの型システムとデータ構造をSDL（Schema Definition Language）で定義する設計作業。type、query、mutation、subscriptionを定義しAPIの契約をコードとして表現する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "型定義",
+          "SDL",
+          "スキーマファースト",
+          "API設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIコントラクトファースト",
+    "reading": "えーぴーあいこんとらくとふぁーすと",
+    "aliases": [
+      "Contract-First API",
+      "API-First Design",
+      "Design First"
+    ],
+    "senses": [
+      {
+        "definition": "実装前にAPIの仕様（OpenAPIなど）を先に定義するアプローチ。チームがAPIを合意してから実装を開始するため、フロントエンドとバックエンドの並行開発が可能になり齟齬を防げる。",
+        "domain": "api",
+        "keywords": [
+          "API設計",
+          "OpenAPI",
+          "コントラクト",
+          "コードファースト",
+          "並行開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQL変数",
+    "reading": "ぐらふきゅーえるへんすう",
+    "aliases": [
+      "GraphQL Variables",
+      "クエリ変数"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLクエリにおいて動的な値をハードコードせず外部から注入する仕組み。クエリ文字列内で$variableName: Typeと宣言し、リクエスト時にJSONで値を渡す。SQLインジェクション防止にも有効。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "動的クエリ",
+          "インジェクション防止",
+          "型安全",
+          "再利用"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIセキュリティテスト",
+    "reading": "えーぴーあいせきゅりてぃてすと",
+    "aliases": [
+      "API Security Testing",
+      "OWASP API Security"
+    ],
+    "senses": [
+      {
+        "definition": "APIの脆弱性を検出するためのテスト活動。OWASP API Security Top 10に基づき、認可バイパス、過剰データ露出、レート制限欠如、インジェクションなどの問題を体系的に確認する。",
+        "domain": "api",
+        "keywords": [
+          "セキュリティ",
+          "OWASP",
+          "脆弱性",
+          "ペネトレーションテスト",
+          "認可"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTPステータスコード設計",
+    "reading": "えいちてぃーてぃーぴーすてーたすこーどせっけい",
+    "aliases": [
+      "HTTP Status Code",
+      "HTTPレスポンスコード"
+    ],
+    "senses": [
+      {
+        "definition": "REST APIで操作結果を伝えるためのHTTPステータスコードの適切な使用。200 OK、201 Created、204 No Content、400 Bad Request、401、403、404、409 Conflict、422、429、500などの意味を正確に使い分ける。",
+        "domain": "api",
+        "keywords": [
+          "HTTP",
+          "REST",
+          "エラーハンドリング",
+          "ステータスコード",
+          "API設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIエラーレスポンス",
+    "reading": "えーぴーあいえらーれすぽんす",
+    "aliases": [
+      "API Error Response",
+      "Problem Details",
+      "RFC 7807"
+    ],
+    "senses": [
+      {
+        "definition": "APIがエラーを返す際のレスポンス形式の標準化。RFC 7807（Problem Details for HTTP APIs）ではtype、title、status、detail、instanceフィールドを持つJSON形式でエラー情報を一貫して表現する。",
+        "domain": "api",
+        "keywords": [
+          "エラーハンドリング",
+          "RFC 7807",
+          "JSON",
+          "標準化",
+          "REST"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebhookシグネチャVerification",
+    "reading": "うぇぶふっくしぐねちゃーべりふぃけーしょん",
+    "aliases": [
+      "Webhook Signature Verification",
+      "Webhook Secret"
+    ],
+    "senses": [
+      {
+        "definition": "WebhookのペイロードにHMAC署名を付与し受信側で検証することで正規の送信者からのリクエストかを確認するセキュリティ手法。X-Hub-Signatureヘッダーなどで署名を渡し、シークレットキーで検証する。",
+        "domain": "api",
+        "keywords": [
+          "Webhook",
+          "セキュリティ",
+          "HMAC",
+          "署名検証",
+          "改ざん防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIレートリミットヘッダー",
+    "reading": "えーぴーあいれーとりみっとへっだー",
+    "aliases": [
+      "Rate Limit Headers",
+      "X-RateLimit"
+    ],
+    "senses": [
+      {
+        "definition": "APIのレート制限状態をクライアントに通知するHTTPレスポンスヘッダー群。X-RateLimit-Limit（上限）、X-RateLimit-Remaining（残数）、X-RateLimit-Reset（リセット時刻）でクライアントが制限状況を把握できる。",
+        "domain": "api",
+        "keywords": [
+          "レート制限",
+          "HTTP",
+          "ヘッダー",
+          "クライアント通知",
+          "429"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLイントロスペクション",
+    "reading": "ぐらふきゅーえるいんとろすぺくしょん",
+    "aliases": [
+      "GraphQL Introspection"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQL APIがスキーマ情報自身をクエリで提供する機能。__schemaや__typeフィールドでスキーマの全型・フィールドを動的に取得でき、GraphiQLなどのツールがAPIを自動探索するために利用する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "スキーマ探索",
+          "ツール",
+          "GraphiQL",
+          "API探索"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQLパーシスティッドクエリ",
+    "reading": "ぐらふきゅーえるぱーしすてぃっどくえり",
+    "aliases": [
+      "GraphQL Persisted Queries",
+      "Automatic Persisted Queries",
+      "APQ"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLクエリをサーバー側に事前登録し、リクエスト時にクエリ全文の代わりにハッシュIDを送る最適化手法。ペイロードサイズを削減しCDNキャッシュを可能にする。Apolloのは自動化されAPQと呼ばれる。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "パフォーマンス",
+          "キャッシュ",
+          "CDN",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIゲートウェイ認証",
+    "reading": "えーぴーあいげーとうぇいにんしょう",
+    "aliases": [
+      "API Gateway Auth",
+      "Gateway Authentication"
+    ],
+    "senses": [
+      {
+        "definition": "API GatewayでJWT検証やAPIキー確認などの認証処理を一元的に行いバックエンドサービスの負担を軽減するパターン。各マイクロサービスが個別に認証を実装せず済み、セキュリティポリシーを集約管理できる。",
+        "domain": "api",
+        "keywords": [
+          "API Gateway",
+          "認証",
+          "JWT",
+          "集約",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RESTfulリソース設計",
+    "reading": "れすとふるりそーすせっけい",
+    "aliases": [
+      "Resource-Oriented Design",
+      "RESTful Resource"
+    ],
+    "senses": [
+      {
+        "definition": "REST APIでURLをリソース（名詞）中心に設計する手法。/users/{id}/postsのような階層構造でリソースを表現し、操作はHTTPメソッドで区別する。動詞をURLに含めないことが基本原則。",
+        "domain": "api",
+        "keywords": [
+          "REST",
+          "URL設計",
+          "リソース",
+          "名詞",
+          "HTTPメソッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIバックプレッシャー",
+    "reading": "えーぴーあいばっくぷれっしゃー",
+    "aliases": [
+      "Backpressure",
+      "API Backpressure"
+    ],
+    "senses": [
+      {
+        "definition": "消費者の処理能力を超えるデータをプロデューサーが送り続けないようにする流量制御の仕組み。gRPCのストリーミングやReactive Streamsに組み込まれており、システム全体の安定性を保つ。",
+        "domain": "api",
+        "keywords": [
+          "流量制御",
+          "Reactive Streams",
+          "gRPC",
+          "安定性",
+          "ストリーミング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トークンイントロスペクション",
+    "reading": "とーくんいんとろすぺくしょん",
+    "aliases": [
+      "Token Introspection",
+      "RFC 7662"
+    ],
+    "senses": [
+      {
+        "definition": "OAuth 2.0のアクセストークンが有効かどうかを認可サーバーに問い合わせるプロトコル（RFC 7662）。リソースサーバーがトークンの有効期限、スコープ、主体などを動的に検証するために使用する。",
+        "domain": "api",
+        "keywords": [
+          "OAuth2",
+          "トークン検証",
+          "RFC 7662",
+          "認可サーバー",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gRPCリフレクション",
+    "reading": "じーあーるぴーしーりふれくしょん",
+    "aliases": [
+      "gRPC Reflection",
+      "gRPC Server Reflection"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCサーバーがサポートするサービスとメソッドの情報を動的に公開する機能。grpcurlなどのツールがサービス定義を事前に知らなくてもAPIを探索・呼び出しできるようにする。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "サービス探索",
+          "デバッグ",
+          "grpcurl",
+          "開発ツール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "API設計レビュー",
+    "reading": "えーぴーあいせっけいれびゅー",
+    "aliases": [
+      "API Design Review",
+      "API Review Board"
+    ],
+    "senses": [
+      {
+        "definition": "新しいAPIの公開前に設計の一貫性、セキュリティ、使いやすさを複数の目で確認するレビュープロセス。命名規則、エラーハンドリング、後方互換性、ドキュメントの充実度などを基準に評価する。",
+        "domain": "api",
+        "keywords": [
+          "API設計",
+          "コードレビュー",
+          "一貫性",
+          "品質",
+          "ガバナンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIプロキシ",
+    "reading": "えーぴーあいぷろきしー",
+    "aliases": [
+      "API Proxy"
+    ],
+    "senses": [
+      {
+        "definition": "クライアントとAPIサーバーの間に置かれ、リクエスト/レスポンスを中継しながら変換・認証・キャッシュ・ログなどの処理を行うコンポーネント。API GatewayやNginx、Envoyがプロキシとして機能する。",
+        "domain": "api",
+        "keywords": [
+          "API Gateway",
+          "リバースプロキシ",
+          "中継",
+          "認証",
+          "変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "チャンクエンコーディング",
+    "reading": "ちゃんくえんこーでぃんぐ",
+    "aliases": [
+      "Chunked Transfer Encoding",
+      "Transfer-Encoding: chunked"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPレスポンスのコンテンツ長が事前に不明な場合にデータを小さなチャンクに分割して順次送信するエンコーディング方式。ストリーミングレスポンスやファイルダウンロードで使われContent-Lengthが不要になる。",
+        "domain": "api",
+        "keywords": [
+          "HTTP",
+          "ストリーミング",
+          "転送",
+          "チャンク",
+          "Transfer-Encoding"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST APIテスト",
+    "reading": "れすとえーぴーあいてすと",
+    "aliases": [
+      "REST API Testing",
+      "Postman",
+      "HTTPie"
+    ],
+    "senses": [
+      {
+        "definition": "REST APIのエンドポイントに対して様々なリクエストを送り、レスポンスのステータスコード、ボディ、ヘッダーを検証するテスト活動。Postman・Insomnia・HTTPieなどのツールで手動・自動テストを実施する。",
+        "domain": "api",
+        "keywords": [
+          "テスト",
+          "REST",
+          "Postman",
+          "自動化",
+          "エンドポイント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "API負荷テスト",
+    "reading": "えーぴーあいふかてすと",
+    "aliases": [
+      "API Load Testing",
+      "k6",
+      "Locust"
+    ],
+    "senses": [
+      {
+        "definition": "APIが高負荷条件下でも期待する性能とレート制限を正常に維持できるか検証するテスト。k6、Locust、JMeterなどのツールで大量の仮想ユーザーを模倣し、スループット・レイテンシ・エラー率を測定する。",
+        "domain": "api",
+        "keywords": [
+          "性能テスト",
+          "負荷テスト",
+          "k6",
+          "スループット",
+          "レイテンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スキーマファーストAPI設計",
+    "reading": "すきーまふぁーすとえーぴーあいせっけい",
+    "aliases": [
+      "Schema-First Design",
+      "API-First",
+      "Contract-First"
+    ],
+    "senses": [
+      {
+        "definition": "実装前にAPIのスキーマ（OpenAPI、GraphQL SDL等）を先に定義してチーム全員が合意するアプローチ。スキーマを単一の真実の源として、サーバー・クライアント・ドキュメントを自動生成する。",
+        "domain": "api",
+        "keywords": [
+          "API設計",
+          "OpenAPI",
+          "GraphQL",
+          "コントラクト",
+          "自動生成"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "API変更管理",
+    "reading": "えーぴーあいへんこうかんり",
+    "aliases": [
+      "API Change Management",
+      "Breaking Change",
+      "Non-Breaking Change"
+    ],
+    "senses": [
+      {
+        "definition": "既存のAPIクライアントに影響を与える破壊的変更と、影響を与えない非破壊的変更を区別してAPIを安全に進化させるための管理プロセス。後方互換性を保ちながら段階的に廃止（Deprecation）する。",
+        "domain": "api",
+        "keywords": [
+          "後方互換性",
+          "破壊的変更",
+          "Deprecation",
+          "バージョニング",
+          "API進化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQL Union型",
+    "reading": "ぐらふきゅーえるゆにおんかた",
+    "aliases": [
+      "GraphQL Union",
+      "Union Type"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLのスキーマで複数の型のいずれかを返せることを表現するためのUnion型。検索結果が記事・ユーザー・商品など異なる型になる場合などに使い、クライアントは__typenameで実際の型を判別する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "型システム",
+          "Union",
+          "多態性",
+          "スキーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQL Interface型",
+    "reading": "ぐらふきゅーえるいんたーふぇーすかた",
+    "aliases": [
+      "GraphQL Interface",
+      "Interface Type"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLスキーマで複数の型が共通のフィールドセットを持つことを表現するInterfaceタイプ。Nodeインターフェースが全リソースにid フィールドを保証するなど、型の共通構造を定義するために使用する。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "型システム",
+          "Interface",
+          "継承",
+          "スキーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebSocketメッセージプロトコル",
+    "reading": "うぇぶそけっとめっせーじぷろとこる",
+    "aliases": [
+      "WebSocket Subprotocol",
+      "graphql-ws",
+      "stomp"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocket接続上でやり取りするメッセージの構造と意味を規定するサブプロトコル。graphql-ws（GraphQLサブスクリプション）、STOMP（メッセージキュー）などが代表例で、Sec-WebSocket-Protocolヘッダーで合意する。",
+        "domain": "api",
+        "keywords": [
+          "WebSocket",
+          "サブプロトコル",
+          "graphql-ws",
+          "STOMP",
+          "メッセージ形式"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "API依存性管理",
+    "reading": "えーぴーあいいぞんせいかんり",
+    "aliases": [
+      "API Dependency Management",
+      "Consumer-Driven Contract"
+    ],
+    "senses": [
+      {
+        "definition": "サービスが依存する外部APIのバージョンと変更を追跡・管理するための実践。消費者主導型コントラクトテスト（Pact）を使いAPI提供者と消費者の期待のずれを自動で検出する手法が有効。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "依存関係",
+          "Pact",
+          "コントラクト",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIトレーシング",
+    "reading": "えーぴーあいとれーしんぐ",
+    "aliases": [
+      "API Tracing",
+      "OpenTelemetry"
+    ],
+    "senses": [
+      {
+        "definition": "APIリクエストが複数のサービスをまたいで処理される様子を可視化する観測可能性の手法。OpenTelemetryやJaegerでスパンを記録しウォーターフォール表示でボトルネックを特定する。",
+        "domain": "api",
+        "keywords": [
+          "分散トレーシング",
+          "OpenTelemetry",
+          "観測可能性",
+          "パフォーマンス",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIファサード",
+    "reading": "えーぴーあいふぁさーど",
+    "aliases": [
+      "API Facade",
+      "Facade Pattern in API"
+    ],
+    "senses": [
+      {
+        "definition": "複雑な内部システムやレガシーAPIの前に置き、シンプルで一貫したインターフェースをクライアントに提供するデザインパターン。複数の内部APIを集約して単一のきれいなAPIとして外部に公開する。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "ファサード",
+          "設計パターン",
+          "集約",
+          "レガシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Retry Storm",
+    "reading": "りとらいすとーむ",
+    "aliases": [
+      "リトライストーム",
+      "Thundering Herd"
+    ],
+    "senses": [
+      {
+        "definition": "障害回復時に多数のクライアントが同時にリトライを試みてサーバーを過負荷にする現象。指数バックオフとジッターを組み合わせることでリトライのタイミングを分散させ、スタンピード（群れ）現象を防ぐ。",
+        "domain": "api",
+        "keywords": [
+          "リトライ",
+          "ジッター",
+          "耐障害性",
+          "過負荷",
+          "指数バックオフ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIスロットリングアルゴリズム",
+    "reading": "えーぴーあいすろっとりんぐあるごりずむ",
+    "aliases": [
+      "Token Bucket",
+      "Leaky Bucket",
+      "Sliding Window"
+    ],
+    "senses": [
+      {
+        "definition": "APIのレート制限を実装するアルゴリズム群。トークンバケット（バーストを許容）、リーキーバケット（一定速度に平滑化）、スライディングウィンドウ（時間窓でカウント）などがあり用途に応じて選択する。",
+        "domain": "api",
+        "keywords": [
+          "レート制限",
+          "トークンバケット",
+          "アルゴリズム",
+          "スライディングウィンドウ",
+          "スロットリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTPメソッドのセマンティクス",
+    "reading": "えいちてぃーてぃーぴーめそっどのせまんてぃくす",
+    "aliases": [
+      "HTTP Methods Semantics",
+      "GET POST PUT PATCH DELETE"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPのGET（読み取り・安全・冪等）、POST（作成）、PUT（置換・冪等）、PATCH（部分更新）、DELETE（削除・冪等）の意味論的な違い。REST API設計でメソッドを正しく使い分けることでAPIの予測可能性を高める。",
+        "domain": "api",
+        "keywords": [
+          "HTTP",
+          "REST",
+          "冪等性",
+          "安全性",
+          "メソッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIグラフQL認可",
+    "reading": "えーぴーあいぐらふきゅーえるにんかん",
+    "aliases": [
+      "GraphQL Authorization",
+      "フィールドレベル認可"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQL APIでのアクセス制御。リゾルバレベルやディレクティブ（@auth）を使いフィールドやオブジェクトごとにきめ細かい認可を実装する。スキーマレベルのミドルウェアで横断的に適用することも可能。",
+        "domain": "api",
+        "keywords": [
+          "GraphQL",
+          "認可",
+          "アクセス制御",
+          "ディレクティブ",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIレスポンスエンベロープ",
+    "reading": "えーぴーあいれすぽんすえんべろーぷ",
+    "aliases": [
+      "Response Envelope",
+      "APIラッパー",
+      "Envelope Pattern"
+    ],
+    "senses": [
+      {
+        "definition": "APIレスポンスをdataフィールドにラップし、status、message、metaなどのフィールドと組み合わせる一貫したレスポンス形式。JSON:APIなどの標準に従うかアプリ独自のエンベロープを定義するかはトレードオフがある。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "レスポンス形式",
+          "一貫性",
+          "JSON",
+          "標準化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JSON:API",
+    "reading": "じぇいそんえーぴーあい",
+    "aliases": [
+      "JSON API Specification",
+      "jsonapi.org"
+    ],
+    "senses": [
+      {
+        "definition": "JSON形式のREST APIレスポンス構造を標準化した仕様。リソースオブジェクト、関係、リンク、メタ情報の形式を規定し、スパースフィールドセットやインクルードによる関連リソース取得を標準化している。",
+        "domain": "api",
+        "keywords": [
+          "REST",
+          "JSON",
+          "標準仕様",
+          "レスポンス形式",
+          "関係"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "API Deprecation",
+    "reading": "えーぴーあいでぷりけーしょん",
+    "aliases": [
+      "APIの非推奨化",
+      "Sunset Header",
+      "RFC 8594"
+    ],
+    "senses": [
+      {
+        "definition": "古いAPIバージョンやエンドポイントを廃止予告する手続き。SunsetヘッダーやDeprecated: trueレスポンスで廃止日を通知し、クライアントに移行を促す。十分な移行期間の提供が重要。",
+        "domain": "api",
+        "keywords": [
+          "API",
+          "廃止",
+          "バージョニング",
+          "Sunset",
+          "後方互換性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebSocket接続管理",
+    "reading": "うぇぶそけっとせつぞくかんり",
+    "aliases": [
+      "WebSocket Connection Management"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocketサーバーで多数の同時接続を効率的に管理する技術と実践。接続数のスケーリング、メモリ管理、タイムアウト処理、ロードバランサーでのスティッキーセッションや共有ストア（Redis）の活用が含まれる。",
+        "domain": "api",
+        "keywords": [
+          "WebSocket",
+          "スケーラビリティ",
+          "Redis",
+          "接続管理",
+          "負荷分散"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gRPCロードバランシング",
+    "reading": "じーあーるぴーしーろーどばらんしんぐ",
+    "aliases": [
+      "gRPC Load Balancing",
+      "クライアントサイドLB"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCではHTTP/2の単一TCP接続上で多重化するためL4ロードバランサーでは不均等になりやすい。Envoy等のL7プロキシやクライアントサイドロードバランシング（サービスメッシュ）で解決する。",
+        "domain": "api",
+        "keywords": [
+          "gRPC",
+          "ロードバランシング",
+          "HTTP/2",
+          "Envoy",
+          "サービスメッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APIキャッシュ戦略",
+    "reading": "えーぴーあいきゃっしゅせんりゃく",
+    "aliases": [
+      "API Caching Strategy",
+      "CDN Caching",
+      "HTTP Caching"
+    ],
+    "senses": [
+      {
+        "definition": "APIレスポンスのキャッシュ層とポリシーを設計する戦略。ブラウザキャッシュ、CDN（エッジキャッシュ）、アプリケーションキャッシュ（Redis等）の組み合わせと、キャッシュキーの設計・無効化戦略を含む。",
+        "domain": "api",
+        "keywords": [
+          "キャッシュ",
+          "CDN",
+          "Redis",
+          "HTTP",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "イベント駆動API",
+    "reading": "いべんとくどうえーぴーあい",
+    "aliases": [
+      "Event-Driven API",
+      "AsyncAPI",
+      "非同期API"
+    ],
+    "senses": [
+      {
+        "definition": "従来のリクエスト/レスポンス型ではなくイベントの発行と購読で通信するAPIパターン。AsyncAPI仕様でイベントスキーマを定義し、Kafka・SNS・WebSocket等のブローカー経由でメッセージを配信する。",
+        "domain": "api",
+        "keywords": [
+          "イベント駆動",
+          "AsyncAPI",
+          "Kafka",
+          "非同期",
+          "メッセージング"
+        ]
+      }
+    ]
+  }
+]

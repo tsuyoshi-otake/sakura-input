@@ -1,0 +1,1788 @@
+[
+  {
+    "term": "一言",
+    "reading": "ひとこと",
+    "senses": [
+      {
+        "definition": "内容全体をひと言で要約した短い表現です。まず要点だけを先に示したいときに役立ちます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "summary",
+          "key point",
+          "expression"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "言う",
+    "reading": "いう",
+    "senses": [
+      {
+        "definition": "言葉で内容を伝える行為です。書き言葉でも広く使える基本的な語です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "communication",
+          "expression",
+          "convey"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "良い",
+    "reading": "よい",
+    "senses": [
+      {
+        "definition": "望ましい、評価できる、または適切であることです。文脈によって品質、印象、判断を表します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "evaluation",
+          "appropriate",
+          "quality"
+        ]
+      }
+    ],
+    "aliases": [
+      "いい"
+    ]
+  },
+  {
+    "term": "言葉",
+    "reading": "ことば",
+    "senses": [
+      {
+        "definition": "意味や考えを伝えるための表現です。単語、文、発話などを広く含みます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "expression",
+          "communication",
+          "convey"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "多く",
+    "reading": "おおく",
+    "senses": [
+      {
+        "definition": "数や量が少なくないことです。何かと比較して語る場面でよく使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "quantity",
+          "comparison",
+          "count"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "難しい",
+    "reading": "むずかしい",
+    "senses": [
+      {
+        "definition": "理解、実行、判断が容易ではない状態です。技術文脈では複雑さや学習コストも含みます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "complex",
+          "learning cost",
+          "difficult"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "そのもの",
+    "senses": [
+      {
+        "definition": "対象それ自体を強く指し示す言い方です。物事の本質や中核を強調するときに使います。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "emphasis",
+          "essence",
+          "core"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "不要",
+    "reading": "ふよう",
+    "senses": [
+      {
+        "definition": "価値が低い、または不要であることです。設計では取り除くべきものを示します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "reduction",
+          "unnecessary",
+          "design"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "生まれる",
+    "reading": "うまれる",
+    "senses": [
+      {
+        "definition": "新しい状態や問題が発生することです。原因から結果への流れを自然に表せます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "occurrence",
+          "generation",
+          "cause and effect"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "本質",
+    "reading": "ほんしつ",
+    "senses": [
+      {
+        "definition": "表面ではなく中心にある重要な性質です。議論の核心を指すときに使います。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "core",
+          "original",
+          "important"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "単なる",
+    "reading": "たんなる",
+    "senses": [
+      {
+        "definition": "それ以上の意味を持たないことを示します。「単なる気合論」のように限定的に使います。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "limitation",
+          "downplay",
+          "emphasis"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "精神論",
+    "reading": "せいしんろん",
+    "senses": [
+      {
+        "definition": "仕組みや根拠よりも気合いや姿勢に頼る考え方です。再現性が低いときに批判的に使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "willpower",
+          "reproducibility",
+          "criticism"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "実務",
+    "reading": "じつむ",
+    "senses": [
+      {
+        "definition": "理論ではなく現場の実際の仕事です。運用、開発、報告などの現実感も含みます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "workplace",
+          "operations",
+          "practice"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "状態",
+    "reading": "じょうたい",
+    "senses": [
+      {
+        "definition": "ある時点での様子や置かれた状況です。システムにも人にも広く使える基本語です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "status",
+          "condition",
+          "current state"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "つまり",
+    "senses": [
+      {
+        "definition": "前の内容を言い換えたり要約したりする接続表現です。説明を整理して伝えるのに便利です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "summary",
+          "rephrase",
+          "connective"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "さらに",
+    "senses": [
+      {
+        "definition": "さらに一段深く進めることを示す表現です。補足や展開の説明に向いています。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "addition",
+          "development",
+          "supplement"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "意味",
+    "reading": "いみ",
+    "senses": [
+      {
+        "definition": "言葉や事柄が持つ内容、価値、意図です。同じ語でも文脈で意味が変わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "intent",
+          "content",
+          "value"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "端的",
+    "reading": "たんてき",
+    "senses": [
+      {
+        "definition": "無駄なく要点をまっすぐ示すことです。説明や結論でよく使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "concise",
+          "key point",
+          "clear"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "まとめ",
+    "senses": [
+      {
+        "definition": "複数の内容を整理して一つにまとめたものです。学習や報告で重要な役割を持ちます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "consolidation",
+          "organization",
+          "summary"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "単純さ",
+    "reading": "たんじゅんさ",
+    "senses": [
+      {
+        "definition": "構造や考え方が理解しやすい性質です。ソフトウェアでは品質や保守性と強く結びつきます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "simple",
+          "clarity",
+          "maintainability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Complexity",
+    "senses": [
+      {
+        "definition": "多くの要素が絡み合って理解しにくい状態です。バグや手戻りの原因としてよく議論されます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "complexity",
+          "hard to understand",
+          "maintenance cost"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "こんぷれきしてぃ"
+  },
+  {
+    "term": "理解",
+    "reading": "りかい",
+    "senses": [
+      {
+        "definition": "内容を把握して意味が分かることです。読み手、利用者、保守者のいずれにも必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "grasp",
+          "comprehension",
+          "recognition"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "理解ミス",
+    "reading": "りかいミス",
+    "senses": [
+      {
+        "definition": "内容を誤って受け取ることです。設計や命名が悪いと起こりやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "misreading",
+          "misunderstanding",
+          "naming"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "誤解",
+    "reading": "ごかい",
+    "senses": [
+      {
+        "definition": "意図したものと異なる意味で受け取ることです。会話でも仕様でもよく起こる問題です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "misreading",
+          "communication",
+          "specification"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "曖昧",
+    "reading": "あいまい",
+    "senses": [
+      {
+        "definition": "一つの解釈に定まりにくいことです。要件や命名の曖昧さは不具合につながります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "unclear",
+          "interpretation",
+          "requirements"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "明確",
+    "reading": "めいかく",
+    "senses": [
+      {
+        "definition": "はっきりしていて誤解されにくいことです。説明、仕様、責任範囲で重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "clear",
+          "unambiguous",
+          "definite"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "整理",
+    "reading": "せいり",
+    "senses": [
+      {
+        "definition": "情報や構造を分かりやすく整えることです。複雑さを減らす基本動作です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "tidying",
+          "classification",
+          "systematization"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "混在",
+    "reading": "こんざい",
+    "senses": [
+      {
+        "definition": "異なる種類のものが混ざっていることです。責務の混在は設計劣化の典型です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "mixing",
+          "responsibility",
+          "design degradation"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "乱立",
+    "reading": "らんりつ",
+    "senses": [
+      {
+        "definition": "多くの要素が制御なく増えていることです。ルールや例外が無秩序に増えると見通しが悪くなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "proliferation",
+          "control",
+          "chaos"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "特別扱い",
+    "reading": "とくべつあつかい",
+    "senses": [
+      {
+        "definition": "一部だけを通常と違う扱いにすることです。必要な場合もありますが、増えすぎると危険です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "exception",
+          "special case",
+          "complexity"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "例外",
+    "reading": "れいがい",
+    "senses": [
+      {
+        "definition": "通常のルールから外れる特別なケースです。業務でもコードでもよく論点になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "edge case",
+          "special",
+          "outside rule"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分岐",
+    "reading": "ぶんき",
+    "senses": [
+      {
+        "definition": "条件によって進む道が変わることです。分岐が増えるほど理解やテストが難しくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "condition",
+          "path",
+          "complexity"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "条件分岐",
+    "reading": "じょうけんぶんき",
+    "senses": [
+      {
+        "definition": "if 文などで条件によって処理を変える仕組みです。便利ですが多用すると複雑になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "if",
+          "condition",
+          "logic"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "依存",
+    "reading": "いぞん",
+    "senses": [
+      {
+        "definition": "他の要素なしでは成り立たない関係です。依存が強すぎると変更に弱くなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "dependency",
+          "coupling",
+          "changeability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "結合",
+    "reading": "けつごう",
+    "senses": [
+      {
+        "definition": "要素どうしのつながりの強さです。密結合は保守を難しくし、疎結合は柔軟性を高めます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "loose coupling",
+          "tight coupling",
+          "coupling"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "凝集",
+    "reading": "ぎょうしゅう",
+    "senses": [
+      {
+        "definition": "一つの部品の内部が単一の目的にうまくまとまっている度合いです。凝集度は高い方が望ましいとされます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "cohesion",
+          "unity",
+          "single responsibility"
+        ]
+      }
+    ],
+    "aliases": [
+      "コヒージョン"
+    ]
+  },
+  {
+    "term": "見通し",
+    "reading": "みとおし",
+    "senses": [
+      {
+        "definition": "全体像や流れを追いやすいことです。見通しの良いコードはレビューもしやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "readability",
+          "clarity",
+          "big picture"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "直感性",
+    "reading": "ちょっかんせい",
+    "senses": [
+      {
+        "definition": "ひと目で自然に理解できる性質です。UI だけでなく API や命名にも重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "intuition",
+          "clarity",
+          "UX"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "優れた設計",
+    "reading": "すぐれたせっけい",
+    "senses": [
+      {
+        "definition": "単に動くだけでなく、変更に強く、理解しやすく、運用しやすい設計です。長期的な価値があります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "good design",
+          "maintainability",
+          "extensibility"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "責務",
+    "reading": "せきむ",
+    "senses": [
+      {
+        "definition": "要素が担うべき役割と責任です。責務が明確だと構造は自然に整理されます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "role",
+          "responsibility",
+          "single responsibility"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "役割",
+    "reading": "やくわり",
+    "senses": [
+      {
+        "definition": "各要素が果たす機能です。「責務」より少し広い意味で一般的に使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "function",
+          "assignment",
+          "responsibility"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "構成",
+    "reading": "こうせい",
+    "senses": [
+      {
+        "definition": "全体をどの部品でどう組み立てるかです。構造に近い語ですが、部品の並べ方にも注目します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "parts",
+          "assembly",
+          "design"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "層",
+    "reading": "そう",
+    "senses": [
+      {
+        "definition": "役割ごとに段階的に分けた区分です。表示層、業務層、データ層のように使います。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "layer",
+          "hierarchy",
+          "separation"
+        ]
+      }
+    ],
+    "aliases": [
+      "レイヤー"
+    ]
+  },
+  {
+    "term": "分離",
+    "reading": "ぶんり",
+    "senses": [
+      {
+        "definition": "役割や関心事を切り分けることです。複雑さを抑える中心的な考え方です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "separation",
+          "separation of concerns",
+          "loose coupling"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "具体化",
+    "reading": "ぐたいか",
+    "senses": [
+      {
+        "definition": "抽象的な考えを実際の形に落とすことです。設計から実装へ進む際に重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "materialization",
+          "embodiment",
+          "implementation"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "単一責任",
+    "reading": "たんいつせきにん",
+    "senses": [
+      {
+        "definition": "一つの部品は一つの主目的に集中すべきという考え方です。変更理由を減らす効果があります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "SRP",
+          "single responsibility principle",
+          "cohesion"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "再利用性",
+    "reading": "さいりようせい",
+    "senses": [
+      {
+        "definition": "他の場面でも使い回しやすい性質です。追求しすぎるとかえって複雑になることもあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "reuse",
+          "generality",
+          "DRY"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "柔軟性",
+    "reading": "じゅうなんせい",
+    "senses": [
+      {
+        "definition": "条件の変化に合わせて適応できる力です。硬すぎる設計との対比で使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "flexibility",
+          "adaptability",
+          "changeability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "境界",
+    "reading": "きょうかい",
+    "senses": [
+      {
+        "definition": "どこまでが一つの責任範囲かを示す境目です。境界が曖昧だと不具合が起きやすくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "boundary",
+          "responsibility",
+          "interface"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コード",
+    "senses": [
+      {
+        "definition": "書かれたプログラムそのものです。最終成果物であると同時に、チームの共通言語でもあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "source code",
+          "program",
+          "implementation"
+        ]
+      }
+    ],
+    "aliases": [
+      "ソースコード"
+    ],
+    "reading": "こーど"
+  },
+  {
+    "term": "モジュール",
+    "senses": [
+      {
+        "definition": "機能単位で分割された部品です。ファイルやパッケージの粒度で使われることもあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "component",
+          "package",
+          "division"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "もじゅーる"
+  },
+  {
+    "term": "定数",
+    "reading": "ていすう",
+    "senses": [
+      {
+        "definition": "基本的に変化しない値です。意味のある名前を付けることで可読性が上がります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "constant",
+          "naming",
+          "fixed value"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "戻り値",
+    "reading": "もどりち",
+    "senses": [
+      {
+        "definition": "関数が返す結果です。戻り値の形が明確だと呼び出し側も単純になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "return value",
+          "return",
+          "function"
+        ]
+      }
+    ],
+    "aliases": [
+      "返り値"
+    ]
+  },
+  {
+    "term": "ロジック",
+    "senses": [
+      {
+        "definition": "処理における考え方や判断の流れです。ロジックが複雑になるほど分解と整理が必要になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "processing",
+          "judgement",
+          "flow"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "ろじっく"
+  },
+  {
+    "term": "ネスト",
+    "senses": [
+      {
+        "definition": "条件や処理が入れ子になっている構造です。深いネストは理解を難しくします。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "nesting",
+          "indent",
+          "complexity"
+        ]
+      }
+    ],
+    "aliases": [
+      "入れ子",
+      "ネスティング"
+    ],
+    "reading": "ねすと"
+  },
+  {
+    "term": "ループ",
+    "senses": [
+      {
+        "definition": "同じ処理を繰り返す仕組みです。終了条件の誤りは不具合の原因になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "iteration",
+          "repetition",
+          "for",
+          "while"
+        ]
+      }
+    ],
+    "aliases": [
+      "繰り返し処理"
+    ],
+    "reading": "るーぷ"
+  },
+  {
+    "term": "Stability",
+    "senses": [
+      {
+        "definition": "頻繁な障害や大きな性能変動がなく、予測どおりに振る舞い続ける性質です。安定性が高いと運用上の驚きや手戻りが減ります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "robustness",
+          "reliability",
+          "fault tolerance"
+        ]
+      }
+    ],
+    "aliases": [
+      "High Stability"
+    ],
+    "reading": "すたびりてぃ"
+  },
+  {
+    "term": "レビュー効率",
+    "reading": "レビューこうりつ",
+    "senses": [
+      {
+        "definition": "ピアレビューがどれだけスムーズに進むかです。コードが複雑になるほど効率は下がります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "code review",
+          "efficiency",
+          "readability"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "網羅性",
+    "reading": "もうらせい",
+    "senses": [
+      {
+        "definition": "どれだけ広くカバーできているかの度合いです。網羅性が高いほど安心感は増しますが、コストも上がります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "coverage",
+          "testing",
+          "thoroughness"
+        ]
+      }
+    ],
+    "aliases": [
+      "カバレッジ"
+    ]
+  },
+  {
+    "term": "検証",
+    "reading": "けんしょう",
+    "senses": [
+      {
+        "definition": "正しさを確かめる行為です。設計案が妥当かを確かめる意味でも使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "validation",
+          "confirmation",
+          "testing"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "妥当性",
+    "reading": "だとうせい",
+    "senses": [
+      {
+        "definition": "目的や前提に照らして適切であることです。正しいかだけでなく、合っているかも見ます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "validity",
+          "appropriate",
+          "validation"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "記録",
+    "reading": "きろく",
+    "senses": [
+      {
+        "definition": "後で確認できるように情報を残すことです。人の記憶に頼らないための基本です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "log",
+          "save",
+          "record"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "復元",
+    "reading": "ふくげん",
+    "senses": [
+      {
+        "definition": "保存した状態を再び使える状態に戻すことです。バックアップとセットで考えるべきです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "restore",
+          "recovery",
+          "backup"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "更新",
+    "reading": "こうしん",
+    "senses": [
+      {
+        "definition": "新しい状態に入れ替えることです。機能追加や修正反映も含みます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "update",
+          "change",
+          "apply"
+        ]
+      }
+    ],
+    "aliases": [
+      "アップデート"
+    ]
+  },
+  {
+    "term": "設定",
+    "reading": "せってい",
+    "senses": [
+      {
+        "definition": "システムの振る舞いを決める項目です。コードに埋め込まず外に置くことが多いです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "config",
+          "parameter",
+          "environment variable"
+        ]
+      }
+    ],
+    "aliases": [
+      "コンフィグ",
+      "コンフィギュレーション"
+    ]
+  },
+  {
+    "term": "寿命",
+    "reading": "じゅみょう",
+    "senses": [
+      {
+        "definition": "実用上維持できる期間です。技術選定や保守計画と関わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "lifecycle",
+          "lifespan",
+          "maintenance"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "手順",
+    "reading": "てじゅん",
+    "senses": [
+      {
+        "definition": "作業を行う順番を示した手順です。特に運用や障害対応で重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "procedure",
+          "steps",
+          "workflow"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "基準",
+    "reading": "きじゅん",
+    "senses": [
+      {
+        "definition": "判断を行うための物差しです。レビューや受入判断で重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "standard",
+          "benchmark",
+          "judgement criterion"
+        ]
+      }
+    ],
+    "aliases": [
+      "スタンダード",
+      "標準"
+    ]
+  },
+  {
+    "term": "ルール",
+    "senses": [
+      {
+        "definition": "守るべき決まりごとです。ルールが多すぎると硬直し、無さすぎると混乱します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "rule",
+          "coding convention",
+          "policy"
+        ]
+      }
+    ],
+    "aliases": [
+      "規則",
+      "規約"
+    ],
+    "reading": "るーる"
+  },
+  {
+    "term": "共有",
+    "reading": "きょうゆう",
+    "senses": [
+      {
+        "definition": "情報を自分だけに持たず関係者へ渡すことです。属人化の防止に有効です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "information sharing",
+          "knowledge",
+          "collaboration"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "合意",
+    "reading": "ごうい",
+    "senses": [
+      {
+        "definition": "関係者が内容を認めることです。要件や優先順位では不可欠です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "consensus",
+          "approval",
+          "agreement"
+        ]
+      }
+    ],
+    "aliases": [
+      "コンセンサス"
+    ]
+  },
+  {
+    "term": "担当",
+    "reading": "たんとう",
+    "senses": [
+      {
+        "definition": "誰が何を見るかを示す分担です。責任の割り当てを見える化するために必要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "assignee",
+          "assignment",
+          "owner"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "値",
+    "reading": "ち",
+    "senses": [
+      {
+        "definition": "データとして実際に入っている中身です。意味のある型や範囲とセットで考えるべきです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "value",
+          "data",
+          "variable"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "文字列",
+    "reading": "もじれつ",
+    "senses": [
+      {
+        "definition": "文字の並びとして扱うデータです。表示だけでなく識別子としても使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "string",
+          "text",
+          "character"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "数値",
+    "reading": "すうち",
+    "senses": [
+      {
+        "definition": "計算や比較ができる数のデータです。単位や範囲の定義が重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "number",
+          "integer",
+          "numeric"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "真偽値",
+    "reading": "しんぎち",
+    "senses": [
+      {
+        "definition": "true/false を表す値です。条件分岐の基礎になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "boolean",
+          "true",
+          "false"
+        ]
+      }
+    ],
+    "aliases": [
+      "boolean",
+      "ブール値"
+    ]
+  },
+  {
+    "term": "配列",
+    "reading": "はいれつ",
+    "senses": [
+      {
+        "definition": "値を順番に並べて扱うデータ構造です。繰り返し処理と相性が良いです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "array",
+          "list",
+          "data structure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "連想配列",
+    "reading": "れんそうはいれつ",
+    "senses": [
+      {
+        "definition": "名前と値の組み合わせを持つ構造です。辞書型や map 型に近い概念です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "map",
+          "dictionary",
+          "hash map"
+        ]
+      }
+    ],
+    "aliases": [
+      "マップ",
+      "辞書型",
+      "ハッシュマップ"
+    ]
+  },
+  {
+    "term": "オブジェクト",
+    "senses": [
+      {
+        "definition": "属性をまとめた一つのまとまりとして扱う存在です。現実世界の概念を表しやすくします。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "instance",
+          "class",
+          "OOP"
+        ]
+      }
+    ],
+    "aliases": [
+      "インスタンス"
+    ]
+  },
+  {
+    "term": "変換",
+    "reading": "へんかん",
+    "senses": [
+      {
+        "definition": "データの形や意味を別の形に変えることです。責務分離の対象になりやすい処理です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "transform",
+          "conversion",
+          "mapping"
+        ]
+      }
+    ],
+    "aliases": [
+      "トランスフォーム",
+      "変形"
+    ]
+  },
+  {
+    "term": "整形",
+    "reading": "せいけい",
+    "senses": [
+      {
+        "definition": "読みやすく扱いやすい形に整えることです。表示前や出力前によく行われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "format",
+          "formatting",
+          "tidying"
+        ]
+      }
+    ],
+    "aliases": [
+      "フォーマット"
+    ]
+  },
+  {
+    "term": "検証ルール",
+    "reading": "けんしょうルール",
+    "senses": [
+      {
+        "definition": "入力や状態が正しいかを判定するためのルールです。業務ルール実装の重要ポイントです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "validation rule",
+          "constraint",
+          "verification"
+        ]
+      }
+    ],
+    "aliases": [
+      "バリデーションルール"
+    ]
+  },
+  {
+    "term": "重複",
+    "reading": "じゅうふく",
+    "senses": [
+      {
+        "definition": "同じ内容が複数箇所にあることです。変更漏れや不整合の原因になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "DRY",
+          "duplicate code",
+          "redundancy"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "整列",
+    "reading": "せいれつ",
+    "senses": [
+      {
+        "definition": "一定の順序に並べることです。見やすさや処理効率と関わります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "sort",
+          "reorder",
+          "order"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "検索",
+    "reading": "けんさく",
+    "senses": [
+      {
+        "definition": "条件に合う情報を見つけることです。件数が増えるほど設計への影響が大きくなります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "search",
+          "query",
+          "filter"
+        ]
+      }
+    ],
+    "aliases": [
+      "サーチ"
+    ]
+  },
+  {
+    "term": "参照",
+    "reading": "さんしょう",
+    "senses": [
+      {
+        "definition": "別のデータや場所を見ることです。依存を生む基本操作でもあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "reference",
+          "pointer",
+          "dependency"
+        ]
+      }
+    ],
+    "aliases": [
+      "リファレンス"
+    ]
+  },
+  {
+    "term": "保存",
+    "reading": "ほぞん",
+    "senses": [
+      {
+        "definition": "データを失わないように保持することです。永続化や履歴管理の文脈で使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "persistence",
+          "save",
+          "storage"
+        ]
+      }
+    ],
+    "aliases": [
+      "永続化",
+      "セーブ"
+    ]
+  },
+  {
+    "term": "問題",
+    "reading": "もんだい",
+    "senses": [
+      {
+        "definition": "解決すべき困りごとです。技術、業務、運用のどこにも存在します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "issue",
+          "problem",
+          "trouble"
+        ]
+      }
+    ],
+    "aliases": [
+      "イシュー"
+    ]
+  },
+  {
+    "term": "原因",
+    "reading": "げんいん",
+    "senses": [
+      {
+        "definition": "問題を引き起こした元です。表面症状だけでなく根本原因を探すことが大切です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "root cause",
+          "five whys",
+          "cause analysis"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "結果",
+    "reading": "けっか",
+    "senses": [
+      {
+        "definition": "行動や条件の後に現れるものです。原因との対応関係を考えるときに使います。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "outcome",
+          "result",
+          "output"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "影響",
+    "reading": "えいきょう",
+    "senses": [
+      {
+        "definition": "一つの出来事が別のものへ与える変化です。変更時には影響範囲の把握が重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "impact",
+          "ripple effect",
+          "dependency"
+        ]
+      }
+    ],
+    "aliases": [
+      "インパクト"
+    ]
+  },
+  {
+    "term": "失敗",
+    "reading": "しっぱい",
+    "senses": [
+      {
+        "definition": "期待した結果を得られないことです。再発防止の学びとして扱う必要があります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "error",
+          "failure case",
+          "retrospective"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "事故",
+    "reading": "じこ",
+    "senses": [
+      {
+        "definition": "望ましくない重大な出来事です。システム障害や情報漏えいを指すことがあります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "incident",
+          "failure",
+          "event"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "障害",
+    "reading": "しょうがい",
+    "senses": [
+      {
+        "definition": "サービス停止や重大な不具合です。運用では検知から復旧までが重要になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "outage",
+          "incident response",
+          "system failure"
+        ]
+      }
+    ],
+    "aliases": [
+      "システム障害",
+      "アウテージ"
+    ]
+  },
+  {
+    "term": "誤作動",
+    "reading": "ごさどう",
+    "senses": [
+      {
+        "definition": "意図しない動きをすることです。条件不足や状態管理ミスが原因になりやすいです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "malfunction",
+          "abnormal behavior",
+          "bug"
+        ]
+      }
+    ],
+    "aliases": [
+      "誤動作"
+    ]
+  },
+  {
+    "term": "停止",
+    "reading": "ていし",
+    "senses": [
+      {
+        "definition": "動作が止まることです。可用性への影響が大きいため重く扱われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "down",
+          "downtime",
+          "availability"
+        ]
+      }
+    ],
+    "aliases": [
+      "ダウン"
+    ]
+  },
+  {
+    "term": "遅延",
+    "reading": "ちえん",
+    "senses": [
+      {
+        "definition": "予定や期待より遅れることです。性能問題にも進捗問題にも使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "latency",
+          "lag",
+          "performance"
+        ]
+      }
+    ],
+    "aliases": [
+      "ラグ"
+    ]
+  },
+  {
+    "term": "競合",
+    "reading": "きょうごう",
+    "senses": [
+      {
+        "definition": "並行処理で資源利用がぶつかることです。見えにくい不具合の典型です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "race condition",
+          "concurrent processing",
+          "conflict"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リーク",
+    "senses": [
+      {
+        "definition": "メモリや接続などの資源が解放されないことです。長期運用で問題になりやすいです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "memory leak",
+          "resource exhaustion",
+          "release"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "りーく"
+  },
+  {
+    "term": "破損",
+    "reading": "はそん",
+    "senses": [
+      {
+        "definition": "データや状態が壊れていることです。復旧難度が高いため予防が重要です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "data corruption",
+          "corruption",
+          "integrity"
+        ]
+      }
+    ],
+    "aliases": [
+      "データ破損"
+    ]
+  },
+  {
+    "term": "欠落",
+    "reading": "けつらく",
+    "senses": [
+      {
+        "definition": "必要な情報や処理が抜けていることです。要件漏れや実装漏れが原因になります。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "deficiency",
+          "omission",
+          "shortage"
+        ]
+      }
+    ],
+    "aliases": [
+      "欠如"
+    ]
+  },
+  {
+    "term": "過剰",
+    "reading": "かじょう",
+    "senses": [
+      {
+        "definition": "必要以上であることです。機能、分岐、抽象化の過剰は複雑さを増やします。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "excess",
+          "over-engineering",
+          "complexity"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "冗長",
+    "reading": "じょうちょう",
+    "senses": [
+      {
+        "definition": "必要以上に重複して長いことです。説明にもコードにも使われます。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "redundancy",
+          "duplication",
+          "waste"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "温床",
+    "reading": "おんしょう",
+    "senses": [
+      {
+        "definition": "問題が起こりやすい土台です。「複雑さはバグの温床」のように使います。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "cause",
+          "risk",
+          "source"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "予防",
+    "reading": "よぼう",
+    "senses": [
+      {
+        "definition": "問題が起こる前に防ぐことです。テスト、設計、監視の多くは予防活動です。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "prevention",
+          "countermeasure",
+          "risk reduction"
+        ]
+      }
+    ],
+    "aliases": [
+      "防止"
+    ]
+  },
+  {
+    "term": "避ける",
+    "reading": "さける",
+    "senses": [
+      {
+        "definition": "近づかない、採用しないようにすることです。設計判断で強い意志を表します。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "avoidance",
+          "prevention",
+          "design decision"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Elegance",
+    "senses": [
+      {
+        "definition": "無駄な複雑さがなく、単純で一貫していて均整が取れていると感じられる設計の質です。ソフトウェアでは装飾よりも、明快な構造と良いトレードオフから生まれることが多いです。",
+        "domain": "it-vocabulary",
+        "keywords": [
+          "design",
+          "clarity",
+          "consistency",
+          "simplicity",
+          "trade-off"
+        ]
+      }
+    ],
+    "aliases": [
+      "Beautiful"
+    ],
+    "reading": "えれがんす"
+  }
+]

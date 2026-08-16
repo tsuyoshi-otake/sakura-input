@@ -1,0 +1,4202 @@
+[
+  {
+    "term": "APサーバ",
+    "reading": "えーぴーさーば",
+    "senses": [
+      {
+        "definition": "Application Serverの略。ビジネスロジックを実行するサーバ。HTTPリクエストを受けDBや外部サービスと連携する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "アプリケーションサーバ",
+          "JavaEE",
+          "ミドルウェア",
+          "ビジネスロジック"
+        ]
+      }
+    ],
+    "aliases": [
+      "Application Server",
+      "AP Server"
+    ]
+  },
+  {
+    "term": "共有ライブラリ構成",
+    "reading": "きょうゆうらいぶらりこうせい",
+    "senses": [
+      {
+        "definition": "複数のアプリケーションが同一のライブラリを共有するデプロイ構成。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ライブラリ",
+          "共有",
+          "デプロイ",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": [
+      "Shared Library Configuration"
+    ]
+  },
+  {
+    "term": "HTTPセッション同期",
+    "reading": "えいちてぃてぃぴーせっしょんどうき",
+    "senses": [
+      {
+        "definition": "クラスタ構成において各サーバのHTTPセッション情報を共有・同期するメカニズム。",
+        "domain": "software-engineering",
+        "keywords": [
+          "セッション",
+          "クラスタ",
+          "同期",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTTP Session Synchronization"
+    ]
+  },
+  {
+    "term": "C10K問題",
+    "reading": "しーじゅうけいもんだい",
+    "senses": [
+      {
+        "definition": "1台のサーバで同時に1万クライアント（10K connections）を処理する際のボトルネック問題。",
+        "domain": "software-engineering",
+        "keywords": [
+          "スケーラビリティ",
+          "同時接続",
+          "性能",
+          "サーバ"
+        ]
+      }
+    ],
+    "aliases": [
+      "C10K Problem"
+    ]
+  },
+  {
+    "term": "Non Blocking I/O",
+    "senses": [
+      {
+        "definition": "I/O操作の完了を待たずに他の処理を続ける非同期I/Oモデル。Node.jsやNginxが採用する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "非同期",
+          "I/O",
+          "イベントループ",
+          "スケーラビリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Blocking I/O"
+    ]
+  },
+  {
+    "term": "ジョブコントローラ",
+    "reading": "じょぶこんとろーら",
+    "senses": [
+      {
+        "definition": "バッチジョブのスケジューリング・依存関係管理・実行監視を行うソフトウェア。",
+        "domain": "software-engineering",
+        "keywords": [
+          "バッチ",
+          "スケジューラ",
+          "ジョブ",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Job Controller"
+    ]
+  },
+  {
+    "term": "統合ジョブ管理",
+    "reading": "とうごうじょぶかんり",
+    "senses": [
+      {
+        "definition": "複数システムのジョブを横断的に管理・調整する仕組み。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ジョブ",
+          "管理",
+          "バッチ",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "Integrated Job Management"
+    ]
+  },
+  {
+    "term": "タスクスケジューラ",
+    "reading": "たすくすけじゅーらー",
+    "senses": [
+      {
+        "definition": "指定した時刻や条件でタスクを自動実行するソフトウェア。cron・Quartzなどが代表例。",
+        "domain": "software-engineering",
+        "keywords": [
+          "スケジューラ",
+          "cron",
+          "自動化",
+          "バッチ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Task Scheduler"
+    ]
+  },
+  {
+    "term": "メッセージキューイング",
+    "reading": "めっせーじきゅーいんぐ",
+    "senses": [
+      {
+        "definition": "非同期処理のためにメッセージをキューに蓄積して送受信する仕組み。",
+        "domain": "software-engineering",
+        "keywords": [
+          "非同期",
+          "キュー",
+          "メッセージ",
+          "RabbitMQ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Message Queuing"
+    ]
+  },
+  {
+    "term": "DBaaS",
+    "senses": [
+      {
+        "definition": "Database as a Serviceの略。クラウドプロバイダが提供するマネージドデータベースサービス。",
+        "domain": "cloud",
+        "keywords": [
+          "クラウド",
+          "DB",
+          "マネージド",
+          "サービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dbPaaS",
+    "senses": [
+      {
+        "definition": "データベース機能に特化したPaaSサービス。管理・スケーリングをプロバイダが担当する。",
+        "domain": "cloud",
+        "keywords": [
+          "クラウド",
+          "DB",
+          "PaaS",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サーバレス",
+    "reading": "さーばれす",
+    "senses": [
+      {
+        "definition": "サーバの管理を意識せず関数単位でコードを実行できるクラウドコンピューティングモデル。",
+        "domain": "cloud",
+        "keywords": [
+          "FaaS",
+          "Lambda",
+          "クラウド",
+          "スケール"
+        ]
+      }
+    ],
+    "aliases": [
+      "FaaS",
+      "Serverless"
+    ]
+  },
+  {
+    "term": "開発フレームワーク",
+    "reading": "かいはつふれーむわーく",
+    "senses": [
+      {
+        "definition": "アプリケーション開発の骨格・共通部品・規約を提供するソフトウェア基盤。",
+        "domain": "software-engineering",
+        "keywords": [
+          "フレームワーク",
+          "共通部品",
+          "規約",
+          "開発効率"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development Framework"
+    ]
+  },
+  {
+    "term": "人のレイヤ",
+    "reading": "ひとのれいや",
+    "senses": [
+      {
+        "definition": "ソフトウェアスタックにおいて開発者・運用者などの人的要素を示す概念レイヤ。",
+        "domain": "software-engineering",
+        "keywords": [
+          "組織",
+          "人材",
+          "スタック",
+          "レイヤ"
+        ]
+      }
+    ],
+    "aliases": [
+      "People Layer"
+    ]
+  },
+  {
+    "term": "非機能のレイヤ",
+    "reading": "ひきのうのれいや",
+    "senses": [
+      {
+        "definition": "ソフトウェアスタックにおいて性能・セキュリティ・可用性などの非機能要素を担うレイヤ。",
+        "domain": "architecture",
+        "keywords": [
+          "非機能",
+          "レイヤ",
+          "スタック",
+          "横断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Functional Layer"
+    ]
+  },
+  {
+    "term": "ソフトウェアスタック",
+    "reading": "そふとうぇあすたっく",
+    "senses": [
+      {
+        "definition": "アプリケーションが動作するために必要なソフトウェア層の組み合わせ。LAMP・MEANなどが代表例。",
+        "domain": "software-engineering",
+        "keywords": [
+          "スタック",
+          "層",
+          "LAMP",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": [
+      "Software Stack"
+    ]
+  },
+  {
+    "term": "fool proof",
+    "senses": [
+      {
+        "definition": "誤操作・誤入力が起きても問題が発生しないように設計すること。フールプルーフ・ポカヨケとも呼ぶ。",
+        "domain": "software-engineering",
+        "keywords": [
+          "フールプルーフ",
+          "安全",
+          "設計",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レイヤ",
+    "reading": "れいや",
+    "senses": [
+      {
+        "definition": "ソフトウェアアーキテクチャにおいて役割・責務で分割した階層の単位。",
+        "domain": "architecture",
+        "keywords": [
+          "層",
+          "アーキテクチャ",
+          "分離",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Layer"
+    ]
+  },
+  {
+    "term": "APコンポーネント",
+    "reading": "えーぴーこんぽーねんと",
+    "senses": [
+      {
+        "definition": "アプリケーション層を構成するビジネスロジック・サービスなどのコンポーネント群。",
+        "domain": "architecture",
+        "keywords": [
+          "アプリケーション",
+          "コンポーネント",
+          "ビジネスロジック",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "AP Component"
+    ]
+  },
+  {
+    "term": "ラップ戦略",
+    "reading": "らっぷせんりゃく",
+    "senses": [
+      {
+        "definition": "既存のライブラリ・APIをラッパークラスで包み依存を隠蔽してテスタビリティや差し替えを容易にする戦略。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ラッパー",
+          "依存",
+          "テスト",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Wrap Strategy"
+    ]
+  },
+  {
+    "term": "スーパークラス",
+    "senses": [
+      {
+        "definition": "継承階層において他のクラス（サブクラス）が継承する基底クラス。",
+        "domain": "software-engineering",
+        "keywords": [
+          "継承",
+          "OOP",
+          "基底",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "POJO",
+    "senses": [
+      {
+        "definition": "Plain Old Java Objectの略。フレームワークに依存しない純粋なJavaオブジェクト。テスタビリティを高める。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Java",
+          "シンプル",
+          "テスト",
+          "依存なし"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DI",
+    "senses": [
+      {
+        "definition": "Dependency Injectionの略。オブジェクトが必要とする依存を外部から注入する設計パターン。テスタビリティを向上させる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "依存性注入",
+          "IoC",
+          "テスト",
+          "Spring"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モックオブジェクト",
+    "reading": "もっくおぶじぇくと",
+    "senses": [
+      {
+        "definition": "テスト時に実際の依存オブジェクトの代わりに使うテスト用の代替オブジェクト。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "Mock",
+          "スタブ",
+          "テスタビリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mock Object"
+    ]
+  },
+  {
+    "term": "テスタビリティ基本戦略",
+    "reading": "てすたびりてぃきほんせんりゃく",
+    "senses": [
+      {
+        "definition": "ソフトウェアをテストしやすく設計するための基本的な方針。DI・ラップ戦略・POJOなどを含む。",
+        "domain": "testing",
+        "keywords": [
+          "テスタビリティ",
+          "設計",
+          "DI",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Testability Strategy"
+    ]
+  },
+  {
+    "term": "セルフレビュー",
+    "reading": "せるふれびゅー",
+    "senses": [
+      {
+        "definition": "開発者が自分自身のコード・ドキュメントを見直すレビュー活動。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "品質",
+          "自己点検",
+          "コード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Self Review"
+    ]
+  },
+  {
+    "term": "ピアレビュー",
+    "reading": "ぴあれびゅー",
+    "senses": [
+      {
+        "definition": "同じ立場の開発者同士が互いのコード・ドキュメントを確認するレビュー活動。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "ピア",
+          "相互確認",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Peer Review"
+    ]
+  },
+  {
+    "term": "機能単体テスト",
+    "reading": "きのうたんたいてすと",
+    "senses": [
+      {
+        "definition": "機能単位でインプット・アウトプットを検証するテスト。モジュール外の依存はモックで代替する。",
+        "domain": "testing",
+        "keywords": [
+          "単体テスト",
+          "機能",
+          "検証",
+          "モック"
+        ]
+      }
+    ],
+    "aliases": [
+      "Functional Unit Test"
+    ]
+  },
+  {
+    "term": "UI境界",
+    "reading": "ゆーあいさかい",
+    "senses": [
+      {
+        "definition": "UIとビジネスロジックの境界。テスト時にUI境界でモック化することでロジックを独立してテストできる。",
+        "domain": "testing",
+        "keywords": [
+          "UI",
+          "境界",
+          "テスト",
+          "モック"
+        ]
+      }
+    ],
+    "aliases": [
+      "UI Boundary"
+    ]
+  },
+  {
+    "term": "テストカバレッジ",
+    "reading": "てすとかばれっじ",
+    "senses": [
+      {
+        "definition": "テストがソースコードをどれだけ網羅しているかを示す指標。C0・C1・C2などがある。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "網羅",
+          "テスト",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Coverage"
+    ]
+  },
+  {
+    "term": "C0基準",
+    "reading": "しーぜろきじゅん",
+    "senses": [
+      {
+        "definition": "ステートメントカバレッジとも呼ばれる。すべての命令文を少なくとも1回実行するテスト基準。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "命令",
+          "C0",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "C0 Criterion"
+    ]
+  },
+  {
+    "term": "C1基準",
+    "reading": "しーいちきじゅん",
+    "senses": [
+      {
+        "definition": "ブランチカバレッジとも呼ばれる。すべての分岐（T/F）を少なくとも1回実行するテスト基準。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "分岐",
+          "C1",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "C1 Criterion"
+    ]
+  },
+  {
+    "term": "C2基準",
+    "reading": "しーにきじゅん",
+    "senses": [
+      {
+        "definition": "条件カバレッジとも呼ばれる。すべての条件式のT/Fの組み合わせを網羅するテスト基準。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "条件",
+          "C2",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "C2 Criterion"
+    ]
+  },
+  {
+    "term": "ラインカバレッジ",
+    "reading": "らいんかばれっじ",
+    "senses": [
+      {
+        "definition": "実行されたソースコードの行数の割合。C0基準と対応する最も基本的なカバレッジ指標。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "行",
+          "C0",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Line Coverage"
+    ]
+  },
+  {
+    "term": "ブランチカバレッジ",
+    "reading": "ぶらんちかばれっじ",
+    "senses": [
+      {
+        "definition": "分岐の各パス（真・偽）が実行された割合。C1基準と対応するカバレッジ指標。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "分岐",
+          "C1",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Branch Coverage"
+    ]
+  },
+  {
+    "term": "コンディションカバレッジ",
+    "reading": "こんでぃしょんかばれっじ",
+    "senses": [
+      {
+        "definition": "条件式内の個々の条件のT/Fが実行された割合。C2基準と対応するカバレッジ指標。",
+        "domain": "testing",
+        "keywords": [
+          "カバレッジ",
+          "条件",
+          "C2",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Condition Coverage"
+    ]
+  },
+  {
+    "term": "xUnit",
+    "senses": [
+      {
+        "definition": "JUnit・NUnit・PyTestなどのユニットテストフレームワーク群の総称。",
+        "domain": "testing",
+        "keywords": [
+          "ユニットテスト",
+          "フレームワーク",
+          "JUnit",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GUIテスト",
+    "reading": "じーゆーあいてすと",
+    "senses": [
+      {
+        "definition": "グラフィカルユーザーインターフェースを自動的に操作して検証するテスト。Selenium・Playwrightが代表例。",
+        "domain": "testing",
+        "keywords": [
+          "GUI",
+          "自動化",
+          "Selenium",
+          "E2E"
+        ]
+      }
+    ],
+    "aliases": [
+      "GUI Testing"
+    ]
+  },
+  {
+    "term": "Nスイッチカバレッジ",
+    "reading": "えぬすいっちかばれっじ",
+    "senses": [
+      {
+        "definition": "状態遷移テストにおいてN回の状態遷移シーケンスを網羅する基準。",
+        "domain": "testing",
+        "keywords": [
+          "状態遷移",
+          "テスト",
+          "カバレッジ",
+          "遷移"
+        ]
+      }
+    ],
+    "aliases": [
+      "N-Switch Coverage"
+    ]
+  },
+  {
+    "term": "組合せ爆発",
+    "reading": "くみあわせばくはつ",
+    "senses": [
+      {
+        "definition": "テスト条件の組み合わせが指数関数的に増加する問題。直交表やオールペア法で緩和する。",
+        "domain": "testing",
+        "keywords": [
+          "組合せ",
+          "テスト",
+          "爆発",
+          "直交表"
+        ]
+      }
+    ],
+    "aliases": [
+      "Combinatorial Explosion"
+    ]
+  },
+  {
+    "term": "直交表",
+    "reading": "ちょっこうひょう",
+    "senses": [
+      {
+        "definition": "統計的直交性を保ちながらテストケースを最小化するための実験計画法由来の表。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "直交",
+          "組合せ",
+          "最小化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Orthogonal Array"
+    ]
+  },
+  {
+    "term": "オールペア法",
+    "reading": "おーるぺあほう",
+    "senses": [
+      {
+        "definition": "すべての2つの入力パラメータの組み合わせを網羅するテスト設計技法。Pairwise Testingとも呼ばれる。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "組合せ",
+          "Pairwise",
+          "網羅"
+        ]
+      }
+    ],
+    "aliases": [
+      "All-Pairs Method"
+    ]
+  },
+  {
+    "term": "サイクロマティック数",
+    "reading": "さいくろまてぃっくすう",
+    "senses": [
+      {
+        "definition": "プログラムの制御フローグラフの複雑度を示す指標。分岐数+1で算出しテスト数の目安となる。",
+        "domain": "testing",
+        "keywords": [
+          "複雑度",
+          "メトリクス",
+          "テスト",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cyclomatic Complexity"
+    ]
+  },
+  {
+    "term": "品質/テスト計画書",
+    "reading": "ひんしつてすとけいかくしょ",
+    "senses": [
+      {
+        "definition": "テストの目的・範囲・スケジュール・品質基準・役割を定義した計画ドキュメント。",
+        "domain": "testing",
+        "keywords": [
+          "計画",
+          "テスト",
+          "品質",
+          "文書"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality and Test Plan"
+    ]
+  },
+  {
+    "term": "レビュー密度",
+    "reading": "れびゅーみつど",
+    "senses": [
+      {
+        "definition": "レビューしたドキュメント・コードに対して発見した指摘事項数の比率。品質指標として使用する。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "密度",
+          "品質",
+          "指標"
+        ]
+      }
+    ],
+    "aliases": [
+      "Review Density"
+    ]
+  },
+  {
+    "term": "バグ密度",
+    "reading": "ばぐみつど",
+    "senses": [
+      {
+        "definition": "コード規模（LOCやFP）に対するバグ数の比率。品質水準を評価する指標。",
+        "domain": "testing",
+        "keywords": [
+          "バグ",
+          "密度",
+          "品質",
+          "メトリクス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bug Density"
+    ]
+  },
+  {
+    "term": "セキュリティポリシー",
+    "reading": "せきゅりてぃぽりしー",
+    "senses": [
+      {
+        "definition": "組織の情報セキュリティに関する方針・ルールを文書化したもの。基本方針・対策基準・実施手順の3階層で構成される。",
+        "domain": "security",
+        "keywords": [
+          "情報セキュリティ",
+          "ポリシー",
+          "方針",
+          "組織"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Policy"
+    ]
+  },
+  {
+    "term": "基本方針",
+    "reading": "きほんほうしん",
+    "senses": [
+      {
+        "definition": "セキュリティポリシーの最上位文書。経営層が宣言する情報セキュリティへの取り組み姿勢。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ",
+          "方針",
+          "経営",
+          "ポリシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Basic Policy"
+    ]
+  },
+  {
+    "term": "対策基準",
+    "reading": "たいさくきじゅん",
+    "senses": [
+      {
+        "definition": "基本方針を受けて各部門が遵守すべきセキュリティルールを定めた文書。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ",
+          "基準",
+          "ルール",
+          "ポリシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Standards"
+    ]
+  },
+  {
+    "term": "実施手順",
+    "reading": "じっしてじゅん",
+    "senses": [
+      {
+        "definition": "対策基準を具体的な操作・手順レベルで記述したドキュメント。運用マニュアルに相当する。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ",
+          "手順",
+          "運用",
+          "マニュアル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Implementation Procedures"
+    ]
+  },
+  {
+    "term": "仕様バグ",
+    "reading": "しようばぐ",
+    "senses": [
+      {
+        "definition": "要件定義・設計書に起因するバグ。実装は仕様通りだがその仕様自体が誤っている問題。",
+        "domain": "testing",
+        "keywords": [
+          "バグ",
+          "要件",
+          "設計",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Specification Bug"
+    ]
+  },
+  {
+    "term": "派遣契約",
+    "reading": "はけんけいやく",
+    "senses": [
+      {
+        "definition": "労働者派遣法に基づき派遣元が派遣先に労働者を派遣する契約形態。指揮命令権は派遣先が持つ。",
+        "domain": "business-analysis",
+        "keywords": [
+          "契約",
+          "派遣",
+          "労働",
+          "法律"
+        ]
+      }
+    ],
+    "aliases": [
+      "Staffing Contract"
+    ]
+  },
+  {
+    "term": "SES契約",
+    "reading": "えすいーえすけいやく",
+    "senses": [
+      {
+        "definition": "System Engineering Serviceの略。エンジニアの技術力を提供する準委任契約の一形態。",
+        "domain": "business-analysis",
+        "keywords": [
+          "契約",
+          "SE",
+          "準委任",
+          "システム開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "SES Contract"
+    ]
+  },
+  {
+    "term": "契約不適合",
+    "reading": "けいやくふてきごう",
+    "senses": [
+      {
+        "definition": "2020年民法改正後の瑕疵担保責任に替わる概念。給付された成果物が契約内容に適合しない状態。",
+        "domain": "business-analysis",
+        "keywords": [
+          "民法",
+          "契約",
+          "責任",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Conformity"
+    ]
+  },
+  {
+    "term": "検収印",
+    "reading": "けんしゅういん",
+    "senses": [
+      {
+        "definition": "発注者が成果物の検収完了を示す承認印。これにより代金支払い義務が確定する。",
+        "domain": "business-analysis",
+        "keywords": [
+          "検収",
+          "承認",
+          "契約",
+          "成果物"
+        ]
+      }
+    ],
+    "aliases": [
+      "Acceptance Stamp"
+    ]
+  },
+  {
+    "term": "外部仕様書",
+    "reading": "がいぶしようしょ",
+    "senses": [
+      {
+        "definition": "システムが外部に対してどのように振る舞うかを定義した仕様書。ユーザーや他システムとのI/Fを記述する。",
+        "domain": "architecture",
+        "keywords": [
+          "仕様書",
+          "外部",
+          "I/F",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "External Specification Document"
+    ]
+  },
+  {
+    "term": "用語定義",
+    "reading": "ようごていぎ",
+    "senses": [
+      {
+        "definition": "システム・ドキュメントで使用する用語の意味・範囲・使い分けを明確化した定義集。",
+        "domain": "modeling",
+        "keywords": [
+          "用語",
+          "定義",
+          "ユビキタス言語",
+          "ドメイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Term Definition"
+    ]
+  },
+  {
+    "term": "概念モデル",
+    "reading": "がいねんもでる",
+    "senses": [
+      {
+        "definition": "業務や問題領域の本質的な概念と関連を表現したモデル。実装やDBMSを意識しない抽象レベル。",
+        "domain": "modeling",
+        "keywords": [
+          "抽象",
+          "概念",
+          "ドメイン",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Conceptual Model"
+    ]
+  },
+  {
+    "term": "論理モデル",
+    "reading": "ろんりもでる",
+    "senses": [
+      {
+        "definition": "概念モデルをDBMS非依存の形で詳細化したモデル。正規化・データ型・関係を定義する。",
+        "domain": "modeling",
+        "keywords": [
+          "論理",
+          "DB",
+          "正規化",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logical Model"
+    ]
+  },
+  {
+    "term": "物理モデル",
+    "reading": "ぶつりもでる",
+    "senses": [
+      {
+        "definition": "特定DBMSの制約・インデックス・パーティションを考慮した実装レベルのデータモデル。",
+        "domain": "database",
+        "keywords": [
+          "物理",
+          "DB",
+          "インデックス",
+          "実装"
+        ]
+      }
+    ],
+    "aliases": [
+      "Physical Model"
+    ]
+  },
+  {
+    "term": "モデリング",
+    "reading": "もでりんぐ",
+    "senses": [
+      {
+        "definition": "現実世界の対象を抽象化して表現・分析するための活動。UML・ER図などが手法として使われる。",
+        "domain": "modeling",
+        "keywords": [
+          "抽象化",
+          "UML",
+          "ER",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [
+      "Modeling"
+    ]
+  },
+  {
+    "term": "分析",
+    "reading": "ぶんせき",
+    "senses": [
+      {
+        "definition": "要求・問題・ドメインを理解するためにデータや情報を詳細に調査・整理する活動。",
+        "domain": "methodology",
+        "keywords": [
+          "要件",
+          "調査",
+          "理解",
+          "ドメイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Analysis"
+    ]
+  },
+  {
+    "term": "表現力",
+    "reading": "ひょうげんりょく",
+    "senses": [
+      {
+        "definition": "モデリング言語や記法が持つ概念の表現能力。表現力が高いほど多様な概念を記述できる。",
+        "domain": "modeling",
+        "keywords": [
+          "モデリング",
+          "記法",
+          "能力",
+          "抽象"
+        ]
+      }
+    ],
+    "aliases": [
+      "Expressive Power"
+    ]
+  },
+  {
+    "term": "分析力",
+    "reading": "ぶんせきりょく",
+    "senses": [
+      {
+        "definition": "問題や要件を正確に理解し本質を見抜く能力。システム開発において要件定義の品質を左右する。",
+        "domain": "methodology",
+        "keywords": [
+          "分析",
+          "スキル",
+          "要件",
+          "能力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Analytical Capability"
+    ]
+  },
+  {
+    "term": "UML as sketch",
+    "senses": [
+      {
+        "definition": "コミュニケーション目的でUMLを軽い手描きレベルで使うアプローチ。厳密さより速さと理解を優先する。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "スケッチ",
+          "コミュニケーション",
+          "軽量"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Agile Modeling",
+    "senses": [
+      {
+        "definition": "アジャイルプロジェクトにおける軽量なモデリングプラクティス。価値のあるモデルだけを作成する考え方。",
+        "domain": "modeling",
+        "keywords": [
+          "アジャイル",
+          "モデリング",
+          "軽量",
+          "プラクティス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ロバストネス分析",
+    "reading": "ろばすとねすぶんせき",
+    "senses": [
+      {
+        "definition": "ユースケースをバウンダリ・コントロール・エンティティに分解してクラス設計へ橋渡しする分析手法。",
+        "domain": "modeling",
+        "keywords": [
+          "ICONIX",
+          "BCE",
+          "分析",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Robustness Analysis"
+    ]
+  },
+  {
+    "term": "データドメイン",
+    "reading": "でーたどめいん",
+    "senses": [
+      {
+        "definition": "特定の属性が取り得る値の範囲・型・制約。データモデリングにおいてデータ品質を保証する。",
+        "domain": "database",
+        "keywords": [
+          "データ型",
+          "制約",
+          "属性",
+          "DB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Domain"
+    ]
+  },
+  {
+    "term": "データフロー",
+    "senses": [
+      {
+        "definition": "システム内でデータが処理・変換・移動する経路。DFDで可視化される。",
+        "domain": "modeling",
+        "keywords": [
+          "DFD",
+          "データ",
+          "フロー",
+          "処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ドメイン境界",
+    "reading": "どめいんさかい",
+    "senses": [
+      {
+        "definition": "特定のドメインモデルが有効な範囲の境界。Bounded Contextと同義で使われることが多い。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "境界",
+          "ドメイン",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Domain Boundary"
+    ]
+  },
+  {
+    "term": "ビジネスルール",
+    "reading": "びじねするーる",
+    "senses": [
+      {
+        "definition": "業務において守るべき制約・計算式・判断基準。ドメインモデルに組み込まれる。",
+        "domain": "business-analysis",
+        "keywords": [
+          "業務",
+          "ルール",
+          "制約",
+          "ドメイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "業務ルール",
+      "Business Rule"
+    ]
+  },
+  {
+    "term": "自然なモデル",
+    "reading": "しぜんなもでる",
+    "senses": [
+      {
+        "definition": "業務の言葉・概念をそのまま反映した直感的に理解しやすいドメインモデル。",
+        "domain": "modeling",
+        "keywords": [
+          "ドメイン",
+          "自然",
+          "業務",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Natural Model"
+    ]
+  },
+  {
+    "term": "オブジェクトモデル",
+    "senses": [
+      {
+        "definition": "システムをオブジェクトとその関係で表現したモデル。クラス図やシーケンス図で表す。",
+        "domain": "modeling",
+        "keywords": [
+          "OOP",
+          "クラス",
+          "UML",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Mapper",
+    "senses": [
+      {
+        "definition": "オブジェクトとデータベース間のマッピングを担う独立した層を持つパターン。ドメインモデルをDBスキーマから分離する。",
+        "domain": "architecture",
+        "keywords": [
+          "ORM",
+          "パターン",
+          "DB",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Active Record",
+    "senses": [
+      {
+        "definition": "オブジェクト自身がDB操作（CRUD）の責務を持つORMパターン。RailsのActiveRecordが代表例。",
+        "domain": "architecture",
+        "keywords": [
+          "ORM",
+          "パターン",
+          "DB",
+          "Rails"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ORマッピング",
+    "reading": "おーあーまっぴんぐ",
+    "senses": [
+      {
+        "definition": "Object-Relational Mappingの略。オブジェクトとリレーショナルDBのレコードを対応付ける技術。",
+        "domain": "database",
+        "keywords": [
+          "ORM",
+          "オブジェクト",
+          "DB",
+          "マッピング"
+        ]
+      }
+    ],
+    "aliases": [
+      "OR Mapping"
+    ]
+  },
+  {
+    "term": "UMLドメインモデル",
+    "reading": "ゆーえむえるどめいんもでる",
+    "senses": [
+      {
+        "definition": "UMLクラス図を用いてドメインの概念・関連・制約を表現したモデル。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "ドメイン",
+          "クラス図",
+          "DDD"
+        ]
+      }
+    ],
+    "aliases": [
+      "UML Domain Model"
+    ]
+  },
+  {
+    "term": "分析クラス",
+    "reading": "ぶんせきくらす",
+    "senses": [
+      {
+        "definition": "ドメイン分析から導出されたクラス。実装クラスと対応しないことがあり業務概念を優先する。",
+        "domain": "modeling",
+        "keywords": [
+          "クラス",
+          "分析",
+          "ドメイン",
+          "UML"
+        ]
+      }
+    ],
+    "aliases": [
+      "Analysis Class"
+    ]
+  },
+  {
+    "term": "所有",
+    "reading": "しょゆう",
+    "senses": [
+      {
+        "definition": "オブジェクト間の関係でAがBのライフサイクルを管理する強い関連（集約・コンポジション）。",
+        "domain": "modeling",
+        "keywords": [
+          "OOP",
+          "関連",
+          "コンポジション",
+          "ライフサイクル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "支配",
+    "reading": "しはい",
+    "senses": [
+      {
+        "definition": "オブジェクト間の関係でAがBの振る舞いを制御・指示する権限を持つ関係。",
+        "domain": "modeling",
+        "keywords": [
+          "OOP",
+          "関係",
+          "制御",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ドメイン知識",
+    "reading": "どめいんちしき",
+    "senses": [
+      {
+        "definition": "特定の業務領域に関する専門的な知識・ルール・慣習。要件定義やドメインモデリングの基盤となる。",
+        "domain": "business-analysis",
+        "keywords": [
+          "業務",
+          "知識",
+          "ドメイン",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Domain Knowledge"
+    ]
+  },
+  {
+    "term": "業務知識",
+    "reading": "ぎょうむちしき",
+    "senses": [
+      {
+        "definition": "特定の業界・組織の業務プロセス・ルール・慣習に関する知識。",
+        "domain": "business-analysis",
+        "keywords": [
+          "業務",
+          "知識",
+          "プロセス",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Knowledge"
+    ]
+  },
+  {
+    "term": "事業要求",
+    "reading": "じぎょうようきゅう",
+    "senses": [
+      {
+        "definition": "経営・ビジネス観点からシステムに求める目標・成果。ビジネスケースで定義される。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ビジネス",
+          "要求",
+          "経営",
+          "目標"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務要求",
+    "reading": "ぎょうむようきゅう",
+    "senses": [
+      {
+        "definition": "業務担当者が業務遂行のためにシステムに期待する機能・サービス。業務要件の源泉となる。",
+        "domain": "business-analysis",
+        "keywords": [
+          "業務",
+          "要求",
+          "ユーザー",
+          "機能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operational Requirements"
+    ]
+  },
+  {
+    "term": "真なる目的",
+    "reading": "しんなるもくてき",
+    "senses": [
+      {
+        "definition": "ステークホルダーの表面的な要望の背後にある本当の達成目標。要件定義で必ず明確化すべき事項。",
+        "domain": "business-analysis",
+        "keywords": [
+          "目的",
+          "要件",
+          "本質",
+          "コンサルティング"
+        ]
+      }
+    ],
+    "aliases": [
+      "True Goal"
+    ]
+  },
+  {
+    "term": "システムユースケース",
+    "reading": "しすてむゆーすけーす",
+    "senses": [
+      {
+        "definition": "システムが外部アクターに提供する機能をユースケースとして定義したもの。",
+        "domain": "modeling",
+        "keywords": [
+          "ユースケース",
+          "UML",
+          "機能",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Use Case"
+    ]
+  },
+  {
+    "term": "ビジネスシーケンス",
+    "reading": "びじねすしーけんす",
+    "senses": [
+      {
+        "definition": "業務の流れを時系列で表現したシーケンス図またはフロー。ビジネスプロセスを可視化する。",
+        "domain": "modeling",
+        "keywords": [
+          "業務",
+          "シーケンス",
+          "フロー",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Sequence"
+    ]
+  },
+  {
+    "term": "システムシーケンス",
+    "reading": "しすてむしーけんす",
+    "senses": [
+      {
+        "definition": "システムとアクター間の相互作用を時系列で表現したUMLシーケンス図。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "シーケンス",
+          "システム",
+          "相互作用"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Sequence"
+    ]
+  },
+  {
+    "term": "DFD記法",
+    "reading": "でぃーえふでぃきほう",
+    "senses": [
+      {
+        "definition": "Data Flow Diagramの記法。プロセス・データストア・データフロー・外部エンティティの4要素で表現する。",
+        "domain": "modeling",
+        "keywords": [
+          "DFD",
+          "記法",
+          "データ",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "DFD Notation"
+    ]
+  },
+  {
+    "term": "ソフトウェアスタック図",
+    "reading": "そふとうぇあすたっくず",
+    "senses": [
+      {
+        "definition": "システムが使用するソフトウェア層の構成を視覚化した図。",
+        "domain": "modeling",
+        "keywords": [
+          "スタック",
+          "図",
+          "構成",
+          "アーキテクチャ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Software Stack Diagram"
+    ]
+  },
+  {
+    "term": "スタック図",
+    "reading": "すたっくず",
+    "senses": [
+      {
+        "definition": "ソフトウェアスタックや技術要素の階層を示した図の総称。",
+        "domain": "modeling",
+        "keywords": [
+          "スタック",
+          "図",
+          "層",
+          "技術"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stack Diagram"
+    ]
+  },
+  {
+    "term": "組織図",
+    "reading": "そしきず",
+    "senses": [
+      {
+        "definition": "組織の部門・役職・指揮命令系統を示した図。",
+        "domain": "modeling",
+        "keywords": [
+          "組織",
+          "図",
+          "部門",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Free Form",
+    "senses": [
+      {
+        "definition": "形式を問わない自由記述形式の図や表現スタイル。",
+        "domain": "modeling",
+        "keywords": [
+          "自由",
+          "スケッチ",
+          "非形式",
+          "図"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スケッチ記法",
+    "reading": "すけっちきほう",
+    "senses": [
+      {
+        "definition": "正確さより速度とコミュニケーションを優先した非形式的な図の描き方。",
+        "domain": "modeling",
+        "keywords": [
+          "スケッチ",
+          "非形式",
+          "図",
+          "コミュニケーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sketch Notation"
+    ]
+  },
+  {
+    "term": "厳密記法",
+    "reading": "げんみつきほう",
+    "senses": [
+      {
+        "definition": "UMLなどの規格に完全に準拠した正確な図の描き方。ツールによる処理・検証を想定する。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "厳密",
+          "形式",
+          "正確"
+        ]
+      }
+    ],
+    "aliases": [
+      "Formal Notation"
+    ]
+  },
+  {
+    "term": "DFD論理モデル",
+    "reading": "でぃーえふでぃろんりもでる",
+    "senses": [
+      {
+        "definition": "実装手段を意識せずビジネスプロセスのデータの流れを表現したDFD。",
+        "domain": "modeling",
+        "keywords": [
+          "DFD",
+          "論理",
+          "プロセス",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "DFD Logical Model"
+    ]
+  },
+  {
+    "term": "DFD物理モデル",
+    "reading": "でぃーえふでぃぶつりもでる",
+    "senses": [
+      {
+        "definition": "実際の処理・システム・ファイルの物理的な実装を反映したDFD。",
+        "domain": "modeling",
+        "keywords": [
+          "DFD",
+          "物理",
+          "実装",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "DFD Physical Model"
+    ]
+  },
+  {
+    "term": "非依存実体",
+    "reading": "ひいぞんじったい",
+    "senses": [
+      {
+        "definition": "他のエンティティに依存せず独立して存在できるエンティティ（強実体）。",
+        "domain": "modeling",
+        "keywords": [
+          "ER",
+          "エンティティ",
+          "独立",
+          "関係"
+        ]
+      }
+    ],
+    "aliases": [
+      "Independent Entity"
+    ]
+  },
+  {
+    "term": "依存実体",
+    "reading": "いぞんじったい",
+    "senses": [
+      {
+        "definition": "他のエンティティの存在に依存する弱実体。親エンティティなしには識別・存在できない。",
+        "domain": "modeling",
+        "keywords": [
+          "ER",
+          "エンティティ",
+          "弱実体",
+          "関係"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dependent Entity"
+    ]
+  },
+  {
+    "term": "カーディナリティ",
+    "reading": "かーでぃなりてぃ",
+    "senses": [
+      {
+        "definition": "エンティティ間の関係における多重度（1:1・1:N・M:N）。ERモデルの重要な要素。",
+        "domain": "modeling",
+        "keywords": [
+          "ER",
+          "多重度",
+          "関係",
+          "数量"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cardinality"
+    ]
+  },
+  {
+    "term": "非正規形",
+    "reading": "ひせいきけい",
+    "senses": [
+      {
+        "definition": "データが正規化されていない状態。繰り返し項目・冗長データを含むテーブル構造。",
+        "domain": "database",
+        "keywords": [
+          "正規化",
+          "テーブル",
+          "DB",
+          "冗長"
+        ]
+      }
+    ],
+    "aliases": [
+      "Unnormalized Form"
+    ]
+  },
+  {
+    "term": "ロングトランザクション",
+    "reading": "ろんぐとらんざくしょん",
+    "senses": [
+      {
+        "definition": "完了まで長時間かかるトランザクション。ロック競合や整合性問題を引き起こしやすい。",
+        "domain": "database",
+        "keywords": [
+          "トランザクション",
+          "ロック",
+          "性能",
+          "競合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Long Transaction"
+    ]
+  },
+  {
+    "term": "アプリケーション境界",
+    "reading": "あぷりけーしょんさかい",
+    "senses": [
+      {
+        "definition": "アプリケーションの責務が及ぶ範囲の境界。外部システムや別アプリとのI/Fポイントを明示する。",
+        "domain": "architecture",
+        "keywords": [
+          "境界",
+          "I/F",
+          "アプリケーション",
+          "責務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Application Boundary"
+    ]
+  },
+  {
+    "term": "文脈",
+    "reading": "ぶんみゃく",
+    "senses": [
+      {
+        "definition": "用語やモデルが有効であるコンテキスト・状況。DDD Bounded Contextと関連する概念。",
+        "domain": "architecture",
+        "keywords": [
+          "コンテキスト",
+          "DDD",
+          "境界",
+          "意味"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "冗長表現",
+    "reading": "じょうちょうひょうげん",
+    "senses": [
+      {
+        "definition": "不必要な繰り返しや重複のある表現。コードやドキュメントでDRY原則に反する状態。",
+        "domain": "software-engineering",
+        "keywords": [
+          "DRY",
+          "冗長",
+          "重複",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Redundant Expression"
+    ]
+  },
+  {
+    "term": "記録システム",
+    "reading": "きろくしすてむ",
+    "senses": [
+      {
+        "definition": "安定的・正確性を重視し業務記録を管理するシステム。ペースレイヤリングのSystems of Record層に対応。",
+        "domain": "architecture",
+        "keywords": [
+          "SOR",
+          "モード1",
+          "安定",
+          "業務記録"
+        ]
+      }
+    ],
+    "aliases": [
+      "System of Record"
+    ]
+  },
+  {
+    "term": "差別化システム",
+    "reading": "さべつかしすてむ",
+    "senses": [
+      {
+        "definition": "業務の競争優位を実現するためのシステム。ペースレイヤリングのSystems of Differentiation層に対応。",
+        "domain": "architecture",
+        "keywords": [
+          "差別化",
+          "競合",
+          "ビジネス",
+          "モード2"
+        ]
+      }
+    ],
+    "aliases": [
+      "System of Differentiation"
+    ]
+  },
+  {
+    "term": "革新システム",
+    "reading": "かくしんしすてむ",
+    "senses": [
+      {
+        "definition": "新ビジネスモデルや実験的機能を素早く試すシステム。ペースレイヤリングのSystems of Innovation層に対応。",
+        "domain": "architecture",
+        "keywords": [
+          "イノベーション",
+          "実験",
+          "俊敏",
+          "モード2"
+        ]
+      }
+    ],
+    "aliases": [
+      "System of Innovation"
+    ]
+  },
+  {
+    "term": "モード1",
+    "reading": "もーどわん",
+    "senses": [
+      {
+        "definition": "安定・信頼性・コスト効率を重視するIT運用スタイル。バイモーダルITの一方の形態。",
+        "domain": "architecture",
+        "keywords": [
+          "バイモーダル",
+          "安定",
+          "SOR",
+          "Gartner"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mode 1"
+    ]
+  },
+  {
+    "term": "モード2",
+    "reading": "もーどつー",
+    "senses": [
+      {
+        "definition": "アジリティ・実験・スピードを重視するIT運用スタイル。バイモーダルITのもう一方の形態。",
+        "domain": "architecture",
+        "keywords": [
+          "バイモーダル",
+          "俊敏",
+          "アジャイル",
+          "Gartner"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mode 2"
+    ]
+  },
+  {
+    "term": "モノリシック",
+    "reading": "ものりしっく",
+    "senses": [
+      {
+        "definition": "システム全体が単一のデプロイ単位として構築されたアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "モノリス",
+          "アーキテクチャ",
+          "デプロイ",
+          "一体型"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monolithic"
+    ]
+  },
+  {
+    "term": "分散システム",
+    "reading": "ぶんさんしすてむ",
+    "senses": [
+      {
+        "definition": "複数のノード・プロセスがネットワーク越しに協調して動作するシステムアーキテクチャ。",
+        "domain": "architecture",
+        "keywords": [
+          "分散",
+          "ネットワーク",
+          "スケーラビリティ",
+          "CAP"
+        ]
+      }
+    ],
+    "aliases": [
+      "Distributed System"
+    ]
+  },
+  {
+    "term": "非同期分散システム",
+    "reading": "ひどうきぶんさんしすてむ",
+    "senses": [
+      {
+        "definition": "ノード間の通信が非同期メッセージングで行われる分散システム。結果整合性を採用することが多い。",
+        "domain": "architecture",
+        "keywords": [
+          "非同期",
+          "分散",
+          "メッセージング",
+          "結果整合性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Asynchronous Distributed System"
+    ]
+  },
+  {
+    "term": "メッセージング",
+    "reading": "めっせーじんぐ",
+    "senses": [
+      {
+        "definition": "システム間でメッセージを非同期に送受信して連携するアーキテクチャパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "非同期",
+          "メッセージ",
+          "キュー",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "Messaging"
+    ]
+  },
+  {
+    "term": "メッセージバス",
+    "reading": "めっせーじばす",
+    "senses": [
+      {
+        "definition": "複数のシステム・コンポーネントが接続して非同期メッセージを交換する共有通信基盤。",
+        "domain": "architecture",
+        "keywords": [
+          "ESB",
+          "メッセージ",
+          "統合",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": [
+      "Message Bus"
+    ]
+  },
+  {
+    "term": "Publish/Subscribe",
+    "senses": [
+      {
+        "definition": "メッセージを発行（Publish）するProducerと購読（Subscribe）するConsumerを分離するメッセージングパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "Pub/Sub",
+          "非同期",
+          "メッセージ",
+          "イベント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Enterprise Integration Patterns",
+    "senses": [
+      {
+        "definition": "Gregor HohpeとBobby Woolfが定義したエンタープライズシステム統合のデザインパターン集。",
+        "domain": "architecture",
+        "keywords": [
+          "EIP",
+          "統合",
+          "メッセージング",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クラウドデザインパターン",
+    "reading": "くらうどでざいんぱたーん",
+    "senses": [
+      {
+        "definition": "クラウド環境特有の課題（スケーリング・耐障害性・コスト最適化）を解決するデザインパターン集。",
+        "domain": "cloud",
+        "keywords": [
+          "クラウド",
+          "パターン",
+          "スケーリング",
+          "耐障害性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cloud Design Patterns"
+    ]
+  },
+  {
+    "term": "分散システムデザインパターン",
+    "reading": "ぶんさんしすてむでざいんぱたーん",
+    "senses": [
+      {
+        "definition": "分散システムの一般的な課題（サービス探索・サーキットブレーカーなど）を解決するパターン集。",
+        "domain": "architecture",
+        "keywords": [
+          "分散",
+          "パターン",
+          "サービスメッシュ",
+          "耐障害性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Distributed Systems Design Patterns"
+    ]
+  },
+  {
+    "term": "分散モノリス",
+    "reading": "ぶんさんものりす",
+    "senses": [
+      {
+        "definition": "コードは分散しているが実行時に強い依存関係を持つアンチパターン。マイクロサービスの失敗形態。",
+        "domain": "architecture",
+        "keywords": [
+          "アンチパターン",
+          "マイクロサービス",
+          "分散",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": [
+      "Distributed Monolith"
+    ]
+  },
+  {
+    "term": "Webサービス",
+    "reading": "うぇぶさーびす",
+    "senses": [
+      {
+        "definition": "HTTPベースのAPIを通じて機能を提供するSOAやWeb APIの総称。SOAP・RESTなどが含まれる。",
+        "domain": "architecture",
+        "keywords": [
+          "API",
+          "HTTP",
+          "SOAP",
+          "REST"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Service"
+    ]
+  },
+  {
+    "term": "Pragmatic REST",
+    "senses": [
+      {
+        "definition": "RESTの原則を実用的な観点から適用するアプローチ。厳密なRESTより開発効率・利便性を優先する。",
+        "domain": "architecture",
+        "keywords": [
+          "REST",
+          "API",
+          "実用",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Thinサーバアーキテクチャ",
+    "reading": "しんさーばあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "サーバ側のロジックを最小化しクライアント（SPA）に処理を委譲するアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "SPA",
+          "クライアント",
+          "API",
+          "サーバレス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Thin Server Architecture"
+    ]
+  },
+  {
+    "term": "メッセージ駆動",
+    "reading": "めっせーじくどう",
+    "senses": [
+      {
+        "definition": "イベント・メッセージの受信を起点にシステムが動作するアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "イベント",
+          "メッセージ",
+          "非同期",
+          "リアクティブ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Message-Driven"
+    ]
+  },
+  {
+    "term": "リアクティブシステム",
+    "reading": "りあくてぃぶしすてむ",
+    "senses": [
+      {
+        "definition": "応答性・回復性・弾力性・メッセージ駆動の特性を持つシステム。Reactive Manifesto定義。",
+        "domain": "architecture",
+        "keywords": [
+          "リアクティブ",
+          "非同期",
+          "耐障害性",
+          "スケーラビリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reactive System"
+    ]
+  },
+  {
+    "term": "リアクティブプログラミング",
+    "reading": "りあくてぃぶぷろぐらみんぐ",
+    "senses": [
+      {
+        "definition": "非同期データストリームとそれに対する宣言的な処理を中心とするプログラミングパラダイム。",
+        "domain": "software-engineering",
+        "keywords": [
+          "RxJS",
+          "ストリーム",
+          "非同期",
+          "FRP"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reactive Programming"
+    ]
+  },
+  {
+    "term": "ポートアンドアダプタ",
+    "reading": "ぽーとあんどあだぷた",
+    "senses": [
+      {
+        "definition": "Alistair Cockburnが提唱したアーキテクチャパターン。ドメインロジックをポートとアダプタで外部から隔離する。",
+        "domain": "architecture",
+        "keywords": [
+          "ヘキサゴナル",
+          "アダプタ",
+          "ドメイン",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ヘキサゴナルアーキテクチャ",
+    "reading": "へきさごなるあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "ポートアンドアダプタパターンの別名。六角形を用いてドメインと外部システムの関係を表現する。",
+        "domain": "architecture",
+        "keywords": [
+          "ポートアンドアダプタ",
+          "ドメイン",
+          "テスト",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DDDドメインモデル",
+    "reading": "でぃでぃでぃどめいんもでる",
+    "senses": [
+      {
+        "definition": "Domain-Driven Designにおいてユビキタス言語でビジネスルールを表現したオブジェクトモデル。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "ドメイン",
+          "ユビキタス言語",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": [
+      "DDD Domain Model"
+    ]
+  },
+  {
+    "term": "Flux",
+    "senses": [
+      {
+        "definition": "Facebookが提唱した単方向データフローに基づくフロントエンドアーキテクチャパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "フロントエンド",
+          "状態管理",
+          "React",
+          "単方向"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JAM stack",
+    "senses": [
+      {
+        "definition": "JavaScript・API・Markupを組み合わせた静的サイト中心のWebアーキテクチャ。",
+        "domain": "architecture",
+        "keywords": [
+          "静的サイト",
+          "CDN",
+          "API",
+          "フロントエンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ヘッドレスCMS",
+    "reading": "へっどれすしーえむえす",
+    "senses": [
+      {
+        "definition": "フロントエンドを持たずAPIでコンテンツを提供するCMS。フロントは自由に選択できる。",
+        "domain": "architecture",
+        "keywords": [
+          "CMS",
+          "API",
+          "フロントエンド",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "Headless CMS"
+    ]
+  },
+  {
+    "term": "静的サイトジェネレータ",
+    "reading": "せいてきさいとじぇねれーた",
+    "senses": [
+      {
+        "definition": "テンプレートとコンテンツからHTMLを事前生成するツール。Next.js・Gatsby・Hugoなどが代表例。",
+        "domain": "architecture",
+        "keywords": [
+          "SSG",
+          "静的",
+          "HTML",
+          "ビルド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Static Site Generator"
+    ]
+  },
+  {
+    "term": "コンポーネント配置図",
+    "reading": "こんぽーねんとはいちず",
+    "senses": [
+      {
+        "definition": "システムのコンポーネント・モジュールとその配置関係を表すUML配置図またはシステム構成図。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "配置",
+          "コンポーネント",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": [
+      "Component Deployment Diagram"
+    ]
+  },
+  {
+    "term": "インテグレーションアーキテクチャ",
+    "reading": "いんてぐれーしょんあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "複数システム・サービスを統合するための方式・パターン・技術スタックの設計。",
+        "domain": "architecture",
+        "keywords": [
+          "統合",
+          "EAI",
+          "API",
+          "システム連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "Integration Architecture"
+    ]
+  },
+  {
+    "term": "メッセージングアーキテクチャ",
+    "reading": "めっせーじんぐあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "メッセージングを中心にシステム間通信・統合を設計するアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "メッセージング",
+          "非同期",
+          "統合",
+          "イベント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Messaging Architecture"
+    ]
+  },
+  {
+    "term": "システムアーキテクチャ",
+    "reading": "しすてむあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "システム全体の構成・コンポーネント・インタラクション・技術選定を定義した設計。",
+        "domain": "architecture",
+        "keywords": [
+          "設計",
+          "コンポーネント",
+          "構成",
+          "技術選定"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Architecture"
+    ]
+  },
+  {
+    "term": "ソフトウェアコンポーネント",
+    "reading": "そふとうぇあこんぽーねんと",
+    "senses": [
+      {
+        "definition": "再利用可能な機能単位として設計されたソフトウェアの構成要素。",
+        "domain": "software-engineering",
+        "keywords": [
+          "コンポーネント",
+          "再利用",
+          "モジュール",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Software Component"
+    ]
+  },
+  {
+    "term": "機能コンポーネント",
+    "reading": "きのうこんぽーねんと",
+    "senses": [
+      {
+        "definition": "業務機能を実現するために分割されたアプリケーション層のコンポーネント。",
+        "domain": "architecture",
+        "keywords": [
+          "機能",
+          "コンポーネント",
+          "業務",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Functional Component"
+    ]
+  },
+  {
+    "term": "ドキュメントフレームワーク",
+    "reading": "どきゅめんとふれーむわーく",
+    "senses": [
+      {
+        "definition": "プロジェクトで作成するドキュメントの種類・構造・命名規則を定めた枠組み。",
+        "domain": "methodology",
+        "keywords": [
+          "ドキュメント",
+          "標準",
+          "フレームワーク",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": [
+      "Document Framework"
+    ]
+  },
+  {
+    "term": "ソフトウェアフレームワーク",
+    "reading": "そふとうぇあふれーむわーく",
+    "senses": [
+      {
+        "definition": "アプリケーション開発の骨格・共通機能・規約を提供するライブラリの集合体。Springなどが代表例。",
+        "domain": "software-engineering",
+        "keywords": [
+          "フレームワーク",
+          "Spring",
+          "共通機能",
+          "規約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Software Framework"
+    ]
+  },
+  {
+    "term": "開発期間",
+    "reading": "かいはつきかん",
+    "senses": [
+      {
+        "definition": "プロジェクトの開発フェーズにかかる期間。要件定義から製造完了までのカレンダー期間を指す。",
+        "domain": "project-management",
+        "keywords": [
+          "期間",
+          "スケジュール",
+          "フェーズ",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development Period"
+    ]
+  },
+  {
+    "term": "製造期間",
+    "reading": "せいぞうきかん",
+    "senses": [
+      {
+        "definition": "コーディング・単体テストを実施するフェーズにかかる期間。",
+        "domain": "project-management",
+        "keywords": [
+          "製造",
+          "コーディング",
+          "期間",
+          "スケジュール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Construction Period"
+    ]
+  },
+  {
+    "term": "共通部品",
+    "reading": "きょうつうぶひん",
+    "senses": [
+      {
+        "definition": "複数の機能・モジュールで再利用される共有コンポーネント・ライブラリ。",
+        "domain": "software-engineering",
+        "keywords": [
+          "再利用",
+          "共通化",
+          "ライブラリ",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Common Components"
+    ]
+  },
+  {
+    "term": "頑健性",
+    "reading": "がんけんせい",
+    "senses": [
+      {
+        "definition": "システムが異常入力・障害・予期しない状況に対して適切に振る舞う性質。ロバストネスとも呼ぶ。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ロバスト",
+          "耐障害性",
+          "品質",
+          "異常処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "ロバストネス",
+      "Robustness"
+    ]
+  },
+  {
+    "term": "保守性向上",
+    "reading": "ほしゅせいこうじょう",
+    "senses": [
+      {
+        "definition": "コードの可読性・変更容易性・テスト容易性を高めてメンテナンスコストを削減する取り組み。",
+        "domain": "software-engineering",
+        "keywords": [
+          "保守性",
+          "リファクタリング",
+          "品質",
+          "技術的負債"
+        ]
+      }
+    ],
+    "aliases": [
+      "Maintainability Improvement"
+    ]
+  },
+  {
+    "term": "品質ロスコスト",
+    "reading": "ひんしつろすこすと",
+    "senses": [
+      {
+        "definition": "品質問題（バグ修正・手戻り・顧客対応）によって発生するコスト。予防コストと対比される概念。",
+        "domain": "testing",
+        "keywords": [
+          "品質",
+          "コスト",
+          "バグ",
+          "手戻り"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Loss Cost"
+    ]
+  },
+  {
+    "term": "タイム",
+    "reading": "たいむ",
+    "senses": [
+      {
+        "definition": "プロジェクトの時間・期間に関する制約。鉄の三角形の一要素。",
+        "domain": "project-management",
+        "keywords": [
+          "スケジュール",
+          "制約",
+          "期間",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": [
+      "Time"
+    ]
+  },
+  {
+    "term": "鉄の三角形",
+    "reading": "てつのさんかくけい",
+    "senses": [
+      {
+        "definition": "スコープ・コスト・タイムのトレードオフ関係を表すプロジェクト管理のモデル。どれかを変えると他に影響する。",
+        "domain": "project-management",
+        "keywords": [
+          "スコープ",
+          "コスト",
+          "タイム",
+          "トレードオフ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Iron Triangle"
+    ]
+  },
+  {
+    "term": "仕様凍結",
+    "reading": "しようとうけつ",
+    "senses": [
+      {
+        "definition": "変更を受け付けない最終仕様の確定状態。これ以降の変更は変更管理プロセスを経る必要がある。",
+        "domain": "project-management",
+        "keywords": [
+          "仕様",
+          "変更管理",
+          "確定",
+          "凍結"
+        ]
+      }
+    ],
+    "aliases": [
+      "Specification Freeze"
+    ]
+  },
+  {
+    "term": "コーディング",
+    "reading": "こーでぃんぐ",
+    "senses": [
+      {
+        "definition": "設計仕様に基づいてソースコードを記述する作業。製造工程の中心となる活動。",
+        "domain": "software-engineering",
+        "keywords": [
+          "実装",
+          "ソースコード",
+          "製造",
+          "プログラム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Coding"
+    ]
+  },
+  {
+    "term": "スケルトン実装",
+    "reading": "すけるとんじっそう",
+    "senses": [
+      {
+        "definition": "クラス・メソッドの骨格だけを先に実装し後でロジックを埋める手法。TDDや設計確認に有効。",
+        "domain": "software-engineering",
+        "keywords": [
+          "スタブ",
+          "実装",
+          "TDD",
+          "骨格"
+        ]
+      }
+    ],
+    "aliases": [
+      "Skeleton Implementation"
+    ]
+  },
+  {
+    "term": "クラスコメント",
+    "reading": "くらすこめんと",
+    "senses": [
+      {
+        "definition": "クラスの目的・責務・利用方法を記述したソースコードのコメント。JavadocやJSDocで文書化する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "コメント",
+          "Javadoc",
+          "文書化",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Class Comment"
+    ]
+  },
+  {
+    "term": "メソッドコメント",
+    "reading": "めそっどこめんと",
+    "senses": [
+      {
+        "definition": "メソッドのパラメータ・戻り値・副作用・例外を記述したソースコードのコメント。",
+        "domain": "software-engineering",
+        "keywords": [
+          "コメント",
+          "Javadoc",
+          "文書化",
+          "メソッド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Method Comment"
+    ]
+  },
+  {
+    "term": "シグニチャ",
+    "reading": "しぐにちゃ",
+    "senses": [
+      {
+        "definition": "メソッド・関数の名前・パラメータ型・戻り値型を示すインターフェース定義。",
+        "domain": "software-engineering",
+        "keywords": [
+          "メソッド",
+          "型",
+          "インターフェース",
+          "API"
+        ]
+      }
+    ],
+    "aliases": [
+      "Signature"
+    ]
+  },
+  {
+    "term": "TODOコメント",
+    "reading": "とぅーどぅーこめんと",
+    "senses": [
+      {
+        "definition": "後で対応が必要な箇所をコードに残すコメント。技術的負債の記録や追跡に使われる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "TODO",
+          "技術的負債",
+          "コメント",
+          "コード"
+        ]
+      }
+    ],
+    "aliases": [
+      "TODO Comment"
+    ]
+  },
+  {
+    "term": "物理名",
+    "reading": "ぶつりめい",
+    "senses": [
+      {
+        "definition": "データベースのテーブル名・カラム名など実装上の英数字の名前。",
+        "domain": "database",
+        "keywords": [
+          "DB",
+          "命名",
+          "テーブル",
+          "カラム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Physical Name"
+    ]
+  },
+  {
+    "term": "論理名",
+    "reading": "ろんりめい",
+    "senses": [
+      {
+        "definition": "物理名に対応する日本語や業務用語での名前。設計書・ドキュメントで使う。",
+        "domain": "database",
+        "keywords": [
+          "命名",
+          "DB",
+          "業務",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logical Name"
+    ]
+  },
+  {
+    "term": "名前空間設計",
+    "reading": "なまえくうかんせっけい",
+    "senses": [
+      {
+        "definition": "パッケージ・モジュール・クラスなどの名前空間を体系的に設計する活動。",
+        "domain": "software-engineering",
+        "keywords": [
+          "命名",
+          "パッケージ",
+          "設計",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": [
+      "Namespace Design"
+    ]
+  },
+  {
+    "term": "URL設計",
+    "reading": "ゆーあーるえるせっけい",
+    "senses": [
+      {
+        "definition": "Webアプリケーションのエンドポイントを意味のある一貫した体系で設計すること。",
+        "domain": "software-engineering",
+        "keywords": [
+          "URL",
+          "API",
+          "REST",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "URL Design"
+    ]
+  },
+  {
+    "term": "ビルド設計",
+    "reading": "びるどせっけい",
+    "senses": [
+      {
+        "definition": "コンパイル・テスト・パッケージング・デプロイのビルドパイプラインを設計する活動。",
+        "domain": "devops",
+        "keywords": [
+          "ビルド",
+          "CI/CD",
+          "パイプライン",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Build Design"
+    ]
+  },
+  {
+    "term": "パッケージング設計",
+    "reading": "ぱっけーじんぐせっけい",
+    "senses": [
+      {
+        "definition": "アプリケーションをどのようなパッケージ・コンテナ・アーカイブ形式でリリースするかを設計する活動。",
+        "domain": "devops",
+        "keywords": [
+          "パッケージ",
+          "デプロイ",
+          "コンテナ",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Packaging Design"
+    ]
+  },
+  {
+    "term": "主要クラス設計",
+    "reading": "しゅようくらすせっけい",
+    "senses": [
+      {
+        "definition": "システムの核となる主要なクラスのインターフェース・責務・関係を先行して設計する活動。",
+        "domain": "architecture",
+        "keywords": [
+          "クラス",
+          "設計",
+          "主要",
+          "アーキテクチャ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Key Class Design"
+    ]
+  },
+  {
+    "term": "主要メソッド設計",
+    "reading": "しゅようめそっどせっけい",
+    "senses": [
+      {
+        "definition": "主要クラスの重要なメソッドのシグニチャ・処理概要を先行設計する活動。",
+        "domain": "architecture",
+        "keywords": [
+          "メソッド",
+          "設計",
+          "シグニチャ",
+          "主要"
+        ]
+      }
+    ],
+    "aliases": [
+      "Key Method Design"
+    ]
+  },
+  {
+    "term": "I/F設計",
+    "reading": "あいえふせっけい",
+    "senses": [
+      {
+        "definition": "システム・コンポーネント間のインターフェース（API・ファイル・メッセージ）を設計する活動。",
+        "domain": "architecture",
+        "keywords": [
+          "インターフェース",
+          "API",
+          "設計",
+          "I/F"
+        ]
+      }
+    ],
+    "aliases": [
+      "I/F Design"
+    ]
+  },
+  {
+    "term": "JDBC",
+    "senses": [
+      {
+        "definition": "Java Database Connectivityの略。JavaアプリケーションからRDBMSに接続するための標準APIとドライバ仕様。",
+        "domain": "database",
+        "keywords": [
+          "Java",
+          "DB",
+          "API",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Lintツール",
+    "reading": "りんとつーる",
+    "senses": [
+      {
+        "definition": "ソースコードの文法エラー・スタイル違反・潜在的バグを静的解析で検出するツールの総称。",
+        "domain": "software-engineering",
+        "keywords": [
+          "静的解析",
+          "コード品質",
+          "ツール",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lint Tool"
+    ]
+  },
+  {
+    "term": "コード解析ツール",
+    "reading": "こーどかいせきつーる",
+    "senses": [
+      {
+        "definition": "ソースコードを静的または動的に解析して品質・セキュリティ・複雑度を評価するツール群。",
+        "domain": "software-engineering",
+        "keywords": [
+          "静的解析",
+          "品質",
+          "ツール",
+          "メトリクス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Code Analysis Tool"
+    ]
+  },
+  {
+    "term": "Checkstyle",
+    "senses": [
+      {
+        "definition": "Javaコードのコーディング規約違反を自動検出する静的解析ツール。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Java",
+          "静的解析",
+          "コーディング規約",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FindBugs",
+    "senses": [
+      {
+        "definition": "Javaコードのバグパターンを静的解析で検出するツール。SpotBugsとして後継が続いている。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Java",
+          "静的解析",
+          "バグ検出",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PMD",
+    "senses": [
+      {
+        "definition": "Javaなど複数言語のコードの問題（冗長・未使用変数・複雑度）を検出する静的解析ツール。",
+        "domain": "software-engineering",
+        "keywords": [
+          "静的解析",
+          "コード品質",
+          "Java",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "StyleCop",
+    "senses": [
+      {
+        "definition": "C#/.NETコードのスタイル・一貫性をチェックするMicrosoftの静的解析ツール。",
+        "domain": "software-engineering",
+        "keywords": [
+          "C#",
+          ".NET",
+          "静的解析",
+          "コーディング規約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FxCop",
+    "senses": [
+      {
+        "definition": ".NETアセンブリのデザイン・セキュリティ・パフォーマンス問題を検出するMicrosoftの静的解析ツール。",
+        "domain": "software-engineering",
+        "keywords": [
+          ".NET",
+          "静的解析",
+          "セキュリティ",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SQLCheck",
+    "senses": [
+      {
+        "definition": "SQLクエリの構文・セキュリティ・パフォーマンス問題を検出する静的解析ツールの総称。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "静的解析",
+          "セキュリティ",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コードメトリクス",
+    "reading": "こーどめとりくす",
+    "senses": [
+      {
+        "definition": "ソースコードの複雑度・結合度・凝集度などを定量化した品質指標の集合。",
+        "domain": "software-engineering",
+        "keywords": [
+          "メトリクス",
+          "品質",
+          "複雑度",
+          "計測"
+        ]
+      }
+    ],
+    "aliases": [
+      "Code Metrics"
+    ]
+  },
+  {
+    "term": "メソッド数",
+    "reading": "めそっどすう",
+    "senses": [
+      {
+        "definition": "クラス・モジュールが持つメソッドの総数。過多はSRP違反や設計問題の兆候となる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "メトリクス",
+          "クラス",
+          "設計",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Method Count"
+    ]
+  },
+  {
+    "term": "行数",
+    "reading": "ぎょうすう",
+    "senses": [
+      {
+        "definition": "ソースコードの物理的な行数。規模の粗い指標だが保守性の参考になる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "LOC",
+          "コード",
+          "規模",
+          "メトリクス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Line Count"
+    ]
+  },
+  {
+    "term": "テストドライバ",
+    "reading": "てすとどらいば",
+    "senses": [
+      {
+        "definition": "テスト対象モジュールを呼び出して実行するテスト用の上位プログラム。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "ドライバ",
+          "単体テスト",
+          "呼び出し"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Driver"
+    ]
+  },
+  {
+    "term": "モックサーバ",
+    "reading": "もっくさーば",
+    "senses": [
+      {
+        "definition": "APIや外部サービスの代わりにテスト用の擬似レスポンスを返すサーバ。",
+        "domain": "testing",
+        "keywords": [
+          "モック",
+          "API",
+          "テスト",
+          "スタブ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テストデータ",
+    "reading": "てすとでーた",
+    "senses": [
+      {
+        "definition": "テスト実行に使用するサンプル入力データ・DBデータ。正常・異常・境界値を網羅する。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "データ",
+          "境界値",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Data"
+    ]
+  },
+  {
+    "term": "テストシナリオ",
+    "reading": "てすとしなりお",
+    "senses": [
+      {
+        "definition": "テストの流れ・条件・期待結果を記述したドキュメント。テストケースの集合体。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "シナリオ",
+          "ケース",
+          "手順"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Scenario"
+    ]
+  },
+  {
+    "term": "障害管理フロー",
+    "reading": "しょうがいかんりふろー",
+    "senses": [
+      {
+        "definition": "発見されたバグ・障害を記録・分析・修正・確認・クローズするプロセスのフロー。",
+        "domain": "testing",
+        "keywords": [
+          "バグ",
+          "管理",
+          "フロー",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": [
+      "Defect Management Flow"
+    ]
+  },
+  {
+    "term": "進捗管理基準",
+    "reading": "しんちょくかんりきじゅん",
+    "senses": [
+      {
+        "definition": "プロジェクトの進捗状況を評価する基準。EVM・出来高・マイルストーン達成率などが使われる。",
+        "domain": "project-management",
+        "keywords": [
+          "進捗",
+          "EVM",
+          "管理",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Progress Management Criteria"
+    ]
+  },
+  {
+    "term": "品質管理計画",
+    "reading": "ひんしつかんりけいかく",
+    "senses": [
+      {
+        "definition": "プロジェクトにおける品質目標・測定指標・レビュー基準・テスト計画を定めた計画書。",
+        "domain": "testing",
+        "keywords": [
+          "品質",
+          "計画",
+          "指標",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Management Plan"
+    ]
+  },
+  {
+    "term": "レビュー実施計画",
+    "reading": "れびゅーじっしけいかく",
+    "senses": [
+      {
+        "definition": "いつ・誰が・何を・どの基準でレビューするかを定めた計画。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "計画",
+          "品質",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Review Execution Plan"
+    ]
+  },
+  {
+    "term": "障害分析方法",
+    "reading": "しょうがいぶんせきほうほう",
+    "senses": [
+      {
+        "definition": "発見したバグ・障害の根本原因を特定するための分析手法。5Whys・魚の骨図などが使われる。",
+        "domain": "testing",
+        "keywords": [
+          "根本原因",
+          "バグ",
+          "分析",
+          "5Whys"
+        ]
+      }
+    ],
+    "aliases": [
+      "Defect Analysis Method"
+    ]
+  },
+  {
+    "term": "内部レビュー",
+    "reading": "ないぶれびゅー",
+    "senses": [
+      {
+        "definition": "開発チーム内部でコード・ドキュメントを確認するレビュー活動。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "チーム",
+          "内部",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Internal Review"
+    ]
+  },
+  {
+    "term": "ユーザーレビュー",
+    "reading": "ゆーざーれびゅー",
+    "senses": [
+      {
+        "definition": "実際のユーザーや顧客代表が成果物を確認するレビュー活動。要件の確認や使用性の検証を目的とする。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "ユーザー",
+          "受入",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Review"
+    ]
+  },
+  {
+    "term": "査読",
+    "reading": "さどく",
+    "senses": [
+      {
+        "definition": "ドキュメントやコードを専門家が詳細に確認する公式なレビュー活動。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー",
+          "専門家",
+          "品質",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Peer Inspection"
+    ]
+  },
+  {
+    "term": "Type Safe Enumパターン",
+    "senses": [
+      {
+        "definition": "型安全な列挙型をクラスで実装するパターン。Javaの旧enumに替わるアプローチとして使われた。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Enum",
+          "型安全",
+          "Java",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Type Safe Enum Pattern"
+    ]
+  },
+  {
+    "term": "変数再利用",
+    "reading": "へんすうさいりよう",
+    "senses": [
+      {
+        "definition": "一つの変数を異なる目的で再利用すること。可読性・保守性を下げるアンチパターン。",
+        "domain": "software-engineering",
+        "keywords": [
+          "変数",
+          "アンチパターン",
+          "可読性",
+          "コード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Variable Reuse"
+    ]
+  },
+  {
+    "term": "実行円滑性",
+    "reading": "じっこうえんかつせい",
+    "senses": [
+      {
+        "definition": "コードや処理が滑らかに・途切れなく実行される性質。",
+        "domain": "software-engineering",
+        "keywords": [
+          "性能",
+          "実行",
+          "品質",
+          "スムーズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Execution Smoothness"
+    ]
+  },
+  {
+    "term": "観測容易性",
+    "reading": "かんそくようえせい",
+    "senses": [
+      {
+        "definition": "システムの状態・動作をログ・メトリクス・トレースで外部から把握しやすい性質。Observabilityとも呼ぶ。",
+        "domain": "devops",
+        "keywords": [
+          "Observability",
+          "ログ",
+          "メトリクス",
+          "モニタリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Observability"
+    ]
+  },
+  {
+    "term": "分解容易性",
+    "reading": "ぶんかいようえせい",
+    "senses": [
+      {
+        "definition": "システムをコンポーネント・モジュールに分割しやすい設計上の性質。テスタビリティとも関連する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "分解",
+          "モジュール",
+          "設計",
+          "保守性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Decomposability"
+    ]
+  },
+  {
+    "term": "単純性",
+    "reading": "たんじゅんせい",
+    "senses": [
+      {
+        "definition": "システム・コードが不必要な複雑さを持たないシンプルな設計の性質。KISS原則と関連する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "シンプル",
+          "KISS",
+          "設計",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Simplicity"
+    ]
+  },
+  {
+    "term": "理解容易性",
+    "reading": "りかいようえせい",
+    "senses": [
+      {
+        "definition": "コード・設計・ドキュメントが他者に理解しやすい性質。可読性とも関連する品質特性。",
+        "domain": "software-engineering",
+        "keywords": [
+          "可読性",
+          "理解",
+          "品質",
+          "保守性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Understandability"
+    ]
+  },
+  {
+    "term": "品質特性",
+    "reading": "ひんしつとくせい",
+    "senses": [
+      {
+        "definition": "ソフトウェアの品質を構成する特性の集合。JIS X 0129-1やISO 25010で定義される。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "特性",
+          "JIS",
+          "ISO"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Characteristic"
+    ]
+  },
+  {
+    "term": "外部品質",
+    "reading": "がいぶひんしつ",
+    "senses": [
+      {
+        "definition": "ユーザーや外部から観測できるソフトウェアの品質。機能性・使用性・性能などが含まれる。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "外部",
+          "ユーザー",
+          "JIS"
+        ]
+      }
+    ],
+    "aliases": [
+      "External Quality"
+    ]
+  },
+  {
+    "term": "内部品質",
+    "reading": "ないぶひんしつ",
+    "senses": [
+      {
+        "definition": "ソースコードや設計書の品質。可読性・保守性・テスタビリティが主な特性。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "コード",
+          "保守性",
+          "内部"
+        ]
+      }
+    ],
+    "aliases": [
+      "Internal Quality"
+    ]
+  },
+  {
+    "term": "利用時品質",
+    "reading": "りようじひんしつ",
+    "senses": [
+      {
+        "definition": "実際の利用状況における有効性・効率性・満足度などを含む品質の観点。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "利用",
+          "有効性",
+          "満足度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality in Use"
+    ]
+  },
+  {
+    "term": "定量的プロジェクトマネジメント",
+    "reading": "ていりょうてきぷろじぇくとまねじめんと",
+    "senses": [
+      {
+        "definition": "メトリクスとデータを活用してプロジェクトの計画・監視・制御を行うアプローチ。CMMIレベル4に対応。",
+        "domain": "project-management",
+        "keywords": [
+          "メトリクス",
+          "CMMI",
+          "計画",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quantitative Project Management"
+    ]
+  },
+  {
+    "term": "リスク評価レベル",
+    "reading": "りすくひょうかれべる",
+    "senses": [
+      {
+        "definition": "リスクの影響度と発生確率から算出したリスクの深刻さを段階で表した評価。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "評価",
+          "影響度",
+          "確率"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk Assessment Level"
+    ]
+  },
+  {
+    "term": "リスク値",
+    "reading": "りすくち",
+    "senses": [
+      {
+        "definition": "リスクの影響度×発生確率で算出したリスクの大きさを示す数値。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "数値",
+          "影響",
+          "確率"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk Value"
+    ]
+  },
+  {
+    "term": "リスク値合計",
+    "reading": "りすくちごうけい",
+    "senses": [
+      {
+        "definition": "プロジェクト全体のリスク値を合算した総合リスク指標。プロジェクト健全性の指標となる。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "合計",
+          "プロジェクト",
+          "指標"
+        ]
+      }
+    ],
+    "aliases": [
+      "Total Risk Value"
+    ]
+  },
+  {
+    "term": "危険レベル",
+    "reading": "きけんれべる",
+    "senses": [
+      {
+        "definition": "リスク評価でリスク値が閾値を超えた最も深刻なリスク段階。即時対応が必要。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "危険",
+          "対応",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Danger Level"
+    ]
+  },
+  {
+    "term": "要監視レベル",
+    "reading": "ようかんしれべる",
+    "senses": [
+      {
+        "definition": "リスク評価で中程度のリスク段階。定期的な監視と準備が必要。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "監視",
+          "管理",
+          "段階"
+        ]
+      }
+    ],
+    "aliases": [
+      "Watch Level"
+    ]
+  },
+  {
+    "term": "通常レベル",
+    "reading": "つうじょうれべる",
+    "senses": [
+      {
+        "definition": "リスク評価でリスク値が許容範囲内の通常状態。定期チェックで管理する。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "通常",
+          "管理",
+          "段階"
+        ]
+      }
+    ],
+    "aliases": [
+      "Normal Level"
+    ]
+  },
+  {
+    "term": "安全レベル",
+    "reading": "あんぜんれべる",
+    "senses": [
+      {
+        "definition": "リスク評価でリスクが十分に低く管理された状態を示す最良の段階。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "安全",
+          "管理",
+          "段階"
+        ]
+      }
+    ],
+    "aliases": [
+      "Safe Level"
+    ]
+  },
+  {
+    "term": "リスク対策",
+    "reading": "りすくたいさく",
+    "senses": [
+      {
+        "definition": "特定されたリスクに対して回避・軽減・転嫁・受容のいずれかの対策を定める活動。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "対策",
+          "回避",
+          "軽減"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk Countermeasure"
+    ]
+  },
+  {
+    "term": "予防策",
+    "reading": "よぼうさく",
+    "senses": [
+      {
+        "definition": "リスクが実際に発生しないよう事前に講じる対策。リスク回避・軽減が目的。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "予防",
+          "対策",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Preventive Measure"
+    ]
+  },
+  {
+    "term": "継続監視",
+    "reading": "けいぞくかんし",
+    "senses": [
+      {
+        "definition": "リスクや品質指標を定期的に測定・評価し続ける活動。",
+        "domain": "project-management",
+        "keywords": [
+          "監視",
+          "リスク",
+          "継続",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Continuous Monitoring"
+    ]
+  },
+  {
+    "term": "顧客組織分析",
+    "reading": "こきゃくそしきぶんせき",
+    "senses": [
+      {
+        "definition": "顧客企業の組織構造・意思決定プロセス・ステークホルダーの影響力を分析する活動。",
+        "domain": "business-analysis",
+        "keywords": [
+          "顧客",
+          "組織",
+          "ステークホルダー",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [
+      "Customer Organization Analysis"
+    ]
+  },
+  {
+    "term": "企画品質",
+    "reading": "きかくひんしつ",
+    "senses": [
+      {
+        "definition": "プロジェクト企画・要件定義フェーズの成果物の品質。上流品質とも呼ばれ後工程の品質を左右する。",
+        "domain": "methodology",
+        "keywords": [
+          "品質",
+          "企画",
+          "上流",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Planning Quality"
+    ]
+  },
+  {
+    "term": "体制リスク",
+    "reading": "たいせいりすく",
+    "senses": [
+      {
+        "definition": "プロジェクトチームの構成・スキル・経験・ステークホルダー関係に起因するリスク。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "体制",
+          "チーム",
+          "組織"
+        ]
+      }
+    ],
+    "aliases": [
+      "Organizational Risk"
+    ]
+  },
+  {
+    "term": "技術リスク",
+    "reading": "ぎじゅつりすく",
+    "senses": [
+      {
+        "definition": "採用技術の成熟度・実績・習熟度・統合複雑性に起因するプロジェクトリスク。",
+        "domain": "project-management",
+        "keywords": [
+          "リスク",
+          "技術",
+          "成熟",
+          "習熟"
+        ]
+      }
+    ],
+    "aliases": [
+      "Technical Risk"
+    ]
+  },
+  {
+    "term": "プロジェクト失敗",
+    "reading": "ぷろじぇくとしっぱい",
+    "senses": [
+      {
+        "definition": "スコープ・品質・コスト・期間のいずれかが目標を大きく外れたプロジェクトの終焉状態。",
+        "domain": "project-management",
+        "keywords": [
+          "失敗",
+          "リスク",
+          "スコープ",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Project Failure"
+    ]
+  },
+  {
+    "term": "炎上",
+    "reading": "えんじょう",
+    "senses": [
+      {
+        "definition": "プロジェクトが制御を失いトラブル・遅延・品質問題が連鎖的に発生する深刻な状態。",
+        "domain": "project-management",
+        "keywords": [
+          "トラブル",
+          "遅延",
+          "品質",
+          "危機"
+        ]
+      }
+    ],
+    "aliases": [
+      "Project Meltdown"
+    ]
+  },
+  {
+    "term": "SL",
+    "senses": [
+      {
+        "definition": "Service Levelの略。システムやサービスが達成すべき品質・可用性の水準。",
+        "domain": "project-management",
+        "keywords": [
+          "サービスレベル",
+          "品質",
+          "可用性",
+          "KPI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工程表",
+    "reading": "こうていひょう",
+    "senses": [
+      {
+        "definition": "プロジェクトの各工程・タスクのスケジュール・担当・マイルストーンを示した表。",
+        "domain": "project-management",
+        "keywords": [
+          "スケジュール",
+          "工程",
+          "計画",
+          "ガントチャート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Process Schedule"
+    ]
+  },
+  {
+    "term": "データ移行ウォーターフォール",
+    "reading": "でーたいこううぉーたーふぉーる",
+    "senses": [
+      {
+        "definition": "既存システムから新システムへのデータ移行を段階的に計画・実行・検証する手順モデル。",
+        "domain": "project-management",
+        "keywords": [
+          "データ移行",
+          "ウォーターフォール",
+          "移行",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Migration Waterfall"
+    ]
+  },
+  {
+    "term": "平行稼動",
+    "reading": "へいこうかどう",
+    "senses": [
+      {
+        "definition": "新旧システムを同時に動かして比較・検証する移行手法。リスクを最小化できるが運用コストが高い。",
+        "domain": "project-management",
+        "keywords": [
+          "移行",
+          "並行",
+          "検証",
+          "リスク"
+        ]
+      }
+    ],
+    "aliases": [
+      "Parallel Operation"
+    ]
+  },
+  {
+    "term": "監視設計",
+    "reading": "かんしせっけい",
+    "senses": [
+      {
+        "definition": "本番環境のメトリクス・ログ・アラートの収集・可視化・通知の仕組みを設計する活動。",
+        "domain": "devops",
+        "keywords": [
+          "監視",
+          "ログ",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monitoring Design"
+    ]
+  },
+  {
+    "term": "バックアップ設計",
+    "reading": "ばっくあっぷせっけい",
+    "senses": [
+      {
+        "definition": "データ・システムの消失に備えたバックアップ方式・頻度・保管先・復元手順を設計する活動。",
+        "domain": "devops",
+        "keywords": [
+          "バックアップ",
+          "復元",
+          "設計",
+          "可用性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Backup Design"
+    ]
+  },
+  {
+    "term": "安定性",
+    "reading": "あんていせい",
+    "senses": [
+      {
+        "definition": "システムや運用が大きく揺れず、同じ条件で継続して期待どおりに動く性質です。高い安定性は障害やばらつきを減らし、運用負荷を抑えます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "信頼性",
+          "障害",
+          "運用",
+          "ばらつき",
+          "可用性"
+        ]
+      }
+    ],
+    "aliases": [
+      "高い安定性"
+    ]
+  },
+  {
+    "term": "複雑さ",
+    "reading": "ふくざつさ",
+    "senses": [
+      {
+        "definition": "構造や依存関係、ルール、例外が多く、理解、変更、運用が難しくなっている度合いです。複雑さが増すほどバグ、手戻り、教育コストが増えやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "依存関係",
+          "例外",
+          "保守性",
+          "手戻り",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "美しさ",
+    "reading": "うつくしさ",
+    "senses": [
+      {
+        "definition": "設計やコード、UIが無理なく整い、筋が通っていて、余計な複雑さが少ないと感じられる性質です。見た目だけでなく、構造の自然さや一貫性も含みます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "一貫性",
+          "シンプル",
+          "可読性",
+          "設計",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": [
+      "美しい"
+    ]
+  }
+]

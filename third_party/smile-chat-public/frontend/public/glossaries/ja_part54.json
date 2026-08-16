@@ -1,0 +1,1780 @@
+[
+  {
+    "term": "Well-Architected Framework",
+    "reading": "うぇるあーきてくてっどふれーむわーく",
+    "aliases": [
+      "AWS Well-Architected"
+    ],
+    "senses": [
+      {
+        "definition": "AWSが提供するクラウドアーキテクチャ設計のベストプラクティス集。運用上の優秀性・セキュリティ・信頼性・パフォーマンス効率・コスト最適化・サステナビリティの6本柱でシステムを評価・改善する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "アーキテクチャ",
+          "ベストプラクティス",
+          "設計原則",
+          "評価"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リザーブドインスタンス",
+    "reading": "りざーぶどいんすたんす",
+    "aliases": [
+      "Reserved Instance"
+    ],
+    "senses": [
+      {
+        "definition": "AWSでEC2などを1年または3年単位でコミットすることで最大75%の割引を得るコスト削減手法。オンデマンドより大幅に安価だが、キャパシティを事前に確保する必要がある。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コスト最適化",
+          "ec2",
+          "割引",
+          "finops"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Savings Plans",
+    "reading": "せいびんぐすぷらんず",
+    "aliases": [
+      "AWS Savings Plans"
+    ],
+    "senses": [
+      {
+        "definition": "AWSで特定の使用量を1年または3年コミットすることで割引を受ける柔軟な料金モデル。コンピューティングSavings Plansは複数サービスに適用でき、リザーブドインスタンスより汎用性が高い。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コスト最適化",
+          "割引",
+          "finops",
+          "コミット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オンデマンドインスタンス",
+    "reading": "おんでまんどいんすたんす",
+    "aliases": [
+      "On-Demand Instance"
+    ],
+    "senses": [
+      {
+        "definition": "AWSで事前コミットなしに必要な時だけ利用できるEC2の料金モデル。最も柔軟だが単価は最も高い。短期・不規則なワークロードに適し、リザーブドインスタンスやスポットと組み合わせてコスト最適化する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ec2",
+          "料金",
+          "柔軟性",
+          "コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タグベースコスト管理",
+    "reading": "たぐべーすこすとかんり",
+    "aliases": [
+      "Tag-Based Cost Management",
+      "コスト配分タグ"
+    ],
+    "senses": [
+      {
+        "definition": "AWSリソースにプロジェクト・チーム・環境などのタグを付与し、そのタグを基にコストを集計・分析・チャージバックする管理手法。FinOpsにおける可視化の基盤となる。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "タグ",
+          "コスト",
+          "可視化",
+          "チャージバック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EBS",
+    "reading": "いーびーえす",
+    "aliases": [
+      "Elastic Block Store"
+    ],
+    "senses": [
+      {
+        "definition": "AWSが提供するEC2インスタンス向けの永続的ブロックストレージサービス。gp3・io2などのボリュームタイプがあり、スナップショットによるバックアップやAZをまたぐ利用はできないが高I/Oが必要なワークロードに適する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ストレージ",
+          "ec2",
+          "ブロックストレージ",
+          "スナップショット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SQS",
+    "reading": "えすきゅーえす",
+    "aliases": [
+      "Simple Queue Service"
+    ],
+    "senses": [
+      {
+        "definition": "AWSのフルマネージドメッセージキューサービス。プロデューサーとコンシューマーを非同期に疎結合し、スケーラブルなメッセージング基盤を提供する。標準キューとFIFOキューがあり、デッドレターキューで失敗メッセージを管理する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "メッセージキュー",
+          "非同期",
+          "疎結合",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFront",
+    "reading": "くらうどふろんと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AWSのグローバルCDN（コンテンツデリバリーネットワーク）サービス。世界中のエッジロケーションからコンテンツを配信し、レイテンシを低減する。S3・ALB・カスタムオリジンと統合でき、WAFやOACでセキュリティを強化する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "cdn",
+          "エッジ",
+          "キャッシュ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SNS",
+    "reading": "えすえぬえす",
+    "aliases": [
+      "Simple Notification Service"
+    ],
+    "senses": [
+      {
+        "definition": "AWSのフルマネージドパブリッシュ/サブスクライブ通知サービス。トピックを介してSQS・Lambda・メール・HTTPエンドポイントなどの複数サブスクライバーへメッセージをファンアウト配信する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "pub/sub",
+          "通知",
+          "ファンアウト",
+          "非同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EKS",
+    "reading": "いーけーえす",
+    "aliases": [
+      "Elastic Kubernetes Service"
+    ],
+    "senses": [
+      {
+        "definition": "AWSのマネージドKubernetesサービス。コントロールプレーンの管理をAWSに委ねながらKubernetesクラスタを運用できる。FargateやEC2ノードグループを組み合わせてワークロードを実行する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "kubernetes",
+          "コンテナ",
+          "マネージドサービス",
+          "オーケストレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "App Runner",
+    "reading": "あっぷらんなー",
+    "aliases": [
+      "AWS App Runner"
+    ],
+    "senses": [
+      {
+        "definition": "AWSがコンテナイメージやソースコードから自動的にWebアプリケーションとAPIをビルド・デプロイ・スケール・運用するフルマネージドサービス。インフラ管理不要でHTTPSエンドポイントを即座に提供する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コンテナ",
+          "フルマネージド",
+          "サーバーレス",
+          "自動スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudTrail",
+    "reading": "くらうどとれいる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AWSアカウント内のAPI呼び出しを記録する監査ログサービス。誰が・いつ・どのリソースに対して何の操作を行ったかをS3やCloudWatch Logsに保存し、セキュリティ調査・コンプライアンス対応に活用する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "監査",
+          "ログ",
+          "セキュリティ",
+          "コンプライアンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "X-Ray",
+    "reading": "えっくすれい",
+    "aliases": [
+      "AWS X-Ray"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの分散トレーシングサービス。マイクロサービスやサーバーレスアプリケーション間のリクエストフローを可視化し、ボトルネックやエラーの根本原因を特定するデバッグ・パフォーマンス分析に使用する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "分散トレーシング",
+          "可観測性",
+          "デバッグ",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Transit Gateway",
+    "reading": "とらんじっとげーとうぇい",
+    "aliases": [
+      "TGW"
+    ],
+    "senses": [
+      {
+        "definition": "複数のVPC・オンプレミスネットワーク・VPNをハブとして集中接続するAWSのネットワーク中継サービス。スター型トポロジーでルーティングを一元管理し、大規模マルチVPC環境の接続設計を簡素化する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ネットワーク",
+          "vpc",
+          "ハイブリッド",
+          "ルーティング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PrivateLink",
+    "reading": "ぷらいべーとりんく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "VPC内のリソースとAWSサービスまたはサードパーティサービスをインターネットを経由せずプライベートに接続するAWSの技術。VPCエンドポイントを介してトラフィックをAWSネットワーク内に閉じる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "セキュリティ",
+          "プライベート接続",
+          "vpc",
+          "エンドポイント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VPCエンドポイント",
+    "reading": "ぶいぴーしーえんどぽいんと",
+    "aliases": [
+      "VPC Endpoint"
+    ],
+    "senses": [
+      {
+        "definition": "インターネットゲートウェイやNATデバイスを使わずにVPCからAWSサービスへプライベートに接続するための入口。ゲートウェイ型（S3・DynamoDB）とインターフェース型（PrivateLink）の2種類がある。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "vpc",
+          "プライベート",
+          "セキュリティ",
+          "privatelink"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "IAMポリシー",
+    "reading": "あいえーえむぽりしー",
+    "aliases": [
+      "IAM Policy"
+    ],
+    "senses": [
+      {
+        "definition": "AWSリソースへのアクセス権限をJSON形式で定義したドキュメント。管理ポリシー（AWS管理・カスタマー管理）とインラインポリシーがあり、ユーザー・グループ・ロールにアタッチして最小権限の原則を実装する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iam",
+          "権限",
+          "セキュリティ",
+          "最小権限"
+        ]
+      },
+      {
+        "definition": "誰が何に何をできるかを定義するアクセス制御ルール。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "IAM Policy"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Certificate Manager",
+    "reading": "えーだぶりゅーえすさーてぃふぃけーとまねーじゃー",
+    "aliases": [
+      "ACM"
+    ],
+    "senses": [
+      {
+        "definition": "AWS上でSSL/TLS証明書をプロビジョニング・管理・自動更新するマネージドサービス。ALB・CloudFront・API GatewayなどのAWSサービスと統合でき、証明書の手動更新作業を排除する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ssl",
+          "tls",
+          "証明書",
+          "https"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Global Accelerator",
+    "reading": "えーだぶりゅーえすぐろーばるあくせられーたー",
+    "aliases": [
+      "Global Accelerator"
+    ],
+    "senses": [
+      {
+        "definition": "AWSのグローバルネットワークを活用してアプリケーションのパフォーマンスと可用性を向上させるサービス。エニーキャストIPを使って最寄りのAWSエッジからトラフィックをルーティングし、レイテンシを低減する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "グローバル",
+          "パフォーマンス",
+          "可用性",
+          "エッジ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS SAM",
+    "reading": "えーだぶりゅーえすさむ",
+    "aliases": [
+      "SAM",
+      "Serverless Application Model"
+    ],
+    "senses": [
+      {
+        "definition": "AWSサーバーレスアプリケーションを定義・テスト・デプロイするためのオープンソースフレームワーク。CloudFormationの拡張であり、Lambda・API Gateway・DynamoDBなどをシンプルなYAMLで記述できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "サーバーレス",
+          "iac",
+          "cloudformation",
+          "lambda"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS CDK",
+    "reading": "えーだぶりゅーえすしーでぃーけー",
+    "aliases": [
+      "CDK",
+      "Cloud Development Kit"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScript・Python・Javaなどの一般的なプログラミング言語でAWSインフラをコードとして定義するフレームワーク。高レベルの抽象化（Construct）を通じてCloudFormationテンプレートを生成し、再利用可能なインフラコンポーネントを作成する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iac",
+          "typescript",
+          "cloudformation",
+          "インフラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スポットフリート",
+    "reading": "すぽっとふりーと",
+    "aliases": [
+      "Spot Fleet"
+    ],
+    "senses": [
+      {
+        "definition": "複数のインスタンスタイプとAZにまたがるスポットインスタンスの集合をターゲット容量で管理するAWSの機能。インスタンスの中断リスクを分散しながら大規模なコスト削減を実現するバッチ・HPC用途に適する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "スポット",
+          "コスト",
+          "ec2",
+          "バッチ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クラウドガバナンス",
+    "reading": "くらうどがばなんす",
+    "aliases": [
+      "Cloud Governance"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドリソースの利用ポリシー・コンプライアンス・コスト・セキュリティを組織的に管理するフレームワーク。AWS ControlTower・Organizations・Configなどのサービスを使ってガードレールを自動適用する。",
+        "domain": "cloud",
+        "keywords": [
+          "ガバナンス",
+          "ポリシー",
+          "コンプライアンス",
+          "aws",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コスト異常検出",
+    "reading": "こすといじょうけんしゅつ",
+    "aliases": [
+      "Cost Anomaly Detection",
+      "AWS Cost Anomaly Detection"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習を使ってAWSの支出の異常なスパイクを自動検出する機能。通常の支出パターンと乖離した費用増加を早期に検知してアラートを送り、予期しないクラウドコストの増大を防ぐ。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "コスト",
+          "機械学習",
+          "アラート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バジェットアラート",
+    "reading": "ばじぇっとあらーと",
+    "aliases": [
+      "AWS Budgets Alert",
+      "予算アラート"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Budgetsで設定した予算閾値をコストや使用量が超過・接近した際にメール・SNSで通知するアラート機能。FinOpsにおけるコスト超過の早期発見と対応に不可欠な管理ツール。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "予算",
+          "通知",
+          "コスト管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Budgets",
+    "reading": "えーだぶりゅーえすばじぇっつ",
+    "aliases": [
+      "Budgets"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの使用コスト・使用量・予約カバレッジに対して予算を設定し、閾値超過時にアラートを発するコスト管理サービス。FinOpsプロセスにおける予算策定とモニタリングの中核ツール。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "予算",
+          "コスト管理",
+          "アラート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マルチアカウント戦略",
+    "reading": "まるちあかうんとせんりゃく",
+    "aliases": [
+      "Multi-Account Strategy"
+    ],
+    "senses": [
+      {
+        "definition": "本番・開発・テスト・セキュリティなど目的別にAWSアカウントを分割して管理する組織設計パターン。アカウント間の爆発半径を最小化し、コスト・ガバナンス・セキュリティの分離を実現する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "organizations",
+          "ガバナンス",
+          "セキュリティ",
+          "アカウント分離"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リージョンフェイルオーバー",
+    "reading": "りーじょんふぇいるおーばー",
+    "aliases": [
+      "Region Failover",
+      "リージョン間フェイルオーバー"
+    ],
+    "senses": [
+      {
+        "definition": "プライマリリージョンで障害が発生した際にセカンダリリージョンへトラフィックを切り替える高可用性設計。Route 53のヘルスチェック・Global Accelerator・クロスリージョンレプリケーションと組み合わせて実装する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "高可用性",
+          "dr",
+          "フェイルオーバー",
+          "マルチリージョン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クロスリージョンレプリケーション",
+    "reading": "くろすりーじょんれぷりけーしょん",
+    "aliases": [
+      "Cross-Region Replication",
+      "CRR"
+    ],
+    "senses": [
+      {
+        "definition": "データやリソースを別のAWSリージョンに自動的に複製する機能。S3・RDS・DynamoDBなどがサポートし、DR（災害復旧）・法規制への対応・低レイテンシアクセスを実現するために使用する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "レプリケーション",
+          "dr",
+          "s3",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "サーバーレスアーキテクチャ",
+    "reading": "さーばーれすあーきてくちゃー",
+    "aliases": [
+      "Serverless Architecture"
+    ],
+    "senses": [
+      {
+        "definition": "サーバーのプロビジョニングや管理なしにアプリケーションを構築・実行するアーキテクチャスタイル。AWS LambdaやAPI Gatewayを中心に構成され、使った分だけ課金される従量制でインフラ管理のオーバーヘッドを排除する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "lambda",
+          "サーバーレス",
+          "従量課金",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンテナオーケストレーション",
+    "reading": "こんてなおーけすとれーしょん",
+    "aliases": [
+      "Container Orchestration"
+    ],
+    "senses": [
+      {
+        "definition": "多数のコンテナのデプロイ・スケーリング・ヘルスチェック・ネットワーキングを自動管理する技術。KubernetesとAmazon ECSが代表的で、マイクロサービスアーキテクチャの運用基盤として広く採用されている。",
+        "domain": "cloud",
+        "keywords": [
+          "コンテナ",
+          "kubernetes",
+          "ecs",
+          "eks",
+          "マイクロサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セキュリティバイデザイン",
+    "reading": "せきゅりてぃばいでざいん",
+    "aliases": [
+      "Security by Design"
+    ],
+    "senses": [
+      {
+        "definition": "セキュリティ対策を後付けではなく設計・開発の初期段階から組み込む原則。IAMの最小権限・暗号化・ネットワーク分離などをアーキテクチャ設計時に考慮し、根本的なセキュリティリスクを低減する。",
+        "domain": "cloud",
+        "keywords": [
+          "セキュリティ",
+          "設計原則",
+          "iam",
+          "暗号化",
+          "devSecOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンプライアンスアズコード",
+    "reading": "こんぷらいあんすあずこーど",
+    "aliases": [
+      "Compliance as Code",
+      "CaC"
+    ],
+    "senses": [
+      {
+        "definition": "コンプライアンス要件をコードで定義し、自動的に検証・適用するアプローチ。AWS ConfigルールやOPA（Open Policy Agent）を使ってインフラのコンプライアンス状態を継続的に監視・矯正する。",
+        "domain": "cloud",
+        "keywords": [
+          "コンプライアンス",
+          "自動化",
+          "aws config",
+          "ガバナンス",
+          "iac"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クラウドネイティブセキュリティ",
+    "reading": "くらうどねいてぃぶせきゅりてぃ",
+    "aliases": [
+      "Cloud Native Security"
+    ],
+    "senses": [
+      {
+        "definition": "クラウド環境の特性（スケール・動的性・マルチテナント）に最適化したセキュリティ手法の総称。ゼロトラスト・最小権限・自動化・コードとしてのセキュリティ（SaC）を組み合わせてクラウドワークロードを保護する。",
+        "domain": "cloud",
+        "keywords": [
+          "セキュリティ",
+          "クラウド",
+          "ゼロトラスト",
+          "自動化",
+          "devSecOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カオスエンジニアリング",
+    "reading": "かおすえんじにありんぐ",
+    "aliases": [
+      "Chaos Engineering"
+    ],
+    "senses": [
+      {
+        "definition": "本番またはステージング環境に意図的に障害を注入してシステムの回復力を検証するエンジニアリング手法。NetflixのChaos Monkeyが先駆けで、障害への耐性を事前に発見し改善することで信頼性を高める。",
+        "domain": "cloud",
+        "keywords": [
+          "信頼性",
+          "障害注入",
+          "耐障害性",
+          "sre",
+          "カオスモンキー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リトライ戦略",
+    "reading": "りとらいせんりゃく",
+    "aliases": [
+      "Retry Strategy",
+      "リトライポリシー"
+    ],
+    "senses": [
+      {
+        "definition": "一時的な障害（ネットワークエラー・レートリミット超過）に対して一定の間隔でリクエストを再試行する設計パターン。指数バックオフとジッターを組み合わせてリトライストームを防ぎながら回復力を高める。",
+        "domain": "cloud",
+        "keywords": [
+          "耐障害性",
+          "指数バックオフ",
+          "ジッター",
+          "api",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パブサブパターン",
+    "reading": "ぱぶさぶぱたーん",
+    "aliases": [
+      "Pub/Sub Pattern",
+      "パブリッシュ/サブスクライブ"
+    ],
+    "senses": [
+      {
+        "definition": "メッセージの送信者（パブリッシャー）と受信者（サブスクライバー）を直接結合せず、トピックやチャネルを介して非同期に通信するメッセージングパターン。Amazon SNSやEventBridgeがこのモデルを実装する。",
+        "domain": "cloud",
+        "keywords": [
+          "メッセージング",
+          "非同期",
+          "疎結合",
+          "sns",
+          "eventbridge"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コールドストレージ",
+    "reading": "こーるどすとれーじ",
+    "aliases": [
+      "Cold Storage",
+      "アーカイブストレージ"
+    ],
+    "senses": [
+      {
+        "definition": "アクセス頻度が極めて低いデータを低コストで長期保存するためのストレージ層。Amazon S3 Glacier・S3 Glacier Deep Archiveが代表例で、取り出しに時間（数分〜数時間）がかかる代わりに保存コストを大幅に削減できる。",
+        "domain": "cloud",
+        "keywords": [
+          "s3 glacier",
+          "アーカイブ",
+          "コスト",
+          "長期保存",
+          "ライフサイクル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データライフサイクル管理",
+    "reading": "でーたらいふさいくるかんり",
+    "aliases": [
+      "Data Lifecycle Management",
+      "DLM"
+    ],
+    "senses": [
+      {
+        "definition": "データを作成・保存・アーカイブ・削除までのライフサイクル全体を通じてコストと要件を最適化する管理手法。S3ライフサイクルポリシーやAWS DLMを使ってEBSスナップショットを自動管理する。",
+        "domain": "cloud",
+        "keywords": [
+          "s3",
+          "ライフサイクル",
+          "コスト最適化",
+          "アーカイブ",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ストレージクラス",
+    "aliases": [
+      "Storage Class",
+      "S3ストレージクラス"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon S3でアクセスパターンやコスト要件に応じてデータを分類する層。Standard・Standard-IA・One Zone-IA・Glacier・Glacier Deep Archiveなどがあり、Intelligent-Tieringは自動的に最適な層へ移動する。",
+        "domain": "cloud",
+        "keywords": [
+          "s3",
+          "コスト最適化",
+          "アーカイブ",
+          "ライフサイクル",
+          "ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ転送コスト",
+    "reading": "でーたてんそうこすと",
+    "aliases": [
+      "Data Transfer Cost"
+    ],
+    "senses": [
+      {
+        "definition": "AWSリソース間またはインターネットへのデータ転送に発生する料金。リージョン間・AZ間・インターネットへの出力（エグレス）で課金され、アーキテクチャ設計時にデータ転送パスを考慮することでコストを削減できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コスト",
+          "エグレス",
+          "finops",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "エッジロケーション",
+    "reading": "えっじろけーしょん",
+    "aliases": [
+      "Edge Location",
+      "PoP"
+    ],
+    "senses": [
+      {
+        "definition": "CloudFrontやGlobal AcceleratorがコンテンツをキャッシュしてユーザーへDNS・HTTPコンテンツを提供するAWSの世界中に点在するデータセンター拠点。ユーザーに地理的に近い場所からコンテンツを配信しレイテンシを低減する。",
+        "domain": "cloud",
+        "keywords": [
+          "cdn",
+          "cloudfront",
+          "キャッシュ",
+          "レイテンシ",
+          "グローバル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CDNオリジン",
+    "reading": "しーでぃーえぬおりじん",
+    "aliases": [
+      "CDN Origin",
+      "オリジンサーバー"
+    ],
+    "senses": [
+      {
+        "definition": "CDNがコンテンツをキャッシュする元となるサーバーやサービス。CloudFrontではS3バケット・ALB・EC2・カスタムHTTPエンドポイントをオリジンとして設定でき、キャッシュミス時にオリジンからコンテンツを取得する。",
+        "domain": "cloud",
+        "keywords": [
+          "cdn",
+          "cloudfront",
+          "キャッシュ",
+          "s3",
+          "配信"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cost Explorer",
+    "reading": "こすとえくすぷろーらー",
+    "aliases": [
+      "AWS Cost Explorer"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの過去13ヶ月のコストと使用状況を可視化・分析するツール。サービス別・アカウント別・タグ別のコスト内訳を確認でき、将来の支出を予測するとともにリザーブドインスタンスの購入推奨も提供する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "コスト",
+          "可視化",
+          "予測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Trusted Advisor",
+    "reading": "とらすてっどあどばいざー",
+    "aliases": [
+      "AWS Trusted Advisor"
+    ],
+    "senses": [
+      {
+        "definition": "AWSアカウントのベストプラクティス遵守状況をコスト最適化・セキュリティ・耐障害性・パフォーマンス・サービス制限の5カテゴリで自動チェックするサービス。Business/Enterpriseサポートプランで全チェック項目にアクセスできる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コスト最適化",
+          "ベストプラクティス",
+          "セキュリティ",
+          "推奨"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Pricing Calculator",
+    "reading": "えーだぶりゅーえすぷらいしんぐかるきゅれーたー",
+    "aliases": [
+      "Pricing Calculator",
+      "料金計算ツール"
+    ],
+    "senses": [
+      {
+        "definition": "AWSサービスの見積もりコストを事前にシミュレーションするWebツール。移行前のTCO比較やアーキテクチャ変更のコスト影響を見積もり、FinOpsにおける計画段階で活用される。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コスト",
+          "見積もり",
+          "finops",
+          "tco"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンバーティブルRI",
+    "reading": "こんばーてぃぶるあーるあい",
+    "aliases": [
+      "Convertible Reserved Instance"
+    ],
+    "senses": [
+      {
+        "definition": "AWSリザーブドインスタンスのうち、コミット期間中にインスタンスファミリー・OS・テナンシーを変更できる柔軟なタイプ。スタンダードRIより割引率は低いが将来のワークロード変化に対応しやすい。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ri",
+          "コスト最適化",
+          "ec2",
+          "finops"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コスト最適化ハブ",
+    "reading": "こすとさいてきかはぶ",
+    "aliases": [
+      "Cost Optimization Hub",
+      "AWS Cost Optimization Hub"
+    ],
+    "senses": [
+      {
+        "definition": "AWS全アカウントのコスト最適化推奨事項（未使用リソース削除・RI/Savings Plans購入提案など）を一元的に集約して表示するダッシュボード。FinOpsチームが優先度の高い削減施策を効率的に特定できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "コスト最適化",
+          "推奨",
+          "ダッシュボード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マネージドサービス",
+    "reading": "まねーじどさーびす",
+    "aliases": [
+      "Managed Service"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドプロバイダーがOS・ミドルウェア・パッチ適用・スケーリング・バックアップなどの運用を代行するサービスモデル。RDS・EKS・ElastiCacheなどが該当し、インフラ運用負荷を削減して開発に集中できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "運用",
+          "フルマネージド",
+          "パッチ",
+          "スケーリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フルマネージドサービス",
+    "reading": "ふるまねーじどさーびす",
+    "aliases": [
+      "Fully Managed Service"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザーがインフラを一切管理せず、プロビジョニングからスケーリング・障害対応まですべてクラウドプロバイダーが担うサービス。DynamoDB・Lambda・S3などが該当し、運用オーバーヘッドを最小化する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "サーバーレス",
+          "lambda",
+          "dynamo",
+          "運用不要"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CloudFormationスタック",
+    "reading": "くらうどふぉーめーしょんすたっく",
+    "aliases": [
+      "CloudFormation Stack"
+    ],
+    "senses": [
+      {
+        "definition": "AWS CloudFormationテンプレートから作成されるAWSリソースの集合単位。スタック単位でリソースのライフサイクルを管理し、一括作成・更新・削除ができる。ネストされたスタックで大規模テンプレートを分割管理する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iac",
+          "cloudformation",
+          "リソース管理",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CodeCommit",
+    "reading": "こーどこみっと",
+    "aliases": [
+      "AWS CodeCommit"
+    ],
+    "senses": [
+      {
+        "definition": "AWSが提供するフルマネージドのGitリポジトリホスティングサービス。IAMで認証管理され、CodePipeline・CodeBuild・CodeDeployと統合してCI/CDパイプラインを構成できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "git",
+          "ci/cd",
+          "ソース管理",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Immutable Deployment",
+    "reading": "いみゅーたぶるでぷろいめんと",
+    "aliases": [
+      "イミュータブルデプロイ"
+    ],
+    "senses": [
+      {
+        "definition": "既存のサーバーやコンテナを変更せずに新バージョンのインスタンスを別途作成して切り替えるデプロイ戦略。変更の副作用がなく一貫した環境を保証し、問題発生時は旧インスタンスへの即時ロールバックが容易。",
+        "domain": "cloud",
+        "keywords": [
+          "デプロイ",
+          "イミュータブル",
+          "ロールバック",
+          "コンテナ",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セッションマネージャー",
+    "reading": "せっしょんまねーじゃー",
+    "aliases": [
+      "Session Manager",
+      "AWS SSM Session Manager"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Systems Managerの機能の一つで、SSHポートやキーペアなしにEC2インスタンスへブラウザまたはCLIから安全に接続できるサービス。踏み台サーバーが不要になり、接続ログをCloudTrailで記録できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ec2",
+          "ssh",
+          "セキュリティ",
+          "踏み台不要"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パッチマネージャー",
+    "reading": "ぱっちまねーじゃー",
+    "aliases": [
+      "Patch Manager",
+      "AWS Patch Manager"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Systems Managerの機能でEC2インスタンスのOSパッチを自動適用・管理するサービス。パッチベースラインとメンテナンスウィンドウを定義して組織全体のパッチコンプライアンスを維持する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "パッチ",
+          "コンプライアンス",
+          "ec2",
+          "運用自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オートメーションランブック",
+    "reading": "おーとめーしょんらんぶっく",
+    "aliases": [
+      "Automation Runbook",
+      "SSM Automation"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Systems Manager Automationで定義する手順書。AWSリソースの作成・設定・修復などの運用タスクを自動化するステップを記述し、人的ミスなく一貫した運用処理を実行できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "自動化",
+          "運用",
+          "systems manager",
+          "ランブック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マルチAZフェイルオーバー",
+    "reading": "まるちえーぜっとふぇいるおーばー",
+    "aliases": [
+      "Multi-AZ Failover"
+    ],
+    "senses": [
+      {
+        "definition": "プライマリAZで障害が発生した際にスタンバイAZへ自動的に切り替わる高可用性設計。RDS Multi-AZやALBが代表例で、RPO約0・RTO数分の回復目標を達成しSLAを維持する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "高可用性",
+          "rds",
+          "フェイルオーバー",
+          "az"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クロスアカウントアクセス",
+    "reading": "くろすあかうんとあくせす",
+    "aliases": [
+      "Cross-Account Access"
+    ],
+    "senses": [
+      {
+        "definition": "あるAWSアカウントのIAMエンティティが別のAWSアカウントのリソースにアクセスする仕組み。IAMロールのAssumeRoleを使い、マルチアカウント環境でセキュアなリソース共有を実現する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iam",
+          "マルチアカウント",
+          "セキュリティ",
+          "ロール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リソースポリシー",
+    "reading": "りそーすぽりしー",
+    "aliases": [
+      "Resource Policy",
+      "Resource-Based Policy"
+    ],
+    "senses": [
+      {
+        "definition": "IAMアイデンティティではなくリソース側にアタッチするアクセス制御ポリシー。S3バケットポリシー・KMSキーポリシー・Lambda リソースポリシーが代表例で、クロスアカウントアクセスの制御にも使用する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iam",
+          "s3",
+          "セキュリティ",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スイッチロール",
+    "reading": "すいっちろーる",
+    "aliases": [
+      "Switch Role",
+      "AssumeRole"
+    ],
+    "senses": [
+      {
+        "definition": "AWSコンソールまたはCLIで別のIAMロールに切り替えてそのロールの権限で操作する機能。マルチアカウント環境でアカウントを行き来したり、クロスアカウントでのリソース管理に使用する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iam",
+          "マルチアカウント",
+          "ロール",
+          "クロスアカウント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インスタンスプロファイル",
+    "reading": "いんすたんすぷろふぁいる",
+    "aliases": [
+      "Instance Profile"
+    ],
+    "senses": [
+      {
+        "definition": "EC2インスタンスにIAMロールを関連付けるためのコンテナ。インスタンスプロファイルを通じてEC2上のアプリケーションはインスタンスメタデータからIAMロールの一時認証情報を取得し、AWSサービスへアクセスする。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ec2",
+          "iam",
+          "認証",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "サービスリンクドロール",
+    "reading": "さーびすりんくどろーる",
+    "aliases": [
+      "Service-Linked Role"
+    ],
+    "senses": [
+      {
+        "definition": "AWSサービスが自身の代わりに他のAWSリソースを呼び出すために事前定義されたIAMロール。ECSやRDSなどのマネージドサービスが必要なリソース操作を行うために自動作成され、ユーザーが直接変更することはできない。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iam",
+          "サービス",
+          "ロール",
+          "マネージドサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パーミッションバウンダリー",
+    "reading": "ぱーみっしょんばうんだりー",
+    "aliases": [
+      "Permission Boundary",
+      "権限境界"
+    ],
+    "senses": [
+      {
+        "definition": "IAMエンティティが持てる最大権限の上限を定めるマネージドポリシー。管理者がデベロッパーにIAMロール作成を委譲する際に、デベロッパーが自分以上の権限を持つロールを作れないよう制限するガードレールとして機能する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iam",
+          "セキュリティ",
+          "権限制御",
+          "委譲"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "サービスコントロールポリシー",
+    "reading": "さーびすこんとろーるぽりしー",
+    "aliases": [
+      "Service Control Policy"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Organizationsで管理単位（OU・アカウント）に適用してメンバーアカウントで実行可能なAWSサービスとアクションを制限するポリシー。IAMポリシーより上位のガードレールとして機能しマルチアカウント統制の要となる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "organizations",
+          "ガバナンス",
+          "マルチアカウント",
+          "ガードレール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Marketplace",
+    "reading": "えーだぶりゅーえすまーけっとぷれーす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サードパーティ企業がAWS上で動作するソフトウェア・SaaS・データ製品を提供するオンラインストア。既存のAWSアカウントで購入・デプロイでき、利用料はAWS請求に統合されてコスト管理を一元化できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "saas",
+          "ソフトウェア",
+          "購入",
+          "課金統合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タグポリシー",
+    "reading": "たぐぽりしー",
+    "aliases": [
+      "Tag Policy",
+      "AWS Tag Policies"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Organizations全体でリソースタグの命名規則を強制するガバナンス機能。許可されたタグキー・値を定義してコスト配分タグの一貫性を保ち、組織全体のFinOps施策を支える基盤となる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "organizations",
+          "タグ",
+          "ガバナンス",
+          "finops"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コストと使用状況レポート",
+    "reading": "こすととしようじょうきょうれぽーと",
+    "aliases": [
+      "Cost and Usage Report",
+      "CUR"
+    ],
+    "senses": [
+      {
+        "definition": "AWSの最も詳細なコストデータをCSV形式でS3に配信するレポートサービス。使用量・料金・リソースタグをリソース単位で時間粒度で提供し、AthenやQuickSightと組み合わせてFinOps分析基盤を構築できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "コスト",
+          "レポート",
+          "athena"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タグ付け戦略",
+    "reading": "たぐつけせんりゃく",
+    "aliases": [
+      "Tagging Strategy",
+      "リソースタグ戦略"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドリソースに付与するタグのキー・値の命名規則・必須タグセットを組織全体で標準化する取り組み。環境・プロジェクト・チーム・コストセンターなどの軸で統一することでコスト可視化と自動化を実現する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "タグ",
+          "コスト",
+          "ガバナンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "FinOps成熟度",
+    "reading": "ふぃんおぷすせいじゅくど",
+    "aliases": [
+      "FinOps Maturity",
+      "FinOps Maturity Model"
+    ],
+    "senses": [
+      {
+        "definition": "FinOps Foundationが定義するFinOps実践の成熟度フレームワーク。クロール（基本的可視化）→ウォーク（最適化開始）→ラン（自動化・高度分析）の3段階で組織のFinOps能力を評価・向上させる。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "成熟度",
+          "コスト最適化",
+          "クラウド",
+          "組織"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ユニットエコノミクス",
+    "reading": "ゆにっとえこのみくす",
+    "aliases": [
+      "Unit Economics",
+      "クラウドユニットエコノミクス"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドコストをビジネスの単位（ユーザー1人あたり・トランザクション1件あたりなど）に紐付けて効率性を測定するFinOps指標。クラウド支出がビジネス成長と比例しているか、または効率化されているかを評価する。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "コスト効率",
+          "kpi",
+          "ビジネス",
+          "指標"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クラウドROI",
+    "reading": "くらうどあーるおーあい",
+    "aliases": [
+      "Cloud ROI",
+      "クラウド投資対効果"
+    ],
+    "senses": [
+      {
+        "definition": "クラウド投資から得られるビジネス価値（コスト削減・開発速度向上・売上寄与）と総費用を比較した投資対効果指標。FinOpsにおいてクラウド化の正当性を示しさらなる投資判断の根拠となる。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "roi",
+          "コスト",
+          "ビジネス価値",
+          "クラウド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Total Cost of Ownership",
+    "reading": "とーたるこすとおぶおーなーしっぷ",
+    "aliases": [
+      "総所有コスト"
+    ],
+    "senses": [
+      {
+        "definition": "システムの購入・導入費用だけでなく運用・保守・廃棄まで含めた生涯コストの総計。オンプレミスからクラウドへの移行判断やプロバイダー比較において、隠れたコストを含めた真の費用対効果を評価するために使用する。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "tco",
+          "コスト分析",
+          "移行",
+          "クラウド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VPCフローログ",
+    "reading": "ぶいぴーしーふろーろぐ",
+    "aliases": [
+      "VPC Flow Logs"
+    ],
+    "senses": [
+      {
+        "definition": "VPC内のネットワークインターフェースを通過するIPトラフィック情報を記録するAWS機能。送信元/宛先IP・ポート・プロトコル・許可/拒否の結果をCloudWatch LogsまたはS3に出力し、ネットワーク監視・セキュリティ調査に活用する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "vpc",
+          "ネットワーク",
+          "セキュリティ",
+          "ログ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Lambda同時実行数",
+    "reading": "らんださどうじじっこうすう",
+    "aliases": [
+      "Lambda Concurrency",
+      "同時実行制限"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Lambdaで同時に処理できる関数インスタンス数の上限。リージョンデフォルト制限とリザーブドコンカレンシー（特定関数用割り当て）があり、スロットリングによるリクエスト失敗を防ぐための管理が重要。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "lambda",
+          "スケーリング",
+          "スロットリング",
+          "コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DynamoDB DAX",
+    "reading": "だいなもでぃーびーだっくす",
+    "aliases": [
+      "DAX",
+      "DynamoDB Accelerator"
+    ],
+    "senses": [
+      {
+        "definition": "AmazonDynamoDBのためのフルマネージドインメモリキャッシュクラスター。マイクロ秒単位のレイテンシを実現し、読み取りヘビーなワークロードでDynamoDBへのリクエスト数を大幅に削減してコストとパフォーマンスを改善する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "dynamodb",
+          "キャッシュ",
+          "パフォーマンス",
+          "インメモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SQSデッドレターキュー",
+    "reading": "えすきゅーえすでっどれたーきゅー",
+    "aliases": [
+      "Dead Letter Queue",
+      "DLQ"
+    ],
+    "senses": [
+      {
+        "definition": "SQSで処理に繰り返し失敗したメッセージを自動的に転送する専用キュー。失敗メッセージを隔離して調査・再処理を可能にし、メッセージの消失を防ぐ。LambdaのイベントソースにもDLQを設定できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "sqs",
+          "エラー処理",
+          "メッセージング",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Lambda レイヤー",
+    "reading": "らんだれいやー",
+    "aliases": [
+      "Lambda Layer"
+    ],
+    "senses": [
+      {
+        "definition": "Lambda関数間で共有するライブラリ・カスタムランタイム・設定ファイルをパッケージングする仕組み。関数コードとライブラリを分離して関数パッケージサイズを削減し、共通依存関係を複数関数で再利用できる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "lambda",
+          "ライブラリ",
+          "共有",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Amazon Aurora Serverless",
+    "reading": "あまぞんおーろらさーばーれす",
+    "aliases": [
+      "Aurora Serverless",
+      "Aurora Serverless v2"
+    ],
+    "senses": [
+      {
+        "definition": "Auroraをサーバーレスで提供する構成オプション。ワークロードに応じてキャパシティを自動でスケールアップ/ダウンし、アイドル時はコンピューティングを停止できる。変動の大きなトラフィックや開発環境のコスト最適化に適する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "aurora",
+          "サーバーレス",
+          "自動スケール",
+          "コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データベースプロキシ",
+    "reading": "でーたべーすぷろきしー",
+    "aliases": [
+      "RDS Proxy",
+      "Amazon RDS Proxy"
+    ],
+    "senses": [
+      {
+        "definition": "Lambda等のサーバーレスやマイクロサービスからRDS/Auroraへの接続をプールして管理するフルマネージドプロキシ。コネクション数の急増によるDB過負荷を防ぎ、フェイルオーバー時のアプリ影響を最小化する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "rds",
+          "aurora",
+          "コネクションプール",
+          "サーバーレス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EBSスナップショット",
+    "reading": "いーびーえすすなっぷしょっと",
+    "aliases": [
+      "EBS Snapshot"
+    ],
+    "senses": [
+      {
+        "definition": "Amazon EBSボリュームの特定時点のバックアップをS3に増分保存する機能。AMI作成の基盤となり、別AZやリージョンへのコピーを通じたDR戦略にも活用される。AWS Backupで自動化して保持ポリシーを管理する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "ebs",
+          "バックアップ",
+          "dr",
+          "スナップショット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RI購入計画",
+    "reading": "あーるあいこうにゅうけいかく",
+    "aliases": [
+      "RI Purchase Planning",
+      "リザーブドインスタンス購入計画"
+    ],
+    "senses": [
+      {
+        "definition": "安定したワークロードに対してリザーブドインスタンスを計画的に購入してコスト削減を最大化するFinOpsプロセス。Cost ExplorerのRI推奨レポートを分析し、カバレッジ率・使用率を継続的にモニタリングする。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "finops",
+          "ri",
+          "コスト最適化",
+          "計画"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロビジョニング",
+    "reading": "ぷろびじょにんぐ",
+    "aliases": [
+      "Provisioning"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドリソース（サーバー・ネットワーク・データベースなど）をユーザーが利用できる状態に設定・割り当てるプロセス。IaCツールによる自動プロビジョニングは手動作業を排除し、一貫性のある環境を素早く構築する。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "iac",
+          "自動化",
+          "リソース",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AWS Configルール",
+    "reading": "えーだぶりゅーえすこんふぃぐるーる",
+    "aliases": [
+      "Config Rule"
+    ],
+    "senses": [
+      {
+        "definition": "AWS Configでリソースの設定が組織のポリシーに準拠しているかを評価するルール定義。AWSマネージドルールとカスタムLambdaルールがあり、非準拠リソースを検出してAuto Remediationで自動修復することもできる。",
+        "domain": "cloud",
+        "keywords": [
+          "aws",
+          "コンプライアンス",
+          "ガバナンス",
+          "自動修復",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロジェクト別コスト追跡",
+    "reading": "ぷろじぇくとべつこすとついせき",
+    "aliases": [
+      "Project-Based Cost Tracking"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドリソースにプロジェクトや製品を示すタグを付与し、プロジェクト単位でコストを集計・レポートするFinOps手法。エンジニアリングとファイナンスの協働でコストアカウンタビリティを各チームに持たせる。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "タグ",
+          "プロジェクト",
+          "コスト追跡",
+          "aws"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クラウドコスト管理",
+    "reading": "くらうどこすとかんり",
+    "aliases": [
+      "Cloud Cost Management",
+      "CCM"
+    ],
+    "senses": [
+      {
+        "definition": "クラウド支出の可視化・最適化・ガバナンスを継続的に行うプラクティスの総称。FinOpsの中核をなし、タグ戦略・予算アラート・RI/Savings Plans・不使用リソース削除などの施策を組み合わせてクラウド費用を管理する。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "コスト",
+          "aws",
+          "最適化",
+          "ガバナンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マイクロサービスメッシュ",
+    "reading": "まいくろさーびすめっしゅ",
+    "aliases": [
+      "Microservice Mesh"
+    ],
+    "senses": [
+      {
+        "definition": "サービスメッシュをマイクロサービスアーキテクチャに適用した構成。Envoyなどのサイドカープロキシが各サービスに注入され、サービス間のトラフィック管理・mTLS・サーキットブレーカー・可観測性を担う。",
+        "domain": "cloud",
+        "keywords": [
+          "マイクロサービス",
+          "サービスメッシュ",
+          "istio",
+          "envoy",
+          "可観測性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCO分析",
+    "reading": "てぃーしーおーぶんせき",
+    "aliases": [
+      "TCO Analysis",
+      "Total Cost Analysis"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミス環境とクラウド環境の総所有コストを比較分析する手法。ハードウェア・ライセンス・人件費・電力・スペースなどの全コストをクラウドの利用料と比較し、クラウド移行の経済的正当性を評価する。",
+        "domain": "cloud",
+        "keywords": [
+          "finops",
+          "tco",
+          "コスト",
+          "移行",
+          "オンプレミス"
+        ]
+      }
+    ]
+  }
+]

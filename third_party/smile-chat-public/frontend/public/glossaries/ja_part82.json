@@ -1,0 +1,616 @@
+[
+  {
+    "term": "コンプライアンス規程",
+    "reading": "コンプライアンスきてい",
+    "aliases": [
+      "Compliance Policy",
+      "Corporate Compliance Regulations",
+      "Code of Conduct Policy"
+    ],
+    "senses": [
+      {
+        "definition": "法令遵守・倫理行動の基本方針と具体的なルールを定めた社内規程。役職員が守るべき行為基準・通報手続き・教育体制を包括的に定める。違反した場合の懲戒処分や是正手続きも規程内に組み込まれる。",
+        "domain": "compliance",
+        "keywords": [
+          "法令遵守",
+          "行為基準",
+          "倫理行動",
+          "内部通報",
+          "懲戒"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "内部統制報告書",
+    "reading": "ないぶとうせいほうこくしょ",
+    "aliases": [
+      "Internal Control Report",
+      "Management Assessment Report on Internal Controls",
+      "J-SOX Report"
+    ],
+    "senses": [
+      {
+        "definition": "J-SOX（金融商品取引法）に基づき、経営者が財務報告に関わる内部統制の有効性を評価・報告する文書。有価証券報告書に添付して開示し、公認会計士または監査法人による監査証明も受ける必要がある。",
+        "domain": "compliance",
+        "keywords": [
+          "J-SOX",
+          "財務報告",
+          "有効性評価",
+          "有価証券報告書",
+          "監査証明"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "内部通報規程",
+    "reading": "ないぶつうほうきてい",
+    "aliases": [
+      "Internal Whistleblowing Policy",
+      "Internal Reporting Regulations",
+      "Whistleblower Protection Policy"
+    ],
+    "senses": [
+      {
+        "definition": "社内の不正・法令違反・倫理違反を従業員が通報するための手続きを定めた規程。通報者保護・調査手続き・対応措置を規定し、公益通報者保護法に準拠して整備されることが多い。",
+        "domain": "compliance",
+        "keywords": [
+          "内部通報",
+          "通報者保護",
+          "不正告発",
+          "公益通報",
+          "ウィスルブロワー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リスク管理規程",
+    "reading": "リスクかんりきてい",
+    "aliases": [
+      "Risk Management Policy",
+      "Enterprise Risk Management Regulations",
+      "Risk Control Policy"
+    ],
+    "senses": [
+      {
+        "definition": "事業活動上のリスク（財務・法務・情報・災害等）の特定・評価・対応・モニタリングに関するルールを定めた社内規程。リスクオーナーの明確化と定期的なリスク評価プロセスを規定する。",
+        "domain": "compliance",
+        "keywords": [
+          "リスク特定",
+          "リスク評価",
+          "リスク対応",
+          "モニタリング",
+          "リスクオーナー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リスクコンプライアンス委員会",
+    "reading": "リスクコンプライアンスいいんかい",
+    "aliases": [
+      "Risk and Compliance Committee",
+      "Risk Compliance Oversight Committee",
+      "Enterprise Risk Committee"
+    ],
+    "senses": [
+      {
+        "definition": "リスク管理とコンプライアンスを横断的に監督・推進するための委員会。全社のリスク状況を把握し、対策の優先順位付けと是正を行い、取締役会または経営会議への報告を担う。",
+        "domain": "compliance",
+        "keywords": [
+          "リスク監督",
+          "コンプライアンス推進",
+          "是正措置",
+          "取締役会報告",
+          "全社横断"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "倫理規程",
+    "reading": "りんりきてい",
+    "aliases": [
+      "Ethics Policy",
+      "Code of Ethics",
+      "Corporate Ethics Regulations"
+    ],
+    "senses": [
+      {
+        "definition": "役職員が業務上で守るべき倫理的行動基準を定めた規程。誠実さ・公正さ・法令遵守・利益相反回避などの原則を示し、コンプライアンス規程と一体で運用されることも多い。",
+        "domain": "compliance",
+        "keywords": [
+          "倫理基準",
+          "行動規範",
+          "誠実性",
+          "利益相反",
+          "公正性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "廃止",
+    "reading": "はいし",
+    "aliases": [
+      "Abolishment",
+      "Policy Abolition",
+      "Regulation Termination"
+    ],
+    "senses": [
+      {
+        "definition": "規程・制度・業務手続き等を正式に終了させること。廃止の際は関係者への周知・文書の処理・引き継ぎが必要となり、規程等管理規程に定める権限者の承認を要する。",
+        "domain": "compliance",
+        "keywords": [
+          "規程廃止",
+          "制度終了",
+          "周知徹底",
+          "文書処理",
+          "権限者承認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "改廃",
+    "reading": "かいはい",
+    "aliases": [
+      "Amendment and Abolishment",
+      "Revision and Abolition",
+      "Policy Amendment or Abolition"
+    ],
+    "senses": [
+      {
+        "definition": "規程・文書・制度の改正（変更）または廃止の総称。改廃の権限者・手続き・施行日を規程等管理規程で定め、変更履歴の管理と関係者への周知を行う。",
+        "domain": "compliance",
+        "keywords": [
+          "改正",
+          "廃止",
+          "施行日",
+          "変更履歴",
+          "規程管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セグリゲーションオブデューティー",
+    "aliases": [
+      "Segregation of Duties",
+      "Duty Separation Control",
+      "SoD Control"
+    ],
+    "senses": [
+      {
+        "definition": "一人の担当者が承認・実行・記録を同時に行えないよう職務を分離する内部統制の原則。不正や誤りの発生を防止するための基本的な管理策であり、IT統制や業務プロセス設計の基盤となる。",
+        "domain": "compliance",
+        "keywords": [
+          "職務分離",
+          "内部統制",
+          "承認分離",
+          "不正防止",
+          "アクセス管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "職務分掌規程",
+    "reading": "しょくむぶんしょうきてい",
+    "aliases": [
+      "Duties and Responsibilities Policy",
+      "Work Allocation Regulations",
+      "Division of Duties Policy"
+    ],
+    "senses": [
+      {
+        "definition": "各部門・各役職の担当業務と責任範囲を明確に定めた規程。業務の重複・抜け漏れを防ぎ、内部統制の基盤となるとともに、職務分離（SoD）の実現にも貢献する。",
+        "domain": "compliance",
+        "keywords": [
+          "職務分掌",
+          "責任範囲",
+          "業務分担",
+          "内部統制",
+          "職務分離"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "職務権限規程",
+    "reading": "しょくむけんげんきてい",
+    "aliases": [
+      "Authority and Authorization Policy",
+      "Delegated Authority Regulations",
+      "Approval Authority Policy"
+    ],
+    "senses": [
+      {
+        "definition": "各職位・部門が持つ決裁・承認・契約等の権限の範囲を定めた規程。権限の委譲範囲・代理承認の条件も定め、不正な意思決定や権限逸脱を防止する内部統制の要となる。",
+        "domain": "compliance",
+        "keywords": [
+          "決裁権限",
+          "承認権限",
+          "権限委譲",
+          "代理承認",
+          "内部統制"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "業務分掌",
+    "reading": "ぎょうむぶんしょう",
+    "aliases": [
+      "Division of Business Duties",
+      "Work Responsibilities Allocation",
+      "Business Function Assignment"
+    ],
+    "senses": [
+      {
+        "definition": "各部門や役職員の業務範囲と担当領域の分担を決めること。職務分掌規程に基づき、業務の重複や責任の曖昧さを排除することで内部統制の実効性を高める。",
+        "domain": "compliance",
+        "keywords": [
+          "業務分担",
+          "担当領域",
+          "責任明確化",
+          "職務分掌",
+          "内部統制"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "標的型攻撃メール",
+    "reading": "ひょうてきがたこうげきメール",
+    "aliases": [
+      "Spear Phishing Email",
+      "Targeted Attack Email",
+      "Targeted Phishing Attack"
+    ],
+    "senses": [
+      {
+        "definition": "特定の組織・個人を狙って送りつけられる不正メール。マルウェアへの誘導や情報窃取を目的とし、社内規程やセキュリティ教育で対策を定めるとともに、インシデント発生時の報告体制を整備する。",
+        "domain": "compliance",
+        "keywords": [
+          "標的型攻撃",
+          "フィッシング",
+          "マルウェア",
+          "情報窃取",
+          "セキュリティ教育"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インサイダー取引",
+    "reading": "インサイダーとりひき",
+    "aliases": [
+      "Insider Trading",
+      "Insider Securities Trading",
+      "Trading on Material Non-Public Information"
+    ],
+    "senses": [
+      {
+        "definition": "上場企業の内部者が未公開の重要情報を利用して株式等を売買すること。金融商品取引法で禁止されており、違反すると刑事罰の対象となるため、コンプライアンス管理の重点項目として取り扱う。",
+        "domain": "compliance",
+        "keywords": [
+          "未公開情報",
+          "金融商品取引法",
+          "内部者取引",
+          "刑事罰",
+          "重要情報"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インサイダー取引防止規程",
+    "reading": "インサイダーとりひきぼうしきてい",
+    "aliases": [
+      "Insider Trading Prevention Policy",
+      "Insider Trading Prohibition Regulations",
+      "Securities Trading Compliance Policy"
+    ],
+    "senses": [
+      {
+        "definition": "役職員が未公開情報を利用した有価証券取引を行わないための禁止行為・管理手続き・教育を定めた社内規程。情報管理部門の役割・取引申告制度・違反時の処罰も規定する。",
+        "domain": "compliance",
+        "keywords": [
+          "インサイダー取引禁止",
+          "未公開情報管理",
+          "有価証券取引",
+          "取引申告",
+          "法令遵守"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "関連当事者等管理規程",
+    "reading": "かんれんとうじしゃとうかんりきてい",
+    "aliases": [
+      "Related Party Transaction Policy",
+      "Related Party Management Regulations",
+      "Conflict of Interest Transaction Policy"
+    ],
+    "senses": [
+      {
+        "definition": "役員・主要株主・子会社等の関連当事者との取引を適正に管理・開示するための社内規程。利益相反防止と透明性確保を目的とし、取引の事前承認・記録・開示手続きを定める。",
+        "domain": "compliance",
+        "keywords": [
+          "関連当事者",
+          "利益相反",
+          "取引開示",
+          "透明性確保",
+          "事前承認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "反社会的勢力排除",
+    "reading": "はんしゃかいてきせいりょくはいじょ",
+    "aliases": [
+      "Exclusion of Anti-Social Forces",
+      "Anti-Organized Crime Measures",
+      "Organized Crime Exclusion Policy"
+    ],
+    "senses": [
+      {
+        "definition": "暴力団・反社会的勢力との関係を排除する取り組みの総称。取引開始時の審査・契約書への排除条項追加・定期的なチェックを含み、全社的な体制整備が求められる。",
+        "domain": "compliance",
+        "keywords": [
+          "反社排除",
+          "暴力団排除",
+          "排除条項",
+          "取引審査",
+          "反社チェック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "反社会的勢力等排除規程",
+    "reading": "はんしゃかいてきせいりょくとうはいじょきてい",
+    "aliases": [
+      "Anti-Social Forces Exclusion Policy",
+      "Organized Crime Exclusion Regulations",
+      "Anti-Gang Policy"
+    ],
+    "senses": [
+      {
+        "definition": "反社会的勢力との取引・関係を一切排除するための基準・審査手続き・発覚時の対応を定めた社内規程。暴力団排除条例や警察との連携指針を含め、実効ある体制を構築する。",
+        "domain": "compliance",
+        "keywords": [
+          "反社排除規程",
+          "審査手続き",
+          "暴力団排除条例",
+          "取引禁止",
+          "関係解消"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "誓約書",
+    "reading": "せいやくしょ",
+    "aliases": [
+      "Pledge Letter",
+      "Compliance Undertaking Letter",
+      "Confidentiality and Compliance Pledge"
+    ],
+    "senses": [
+      {
+        "definition": "特定の事項（情報守秘・利益相反回避・反社排除等）を守ることを約束する文書。入社時・取引開始時・退職時などに取得し、コンプライアンス義務の確認と証拠保全を目的とする。",
+        "domain": "compliance",
+        "keywords": [
+          "誓約",
+          "秘密保持",
+          "利益相反回避",
+          "入社時手続き",
+          "証拠保全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "情報セキュリティ管理規程",
+    "reading": "じょうほうセキュリティかんりきてい",
+    "aliases": [
+      "Information Security Management Policy",
+      "Information Security Regulations",
+      "ISMS Policy"
+    ],
+    "senses": [
+      {
+        "definition": "情報資産の分類・アクセス管理・漏洩防止・インシデント対応などを定めた社内規程。ISMS等の国際規格に準拠して策定することも多く、情報セキュリティ委員会が整備・運用を主導する。",
+        "domain": "compliance",
+        "keywords": [
+          "情報資産管理",
+          "アクセス管理",
+          "漏洩防止",
+          "ISMS",
+          "インシデント対応"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "個人情報保護規程",
+    "reading": "こじんじょうほうほごきてい",
+    "aliases": [
+      "Personal Information Protection Policy",
+      "Privacy Protection Regulations",
+      "Personal Data Management Policy"
+    ],
+    "senses": [
+      {
+        "definition": "個人情報保護法に基づき、個人情報の取得・利用・保管・提供・廃棄に関するルールを定めた社内規程。利用目的の明示・本人同意・安全管理措置・苦情対応を含む包括的な規定を設ける。",
+        "domain": "compliance",
+        "keywords": [
+          "個人情報保護法",
+          "利用目的",
+          "安全管理措置",
+          "本人同意",
+          "プライバシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "個人情報保護マネジメントシステム",
+    "reading": "こじんじょうほうほごマネジメントシステム",
+    "aliases": [
+      "Personal Information Protection Management System",
+      "Privacy Management System",
+      "PMS for Personal Data"
+    ],
+    "senses": [
+      {
+        "definition": "個人情報を適切に管理するための組織的な仕組み（方針・体制・手続き・内部監査・改善）の総称。プライバシーマーク取得の基盤となり、JIS Q 15001に準拠して整備する。",
+        "domain": "compliance",
+        "keywords": [
+          "個人情報管理",
+          "プライバシーマーク",
+          "JIS Q 15001",
+          "内部監査",
+          "継続的改善"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プライバシーマーク",
+    "aliases": [
+      "Privacy Mark",
+      "P-Mark Certification",
+      "JIS Q 15001 Certification"
+    ],
+    "senses": [
+      {
+        "definition": "個人情報を適切に扱っている事業者であることを認定する第三者認証制度（JIS Q 15001準拠）。Pマークとも呼ばれ、取得により取引先や顧客への信頼性アピールと個人情報管理体制の強化が図られる。",
+        "domain": "compliance",
+        "keywords": [
+          "Pマーク",
+          "第三者認証",
+          "JIS Q 15001",
+          "個人情報保護",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "特定個人情報取扱規程",
+    "reading": "とくていこじんじょうほうとりあつかいきてい",
+    "aliases": [
+      "My Number Information Handling Policy",
+      "Specific Personal Information Management Regulations",
+      "Individual Number Data Handling Policy"
+    ],
+    "senses": [
+      {
+        "definition": "マイナンバー（個人番号）の収集・保管・利用・廃棄に関する特別なルールを定めた社内規程。番号法の要件に従い厳格な管理を求め、利用目的の限定・アクセス制御・廃棄手続きを詳細に規定する。",
+        "domain": "compliance",
+        "keywords": [
+          "マイナンバー",
+          "個人番号",
+          "番号法",
+          "利用目的限定",
+          "廃棄手続き"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "苦情処理規程",
+    "reading": "くじょうしょりきてい",
+    "aliases": [
+      "Complaint Handling Policy",
+      "Grievance Management Regulations",
+      "Customer Complaint Processing Policy"
+    ],
+    "senses": [
+      {
+        "definition": "顧客・取引先・従業員からの苦情を受け付けて適切に処理するための手続き・担当者・対応期限を定めた社内規程。苦情の記録・原因分析・再発防止策の策定と、通報者保護も含む。",
+        "domain": "compliance",
+        "keywords": [
+          "苦情受付",
+          "苦情対応",
+          "再発防止",
+          "顧客対応",
+          "通報者保護"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クレーム管理規程",
+    "reading": "クレームかんりきてい",
+    "aliases": [
+      "Complaint Management Policy",
+      "Customer Claim Handling Regulations",
+      "Customer Complaint Management Policy"
+    ],
+    "senses": [
+      {
+        "definition": "顧客からの苦情やトラブルをどう受け付けて処理するかの社内ルール。受付窓口・記録方法・エスカレーション基準・再発防止策を定め、顧客満足の向上と法的リスクの低減を図る。",
+        "domain": "compliance",
+        "keywords": [
+          "クレーム対応",
+          "エスカレーション",
+          "再発防止",
+          "記録管理",
+          "顧客満足"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "不正取引",
+    "reading": "ふせいとりひき",
+    "aliases": [
+      "Fraudulent Transaction",
+      "Improper Trading Activity",
+      "Irregular Transaction"
+    ],
+    "senses": [
+      {
+        "definition": "法令・社内規程・倫理基準に反した取引行為。架空取引・循環取引・利益相反取引などを指し、コンプライアンス管理の重点監視対象となるとともに、発覚時は調査・報告・是正が必要となる。",
+        "domain": "compliance",
+        "keywords": [
+          "架空取引",
+          "循環取引",
+          "利益相反取引",
+          "不正検知",
+          "取引監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "横領",
+    "reading": "おうりょう",
+    "aliases": [
+      "Embezzlement",
+      "Misappropriation of Funds",
+      "Business Embezzlement"
+    ],
+    "senses": [
+      {
+        "definition": "業務上預かっている会社の資金や財物を不正に自己の利益のために使用すること。刑法上の業務上横領罪に該当し、発覚次第即時対応・刑事告訴・社内懲戒処分が行われる。",
+        "domain": "compliance",
+        "keywords": [
+          "業務上横領",
+          "資金不正流用",
+          "刑事告訴",
+          "懲戒処分",
+          "不正行為"
+        ]
+      }
+    ]
+  }
+]

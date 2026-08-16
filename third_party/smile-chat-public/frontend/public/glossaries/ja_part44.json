@@ -1,0 +1,1567 @@
+[
+  {
+    "term": "クロージャ",
+    "reading": "くろーじゃ",
+    "aliases": [
+      "Closure"
+    ],
+    "senses": [
+      {
+        "definition": "関数がその定義時のレキシカルスコープを記憶し、スコープ外から呼び出された後もそのスコープ内の変数にアクセスできる仕組み。データのカプセル化やコールバック、モジュールパターンに広く使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "レキシカルスコープ",
+          "変数",
+          "カプセル化",
+          "関数",
+          "スコープ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロトタイプチェーン",
+    "reading": "ぷろとたいぷちぇーん",
+    "aliases": [
+      "Prototype Chain"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptオブジェクトが持つ__proto__リンクを辿って親オブジェクトのプロパティやメソッドを継承する仕組み。プロパティ参照時にチェーンをObject.prototypeまで遡って検索する。",
+        "domain": "javascript",
+        "keywords": [
+          "継承",
+          "オブジェクト",
+          "__proto__",
+          "プロパティ参照",
+          "JavaScript"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "イベントループ",
+    "reading": "いべんとるーぷ",
+    "aliases": [
+      "Event Loop"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptのシングルスレッド非同期処理を実現する仕組み。コールスタックが空になったときにキューからコールバックを取り出して実行するループ処理で、ブラウザやNode.jsの非同期モデルの根幹をなす。",
+        "domain": "javascript",
+        "keywords": [
+          "非同期",
+          "コールスタック",
+          "タスクキュー",
+          "シングルスレッド",
+          "Node.js"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コールスタック",
+    "reading": "こーるすたっく",
+    "aliases": [
+      "Call Stack"
+    ],
+    "senses": [
+      {
+        "definition": "関数呼び出しの順序を追跡するLIFO構造のスタック。関数が呼ばれるとフレームが積まれ、返ると取り出される。スタックオーバーフローは再帰が深くなりすぎたときに発生する。",
+        "domain": "javascript",
+        "keywords": [
+          "スタック",
+          "関数呼び出し",
+          "LIFO",
+          "スタックオーバーフロー",
+          "イベントループ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マイクロタスク",
+    "reading": "まいくろたすく",
+    "aliases": [
+      "Microtask"
+    ],
+    "senses": [
+      {
+        "definition": "イベントループにおいてマクロタスク完了後、次のマクロタスク実行前に優先的に処理されるタスク。Promise解決コールバックやqueueMicrotask、MutationObserverが該当し、UIレンダリングより先に実行される。",
+        "domain": "javascript",
+        "keywords": [
+          "イベントループ",
+          "Promise",
+          "タスクキュー",
+          "優先度",
+          "非同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マクロタスク",
+    "reading": "まくろたすく",
+    "aliases": [
+      "Macrotask",
+      "Task"
+    ],
+    "senses": [
+      {
+        "definition": "イベントループの通常タスクキューに積まれる処理単位。setTimeout、setInterval、I/Oコールバックなどが該当し、マイクロタスクキューが空になった後に1件ずつ実行される。",
+        "domain": "javascript",
+        "keywords": [
+          "イベントループ",
+          "setTimeout",
+          "タスクキュー",
+          "非同期",
+          "マイクロタスク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ホイスティング",
+    "reading": "ほいすてぃんぐ",
+    "aliases": [
+      "Hoisting"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptで変数宣言・関数宣言がスコープの先頭に巻き上げられる動作。varはundefinedで初期化されて巻き上げられるが、let/constは宣言のみ巻き上げられ初期化前にアクセスするとTDZエラーとなる。",
+        "domain": "javascript",
+        "keywords": [
+          "変数宣言",
+          "スコープ",
+          "var",
+          "let",
+          "const"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "テンポラルデッドゾーン",
+    "reading": "てんぽらるでっどぞーん",
+    "aliases": [
+      "Temporal Dead Zone",
+      "TDZ"
+    ],
+    "senses": [
+      {
+        "definition": "let/constで宣言された変数がスコープの先頭から宣言文に達するまでの期間。この期間中に変数を参照するとReferenceErrorが発生する。ホイスティングは起きているが初期化されていない状態。",
+        "domain": "javascript",
+        "keywords": [
+          "let",
+          "const",
+          "ホイスティング",
+          "ReferenceError",
+          "スコープ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WeakRef",
+    "aliases": [
+      "WeakReference"
+    ],
+    "senses": [
+      {
+        "definition": "ガベージコレクタによるオブジェクト回収を妨げない弱い参照を保持するES2021の組み込みクラス。参照先オブジェクトがGCされると.deref()がundefinedを返す。キャッシュ実装に利用される。",
+        "domain": "javascript",
+        "keywords": [
+          "ガベージコレクション",
+          "弱参照",
+          "メモリ管理",
+          "ES2021",
+          "キャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "FinalizationRegistry",
+    "aliases": [
+      "Finalization Registry"
+    ],
+    "senses": [
+      {
+        "definition": "ガベージコレクトされたオブジェクトのクリーンアップコールバックを登録できるES2021のクラス。WeakRefと組み合わせてリソース解放処理を自動化するが、実行タイミングは保証されない。",
+        "domain": "javascript",
+        "keywords": [
+          "ガベージコレクション",
+          "クリーンアップ",
+          "ES2021",
+          "WeakRef",
+          "メモリ管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Reflect",
+    "aliases": [
+      "Reflect API"
+    ],
+    "senses": [
+      {
+        "definition": "言語組み込みの操作（プロパティアクセス、関数呼び出しなど）をメソッドとして提供するES2015の静的オブジェクト。Proxyハンドラ内でデフォルト動作を呼び出す際に使われることが多い。",
+        "domain": "javascript",
+        "keywords": [
+          "メタプログラミング",
+          "Proxy",
+          "ES2015",
+          "リフレクション",
+          "静的メソッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Symbol",
+    "aliases": [
+      "JavaScript Symbol"
+    ],
+    "senses": [
+      {
+        "definition": "ES2015で導入されたプリミティブ型。毎回一意の値を生成し、オブジェクトの非公開プロパティキーや既知のシンボル（Symbol.iteratorなど）を通じて言語の組み込み動作をカスタマイズできる。",
+        "domain": "javascript",
+        "keywords": [
+          "プリミティブ",
+          "一意",
+          "ES2015",
+          "Well-known Symbol",
+          "プロパティキー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "イテレータプロトコル",
+    "reading": "いてれーたぷろとこる",
+    "aliases": [
+      "Iterator Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "nextメソッドを持ち、呼び出すたびに{value, done}オブジェクトを返すオブジェクトを定義するJavaScriptのプロトコル。for...ofやスプレッド構文はこのプロトコルを利用して反復処理を行う。",
+        "domain": "javascript",
+        "keywords": [
+          "反復",
+          "for...of",
+          "iterable",
+          "ジェネレータ",
+          "Symbol.iterator"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ジェネレータ",
+    "reading": "じぇねれーた",
+    "aliases": [
+      "Generator",
+      "Generator Function"
+    ],
+    "senses": [
+      {
+        "definition": "function*構文で定義され、yieldで実行を一時停止・再開できる特殊な関数。呼び出すとイテレータを返し、遅延評価や無限シーケンス、非同期フロー制御（co等）に利用される。",
+        "domain": "javascript",
+        "keywords": [
+          "function*",
+          "yield",
+          "遅延評価",
+          "イテレータ",
+          "非同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "非同期イテレータ",
+    "reading": "ひどうきいてれーた",
+    "aliases": [
+      "Async Iterator",
+      "Async Generator"
+    ],
+    "senses": [
+      {
+        "definition": "Symbol.asyncIteratorを実装し、nextメソッドがPromiseを返すオブジェクト。for await...of構文で非同期なデータストリーム（ファイル読み取り、WebSocketなど）を順次処理できる。",
+        "domain": "javascript",
+        "keywords": [
+          "for await...of",
+          "Symbol.asyncIterator",
+          "ストリーム",
+          "非同期",
+          "ES2018"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オプショナルチェイニング",
+    "reading": "おぷしょなるちぇいにんぐ",
+    "aliases": [
+      "Optional Chaining"
+    ],
+    "senses": [
+      {
+        "definition": "?.演算子を使い、チェーン中の値がnullまたはundefinedの場合にエラーを投げずundefinedを返す構文。ネストしたオブジェクトへの安全なアクセスを簡潔に記述できるES2020の機能。",
+        "domain": "javascript",
+        "keywords": [
+          "?. 演算子",
+          "null安全",
+          "ES2020",
+          "undefined",
+          "プロパティアクセス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Null合体演算子",
+    "reading": "ぬるがったいえんざんし",
+    "aliases": [
+      "Nullish Coalescing Operator"
+    ],
+    "senses": [
+      {
+        "definition": "??演算子で、左辺がnullまたはundefinedの場合のみ右辺を返す演算子。||演算子と異なり0や空文字列などfalsyな値は通過させるため、デフォルト値の設定に適している。",
+        "domain": "javascript",
+        "keywords": [
+          "??",
+          "nullish",
+          "デフォルト値",
+          "ES2020",
+          "演算子"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "論理代入演算子",
+    "reading": "ろんりだいにゅうえんざんし",
+    "aliases": [
+      "Logical Assignment Operators"
+    ],
+    "senses": [
+      {
+        "definition": "&&=、||=、??=の3つの演算子で、論理演算と代入を組み合わせたES2021の機能。例えばa ??= bはaがnullish場合のみbを代入する。条件付き初期化を簡潔に書ける。",
+        "domain": "javascript",
+        "keywords": [
+          "&&=",
+          "||=",
+          "??=",
+          "ES2021",
+          "代入演算子"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "分割代入",
+    "reading": "ぶんかつだいにゅう",
+    "aliases": [
+      "Destructuring Assignment"
+    ],
+    "senses": [
+      {
+        "definition": "配列やオブジェクトの値を個別の変数に一度に割り当てるES2015の構文。デフォルト値の設定、リネーム、ネストしたパターンなどに対応し、関数の引数や戻り値の展開に広く使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "ES2015",
+          "変数展開",
+          "オブジェクト",
+          "配列",
+          "パターンマッチング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スプレッド構文",
+    "reading": "すぷれっどこうぶん",
+    "aliases": [
+      "Spread Syntax"
+    ],
+    "senses": [
+      {
+        "definition": "...演算子を使い、配列・オブジェクト・反復可能オブジェクトを個々の要素に展開する構文。配列の結合、オブジェクトのシャローコピー・マージ、関数への可変引数渡しに利用される。",
+        "domain": "javascript",
+        "keywords": [
+          "...演算子",
+          "展開",
+          "イテラブル",
+          "ES2015",
+          "シャローコピー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レスト構文",
+    "reading": "れすとこうぶん",
+    "aliases": [
+      "Rest Syntax",
+      "Rest Parameters"
+    ],
+    "senses": [
+      {
+        "definition": "...演算子を関数パラメータや分割代入の末尾に使い、残りの要素を配列としてまとめる構文。引数の数が不定な関数の実装や、オブジェクトから一部プロパティを除いた残りを収集する際に使う。",
+        "domain": "javascript",
+        "keywords": [
+          "...演算子",
+          "可変長引数",
+          "分割代入",
+          "ES2015",
+          "残余"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タグ付きテンプレートリテラル",
+    "reading": "たぐつきてんぷれーとりてらる",
+    "aliases": [
+      "Tagged Template Literal"
+    ],
+    "senses": [
+      {
+        "definition": "テンプレートリテラルの前に関数名（タグ）を付けることで、文字列部分と式を個別の引数として受け取り加工できる高度な構文。GraphQLクエリ構築（gql`...`）やCSSテンプレート（css`...`）に活用される。",
+        "domain": "javascript",
+        "keywords": [
+          "テンプレートリテラル",
+          "タグ関数",
+          "ES2015",
+          "GraphQL",
+          "DSL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "動的インポート",
+    "reading": "どうてきいんぽーと",
+    "aliases": [
+      "Dynamic Import"
+    ],
+    "senses": [
+      {
+        "definition": "import()関数を使い実行時に非同期でモジュールを読み込む機能。静的importと異なり条件分岐やユーザー操作に応じた遅延ローディングが可能で、バンドルサイズのコード分割に広く活用される。",
+        "domain": "javascript",
+        "keywords": [
+          "コード分割",
+          "遅延ロード",
+          "Promise",
+          "ES2020",
+          "モジュール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トップレベルawait",
+    "reading": "とっぷれべるあうぇいと",
+    "aliases": [
+      "Top-level await"
+    ],
+    "senses": [
+      {
+        "definition": "ESモジュールのトップレベルでasync関数なしにawaitを使える機能。モジュールの初期化処理で非同期API呼び出しや動的インポートを直接awaitでき、初期化ロジックを簡潔に記述できる。",
+        "domain": "javascript",
+        "keywords": [
+          "ESモジュール",
+          "await",
+          "非同期初期化",
+          "ES2022",
+          "モジュール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プライベートクラスフィールド",
+    "reading": "ぷらいべーとくらすふぃーるど",
+    "aliases": [
+      "Private Class Fields"
+    ],
+    "senses": [
+      {
+        "definition": "#プレフィックスで宣言するクラスのプライベートプロパティ。クラス外部からのアクセスを言語レベルで禁止し、真のカプセル化を実現するES2022の機能。プライベートメソッドやstatic privateにも対応する。",
+        "domain": "javascript",
+        "keywords": [
+          "#プレフィックス",
+          "カプセル化",
+          "ES2022",
+          "クラス",
+          "プライベート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "静的初期化ブロック",
+    "reading": "せいてきしょきかぶろっく",
+    "aliases": [
+      "Static Initialization Block"
+    ],
+    "senses": [
+      {
+        "definition": "クラス定義内にstatic { }ブロックを書き、クラスが評価される際に一度だけ実行される初期化コードを記述できるES2022の機能。複数のstaticフィールドの初期化ロジックや例外処理をまとめて書ける。",
+        "domain": "javascript",
+        "keywords": [
+          "static",
+          "クラス",
+          "初期化",
+          "ES2022",
+          "クラスフィールド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "正規表現名前付きグループ",
+    "reading": "せいきひょうげんなまえつきぐるーぷ",
+    "aliases": [
+      "Named Capture Groups"
+    ],
+    "senses": [
+      {
+        "definition": "正規表現で(?<name>...)の形式を使い、キャプチャグループに名前を付ける機能。マッチ結果のgroups.nameで取得でき、インデックスに依存しない可読性の高いパターン解析ができる。",
+        "domain": "javascript",
+        "keywords": [
+          "正規表現",
+          "キャプチャグループ",
+          "ES2018",
+          "パターンマッチング",
+          "文字列処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Array.from",
+    "aliases": [
+      "Array from"
+    ],
+    "senses": [
+      {
+        "definition": "反復可能オブジェクトや配列様オブジェクト（NodeListなど）を新しい配列に変換する静的メソッド。第2引数にマップ関数を受け付けるため、Array.from({length: n}, (_, i) => i)で連番生成にも使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "配列変換",
+          "イテラブル",
+          "静的メソッド",
+          "ES2015",
+          "NodeList"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Array.at",
+    "aliases": [
+      "Array at method"
+    ],
+    "senses": [
+      {
+        "definition": "配列の指定インデックスの要素を返すメソッドで、負のインデックスで末尾から数えた要素を取得できる。arr[arr.length - 1]の代わりにarr.at(-1)と書けてコードが簡潔になる。",
+        "domain": "javascript",
+        "keywords": [
+          "配列",
+          "負のインデックス",
+          "ES2022",
+          "メソッド",
+          "末尾アクセス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Object.groupBy",
+    "aliases": [
+      "Array.prototype.groupBy"
+    ],
+    "senses": [
+      {
+        "definition": "コールバック関数の戻り値をキーとして配列要素をグループ化するES2024の静的メソッド。ループとreduce/pushの組み合わせを不要にし、データのグルーピングを宣言的に記述できる。",
+        "domain": "javascript",
+        "keywords": [
+          "グルーピング",
+          "静的メソッド",
+          "ES2024",
+          "配列",
+          "Object"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WeakMap",
+    "aliases": [
+      "JavaScript WeakMap"
+    ],
+    "senses": [
+      {
+        "definition": "キーがオブジェクトのみ使えるマップ構造で、キーへの参照が弱参照であるためGCを妨げない。プライベートデータの関連付けやメモ化など、オブジェクトへのメタデータ付与に使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "弱参照",
+          "ガベージコレクション",
+          "プライベートデータ",
+          "メモ化",
+          "キャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WeakSet",
+    "aliases": [
+      "JavaScript WeakSet"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトのみを要素として保持するセット構造で、要素への参照が弱参照のためGCを妨げない。オブジェクトが訪問済みかどうかのフラグ管理など、オブジェクトのタグ付けに利用される。",
+        "domain": "javascript",
+        "keywords": [
+          "弱参照",
+          "ガベージコレクション",
+          "オブジェクト管理",
+          "タグ付け",
+          "ES2015"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Promise.allSettled",
+    "aliases": [
+      "allSettled"
+    ],
+    "senses": [
+      {
+        "definition": "渡した全Promiseが解決または拒否された後に、各Promiseの結果（fulfilled/rejected）を配列で返すメソッド。Promise.allと異なり途中でrejectされても残りを待ち全結果を収集するES2020の機能。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          "非同期",
+          "ES2020",
+          "settled",
+          "エラーハンドリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Promise.any",
+    "aliases": [
+      "Promise any"
+    ],
+    "senses": [
+      {
+        "definition": "渡した複数のPromiseのうち最初にresolvedになったものの値を返すES2021のメソッド。全てrejectされた場合はAggregateErrorを投げる。Promise.raceと異なりrejectedは無視する。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          "非同期",
+          "ES2021",
+          "AggregateError",
+          "最初の成功"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Promise.race",
+    "aliases": [
+      "Promise race"
+    ],
+    "senses": [
+      {
+        "definition": "渡した複数のPromiseのうち最初に確定した（resolve・reject問わず）ものの結果を返すメソッド。タイムアウト処理の実装（タイムアウトPromiseとの競争）などに利用される。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          "非同期",
+          "タイムアウト",
+          "競合",
+          "最速"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Intl API",
+    "aliases": [
+      "Internationalization API",
+      "ECMAScript Internationalization API"
+    ],
+    "senses": [
+      {
+        "definition": "日付・数値・リスト・相対時刻などのロケール対応フォーマットを提供するJavaScriptの組み込み名前空間。Intl.DateTimeFormat、Intl.NumberFormat、Intl.RelativeTimeFormatなどのクラスを含む。",
+        "domain": "javascript",
+        "keywords": [
+          "国際化",
+          "ロケール",
+          "日付フォーマット",
+          "数値フォーマット",
+          "i18n"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Temporal API",
+    "aliases": [
+      "TC39 Temporal"
+    ],
+    "senses": [
+      {
+        "definition": "DateオブジェクトのAPIの欠陥を解消するために設計されたTC39プロポーザル（Stage 3）。タイムゾーン対応のZonedDateTime、PlainDate、PlainTimeなどの型を提供し、日付演算・比較・フォーマットを直感的に行える。",
+        "domain": "javascript",
+        "keywords": [
+          "日付",
+          "時刻",
+          "タイムゾーン",
+          "TC39",
+          "プロポーザル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "即時実行関数式",
+    "reading": "そくじじっこうかんすうしき",
+    "aliases": [
+      "IIFE",
+      "Immediately Invoked Function Expression"
+    ],
+    "senses": [
+      {
+        "definition": "定義と同時に呼び出される関数式のパターン。(function(){})()の形式でスコープを作り変数汚染を防ぐ。ES2015以降はブロックスコープのletやconstでも同様の目的を達成できるが依然として利用される。",
+        "domain": "javascript",
+        "keywords": [
+          "スコープ",
+          "変数汚染",
+          "即時実行",
+          "モジュールパターン",
+          "ES5"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アロー関数",
+    "reading": "あろーかんすう",
+    "aliases": [
+      "Arrow Function"
+    ],
+    "senses": [
+      {
+        "definition": "=>構文で定義する関数の省略記法。自身のthisを持たず定義時の外側のthisをレキシカルに参照する。引数が1つなら括弧を、本体が1式なら波括弧とreturnを省略できる。",
+        "domain": "javascript",
+        "keywords": [
+          "this",
+          "レキシカル",
+          "ES2015",
+          "簡潔記法",
+          "高階関数"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "this束縛",
+    "reading": "これそくばく",
+    "aliases": [
+      "this binding"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptでthisが何を指すかを決定するルール。呼び出し方法（メソッド呼び出し・関数呼び出し・コンストラクタ・apply/call/bind・アロー関数）によって異なる値に束縛される。",
+        "domain": "javascript",
+        "keywords": [
+          "this",
+          "実行コンテキスト",
+          "アロー関数",
+          "bind",
+          "call"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "bind/call/apply",
+    "reading": "ばいんどこーるあぷらい",
+    "aliases": [
+      "Function.prototype.bind",
+      "Function.prototype.call",
+      "Function.prototype.apply"
+    ],
+    "senses": [
+      {
+        "definition": "関数のthisと引数を明示的に指定するメソッド。callは引数をカンマ区切りで渡し即時実行、applyは引数を配列で渡し即時実行、bindはthisを固定した新しい関数を返す。",
+        "domain": "javascript",
+        "keywords": [
+          "this",
+          "関数",
+          "メソッド",
+          "明示的束縛",
+          "プロトタイプ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロトタイプ継承",
+    "reading": "ぷろとたいぷけいしょう",
+    "aliases": [
+      "Prototypal Inheritance"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptがクラスベースではなくプロトタイプチェーンを通じてオブジェクトからオブジェクトへ振る舞いを委譲する仕組み。Object.create()でプロトタイプを指定した新しいオブジェクトを生成できる。",
+        "domain": "javascript",
+        "keywords": [
+          "プロトタイプチェーン",
+          "継承",
+          "Object.create",
+          "委譲",
+          "オブジェクト指向"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クラス構文",
+    "reading": "くらすこうぶん",
+    "aliases": [
+      "Class Syntax"
+    ],
+    "senses": [
+      {
+        "definition": "ES2015で導入されたclassキーワードによるオブジェクト指向プログラミングの記述形式。内部的にはプロトタイプ継承のシンタックスシュガーだが、constructor・extends・super・static・#private等の機能を提供する。",
+        "domain": "javascript",
+        "keywords": [
+          "class",
+          "ES2015",
+          "プロトタイプ",
+          "extends",
+          "シンタックスシュガー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "getter/setter",
+    "reading": "げったーせったー",
+    "aliases": [
+      "Accessor Properties",
+      "get/set"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトのプロパティアクセス時に自動的に呼び出される関数をgetとsetキーワードで定義する機能。バリデーション、計算プロパティ、変更検知などを実装でき、クラスやオブジェクトリテラルで使える。",
+        "domain": "javascript",
+        "keywords": [
+          "アクセサ",
+          "get",
+          "set",
+          "プロパティ",
+          "カプセル化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "computed property",
+    "reading": "こんぴゅーてっどぷろぱてぃ",
+    "aliases": [
+      "Computed Property Names",
+      "計算プロパティ"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトリテラルやクラス定義で[expression]の形式を使い、動的に決まる値をプロパティキーとして使う機能。変数やSymbolをキーとするオブジェクトの生成を簡潔に記述できる。",
+        "domain": "javascript",
+        "keywords": [
+          "プロパティ",
+          "動的キー",
+          "ES2015",
+          "オブジェクトリテラル",
+          "Symbol"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レキシカルスコープ",
+    "reading": "れきしかるすこーぷ",
+    "aliases": [
+      "Lexical Scope",
+      "Static Scope"
+    ],
+    "senses": [
+      {
+        "definition": "関数がどこで定義されたかによってスコープが決まる規則。JavaScriptはレキシカルスコープを採用しており、関数を別の場所で呼び出しても定義時のスコープの変数を参照する。クロージャの基礎となる概念。",
+        "domain": "javascript",
+        "keywords": [
+          "スコープ",
+          "クロージャ",
+          "静的スコープ",
+          "変数参照",
+          "関数"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スコープチェーン",
+    "reading": "すこーぷちぇーん",
+    "aliases": [
+      "Scope Chain"
+    ],
+    "senses": [
+      {
+        "definition": "変数を参照する際に現在のスコープから外側のスコープへ順に探索する仕組み。グローバルスコープに達するまでチェーンを辿る。レキシカルスコープとクロージャの動作を支える基盤。",
+        "domain": "javascript",
+        "keywords": [
+          "スコープ",
+          "変数参照",
+          "クロージャ",
+          "レキシカル",
+          "グローバル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Promise連鎖",
+    "reading": "ぷろみすれんさ",
+    "aliases": [
+      "Promise Chain",
+      "Promise Chaining"
+    ],
+    "senses": [
+      {
+        "definition": ".then()と.catch()を連続して繋ぎ、非同期処理を順序よく記述するパターン。各.then()は新しいPromiseを返すため連鎖できる。async/awaitの登場以降は可読性の観点から書き換えられることも多い。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          ".then()",
+          ".catch()",
+          "非同期",
+          "async/await"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "async/await",
+    "reading": "えいしんくあうぇいと",
+    "aliases": [
+      "Async Await"
+    ],
+    "senses": [
+      {
+        "definition": "Promiseを同期的なコードのように記述できるES2017の構文糖衣。async関数内でawaitを使うとPromiseの解決まで関数の実行を一時停止し、エラーはtry/catchで捕捉できる。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          "非同期",
+          "ES2017",
+          "シンタックスシュガー",
+          "try/catch"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コールバック地獄",
+    "reading": "こーるばっくじごく",
+    "aliases": [
+      "Callback Hell",
+      "Pyramid of Doom"
+    ],
+    "senses": [
+      {
+        "definition": "非同期処理のコールバックが多段ネストして可読性・保守性が著しく低下するアンチパターン。ピラミッド型のインデントが特徴でPromiseやasync/awaitへの移行で解消できる。",
+        "domain": "javascript",
+        "keywords": [
+          "コールバック",
+          "非同期",
+          "ネスト",
+          "Promise",
+          "アンチパターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カリー化",
+    "reading": "かりーか",
+    "aliases": [
+      "Currying"
+    ],
+    "senses": [
+      {
+        "definition": "複数の引数を取る関数を、引数を1つずつ受け取る関数の連鎖に変換する関数型プログラミングの技法。部分適用と組み合わせて再利用可能な関数を作成でき、RamdaやLodash/fpが代表ライブラリ。",
+        "domain": "javascript",
+        "keywords": [
+          "関数型",
+          "部分適用",
+          "高階関数",
+          "Ramda",
+          "関数合成"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "部分適用",
+    "reading": "ぶぶんてきよう",
+    "aliases": [
+      "Partial Application"
+    ],
+    "senses": [
+      {
+        "definition": "関数の一部の引数を事前に固定して新しい関数を作る技法。bind()やクロージャで実装できる。カリー化と似ているが、部分適用は任意の数の引数を固定できる点が異なる。",
+        "domain": "javascript",
+        "keywords": [
+          "関数型",
+          "カリー化",
+          "bind",
+          "クロージャ",
+          "高階関数"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "関数合成",
+    "reading": "かんすうごうせい",
+    "aliases": [
+      "Function Composition"
+    ],
+    "senses": [
+      {
+        "definition": "複数の関数を組み合わせて新しい関数を作るプログラミング技法。compose(f, g)(x) = f(g(x))の形で関数をパイプライン化し、データ変換ロジックを宣言的に組み立てる。",
+        "domain": "javascript",
+        "keywords": [
+          "関数型",
+          "高階関数",
+          "pipe",
+          "compose",
+          "Ramda"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型強制",
+    "reading": "かたきょうせい",
+    "aliases": [
+      "Type Coercion",
+      "Implicit Coercion"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptが演算子や比較において自動的に値の型を変換する動作。==演算子による緩い等価比較や文字列連結演算での数値の文字列化などが代表例。予期しない挙動の原因になりやすい。",
+        "domain": "javascript",
+        "keywords": [
+          "==",
+          "暗黙的型変換",
+          "falsy",
+          "等価比較",
+          "動的型付け"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トランスパイル",
+    "reading": "とらんすぱいる",
+    "aliases": [
+      "Transpile",
+      "Transpilation"
+    ],
+    "senses": [
+      {
+        "definition": "新しいJavaScript構文を古いブラウザでも動作するコードに変換する処理。BabelやTypeScript等のツールが担う。ソース間コンパイルとも呼ばれ、コードの最適化とポリフィルの注入も行う。",
+        "domain": "javascript",
+        "keywords": [
+          "Babel",
+          "TypeScript",
+          "コンパイル",
+          "ブラウザ互換",
+          "ES5"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ポリフィル",
+    "reading": "ぽりふぃる",
+    "aliases": [
+      "Polyfill"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザがネイティブにサポートしていないWebAPIやJavaScriptの機能を、JavaScriptコードで代替実装するライブラリ。core-jsやpolyfill.ioが代表的で、古い環境での動作互換性を保つために使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "ブラウザ互換",
+          "core-js",
+          "機能検出",
+          "Babel",
+          "プログレッシブエンハンスメント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "イベント伝播",
+    "reading": "いべんとでんぱ",
+    "aliases": [
+      "Event Propagation",
+      "Event Bubbling",
+      "Event Capturing"
+    ],
+    "senses": [
+      {
+        "definition": "DOMイベントがキャプチャ→ターゲット→バブリングの3フェーズで伝播する仕組み。stopPropagation()で伝播を止め、preventDefault()でデフォルト動作を抑止できる。イベント委譲のベースとなる概念。",
+        "domain": "javascript",
+        "keywords": [
+          "DOM",
+          "バブリング",
+          "キャプチャリング",
+          "stopPropagation",
+          "addEventListener"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Atomics",
+    "aliases": [
+      "JavaScript Atomics"
+    ],
+    "senses": [
+      {
+        "definition": "SharedArrayBuffer上のデータへのアトミック操作を提供する静的オブジェクト。add・sub・and・or・xor・load・store・wait・notifyなどのメソッドを持ち、スレッドセーフな低レベル並行処理を実現する。",
+        "domain": "javascript",
+        "keywords": [
+          "SharedArrayBuffer",
+          "並行処理",
+          "スレッドセーフ",
+          "アトミック操作",
+          "Web Worker"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ESモジュール",
+    "reading": "いーえすもじゅーる",
+    "aliases": [
+      "ES Modules",
+      "ESM"
+    ],
+    "senses": [
+      {
+        "definition": "import/export構文によるJavaScript標準のモジュールシステム。静的解析可能な依存関係グラフを持ち、ツリーシェイキングが可能。CommonJS（require）と異なりブラウザとNode.jsの両方でネイティブサポートされる。",
+        "domain": "javascript",
+        "keywords": [
+          "import",
+          "export",
+          "CommonJS",
+          "ツリーシェイキング",
+          "モジュール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CommonJS",
+    "aliases": [
+      "CJS",
+      "require/module.exports"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsで長年使われてきたモジュールシステム。require()で同期的にモジュールを読み込みmodule.exportsで公開する。動的なrequireが可能な反面、静的解析が難しくツリーシェイキングに不向きでESMへの移行が進む。",
+        "domain": "javascript",
+        "keywords": [
+          "Node.js",
+          "require",
+          "module.exports",
+          "モジュール",
+          "ESM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "V8エンジン",
+    "reading": "ぶいはちえんじん",
+    "aliases": [
+      "V8",
+      "V8 JavaScript Engine"
+    ],
+    "senses": [
+      {
+        "definition": "GoogleがChromeとNode.js向けに開発したオープンソースのJavaScriptエンジン。JITコンパイル、隠れクラス最適化、インラインキャッシュなどの技術で高速実行を実現し、現代のJavaScriptパフォーマンスの基盤をなす。",
+        "domain": "javascript",
+        "keywords": [
+          "JITコンパイル",
+          "Chrome",
+          "Node.js",
+          "パフォーマンス",
+          "JavaScriptエンジン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JITコンパイル",
+    "reading": "じっとこんぱいる",
+    "aliases": [
+      "JIT Compilation",
+      "Just-In-Time Compilation"
+    ],
+    "senses": [
+      {
+        "definition": "プログラムの実行中にホットパス（頻繁に実行されるコード）を機械語にコンパイルして高速化する技術。V8のTurboFanはこれを担い、インタープリタとコンパイラの中間的なアプローチで実行速度を向上させる。",
+        "domain": "javascript",
+        "keywords": [
+          "V8",
+          "最適化",
+          "ホットパス",
+          "コンパイル",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロミス化",
+    "reading": "ぷろみすか",
+    "aliases": [
+      "Promisification"
+    ],
+    "senses": [
+      {
+        "definition": "コールバックスタイルの非同期関数をPromiseを返す関数に変換する操作。Node.jsのutil.promisify()が代表的。古いAPIとモダンなasync/awaitコードを橋渡しするために使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          "コールバック",
+          "util.promisify",
+          "Node.js",
+          "非同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Object.assign",
+    "aliases": [
+      "Object assign"
+    ],
+    "senses": [
+      {
+        "definition": "1つ以上のソースオブジェクトの列挙可能な自身のプロパティをターゲットオブジェクトへシャローコピーするメソッド。オブジェクトのマージや浅いクローンに使われるが、ネストしたオブジェクトは参照コピーとなる点に注意。",
+        "domain": "javascript",
+        "keywords": [
+          "シャローコピー",
+          "オブジェクトマージ",
+          "プロパティコピー",
+          "ES2015",
+          "スプレッド構文"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Object.entries",
+    "aliases": [
+      "Object entries",
+      "Object.keys",
+      "Object.values"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトの列挙可能な自身のプロパティの[key, value]ペア配列を返す静的メソッド。Object.keysとObject.valuesと合わせてオブジェクトの反復処理を配列メソッド（map/filter/reduce）と組み合わせて使う。",
+        "domain": "javascript",
+        "keywords": [
+          "オブジェクト反復",
+          "キー",
+          "値",
+          "ES2017",
+          "静的メソッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Array.prototype.flat",
+    "aliases": [
+      "flat",
+      "flatMap"
+    ],
+    "senses": [
+      {
+        "definition": "ネストした配列を指定した深さまで平坦化する配列メソッド。flatMap()はmap()の後にflat(1)を行う省略形で、各要素を配列にマップして連結する処理を一度で行える。",
+        "domain": "javascript",
+        "keywords": [
+          "配列",
+          "平坦化",
+          "flatMap",
+          "ES2019",
+          "ネスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "for...of",
+    "reading": "ふぉーおふ",
+    "aliases": [
+      "for-of loop"
+    ],
+    "senses": [
+      {
+        "definition": "Symbol.iteratorを実装したオブジェクト（配列、文字列、Map、Set、ジェネレータ等）を反復するES2015のループ構文。for...inがキーを反復するのに対し、for...ofは値を直接取得できる。",
+        "domain": "javascript",
+        "keywords": [
+          "反復",
+          "イテラブル",
+          "Symbol.iterator",
+          "ES2015",
+          "配列"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Symbol.iterator",
+    "aliases": [
+      "@@iterator"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトにイテレータプロトコルを実装するための既知のシンボル。このプロパティにイテレータを返す関数を定義することでfor...of、スプレッド構文、分割代入が使えるカスタムイテラブルを作成できる。",
+        "domain": "javascript",
+        "keywords": [
+          "イテレータ",
+          "iterable",
+          "Well-known Symbol",
+          "for...of",
+          "スプレッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Promise.all",
+    "aliases": [
+      "Promise all"
+    ],
+    "senses": [
+      {
+        "definition": "渡した全Promiseが全て解決されると、その結果の配列で解決するメソッド。1つでもrejectされるとそこで全体がrejectされる。複数の非同期処理を並列に実行して全結果を待つ際に使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "Promise",
+          "並列処理",
+          "非同期",
+          "ES2015",
+          "reject"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンストラクタ関数",
+    "reading": "こんすとらくたかんすう",
+    "aliases": [
+      "Constructor Function"
+    ],
+    "senses": [
+      {
+        "definition": "newキーワードと共に呼び出し新しいオブジェクトを生成する関数。thisが新しいオブジェクトに束縛され、prototypeプロパティが新オブジェクトの__proto__に設定される。ES2015以降はclass構文が代替として使われる。",
+        "domain": "javascript",
+        "keywords": [
+          "new",
+          "prototype",
+          "this",
+          "オブジェクト生成",
+          "クラス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タスクキュー",
+    "reading": "たすくきゅー",
+    "aliases": [
+      "Task Queue",
+      "Callback Queue"
+    ],
+    "senses": [
+      {
+        "definition": "イベントループが実行するマクロタスクを順番に蓄えるキュー。タイマー・I/Oコールバック・UIイベントハンドラなどが追加される。コールスタックが空になったときにイベントループがキューから取り出して実行する。",
+        "domain": "javascript",
+        "keywords": [
+          "イベントループ",
+          "マクロタスク",
+          "コールバック",
+          "setTimeout",
+          "キュー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "シンタックスシュガー",
+    "reading": "しんたっくすしゅがー",
+    "aliases": [
+      "Syntactic Sugar"
+    ],
+    "senses": [
+      {
+        "definition": "既存の機能をより簡潔・直感的に書けるようにした言語構文。JavaScriptではclassキーワード（プロトタイプ継承のシュガー）、async/await（Promiseのシュガー）などが代表例。機能は変わらず可読性を向上させる。",
+        "domain": "javascript",
+        "keywords": [
+          "構文",
+          "可読性",
+          "class",
+          "async/await",
+          "JavaScript"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "隠れクラス",
+    "reading": "かくれくらす",
+    "aliases": [
+      "Hidden Class"
+    ],
+    "senses": [
+      {
+        "definition": "V8エンジンがオブジェクトのプロパティ構造を追跡するために内部的に生成するクラス。同じ順序で同じプロパティを持つオブジェクトは隠れクラスを共有でき、プロパティアクセスを高速化する。",
+        "domain": "javascript",
+        "keywords": [
+          "V8",
+          "パフォーマンス最適化",
+          "オブジェクト",
+          "インラインキャッシュ",
+          "JIT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インラインキャッシュ",
+    "reading": "いんらいんきゃっしゅ",
+    "aliases": [
+      "Inline Cache",
+      "IC"
+    ],
+    "senses": [
+      {
+        "definition": "プロパティアクセスの解決結果をキャッシュしてオブジェクト操作を高速化するV8の最適化技術。同じ隠れクラスのオブジェクトへのアクセスはキャッシュから解決され、型が単型（モノモーフィック）のほど効率が良い。",
+        "domain": "javascript",
+        "keywords": [
+          "V8",
+          "パフォーマンス",
+          "隠れクラス",
+          "プロパティアクセス",
+          "JIT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "参照渡しと値渡し",
+    "reading": "さんしょうわたしとあたいわたし",
+    "aliases": [
+      "Pass by Reference vs Pass by Value"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptでは基本型（プリミティブ）は値のコピーが渡され、オブジェクト・配列は参照（メモリアドレス）が渡される。参照渡しでは関数内の変更が元のオブジェクトに影響するため注意が必要。",
+        "domain": "javascript",
+        "keywords": [
+          "プリミティブ",
+          "オブジェクト",
+          "参照",
+          "コピー",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Number.isNaN",
+    "aliases": [
+      "isNaN",
+      "Number.isFinite"
+    ],
+    "senses": [
+      {
+        "definition": "値がNaN（非数）であるかを判定するメソッド。グローバルのisNaN()が型強制を行うのと異なり、Number.isNaN()は厳密に型チェックを行いNaN型かつNaN値の場合のみtrueを返す。",
+        "domain": "javascript",
+        "keywords": [
+          "NaN",
+          "数値",
+          "型チェック",
+          "isNaN",
+          "IEEE754"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "for...in",
+    "reading": "ふぉーいん",
+    "aliases": [
+      "for-in loop"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトの列挙可能なプロパティキー（継承されたものを含む）を反復するループ構文。プロトタイプチェーン上のプロパティも含まれるためhasOwnProperty()チェックが推奨される。配列への使用は非推奨で、for...ofを使うべき。",
+        "domain": "javascript",
+        "keywords": [
+          "オブジェクト反復",
+          "プロパティキー",
+          "プロトタイプチェーン",
+          "hasOwnProperty",
+          "for...of"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Object.freeze",
+    "aliases": [
+      "Object.seal"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトのプロパティの追加・削除・変更を禁止するメソッド。シャローなフリーズのため深くネストしたオブジェクトには再帰適用が必要。Object.seal()はプロパティの追加・削除を禁止するが変更は許可する。",
+        "domain": "javascript",
+        "keywords": [
+          "イミュータビリティ",
+          "シャロー",
+          "Object",
+          "定数",
+          "制約"
+        ]
+      }
+    ]
+  }
+]

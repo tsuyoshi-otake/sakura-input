@@ -1,0 +1,1025 @@
+[
+  {
+    "term": "Workflow",
+    "senses": [
+      {
+        "definition": "GitHub Actionsで定義する自動処理全体。YAMLで記述する。",
+        "domain": "github-actions",
+        "keywords": [
+          "自動化",
+          "YAML",
+          "CI/CD"
+        ]
+      }
+    ],
+    "reading": "わーくふろー（GitHub Actions）",
+    "aliases": []
+  },
+  {
+    "term": "Workflow run",
+    "senses": [
+      {
+        "definition": "あるworkflowが一度実行された単位。",
+        "domain": "github-actions",
+        "keywords": [
+          "実行",
+          "ログ",
+          "ワークフロー"
+        ]
+      }
+    ],
+    "reading": "わーくふろーらん",
+    "aliases": []
+  },
+  {
+    "term": "Event trigger",
+    "senses": [
+      {
+        "definition": "Workflow実行のきっかけとなるイベント。",
+        "domain": "github-actions",
+        "keywords": [
+          "トリガー",
+          "イベント",
+          "起動"
+        ]
+      }
+    ],
+    "reading": "いべんととりがー",
+    "aliases": []
+  },
+  {
+    "term": "repository_dispatch",
+    "senses": [
+      {
+        "definition": "外部からREST API経由でworkflowを起動できるイベント。",
+        "domain": "github-actions",
+        "keywords": [
+          "API",
+          "外部起動",
+          "webhook"
+        ]
+      }
+    ],
+    "reading": "りぽじとりーでぃすぱっち",
+    "aliases": []
+  },
+  {
+    "term": "workflow_dispatch",
+    "senses": [
+      {
+        "definition": "手動実行のためのトリガー。",
+        "domain": "github-actions",
+        "keywords": [
+          "手動",
+          "トリガー",
+          "実行"
+        ]
+      }
+    ],
+    "reading": "わーくふろーでぃすぱっち",
+    "aliases": []
+  },
+  {
+    "term": "Scheduled workflow",
+    "senses": [
+      {
+        "definition": "定期時刻で実行されるworkflow。",
+        "domain": "github-actions",
+        "keywords": [
+          "cron",
+          "定期",
+          "スケジュール"
+        ]
+      }
+    ],
+    "reading": "すけじゅーるどわーくふろー",
+    "aliases": []
+  },
+  {
+    "term": "Job",
+    "senses": [
+      {
+        "definition": "Workflow内でrunner上に実行される処理単位。複数stepを含む。",
+        "domain": "github-actions",
+        "keywords": [
+          "処理",
+          "runner",
+          "step"
+        ]
+      }
+    ],
+    "reading": "じょぶ",
+    "aliases": []
+  },
+  {
+    "term": "Job dependency",
+    "senses": [
+      {
+        "definition": "あるjobが別job完了を待つ依存関係。",
+        "domain": "github-actions",
+        "keywords": [
+          "依存",
+          "needs",
+          "順序"
+        ]
+      }
+    ],
+    "reading": "じょぶでぃぺんでんしー",
+    "aliases": []
+  },
+  {
+    "term": "Step",
+    "senses": [
+      {
+        "definition": "Jobの中で順番に実行される最小処理単位。scriptかactionを実行する。",
+        "domain": "github-actions",
+        "keywords": [
+          "処理",
+          "最小単位",
+          "action"
+        ]
+      }
+    ],
+    "reading": "すてっぷ",
+    "aliases": []
+  },
+  {
+    "term": "Action",
+    "senses": [
+      {
+        "definition": "Workflow内で再利用できる処理単位。繰り返し処理を簡潔に書ける。",
+        "domain": "github-actions",
+        "keywords": [
+          "再利用",
+          "action",
+          "マーケットプレイス"
+        ]
+      }
+    ],
+    "reading": "あくしょん",
+    "aliases": []
+  },
+  {
+    "term": "Composite action",
+    "senses": [
+      {
+        "definition": "複数stepをまとめて一つのactionのように再利用できる形式。",
+        "domain": "github-actions",
+        "keywords": [
+          "再利用",
+          "step",
+          "合成"
+        ]
+      }
+    ],
+    "reading": "こんぽじっとあくしょん",
+    "aliases": []
+  },
+  {
+    "term": "Reusable workflow",
+    "senses": [
+      {
+        "definition": "Workflow全体を別workflowから呼び出して再利用する仕組み。",
+        "domain": "github-actions",
+        "keywords": [
+          "再利用",
+          "呼び出し",
+          "共通化"
+        ]
+      }
+    ],
+    "reading": "りゆーざぶるわーくふろー",
+    "aliases": []
+  },
+  {
+    "term": "Caller workflow",
+    "senses": [
+      {
+        "definition": "Reusable workflowを呼び出す側のworkflow。",
+        "domain": "github-actions",
+        "keywords": [
+          "呼び出し",
+          "caller",
+          "再利用"
+        ]
+      }
+    ],
+    "reading": "こーらーわーくふろー",
+    "aliases": []
+  },
+  {
+    "term": "Called workflow",
+    "senses": [
+      {
+        "definition": "Reusable workflowとして呼ばれる側のworkflow。",
+        "domain": "github-actions",
+        "keywords": [
+          "被呼び出し",
+          "called",
+          "再利用"
+        ]
+      }
+    ],
+    "reading": "こーるどわーくふろー",
+    "aliases": []
+  },
+  {
+    "term": "Runner",
+    "senses": [
+      {
+        "definition": "GitHub Actionsのjobを実行するサーバー。各jobはrunner上で動く。",
+        "domain": "github-actions",
+        "keywords": [
+          "実行環境",
+          "サーバー",
+          "VM"
+        ]
+      }
+    ],
+    "reading": "らんなー",
+    "aliases": []
+  },
+  {
+    "term": "GitHub-hosted runner",
+    "senses": [
+      {
+        "definition": "GitHubが提供する標準runner。新しい仮想マシンで実行される。",
+        "domain": "github-actions",
+        "keywords": [
+          "ホスト",
+          "VM",
+          "標準"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶほすてっどらんなー",
+    "aliases": []
+  },
+  {
+    "term": "Self-hosted runner",
+    "senses": [
+      {
+        "definition": "自分たちで用意、管理するrunner。ハードウェアやOSを自由に選べる。",
+        "domain": "github-actions",
+        "keywords": [
+          "自前",
+          "ランナー",
+          "カスタム"
+        ]
+      }
+    ],
+    "reading": "せるふほすてっどらんなー",
+    "aliases": []
+  },
+  {
+    "term": "Runner label",
+    "senses": [
+      {
+        "definition": "Self-hosted runnerを特性ごとに指定するためのラベル。",
+        "domain": "github-actions",
+        "keywords": [
+          "ラベル",
+          "runner",
+          "指定"
+        ]
+      }
+    ],
+    "reading": "らんなーらべる",
+    "aliases": []
+  },
+  {
+    "term": "Runner group",
+    "senses": [
+      {
+        "definition": "Self-hosted runnerをまとめてアクセス制御する単位。",
+        "domain": "github-actions",
+        "keywords": [
+          "グループ",
+          "アクセス制御",
+          "runner"
+        ]
+      }
+    ],
+    "reading": "らんなーぐるーぷ",
+    "aliases": []
+  },
+  {
+    "term": "Matrix strategy",
+    "senses": [
+      {
+        "definition": "複数条件の組み合わせでjobを並列展開する方式。",
+        "domain": "github-actions",
+        "keywords": [
+          "並列",
+          "組み合わせ",
+          "matrix"
+        ]
+      }
+    ],
+    "reading": "まとりくすすとらてじー",
+    "aliases": []
+  },
+  {
+    "term": "Concurrency",
+    "senses": [
+      {
+        "definition": "同時実行の衝突を避けるためworkflowやjobを制御する仕組み。",
+        "domain": "github-actions",
+        "keywords": [
+          "同時実行",
+          "排他",
+          "制御"
+        ]
+      }
+    ],
+    "reading": "こんかれんしー",
+    "aliases": []
+  },
+  {
+    "term": "Artifact",
+    "senses": [
+      {
+        "definition": "Workflow実行中に生成、保存、受け渡しされる成果物。",
+        "domain": "github-actions",
+        "keywords": [
+          "成果物",
+          "保存",
+          "受け渡し"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Workflow template",
+    "senses": [
+      {
+        "definition": "新しいworkflow作成を簡単にするためのひな形。",
+        "domain": "github-actions",
+        "keywords": [
+          "テンプレート",
+          "ひな形",
+          "作成"
+        ]
+      }
+    ],
+    "reading": "わーくふろーてんぷれーと",
+    "aliases": []
+  },
+  {
+    "term": "GITHUB_TOKEN",
+    "senses": [
+      {
+        "definition": "Workflow実行時に自動付与されるトークン。",
+        "domain": "github-actions",
+        "keywords": [
+          "トークン",
+          "認証",
+          "自動"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶとーくん",
+    "aliases": []
+  },
+  {
+    "term": "Repository secret",
+    "senses": [
+      {
+        "definition": "リポジトリ単位で管理するGitHub Actions用の秘密情報。",
+        "domain": "github-actions",
+        "keywords": [
+          "秘密情報",
+          "リポジトリ",
+          "環境変数"
+        ]
+      }
+    ],
+    "reading": "りぽじとりーしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Organization secret",
+    "senses": [
+      {
+        "definition": "組織単位で複数リポジトリへ共有できる秘密情報。",
+        "domain": "github-actions",
+        "keywords": [
+          "秘密情報",
+          "組織",
+          "共有"
+        ]
+      }
+    ],
+    "reading": "おーがにぜーしょんしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Environment secret",
+    "senses": [
+      {
+        "definition": "Environmentにひもづく秘密情報。job開始時に読み込まれる。",
+        "domain": "github-actions",
+        "keywords": [
+          "秘密情報",
+          "Environment",
+          "job"
+        ]
+      }
+    ],
+    "reading": "えんばいろんめんとしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Secret precedence",
+    "senses": [
+      {
+        "definition": "同名secretが複数レベルにある場合、environment secretが優先されるルール。",
+        "domain": "github-actions",
+        "keywords": [
+          "優先順位",
+          "secret",
+          "Environment"
+        ]
+      }
+    ],
+    "reading": "しーくれっとぷれせでんす",
+    "aliases": []
+  },
+  {
+    "term": "Secret redaction",
+    "senses": [
+      {
+        "definition": "ログ中の秘密情報をGitHubが自動で伏せる仕組み。",
+        "domain": "github-actions",
+        "keywords": [
+          "マスク",
+          "ログ",
+          "秘密情報"
+        ]
+      }
+    ],
+    "reading": "しーくれっとりだくしょん",
+    "aliases": []
+  },
+  {
+    "term": "Secret size limit",
+    "senses": [
+      {
+        "definition": "GitHub secretsのサイズ上限。1件あたり48KB。",
+        "domain": "github-actions",
+        "keywords": [
+          "上限",
+          "サイズ",
+          "48KB"
+        ]
+      }
+    ],
+    "reading": "しーくれっとさいずりみっと",
+    "aliases": []
+  },
+  {
+    "term": "Secrets not passed from forks",
+    "senses": [
+      {
+        "definition": "GITHUB_TOKENを除き、fork由来workflowにはsecretsが渡らない制約。",
+        "domain": "github-actions",
+        "keywords": [
+          "fork",
+          "制約",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "reading": "ふぉーくからはしーくれっとがわたらない",
+    "aliases": []
+  },
+  {
+    "term": "Environment",
+    "senses": [
+      {
+        "definition": "デプロイや保護ルール、secretを束ねるGitHubの単位。",
+        "domain": "github-actions",
+        "keywords": [
+          "デプロイ",
+          "保護",
+          "secret"
+        ]
+      }
+    ],
+    "reading": "えんばいろんめんと",
+    "aliases": []
+  },
+  {
+    "term": "Environment protection rule",
+    "senses": [
+      {
+        "definition": "Environmentを使うjobに対して承認や条件を要求するルール。",
+        "domain": "github-actions",
+        "keywords": [
+          "承認",
+          "保護",
+          "デプロイ"
+        ]
+      }
+    ],
+    "reading": "えんばいろんめんとぷろてくしょんるーる",
+    "aliases": []
+  },
+  {
+    "term": "GitHub Codespaces",
+    "senses": [
+      {
+        "definition": "GitHub上で使えるクラウド開発環境。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "クラウド",
+          "開発環境",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶこーどすぺーしず",
+    "aliases": []
+  },
+  {
+    "term": "Codespace",
+    "senses": [
+      {
+        "definition": "実際に起動した1つのクラウド開発環境インスタンス。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "インスタンス",
+          "開発環境",
+          "VM"
+        ]
+      }
+    ],
+    "reading": "こーどすぺーす",
+    "aliases": []
+  },
+  {
+    "term": "Codespace lifecycle",
+    "senses": [
+      {
+        "definition": "codespaceの作成、停止、再開、破棄を通じたライフサイクル全体。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "ライフサイクル",
+          "作成",
+          "破棄"
+        ]
+      }
+    ],
+    "reading": "こーどすぺーすらいふさいくる",
+    "aliases": []
+  },
+  {
+    "term": "Dev container",
+    "senses": [
+      {
+        "definition": "開発環境の定義と実行に使うコンテナ構成。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "コンテナ",
+          "開発環境",
+          "定義"
+        ]
+      }
+    ],
+    "reading": "でぶこんてな",
+    "aliases": []
+  },
+  {
+    "term": "devcontainer.json",
+    "senses": [
+      {
+        "definition": "dev containerの設定ファイル。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "設定",
+          "JSON",
+          "コンテナ"
+        ]
+      }
+    ],
+    "reading": "でぶこんてなじぇいそん",
+    "aliases": []
+  },
+  {
+    "term": "Prebuild",
+    "senses": [
+      {
+        "definition": "Codespacesを事前構築して起動を速くする仕組み。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "事前構築",
+          "高速化",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "reading": "ぷりびるど",
+    "aliases": []
+  },
+  {
+    "term": "Prebuild ready",
+    "senses": [
+      {
+        "definition": "指定branch、dev container、regionでprebuildが用意済みであることを示す表示。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "準備完了",
+          "Prebuild",
+          "表示"
+        ]
+      }
+    ],
+    "reading": "ぷりびるどれでぃ",
+    "aliases": []
+  },
+  {
+    "term": "Temporary codespace",
+    "senses": [
+      {
+        "definition": "Prebuild作成時にGitHubが一時的に作るcodespace。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "一時的",
+          "Prebuild",
+          "作成"
+        ]
+      }
+    ],
+    "reading": "てんぽらりーこーどすぺーす",
+    "aliases": []
+  },
+  {
+    "term": "onCreateCommand",
+    "senses": [
+      {
+        "definition": "devcontainer.jsonでcodespace作成時に実行するコマンド。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "コマンド",
+          "作成時",
+          "初期化"
+        ]
+      }
+    ],
+    "reading": "おんくりえいとこまんど",
+    "aliases": []
+  },
+  {
+    "term": "updateContentCommand",
+    "senses": [
+      {
+        "definition": "コンテンツ更新時に実行するdev container設定コマンド。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "更新",
+          "コマンド",
+          "Prebuild"
+        ]
+      }
+    ],
+    "reading": "あっぷでーとこんてんとこまんど",
+    "aliases": []
+  },
+  {
+    "term": "Machine type",
+    "senses": [
+      {
+        "definition": "Codespaceに割り当てるCPU、メモリ構成の種類。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "CPU",
+          "メモリ",
+          "スペック"
+        ]
+      }
+    ],
+    "reading": "ましんたいぷ",
+    "aliases": []
+  },
+  {
+    "term": "Port forwarding",
+    "senses": [
+      {
+        "definition": "Codespace内で動くTCPポートをローカルから使えるようにする仕組み。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "ポート",
+          "転送",
+          "ローカル"
+        ]
+      }
+    ],
+    "reading": "ぽーとふぉわーでぃんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Forwarded port",
+    "senses": [
+      {
+        "definition": "外部へ公開されたcodespace内ポート。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "ポート",
+          "公開",
+          "転送"
+        ]
+      }
+    ],
+    "reading": "ふぉわーどぽーと",
+    "aliases": []
+  },
+  {
+    "term": "Automatic port forwarding",
+    "senses": [
+      {
+        "definition": "localhost:PORTのような出力を検知してGitHubが自動で転送する仕組み。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "自動",
+          "ポート",
+          "検知"
+        ]
+      }
+    ],
+    "reading": "おーとまちっくぽーとふぉわーでぃんぐ",
+    "aliases": []
+  },
+  {
+    "term": "forwardPorts property",
+    "senses": [
+      {
+        "definition": "devcontainer.jsonで自動転送したいポートを定義する設定。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "設定",
+          "ポート",
+          "devcontainer"
+        ]
+      }
+    ],
+    "reading": "ふぉわーどぽーつぷろぱてぃ",
+    "aliases": []
+  },
+  {
+    "term": "portsAttributes",
+    "senses": [
+      {
+        "definition": "転送ポートのラベルなどをdevcontainer.jsonで定義する設定。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "属性",
+          "ポート",
+          "devcontainer"
+        ]
+      }
+    ],
+    "reading": "ぽーつあどりびゅーつ",
+    "aliases": []
+  },
+  {
+    "term": "Port label",
+    "senses": [
+      {
+        "definition": "転送ポートへ付ける名前。PORTSタブで識別しやすくなる。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "ラベル",
+          "ポート",
+          "名前"
+        ]
+      }
+    ],
+    "reading": "ぽーとらべる",
+    "aliases": []
+  },
+  {
+    "term": "Public port visibility",
+    "senses": [
+      {
+        "definition": "転送ポートを公開アクセス可能にする可視性設定。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "公開",
+          "可視性",
+          "ポート"
+        ]
+      }
+    ],
+    "reading": "ぱぶりっくぽーとびじびりてぃ",
+    "aliases": []
+  },
+  {
+    "term": "Organization-restricted port visibility",
+    "senses": [
+      {
+        "definition": "ポートを組織内だけに共有させる制御。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "組織",
+          "制限",
+          "ポート"
+        ]
+      }
+    ],
+    "reading": "おーがにぜーしょんりすとりくてっどぽーとびじびりてぃ",
+    "aliases": []
+  },
+  {
+    "term": "Development environment secret",
+    "senses": [
+      {
+        "definition": "Codespacesで使うための秘密情報。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "秘密情報",
+          "環境変数",
+          "Codespaces"
+        ]
+      }
+    ],
+    "reading": "でぃべろっぷめんとえんばいろんめんとしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Repository-level development secret",
+    "senses": [
+      {
+        "definition": "特定リポジトリ向けに設定するCodespaces secret。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "リポジトリ",
+          "秘密情報",
+          "Codespaces"
+        ]
+      }
+    ],
+    "reading": "りぽじとりーれべるでぃべろっぷめんとえんばいろんめんとしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Organization-level development secret",
+    "senses": [
+      {
+        "definition": "組織単位で共有できるCodespaces secret。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "組織",
+          "秘密情報",
+          "共有"
+        ]
+      }
+    ],
+    "reading": "おーがにぜーしょんれべるでぃべろっぷめんとえんばいろんめんとしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Account-specific Codespaces secret",
+    "senses": [
+      {
+        "definition": "個人アカウント単位で管理するCodespaces secret。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "個人",
+          "秘密情報",
+          "アカウント"
+        ]
+      }
+    ],
+    "reading": "あかうんとすぺしふぃっくこーどすぺーしずしーくれっと",
+    "aliases": []
+  },
+  {
+    "term": "Dotfiles",
+    "senses": [
+      {
+        "definition": "Codespaces起動時に自分のシェル設定などを反映する個人設定ファイル群。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "設定",
+          "シェル",
+          "個人化"
+        ]
+      }
+    ],
+    "reading": "どっとふぁいるず",
+    "aliases": []
+  },
+  {
+    "term": "GitHub CLI for Codespaces",
+    "senses": [
+      {
+        "definition": "ghコマンドでcodespaceの作成、接続、一覧、ポート確認などを行う使い方。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "CLI",
+          "gh",
+          "コマンド"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶしーえるあいふぉーこーどすぺーしず",
+    "aliases": []
+  },
+  {
+    "term": "gh codespace ports",
+    "senses": [
+      {
+        "definition": "Codespaceの転送ポート情報を確認するGitHub CLIコマンド。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "CLI",
+          "ポート",
+          "確認"
+        ]
+      }
+    ],
+    "reading": "じーえいちこーどすぺーすぽーつ",
+    "aliases": []
+  },
+  {
+    "term": "gh codespace ssh",
+    "senses": [
+      {
+        "definition": "CodespaceへSSH接続するGitHub CLIコマンド。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "SSH",
+          "CLI",
+          "接続"
+        ]
+      }
+    ],
+    "reading": "じーえいちこーどすぺーすえすえいち",
+    "aliases": []
+  },
+  {
+    "term": "X-GitHub-Token header",
+    "senses": [
+      {
+        "definition": "Private portへcurlやPostmanで接続するときに使う認証ヘッダー。",
+        "domain": "github-codespaces",
+        "keywords": [
+          "認証",
+          "ヘッダー",
+          "curl"
+        ]
+      }
+    ],
+    "reading": "えっくすぎっとはぶとーくんへっだー",
+    "aliases": []
+  },
+  {
+    "term": "Workflow dependency graph entry",
+    "senses": [
+      {
+        "definition": "Reusable workflowはdependency graph上で依存先として見えることがある。",
+        "domain": "github-actions",
+        "keywords": [
+          "依存",
+          "グラフ",
+          "reusable"
+        ]
+      }
+    ],
+    "reading": "わーくふろーでぃぺんでんしーぐらふえんとりー",
+    "aliases": []
+  },
+  {
+    "term": "Four-level reusable workflow limit",
+    "senses": [
+      {
+        "definition": "Reusable workflowは最大4階層まで接続できる。",
+        "domain": "github-actions",
+        "keywords": [
+          "制限",
+          "階層",
+          "reusable"
+        ]
+      }
+    ],
+    "reading": "ふぉーれべるりゆーざぶるわーくふろーりみっと",
+    "aliases": []
+  },
+  {
+    "term": "Twenty unique reusable workflow limit",
+    "senses": [
+      {
+        "definition": "1つのworkflow fileから参照できるunique reusable workflow数には上限がある。",
+        "domain": "github-actions",
+        "keywords": [
+          "制限",
+          "上限",
+          "reusable"
+        ]
+      }
+    ],
+    "reading": "とぅえんてぃゆにーくりゆーざぶるわーくふろーりみっと",
+    "aliases": []
+  }
+]

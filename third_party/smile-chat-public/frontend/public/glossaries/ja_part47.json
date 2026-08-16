@@ -1,0 +1,1964 @@
+[
+  {
+    "term": "Flexbox",
+    "reading": "ふれっくすぼっくす",
+    "aliases": [
+      "CSS Flexbox",
+      "Flexible Box Layout"
+    ],
+    "senses": [
+      {
+        "definition": "CSS3で導入された一次元レイアウトモデル。フレックスコンテナ内のアイテムを主軸・交差軸に沿って柔軟に配置・伸縮させる。ナビゲーションバーやカード列など方向性のある要素配置に最適。",
+        "domain": "css",
+        "keywords": [
+          "レイアウト",
+          "フレックスコンテナ",
+          "主軸",
+          "flex-direction"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS Grid",
+    "reading": "しーえすえすぐりっど",
+    "aliases": [
+      "CSS Grid Layout",
+      "Grid Layout"
+    ],
+    "senses": [
+      {
+        "definition": "行と列の二次元グリッド上に要素を配置するCSSレイアウトシステム。`grid-template-columns`や`grid-template-rows`で領域を定義し、複雑なページレイアウトを宣言的に実現できる。",
+        "domain": "css",
+        "keywords": [
+          "レイアウト",
+          "グリッド",
+          "二次元",
+          "grid-template"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS変数",
+    "reading": "しーえすえすへんすう",
+    "aliases": [
+      "CSSカスタムプロパティ",
+      "CSS Custom Properties"
+    ],
+    "senses": [
+      {
+        "definition": "CSSで`--name: value`の形式で定義し`var(--name)`で参照できるカスタムプロパティ。テーマカラーやスペーシングなど設計トークンを一元管理し、JavaScriptからも動的に変更可能。",
+        "domain": "css",
+        "keywords": [
+          "カスタムプロパティ",
+          "var()",
+          "テーマ",
+          "設計トークン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カスケードレイヤー",
+    "reading": "かすけーどれいやー",
+    "aliases": [
+      "@layer",
+      "Cascade Layers"
+    ],
+    "senses": [
+      {
+        "definition": "CSSの`@layer`ルールで宣言する明示的なカスケード優先順位の仕組み。リセット・ベース・コンポーネント・ユーティリティといったレイヤーを定義し、詳細度に依存しない予測可能なスタイル管理を実現する。",
+        "domain": "css",
+        "keywords": [
+          "@layer",
+          "カスケード",
+          "詳細度",
+          "優先順位"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンテナクエリ",
+    "reading": "こんてなくえり",
+    "aliases": [
+      "Container Query",
+      "@container"
+    ],
+    "senses": [
+      {
+        "definition": "親コンテナのサイズに基づいてスタイルを適用するCSSの仕組み。`container-type`で計測対象を宣言し`@container`ルール内でブレークポイントを指定する。コンポーネントを真に再利用可能にする。",
+        "domain": "css",
+        "keywords": [
+          "@container",
+          "レスポンシブ",
+          "コンポーネント",
+          "container-type"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "メディアクエリ",
+    "reading": "めでぃあくえり",
+    "aliases": [
+      "Media Query",
+      "@media"
+    ],
+    "senses": [
+      {
+        "definition": "画面幅・解像度・向き・入力手段などの端末特性に応じて異なるスタイルを適用するCSSの仕組み。`@media (max-width: 768px)`のように条件を記述し、レスポンシブデザインの基盤となる。",
+        "domain": "css",
+        "keywords": [
+          "@media",
+          "レスポンシブ",
+          "ブレークポイント",
+          "端末特性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS Nesting",
+    "reading": "しーえすえすねすてぃんぐ",
+    "aliases": [
+      "CSSネスティング",
+      "ネイティブCSS Nesting"
+    ],
+    "senses": [
+      {
+        "definition": "CSS標準として2023年に主要ブラウザが対応したネスト記法。セレクタの中に子セレクタを直接記述でき、Sassなどのプリプロセッサなしに構造を整理したCSSを書ける。",
+        "domain": "css",
+        "keywords": [
+          "ネスト",
+          "セレクタ",
+          "可読性",
+          "標準CSS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": ":has()セレクタ",
+    "reading": "はすせれくた",
+    "aliases": [
+      ":has()",
+      "CSS :has pseudo-class"
+    ],
+    "senses": [
+      {
+        "definition": "指定した子孫要素を持つ親要素にスタイルを適用する疑似クラス。「親セレクタ」とも呼ばれ、入力が空かどうかでラベルスタイルを変えるなど条件付き親スタイリングを純CSSで実現する。",
+        "domain": "css",
+        "keywords": [
+          ":has()",
+          "親セレクタ",
+          "疑似クラス",
+          "条件付きスタイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": ":is()疑似クラス",
+    "reading": "いずぎじくらす",
+    "aliases": [
+      ":is()",
+      ":is() pseudo-class"
+    ],
+    "senses": [
+      {
+        "definition": "引数に渡したセレクタリストのいずれかに一致する要素を選択する疑似クラス。グループ化により冗長なセレクタを短縮でき、詳細度はリスト中で最も高いセレクタに準じるため注意が必要。",
+        "domain": "css",
+        "keywords": [
+          ":is()",
+          "セレクタ",
+          "詳細度",
+          "グループ化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": ":where()疑似クラス",
+    "reading": "うぇあぎじくらす",
+    "aliases": [
+      ":where()",
+      ":where() pseudo-class"
+    ],
+    "senses": [
+      {
+        "definition": ":is()と同様にセレクタリストで要素を選択するが、詳細度が常に0になる疑似クラス。ベーススタイルのリセットやライブラリのデフォルトスタイルに適しており、後からの上書きが容易。",
+        "domain": "css",
+        "keywords": [
+          ":where()",
+          "詳細度ゼロ",
+          "セレクタ",
+          "ベーススタイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "subgrid",
+    "reading": "さぶぐりっど",
+    "aliases": [
+      "CSS subgrid",
+      "grid subgrid"
+    ],
+    "senses": [
+      {
+        "definition": "CSS Gridの子グリッドが親グリッドのトラック定義を継承する機能。`grid-template-columns: subgrid`と指定することで、ネストされた要素を親グリッドの列に揃えて整列させることができる。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "継承",
+          "トラック",
+          "整列"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "aspect-ratio",
+    "reading": "あすぺくとれしお",
+    "aliases": [
+      "アスペクト比プロパティ",
+      "CSS aspect-ratio"
+    ],
+    "senses": [
+      {
+        "definition": "要素の幅高さの比率を`aspect-ratio: 16 / 9`のように指定するCSSプロパティ。画像・動画・カードなどを固定比率で表示する際にpadding hackを使わずシンプルに実装できる。",
+        "domain": "css",
+        "keywords": [
+          "アスペクト比",
+          "レスポンシブ",
+          "動画",
+          "比率"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "clamp()",
+    "reading": "くらんぷ",
+    "aliases": [
+      "CSS clamp",
+      "clamp関数"
+    ],
+    "senses": [
+      {
+        "definition": "最小値・推奨値・最大値の3引数を取りその範囲内の値を返すCSS数学関数。`clamp(1rem, 2.5vw, 2rem)`のようにフォントサイズやスペーシングを流体的にスケールさせるフルード・タイポグラフィに多用。",
+        "domain": "css",
+        "keywords": [
+          "数学関数",
+          "流体タイポグラフィ",
+          "vw",
+          "フルード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "min()関数",
+    "reading": "みんかんすう",
+    "aliases": [
+      "CSS min()",
+      "min関数"
+    ],
+    "senses": [
+      {
+        "definition": "渡した値のリストから最小値を選んで返すCSS数学関数。`width: min(50%, 400px)`のように、画面幅に応じてコンテンツ幅を上限付きで制限する用途に使われる。",
+        "domain": "css",
+        "keywords": [
+          "数学関数",
+          "min()",
+          "幅制限",
+          "レスポンシブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "max()関数",
+    "reading": "まっくすかんすう",
+    "aliases": [
+      "CSS max()",
+      "max関数"
+    ],
+    "senses": [
+      {
+        "definition": "渡した値のリストから最大値を選んで返すCSS数学関数。`font-size: max(1rem, 2vw)`のように最小フォントサイズを保証しつつビューポートに応じて拡大するなど下限保証に使われる。",
+        "domain": "css",
+        "keywords": [
+          "数学関数",
+          "max()",
+          "下限保証",
+          "フォントサイズ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "calc()",
+    "reading": "かるく",
+    "aliases": [
+      "CSS calc",
+      "calc関数"
+    ],
+    "senses": [
+      {
+        "definition": "異なる単位同士の四則演算をCSSで記述できる関数。`width: calc(100% - 2rem)`のように静的値と動的値を組み合わせた計算が可能で、グリッドやスペーシングの精密な制御に利用される。",
+        "domain": "css",
+        "keywords": [
+          "数学関数",
+          "calc()",
+          "単位混在",
+          "演算"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS論理プロパティ",
+    "reading": "しーえすえすろんりぷろぱてぃ",
+    "aliases": [
+      "CSS Logical Properties",
+      "論理プロパティ"
+    ],
+    "senses": [
+      {
+        "definition": "物理的な方向（left/right/top/bottom）ではなく書字方向に相対的な論理方向（inline-start/block-end等）でマージン・パディング・ボーダーを指定するCSSプロパティ群。多言語レイアウトを容易にする。",
+        "domain": "css",
+        "keywords": [
+          "論理プロパティ",
+          "書字方向",
+          "多言語",
+          "inline-start"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "writing-mode",
+    "reading": "らいてぃんぐもーど",
+    "aliases": [
+      "CSS writing-mode",
+      "縦書きCSS"
+    ],
+    "senses": [
+      {
+        "definition": "テキストの流れる方向と行の積み重なり方を制御するCSSプロパティ。`vertical-rl`で日本語縦書きレイアウトを実現でき、論理プロパティと組み合わせることで多言語組版に対応する。",
+        "domain": "css",
+        "keywords": [
+          "縦書き",
+          "テキスト方向",
+          "多言語",
+          "vertical-rl"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gap",
+    "reading": "ぎゃっぷ",
+    "aliases": [
+      "CSS gap",
+      "row-gap",
+      "column-gap"
+    ],
+    "senses": [
+      {
+        "definition": "FlexboxおよびCSS Gridのアイテム間隔を指定するCSSプロパティ。`gap: 1rem 2rem`で行列の間隔を一括指定でき、marginを使ったハック不要でクリーンな間隔管理が可能になる。",
+        "domain": "css",
+        "keywords": [
+          "Flexbox",
+          "CSS Grid",
+          "間隔",
+          "スペーシング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "place-items",
+    "reading": "ぷれいすあいてむず",
+    "aliases": [
+      "CSS place-items",
+      "align-items shorthand"
+    ],
+    "senses": [
+      {
+        "definition": "CSS Gridで`align-items`と`justify-items`を一括指定するショートハンドプロパティ。`place-items: center`で要素を縦横中央揃えにする最短の記述として頻繁に使われる。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "中央揃え",
+          "align-items",
+          "justify-items"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PostCSS",
+    "reading": "ぽすとしーえすえす",
+    "aliases": [
+      "CSS後処理ツール"
+    ],
+    "senses": [
+      {
+        "definition": "プラグインシステムでCSSを変換するJavaScriptベースのツール。Autoprefixerでベンダープレフィックスを付与したり、cssnanoで圧縮したり、未来のCSS構文を現在のブラウザ向けに変換するなど多用途。",
+        "domain": "css",
+        "keywords": [
+          "プラグイン",
+          "Autoprefixer",
+          "トランスフォーム",
+          "ビルドツール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Sass/SCSS",
+    "reading": "さす・えすしーえすえす",
+    "aliases": [
+      "Sass",
+      "SCSS",
+      "CSS プリプロセッサ"
+    ],
+    "senses": [
+      {
+        "definition": "変数・ネスト・ミックスイン・継承などの機能をCSSに追加するプリプロセッサ。SCSS構文はCSSのスーパーセットで既存CSSと互換性があり、大規模プロジェクトのスタイル管理を効率化する。",
+        "domain": "css",
+        "keywords": [
+          "プリプロセッサ",
+          "ミックスイン",
+          "変数",
+          "ネスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "BEM",
+    "reading": "べむ",
+    "aliases": [
+      "Block Element Modifier",
+      "BEM記法"
+    ],
+    "senses": [
+      {
+        "definition": "Block__Element--Modifierのパターンでクラス名を構造化するCSS命名規則。コンポーネントの構造と状態をクラス名から読み取れるようにし、大規模チームでの一貫性とスタイルの再利用を促進する。",
+        "domain": "css",
+        "keywords": [
+          "命名規則",
+          "コンポーネント",
+          "スタイル管理",
+          "チーム開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OOCSS",
+    "reading": "おぶじぇくとしこうしーえすえす",
+    "aliases": [
+      "Object-Oriented CSS",
+      "オブジェクト指向CSS"
+    ],
+    "senses": [
+      {
+        "definition": "CSSをコンテナとコンテンツを分離した「オブジェクト」として設計する方法論。再利用可能な視覚的パターンをクラスとして定義しスタイルの重複を排除することで、保守性と一貫性を高める。",
+        "domain": "css",
+        "keywords": [
+          "設計手法",
+          "再利用",
+          "コンポーネント",
+          "命名"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SMACSS",
+    "reading": "すまっくす",
+    "aliases": [
+      "Scalable and Modular Architecture for CSS"
+    ],
+    "senses": [
+      {
+        "definition": "CSS設計をBase・Layout・Module・State・Themeの5カテゴリに分類するアーキテクチャガイドライン。カテゴリごとに命名規則と責務を明確にし、大規模なCSSのスケーラビリティを保つ。",
+        "domain": "css",
+        "keywords": [
+          "設計手法",
+          "カテゴリ",
+          "命名規則",
+          "スケーラビリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS詳細度",
+    "reading": "しーえすえすしょうさいど",
+    "aliases": [
+      "CSS specificity",
+      "詳細度",
+      "セレクタ詳細度"
+    ],
+    "senses": [
+      {
+        "definition": "CSSの競合するルールのどちらが優先されるかを決めるスコア体系。インラインスタイル>IDセレクタ>クラス・属性>要素の順に高く、詳細度の予測困難さがカスケードレイヤー導入の背景にある。",
+        "domain": "css",
+        "keywords": [
+          "セレクタ",
+          "詳細度",
+          "カスケード",
+          "優先順位"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カスケード",
+    "reading": "かすけーど",
+    "aliases": [
+      "CSS Cascade",
+      "カスケードアルゴリズム"
+    ],
+    "senses": [
+      {
+        "definition": "複数のCSSルールが同一要素に適用される場合にどのスタイルを採用するか決定するアルゴリズム。起源（ブラウザ/ユーザー/作者）・カスケードレイヤー・詳細度・記述順の優先順位で解決される。",
+        "domain": "css",
+        "keywords": [
+          "詳細度",
+          "優先順位",
+          "@layer",
+          "スタイル解決"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "継承（CSS）",
+    "aliases": [
+      "CSS Inheritance",
+      "CSS継承"
+    ],
+    "senses": [
+      {
+        "definition": "親要素に指定したCSSプロパティが子孫要素に自動的に引き継がれる仕組み。`color`や`font-family`は既定で継承されるが`width`や`border`は継承されない。`inherit`値で明示的に継承を強制できる。",
+        "domain": "css",
+        "keywords": [
+          "継承",
+          "inherit",
+          "font-family",
+          "プロパティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ボックスモデル",
+    "reading": "ぼっくすもでる",
+    "aliases": [
+      "CSS Box Model",
+      "Box Model"
+    ],
+    "senses": [
+      {
+        "definition": "CSSでHTML要素の占める空間をcontent・padding・border・marginの4層で表現するモデル。`box-sizing: border-box`にするとpadding・borderを含めたサイズを指定幅に収められるため現代的な実装の標準。",
+        "domain": "css",
+        "keywords": [
+          "content",
+          "padding",
+          "border",
+          "margin",
+          "box-sizing"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マージン相殺",
+    "reading": "まーじんそうさつ",
+    "aliases": [
+      "margin collapse",
+      "マージンの折り畳み"
+    ],
+    "senses": [
+      {
+        "definition": "縦方向に隣接するブロック要素のmarginが合計ではなく大きい方の値のみ適用される現象。Flexbox・Gridのコンテナ内やfloat要素では発生しない。意図しないスペーシングの原因になりやすい。",
+        "domain": "css",
+        "keywords": [
+          "margin",
+          "ブロック要素",
+          "スペーシング",
+          "レイアウト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "重ね合わせコンテキスト",
+    "reading": "かさねあわせこんてきすと",
+    "aliases": [
+      "stacking context",
+      "スタッキングコンテキスト"
+    ],
+    "senses": [
+      {
+        "definition": "z-indexが適用される独立した三次元の積み重なり空間。`position`+`z-index`指定、`opacity<1`、`transform`、`filter`、`isolation: isolate`などが新しいスタッキングコンテキストを生成する。",
+        "domain": "css",
+        "keywords": [
+          "z-index",
+          "積み重なり",
+          "transform",
+          "isolation"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "z-index",
+    "reading": "ぜっといんでっくす",
+    "aliases": [
+      "CSS z-index",
+      "重なり順"
+    ],
+    "senses": [
+      {
+        "definition": "重ね合わせコンテキスト内で要素の前後の重なり順を制御するCSSプロパティ。値が大きいほど手前に表示される。`position`が`static`以外の場合に有効で、スタッキングコンテキストを理解しないと意図通りに機能しない。",
+        "domain": "css",
+        "keywords": [
+          "重なり順",
+          "stacking context",
+          "position",
+          "レイヤー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "position: sticky",
+    "reading": "ぽじしょんすてぃっきー",
+    "aliases": [
+      "CSS sticky",
+      "sticky positioning"
+    ],
+    "senses": [
+      {
+        "definition": "通常フローに従いながらスクロールで閾値に達するとビューポートに固定されるCSSの配置モード。`position: sticky`+`top`等の閾値で動作し、スクロールが閾値内に戻ると元の位置に戻る。",
+        "domain": "css",
+        "keywords": [
+          "position",
+          "スクロール",
+          "固定",
+          "ヘッダー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "position: fixed",
+    "reading": "ぽじしょんふぃっくすど",
+    "aliases": [
+      "CSS fixed",
+      "fixed positioning"
+    ],
+    "senses": [
+      {
+        "definition": "ビューポート（または直近のtransform/filterを持つ祖先）に対して固定された位置に配置されるCSSの配置モード。スクロールしても動かないナビゲーションバーやトーストUI、モーダルオーバーレイに使われる。",
+        "domain": "css",
+        "keywords": [
+          "position",
+          "ビューポート",
+          "固定",
+          "ナビゲーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "position: absolute",
+    "reading": "ぽじしょんあぶそりゅーと",
+    "aliases": [
+      "CSS absolute",
+      "absolute positioning"
+    ],
+    "senses": [
+      {
+        "definition": "最も近い`position: static`以外の祖先を基準に絶対座標で配置されるCSSの配置モード。通常フローから外れるため周囲の要素に影響を与えず、ドロップダウンメニューやツールチップの実装に多用される。",
+        "domain": "css",
+        "keywords": [
+          "position",
+          "絶対配置",
+          "オフセット",
+          "基準要素"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "overflow",
+    "reading": "おーばーふろー",
+    "aliases": [
+      "CSS overflow",
+      "overflow hidden"
+    ],
+    "senses": [
+      {
+        "definition": "コンテンツがコンテナのサイズを超えた場合の表示方法を制御するCSSプロパティ。`hidden`で切り取り・`scroll`でスクロールバー表示・`auto`で必要時のみ表示。新しいブロック整形コンテキストも生成する。",
+        "domain": "css",
+        "keywords": [
+          "オーバーフロー",
+          "スクロール",
+          "BFC",
+          "クリッピング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "clip-path",
+    "reading": "くりっぱす",
+    "aliases": [
+      "CSS clip-path",
+      "クリッピングパス"
+    ],
+    "senses": [
+      {
+        "definition": "要素の表示領域を任意の形状にクリップするCSSプロパティ。`circle()`・`polygon()`・`inset()`・SVGのclipPathPathを参照可能で、アニメーションとの組み合わせで複雑な形状変化エフェクトも実現できる。",
+        "domain": "css",
+        "keywords": [
+          "クリップ",
+          "形状",
+          "polygon",
+          "アニメーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSフィルター",
+    "reading": "しーえすえすふぃるたー",
+    "aliases": [
+      "CSS Filter",
+      "filter",
+      "CSS filter property"
+    ],
+    "senses": [
+      {
+        "definition": "要素にぼかし・色変換・彩度・コントラストなどのグラフィカル効果を適用するCSSプロパティ。`filter: blur(4px) grayscale(50%)`のように複数の関数を重ねられ、ホバーエフェクトや画像加工UIに利用される。",
+        "domain": "css",
+        "keywords": [
+          "filter",
+          "blur",
+          "grayscale",
+          "エフェクト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "backdrop-filter",
+    "reading": "ばっくどろっぷふぃるたー",
+    "aliases": [
+      "CSS backdrop-filter",
+      "背景ぼかし"
+    ],
+    "senses": [
+      {
+        "definition": "要素の後ろに描画されたコンテンツにフィルター効果を適用するCSSプロパティ。`backdrop-filter: blur(10px)`でガラスモーフィズムUI（すりガラス効果）を実現する際に使われ、ヘッダーやモーダル背景に多用される。",
+        "domain": "css",
+        "keywords": [
+          "ガラスモーフィズム",
+          "blur",
+          "エフェクト",
+          "透過UI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "mix-blend-mode",
+    "reading": "みっくすぶれんどもーど",
+    "aliases": [
+      "CSSブレンドモード",
+      "blend mode"
+    ],
+    "senses": [
+      {
+        "definition": "要素と背景の色をどのように合成するかを指定するCSSプロパティ。Photoshopの描画モードに相当し、`multiply`・`screen`・`overlay`などの値でデザイン上の重ね合わせ表現を純CSSで実現できる。",
+        "domain": "css",
+        "keywords": [
+          "ブレンドモード",
+          "合成",
+          "multiply",
+          "screen"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS Transform",
+    "reading": "しーえすえすとらんすふぉーむ",
+    "aliases": [
+      "transformプロパティ"
+    ],
+    "senses": [
+      {
+        "definition": "要素を移動・回転・拡縮・傾斜させるCSSプロパティ。`translate`・`rotate`・`scale`・`skew`関数の組み合わせが可能で、GPU合成レイヤーに昇格しアニメーションを高速化する効果もある。",
+        "domain": "css",
+        "keywords": [
+          "transform",
+          "translate",
+          "rotate",
+          "scale",
+          "GPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS Transition",
+    "reading": "しーえすえすとらんじしょん",
+    "aliases": [
+      "transitionプロパティ",
+      "CSS遷移"
+    ],
+    "senses": [
+      {
+        "definition": "プロパティ値の変化を指定した時間と緩急で滑らかに補間するCSSの仕組み。`transition: opacity 0.3s ease`のように対象プロパティ・時間・イージング関数を指定し、ホバーや状態変化にアニメーションを付ける。",
+        "domain": "css",
+        "keywords": [
+          "トランジション",
+          "イージング",
+          "補間",
+          "アニメーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS Animation",
+    "reading": "しーえすえすあにめーしょん",
+    "aliases": [
+      "animationプロパティ",
+      "CSSアニメーション"
+    ],
+    "senses": [
+      {
+        "definition": "`@keyframes`で定義したアニメーションシーケンスを要素に適用するCSSプロパティ。繰り返し回数・方向・遅延・充填モードを細かく制御でき、トランジションと異なりJavaScriptなしで複雑な多段アニメーションを表現できる。",
+        "domain": "css",
+        "keywords": [
+          "animation",
+          "@keyframes",
+          "繰り返し",
+          "遅延"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "@keyframes",
+    "reading": "きーふれーむず",
+    "aliases": [
+      "CSS @keyframes",
+      "キーフレーム"
+    ],
+    "senses": [
+      {
+        "definition": "CSSアニメーションの各中間状態（キーフレーム）を`from`/`to`またはパーセンテージで定義するアットルール。`@keyframes slidein { from { transform: translateX(-100%) } to { transform: translateX(0) } }`のように記述する。",
+        "domain": "css",
+        "keywords": [
+          "アニメーション",
+          "キーフレーム",
+          "中間状態",
+          "from/to"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "will-change",
+    "reading": "うぃるちぇんじ",
+    "aliases": [
+      "CSS will-change",
+      "合成レイヤー昇格"
+    ],
+    "senses": [
+      {
+        "definition": "要素のどのプロパティが変化するかブラウザに事前通知するCSSプロパティ。`will-change: transform`で要素をGPU合成レイヤーに昇格させアニメーションのちらつきを防ぐが、過剰使用はメモリを消費するため必要な場合のみ使う。",
+        "domain": "css",
+        "keywords": [
+          "パフォーマンス",
+          "GPU",
+          "合成レイヤー",
+          "アニメーション最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "contain",
+    "reading": "こんていん",
+    "aliases": [
+      "CSS contain",
+      "コンテナ分離"
+    ],
+    "senses": [
+      {
+        "definition": "要素のレイアウト・ペイント・スタイルの影響範囲をその要素に閉じ込めるCSSプロパティ。`contain: layout paint`でブラウザが再計算するスコープを限定し、大規模なUIのレンダリングパフォーマンスを向上させる。",
+        "domain": "css",
+        "keywords": [
+          "パフォーマンス",
+          "レイアウト分離",
+          "ペイント",
+          "レンダリング最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "content-visibility",
+    "reading": "こんてんとびじびりてぃ",
+    "aliases": [
+      "CSS content-visibility",
+      "仮想化CSS"
+    ],
+    "senses": [
+      {
+        "definition": "要素がビューポート外にある場合のレンダリングをスキップするCSSプロパティ。`content-visibility: auto`で長いページの初期表示を大幅に高速化でき、ブラウザが表示領域のみをレンダリングする「CSS仮想化」を実現する。",
+        "domain": "css",
+        "keywords": [
+          "パフォーマンス",
+          "遅延レンダリング",
+          "スクロール",
+          "ビューポート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "font-display",
+    "reading": "ふぉんとでぃすぷれい",
+    "aliases": [
+      "CSS font-display",
+      "Webフォント表示戦略"
+    ],
+    "senses": [
+      {
+        "definition": "Webフォントのロード中にフォールバックフォントの表示を制御する`@font-face`内のディスクリプタ。`swap`でFOITを防ぎテキストを即表示・`optional`で帯域を節約するなどパフォーマンスと視覚安定性のトレードオフを調整する。",
+        "domain": "css",
+        "keywords": [
+          "Webフォント",
+          "FOIT",
+          "FOUT",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "@font-face",
+    "reading": "ふぉんとふぇいす",
+    "aliases": [
+      "CSSカスタムフォント",
+      "Webフォント定義"
+    ],
+    "senses": [
+      {
+        "definition": "カスタムフォントファイルをWebページで使用するためのCSSアットルール。フォントの名前・ソース（woff2など）・スタイル・ウェイト・Unicodeレンジを定義し、ブラウザが必要なフォントサブセットのみをダウンロードできる。",
+        "domain": "css",
+        "keywords": [
+          "Webフォント",
+          "woff2",
+          "フォント定義",
+          "サブセット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS Scroll Snap",
+    "reading": "しーえすえすすくろーるすなっぷ",
+    "aliases": [
+      "Scroll Snap",
+      "scroll-snap-type"
+    ],
+    "senses": [
+      {
+        "definition": "スクロール終了時に特定のスナップポイントに吸着する動作を実現するCSSプロパティ群。コンテナに`scroll-snap-type`・子要素に`scroll-snap-align`を指定しカルーセルや縦スクロールギャラリーをJSなしで実装できる。",
+        "domain": "css",
+        "keywords": [
+          "スクロール",
+          "スナップ",
+          "カルーセル",
+          "UX"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "scroll-behavior",
+    "reading": "すくろーるびへいびあ",
+    "aliases": [
+      "CSS scroll-behavior",
+      "スムーススクロール"
+    ],
+    "senses": [
+      {
+        "definition": "アンカーリンクなどによるプログラムスクロールの動作を制御するCSSプロパティ。`scroll-behavior: smooth`でページ内リンクを滑らかにスクロールさせられ、`prefers-reduced-motion`と組み合わせてアクセシビリティにも配慮する。",
+        "domain": "css",
+        "keywords": [
+          "スムーススクロール",
+          "アンカーリンク",
+          "アニメーション",
+          "アクセシビリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "overscroll-behavior",
+    "reading": "おーばーすくろーるびへいびあ",
+    "aliases": [
+      "CSS overscroll-behavior",
+      "スクロール連鎖防止"
+    ],
+    "senses": [
+      {
+        "definition": "スクロールがコンテンツの端に達したときの動作を制御するCSSプロパティ。`overscroll-behavior: contain`でモーダルや引き出しUIのスクロールが親要素に連鎖するのを防ぎ、スクロール境界でのバウンスエフェクトも制御できる。",
+        "domain": "css",
+        "keywords": [
+          "スクロール",
+          "連鎖防止",
+          "モーダル",
+          "バウンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "touch-action",
+    "reading": "たっちあくしょん",
+    "aliases": [
+      "CSS touch-action",
+      "タッチ操作制御"
+    ],
+    "senses": [
+      {
+        "definition": "要素でのタッチ操作（パン・ピンチズームなど）をブラウザとJSのどちらが処理するかを指定するCSSプロパティ。`touch-action: pan-y`でY方向のみブラウザネイティブスクロールを許可し、カスタムスワイプ実装との干渉を防ぐ。",
+        "domain": "css",
+        "keywords": [
+          "タッチ",
+          "パン",
+          "ピンチズーム",
+          "モバイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pointer-events",
+    "reading": "ぽいんたーいべんつ",
+    "aliases": [
+      "CSS pointer-events",
+      "マウスイベント制御"
+    ],
+    "senses": [
+      {
+        "definition": "要素がマウス・タッチ・ペンなどのポインターイベントのターゲットになれるかどうかを制御するCSSプロパティ。`pointer-events: none`で透明なオーバーレイや無効化されたUIコントロールをクリックスルー可能にする。",
+        "domain": "css",
+        "keywords": [
+          "イベント",
+          "クリックスルー",
+          "オーバーレイ",
+          "無効化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "accent-color",
+    "reading": "あくせんとからー",
+    "aliases": [
+      "CSS accent-color",
+      "フォームアクセントカラー"
+    ],
+    "senses": [
+      {
+        "definition": "チェックボックス・ラジオボタン・レンジスライダーなどのネイティブUIコントロールのテーマ色を指定するCSSプロパティ。複雑なカスタムスタイルなしでフォームコントロールをブランドカラーに統一できる。",
+        "domain": "css",
+        "keywords": [
+          "フォーム",
+          "チェックボックス",
+          "テーマカラー",
+          "ブランディング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "color-scheme",
+    "reading": "からーすきーむ",
+    "aliases": [
+      "CSS color-scheme",
+      "カラースキーム"
+    ],
+    "senses": [
+      {
+        "definition": "ページや要素が対応するカラーモード（light/dark）をブラウザに通知するCSSプロパティ。`color-scheme: light dark`と指定すると、スクロールバーやフォームコントロールなどのシステムUIも自動的にダークモードに適応する。",
+        "domain": "css",
+        "keywords": [
+          "ダークモード",
+          "ライトモード",
+          "システムUI",
+          "テーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "prefers-color-scheme",
+    "reading": "ぷりふぁーずからーすきーむ",
+    "aliases": [
+      "CSS prefers-color-scheme",
+      "ダークモードメディアクエリ"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザーのOSカラーモード設定（light/dark）を検出するCSSメディア特性。`@media (prefers-color-scheme: dark)`でダークモード用のスタイルを定義し、システム設定に自動追従するテーマ切り替えを実装できる。",
+        "domain": "css",
+        "keywords": [
+          "ダークモード",
+          "メディアクエリ",
+          "システム設定",
+          "テーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "prefers-reduced-motion",
+    "reading": "ぷりふぁーずりでゅーすどもーしょん",
+    "aliases": [
+      "CSS prefers-reduced-motion",
+      "モーション軽減設定"
+    ],
+    "senses": [
+      {
+        "definition": "OSの「視差効果を減らす」設定を検出するCSSメディア特性。`@media (prefers-reduced-motion: reduce)`でアニメーションを無効化または簡略化することで、前庭障害などを持つユーザーへのアクセシビリティを確保する。",
+        "domain": "css",
+        "keywords": [
+          "アクセシビリティ",
+          "アニメーション",
+          "メディアクエリ",
+          "前庭障害"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "@supports",
+    "reading": "あっとさぽーつ",
+    "aliases": [
+      "CSS @supports",
+      "機能クエリ"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザが特定のCSSプロパティや値をサポートするかどうかを条件にスタイルを適用するアットルール。`@supports (display: grid)`でGrid未対応ブラウザのフォールバックを提供するプログレッシブエンハンスメントに使う。",
+        "domain": "css",
+        "keywords": [
+          "プログレッシブエンハンスメント",
+          "ブラウザ互換",
+          "機能検出",
+          "フォールバック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ブロック整形コンテキスト",
+    "reading": "ぶろくせいけいこんてきすと",
+    "aliases": [
+      "BFC",
+      "Block Formatting Context"
+    ],
+    "senses": [
+      {
+        "definition": "ブロックレベル要素が独立してレイアウトされる独自の空間。`overflow: hidden`・`float`・`display: flow-root`などで生成され、内部のfloatを包含したりマージン相殺を防いだりする効果がある。",
+        "domain": "css",
+        "keywords": [
+          "BFC",
+          "float",
+          "overflow",
+          "マージン相殺"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インライン整形コンテキスト",
+    "reading": "いんらいんせいけいこんてきすと",
+    "aliases": [
+      "IFC",
+      "Inline Formatting Context"
+    ],
+    "senses": [
+      {
+        "definition": "テキストや`display: inline`要素が行ボックス内に並べられるレイアウトの仕組み。行の高さは`line-height`と各インライン要素の高さから計算され、`vertical-align`で要素の縦位置を制御する。",
+        "domain": "css",
+        "keywords": [
+          "IFC",
+          "line-height",
+          "vertical-align",
+          "行ボックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フレックスコンテナ",
+    "reading": "ふれっくすこんてな",
+    "aliases": [
+      "flex container",
+      "Flexコンテナ"
+    ],
+    "senses": [
+      {
+        "definition": "`display: flex`または`display: inline-flex`を指定した要素。直接の子要素がフレックスアイテムとなり、`flex-direction`・`justify-content`・`align-items`・`flex-wrap`などのプロパティで子の配置を制御する。",
+        "domain": "css",
+        "keywords": [
+          "Flexbox",
+          "flex-direction",
+          "justify-content",
+          "align-items"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フレックスアイテム",
+    "reading": "ふれっくすあいてむ",
+    "aliases": [
+      "flex item",
+      "Flexアイテム"
+    ],
+    "senses": [
+      {
+        "definition": "フレックスコンテナの直接の子要素。`flex-grow`・`flex-shrink`・`flex-basis`の3値をショートハンドの`flex`で制御し、利用可能なスペースへの伸縮と初期サイズを設定する。",
+        "domain": "css",
+        "keywords": [
+          "Flexbox",
+          "flex-grow",
+          "flex-shrink",
+          "flex-basis"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "グリッドトラック",
+    "reading": "ぐりっどとらっく",
+    "aliases": [
+      "grid track",
+      "グリッド列・行"
+    ],
+    "senses": [
+      {
+        "definition": "CSS Gridの行または列の一区画。`grid-template-columns: repeat(3, 1fr)`のように`fr`単位や`minmax()`関数でサイズを指定し、グリッドラインに囲まれた帯状の空間としてレイアウトを構成する。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "fr単位",
+          "repeat()",
+          "minmax()"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "グリッドエリア",
+    "reading": "ぐりっどえりあ",
+    "aliases": [
+      "grid area",
+      "grid-template-areas"
+    ],
+    "senses": [
+      {
+        "definition": "CSS Gridで名前付き領域を定義し、セルを結合したレイアウトを宣言的に記述する仕組み。`grid-template-areas`で「header」「sidebar」「main」などの名前付き領域を視覚的に配置し、各要素を`grid-area`で割り当てる。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "grid-template-areas",
+          "名前付き領域",
+          "レイアウト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "fr単位",
+    "reading": "えふあーるたんい",
+    "aliases": [
+      "fr unit",
+      "CSS fr",
+      "フレクシブルトラック"
+    ],
+    "senses": [
+      {
+        "definition": "CSS Gridのトラックサイズ指定に使う割合単位。使用可能な空間を分数（fraction）で分配し、`grid-template-columns: 1fr 2fr`で右列が左列の2倍幅になる。`minmax()`と組み合わせて最小幅を保証しつつ均等分割できる。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "割合単位",
+          "スペース分配",
+          "minmax()"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "論理的プロパティ（inline/block）",
+    "reading": "ろんりてきぷろぱてぃ",
+    "aliases": [
+      "inline-start",
+      "block-end",
+      "CSS logical"
+    ],
+    "senses": [
+      {
+        "definition": "CSSの物理的方向（left/top）に対して書字方向に相対的な方向（inline-start/block-end等）でスタイルを指定するプロパティ。`margin-inline-start`は左から右書きでは`margin-left`に相当し、RTLや縦書きに自動適応する。",
+        "domain": "css",
+        "keywords": [
+          "論理プロパティ",
+          "RTL",
+          "多言語",
+          "書字方向"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS変数のフォールバック",
+    "reading": "しーえすえすへんすうのふぉーるばっく",
+    "aliases": [
+      "var() fallback",
+      "CSS変数デフォルト値"
+    ],
+    "senses": [
+      {
+        "definition": "`var(--color, blue)`のようにCSS変数が未定義の場合に使うデフォルト値を指定する構文。コンポーネントが外部から変数を受け取りつつ独自のデフォルトスタイルを持つ設計を可能にし、テーマ対応UIの実装に役立つ。",
+        "domain": "css",
+        "keywords": [
+          "CSS変数",
+          "var()",
+          "フォールバック",
+          "デフォルト値"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カスタムプロパティの継承",
+    "reading": "かすたむぷろぱてぃのけいしょう",
+    "aliases": [
+      "CSS custom property inheritance",
+      "CSS変数スコープ"
+    ],
+    "senses": [
+      {
+        "definition": "CSS変数（カスタムプロパティ）は通常のCSSプロパティと同様に継承される。`:root`で定義した変数はページ全体に、特定のコンポーネントで上書きした変数はその子孫にのみ適用されるスコープを形成する。",
+        "domain": "css",
+        "keywords": [
+          "CSS変数",
+          "スコープ",
+          "継承",
+          "カスケード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ユーティリティファーストCSS",
+    "reading": "ゆーてぃりてぃふぁーすとしーえすえす",
+    "aliases": [
+      "Utility-First CSS",
+      "アトミックCSS"
+    ],
+    "senses": [
+      {
+        "definition": "単一の視覚的機能を持つ小さなクラスを組み合わせてUIを構築するCSS手法。Tailwind CSSが代表的で、カスタムCSSの記述を最小限にしながらデザインの一貫性を保ちHTMLのクラス属性でスタイルを表現する。",
+        "domain": "css",
+        "keywords": [
+          "Tailwind",
+          "アトミック",
+          "単一責務",
+          "HTML優先"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "box-shadow",
+    "reading": "ぼっくすしゃどう",
+    "aliases": [
+      "CSS box-shadow",
+      "ボックスシャドウ"
+    ],
+    "senses": [
+      {
+        "definition": "要素のボックスにドロップシャドウを付与するCSSプロパティ。水平・垂直オフセット・ぼかし半径・拡散半径・色を指定でき、カンマ区切りで複数のシャドウを重ねられる。キーワードで内側シャドウも表現可能。",
+        "domain": "css",
+        "keywords": [
+          "シャドウ",
+          "ドロップシャドウ",
+          "inset",
+          "装飾"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "text-shadow",
+    "reading": "てきすとしゃどう",
+    "aliases": [
+      "CSS text-shadow",
+      "テキストシャドウ"
+    ],
+    "senses": [
+      {
+        "definition": "テキストにシャドウ効果を付与するCSSプロパティ。水平・垂直オフセット・ぼかし半径・色を指定し、複数のシャドウをカンマ区切りで重ねることでグロー効果やエンボス効果などのタイポグラフィ表現を実現できる。",
+        "domain": "css",
+        "keywords": [
+          "シャドウ",
+          "テキスト",
+          "タイポグラフィ",
+          "グロー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フルードタイポグラフィ",
+    "reading": "ふるーどたいぽぐらふぃ",
+    "aliases": [
+      "Fluid Typography",
+      "流体タイポグラフィ",
+      "可変フォントサイズ"
+    ],
+    "senses": [
+      {
+        "definition": "ビューポート幅に応じてフォントサイズが連続的に変化するタイポグラフィ手法。`clamp()`・`vw`単位・CSS計算を組み合わせ、特定のブレークポイントなしに最小・最大サイズの範囲で滑らかにスケールする。",
+        "domain": "css",
+        "keywords": [
+          "clamp()",
+          "vw",
+          "フォントサイズ",
+          "レスポンシブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSグリッドの暗黙的グリッド",
+    "reading": "しーえすえすぐりっどのあんもくてきぐりっど",
+    "aliases": [
+      "implicit grid",
+      "CSS implicit tracks"
+    ],
+    "senses": [
+      {
+        "definition": "CSS Gridで`grid-template-columns/rows`に明示しなかった行・列が自動生成される領域。`grid-auto-rows`や`grid-auto-columns`でサイズを制御し、`grid-auto-flow`で自動配置の方向を指定する。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "自動配置",
+          "grid-auto-rows",
+          "暗黙的トラック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS変数とJavaScript連携",
+    "reading": "しーえすえすへんすうとじゃばすくりぷとれんけい",
+    "aliases": [
+      "CSS variables JS interop",
+      "setProperty",
+      "getComputedStyle"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptから`element.style.setProperty('--color', 'red')`でCSS変数を動的に変更する連携手法。テーマ切り替えやインタラクティブなアニメーション値の更新をJSとCSSが協調して処理するパターン。",
+        "domain": "css",
+        "keywords": [
+          "CSS変数",
+          "JavaScript",
+          "動的スタイル",
+          "setProperty"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ベンダープレフィックス",
+    "reading": "べんだーぷれふぃっくす",
+    "aliases": [
+      "Vendor Prefix",
+      "-webkit-",
+      "-moz-"
+    ],
+    "senses": [
+      {
+        "definition": "実験的CSSプロパティをブラウザ固有の接頭辞（`-webkit-`・`-moz-`・`-ms-`）付きで実装した歴史的な仕組み。現在は標準化が進みPostCSS+Autoprefixerで自動付与するのが一般的で、新規にプレフィックスを手書きする機会は減少している。",
+        "domain": "css",
+        "keywords": [
+          "Autoprefixer",
+          "PostCSS",
+          "ブラウザ互換",
+          "プレフィックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アダプティブデザイン",
+    "reading": "あだぷてぃぶでざいん",
+    "aliases": [
+      "Adaptive Design",
+      "適応型デザイン"
+    ],
+    "senses": [
+      {
+        "definition": "特定のブレークポイントで異なる固定レイアウトを切り替えるデザイン手法。レスポンシブデザインが流体的に変化するのに対し、アダプティブは段階的にデザインを切り替える。デバイス別に最適化された体験を提供する。",
+        "domain": "css",
+        "keywords": [
+          "ブレークポイント",
+          "レスポンシブ",
+          "デバイス",
+          "固定レイアウト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カラーシステム",
+    "reading": "からーしすてむ",
+    "aliases": [
+      "Design Color System",
+      "カラートークン"
+    ],
+    "senses": [
+      {
+        "definition": "デザインシステムにおけるカラーの命名・階層・適用ルールの体系。プリミティブカラー（具体的な色値）・セマンティックカラー（用途別の意味）・コンポーネントカラーの3層構造でCSS変数と組み合わせてテーマ管理する。",
+        "domain": "css",
+        "keywords": [
+          "デザインシステム",
+          "CSS変数",
+          "テーマ",
+          "カラートークン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSリセット",
+    "reading": "しーえすえすりせっと",
+    "aliases": [
+      "CSS Reset",
+      "Normalize.css",
+      "Modern CSS Reset"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザ間のデフォルトスタイルの差異を均一化するCSSファイル。古典的なEric Meyerリセット・差異のみを補正するNormalize.css・現代的なAndy Bellリセットなどがあり、スタイルの一貫性を確保する出発点となる。",
+        "domain": "css",
+        "keywords": [
+          "ブラウザ互換",
+          "デフォルトスタイル",
+          "Normalize",
+          "スタイル均一化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSスペーシングシステム",
+    "reading": "しーえすえすすぺーしんぐしすてむ",
+    "aliases": [
+      "CSS Spacing Scale",
+      "スペーシングスケール",
+      "スペースシステム"
+    ],
+    "senses": [
+      {
+        "definition": "余白・パディング・ギャップに一貫した数値スケール（4px・8px・16px等）を適用するデザインシステムの一要素。CSS変数やTailwindのスペーシング設定として実装し、視覚的なリズムと整合性を確保する。",
+        "domain": "css",
+        "keywords": [
+          "デザインシステム",
+          "余白",
+          "スケール",
+          "CSS変数"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "display: grid vs flex",
+    "reading": "でぃすぷれいぐりっどたいふれっくす",
+    "aliases": [
+      "Grid vs Flexbox",
+      "レイアウト選択"
+    ],
+    "senses": [
+      {
+        "definition": "CSS GridとFlexboxの使い分け指針。Gridは二次元レイアウト（ページ全体・カード格子など）に、Flexboxは一次元の整列（ナビゲーション・ボタン行など）に向く。両者を組み合わせて使うことも多い。",
+        "domain": "css",
+        "keywords": [
+          "CSS Grid",
+          "Flexbox",
+          "二次元",
+          "一次元",
+          "レイアウト選択"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSアーキテクチャ",
+    "reading": "しーえすえすあーきてくちゃ",
+    "aliases": [
+      "CSS Architecture",
+      "CSS設計"
+    ],
+    "senses": [
+      {
+        "definition": "大規模プロジェクトでCSSをスケーラブルかつ保守可能に管理するための設計方針の総称。BEM・OOCSS・SMACSSといった命名規則・CSS Modules・CSS-in-JSなどのスコープ管理手法・カスケードレイヤーによる優先順位管理を組み合わせる。",
+        "domain": "css",
+        "keywords": [
+          "設計",
+          "BEM",
+          "CSS Modules",
+          "スケーラビリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セレクタパフォーマンス",
+    "reading": "せれくたぱふぉーまんす",
+    "aliases": [
+      "CSS selector performance",
+      "セレクタ効率"
+    ],
+    "senses": [
+      {
+        "definition": "CSSセレクタがブラウザによって右から左に評価されることを理解した上でパフォーマンスを考慮した書き方をすること。ユニバーサルセレクタや過度に深いネストは避け、クラスセレクタを主体にする。現代ブラウザでは実用上の差は小さい。",
+        "domain": "css",
+        "keywords": [
+          "パフォーマンス",
+          "セレクタ",
+          "ブラウザ評価",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ペイントとレイアウト",
+    "reading": "ぺいんととれいあうと",
+    "aliases": [
+      "CSS paint layout",
+      "レイアウト再計算",
+      "リペイント"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザのレンダリングパイプラインの工程。Layoutはサイズ・位置を計算しPaintはピクセルを描画する。`transform`・`opacity`の変化はLayoutをスキップしCompositeのみで処理されるため高パフォーマンスなアニメーションになる。",
+        "domain": "css",
+        "keywords": [
+          "レンダリング",
+          "リフロー",
+          "リペイント",
+          "合成"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSグラデーション",
+    "reading": "しーえすえすぐらでーしょん",
+    "aliases": [
+      "CSS gradient",
+      "linear-gradient",
+      "radial-gradient"
+    ],
+    "senses": [
+      {
+        "definition": "2色以上の色を滑らかに遷移させる背景画像を生成するCSS関数。`linear-gradient`で線形・`radial-gradient`で放射状・`conic-gradient`で円錐状のグラデーションを作成でき、ベクター的なカラーパターン生成にも使われる。",
+        "domain": "css",
+        "keywords": [
+          "グラデーション",
+          "linear-gradient",
+          "background",
+          "カラー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSシェイプ",
+    "reading": "しーえすえすしぇいぷ",
+    "aliases": [
+      "CSS Shapes",
+      "shape-outside",
+      "CSS shape-outside"
+    ],
+    "senses": [
+      {
+        "definition": "フロートした要素の周囲に画像や多角形に沿ったテキスト回り込みを実現するCSSプロパティ。`shape-outside: circle()`や`shape-outside: url(image.png)`で非矩形のレイアウトを実装でき、雑誌風デザインに使われる。",
+        "domain": "css",
+        "keywords": [
+          "shape-outside",
+          "float",
+          "テキスト回り込み",
+          "非矩形"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "object-fit",
+    "reading": "おぶじぇくとふぃっと",
+    "aliases": [
+      "CSS object-fit",
+      "画像フィット"
+    ],
+    "senses": [
+      {
+        "definition": "imgやvideoなどのコンテンツが要素ボックスに収まる方法を指定するCSSプロパティ。`object-fit: cover`でアスペクト比を保ちながら要素全体を埋め、`contain`では全体が収まるよう縮小する。`object-position`で焦点位置も制御できる。",
+        "domain": "css",
+        "keywords": [
+          "画像",
+          "object-fit",
+          "cover",
+          "contain",
+          "アスペクト比"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSカスタムメディア",
+    "reading": "しーえすえすかすたむめでぃあ",
+    "aliases": [
+      "@custom-media",
+      "CSS Custom Media"
+    ],
+    "senses": [
+      {
+        "definition": "メディアクエリに名前付きエイリアスを定義するCSS仕様（Level 5）。`@custom-media --mobile (max-width: 768px)`と定義し`@media (--mobile)`で参照することで、ブレークポイントをCSS変数のように一元管理できる。",
+        "domain": "css",
+        "keywords": [
+          "メディアクエリ",
+          "カスタムメディア",
+          "@custom-media",
+          "ブレークポイント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSパフォーマンス最適化",
+    "reading": "しーえすえすぱふぉーまんすさいてきか",
+    "aliases": [
+      "CSS performance",
+      "CSS optimization"
+    ],
+    "senses": [
+      {
+        "definition": "CSSのロード・パース・計算・レンダリングを最適化する手法の総称。クリティカルCSSのインライン化・未使用CSS削除（PurgeCSS）・`contain`・`content-visibility`の活用・レンダリングブロックの回避などが含まれる。",
+        "domain": "css",
+        "keywords": [
+          "パフォーマンス",
+          "クリティカルCSS",
+          "PurgeCSS",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS環境変数",
+    "reading": "しーえすえすかんきょうへんすう",
+    "aliases": [
+      "env()",
+      "CSS environment variables",
+      "safe-area-inset"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザや端末が提供する値を参照する`env()`関数。`env(safe-area-inset-bottom)`でiPhoneのホームインジケーター領域を取得し、コンテンツがノッチやセーフエリアに重ならないレイアウトを実装できる。",
+        "domain": "css",
+        "keywords": [
+          "env()",
+          "safe-area",
+          "ノッチ",
+          "PWA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSハイライト疑似要素",
+    "reading": "しーえすえすはいらいとぎじようそ",
+    "aliases": [
+      "::selection",
+      "::highlight",
+      "CSSカスタムハイライト"
+    ],
+    "senses": [
+      {
+        "definition": "テキスト選択（`::selection`）やブラウザのテキストハイライト（`::highlight()`）のスタイルを制御するCSS疑似要素。選択時の背景色・文字色をブランドカラーに合わせたり、検索ハイライトのスタイルをカスタマイズできる。",
+        "domain": "css",
+        "keywords": [
+          "::selection",
+          "ハイライト",
+          "テキスト選択",
+          "疑似要素"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSスクロールバースタイリング",
+    "reading": "しーえすえすすくろーるばーすたいりんぐ",
+    "aliases": [
+      "::-webkit-scrollbar",
+      "scrollbar-width",
+      "scrollbar-color"
+    ],
+    "senses": [
+      {
+        "definition": "スクロールバーの外観をCSSでカスタマイズする手法。標準化された`scrollbar-width`・`scrollbar-color`（Firefox・Chrome 121+対応）と、Webkit固有の`::-webkit-scrollbar`疑似要素による詳細カスタマイズがある。",
+        "domain": "css",
+        "keywords": [
+          "スクロールバー",
+          "scrollbar-width",
+          "カスタマイズ",
+          "UX"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カラーP3",
+    "reading": "からーぴーすりー",
+    "aliases": [
+      "P3 color space",
+      "display-p3",
+      "wide gamut"
+    ],
+    "senses": [
+      {
+        "definition": "sRGBより広い色域を持つDisplay P3カラースペースをCSSで指定する方法。`color(display-p3 1 0 0)`やHDR対応の`oklch()`・`lch()`関数で鮮やかな色を表現でき、対応ディスプレイで豊かな色彩を提供できる。",
+        "domain": "css",
+        "keywords": [
+          "広色域",
+          "P3",
+          "oklch",
+          "HDR"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSレイヤーと詳細度",
+    "reading": "しーえすえすれいやーとしょうさいど",
+    "aliases": [
+      "@layer specificity",
+      "レイヤー詳細度",
+      "Cascade Layer specificity"
+    ],
+    "senses": [
+      {
+        "definition": "`@layer`で宣言したスタイルは、同じ詳細度でも後から宣言したレイヤーが優先される。レイヤー外のスタイルは常にレイヤー内のスタイルより優先され、`!important`はレイヤーの優先順位を逆転させる。",
+        "domain": "css",
+        "keywords": [
+          "@layer",
+          "詳細度",
+          "カスケード",
+          "!important"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSマスキング",
+    "reading": "しーえすえすますきんぐ",
+    "aliases": [
+      "CSS Mask",
+      "mask-image",
+      "mask-composite"
+    ],
+    "senses": [
+      {
+        "definition": "要素の表示領域を画像やグラデーションで定義するCSSプロパティ群。`mask-image`でSVGや画像をマスクとして使用し、`clip-path`より柔軟な透過表現が可能。グラデーションフェードアウト効果に多用される。",
+        "domain": "css",
+        "keywords": [
+          "mask-image",
+          "マスク",
+          "グラデーション",
+          "透過"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSSカウンター",
+    "reading": "しーえすえすかうんたー",
+    "aliases": [
+      "CSS Counters",
+      "counter-increment",
+      "counter()"
+    ],
+    "senses": [
+      {
+        "definition": "CSSだけで要素の番号付けを自動化する仕組み。`counter-reset`で初期化し`counter-increment`でカウントし`counter()`関数で`::before`疑似要素に表示する。目次の章番号や順序付きリストのカスタムスタイルに使われる。",
+        "domain": "css",
+        "keywords": [
+          "counter()",
+          "::before",
+          "番号付け",
+          "リスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSS比較セレクタ",
+    "reading": "しーえすえすひかくせれくた",
+    "aliases": [
+      "CSS Quantity Queries",
+      "nth-child",
+      "nth-of-type"
+    ],
+    "senses": [
+      {
+        "definition": "要素数や位置に基づいてスタイルを適用する疑似クラスの総称。`:nth-child(2n+1)`・`:nth-of-type()`・`:nth-last-child()`などを使い、グリッドの最終行のみ下線を外すなど条件付きスタイリングを実現する。",
+        "domain": "css",
+        "keywords": [
+          ":nth-child",
+          "疑似クラス",
+          "条件付きスタイル",
+          "セレクタ"
+        ]
+      }
+    ]
+  }
+]

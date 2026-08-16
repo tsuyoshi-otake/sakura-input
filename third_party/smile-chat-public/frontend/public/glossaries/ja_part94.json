@@ -1,0 +1,946 @@
+[
+  {
+    "term": "要件トレーサビリティ（拡張1）",
+    "reading": "ようけんとれーさびりてぃ（かくちょう1）",
+    "senses": [
+      {
+        "definition": "要件トレーサビリティは各要件を設計・実装・テストへと追跡できるようにリンクし、変更影響を端から端まで把握する仕組みです。品質確保と変更管理の基盤となります。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "トレーサビリティ",
+          "要件追跡",
+          "変更影響",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Requirements Traceability (Extended 1)"
+    ]
+  },
+  {
+    "term": "非機能要求グレード（拡張1）",
+    "reading": "ひきのうようきゅうぐれーど（かくちょう1）",
+    "senses": [
+      {
+        "definition": "非機能要求グレードは性能・可用性・セキュリティなどの品質に対して測定可能な目標レベルを段階的に定義したものです。ステークホルダー間の合意形成を容易にします。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "非機能要件",
+          "品質目標",
+          "サービスレベル",
+          "グレード定義"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Functional Requirement Grade (Extended 1)"
+    ]
+  },
+  {
+    "term": "業務要件定義",
+    "reading": "ぎょうむようけんていぎ",
+    "senses": [
+      {
+        "definition": "業務要件定義は、システムが支援すべきビジネス目標・プロセス・成果を明確化する活動です。システム要件の出発点となります。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "ビジネスプロセス",
+          "要件",
+          "スコープ",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Requirements Definition"
+    ]
+  },
+  {
+    "term": "ユースケース図",
+    "reading": "ゆーすけーすず",
+    "senses": [
+      {
+        "definition": "ユースケース図は、システムのアクターとシステム機能との相互作用を視覚的に表現するUML図です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "UML",
+          "アクター",
+          "ユースケース",
+          "要件定義"
+        ]
+      }
+    ],
+    "aliases": [
+      "Use Case Diagram"
+    ]
+  },
+  {
+    "term": "ユーザストーリー",
+    "reading": "ゆーざすとーりー",
+    "senses": [
+      {
+        "definition": "ユーザストーリーは、アジャイル開発でユーザ視点の機能要求を「誰が・何を・なぜ」の形式で記述した短い説明です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "アジャイル",
+          "バックログ",
+          "要件",
+          "スクラム"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Story"
+    ]
+  },
+  {
+    "term": "完了の定義（拡張1）",
+    "reading": "かんりょうのていぎ（かくちょう1）",
+    "senses": [
+      {
+        "definition": "完了の定義はアジャイル開発において作業が完了しリリース可能となる条件を定めた共有チェックリストです。チームの品質基準と透明性を確保します。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "DoD",
+          "アジャイル",
+          "品質ゲート",
+          "完了基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Definition of Done (Extended 1)"
+    ]
+  },
+  {
+    "term": "スコープ定義",
+    "reading": "すこーぷていぎ",
+    "senses": [
+      {
+        "definition": "スコープ定義は、プロジェクトに含まれる範囲と除外する範囲を明確にし、スコープの無制限な拡大を防ぐ活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "スコープ",
+          "境界",
+          "プロジェクト管理",
+          "WBS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Scope Definition"
+    ]
+  },
+  {
+    "term": "WBS作成",
+    "reading": "だぶりゅーびーえすさくせい",
+    "senses": [
+      {
+        "definition": "WBS作成は、プロジェクトの成果物を計画・追跡可能な作業パッケージに分解する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "WBS",
+          "作業パッケージ",
+          "計画",
+          "プロジェクト管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "WBS Creation"
+    ]
+  },
+  {
+    "term": "工数見積り",
+    "reading": "こうすうみつもり",
+    "senses": [
+      {
+        "definition": "工数見積りは、プロジェクト規模・複雑度・過去データを使って必要な作業時間を予測する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "見積り",
+          "工数",
+          "計画",
+          "FP"
+        ]
+      }
+    ],
+    "aliases": [
+      "Effort Estimation"
+    ]
+  },
+  {
+    "term": "見積り精度",
+    "reading": "みつもりせいど",
+    "senses": [
+      {
+        "definition": "見積り精度は、計画された工数・スケジュール値が実績値にどれだけ近いかを測定する指標です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "予測",
+          "差異",
+          "プロジェクト指標",
+          "精度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Estimation Accuracy"
+    ]
+  },
+  {
+    "term": "進捗管理指標",
+    "reading": "しんちょくかんりしひょう",
+    "senses": [
+      {
+        "definition": "進捗管理指標は、スケジュールとデリバリの状況を客観的に管理するための定量的な尺度です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "進捗",
+          "KPI",
+          "スケジュール追跡",
+          "EVM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Progress Management Metrics"
+    ]
+  },
+  {
+    "term": "バーンアップチャート（拡張1）",
+    "reading": "ばーんあっぷちゃーと（かくちょう1）",
+    "senses": [
+      {
+        "definition": "バーンアップチャートは完了した作業量をスコープ全体に対して時系列で表示し、納品の進捗とスコープの変化を可視化するアジャイル指標です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "アジャイル指標",
+          "バーンアップ",
+          "スコープ傾向",
+          "進捗可視化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Burn-Up Chart (Extended 1)"
+    ]
+  },
+  {
+    "term": "クリティカルチェーン法",
+    "reading": "くりてぃかるちぇーんほう",
+    "senses": [
+      {
+        "definition": "クリティカルチェーン法は、リソース制約を考慮した日程計画にバッファを配置し、納期を保護するプロジェクトスケジューリング手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "プロジェクトスケジューリング",
+          "バッファ",
+          "リソース制約",
+          "TOC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Critical Chain Method"
+    ]
+  },
+  {
+    "term": "リスク登録簿",
+    "reading": "りすくとうろくぼ",
+    "senses": [
+      {
+        "definition": "リスク登録簿は、識別されたプロジェクトリスク・発生確率・影響度・対応策を記録し管理する台帳です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "リスク管理",
+          "リスク台帳",
+          "プロジェクト管理",
+          "対応策"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "変更管理委員会",
+    "reading": "へんこうかんりいいんかい",
+    "senses": [
+      {
+        "definition": "変更管理委員会（CCB）は、スコープや要件の重要な変更を審議・承認する組織です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "CCB",
+          "変更管理",
+          "ガバナンス",
+          "承認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Change Control Board"
+    ]
+  },
+  {
+    "term": "構成管理計画",
+    "reading": "こうせいかんりけいかく",
+    "senses": [
+      {
+        "definition": "構成管理計画は、プロジェクト成果物のバージョン管理・ベースライン設定・変更制御の方法を定義する計画書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "構成管理",
+          "バージョン管理",
+          "ベースライン",
+          "変更制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Configuration Management Plan"
+    ]
+  },
+  {
+    "term": "品質保証計画",
+    "reading": "ひんしつほしょうけいかく",
+    "senses": [
+      {
+        "definition": "品質保証計画は、ライフサイクル全体にわたる品質目標・レビュー手法・保証活動を定義する計画書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "QA",
+          "品質目標",
+          "プロセス",
+          "レビュー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Assurance Plan"
+    ]
+  },
+  {
+    "term": "テスト方針書",
+    "reading": "てすとほうしんしょ",
+    "senses": [
+      {
+        "definition": "テスト方針書は、テスト目標・スコープ・レベル・基準・責任を記述した文書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "テスト方針",
+          "品質",
+          "検証",
+          "テスト計画"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Policy Document"
+    ]
+  },
+  {
+    "term": "テスト設計技法",
+    "reading": "てすとせっけいぎほう",
+    "senses": [
+      {
+        "definition": "テスト設計技法は、要件やモデルから効果的なテストケースを体系的に導出するための手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "テストケース設計",
+          "カバレッジ",
+          "検証",
+          "技法"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Design Techniques"
+    ]
+  },
+  {
+    "term": "原因結果グラフ法",
+    "reading": "げんいんけっかぐらふほう",
+    "senses": [
+      {
+        "definition": "原因結果グラフ法は、入力条件と期待出力の論理的関係をモデル化しテストケースを導出するテスト設計技法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "テスト技法",
+          "決定論理",
+          "グラフ",
+          "組合せ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cause-Effect Graphing"
+    ]
+  },
+  {
+    "term": "境界値組合せ",
+    "reading": "きょうかいちくみあわせ",
+    "senses": [
+      {
+        "definition": "境界値組合せテストは、複数の入力次元にわたる限界値の相互作用を確認するテスト手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "境界値",
+          "テストデータ",
+          "エッジケース",
+          "組合せ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Boundary Value Combination"
+    ]
+  },
+  {
+    "term": "デシジョンテーブルテスト",
+    "reading": "でしじょんてーぶるてすと",
+    "senses": [
+      {
+        "definition": "デシジョンテーブルテストは、条件とアクションのルールを定義し複雑なビジネスロジックを体系的に検証するテスト手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "デシジョンテーブル",
+          "ルールテスト",
+          "論理カバレッジ",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Decision Table Testing"
+    ]
+  },
+  {
+    "term": "遷移網羅基準",
+    "reading": "せんいもうらきじゅん",
+    "senses": [
+      {
+        "definition": "遷移網羅基準は、テストにおいて状態遷移をどの程度網羅する必要があるかを規定する基準です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "状態遷移",
+          "カバレッジ",
+          "テスト",
+          "FSM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Transition Coverage Criteria"
+    ]
+  },
+  {
+    "term": "セッションベーステスト管理",
+    "reading": "せっしょんべーすてすとかんり",
+    "senses": [
+      {
+        "definition": "セッションベーステスト管理は、探索的テストをチャーターと報告書を持つタイムボックスセッションに構造化する手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "探索的テスト",
+          "セッション",
+          "テスト管理",
+          "アジャイル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Session-Based Test Management"
+    ]
+  },
+  {
+    "term": "回帰テスト計画",
+    "reading": "かいきてすとけいかく",
+    "senses": [
+      {
+        "definition": "回帰テスト計画は、変更後に既存機能を再検証するための方法と範囲を定義した計画書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "回帰テスト",
+          "変更検証",
+          "テスト計画",
+          "CI"
+        ]
+      }
+    ],
+    "aliases": [
+      "Regression Test Plan"
+    ]
+  },
+  {
+    "term": "自動テスト戦略",
+    "reading": "じどうてすとせんりゃく",
+    "senses": [
+      {
+        "definition": "自動テスト戦略は、テスト自動化の目標・スコープ・ツール・実装方針を定めた戦略文書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "テスト自動化",
+          "CI/CD",
+          "テスト戦略",
+          "効率化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Automated Test Strategy"
+    ]
+  },
+  {
+    "term": "継続的インテグレーション設計",
+    "reading": "けいぞくてきいんてぐれーしょんせっけい",
+    "senses": [
+      {
+        "definition": "継続的インテグレーション設計は、頻繁なマージ・ビルド・テストのワークフローを定義し早期欠陥検出を実現する設計活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "CI",
+          "パイプライン",
+          "インテグレーション",
+          "ビルド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Continuous Integration Design"
+    ]
+  },
+  {
+    "term": "継続的デリバリ設計",
+    "reading": "けいぞくてきでりばりせっけい",
+    "senses": [
+      {
+        "definition": "継続的デリバリ設計は、リリースをいつでも安全にデプロイできるようパイプラインを構成する設計活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "CD",
+          "リリースパイプライン",
+          "デプロイ",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Continuous Delivery Design"
+    ]
+  },
+  {
+    "term": "リリーストレイン（拡張1）",
+    "reading": "りりーすとれいん（かくちょう1）",
+    "senses": [
+      {
+        "definition": "リリーストレインは複数チームが固定リズムで統合・リリースするよう調整する仕組みです。アジャイル・アット・スケールの枠組みで採用され、一貫したデリバリケイデンスを実現します。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "リリースケイデンス",
+          "アジャイルスケーリング",
+          "調整",
+          "SAFe"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Train (Extended 1)"
+    ]
+  },
+  {
+    "term": "ブルーグリーン方式",
+    "reading": "ぶるーぐりーんほうしき",
+    "senses": [
+      {
+        "definition": "ブルーグリーン方式は、本番環境（ブルー）と同一の新環境（グリーン）を用意しトラフィックを切り替えてダウンタイムなしでリリースするデプロイ手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "デプロイ",
+          "ゼロダウンタイム",
+          "リリース",
+          "スイッチオーバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プログレッシブデリバリ",
+    "reading": "ぷろぐれっしぶでりばり",
+    "senses": [
+      {
+        "definition": "プログレッシブデリバリは、カナリアリリースやフィーチャーフラグを使って新機能を段階的にユーザに展開するデリバリ手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "カナリアリリース",
+          "フィーチャーフラグ",
+          "段階展開",
+          "リスク低減"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フィーチャーフラグ運用",
+    "reading": "ふぃーちゃーふらぐうんよう",
+    "senses": [
+      {
+        "definition": "フィーチャーフラグ運用は、段階的リリース・実験・緊急無効化のためのランタイムトグルを管理する手法です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "フィーチャートグル",
+          "リリース制御",
+          "実験",
+          "A/Bテスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Feature Flag Operations"
+    ]
+  },
+  {
+    "term": "ロールバック計画",
+    "reading": "ろーるばっくけいかく",
+    "senses": [
+      {
+        "definition": "ロールバック計画は、リリース失敗後に前の安定した状態を安全に復元するための手順と条件を定義した計画書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "ロールバック",
+          "インシデント",
+          "リリース管理",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": [
+      "Rollback Plan"
+    ]
+  },
+  {
+    "term": "運用引継ぎ",
+    "reading": "うんようひきつぎ",
+    "senses": [
+      {
+        "definition": "運用引継ぎは、システムの知識・手順・責任を開発チームから運用チームへ移転する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "引継ぎ",
+          "ランブック",
+          "運用",
+          "移管"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operations Handover"
+    ]
+  },
+  {
+    "term": "サービスレベル目標",
+    "reading": "さーびすれべるもくひょう",
+    "senses": [
+      {
+        "definition": "サービスレベル目標（SLO）は、サービスの信頼性やパフォーマンスに対して設定する測定可能な目標値です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "SLO",
+          "信頼性目標",
+          "サービス品質",
+          "SRE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Service Level Objective"
+    ]
+  },
+  {
+    "term": "サービスレベル指標",
+    "reading": "さーびすれべるしひょう",
+    "senses": [
+      {
+        "definition": "サービスレベル指標（SLI）は、サービスレベル目標が達成されているかどうかを測定するためのメトリクスです。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "SLI",
+          "メトリクス",
+          "オブザーバビリティ",
+          "SRE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Service Level Indicator"
+    ]
+  },
+  {
+    "term": "信頼性目標管理",
+    "reading": "しんらいせいもくひょうかんり",
+    "senses": [
+      {
+        "definition": "信頼性目標管理は、信頼性目標を監視・統治し、リスクとデリバリ速度のバランスを取る活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "信頼性",
+          "エラーバジェット",
+          "SRE",
+          "可用性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reliability Target Management"
+    ]
+  },
+  {
+    "term": "障害対応手順",
+    "reading": "しょうがいたいおうてじゅん",
+    "senses": [
+      {
+        "definition": "障害対応手順は、サービス障害発生時の役割・エスカレーションフロー・復旧ステップを定義した手順書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "インシデント",
+          "エスカレーション",
+          "復旧",
+          "手順書"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incident Response Procedure"
+    ]
+  },
+  {
+    "term": "ポストモーテム文化",
+    "reading": "ぽすともーてむぶんか",
+    "senses": [
+      {
+        "definition": "ポストモーテム文化は、インシデントをブレームレスに分析し再発防止策を学ぶための組織文化です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "ブレームレス",
+          "インシデントレビュー",
+          "継続的改善",
+          "SRE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Postmortem Culture"
+    ]
+  },
+  {
+    "term": "ナレッジベース運用",
+    "reading": "なれっじべーすうんよう",
+    "senses": [
+      {
+        "definition": "ナレッジベース運用は、チームが運用・技術ナレッジを再利用できるよう検索可能なドキュメントを維持・管理する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "ナレッジ管理",
+          "ドキュメント",
+          "運用",
+          "再利用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Knowledge Base Operations"
+    ]
+  },
+  {
+    "term": "KPI設計",
+    "reading": "けーぴーあいせっけい",
+    "senses": [
+      {
+        "definition": "KPI設計は、戦略目標・運用目標と整合した測定可能なパフォーマンス指標を定義する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "KPI",
+          "パフォーマンス指標",
+          "目標整合",
+          "管理指標"
+        ]
+      }
+    ],
+    "aliases": [
+      "KPI Design"
+    ]
+  },
+  {
+    "term": "KGI設計",
+    "reading": "けーじーあいせっけい",
+    "senses": [
+      {
+        "definition": "KGI設計は、戦略的目標が達成されたかどうかを評価するための最上位の結果指標を設定する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "KGI",
+          "結果指標",
+          "戦略",
+          "目標"
+        ]
+      }
+    ],
+    "aliases": [
+      "KGI Design"
+    ]
+  },
+  {
+    "term": "ROI評価",
+    "reading": "あーるおーあいひょうか",
+    "senses": [
+      {
+        "definition": "ROI評価は、期待されるベネフィットとコストを比較して投資対効果を査定する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "ROI",
+          "コストベネフィット",
+          "投資",
+          "効果測定"
+        ]
+      }
+    ],
+    "aliases": [
+      "ROI Evaluation"
+    ]
+  },
+  {
+    "term": "TCO試算",
+    "reading": "てぃーしーおーしさん",
+    "senses": [
+      {
+        "definition": "TCO試算は、取得・運用・保守・廃棄を含むライフサイクル全体のコストを算出する財務分析です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "TCO",
+          "ライフサイクルコスト",
+          "財務計画",
+          "総保有コスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "TCO Estimation"
+    ]
+  },
+  {
+    "term": "ベンダ評価",
+    "reading": "べんだひょうか",
+    "senses": [
+      {
+        "definition": "ベンダ評価は、品質・コスト・能力・信頼性などの基準を用いてサプライヤを評価する調達活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "調達",
+          "サプライヤ",
+          "評価",
+          "RFP"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vendor Evaluation"
+    ]
+  },
+  {
+    "term": "契約形態選定",
+    "reading": "けいやくけいたいせんてい",
+    "senses": [
+      {
+        "definition": "契約形態選定は、リスクに基づいて固定価格・準委任などの適切な商業条件を選択する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "契約",
+          "調達",
+          "リスク配分",
+          "固定価格"
+        ]
+      }
+    ],
+    "aliases": [
+      "Contract Type Selection"
+    ]
+  },
+  {
+    "term": "SLA交渉",
+    "reading": "えすえるえーこうしょう",
+    "senses": [
+      {
+        "definition": "SLA交渉は、当事者間で測定可能なサービスコミットメント・責任・ペナルティを合意する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "SLA",
+          "サービス合意",
+          "交渉",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "SLA Negotiation"
+    ]
+  },
+  {
+    "term": "監査対応計画",
+    "reading": "かんさたいおうけいかく",
+    "senses": [
+      {
+        "definition": "監査対応計画は、内部または外部の監査に合格するために必要なエビデンス・統制・手順を準備する計画書です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "監査",
+          "コンプライアンス",
+          "エビデンス",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": [
+      "Audit Readiness Plan"
+    ]
+  },
+  {
+    "term": "マスタデータ管理",
+    "reading": "ますたでーたかんり",
+    "senses": [
+      {
+        "definition": "マスタデータ管理（MDM）は、システム間にわたるコアビジネスデータの定義・品質・一貫性を統治する活動です。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "MDM",
+          "データガバナンス",
+          "データ品質",
+          "一貫性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Master Data Management"
+    ]
+  },
+  {
+    "term": "IT統制",
+    "reading": "あいてぃとうせい",
+    "senses": [
+      {
+        "definition": "IT統制は、情報システムのプロセスがセキュアで信頼性が高くコンプライアントであることを確保するガバナンス・管理枠組みです。",
+        "domain": "fe-dev-management",
+        "keywords": [
+          "ITガバナンス",
+          "内部統制",
+          "コンプライアンス",
+          "COBIT"
+        ]
+      }
+    ],
+    "aliases": [
+      "IT Control"
+    ]
+  }
+]

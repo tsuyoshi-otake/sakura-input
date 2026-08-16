@@ -1,0 +1,533 @@
+[
+  {
+    "term": "文書保管",
+    "reading": "ぶんしょほかん",
+    "aliases": [
+      "Document Storage",
+      "Document Archiving",
+      "Document Retention"
+    ],
+    "senses": [
+      {
+        "definition": "文書を保存・管理すること。法定保存期間・社内規程に基づき、電子ファイルまたは紙で文書を保存・管理する業務。検索性・アクセス管理・廃棄ルールも含む文書ライフサイクル管理の核心。",
+        "domain": "operations",
+        "keywords": [
+          "保存",
+          "アーカイブ",
+          "保存期間",
+          "廃棄",
+          "アクセス管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "文書登録",
+    "reading": "ぶんしょとうろく",
+    "aliases": [
+      "Document Registration",
+      "Document Filing"
+    ],
+    "senses": [
+      {
+        "definition": "文書を所定の保管先や管理システムへ登録すること。押印済み契約書・申請書・承認書などを文書管理システムへ登録し、検索・参照できる状態にする。文書番号・分類・保存期限も合わせて設定する。",
+        "domain": "operations",
+        "keywords": [
+          "登録",
+          "文書管理",
+          "分類",
+          "文書番号",
+          "保存期限"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "登録期限",
+    "reading": "とうろくきげん",
+    "aliases": [
+      "Registration Deadline",
+      "Filing Deadline"
+    ],
+    "senses": [
+      {
+        "definition": "対象となる情報や文書を登録すべき期限。契約書・申請書・伝票などの登録期限を守ることで、業務の遅延や法的リスクを回避する。期限超過は督促・エスカレーション対象となる。",
+        "domain": "operations",
+        "keywords": [
+          "期限",
+          "締め切り",
+          "督促",
+          "エスカレーション",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ステータス",
+    "reading": "すてーたす",
+    "aliases": [
+      "Status"
+    ],
+    "senses": [
+      {
+        "definition": "対象の進捗や状態を表す管理項目。契約管理では「入力中」「条件提示」「条件合意」「案文合意」「決裁済」「締結済」などのステータスで各契約の進行状況を可視化する。ステータス管理により担当者全員が現状を共有できる。",
+        "domain": "operations",
+        "keywords": [
+          "進捗",
+          "状態",
+          "可視化",
+          "管理",
+          "フロー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "入力中",
+    "reading": "にゅうりょくちゅう",
+    "aliases": [
+      "In Progress",
+      "Editing",
+      "Draft"
+    ],
+    "senses": [
+      {
+        "definition": "作成や編集の途中にある状態を示すステータス。契約書や申請書の入力が始まっているが、まだ提出・承認依頼には至っていない段階。担当者が内容を確認・修正している最中。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "作成中",
+          "編集",
+          "下書き",
+          "進捗"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "条件提示",
+    "reading": "じょうけんていじ",
+    "aliases": [
+      "Terms Presented",
+      "Offer Made"
+    ],
+    "senses": [
+      {
+        "definition": "条件を相手へ示した状態を示すステータス。自社が価格・条件などを相手先に提示し、相手からの回答を待っている段階。相手先の反応次第で条件合意または再交渉に進む。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "提示済み",
+          "待機",
+          "回答待ち",
+          "交渉"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "確定",
+    "reading": "かくてい",
+    "aliases": [
+      "Confirmed",
+      "Finalized",
+      "Fixed"
+    ],
+    "senses": [
+      {
+        "definition": "内容が固まった状態。交渉・確認・調整のプロセスを経て変更不要と判断された段階。確定後は押印申請・出力・送付などの次工程に進む。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "確定済み",
+          "変更不可",
+          "合意",
+          "次工程"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "決裁済",
+    "reading": "けっさいずみ",
+    "aliases": [
+      "Approved",
+      "Authorized",
+      "Sanctioned"
+    ],
+    "senses": [
+      {
+        "definition": "承認が完了した状態を示すステータス。決裁権者による最終承認が得られ、次の業務ステップ（押印・送付・締結など）に進める状態。承認日時・承認者が記録される。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "承認完了",
+          "決裁",
+          "承認者",
+          "次工程"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "締結済",
+    "reading": "ていけつずみ",
+    "aliases": [
+      "Concluded",
+      "Executed",
+      "Signed"
+    ],
+    "senses": [
+      {
+        "definition": "合意と必要な手続き（押印・署名・交換など）が完了し、契約が正式に成立した状態を示すステータス。締結日・相手先・担当者が記録され、以後は契約の履行管理フェーズに移行する。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "締結",
+          "契約成立",
+          "押印完了",
+          "履行管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ステータス更新",
+    "reading": "すてーたすこうしん",
+    "aliases": [
+      "Status Update",
+      "State Change"
+    ],
+    "senses": [
+      {
+        "definition": "状態を次の段階へ変更すること。契約や申請の進行に合わせて担当者がステータスを更新し、関係者全員が最新の状況を把握できるようにする。更新時に通知・メール送信が行われる場合もある。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "変更",
+          "進行",
+          "通知",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ステータス確認",
+    "reading": "すてーたすかくにん",
+    "aliases": [
+      "Status Verification"
+    ],
+    "senses": [
+      {
+        "definition": "現在の状態を確認すること。契約・申請・業務の現在のステータスを一覧や詳細画面で確認する行為。月例会議や日次チェックで進捗停滞案件を見つけるためにも行う。",
+        "domain": "operations",
+        "keywords": [
+          "ステータス",
+          "確認",
+          "一覧",
+          "進捗",
+          "チェック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "進捗管理表",
+    "reading": "しんちょくかんりひょう",
+    "aliases": [
+      "Progress Tracking Sheet",
+      "Status Tracking Table"
+    ],
+    "senses": [
+      {
+        "definition": "進行状況を一覧で管理するための資料。案件名・担当者・ステータス・期限・備考などを列挙し、全体像を把握するために使う。Excel や契約管理システムの画面として提供される。",
+        "domain": "project-management",
+        "keywords": [
+          "進捗",
+          "一覧",
+          "案件",
+          "期限",
+          "担当者"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "月例営業会議",
+    "reading": "げつれいえいぎょうかいぎ",
+    "aliases": [
+      "Monthly Sales Meeting",
+      "Monthly Business Review"
+    ],
+    "senses": [
+      {
+        "definition": "毎月定期的に実施する営業進捗確認の会議。契約・商談・パイプラインのステータスを共有し、滞留案件の対策や目標達成状況を議論する。進捗管理表・ヒアリング状況シートを資料として使うことが多い。",
+        "domain": "operations",
+        "keywords": [
+          "月次",
+          "定例会議",
+          "営業",
+          "進捗",
+          "商談"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ヒアリング状況シート",
+    "reading": "ひありんぐじょうきょうしーと",
+    "aliases": [
+      "Hearing Status Sheet",
+      "Interview Tracking Sheet"
+    ],
+    "senses": [
+      {
+        "definition": "ヒアリング結果や進捗状況を整理するための資料。対象相手先・ヒアリング日・担当者・確認項目・回答内容・次のアクションなどを記録し、関係者間で情報を共有する。",
+        "domain": "operations",
+        "keywords": [
+          "ヒアリング",
+          "進捗",
+          "記録",
+          "担当者",
+          "アクション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "対象相手先洗い出し",
+    "reading": "たいしょうあいてさきあらいだし",
+    "aliases": [
+      "Target Counterparty Extraction",
+      "Candidate List Identification"
+    ],
+    "senses": [
+      {
+        "definition": "対象となる候補先を抽出し、整理すること。新規契約の締結や更新対応の際に、条件に合う相手先を一覧化・優先順位付けするプロセス。ヒアリング状況シートや進捗管理表の作成前提となる。",
+        "domain": "operations",
+        "keywords": [
+          "抽出",
+          "候補先",
+          "一覧化",
+          "優先順位",
+          "選定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "変更通知",
+    "reading": "へんこうつうち",
+    "aliases": [
+      "Change Notice",
+      "Change Notification"
+    ],
+    "senses": [
+      {
+        "definition": "内容や条件の変更を関係者へ知らせる文書または連絡。契約条件・担当者・住所・価格などの変更を公式に通知する際に使われ、変更内容・有効日・署名を含むことが多い。",
+        "domain": "operations",
+        "keywords": [
+          "変更",
+          "通知",
+          "条件変更",
+          "有効日",
+          "関係者"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "確定通知",
+    "reading": "かくていつうち",
+    "aliases": [
+      "Confirmation Notice",
+      "Finalization Notice"
+    ],
+    "senses": [
+      {
+        "definition": "内容や日程などが確定したことを関係者へ知らせる文書または連絡。交渉・調整の結果として合意内容が固まったことを公式に伝える。契約締結後の「締結確認通知」も確定通知のひとつ。",
+        "domain": "operations",
+        "keywords": [
+          "確定",
+          "通知",
+          "合意内容",
+          "関係者",
+          "公式"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "通知書",
+    "reading": "つうちしょ",
+    "aliases": [
+      "Notice",
+      "Notification Letter",
+      "Official Notice"
+    ],
+    "senses": [
+      {
+        "definition": "一定の事項を関係者へ正式に知らせるための文書。変更通知書・督促通知書・解約通知書などがあり、送付日時・通知内容・通知先を記録する。法的効力を持つ場合は内容証明郵便で送ることもある。",
+        "domain": "operations",
+        "keywords": [
+          "通知",
+          "正式文書",
+          "督促",
+          "解約",
+          "内容証明"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "案内文",
+    "reading": "あんないぶん",
+    "aliases": [
+      "Guidance Letter",
+      "Introductory Text",
+      "Notice Letter"
+    ],
+    "senses": [
+      {
+        "definition": "連絡事項や説明事項を伝えるための文書。正式な通知書よりも柔らかいトーンで、手続きの説明・スケジールのお知らせ・お礼・依頼などを記載する。メール本文・FAX・同封レターとして使われることが多い。",
+        "domain": "operations",
+        "keywords": [
+          "案内",
+          "連絡",
+          "説明",
+          "お知らせ",
+          "依頼"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "一括送付",
+    "reading": "いっかつそうふ",
+    "aliases": [
+      "Batch Sending",
+      "Bulk Delivery"
+    ],
+    "senses": [
+      {
+        "definition": "複数の対象へまとめて送付する運用。同じ文書を多数の相手先へ同時に送る場合や、複数の書類を一度にまとめて送る場合に使う。システムの一括送付機能を活用することで作業効率を高める。",
+        "domain": "operations",
+        "keywords": [
+          "一括",
+          "まとめて",
+          "複数",
+          "効率化",
+          "送付"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "一括対応",
+    "reading": "いっかつたいおう",
+    "aliases": [
+      "Bulk Handling",
+      "Bulk Operation"
+    ],
+    "senses": [
+      {
+        "definition": "個別ではなくまとめて処理する運用。複数の申請・登録・更新を一度に行うことで作業効率を高める。一括対応は個々の件数が多い更新業務や定期対応で特に有効。",
+        "domain": "operations",
+        "keywords": [
+          "一括",
+          "まとめて処理",
+          "効率化",
+          "更新",
+          "登録"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "異動登録",
+    "reading": "いどうとうろく",
+    "aliases": [
+      "Transfer Registration",
+      "Change Registration"
+    ],
+    "senses": [
+      {
+        "definition": "変更内容を記録・反映すること。担当者の異動・部署変更・権限変更などをシステムに登録し、業務の継続性を確保する。異動発生時は速やかに登録して引継ぎを完了させる必要がある。",
+        "domain": "operations",
+        "keywords": [
+          "異動",
+          "担当変更",
+          "引継ぎ",
+          "登録",
+          "更新"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "運営引継ぎ",
+    "reading": "うんえいひきつぎ",
+    "aliases": [
+      "Operational Handover",
+      "Operations Transfer"
+    ],
+    "senses": [
+      {
+        "definition": "業務運営に必要な情報や役割を引き継ぐこと。担当者交代・組織変更・プロジェクト移管の際に、業務内容・関係者・注意点・進行中の案件を次の担当者へ伝える。引継ぎ資料の整備と引継ぎ会の実施が重要。",
+        "domain": "operations",
+        "keywords": [
+          "引継ぎ",
+          "担当交代",
+          "引継ぎ資料",
+          "業務継続",
+          "引き渡し"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "引継ぎ会",
+    "reading": "ひきつぎかい",
+    "aliases": [
+      "Handover Meeting",
+      "Transition Meeting"
+    ],
+    "senses": [
+      {
+        "definition": "引継ぎ内容を共有・確認するための会議。前任者・後任者・関係者が集まり、業務の概要・進行中の案件・注意事項・連絡先などを確認する。引継ぎ会の内容を議事録として残すことが望ましい。",
+        "domain": "operations",
+        "keywords": [
+          "引継ぎ",
+          "会議",
+          "前任者",
+          "後任者",
+          "議事録"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "手交",
+    "reading": "しゅこう",
+    "aliases": [
+      "Direct Delivery",
+      "Personal Delivery",
+      "Hand Delivery"
+    ],
+    "senses": [
+      {
+        "definition": "文書や物品を相手へ直接手渡しすること。郵送・メールとは異なり、担当者が相手先へ直接持参して渡す方法。重要な契約書・機密文書・押印済書類の受け渡しに使われ、受領の確実性を確保できる。",
+        "domain": "operations",
+        "keywords": [
+          "直接手渡し",
+          "持参",
+          "受領確認",
+          "重要書類",
+          "機密"
+        ]
+      }
+    ]
+  }
+]

@@ -142,6 +142,14 @@ function Resolve-PinnedSource {
         if (-not [IO.Directory]::Exists($resolved)) {
             throw "source directory does not exist: $resolved"
         }
+        $pinnedRevisionFile = Join-Path $resolved 'PINNED_REVISION'
+        if ([IO.File]::Exists($pinnedRevisionFile)) {
+            $pinned = ([IO.File]::ReadAllText($pinnedRevisionFile)).Trim()
+            if ($pinned -cne $Revision) {
+                throw "$resolved PINNED_REVISION '$pinned' does not match required revision $Revision"
+            }
+            return $resolved
+        }
         if ((Get-RepositoryHead $resolved) -ne $Revision) {
             throw "$resolved is not checked out at pinned revision $Revision"
         }
@@ -491,6 +499,14 @@ $stopwatch = [Diagnostics.Stopwatch]::StartNew()
 $MozcSource = Resolve-PinnedSource -ProvidedPath $MozcSource -Repository $MozcRepository `
     -Revision $MozcRevision -ManagedName 'mozc' `
     -SparsePaths @('src/data/dictionary_oss', 'src/data/rules')
+if ([string]::IsNullOrWhiteSpace($GlossarySource)) {
+    # Prefer the MIT glossary snapshot vendored in-tree so CI and local builds
+    # do not need a private-repository token for smile-chat.
+    $vendoredGlossary = Join-Path $RepositoryRoot 'third_party\smile-chat-public'
+    if ([IO.Directory]::Exists($vendoredGlossary)) {
+        $GlossarySource = $vendoredGlossary
+    }
+}
 $GlossarySource = Resolve-PinnedSource -ProvidedPath $GlossarySource -Repository $GlossaryRepository `
     -Revision $GlossaryRevision -ManagedName 'smile-chat' -SparsePaths @('frontend/public')
 $SystemCategoryDictionary = Resolve-SystemCategoryDictionary -Directory $SystemCategoryDirectory

@@ -1,0 +1,3800 @@
+[
+  {
+    "term": "CRUDマトリクス",
+    "reading": "しーあーるゆーでぃーまとりくす",
+    "senses": [
+      {
+        "definition": "業務や機能ごとに、どのデータを作成、参照、更新、削除するかを整理した表です。機能とデータの関係を一覧できるため、抜け漏れ確認に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "機能",
+          "データ",
+          "CRUD"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CRUD図",
+    "reading": "しーあーるゆーでぃーず",
+    "senses": [
+      {
+        "definition": "CRUDマトリクスを図的に表現したものです。表より直感的に関係性を把握しやすい場面があります。",
+        "domain": "design-document",
+        "keywords": [
+          "機能",
+          "データ",
+          "CRUD"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データフロー図",
+    "reading": "でーたふろーず",
+    "senses": [
+      {
+        "definition": "データがどこから来て、どこへ流れ、どこで加工されるかを示した図です。システム間連携や内部処理の流れを整理するのに有効です。",
+        "domain": "design-document",
+        "keywords": [
+          "データ",
+          "流れ",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "DFD"
+    ]
+  },
+  {
+    "term": "コンテキスト図",
+    "reading": "こんてきすとず",
+    "senses": [
+      {
+        "definition": "対象システムと外部の関係だけを大きく示した図です。まず全体境界を把握したいときに使います。",
+        "domain": "design-document",
+        "keywords": [
+          "システム",
+          "境界",
+          "外部"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ユースケース記述",
+    "reading": "ゆーすけーすきじゅつ",
+    "senses": [
+      {
+        "definition": "利用者がどの目的でどのようにシステムを使うかを文章で記述したものです。図だけでは伝わらない前提や流れを補えます。",
+        "domain": "design-document",
+        "keywords": [
+          "利用者",
+          "要件",
+          "シナリオ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アクティビティ図",
+    "reading": "あくてぃびてぃず",
+    "senses": [
+      {
+        "definition": "処理の流れや分岐、並行動作を表す図です。業務フローや処理フローの可視化に向いています。",
+        "domain": "uml",
+        "keywords": [
+          "処理",
+          "フロー",
+          "分岐"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "シーケンス図",
+    "reading": "しーけんすず",
+    "senses": [
+      {
+        "definition": "オブジェクトやシステム間のやり取りを時系列順で表す図です。API呼び出しや画面からDBまでの流れを追いやすくなります。",
+        "domain": "uml",
+        "keywords": [
+          "時系列",
+          "メッセージ",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コミュニケーション図",
+    "reading": "こみゅにけーしょんず",
+    "senses": [
+      {
+        "definition": "要素間の関係とメッセージのやり取りを重視した図です。シーケンス図より構造を見たいときに向きます。",
+        "domain": "uml",
+        "keywords": [
+          "メッセージ",
+          "関係",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ステートマシン図",
+    "reading": "すてーとましんず",
+    "senses": [
+      {
+        "definition": "ある対象がどの状態からどの状態へ移るかを表現した図です。状態遷移図をより形式的に扱うときに使います。",
+        "domain": "uml",
+        "keywords": [
+          "状態",
+          "遷移",
+          "図"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クラス図",
+    "reading": "くらすず",
+    "senses": [
+      {
+        "definition": "クラス、属性、メソッド、関係を表した図です。オブジェクト指向設計の骨格を共有するのに役立ちます。",
+        "domain": "uml",
+        "keywords": [
+          "クラス",
+          "属性",
+          "メソッド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オブジェクト図",
+    "reading": "おぶじぇくとず",
+    "senses": [
+      {
+        "definition": "特定時点でのオブジェクト同士の関係を表した図です。クラス図より具体的なインスタンス例を示せます。",
+        "domain": "uml",
+        "keywords": [
+          "インスタンス",
+          "関係",
+          "具体例"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンポーネント図",
+    "reading": "こんぽーねんとず",
+    "senses": [
+      {
+        "definition": "システムを構成する部品とその依存関係を示す図です。論理構成を共有するのに適しています。",
+        "domain": "uml",
+        "keywords": [
+          "部品",
+          "依存",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "配置図",
+    "reading": "はいちず",
+    "senses": [
+      {
+        "definition": "サーバー、アプリ、ネットワーク機器などの配置関係を示す図です。インフラ設計や構成説明でよく使われます。",
+        "domain": "uml",
+        "keywords": [
+          "サーバー",
+          "インフラ",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "論理構成図",
+    "reading": "ろんりこうせいず",
+    "senses": [
+      {
+        "definition": "役割単位でシステム構造を表した図です。物理環境に依存しない全体像の共有に向いています。",
+        "domain": "design-document",
+        "keywords": [
+          "構成",
+          "論理",
+          "全体像"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "物理構成図",
+    "reading": "ぶつりこうせいず",
+    "senses": [
+      {
+        "definition": "実際のサーバー、ネットワーク、ミドルウェア配置を示した図です。構築や運用の実務に直結します。",
+        "domain": "design-document",
+        "keywords": [
+          "構成",
+          "物理",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ネットワーク構成図",
+    "reading": "ねっとわーくこうせいず",
+    "senses": [
+      {
+        "definition": "通信経路、セグメント、接続点を中心に示す構成図です。セキュリティや接続要件の確認に有効です。",
+        "domain": "design-document",
+        "keywords": [
+          "ネットワーク",
+          "通信",
+          "セグメント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "システム関連図",
+    "reading": "しすてむかんれんず",
+    "senses": [
+      {
+        "definition": "複数システムの関係性を俯瞰的に表す図です。連携対象の洗い出しに役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "システム",
+          "連携",
+          "関係"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "外部インターフェース一覧",
+    "reading": "がいぶいんたーふぇーすいちらん",
+    "senses": [
+      {
+        "definition": "他システムや外部サービスとの接続点を一覧化した資料です。漏れなく連携を管理する基礎になります。",
+        "domain": "design-document",
+        "keywords": [
+          "外部",
+          "連携",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "内部インターフェース一覧",
+    "reading": "ないぶいんたーふぇーすいちらん",
+    "senses": [
+      {
+        "definition": "システム内部のモジュール間接続や呼び出しを整理した一覧です。構造把握や影響分析に使えます。",
+        "domain": "design-document",
+        "keywords": [
+          "内部",
+          "モジュール",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "画面一覧",
+    "reading": "がめんいちらん",
+    "senses": [
+      {
+        "definition": "システムに存在する画面を一覧化した資料です。画面数の把握や範囲確認に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "画面",
+          "UI",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "画面遷移図",
+    "reading": "がめんせんいず",
+    "senses": [
+      {
+        "definition": "どの画面からどの画面へ移るかを示した図です。利用者導線を共有するうえで基本資料になります。",
+        "domain": "design-document",
+        "keywords": [
+          "画面",
+          "遷移",
+          "導線"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "画面レイアウト図",
+    "reading": "がめんれいあうとず",
+    "senses": [
+      {
+        "definition": "画面上の項目配置を示した図です。詳細設計でUIの共通認識を作るのに使います。",
+        "domain": "design-document",
+        "keywords": [
+          "画面",
+          "レイアウト",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "画面項目一覧",
+    "reading": "がめんこうもくいちらん",
+    "senses": [
+      {
+        "definition": "画面ごとの入力項目、表示項目を一覧化した資料です。項目定義との対応づけにも役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "画面",
+          "項目",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "項目属性表",
+    "reading": "こうもくぞくせいひょう",
+    "senses": [
+      {
+        "definition": "項目名、型、桁数、必須、初期値などをまとめた表です。画面設計、API設計、DB設計をつなぐ資料になります。",
+        "domain": "design-document",
+        "keywords": [
+          "項目",
+          "属性",
+          "型"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "項目マッピング表",
+    "reading": "こうもくまっぴんぐひょう",
+    "senses": [
+      {
+        "definition": "画面、API、DBなどの項目対応を整理した表です。データ受け渡しのズレを防ぎます。",
+        "domain": "design-document",
+        "keywords": [
+          "項目",
+          "マッピング",
+          "対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "帳票一覧",
+    "reading": "ちょうひょういちらん",
+    "senses": [
+      {
+        "definition": "出力対象となる帳票を一覧化した資料です。帳票要件の把握や優先度整理に使います。",
+        "domain": "design-document",
+        "keywords": [
+          "帳票",
+          "出力",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "帳票レイアウト",
+    "reading": "ちょうひょうれいあうと",
+    "senses": [
+      {
+        "definition": "帳票の見た目や項目配置を示した設計です。印刷物やPDF出力の品質に直結します。",
+        "domain": "design-document",
+        "keywords": [
+          "帳票",
+          "レイアウト",
+          "印刷"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "帳票項目定義",
+    "reading": "ちょうひょうこうもくていぎ",
+    "senses": [
+      {
+        "definition": "帳票に出す項目の意味や出力条件を整理した定義です。表示ルールや計算ロジックの明確化に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "帳票",
+          "項目",
+          "定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バッチ一覧",
+    "reading": "ばっちいちらん",
+    "senses": [
+      {
+        "definition": "バッチ処理の種類、目的、実行タイミングを一覧化したものです。定期処理の全体像把握に向いています。",
+        "domain": "design-document",
+        "keywords": [
+          "バッチ",
+          "処理",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バッチフロー",
+    "reading": "ばっちふろー",
+    "senses": [
+      {
+        "definition": "複数バッチの実行順や依存関係を示した流れです。夜間処理や締め処理の設計で重要になります。",
+        "domain": "design-document",
+        "keywords": [
+          "バッチ",
+          "フロー",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ジョブネット",
+    "reading": "じょぶねっと",
+    "senses": [
+      {
+        "definition": "ジョブ同士の前後関係や条件分岐を定義したまとまりです。運用設計やジョブ管理製品でよく使われます。",
+        "domain": "operations",
+        "keywords": [
+          "ジョブ",
+          "実行",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ジョブ一覧",
+    "reading": "じょぶいちらん",
+    "senses": [
+      {
+        "definition": "ジョブごとの目的、入力、出力、実行条件を整理した一覧です。障害時の影響把握にも使いやすい資料です。",
+        "domain": "operations",
+        "keywords": [
+          "ジョブ",
+          "一覧",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "入出力定義",
+    "reading": "にゅうしゅつりょくていぎ",
+    "senses": [
+      {
+        "definition": "処理に対して何を受け取り、何を返すかを定義したものです。画面、API、バッチすべてで重要です。",
+        "domain": "design-document",
+        "keywords": [
+          "入力",
+          "出力",
+          "定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ファイルレイアウト定義",
+    "reading": "ふぁいるれいあうとていぎ",
+    "senses": [
+      {
+        "definition": "連携ファイルの項目位置、型、長さなどを定義したものです。固定長やCSV連携で特に重要です。",
+        "domain": "design-document",
+        "keywords": [
+          "ファイル",
+          "レイアウト",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コード体系",
+    "reading": "こーどたいけい",
+    "senses": [
+      {
+        "definition": "業務コードや管理コードをどのような体系で持つかという設計です。将来の拡張性や検索性にも影響します。",
+        "domain": "design-document",
+        "keywords": [
+          "コード",
+          "体系",
+          "採番"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "採番ルール",
+    "reading": "さいばんるーる",
+    "senses": [
+      {
+        "definition": "IDや番号をどの条件で付与するかのルールです。一意性だけでなく、業務運用との整合も大切です。",
+        "domain": "design-document",
+        "keywords": [
+          "採番",
+          "ID",
+          "一意性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メッセージ一覧",
+    "reading": "めっせーじいちらん",
+    "senses": [
+      {
+        "definition": "画面やAPIで表示、返却するメッセージを一覧化した資料です。文言の統一やテスト観点整理に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "メッセージ",
+          "画面",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エラー一覧",
+    "reading": "えらーいちらん",
+    "senses": [
+      {
+        "definition": "発生しうるエラーと、そのコードや内容を整理した一覧です。問い合わせ対応や障害解析の基礎になります。",
+        "domain": "design-document",
+        "keywords": [
+          "エラー",
+          "コード",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メッセージ設計書",
+    "reading": "めっせーじせっけいしょ",
+    "senses": [
+      {
+        "definition": "メッセージID、文言、表示条件、表示先を整理した設計書です。詳細設計で使いやすい形にすることが多いです。",
+        "domain": "design-document",
+        "keywords": [
+          "メッセージ",
+          "ID",
+          "文言"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バリデーション一覧",
+    "reading": "ばりでーしょんいちらん",
+    "senses": [
+      {
+        "definition": "各項目、各処理で行う妥当性確認を整理した一覧です。漏れなく入力制御を設計するのに有効です。",
+        "domain": "design-document",
+        "keywords": [
+          "バリデーション",
+          "入力",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "例外一覧",
+    "reading": "れいがいいちらん",
+    "senses": [
+      {
+        "definition": "異常ケースを洗い出して一覧化した資料です。正常系だけでは見えない実務上の問題を拾えます。",
+        "domain": "design-document",
+        "keywords": [
+          "例外",
+          "異常",
+          "ケース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "例外設計表",
+    "reading": "れいがいせっけいひょう",
+    "senses": [
+      {
+        "definition": "例外発生時の振る舞い、返却値、ログ出力などを整理した表です。障害時品質を大きく左右します。",
+        "domain": "design-document",
+        "keywords": [
+          "例外",
+          "設計",
+          "ログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "状態一覧",
+    "reading": "じょうたいいちらん",
+    "senses": [
+      {
+        "definition": "業務対象が持つ状態を一覧化した資料です。状態遷移図の前提となることが多いです。",
+        "domain": "design-document",
+        "keywords": [
+          "状態",
+          "一覧",
+          "遷移"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "状態遷移表",
+    "reading": "じょうたいせんいひょう",
+    "senses": [
+      {
+        "definition": "どの条件でどの状態へ移るかを表形式で整理したものです。図だけでは表しにくい詳細条件を補えます。",
+        "domain": "design-document",
+        "keywords": [
+          "状態",
+          "遷移",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "イベント一覧",
+    "reading": "いべんといちらん",
+    "senses": [
+      {
+        "definition": "処理開始のきっかけとなるイベントを一覧化した資料です。非同期処理や画面イベント整理で有効です。",
+        "domain": "design-document",
+        "keywords": [
+          "イベント",
+          "処理",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務イベント定義",
+    "reading": "ぎょうむいべんとていぎ",
+    "senses": [
+      {
+        "definition": "申請、承認、取消など業務上の出来事を定義したものです。イベント駆動設計の土台になります。",
+        "domain": "design-document",
+        "keywords": [
+          "業務",
+          "イベント",
+          "申請"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "権限マトリクス",
+    "reading": "けんげんまとりくす",
+    "senses": [
+      {
+        "definition": "役割ごとにどの操作が可能かを表にしたものです。認可設計の中核資料です。",
+        "domain": "design-document",
+        "keywords": [
+          "権限",
+          "役割",
+          "認可"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "役割一覧",
+    "reading": "やくわりいちらん",
+    "senses": [
+      {
+        "definition": "利用者や管理者などの役割を整理した一覧です。権限設計や画面制御の前提になります。",
+        "domain": "design-document",
+        "keywords": [
+          "役割",
+          "権限",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "権限制御仕様",
+    "reading": "けんげんせいぎょしよう",
+    "senses": [
+      {
+        "definition": "どの条件で閲覧、更新、削除、承認などを許可するかを決めた仕様です。内部統制やセキュリティにも関わります。",
+        "domain": "design-document",
+        "keywords": [
+          "権限",
+          "制御",
+          "認可"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務ルール一覧",
+    "reading": "ぎょうむるーるいちらん",
+    "senses": [
+      {
+        "definition": "業務上守るべきルールを整理した一覧です。要件と詳細設計の橋渡しになります。",
+        "domain": "design-document",
+        "keywords": [
+          "業務",
+          "ルール",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務判定条件",
+    "reading": "ぎょうむはんていじょうけん",
+    "senses": [
+      {
+        "definition": "承認可否や登録可否などの判断条件です。曖昧だと実装や運用にばらつきが出やすくなります。",
+        "domain": "design-document",
+        "keywords": [
+          "業務",
+          "判定",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "計算式定義",
+    "reading": "けいさんしきていぎ",
+    "senses": [
+      {
+        "definition": "金額や点数などの算出式を明示した定義です。Excel依存の暗黙計算を脱却するのに有効です。",
+        "domain": "design-document",
+        "keywords": [
+          "計算",
+          "定義",
+          "金額"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マスタ一覧",
+    "reading": "ますたいちらん",
+    "senses": [
+      {
+        "definition": "業務で使う基準データを一覧化したものです。項目定義や保守範囲の整理に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "マスタ",
+          "データ",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マスタメンテナンス仕様",
+    "reading": "ますためんてなんすしよう",
+    "senses": [
+      {
+        "definition": "マスタを誰がどう更新するかの仕様です。整合性と運用性の両立が必要です。",
+        "domain": "design-document",
+        "keywords": [
+          "マスタ",
+          "更新",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コード変換表",
+    "reading": "こーどへんかんひょう",
+    "senses": [
+      {
+        "definition": "システムごとに異なるコード値の対応表です。連携設計で非常に重要です。",
+        "domain": "design-document",
+        "keywords": [
+          "コード",
+          "変換",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "初期データ定義",
+    "reading": "しょきでーたていぎ",
+    "senses": [
+      {
+        "definition": "導入時にあらかじめ投入するデータを定義したものです。本番移行や初期セットアップで必要になります。",
+        "domain": "design-document",
+        "keywords": [
+          "初期",
+          "データ",
+          "導入"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データ移行定義",
+    "reading": "でーたいこうていぎ",
+    "senses": [
+      {
+        "definition": "旧システムから新システムへどのデータをどう移すか定義したものです。マッピング、変換、除外条件が重要です。",
+        "domain": "migration",
+        "keywords": [
+          "データ",
+          "移行",
+          "変換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "移行対象一覧",
+    "reading": "いこうたいしょういちらん",
+    "senses": [
+      {
+        "definition": "移行するデータ、文書、設定、資産を一覧化した資料です。範囲漏れ防止に役立ちます。",
+        "domain": "migration",
+        "keywords": [
+          "移行",
+          "対象",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "移行方針",
+    "reading": "いこうほうしん",
+    "senses": [
+      {
+        "definition": "一括移行か段階移行かなど、移行の基本考え方です。移行リスクと業務影響を左右します。",
+        "domain": "migration",
+        "keywords": [
+          "移行",
+          "方針",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "切替手順",
+    "reading": "きりかえてじゅん",
+    "senses": [
+      {
+        "definition": "新旧システムを切り替えるための具体手順です。リハーサルを前提に作ることが重要です。",
+        "domain": "migration",
+        "keywords": [
+          "切替",
+          "手順",
+          "リリース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "切戻手順書",
+    "reading": "きりもどしてじゅんしょ",
+    "senses": [
+      {
+        "definition": "問題発生時に旧状態へ戻すための手順書です。実際に戻せるかまで確認しておく必要があります。",
+        "domain": "migration",
+        "keywords": [
+          "切戻",
+          "手順",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リハーサル計画",
+    "reading": "りはーさるけいかく",
+    "senses": [
+      {
+        "definition": "移行や切替の事前訓練をどう行うか定めた計画です。本番前に弱い部分を見つける機会になります。",
+        "domain": "migration",
+        "keywords": [
+          "リハーサル",
+          "訓練",
+          "移行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "受入項目一覧",
+    "reading": "うけいれこうもくいちらん",
+    "senses": [
+      {
+        "definition": "利用者や発注者が確認する項目をまとめた一覧です。受入テストの抜け漏れを減らせます。",
+        "domain": "testing",
+        "keywords": [
+          "受入",
+          "確認",
+          "項目"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能一覧",
+    "reading": "ひきのういちらん",
+    "senses": [
+      {
+        "definition": "性能、監視、可用性、セキュリティなどの要件を一覧化したものです。機能要件に埋もれがちな観点を整理できます。",
+        "domain": "design-document",
+        "keywords": [
+          "非機能",
+          "性能",
+          "可用性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "性能要件表",
+    "reading": "せいのうようけんひょう",
+    "senses": [
+      {
+        "definition": "応答時間、同時接続数、件数処理量などをまとめた表です。性能設計の前提になります。",
+        "domain": "design-document",
+        "keywords": [
+          "性能",
+          "応答",
+          "同時接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "可用性要件表",
+    "reading": "かようせいようけんひょう",
+    "senses": [
+      {
+        "definition": "停止許容時間、冗長化要件、復旧目標などを整理した表です。運用設計と密接に関わります。",
+        "domain": "design-document",
+        "keywords": [
+          "可用性",
+          "冗長",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "監視項目一覧",
+    "reading": "かんしこうもくいちらん",
+    "senses": [
+      {
+        "definition": "監視対象としきい値、通知先を整理した一覧です。運用開始後の安定性を支える資料です。",
+        "domain": "operations",
+        "keywords": [
+          "監視",
+          "しきい値",
+          "通知"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ログ出力設計",
+    "reading": "ろぐしゅつりょくせっけい",
+    "senses": [
+      {
+        "definition": "何を、どの粒度で、どこへ、どの形式で出すかを定める設計です。障害解析や監査で効いてきます。",
+        "domain": "design-document",
+        "keywords": [
+          "ログ",
+          "出力",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "監査ログ定義",
+    "reading": "かんさろぐていぎ",
+    "senses": [
+      {
+        "definition": "誰が何をしたかを残すログ定義です。内部統制や法令対応に関わります。",
+        "domain": "design-document",
+        "keywords": [
+          "監査",
+          "ログ",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "保守対象一覧",
+    "reading": "ほしゅたいしょういちらん",
+    "senses": [
+      {
+        "definition": "保守契約や運用対象となる資産を一覧化したものです。責任範囲の明確化に役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "保守",
+          "対象",
+          "資産"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "運用手順一覧",
+    "reading": "うんようてじゅんいちらん",
+    "senses": [
+      {
+        "definition": "定常作業や例外作業を一覧化した資料です。担当交代時にも有効です。",
+        "domain": "operations",
+        "keywords": [
+          "運用",
+          "手順",
+          "作業"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "障害対応フロー",
+    "reading": "しょうがいたいおうふろー",
+    "senses": [
+      {
+        "definition": "障害発生から復旧、報告までの流れです。初動品質を安定させます。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "対応",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エスカレーション表",
+    "reading": "えすかれーしょんひょう",
+    "senses": [
+      {
+        "definition": "問題ごとに誰へ連絡、引上げするかを整理した表です。緊急時に迷いを減らせます。",
+        "domain": "operations",
+        "keywords": [
+          "エスカレーション",
+          "連絡",
+          "緊急"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "問合せ分類表",
+    "reading": "といあわせぶんるいひょう",
+    "senses": [
+      {
+        "definition": "問い合わせ種別を整理した表です。FAQ整備や問い合わせ分析に使えます。",
+        "domain": "operations",
+        "keywords": [
+          "問合せ",
+          "分類",
+          "FAQ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サポート範囲定義",
+    "reading": "さぽーとはんいていぎ",
+    "senses": [
+      {
+        "definition": "サポート対象と対象外を明示した定義です。保守運用の期待値調整に重要です。",
+        "domain": "operations",
+        "keywords": [
+          "サポート",
+          "範囲",
+          "保守"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リリース一覧",
+    "reading": "りりーすいちらん",
+    "senses": [
+      {
+        "definition": "過去の本番反映履歴を一覧化したものです。障害原因の追跡にも役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "リリース",
+          "履歴",
+          "本番"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "変更履歴台帳",
+    "reading": "へんこうりれきだいちょう",
+    "senses": [
+      {
+        "definition": "変更内容と日付、担当、影響を蓄積した台帳です。保守が長いシステムで特に有効です。",
+        "domain": "operations",
+        "keywords": [
+          "変更",
+          "履歴",
+          "台帳"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "差分一覧",
+    "reading": "さぶんいちらん",
+    "senses": [
+      {
+        "definition": "変更前後で何が変わったかを一覧化したものです。レビューや移行判断の材料になります。",
+        "domain": "design-document",
+        "keywords": [
+          "差分",
+          "変更",
+          "比較"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "依存関係図",
+    "reading": "いぞんかんけいず",
+    "senses": [
+      {
+        "definition": "部品、処理、システム間の依存を示した図です。影響分析に有効です。",
+        "domain": "design-document",
+        "keywords": [
+          "依存",
+          "関係",
+          "影響"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "呼出関係図",
+    "reading": "よびだしかんけいず",
+    "senses": [
+      {
+        "definition": "どの処理がどの処理を呼ぶかを示す図です。内部構造の理解に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "呼出",
+          "関係",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "機能関連図",
+    "reading": "きのうかんれんず",
+    "senses": [
+      {
+        "definition": "機能同士の関係やまとまりを可視化した図です。機能分割やメニュー設計に使えます。",
+        "domain": "design-document",
+        "keywords": [
+          "機能",
+          "関連",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務機能対応表",
+    "reading": "ぎょうむきのうたいおうひょう",
+    "senses": [
+      {
+        "definition": "業務活動とシステム機能の対応を整理した表です。要件漏れや過剰機能の確認に向いています。",
+        "domain": "design-document",
+        "keywords": [
+          "業務",
+          "機能",
+          "対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "トレーサビリティマトリクス",
+    "reading": "とれーさびりてぃまとりくす",
+    "senses": [
+      {
+        "definition": "要件、設計、実装、テストの対応関係を表にしたものです。変更時の追跡に非常に役立ちます。",
+        "domain": "design-document",
+        "keywords": [
+          "要件",
+          "追跡",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "要件対応表",
+    "reading": "ようけんたいおうひょう",
+    "senses": [
+      {
+        "definition": "各要件に対してどの設計や機能が対応するかを整理した表です。受入時の説明にも使えます。",
+        "domain": "design-document",
+        "keywords": [
+          "要件",
+          "対応",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テスト観点表",
+    "reading": "てすとかんてんひょう",
+    "senses": [
+      {
+        "definition": "何をどう確認するかの観点を整理した表です。テストケース設計の質を上げます。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "観点",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テストケース一覧",
+    "reading": "てすとけーすいちらん",
+    "senses": [
+      {
+        "definition": "個別テストケースをまとめた一覧です。進捗管理や網羅確認に向いています。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "ケース",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テストデータ一覧",
+    "reading": "てすとでーたいちらん",
+    "senses": [
+      {
+        "definition": "テストで使う入力や前提データをまとめた一覧です。再現性ある検証に必要です。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "データ",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テスト証跡",
+    "reading": "てすとしょうせき",
+    "senses": [
+      {
+        "definition": "テスト実施結果を示す記録です。監査や受入説明に使われます。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "証跡",
+          "監査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質基準表",
+    "reading": "ひんしつきじゅんひょう",
+    "senses": [
+      {
+        "definition": "何をもって品質良好と判断するかの基準表です。主観的判断を減らせます。",
+        "domain": "testing",
+        "keywords": [
+          "品質",
+          "基準",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "完了条件表",
+    "reading": "かんりょうじょうけんひょう",
+    "senses": [
+      {
+        "definition": "作業や工程が完了したと判断する条件を表にしたものです。認識差防止に有効です。",
+        "domain": "project-management",
+        "keywords": [
+          "完了",
+          "条件",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "受入基準表",
+    "reading": "うけいれきじゅんひょう",
+    "senses": [
+      {
+        "definition": "利用者や発注者が受け入れるための基準です。請負契約や受入テストと相性がよいです。",
+        "domain": "testing",
+        "keywords": [
+          "受入",
+          "基準",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能試験項目表",
+    "reading": "ひきのうしけんこうもくひょう",
+    "senses": [
+      {
+        "definition": "性能、障害、監視などの確認項目をまとめた表です。機能テストに埋もれがちな観点を拾えます。",
+        "domain": "testing",
+        "keywords": [
+          "非機能",
+          "試験",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セキュリティ設計書",
+    "reading": "せきゅりてぃせっけいしょ",
+    "senses": [
+      {
+        "definition": "認証、認可、暗号化、監査などを整理した設計書です。業務系では非常に重要です。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "認可",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "認証方式定義",
+    "reading": "にんしょうほうしきていぎ",
+    "senses": [
+      {
+        "definition": "どの認証方式を採用し、どう使うかを定義したものです。SSO、多要素認証などの整理に使えます。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "SSO",
+          "多要素"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "認可ルール定義",
+    "reading": "にんかるーるていぎ",
+    "senses": [
+      {
+        "definition": "どの役割に何を許可するかを明文化した定義です。設計と監査の両方で役立ちます。",
+        "domain": "security",
+        "keywords": [
+          "認可",
+          "役割",
+          "許可"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "暗号化方針",
+    "reading": "あんごうかほうしん",
+    "senses": [
+      {
+        "definition": "保存時、通信時の暗号化対象と方式を整理した方針です。セキュリティ設計の中核になります。",
+        "domain": "security",
+        "keywords": [
+          "暗号化",
+          "保存",
+          "通信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "秘密情報管理方針",
+    "reading": "ひみつじょうほうかんりほうしん",
+    "senses": [
+      {
+        "definition": "パスワード、鍵、トークンをどう扱うかの方針です。運用事故防止に直結します。",
+        "domain": "security",
+        "keywords": [
+          "秘密情報",
+          "鍵",
+          "トークン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データ分類表",
+    "reading": "でーたぶんるいひょう",
+    "senses": [
+      {
+        "definition": "データを機密度や重要度ごとに分類した表です。保存場所、共有範囲、AI入力可否などの基準になります。",
+        "domain": "security",
+        "keywords": [
+          "データ",
+          "分類",
+          "機密"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "保持期間定義",
+    "reading": "ほじきかんていぎ",
+    "senses": [
+      {
+        "definition": "データやログをどれだけ保存するかの定義です。法令や監査との整合が必要です。",
+        "domain": "operations",
+        "keywords": [
+          "保持",
+          "期間",
+          "法令"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "廃棄ルール",
+    "reading": "はいきるーる",
+    "senses": [
+      {
+        "definition": "不要データをいつどう消すかのルールです。削除漏れや残置リスクを減らせます。",
+        "domain": "operations",
+        "keywords": [
+          "廃棄",
+          "削除",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データ辞書",
+    "reading": "でーたじしょ",
+    "senses": [
+      {
+        "definition": "項目の意味、型、制約を体系的に整理した資料です。設計、運用、分析の共通基盤になります。",
+        "domain": "design-document",
+        "keywords": [
+          "データ",
+          "辞書",
+          "項目"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務用語集",
+    "reading": "ぎょうむようごしゅう",
+    "senses": [
+      {
+        "definition": "業務上の言葉の意味を整理した用語集です。部門ごとの解釈差を減らせます。",
+        "domain": "design-document",
+        "keywords": [
+          "業務",
+          "用語",
+          "定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "システム用語集",
+    "reading": "しすてむようごしゅう",
+    "senses": [
+      {
+        "definition": "技術用語やシステム内名称を整理した用語集です。設計書を読みやすくする補助資料です。",
+        "domain": "design-document",
+        "keywords": [
+          "システム",
+          "用語",
+          "技術"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "凡例一覧",
+    "reading": "はんれいいちらん",
+    "senses": [
+      {
+        "definition": "図や表で使う記号や色の意味を整理した一覧です。複雑な資料ほど重要になります。",
+        "domain": "design-document",
+        "keywords": [
+          "凡例",
+          "記号",
+          "図"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "指摘管理表",
+    "reading": "してきかんりひょう",
+    "senses": [
+      {
+        "definition": "レビュー指摘と対応状況を管理する表です。未対応漏れを防げます。",
+        "domain": "project-management",
+        "keywords": [
+          "指摘",
+          "レビュー",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "残課題一覧",
+    "reading": "ざんかだいいちらん",
+    "senses": [
+      {
+        "definition": "リリース時点で未解決の課題を整理した一覧です。引継ぎや今後計画に役立ちます。",
+        "domain": "project-management",
+        "keywords": [
+          "課題",
+          "残",
+          "引継ぎ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "保留事項一覧",
+    "reading": "ほりゅうじこういちらん",
+    "senses": [
+      {
+        "definition": "まだ決めていない論点を整理した一覧です。決定漏れを防ぐ実務的な資料です。",
+        "domain": "project-management",
+        "keywords": [
+          "保留",
+          "決定",
+          "論点"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "前提条件一覧",
+    "reading": "ぜんていじょうけんいちらん",
+    "senses": [
+      {
+        "definition": "設計や見積の前提を一覧にしたものです。前提崩れ時の再評価に役立ちます。",
+        "domain": "project-management",
+        "keywords": [
+          "前提",
+          "条件",
+          "見積"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "制約条件一覧",
+    "reading": "せいやくじょうけんいちらん",
+    "senses": [
+      {
+        "definition": "予算、納期、技術、法令などの制約を整理した一覧です。判断の背景共有に有効です。",
+        "domain": "project-management",
+        "keywords": [
+          "制約",
+          "条件",
+          "予算"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スコープ一覧",
+    "reading": "すこーぷいちらん",
+    "senses": [
+      {
+        "definition": "対象範囲と対象外範囲を整理した一覧です。仕様膨張防止に使えます。",
+        "domain": "project-management",
+        "keywords": [
+          "スコープ",
+          "範囲",
+          "対象"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "関係者一覧",
+    "reading": "かんけいしゃいちらん",
+    "senses": [
+      {
+        "definition": "ステークホルダーとその役割を整理した一覧です。レビュー招集や承認経路にも使えます。",
+        "domain": "project-management",
+        "keywords": [
+          "関係者",
+          "ステークホルダー",
+          "役割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "体制図補足表",
+    "reading": "たいせいずほそくひょう",
+    "senses": [
+      {
+        "definition": "組織図だけでは伝わらない責任範囲を補足する表です。誰が最終判断者かを明確にできます。",
+        "domain": "project-management",
+        "keywords": [
+          "体制",
+          "責任",
+          "判断者"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "役割期待値定義",
+    "reading": "やくわりきたいちていぎ",
+    "senses": [
+      {
+        "definition": "各役割に何が求められるかを定義したものです。曖昧な責任分担を減らします。",
+        "domain": "project-management",
+        "keywords": [
+          "役割",
+          "期待",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "引継ぎ項目一覧",
+    "reading": "ひきつぎこうもくいちらん",
+    "senses": [
+      {
+        "definition": "引継ぎ時に渡すべき情報を整理した一覧です。保守移管や担当変更で有効です。",
+        "domain": "project-management",
+        "keywords": [
+          "引継ぎ",
+          "移管",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "運用受領条件",
+    "reading": "うんようじゅりょうじょうけん",
+    "senses": [
+      {
+        "definition": "開発側から運用側へ受け渡す条件です。運用開始後の混乱防止に役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "運用",
+          "受領",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "設計判断記録",
+    "reading": "せっけいはんだんきろく",
+    "senses": [
+      {
+        "definition": "なぜその設計にしたかを残す記録です。将来の変更判断を楽にする重要資産になります。",
+        "domain": "design-document",
+        "keywords": [
+          "設計",
+          "判断",
+          "記録"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クラウドアカウント",
+    "reading": "くらうどあかうんと",
+    "senses": [
+      {
+        "definition": "クラウド利用の契約、請求、権限の基本単位です。組織設計やガバナンスの土台になります。",
+        "domain": "cloud",
+        "keywords": [
+          "契約",
+          "請求",
+          "権限"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テナント",
+    "reading": "てなんと",
+    "senses": [
+      {
+        "definition": "クラウドやSaaSにおける論理的な利用単位です。企業単位や組織単位で分かれることがあります。",
+        "domain": "cloud",
+        "keywords": [
+          "SaaS",
+          "組織",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サブスクリプション",
+    "reading": "さぶすくりぷしょん",
+    "senses": [
+      {
+        "definition": "利用契約や課金単位として使われる概念です。クラウドによって意味合いが少し異なります。",
+        "domain": "cloud",
+        "keywords": [
+          "契約",
+          "課金",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リソースグループ",
+    "reading": "りそーすぐるーぷ",
+    "aliases": [
+      "Resource Group"
+    ],
+    "senses": [
+      {
+        "definition": "関連するクラウド資源をまとめて管理する単位です。整理、権限、削除管理に役立ちます。",
+        "domain": "cloud",
+        "keywords": [
+          "資源",
+          "管理",
+          "整理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンパートメント",
+    "reading": "こんぱーとめんと",
+    "senses": [
+      {
+        "definition": "資源を論理的に分けて管理する単位です。権限や請求の分離にも使えます。",
+        "domain": "cloud",
+        "keywords": [
+          "分離",
+          "権限",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "可用性ゾーン",
+    "reading": "かようせいぞーん",
+    "senses": [
+      {
+        "definition": "同一リージョン内で独立性を持たせた設備単位です。障害分散の基本要素になります。",
+        "domain": "cloud",
+        "keywords": [
+          "可用性",
+          "障害",
+          "分散"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "仮想ネットワーク",
+    "reading": "かそうねっとわーく",
+    "senses": [
+      {
+        "definition": "クラウド上で論理的に構築するネットワークです。ベンダーごとに呼び方が異なります。",
+        "domain": "cloud",
+        "keywords": [
+          "ネットワーク",
+          "VPC",
+          "VNet"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セキュリティルール",
+    "reading": "せきゅりてぃるーる",
+    "senses": [
+      {
+        "definition": "どの通信を許可、拒否するかを定めたルールです。最小権限の考え方が重要です。",
+        "domain": "cloud",
+        "keywords": [
+          "通信",
+          "許可",
+          "拒否"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オブジェクトストレージ",
+    "reading": "おぶじぇくとすとれーじ",
+    "senses": [
+      {
+        "definition": "ファイルや非構造データを大量に保存する仕組みです。各クラウドで中核ストレージとして提供されています。",
+        "domain": "cloud",
+        "keywords": [
+          "ストレージ",
+          "ファイル",
+          "S3"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブロックストレージ",
+    "reading": "ぶろっくすとれーじ",
+    "senses": [
+      {
+        "definition": "仮想ディスクのように使うストレージです。OSディスクやDB向けによく使われます。",
+        "domain": "cloud",
+        "keywords": [
+          "ストレージ",
+          "ディスク",
+          "EBS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ファイルストレージ",
+    "reading": "ふぁいるすとれーじ",
+    "senses": [
+      {
+        "definition": "ファイル共有方式で扱うストレージです。既存業務の移行先として使われることがあります。",
+        "domain": "cloud",
+        "keywords": [
+          "ストレージ",
+          "ファイル共有",
+          "NFS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マネージドデータベース",
+    "reading": "まねーじどでーたべーす",
+    "senses": [
+      {
+        "definition": "運用の一部をクラウド側が担うDBサービスです。バックアップや監視負担を減らしやすくなります。",
+        "domain": "cloud",
+        "keywords": [
+          "データベース",
+          "運用",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サーバーレス実行環境",
+    "reading": "さーばーれすじっこうかんきょう",
+    "senses": [
+      {
+        "definition": "サーバー管理を強く意識せずにコード実行できる環境です。イベント駆動処理と相性がよいです。",
+        "domain": "cloud",
+        "keywords": [
+          "サーバーレス",
+          "Lambda",
+          "Functions"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンテナ実行基盤",
+    "reading": "こんてなじっこうきばん",
+    "senses": [
+      {
+        "definition": "コンテナ化したアプリを動かす基盤です。移植性と運用効率の両立に役立ちます。",
+        "domain": "cloud",
+        "keywords": [
+          "コンテナ",
+          "Docker",
+          "基盤"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Kubernetesマネージドサービス",
+    "reading": "くばねてぃすまねーじどさーびす",
+    "senses": [
+      {
+        "definition": "Kubernetesの制御面などをクラウドが管理するサービスです。運用負担を減らしつつKubernetesを使えます。",
+        "domain": "cloud",
+        "keywords": [
+          "Kubernetes",
+          "コンテナ",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ロール",
+    "reading": "ろーる",
+    "senses": [
+      {
+        "definition": "役割単位で権限をまとめたものです。利用者やサービスへ権限付与するときに使います。",
+        "domain": "cloud",
+        "keywords": [
+          "権限",
+          "役割",
+          "IAM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ポリシー",
+    "reading": "ぽりしー",
+    "senses": [
+      {
+        "definition": "何を許可、禁止するかを記述したルールです。IAMやネットワーク制御で重要です。",
+        "domain": "cloud",
+        "keywords": [
+          "許可",
+          "禁止",
+          "IAM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サービスプリンシパル",
+    "reading": "さーびすぷりんしぱる",
+    "senses": [
+      {
+        "definition": "アプリケーションや自動処理が使う認証主体です。人のアカウントとは分けて管理します。",
+        "domain": "cloud",
+        "keywords": [
+          "認証",
+          "アプリ",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マネージドアイデンティティ",
+    "reading": "まねーじどあいでんてぃてぃ",
+    "senses": [
+      {
+        "definition": "クラウドが資格情報管理を担う認証方式です。秘密情報の埋め込みを減らしやすくなります。",
+        "domain": "cloud",
+        "keywords": [
+          "認証",
+          "マネージド",
+          "秘密情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "シークレットマネージャ",
+    "reading": "しーくれっとまねーじゃー",
+    "senses": [
+      {
+        "definition": "秘密情報を安全に保管、配布するサービスです。APIキーや接続情報の管理に使います。",
+        "domain": "cloud",
+        "keywords": [
+          "秘密情報",
+          "鍵",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "監視サービス",
+    "reading": "かんしさーびす",
+    "senses": [
+      {
+        "definition": "メトリクス、ログ、アラートを扱う基盤です。障害検知と可観測性に関わります。",
+        "domain": "cloud",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ログ基盤",
+    "reading": "ろぐきばん",
+    "senses": [
+      {
+        "definition": "アプリやインフラのログを集約、検索する仕組みです。障害調査や監査で必須です。",
+        "domain": "cloud",
+        "keywords": [
+          "ログ",
+          "集約",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メトリクス基盤",
+    "reading": "めとりくすきばん",
+    "senses": [
+      {
+        "definition": "CPUや応答時間などの数値を集約する仕組みです。傾向把握やアラート設定に使います。",
+        "domain": "cloud",
+        "keywords": [
+          "メトリクス",
+          "CPU",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分散トレース基盤",
+    "reading": "ぶんさんとれーすきばん",
+    "senses": [
+      {
+        "definition": "複数サービスをまたぐ処理の流れを追跡する基盤です。マイクロサービスで特に重要です。",
+        "domain": "cloud",
+        "keywords": [
+          "トレース",
+          "分散",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メッセージングサービス",
+    "reading": "めっせーじんぐさーびす",
+    "senses": [
+      {
+        "definition": "非同期にメッセージを受け渡すための基盤です。疎結合なシステム構築に役立ちます。",
+        "domain": "cloud",
+        "keywords": [
+          "メッセージ",
+          "非同期",
+          "疎結合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キューサービス",
+    "reading": "きゅーさーびす",
+    "senses": [
+      {
+        "definition": "処理待ちデータを順番にためるサービスです。負荷平準化や再試行設計に向いています。",
+        "domain": "cloud",
+        "keywords": [
+          "キュー",
+          "負荷",
+          "再試行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "イベントバス",
+    "reading": "いべんとばす",
+    "senses": [
+      {
+        "definition": "イベントを発行、購読するための仕組みです。イベント駆動設計の土台になります。",
+        "domain": "cloud",
+        "keywords": [
+          "イベント",
+          "発行",
+          "購読"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マネージドDNS",
+    "reading": "まねーじどでぃーえぬえす",
+    "senses": [
+      {
+        "definition": "DNS管理をクラウド側で提供するサービスです。名前解決の可用性や運用性を高めやすいです。",
+        "domain": "cloud",
+        "keywords": [
+          "DNS",
+          "名前解決",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "専用線接続サービス",
+    "reading": "せんようせんせつぞくさーびす",
+    "senses": [
+      {
+        "definition": "オンプレミスとクラウドを専用回線でつなぐ仕組みです。安定性や低遅延が求められる場面で使います。",
+        "domain": "cloud",
+        "keywords": [
+          "専用線",
+          "オンプレミス",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NATサービス",
+    "reading": "なっとさーびす",
+    "senses": [
+      {
+        "definition": "内部資源が外向き通信するときに中継する仕組みです。外からの直接接続を防ぎやすくなります。",
+        "domain": "cloud",
+        "keywords": [
+          "NAT",
+          "通信",
+          "中継"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ハイブリッド接続",
+    "reading": "はいぶりっどせつぞく",
+    "senses": [
+      {
+        "definition": "オンプレミスとクラウドを組み合わせて使う構成です。移行途中や既存資産活用でよく出ます。",
+        "domain": "cloud",
+        "keywords": [
+          "ハイブリッド",
+          "オンプレミス",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マルチクラウド",
+    "reading": "まるちくらうど",
+    "senses": [
+      {
+        "definition": "複数クラウドを組み合わせて利用する考え方です。コスト、冗長性、得意分野の使い分けに活用されます。",
+        "domain": "cloud",
+        "keywords": [
+          "マルチ",
+          "冗長",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure",
+    "reading": "あじゅーる",
+    "senses": [
+      {
+        "definition": "Microsoftのクラウドサービス群の総称です。企業向け認証基盤や業務システムとの親和性が高いです。",
+        "domain": "azure",
+        "keywords": [
+          "Microsoft",
+          "クラウド",
+          "エンタープライズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Virtual Network",
+    "reading": "あじゅーるばーちゃるねっとわーく",
+    "senses": [
+      {
+        "definition": "Azure上の論理ネットワークです。略してVNetと呼ばれます。",
+        "domain": "azure",
+        "keywords": [
+          "ネットワーク",
+          "VNet",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VNet",
+    "reading": "ぶいねっと",
+    "senses": [
+      {
+        "definition": "Azure Virtual Networkの略称です。サブネットやルート、セキュリティを含む基本単位になります。",
+        "domain": "azure",
+        "keywords": [
+          "ネットワーク",
+          "Azure",
+          "仮想"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Subnet in Azure",
+    "reading": "あじゅーるさぶねっと",
+    "senses": [
+      {
+        "definition": "VNet内を分割したネットワーク領域です。役割分離やセキュリティ設計に使います。",
+        "domain": "azure",
+        "keywords": [
+          "サブネット",
+          "VNet",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Network Security Group",
+    "reading": "ねっとわーくせきゅりてぃぐるーぷ",
+    "senses": [
+      {
+        "definition": "通信許可、拒否を制御するAzureの仕組みです。略してNSGと呼ばれます。",
+        "domain": "azure",
+        "keywords": [
+          "NSG",
+          "通信",
+          "セキュリティ"
+        ]
+      },
+      {
+        "definition": "リソース単位で適用しやすい通信制御グループ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "セキュリティ",
+          "Network Security Group"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NSG",
+    "reading": "えぬえすじー",
+    "senses": [
+      {
+        "definition": "Network Security Groupの略称です。サブネットやNIC単位の通信制御に使えます。",
+        "domain": "azure",
+        "keywords": [
+          "セキュリティ",
+          "通信",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Load Balancer",
+    "reading": "あじゅーるろーどばらんさー",
+    "senses": [
+      {
+        "definition": "Azureの負荷分散サービスです。可用性向上やトラフィック分散に使います。",
+        "domain": "azure",
+        "keywords": [
+          "負荷分散",
+          "可用性",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Application Gateway",
+    "reading": "あじゅーるあぷりけーしょんげーとうぇい",
+    "senses": [
+      {
+        "definition": "L7レベルで動作するAzureのアプリケーション向けゲートウェイです。Web系のルーティングや保護に使われます。",
+        "domain": "azure",
+        "keywords": [
+          "L7",
+          "WAF",
+          "ルーティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Front Door",
+    "reading": "あじゅーるふろんとどあ",
+    "senses": [
+      {
+        "definition": "グローバル配信や入口制御に使うAzureサービスです。複数リージョン配信や高速化で使われます。",
+        "domain": "azure",
+        "keywords": [
+          "CDN",
+          "グローバル",
+          "配信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure DNS",
+    "reading": "あじゅーるでぃーえぬえす",
+    "senses": [
+      {
+        "definition": "AzureのDNS管理サービスです。名前解決をクラウド側で管理できます。",
+        "domain": "azure",
+        "keywords": [
+          "DNS",
+          "名前解決",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Microsoft Entra ID",
+    "reading": "まいくろそふとえんとらあいでぃー",
+    "senses": [
+      {
+        "definition": "MicrosoftのID管理サービス名称です。旧Azure Active Directoryの系譜にある認証基盤です。",
+        "domain": "azure",
+        "keywords": [
+          "認証",
+          "ID",
+          "SSO"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Entra ID",
+    "reading": "えんとらあいでぃー",
+    "senses": [
+      {
+        "definition": "Microsoft Entra IDの略称的な呼び方です。SSOや認証連携で重要です。",
+        "domain": "azure",
+        "keywords": [
+          "認証",
+          "SSO",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Subscription",
+    "reading": "あじゅーるさぶすくりぷしょん",
+    "senses": [
+      {
+        "definition": "Azure利用の契約、課金、管理単位です。リソースや権限のまとまりとして使われます。",
+        "domain": "azure",
+        "keywords": [
+          "契約",
+          "課金",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Policy",
+    "reading": "あじゅーるぽりしー",
+    "senses": [
+      {
+        "definition": "リソース作成や設定にルールを適用する仕組みです。統制や標準化に有効です。",
+        "domain": "azure",
+        "keywords": [
+          "ポリシー",
+          "統制",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure RBAC",
+    "reading": "あじゅーるあーるびーえーしー",
+    "senses": [
+      {
+        "definition": "Azureのロールベース権限制御です。誰に何を許可するかをロール単位で管理します。",
+        "domain": "azure",
+        "keywords": [
+          "RBAC",
+          "権限",
+          "ロール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Managed Identity",
+    "reading": "あじゅーるまねーじどあいでんてぃてぃ",
+    "senses": [
+      {
+        "definition": "Azureが認証情報管理を肩代わりする仕組みです。秘密情報をコードへ埋め込まない設計に役立ちます。",
+        "domain": "azure",
+        "keywords": [
+          "認証",
+          "マネージド",
+          "秘密情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Key Vault",
+    "reading": "あじゅーるきーぼると",
+    "senses": [
+      {
+        "definition": "秘密情報や鍵、証明書を保管するAzureサービスです。セキュアな構成の要になります。",
+        "domain": "azure",
+        "keywords": [
+          "鍵",
+          "秘密情報",
+          "証明書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure App Service",
+    "reading": "あじゅーるあっぷさーびす",
+    "senses": [
+      {
+        "definition": "WebアプリやAPIをホストできるAzureのマネージドサービスです。インフラ管理負担を減らしやすいです。",
+        "domain": "azure",
+        "keywords": [
+          "Web",
+          "API",
+          "ホスティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Web App for Azure App Service",
+    "reading": "うぇぶあっぷふぉーあじゅーるあっぷさーびす",
+    "senses": [
+      {
+        "definition": "App Service上でWebアプリを動かす形態です。業務Webシステムでもよく使われます。",
+        "domain": "azure",
+        "keywords": [
+          "Web",
+          "App Service",
+          "ホスティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Functions",
+    "reading": "あじゅーるふぁんくしょんず",
+    "senses": [
+      {
+        "definition": "イベント駆動でコードを実行するAzureのサーバーレスサービスです。小さな処理単位の自動化に向いています。",
+        "domain": "azure",
+        "keywords": [
+          "サーバーレス",
+          "イベント",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Function App",
+    "reading": "ふぁんくしょんあっぷ",
+    "senses": [
+      {
+        "definition": "Azure Functionsをまとめて管理する単位です。関数群の配置や設定に使われます。",
+        "domain": "azure",
+        "keywords": [
+          "Functions",
+          "管理",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Container Apps",
+    "reading": "あじゅーるこんてなあっぷす",
+    "senses": [
+      {
+        "definition": "コンテナアプリを実行するAzureのマネージド基盤です。Kubernetesを直接運用せずにコンテナを扱いやすくします。",
+        "domain": "azure",
+        "keywords": [
+          "コンテナ",
+          "マネージド",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Kubernetes Service",
+    "reading": "あじゅーるくばねてぃすさーびす",
+    "senses": [
+      {
+        "definition": "AzureのマネージドKubernetesサービスです。略してAKSと呼ばれます。",
+        "domain": "azure",
+        "keywords": [
+          "Kubernetes",
+          "AKS",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AKS",
+    "reading": "えーけーえす",
+    "senses": [
+      {
+        "definition": "Azure Kubernetes Serviceの略称です。コンテナ基盤としてよく使われます。",
+        "domain": "azure",
+        "keywords": [
+          "Kubernetes",
+          "Azure",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure SQL Database",
+    "reading": "あじゅーるえすきゅーえるでーたべーす",
+    "senses": [
+      {
+        "definition": "AzureのマネージドSQLデータベースサービスです。SQL Server系の業務資産と相性があります。",
+        "domain": "azure",
+        "keywords": [
+          "SQL",
+          "データベース",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Cosmos DB",
+    "reading": "あじゅーるこすもすでぃーびー",
+    "senses": [
+      {
+        "definition": "グローバル分散を特徴とするAzureのデータベースサービスです。高可用性や多モデル対応が特徴です。",
+        "domain": "azure",
+        "keywords": [
+          "NoSQL",
+          "分散",
+          "グローバル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Storage Account",
+    "reading": "あじゅーるすとれーじあかうんと",
+    "senses": [
+      {
+        "definition": "Azureの各種ストレージサービスをまとめる管理単位です。Blob、Queue、Tableなどを扱います。",
+        "domain": "azure",
+        "keywords": [
+          "ストレージ",
+          "Blob",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Blob Storage",
+    "reading": "あじゅーるぶろぶすとれーじ",
+    "senses": [
+      {
+        "definition": "Azureのオブジェクトストレージサービスです。大容量ファイル保存に向いています。",
+        "domain": "azure",
+        "keywords": [
+          "Blob",
+          "ストレージ",
+          "オブジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Files",
+    "reading": "あじゅーるふぁいるず",
+    "senses": [
+      {
+        "definition": "Azureのファイル共有サービスです。既存ファイル共有のクラウド移行先として使われることがあります。",
+        "domain": "azure",
+        "keywords": [
+          "ファイル共有",
+          "SMB",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Queue Storage",
+    "reading": "あじゅーるきゅーすとれーじ",
+    "senses": [
+      {
+        "definition": "キュー型メッセージを扱うAzureストレージサービスです。非同期処理の簡易実装に使えます。",
+        "domain": "azure",
+        "keywords": [
+          "キュー",
+          "メッセージ",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Service Bus",
+    "reading": "あじゅーるさーびすばす",
+    "senses": [
+      {
+        "definition": "Azureの高機能メッセージングサービスです。キューやトピック連携に使われます。",
+        "domain": "azure",
+        "keywords": [
+          "メッセージング",
+          "キュー",
+          "トピック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Event Grid",
+    "reading": "あじゅーるいべんとぐりっど",
+    "senses": [
+      {
+        "definition": "イベント配信を扱うAzureサービスです。イベント駆動アーキテクチャに向いています。",
+        "domain": "azure",
+        "keywords": [
+          "イベント",
+          "配信",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Event Hubs",
+    "reading": "あじゅーるいべんとはぶず",
+    "senses": [
+      {
+        "definition": "大量イベントやストリームデータを取り込むAzureサービスです。ログ収集やIoT系と相性があります。",
+        "domain": "azure",
+        "keywords": [
+          "ストリーム",
+          "IoT",
+          "ログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Monitor",
+    "reading": "あじゅーるもにたー",
+    "senses": [
+      {
+        "definition": "Azureの監視基盤です。メトリクス、ログ、アラートを扱えます。",
+        "domain": "azure",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Log Analytics",
+    "reading": "ろぐあなりてぃくす",
+    "senses": [
+      {
+        "definition": "Azure Monitorと組み合わせてログ分析を行う機能です。クエリベースで運用データを調べやすいです。",
+        "domain": "azure",
+        "keywords": [
+          "ログ",
+          "分析",
+          "クエリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Application Insights",
+    "reading": "あぷりけーしょんいんさいつ",
+    "senses": [
+      {
+        "definition": "アプリケーション監視に特化したAzureの機能です。依存関係や例外、応答時間の可視化に使えます。",
+        "domain": "azure",
+        "keywords": [
+          "APM",
+          "監視",
+          "例外"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure DevOps",
+    "reading": "あじゅーるでぶおぷす",
+    "senses": [
+      {
+        "definition": "開発管理、CI/CD、ボード、リポジトリなどを提供するMicrosoftのサービス群です。開発運用基盤として使われます。",
+        "domain": "azure",
+        "keywords": [
+          "DevOps",
+          "CI/CD",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Pipelines",
+    "reading": "あじゅーるぱいぷらいんず",
+    "senses": [
+      {
+        "definition": "Azure DevOpsのCI/CD機能です。ビルド、テスト、デプロイを自動化できます。",
+        "domain": "azure",
+        "keywords": [
+          "CI/CD",
+          "パイプライン",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Repos",
+    "reading": "あじゅーるれぽず",
+    "senses": [
+      {
+        "definition": "Azure DevOpsのGitリポジトリ機能です。コード管理とレビュー基盤として使われます。",
+        "domain": "azure",
+        "keywords": [
+          "Git",
+          "リポジトリ",
+          "コード管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "状態機械図",
+    "reading": "じょうたいきかいず",
+    "senses": [
+      {
+        "definition": "対象がどの状態間を遷移するかを表す図です。状態遷移をより形式的に扱う場合に使用します。",
+        "domain": "UML",
+        "keywords": [
+          "状態",
+          "遷移",
+          "図"
+        ]
+      }
+    ],
+    "aliases": [
+      "State Machine Diagram"
+    ]
+  },
+  {
+    "term": "デプロイメント図",
+    "reading": "でぷろいめんとず",
+    "senses": [
+      {
+        "definition": "サーバー・アプリケーション・ネットワーク機器の配置関係を示す図です。インフラ設計や構成ドキュメントによく使われます。",
+        "domain": "UML",
+        "keywords": [
+          "サーバー",
+          "インフラ",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deployment Diagram"
+    ]
+  },
+  {
+    "term": "論理アーキテクチャ図",
+    "reading": "ろんりあーきてくちゃず",
+    "senses": [
+      {
+        "definition": "役割によってシステム構造を表す図です。物理環境に依存せず全体像を共有するのに適しています。",
+        "domain": "Design Document",
+        "keywords": [
+          "アーキテクチャ",
+          "論理",
+          "全体像"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logical Architecture Diagram"
+    ]
+  },
+  {
+    "term": "物理アーキテクチャ図",
+    "reading": "ぶつりあーきてくちゃず",
+    "senses": [
+      {
+        "definition": "サーバー・ネットワーク・ミドルウェアの実際の配置を示す図です。構築・運用作業に直結します。",
+        "domain": "Design Document",
+        "keywords": [
+          "アーキテクチャ",
+          "物理",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Physical Architecture Diagram"
+    ]
+  },
+  {
+    "term": "ネットワークアーキテクチャ図",
+    "reading": "ねっとわーくあーきてくちゃず",
+    "senses": [
+      {
+        "definition": "通信経路・セグメント・接続点に焦点を当てた構成図です。セキュリティや接続性の要件確認に役立ちます。",
+        "domain": "Design Document",
+        "keywords": [
+          "ネットワーク",
+          "通信",
+          "セグメント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Network Architecture Diagram"
+    ]
+  },
+  {
+    "term": "フィールド属性表",
+    "reading": "ふぃーるどぞくせいひょう",
+    "senses": [
+      {
+        "definition": "フィールド名・型・桁数・必須フラグ・デフォルト値をまとめた表です。画面設計・API設計・DB設計をつなぐドキュメントになります。",
+        "domain": "Design Document",
+        "keywords": [
+          "フィールド",
+          "属性",
+          "型"
+        ]
+      }
+    ],
+    "aliases": [
+      "Field Attribute Table"
+    ]
+  },
+  {
+    "term": "フィールドマッピング表",
+    "reading": "ふぃーるどまっぴんぐひょう",
+    "senses": [
+      {
+        "definition": "画面・API・データベース間のフィールドの対応を整理した表です。データ受け渡しの齟齬を防ぎます。",
+        "domain": "Design Document",
+        "keywords": [
+          "フィールド",
+          "マッピング",
+          "対応"
+        ]
+      }
+    ],
+    "aliases": [
+      "Field Mapping Table"
+    ]
+  },
+  {
+    "term": "バッチジョブ一覧",
+    "reading": "ばっちじょぶいちらん",
+    "senses": [
+      {
+        "definition": "バッチ処理の種類・目的・実行タイミングを列挙したドキュメントです。定期処理の全体像の把握に適しています。",
+        "domain": "Design Document",
+        "keywords": [
+          "バッチ",
+          "処理",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": [
+      "Batch Job List"
+    ]
+  },
+  {
+    "term": "ロール一覧",
+    "reading": "ろーるいちらん",
+    "senses": [
+      {
+        "definition": "ユーザーや管理者などのロールを整理した一覧です。権限設計や画面制御の前提条件になります。",
+        "domain": "Design Document",
+        "keywords": [
+          "ロール",
+          "権限",
+          "ユーザー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Role List"
+    ]
+  },
+  {
+    "term": "ビジネスルール一覧",
+    "reading": "びじねするーるいちらん",
+    "senses": [
+      {
+        "definition": "業務で守らなければならないルールを整理した一覧です。要件と詳細設計をつなぐ橋渡しになります。",
+        "domain": "Design Document",
+        "keywords": [
+          "業務",
+          "ルール",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Rule List"
+    ]
+  },
+  {
+    "term": "業務判断基準",
+    "reading": "ぎょうむはんだんきじゅん",
+    "senses": [
+      {
+        "definition": "承認可否や登録可否などの判断条件です。曖昧さが実装や運用での不整合を招くことがあります。",
+        "domain": "Design Document",
+        "keywords": [
+          "業務",
+          "判断",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Decision Criteria"
+    ]
+  },
+  {
+    "term": "マスターデータ一覧",
+    "reading": "ますたーでーたいちらん",
+    "senses": [
+      {
+        "definition": "業務で参照される基準データを列挙したドキュメントです。フィールド定義やメンテナンス範囲の整理に役立ちます。",
+        "domain": "Design Document",
+        "keywords": [
+          "マスター",
+          "データ",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": [
+      "Master Data List"
+    ]
+  },
+  {
+    "term": "マスターデータメンテナンス仕様",
+    "reading": "ますたーでーためんてなんすしよう",
+    "senses": [
+      {
+        "definition": "マスターデータを誰がどのように更新するかの仕様書です。データ整合性と運用上の使いやすさのバランスが求められます。",
+        "domain": "Design Document",
+        "keywords": [
+          "マスター",
+          "更新",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Master Data Maintenance Specification"
+    ]
+  },
+  {
+    "term": "カットオーバー手順",
+    "reading": "かっとおーばーてじゅん",
+    "senses": [
+      {
+        "definition": "旧システムと新システムを切り替えるための具体的な手順です。リハーサルを想定して作成することが重要です。",
+        "domain": "Migration",
+        "keywords": [
+          "カットオーバー",
+          "手順",
+          "リリース"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cutover Procedure"
+    ]
+  },
+  {
+    "term": "カットバック手順書",
+    "reading": "かっとばっくてじゅんしょ",
+    "senses": [
+      {
+        "definition": "システム切り替え時に問題が発生した場合に元の状態へ戻すための手順書です。実際にロールバックできることの確認が必要です。",
+        "domain": "Migration",
+        "keywords": [
+          "カットバック",
+          "手順",
+          "リカバリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cutback Procedure Document"
+    ]
+  },
+  {
+    "term": "非機能要件一覧",
+    "reading": "ひきのうようけんいちらん",
+    "senses": [
+      {
+        "definition": "パフォーマンス・監視・可用性・セキュリティなどの要件を列挙したドキュメントです。機能要件に埋もれがちな観点を整理します。",
+        "domain": "Design Document",
+        "keywords": [
+          "非機能",
+          "パフォーマンス",
+          "可用性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Functional Requirements List"
+    ]
+  },
+  {
+    "term": "作業手順一覧",
+    "reading": "さぎょうてじゅんいちらん",
+    "senses": [
+      {
+        "definition": "定常作業と例外作業を列挙したドキュメントです。要員交代時にも役立ちます。",
+        "domain": "Operations",
+        "keywords": [
+          "運用",
+          "手順",
+          "作業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operation Procedure List"
+    ]
+  },
+  {
+    "term": "インシデント対応フロー",
+    "reading": "いんしでんとたいおうふろー",
+    "senses": [
+      {
+        "definition": "インシデント発生から復旧・報告までのフローです。初動対応の品質を安定させます。",
+        "domain": "Operations",
+        "keywords": [
+          "インシデント",
+          "対応",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incident Response Flow"
+    ]
+  },
+  {
+    "term": "差異一覧",
+    "reading": "さいいちらん",
+    "senses": [
+      {
+        "definition": "変更前後で何が変わったかを列挙したドキュメントです。レビューや移行判断の材料になります。",
+        "domain": "Design Document",
+        "keywords": [
+          "差異",
+          "変更",
+          "比較"
+        ]
+      }
+    ],
+    "aliases": [
+      "Difference List"
+    ]
+  },
+  {
+    "term": "業務機能マッピング表",
+    "reading": "ぎょうむきのうまっぴんぐひょう",
+    "senses": [
+      {
+        "definition": "業務活動とシステム機能の対応を整理した表です。要件の抜けや過剰な機能の検証に適しています。",
+        "domain": "Design Document",
+        "keywords": [
+          "業務",
+          "機能",
+          "マッピング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business-Function Mapping Table"
+    ]
+  },
+  {
+    "term": "要件マッピング表",
+    "reading": "ようけんまっぴんぐひょう",
+    "senses": [
+      {
+        "definition": "各要件にどの設計要素や機能が対応するかを整理した表です。受け入れ時の説明にも活用できます。",
+        "domain": "Design Document",
+        "keywords": [
+          "要件",
+          "マッピング",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Requirements Mapping Table"
+    ]
+  },
+  {
+    "term": "完了基準表",
+    "reading": "かんりょうきじゅんひょう",
+    "senses": [
+      {
+        "definition": "タスクやフェーズがいつ完了したと判断するかの条件を示す表です。期待値のずれを防ぐのに効果的です。",
+        "domain": "Project Management",
+        "keywords": [
+          "完了",
+          "基準",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Completion Criteria Table"
+    ]
+  },
+  {
+    "term": "非機能テスト項目表",
+    "reading": "ひきのうてすとこうもくひょう",
+    "senses": [
+      {
+        "definition": "パフォーマンス・障害・監視の検証項目をまとめた表です。機能テストに埋もれがちな観点を捉えます。",
+        "domain": "Testing",
+        "keywords": [
+          "非機能",
+          "テスト",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Functional Test Item Table"
+    ]
+  },
+  {
+    "term": "暗号化ポリシー",
+    "reading": "あんごうかぽりしー",
+    "senses": [
+      {
+        "definition": "保存時と通信時に何をどのように暗号化するかを整理したポリシーです。セキュリティ設計の核になります。",
+        "domain": "Security",
+        "keywords": [
+          "暗号化",
+          "保存時",
+          "通信時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Encryption Policy"
+    ]
+  },
+  {
+    "term": "秘密情報管理ポリシー",
+    "reading": "ひみつじょうほうかんりぽりしー",
+    "senses": [
+      {
+        "definition": "パスワード・鍵・トークンの扱い方を定めたポリシーです。運用上のインシデント防止に直結します。",
+        "domain": "Security",
+        "keywords": [
+          "秘密",
+          "鍵",
+          "トークン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Secret Information Management Policy"
+    ]
+  },
+  {
+    "term": "データ保管期間定義",
+    "reading": "でーたほかんきかんていぎ",
+    "senses": [
+      {
+        "definition": "データやログをどれだけの期間保管するかの定義書です。法規制や監査要件との整合が必要です。",
+        "domain": "Operations",
+        "keywords": [
+          "保管",
+          "期間",
+          "法規制"
+        ]
+      }
+    ],
+    "aliases": [
+      "Retention Period Definition"
+    ]
+  },
+  {
+    "term": "データ廃棄ルール",
+    "reading": "でーたはいきるーる",
+    "senses": [
+      {
+        "definition": "不要なデータをいつどのように削除するかのルールです。削除漏れやデータ残留のリスクを低減します。",
+        "domain": "Operations",
+        "keywords": [
+          "廃棄",
+          "削除",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Disposal Rules"
+    ]
+  },
+  {
+    "term": "レビュー指摘管理表",
+    "reading": "れびゅーしてきかんりひょう",
+    "senses": [
+      {
+        "definition": "レビュー指摘とその解決状況を管理する表です。未解決の指摘が見落とされるのを防ぎます。",
+        "domain": "Project Management",
+        "keywords": [
+          "レビュー",
+          "指摘",
+          "追跡"
+        ]
+      }
+    ],
+    "aliases": [
+      "Review Issue Tracking Table"
+    ]
+  },
+  {
+    "term": "オープンイシュー一覧",
+    "reading": "おーぷんいしゅーいちらん",
+    "senses": [
+      {
+        "definition": "リリース時点での未解決課題を整理した一覧です。引き継ぎや今後の計画に役立ちます。",
+        "domain": "Project Management",
+        "keywords": [
+          "課題",
+          "未解決",
+          "引き継ぎ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Open Issues List"
+    ]
+  },
+  {
+    "term": "ステークホルダー一覧",
+    "reading": "すてーくほるだーいちらん",
+    "senses": [
+      {
+        "definition": "ステークホルダーとそのロールを整理した一覧です。レビュー招集や承認フローにも活用できます。",
+        "domain": "Project Management",
+        "keywords": [
+          "ステークホルダー",
+          "ロール",
+          "承認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stakeholder List"
+    ]
+  },
+  {
+    "term": "組織図補足表",
+    "reading": "そしきずほそくひょう",
+    "senses": [
+      {
+        "definition": "組織図だけでは表現できない責任境界を補足した表です。最終決裁権者を明確にするのに役立ちます。",
+        "domain": "Project Management",
+        "keywords": [
+          "組織",
+          "責任",
+          "権限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Organization Chart Supplement Table"
+    ]
+  },
+  {
+    "term": "ロール期待定義",
+    "reading": "ろーるきたいていぎ",
+    "senses": [
+      {
+        "definition": "各ロールに何が期待されているかを定義した書類です。曖昧な責任分担を減らします。",
+        "domain": "Project Management",
+        "keywords": [
+          "ロール",
+          "期待",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Role Expectation Definition"
+    ]
+  },
+  {
+    "term": "運用受け入れ基準",
+    "reading": "うんよううけいれきじゅん",
+    "senses": [
+      {
+        "definition": "開発チームから運用チームへ引き渡す条件を定めたものです。運用開始後の混乱を防ぎます。",
+        "domain": "Operations",
+        "keywords": [
+          "運用",
+          "受け入れ",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operations Acceptance Criteria"
+    ]
+  },
+  {
+    "term": "コンテナ実行プラットフォーム",
+    "reading": "こんてなじっこうぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "コンテナ化されたアプリケーションを実行するプラットフォームです。ポータビリティと運用効率の両立を支援します。",
+        "domain": "Cloud",
+        "keywords": [
+          "コンテナ",
+          "Docker",
+          "プラットフォーム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Container Execution Platform"
+    ]
+  },
+  {
+    "term": "マネージドKubernetesサービス",
+    "reading": "まねーじどくーばねてぃすさーびす",
+    "senses": [
+      {
+        "definition": "クラウドがKubernetesのコントロールプレーンなどを管理するサービスです。運用負担を減らしながらKubernetesを利用できます。",
+        "domain": "Cloud",
+        "keywords": [
+          "Kubernetes",
+          "コンテナ",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Managed Kubernetes Service"
+    ]
+  },
+  {
+    "term": "IAMロール",
+    "reading": "あいえーえむろーる",
+    "senses": [
+      {
+        "definition": "ロール別に権限をグループ化したものです。ユーザーやサービスへの権限付与に使用します。",
+        "domain": "Cloud",
+        "keywords": [
+          "権限",
+          "ロール",
+          "IAM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Role (Cloud IAM)"
+    ]
+  },
+  {
+    "term": "マネージドID",
+    "reading": "まねーじどあいでぃ",
+    "senses": [
+      {
+        "definition": "クラウドが認証情報を管理する認証方式です。コードにシークレットを埋め込まずに済みやすくなります。",
+        "domain": "Cloud",
+        "keywords": [
+          "認証",
+          "マネージド",
+          "シークレット"
+        ]
+      }
+    ],
+    "aliases": [
+      "Managed Identity"
+    ]
+  },
+  {
+    "term": "モニタリングサービス",
+    "reading": "もにたりんぐさーびす",
+    "senses": [
+      {
+        "definition": "メトリクス・ログ・アラートを扱うプラットフォームです。障害検知とオブザーバビリティに関わります。",
+        "domain": "Cloud",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monitoring Service"
+    ]
+  },
+  {
+    "term": "ログプラットフォーム",
+    "reading": "ろぐぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "アプリケーションやインフラのログを集約・検索する仕組みです。障害調査や監査に不可欠です。",
+        "domain": "Cloud",
+        "keywords": [
+          "ログ",
+          "集約",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": [
+      "Log Platform"
+    ]
+  },
+  {
+    "term": "メトリクスプラットフォーム",
+    "reading": "めとりくすぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "CPU使用率や応答時間などの数値を集約する仕組みです。トレンド分析やアラート設定に使用されます。",
+        "domain": "Cloud",
+        "keywords": [
+          "メトリクス",
+          "CPU",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Metrics Platform"
+    ]
+  },
+  {
+    "term": "分散トレーシングプラットフォーム",
+    "reading": "ぶんさんとれーしんぐぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "複数サービスにまたがる処理の流れを追跡するプラットフォームです。マイクロサービスにおいて特に重要です。",
+        "domain": "Cloud",
+        "keywords": [
+          "トレーシング",
+          "分散",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Distributed Tracing Platform"
+    ]
+  },
+  {
+    "term": "APIゲートウェイサービス",
+    "reading": "えーぴーあいげーとうぇいさーびす",
+    "senses": [
+      {
+        "definition": "APIのエントリーポイントを一元管理する仕組みです。認証・レート制限・ルーティングの統一を容易にします。",
+        "domain": "Cloud",
+        "keywords": [
+          "API",
+          "ゲートウェイ",
+          "認証"
+        ]
+      }
+    ],
+    "aliases": [
+      "API Gateway Service"
+    ]
+  },
+  {
+    "term": "Azureリソースグループ",
+    "reading": "あじゅーるりそーすぐるーぷ",
+    "senses": [
+      {
+        "definition": "Azureリソースをまとめて管理する単位です。削除・権限管理・整理の基盤になります。",
+        "domain": "Azure",
+        "keywords": [
+          "リソース",
+          "管理",
+          "Azure"
+        ]
+      }
+    ],
+    "aliases": [
+      "Azure Resource Group"
+    ]
+  },
+  {
+    "term": "Azure App Service Webアプリ",
+    "reading": "あじゅーるあっぷさーびすうぇぶあぷり",
+    "senses": [
+      {
+        "definition": "App Service上でウェブアプリケーションを実行する形態です。業務向けウェブシステムにもよく利用されます。",
+        "domain": "Azure",
+        "keywords": [
+          "ウェブ",
+          "App Service",
+          "ホスティング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Azure App Service Web App"
+    ]
+  }
+]

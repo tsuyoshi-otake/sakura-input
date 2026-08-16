@@ -1,0 +1,1768 @@
+[
+  {
+    "term": "ELT",
+    "aliases": [
+      "Extract Load Transform"
+    ],
+    "senses": [
+      {
+        "definition": "データをソースから抽出してそのままデータウェアハウスやデータレイクにロードし、その後変換処理を行うデータ統合パターン。BigQueryやSnowflakeなど処理能力の高いクラウドDWHの普及により、従来のETLに代わる手法として広く採用されている。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ統合",
+          "変換",
+          "ロード",
+          "クラウドDWH",
+          "BigQuery"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データパイプライン",
+    "reading": "でーたぱいぷらいん",
+    "aliases": [
+      "Data Pipeline"
+    ],
+    "senses": [
+      {
+        "definition": "データをソースから目的地まで一連のステップで自動的に移動・変換・処理する仕組みの総称。取り込み・変換・検証・ロードの各ステージで構成され、スケジュール実行やイベントドリブンで動作する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "ELT",
+          "オーケストレーション",
+          "自動化",
+          "データフロー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データレイクハウス",
+    "reading": "でーたれいくはうす",
+    "aliases": [
+      "Data Lakehouse",
+      "Lakehouse"
+    ],
+    "senses": [
+      {
+        "definition": "データレイクの低コスト・高スケーラビリティとデータウェアハウスのトランザクション管理・クエリ最適化を統合したアーキテクチャ。Delta LakeやApache Icebergなどのオープンテーブルフォーマットが基盤となる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Delta Lake",
+          "Iceberg",
+          "ACID",
+          "データレイク",
+          "データウェアハウス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OLTP",
+    "aliases": [
+      "Online Transaction Processing",
+      "オンライントランザクション処理"
+    ],
+    "senses": [
+      {
+        "definition": "銀行振込やECサイト注文など日常的なトランザクション処理を高速に行うためのデータベースシステム。大量の短い読み書き操作に最適化されており、正規化されたスキーマを持つ。OLAPと対をなす概念。",
+        "domain": "data-engineering",
+        "keywords": [
+          "トランザクション",
+          "データベース",
+          "正規化",
+          "ACID",
+          "OLAP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Slowly Changing Dimension",
+    "aliases": [
+      "SCD",
+      "緩やかに変化するディメンション"
+    ],
+    "senses": [
+      {
+        "definition": "データウェアハウスにおいてディメンションテーブルの属性が時間とともに変化する場合の管理手法。型1（上書き）、型2（履歴保持）、型3（前回値保持）など複数のアプローチがある。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ディメンション",
+          "履歴管理",
+          "型2",
+          "DWH",
+          "ディメンショナルモデリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データプロファイリング",
+    "reading": "でーたぷろふぁいりんぐ",
+    "aliases": [
+      "Data Profiling"
+    ],
+    "senses": [
+      {
+        "definition": "データセットの品質・構造・分布・統計を体系的に分析する活動。NULL率、重複率、値の分布、データ型の整合性などを検査し、データ品質問題を早期発見するために用いられる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ品質",
+          "統計分析",
+          "NULL",
+          "重複",
+          "スキーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "dbt",
+    "aliases": [
+      "data build tool"
+    ],
+    "senses": [
+      {
+        "definition": "データウェアハウス内でSQLベースのデータ変換を管理するオープンソースのELTツール。SELECT文を書くだけでモデル依存関係の管理・テスト・ドキュメント生成が可能で、アナリティクスエンジニアリングを加速する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "SQL",
+          "ELT",
+          "変換",
+          "テスト",
+          "アナリティクスエンジニアリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Apache Airflow",
+    "aliases": [
+      "Airflow"
+    ],
+    "senses": [
+      {
+        "definition": "Python製のオープンソースワークフローオーケストレーションプラットフォーム。DAG（有向非巡回グラフ）でパイプラインを定義し、スケジューリング・モニタリング・リトライなどの処理を管理する。データエンジニアリングで最も広く使われるオーケストレーターの一つ。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ワークフロー",
+          "DAG",
+          "オーケストレーション",
+          "スケジューリング",
+          "Python"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dagster",
+    "senses": [
+      {
+        "definition": "データパイプラインとデータアセットを中心に設計されたPython製のオープンソースオーケストレーションプラットフォーム。ソフトウェアエンジニアリングのベストプラクティス（テスト・型安全性）をデータパイプラインに持ち込むことを重視する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "オーケストレーション",
+          "データアセット",
+          "Python",
+          "テスト",
+          "パイプライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Prefect",
+    "senses": [
+      {
+        "definition": "Pythonネイティブのワークフローオーケストレーションツール。コードファースト設計で、既存のPythonコードにデコレータを付けるだけでパイプライン化できる。マネージドサービスのPrefect Cloudも提供。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ワークフロー",
+          "Python",
+          "オーケストレーション",
+          "デコレータ",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Apache Spark",
+    "aliases": [
+      "Spark"
+    ],
+    "senses": [
+      {
+        "definition": "大規模データをメモリ内で分散処理するオープンソースのビッグデータ処理フレームワーク。バッチ・ストリーミング・機械学習・グラフ処理をサポートし、HadoopのMapReduceに比べて大幅に高速。",
+        "domain": "data-engineering",
+        "keywords": [
+          "分散処理",
+          "ビッグデータ",
+          "RDD",
+          "DataFrame",
+          "PySpark"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PySpark",
+    "senses": [
+      {
+        "definition": "Apache SparkのPython APIインターフェース。PythonからSparkの分散処理機能を利用でき、DataFrameやSQLを使ったデータ処理、MLlibを使った機械学習を実現する。データエンジニアリングの現場で広く使われる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Spark",
+          "Python",
+          "DataFrame",
+          "分散処理",
+          "ビッグデータ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Apache Flink",
+    "aliases": [
+      "Flink"
+    ],
+    "senses": [
+      {
+        "definition": "ステートフルなストリーム処理に特化したオープンソースの分散処理フレームワーク。イベント時刻・ウォーターマーク・チェックポイントなどの機能を持ち、低レイテンシの連続データ処理に優れる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ストリーム処理",
+          "ステートフル",
+          "イベント時刻",
+          "チェックポイント",
+          "低レイテンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Apache Kafka",
+    "aliases": [
+      "Kafka"
+    ],
+    "senses": [
+      {
+        "definition": "高スループット・低レイテンシを実現する分散型イベントストリーミングプラットフォーム。プロデューサーとコンシューマーを疎結合にし、トピックへのメッセージをログとして永続化する。マイクロサービス間通信やリアルタイムデータパイプラインの基盤として広く利用される。",
+        "domain": "data-engineering",
+        "keywords": [
+          "イベントストリーミング",
+          "メッセージキュー",
+          "分散",
+          "プロデューサー",
+          "コンシューマー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Kafka Connect",
+    "senses": [
+      {
+        "definition": "Apache KafkaとデータソースやシンクをSQLデータベース、S3、Elasticsearchなどと接続するためのフレームワーク。コネクタプラグインを設定するだけでノーコードのデータ統合パイプラインを構築できる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Kafka",
+          "コネクタ",
+          "データ統合",
+          "ソース",
+          "シンク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Kafka Streams",
+    "senses": [
+      {
+        "definition": "Apache Kafkaに組み込まれたクライアントライブラリ型のストリーム処理フレームワーク。別途クラスターを構築せずJavaアプリケーション内でKafkaトピックのリアルタイム変換・集計・ジョインが可能。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Kafka",
+          "ストリーム処理",
+          "Java",
+          "リアルタイム",
+          "ステートフル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ksqlDB",
+    "aliases": [
+      "KSQL"
+    ],
+    "senses": [
+      {
+        "definition": "Apache Kafka上でSQLライクな構文を使ってリアルタイムストリーム処理クエリを実行できるデータベース。マテリアライズドビューの定義やフィルタリング・集計をSQL文で記述でき、ストリーム処理のハードルを下げる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Kafka",
+          "SQL",
+          "ストリーム処理",
+          "リアルタイム",
+          "マテリアライズドビュー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Debezium",
+    "senses": [
+      {
+        "definition": "データベースの変更履歴をキャプチャしてKafkaトピックなどにストリーミングするオープンソースのCDCプラットフォーム。MySQL・PostgreSQL・MongoDBなどのWALやbinlogを監視し、行レベルの変更をリアルタイムに伝播する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "CDC",
+          "Kafka",
+          "変更検出",
+          "WAL",
+          "レプリケーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Apache Beam",
+    "aliases": [
+      "Beam"
+    ],
+    "senses": [
+      {
+        "definition": "バッチとストリームの両方をポータブルに記述できるオープンソースのデータ処理統合モデル。Spark・Flink・Google Dataflowなど複数のランナーで同一コードを実行でき、クラウド依存を排除する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ポータブル",
+          "バッチ",
+          "ストリーム",
+          "ランナー",
+          "Dataflow"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Databricks",
+    "senses": [
+      {
+        "definition": "Apache Sparkをベースにしたクラウドデータプラットフォーム。Lakehouse架構を採用しDelta LakeによるACIDトランザクションを提供し、データエンジニアリング・データサイエンス・機械学習を統合環境で実行できる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Spark",
+          "Delta Lake",
+          "Lakehouse",
+          "機械学習",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Delta Lake",
+    "senses": [
+      {
+        "definition": "データレイク上でACIDトランザクション・スキーマ強制・タイムトラベルを実現するオープンソースのストレージレイヤー。Parquetをベースにトランザクションログを追加し、Lakehouseアーキテクチャの基盤として採用される。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ACID",
+          "Parquet",
+          "タイムトラベル",
+          "Lakehouse",
+          "Databricks"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Apache Iceberg",
+    "aliases": [
+      "Iceberg"
+    ],
+    "senses": [
+      {
+        "definition": "大規模分析テーブル向けのオープンテーブルフォーマット仕様。スキーマ進化・パーティション進化・タイムトラベル・ACIDトランザクションを実現し、Trino・Spark・Flinkなど複数のエンジンから同一テーブルへアクセスできる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "オープンテーブルフォーマット",
+          "ACID",
+          "タイムトラベル",
+          "Lakehouse",
+          "スキーマ進化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Apache Hudi",
+    "aliases": [
+      "Hudi"
+    ],
+    "senses": [
+      {
+        "definition": "データレイク上でUPDATE/DELETE・インクリメンタル処理・タイムトラベルを実現するオープンソースのテーブルフォーマット。Copy-on-WriteとMerge-on-Readの2種類のテーブルタイプを提供し、ストリーミング取り込みに強い。",
+        "domain": "data-engineering",
+        "keywords": [
+          "CDC",
+          "インクリメンタル処理",
+          "ACID",
+          "Lakehouse",
+          "S3"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Parquet",
+    "aliases": [
+      "Apache Parquet"
+    ],
+    "senses": [
+      {
+        "definition": "列指向の圧縮バイナリファイルフォーマット。必要な列のみを読み込むため大規模分析クエリに高効率で、Snappy・Zstdなどの圧縮と組み合わせてストレージコストを削減する。Spark・Hive・BigQueryで標準的に使われる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "列指向",
+          "圧縮",
+          "ファイルフォーマット",
+          "Spark",
+          "分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Avro",
+    "aliases": [
+      "Apache Avro"
+    ],
+    "senses": [
+      {
+        "definition": "Hadoopエコシステム向けの行指向バイナリシリアライゼーションフォーマット。スキーマをJSONで定義しデータと一緒に格納でき、スキーマ進化をサポートする。Kafkaのメッセージシリアライゼーションで広く使われる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "シリアライゼーション",
+          "スキーマ",
+          "Kafka",
+          "行指向",
+          "Hadoop"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ORC",
+    "aliases": [
+      "Optimized Row Columnar"
+    ],
+    "senses": [
+      {
+        "definition": "Hive向けに設計された最適化列指向ファイルフォーマット。ストライプ構造・統計情報・ブルームフィルタにより高速なクエリと高圧縮を実現し、Apache Spark・Hiveのバッチ処理で使われる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "列指向",
+          "Hive",
+          "圧縮",
+          "ファイルフォーマット",
+          "ブルームフィルタ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Apache Arrow",
+    "aliases": [
+      "Arrow"
+    ],
+    "senses": [
+      {
+        "definition": "言語間のゼロコピーデータ共有を実現するメモリ内列指向データフォーマット。PythonのPandasやR・Java・Rust間でメモリコピーなしにデータを渡せるため、データ処理のボトルネックを解消する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "列指向",
+          "ゼロコピー",
+          "メモリ",
+          "相互運用",
+          "Pandas"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データメッシュ",
+    "reading": "でーためっしゅ",
+    "aliases": [
+      "Data Mesh"
+    ],
+    "senses": [
+      {
+        "definition": "データを中央集権的に管理するのではなく、ドメインチームがデータプロダクトとして所有・提供する分散型データアーキテクチャ。データプロダクト・ドメイン所有・セルフサービス基盤・フェデレーテッドガバナンスの4原則から成る。",
+        "domain": "data-engineering",
+        "keywords": [
+          "分散アーキテクチャ",
+          "データプロダクト",
+          "ドメイン所有",
+          "ガバナンス",
+          "セルフサービス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データプロダクト",
+    "reading": "でーたぷろだくと",
+    "aliases": [
+      "Data Product"
+    ],
+    "senses": [
+      {
+        "definition": "データメッシュにおいてドメインチームが提供するデータの単位。発見可能・アドレス可能・信頼性・自己記述的・相互運用可能・ネイティブにアクセス可能・安全という特性を備えるべきとされる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データメッシュ",
+          "ドメイン",
+          "データオーナーシップ",
+          "インターフェース",
+          "品質"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データコントラクト",
+    "reading": "でーたこんとらくと",
+    "aliases": [
+      "Data Contract"
+    ],
+    "senses": [
+      {
+        "definition": "データプロデューサーとコンシューマー間でデータのスキーマ・品質・SLA・セマンティクスを明文化した合意文書。破壊的変更を防ぎ、データパイプラインの信頼性を向上させる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "スキーマ",
+          "SLA",
+          "データ品質",
+          "プロデューサー",
+          "コンシューマー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セルフサービスデータプラットフォーム",
+    "reading": "せるふさーびすでーたぷらっとふぉーむ",
+    "aliases": [
+      "Self-Service Data Platform"
+    ],
+    "senses": [
+      {
+        "definition": "データメッシュの4原則の一つ。ドメインチームが中央プラットフォームチームに依存せずデータパイプラインの構築・テスト・デプロイ・監視を自律的に行えるインフラを提供するコンセプト。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データメッシュ",
+          "プラットフォーム",
+          "自律",
+          "DevOps",
+          "ドメイン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フェデレーテッドコンピュテーショナルガバナンス",
+    "reading": "ふぇでれーてっどこんぴゅてーしょなるがばなんす",
+    "aliases": [
+      "Federated Computational Governance"
+    ],
+    "senses": [
+      {
+        "definition": "データメッシュの4原則の一つ。全ドメインが共通のガバナンスポリシー（セキュリティ・プライバシー・品質基準）をコードとして実装し、プラットフォームレベルで自動的に適用する分散型ガバナンスモデル。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データメッシュ",
+          "ガバナンス",
+          "ポリシー",
+          "自動化",
+          "コンプライアンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データオブザーバビリティ",
+    "reading": "でーたおぶざーばびりてぃ",
+    "aliases": [
+      "Data Observability"
+    ],
+    "senses": [
+      {
+        "definition": "データパイプラインの健全性をリアルタイムに監視し、データ品質の劣化や障害を早期検出・根本原因分析できる状態。鮮度・ボリューム・分布・スキーマ・リネージの5要素で評価する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "モニタリング",
+          "データ品質",
+          "異常検知",
+          "リネージ",
+          "鮮度"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Great Expectations",
+    "senses": [
+      {
+        "definition": "Pythonベースのオープンソースデータバリデーションフレームワーク。データに対する期待値（Expectation）をコードで定義し、パイプラインの各ステージで自動的にデータ品質チェックを実行してHTMLレポートを生成する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ品質",
+          "バリデーション",
+          "Python",
+          "テスト",
+          "ドキュメント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データバリデーション",
+    "reading": "でーたばりでーしょん",
+    "aliases": [
+      "Data Validation"
+    ],
+    "senses": [
+      {
+        "definition": "データが定義されたルール・制約・期待値を満たしているかを検証するプロセス。パイプラインの各ステージで型チェック・範囲チェック・参照整合性・統計的異常検知などを実施し、不正データの伝播を防ぐ。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ品質",
+          "制約",
+          "テスト",
+          "Great Expectations",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マイクロバッチ",
+    "reading": "まいくろばっち",
+    "aliases": [
+      "Micro-batch"
+    ],
+    "senses": [
+      {
+        "definition": "ストリーム処理を数秒間隔の小さなバッチの連続として実装するアプローチ。Spark Streamingが採用しており、純粋なストリーム処理より実装が容易だがレイテンシは高くなる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Spark Streaming",
+          "バッチ",
+          "リアルタイム",
+          "レイテンシ",
+          "処理方式"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リアルタイム処理",
+    "reading": "りあるたいむしょり",
+    "aliases": [
+      "Real-time Processing"
+    ],
+    "senses": [
+      {
+        "definition": "データを受信後ミリ秒から秒単位の遅延でほぼ即座に処理・応答するデータ処理方式。詐欺検知・株式売買・IoTアラートなどのユースケースで必須であり、ストリーム処理フレームワークで実現する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ストリーム処理",
+          "低レイテンシ",
+          "Kafka",
+          "Flink",
+          "イベント駆動"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ディメンショナルモデリング",
+    "reading": "でぃめんしょなるもでりんぐ",
+    "aliases": [
+      "Dimensional Modeling"
+    ],
+    "senses": [
+      {
+        "definition": "Ralph Kimballが提唱したデータウェアハウス設計手法。ビジネスプロセスをファクトテーブルとディメンションテーブルの組み合わせで表現し、直感的なクエリとBIツールとの親和性を高める。",
+        "domain": "data-engineering",
+        "keywords": [
+          "DWH",
+          "スタースキーマ",
+          "Kimball",
+          "ファクト",
+          "ディメンション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データオーケストレーション",
+    "reading": "でーたおーけすとれーしょん",
+    "aliases": [
+      "Data Orchestration"
+    ],
+    "senses": [
+      {
+        "definition": "複数のデータパイプラインタスクの実行順序・依存関係・スケジュール・リトライを中央管理する仕組み。AirflowやDagsterなどのオーケストレーターが担い、パイプラインの可観測性と運用性を高める。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Airflow",
+          "DAG",
+          "スケジューリング",
+          "依存関係",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ワークフローオーケストレーション",
+    "reading": "わーくふろーおーけすとれーしょん",
+    "aliases": [
+      "Workflow Orchestration"
+    ],
+    "senses": [
+      {
+        "definition": "複数のタスクや処理ステップを依存関係・実行順・スケジュールに従って自動的に調整・実行管理する仕組みの総称。データエンジニアリング分野ではAirflow・Dagster・Prefectが代表的なツール。",
+        "domain": "data-engineering",
+        "keywords": [
+          "DAG",
+          "スケジューリング",
+          "依存管理",
+          "Airflow",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データスチュワードシップ",
+    "reading": "でーたすちゅわーどしっぷ",
+    "aliases": [
+      "Data Stewardship"
+    ],
+    "senses": [
+      {
+        "definition": "組織のデータ品質・整合性・セキュリティ・可用性を継続的に管理・改善する責任と活動。データスチュワードが担い、ビジネスとITの橋渡しをしながらデータガバナンスポリシーを実行に移す。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データガバナンス",
+          "データ品質",
+          "データスチュワード",
+          "ポリシー",
+          "メタデータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ変換",
+    "aliases": [
+      "Data Transformation"
+    ],
+    "senses": [
+      {
+        "definition": "ソースシステムのデータを分析や下流システムが必要とする形式・構造・粒度に変換するプロセス。型変換・集計・正規化・エンリッチメント・ピボットなどの操作を含み、パイプラインのTフェーズを担う。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "ELT",
+          "dbt",
+          "クレンジング",
+          "集計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ステージングレイヤー",
+    "reading": "すてーじんぐれいやー",
+    "aliases": [
+      "Staging Layer",
+      "Staging"
+    ],
+    "senses": [
+      {
+        "definition": "ソースシステムからデータをそのまま取り込む最初のデータウェアハウスレイヤー。変換を加えず生データを保持し、変換の再実行やデバッグを可能にする。dbtではstagingモデルがこれに対応する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ELT",
+          "DWH",
+          "生データ",
+          "dbt",
+          "レイヤーアーキテクチャ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データエンジニアリング",
+    "reading": "でーたえんじにありんぐ",
+    "aliases": [
+      "Data Engineering"
+    ],
+    "senses": [
+      {
+        "definition": "データを収集・格納・変換・配信するパイプラインとインフラを設計・構築・運用するエンジニアリング領域。データサイエンティストや分析者が利用できる信頼性の高いデータ基盤を提供することを目的とする。",
+        "domain": "data-engineering",
+        "keywords": [
+          "パイプライン",
+          "ETL",
+          "DWH",
+          "データ基盤",
+          "インフラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データエンジニア",
+    "reading": "でーたえんじにあ",
+    "aliases": [
+      "Data Engineer"
+    ],
+    "senses": [
+      {
+        "definition": "データパイプライン・データウェアハウス・データレイクなどのデータ基盤を設計・構築・運用する職種。SQL・Python・Spark・クラウドサービスの知識を持ち、データサイエンティストやアナリストが分析できる環境を整備する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "Spark",
+          "DWH",
+          "Python",
+          "データ基盤"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データアーキテクト",
+    "reading": "でーたあーきてくと",
+    "aliases": [
+      "Data Architect"
+    ],
+    "senses": [
+      {
+        "definition": "企業のデータ戦略・データモデル・データプラットフォームのアーキテクチャを設計・策定する役割。ビジネス要件をデータ構造に落とし込み、データガバナンスの枠組みを定義してデータエンジニアや分析者をリードする。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データモデル",
+          "ガバナンス",
+          "アーキテクチャ",
+          "DWH",
+          "戦略"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データアーキテクチャ",
+    "reading": "でーたあーきてくちゃ",
+    "aliases": [
+      "Data Architecture"
+    ],
+    "senses": [
+      {
+        "definition": "組織のデータ収集・格納・変換・消費の全体構造を規定する設計思想と仕様の総体。モダンデータスタック・Lakehouse・データメッシュなど複数のアーキテクチャパターンが存在し、ビジネス要件に応じて選択する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "DWH",
+          "Lakehouse",
+          "データメッシュ",
+          "設計",
+          "モダンデータスタック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "モダンデータスタック",
+    "reading": "もだんでーたすたっく",
+    "aliases": [
+      "Modern Data Stack",
+      "MDS"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドネイティブなSaaSツールを組み合わせてデータパイプラインを構築するアプローチ。Fivetran（取り込み）・BigQuery/Snowflake（DWH）・dbt（変換）・Looker（BI）などのベストオブブリードツールを接続して構成する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "SaaS",
+          "クラウド",
+          "Fivetran",
+          "dbt",
+          "BI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データエクストラクション",
+    "reading": "でーたえくすとらくしょん",
+    "aliases": [
+      "Data Extraction"
+    ],
+    "senses": [
+      {
+        "definition": "ETL/ELTの最初のステップであるソースシステムからのデータ取り出しフェーズ。フルロードと差分（インクリメンタル）ロードの方式があり、APIポーリング・CDCベース・ファイルベースなど方法は様々。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "ELT",
+          "インクリメンタル",
+          "CDC",
+          "API"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インクリメンタルロード",
+    "reading": "いんくりめんたるろーど",
+    "aliases": [
+      "Incremental Load"
+    ],
+    "senses": [
+      {
+        "definition": "前回の取り込み以降に追加・変更されたデータのみを差分でロードする方式。フルロードに比べ処理時間とコストを削減でき、大規模テーブルのパイプラインで必須となる。ウォーターマークやCDCで変更を検出する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "差分",
+          "CDC",
+          "ウォーターマーク",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フルロード",
+    "reading": "ふるろーど",
+    "aliases": [
+      "Full Load"
+    ],
+    "senses": [
+      {
+        "definition": "ソーステーブルの全データを毎回洗い替えでロードする方式。実装がシンプルでデータ整合性が保ちやすいが、大規模テーブルでは処理時間・コスト・ソースへの負荷が大きくなるため用途を選ぶ。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "洗い替え",
+          "インクリメンタルロード",
+          "シンプル",
+          "コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データウェアハウジング",
+    "reading": "でーたうぇあはうじんぐ",
+    "aliases": [
+      "Data Warehousing"
+    ],
+    "senses": [
+      {
+        "definition": "ビジネス分析・レポーティング・意思決定支援のために複数ソースからデータを統合・格納・管理する一連の技術・プロセス・実践の総称。ETL設計・ディメンショナルモデリング・DWH運用を含む広義の概念。",
+        "domain": "data-engineering",
+        "keywords": [
+          "DWH",
+          "BI",
+          "ETL",
+          "意思決定",
+          "分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データロード",
+    "reading": "でーたろーど",
+    "aliases": [
+      "Data Loading",
+      "Data Load"
+    ],
+    "senses": [
+      {
+        "definition": "変換済みデータをデータウェアハウス・データマート・データレイクなどの最終目的地に書き込むETL/ELTの最終ステップ。バルクロード・ストリーミングインサート・COPY命令など手法が複数あり、スループットと整合性のバランスを考慮する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ETL",
+          "ELT",
+          "DWH",
+          "バルクロード",
+          "書き込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ品質スコア",
+    "reading": "でーたひんしつすこあ",
+    "aliases": [
+      "Data Quality Score",
+      "DQ Score"
+    ],
+    "senses": [
+      {
+        "definition": "データセットの品質を定量的な数値で表したもの。完全性・正確性・一貫性・鮮度などの次元ごとにルールを設定してスコアリングし、データカタログやモニタリングダッシュボードで可視化する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ品質",
+          "データカタログ",
+          "モニタリング",
+          "定量評価",
+          "KPI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ鮮度",
+    "reading": "でーたせんど",
+    "aliases": [
+      "Data Freshness"
+    ],
+    "senses": [
+      {
+        "definition": "データが最後に更新されてからの経過時間を表す品質指標。パイプラインのSLA要件として定義され、データオブザーバビリティツールがリアルタイムに監視する。データが古すぎると意思決定の質が低下する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ品質",
+          "SLA",
+          "モニタリング",
+          "データオブザーバビリティ",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データカタログツール",
+    "reading": "でーたかたろぐつーる",
+    "aliases": [
+      "Data Catalog Tool"
+    ],
+    "senses": [
+      {
+        "definition": "データアセットのメタデータを収集・管理・検索可能にするプラットフォームソフトウェア。Amundsen・DataHub・Apache Atlas・Collibra・Alationが代表例で、リネージの可視化・ビジネス用語集・データオーナー管理機能を提供する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "メタデータ",
+          "DataHub",
+          "Amundsen",
+          "データリネージ",
+          "データ発見性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DataHub",
+    "senses": [
+      {
+        "definition": "LinkedInがオープンソースで公開したメタデータ管理・データカタログプラットフォーム。グラフDBベースのメタデータストアを持ち、データリネージ・データ品質・アクセス制御を統合管理する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データカタログ",
+          "メタデータ",
+          "リネージ",
+          "オープンソース",
+          "LinkedIn"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amundsen",
+    "senses": [
+      {
+        "definition": "Lyftがオープンソースで公開したデータ発見・メタデータ管理プラットフォーム。グラフDBとElasticsearchを組み合わせてデータアセットの検索性を高め、人気度・オーナー・サンプルデータを表示する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データカタログ",
+          "メタデータ",
+          "データ発見",
+          "オープンソース",
+          "Lyft"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ゴールデンレコード",
+    "reading": "ごーるでんれこーど",
+    "aliases": [
+      "Golden Record"
+    ],
+    "senses": [
+      {
+        "definition": "マスターデータ管理において複数ソースの重複データを突合・統合した後の、唯一の信頼できるエンティティレコード。エンティティ解決（名寄せ）処理を経て生成され、全システムでこれを正とする。",
+        "domain": "data-engineering",
+        "keywords": [
+          "MDM",
+          "エンティティ解決",
+          "名寄せ",
+          "マスターデータ",
+          "一貫性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "エンティティ解決",
+    "reading": "えんてぃてぃかいけつ",
+    "aliases": [
+      "Entity Resolution",
+      "Record Linkage",
+      "名寄せ"
+    ],
+    "senses": [
+      {
+        "definition": "異なるソースや表記ゆれのある複数レコードが同一エンティティを指すかを判定・統合するプロセス。MDMのゴールデンレコード作成に不可欠で、確定的マッチングと確率的マッチングのアプローチがある。",
+        "domain": "data-engineering",
+        "keywords": [
+          "MDM",
+          "名寄せ",
+          "ゴールデンレコード",
+          "重複排除",
+          "マッチング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データドリブン意思決定",
+    "reading": "でーたどりぶんいしけってい",
+    "aliases": [
+      "Data-Driven Decision Making",
+      "DDDM"
+    ],
+    "senses": [
+      {
+        "definition": "感覚や経験ではなくデータと分析結果に基づいて意思決定を行うアプローチ。信頼性の高いデータ基盤・BI・実験プラットフォーム（A/Bテスト）が前提となり、データエンジニアリングの最終目的の一つ。",
+        "domain": "data-engineering",
+        "keywords": [
+          "BI",
+          "A/Bテスト",
+          "分析",
+          "データ基盤",
+          "意思決定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スキーマオンリード",
+    "reading": "すきーまおんりーど",
+    "aliases": [
+      "Schema on Read"
+    ],
+    "senses": [
+      {
+        "definition": "データを格納する際にスキーマを強制せず、読み込む時点でスキーマを適用するアプローチ。データレイクで採用されており、多様なデータを柔軟に取り込める反面、データ品質管理が複雑になる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データレイク",
+          "スキーマ",
+          "柔軟性",
+          "生データ",
+          "Parquet"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スキーマオンライト",
+    "reading": "すきーまおんらいと",
+    "aliases": [
+      "Schema on Write"
+    ],
+    "senses": [
+      {
+        "definition": "データを書き込む時点でスキーマを強制・検証するアプローチ。データウェアハウスで採用されており、データ品質が保証されクエリが高速だが、スキーマ変更には手間がかかる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データウェアハウス",
+          "スキーマ",
+          "品質保証",
+          "RDBMS",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カラムナーストレージ",
+    "reading": "からむなーすとれーじ",
+    "aliases": [
+      "Columnar Storage",
+      "列指向ストレージ"
+    ],
+    "senses": [
+      {
+        "definition": "データを行単位でなく列単位でディスクに格納するストレージ方式。特定列のみを読み込む分析クエリで高い圧縮率とI/O削減を実現し、Parquet・ORC・RedshiftなどのDWH・分析DBが採用する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Parquet",
+          "ORC",
+          "圧縮",
+          "分析",
+          "列指向"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "大規模並列処理",
+    "reading": "だいきぼへいれつしょり",
+    "aliases": [
+      "MPP",
+      "Massively Parallel Processing"
+    ],
+    "senses": [
+      {
+        "definition": "クエリを多数のノードに分散して同時実行することで大規模データの高速処理を実現するアーキテクチャ。RedshiftやSnowflakeなどクラウドDWHが採用し、スケールアウトによってペタバイト規模の分析を可能にする。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Redshift",
+          "Snowflake",
+          "分散処理",
+          "クエリ",
+          "DWH"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データボルト",
+    "reading": "でーたぼると",
+    "aliases": [
+      "Data Vault"
+    ],
+    "senses": [
+      {
+        "definition": "ハブ・リンク・サテライトの3テーブル種別でデータウェアハウスを設計するモデリング手法。ビジネスキーを中心に構造化するためスキーマ変更への柔軟性が高く、監査とトレーサビリティに優れる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "DWH",
+          "ハブ",
+          "リンク",
+          "サテライト",
+          "監査"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データマスキング",
+    "reading": "でーたますきんぐ",
+    "aliases": [
+      "Data Masking",
+      "データ匿名化"
+    ],
+    "senses": [
+      {
+        "definition": "個人情報や機密データを本番環境から取り出す際に、元のデータ形式を保ちながら実際の値を隠蔽・置換する技術。開発・テスト環境でのデータ利用やGDPR準拠のためにデータパイプラインに組み込まれる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "プライバシー",
+          "GDPR",
+          "匿名化",
+          "テストデータ",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ民主化",
+    "reading": "でーたみんしゅか",
+    "aliases": [
+      "Data Democratization"
+    ],
+    "senses": [
+      {
+        "definition": "組織内のすべての意思決定者が専門知識なしにデータへアクセス・活用できる状態を目指す考え方。セルフサービスBIやデータカタログの整備によって実現し、データチームへの依存を減らす。",
+        "domain": "data-engineering",
+        "keywords": [
+          "セルフサービス",
+          "BI",
+          "データカタログ",
+          "アクセス",
+          "意思決定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アナリティクスエンジニアリング",
+    "reading": "あなりてぃくすえんじにありんぐ",
+    "aliases": [
+      "Analytics Engineering"
+    ],
+    "senses": [
+      {
+        "definition": "データエンジニアとデータアナリストの中間領域。dbtを活用してSQLベースでデータ変換・テスト・ドキュメントを管理し、ビジネスロジックをコードとして表現してBIツールに高品質なデータモデルを提供する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "dbt",
+          "SQL",
+          "データモデル",
+          "BI",
+          "変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ELTパターン",
+    "reading": "えるてぃーぱたーん",
+    "aliases": [
+      "ELT Pattern"
+    ],
+    "senses": [
+      {
+        "definition": "データをまずDWHやデータレイクにそのままロードし、その中でクラウドのコンピューティングリソースを活用して変換するデータ統合パターン。dbt・BigQuery・Snowflakeの組み合わせが典型的なモダンデータスタックの形。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ELT",
+          "dbt",
+          "BigQuery",
+          "Snowflake",
+          "モダンデータスタック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データエンリッチメント",
+    "reading": "でーたえんりっちめんと",
+    "aliases": [
+      "Data Enrichment"
+    ],
+    "senses": [
+      {
+        "definition": "既存のデータに外部ソースや参照データを結合して情報の価値を高める変換処理。IPアドレスから地理情報を付与したり、会社名から業種コードを付加するなどが例として挙げられる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ変換",
+          "付加価値",
+          "JOIN",
+          "外部データ",
+          "ETL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ品質ルール",
+    "reading": "でーたひんしつるーる",
+    "aliases": [
+      "Data Quality Rule",
+      "DQ Rule"
+    ],
+    "senses": [
+      {
+        "definition": "データが満たすべき条件を明示的に定義した規則。「売上金額は0以上」「顧客IDはNULLでない」など具体的な制約として記述され、Great Expectationsなどのバリデーションフレームワークで自動チェックされる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データ品質",
+          "バリデーション",
+          "制約",
+          "Great Expectations",
+          "テスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タイムトラベル",
+    "reading": "たいむとらべる",
+    "aliases": [
+      "Time Travel"
+    ],
+    "senses": [
+      {
+        "definition": "Delta Lake・Apache Iceberg・Snowflakeなどが提供する過去の任意の時点のデータを参照できる機能。誤った変換やDELETEからのリカバリ・監査・再現性確保に活用され、Lakehouseの重要な特性の一つ。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Delta Lake",
+          "Iceberg",
+          "Snowflake",
+          "監査",
+          "リカバリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スキーマ進化",
+    "reading": "すきーましんか",
+    "aliases": [
+      "Schema Evolution"
+    ],
+    "senses": [
+      {
+        "definition": "既存データを壊さずにテーブルやファイルのスキーマ（列の追加・削除・型変更など）を変更できる能力。Avro・Iceberg・Delta Lakeがサポートし、下流への影響を最小化しながらデータ構造を変更できる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Avro",
+          "Iceberg",
+          "Delta Lake",
+          "後方互換",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ブロンズシルバーゴールドアーキテクチャ",
+    "reading": "ぶろんずしるばーごーるどあーきてくちゃ",
+    "aliases": [
+      "Bronze Silver Gold",
+      "Medallion Architecture",
+      "メダリオンアーキテクチャ"
+    ],
+    "senses": [
+      {
+        "definition": "Databricksが提唱するLakehouseの多層データアーキテクチャ。ブロンズ（生データ）・シルバー（クレンジング済み）・ゴールド（集計・ビジネスロジック適用済み）の3レイヤーでデータ品質を段階的に高める。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Databricks",
+          "Lakehouse",
+          "レイヤーアーキテクチャ",
+          "データ品質",
+          "Delta Lake"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ウォーターマーク",
+    "reading": "うぉーたーまーく",
+    "aliases": [
+      "Watermark",
+      "Event-time Watermark"
+    ],
+    "senses": [
+      {
+        "definition": "ストリーム処理においてイベント時刻の進行を追跡し、遅延到着データの許容範囲を定義するメカニズム。FlinkやSpark Streamingでウィンドウ集計の完了タイミングを制御し、遅延データの取り扱いポリシーを実装する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ストリーム処理",
+          "Flink",
+          "Spark Streaming",
+          "遅延データ",
+          "イベント時刻"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ウィンドウ集計",
+    "reading": "うぃんどうしゅうけい",
+    "aliases": [
+      "Windowing",
+      "Window Aggregation"
+    ],
+    "senses": [
+      {
+        "definition": "ストリームデータを時間的な窓（ウィンドウ）で区切って集計する処理。タンブリングウィンドウ・スライディングウィンドウ・セッションウィンドウの3種類が主要で、FlinkやKafka Streamsで実装する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ストリーム処理",
+          "Flink",
+          "Kafka Streams",
+          "タンブリング",
+          "セッション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "逆ETL",
+    "reading": "ぎゃくいーてぃーえる",
+    "aliases": [
+      "Reverse ETL"
+    ],
+    "senses": [
+      {
+        "definition": "データウェアハウスに蓄積・整備されたデータをCRMやMAなど業務ツール（オペレーショナルシステム）に書き戻すプロセス。CensusやHightouch等のツールが担い、分析結果を施策実行に直結させる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "DWH",
+          "CRM",
+          "オペレーショナル",
+          "Census",
+          "Hightouch"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Fivetran",
+    "senses": [
+      {
+        "definition": "ソースデータベース・SaaS・クラウドストレージからデータウェアハウスへのデータ取り込みを自動化するマネージドELTサービス。300以上のコネクタを提供し、スキーマドリフト検出・自動マイグレーションなどを備える。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ELT",
+          "コネクタ",
+          "データ取り込み",
+          "SaaS",
+          "スキーマドリフト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Airbyte",
+    "senses": [
+      {
+        "definition": "オープンソースのデータ統合（ELT）プラットフォーム。300以上のコネクタをコミュニティで開発・提供し、セルフホストとクラウドマネージドの両方で利用できる。コネクタ開発キットでカスタムコネクタも作成可能。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ELT",
+          "オープンソース",
+          "コネクタ",
+          "データ取り込み",
+          "セルフホスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データ系統グラフ",
+    "reading": "でーたけいとうぐらふ",
+    "aliases": [
+      "Data Lineage Graph",
+      "Lineage Graph"
+    ],
+    "senses": [
+      {
+        "definition": "データアセット間の依存関係と変換の流れを有向グラフで可視化したもの。dbtやDataHubが生成し、特定テーブルの上流ソースや下流への影響範囲を素早く把握するためのデバッグ・影響分析に使用する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データリネージ",
+          "DAG",
+          "依存関係",
+          "影響分析",
+          "データカタログ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SLAモニタリング",
+    "reading": "えすえるえーもにたりんぐ",
+    "aliases": [
+      "SLA Monitoring",
+      "Pipeline SLA"
+    ],
+    "senses": [
+      {
+        "definition": "データパイプラインが定めた完了時刻・鮮度・品質などのSLA（サービスレベル契約）を満たしているかを継続的に監視する仕組み。違反時にアラートを発して対応を促し、ダウンストリームの影響を最小化する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データオブザーバビリティ",
+          "アラート",
+          "モニタリング",
+          "パイプライン",
+          "鮮度"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データスキューイング",
+    "reading": "でーたすきゅーいんぐ",
+    "aliases": [
+      "Data Skew",
+      "Skew"
+    ],
+    "senses": [
+      {
+        "definition": "分散処理において一部のパーティションやノードにデータが偏る現象。Sparkなどでジョインキーに偏りがあるとホットパーティションが生じ、処理全体がボトルネックになる。スキュー対策としてサルティングなどを用いる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Spark",
+          "分散処理",
+          "パーティション",
+          "ホットスポット",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クラスター化テーブル",
+    "reading": "くらすたーかてーぶる",
+    "aliases": [
+      "Clustered Table",
+      "Clustering"
+    ],
+    "senses": [
+      {
+        "definition": "データを特定の列の値でソートして格納することでクエリ時のブロックスキップを最適化するテーブル構成。BigQueryのクラスタリングやSnowflakeのクラスタリングキーが代表例で、パーティショニングと組み合わせて効果を発揮する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "BigQuery",
+          "Snowflake",
+          "パフォーマンス",
+          "ブロックスキップ",
+          "ソート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コスト最適化",
+    "reading": "こすとさいてきか",
+    "aliases": [
+      "Cost Optimization",
+      "Query Cost Optimization"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドDWHにおけるクエリコストを削減するための設計・運用の取り組み。パーティショニング・マテリアライズドビュー・列選択の最適化・クラスタリングを組み合わせてスキャン量を減らすことが基本戦略。",
+        "domain": "data-engineering",
+        "keywords": [
+          "BigQuery",
+          "Snowflake",
+          "Redshift",
+          "パーティション",
+          "クエリチューニング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ラムダアーキテクチャ",
+    "reading": "らむだあーきてくちゃ",
+    "aliases": [
+      "Lambda Architecture"
+    ],
+    "senses": [
+      {
+        "definition": "バッチレイヤー（高精度・高レイテンシ）とスピードレイヤー（低レイテンシ・近似値）を並行稼働させ、サービングレイヤーで統合するビッグデータアーキテクチャ。実装の複雑さが課題で、後にカッパアーキテクチャが提案された。",
+        "domain": "data-engineering",
+        "keywords": [
+          "バッチ処理",
+          "ストリーム処理",
+          "ビッグデータ",
+          "サービングレイヤー",
+          "アーキテクチャ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カッパアーキテクチャ",
+    "reading": "かっぱあーきてくちゃ",
+    "aliases": [
+      "Kappa Architecture"
+    ],
+    "senses": [
+      {
+        "definition": "バッチレイヤーを排除しストリーム処理のみで全データ処理を統一するビッグデータアーキテクチャ。ラムダアーキテクチャの複雑性を解消し、Kafkaに全ログを保持して再処理を可能にする設計思想。",
+        "domain": "data-engineering",
+        "keywords": [
+          "ストリーム処理",
+          "Kafka",
+          "ラムダアーキテクチャ",
+          "シンプル",
+          "リプロセシング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Apache NiFi",
+    "aliases": [
+      "NiFi"
+    ],
+    "senses": [
+      {
+        "definition": "NASAが開発しApache財団に寄贈したビジュアルなデータフロー管理ツール。GUIでプロセッサをつないでデータのルーティング・変換・フィルタリングを定義でき、IoTデータ収集やリアルタイムデータ取り込みに使われる。",
+        "domain": "data-engineering",
+        "keywords": [
+          "データフロー",
+          "GUI",
+          "IoT",
+          "リアルタイム",
+          "データ取り込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ストリーミング取り込み",
+    "reading": "すとりーみんぐとりこみ",
+    "aliases": [
+      "Streaming Ingestion"
+    ],
+    "senses": [
+      {
+        "definition": "データが生成されるたびに継続的にデータプラットフォームへ取り込む方式。KafkaやKinesis経由でDelta LakeやBigQueryにリアルタイム書き込みを行い、バッチ取り込みより鮮度の高いデータを提供する。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Kafka",
+          "リアルタイム",
+          "データ取り込み",
+          "鮮度",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Z-Ordering",
+    "aliases": [
+      "Z-Order Clustering",
+      "Z-オーダリング"
+    ],
+    "senses": [
+      {
+        "definition": "Delta LakeやDatabricksで提供されるデータ局所性最適化技術。複数の列の値を空間充填曲線でクラスタリングし、フィルタ条件に合うデータが同一ファイルに集まるようにすることでスキップ効率を高める。",
+        "domain": "data-engineering",
+        "keywords": [
+          "Delta Lake",
+          "Databricks",
+          "クラスタリング",
+          "スキップ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  }
+]

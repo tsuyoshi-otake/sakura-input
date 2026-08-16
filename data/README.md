@@ -27,12 +27,14 @@ backward-compatible command-line alias. The PowerShell pipeline names the input
 directory `-SystemCategoryDirectory` (the old `-SupplementLexiconDirectory`
 name is accepted only for compatibility).
 
-Run `scripts/build-dictionary.ps1` to fetch the pinned trees, regenerate every
-intermediate, compile `system.dic`, repeat the build, and compare SHA-256
-digests. Provide the canonical fourteen-category source directory with
-`-SystemCategoryDirectory` when generating the full Sakura dictionary. Generated
-artifacts go under `~/tmp/` by default. The checked-in overlay can only be
-replaced when the script is given `-UpdateCheckedInData`.
+Run `scripts/build-dictionary.ps1` to fetch the pinned Mozc tree, read the
+vendored smile-chat MIT glossary under `third_party/smile-chat-public`,
+regenerate every intermediate, compile `system.dic`, repeat the build, and
+compare SHA-256 digests. Provide the canonical fourteen-category source
+directory with `-SystemCategoryDirectory` when generating the full Sakura
+dictionary. Generated artifacts go under `~/tmp/` by default. The checked-in
+overlay can only be replaced when the script is given `-UpdateCheckedInData`.
+CI does not use a private-repository token for smile-chat.
 
 For ASCII glossary surfaces, the importer adds lower-case readings that can be
 typed as a continuous ASCII run begun with Shift. Multi-word surfaces also receive a separator-free

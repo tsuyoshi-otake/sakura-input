@@ -1,0 +1,527 @@
+[
+  {
+    "term": "契約書案文",
+    "reading": "けいやくしょあんぶん",
+    "aliases": [
+      "Contract Draft Text",
+      "案文",
+      "草案"
+    ],
+    "senses": [
+      {
+        "definition": "契約書に記載する文面や条項の案。正式な契約書として製本・押印する前に双方で内容を確認・修正するための原稿。交渉や確認・調整のプロセスで使われ、案文合意が得られた後に本紙として作成する。",
+        "domain": "operations",
+        "keywords": [
+          "文面",
+          "条項",
+          "草案",
+          "原稿",
+          "確認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "契約書案文登録",
+    "reading": "けいやくしょあんぶんとうろく",
+    "aliases": [
+      "Contract Draft Registration"
+    ],
+    "senses": [
+      {
+        "definition": "契約書の標準文面や条項を登録・整理する機能または業務。よく使われる条項のテンプレートを蓄積して再利用性を高め、契約書作成の効率化を図る。案文ライブラリとして管理される。",
+        "domain": "operations",
+        "keywords": [
+          "登録",
+          "テンプレート",
+          "条項",
+          "ライブラリ",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "契約書出力",
+    "reading": "けいやくしょしゅつりょく",
+    "aliases": [
+      "Contract Output",
+      "Contract Print"
+    ],
+    "senses": [
+      {
+        "definition": "案文合意が得られた契約書を正式な文書として出力する処理。印刷や PDF 生成を含み、製本・押印のための原本を作成する。出力後は押印申請へ進むフローが多い。",
+        "domain": "operations",
+        "keywords": [
+          "出力",
+          "印刷",
+          "PDF",
+          "製本",
+          "原本"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "契約書製本",
+    "reading": "けいやくしょせいほん",
+    "aliases": [
+      "Contract Binding"
+    ],
+    "senses": [
+      {
+        "definition": "出力した契約書をひとまとまりの書類として整える作業。ページの順番を確認し、割印や契印を押せるよう整理する。製本テープや綴じ方の規則は企業によって異なる。",
+        "domain": "operations",
+        "keywords": [
+          "製本",
+          "割印",
+          "契印",
+          "綴じ",
+          "書類"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "契約書加工",
+    "reading": "けいやくしょかこう",
+    "aliases": [
+      "Contract Customization",
+      "Contract Modification"
+    ],
+    "senses": [
+      {
+        "definition": "標準様式では対応できない契約書を個別に修正する作業。相手先の指定書式への変換、特殊条項の追加、非定型対応などを含む。加工が必要な案件は通常の承認フローとは別に管理されることが多い。",
+        "domain": "operations",
+        "keywords": [
+          "修正",
+          "個別対応",
+          "非定型",
+          "カスタマイズ",
+          "特殊条項"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "契約一覧",
+    "reading": "けいやくいちらん",
+    "aliases": [
+      "Contract List",
+      "Contract Index"
+    ],
+    "senses": [
+      {
+        "definition": "契約情報を一覧で確認するための画面または資料。締結済・進行中・期限切れなどのステータスで絞り込み、担当者・相手先・期間などで検索できる。契約管理システムの主要画面のひとつ。",
+        "domain": "operations",
+        "keywords": [
+          "一覧",
+          "ステータス",
+          "検索",
+          "絞り込み",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "契約相手先一覧",
+    "reading": "けいやくあいてさきいちらん",
+    "aliases": [
+      "Contract Counterparty List"
+    ],
+    "senses": [
+      {
+        "definition": "契約の相手先を一覧で確認するための画面または資料。相手先ごとの契約数・契約期間・担当者などを把握し、取引先管理に活用する。",
+        "domain": "operations",
+        "keywords": [
+          "相手先",
+          "取引先",
+          "一覧",
+          "管理",
+          "契約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "交渉",
+    "reading": "こうしょう",
+    "aliases": [
+      "Negotiation"
+    ],
+    "senses": [
+      {
+        "definition": "条件や内容について相手と調整すること。契約では価格・納期・条項・責任範囲などを双方の利益が一致するよう話し合う。口頭合意・条件合意・案文合意という段階を経て締結へ進む。",
+        "domain": "operations",
+        "keywords": [
+          "条件",
+          "調整",
+          "合意",
+          "相手先",
+          "折衝"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "口頭合意",
+    "reading": "こうとうごうい",
+    "aliases": [
+      "Verbal Agreement",
+      "Oral Agreement"
+    ],
+    "senses": [
+      {
+        "definition": "書面化前に、条件について口頭で合意が成立した状態。法的拘束力は書面合意より弱いが、交渉の進捗を示す重要な節目。後から書面に落とす際に内容の確認・調整が必要になることがある。",
+        "domain": "operations",
+        "keywords": [
+          "口頭",
+          "合意",
+          "書面化前",
+          "交渉",
+          "条件"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "条件合意",
+    "reading": "じょうけんごうい",
+    "aliases": [
+      "Condition Agreement",
+      "Terms Agreement"
+    ],
+    "senses": [
+      {
+        "definition": "主要な条件（価格・期間・責任範囲など）について関係者間で概ね合意した状態。口頭合意の次のステップで、この段階を経て案文作成・案文合意へ進む。",
+        "domain": "operations",
+        "keywords": [
+          "条件",
+          "合意",
+          "価格",
+          "期間",
+          "責任範囲"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "案文合意",
+    "reading": "あんぶんごうい",
+    "aliases": [
+      "Draft Agreement",
+      "Text Agreement"
+    ],
+    "senses": [
+      {
+        "definition": "文書の文面や条項について合意した状態。条件合意の後に契約書案文を作成し、双方でレビューして内容に同意した段階。案文合意後は正式な出力・押印フローに進む。",
+        "domain": "operations",
+        "keywords": [
+          "文面",
+          "条項",
+          "合意",
+          "レビュー",
+          "確認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "確認・調整",
+    "reading": "かくにんちょうせい",
+    "aliases": [
+      "Confirmation and Adjustment",
+      "Review and Adjustment"
+    ],
+    "senses": [
+      {
+        "definition": "内容を確認し、必要な修正やすり合わせを行うこと。契約交渉における標準的なプロセスステップで、案文の読み合わせや誤字・条件の食い違いを解消する活動を指す。",
+        "domain": "operations",
+        "keywords": [
+          "確認",
+          "修正",
+          "すり合わせ",
+          "レビュー",
+          "調整"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "提示",
+    "reading": "ていじ",
+    "aliases": [
+      "Presentation",
+      "Offer",
+      "Proposal"
+    ],
+    "senses": [
+      {
+        "definition": "条件や資料を相手に示すこと。契約交渉では価格・条件・案文などを相手先に提示し、相手の反応を待つ。提示後は相手からの回答・交渉を経て合意へ進む。",
+        "domain": "operations",
+        "keywords": [
+          "条件",
+          "資料",
+          "示す",
+          "提案",
+          "交渉"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "送付",
+    "reading": "そうふ",
+    "aliases": [
+      "Sending",
+      "Delivery",
+      "Dispatch"
+    ],
+    "senses": [
+      {
+        "definition": "文書や資料を相手へ送ること。郵送・メール・システム経由のファイル共有などを含む。送付した事実と日時を記録しておくことが証跡管理上重要。",
+        "domain": "operations",
+        "keywords": [
+          "文書",
+          "資料",
+          "郵送",
+          "メール",
+          "証跡"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "受領",
+    "reading": "じゅりょう",
+    "aliases": [
+      "Receipt",
+      "Receiving"
+    ],
+    "senses": [
+      {
+        "definition": "文書や資料を受け取ること。受領日時・担当者を記録し、受領書を発行することで送付側の証跡にもなる。契約書の受け取りは締結プロセスの重要な工程。",
+        "domain": "operations",
+        "keywords": [
+          "受け取る",
+          "受領書",
+          "日時記録",
+          "証跡",
+          "確認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "回収",
+    "aliases": [
+      "Document Retrieval"
+    ],
+    "senses": [
+      {
+        "definition": "相手へ渡した書類を受け戻すこと。押印済みの契約書を相手先から返送してもらう場面が典型例。回収期限を設定し、未回収を管理することが重要。",
+        "domain": "operations",
+        "keywords": [
+          "書類",
+          "返送",
+          "回収期限",
+          "未回収",
+          "管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "提出",
+    "reading": "ていしゅつ",
+    "aliases": [
+      "Submission",
+      "Filing"
+    ],
+    "senses": [
+      {
+        "definition": "必要書類を関係先へ出すこと。申請書・報告書・契約書などを所定の窓口や担当部門へ届ける行為。提出期限・提出先・提出方法を確認して漏れなく実施する。",
+        "domain": "operations",
+        "keywords": [
+          "書類",
+          "申請書",
+          "期限",
+          "提出先",
+          "窓口"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "本紙",
+    "reading": "ほんし",
+    "aliases": [
+      "Original Document",
+      "Principal Copy"
+    ],
+    "senses": [
+      {
+        "definition": "控え・写し・案ではなく、文書本体を指す表現。契約書の文脈では、最終的に押印・交換する正式な書類を「本紙」と呼び、写しや案とは区別する。",
+        "domain": "operations",
+        "keywords": [
+          "原本",
+          "正式",
+          "控え",
+          "写し",
+          "区別"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "定型",
+    "reading": "ていけい",
+    "aliases": [
+      "Standard Form",
+      "Template Form",
+      "Standard Format"
+    ],
+    "senses": [
+      {
+        "definition": "あらかじめ定められた標準形式。定型契約書・定型フォームは内容が統一されており、変更なく使用できる。作成コストが低く承認も容易だが、特殊な条件には対応できない。",
+        "domain": "operations",
+        "keywords": [
+          "標準",
+          "テンプレート",
+          "様式",
+          "形式",
+          "統一"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "非定型",
+    "reading": "ひていけい",
+    "aliases": [
+      "Non-standard Form",
+      "Custom Format",
+      "Irregular Format"
+    ],
+    "senses": [
+      {
+        "definition": "標準形式では対応できず、個別対応が必要な形式。相手先指定書式・特殊条項・複雑な構成などが理由となり、通常より時間・コスト・確認工数が多くかかる。",
+        "domain": "operations",
+        "keywords": [
+          "個別対応",
+          "カスタム",
+          "特殊",
+          "相手先指定",
+          "非標準"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "申請書",
+    "reading": "しんせいしょ",
+    "aliases": [
+      "Application Form",
+      "Request Form"
+    ],
+    "senses": [
+      {
+        "definition": "登録・承認・変更などを依頼するための文書。押印申請書・変更申請書・発注申請書など業務種別ごとに書式が用意される。記入後は承認依頼フローに沿って決裁者へ回付する。",
+        "domain": "operations",
+        "keywords": [
+          "申請",
+          "依頼",
+          "書式",
+          "承認フロー",
+          "回付"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "承認依頼",
+    "reading": "しょうにんいらい",
+    "aliases": [
+      "Approval Request",
+      "Approval Workflow Request"
+    ],
+    "senses": [
+      {
+        "definition": "上位者や関係部門に承認を求めること。電子承認システムまたは紙の申請書を通じて承認者へ依頼し、承認後に次の業務ステップへ進める。期限内に承認が得られない場合はエスカレーションが必要。",
+        "domain": "operations",
+        "keywords": [
+          "承認",
+          "上位者",
+          "エスカレーション",
+          "ワークフロー",
+          "依頼"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "電子承認",
+    "reading": "でんししょうにん",
+    "aliases": [
+      "Electronic Approval",
+      "Digital Approval",
+      "e-Approval"
+    ],
+    "senses": [
+      {
+        "definition": "システム上で承認を行うこと。紙の押印・回付に代わり、ワークフローシステムや契約管理システム上で承認者が操作して承認を完結する。証跡が自動記録され、承認状況のリアルタイム確認が可能。",
+        "domain": "operations",
+        "keywords": [
+          "ワークフロー",
+          "システム",
+          "電子化",
+          "証跡",
+          "リアルタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "請求書作成",
+    "reading": "せいきゅうしょさくせい",
+    "aliases": [
+      "Invoice Creation",
+      "Invoice Generation"
+    ],
+    "senses": [
+      {
+        "definition": "請求内容に基づいて請求書を作成すること。取引金額・品目・振込先・支払期日などを記載し、会計システムや請求管理システムで生成することが多い。作成後は承認を経て相手先に送付する。",
+        "domain": "operations",
+        "keywords": [
+          "請求",
+          "金額",
+          "品目",
+          "支払期日",
+          "会計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "請求書出力",
+    "reading": "せいきゅうしょしゅつりょく",
+    "aliases": [
+      "Invoice Output",
+      "Invoice Print"
+    ],
+    "senses": [
+      {
+        "definition": "請求書を文書として出力すること。PDF 形式での電子出力や印刷対応を含む。出力した請求書は送付や保管に使われる。",
+        "domain": "operations",
+        "keywords": [
+          "出力",
+          "PDF",
+          "印刷",
+          "電子",
+          "保管"
+        ]
+      }
+    ]
+  }
+]

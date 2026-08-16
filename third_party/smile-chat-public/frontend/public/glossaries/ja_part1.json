@@ -1,0 +1,3805 @@
+[
+  {
+    "term": "基本設計書",
+    "reading": "きほんせっけいしょ",
+    "senses": [
+      {
+        "definition": "システムの全体像、主要な機能、画面、連携、データの考え方などを整理して、関係者の認識をそろえるための設計書です。業務部門、利用者、開発側が「この方向で作る」という合意を取るための文書という意味合いが強いです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計書",
+          "システム",
+          "データ",
+          "業務部門"
+        ]
+      }
+    ],
+    "aliases": [
+      "Basic Design Document"
+    ]
+  },
+  {
+    "term": "詳細設計書",
+    "reading": "しょうさいせっけいしょ",
+    "senses": [
+      {
+        "definition": "基本設計書で決めた内容を、実装できるレベルまで細かく落とし込んだ設計書です。入力条件、分岐条件、エラー時の挙動、内部処理の順序など、開発者が迷いやすい部分を具体化します。",
+        "domain": "software-engineering",
+        "keywords": [
+          "エラー",
+          "設計書",
+          "実装",
+          "レベル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Detailed Design Document"
+    ]
+  },
+  {
+    "term": "要件定義",
+    "reading": "ようけんていぎ",
+    "senses": [
+      {
+        "definition": "システムで何を実現したいのか、何が必要なのかを整理する工程です。設計の前段階にあたり、ここが曖昧だと後工程で仕様変更や手戻りが増えやすくなります。",
+        "domain": "requirements",
+        "keywords": [
+          "システム",
+          "仕様変更",
+          "前段階",
+          "後工程"
+        ]
+      }
+    ],
+    "aliases": [
+      "Requirements Definition"
+    ]
+  },
+  {
+    "term": "仕様",
+    "reading": "しよう",
+    "senses": [
+      {
+        "definition": "システムがどのように動くべきかを定めた内容全体を指します。画面の表示内容、入力条件、計算ルール、外部連携の動きなどが仕様に含まれます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ルール",
+          "計算",
+          "システム",
+          "内容全体"
+        ]
+      }
+    ],
+    "aliases": [
+      "Specification"
+    ]
+  },
+  {
+    "term": "設計",
+    "reading": "せっけい",
+    "senses": [
+      {
+        "definition": "要件を実現するために、構造や振る舞いを具体的に決める作業です。要件が「何を実現したいか」だとすると、設計は「どう形にするか」を考える工程です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "工程",
+          "要件",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": [
+      "Design"
+    ]
+  },
+  {
+    "term": "実装",
+    "reading": "じっそう",
+    "senses": [
+      {
+        "definition": "設計書に基づいて、実際にプログラムや設定を作る作業です。設計が不十分だと、実装時に担当者ごとの判断が増え、品質のばらつきが起きやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "プログラム",
+          "設計書",
+          "不十分",
+          "実装時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Implementation"
+    ]
+  },
+  {
+    "term": "テスト",
+    "reading": "てすと",
+    "senses": [
+      {
+        "definition": "システムが期待どおりに動くかを確認する活動です。設計内容が正しいか、実装が設計どおりか、利用者の想定どおりに使えるかを検証します。",
+        "domain": "testing",
+        "keywords": [
+          "システム",
+          "設計内容",
+          "利用者",
+          "期待"
+        ]
+      }
+    ],
+    "aliases": [
+      "Testing"
+    ]
+  },
+  {
+    "term": "運用",
+    "reading": "うんよう",
+    "senses": [
+      {
+        "definition": "システム稼働後に、安定して使い続けるための活動です。監視、障害対応、定期作業、問い合わせ対応などが含まれます。",
+        "domain": "operations",
+        "keywords": [
+          "障害対応",
+          "監視",
+          "システム稼働後",
+          "定期作業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operations"
+    ]
+  },
+  {
+    "term": "保守",
+    "reading": "ほしゅ",
+    "senses": [
+      {
+        "definition": "稼働中のシステムを修正、改善、維持する活動です。不具合修正だけでなく、法改正対応、性能改善、小さな機能追加も保守に含まれることがあります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "修正",
+          "システム",
+          "法改正対応",
+          "性能改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "Maintenance"
+    ]
+  },
+  {
+    "term": "合意形成",
+    "reading": "ごういけいせい",
+    "senses": [
+      {
+        "definition": "関係者の認識をそろえ、内容に納得してもらうことです。基本設計書は、まさにこの合意形成のために使われる代表的な文書です。",
+        "domain": "project-management",
+        "keywords": [
+          "基本設計書",
+          "関係者",
+          "代表的",
+          "認識"
+        ]
+      }
+    ],
+    "aliases": [
+      "Consensus Building"
+    ]
+  },
+  {
+    "term": "業務",
+    "reading": "ぎょうむ",
+    "senses": [
+      {
+        "definition": "会社や組織が日常的に行っている仕事そのものです。システムは業務を支える道具なので、業務理解なしに良い設計はしづらいです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計",
+          "システム",
+          "業務理解",
+          "日常的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Operations"
+    ]
+  },
+  {
+    "term": "業務要件",
+    "reading": "ぎょうむようけん",
+    "senses": [
+      {
+        "definition": "業務上、何を実現しなければならないかを表した要件です。たとえば「申請は上長承認後に確定する」「月末締めで集計する」といった内容が該当します。",
+        "domain": "requirements",
+        "keywords": [
+          "要件",
+          "上長承認後",
+          "業務上",
+          "月末締"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Requirements"
+    ]
+  },
+  {
+    "term": "システム要件",
+    "reading": "しすてむようけん",
+    "senses": [
+      {
+        "definition": "業務要件を満たすために、システムとして必要になる条件です。機能だけでなく、性能、セキュリティ、可用性なども含めて整理します。",
+        "domain": "requirements",
+        "keywords": [
+          "業務要件",
+          "セキュリティ",
+          "システム",
+          "可用性"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Requirements"
+    ]
+  },
+  {
+    "term": "機能要件",
+    "reading": "きのうようけん",
+    "senses": [
+      {
+        "definition": "システムが何をできるべきかを定めた要件です。登録、検索、更新、削除、承認、通知など、利用者から見える機能が中心になります。",
+        "domain": "requirements",
+        "keywords": [
+          "要件",
+          "システム",
+          "利用者",
+          "登録"
+        ]
+      }
+    ],
+    "aliases": [
+      "Functional Requirements"
+    ]
+  },
+  {
+    "term": "非機能要件",
+    "reading": "ひきのうようけん",
+    "senses": [
+      {
+        "definition": "システムの品質面に関する要件です。処理速度、停止しにくさ、セキュリティ、バックアップ、監視、拡張しやすさなどが代表例です。",
+        "domain": "requirements",
+        "keywords": [
+          "要件",
+          "セキュリティ",
+          "バックアップ",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Functional Requirements"
+    ]
+  },
+  {
+    "term": "制約条件",
+    "reading": "せいやくじょうけん",
+    "senses": [
+      {
+        "definition": "設計や開発を進めるうえで自由に変えられない条件です。予算、納期、既存システムとの接続条件、使用製品の制限などがこれにあたります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計",
+          "開発",
+          "条件",
+          "存システム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "前提条件",
+    "reading": "ぜんていじょうけん",
+    "senses": [
+      {
+        "definition": "その設計や計画が成り立つために、先に成立しているとみなす条件です。たとえば「利用者は社内ネットワークから接続する」が前提なら、設計もそれに合わせて組みます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計",
+          "条件",
+          "内ネットワーク",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スコープ",
+    "reading": "すこーぷ",
+    "senses": [
+      {
+        "definition": "プロジェクトや設計の対象範囲です。何を今回やるか、何をやらないかを明確にしないと、後で認識差や追加要求が起きやすくなります。",
+        "domain": "project-management",
+        "keywords": [
+          "プロジェクト",
+          "対象範囲",
+          "追加要求",
+          "認識差"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ステークホルダー",
+    "reading": "すてーくほるだー",
+    "senses": [
+      {
+        "definition": "プロジェクトに関わる利害関係者全体を指す言葉です。利用者、業務部門、開発者、運用担当、発注者、受注者など、影響を受ける人が含まれます。",
+        "domain": "project-management",
+        "keywords": [
+          "プロジェクト",
+          "利害関係者全",
+          "業務部門",
+          "運用担当"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stakeholder"
+    ]
+  },
+  {
+    "term": "レビュー",
+    "reading": "れびゅー",
+    "senses": [
+      {
+        "definition": "文書や成果物を複数人で確認し、誤りや抜け漏れを見つける活動です。基本設計では合意の観点、詳細設計では実装可能性の観点が強くなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "基本設計",
+          "詳細設計",
+          "成果物",
+          "実装可能性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Review"
+    ]
+  },
+  {
+    "term": "章立て",
+    "reading": "しょうだて",
+    "senses": [
+      {
+        "definition": "文書全体をどの章で構成するかを整理したものです。設計書の章立てがよいと、読む人が必要な情報を探しやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計書",
+          "文書全体",
+          "構成",
+          "章立"
+        ]
+      }
+    ],
+    "aliases": [
+      "Document Structure"
+    ]
+  },
+  {
+    "term": "用語集",
+    "reading": "ようごしゅう",
+    "senses": [
+      {
+        "definition": "用語とその意味を一覧化した資料です。関係者が同じ言葉を同じ意味で使えるようにするため、設計書と相性がよい文書です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計書",
+          "一覧化",
+          "関係者",
+          "用語"
+        ]
+      }
+    ],
+    "aliases": [
+      "Glossary"
+    ]
+  },
+  {
+    "term": "版管理",
+    "reading": "はんかんり",
+    "senses": [
+      {
+        "definition": "文書や成果物の版を区別して管理することです。いつ、誰が、何を変えたかが追えると、認識差や事故を減らしやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "成果物",
+          "認識差",
+          "文書",
+          "区別"
+        ]
+      }
+    ],
+    "aliases": [
+      "Version Control"
+    ]
+  },
+  {
+    "term": "テンプレート",
+    "reading": "てんぷれーと",
+    "senses": [
+      {
+        "definition": "文書の書き方や構成をそろえるためのひな形です。テンプレートがあると品質が安定し、新規参加者も書きやすくなります。",
+        "domain": "design-document",
+        "keywords": [
+          "文書",
+          "新規参加者",
+          "構成",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Template"
+    ]
+  },
+  {
+    "term": "トレーサビリティ",
+    "reading": "とれーさびりてぃ",
+    "senses": [
+      {
+        "definition": "要件から設計、実装、テストまでの対応関係を追えることです。何のための機能か、どの要件に対応した設計かが分かると管理しやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計",
+          "実装",
+          "テスト",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Traceability"
+    ]
+  },
+  {
+    "term": "画面設計",
+    "reading": "がめんせっけい",
+    "senses": [
+      {
+        "definition": "画面の構成、表示項目、入力項目、操作方法などを定める設計です。基本設計では概略、詳細設計では項目単位の動きまで落とし込むことが多いです。",
+        "domain": "frontend",
+        "keywords": [
+          "画面",
+          "表示項目",
+          "入力項目",
+          "操作方法"
+        ]
+      }
+    ],
+    "aliases": [
+      "Screen Design"
+    ]
+  },
+  {
+    "term": "画面遷移",
+    "reading": "がめんせんい",
+    "senses": [
+      {
+        "definition": "どの画面からどの画面へ移るか、その操作条件は何かを整理したものです。利用者の操作導線を理解するうえで重要です。",
+        "domain": "frontend",
+        "keywords": [
+          "画面",
+          "操作条件",
+          "操作導線",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": [
+      "Screen Transition"
+    ]
+  },
+  {
+    "term": "項目定義",
+    "reading": "こうもくていぎ",
+    "senses": [
+      {
+        "definition": "項目名、意味、型、桁数、必須かどうか、入力制約などを定義したものです。画面項目やAPI項目の解釈ズレを防ぐ役割があります。",
+        "domain": "frontend",
+        "keywords": [
+          "釈ズレ",
+          "API",
+          "入力制約",
+          "画面項目"
+        ]
+      }
+    ],
+    "aliases": [
+      "Field Definition"
+    ]
+  },
+  {
+    "term": "入力チェック",
+    "reading": "にゅうりょくちぇっく",
+    "senses": [
+      {
+        "definition": "利用者が入力した値が正しいかを確認する処理です。未入力、桁数超過、形式違反、相関チェックなどが含まれます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "チェック",
+          "処理",
+          "桁数超過",
+          "形式違反"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バリデーション",
+    "reading": "ばりでーしょん",
+    "senses": [
+      {
+        "definition": "入力値やデータの妥当性を確認する考え方や処理全般を指します。画面だけでなく、サーバー側でも必ず確認するのが基本です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "入力値",
+          "サーバー側",
+          "データ",
+          "処理全般"
+        ]
+      }
+    ],
+    "aliases": [
+      "Input Validation",
+      "Validation"
+    ]
+  },
+  {
+    "term": "初期値",
+    "reading": "しょきち",
+    "senses": [
+      {
+        "definition": "画面表示時や処理開始時にあらかじめ入っている値です。利用者の手間を減らす一方で、誤ってそのまま確定されるリスクもあるため設計意図が重要です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "リスク",
+          "画面表示時",
+          "処理開始時",
+          "設計意図"
+        ]
+      }
+    ],
+    "aliases": [
+      "Default Value"
+    ]
+  },
+  {
+    "term": "活性・非活性",
+    "reading": "かっせい・ひかっせい",
+    "senses": [
+      {
+        "definition": "ボタンや入力欄が操作できる状態か、操作できない状態かを示します。詳細設計では「どの条件で切り替えるか」まで書くと実装ぶれを防げます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "詳細設計",
+          "条件",
+          "実装",
+          "ボタン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Enabled/Disabled State"
+    ]
+  },
+  {
+    "term": "メッセージID",
+    "reading": "めっせーじあいでぃー",
+    "senses": [
+      {
+        "definition": "メッセージを識別するための管理番号です。設計、実装、テスト、問い合わせ対応で同じメッセージを正確に指せるようになります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "メッセージ",
+          "設計",
+          "実装",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Message ID"
+    ]
+  },
+  {
+    "term": "エラーメッセージ",
+    "reading": "えらーめっせーじ",
+    "senses": [
+      {
+        "definition": "利用者に問題を知らせる文言です。単に「エラー」と出すのではなく、何が悪くてどう直せばよいかが分かると実用性が高まります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "エラー",
+          "利用者",
+          "実用性",
+          "文言"
+        ]
+      }
+    ],
+    "aliases": [
+      "Error Message"
+    ]
+  },
+  {
+    "term": "API",
+    "reading": "えーぴーあい",
+    "senses": [
+      {
+        "definition": "システム同士がデータや処理をやり取りするための窓口です。画面とサーバーの通信、他システム連携、外部サービス利用などで広く使われます。",
+        "domain": "backend",
+        "keywords": [
+          "サーバー",
+          "システム",
+          "部サービス利",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エンドポイント",
+    "reading": "えんどぽいんと",
+    "senses": [
+      {
+        "definition": "APIの接続先や呼び出し先を表す単位です。どのURLに、どの方式でアクセスすれば何ができるかを整理する中心要素になります。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "アクセス",
+          "URL",
+          "中心要素"
+        ]
+      }
+    ],
+    "aliases": [
+      "Endpoint"
+    ]
+  },
+  {
+    "term": "リクエスト",
+    "reading": "りくえすと",
+    "senses": [
+      {
+        "definition": "APIに送る要求データです。検索条件や登録内容だけでなく、認証情報や操作対象のIDも含まれることがあります。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "求データ",
+          "ID",
+          "検索条件"
+        ]
+      },
+      {
+        "definition": "ユーザーやステークホルダーが求めること・望みです。整理されていない希望や不満を含むため、そのまま要件になるとは限りません。",
+        "domain": "product",
+        "keywords": [
+          "ユーザー",
+          "ステークホルダー",
+          "要望",
+          "要件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Request"
+    ]
+  },
+  {
+    "term": "レスポンス",
+    "reading": "れすぽんす",
+    "senses": [
+      {
+        "definition": "APIが返す結果データです。正常時の値だけでなく、エラーコードやメッセージもレスポンス設計の重要な対象です。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "レスポンス設計",
+          "エラーコード",
+          "メッセージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Response"
+    ]
+  },
+  {
+    "term": "インターフェース仕様",
+    "reading": "いんたーふぇーすしよう",
+    "senses": [
+      {
+        "definition": "システム間で何をどう受け渡すかを決めた仕様です。項目一覧だけでなく、呼び出し条件、タイミング、エラー時の扱いも含めて考える必要があります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "エラー",
+          "仕様",
+          "条件",
+          "タイミング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Interface Specification"
+    ]
+  },
+  {
+    "term": "他システム連携",
+    "reading": "たしすてむれんけい",
+    "senses": [
+      {
+        "definition": "外部または別システムとデータや処理をやり取りすることです。自システムだけ見て設計すると連携部で問題が起きやすいため、相手側仕様の理解が欠かせません。",
+        "domain": "integration",
+        "keywords": [
+          "システム",
+          "データ",
+          "相手側仕様",
+          "連携部"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "処理フロー",
+    "reading": "しょりふろー",
+    "senses": [
+      {
+        "definition": "処理がどの順番で進むかを表した流れです。正常系だけでなく、エラー時や例外時の流れも合わせて示すと実務で役立ちます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "エラー",
+          "正常系",
+          "処理",
+          "例外時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Processing Flow"
+    ]
+  },
+  {
+    "term": "例外処理",
+    "reading": "れいがいしょり",
+    "senses": [
+      {
+        "definition": "想定外の入力や障害などが起きたときにどう扱うかを決めることです。止めるのか、やり直させるのか、代替処理するのかで設計思想が表れます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "代替処理",
+          "設計思想",
+          "想定外",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Exception Handling"
+    ]
+  },
+  {
+    "term": "状態遷移",
+    "reading": "じょうたいいせん",
+    "senses": [
+      {
+        "definition": "ある対象がどの状態からどの状態へ変わるかを整理した考え方です。申請、承認、取消、完了のように、業務ルールと深く結びつくことが多いです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ルール",
+          "対象",
+          "申請",
+          "承認"
+        ]
+      }
+    ],
+    "aliases": [
+      "State Transition"
+    ]
+  },
+  {
+    "term": "DB",
+    "reading": "でぃーびー",
+    "senses": [
+      {
+        "definition": "データベースの略で、情報を保存、検索、更新する仕組みです。多くの業務システムでは、画面やAPIの裏側で中心となる存在です。",
+        "domain": "database",
+        "keywords": [
+          "データベース",
+          "務システム",
+          "API",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テーブル",
+    "reading": "てーぶる",
+    "senses": [
+      {
+        "definition": "DBの中でデータを表形式で保存する単位です。顧客、注文、申請など、業務上の対象ごとに分けて管理されることが多いです。",
+        "domain": "database",
+        "keywords": [
+          "DB",
+          "データ",
+          "表形式",
+          "業務上"
+        ]
+      }
+    ],
+    "aliases": [
+      "Table"
+    ]
+  },
+  {
+    "term": "カラム",
+    "reading": "からむ",
+    "senses": [
+      {
+        "definition": "テーブルの列のことです。名前、金額、登録日など、1件のデータが持つ属性を表します。",
+        "domain": "database",
+        "keywords": [
+          "テーブル",
+          "属性",
+          "データ",
+          "登録日"
+        ]
+      }
+    ],
+    "aliases": [
+      "Column"
+    ]
+  },
+  {
+    "term": "レコード",
+    "reading": "れこーど",
+    "senses": [
+      {
+        "definition": "テーブルの1行分のデータです。1人の顧客情報や1件の申請情報など、実体を表す単位として使われます。",
+        "domain": "database",
+        "keywords": [
+          "テーブル",
+          "データ",
+          "顧客情報",
+          "申請情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "主キー",
+    "reading": "しゅきー",
+    "senses": [
+      {
+        "definition": "レコードを一意に識別するための項目です。同じ値が重複しないため、DBの整合性を保つ土台になります。",
+        "domain": "database",
+        "keywords": [
+          "レコード",
+          "DB",
+          "整合性",
+          "一意"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "外部キー",
+    "reading": "がいぶきー",
+    "senses": [
+      {
+        "definition": "他のテーブルの主キーを参照することで、関連を表す項目です。親子関係や明細構造を表現するときによく使います。",
+        "domain": "database",
+        "keywords": [
+          "テーブル",
+          "主キー",
+          "親子関係",
+          "明細構造"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ER図",
+    "reading": "いーあーるず",
+    "senses": [
+      {
+        "definition": "データ同士の関係を図で表したものです。テーブル設計の前段で、業務上どの情報がどう結びつくかを整理するのに役立ちます。",
+        "domain": "database",
+        "keywords": [
+          "テーブル設計",
+          "データ同士",
+          "業務上",
+          "関係"
+        ]
+      }
+    ],
+    "aliases": [
+      "ER Diagram",
+      "Entity-Relationship Diagram"
+    ]
+  },
+  {
+    "term": "論理設計",
+    "reading": "ろんりせっけい",
+    "senses": [
+      {
+        "definition": "業務上必要なデータ構造や関係を、製品依存を抑えて整理する設計です。まず意味の正しさを整え、その後で物理設計へ落とし込む流れが一般的です。",
+        "domain": "database",
+        "keywords": [
+          "データ構造",
+          "物理設計",
+          "業務上必要",
+          "製品依存"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logical Design"
+    ]
+  },
+  {
+    "term": "物理設計",
+    "reading": "ぶつりせっけい",
+    "senses": [
+      {
+        "definition": "実際のDB製品や実行環境に合わせて、型や長さ、制約、索引などを決める設計です。論理的に正しいだけでなく、性能や運用性も考慮します。",
+        "domain": "database",
+        "keywords": [
+          "DB",
+          "制約",
+          "実行環境",
+          "論理的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Physical Design"
+    ]
+  },
+  {
+    "term": "制約",
+    "reading": "せいやく",
+    "senses": [
+      {
+        "definition": "データに守らせる条件やルールです。重複禁止、未入力禁止、参照整合性などを制約として定義することで、アプリだけに頼らず品質を保ちます。",
+        "domain": "database",
+        "keywords": [
+          "データ",
+          "ルール",
+          "アプリ",
+          "未入力禁止"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "インデックス",
+    "reading": "いんでっくす",
+    "senses": [
+      {
+        "definition": "データ検索を速くするための仕組みです。ただ増やせばよいわけではなく、更新性能や容量への影響もあるため、よく使う検索条件を見て設計します。",
+        "domain": "database",
+        "keywords": [
+          "データ検索",
+          "更新性能",
+          "検索条件",
+          "仕組"
+        ]
+      }
+    ],
+    "aliases": [
+      "Index"
+    ]
+  },
+  {
+    "term": "トランザクション",
+    "reading": "とらんざくしょん",
+    "senses": [
+      {
+        "definition": "一連の処理をひとまとまりとして扱い、全部成功するか全部失敗するかを保証する仕組みです。途中でエラーが起きたら元に戻すことで、データの整合性を守ります。",
+        "domain": "database",
+        "keywords": [
+          "整合性",
+          "エラー",
+          "データ",
+          "全部成功"
+        ]
+      }
+    ],
+    "aliases": [
+      "Transaction"
+    ]
+  },
+  {
+    "term": "トランザクション境界",
+    "reading": "とらんざくしょんきょうかい",
+    "senses": [
+      {
+        "definition": "どこからどこまでを1つのトランザクションとするかの範囲です。広すぎると性能や競合に不利になり、狭すぎると整合性が崩れやすくなります。",
+        "domain": "database",
+        "keywords": [
+          "トランザクション",
+          "整合性",
+          "性能",
+          "競合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Transaction Boundary"
+    ]
+  },
+  {
+    "term": "冪等性",
+    "reading": "べきとうせい",
+    "senses": [
+      {
+        "definition": "同じ処理を複数回実行しても結果が変わらない性質です。二重送信や再試行が起こる環境では特に重要で、API設計でよく登場します。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "複数回実行",
+          "二重送信",
+          "再試行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "排他制御",
+    "reading": "はいたせいぎょ",
+    "senses": [
+      {
+        "definition": "同じデータを同時に更新して不整合が起きないように制御することです。業務特性に応じてロック方法や衝突時の扱いを決めます。",
+        "domain": "backend",
+        "keywords": [
+          "ロック方法",
+          "データ",
+          "業務特性",
+          "不整合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Concurrency Control",
+      "Exclusive Control"
+    ]
+  },
+  {
+    "term": "楽観ロック",
+    "reading": "らっかんろっく",
+    "senses": [
+      {
+        "definition": "競合はそれほど多くない前提で、更新時に衝突を検知する方式です。利用者の待ち時間を抑えやすい一方、衝突時の再入力や再試行設計が必要になります。",
+        "domain": "backend",
+        "keywords": [
+          "再試行設計",
+          "更新時",
+          "利用者",
+          "衝突時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Optimistic Locking"
+    ]
+  },
+  {
+    "term": "悲観ロック",
+    "reading": "ひかんろっく",
+    "senses": [
+      {
+        "definition": "最初から他者の更新を防ぎ、競合を避ける方式です。整合性を守りやすい反面、待ちやすくなったり、長時間ロックの問題が出たりします。",
+        "domain": "backend",
+        "keywords": [
+          "間ロック",
+          "整合性",
+          "長時間",
+          "最初"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pessimistic Locking"
+    ]
+  },
+  {
+    "term": "ログ",
+    "reading": "ろぐ",
+    "senses": [
+      {
+        "definition": "システムの動作や操作を記録した情報です。不具合調査、監査、性能分析、障害切り分けなど、運用面で非常に重要な役割を持ちます。",
+        "domain": "security",
+        "keywords": [
+          "システム",
+          "不具合調査",
+          "性能分析",
+          "障害切"
+        ]
+      }
+    ],
+    "aliases": [
+      "Log"
+    ]
+  },
+  {
+    "term": "監査ログ",
+    "reading": "かんさろぐ",
+    "senses": [
+      {
+        "definition": "誰が、いつ、何をしたかを後から追えるように残す記録です。特に権限変更、承認、削除など重要操作では必須になることが多いです。",
+        "domain": "security",
+        "keywords": [
+          "権限変更",
+          "重要操作",
+          "記録",
+          "承認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Audit Log"
+    ]
+  },
+  {
+    "term": "監視",
+    "reading": "かんし",
+    "senses": [
+      {
+        "definition": "システムの状態を継続的に確認することです。異常に早く気づくためだけでなく、性能劣化や傾向を把握するためにも役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "システム",
+          "性能劣化",
+          "継続的",
+          "異常"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アラート",
+    "reading": "あらーと",
+    "senses": [
+      {
+        "definition": "監視結果がしきい値を超えたときに出す通知です。多すぎると無視されやすく、少なすぎると見逃すため、運用に合った調整が重要です。",
+        "domain": "operations",
+        "keywords": [
+          "運用",
+          "監視結果",
+          "通知",
+          "無視"
+        ]
+      }
+    ],
+    "aliases": [
+      "Alert"
+    ]
+  },
+  {
+    "term": "性能",
+    "reading": "せいのう",
+    "senses": [
+      {
+        "definition": "応答速度、処理件数、同時利用への強さなど、システムの処理能力を表す言葉です。設計段階で考えないと、後からの改善は高コストになりやすいです。",
+        "domain": "performance",
+        "keywords": [
+          "処理件数",
+          "処理能力",
+          "システム",
+          "高コスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Performance"
+    ]
+  },
+  {
+    "term": "可用性",
+    "reading": "かようせい",
+    "senses": [
+      {
+        "definition": "システムやサービスが必要なときに利用可能な状態を維持する度合いです。",
+        "domain": "operations",
+        "keywords": [
+          "システム",
+          "サービス",
+          "利用可能",
+          "維持"
+        ]
+      },
+      {
+        "definition": "システムが必要なときに使える度合いです。単に止まらないことだけでなく、止まっても早く戻せることも含めて考えます。",
+        "domain": "operations",
+        "keywords": [
+          "稼働",
+          "ダウンタイム",
+          "復旧",
+          "SLA",
+          "障害"
+        ]
+      },
+      {
+        "definition": "必要なときに必要な人が使える状態を保つ性質です。セキュリティは守ることだけでなく、止まりにくくすることも大事だと理解すると設計のバランスがよくなります。",
+        "domain": "security",
+        "keywords": [
+          "CIA",
+          "機密性",
+          "完全性",
+          "認可",
+          "アクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Availability"
+    ]
+  },
+  {
+    "term": "拡張性",
+    "reading": "かくちょうせい",
+    "senses": [
+      {
+        "definition": "将来の機能追加や利用増加に対応しやすい性質です。今だけ最適な設計は短期的には楽でも、後で大きな負債になることがあります。",
+        "domain": "architecture",
+        "keywords": [
+          "機能追加",
+          "利用増加",
+          "短期的",
+          "将来"
+        ]
+      }
+    ],
+    "aliases": [
+      "Scalability"
+    ]
+  },
+  {
+    "term": "保守性",
+    "reading": "ほしゅせい",
+    "senses": [
+      {
+        "definition": "修正、改善、調査がしやすい性質です。構造が分かりやすく、責務が整理されていると保守性が高くなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "修正",
+          "改善",
+          "調査",
+          "性質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Maintainability"
+    ]
+  },
+  {
+    "term": "可読性",
+    "reading": "かどくせい",
+    "senses": [
+      {
+        "definition": "文書やコードが読みやすく、理解しやすいことです。長期運用では、本人より他人が読む機会のほうが多いため非常に重要です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "コード",
+          "長期運用",
+          "文書",
+          "理解"
+        ]
+      }
+    ],
+    "aliases": [
+      "Readability"
+    ]
+  },
+  {
+    "term": "冗長化",
+    "reading": "じょうちょうか",
+    "senses": [
+      {
+        "definition": "同じ役割を持つ仕組みを複数用意して、故障時に止まりにくくすることです。サーバー、回線、電源など複数の層で考えることがあります。",
+        "domain": "operations",
+        "keywords": [
+          "サーバー",
+          "複数用意",
+          "故障時",
+          "役割"
+        ]
+      }
+    ],
+    "aliases": [
+      "Redundancy"
+    ]
+  },
+  {
+    "term": "バックアップ",
+    "reading": "ばっくあっぷ",
+    "senses": [
+      {
+        "definition": "データや設定を別の場所に保存しておくことです。障害、誤操作、ランサムウェアなどに備える基本対策です。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "ランサムウェア",
+          "データ",
+          "基本対策"
+        ]
+      }
+    ],
+    "aliases": [
+      "Backup"
+    ]
+  },
+  {
+    "term": "リストア",
+    "reading": "りすとあ",
+    "senses": [
+      {
+        "definition": "バックアップした内容を元に戻すことです。バックアップだけ取って満足せず、実際に戻せるかまで確認して初めて意味があります。",
+        "domain": "operations",
+        "keywords": [
+          "バックアップ",
+          "満足",
+          "実際"
+        ]
+      }
+    ],
+    "aliases": [
+      "Restore"
+    ]
+  },
+  {
+    "term": "データ移行",
+    "reading": "でーたいこう",
+    "senses": [
+      {
+        "definition": "旧システムから新システムへデータを移す作業です。単純コピーでは済まず、形式変換、重複除去、欠損補完が必要になることが多いです。",
+        "domain": "migration",
+        "keywords": [
+          "システム",
+          "純コピー",
+          "データ",
+          "形式変換"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Migration"
+    ]
+  },
+  {
+    "term": "マイグレーション",
+    "reading": "まいぐれーしょん",
+    "senses": [
+      {
+        "definition": "システムやデータ構造を計画的に変更していくことです。DBのスキーマ変更やクラウド移行など、段階的に行う場面でよく使われます。",
+        "domain": "migration",
+        "keywords": [
+          "移行",
+          "スキーマ変更",
+          "データ構造",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セキュリティ",
+    "reading": "せきゅりてぃ",
+    "senses": [
+      {
+        "definition": "情報やシステムを守るための考え方と対策全体です。機能と比べて後回しにされがちですが、設計初期から織り込むべき重要要素です。",
+        "domain": "security",
+        "keywords": [
+          "システム",
+          "対策全体",
+          "設計初期",
+          "重要要素"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security"
+    ]
+  },
+  {
+    "term": "認証",
+    "reading": "にんしょう",
+    "senses": [
+      {
+        "definition": "利用者が誰であるかを確認する仕組みです。IDとパスワードだけでなく、多要素認証や証明書認証なども使われます。",
+        "domain": "security",
+        "keywords": [
+          "パスワード",
+          "ID",
+          "多要素認証",
+          "証明書認証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Authentication"
+    ]
+  },
+  {
+    "term": "認可",
+    "reading": "にんか",
+    "senses": [
+      {
+        "definition": "認証された利用者に何を許可するかを決める仕組みです。本人確認が認証、操作範囲の判断が認可という違いがあります。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "本人確認",
+          "操作範囲",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": [
+      "Authorization"
+    ]
+  },
+  {
+    "term": "権限",
+    "reading": "けんげん",
+    "senses": [
+      {
+        "definition": "利用者が許可された操作範囲です。閲覧だけ可能なのか、更新や削除まで可能なのかで設計が変わります。",
+        "domain": "security",
+        "keywords": [
+          "可能",
+          "操作範囲",
+          "利用者",
+          "許可"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "最小権限",
+    "reading": "さいしょうけんげん",
+    "senses": [
+      {
+        "definition": "必要最低限の権限だけを付与する考え方です。便利さより被害最小化を優先する、セキュリティの基本原則の1つです。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ",
+          "必要最低限",
+          "被害最小化",
+          "基本原則"
+        ]
+      }
+    ],
+    "aliases": [
+      "Least Privilege",
+      "Principle of Least Privilege"
+    ]
+  },
+  {
+    "term": "暗号化",
+    "reading": "あんごうか",
+    "senses": [
+      {
+        "definition": "情報を読めない形に変換して守ることです。通信経路での暗号化と、保存時の暗号化の両方を考える必要があります。",
+        "domain": "security",
+        "keywords": [
+          "通信経路",
+          "保存時",
+          "情報",
+          "変換"
+        ]
+      }
+    ],
+    "aliases": [
+      "Encryption"
+    ]
+  },
+  {
+    "term": "ハッシュ化",
+    "reading": "はっしゅか",
+    "senses": [
+      {
+        "definition": "元に戻しにくい形へ変換する処理です。パスワード保存などで使われますが、暗号化とは目的が異なります。",
+        "domain": "security",
+        "keywords": [
+          "パスワード",
+          "暗号化",
+          "変換",
+          "処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hashing"
+    ]
+  },
+  {
+    "term": "脆弱性",
+    "reading": "ぜいじゃくせい",
+    "senses": [
+      {
+        "definition": "攻撃や誤用につながる弱点です。設計、実装、設定、運用のどの層にも入り込む可能性があります。",
+        "domain": "security",
+        "keywords": [
+          "攻撃",
+          "可能性",
+          "誤用",
+          "弱点"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vulnerability"
+    ]
+  },
+  {
+    "term": "脆弱性診断",
+    "reading": "ぜいじゃくせいしんだん",
+    "senses": [
+      {
+        "definition": "システムに弱点がないかを調べる活動です。公開前だけでなく、定期的に実施することでリスクを下げられます。",
+        "domain": "security",
+        "keywords": [
+          "システム",
+          "リスク",
+          "公開前",
+          "定期的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vulnerability Assessment",
+      "Penetration Testing"
+    ]
+  },
+  {
+    "term": "SQLインジェクション",
+    "reading": "えすきゅーえるいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "入力値を悪用して不正なSQLを実行させる攻撃です。入力値の埋め込み方を誤ると、情報漏えいや破壊につながることがあります。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "入力値",
+          "情報漏",
+          "悪用"
+        ]
+      }
+    ],
+    "aliases": [
+      "SQL Injection"
+    ]
+  },
+  {
+    "term": "XSS",
+    "reading": "くろすさいとすくりぷてぃんぐ",
+    "senses": [
+      {
+        "definition": "悪意あるスクリプトを利用者の画面で実行させる攻撃です。表示時のエスケープや入力制御が基本対策になります。",
+        "domain": "security",
+        "keywords": [
+          "攻撃",
+          "スクリプト",
+          "エスケープ",
+          "入力制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CSRF",
+    "reading": "しーえすあーるえふ",
+    "senses": [
+      {
+        "definition": "利用者が意図しない操作を別サイト経由で実行させる攻撃です。トークンやセッション管理の設計が対策になります。",
+        "domain": "security",
+        "keywords": [
+          "セッション",
+          "トークン",
+          "攻撃",
+          "別サイト経"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "個人情報",
+    "reading": "こじんじょうほう",
+    "senses": [
+      {
+        "definition": "特定の個人を識別できる情報です。氏名だけでなく、番号や組み合わせによって特定できる情報も含まれる場合があります。",
+        "domain": "compliance",
+        "keywords": [
+          "情報",
+          "個人",
+          "識別",
+          "氏名"
+        ]
+      }
+    ],
+    "aliases": [
+      "Personal Information",
+      "PII"
+    ]
+  },
+  {
+    "term": "機密情報",
+    "reading": "きみつじょうほう",
+    "senses": [
+      {
+        "definition": "公開してはいけない重要情報です。顧客情報、契約情報、設計情報、認証情報など、組織にとって守るべき対象を指します。",
+        "domain": "security",
+        "keywords": [
+          "重要情報",
+          "顧客情報",
+          "契約情報",
+          "設計情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Confidential Information"
+    ]
+  },
+  {
+    "term": "コンプライアンス",
+    "reading": "こんぷらいあんす",
+    "senses": [
+      {
+        "definition": "法令や社内ルール、契約条件などを守ることです。システム設計でも、単に動けばよいでは済まず、守るべき条件を設計へ反映する必要があります。",
+        "domain": "compliance",
+        "keywords": [
+          "法令",
+          "システム設計",
+          "内ルール",
+          "契約条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Compliance"
+    ]
+  },
+  {
+    "term": "内部統制",
+    "reading": "ないぶとうせい",
+    "senses": [
+      {
+        "definition": "不正防止や適正運営のために組織で整える仕組みです。承認フロー、職務分掌、操作ログ、変更管理などが代表例です。",
+        "domain": "compliance",
+        "keywords": [
+          "認フロー",
+          "作ログ",
+          "不正防止",
+          "適正運営"
+        ]
+      }
+    ],
+    "aliases": [
+      "Internal Controls"
+    ]
+  },
+  {
+    "term": "プロジェクト",
+    "reading": "ぷろじぇくと",
+    "senses": [
+      {
+        "definition": "目的、期間、体制を持って進める取り組みです。定常業務と違い、始まりと終わりがあるのが特徴です。",
+        "domain": "project-management",
+        "keywords": [
+          "体制",
+          "定常業務",
+          "期間",
+          "特徴"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WBS",
+    "reading": "だぶりゅーびーえす",
+    "senses": [
+      {
+        "definition": "作業を細かく分解して整理した一覧です。設計、実装、テスト、移行などを粒度よく見える化し、進捗管理しやすくします。",
+        "domain": "project-management",
+        "keywords": [
+          "テスト",
+          "進捗管理",
+          "分解",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "工数",
+    "reading": "こうすう",
+    "senses": [
+      {
+        "definition": "作業に必要な人手と時間の量です。1人日、1人月などで表現され、見積や計画の基礎になります。",
+        "domain": "project-management",
+        "keywords": [
+          "見積",
+          "人手",
+          "時間",
+          "人日"
+        ]
+      }
+    ],
+    "aliases": [
+      "Effort",
+      "Man-hours"
+    ]
+  },
+  {
+    "term": "見積",
+    "reading": "みつもり",
+    "senses": [
+      {
+        "definition": "工数、費用、期間などを予測して示すことです。希望ではなく、前提条件つきの予測として扱うことが重要です。",
+        "domain": "project-management",
+        "keywords": [
+          "工数",
+          "予測",
+          "前提条件",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Estimate"
+    ]
+  },
+  {
+    "term": "納期",
+    "reading": "のうき",
+    "senses": [
+      {
+        "definition": "成果物を提出、またはシステムを完成させる期限です。納期は契約や関係者期待に直結するため、実現性とのバランスが重要です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "成果物",
+          "システム",
+          "バランス",
+          "関係者期待"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マイルストーン",
+    "reading": "まいるすとーん",
+    "senses": [
+      {
+        "definition": "プロジェクト途中の重要な到達点です。基本設計完了、詳細設計完了、結合テスト開始など、節目として設定されます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "結合",
+          "プロジェクト途中",
+          "合テスト開",
+          "基本設計完了"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "課題",
+    "reading": "かだい",
+    "senses": [
+      {
+        "definition": "現時点では問題化していないが、放置すると影響が出る懸念事項です。早めに見える化し、責任者と対策を持つことが大切です。",
+        "domain": "project-management",
+        "keywords": [
+          "懸念事項",
+          "責任者",
+          "現時点",
+          "問題化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Issue"
+    ]
+  },
+  {
+    "term": "リスク",
+    "reading": "りすく",
+    "senses": [
+      {
+        "definition": "起こる可能性のある問題と、その影響の大きさを合わせて見たものです。起こってから考えるのではなく、先に備える対象として扱います。",
+        "domain": "project-management",
+        "keywords": [
+          "可能性",
+          "対象"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk"
+    ]
+  },
+  {
+    "term": "変更管理",
+    "reading": "へんこうかんり",
+    "senses": [
+      {
+        "definition": "変更内容を記録し、影響を確認し、承認のうえで反映する管理方法です。特に本番運用では、無秩序な変更が障害の大きな原因になります。",
+        "domain": "project-management",
+        "keywords": [
+          "承認",
+          "変更内容",
+          "管理方法",
+          "本番運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リリース管理",
+    "reading": "りりーすかんり",
+    "senses": [
+      {
+        "definition": "本番反映の計画、承認、手順、切り戻しまで含めて管理することです。単にデプロイする作業ではなく、業務影響と復旧手段まで含めて考えます。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "本番反映",
+          "業務影響",
+          "復旧手段"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Management"
+    ]
+  },
+  {
+    "term": "クラウド",
+    "reading": "くらうど",
+    "senses": [
+      {
+        "definition": "インターネット経由でサーバーやストレージ、アプリ実行環境などを利用する形態です。初期投資を抑えやすく、拡張しやすい点が大きな特徴です。",
+        "domain": "cloud",
+        "keywords": [
+          "インターネット経由",
+          "アプリ実行環境",
+          "ストレージ",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cloud",
+      "Cloud Computing"
+    ]
+  },
+  {
+    "term": "オンプレミス",
+    "reading": "おんぷれみす",
+    "senses": [
+      {
+        "definition": "自社設備内にサーバーやネットワーク機器を置いて運用する形態です。自由度は高い一方で、保守、更新、セキュリティ対応の負担が重くなりやすいです。",
+        "domain": "cloud",
+        "keywords": [
+          "ネットワーク機器",
+          "セキュリティ対応",
+          "サーバー",
+          "自社設備内"
+        ]
+      }
+    ],
+    "aliases": [
+      "On-Premises",
+      "On-Prem"
+    ]
+  },
+  {
+    "term": "IaaS",
+    "reading": "いあーす",
+    "senses": [
+      {
+        "definition": "サーバー、ネットワーク、ストレージなどの基盤を提供するクラウド形態です。自由度は高いですが、OSやミドルウェアの管理責任も比較的多く残ります。",
+        "domain": "cloud",
+        "keywords": [
+          "クラウド",
+          "ネットワーク",
+          "ミドルウェア",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PaaS",
+    "reading": "ぱーす",
+    "senses": [
+      {
+        "definition": "アプリ実行に必要な基盤までまとめて提供される形態です。開発者はアプリに集中しやすく、運用負担を減らしやすいのが利点です。",
+        "domain": "cloud",
+        "keywords": [
+          "アプリ",
+          "運用負担",
+          "開発者",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SaaS",
+    "reading": "さーす",
+    "senses": [
+      {
+        "definition": "完成したソフトウェアをサービスとして利用する形態です。自前開発より導入が早い反面、業務を製品に合わせる発想も必要になります。",
+        "domain": "cloud",
+        "keywords": [
+          "ソフトウェア",
+          "サービス",
+          "自前開発",
+          "完成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サーバーレス",
+    "reading": "さーばーれす",
+    "senses": [
+      {
+        "definition": "サーバー管理を強く意識せず、必要な処理だけを実行できる形態です。小さな機能を素早く作りやすい一方、長時間処理や密な制御には向き不向きがあります。",
+        "domain": "backend",
+        "keywords": [
+          "サーバー",
+          "長時間処理",
+          "管理",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンテナ",
+    "reading": "こんてな",
+    "senses": [
+      {
+        "definition": "アプリと必要な実行環境をひとまとめにして動かす仕組みです。開発環境と本番環境の差を小さくしやすいのが大きな利点です。",
+        "domain": "devops",
+        "keywords": [
+          "アプリ",
+          "実行環境",
+          "開発環境",
+          "本番環境"
+        ]
+      }
+    ],
+    "aliases": [
+      "Container"
+    ]
+  },
+  {
+    "term": "仮想マシン",
+    "reading": "かそうましん",
+    "senses": [
+      {
+        "definition": "1台の物理サーバー上に複数の仮想的なコンピューターを作る仕組みです。従来型の業務システム移行でもよく使われます。",
+        "domain": "migration",
+        "keywords": [
+          "移行",
+          "コンピューター",
+          "理サーバー上",
+          "務システム移"
+        ]
+      }
+    ],
+    "aliases": [
+      "Virtual Machine",
+      "VM"
+    ]
+  },
+  {
+    "term": "Kubernetes",
+    "reading": "くばねてぃす",
+    "senses": [
+      {
+        "definition": "コンテナを大規模に運用管理するための仕組みです。高機能ですが学習コストも高く、必要性を見極めて採用することが重要です。",
+        "domain": "devops",
+        "keywords": [
+          "コンテナ",
+          "習コスト",
+          "運用管理",
+          "大規模"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Docker",
+    "reading": "どっかー",
+    "senses": [
+      {
+        "definition": "コンテナの作成、配布、実行を扱いやすくする代表的な技術です。開発現場ではローカル再現性の向上にもよく使われます。",
+        "domain": "devops",
+        "keywords": [
+          "コンテナ",
+          "ローカル再現性",
+          "開発現場",
+          "代表的"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ネットワーク",
+    "reading": "ねっとわーく",
+    "senses": [
+      {
+        "definition": "コンピューター同士をつなぎ、通信できるようにする仕組みです。クラウド設計でも、アプリだけでなく通信経路の設計が非常に重要です。",
+        "domain": "network",
+        "keywords": [
+          "通信経路",
+          "コンピューター同士",
+          "クラウド設計",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Network"
+    ]
+  },
+  {
+    "term": "IPアドレス",
+    "reading": "あいぴーあどれす",
+    "senses": [
+      {
+        "definition": "ネットワーク上で機器を識別するための番号です。住所のような役割を持ち、通信の基礎になります。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "通信",
+          "機器",
+          "識別"
+        ]
+      }
+    ],
+    "aliases": [
+      "IP Address"
+    ]
+  },
+  {
+    "term": "DNS",
+    "reading": "でぃーえぬえす",
+    "senses": [
+      {
+        "definition": "ドメイン名とIPアドレスを対応付ける仕組みです。利用者は名前でアクセスし、裏側ではDNSが行き先を解決しています。",
+        "domain": "network",
+        "keywords": [
+          "DNS",
+          "IP",
+          "ドメイン名",
+          "アドレス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ドメイン",
+    "reading": "どめいん",
+    "senses": [
+      {
+        "definition": "インターネット上の名前や住所にあたるものです。利用者向けの見え方だけでなく、証明書やメール設定とも関わります。",
+        "domain": "security",
+        "keywords": [
+          "証明書",
+          "インターネット上",
+          "メール設定",
+          "利用者向"
+        ]
+      }
+    ],
+    "aliases": [
+      "Domain",
+      "Domain Name"
+    ]
+  },
+  {
+    "term": "ポート",
+    "reading": "ぽーと",
+    "senses": [
+      {
+        "definition": "同じサーバー内でどのサービスに接続するかを識別する番号です。ネットワーク設計やセキュリティ設定で必ず出てきます。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "セキュリティ設定",
+          "サーバー内",
+          "サービス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Port"
+    ]
+  },
+  {
+    "term": "ファイアウォール",
+    "reading": "ふぁいあうぉーる",
+    "senses": [
+      {
+        "definition": "通信を許可、拒否して不正アクセスを防ぐ仕組みです。許可しすぎると危険で、閉じすぎると必要な通信まで止まるため、設計意図が重要です。",
+        "domain": "security",
+        "keywords": [
+          "不正",
+          "正アクセス",
+          "通信",
+          "許可"
+        ]
+      }
+    ],
+    "aliases": [
+      "Firewall"
+    ]
+  },
+  {
+    "term": "ロードバランサー",
+    "reading": "ろーどばらんさー",
+    "senses": [
+      {
+        "definition": "複数のサーバーに処理を分散する仕組みです。負荷分散だけでなく、可用性向上やSSL終端の役割を持つこともあります。",
+        "domain": "operations",
+        "keywords": [
+          "サーバー",
+          "SSL",
+          "可用性向上",
+          "負荷分散"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CDN",
+    "reading": "しーでぃーえぬ",
+    "senses": [
+      {
+        "definition": "コンテンツを利用者に近い場所から配信して高速化する仕組みです。画像、静的ファイル、動画配信などで特に効果が高いです。",
+        "domain": "cloud",
+        "keywords": [
+          "配信",
+          "コンテンツ",
+          "的ファイル",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キャッシュ",
+    "reading": "きゃっしゅ",
+    "senses": [
+      {
+        "definition": "よく使うデータを一時的に保存して、再利用しやすくする仕組みです。高速化に有効ですが、古い情報を返さないよう更新設計が重要です。",
+        "domain": "performance",
+        "keywords": [
+          "一時的",
+          "再利用",
+          "高速化",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cache"
+    ]
+  },
+  {
+    "term": "オートスケール",
+    "reading": "おーとすけーる",
+    "senses": [
+      {
+        "definition": "負荷に応じてサーバー台数や処理資源を自動で増減する仕組みです。ピーク時対応とコスト最適化の両面で有効です。",
+        "domain": "operations",
+        "keywords": [
+          "負荷",
+          "サーバー台数",
+          "ピーク時対応",
+          "コスト最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SLA",
+    "reading": "えすえるえー",
+    "senses": [
+      {
+        "definition": "提供者が約束するサービス水準です。稼働率やサポート時間などが含まれ、契約や運用品質の基準になります。",
+        "domain": "operations",
+        "keywords": [
+          "稼働率",
+          "サービス水準",
+          "サポート時間",
+          "運用品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SLO",
+    "reading": "えすえるおー",
+    "senses": [
+      {
+        "definition": "運用上の目標とするサービス品質の水準です。SLAが対外的約束だとすると、SLOは内部目標として使われることが多いです。",
+        "domain": "operations",
+        "keywords": [
+          "SLA",
+          "SLO",
+          "サービス品質",
+          "対外的約束"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SLI",
+    "reading": "えすえるあい",
+    "senses": [
+      {
+        "definition": "サービス品質を測るための具体的な指標です。応答時間、成功率、エラー率など、実測可能な値で定義します。",
+        "domain": "operations",
+        "keywords": [
+          "サービス品質",
+          "エラー率",
+          "応答時間",
+          "実測可能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "障害対応",
+    "reading": "しょうがいたいおう",
+    "senses": [
+      {
+        "definition": "障害発生時に検知、連絡、切り分け、復旧、報告を行う活動です。事前に役割分担や連絡ルートを決めておくと混乱を減らせます。",
+        "domain": "operations",
+        "keywords": [
+          "復旧",
+          "絡ルート",
+          "連絡",
+          "障害発生時"
+        ]
+      },
+      {
+        "definition": "セキュリティインシデント発生時の初動・封じ込め・調査・復旧・報告までの一連のプロセスです。技術的・組織的な両面の対応能力が求められます。",
+        "domain": "security",
+        "keywords": [
+          "インシデント",
+          "封じ込め",
+          "フォレンジック",
+          "脅威"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incident Response"
+    ]
+  },
+  {
+    "term": "フェイルオーバー",
+    "reading": "ふぇいるおーばー",
+    "senses": [
+      {
+        "definition": "障害時に待機系へ切り替えてサービス継続する仕組みです。自動切替か手動切替かで運用設計が変わります。",
+        "domain": "operations",
+        "keywords": [
+          "サービス継続",
+          "自動切替",
+          "手動切替",
+          "運用設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Failover"
+    ]
+  },
+  {
+    "term": "DR",
+    "reading": "でぃーあーる",
+    "senses": [
+      {
+        "definition": "災害など大きな障害時にシステムを復旧するための考え方です。通常障害対応より広い視点で、拠点、データ、復旧手順を考えます。",
+        "domain": "operations",
+        "keywords": [
+          "復旧",
+          "システム",
+          "データ",
+          "通常障害対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BCP",
+    "reading": "びーしーぴー",
+    "senses": [
+      {
+        "definition": "重大な障害や災害が起きても重要業務を継続するための計画です。システム復旧だけでなく、業務の優先順位付けも含まれます。",
+        "domain": "operations",
+        "keywords": [
+          "障害",
+          "復旧",
+          "システム",
+          "優先順位付"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "監視項目",
+    "reading": "かんしこうもく",
+    "senses": [
+      {
+        "definition": "何を監視するかを整理した一覧です。CPUやメモリだけでなく、業務件数やエラー件数など業務監視も含めると実用的です。",
+        "domain": "operations",
+        "keywords": [
+          "監視",
+          "エラー件数",
+          "メモリ",
+          "CPU"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monitoring Items"
+    ]
+  },
+  {
+    "term": "メトリクス",
+    "reading": "めとりくす",
+    "senses": [
+      {
+        "definition": "システム状態を数値で表した監視指標です。観測できるからこそ改善できるため、運用の基礎データになります。",
+        "domain": "operations",
+        "keywords": [
+          "運用",
+          "システム状態",
+          "礎データ",
+          "監視指標"
+        ]
+      }
+    ],
+    "aliases": [
+      "Metrics"
+    ]
+  },
+  {
+    "term": "トレース",
+    "reading": "とれーす",
+    "senses": [
+      {
+        "definition": "1つのリクエストが複数システムをどう通ったかを追跡する情報です。マイクロサービスやAPI連携が多い構成で原因調査に役立ちます。",
+        "domain": "backend",
+        "keywords": [
+          "リクエスト",
+          "API",
+          "マイクロサービス",
+          "数システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Trace",
+      "Distributed Tracing"
+    ]
+  },
+  {
+    "term": "生成AI",
+    "reading": "せいせいえーあい",
+    "senses": [
+      {
+        "definition": "文章、画像、音声、コードなどを生成できるAIの総称です。便利さが大きい一方で、誤情報や情報持ち出しのリスクも理解して使う必要があります。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "コード",
+          "リスク",
+          "誤情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Generative AI",
+      "GenAI"
+    ]
+  },
+  {
+    "term": "大規模言語モデル",
+    "reading": "だいきぼげんごもでる",
+    "senses": [
+      {
+        "definition": "大量の文章を学習し、自然な文章生成や要約、推論を行うAIモデルです。生成AIの中でも文章やコードを扱う中心技術として使われています。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "推論",
+          "モデル",
+          "コード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Large Language Model",
+      "LLM"
+    ]
+  },
+  {
+    "term": "プロンプト",
+    "reading": "ぷろんぷと",
+    "senses": [
+      {
+        "definition": "AIに与える指示文です。何を求めるか、どの条件で出してほしいかを明確にすると、回答品質が安定しやすくなります。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "回答品質",
+          "指示文",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Prompt"
+    ]
+  },
+  {
+    "term": "システムプロンプト",
+    "reading": "しすてむぷろんぷと",
+    "senses": [
+      {
+        "definition": "AIの振る舞い方や優先ルールを上位から定める指示です。出力形式、安全性、専門性、話し方などに強く影響します。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "先ルール",
+          "出力形式",
+          "安全性"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Prompt"
+    ]
+  },
+  {
+    "term": "コンテキスト",
+    "reading": "こんてきすと",
+    "senses": [
+      {
+        "definition": "AIが回答時に参照している文脈や入力情報のことです。過去の会話、添付資料、関連文書が含まれると、回答の一貫性が上がりやすくなります。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "文脈",
+          "入力情報",
+          "添付資料"
+        ]
+      }
+    ],
+    "aliases": [
+      "Context"
+    ]
+  },
+  {
+    "term": "トークン",
+    "reading": "とーくん",
+    "senses": [
+      {
+        "definition": "AIが文章を内部で扱うときの細かな単位です。長い資料を処理できるか、どれだけ出力できるかはトークン上限に強く影響されます。",
+        "domain": "security",
+        "keywords": [
+          "トークン上限",
+          "AI",
+          "文章",
+          "内部"
+        ]
+      }
+    ],
+    "aliases": [
+      "Token"
+    ]
+  },
+  {
+    "term": "RAG",
+    "reading": "らぐ",
+    "senses": [
+      {
+        "definition": "外部資料を検索してAIに渡し、回答精度を高める仕組みです。モデルの記憶だけに頼らず、社内文書や仕様書を参照させたいときに有効です。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "モデル",
+          "外部資料",
+          "回答精度"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ベクトル検索",
+    "reading": "べくとるけんさく",
+    "senses": [
+      {
+        "definition": "単語の完全一致ではなく、意味の近さで検索する方法です。言い換えや類義表現に強く、文書検索との相性がよいです。",
+        "domain": "ai",
+        "keywords": [
+          "完全一致",
+          "類義表現",
+          "文書検索",
+          "単語"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vector Search",
+      "Semantic Search"
+    ]
+  },
+  {
+    "term": "埋め込み",
+    "reading": "うめこみ",
+    "senses": [
+      {
+        "definition": "文章の意味を数値ベクトルとして表現したものです。RAGや類似検索では、この埋め込みが検索の土台になります。",
+        "domain": "ai",
+        "keywords": [
+          "ベクトル",
+          "RAG",
+          "類似検索",
+          "文章"
+        ]
+      }
+    ],
+    "aliases": [
+      "Embedding"
+    ]
+  },
+  {
+    "term": "エージェント",
+    "reading": "えーじぇんと",
+    "senses": [
+      {
+        "definition": "指示を受けて複数ステップで処理を進めるAIやソフトウェアのことです。単発回答だけでなく、調査、整理、実行、再試行まで行う設計もあります。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "ソフトウェア",
+          "数ステップ",
+          "単発回答"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Agentic AI",
+    "reading": "えーじぇんてぃっくえーあい",
+    "senses": [
+      {
+        "definition": "自律的に計画し、ツールを使い、複数手順で目的達成を目指すAIの考え方です。便利ですが、権限や監査を弱くすると危険性も高まります。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "ツール",
+          "複数手順",
+          "目的達成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "推論",
+    "reading": "すいろん",
+    "senses": [
+      {
+        "definition": "与えられた情報から筋道を立てて判断することです。AI文脈では、単なる記憶再生ではなく、条件を踏まえて答えを導く能力を指すことが多いです。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "文脈",
+          "記憶再生",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Inference"
+    ]
+  },
+  {
+    "term": "ハルシネーション",
+    "reading": "はるしねーしょん",
+    "senses": [
+      {
+        "definition": "AIがもっともらしいが誤った内容を出してしまう現象です。流暢だから正しいとは限らないため、重要情報は必ず検証が必要です。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "重要情報",
+          "現象",
+          "流暢"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hallucination"
+    ]
+  },
+  {
+    "term": "ファインチューニング",
+    "reading": "ふぁいんちゅーにんぐ",
+    "senses": [
+      {
+        "definition": "既存モデルに追加学習を行い、特定用途へ合わせて調整することです。便利ですが、RAGで十分な場合も多く、目的に応じて使い分けます。",
+        "domain": "ai",
+        "keywords": [
+          "RAG",
+          "存モデル",
+          "追加学習",
+          "特定用途"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fine-Tuning",
+      "Fine Tuning"
+    ]
+  },
+  {
+    "term": "ツール呼び出し",
+    "reading": "つーるよびだし",
+    "senses": [
+      {
+        "definition": "AIが外部のAPIや関数、検索、計算ツールなどを使うことです。回答だけでなく、実際の情報取得や処理実行が可能になります。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "算ツール",
+          "API",
+          "情報取得"
+        ]
+      }
+    ],
+    "aliases": [
+      "Tool Calling",
+      "Function Calling"
+    ]
+  },
+  {
+    "term": "MCP",
+    "reading": "えむしーぴー",
+    "senses": [
+      {
+        "definition": "AIと外部ツールやデータ源をつなぐための枠組みの1つです。適切に設計すれば業務システム連携が進みますが、権限管理を誤ると危険です。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "務システム連",
+          "部ツール",
+          "データ源"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "APIキー",
+    "reading": "えーぴーあいきー",
+    "senses": [
+      {
+        "definition": "API利用者を識別するための秘密情報です。漏えいすると不正利用や課金事故につながるため、厳重な管理が必要です。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "秘密情報",
+          "不正利用",
+          "課金事故"
+        ]
+      }
+    ],
+    "aliases": [
+      "API Key"
+    ]
+  },
+  {
+    "term": "学習利用オプトアウト",
+    "reading": "がくしゅうりようおぷとあうと",
+    "senses": [
+      {
+        "definition": "入力データをモデル学習に使わない設定や契約条件のことです。業務利用ではプライバシーや情報統制の観点から重要になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "プライバシー",
+          "モデル学習",
+          "力データ",
+          "契約条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Training Data Opt-Out"
+    ]
+  },
+  {
+    "term": "プライバシー",
+    "reading": "ぷらいばしー",
+    "senses": [
+      {
+        "definition": "個人に関する情報や私的領域を適切に守る考え方です。AI活用では、入力内容がどこへ送られ、どう扱われるかを理解する必要があります。",
+        "domain": "compliance",
+        "keywords": [
+          "AI",
+          "私的領域",
+          "入力内容",
+          "個人"
+        ]
+      }
+    ],
+    "aliases": [
+      "Privacy"
+    ]
+  },
+  {
+    "term": "ガードレール",
+    "reading": "がーどれーる",
+    "senses": [
+      {
+        "definition": "AIやシステムが危険な動作や不適切な出力をしないように設ける制御です。権限制御、禁止事項、承認フロー、出力制限などが含まれます。",
+        "domain": "ai",
+        "keywords": [
+          "AI",
+          "システム",
+          "認フロー",
+          "権限制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Guardrails",
+      "AI Guardrails"
+    ]
+  },
+  {
+    "term": "請負契約",
+    "reading": "うけおいけいやく",
+    "senses": [
+      {
+        "definition": "成果物の完成を約束する契約です。一般に「完成責任」が重く、何をもって完成とするかを契約や仕様で明確にすることがとても重要です。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "完成",
+          "成果物",
+          "約束"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fixed-Price Contract"
+    ]
+  },
+  {
+    "term": "準委任契約",
+    "reading": "じゅんいにんけいやく",
+    "senses": [
+      {
+        "definition": "仕事の完成ではなく、業務の遂行そのものを受託する契約です。システム開発では、作業支援や継続的な技術支援に使われることが多いです。",
+        "domain": "project-management",
+        "keywords": [
+          "受託",
+          "契約",
+          "システム開発",
+          "作業支援"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quasi-Delegation Contract"
+    ]
+  },
+  {
+    "term": "委任契約",
+    "reading": "いにんけいやく",
+    "senses": [
+      {
+        "definition": "法律行為を相手に委ねる契約です。IT実務では準委任のほうが登場頻度は高いですが、区別は知っておくと役立ちます。",
+        "domain": "project-management",
+        "keywords": [
+          "準委任",
+          "契約",
+          "IT",
+          "法律行為"
+        ]
+      }
+    ],
+    "aliases": [
+      "Delegation Contract"
+    ]
+  },
+  {
+    "term": "契約不適合責任",
+    "reading": "けいやくふてきごうせきにん",
+    "senses": [
+      {
+        "definition": "引き渡した成果物が契約内容に合っていない場合に負う責任です。何が契約内容なのかを曖昧にすると、後で解釈争いが起きやすくなります。",
+        "domain": "project-management",
+        "keywords": [
+          "契約内容",
+          "成果物",
+          "解釈争",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Warranty Against Defects",
+      "Non-conformity Liability"
+    ]
+  },
+  {
+    "term": "受入",
+    "reading": "うけいれ",
+    "senses": [
+      {
+        "definition": "発注者側が成果物を受け入れる判断をすることです。形式的な納品だけでなく、内容確認や条件充足の判断が伴います。",
+        "domain": "software-engineering",
+        "keywords": [
+          "成果物",
+          "判断",
+          "発注者側",
+          "内容確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Acceptance",
+      "User Acceptance"
+    ]
+  },
+  {
+    "term": "検収",
+    "reading": "けんしゅう",
+    "senses": [
+      {
+        "definition": "成果物が契約条件や仕様を満たしているか確認し、正式に受け取る手続きです。請負契約では支払いや責任移転の重要な節目になることがあります。",
+        "domain": "project-management",
+        "keywords": [
+          "契約条件",
+          "請負契約",
+          "責任移転",
+          "成果物"
+        ]
+      }
+    ],
+    "aliases": [
+      "Inspection",
+      "Acceptance Inspection"
+    ]
+  },
+  {
+    "term": "成果物",
+    "reading": "せいかぶつ",
+    "senses": [
+      {
+        "definition": "契約やプロジェクトで納める対象です。プログラム本体だけでなく、設計書、テスト結果、マニュアルなども成果物に含まれる場合があります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "プログラム",
+          "設計書",
+          "プロジェクト",
+          "マニュアル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deliverable"
+    ]
+  },
+  {
+    "term": "善管注意義務",
+    "reading": "ぜんかんちゅういぎむ",
+    "senses": [
+      {
+        "definition": "専門家として通常期待される注意を払って業務を行う義務です。準委任では特にこの観点で評価されることが多いです。",
+        "domain": "project-management",
+        "keywords": [
+          "準委任",
+          "通常期待",
+          "専門家",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Duty of Care"
+    ]
+  },
+  {
+    "term": "再委託",
+    "reading": "さいいたく",
+    "senses": [
+      {
+        "definition": "受けた業務の一部または全部を別会社へ委ねることです。禁止や事前承認条件があることが多いため、契約確認が欠かせません。",
+        "domain": "project-management",
+        "keywords": [
+          "事前承認条件",
+          "契約確認",
+          "別会社",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Subcontracting"
+    ]
+  },
+  {
+    "term": "秘密保持契約",
+    "reading": "ひみつほじけいやく",
+    "senses": [
+      {
+        "definition": "受け取った秘密情報を外部へ漏らさないことを約束する契約です。NDAと呼ばれることも多く、開発前の情報共有段階から重要です。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "NDA",
+          "情報共有段階",
+          "秘密情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Non-Disclosure Agreement",
+      "NDA"
+    ]
+  },
+  {
+    "term": "個別契約",
+    "reading": "こべつけいやく",
+    "senses": [
+      {
+        "definition": "案件ごとの具体条件を定める契約です。基本契約で共通条件を定め、個別契約で案件ごとの金額、期間、成果物を定める形がよく使われます。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "案件",
+          "具体条件",
+          "共通条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Individual Contract"
+    ]
+  },
+  {
+    "term": "基本契約",
+    "reading": "きほんけいやく",
+    "senses": [
+      {
+        "definition": "継続取引に共通するルールを定める契約です。毎回ゼロから契約を起こさずに済むため、運用効率を上げやすくなります。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "ルール",
+          "回ゼロ",
+          "継続取引"
+        ]
+      }
+    ],
+    "aliases": [
+      "Master Agreement",
+      "Framework Agreement"
+    ]
+  },
+  {
+    "term": "業務委託",
+    "reading": "ぎょうむいたく",
+    "senses": [
+      {
+        "definition": "業務を外部へ委ねること全般を指す広い言葉です。法的には請負や準委任など複数の契約形態があり、単に「業務委託」とだけ書くと曖昧です。",
+        "domain": "project-management",
+        "keywords": [
+          "準委任",
+          "請負",
+          "契約形態",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Outsourcing"
+    ]
+  },
+  {
+    "term": "仕様変更",
+    "reading": "しようへんこう",
+    "senses": [
+      {
+        "definition": "一度決めた仕様を後から変更することです。影響範囲、費用、納期、責任分担を整理せず進めるとトラブルになりやすいです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "影響範囲",
+          "仕様",
+          "トラブル",
+          "責任分担"
+        ]
+      }
+    ],
+    "aliases": [
+      "Specification Change",
+      "Change Request"
+    ]
+  },
+  {
+    "term": "追加見積",
+    "reading": "ついかみつもり",
+    "senses": [
+      {
+        "definition": "仕様変更や追加要望に対して、別途費用や工数を算出することです。元契約の範囲を超えるなら、口頭で済ませず文書化するのが安全です。",
+        "domain": "project-management",
+        "keywords": [
+          "仕様変更",
+          "工数",
+          "追加要望",
+          "別途費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Additional Estimate"
+    ]
+  },
+  {
+    "term": "責任分界点",
+    "reading": "せきにんぶんかいてん",
+    "senses": [
+      {
+        "definition": "どこまでを誰が担当し、どこから先は相手の責任かを分ける境目です。クラウド利用、外部委託、共同開発では特に重要になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "クラウド利用",
+          "外部委託",
+          "共同開発",
+          "担当"
+        ]
+      }
+    ],
+    "aliases": [
+      "Responsibility Boundary"
+    ]
+  },
+  {
+    "term": "損害賠償",
+    "reading": "そんがいばいしょう",
+    "senses": [
+      {
+        "definition": "相手に損害を与えた場合に、その損害を補う責任です。契約では上限額や対象範囲を定めることが多く、交渉ポイントになりやすいです。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "渉ポイント",
+          "損害",
+          "対象範囲"
+        ]
+      }
+    ],
+    "aliases": [
+      "Damages"
+    ]
+  },
+  {
+    "term": "知的財産権",
+    "reading": "ちてきざいさんけん",
+    "senses": [
+      {
+        "definition": "発明、著作物、商標など、知的成果を守る権利の総称です。システム開発では特に著作権や利用許諾が実務上重要です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "開発",
+          "システム",
+          "実務上重要",
+          "知的成果"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intellectual Property Rights",
+      "IPR"
+    ]
+  },
+  {
+    "term": "著作権",
+    "reading": "ちょさくけん",
+    "senses": [
+      {
+        "definition": "プログラム、文書、画像などの著作物に対する権利です。誰に帰属するのか、納品後に誰がどこまで使えるのかを明確にしておく必要があります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "プログラム",
+          "著作物",
+          "納品後",
+          "文書"
+        ]
+      }
+    ],
+    "aliases": [
+      "Copyright"
+    ]
+  },
+  {
+    "term": "著作者人格権",
+    "reading": "ちょさくしゃじんかくけん",
+    "senses": [
+      {
+        "definition": "著作者本人に結びつく権利で、公表方法や氏名表示などに関わります。譲渡しにくい性質があるため、契約では不行使特約が話題になることがあります。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "著作者本人",
+          "不行使特約",
+          "公表方法"
+        ]
+      }
+    ],
+    "aliases": [
+      "Moral Rights"
+    ]
+  },
+  {
+    "term": "利用許諾",
+    "reading": "りようきょだく",
+    "senses": [
+      {
+        "definition": "著作物やソフトウェアを一定条件で使ってよいと認めることです。所有権移転とは別であり、使用範囲や再利用可否が重要になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ソフトウェア",
+          "所有権移転",
+          "再利用可否",
+          "一定条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "License",
+      "Software License"
+    ]
+  },
+  {
+    "term": "ソースコード引渡し",
+    "reading": "そーすこーどひきわたし",
+    "senses": [
+      {
+        "definition": "実行形式だけでなく、元のソースコードを納品対象に含めることです。保守や再委託の自由度に関わるため、契約時点で明記すべき論点です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ソースコード",
+          "保守",
+          "実行形式",
+          "納品対象"
+        ]
+      }
+    ],
+    "aliases": [
+      "Source Code Delivery"
+    ]
+  },
+  {
+    "term": "検収条件",
+    "reading": "けんしゅうじょうけん",
+    "senses": [
+      {
+        "definition": "何を満たせば検収とするかを定めた条件です。機能一覧、テスト結果、納品物一覧など、判断材料を具体化すると争いを防ぎやすいです。",
+        "domain": "project-management",
+        "keywords": [
+          "検収",
+          "テスト結果",
+          "納品物一覧",
+          "機能一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "支払条件",
+    "reading": "しはらいじょうけん",
+    "senses": [
+      {
+        "definition": "いつ、いくら、どの条件で支払うかを定めた内容です。着手金、中間金、検収後一括など、契約形態により考え方が変わります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "条件",
+          "検収後一括",
+          "契約形態",
+          "着手金"
+        ]
+      }
+    ],
+    "aliases": [
+      "Payment Terms"
+    ]
+  },
+  {
+    "term": "中途解約",
+    "reading": "ちゅうとかいやく",
+    "senses": [
+      {
+        "definition": "契約期間中に契約を終了させることです。どの条件で解約できるか、精算をどうするかが実務上重要になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "条件",
+          "契約期間中",
+          "実務上重要",
+          "終了"
+        ]
+      }
+    ],
+    "aliases": [
+      "Early Termination"
+    ]
+  },
+  {
+    "term": "不可抗力",
+    "reading": "ふかこうりょく",
+    "senses": [
+      {
+        "definition": "当事者の努力では避けられない事象を指します。災害、大規模障害、法令変更などが例で、責任の扱いに関わります。",
+        "domain": "operations",
+        "keywords": [
+          "大規模障害",
+          "法令変更",
+          "当事者",
+          "努力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Force Majeure"
+    ]
+  },
+  {
+    "term": "下請法",
+    "reading": "したうけほう",
+    "senses": [
+      {
+        "definition": "一定の取引で下請事業者を保護するための法律です。支払条件や一方的変更などに関わるため、発注側も受注側も理解が必要です。",
+        "domain": "project-management",
+        "keywords": [
+          "下請事業者",
+          "一方的変更",
+          "支払条件",
+          "発注側"
+        ]
+      }
+    ],
+    "aliases": [
+      "Subcontractor Protection Law"
+    ]
+  },
+  {
+    "term": "反社条項",
+    "reading": "はんしゃじょうこう",
+    "senses": [
+      {
+        "definition": "反社会的勢力との関係がないことを確認し、関係が判明した場合の契約解除などを定める条項です。現在の契約ではかなり一般的です。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "関係",
+          "反社会的勢力",
+          "判明"
+        ]
+      }
+    ],
+    "aliases": [
+      "Anti-Organized Crime Clause"
+    ]
+  },
+  {
+    "term": "印紙",
+    "reading": "いんし",
+    "senses": [
+      {
+        "definition": "契約書など特定文書に課される税の支払い手段です。紙契約では問題になりますが、電子契約では通常不要です。",
+        "domain": "project-management",
+        "keywords": [
+          "特定文書",
+          "電子契約",
+          "通常不要",
+          "契約書"
+        ]
+      }
+    ],
+    "aliases": [
+      "Revenue Stamp"
+    ]
+  },
+  {
+    "term": "電子契約",
+    "reading": "でんしけいやく",
+    "senses": [
+      {
+        "definition": "電子的な方式で締結する契約です。印紙不要、保管しやすい、検索しやすいなどの利点がありますが、社内ルールとの整合も必要です。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "内ルール",
+          "印紙不要",
+          "電子的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Electronic Contract"
+    ]
+  },
+  {
+    "term": "契約書",
+    "reading": "けいやくしょ",
+    "senses": [
+      {
+        "definition": "契約内容を文書化したものです。口頭合意よりも、範囲、責任、支払、知財、秘密保持などを明文化できる点が重要です。",
+        "domain": "project-management",
+        "keywords": [
+          "契約内容",
+          "口頭合意",
+          "秘密保持",
+          "文書化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Contract Document"
+    ]
+  },
+  {
+    "term": "議事録",
+    "reading": "ぎじろく",
+    "senses": [
+      {
+        "definition": "会議で何を話し、何を決め、誰が何を持ち帰ったかを記録した文書です。契約変更まではいかなくても、実務上の証跡として非常に重要です。",
+        "domain": "operations",
+        "keywords": [
+          "証跡",
+          "契約変更",
+          "実務上",
+          "会議"
+        ]
+      }
+    ],
+    "aliases": [
+      "Meeting Minutes"
+    ]
+  },
+  {
+    "term": "稟議",
+    "reading": "りんぎ",
+    "senses": [
+      {
+        "definition": "組織内で正式承認を得るための手続きです。契約や大きな変更では、外向きの合意だけでなく内部承認も必要になることが多いです。",
+        "domain": "project-management",
+        "keywords": [
+          "契約",
+          "合意",
+          "正式承認",
+          "内部承認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Internal Approval Process",
+      "Ringi"
+    ]
+  },
+  {
+    "term": "承認フロー",
+    "reading": "しょうにんふろー",
+    "senses": [
+      {
+        "definition": "誰がどの順番で確認・承認するかを定めた一連の流れです。",
+        "domain": "project-management",
+        "keywords": [
+          "承認",
+          "順番",
+          "フロー"
+        ]
+      },
+      {
+        "definition": "誰がどの順番で確認、承認するかを定めた流れです。業務システムでは、承認ルートそのものが重要な業務ルールになることがあります。",
+        "domain": "operations",
+        "keywords": [
+          "承認",
+          "業務",
+          "フロー",
+          "ルート",
+          "順序"
+        ]
+      },
+      {
+        "definition": "誰から誰へ承認が回るかの経路設計です。組織階層だけでなく、金額や内容に応じて分岐することがあります。",
+        "domain": "business-process",
+        "keywords": [
+          "経路",
+          "組織",
+          "金額",
+          "分岐",
+          "階層"
+        ]
+      }
+    ],
+    "aliases": [
+      "Approval Flow"
+    ]
+  },
+  {
+    "term": "体制図",
+    "reading": "たいせいず",
+    "senses": [
+      {
+        "definition": "プロジェクト関係者と役割の関係を図で示したものです。連絡先一覧とは違い、責任や指揮系統を視覚的に理解しやすくします。",
+        "domain": "project-management",
+        "keywords": [
+          "プロジェクト",
+          "連絡先一覧",
+          "指揮系統",
+          "関係者"
+        ]
+      }
+    ],
+    "aliases": [
+      "Organization Chart"
+    ]
+  },
+  {
+    "term": "役割分担",
+    "reading": "やくわりぶんたん",
+    "senses": [
+      {
+        "definition": "誰が何を担当するかを整理することです。曖昧だと「誰もやっていなかった」という事故につながりやすいです。",
+        "domain": "team",
+        "keywords": [
+          "担当",
+          "曖昧",
+          "事故"
+        ]
+      }
+    ],
+    "aliases": [
+      "Role Assignment"
+    ]
+  },
+  {
+    "term": "責任者",
+    "reading": "せきにんしゃ",
+    "senses": [
+      {
+        "definition": "最終的に判断や結果への責任を持つ人です。実務では担当者と責任者を区別しておかないと、重要判断が止まりやすくなります。",
+        "domain": "project-management",
+        "keywords": [
+          "重要判断",
+          "最終的",
+          "担当者",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Person in Charge"
+    ]
+  },
+  {
+    "term": "オーナー",
+    "reading": "おーなー",
+    "senses": [
+      {
+        "definition": "ある機能、業務、製品、文書などの責任主体です。意思決定の窓口として明確にしておくと、変更時の混乱を減らせます。",
+        "domain": "design-document",
+        "keywords": [
+          "文書",
+          "責任主体",
+          "意思決定",
+          "変更時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Owner",
+      "Product Owner"
+    ]
+  },
+  {
+    "term": "ベンダー",
+    "reading": "べんだー",
+    "senses": [
+      {
+        "definition": "製品やサービスを提供する企業です。開発会社、クラウド提供会社、SaaS提供会社など、文脈により指す対象が変わります。",
+        "domain": "cloud",
+        "keywords": [
+          "クラウド",
+          "SaaS",
+          "サービス",
+          "提供会社"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vendor"
+    ]
+  },
+  {
+    "term": "発注者",
+    "reading": "はっちゅうしゃ",
+    "senses": [
+      {
+        "definition": "仕事を依頼する側の当事者です。要求を出すだけでなく、受入、承認、意思決定の責任も持ちます。",
+        "domain": "project-management",
+        "keywords": [
+          "承認",
+          "意思決定",
+          "当事者",
+          "仕事"
+        ]
+      }
+    ],
+    "aliases": [
+      "Client",
+      "Ordering Party"
+    ]
+  },
+  {
+    "term": "受注者",
+    "reading": "じゅちゅうしゃ",
+    "senses": [
+      {
+        "definition": "仕事を引き受ける側の当事者です。契約形態に応じて、完成責任なのか遂行責任なのかが変わります。",
+        "domain": "project-management",
+        "keywords": [
+          "契約形態",
+          "完成責任",
+          "遂行責任",
+          "当事者"
+        ]
+      }
+    ],
+    "aliases": [
+      "Contractor"
+    ]
+  },
+  {
+    "term": "KPI",
+    "reading": "けーぴーあい",
+    "senses": [
+      {
+        "definition": "目標達成状況を測るための主要指標です。測りやすい数字を置くだけではなく、何の目的に効く指標かを明確にすることが大切です。",
+        "domain": "Generic",
+        "keywords": [
+          "目標達成状況",
+          "主要指標",
+          "数字",
+          "大切"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質基準",
+    "reading": "ひんしつきじゅん",
+    "senses": [
+      {
+        "definition": "どの水準なら合格とみなすかを定めた基準です。レビュー指摘件数、重大障害ゼロ、性能目標達成など、判断のものさしになります。",
+        "domain": "testing",
+        "keywords": [
+          "レビュー指摘件数",
+          "害ゼロ",
+          "性能目標達成",
+          "重大障害"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Standard"
+    ]
+  },
+  {
+    "term": "完了条件",
+    "reading": "かんりょうじょうけん",
+    "senses": [
+      {
+        "definition": "作業が終わったとみなす条件です。「作った」ではなく、「レビュー済み」「テスト済み」「承認済み」まで含めると運用しやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "条件",
+          "レビュー済",
+          "テスト済",
+          "承認済"
+        ]
+      }
+    ],
+    "aliases": [
+      "Completion Criteria"
+    ]
+  },
+  {
+    "term": "受入基準",
+    "reading": "うけいれきじゅん",
+    "senses": [
+      {
+        "definition": "発注者側が受け入れ可能と判断する条件です。曖昧だと、作った側と受け取る側で完了認識がずれやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "条件",
+          "発注者側",
+          "完了認識",
+          "可能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Acceptance Standard",
+      "Acceptance Criteria"
+    ]
+  },
+  {
+    "term": "標準化",
+    "reading": "ひょうじゅんか",
+    "senses": [
+      {
+        "definition": "書き方、手順、ルールをそろえて品質を安定させることです。個人依存を減らし、教育や引継ぎも楽になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ルール",
+          "個人依存",
+          "手順",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Standardization"
+    ]
+  },
+  {
+    "term": "ベストプラクティス",
+    "reading": "べすとぷらくてぃす",
+    "senses": [
+      {
+        "definition": "よい結果を出しやすい実践方法です。ただし環境によって最適解は変わるため、盲信ではなく適用条件も見る必要があります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "実践方法",
+          "適用条件",
+          "最適解",
+          "環境"
+        ]
+      }
+    ],
+    "aliases": [
+      "Best Practice"
+    ]
+  },
+  {
+    "term": "継続改善",
+    "reading": "けいぞくかいぜん",
+    "senses": [
+      {
+        "definition": "小さな改善を積み重ねて品質や効率を上げていく考え方です。設計書テンプレート、レビュー方法、運用ルールの見直しなども対象になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ルール",
+          "設計書",
+          "書テンプレート",
+          "レビュー方法"
+        ]
+      }
+    ],
+    "aliases": [
+      "Continuous Improvement",
+      "Kaizen"
+    ]
+  },
+  {
+    "term": "ナレッジ",
+    "reading": "なれっじ",
+    "senses": [
+      {
+        "definition": "組織や個人が持つ知識、経験、判断のコツです。属人化すると引継ぎが難しくなるため、文書化や共有が重要です。",
+        "domain": "team",
+        "keywords": [
+          "組織",
+          "属人化",
+          "文書化",
+          "個人"
+        ]
+      }
+    ],
+    "aliases": [
+      "Knowledge"
+    ]
+  },
+  {
+    "term": "用語統一",
+    "reading": "ようごとういつ",
+    "senses": [
+      {
+        "definition": "同じ対象を同じ言葉で呼ぶようそろえることです。設計書、議事録、契約、テストで言葉がぶれると、認識差や仕様誤解の原因になります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "設計書",
+          "テスト",
+          "仕様誤解",
+          "議事録"
+        ]
+      }
+    ],
+    "aliases": [
+      "Terminology Alignment"
+    ]
+  }
+]

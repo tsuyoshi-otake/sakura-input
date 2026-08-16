@@ -1,0 +1,896 @@
+[
+  {
+    "term": "URL",
+    "reading": "ゆーあーるえる",
+    "senses": [
+      {
+        "definition": "Uniform Resource Locatorの略。インターネット上のWebページやファイルの場所を示す文字列。「https://www.example.com/page」のような形式。",
+        "domain": "web",
+        "keywords": [
+          "URL",
+          "アドレス",
+          "URI"
+        ]
+      }
+    ],
+    "aliases": [
+      "Uniform Resource Locator",
+      "ウェブアドレス"
+    ]
+  },
+  {
+    "term": "URI",
+    "reading": "ゆーあーるあい",
+    "senses": [
+      {
+        "definition": "Uniform Resource Identifierの略。インターネット上のリソースを一意に識別する文字列。URLはURIの一種。APIでリソースの場所を示す際に使う。",
+        "domain": "web",
+        "keywords": [
+          "URI",
+          "URL",
+          "リソース識別"
+        ]
+      }
+    ],
+    "aliases": [
+      "Uniform Resource Identifier"
+    ]
+  },
+  {
+    "term": "Webサイト",
+    "reading": "うぇぶさいと",
+    "senses": [
+      {
+        "definition": "インターネット上で公開されているWebページの集まり。企業の公式サイト、ニュースサイト、ECサイトなどがある。ブラウザでURLを入力してアクセスする。",
+        "domain": "web",
+        "keywords": [
+          "website",
+          "ウェブサイト",
+          "ホームページ"
+        ]
+      }
+    ],
+    "aliases": [
+      "website",
+      "ウェブサイト",
+      "ホームページ"
+    ]
+  },
+  {
+    "term": "Webアプリ",
+    "reading": "うぇぶあぷり",
+    "senses": [
+      {
+        "definition": "Webブラウザ上で動作するアプリケーション。インストール不要でURLにアクセスするだけで使える。GoogleスプレッドシートやSlackなどが代表例。",
+        "domain": "web",
+        "keywords": [
+          "web app",
+          "ウェブアプリ",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "web application",
+      "Webアプリケーション",
+      "ウェブアプリ"
+    ]
+  },
+  {
+    "term": "ブラウザ",
+    "reading": "ぶらうざ",
+    "senses": [
+      {
+        "definition": "Webページを閲覧するためのソフトウェア。ChromeやSafari、Firefoxが代表的。URLを入力してWebサーバーにアクセスし、受け取ったHTMLを画面に表示する。",
+        "domain": "web",
+        "keywords": [
+          "browser",
+          "Chrome",
+          "Firefox",
+          "Safari"
+        ]
+      }
+    ],
+    "aliases": [
+      "browser",
+      "Webブラウザ",
+      "web browser"
+    ]
+  },
+  {
+    "term": "セッション",
+    "reading": "せっしょん",
+    "senses": [
+      {
+        "definition": "ユーザーがWebサイトにアクセスしてから離れるまでの一連のやりとり。ログイン状態の維持などに使われる。セッションIDというIDで管理される。",
+        "domain": "web",
+        "keywords": [
+          "session",
+          "ログイン状態",
+          "セッション管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "session"
+    ]
+  },
+  {
+    "term": "Webサーバー",
+    "reading": "うぇぶさーばー",
+    "senses": [
+      {
+        "definition": "Webページのデータを保存し、ブラウザからのリクエストに応じてHTMLやファイルを返すコンピューター（またはソフトウェア）。ApacheやNginxが有名。",
+        "domain": "web",
+        "keywords": [
+          "web server",
+          "Apache",
+          "Nginx",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": [
+      "web server",
+      "Webサーバ",
+      "Apache"
+    ]
+  },
+  {
+    "term": "V字モデル",
+    "reading": "ぶいじもでる",
+    "senses": [
+      {
+        "definition": "システム開発の各工程とテスト工程を対応させたモデル。要件定義→基本設計→詳細設計→製造→単体テスト→結合テスト→システムテスト→受入テストとV字形に対応する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "V字モデル",
+          "開発モデル",
+          "テスト対応"
+        ]
+      }
+    ],
+    "aliases": [
+      "V-model",
+      "Vモデル"
+    ]
+  },
+  {
+    "term": "画面要件",
+    "reading": "がめんようけん",
+    "senses": [
+      {
+        "definition": "システムの画面（UI）に関する要件。どの画面が必要か、何の項目を表示するか、どのような操作ができるかを定義する。画面一覧や画面遷移図としてまとめられる。",
+        "domain": "requirements",
+        "keywords": [
+          "画面要件",
+          "UI",
+          "画面設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "画面仕様"
+    ]
+  },
+  {
+    "term": "連携要件",
+    "reading": "れんけいようけん",
+    "senses": [
+      {
+        "definition": "他のシステムやサービスとのデータのやりとりに関する要件。どのシステムと、どのデータを、どの頻度でやりとりするかを定義する。IF要件とも呼ばれる。",
+        "domain": "requirements",
+        "keywords": [
+          "連携要件",
+          "IF",
+          "外部連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "IF要件",
+      "インターフェース要件"
+    ]
+  },
+  {
+    "term": "性能要件",
+    "reading": "せいのうようけん",
+    "senses": [
+      {
+        "definition": "システムの速度や処理能力に関する要件。「1秒以内にレスポンスを返す」「同時1000ユーザーが利用できる」など数値で定義する非機能要件の一つ。",
+        "domain": "requirements",
+        "keywords": [
+          "性能要件",
+          "非機能要件",
+          "レスポンス",
+          "スループット"
+        ]
+      }
+    ],
+    "aliases": [
+      "パフォーマンス要件",
+      "performance requirement"
+    ]
+  },
+  {
+    "term": "フィジビリティスタディ",
+    "reading": "ふぃじびりてぃすたでぃ",
+    "senses": [
+      {
+        "definition": "実現可能性調査のこと。プロジェクト開始前に、技術的・予算的・スケジュール的に実現できるかを調査・検討する活動。FS（フィジビリ）と略されることもある。",
+        "domain": "requirements",
+        "keywords": [
+          "フィジビリティスタディ",
+          "実現可能性",
+          "FS"
+        ]
+      }
+    ],
+    "aliases": [
+      "feasibility study",
+      "フィジビリ",
+      "FS",
+      "実現可能性調査"
+    ]
+  },
+  {
+    "term": "外部設計",
+    "reading": "がいぶせっけい",
+    "senses": [
+      {
+        "definition": "ユーザーから見えるシステムの仕様を定義する設計工程。画面レイアウト、帳票、他システムとの連携などを設計する。基本設計と同義に使われることが多い。",
+        "domain": "design",
+        "keywords": [
+          "外部設計",
+          "基本設計",
+          "画面設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "概要設計"
+    ]
+  },
+  {
+    "term": "内部設計",
+    "reading": "ないぶせっけい",
+    "senses": [
+      {
+        "definition": "システムの内部構造・ロジックを詳細に設計する工程。データベース設計、クラス設計、処理フローなどを決める。詳細設計と同義に使われることが多い。",
+        "domain": "design",
+        "keywords": [
+          "内部設計",
+          "詳細設計",
+          "ロジック設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レビュー観点",
+    "reading": "れびゅーかんてん",
+    "senses": [
+      {
+        "definition": "設計書やソースコードをレビューする際にチェックすべき項目のリスト。「要件との整合性」「セキュリティ」「パフォーマンス」などの観点で確認する。",
+        "domain": "design",
+        "keywords": [
+          "レビュー観点",
+          "チェックリスト",
+          "品質確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "レビューチェックリスト"
+    ]
+  },
+  {
+    "term": "設計標準",
+    "reading": "せっけいひょうじゅん",
+    "senses": [
+      {
+        "definition": "プロジェクト内で設計書を作成する際のルール・フォーマット・命名規則などを定めた標準。統一感を持たせ、品質を均一に保つために使われる。",
+        "domain": "design",
+        "keywords": [
+          "設計標準",
+          "標準化",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": [
+      "設計規約",
+      "コーディング標準"
+    ]
+  },
+  {
+    "term": "ワイヤーフレーム",
+    "reading": "わいやーふれーむ",
+    "senses": [
+      {
+        "definition": "画面レイアウトをシンプルな線や図形で表した設計図。色やデザインを省き、どこに何の要素を置くかを示す。Webサイトやアプリの設計初期段階で作成する。",
+        "domain": "ui-design",
+        "keywords": [
+          "ワイヤーフレーム",
+          "画面設計",
+          "レイアウト"
+        ]
+      }
+    ],
+    "aliases": [
+      "wireframe"
+    ]
+  },
+  {
+    "term": "帳票",
+    "reading": "ちょうひょう",
+    "senses": [
+      {
+        "definition": "業務で使用する書類や印刷物の総称。請求書、注文書、報告書など。システムから自動生成される帳票をシステム帳票と呼ぶ。帳票設計書で定義する。",
+        "domain": "ui-design",
+        "keywords": [
+          "帳票",
+          "書類",
+          "印刷",
+          "レポート"
+        ]
+      }
+    ],
+    "aliases": [
+      "form",
+      "report",
+      "帳票設計"
+    ]
+  },
+  {
+    "term": "バッチ処理",
+    "reading": "ばっちしょり",
+    "senses": [
+      {
+        "definition": "大量のデータを一括して処理する方式。夜間や定時に自動実行されることが多い。「毎日深夜2時に売上データを集計する」などがバッチ処理の例。",
+        "domain": "ui-design",
+        "keywords": [
+          "バッチ",
+          "一括処理",
+          "夜間処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "batch processing",
+      "バッチ",
+      "一括処理"
+    ]
+  },
+  {
+    "term": "IF設計書",
+    "reading": "あいえふせっけいしょ",
+    "senses": [
+      {
+        "definition": "システム間のインターフェース（連携）を定義した設計書。連携するシステム名、データ形式、ファイルレイアウト、タイミングなどを記載する。",
+        "domain": "ui-design",
+        "keywords": [
+          "IF設計書",
+          "連携",
+          "インターフェース設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "インターフェース設計書",
+      "連携設計書"
+    ]
+  },
+  {
+    "term": "項目定義書",
+    "reading": "こうもくていぎしょ",
+    "senses": [
+      {
+        "definition": "画面や帳票、DBの各項目（フィールド）の定義を記載したドキュメント。項目名、データ型、桁数、必須/任意、入力チェックルールなどを定義する。",
+        "domain": "ui-design",
+        "keywords": [
+          "項目定義書",
+          "フィールド定義",
+          "データ定義"
+        ]
+      }
+    ],
+    "aliases": [
+      "フィールド定義書",
+      "項目仕様書"
+    ]
+  },
+  {
+    "term": "レイアウト",
+    "senses": [
+      {
+        "definition": "画面や帳票上で要素をどこにどのように配置するかの設計。「ヘッダーは上部、フッターは下部、メニューは左側」のように、位置・大きさ・並びを定義する。",
+        "domain": "ui-design",
+        "keywords": [
+          "layout",
+          "配置",
+          "デザイン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "入力チェック仕様",
+    "reading": "にゅうりょくちぇっくしよう",
+    "senses": [
+      {
+        "definition": "ユーザーが入力するデータの正しさを検証するルールを定義したもの。「電話番号は数字のみ10〜11桁」「必須項目が空白の場合はエラー」などを定義する。",
+        "domain": "ui-design",
+        "keywords": [
+          "入力チェック",
+          "バリデーション",
+          "入力規則"
+        ]
+      }
+    ],
+    "aliases": [
+      "入力バリデーション仕様",
+      "チェック仕様"
+    ]
+  },
+  {
+    "term": "画面ID",
+    "reading": "がめんあいでぃ",
+    "senses": [
+      {
+        "definition": "各画面に付与される一意の識別子。「SCR-001」などの形式でプロジェクト内の画面を識別する。設計書、仕様書、テストケースで画面を参照するときに使う。",
+        "domain": "ui-design",
+        "keywords": [
+          "画面ID",
+          "画面識別",
+          "スクリーンID"
+        ]
+      }
+    ],
+    "aliases": [
+      "スクリーンID",
+      "SCR"
+    ]
+  },
+  {
+    "term": "連携仕様書",
+    "reading": "れんけいしようしょ",
+    "senses": [
+      {
+        "definition": "システム間のデータ連携を詳細に記述したドキュメント。連携の方向、データフォーマット、エラー処理、タイムアウト設定などを記載する。",
+        "domain": "ui-design",
+        "keywords": [
+          "連携仕様書",
+          "IF仕様",
+          "外部連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "IF仕様書",
+      "外部連携仕様書"
+    ]
+  },
+  {
+    "term": "RDBMS",
+    "reading": "あーるでぃびーえむえす",
+    "senses": [
+      {
+        "definition": "Relational Database Management Systemの略。表（テーブル）形式でデータを管理するデータベースシステム。MySQL、PostgreSQL、Oracle、SQL Serverが代表的。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "リレーショナルDB",
+          "MySQL",
+          "PostgreSQL"
+        ]
+      }
+    ],
+    "aliases": [
+      "Relational Database Management System",
+      "リレーショナルデータベース管理システム"
+    ]
+  },
+  {
+    "term": "NoSQL",
+    "reading": "のーえすきゅーえる",
+    "senses": [
+      {
+        "definition": "従来のSQL（リレーショナルDB）以外のデータベースの総称。キー・バリュー型、ドキュメント型、グラフ型などがある。MongoDBやRedisが有名。柔軟なデータ構造を扱える。",
+        "domain": "database",
+        "keywords": [
+          "NoSQL",
+          "MongoDB",
+          "Redis",
+          "非リレーショナル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Not only SQL"
+    ]
+  },
+  {
+    "term": "トリガー",
+    "reading": "とりがー",
+    "senses": [
+      {
+        "definition": "データベースで特定の操作（INSERT、UPDATE、DELETEなど）が実行されたとき、自動的に別の処理を起動する仕組み。「データ更新時に更新日時を自動記録する」などに使われる。",
+        "domain": "database",
+        "keywords": [
+          "trigger",
+          "自動処理",
+          "DB"
+        ]
+      }
+    ],
+    "aliases": [
+      "trigger",
+      "データベーストリガー"
+    ]
+  },
+  {
+    "term": "スキーマ",
+    "reading": "すきーま",
+    "senses": [
+      {
+        "definition": "データベースの構造定義。テーブルの一覧、各テーブルのカラム名やデータ型、制約などを定義したもの全体をスキーマと呼ぶ。設計時にスキーマ設計を行う。",
+        "domain": "database",
+        "keywords": [
+          "schema",
+          "DB設計",
+          "テーブル構造"
+        ]
+      }
+    ],
+    "aliases": [
+      "schema",
+      "データベーススキーマ"
+    ]
+  },
+  {
+    "term": "SELECT",
+    "reading": "せれくと",
+    "senses": [
+      {
+        "definition": "SQLでデータを検索・取得する命令。「SELECT * FROM テーブル名」のように使う。CRUD操作のR（Read）にあたる。最もよく使われるSQL命令。",
+        "domain": "sql",
+        "keywords": [
+          "SELECT",
+          "SQL",
+          "検索",
+          "クエリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "select文"
+    ]
+  },
+  {
+    "term": "INSERT",
+    "reading": "いんさーと",
+    "senses": [
+      {
+        "definition": "SQLでテーブルに新しいレコードを追加する命令。「INSERT INTO テーブル名 VALUES(...)」のように使う。CRUD操作のC（Create）にあたる。",
+        "domain": "sql",
+        "keywords": [
+          "INSERT",
+          "SQL",
+          "追加",
+          "登録"
+        ]
+      }
+    ],
+    "aliases": [
+      "insert文"
+    ]
+  },
+  {
+    "term": "UPDATE",
+    "reading": "あっぷでーと",
+    "senses": [
+      {
+        "definition": "SQLで既存のレコードを更新する命令。「UPDATE テーブル名 SET カラム名=値 WHERE 条件」のように使う。CRUD操作のU（Update）にあたる。",
+        "domain": "sql",
+        "keywords": [
+          "UPDATE",
+          "SQL",
+          "更新",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "update文"
+    ]
+  },
+  {
+    "term": "DELETE",
+    "reading": "でりーと",
+    "senses": [
+      {
+        "definition": "SQLでレコードを削除する命令。「DELETE FROM テーブル名 WHERE 条件」のように使う。CRUD操作のD（Delete）にあたる。WHERE句を忘れると全件削除になるので注意。",
+        "domain": "sql",
+        "keywords": [
+          "DELETE",
+          "SQL",
+          "削除"
+        ]
+      }
+    ],
+    "aliases": [
+      "delete文"
+    ]
+  },
+  {
+    "term": "JOIN",
+    "reading": "じょいん",
+    "senses": [
+      {
+        "definition": "SQLで複数のテーブルを結合して検索する操作。INNER JOIN（両方に一致するもの）、LEFT JOIN（左テーブルを全件含む）などの種類がある。",
+        "domain": "sql",
+        "keywords": [
+          "JOIN",
+          "結合",
+          "テーブル結合"
+        ]
+      }
+    ],
+    "aliases": [
+      "テーブル結合",
+      "INNER JOIN",
+      "LEFT JOIN"
+    ]
+  },
+  {
+    "term": "WHERE",
+    "reading": "うぇあ",
+    "senses": [
+      {
+        "definition": "SQLで検索条件を指定するキーワード。「WHERE 年齢 >= 20」のように、特定の条件に一致するレコードだけを対象にする。",
+        "domain": "sql",
+        "keywords": [
+          "WHERE",
+          "条件",
+          "絞り込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "where句"
+    ]
+  },
+  {
+    "term": "GROUP BY",
+    "reading": "ぐるーぷばい",
+    "senses": [
+      {
+        "definition": "SQLで特定のカラムでレコードをグループ化する命令。「GROUP BY 部署」で部署ごとに集計できる。COUNT、SUM、AVGなどの集計関数と組み合わせて使う。",
+        "domain": "sql",
+        "keywords": [
+          "GROUP BY",
+          "グループ化",
+          "集計"
+        ]
+      }
+    ],
+    "aliases": [
+      "group by句"
+    ]
+  },
+  {
+    "term": "ORDER BY",
+    "reading": "おーだーばい",
+    "senses": [
+      {
+        "definition": "SQLで検索結果を並び替える命令。「ORDER BY 日付 DESC」で日付の新しい順に並べる。ASC（昇順）とDESC（降順）が指定できる。",
+        "domain": "sql",
+        "keywords": [
+          "ORDER BY",
+          "ソート",
+          "並び替え"
+        ]
+      }
+    ],
+    "aliases": [
+      "order by句",
+      "ソート"
+    ]
+  },
+  {
+    "term": "HAVING",
+    "reading": "はびんぐ",
+    "senses": [
+      {
+        "definition": "GROUP BYでグループ化した後の結果に条件を指定するSQLキーワード。「HAVING COUNT(*) > 10」のように集計後の値で絞り込む。WHEREとの違いは集計後に使う点。",
+        "domain": "sql",
+        "keywords": [
+          "HAVING",
+          "集計条件",
+          "GROUP BY"
+        ]
+      }
+    ],
+    "aliases": [
+      "having句"
+    ]
+  },
+  {
+    "term": "サブクエリ",
+    "reading": "さぶくえり",
+    "senses": [
+      {
+        "definition": "SQLの中に別のSQLを入れ子にした構造。「SELECT * FROM テーブル WHERE id IN (SELECT id FROM ...)」のように使う。複雑な検索条件を表現できる。",
+        "domain": "sql",
+        "keywords": [
+          "サブクエリ",
+          "入れ子",
+          "SQL"
+        ]
+      }
+    ],
+    "aliases": [
+      "subquery",
+      "副問合せ",
+      "副問い合わせ"
+    ]
+  },
+  {
+    "term": "リポジトリ層",
+    "reading": "りぽじとりそう",
+    "senses": [
+      {
+        "definition": "データベースへのアクセス処理をまとめた層。データの取得・保存・削除などDB操作を集約する。ビジネスロジックとDBの分離により、テストや変更がしやすくなる。",
+        "domain": "backend",
+        "keywords": [
+          "リポジトリ層",
+          "DAO",
+          "データアクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "repository layer",
+      "DAOパターン"
+    ]
+  },
+  {
+    "term": "非同期処理",
+    "reading": "ひどうきしょり",
+    "senses": [
+      {
+        "definition": "処理の完了を待たずに次の処理を進める方式。時間のかかる処理（ファイルダウンロード、API呼び出しなど）を非同期にすることで、画面の応答性を保つことができる。",
+        "domain": "backend",
+        "keywords": [
+          "非同期",
+          "async",
+          "await",
+          "並行処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "asynchronous processing",
+      "async",
+      "非同期"
+    ]
+  },
+  {
+    "term": "キュー",
+    "senses": [
+      {
+        "definition": "処理を順番に待つ仕組み。先に入れたものが先に処理される（FIFO）。大量のリクエストが来たときに順番に処理したり、後で処理したい仕事を一時的にためておくのに使う。",
+        "domain": "backend",
+        "keywords": [
+          "queue",
+          "キュー",
+          "FIFO",
+          "メッセージキュー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モーダル",
+    "reading": "もーだる",
+    "senses": [
+      {
+        "definition": "現在の画面の上に重ねて表示されるポップアップウィンドウ。確認ダイアログ、フォーム入力など。操作するまでは元の画面に戻れない。",
+        "domain": "frontend",
+        "keywords": [
+          "modal",
+          "ダイアログ",
+          "ポップアップ"
+        ]
+      }
+    ],
+    "aliases": [
+      "modal",
+      "モーダルダイアログ",
+      "ダイアログ"
+    ]
+  },
+  {
+    "term": "レスポンシブデザイン",
+    "reading": "れすぽんしぶでざいん",
+    "senses": [
+      {
+        "definition": "PC、タブレット、スマートフォンなど画面サイズの違いに応じて自動的にレイアウトを切り替えるWebデザイン手法。一つのHTMLで複数のデバイスに対応できる。",
+        "domain": "frontend",
+        "keywords": [
+          "responsive design",
+          "レスポンシブ",
+          "モバイル対応"
+        ]
+      }
+    ],
+    "aliases": [
+      "responsive design",
+      "レスポンシブ",
+      "スマホ対応"
+    ]
+  },
+  {
+    "term": "アクセシビリティ",
+    "reading": "あくせしびりてぃ",
+    "senses": [
+      {
+        "definition": "障害のある人を含むすべての人がWebサイトやシステムを利用できるようにすること。音声読み上げ対応、色覚配慮、キーボード操作対応などが含まれる。a11yとも書く。",
+        "domain": "frontend",
+        "keywords": [
+          "accessibility",
+          "a11y",
+          "バリアフリー",
+          "ユニバーサルデザイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "accessibility",
+      "a11y",
+      "アクセシ"
+    ]
+  },
+  {
+    "term": "ユーザビリティ",
+    "reading": "ゆーざびりてぃ",
+    "senses": [
+      {
+        "definition": "システムやWebサイトがどれだけ使いやすいかの度合い。直感的な操作、わかりやすいメニュー構成、エラーメッセージの明確さなどが評価される。UXの一部。",
+        "domain": "frontend",
+        "keywords": [
+          "usability",
+          "使いやすさ",
+          "UI",
+          "UX"
+        ]
+      }
+    ],
+    "aliases": [
+      "usability"
+    ]
+  },
+  {
+    "term": "正常系",
+    "reading": "せいじょうけい",
+    "senses": [
+      {
+        "definition": "システムが期待どおりに動作する正しい入力・条件でのテスト。「正しいIDとパスワードでログインできる」がその例。異常系と対で考える。",
+        "domain": "testing",
+        "keywords": [
+          "正常系",
+          "ハッピーパス",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "正常ケース",
+      "happy path"
+    ]
+  }
+]

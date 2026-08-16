@@ -1,0 +1,1203 @@
+[
+  {
+    "term": "SmileCHAT",
+    "reading": "すまいるちゃっと",
+    "senses": [
+      {
+        "definition": "SystemEXE R&D開発のAgentic AIプラットフォーム。マルチターン対話、Artifacts、ローカルRAG、GitHub連携、MCP、リアルタイムWeb検索などを備え、ユーザーとAIエージェントの協働を支援する。",
+        "domain": "service",
+        "keywords": [
+          "チャット",
+          "AI",
+          "エージェント",
+          "プラットフォーム",
+          "SystemEXE"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ページタイトル",
+    "reading": "ぺーじたいとる",
+    "senses": [
+      {
+        "definition": "ページや画面に付けられた名称。",
+        "domain": "web-analytics",
+        "keywords": [
+          "画面",
+          "タイトル",
+          "GA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "画面クラス",
+    "reading": "がめんくらす",
+    "senses": [
+      {
+        "definition": "どの画面種類に属するかを表す分類情報。",
+        "domain": "web-analytics",
+        "keywords": [
+          "分類",
+          "画面",
+          "GA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "閲覧数",
+    "reading": "えつらんすう",
+    "senses": [
+      {
+        "definition": "ページや画面が表示された回数。",
+        "domain": "web-analytics",
+        "keywords": [
+          "PV",
+          "ページビュー",
+          "GA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アクティブユーザー",
+    "reading": "あくてぃぶゆーざー",
+    "senses": [
+      {
+        "definition": "実際に利用行動があった利用者数。",
+        "domain": "web-analytics",
+        "keywords": [
+          "ユーザー",
+          "GA",
+          "DAU"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アクティブユーザーあたりの閲覧数",
+    "reading": "あくてぃぶゆーざーあたりのえつらんすう",
+    "senses": [
+      {
+        "definition": "1人の利用者が平均して何回見たかを表す指標。",
+        "domain": "web-analytics",
+        "keywords": [
+          "PV",
+          "指標",
+          "GA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "平均エンゲージメント時間",
+    "reading": "へいきんえんげーじめんとじかん",
+    "senses": [
+      {
+        "definition": "1人あたり平均でどれくらい操作・滞在したかの時間。",
+        "domain": "web-analytics",
+        "keywords": [
+          "滞在時間",
+          "GA",
+          "指標"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "イベント数",
+    "reading": "いべんとすう",
+    "senses": [
+      {
+        "definition": "クリックや送信などの操作発生数。",
+        "domain": "web-analytics",
+        "keywords": [
+          "GA",
+          "イベント",
+          "トラッキング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "重要イベント",
+    "reading": "じゅうよういべんと",
+    "senses": [
+      {
+        "definition": "成果として特に重要と定義されたイベント。",
+        "domain": "web-analytics",
+        "keywords": [
+          "コンバージョン",
+          "GA",
+          "KPI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "総収益",
+    "reading": "そうしゅうえき",
+    "senses": [
+      {
+        "definition": "その期間に発生した売上や収益の合計。",
+        "domain": "web-analytics",
+        "keywords": [
+          "売上",
+          "収益",
+          "GA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "新規会話",
+    "reading": "しんきかいわ",
+    "senses": [
+      {
+        "definition": "新しいチャットセッションを開始する機能や状態。",
+        "domain": "chat",
+        "keywords": [
+          "会話",
+          "セッション",
+          "開始"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ベクトル化",
+    "reading": "べくとるか",
+    "senses": [
+      {
+        "definition": "文章や画像を検索しやすい数値表現に変換すること。",
+        "domain": "ai",
+        "keywords": [
+          "Embedding",
+          "ベクトル",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "類似検索",
+    "reading": "るいじけんさく",
+    "senses": [
+      {
+        "definition": "入力内容に意味が近い情報を探す検索方法。",
+        "domain": "ai",
+        "keywords": [
+          "セマンティック",
+          "ベクトル",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "前例検索",
+    "reading": "ぜんれいけんさく",
+    "senses": [
+      {
+        "definition": "過去の似た事例を探して活用する検索。",
+        "domain": "business",
+        "keywords": [
+          "事例",
+          "検索",
+          "ナレッジ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "要約",
+    "reading": "ようやく",
+    "senses": [
+      {
+        "definition": "長い文書や会話を短く整理すること。",
+        "domain": "ai",
+        "keywords": [
+          "サマリー",
+          "圧縮",
+          "文書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "翻訳",
+    "reading": "ほんやく",
+    "senses": [
+      {
+        "definition": "ある言語の内容を別の言語へ変換すること。",
+        "domain": "ai",
+        "keywords": [
+          "多言語",
+          "言語",
+          "変換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "文字起こし",
+    "reading": "もじおこし",
+    "senses": [
+      {
+        "definition": "音声や画像中の文字をテキストにすること。",
+        "domain": "ai",
+        "keywords": [
+          "音声認識",
+          "テキスト化",
+          "書き起こし"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OCR",
+    "reading": "おーしーあーる",
+    "senses": [
+      {
+        "definition": "画像やPDFの文字を認識してテキスト化する技術。",
+        "domain": "ai",
+        "keywords": [
+          "文字認識",
+          "画像",
+          "テキスト化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Optical Character Recognition"
+    ]
+  },
+  {
+    "term": "AI Foundry",
+    "reading": "えーあいふぁうんどり",
+    "senses": [
+      {
+        "definition": "AIモデルやエージェントを構築・管理する基盤やサービスを指す語。",
+        "domain": "ai",
+        "keywords": [
+          "基盤",
+          "モデル管理",
+          "エージェント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Claude Code",
+    "reading": "くろーどこーど",
+    "senses": [
+      {
+        "definition": "コーディング支援に強いAI系開発ツール名。",
+        "domain": "ai",
+        "keywords": [
+          "Anthropic",
+          "Claude",
+          "開発支援"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Codex",
+    "reading": "こーでっくす",
+    "senses": [
+      {
+        "definition": "コード生成・修正・理解を支援するAI系ツールやモデル群を指す。",
+        "domain": "ai",
+        "keywords": [
+          "OpenAI",
+          "コード生成",
+          "開発支援"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Kiro",
+    "reading": "きろ",
+    "senses": [
+      {
+        "definition": "仕様駆動型の開発補助に使われるAI開発ツール名。",
+        "domain": "ai",
+        "keywords": [
+          "AWS",
+          "開発支援",
+          "仕様駆動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Gemini",
+    "reading": "じぇみに",
+    "senses": [
+      {
+        "definition": "Google系の生成AIモデル群の名称。",
+        "domain": "ai",
+        "keywords": [
+          "Google",
+          "LLM",
+          "生成AI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OpenAI",
+    "reading": "おーぷんえーあい",
+    "senses": [
+      {
+        "definition": "ChatGPTやGPT系モデル、埋め込みモデル、API、関連ツールを提供するAI企業・プラットフォーム名。",
+        "domain": "ai",
+        "keywords": [
+          "GPT",
+          "ChatGPT",
+          "API"
+        ]
+      },
+      {
+        "definition": "APEXで設定可能な生成AI提供元の一つ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "OpenAI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AI統合",
+    "reading": "えーあいとうごう",
+    "senses": [
+      {
+        "definition": "既存のシステムや業務フローにAIモデルやエージェントを組み込み、検索、要約、判断支援、自動化などに活用できるようにすること。",
+        "domain": "ai",
+        "keywords": [
+          "エージェント",
+          "ワークフロー",
+          "自動化",
+          "API",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Anthropic",
+    "reading": "あんそろぴっく",
+    "senses": [
+      {
+        "definition": "Claude系モデルを提供する企業名。",
+        "domain": "ai",
+        "keywords": [
+          "Claude",
+          "LLM",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AVD",
+    "reading": "えーぶいでぃー",
+    "senses": [
+      {
+        "definition": "Azure Virtual Desktopの略で、仮想デスクトップ環境。",
+        "domain": "azure",
+        "keywords": [
+          "VDI",
+          "仮想デスクトップ",
+          "リモート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Azure Virtual Desktop"
+    ]
+  },
+  {
+    "term": "ECS Fargate",
+    "reading": "いーしーえす ふぁーげーと",
+    "senses": [
+      {
+        "definition": "AWSでサーバー管理を意識せずコンテナ実行できる仕組み。",
+        "domain": "aws",
+        "keywords": [
+          "コンテナ",
+          "サーバーレス",
+          "ECS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Datadog",
+    "reading": "でーただっぐ",
+    "senses": [
+      {
+        "definition": "監視、ログ、APMを統合して扱える運用監視サービス。",
+        "domain": "monitoring",
+        "keywords": [
+          "APM",
+          "ログ",
+          "SaaS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HDInsight",
+    "reading": "えいちでぃーいんさいと",
+    "senses": [
+      {
+        "definition": "Azure上でHadoopやSparkなどを扱う分析基盤サービス。",
+        "domain": "azure",
+        "keywords": [
+          "Hadoop",
+          "Spark",
+          "ビッグデータ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "対話型グリッド",
+    "reading": "たいわがたぐりっど",
+    "senses": [
+      {
+        "definition": "表形式で編集や検索ができる高機能な一覧UI。",
+        "domain": "oracle-apex",
+        "keywords": [
+          "グリッド",
+          "一覧",
+          "編集"
+        ]
+      }
+    ],
+    "aliases": [
+      "Interactive Grid"
+    ]
+  },
+  {
+    "term": "UI",
+    "reading": "ゆーあい",
+    "senses": [
+      {
+        "definition": "利用者が目で見て操作する画面や見た目のこと。",
+        "domain": "design",
+        "keywords": [
+          "画面",
+          "デザイン",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Interface",
+      "Web UI"
+    ]
+  },
+  {
+    "term": "UX",
+    "reading": "ゆーえっくす",
+    "senses": [
+      {
+        "definition": "使いやすさや体験全体の質を指す。",
+        "domain": "design",
+        "keywords": [
+          "体験",
+          "ユーザビリティ",
+          "デザイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Experience"
+    ]
+  },
+  {
+    "term": "Streamlit",
+    "reading": "すとりーむりっと",
+    "senses": [
+      {
+        "definition": "Pythonで簡単に画面付きアプリを作れるフレームワーク。",
+        "domain": "python",
+        "keywords": [
+          "ダッシュボード",
+          "Web",
+          "データ可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Playwright",
+    "reading": "ぷれいうらいと",
+    "senses": [
+      {
+        "definition": "Web画面を自動操作してテストするツール。",
+        "domain": "testing",
+        "keywords": [
+          "E2E",
+          "ブラウザ",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Java Servlet",
+    "reading": "じゃばさーぶれっと",
+    "senses": [
+      {
+        "definition": "JavaでWebリクエストを処理する基本技術。",
+        "domain": "java",
+        "keywords": [
+          "Web",
+          "HTTPリクエスト",
+          "サーバサイド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JSP",
+    "reading": "じぇいえすぴー",
+    "senses": [
+      {
+        "definition": "JavaベースでHTML画面を生成する古典的な技術。",
+        "domain": "java",
+        "keywords": [
+          "HTML生成",
+          "サーバサイド",
+          "テンプレート"
+        ]
+      }
+    ],
+    "aliases": [
+      "JavaServer Pages"
+    ]
+  },
+  {
+    "term": "PowerShell",
+    "reading": "ぱわーしぇる",
+    "senses": [
+      {
+        "definition": "Windowsやクラウド操作を自動化するコマンド環境。",
+        "domain": "os",
+        "keywords": [
+          "Windows",
+          "スクリプト",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JSON",
+    "reading": "じぇいそん",
+    "senses": [
+      {
+        "definition": "データをやりとりするための軽量な記述形式。",
+        "domain": "development",
+        "keywords": [
+          "データ形式",
+          "API",
+          "シリアライズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "JavaScript Object Notation"
+    ]
+  },
+  {
+    "term": "Cookie",
+    "reading": "くっきー",
+    "senses": [
+      {
+        "definition": "ブラウザ側に保存される小さな状態情報。",
+        "domain": "web",
+        "keywords": [
+          "ブラウザ",
+          "セッション",
+          "認証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sessionStorage",
+    "reading": "せっしょんすとれーじ（ブラウザ）",
+    "senses": [
+      {
+        "definition": "ブラウザのタブ単位で保持される一時保存領域。",
+        "domain": "web",
+        "keywords": [
+          "ブラウザ",
+          "ストレージ",
+          "一時保存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "REST API",
+    "reading": "れすと えーぴーあい",
+    "senses": [
+      {
+        "definition": "HTTPを使ってデータ連携する一般的なAPI形式。",
+        "domain": "development",
+        "keywords": [
+          "HTTP",
+          "API",
+          "RESTful"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SQLite",
+    "reading": "えすきゅーらいと",
+    "senses": [
+      {
+        "definition": "組み込み用途にも強い軽量データベース。",
+        "domain": "database",
+        "keywords": [
+          "組み込み",
+          "軽量",
+          "ファイルDB"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OGG",
+    "reading": "おーじーじー",
+    "senses": [
+      {
+        "definition": "Oracle系のデータ複製・同期製品。",
+        "domain": "oracle",
+        "keywords": [
+          "GoldenGate",
+          "レプリケーション",
+          "CDC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Oracle GoldenGate"
+    ]
+  },
+  {
+    "term": "PRIMARY KEY",
+    "reading": "ぷらいまりーきー",
+    "senses": [
+      {
+        "definition": "表の中で1行を一意に識別する主キー。",
+        "domain": "database",
+        "keywords": [
+          "主キー",
+          "SQL",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CONSTRAINT",
+    "reading": "こんすとれいんと",
+    "senses": [
+      {
+        "definition": "データの整合性を守るための制約条件。",
+        "domain": "database",
+        "keywords": [
+          "制約",
+          "SQL",
+          "整合性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ストアドプロシージャ",
+    "reading": "すとあどぷろしーじゃ",
+    "senses": [
+      {
+        "definition": "DB内に保存して実行する手続き型プログラム。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "手続き",
+          "PL/SQL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VIEW",
+    "reading": "びゅー（えすきゅーえる）",
+    "senses": [
+      {
+        "definition": "SELECT結果を仮想表として扱う仕組み。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "仮想表",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DBリンク",
+    "reading": "でぃーびーりんく",
+    "senses": [
+      {
+        "definition": "別のデータベースへ接続して参照する仕組み。",
+        "domain": "oracle",
+        "keywords": [
+          "接続",
+          "参照",
+          "リモート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Database Link"
+    ]
+  },
+  {
+    "term": "AWR",
+    "reading": "えーだぶりゅーあーる",
+    "senses": [
+      {
+        "definition": "Oracleの性能統計レポート機能。",
+        "domain": "oracle",
+        "keywords": [
+          "性能",
+          "統計",
+          "チューニング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Automatic Workload Repository"
+    ]
+  },
+  {
+    "term": "pg_repack",
+    "reading": "ぴーじーりぱっく",
+    "senses": [
+      {
+        "definition": "PostgreSQLのテーブルやインデックスを再編成するツール。",
+        "domain": "postgresql",
+        "keywords": [
+          "メンテナンス",
+          "再編成",
+          "VACUUM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CLOB",
+    "reading": "しーろぶ",
+    "senses": [
+      {
+        "definition": "長文テキストを保存するためのデータ型。",
+        "domain": "database",
+        "keywords": [
+          "LOB",
+          "テキスト",
+          "大容量"
+        ]
+      }
+    ],
+    "aliases": [
+      "Character Large Object"
+    ]
+  },
+  {
+    "term": "LOV",
+    "reading": "えるおーぶい",
+    "senses": [
+      {
+        "definition": "選択肢一覧を持つ項目定義で、APEXなどでよく使われる。",
+        "domain": "oracle-apex",
+        "keywords": [
+          "選択肢",
+          "リスト",
+          "APEX"
+        ]
+      },
+      {
+        "definition": "選択肢表示に使う静的または動的な値一覧。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "共通部品",
+          "List of Values"
+        ]
+      }
+    ],
+    "aliases": [
+      "List of Values"
+    ]
+  },
+  {
+    "term": "シナリオテスト",
+    "reading": "しなりおてすと",
+    "senses": [
+      {
+        "definition": "実際の業務の流れに沿って確認するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "業務フロー",
+          "シナリオ",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テストケース",
+    "reading": "てすとけーす",
+    "senses": [
+      {
+        "definition": "何をどう確認するかを定義した個別の試験項目。",
+        "domain": "testing",
+        "keywords": [
+          "テスト項目",
+          "検証",
+          "仕様"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "E2Eテスト",
+    "reading": "いーつーいーてすと",
+    "senses": [
+      {
+        "definition": "画面から裏側処理まで一連で確認するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "エンドツーエンド",
+          "Playwright",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "負荷テスト",
+    "reading": "ふかてすと",
+    "senses": [
+      {
+        "definition": "高いアクセスや大量処理に耐えられるか確認するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "パフォーマンス",
+          "負荷",
+          "JMeter"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リグレッションテスト",
+    "reading": "りぐれっしょんてすと",
+    "senses": [
+      {
+        "definition": "修正による別機能への悪影響がないか確認するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "回帰",
+          "デグレード",
+          "影響確認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テストエビデンス",
+    "reading": "てすとえびでんす",
+    "senses": [
+      {
+        "definition": "テストを実施した証拠となる記録や画面キャプチャ。",
+        "domain": "testing",
+        "keywords": [
+          "証跡",
+          "キャプチャ",
+          "記録"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "デバッグ",
+    "reading": "でばっぐ",
+    "senses": [
+      {
+        "definition": "不具合の原因を特定して修正する作業。",
+        "domain": "development",
+        "keywords": [
+          "バグ",
+          "修正",
+          "調査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質観点",
+    "reading": "ひんしつかんてん",
+    "senses": [
+      {
+        "definition": "テストやレビューで確認すべき着眼点。",
+        "domain": "quality-management",
+        "keywords": [
+          "レビュー",
+          "チェック",
+          "観点"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "死活監視",
+    "reading": "しかつかんし",
+    "senses": [
+      {
+        "definition": "システムが生きているか、応答するかを確認する監視。",
+        "domain": "monitoring",
+        "keywords": [
+          "Ping",
+          "ヘルスチェック",
+          "稼働確認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メンテナンス",
+    "reading": "めんてなんす",
+    "senses": [
+      {
+        "definition": "更新、保守、修正などの維持作業。",
+        "domain": "operations",
+        "keywords": [
+          "保守",
+          "更新",
+          "定期作業"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スケーリング",
+    "reading": "すけーりんぐ",
+    "senses": [
+      {
+        "definition": "負荷に応じて資源量を増減すること。",
+        "domain": "infrastructure",
+        "keywords": [
+          "オートスケール",
+          "拡張",
+          "負荷対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "デプロイ",
+    "reading": "でぷろい",
+    "senses": [
+      {
+        "definition": "アプリや設定を実行環境へ反映すること。",
+        "domain": "development",
+        "keywords": [
+          "リリース",
+          "配備",
+          "CI/CD"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リリース",
+    "reading": "りりーす",
+    "senses": [
+      {
+        "definition": "利用者が使う環境へ正式に公開すること。",
+        "domain": "development",
+        "keywords": [
+          "公開",
+          "デプロイ",
+          "本番"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "cron",
+    "reading": "くろん",
+    "senses": [
+      {
+        "definition": "定期実行ジョブを設定する仕組み。",
+        "domain": "operations",
+        "keywords": [
+          "ジョブ",
+          "スケジュール",
+          "定期実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MFA",
+    "reading": "えむえふえー",
+    "senses": [
+      {
+        "definition": "多要素認証のことで、複数手段で本人確認する方式。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "二要素",
+          "本人確認"
+        ]
+      },
+      {
+        "definition": "複数要素で本人確認する認証方式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "MFA"
+        ]
+      }
+    ],
+    "aliases": [
+      "Multi-Factor Authentication"
+    ]
+  },
+  {
+    "term": "DKIM",
+    "reading": "でぃーきむ",
+    "senses": [
+      {
+        "definition": "送信メールの正当性を検証する署名技術。",
+        "domain": "security",
+        "keywords": [
+          "メール",
+          "署名",
+          "認証"
+        ]
+      }
+    ],
+    "aliases": [
+      "DomainKeys Identified Mail"
+    ]
+  },
+  {
+    "term": "SPF",
+    "reading": "えすぴーえふ",
+    "senses": [
+      {
+        "definition": "送信元メールサーバーの正当性を判定する仕組み。",
+        "domain": "security",
+        "keywords": [
+          "メール",
+          "認証",
+          "送信元"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sender Policy Framework"
+    ]
+  },
+  {
+    "term": "DMARC",
+    "reading": "でぃーまーく",
+    "senses": [
+      {
+        "definition": "SPFやDKIMの結果を基にメールなりすまし対策を行う仕組み。",
+        "domain": "security",
+        "keywords": [
+          "メール",
+          "なりすまし",
+          "認証"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

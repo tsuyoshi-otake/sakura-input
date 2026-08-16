@@ -1,0 +1,1536 @@
+[
+  {
+    "term": "ArgoCD",
+    "senses": [
+      {
+        "definition": "Kubernetes向けのGitOpsベースの継続的デリバリーツール。GitリポジトリをSingle Source of Truthとして、クラスター上のアプリケーション状態を宣言的に管理・同期する。差分可視化と自動同期機能を持つ。",
+        "domain": "devops",
+        "keywords": [
+          "GitOps",
+          "Kubernetes",
+          "CD",
+          "宣言的",
+          "同期"
+        ]
+      }
+    ],
+    "aliases": [
+      "Argo CD"
+    ]
+  },
+  {
+    "term": "Jenkins",
+    "senses": [
+      {
+        "definition": "オープンソースの継続的インテグレーション/デリバリーサーバー。豊富なプラグインエコシステムを持ち、ビルド・テスト・デプロイのパイプラインを柔軟に構築できる。長年の実績を持つCI/CDの定番ツール。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "オープンソース",
+          "プラグイン",
+          "パイプライン",
+          "ビルド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CircleCI",
+    "senses": [
+      {
+        "definition": "クラウドベースのCI/CDプラットフォーム。YAML設定ファイルでワークフローを定義し、Docker環境での高速なビルドとテスト実行を提供する。並列実行やキャッシュ機能でパイプラインを最適化できる。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "クラウド",
+          "YAML",
+          "Docker",
+          "並列実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GitLab CI",
+    "senses": [
+      {
+        "definition": "GitLabに統合されたCI/CDシステム。リポジトリ内の`.gitlab-ci.yml`でパイプラインを定義し、GitLab Runnerで実行する。コードホスティングからデプロイまでを一元管理できる。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "GitLab",
+          "パイプライン",
+          "Runner",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": [
+      "GitLab CI/CD"
+    ]
+  },
+  {
+    "term": "Canary Deployment",
+    "senses": [
+      {
+        "definition": "新バージョンを全体の一部（カナリア）にのみ先行リリースし、問題がなければ段階的に展開するデプロイ手法。炭鉱のカナリアに由来し、リスクを最小化しながら本番環境での動作を検証できる。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "段階リリース",
+          "リスク管理",
+          "Progressive Delivery",
+          "本番検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "カナリアデプロイ"
+    ]
+  },
+  {
+    "term": "Progressive Delivery",
+    "senses": [
+      {
+        "definition": "Feature Flag・カナリアデプロイ・A/Bテストなどを組み合わせ、新機能を段階的かつ制御された方法でリリースするデリバリー手法。リスクを分散しながら継続的にデプロイできる。",
+        "domain": "devops",
+        "keywords": [
+          "カナリア",
+          "Feature Flag",
+          "段階リリース",
+          "リスク管理",
+          "継続的デリバリー"
+        ]
+      }
+    ],
+    "aliases": [
+      "プログレッシブデリバリー"
+    ]
+  },
+  {
+    "term": "Pulumi",
+    "senses": [
+      {
+        "definition": "TypeScript・Python・Go・C#などの汎用プログラミング言語でインフラをコードとして定義するIaCツール。HCLではなく既存の言語スキルを活用でき、複雑なロジックや抽象化が書きやすい。",
+        "domain": "devops",
+        "keywords": [
+          "IaC",
+          "インフラ",
+          "プログラミング言語",
+          "TypeScript",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Chef",
+    "senses": [
+      {
+        "definition": "Rubyベースの構成管理ツール。サーバーの望ましい状態をRecipeとCookbookで記述し、Chef Clientが各ノードで実行して状態を収束させる。大規模インフラの自動化に使われる。",
+        "domain": "devops",
+        "keywords": [
+          "構成管理",
+          "IaC",
+          "自動化",
+          "Ruby",
+          "サーバー管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Puppet",
+    "senses": [
+      {
+        "definition": "宣言的な独自DSLでサーバー構成を記述する構成管理ツール。エージェントベースのアーキテクチャでPuppet Serverから各ノードに構成を配布する。エンタープライズ環境での実績が豊富。",
+        "domain": "devops",
+        "keywords": [
+          "構成管理",
+          "IaC",
+          "宣言的",
+          "エージェント",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "構成ドリフト",
+    "reading": "こうせいどりふと",
+    "senses": [
+      {
+        "definition": "サーバーや環境の実際の状態がIaCで定義された期待状態から乖離していく現象。手動変更や障害対応などで生じる。定期的なドリフト検出と修正によりインフラの一貫性を保つ必要がある。",
+        "domain": "devops",
+        "keywords": [
+          "IaC",
+          "Terraform",
+          "自動化",
+          "状態管理",
+          "一貫性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Configuration Drift",
+      "ドリフト検出"
+    ]
+  },
+  {
+    "term": "プラン",
+    "reading": "ぷらん",
+    "senses": [
+      {
+        "definition": "Terraformで`terraform plan`を実行した際に生成される、実際の変更を適用する前の差分プレビュー。追加・変更・削除されるリソースを確認でき、意図しない変更を防ぐ安全機構として機能する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "差分",
+          "プレビュー",
+          "安全確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "terraform plan"
+    ]
+  },
+  {
+    "term": "アプライ",
+    "reading": "あぷらい",
+    "senses": [
+      {
+        "definition": "Terraformで`terraform apply`を実行して、プランで確認した変更を実際のインフラに適用する操作。プランを承認後に実行し、宣言的に定義されたインフラ状態を実現する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "実行",
+          "適用",
+          "インフラ変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "terraform apply"
+    ]
+  },
+  {
+    "term": "Packer",
+    "senses": [
+      {
+        "definition": "HashiCorpが開発するマシンイメージ自動作成ツール。AMI・DockerイメージなどをコードのテンプレートとしてJSONまたはHCLで定義し、複数のプラットフォーム向けに一貫したイメージを生成できる。",
+        "domain": "devops",
+        "keywords": [
+          "マシンイメージ",
+          "AMI",
+          "HashiCorp",
+          "自動化",
+          "イミュータブルインフラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AMI",
+    "senses": [
+      {
+        "definition": "Amazon Machine Imageの略。AWS EC2インスタンス起動に使用するマシンイメージ。OS・ミドルウェア・アプリケーションをあらかじめ含んだテンプレートで、イミュータブルインフラの基盤となる。",
+        "domain": "devops",
+        "keywords": [
+          "AWS",
+          "EC2",
+          "マシンイメージ",
+          "Packer",
+          "イミュータブル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マシンイメージ",
+    "reading": "ましんいめーじ",
+    "senses": [
+      {
+        "definition": "仮想マシンやクラウドインスタンス起動に使用するOSとソフトウェアを含んだテンプレートファイル。AMI・VMI・Docker imageなどが該当し、イミュータブルインフラにおける基本構成要素となる。",
+        "domain": "devops",
+        "keywords": [
+          "AMI",
+          "仮想マシン",
+          "イミュータブルインフラ",
+          "Packer",
+          "テンプレート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Machine Image"
+    ]
+  },
+  {
+    "term": "環境変数管理",
+    "reading": "かんきょうへんすうかんり",
+    "senses": [
+      {
+        "definition": "APIキー・設定値などの環境変数を安全かつ一貫して管理する仕組み。ハードコードを避けてコードから設定を分離し、環境ごとに異なる値を提供する。Dotenv・クラウドシークレットストアなどで実装する。",
+        "domain": "devops",
+        "keywords": [
+          "設定管理",
+          "12ファクターアプリ",
+          "シークレット",
+          "環境分離",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Environment Variable Management"
+    ]
+  },
+  {
+    "term": "環境分離",
+    "reading": "かんきょうぶんり",
+    "senses": [
+      {
+        "definition": "開発・ステージング・本番などの異なる環境を論理的または物理的に分けて管理すること。設定・データ・インフラを環境ごとに独立させ、本番環境への影響を防ぎながら安全に開発・テストを行える。",
+        "domain": "devops",
+        "keywords": [
+          "開発環境",
+          "ステージング",
+          "本番環境",
+          "設定管理",
+          "IaC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Environment Isolation"
+    ]
+  },
+  {
+    "term": "プレビュー環境",
+    "reading": "ぷれびゅーかんきょう",
+    "senses": [
+      {
+        "definition": "プルリクエストやフィーチャーブランチごとに自動的に作成される一時的なデプロイ環境。実際のURLでコードレビューやQAを行えるため、マージ前の変更確認を効率化する。Vercel・Netlifyなどで標準的。",
+        "domain": "devops",
+        "keywords": [
+          "ephemeral環境",
+          "PR環境",
+          "デプロイ",
+          "レビュー",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Preview Environment",
+      "Preview Deploy"
+    ]
+  },
+  {
+    "term": "ephemeral環境",
+    "reading": "えふぇめらるかんきょう",
+    "senses": [
+      {
+        "definition": "特定の目的（PRテスト・デモ・実験）のために短期間だけ作成され、不要になったら自動的に削除される一時的な環境。インフラコストを抑えながら独立したテスト環境を動的に提供する。",
+        "domain": "devops",
+        "keywords": [
+          "プレビュー環境",
+          "一時環境",
+          "自動削除",
+          "テスト",
+          "PR"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ephemeral Environment",
+      "一時環境"
+    ]
+  },
+  {
+    "term": "GitHub Flow",
+    "senses": [
+      {
+        "definition": "GitHubが提唱するシンプルなブランチ戦略。mainブランチを常にデプロイ可能な状態に保ち、フィーチャーブランチからPRを経てmainにマージするシンプルなフロー。Git Flowより軽量で継続的デリバリーに向く。",
+        "domain": "devops",
+        "keywords": [
+          "ブランチ戦略",
+          "GitHub",
+          "CI/CD",
+          "PR",
+          "フィーチャーブランチ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Turborepo",
+    "senses": [
+      {
+        "definition": "Vercel製の高性能モノレポビルドシステム。タスクのキャッシュとリモートキャッシュ共有により、モノレポのビルドとCI時間を大幅に短縮する。パッケージ間の依存グラフを解析し並列実行を最適化する。",
+        "domain": "devops",
+        "keywords": [
+          "モノレポ",
+          "ビルドシステム",
+          "キャッシュ",
+          "JavaScript",
+          "Vercel"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Nx",
+    "senses": [
+      {
+        "definition": "モノレポ向けのビルドシステム・CLIツール。依存グラフに基づく影響範囲分析で変更されたパッケージのみビルド・テストし、Nx Cloudによるリモートキャッシュで大規模モノレポのCI効率を最大化する。",
+        "domain": "devops",
+        "keywords": [
+          "モノレポ",
+          "ビルドシステム",
+          "影響範囲",
+          "キャッシュ",
+          "JavaScript"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Lerna",
+    "senses": [
+      {
+        "definition": "JavaScriptモノレポの管理ツール。複数パッケージのバージョン管理・公開・依存関係のリンクを自動化する。npm workspacesやyarn workspacesと組み合わせて使われることが多く、monorepository管理の先駆けとなったツール。",
+        "domain": "devops",
+        "keywords": [
+          "モノレポ",
+          "npm",
+          "パッケージ管理",
+          "バージョン管理",
+          "JavaScript"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "changesets",
+    "senses": [
+      {
+        "definition": "モノレポにおけるバージョン管理とCHANGELOG生成を自動化するツール。PRに変更内容を記述したchangesetファイルを追加し、リリース時にsemverバージョンを自動計算してパッケージを公開する。",
+        "domain": "devops",
+        "keywords": [
+          "モノレポ",
+          "semver",
+          "CHANGELOG",
+          "リリース",
+          "バージョン管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "conventional commits",
+    "senses": [
+      {
+        "definition": "コミットメッセージの形式を`feat:`,`fix:`,`chore:`などのプレフィックスで統一する規約。CHANGELOG自動生成・semverバージョン自動計算・リリース自動化ツールと連携するための機械可読な形式を提供する。",
+        "domain": "devops",
+        "keywords": [
+          "コミット",
+          "CHANGELOG",
+          "semver",
+          "自動化",
+          "Git"
+        ]
+      }
+    ],
+    "aliases": [
+      "コンベンショナルコミット"
+    ]
+  },
+  {
+    "term": "release automation",
+    "senses": [
+      {
+        "definition": "バージョン計算・CHANGELOGの生成・タグ付け・パッケージ公開をCIパイプラインで自動化する仕組み。conventional commitsやchangesetsと組み合わせ、手動リリース作業を排除して一貫性のあるリリースを実現する。",
+        "domain": "devops",
+        "keywords": [
+          "リリース",
+          "自動化",
+          "CHANGELOG",
+          "semver",
+          "CI/CD"
+        ]
+      }
+    ],
+    "aliases": [
+      "リリース自動化"
+    ]
+  },
+  {
+    "term": "デプロイゲート",
+    "reading": "でぷろいげーと",
+    "senses": [
+      {
+        "definition": "CI/CDパイプラインの特定ポイントに設けられた自動または手動のチェックポイント。品質チェック・セキュリティスキャン・承認などの条件をクリアしないと次のステージに進めず、不適切なデプロイを防ぐ。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "品質ゲート",
+          "承認",
+          "パイプライン",
+          "デプロイ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deployment Gate"
+    ]
+  },
+  {
+    "term": "デプロイ承認",
+    "reading": "でぷろいしょうにん",
+    "senses": [
+      {
+        "definition": "本番環境などへのデプロイ前に指定された承認者（人間）の明示的な許可を必要とするCI/CDの仕組み。GitHub ActionsのEnvironment保護ルールやGitLab CI のManual Approvalで実装される。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "承認",
+          "本番環境",
+          "ガバナンス",
+          "デプロイゲート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Manual Approval"
+    ]
+  },
+  {
+    "term": "ワークフローエンジン",
+    "reading": "わーくふろーえんじん",
+    "senses": [
+      {
+        "definition": "タスクの実行順序・依存関係・スケジュールを管理し自動化するシステム。Apache Airflow・Temporal・AWS Step Functionsなどが代表例で、複雑な多段階処理を信頼性高く実行する基盤となる。",
+        "domain": "devops",
+        "keywords": [
+          "自動化",
+          "Airflow",
+          "Temporal",
+          "オーケストレーション",
+          "タスク管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Workflow Engine"
+    ]
+  },
+  {
+    "term": "パイプラインオーケストレーション",
+    "reading": "ぱいぷらいんおーけすとれーしょん",
+    "senses": [
+      {
+        "definition": "CI/CDパイプライン内の複数ジョブやステージを、依存関係・条件分岐・並列実行を考慮して統合的に制御すること。複雑なデリバリープロセスを宣言的に定義し、信頼性と可視性を高める。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "パイプライン",
+          "依存関係",
+          "並列",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pipeline Orchestration"
+    ]
+  },
+  {
+    "term": "コンテナレジストリ",
+    "reading": "こんてなれじすとり",
+    "senses": [
+      {
+        "definition": "Dockerイメージなどのコンテナイメージを保存・管理・配布するリポジトリサービス。Docker Hub・Amazon ECR・GitHub Container Registryなどがあり、CI/CDパイプラインでビルドしたイメージを格納してデプロイで使用する。",
+        "domain": "devops",
+        "keywords": [
+          "Docker",
+          "コンテナ",
+          "イメージ",
+          "CI/CD",
+          "ECR"
+        ]
+      }
+    ],
+    "aliases": [
+      "Container Registry",
+      "イメージレジストリ"
+    ]
+  },
+  {
+    "term": "ビルドトリガー",
+    "reading": "びるどとりがー",
+    "senses": [
+      {
+        "definition": "CI/CDパイプラインを起動させるイベント。コードのプッシュ・PRの作成・スケジュール・手動実行・Webhookなどが該当する。適切なトリガー設定によりビルドの頻度と目的を制御する。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "イベント",
+          "自動化",
+          "Webhook",
+          "スケジュール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Build Trigger",
+      "Pipeline Trigger"
+    ]
+  },
+  {
+    "term": "エフェメラルランナー",
+    "reading": "えふぇめらるらんなー",
+    "senses": [
+      {
+        "definition": "CI/CDのジョブを1回だけ実行して即座に廃棄される使い捨てのランナー（エージェント）。セキュリティとクリーンな実行環境を保証し、ジョブ間での状態汚染を防ぐ。GitHub ActionsのEphemeral Runnersが代表例。",
+        "domain": "devops",
+        "keywords": [
+          "GitHub Actions",
+          "ランナー",
+          "セキュリティ",
+          "使い捨て",
+          "CI/CD"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ephemeral Runner"
+    ]
+  },
+  {
+    "term": "シークレットスコープ",
+    "reading": "しーくれっとすこーぷ",
+    "senses": [
+      {
+        "definition": "CI/CDシステムにおいてシークレット（APIキーや認証情報）が参照可能な範囲の定義。Organization・リポジトリ・環境（Environment）の3レベルで管理でき、最小権限の原則に基づいてアクセスを制限する。",
+        "domain": "devops",
+        "keywords": [
+          "シークレット管理",
+          "GitHub Actions",
+          "アクセス制御",
+          "セキュリティ",
+          "最小権限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Secret Scope"
+    ]
+  },
+  {
+    "term": "environment protection rules",
+    "senses": [
+      {
+        "definition": "GitHub Actionsにおいて本番・ステージングなどの環境へのデプロイを保護するルール設定。承認者の指定・ブランチフィルター・待機時間などを設定でき、意図しないデプロイや不正アクセスを防ぐ。",
+        "domain": "devops",
+        "keywords": [
+          "GitHub Actions",
+          "デプロイ保護",
+          "承認",
+          "本番環境",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "環境保護ルール",
+      "デプロイメント保護"
+    ]
+  },
+  {
+    "term": "デプロイメントロック",
+    "reading": "でぷろいめんとろっく",
+    "senses": [
+      {
+        "definition": "デプロイ中に他のデプロイが同時実行されないようにロックする仕組み。競合するデプロイを防ぎ、環境の整合性を保つ。GitHub ActionsのConcurrencyグループやTerraformのステートロックが代表例。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "競合防止",
+          "Terraform",
+          "ステートロック",
+          "GitHub Actions"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deployment Lock",
+      "ステートロック"
+    ]
+  },
+  {
+    "term": "Open Policy Agent",
+    "senses": [
+      {
+        "definition": "汎用的なポリシーエンジン。RegoというDSLでポリシーを記述し、Kubernetes AdmissionController・Terraform・API認可など様々な場面でポリシーの評価・適用を一元化できる。CNCFの卒業プロジェクト。",
+        "domain": "devops",
+        "keywords": [
+          "OPA",
+          "policy as code",
+          "Rego",
+          "Kubernetes",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "OPA"
+    ]
+  },
+  {
+    "term": "Conftest",
+    "senses": [
+      {
+        "definition": "TerraformのプランやKubernetesマニフェストなどの構造化データに対してOPA（Rego）ポリシーをテストするCLIツール。CI/CDパイプラインにポリシーチェックを組み込むことでガバナンスを自動化する。",
+        "domain": "devops",
+        "keywords": [
+          "OPA",
+          "Rego",
+          "policy as code",
+          "Terraform",
+          "Kubernetes"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Checkov",
+    "senses": [
+      {
+        "definition": "Terraform・CloudFormation・Kubernetes・Dockerfileなどのインフラコードを静的解析してセキュリティとコンプライアンスの問題を検出するオープンソースツール。CI/CDパイプラインへの統合でDevSecOpsを推進する。",
+        "domain": "devops",
+        "keywords": [
+          "IaC",
+          "静的解析",
+          "セキュリティ",
+          "コンプライアンス",
+          "DevSecOps"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "tfsec",
+    "senses": [
+      {
+        "definition": "TerraformコードのセキュリティリスクをCI段階で検出する静的解析ツール。AWSやGCPなどクラウドプロバイダーのベストプラクティスに基づくルールでS3バケットの公開設定ミスなどを検出する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "セキュリティ",
+          "静的解析",
+          "IaC",
+          "DevSecOps"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Trivy",
+    "senses": [
+      {
+        "definition": "コンテナイメージ・ファイルシステム・Gitリポジトリ・IaCファイルの脆弱性やシークレット漏えいを包括的にスキャンするオープンソースのセキュリティスキャナー。CI/CDパイプラインへの統合が容易で幅広く採用されている。",
+        "domain": "devops",
+        "keywords": [
+          "コンテナ",
+          "脆弱性スキャン",
+          "セキュリティ",
+          "CI/CD",
+          "SBOM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SLSA",
+    "senses": [
+      {
+        "definition": "Supply chain Levels for Software Artifactsの略。Googleが提唱するソフトウェアサプライチェーンのセキュリティフレームワーク。ソースコード・ビルド・依存関係の整合性保証をレベル1〜4の段階で定義する。",
+        "domain": "devops",
+        "keywords": [
+          "サプライチェーン",
+          "セキュリティ",
+          "ビルド整合性",
+          "署名",
+          "SBOM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Supply chain Levels for Software Artifacts"
+    ]
+  },
+  {
+    "term": "スタック",
+    "reading": "すたっく",
+    "senses": [
+      {
+        "definition": "Terraform・CloudFormationなどのIaCにおいて、一緒にデプロイ・管理されるリソースの集合単位。環境（dev/staging/prod）やサービスごとにスタックを分けることでリソース管理の境界を明確にする。",
+        "domain": "devops",
+        "keywords": [
+          "IaC",
+          "Terraform",
+          "CloudFormation",
+          "リソース管理",
+          "環境分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stack",
+      "IaCスタック"
+    ]
+  },
+  {
+    "term": "バックエンド設定",
+    "reading": "ばっくえんどせってい",
+    "senses": [
+      {
+        "definition": "TerraformのステートファイルをどこにどのVように保存するかを定義する設定。S3+DynamoDBやTerraform Cloudなどのリモートバックエンドを使うことでチームでのステート共有とロック機能を実現する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "ステート",
+          "S3",
+          "リモートステート",
+          "バックエンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Backend Configuration",
+      "Terraformバックエンド"
+    ]
+  },
+  {
+    "term": "リモートステート",
+    "reading": "りもーとすてーと",
+    "senses": [
+      {
+        "definition": "Terraformのステートファイルをローカルではなくリモートストレージ（S3・GCS・Terraform Cloud）に保存する構成。チームでの同時作業時のステート競合を防ぎ、ステートのバックアップと共有を実現する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "ステート",
+          "S3",
+          "バックエンド",
+          "チーム開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "Remote State"
+    ]
+  },
+  {
+    "term": "モジュールレジストリ",
+    "reading": "もじゅーるれじすとり",
+    "senses": [
+      {
+        "definition": "再利用可能なTerraformモジュールを公開・共有するためのリポジトリ。Terraform Registryが公式で提供しており、VPCやEKSクラスターなどの実績あるモジュールを活用してインフラの標準化と再利用を促進できる。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "モジュール",
+          "再利用",
+          "IaC",
+          "共有"
+        ]
+      }
+    ],
+    "aliases": [
+      "Module Registry"
+    ]
+  },
+  {
+    "term": "プロビジョナー",
+    "reading": "ぷろびじょなー",
+    "senses": [
+      {
+        "definition": "TerraformでリソースのCREATEやDESTROY時にローカルやリモートマシン上でスクリプトを実行する仕組み。Terraform公式では最終手段として位置づけられており、可能な限りcloud-initやAnsibleで代替することが推奨される。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "スクリプト",
+          "プロビジョニング",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Provisioner"
+    ]
+  },
+  {
+    "term": "データソース",
+    "reading": "でーたそーす",
+    "senses": [
+      {
+        "definition": "TerraformでIaC管理外の既存リソース情報を読み取るための宣言。`data`ブロックで定義し、他のリソースの設定値（VPC IDやAMI IDなど）を動的に参照するために使う。リソースを作成するのではなく読み取るだけ。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "参照",
+          "既存リソース",
+          "動的値"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Source"
+    ]
+  },
+  {
+    "term": "リソースグラフ",
+    "reading": "りそーすぐらふ",
+    "senses": [
+      {
+        "definition": "TerraformがHCLコードを解析して生成する、リソース間の依存関係を表す有向非循環グラフ（DAG）。このグラフに基づいて独立したリソースは並列に、依存するリソースは順次プロビジョニングされる。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "DAG",
+          "依存関係",
+          "並列実行",
+          "IaC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Resource Graph",
+      "依存グラフ"
+    ]
+  },
+  {
+    "term": "ルートモジュール",
+    "reading": "るーともじゅーる",
+    "senses": [
+      {
+        "definition": "Terraformを実行するディレクトリ内のHCLファイル群のこと。`terraform init`や`terraform plan`を実行するトップレベルのモジュールで、他のモジュールを呼び出してインフラ全体を構成する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "モジュール",
+          "IaC",
+          "ディレクトリ",
+          "エントリーポイント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Root Module"
+    ]
+  },
+  {
+    "term": "本番環境",
+    "reading": "ほんばんかんきょう",
+    "senses": [
+      {
+        "definition": "実際のエンドユーザーが利用する本番稼働中の環境。他の環境と最も厳格に分離され、変更はCI/CDパイプラインを通じた承認フローを経てのみ適用される。可用性・セキュリティ・パフォーマンスが最優先される。",
+        "domain": "devops",
+        "keywords": [
+          "環境管理",
+          "デプロイ",
+          "可用性",
+          "セキュリティ",
+          "環境分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "Production Environment",
+      "prod",
+      "production"
+    ]
+  },
+  {
+    "term": "開発環境",
+    "reading": "かいはつかんきょう",
+    "senses": [
+      {
+        "definition": "開発者が機能開発やデバッグを行うための環境。本番と分離されており、試行錯誤やデータ汚染が許容される。ローカル環境・共有dev環境・クラウドdev環境などの形態があり、開発生産性を支える基盤となる。",
+        "domain": "devops",
+        "keywords": [
+          "環境管理",
+          "ローカル開発",
+          "デバッグ",
+          "環境分離",
+          "開発効率"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development Environment",
+      "dev環境"
+    ]
+  },
+  {
+    "term": "カナリア分析",
+    "reading": "かなりあぶんせき",
+    "senses": [
+      {
+        "definition": "カナリアデプロイ中に新旧バージョン間のエラー率・レイテンシ・ビジネス指標を自動的に比較分析する仕組み。Kayentaなどのツールで統計的に有意な差異を検出し、自動的にロールバックまたは展開継続を判断する。",
+        "domain": "devops",
+        "keywords": [
+          "カナリアデプロイ",
+          "メトリクス比較",
+          "自動分析",
+          "Progressive Delivery",
+          "Kayenta"
+        ]
+      }
+    ],
+    "aliases": [
+      "Canary Analysis",
+      "自動カナリア分析"
+    ]
+  },
+  {
+    "term": "デプロイ戦略",
+    "reading": "でぷろいせんりゃく",
+    "senses": [
+      {
+        "definition": "新バージョンのアプリケーションをどのように本番環境に展開するかの方針。Recreate・Rolling Update・Blue-Green・Canaryなど複数の手法があり、ダウンタイム許容度・リスク・コストを考慮して選択する。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "Blue-Green",
+          "カナリア",
+          "ローリング",
+          "リスク管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deployment Strategy"
+    ]
+  },
+  {
+    "term": "ゼロダウンタイムデプロイ",
+    "reading": "ぜろだうんたいむでぷろい",
+    "senses": [
+      {
+        "definition": "サービスを停止せずにアプリケーションの新バージョンをデプロイする手法の総称。Rolling Update・Blue-Green Deployment・Canary Deploymentなどの戦略によって実現し、ユーザー体験を損なわずにリリースを行う。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "可用性",
+          "Blue-Green",
+          "ローリング",
+          "サービス継続"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zero Downtime Deployment",
+      "ゼロダウンタイムリリース"
+    ]
+  },
+  {
+    "term": "パッチリリース",
+    "reading": "ぱっちりりーす",
+    "senses": [
+      {
+        "definition": "SemVerにおけるPATCH番号のインクリメント（例: 1.2.3→1.2.4）。後方互換性のあるバグ修正のみを含む小規模なリリース。ユーザーへの影響が最小限で、自動アップグレードが推奨されるリリース種別。",
+        "domain": "devops",
+        "keywords": [
+          "SemVer",
+          "バグ修正",
+          "リリース",
+          "互換性",
+          "バージョン管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Patch Release"
+    ]
+  },
+  {
+    "term": "マイナーリリース",
+    "reading": "まいなーりりーす",
+    "senses": [
+      {
+        "definition": "SemVerにおけるMINOR番号のインクリメント（例: 1.2.0→1.3.0）。後方互換性を保ちながら新機能を追加するリリース。既存のAPIや動作は壊さず、新しい機能・改善・deprecation通知を含む。",
+        "domain": "devops",
+        "keywords": [
+          "SemVer",
+          "新機能",
+          "リリース",
+          "互換性",
+          "バージョン管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Minor Release"
+    ]
+  },
+  {
+    "term": "メジャーリリース",
+    "reading": "めじゃーりりーす",
+    "senses": [
+      {
+        "definition": "SemVerにおけるMAJOR番号のインクリメント（例: 1.0.0→2.0.0）。後方互換性のない破壊的変更を含むリリース。API変更や動作変更を伴い、利用者は移行作業が必要になる可能性がある。",
+        "domain": "devops",
+        "keywords": [
+          "SemVer",
+          "破壊的変更",
+          "リリース",
+          "バージョン管理",
+          "移行"
+        ]
+      }
+    ],
+    "aliases": [
+      "Major Release"
+    ]
+  },
+  {
+    "term": "CHANGELOGの自動生成",
+    "reading": "ちぇんじろぐのじどうせいせい",
+    "senses": [
+      {
+        "definition": "conventional commitsやchangesetsのデータをもとに、リリースごとの変更内容リストを自動的に生成する仕組み。手動での記述負荷をなくし、リリースノートを一貫したフォーマットで管理できる。",
+        "domain": "devops",
+        "keywords": [
+          "CHANGELOG",
+          "conventional commits",
+          "changesets",
+          "リリース",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "CHANGELOG生成",
+      "自動CHANGELOG"
+    ]
+  },
+  {
+    "term": "テストパイプライン",
+    "reading": "てすとぱいぷらいん",
+    "senses": [
+      {
+        "definition": "CI/CDの中でテスト実行を担うパイプラインまたはステージ群。ユニットテスト・統合テスト・E2Eテスト・パフォーマンステストを自動実行し、品質ゲートとしてデプロイの可否を判断する。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "テスト自動化",
+          "品質ゲート",
+          "ユニットテスト",
+          "E2E"
+        ]
+      }
+    ],
+    "aliases": [
+      "Test Pipeline"
+    ]
+  },
+  {
+    "term": "ステージングパイプライン",
+    "reading": "すてーじんぐぱいぷらいん",
+    "senses": [
+      {
+        "definition": "本番環境と同等の構成を持つステージング環境へのデプロイと検証を行うCI/CDパイプラインのフェーズ。本番前の最終確認環境として機能し、統合テスト・UAT・パフォーマンステストを実施する。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "ステージング",
+          "本番前確認",
+          "UAT",
+          "デプロイ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Staging Pipeline"
+    ]
+  },
+  {
+    "term": "セキュリティスキャン",
+    "reading": "せきゅりてぃすきゃん",
+    "senses": [
+      {
+        "definition": "CI/CDパイプラインに組み込まれた自動セキュリティチェック。依存ライブラリの脆弱性・コンテナイメージのCVE・IaCの設定ミス・シークレット漏えいなどをビルド段階で検出してデプロイを阻止する。",
+        "domain": "devops",
+        "keywords": [
+          "DevSecOps",
+          "脆弱性",
+          "CI/CD",
+          "Trivy",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Scan",
+      "セキュリティチェック"
+    ]
+  },
+  {
+    "term": "SonarQube",
+    "senses": [
+      {
+        "definition": "コードの静的解析プラットフォーム。バグ・コードスメル・セキュリティホットスポット・テストカバレッジを可視化し、品質ゲートを設定してCI/CDパイプラインで基準未満のコードのマージを防止する。",
+        "domain": "devops",
+        "keywords": [
+          "静的解析",
+          "コード品質",
+          "品質ゲート",
+          "CI/CD",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コードカバレッジゲート",
+    "reading": "こーどかばれっじげーと",
+    "senses": [
+      {
+        "definition": "CI/CDパイプラインにおいてテストのコードカバレッジが設定した閾値（例: 80%）を下回った場合にビルドを失敗させる品質ゲート。カバレッジの低下を検知してテスト不足のコードのマージを防ぐ。",
+        "domain": "devops",
+        "keywords": [
+          "テストカバレッジ",
+          "品質ゲート",
+          "CI/CD",
+          "テスト",
+          "SonarQube"
+        ]
+      }
+    ],
+    "aliases": [
+      "Coverage Gate"
+    ]
+  },
+  {
+    "term": "パフォーマンステスト",
+    "reading": "ぱふぉーまんすてすと",
+    "senses": [
+      {
+        "definition": "システムの応答速度・スループット・リソース使用量などのパフォーマンス特性を計測するテスト。負荷テスト・ストレステスト・耐久テストなどを含み、CI/CDパイプラインに組み込んでパフォーマンス劣化を検出する。",
+        "domain": "devops",
+        "keywords": [
+          "テスト",
+          "負荷",
+          "スループット",
+          "CI/CD",
+          "k6"
+        ]
+      }
+    ],
+    "aliases": [
+      "Performance Test"
+    ]
+  },
+  {
+    "term": "サニティテスト",
+    "reading": "さにてぃてすと",
+    "senses": [
+      {
+        "definition": "デプロイ直後や環境構築後に、システムの基本的な機能が正常に動作しているかを素早く確認する軽量なテスト。スモークテストに近いが、特定の機能が正常かの簡易確認に重点を置く点が異なる。",
+        "domain": "devops",
+        "keywords": [
+          "テスト",
+          "デプロイ後確認",
+          "スモークテスト",
+          "CI/CD",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sanity Test"
+    ]
+  },
+  {
+    "term": "回帰テスト自動化",
+    "reading": "かいきてすとじどうか",
+    "senses": [
+      {
+        "definition": "コード変更による既存機能の破損（デグレード）を検出するため、既存のテストスイートをCI/CDで自動実行する仕組み。デプロイのたびに全回帰テストが走ることで品質を継続的に担保する。",
+        "domain": "devops",
+        "keywords": [
+          "回帰テスト",
+          "CI/CD",
+          "デグレード",
+          "自動化",
+          "品質保証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Regression Test Automation"
+    ]
+  },
+  {
+    "term": "インフラテスト",
+    "reading": "いんふらてすと",
+    "senses": [
+      {
+        "definition": "IaCコードが意図したインフラを正しく構成するかを検証するテスト。Terratest・Kitchen-Terraform・Pulumi Testing APIなどを使い、実際にリソースをデプロイして動作を検証する統合テスト的アプローチ。",
+        "domain": "devops",
+        "keywords": [
+          "IaC",
+          "Terraform",
+          "Terratest",
+          "テスト",
+          "インフラ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Infrastructure Test",
+      "Terratest"
+    ]
+  },
+  {
+    "term": "内部開発者ポータル",
+    "reading": "ないぶかいはつしゃぽーたる",
+    "senses": [
+      {
+        "definition": "開発者がサービス・APIドキュメント・インフラリソース・デプロイ履歴などを一か所から探せるセルフサービスの内部ポータル。BackstageなどのIDPにより、開発者の認知負荷を下げてゴールデンパスを提供する。",
+        "domain": "devops",
+        "keywords": [
+          "Backstage",
+          "プラットフォームエンジニアリング",
+          "IDP",
+          "開発効率",
+          "カタログ"
+        ]
+      }
+    ],
+    "aliases": [
+      "IDP",
+      "Internal Developer Portal",
+      "Backstage"
+    ]
+  },
+  {
+    "term": "平均復旧時間",
+    "reading": "へいきんふっきゅうじかん",
+    "senses": [
+      {
+        "definition": "DORAメトリクスの一つ（MTTR）。本番環境で障害が発生してから復旧するまでにかかる平均時間。低いMTTRはインシデント対応能力と可観測性の高さを示し、ロールバックの自動化やカナリアデプロイが短縮に寄与する。",
+        "domain": "devops",
+        "keywords": [
+          "DORAメトリクス",
+          "MTTR",
+          "障害対応",
+          "可観測性",
+          "インシデント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mean Time to Recovery"
+    ]
+  },
+  {
+    "term": "変更リードタイム",
+    "reading": "へんこうりーどたいむ",
+    "senses": [
+      {
+        "definition": "DORAメトリクスの一つ。コードのコミットから本番稼働までにかかる時間。エリートチームでは1時間未満を達成する。短いリードタイムはCI/CDパイプラインの効率と自動化の成熟度を反映する。",
+        "domain": "devops",
+        "keywords": [
+          "DORAメトリクス",
+          "CI/CD",
+          "継続的デリバリー",
+          "デプロイ",
+          "リードタイム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lead Time for Changes",
+      "Change Lead Time"
+    ]
+  },
+  {
+    "term": "Kustomize",
+    "senses": [
+      {
+        "definition": "Kubernetesマニフェストを基本テンプレートに対するパッチや上書きで環境ごとにカスタマイズするツール。HelmのようなテンプレートエンジンではなくYAMLの差分合成で動作し、kubectl buildに統合されている。",
+        "domain": "devops",
+        "keywords": [
+          "Kubernetes",
+          "マニフェスト",
+          "環境設定",
+          "IaC",
+          "GitOps"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Helmチャート",
+    "reading": "へるむちゃーと",
+    "senses": [
+      {
+        "definition": "Kubernetesアプリケーションのパッケージング形式。テンプレート化されたKubernetesマニフェストとデフォルト値（values.yaml）をまとめたもので、Helm CLIで管理・インストールする。複雑なK8sアプリの配布を標準化する。",
+        "domain": "devops",
+        "keywords": [
+          "Helm",
+          "Kubernetes",
+          "パッケージ",
+          "マニフェスト",
+          "テンプレート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Helm Chart",
+      "Helm"
+    ]
+  },
+  {
+    "term": "Terraform Cloud",
+    "senses": [
+      {
+        "definition": "HashiCorpが提供するTerraformのマネージドSaaS。リモートステート管理・リモート実行・VCS連携・コスト見積もり・Sentinelポリシー適用などを提供し、チームでのTerraform運用を一元化する。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "HashiCorp",
+          "IaC",
+          "マネージドサービス",
+          "チーム開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "HCP Terraform"
+    ]
+  },
+  {
+    "term": "DORAメトリクス",
+    "reading": "どらめとりくす",
+    "senses": [
+      {
+        "definition": "DevOps Research and Assessmentが定義するソフトウェアデリバリーのパフォーマンス指標群。デプロイメント頻度・変更リードタイム・変更失敗率・平均復旧時間の4指標でエンジニアリング組織の成熟度を測る。",
+        "domain": "devops",
+        "keywords": [
+          "DORA",
+          "デプロイ",
+          "リードタイム",
+          "障害",
+          "CI/CD"
+        ]
+      }
+    ],
+    "aliases": [
+      "DORA Metrics"
+    ]
+  },
+  {
+    "term": "シフトレフト",
+    "reading": "しふとれふと",
+    "senses": [
+      {
+        "definition": "テスト・セキュリティ・品質チェックをソフトウェア開発ライフサイクルの早い段階（左側）に移動させるアプローチ。CI/CDパイプラインの早期段階でバグや脆弱性を発見することでコスト削減と品質向上を実現する。",
+        "domain": "devops",
+        "keywords": [
+          "CI/CD",
+          "テスト",
+          "セキュリティ",
+          "DevSecOps",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Shift Left",
+      "シフトレフトテスト"
+    ]
+  },
+  {
+    "term": "Terragrunt",
+    "senses": [
+      {
+        "definition": "TerraformのDRY（Don't Repeat Yourself）を実現するラッパーツール。複数環境・複数モジュール間でのバックエンド設定やプロバイダー設定の重複を排除し、大規模なTerraformコードベースの管理を容易にする。",
+        "domain": "devops",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "DRY",
+          "環境管理",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Renovate",
+    "senses": [
+      {
+        "definition": "依存ライブラリのバージョンを自動的に更新するPRを作成するボット。Dependabotと並ぶ依存更新自動化ツールで、細かいスケジュール設定・自動マージルール・グループ更新など高度なカスタマイズが可能。",
+        "domain": "devops",
+        "keywords": [
+          "依存関係",
+          "自動更新",
+          "PR",
+          "セキュリティ",
+          "バージョン管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Renovate Bot"
+    ]
+  },
+  {
+    "term": "CHANGELOG自動生成",
+    "reading": "ちぇんじろぐじどうせいせい",
+    "senses": [
+      {
+        "definition": "Gitコミット履歴やプルリクエスト情報から変更履歴ファイルを自動的に生成する機能です。リリースノートの作成を効率化します。",
+        "domain": "devops",
+        "keywords": [
+          "CHANGELOG",
+          "自動生成",
+          "リリースノート",
+          "Git"
+        ]
+      }
+    ],
+    "aliases": [
+      "CHANGELOG Auto-Generation"
+    ]
+  }
+]

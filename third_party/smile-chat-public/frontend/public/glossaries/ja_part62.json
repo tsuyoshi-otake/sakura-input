@@ -1,0 +1,1726 @@
+[
+  {
+    "term": "MQTT",
+    "aliases": [
+      "Message Queuing Telemetry Transport"
+    ],
+    "senses": [
+      {
+        "definition": "IoT向けの軽量パブリッシュ/サブスクライブ型メッセージプロトコル。TCP/IP上で動作し、ブローカーを介してデバイス間でメッセージをやり取りする。帯域幅が限られたセンサーネットワークや電力制約のある組込みデバイスで広く使われる。",
+        "domain": "iot",
+        "keywords": [
+          "プロトコル",
+          "パブリッシュ",
+          "サブスクライブ",
+          "ブローカー",
+          "センサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CoAP",
+    "aliases": [
+      "Constrained Application Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "リソース制約のあるIoTデバイス向けに設計された軽量なRESTfulプロトコル。UDP上で動作しHTTPと類似のリクエスト/レスポンスモデルを持ち、低電力センサーネットワークやM2M通信に適している。",
+        "domain": "iot",
+        "keywords": [
+          "プロトコル",
+          "UDP",
+          "REST",
+          "軽量",
+          "センサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AMQP",
+    "aliases": [
+      "Advanced Message Queuing Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "エンタープライズメッセージングのための標準プロトコル。信頼性の高いメッセージキューイング、柔軟なルーティング、トランザクション機能を提供し、RabbitMQなどのブローカーが実装する。",
+        "domain": "iot",
+        "keywords": [
+          "メッセージキュー",
+          "プロトコル",
+          "ブローカー",
+          "信頼性",
+          "エンタープライズ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フォグコンピューティング",
+    "aliases": [
+      "Fog Computing"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドとエッジデバイスの中間層でデータ処理を行うアーキテクチャ。ゲートウェイやローカルサーバーで処理することでクラウドへの通信量を削減し、レイテンシを低減してリアルタイム性を高める。",
+        "domain": "iot",
+        "keywords": [
+          "エッジ",
+          "クラウド",
+          "分散処理",
+          "ゲートウェイ",
+          "レイテンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RTOS",
+    "aliases": [
+      "Real-Time Operating System",
+      "リアルタイムOS"
+    ],
+    "senses": [
+      {
+        "definition": "厳密なタイミング要件を満たすことを保証するオペレーティングシステム。タスクの実行時間に上限を設け決定論的な応答を提供する。組込みシステムや産業制御装置、航空宇宙機器で使われる。",
+        "domain": "iot",
+        "keywords": [
+          "リアルタイム",
+          "組込み",
+          "タスク",
+          "スケジューリング",
+          "決定論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "FreeRTOS",
+    "senses": [
+      {
+        "definition": "マイクロコントローラ向けのオープンソースリアルタイムOSカーネル。小フットプリントで多くのMCUアーキテクチャに移植されており、AWSがサポートするIoTデバイス向けの標準的な選択肢の一つ。",
+        "domain": "iot",
+        "keywords": [
+          "RTOS",
+          "組込み",
+          "マイクロコントローラ",
+          "オープンソース",
+          "AWS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マイクロコントローラ",
+    "reading": "まいくろこんとろーら",
+    "aliases": [
+      "MCU",
+      "Microcontroller"
+    ],
+    "senses": [
+      {
+        "definition": "CPU、メモリ、I/Oペリフェラルを1チップに集積した小型コンピュータ。低コスト・低消費電力で組込み制御に特化しており、ArduinoやSTM32、ESP32などのファミリーが代表例として挙げられる。",
+        "domain": "iot",
+        "keywords": [
+          "組込み",
+          "チップ",
+          "CPU",
+          "メモリ",
+          "制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "FPGA",
+    "aliases": [
+      "Field-Programmable Gate Array"
+    ],
+    "senses": [
+      {
+        "definition": "製造後にユーザーが論理回路を書き換え可能なプログラマブル半導体デバイス。ハードウェア並列処理に優れ、信号処理や機械学習推論の高速化、ASICのプロトタイプ設計などに活用される。",
+        "domain": "iot",
+        "keywords": [
+          "ハードウェア",
+          "論理回路",
+          "並列処理",
+          "プログラマブル",
+          "ASIC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GPIO",
+    "aliases": [
+      "General Purpose Input/Output"
+    ],
+    "senses": [
+      {
+        "definition": "マイクロコントローラやSBCが持つ汎用デジタル入出力ピン。センサーの読み取り、LEDやリレーの制御、外部デバイスとの信号通信など多様な用途に対応する基本的なインターフェース。",
+        "domain": "iot",
+        "keywords": [
+          "ピン",
+          "デジタル",
+          "入出力",
+          "センサー",
+          "制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "I2C",
+    "aliases": [
+      "Inter-Integrated Circuit"
+    ],
+    "senses": [
+      {
+        "definition": "2本の信号線（SDA、SCL）で複数のデバイスを接続できるシリアル通信プロトコル。センサーやEEPROMなどの短距離通信に広く使われ、アドレス指定により同一バスで複数スレーブを管理できる。",
+        "domain": "iot",
+        "keywords": [
+          "シリアル通信",
+          "プロトコル",
+          "センサー",
+          "マイコン",
+          "バス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SPI",
+    "aliases": [
+      "Serial Peripheral Interface"
+    ],
+    "senses": [
+      {
+        "definition": "4本の信号線を使うフル二重シリアル通信プロトコル。I2Cより高速で、ディスプレイ・SDカード・ADCなどとの通信に使われる。マスター/スレーブ構成で複数デバイスをチップセレクトで切り替える。",
+        "domain": "iot",
+        "keywords": [
+          "シリアル通信",
+          "プロトコル",
+          "マスター",
+          "スレーブ",
+          "高速"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UART",
+    "aliases": [
+      "Universal Asynchronous Receiver/Transmitter"
+    ],
+    "senses": [
+      {
+        "definition": "クロック信号なしに非同期でシリアル通信を行うハードウェアインターフェース。GPSモジュールやBluetooth機器、デバッグコンソールとの通信に広く使われ、ボーレートで通信速度を設定する。",
+        "domain": "iot",
+        "keywords": [
+          "シリアル通信",
+          "非同期",
+          "デバッグ",
+          "組込み",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PWM",
+    "aliases": [
+      "Pulse Width Modulation",
+      "パルス幅変調"
+    ],
+    "senses": [
+      {
+        "definition": "デジタル信号のパルス幅（デューティ比）を変化させてアナログ量を模擬する技術。DCモーターの速度制御、LEDの輝度調整、サーボモーター制御など組込みシステムで幅広く使われる。",
+        "domain": "iot",
+        "keywords": [
+          "デジタル",
+          "アナログ",
+          "モーター",
+          "制御",
+          "デューティ比"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "センサーフュージョン",
+    "aliases": [
+      "Sensor Fusion"
+    ],
+    "senses": [
+      {
+        "definition": "複数のセンサーデータを統合して単一センサーでは得られない精度や情報を導き出す技術。加速度計・ジャイロスコープ・磁気センサーを組み合わせたカルマンフィルタによる姿勢推定が代表例。",
+        "domain": "iot",
+        "keywords": [
+          "センサー",
+          "統合",
+          "精度",
+          "姿勢推定",
+          "カルマンフィルタ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デジタルツイン",
+    "aliases": [
+      "Digital Twin"
+    ],
+    "senses": [
+      {
+        "definition": "物理的なオブジェクトや環境をリアルタイムにデジタル空間に再現した仮想モデル。センサーデータを継続的に受け取りシミュレーションや予知保全、最適化に活用されるIoT基盤技術。",
+        "domain": "iot",
+        "keywords": [
+          "IoT",
+          "シミュレーション",
+          "仮想モデル",
+          "予知保全",
+          "クラウド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OTAアップデート",
+    "reading": "おーてぃーえーあっぷでーと",
+    "aliases": [
+      "Over-The-Air Update",
+      "OTA"
+    ],
+    "senses": [
+      {
+        "definition": "デバイスのファームウェアやソフトウェアを無線通信経由でリモートから更新する仕組み。物理アクセスなしにセキュリティパッチや機能追加を大量デバイスに一斉展開できる重要な運用機能。",
+        "domain": "iot",
+        "keywords": [
+          "ファームウェア",
+          "更新",
+          "無線",
+          "リモート",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ファームウェア",
+    "aliases": [
+      "Firmware"
+    ],
+    "senses": [
+      {
+        "definition": "ハードウェアに組み込まれた低レベルのソフトウェア。ROMやフラッシュメモリに格納されデバイスの基本動作を制御する。マイクロコントローラ、ルーター、IoTデバイスの動作の核となる。",
+        "domain": "iot",
+        "keywords": [
+          "組込み",
+          "ソフトウェア",
+          "フラッシュ",
+          "ROM",
+          "制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ウォッチドッグタイマー",
+    "reading": "うぉっちどっぐたいまー",
+    "aliases": [
+      "Watchdog Timer",
+      "WDT"
+    ],
+    "senses": [
+      {
+        "definition": "システムのハングアップやフリーズを検出して自動リセットをかけるハードウェアタイマー。ソフトウェアが定期的にタイマーをクリアしない場合にリセット信号を発生させ、デバイスの自律回復を実現する。",
+        "domain": "iot",
+        "keywords": [
+          "組込み",
+          "リセット",
+          "信頼性",
+          "ハング",
+          "フォールトトレランス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "割り込み",
+    "reading": "わりこみ",
+    "aliases": [
+      "Interrupt",
+      "IRQ"
+    ],
+    "senses": [
+      {
+        "definition": "外部イベントや内部条件に応じてCPUが現在の処理を中断し、割り込みハンドラを実行する仕組み。リアルタイム応答を実現するための基本メカニズムで、RTOS設計の中核をなす概念。",
+        "domain": "iot",
+        "keywords": [
+          "CPU",
+          "ハンドラ",
+          "リアルタイム",
+          "イベント",
+          "組込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DMA",
+    "aliases": [
+      "Direct Memory Access"
+    ],
+    "senses": [
+      {
+        "definition": "CPUを介さずに周辺デバイスとメモリ間でデータを直接転送するコントローラ。大量データの転送中にCPUを他の処理に使えるため、システム全体のスループットとエネルギー効率が向上する。",
+        "domain": "iot",
+        "keywords": [
+          "メモリ",
+          "転送",
+          "CPU",
+          "効率",
+          "ペリフェラル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "メモリマップドI/O",
+    "reading": "めもりまっぷどあいおー",
+    "aliases": [
+      "Memory-Mapped I/O",
+      "MMIO"
+    ],
+    "senses": [
+      {
+        "definition": "周辺デバイスのレジスタをメモリアドレス空間にマッピングし、通常のメモリ読み書き命令でデバイスを制御する方式。多くのマイクロコントローラとSoCで採用されているハードウェア設計手法。",
+        "domain": "iot",
+        "keywords": [
+          "レジスタ",
+          "アドレス",
+          "デバイス",
+          "制御",
+          "組込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "組込みLinux",
+    "reading": "くみこみりなっくす",
+    "aliases": [
+      "Embedded Linux"
+    ],
+    "senses": [
+      {
+        "definition": "Linuxカーネルを組込みデバイス向けにカスタマイズしたOS。Raspberry PiやルーターなどのSBC、産業機器で使われ、豊富なドライバと開発ツールを活用できる。",
+        "domain": "iot",
+        "keywords": [
+          "Linux",
+          "組込み",
+          "カーネル",
+          "SBC",
+          "ドライバ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Yocto",
+    "senses": [
+      {
+        "definition": "組込みLinuxディストリビューションをカスタムビルドするためのオープンソースプロジェクト。BitBakeビルドシステムとレシピを使い、特定のハードウェア向けに最小限かつ最適化されたLinuxイメージを生成できる。",
+        "domain": "iot",
+        "keywords": [
+          "組込みLinux",
+          "ビルド",
+          "カスタム",
+          "BitBake",
+          "ディストリビューション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Buildroot",
+    "senses": [
+      {
+        "definition": "クロスコンパイルツールチェーンと組込みLinuxシステムイメージを生成するシンプルなビルドシステム。Yoctoより学習コストが低く、中小規模の組込みLinuxプロジェクトに適している。",
+        "domain": "iot",
+        "keywords": [
+          "組込みLinux",
+          "ビルド",
+          "クロスコンパイル",
+          "イメージ",
+          "シンプル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Device Tree",
+    "aliases": [
+      "デバイスツリー",
+      "DTB"
+    ],
+    "senses": [
+      {
+        "definition": "Linuxカーネルに対してハードウェア構成（CPU・メモリ・ペリフェラルのアドレスなど）を記述するデータ構造。ハードコードされたハードウェア情報をカーネルから分離し移植性を高める。",
+        "domain": "iot",
+        "keywords": [
+          "Linux",
+          "ハードウェア",
+          "カーネル",
+          "組込み",
+          "構成"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "BLE",
+    "reading": "びーえるいー",
+    "aliases": [
+      "Bluetooth Low Energy",
+      "Bluetooth LE"
+    ],
+    "senses": [
+      {
+        "definition": "低電力消費のBluetoothプロトコル。ウェアラブルデバイス、医療機器、スマートホームデバイスとスマートフォンの通信に広く使われ、コイン電池でも年単位で動作できる省電力規格。",
+        "domain": "iot",
+        "keywords": [
+          "Bluetooth",
+          "省電力",
+          "ウェアラブル",
+          "IoT",
+          "スマートフォン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Zigbee",
+    "senses": [
+      {
+        "definition": "低電力・低速・低コストなメッシュネットワーク対応の無線通信規格。IEEE 802.15.4ベースでスマートホームデバイスや産業用センサーネットワークに使われ、数十ノードのメッシュ構成が可能。",
+        "domain": "iot",
+        "keywords": [
+          "メッシュネットワーク",
+          "省電力",
+          "スマートホーム",
+          "IEEE 802.15.4",
+          "センサー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Z-Wave",
+    "senses": [
+      {
+        "definition": "スマートホーム向けの低電力メッシュ無線通信プロトコル。868/908MHz帯を使いWi-Fiと干渉しにくく、スイッチ、電子錠、センサーなどのホームオートメーション機器で幅広く採用される。",
+        "domain": "iot",
+        "keywords": [
+          "スマートホーム",
+          "メッシュ",
+          "省電力",
+          "ホームオートメーション",
+          "無線"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "LoRaWAN",
+    "aliases": [
+      "Long Range Wide Area Network"
+    ],
+    "senses": [
+      {
+        "definition": "LoRa無線変調技術を使った長距離・省電力なIoT向けWAN規格。数kmから数十kmの通信範囲を持ち、農業センサー、スマートメーター、資産追跡などのLPWANユースケースに適する。",
+        "domain": "iot",
+        "keywords": [
+          "LPWAN",
+          "省電力",
+          "長距離",
+          "IoT",
+          "センサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NB-IoT",
+    "aliases": [
+      "Narrowband IoT"
+    ],
+    "senses": [
+      {
+        "definition": "LTEインフラを活用したIoT向けのナローバンド通信規格。セルラーネットワーク上で動作し、地下や建物内など電波が届きにくい環境でも通信できる低コスト・省電力なLPWAN技術。",
+        "domain": "iot",
+        "keywords": [
+          "LPWAN",
+          "セルラー",
+          "LTE",
+          "省電力",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LTE-M",
+    "aliases": [
+      "LTE-MTC",
+      "eMTC"
+    ],
+    "senses": [
+      {
+        "definition": "LTEネットワーク上で動作するIoT向けの通信規格。NB-IoTより高いデータレートと移動体対応を持ち、ウェアラブルや資産追跡など移動するデバイスへの接続に適している。",
+        "domain": "iot",
+        "keywords": [
+          "LTE",
+          "IoT",
+          "LPWAN",
+          "モビリティ",
+          "ウェアラブル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LPWAN",
+    "aliases": [
+      "Low Power Wide Area Network"
+    ],
+    "senses": [
+      {
+        "definition": "低電力で広範囲をカバーするIoT向け無線ネットワーク技術のカテゴリー。LoRaWAN、NB-IoT、Sigfoxなどが含まれ、電池駆動センサーの長距離通信を低コストで実現する。",
+        "domain": "iot",
+        "keywords": [
+          "省電力",
+          "長距離",
+          "IoT",
+          "センサー",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Matter",
+    "senses": [
+      {
+        "definition": "Apple、Google、Amazonなど主要企業が支持するスマートホーム向けの相互接続標準プロトコル。Wi-Fi、Ethernet、ThreadをトランスポートとしてCSA（接続標準同盟）が策定し普及を推進している。",
+        "domain": "iot",
+        "keywords": [
+          "スマートホーム",
+          "相互接続",
+          "標準",
+          "Thread",
+          "Wi-Fi"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HomeKit",
+    "senses": [
+      {
+        "definition": "AppleのスマートホームフレームワークでiOSデバイスから対応デバイスを制御できる。Siriを使った音声操作やオートメーションを実現し、HomeKit Accessory Protocolでセキュアに端末間連携する。",
+        "domain": "iot",
+        "keywords": [
+          "Apple",
+          "スマートホーム",
+          "iOS",
+          "Siri",
+          "オートメーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS IoT Core",
+    "aliases": [
+      "AWS IoT"
+    ],
+    "senses": [
+      {
+        "definition": "AmazonのマネージドIoTサービス。MQTTやHTTPSでデバイスをクラウドに接続し、デバイスシャドウ、ルールエンジン、Device Defenderなどの機能を提供してIoTソリューション構築を支援する。",
+        "domain": "iot",
+        "keywords": [
+          "AWS",
+          "クラウド",
+          "MQTT",
+          "デバイス管理",
+          "スケーラブル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure IoT Hub",
+    "aliases": [
+      "Azure IoT"
+    ],
+    "senses": [
+      {
+        "definition": "MicrosoftのマネージドIoTサービス。デバイスとクラウドの双方向通信、デバイス管理、OTAアップデートを提供し、Azure Stream AnalyticsやAzure MLと連携してエッジ-クラウド統合を実現する。",
+        "domain": "iot",
+        "keywords": [
+          "Azure",
+          "Microsoft",
+          "クラウド",
+          "デバイス管理",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Google Cloud IoT",
+    "aliases": [
+      "Cloud IoT Core"
+    ],
+    "senses": [
+      {
+        "definition": "GoogleのIoTデバイス管理サービス（2023年廃止）。MQTTとHTTPでデバイスをCloud Pub/Subに接続し、BigQueryやDataflowでリアルタイム分析するアーキテクチャパターンで使われていた。",
+        "domain": "iot",
+        "keywords": [
+          "Google Cloud",
+          "IoT",
+          "Pub/Sub",
+          "デバイス管理",
+          "廃止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TinyML",
+    "senses": [
+      {
+        "definition": "マイクロコントローラなどの超小型・低電力デバイス上で機械学習モデルを実行する技術分野。TensorFlow LiteやEdge Impulseを使い、クラウド接続なしでのリアルタイム推論を実現する。",
+        "domain": "iot",
+        "keywords": [
+          "機械学習",
+          "組込み",
+          "エッジAI",
+          "マイクロコントローラ",
+          "推論"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ONNX Runtime",
+    "aliases": [
+      "ONNX",
+      "Open Neural Network Exchange"
+    ],
+    "senses": [
+      {
+        "definition": "様々なフレームワークで訓練した機械学習モデルを統一フォーマット（ONNX）で表現し高速に推論するランタイム。エッジデバイスからクラウドまで幅広いプラットフォームで動作し最適化が施される。",
+        "domain": "iot",
+        "keywords": [
+          "機械学習",
+          "推論",
+          "クロスプラットフォーム",
+          "最適化",
+          "インタロップ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TensorFlow Lite",
+    "aliases": [
+      "TFLite"
+    ],
+    "senses": [
+      {
+        "definition": "Googleが開発したモバイル・組込みデバイス向けの機械学習推論フレームワーク。モデルを量子化・最適化してフットプリントを削減し、AndroidやiOS、マイクロコントローラで動作させられる。",
+        "domain": "iot",
+        "keywords": [
+          "TensorFlow",
+          "機械学習",
+          "モバイル",
+          "組込み",
+          "量子化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SwiftUI",
+    "senses": [
+      {
+        "definition": "Appleが提供する宣言的UIフレームワーク。Swiftで記述しiOS、macOS、watchOS、tvOSに対応したUIを単一コードベースで構築できる。リアクティブなデータバインディングを標準サポートする。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "iOS",
+          "宣言的UI",
+          "macOS",
+          "Swift"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Jetpack Compose",
+    "senses": [
+      {
+        "definition": "GoogleのAndroid向け宣言的UIフレームワーク。KotlinのDSLでUIを記述し従来のXMLレイアウトを置き換える。状態駆動のリコンポジションモデルを採用し宣言的にUIを構築できる。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "Kotlin",
+          "宣言的UI",
+          "Google",
+          "コンポーザブル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Xcode",
+    "senses": [
+      {
+        "definition": "AppleのiOS・macOSアプリ開発用統合開発環境。シミュレータ、パフォーマンス計測ツール（Instruments）、コード署名、App Store Connect連携を提供する公式IDEで開発に必須。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "IDE",
+          "iOS",
+          "macOS",
+          "開発環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Android Studio",
+    "senses": [
+      {
+        "definition": "GoogleのAndroidアプリ公式IDE。IntelliJ IDEAベースでコードエディタ、エミュレータ、Gradle統合、プロファイラ、Layout Inspectorなどの開発・デバッグツールを統合提供する。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "Google",
+          "IDE",
+          "IntelliJ",
+          "開発環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "App Store",
+    "senses": [
+      {
+        "definition": "AppleのiOS・macOSアプリ配信プラットフォーム。アプリはAppleの審査プロセスを経て公開され、In-App Purchase・サブスクリプション・TestFlightによるベータ配信を管理できる。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "iOS",
+          "配信",
+          "審査",
+          "TestFlight"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Google Play",
+    "aliases": [
+      "Google Play Store"
+    ],
+    "senses": [
+      {
+        "definition": "GoogleのAndroidアプリ配信プラットフォーム。アプリのアップロード・審査・公開、クラッシュ分析、A/Bテスト、段階的ロールアウトをPlay Consoleで一元管理できる。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "Google",
+          "配信",
+          "Play Console",
+          "段階的ロールアウト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APNs",
+    "aliases": [
+      "Apple Push Notification service"
+    ],
+    "senses": [
+      {
+        "definition": "Appleが運営するiOSデバイスへのプッシュ通知配信インフラ。サーバーからAPNsにHTTP/2でリクエストを送ると、Appleのサーバーがデバイストークンに基づき対象デバイスに通知を届ける。",
+        "domain": "mobile",
+        "keywords": [
+          "iOS",
+          "プッシュ通知",
+          "Apple",
+          "通知配信",
+          "HTTP/2"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "FCM",
+    "aliases": [
+      "Firebase Cloud Messaging"
+    ],
+    "senses": [
+      {
+        "definition": "GoogleのクロスプラットフォームメッセージングサービスでAndroid・iOS・Webにプッシュ通知やデータメッセージを送信できる。旧GCMの後継でFirebaseエコシステムの主要コンポーネント。",
+        "domain": "mobile",
+        "keywords": [
+          "Firebase",
+          "プッシュ通知",
+          "Android",
+          "クロスプラットフォーム",
+          "Google"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Universal Links",
+    "senses": [
+      {
+        "definition": "iOSのディープリンク機能でウェブURLをネイティブアプリの特定画面に直接遷移させる仕組み。サーバーにapple-app-site-associationファイルを配置してドメインとアプリを紐付ける公式推奨方式。",
+        "domain": "mobile",
+        "keywords": [
+          "iOS",
+          "ディープリンク",
+          "URL",
+          "Apple",
+          "ナビゲーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "App Links",
+    "senses": [
+      {
+        "definition": "AndroidのディープリンクでウェブURLをネイティブアプリの特定画面に遷移させる公式の仕組み。サーバーにassetlinks.jsonを配置しDigital Asset Linksでドメイン所有を証明して機能させる。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "ディープリンク",
+          "URL",
+          "Google",
+          "ナビゲーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WebView",
+    "senses": [
+      {
+        "definition": "ネイティブアプリ内でウェブコンテンツ（HTML/CSS/JS）を表示する組み込みブラウザコンポーネント。iOSはWKWebView、AndroidはAndroid WebViewを提供し、ハイブリッドアプリの基盤となる。",
+        "domain": "mobile",
+        "keywords": [
+          "ハイブリッドアプリ",
+          "HTML",
+          "JavaScript",
+          "ブラウザ",
+          "ネイティブ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Capacitor",
+    "senses": [
+      {
+        "definition": "IonicチームがApache Cordovaの後継として開発したクロスプラットフォームアプリ構築ツール。WebViewベースでiOS・Android・Webアプリを一つのコードベースから生成しネイティブAPIにアクセスできる。",
+        "domain": "mobile",
+        "keywords": [
+          "クロスプラットフォーム",
+          "WebView",
+          "Ionic",
+          "ネイティブAPI",
+          "Cordova"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Ionic",
+    "senses": [
+      {
+        "definition": "Angular・React・Vueと組み合わせて使えるモバイルアプリUIコンポーネントライブラリ兼フレームワーク。Capacitorと連携しiOS・Android向けのネイティブアプリをWeb技術で構築できる。",
+        "domain": "mobile",
+        "keywords": [
+          "クロスプラットフォーム",
+          "UI",
+          "WebView",
+          "Angular",
+          "React"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Expo",
+    "senses": [
+      {
+        "definition": "React Nativeの開発を簡素化するプラットフォームとツールセット。開発サーバー、OTAアップデート、EAS Build（クラウドビルド）を提供し、ネイティブ設定なしに始められる開発環境。",
+        "domain": "mobile",
+        "keywords": [
+          "React Native",
+          "クロスプラットフォーム",
+          "ビルド",
+          "OTA",
+          "開発環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DAC",
+    "aliases": [
+      "Digital-to-Analog Converter",
+      "デジタルアナログ変換器"
+    ],
+    "senses": [
+      {
+        "definition": "デジタル数値信号をアナログ電圧・電流に変換する回路または集積回路。音声出力、波形生成、サーボモーター制御などの用途でマイクロコントローラと組み合わせて幅広く使われる。",
+        "domain": "iot",
+        "keywords": [
+          "アナログ",
+          "デジタル",
+          "変換",
+          "音声",
+          "マイコン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "5G IoT",
+    "reading": "ふぁいぶじーあいおーてぃー",
+    "aliases": [
+      "5G",
+      "NR IoT"
+    ],
+    "senses": [
+      {
+        "definition": "第5世代移動通信システムをIoTに活用する技術。超低遅延・超高密度接続・高帯域を活かし、自動運転、スマートファクトリー、遠隔医療など高度なユースケースを実現する通信基盤。",
+        "domain": "iot",
+        "keywords": [
+          "5G",
+          "IoT",
+          "低遅延",
+          "高密度",
+          "コネクテッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アプリ内課金",
+    "reading": "あぷりないかきん",
+    "aliases": [
+      "In-App Purchase",
+      "IAP"
+    ],
+    "senses": [
+      {
+        "definition": "モバイルアプリ内でユーザーが追加コンテンツや機能、サブスクリプションを購入できる仕組み。App StoreやGoogle Playが提供するAPIを通じて決済し、プラットフォームが手数料を徴収する。",
+        "domain": "mobile",
+        "keywords": [
+          "課金",
+          "App Store",
+          "Google Play",
+          "サブスクリプション",
+          "収益化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コードサイニング",
+    "reading": "こーどさいにんぐ",
+    "aliases": [
+      "Code Signing"
+    ],
+    "senses": [
+      {
+        "definition": "アプリの開発者を証明し改ざんを検知するためにデジタル証明書で署名する仕組み。iOSではProvisioning Profileと証明書、AndroidではKeystoreを使い、配布・公開に必須のプロセス。",
+        "domain": "mobile",
+        "keywords": [
+          "セキュリティ",
+          "証明書",
+          "iOS",
+          "Android",
+          "配布"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TestFlight",
+    "senses": [
+      {
+        "definition": "AppleのiOSアプリベータテストサービス。App Store Connect経由で最大10,000人のテスターにベータ版を配信でき、本番リリース前のフィードバック収集とクラッシュ確認に広く使われる。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "ベータテスト",
+          "iOS",
+          "配信",
+          "フィードバック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Crashlytics",
+    "senses": [
+      {
+        "definition": "Firebase（旧Fabric）のモバイルクラッシュレポートサービス。アプリのクラッシュをリアルタイムに収集・分類し、スタックトレースとデバイス情報を提供して問題の特定と解決を支援する。",
+        "domain": "mobile",
+        "keywords": [
+          "クラッシュ",
+          "モニタリング",
+          "Firebase",
+          "Android",
+          "iOS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ビルドフレーバー",
+    "reading": "びるどふれーばー",
+    "aliases": [
+      "Build Flavor",
+      "Product Flavor"
+    ],
+    "senses": [
+      {
+        "definition": "同一コードベースから開発版・ステージング版・本番版など異なる設定のアプリバリアントを生成する仕組み。AndroidのGradle設定やiOSのXcode Schemeで管理される開発プラクティス。",
+        "domain": "mobile",
+        "keywords": [
+          "ビルド",
+          "環境設定",
+          "Android",
+          "iOS",
+          "バリアント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Swift Concurrency",
+    "aliases": [
+      "async/await Swift",
+      "Structured Concurrency"
+    ],
+    "senses": [
+      {
+        "definition": "Swift 5.5で導入された構造化並行処理モデル。asyncキーワードで非同期関数を定義しawaitで呼び出すことでコールバックネストなしに非同期処理を直線的に記述できる公式機能。",
+        "domain": "mobile",
+        "keywords": [
+          "Swift",
+          "非同期",
+          "並行",
+          "iOS",
+          "構造化並行処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ARKit",
+    "senses": [
+      {
+        "definition": "AppleのiOS向け拡張現実フレームワーク。カメラとモーションセンサーで現実空間を認識し、3Dオブジェクトの配置、顔トラッキング、LiDARスキャンなど高度なAR体験を構築できる。",
+        "domain": "mobile",
+        "keywords": [
+          "AR",
+          "Apple",
+          "iOS",
+          "カメラ",
+          "3D"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ARCore",
+    "senses": [
+      {
+        "definition": "GoogleのAndroid向け拡張現実プラットフォーム。環境認識（平面・光源）、モーショントラッキング、オクルージョンをサポートし、SceneformやWebARでARアプリを構築できる。",
+        "domain": "mobile",
+        "keywords": [
+          "AR",
+          "Android",
+          "Google",
+          "3D",
+          "カメラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ML Kit",
+    "aliases": [
+      "MLKit",
+      "Firebase ML"
+    ],
+    "senses": [
+      {
+        "definition": "Googleのモバイル向け機械学習SDKでFirebaseの一部。テキスト認識、顔検出、バーコードスキャン、翻訳、ポーズ検出などの機能をAndroid・iOS上でオンデバイス実行できる。",
+        "domain": "mobile",
+        "keywords": [
+          "機械学習",
+          "Firebase",
+          "Android",
+          "iOS",
+          "オンデバイス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Create ML",
+    "senses": [
+      {
+        "definition": "Appleが提供するmacOS向け機械学習モデル作成ツール。コードなしのGUIでも画像分類・テキスト分類・物体検出のモデルを学習でき、Core MLフォーマットで出力しiOSアプリに組み込める。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "機械学習",
+          "Core ML",
+          "macOS",
+          "モデル作成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Core ML",
+    "senses": [
+      {
+        "definition": "AppleのiOS・macOS向けオンデバイス機械学習フレームワーク。ONNX・TensorFlow・PyTorchモデルをCore MLフォーマットに変換してiOSデバイス上でGPUやNeural Engine活用し効率的に推論する。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "iOS",
+          "機械学習",
+          "推論",
+          "オンデバイス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WidgetKit",
+    "senses": [
+      {
+        "definition": "AppleのiOSホーム画面ウィジェット構築フレームワーク。SwiftUIで記述したウィジェットをタイムラインエントリで更新し、ホーム画面やLock Screenでユーザーが情報を素早く確認できる。",
+        "domain": "mobile",
+        "keywords": [
+          "iOS",
+          "ウィジェット",
+          "SwiftUI",
+          "ホーム画面",
+          "Apple"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WorkManager",
+    "senses": [
+      {
+        "definition": "AndroidのバックグラウンドタスクスケジューリングAPI。制約条件（ネットワーク・充電状態など）を設定してバックグラウンド処理を信頼性高く実行でき、Dozeモード下でも動作する。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "バックグラウンド",
+          "タスク",
+          "スケジューリング",
+          "Jetpack"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Room",
+    "aliases": [
+      "Room Persistence Library"
+    ],
+    "senses": [
+      {
+        "definition": "AndroidのSQLiteラッパーライブラリでJetpackの一部。アノテーションでエンティティ・DAO・データベースを定義し、コンパイル時に検証されたSQL操作を型安全に実行できる永続化ライブラリ。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "SQLite",
+          "データベース",
+          "Jetpack",
+          "DAO"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Hilt",
+    "senses": [
+      {
+        "definition": "AndroidのDagger2ベースの依存性注入フレームワークでJetpackの一部。コンポーネントのスコープとライフサイクル管理を簡素化し、ViewModelやRepositoryへのインジェクションを容易にする。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "DI",
+          "依存性注入",
+          "Jetpack",
+          "Dagger"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Navigation Component",
+    "aliases": [
+      "Jetpack Navigation"
+    ],
+    "senses": [
+      {
+        "definition": "AndroidのJetpackライブラリで画面遷移を宣言的に管理する。ナビゲーショングラフでルートを定義し、バックスタック管理、ディープリンク処理、SafeArgsで型安全な引数渡しを実現する。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "画面遷移",
+          "Jetpack",
+          "バックスタック",
+          "ディープリンク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Combine",
+    "senses": [
+      {
+        "definition": "Appleが提供するSwift向けリアクティブプログラミングフレームワーク。PublisherとSubscriberの概念でイベントストリームや非同期データフローを宣言的に扱い、SwiftUIと高い親和性を持つ。",
+        "domain": "mobile",
+        "keywords": [
+          "Swift",
+          "リアクティブ",
+          "iOS",
+          "非同期",
+          "SwiftUI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SwiftData",
+    "senses": [
+      {
+        "definition": "iOS 17でAppleが導入したSwift向けデータ永続化フレームワーク。Swiftマクロで@Modelを定義するだけでCore Dataバックエンドによる永続化が実現でき、SwiftUIとの統合も優れている。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "iOS",
+          "永続化",
+          "Core Data",
+          "SwiftUI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HealthKit",
+    "senses": [
+      {
+        "definition": "AppleのiOS向け健康データ管理フレームワーク。歩数・心拍数・睡眠データなどをHealth Appと共有し、ユーザーの許可のもとでフィットネスアプリが健康データを読み書きできる仕組み。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "ヘルスケア",
+          "iOS",
+          "データ",
+          "センサー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CoreLocation",
+    "senses": [
+      {
+        "definition": "AppleのiOS・macOSで位置情報・方位・高度を取得するフレームワーク。GPS・Wi-Fi・セルラー測位を組み合わせてデバイスの位置を取得し、ジオフェンシングや地域モニタリングにも対応する。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "GPS",
+          "位置情報",
+          "iOS",
+          "ジオフェンシング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ジオフェンシング",
+    "reading": "じおふぇんしんぐ",
+    "aliases": [
+      "Geofencing"
+    ],
+    "senses": [
+      {
+        "definition": "仮想的な地理的境界を設定しデバイスが境界を越えたときにイベントを発生させる技術。入店通知、配送追跡、ペアレンタルコントロールなどiOS・Androidのロケーションサービスで活用される。",
+        "domain": "mobile",
+        "keywords": [
+          "位置情報",
+          "GPS",
+          "通知",
+          "iOS",
+          "Android"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バックグラウンドフェッチ",
+    "reading": "ばっくぐらうんどふぇっち",
+    "aliases": [
+      "Background Fetch",
+      "BGAppRefreshTask"
+    ],
+    "senses": [
+      {
+        "definition": "iOSアプリがバックグラウンドで定期的にデータを更新するためのAPI。システムが適切なタイミングでアプリを起動しコンテンツを更新することで、ユーザーに最新情報を表示できるようにする。",
+        "domain": "mobile",
+        "keywords": [
+          "iOS",
+          "バックグラウンド",
+          "更新",
+          "Apple",
+          "タスク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ProGuard",
+    "senses": [
+      {
+        "definition": "Androidアプリのコード圧縮・最適化・難読化ツール。使われていないコードを除去しクラスや変数名を短縮してAPKサイズを削減する。現在はR8に置き換えられつつある難読化ツール。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "難読化",
+          "最適化",
+          "APK",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "R8",
+    "senses": [
+      {
+        "definition": "AndroidのProGuard後継コード縮小・最適化ツール。Dexコンパイラと統合されてビルド時間が短縮され、デッドコード除去と難読化をProGuardより効率的に実行するAndroidビルドツール。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "最適化",
+          "難読化",
+          "Dex",
+          "ビルド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AAB",
+    "aliases": [
+      "Android App Bundle"
+    ],
+    "senses": [
+      {
+        "definition": "Googleが推奨するAndroidアプリの配布形式。Google PlayがユーザーのデバイスとOSに合わせた最適なAPKを動的に生成し、不要なリソースを除外してダウンロードサイズを最大65%削減できる。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "配布",
+          "Google Play",
+          "APK",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フラッシュメモリ",
+    "reading": "ふらっしゅめもり",
+    "aliases": [
+      "Flash Memory",
+      "NAND Flash"
+    ],
+    "senses": [
+      {
+        "definition": "電気的に書き換え可能な不揮発性半導体メモリ。組込みデバイスのファームウェア格納、SSD、USBメモリ、スマートフォンのストレージとして広く使われ、書き込み回数に上限がある。",
+        "domain": "iot",
+        "keywords": [
+          "メモリ",
+          "不揮発",
+          "ファームウェア",
+          "ストレージ",
+          "EEPROM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JTAG",
+    "senses": [
+      {
+        "definition": "IEEE 1149.1に規定されたシリアルデバッグ・テストインターフェース。マイクロコントローラやFPGAのオンチップデバッグ、境界スキャンテスト、フラッシュへの書き込みに広く利用される。",
+        "domain": "iot",
+        "keywords": [
+          "デバッグ",
+          "テスト",
+          "組込み",
+          "FPGA",
+          "マイコン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SWD",
+    "aliases": [
+      "Serial Wire Debug"
+    ],
+    "senses": [
+      {
+        "definition": "ARM CoreSight技術の一部であるARMデバイス用の2ピンシリアルデバッグプロトコル。JTAGより少ないピン数でデバッグ・フラッシュ書き込みができSTM32などのARM Cortexデバイスで広く使われる。",
+        "domain": "iot",
+        "keywords": [
+          "ARM",
+          "デバッグ",
+          "組込み",
+          "STM32",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CAN",
+    "aliases": [
+      "Controller Area Network"
+    ],
+    "senses": [
+      {
+        "definition": "自動車や産業機器向けの堅牢なシリアル通信バスプロトコル。マルチマスター構成でノイズ耐性が高く、ECU（エンジン制御ユニット）間通信や産業用ロボット制御に広く使われる。",
+        "domain": "iot",
+        "keywords": [
+          "自動車",
+          "産業",
+          "バス",
+          "通信",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Modbus",
+    "senses": [
+      {
+        "definition": "産業用機器向けのシリアル通信プロトコル。RTU・ASCII・TCPの3モードがあり、PLC・センサー・インバーターとSCADAシステムを接続するために長年にわたり広く使われているレガシー規格。",
+        "domain": "iot",
+        "keywords": [
+          "産業",
+          "PLC",
+          "SCADA",
+          "シリアル",
+          "プロトコル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OBD-II",
+    "aliases": [
+      "On-Board Diagnostics"
+    ],
+    "senses": [
+      {
+        "definition": "自動車の故障診断用標準インターフェースとプロトコルセット。エンジンの状態・センサー値・エラーコードを読み出せ、スマートフォンアプリやテレマティクス機器と連携して活用される。",
+        "domain": "iot",
+        "keywords": [
+          "自動車",
+          "診断",
+          "センサー",
+          "テレマティクス",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SCADA",
+    "aliases": [
+      "Supervisory Control and Data Acquisition"
+    ],
+    "senses": [
+      {
+        "definition": "産業プロセスをリモートから監視・制御するシステム。センサーやPLCからデータを収集して中央コンソールで可視化・操作する。水処理、電力インフラ、製造ラインで長年使われる制御システム。",
+        "domain": "iot",
+        "keywords": [
+          "産業",
+          "監視",
+          "制御",
+          "PLC",
+          "HMI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PLC",
+    "aliases": [
+      "Programmable Logic Controller"
+    ],
+    "senses": [
+      {
+        "definition": "工場や産業設備の制御に使われる堅牢なコンピュータ。ラダー図などの専用言語でプログラムしセンサー入力に応じてアクチュエータを制御する。高い信頼性と長期サポートが特徴。",
+        "domain": "iot",
+        "keywords": [
+          "産業",
+          "制御",
+          "ラダー",
+          "センサー",
+          "アクチュエータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TPM",
+    "aliases": [
+      "Trusted Platform Module"
+    ],
+    "senses": [
+      {
+        "definition": "暗号鍵の生成・保管と機器の完全性測定を行う専用セキュリティチップ。IoTデバイスの安全なブート、デバイス認証、セキュアストレージに使われデバイス信頼の根幹（Root of Trust）を担う。",
+        "domain": "iot",
+        "keywords": [
+          "セキュリティ",
+          "暗号",
+          "チップ",
+          "IoT",
+          "認証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TrustZone",
+    "senses": [
+      {
+        "definition": "ARMプロセッサのハードウェアセキュリティ拡張機能。通常ワールドとセキュアワールドをハードウェアで分離し、暗号鍵・生体認証データ・DRM資産などをセキュアワールドで保護する仕組み。",
+        "domain": "iot",
+        "keywords": [
+          "ARM",
+          "セキュリティ",
+          "組込み",
+          "TEE",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Sigfox",
+    "senses": [
+      {
+        "definition": "超狭帯域（UNB）無線技術を使った低電力・長距離のIoT向けLPWANサービス。専用基地局ネットワークでグローバルカバレッジを提供し、スマートメーターや環境センサーの通信に使われる。",
+        "domain": "iot",
+        "keywords": [
+          "LPWAN",
+          "省電力",
+          "IoT",
+          "長距離",
+          "センサー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Zephyr RTOS",
+    "aliases": [
+      "Zephyr"
+    ],
+    "senses": [
+      {
+        "definition": "Linux Foundation傘下のオープンソースリアルタイムOS。IoTデバイス向けに設計されBLE・IEEE 802.15.4・IPネットワークスタックを統合し、多くのマイクロコントローラアーキテクチャをサポートする。",
+        "domain": "iot",
+        "keywords": [
+          "RTOS",
+          "組込み",
+          "Linux Foundation",
+          "IoT",
+          "オープンソース"
+        ]
+      }
+    ]
+  }
+]

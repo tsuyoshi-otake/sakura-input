@@ -1,0 +1,925 @@
+[
+  {
+    "term": "システム",
+    "reading": "しすてむ",
+    "senses": [
+      {
+        "definition": "複数の要素が組み合わさって一つの目的を達成する仕組み。IT分野ではコンピューターやソフトウェア、ネットワークを組み合わせた構成体を指す。",
+        "domain": "it-basics",
+        "keywords": [
+          "system",
+          "仕組み",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": [
+      "system"
+    ]
+  },
+  {
+    "term": "ソフトウェア",
+    "reading": "そふとうぇあ",
+    "senses": [
+      {
+        "definition": "コンピューター上で動作するプログラムやデータの総称。OSやアプリなど、形のないものをソフトウェアと呼ぶ。ハードウェアと対になる概念。",
+        "domain": "it-basics",
+        "keywords": [
+          "software",
+          "プログラム",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "software",
+      "SW"
+    ]
+  },
+  {
+    "term": "ハードウェア",
+    "reading": "はーどうぇあ",
+    "senses": [
+      {
+        "definition": "コンピューターの物理的な部品の総称。本体、画面、キーボード、マウスなど実際に触れることができる機器を指す。",
+        "domain": "it-basics",
+        "keywords": [
+          "hardware",
+          "機器",
+          "物理"
+        ]
+      }
+    ],
+    "aliases": [
+      "hardware",
+      "HW"
+    ]
+  },
+  {
+    "term": "データ",
+    "reading": "でーた",
+    "senses": [
+      {
+        "definition": "コンピューターが処理する情報の基本単位。文字、数値、画像、音声などあらゆる情報をデータと呼ぶ。",
+        "domain": "it-basics",
+        "keywords": [
+          "data",
+          "情報",
+          "数値"
+        ]
+      }
+    ],
+    "aliases": [
+      "data"
+    ]
+  },
+  {
+    "term": "情報",
+    "reading": "じょうほう",
+    "senses": [
+      {
+        "definition": "何らかの意味を持つデータのこと。コンピューターは情報を処理・保存・伝達する。情報システムは業務上の情報を管理するシステム。",
+        "domain": "it-basics",
+        "keywords": [
+          "information",
+          "データ",
+          "知識"
+        ]
+      }
+    ],
+    "aliases": [
+      "information"
+    ]
+  },
+  {
+    "term": "アルゴリズム",
+    "reading": "あるごりずむ",
+    "senses": [
+      {
+        "definition": "問題を解くための手順や手続きを明確に定義したもの。料理のレシピのように、何をどの順番でやるかを決めたもの。プログラムはアルゴリズムを実装したもの。",
+        "domain": "it-basics",
+        "keywords": [
+          "algorithm",
+          "手順",
+          "処理手順"
+        ]
+      }
+    ],
+    "aliases": [
+      "algorithm"
+    ]
+  },
+  {
+    "term": "プログラム",
+    "reading": "ぷろぐらむ",
+    "senses": [
+      {
+        "definition": "コンピューターに実行させる命令を記述したもの。Java、Pythonなどの言語で書かれており、コンピューターはプログラムの指示に従って動作する。",
+        "domain": "it-basics",
+        "keywords": [
+          "program",
+          "ソースコード",
+          "命令"
+        ]
+      }
+    ],
+    "aliases": [
+      "program"
+    ]
+  },
+  {
+    "term": "アプリケーション",
+    "reading": "あぷりけーしょん",
+    "senses": [
+      {
+        "definition": "特定の目的のために作られたソフトウェア。メール、表計算、チャットなど、ユーザーが直接使う用途向けのプログラムをアプリケーションと呼ぶ。",
+        "domain": "it-basics",
+        "keywords": [
+          "application",
+          "アプリ",
+          "ソフト"
+        ]
+      }
+    ],
+    "aliases": [
+      "アプリ",
+      "application",
+      "app"
+    ]
+  },
+  {
+    "term": "ユーザー",
+    "reading": "ゆーざー",
+    "senses": [
+      {
+        "definition": "システムやサービスを利用する人。エンドユーザーとも言い、実際に画面を操作する利用者を指す。開発者・管理者と区別するために使われることが多い。",
+        "domain": "it-basics",
+        "keywords": [
+          "user",
+          "利用者",
+          "エンドユーザー"
+        ]
+      },
+      {
+        "definition": "作成済みアプリを利用する人。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロール",
+          "エンドユーザー"
+        ]
+      }
+    ],
+    "aliases": [
+      "user",
+      "利用者",
+      "エンドユーザー"
+    ]
+  },
+  {
+    "term": "デジタル",
+    "reading": "でじたる",
+    "senses": [
+      {
+        "definition": "情報を0と1（二進数）で表す方式。現代のコンピューターはすべてデジタル方式で動作する。アナログと対比して使われる。",
+        "domain": "it-basics",
+        "keywords": [
+          "digital",
+          "二進数",
+          "0と1"
+        ]
+      }
+    ],
+    "aliases": [
+      "digital"
+    ]
+  },
+  {
+    "term": "アナログ",
+    "reading": "あなろぐ",
+    "senses": [
+      {
+        "definition": "情報を連続した量（電圧や波形など）で表す方式。デジタルと対比して使われる。昔の電話やテレビはアナログ方式だった。",
+        "domain": "it-basics",
+        "keywords": [
+          "analog",
+          "連続",
+          "波形"
+        ]
+      }
+    ],
+    "aliases": [
+      "analog"
+    ]
+  },
+  {
+    "term": "バイナリ",
+    "reading": "ばいなり",
+    "senses": [
+      {
+        "definition": "0と1の二進数で表されたデータ。コンピューターはすべての情報をバイナリで処理する。テキストでないファイル（画像、動画など）もバイナリファイルと呼ぶ。",
+        "domain": "it-basics",
+        "keywords": [
+          "binary",
+          "二進数",
+          "0と1"
+        ]
+      }
+    ],
+    "aliases": [
+      "binary",
+      "二進数"
+    ]
+  },
+  {
+    "term": "ビット",
+    "reading": "びっと",
+    "senses": [
+      {
+        "definition": "コンピューターが扱う最小のデータ単位。0か1のどちらかの値を持つ。8ビットで1バイトになる。",
+        "domain": "it-basics",
+        "keywords": [
+          "bit",
+          "最小単位",
+          "0と1"
+        ]
+      }
+    ],
+    "aliases": [
+      "bit"
+    ]
+  },
+  {
+    "term": "バイト",
+    "reading": "ばいと",
+    "senses": [
+      {
+        "definition": "8ビットをまとめた情報量の単位。1バイトで英字1文字を表せる。1,024バイト＝1KB、1,024KB＝1MBというように大きな単位になる。",
+        "domain": "it-basics",
+        "keywords": [
+          "byte",
+          "データ量",
+          "容量"
+        ]
+      }
+    ],
+    "aliases": [
+      "byte",
+      "B"
+    ]
+  },
+  {
+    "term": "処理",
+    "reading": "しょり",
+    "senses": [
+      {
+        "definition": "コンピューターがデータに対して計算・変換・判断などの操作を行うこと。「入力→処理→出力」がコンピューターの基本的な動作パターン。",
+        "domain": "it-basics",
+        "keywords": [
+          "processing",
+          "計算",
+          "操作"
+        ]
+      },
+      {
+        "definition": "サーバ側処理や保存処理を扱う領域。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Processing"
+        ]
+      }
+    ],
+    "aliases": [
+      "processing"
+    ]
+  },
+  {
+    "term": "入力",
+    "reading": "にゅうりょく",
+    "senses": [
+      {
+        "definition": "コンピューターに対してデータや命令を与えること。キーボードやマウスで操作したり、ファイルを読み込んだりすることが入力にあたる。",
+        "domain": "it-basics",
+        "keywords": [
+          "input",
+          "インプット",
+          "受付"
+        ]
+      }
+    ],
+    "aliases": [
+      "input",
+      "インプット"
+    ]
+  },
+  {
+    "term": "出力",
+    "reading": "しゅつりょく",
+    "senses": [
+      {
+        "definition": "コンピューターが処理結果を外部に送り出すこと。画面表示、印刷、ファイル書き込みなどが出力にあたる。",
+        "domain": "it-basics",
+        "keywords": [
+          "output",
+          "アウトプット",
+          "表示"
+        ]
+      }
+    ],
+    "aliases": [
+      "output",
+      "アウトプット"
+    ]
+  },
+  {
+    "term": "ファイル",
+    "reading": "ふぁいる",
+    "senses": [
+      {
+        "definition": "コンピューター上でデータをひとまとめにして保存したもの。文書ファイル、画像ファイル、プログラムファイルなどがある。ファイル名と拡張子で区別される。",
+        "domain": "it-basics",
+        "keywords": [
+          "file",
+          "保存",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "file"
+    ]
+  },
+  {
+    "term": "フォルダ",
+    "senses": [
+      {
+        "definition": "複数のファイルをまとめて管理するための入れ物。ディレクトリとも呼ばれる。フォルダの中にさらにフォルダを作ることができる。",
+        "domain": "it-basics",
+        "keywords": [
+          "folder",
+          "directory",
+          "ディレクトリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "ディレクトリ"
+    ]
+  },
+  {
+    "term": "CPU",
+    "reading": "しーぴーゆー",
+    "senses": [
+      {
+        "definition": "コンピューターの「頭脳」にあたる部品。Central Processing Unitの略。プログラムの命令を読み取り計算・実行する。処理速度はGHzという単位で表される。",
+        "domain": "computer-basics",
+        "keywords": [
+          "CPU",
+          "プロセッサ",
+          "演算"
+        ]
+      }
+    ],
+    "aliases": [
+      "Central Processing Unit",
+      "プロセッサ",
+      "processor"
+    ]
+  },
+  {
+    "term": "メモリ",
+    "reading": "めもり",
+    "senses": [
+      {
+        "definition": "CPUが処理中のデータを一時的に保存する場所。作業台に例えられる。容量が大きいほど多くのアプリを同時に動かせる。電源を切るとデータは消える。",
+        "domain": "computer-basics",
+        "keywords": [
+          "memory",
+          "RAM",
+          "一時記憶"
+        ]
+      }
+    ],
+    "aliases": [
+      "memory"
+    ]
+  },
+  {
+    "term": "RAM",
+    "reading": "らむ",
+    "senses": [
+      {
+        "definition": "Random Access Memoryの略。コンピューターのメモリの正式名称。作業中のデータを高速に読み書きできる揮発性メモリ。電源を切るとデータが消える。",
+        "domain": "computer-basics",
+        "keywords": [
+          "RAM",
+          "メモリ",
+          "揮発性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Random Access Memory"
+    ]
+  },
+  {
+    "term": "ストレージ",
+    "reading": "すとれーじ",
+    "senses": [
+      {
+        "definition": "データを長期間保存するための記憶装置。HDDやSSDが代表的。電源を切ってもデータが消えない不揮発性メモリ。容量はGBやTBで表される。",
+        "domain": "computer-basics",
+        "keywords": [
+          "storage",
+          "記憶装置",
+          "保存"
+        ]
+      }
+    ],
+    "aliases": [
+      "storage",
+      "記憶装置"
+    ]
+  },
+  {
+    "term": "HDD",
+    "reading": "えいちでぃでぃ",
+    "senses": [
+      {
+        "definition": "Hard Disk Driveの略。磁気ディスクを使ってデータを保存する記憶装置。SSDより安価だが読み書き速度は遅い。大容量のデータ保存に使われる。",
+        "domain": "computer-basics",
+        "keywords": [
+          "HDD",
+          "ハードディスク",
+          "記憶装置"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hard Disk Drive",
+      "ハードディスク",
+      "hard disk"
+    ]
+  },
+  {
+    "term": "SSD",
+    "reading": "えすえすでぃ",
+    "senses": [
+      {
+        "definition": "Solid State Driveの略。フラッシュメモリを使ってデータを保存する記憶装置。HDDより高速で衝撃に強い。最近のPCではSSDが主流。",
+        "domain": "computer-basics",
+        "keywords": [
+          "SSD",
+          "フラッシュメモリ",
+          "高速"
+        ]
+      }
+    ],
+    "aliases": [
+      "Solid State Drive"
+    ]
+  },
+  {
+    "term": "OS",
+    "reading": "おーえす",
+    "senses": [
+      {
+        "definition": "Operating Systemの略。コンピューターの基本的な動作を管理するソフトウェア。ハードウェアとアプリの橋渡し役で、WindowsやmacOS、Linuxが代表的。",
+        "domain": "computer-basics",
+        "keywords": [
+          "OS",
+          "オペレーティングシステム",
+          "基本ソフト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operating System",
+      "オペレーティングシステム",
+      "基本ソフト"
+    ]
+  },
+  {
+    "term": "Windows",
+    "reading": "うぃんどうず",
+    "senses": [
+      {
+        "definition": "Microsoft社が開発したOS。世界で最も広く使われているOS。会社のPCのほとんどはWindowsが使われている。バージョンはWindows 10、11などがある。",
+        "domain": "computer-basics",
+        "keywords": [
+          "Windows",
+          "Microsoft",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "ウィンドウズ"
+    ]
+  },
+  {
+    "term": "macOS",
+    "reading": "まっくおーえす",
+    "senses": [
+      {
+        "definition": "Apple社が開発したOS。MacBook・iMacなどApple製パソコンに搭載。デザイン職やクリエイター向けに人気。MacOSとも書く。",
+        "domain": "computer-basics",
+        "keywords": [
+          "macOS",
+          "Apple",
+          "Mac"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mac OS",
+      "マック"
+    ]
+  },
+  {
+    "term": "Linux",
+    "reading": "りなっくす",
+    "senses": [
+      {
+        "definition": "オープンソースのOS。サーバーや開発環境で広く使われる。無料で使えて安定性が高い。UbuntuやCentOSなど多くのディストリビューションがある。",
+        "domain": "computer-basics",
+        "keywords": [
+          "Linux",
+          "サーバー",
+          "オープンソース"
+        ]
+      }
+    ],
+    "aliases": [
+      "リナックス",
+      "GNU/Linux"
+    ]
+  },
+  {
+    "term": "プロセス",
+    "reading": "ぷろせす",
+    "senses": [
+      {
+        "definition": "コンピューター上で実行中のプログラムのこと。同じプログラムでも複数起動すると複数のプロセスになる。タスクマネージャーで確認できる。",
+        "domain": "computer-basics",
+        "keywords": [
+          "process",
+          "実行中",
+          "タスク"
+        ]
+      },
+      {
+        "definition": "送信時などに実行するサーバ処理。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ページ",
+          "Process"
+        ]
+      }
+    ],
+    "aliases": [
+      "process"
+    ]
+  },
+  {
+    "term": "スレッド",
+    "reading": "すれっど",
+    "senses": [
+      {
+        "definition": "プロセスの中で実行される処理の単位。一つのプロセスが複数のスレッドを持つことで、並行して複数の処理を行える（マルチスレッド処理）。",
+        "domain": "computer-basics",
+        "keywords": [
+          "thread",
+          "並行処理",
+          "マルチスレッド"
+        ]
+      }
+    ],
+    "aliases": [
+      "thread",
+      "マルチスレッド"
+    ]
+  },
+  {
+    "term": "タスクマネージャー",
+    "reading": "たすくまねーじゃー",
+    "senses": [
+      {
+        "definition": "Windowsで実行中のプロセスやCPU・メモリの使用状況を確認・管理するツール。Ctrl+Alt+Deleteで起動できる。応答しないアプリを強制終了することもできる。",
+        "domain": "computer-basics",
+        "keywords": [
+          "タスクマネージャー",
+          "プロセス管理",
+          "Windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "Task Manager"
+    ]
+  },
+  {
+    "term": "ドライバー",
+    "reading": "どらいばー",
+    "senses": [
+      {
+        "definition": "ハードウェアをOSが制御するためのソフトウェア。プリンターやマウスなど周辺機器をPCに接続したとき、ドライバーをインストールすることで使えるようになる。",
+        "domain": "computer-basics",
+        "keywords": [
+          "driver",
+          "デバイスドライバー",
+          "周辺機器"
+        ]
+      }
+    ],
+    "aliases": [
+      "device driver",
+      "デバイスドライバー"
+    ]
+  },
+  {
+    "term": "ブート",
+    "reading": "ぶーと",
+    "senses": [
+      {
+        "definition": "コンピューターの電源を入れてOSが起動するまでの過程。「ブートする」「ブートアップ」とも言う。ブートに時間がかかる場合はSSDへの交換などが有効。",
+        "domain": "computer-basics",
+        "keywords": [
+          "boot",
+          "起動",
+          "OS起動"
+        ]
+      }
+    ],
+    "aliases": [
+      "boot",
+      "起動",
+      "ブートアップ"
+    ]
+  },
+  {
+    "term": "カーネル",
+    "reading": "かーねる",
+    "senses": [
+      {
+        "definition": "OSの中核となるプログラム。ハードウェアの管理やプロセスの制御など、最も基本的な機能を担う。ユーザーは直接触れないが、すべての動作の基盤となる。",
+        "domain": "computer-basics",
+        "keywords": [
+          "kernel",
+          "OS",
+          "コア"
+        ]
+      }
+    ],
+    "aliases": [
+      "kernel"
+    ]
+  },
+  {
+    "term": "ファイルシステム",
+    "reading": "ふぁいるしすてむ",
+    "senses": [
+      {
+        "definition": "ストレージにファイルを保存・管理する仕組み。Windowsでは「NTFS」、MacではAPFS、LinuxではExt4が使われる。ファイルの読み書きや検索を管理する。",
+        "domain": "computer-basics",
+        "keywords": [
+          "file system",
+          "NTFS",
+          "保存管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "file system",
+      "NTFS",
+      "APFS"
+    ]
+  },
+  {
+    "term": "ドメイン名",
+    "reading": "どめいんめい",
+    "senses": [
+      {
+        "definition": "インターネット上のアドレスを人間が読みやすい文字列で表したもの。「example.com」のような形式。DNSによってIPアドレスに変換される。",
+        "domain": "network",
+        "keywords": [
+          "domain name",
+          "URL",
+          "DNS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HTTP",
+    "reading": "えいちてぃてぃぴー",
+    "senses": [
+      {
+        "definition": "HyperText Transfer Protocolの略。WebブラウザとWebサーバーがデータをやりとりするためのプロトコル。URLが「http://」で始まるサイトで使われている。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "通信",
+          "プロトコル"
+        ]
+      }
+    ],
+    "aliases": [
+      "HyperText Transfer Protocol"
+    ]
+  },
+  {
+    "term": "HTTPS",
+    "reading": "えいちてぃてぃぴーえす",
+    "senses": [
+      {
+        "definition": "HTTPにSSL/TLS暗号化を加えた安全な通信プロトコル。URLが「https://」で始まる。個人情報やパスワードを送受信するサイトでは必須。ブラウザに鍵マークが表示される。",
+        "domain": "network",
+        "keywords": [
+          "HTTPS",
+          "暗号化",
+          "SSL",
+          "TLS"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTTP Secure"
+    ]
+  },
+  {
+    "term": "TCP/IP",
+    "reading": "てぃーしーぴーあいぴー",
+    "senses": [
+      {
+        "definition": "インターネット通信の基本となる2つのプロトコルの組み合わせ。TCP（信頼性のある通信）とIP（アドレス指定）が組み合わさって、インターネットの土台を作っている。",
+        "domain": "network",
+        "keywords": [
+          "TCP/IP",
+          "インターネット",
+          "プロトコル"
+        ]
+      }
+    ],
+    "aliases": [
+      "TCP",
+      "IP"
+    ]
+  },
+  {
+    "term": "ルーター",
+    "reading": "るーたー",
+    "senses": [
+      {
+        "definition": "ネットワーク間でデータを転送する機器。家庭や会社のインターネット接続に使われ、データを正しい宛先に届ける「道案内」の役割を持つ。",
+        "domain": "network",
+        "keywords": [
+          "router",
+          "ネットワーク",
+          "経路制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "router"
+    ]
+  },
+  {
+    "term": "スイッチ",
+    "reading": "すいっち",
+    "senses": [
+      {
+        "definition": "同じネットワーク内の複数の機器を接続する機器。データを必要なポートだけに送ることで効率的な通信を実現する。LANスイッチとも呼ぶ。",
+        "domain": "network",
+        "keywords": [
+          "switch",
+          "LAN",
+          "ネットワーク機器"
+        ]
+      }
+    ],
+    "aliases": [
+      "network switch",
+      "LANスイッチ",
+      "switching hub"
+    ]
+  },
+  {
+    "term": "ポート番号",
+    "reading": "ぽーとばんごう",
+    "senses": [
+      {
+        "definition": "コンピューター上で複数の通信を区別するための番号。Webは80番（HTTP）や443番（HTTPS）、メールは25番など、サービスごとに番号が決まっている。",
+        "domain": "network",
+        "keywords": [
+          "port",
+          "ポート",
+          "番号"
+        ]
+      }
+    ],
+    "aliases": [
+      "port number"
+    ]
+  },
+  {
+    "term": "パケット",
+    "reading": "ぱけっと",
+    "senses": [
+      {
+        "definition": "ネットワーク上でデータを送受信するときの小さな単位。大きなデータを複数のパケットに分割して送り、受信側で組み立て直す。手紙を複数の封筒に分けて送るイメージ。",
+        "domain": "network",
+        "keywords": [
+          "packet",
+          "データ転送",
+          "通信"
+        ]
+      }
+    ],
+    "aliases": [
+      "packet"
+    ]
+  },
+  {
+    "term": "プロトコル",
+    "reading": "ぷろとこる",
+    "senses": [
+      {
+        "definition": "コンピューター同士が通信するための取り決め・規則。話す言語を合わせるように、通信する機器が同じプロトコルに従うことでデータをやりとりできる。",
+        "domain": "network",
+        "keywords": [
+          "protocol",
+          "通信規則",
+          "規約"
+        ]
+      }
+    ],
+    "aliases": [
+      "protocol"
+    ]
+  },
+  {
+    "term": "LAN",
+    "reading": "らん",
+    "senses": [
+      {
+        "definition": "Local Area Networkの略。会社や家庭など限られた範囲内のネットワーク。有線LANと無線LAN（Wi-Fi）がある。インターネットに接続するためにはルーターが必要。",
+        "domain": "network",
+        "keywords": [
+          "LAN",
+          "ローカルネットワーク",
+          "社内ネット"
+        ]
+      }
+    ],
+    "aliases": [
+      "Local Area Network",
+      "ローカルエリアネットワーク"
+    ]
+  },
+  {
+    "term": "WAN",
+    "reading": "わん",
+    "senses": [
+      {
+        "definition": "Wide Area Networkの型。地理的に離れた場所のネットワーク同士を接続した広域ネットワーク。インターネット自体がWANの一つ。企業の拠点間接続にも使われる。",
+        "domain": "network",
+        "keywords": [
+          "WAN",
+          "広域ネットワーク",
+          "インターネット"
+        ]
+      }
+    ],
+    "aliases": [
+      "Wide Area Network",
+      "広域エリアネットワーク"
+    ]
+  },
+  {
+    "term": "帯域幅",
+    "reading": "たいいきはば",
+    "senses": [
+      {
+        "definition": "ネットワークで一度に転送できるデータ量の上限。道路の車線数に例えられる。帯域幅が広いほど速く大量のデータを転送できる。単位はbps（ビット毎秒）。",
+        "domain": "network",
+        "keywords": [
+          "bandwidth",
+          "通信速度",
+          "bps"
+        ]
+      }
+    ],
+    "aliases": [
+      "bandwidth",
+      "バンド幅"
+    ]
+  }
+]

@@ -1,0 +1,2151 @@
+[
+  {
+    "term": "Unix",
+    "senses": [
+      {
+        "definition": "1969年にAT&Tベル研究所で開発されたマルチタスク・マルチユーザー対応のオペレーティングシステム。現代のLinuxやmacOSの設計思想の源流となった。",
+        "domain": "linux",
+        "keywords": [
+          "OS",
+          "オペレーティングシステム",
+          "ベル研究所",
+          "POSIX",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "POSIX",
+    "senses": [
+      {
+        "definition": "IEEEが策定したUnix系OSの移植性を高めるための標準規格群。システムコール、シェル、ユーティリティのAPIを定義する。",
+        "domain": "linux",
+        "keywords": [
+          "標準規格",
+          "移植性",
+          "unix",
+          "API",
+          "IEEE"
+        ]
+      }
+    ],
+    "aliases": [
+      "Portable Operating System Interface"
+    ]
+  },
+  {
+    "term": "GNU",
+    "senses": [
+      {
+        "definition": "Richard Stallmanが1983年に立ち上げたフリーソフトウェアプロジェクト。GCCやglibcなどLinuxシステムの基盤となるツールを提供する。",
+        "domain": "linux",
+        "keywords": [
+          "フリーソフトウェア",
+          "オープンソース",
+          "GCC",
+          "linux",
+          "FSF"
+        ]
+      }
+    ],
+    "aliases": [
+      "GNU's Not Unix"
+    ]
+  },
+  {
+    "term": "RHEL",
+    "senses": [
+      {
+        "definition": "Red Hatが提供するエンタープライズ向けLinuxディストリビューション。長期サポートと商用サポートが特徴で、企業環境に広く採用される。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "エンタープライズ",
+          "Red Hat",
+          "linux",
+          "サポート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Red Hat Enterprise Linux"
+    ]
+  },
+  {
+    "term": "Oracle Linux",
+    "senses": [
+      {
+        "definition": "OracleがRHELをベースに提供するLinuxディストリビューション。RHELと完全バイナリ互換を持ち、Oracle製品との親和性が高い。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "RHEL互換",
+          "Oracle",
+          "linux",
+          "エンタープライズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Ubuntu",
+    "senses": [
+      {
+        "definition": "Canonicalが支援するDebianベースのLinuxディストリビューション。使いやすさと定期的なLTSリリースで世界的に人気が高い。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "Debian",
+          "Canonical",
+          "linux",
+          "LTS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Debian",
+    "senses": [
+      {
+        "definition": "コミュニティ主導で開発されるLinuxディストリビューション。安定性と自由ソフトウェアの原則を重視し、多くのディストリビューションの派生元となっている。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "APT",
+          "安定性",
+          "コミュニティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CentOS",
+    "senses": [
+      {
+        "definition": "RHELのソースコードをベースにしたコミュニティ版Linuxディストリビューション。2021年末にCentOS Streamへ移行が決定された。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "RHEL互換",
+          "linux",
+          "コミュニティ",
+          "CentOS Stream"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CentOS Stream",
+    "senses": [
+      {
+        "definition": "RHELの開発上流として位置づけられるローリングリリース型のLinuxディストリビューション。CentOSの後継として提供される。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "RHEL",
+          "ローリングリリース",
+          "linux",
+          "アップストリーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AlmaLinux",
+    "senses": [
+      {
+        "definition": "CentOS 8の後継として開発されたRHEL互換のLinuxディストリビューション。CloudLinuxが主導するコミュニティプロジェクト。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "RHEL互換",
+          "linux",
+          "CentOS後継",
+          "コミュニティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Rocky Linux",
+    "senses": [
+      {
+        "definition": "CentOSの共同創設者Gregory Kurtzerが主導するRHEL互換Linuxディストリビューション。エンタープライズ環境向けに設計されている。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "RHEL互換",
+          "linux",
+          "CentOS後継",
+          "エンタープライズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Fedora",
+    "senses": [
+      {
+        "definition": "Red Hatが支援するコミュニティ主導のLinuxディストリビューション。最新技術を積極的に取り入れRHELの上流として機能する。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "Red Hat",
+          "アップストリーム",
+          "最新技術"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "openSUSE",
+    "senses": [
+      {
+        "definition": "SUSEが支援するオープンソースのLinuxディストリビューション。安定版のLeapとローリングリリースのTumbleweedの2系統がある。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "SUSE",
+          "Leap",
+          "Tumbleweed"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SUSE Linux",
+    "senses": [
+      {
+        "definition": "ドイツのSUSEが提供するLinuxディストリビューション群の総称。エンタープライズ向けSLES（SUSE Linux Enterprise Server）が主力製品。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "エンタープライズ",
+          "SLES",
+          "zypper"
+        ]
+      }
+    ],
+    "aliases": [
+      "SUSE"
+    ]
+  },
+  {
+    "term": "Linux Mint",
+    "senses": [
+      {
+        "definition": "Ubuntuベースの使いやすさを重視したLinuxディストリビューション。Windows移行ユーザーに人気で、Cinnamonデスクトップが特徴的。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "Ubuntu",
+          "デスクトップ",
+          "初心者向け"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Arch Linux",
+    "senses": [
+      {
+        "definition": "シンプルさと最新性を重視したローリングリリース型Linuxディストリビューション。pacmanパッケージマネージャとAURリポジトリが特徴。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "ローリングリリース",
+          "pacman",
+          "AUR"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Gentoo",
+    "senses": [
+      {
+        "definition": "ソースからコンパイルしてインストールするLinuxディストリビューション。Portageパッケージシステムで細かいビルドオプション最適化が可能。",
+        "domain": "linux",
+        "keywords": [
+          "ディストリビューション",
+          "linux",
+          "ソースビルド",
+          "Portage",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FreeBSD",
+    "senses": [
+      {
+        "definition": "BSDライセンスで配布されるUnix系オペレーティングシステム。安定性とネットワーク性能に優れ、サーバー用途に広く利用される。",
+        "domain": "linux",
+        "keywords": [
+          "OS",
+          "BSD",
+          "unix",
+          "サーバー",
+          "ネットワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OpenBSD",
+    "senses": [
+      {
+        "definition": "セキュリティを最優先に設計されたBSD系オペレーティングシステム。コード監査を徹底し、SSHなど多くのセキュリティツールの発祥地。",
+        "domain": "linux",
+        "keywords": [
+          "OS",
+          "BSD",
+          "unix",
+          "セキュリティ",
+          "SSH"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NetBSD",
+    "senses": [
+      {
+        "definition": "高い移植性を特徴とするBSD系オペレーティングシステム。多様なCPUアーキテクチャをサポートし「どんなハードウェアでも動く」がモットー。",
+        "domain": "linux",
+        "keywords": [
+          "OS",
+          "BSD",
+          "unix",
+          "移植性",
+          "組み込み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WSL",
+    "senses": [
+      {
+        "definition": "Windows上でLinuxバイナリをネイティブ実行できるWindows Subsystem for Linux。WSL2ではLinuxカーネルを内包し完全な互換性を持つ。",
+        "domain": "linux",
+        "keywords": [
+          "Windows",
+          "linux",
+          "互換レイヤー",
+          "開発環境",
+          "WSL2"
+        ]
+      }
+    ],
+    "aliases": [
+      "Windows Subsystem for Linux"
+    ]
+  },
+  {
+    "term": "WSL2",
+    "senses": [
+      {
+        "definition": "仮想化技術を用いてWindows上に本物のLinuxカーネルを実行するWSLの第2世代。完全なシステムコール互換とDockerサポートが特徴。",
+        "domain": "linux",
+        "keywords": [
+          "Windows",
+          "linux",
+          "仮想化",
+          "カーネル",
+          "Docker"
+        ]
+      }
+    ],
+    "aliases": [
+      "Windows Subsystem for Linux 2"
+    ]
+  },
+  {
+    "term": "ディストリビューション",
+    "senses": [
+      {
+        "definition": "Linuxカーネルに各種ソフトウェアやパッケージ管理システムを組み合わせて配布されるOSパッケージ。UbuntuやRHELなど多数存在する。",
+        "domain": "linux",
+        "keywords": [
+          "linux",
+          "OS",
+          "パッケージ",
+          "ディストロ",
+          "カーネル"
+        ]
+      }
+    ],
+    "aliases": [
+      "ディストロ",
+      "distro"
+    ]
+  },
+  {
+    "term": "LTS",
+    "senses": [
+      {
+        "definition": "Long Term Supportの略。通常より長期間（5年程度）のセキュリティアップデートとバグ修正が提供されるリリースバージョン。",
+        "domain": "linux",
+        "keywords": [
+          "サポート",
+          "長期サポート",
+          "リリース",
+          "Ubuntu",
+          "安定版"
+        ]
+      }
+    ],
+    "aliases": [
+      "Long Term Support",
+      "長期サポート"
+    ]
+  },
+  {
+    "term": "サポートライフサイクル",
+    "senses": [
+      {
+        "definition": "OSやソフトウェアのバージョンがセキュリティパッチやバグ修正のサポートを受けられる期間。EOL（End of Life）でサポートが終了する。",
+        "domain": "linux",
+        "keywords": [
+          "EOL",
+          "セキュリティ",
+          "サポート期間",
+          "linux",
+          "アップデート"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "さぽーとらいふさいくる"
+  },
+  {
+    "term": "アップストリーム",
+    "senses": [
+      {
+        "definition": "ソフトウェアの開発元や上流プロジェクトを指す。ディストリビューションはアップストリームのコードを取り込んでパッケージ化する。",
+        "domain": "linux",
+        "keywords": [
+          "開発元",
+          "上流",
+          "ソフトウェア",
+          "パッケージ",
+          "OSS"
+        ]
+      }
+    ],
+    "aliases": [
+      "upstream"
+    ]
+  },
+  {
+    "term": "ダウンストリーム",
+    "senses": [
+      {
+        "definition": "上流（アップストリーム）プロジェクトを取り込んで配布する下流プロジェクトを指す。ディストリビューションはLinuxカーネルのダウンストリームにあたる。",
+        "domain": "linux",
+        "keywords": [
+          "下流",
+          "ディストリビューション",
+          "派生",
+          "linux",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "downstream"
+    ]
+  },
+  {
+    "term": "BIOS",
+    "senses": [
+      {
+        "definition": "PCのマザーボードに搭載されたファームウェア。コンピュータ起動時にハードウェアを初期化しブートローダーを起動する役割を持つ。",
+        "domain": "linux",
+        "keywords": [
+          "ファームウェア",
+          "起動",
+          "ブートローダー",
+          "ハードウェア",
+          "UEFI"
+        ]
+      }
+    ],
+    "aliases": [
+      "Basic Input/Output System"
+    ]
+  },
+  {
+    "term": "UEFI",
+    "senses": [
+      {
+        "definition": "BIOSの後継となる現代的なファームウェアインターフェース。GPTパーティション、Secure Boot、グラフィカルなセットアップ画面などをサポートする。",
+        "domain": "linux",
+        "keywords": [
+          "ファームウェア",
+          "起動",
+          "Secure Boot",
+          "GPT",
+          "BIOS後継"
+        ]
+      }
+    ],
+    "aliases": [
+      "Unified Extensible Firmware Interface"
+    ]
+  },
+  {
+    "term": "GRUB",
+    "senses": [
+      {
+        "definition": "GNU GRand Unified Bootloaderの略。Linuxシステムで広く使われるブートローダー。複数のOSやカーネルバージョンを選択して起動できる。",
+        "domain": "linux",
+        "keywords": [
+          "ブートローダー",
+          "起動",
+          "linux",
+          "マルチブート",
+          "カーネル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Grand Unified Bootloader",
+      "GNU GRUB"
+    ]
+  },
+  {
+    "term": "GRUB2",
+    "senses": [
+      {
+        "definition": "GRUBの第2世代。モジュール式設計により多様なファイルシステムやアーキテクチャをサポートし、現在のLinuxディストリビューションの標準ブートローダー。",
+        "domain": "linux",
+        "keywords": [
+          "ブートローダー",
+          "起動",
+          "linux",
+          "モジュール",
+          "GRUB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Grand Unified Bootloader 2",
+      "GNU GRUB 2"
+    ]
+  },
+  {
+    "term": "ブートローダー",
+    "senses": [
+      {
+        "definition": "コンピュータの電源投入後にファームウェアから制御を受け取り、OSカーネルをメモリに読み込んで実行するプログラム。GRUBが代表的。",
+        "domain": "linux",
+        "keywords": [
+          "起動",
+          "GRUB",
+          "カーネル",
+          "ファームウェア",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "bootloader"
+    ]
+  },
+  {
+    "term": "initramfs",
+    "senses": [
+      {
+        "definition": "カーネル起動直後にメモリ上に展開される初期RAMファイルシステム。実際のルートファイルシステムをマウントするために必要なドライバやツールを含む。",
+        "domain": "linux",
+        "keywords": [
+          "起動",
+          "RAMファイルシステム",
+          "カーネル",
+          "initrd",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "initial RAM filesystem"
+    ]
+  },
+  {
+    "term": "initrd",
+    "senses": [
+      {
+        "definition": "カーネル起動時に使用される初期RAMディスクイメージ。initramfsの旧称・旧形式で、現在のLinuxでは主にinitramfsが使われる。",
+        "domain": "linux",
+        "keywords": [
+          "起動",
+          "RAMディスク",
+          "カーネル",
+          "initramfs",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "initial RAM disk"
+    ]
+  },
+  {
+    "term": "MBR",
+    "senses": [
+      {
+        "definition": "ディスクの先頭512バイトに格納されるマスターブートレコード。ブートコードとパーティションテーブルを含み、最大4つのプライマリパーティションをサポートする。",
+        "domain": "linux",
+        "keywords": [
+          "ブート",
+          "パーティション",
+          "ディスク",
+          "BIOS",
+          "GPT"
+        ]
+      }
+    ],
+    "aliases": [
+      "Master Boot Record"
+    ]
+  },
+  {
+    "term": "GPT",
+    "senses": [
+      {
+        "definition": "GUIDパーティションテーブルの略。MBRの後継として設計された現代的なパーティション方式。2TB超のディスクや128以上のパーティションをサポートする。",
+        "domain": "linux",
+        "keywords": [
+          "パーティション",
+          "ディスク",
+          "UEFI",
+          "MBR後継",
+          "GUID"
+        ]
+      }
+    ],
+    "aliases": [
+      "GUID Partition Table"
+    ]
+  },
+  {
+    "term": "EFI System Partition",
+    "senses": [
+      {
+        "definition": "UEFIファームウェアがブートローダーやEFIアプリケーションを格納・実行するために使用する特殊なFATパーティション。",
+        "domain": "linux",
+        "keywords": [
+          "UEFI",
+          "ブートローダー",
+          "パーティション",
+          "FAT",
+          "起動"
+        ]
+      }
+    ],
+    "aliases": [
+      "ESP",
+      "EFIシステムパーティション"
+    ]
+  },
+  {
+    "term": "Secure Boot",
+    "senses": [
+      {
+        "definition": "UEFIの機能の一つ。デジタル署名されたブートローダーのみ起動を許可し、マルウェアによるブートプロセスへの侵害を防ぐ仕組み。",
+        "domain": "security",
+        "keywords": [
+          "UEFI",
+          "署名",
+          "セキュリティ",
+          "ブートローダー",
+          "マルウェア対策"
+        ]
+      }
+    ],
+    "aliases": [
+      "セキュアブート"
+    ]
+  },
+  {
+    "term": "カーネルパラメータ",
+    "senses": [
+      {
+        "definition": "Linuxカーネルにブート時や実行時に渡す設定値。GRUBのカーネルコマンドラインやsysctlで指定し、起動オプションやカーネル動作を制御する。",
+        "domain": "linux",
+        "keywords": [
+          "カーネル",
+          "起動",
+          "sysctl",
+          "GRUB",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "kernel parameter",
+      "カーネルコマンドライン"
+    ],
+    "reading": "かーねるぱらめーた"
+  },
+  {
+    "term": "runlevel",
+    "senses": [
+      {
+        "definition": "SysVinitにおけるシステムの動作状態を表す数値（0〜6）。例えば0は電源オフ、3はマルチユーザーモード、5はグラフィカルモードを示す。",
+        "domain": "linux",
+        "keywords": [
+          "SysVinit",
+          "起動レベル",
+          "systemd",
+          "linux",
+          "ターゲット"
+        ]
+      }
+    ],
+    "aliases": [
+      "ランレベル"
+    ]
+  },
+  {
+    "term": "ターゲット",
+    "senses": [
+      {
+        "definition": "systemdにおけるrunlevelの相当概念。multi-user.targetやgraphical.targetなど、システムの動作状態をユニット群として定義する。",
+        "domain": "linux",
+        "keywords": [
+          "systemd",
+          "runlevel",
+          "linux",
+          "起動",
+          "ユニット"
+        ]
+      }
+    ],
+    "aliases": [
+      "target",
+      "systemd target"
+    ]
+  },
+  {
+    "term": "SysVinit",
+    "senses": [
+      {
+        "definition": "伝統的なUnix/Linuxの初期化システム。/etc/inittabとランレベルに基づいてサービスを起動するinitプロセスを使用する。systemdに置き換えられつつある。",
+        "domain": "linux",
+        "keywords": [
+          "init",
+          "linux",
+          "起動",
+          "ランレベル",
+          "サービス管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "System V init",
+      "SysV init"
+    ]
+  },
+  {
+    "term": "Upstart",
+    "senses": [
+      {
+        "definition": "UbuntuなどでSysVinitの代替として採用されたイベント駆動型のinitシステム。現在はほとんどのディストリビューションでsystemdに置き換えられている。",
+        "domain": "linux",
+        "keywords": [
+          "init",
+          "linux",
+          "イベント駆動",
+          "Ubuntu",
+          "systemd"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブートプロセス",
+    "senses": [
+      {
+        "definition": "電源投入からOSが使用可能になるまでの一連の起動手順。BIOS/UEFI→ブートローダー→カーネル→init/systemdの順で処理が進む。",
+        "domain": "linux",
+        "keywords": [
+          "起動",
+          "BIOS",
+          "UEFI",
+          "GRUB",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "boot process"
+    ],
+    "reading": "ぶーとぷろせす"
+  },
+  {
+    "term": "multi-user.target",
+    "senses": [
+      {
+        "definition": "systemdのターゲットユニットの一つ。ネットワークが有効でGUIなしのマルチユーザー環境を表し、SysVinitのrunlevel 3に相当する。",
+        "domain": "linux",
+        "keywords": [
+          "systemd",
+          "ターゲット",
+          "マルチユーザー",
+          "linux",
+          "runlevel"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "graphical.target",
+    "senses": [
+      {
+        "definition": "systemdのターゲットユニットの一つ。グラフィカルデスクトップ環境が起動した状態を表し、SysVinitのrunlevel 5に相当する。",
+        "domain": "linux",
+        "keywords": [
+          "systemd",
+          "ターゲット",
+          "GUI",
+          "linux",
+          "runlevel"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "rescue.target",
+    "senses": [
+      {
+        "definition": "systemdのシングルユーザーレスキューモードを表すターゲット。root権限で最小限のサービスのみ起動し、システム修復に使用する。",
+        "domain": "linux",
+        "keywords": [
+          "systemd",
+          "ターゲット",
+          "修復",
+          "シングルユーザー",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "emergency.target",
+    "senses": [
+      {
+        "definition": "systemdの緊急モードターゲット。rescue.targetよりさらに最小限の環境で起動し、重大なシステム障害時の診断・修復に使用する。",
+        "domain": "linux",
+        "keywords": [
+          "systemd",
+          "ターゲット",
+          "緊急",
+          "修復",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "カーネルモジュール",
+    "senses": [
+      {
+        "definition": "Linuxカーネルに動的にロード・アンロードできる機能拡張単位。デバイスドライバやファイルシステムなどを必要時のみカーネルに組み込める。",
+        "domain": "linux",
+        "keywords": [
+          "カーネル",
+          "ドライバ",
+          "lsmod",
+          "modprobe",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "kernel module"
+    ],
+    "reading": "かーねるもじゅーる"
+  },
+  {
+    "term": "lsmod",
+    "senses": [
+      {
+        "definition": "現在Linuxカーネルにロードされているモジュールの一覧を表示するコマンド。モジュール名、サイズ、使用数を確認できる。",
+        "domain": "linux",
+        "keywords": [
+          "カーネルモジュール",
+          "コマンド",
+          "linux",
+          "modprobe",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "modprobe",
+    "senses": [
+      {
+        "definition": "Linuxカーネルモジュールをロードまたはアンロードするコマンド。依存関係を自動解決してモジュールをロードする点でinsmodより高機能。",
+        "domain": "linux",
+        "keywords": [
+          "カーネルモジュール",
+          "ロード",
+          "linux",
+          "依存関係",
+          "insmod"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "insmod",
+    "senses": [
+      {
+        "definition": "指定したカーネルモジュールファイルをLinuxカーネルに直接ロードするコマンド。依存関係の解決は行わない低レベルコマンド。",
+        "domain": "linux",
+        "keywords": [
+          "カーネルモジュール",
+          "ロード",
+          "linux",
+          "modprobe",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "rmmod",
+    "senses": [
+      {
+        "definition": "Linuxカーネルからモジュールをアンロードするコマンド。使用中のモジュールはアンロードできない。",
+        "domain": "linux",
+        "keywords": [
+          "カーネルモジュール",
+          "アンロード",
+          "linux",
+          "modprobe",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "modinfo",
+    "senses": [
+      {
+        "definition": "カーネルモジュールの詳細情報（作者、バージョン、パラメータ、依存関係など）を表示するコマンド。",
+        "domain": "linux",
+        "keywords": [
+          "カーネルモジュール",
+          "情報",
+          "linux",
+          "コマンド",
+          "ドライバ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "カーネルパニック",
+    "senses": [
+      {
+        "definition": "Linuxカーネルが回復不能なエラーを検出した際に発生するシステムクラッシュ状態。エラーメッセージを出力してシステムを停止または再起動する。",
+        "domain": "linux",
+        "keywords": [
+          "カーネル",
+          "クラッシュ",
+          "linux",
+          "エラー",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": [
+      "kernel panic"
+    ],
+    "reading": "かーねるぱにっく"
+  },
+  {
+    "term": "uname",
+    "senses": [
+      {
+        "definition": "システムのカーネルバージョン、OS名、ホスト名などのシステム情報を表示するコマンド。uname -aですべての情報を一括表示できる。",
+        "domain": "linux",
+        "keywords": [
+          "カーネル",
+          "バージョン",
+          "linux",
+          "コマンド",
+          "システム情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/proc",
+    "senses": [
+      {
+        "definition": "Linuxカーネルが提供する仮想ファイルシステム。実行中のプロセス情報やカーネルパラメータをファイルとして公開し、sysctlでも参照される。",
+        "domain": "linux",
+        "keywords": [
+          "仮想ファイルシステム",
+          "プロセス",
+          "カーネル",
+          "linux",
+          "/sys"
+        ]
+      }
+    ],
+    "aliases": [
+      "proc filesystem",
+      "procfs"
+    ]
+  },
+  {
+    "term": "/sys",
+    "senses": [
+      {
+        "definition": "カーネルのデバイス・ドライバ情報を公開する仮想ファイルシステム（sysfs）。/procよりも整理された構造でデバイス管理情報を提供する。",
+        "domain": "linux",
+        "keywords": [
+          "仮想ファイルシステム",
+          "デバイス",
+          "カーネル",
+          "linux",
+          "/proc"
+        ]
+      }
+    ],
+    "aliases": [
+      "sysfs"
+    ]
+  },
+  {
+    "term": "sysctl",
+    "senses": [
+      {
+        "definition": "実行中のLinuxカーネルパラメータを読み書きするコマンドおよびインターフェース。/proc/sys以下のパラメータを操作し、ネットワーク設定などに利用する。",
+        "domain": "linux",
+        "keywords": [
+          "カーネルパラメータ",
+          "linux",
+          "コマンド",
+          "/proc",
+          "チューニング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dmesg",
+    "senses": [
+      {
+        "definition": "Linuxカーネルのリングバッファに記録されたメッセージを表示するコマンド。起動時のハードウェア検出やドライバエラーの確認に使用する。",
+        "domain": "linux",
+        "keywords": [
+          "カーネル",
+          "ログ",
+          "linux",
+          "コマンド",
+          "デバッグ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OOMキラー",
+    "senses": [
+      {
+        "definition": "システムのメモリが枯渇した際にLinuxカーネルが動作させるメモリ回収機構。使用メモリ量などに基づいてプロセスを強制終了させる。",
+        "domain": "linux",
+        "keywords": [
+          "メモリ",
+          "プロセス",
+          "カーネル",
+          "linux",
+          "OOM"
+        ]
+      }
+    ],
+    "aliases": [
+      "OOM Killer",
+      "Out-of-Memory Killer"
+    ],
+    "reading": "おーむきらー"
+  },
+  {
+    "term": "シェル",
+    "senses": [
+      {
+        "definition": "ユーザーとOSカーネルの間に介在するコマンドインタプリタ。コマンドの入力受付、パイプ処理、スクリプト実行などを担う。bash・zshが代表的。",
+        "domain": "shell",
+        "keywords": [
+          "コマンドライン",
+          "bash",
+          "linux",
+          "CLI",
+          "インタプリタ"
+        ]
+      }
+    ],
+    "aliases": [
+      "shell"
+    ]
+  },
+  {
+    "term": "bash",
+    "senses": [
+      {
+        "definition": "GNU Projectが開発したBourne-Againシェル。LinuxのデフォルトシェルとしてWindowsやmacOSでも広く利用される高機能シェル。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "linux",
+          "スクリプト",
+          "GNU",
+          "コマンドライン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bourne Again Shell"
+    ]
+  },
+  {
+    "term": "zsh",
+    "senses": [
+      {
+        "definition": "bash互換の高機能シェル。タブ補完、プラグイン機能、テーマカスタマイズが優れ、macOSのデフォルトシェルとしても採用されている。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "linux",
+          "補完",
+          "Oh My Zsh",
+          "コマンドライン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Z Shell"
+    ]
+  },
+  {
+    "term": "ksh",
+    "senses": [
+      {
+        "definition": "AT&TのDavid Kornが開発したKornシェル。スクリプト互換性が高く、商用Unixシステムで広く利用される。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "unix",
+          "スクリプト",
+          "POSIX",
+          "コマンドライン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Korn Shell"
+    ]
+  },
+  {
+    "term": "tcsh",
+    "senses": [
+      {
+        "definition": "cshを拡張したシェル。コマンド補完やコマンドラインの編集機能を追加したC Shell互換シェル。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "unix",
+          "C shell",
+          "補完",
+          "コマンドライン"
+        ]
+      }
+    ],
+    "aliases": [
+      "TENEX C Shell"
+    ]
+  },
+  {
+    "term": "fish",
+    "senses": [
+      {
+        "definition": "ユーザーフレンドリーを重視したモダンなシェル。自動補完、構文ハイライト、豊富なドキュメントが特徴で設定なしで使いやすい。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "linux",
+          "補完",
+          "構文ハイライト",
+          "モダン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fish Shell",
+      "friendly interactive shell"
+    ]
+  },
+  {
+    "term": "シェルスクリプト",
+    "senses": [
+      {
+        "definition": "シェルコマンドをファイルに記述して自動実行できるようにしたスクリプト。システム管理の自動化やバッチ処理に広く利用される。",
+        "domain": "shell",
+        "keywords": [
+          "自動化",
+          "bash",
+          "linux",
+          "スクリプト",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "shell script"
+    ],
+    "reading": "しぇるすくりぷと"
+  },
+  {
+    "term": "シェバン",
+    "senses": [
+      {
+        "definition": "スクリプトファイルの先頭に記述する「#!」で始まる行。実行するインタプリタのパス（例：#!/bin/bash）を指定する。",
+        "domain": "shell",
+        "keywords": [
+          "スクリプト",
+          "bash",
+          "linux",
+          "インタプリタ",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": [
+      "shebang",
+      "sha-bang",
+      "#!/"
+    ]
+  },
+  {
+    "term": "エクスポート",
+    "senses": [
+      {
+        "definition": "シェル変数を子プロセスに引き継ぐ環境変数として設定するexportコマンドの操作。exportコマンドで変数を環境変数化する。",
+        "domain": "shell",
+        "keywords": [
+          "環境変数",
+          "bash",
+          "linux",
+          "export",
+          "子プロセス"
+        ]
+      },
+      {
+        "definition": "アプリや設定を外部へ書き出す操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "移送",
+          "Export"
+        ]
+      }
+    ],
+    "aliases": [
+      "export"
+    ]
+  },
+  {
+    "term": "エイリアス",
+    "senses": [
+      {
+        "definition": "シェルで長いコマンドや頻繁に使うコマンドに短い名前を付ける機能。aliasコマンドで定義し、ドットファイルに記述して永続化する。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "bash",
+          "コマンド",
+          "alias",
+          "ショートカット"
+        ]
+      }
+    ],
+    "aliases": [
+      "alias"
+    ]
+  },
+  {
+    "term": "ヒアドキュメント",
+    "senses": [
+      {
+        "definition": "シェルスクリプト内で複数行の入力を標準入力として渡す構文（<<EOF…EOF）。設定ファイル生成やコマンドへの複数行データ入力に使用する。",
+        "domain": "shell",
+        "keywords": [
+          "シェルスクリプト",
+          "bash",
+          "標準入力",
+          "複数行",
+          "リダイレクト"
+        ]
+      }
+    ],
+    "aliases": [
+      "here document",
+      "heredoc"
+    ],
+    "reading": "ひあどきゅめんと"
+  },
+  {
+    "term": "コマンド置換",
+    "senses": [
+      {
+        "definition": "シェルスクリプトでコマンドの出力結果を変数や別のコマンドの引数として使用する構文。$(command)またはバッククォート記法を使う。",
+        "domain": "shell",
+        "keywords": [
+          "シェルスクリプト",
+          "bash",
+          "コマンド",
+          "変数",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "command substitution"
+    ],
+    "reading": "こまんどちかん"
+  },
+  {
+    "term": "サブシェル",
+    "senses": [
+      {
+        "definition": "親シェルから独立して実行されるシェルプロセス。丸括弧()でコマンドを囲むと生成され、環境変数の変更が親シェルに影響しない。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "bash",
+          "linux",
+          "プロセス",
+          "環境変数"
+        ]
+      }
+    ],
+    "aliases": [
+      "subshell"
+    ]
+  },
+  {
+    "term": "標準入力",
+    "senses": [
+      {
+        "definition": "プログラムがデータを受け取るデフォルトの入力ストリーム（ファイルディスクリプタ0）。通常はキーボード入力で、<リダイレクトやパイプで変更できる。",
+        "domain": "shell",
+        "keywords": [
+          "stdin",
+          "ファイルディスクリプタ",
+          "シェル",
+          "linux",
+          "リダイレクト"
+        ]
+      }
+    ],
+    "aliases": [
+      "stdin"
+    ],
+    "reading": "ひょうじゅんにゅうりょく"
+  },
+  {
+    "term": "標準出力",
+    "senses": [
+      {
+        "definition": "プログラムが通常の結果を出力するデフォルトのストリーム（ファイルディスクリプタ1）。通常は端末に表示され、>リダイレクトやパイプで変更できる。",
+        "domain": "shell",
+        "keywords": [
+          "stdout",
+          "ファイルディスクリプタ",
+          "シェル",
+          "linux",
+          "リダイレクト"
+        ]
+      }
+    ],
+    "aliases": [
+      "stdout"
+    ],
+    "reading": "ひょうじゅんしゅつりょく"
+  },
+  {
+    "term": "標準エラー出力",
+    "senses": [
+      {
+        "definition": "プログラムがエラーメッセージを出力するデフォルトのストリーム（ファイルディスクリプタ2）。2>でリダイレクトでき、標準出力と独立して扱える。",
+        "domain": "shell",
+        "keywords": [
+          "stderr",
+          "ファイルディスクリプタ",
+          "シェル",
+          "linux",
+          "エラー"
+        ]
+      }
+    ],
+    "aliases": [
+      "stderr"
+    ],
+    "reading": "ひょうじゅんえらーしゅつりょく"
+  },
+  {
+    "term": "ジョブ制御",
+    "senses": [
+      {
+        "definition": "シェルにおいてプロセスをフォアグラウンド・バックグラウンドで管理する仕組み。jobs、fg、bgコマンドでジョブを操作できる。",
+        "domain": "shell",
+        "keywords": [
+          "プロセス",
+          "バックグラウンド",
+          "bash",
+          "linux",
+          "jobs"
+        ]
+      }
+    ],
+    "aliases": [
+      "job control"
+    ],
+    "reading": "じょぶせいぎょ"
+  },
+  {
+    "term": "フォアグラウンド",
+    "senses": [
+      {
+        "definition": "端末を占有して対話的に実行されているプロセスの実行状態。Ctrl+Zでバックグラウンドに送り、fgで前面に戻せる。",
+        "domain": "shell",
+        "keywords": [
+          "プロセス",
+          "ジョブ制御",
+          "シェル",
+          "linux",
+          "端末"
+        ]
+      }
+    ],
+    "aliases": [
+      "foreground"
+    ]
+  },
+  {
+    "term": "バックグラウンド",
+    "senses": [
+      {
+        "definition": "端末を占有せずに別タスクとして実行されているプロセスの実行状態。コマンドの末尾に&を付けることでバックグラウンド実行できる。",
+        "domain": "shell",
+        "keywords": [
+          "プロセス",
+          "ジョブ制御",
+          "シェル",
+          "linux",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": [
+      "background"
+    ]
+  },
+  {
+    "term": "nohup",
+    "senses": [
+      {
+        "definition": "コマンドをSIGHUP（端末切断シグナル）を無視して実行するコマンド。SSHセッションが切れても処理を継続させるために使用する。",
+        "domain": "shell",
+        "keywords": [
+          "プロセス",
+          "シェル",
+          "linux",
+          "SIGHUP",
+          "バックグラウンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "screen",
+    "senses": [
+      {
+        "definition": "端末マルチプレクサソフトウェア。複数の仮想端末セッションを管理でき、SSH切断後も処理を継続させるデタッチ機能を持つ。",
+        "domain": "shell",
+        "keywords": [
+          "端末",
+          "マルチプレクサ",
+          "linux",
+          "SSH",
+          "セッション管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "GNU Screen"
+    ]
+  },
+  {
+    "term": "tmux",
+    "senses": [
+      {
+        "definition": "screenの後継として広く使われる端末マルチプレクサ。ウィンドウ分割、セッション管理、設定の柔軟性に優れる。",
+        "domain": "shell",
+        "keywords": [
+          "端末",
+          "マルチプレクサ",
+          "linux",
+          "セッション管理",
+          "screen"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コマンドヒストリ",
+    "senses": [
+      {
+        "definition": "シェルが過去に実行したコマンドを記録する機能。historyコマンドで参照でき、Ctrl+Rで検索、!!で直前コマンド再実行などができる。",
+        "domain": "shell",
+        "keywords": [
+          "bash",
+          "シェル",
+          "history",
+          "linux",
+          "履歴"
+        ]
+      }
+    ],
+    "aliases": [
+      "command history",
+      "ヒストリ"
+    ],
+    "reading": "こまんどひすとり"
+  },
+  {
+    "term": "タブ補完",
+    "senses": [
+      {
+        "definition": "コマンドやファイル名の入力途中にTabキーを押すと候補を自動補完するシェルの機能。作業効率を大幅に向上させる。",
+        "domain": "shell",
+        "keywords": [
+          "シェル",
+          "bash",
+          "補完",
+          "linux",
+          "CLI"
+        ]
+      }
+    ],
+    "aliases": [
+      "tab completion",
+      "コマンド補完"
+    ]
+  },
+  {
+    "term": "ドットファイル",
+    "senses": [
+      {
+        "definition": "Unixシステムでファイル名がドット（.）で始まる隠しファイル。~/.bashrc、~/.vimrcなどアプリケーションの設定ファイルに広く使われる。",
+        "domain": "shell",
+        "keywords": [
+          "設定ファイル",
+          "linux",
+          "隠しファイル",
+          "bash",
+          "ホームディレクトリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "dotfile",
+      ".bashrc",
+      ".profile"
+    ]
+  },
+  {
+    "term": "inode",
+    "senses": [
+      {
+        "definition": "Unixファイルシステムでファイルのメタデータ（所有者、パーミッション、タイムスタンプ、データブロック位置）を格納するデータ構造。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "メタデータ",
+          "linux",
+          "パーミッション",
+          "ext4"
+        ]
+      }
+    ],
+    "aliases": [
+      "アイノード"
+    ]
+  },
+  {
+    "term": "ハードリンク",
+    "senses": [
+      {
+        "definition": "同じinodeを参照する複数のファイルシステムエントリ。実体のコピーを作らず同じデータを複数の名前で参照でき、同一ファイルシステム内でのみ作成可能。",
+        "domain": "storage",
+        "keywords": [
+          "inode",
+          "ファイルシステム",
+          "linux",
+          "リンク",
+          "ln"
+        ]
+      }
+    ],
+    "aliases": [
+      "hard link"
+    ],
+    "reading": "はーどりんく"
+  },
+  {
+    "term": "シンボリックリンク",
+    "senses": [
+      {
+        "definition": "別のファイルやディレクトリへのパスを参照するポインタファイル。異なるファイルシステム間でも作成でき、ln -sコマンドで作成する。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "リンク",
+          "ln",
+          "ショートカット"
+        ]
+      }
+    ],
+    "aliases": [
+      "symlink",
+      "symbolic link",
+      "ソフトリンク"
+    ]
+  },
+  {
+    "term": "パーミッション",
+    "senses": [
+      {
+        "definition": "Unixファイルシステムにおけるファイル・ディレクトリへのアクセス権限。所有者・グループ・その他ユーザーに対して読み取り/書き込み/実行権を設定する。",
+        "domain": "linux",
+        "keywords": [
+          "アクセス権",
+          "chmod",
+          "linux",
+          "セキュリティ",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": [
+      "permission",
+      "ファイルパーミッション"
+    ],
+    "reading": "ぱーみっしょん"
+  },
+  {
+    "term": "chmod",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリのパーミッション（アクセス権限）を変更するコマンド。数値表記（755など）またはシンボル表記（u+xなど）で指定する。",
+        "domain": "linux",
+        "keywords": [
+          "パーミッション",
+          "アクセス権",
+          "linux",
+          "コマンド",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "chown",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリの所有者とグループを変更するコマンド。root権限が必要で、chown user:group fileの形式で使用する。",
+        "domain": "linux",
+        "keywords": [
+          "所有者",
+          "グループ",
+          "linux",
+          "コマンド",
+          "パーミッション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "chgrp",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリの所有グループを変更するコマンド。chownでも同様の操作が可能だが、グループのみ変更する専用コマンド。",
+        "domain": "linux",
+        "keywords": [
+          "グループ",
+          "linux",
+          "コマンド",
+          "パーミッション",
+          "chown"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "umask",
+    "senses": [
+      {
+        "definition": "新規作成ファイル・ディレクトリのデフォルトパーミッションを制限するマスク値。指定したビットに対応するパーミッションが除外される。",
+        "domain": "linux",
+        "keywords": [
+          "パーミッション",
+          "linux",
+          "ファイル作成",
+          "シェル",
+          "アクセス権"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スティッキービット",
+    "senses": [
+      {
+        "definition": "ディレクトリに設定するとそのディレクトリ内のファイルをファイル所有者のみが削除できるようにするパーミッションフラグ。/tmpに設定されている。",
+        "domain": "linux",
+        "keywords": [
+          "パーミッション",
+          "ファイルシステム",
+          "linux",
+          "/tmp",
+          "特殊ビット"
+        ]
+      }
+    ],
+    "aliases": [
+      "sticky bit"
+    ],
+    "reading": "すてぃっきーびっと"
+  },
+  {
+    "term": "SUID",
+    "senses": [
+      {
+        "definition": "Set User IDの略。実行ファイルに設定するとファイル所有者の権限でプログラムが実行される特殊パーミッション。passwdコマンドなどに使用される。",
+        "domain": "security",
+        "keywords": [
+          "パーミッション",
+          "linux",
+          "特殊ビット",
+          "セキュリティ",
+          "setuid"
+        ]
+      }
+    ],
+    "aliases": [
+      "Set User ID",
+      "setuid"
+    ]
+  },
+  {
+    "term": "SGID",
+    "senses": [
+      {
+        "definition": "Set Group IDの略。ファイルに設定すると所有グループ権限で実行、ディレクトリに設定すると作成ファイルが同じグループを継承する特殊パーミッション。",
+        "domain": "security",
+        "keywords": [
+          "パーミッション",
+          "linux",
+          "特殊ビット",
+          "グループ",
+          "setgid"
+        ]
+      }
+    ],
+    "aliases": [
+      "Set Group ID",
+      "setgid"
+    ]
+  },
+  {
+    "term": "隠しファイル",
+    "senses": [
+      {
+        "definition": "Unixシステムでファイル名がドット（.）で始まるファイル。ls -aオプションを使わなければ通常は一覧に表示されない。",
+        "domain": "linux",
+        "keywords": [
+          "ファイル",
+          "linux",
+          "ドットファイル",
+          "ls",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": [
+      "hidden file",
+      ".ファイル"
+    ],
+    "reading": "かくしふぁいる"
+  },
+  {
+    "term": "/etc",
+    "senses": [
+      {
+        "definition": "Linuxシステムの設定ファイルを格納する標準ディレクトリ。/etc/passwd、/etc/fstab、/etc/hostsなどシステム全体の設定が集約される。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "設定ファイル",
+          "linux",
+          "FHS",
+          "システム管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/var",
+    "senses": [
+      {
+        "definition": "システムの可変データ（ログ、スプール、キャッシュ、PIDファイルなど）を格納する標準ディレクトリ。/var/logや/var/spoolが代表的なサブディレクトリ。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "ログ",
+          "linux",
+          "FHS",
+          "可変データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/tmp",
+    "senses": [
+      {
+        "definition": "システム一時ファイルを格納するディレクトリ。再起動時に削除されるため一時的なデータのみを置き、スティッキービットが設定されている。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "一時ファイル",
+          "linux",
+          "FHS",
+          "スティッキービット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/opt",
+    "senses": [
+      {
+        "definition": "オプションの追加ソフトウェアパッケージをインストールするための標準ディレクトリ。パッケージマネージャを使わないソフトウェアをインストールする際に使用される。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "インストール",
+          "linux",
+          "FHS",
+          "追加ソフトウェア"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/usr",
+    "senses": [
+      {
+        "definition": "ユーザー向けのコマンド、ライブラリ、ドキュメントが格納される大規模ディレクトリ。/usr/bin、/usr/lib、/usr/shareなど多くのサブディレクトリを持つ。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "コマンド",
+          "linux",
+          "FHS",
+          "ライブラリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/home",
+    "senses": [
+      {
+        "definition": "各ユーザーのホームディレクトリが格納される標準ディレクトリ。個人の設定ファイル、ドキュメント、ダウンロードなどが保存される。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "ホームディレクトリ",
+          "linux",
+          "FHS",
+          "ユーザー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/boot",
+    "senses": [
+      {
+        "definition": "カーネルイメージ、initramfs、GRUBの設定ファイルなどブートに必要なファイルを格納するディレクトリ。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "ブート",
+          "linux",
+          "カーネル",
+          "GRUB"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/dev",
+    "senses": [
+      {
+        "definition": "デバイスファイルが格納される仮想ディレクトリ。/dev/sda（ディスク）、/dev/null、/dev/randomなどハードウェアをファイルとして表現する。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "デバイス",
+          "linux",
+          "FHS",
+          "devtmpfs"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/run",
+    "senses": [
+      {
+        "definition": "起動中のシステムランタイム情報（PIDファイル、ソケット、ロックファイルなど）を格納するtmpfsマウントのディレクトリ。再起動時に内容が消える。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ",
+          "ランタイム",
+          "linux",
+          "tmpfs",
+          "PID"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FHS",
+    "senses": [
+      {
+        "definition": "Filesystem Hierarchy Standardの略。Linuxのディレクトリ構造と各ディレクトリの用途を定めた標準規格。/usr、/var、/etcなどの役割を定義する。",
+        "domain": "linux",
+        "keywords": [
+          "ディレクトリ構造",
+          "linux",
+          "標準規格",
+          "ファイルシステム",
+          "/usr"
+        ]
+      }
+    ],
+    "aliases": [
+      "Filesystem Hierarchy Standard"
+    ]
+  },
+  {
+    "term": "マウント",
+    "senses": [
+      {
+        "definition": "ファイルシステムをディレクトリツリーの指定した位置（マウントポイント）に接続する操作。mountコマンドで実行し、/etc/fstabで永続設定できる。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "mount",
+          "マウントポイント",
+          "/etc/fstab"
+        ]
+      }
+    ],
+    "aliases": [
+      "mount"
+    ],
+    "reading": "まうんと"
+  },
+  {
+    "term": "アンマウント",
+    "senses": [
+      {
+        "definition": "マウントされたファイルシステムをディレクトリツリーから切り離す操作。umountコマンドで実行し、使用中のファイルシステムはアンマウントできない。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "umount",
+          "マウント",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "umount"
+    ],
+    "reading": "あんまうんと"
+  },
+  {
+    "term": "/etc/fstab",
+    "senses": [
+      {
+        "definition": "システム起動時に自動マウントするファイルシステムの設定ファイル。デバイス、マウントポイント、ファイルシステムタイプ、オプションを記述する。",
+        "domain": "linux",
+        "keywords": [
+          "マウント",
+          "ファイルシステム",
+          "linux",
+          "設定ファイル",
+          "自動マウント"
+        ]
+      }
+    ],
+    "aliases": [
+      "fstab"
+    ]
+  },
+  {
+    "term": "ループバックデバイス",
+    "senses": [
+      {
+        "definition": "ファイルをブロックデバイスとして扱うための仮想デバイス（/dev/loop*）。ISOイメージファイルなどをマウントする際に使用する。",
+        "domain": "storage",
+        "keywords": [
+          "デバイス",
+          "ファイルシステム",
+          "linux",
+          "ISO",
+          "マウント"
+        ]
+      }
+    ],
+    "aliases": [
+      "loop device",
+      "loopback device"
+    ],
+    "reading": "るーぷばっくでばいす"
+  },
+  {
+    "term": "tmpfs",
+    "senses": [
+      {
+        "definition": "メモリ上に構築される仮想ファイルシステム。非常に高速で、/run、/tmp、/dev/shmなどに使用される。再起動でデータは消える。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "メモリ",
+          "仮想",
+          "マウント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "devtmpfs",
+    "senses": [
+      {
+        "definition": "カーネルがデバイスファイルを動的に管理するための仮想ファイルシステム。/devにマウントされudevと連携してデバイスファイルを自動作成する。",
+        "domain": "linux",
+        "keywords": [
+          "デバイス",
+          "linux",
+          "カーネル",
+          "udev",
+          "仮想ファイルシステム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CLI",
+    "reading": "しーえるあい",
+    "senses": [
+      {
+        "definition": "コマンドを文字で入力して操作するインターフェースです。自動化、スクリプト化、大量操作と相性がよく、GUIより再現性を高めやすいです。",
+        "domain": "shell",
+        "keywords": [
+          "コマンド",
+          "自動化",
+          "スクリプト",
+          "端末",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "Command Line Interface",
+      "コマンドラインインターフェース"
+    ]
+  }
+]

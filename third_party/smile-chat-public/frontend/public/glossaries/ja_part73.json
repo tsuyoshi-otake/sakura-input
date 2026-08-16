@@ -1,0 +1,996 @@
+[
+  {
+    "term": "マイコン",
+    "reading": "まいこん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "CPU・メモリ・I/Oペリフェラルを1チップに集積した小型コンピュータ。家電・自動車・産業機器・IoT機器に組み込まれ、センサー入力の処理やモーター制御など専用の制御タスクを担う。Arduino・Raspberry Pi Pico・M5Stack等の開発ボードに搭載される。",
+        "domain": "embedded",
+        "keywords": [
+          "MCU",
+          "組み込み",
+          "制御",
+          "ワンチップ",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino",
+    "reading": "あるでゅいーの",
+    "aliases": [
+      "Arduino Platform"
+    ],
+    "senses": [
+      {
+        "definition": "オープンソースの電子工作プラットフォーム。AVRやARM系マイコンを搭載した開発ボードと、C/C++ベースのArduino IDEを提供する。初心者から上級者まで幅広く使われ、豊富なライブラリとシールド（拡張基板）のエコシステムを持つ。",
+        "domain": "embedded",
+        "keywords": [
+          "開発ボード",
+          "オープンソース",
+          "電子工作",
+          "IDE",
+          "シールド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino UNO R4 WiFi",
+    "aliases": [
+      "UNO R4 WiFi"
+    ],
+    "senses": [
+      {
+        "definition": "Renesas RA4M1（Arm Cortex-M4/48MHz）搭載のArduino UNO最新モデル。ESP32-S3によるWi-Fi/BLE接続、12x8 LEDマトリクス、USB-C、CAN対応を備え、IoTプロジェクトに適した入門ボード。",
+        "domain": "embedded",
+        "keywords": [
+          "Arduino",
+          "RA4M1",
+          "Wi-Fi",
+          "BLE",
+          "LEDマトリクス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino Nano R4",
+    "aliases": [
+      "Nano R4"
+    ],
+    "senses": [
+      {
+        "definition": "Arduino Nanoフォームファクタを採用したRenesas RA4M1搭載のコンパクト開発ボード。ブレッドボードに直接挿せるサイズでありながら、UNO R4同等の処理性能を持つ小型プロジェクト向けボード。",
+        "domain": "embedded",
+        "keywords": [
+          "Arduino",
+          "Nano",
+          "RA4M1",
+          "コンパクト",
+          "ブレッドボード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino Nano ESP32",
+    "aliases": [
+      "Nano ESP32"
+    ],
+    "senses": [
+      {
+        "definition": "ESP32-S3を搭載したArduino Nanoフォームファクタの開発ボード。Wi-Fi/BLE接続、MicroPython対応、Arduino Cloud統合が特徴で、Nanoサイズで無線IoTプロジェクトを実現できる。u-blox NORA-W106モジュールを採用。",
+        "domain": "embedded",
+        "keywords": [
+          "Arduino",
+          "ESP32-S3",
+          "Wi-Fi",
+          "MicroPython",
+          "NORA-W106"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino Plug and Make Kit",
+    "aliases": [
+      "Plug and Make Kit"
+    ],
+    "senses": [
+      {
+        "definition": "Arduino UNO R4 WiFiとModulinoセンサーモジュール群をセットにしたスターターキット。配線不要のQwiic接続でセンサーを接続でき、Arduino Cloudとの連携でIoTプロジェクトを簡単に始められる教育・入門向けパッケージ。",
+        "domain": "embedded",
+        "keywords": [
+          "Arduino",
+          "スターターキット",
+          "Modulino",
+          "Qwiic",
+          "入門"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino UNO Rev3",
+    "aliases": [
+      "UNO Rev3",
+      "Arduino UNO R3"
+    ],
+    "senses": [
+      {
+        "definition": "ATmega328Pを搭載したArduinoの代表的な開発ボード。14本のデジタルI/O・6本のアナログ入力・16MHz動作で、電子工作の入門ボードとして世界中で最も普及したマイコンボードの一つ。5V動作。",
+        "domain": "embedded",
+        "keywords": [
+          "Arduino",
+          "ATmega328P",
+          "入門",
+          "5V",
+          "デジタルI/O"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Raspberry Pi Pico",
+    "aliases": [
+      "Pi Pico"
+    ],
+    "senses": [
+      {
+        "definition": "Raspberry Pi財団が設計したRP2040搭載の小型マイコンボード。デュアルコアArm Cortex-M0+/133MHz、264KB SRAM、2MB Flash、26本のGPIOを備え、低価格ながら高いI/O性能を持つ。MicroPythonとC/C++ SDKで開発可能。",
+        "domain": "embedded",
+        "keywords": [
+          "RP2040",
+          "Cortex-M0+",
+          "MicroPython",
+          "GPIO",
+          "低価格"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Raspberry Pi Pico 2",
+    "aliases": [
+      "Pi Pico 2"
+    ],
+    "senses": [
+      {
+        "definition": "RP2350搭載のRaspberry Pi Picoの後継ボード。デュアルコアArm Cortex-M33/150MHzとRISC-V Hazard3コアのデュアルアーキテクチャ、520KB SRAM、4MB Flash、セキュリティ機能（Arm TrustZone）を備え、性能とセキュリティが大幅に向上。",
+        "domain": "embedded",
+        "keywords": [
+          "RP2350",
+          "Cortex-M33",
+          "Hazard3",
+          "TrustZone",
+          "RISC-V"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Raspberry Pi Pico 2 W",
+    "aliases": [
+      "Pi Pico 2 W"
+    ],
+    "senses": [
+      {
+        "definition": "Raspberry Pi Pico 2にCYW43439無線モジュールを追加し、2.4GHz Wi-FiとBluetooth 5.2（BLE）に対応した無線通信付きマイコンボード。IoTプロジェクトや無線センサーノードに最適。",
+        "domain": "embedded",
+        "keywords": [
+          "RP2350",
+          "Wi-Fi",
+          "Bluetooth",
+          "CYW43439",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "M5Stack",
+    "reading": "えむふぁいぶすたっく",
+    "aliases": [
+      "M5Stack Platform"
+    ],
+    "senses": [
+      {
+        "definition": "ESP32を中心としたモジュール式IoT開発プラットフォーム。ケース付きのスタッカブルな筐体に液晶・ボタン・バッテリーを内蔵し、Grove/I2C対応の豊富なセンサーユニットとUiFlowビジュアルプログラミングで迅速なプロトタイピングを実現する。",
+        "domain": "embedded",
+        "keywords": [
+          "ESP32",
+          "IoT",
+          "モジュール",
+          "UiFlow",
+          "プロトタイピング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "M5Stack Basic v2.7",
+    "aliases": [
+      "M5Stack Basic"
+    ],
+    "senses": [
+      {
+        "definition": "ESP32-D0WDQ6-V3搭載のM5Stackの基本モデル（v2.7）。2インチIPS液晶・3ボタン・スピーカー・microSDスロット・110mAhバッテリーを内蔵し、16MB Flash/8MB PSRAMで余裕のあるメモリ構成を持つ。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "ESP32",
+          "IPS液晶",
+          "PSRAM",
+          "開発ボード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "M5StickC",
+    "reading": "えむふぁいぶすてぃっくしー",
+    "aliases": [
+      "M5StickC Plus"
+    ],
+    "senses": [
+      {
+        "definition": "ESP32-PICO搭載のスティック型超小型M5Stack開発ボード。0.96インチTFT液晶・6軸IMU・赤外線LED・80mAhバッテリーを内蔵し、帽子型のHATモジュールで機能拡張できるウェアラブル・小型IoT向けデバイス。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "ESP32",
+          "小型",
+          "IMU",
+          "HAT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "M5StickC Plus2",
+    "aliases": [
+      "M5StickC Plus 2"
+    ],
+    "senses": [
+      {
+        "definition": "M5StickCの後継モデル。1.14インチTFT液晶に大型化し、200mAhバッテリー・ブザー・6軸IMU・赤外線LED・マイクを搭載。ESP32-PICO-V3-02による安定した無線性能と、Grove/HATポートによる拡張性を持つ。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "ESP32",
+          "TFT",
+          "バッテリー",
+          "Grove"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "M5Atom",
+    "reading": "えむふぁいぶあとむ",
+    "aliases": [
+      "ATOM Lite",
+      "ATOM Matrix"
+    ],
+    "senses": [
+      {
+        "definition": "24×24mmの超小型ESP32搭載M5Stack開発ボード。ATOM Liteは1個のRGB LED、ATOM Matrixは5×5 RGB LEDマトリクスとIMUを搭載。Grove対応で小型IoTノードやスマートホームの制御ユニットに適する。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "ESP32",
+          "超小型",
+          "RGB LED",
+          "Grove"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Core2",
+    "reading": "こあつー",
+    "aliases": [
+      "M5Stack Core2",
+      "M5Stack Core2 v1.1"
+    ],
+    "senses": [
+      {
+        "definition": "ESP32-D0WDQ6-V3搭載のM5Stackタッチスクリーン対応モデル。2インチIPS静電容量式タッチパネル・振動モーター・マイク・スピーカー・IMU・390mAhバッテリーを内蔵し、AWSやAzure IoT連携にも対応する上位モデル。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "ESP32",
+          "タッチスクリーン",
+          "AWS IoT",
+          "バッテリー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "STM32",
+    "reading": "えすてぃーえむさんじゅうに",
+    "aliases": [
+      "STM32ファミリ"
+    ],
+    "senses": [
+      {
+        "definition": "STMicroelectronics社が提供するArm Cortex-Mコア搭載32bitマイコンファミリの総称。Cortex-M0/M3/M4/M7/M33など多数のシリーズがあり、産業用・民生用・自動車用まで幅広い組み込み市場で使用される。STM32CubeIDEやHALライブラリで開発する。",
+        "domain": "embedded",
+        "keywords": [
+          "Arm",
+          "Cortex-M",
+          "32bit",
+          "STMicro",
+          "HAL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "STM32 Nucleo-F411RE",
+    "aliases": [
+      "Nucleo-F411RE"
+    ],
+    "senses": [
+      {
+        "definition": "STM32F411RE（Arm Cortex-M4/100MHz/512KB Flash/128KB SRAM）搭載のST公式評価ボード。Arduino互換ピンヘッダとST Morphoコネクタを備え、ST-LINK/V2-1デバッガ内蔵でUSB給電・デバッグが可能。",
+        "domain": "embedded",
+        "keywords": [
+          "STM32",
+          "Cortex-M4",
+          "Nucleo",
+          "ST-LINK",
+          "Arduino互換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "STM32 Nucleo-U575ZI",
+    "aliases": [
+      "Nucleo-U575ZI",
+      "NUCLEO-U575ZI-Q"
+    ],
+    "senses": [
+      {
+        "definition": "STM32U575ZIT6Q（Arm Cortex-M33/160MHz/2MB Flash/786KB SRAM）搭載の超低消費電力Nucleoボード。TrustZoneセキュリティ対応、ST Zio/Morphoコネクタ搭載で、セキュアIoTや省電力アプリケーションの開発・評価に使用される。",
+        "domain": "embedded",
+        "keywords": [
+          "STM32",
+          "Cortex-M33",
+          "TrustZone",
+          "低消費電力",
+          "Zio"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RP2040",
+    "reading": "あーるぴーにーまるよんまる",
+    "aliases": [
+      "Raspberry Pi RP2040"
+    ],
+    "senses": [
+      {
+        "definition": "Raspberry Pi財団が独自設計したデュアルコアArm Cortex-M0+マイコン。133MHz動作・264KB SRAM・30本のGPIO・PIOステートマシンを搭載し、Raspberry Pi Picoに採用された。低価格（1ドル台）と高いI/O柔軟性が特徴。",
+        "domain": "embedded",
+        "keywords": [
+          "Cortex-M0+",
+          "PIO",
+          "デュアルコア",
+          "GPIO",
+          "Raspberry Pi"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RP2350",
+    "reading": "あーるぴーにーさんごーまる",
+    "aliases": [
+      "Raspberry Pi RP2350"
+    ],
+    "senses": [
+      {
+        "definition": "RP2040の後継となるRaspberry Pi財団設計のマイコン。Arm Cortex-M33×2とRISC-V Hazard3×2のデュアルアーキテクチャを持ち、150MHz動作・520KB SRAM・TrustZone対応。Raspberry Pi Pico 2に搭載され、セキュリティと性能が大幅に向上。",
+        "domain": "embedded",
+        "keywords": [
+          "Cortex-M33",
+          "Hazard3",
+          "RISC-V",
+          "TrustZone",
+          "デュアルアーキテクチャ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CYW43439",
+    "reading": "しーわいだぶりゅーよんさんよんさんきゅう",
+    "aliases": [
+      "Infineon CYW43439"
+    ],
+    "senses": [
+      {
+        "definition": "Infineon（旧Cypress）製の無線コンボチップ。2.4GHz Wi-Fi（802.11n）とBluetooth 5.2（BLE/BR/EDR）を1チップで提供し、Raspberry Pi Pico WおよびPico 2 Wに搭載されている。低消費電力設計でIoTデバイスに適する。",
+        "domain": "embedded",
+        "keywords": [
+          "Wi-Fi",
+          "Bluetooth",
+          "無線",
+          "Infineon",
+          "Raspberry Pi"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ATmega",
+    "reading": "えーてぃーめが",
+    "aliases": [
+      "ATmega328P",
+      "ATmega2560",
+      "AVRマイコン"
+    ],
+    "senses": [
+      {
+        "definition": "Microchip（旧Atmel）社のAVRアーキテクチャ8bitマイコンファミリ。ATmega328PはArduino UNO、ATmega2560はArduino Megaに搭載され、Arduino文化の基盤となった。Flash/SRAM/EEPROMを内蔵しC/C++で開発する。",
+        "domain": "embedded",
+        "keywords": [
+          "AVR",
+          "8bit",
+          "Arduino",
+          "Microchip",
+          "Atmel"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AVR",
+    "reading": "えーぶいあーる",
+    "aliases": [
+      "AVRアーキテクチャ"
+    ],
+    "senses": [
+      {
+        "definition": "Atmel（現Microchip）が開発した8bitRISCマイコンアーキテクチャ。tinyAVR・megaAVR・AVR Dxシリーズがあり、Arduino UNOのATmega328Pが代表例。ハーバードアーキテクチャで1クロック1命令実行が特徴。",
+        "domain": "embedded",
+        "keywords": [
+          "8bit",
+          "RISC",
+          "Atmel",
+          "Microchip",
+          "Arduino"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "tinyAVR 1シリーズ",
+    "reading": "たいにーえーぶいあーるわんしりーず",
+    "aliases": [
+      "tinyAVR 1-series",
+      "ATtiny1シリーズ"
+    ],
+    "senses": [
+      {
+        "definition": "Microchip社のtinyAVRファミリのモダンシリーズ。ATTINY816/1616/3216等が含まれ、従来のATtinyから大幅に機能強化されたペリフェラル（CCL・DAC・イベントシステム等）を搭載。UPDI単線プログラミングで書き込む。",
+        "domain": "embedded",
+        "keywords": [
+          "ATtiny",
+          "UPDI",
+          "CCL",
+          "Microchip",
+          "8bit"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ATTINY1616 DIP化キット",
+    "aliases": [
+      "ATtiny1616 DIP化基板"
+    ],
+    "senses": [
+      {
+        "definition": "表面実装パッケージ（SOIC20/VQFN20）のATTINY1616をDIP20ピン変換基板に実装したキット。ブレッドボードに直接挿せるため、tinyAVR 1シリーズの学習や試作に便利。秋月電子等で入手可能。",
+        "domain": "embedded",
+        "keywords": [
+          "ATtiny1616",
+          "DIP変換",
+          "ブレッドボード",
+          "秋月電子",
+          "試作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PIC16F",
+    "reading": "ぴっくじゅうろくえふ",
+    "aliases": [
+      "PIC16F18313-I/P",
+      "PIC16Fシリーズ",
+      "PICマイコン"
+    ],
+    "senses": [
+      {
+        "definition": "Microchip社の8bit PICマイコンファミリ。PIC16F18313は8ピンDIPで入手しやすく、CLC・DAC・PWM等の豊富なペリフェラルを搭載する。MPLAB X IDEとXCコンパイラで開発し、低価格・低消費電力が特徴。",
+        "domain": "embedded",
+        "keywords": [
+          "PIC",
+          "8bit",
+          "Microchip",
+          "MPLAB",
+          "DIP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CH32V203K8T6",
+    "reading": "しーえいちさんにーぶいにーまるさん",
+    "aliases": [
+      "CH32V203",
+      "WCH CH32V"
+    ],
+    "senses": [
+      {
+        "definition": "WCH（南京沁恒）社のRISC-Vコア搭載32bitマイコン。144MHz動作・64KB Flash・20KB SRAM・USB/CAN/I2C/SPI搭載で、STM32互換のペリフェラル構成を持つ。低価格なRISC-Vマイコンとして注目されている。",
+        "domain": "embedded",
+        "keywords": [
+          "RISC-V",
+          "WCH",
+          "32bit",
+          "USB",
+          "低価格"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arm Cortex-M33",
+    "reading": "あーむこーてっくすえむさんじゅうさん",
+    "aliases": [
+      "Cortex-M33"
+    ],
+    "senses": [
+      {
+        "definition": "Arm社が設計したARMv8-Mアーキテクチャの高性能組み込みプロセッサコア。DSP拡張・FPU・TrustZoneセキュリティを標準搭載し、RP2350やSTM32U5シリーズ等の次世代マイコンに採用される。Cortex-M4の後継として位置づけられる。",
+        "domain": "embedded",
+        "keywords": [
+          "Arm",
+          "ARMv8-M",
+          "TrustZone",
+          "DSP",
+          "FPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cortex-M4",
+    "reading": "こーてっくすえむふぉー",
+    "aliases": [
+      "Arm Cortex-M4"
+    ],
+    "senses": [
+      {
+        "definition": "Arm社設計のARMv7-Mアーキテクチャ中〜高性能組み込みプロセッサコア。DSP命令とオプションのFPUを搭載し、STM32F4シリーズやRenesas RA4M1等に広く採用される。信号処理と制御の両立が可能なバランスの良いコア。",
+        "domain": "embedded",
+        "keywords": [
+          "Arm",
+          "ARMv7-M",
+          "DSP",
+          "FPU",
+          "STM32"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RISC-V",
+    "reading": "りすくふぁいぶ",
+    "aliases": [
+      "RISC-V ISA"
+    ],
+    "senses": [
+      {
+        "definition": "カリフォルニア大学バークレー校で開発されたオープンソースの命令セットアーキテクチャ。ライセンスフリーでカスタマイズ可能なため、WCH CH32VシリーズやRP2350のHazard3コア等、組み込みからサーバーまで幅広く採用が進む。",
+        "domain": "embedded",
+        "keywords": [
+          "オープンソース",
+          "ISA",
+          "ライセンスフリー",
+          "WCH",
+          "Hazard3"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Hazard3",
+    "reading": "はざーどすりー",
+    "aliases": [
+      "Hazard3 RISC-Vコア"
+    ],
+    "senses": [
+      {
+        "definition": "Raspberry Pi財団がRP2350向けに設計した2ステージRISC-Vプロセッサコア。RV32IMAZbkb_Zbs_Zcb_Zcmp拡張に対応し、Arm Cortex-M33との切り替え実行が可能なデュアルアーキテクチャ構成で動作する。",
+        "domain": "embedded",
+        "keywords": [
+          "RISC-V",
+          "RP2350",
+          "デュアルアーキテクチャ",
+          "Raspberry Pi",
+          "2ステージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RA4M1",
+    "reading": "あーるえーよんえむわん",
+    "aliases": [
+      "Renesas RA4M1",
+      "R7FA4M1AB3CFM"
+    ],
+    "senses": [
+      {
+        "definition": "Renesas社のRAファミリに属するArm Cortex-M4搭載32bitマイコン。48MHz動作・256KB Flash・32KB SRAM・USB 2.0 Full Speed・CAN・14bit ADC搭載。Arduino UNO R4 WiFi/Minima等に採用されている。",
+        "domain": "embedded",
+        "keywords": [
+          "Renesas",
+          "Cortex-M4",
+          "Arduino",
+          "USB",
+          "CAN"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NORA-W106",
+    "reading": "のーらだぶりゅーいちまるろく",
+    "aliases": [
+      "u-blox NORA-W106"
+    ],
+    "senses": [
+      {
+        "definition": "u-blox社のESP32-S3搭載Wi-Fi/Bluetoothモジュール。2.4GHz Wi-Fi（802.11b/g/n）とBluetooth LE 5.0に対応し、Arduino Nano ESP32に採用されている。技適取得済みで日本国内でも使用可能な無線モジュール。",
+        "domain": "embedded",
+        "keywords": [
+          "ESP32-S3",
+          "Wi-Fi",
+          "BLE",
+          "u-blox",
+          "Arduino"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Espressif",
+    "reading": "えすぷれっしふ",
+    "aliases": [
+      "Espressif Systems",
+      "乐鑫科技"
+    ],
+    "senses": [
+      {
+        "definition": "ESP32/ESP8266シリーズのWi-Fi/Bluetooth内蔵マイコンを開発する上海の半導体メーカー。IoT向けSoCで圧倒的シェアを持ち、M5Stack・Arduino Nano ESP32等多くの開発ボードに採用される。ESP-IDFとArduinoコアを提供。",
+        "domain": "embedded",
+        "keywords": [
+          "ESP32",
+          "ESP8266",
+          "Wi-Fi",
+          "IoT",
+          "SoC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Atmel",
+    "reading": "あとめる",
+    "aliases": [
+      "Atmel Corporation"
+    ],
+    "senses": [
+      {
+        "definition": "AVRマイコンとSAM（ARM）マイコンを開発した米国の半導体メーカー。2016年にMicrochip Technology社に買収された。Arduino UNOのATmega328PやATtinyシリーズの設計元として電子工作文化に大きく貢献した。",
+        "domain": "embedded",
+        "keywords": [
+          "AVR",
+          "ATmega",
+          "ATtiny",
+          "Microchip",
+          "買収"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Microchip",
+    "reading": "まいくろちっぷ",
+    "aliases": [
+      "Microchip Technology",
+      "MCHP"
+    ],
+    "senses": [
+      {
+        "definition": "PICマイコン・AVRマイコン・SAMマイコンを擁する米国の大手半導体メーカー。2016年のAtmel買収でAVR/SAMファミリを取得し、8bit〜32bitの広範なマイコン製品群とMPLAB X開発環境を提供する。",
+        "domain": "embedded",
+        "keywords": [
+          "PIC",
+          "AVR",
+          "SAM",
+          "MPLAB",
+          "半導体"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Raspberry Pi",
+    "reading": "らずべりーぱい",
+    "aliases": [
+      "Raspberry Pi Foundation",
+      "ラズパイ"
+    ],
+    "senses": [
+      {
+        "definition": "英国のRaspberry Pi財団が開発する教育・ホビー向けシングルボードコンピュータおよびマイコンのブランド。Linux搭載のRaspberry Pi 5等のSBCと、RP2040/RP2350搭載のPicoシリーズのマイコンボードを展開する。",
+        "domain": "embedded",
+        "keywords": [
+          "SBC",
+          "RP2040",
+          "Linux",
+          "教育",
+          "ホビー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Renesas",
+    "reading": "るねさす",
+    "aliases": [
+      "Renesas Electronics",
+      "ルネサスエレクトロニクス"
+    ],
+    "senses": [
+      {
+        "definition": "日立・三菱電機・NEC系の半導体事業を統合した日本最大のマイコンメーカー。RA（Arm）・RX・RL78ファミリを展開し、自動車・産業機器で高いシェアを持つ。Arduino UNO R4にRA4M1が採用されたことで組み込み教育分野にも進出。",
+        "domain": "embedded",
+        "keywords": [
+          "RA",
+          "RX",
+          "RL78",
+          "自動車",
+          "Arduino"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "u-blox",
+    "reading": "ゆーぶろっくす",
+    "aliases": [
+      "u-blox AG"
+    ],
+    "senses": [
+      {
+        "definition": "スイスの半導体メーカー。GNSS（GPS）モジュール・セルラーモジュール・Wi-Fi/Bluetoothモジュールを提供し、IoTやM2M通信分野で高いシェアを持つ。Arduino Nano ESP32にはu-blox NORA-W106モジュールが搭載されている。",
+        "domain": "embedded",
+        "keywords": [
+          "GNSS",
+          "Wi-Fi",
+          "Bluetooth",
+          "モジュール",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "秋月電子",
+    "reading": "あきづきでんし",
+    "aliases": [
+      "秋月電子通商",
+      "Akizuki Denshi"
+    ],
+    "senses": [
+      {
+        "definition": "東京・秋葉原に本店を持つ電子部品・マイコンボード・計測器の専門通販・小売店。ATTINY1616 DIP化キットやPICマイコン等の組み込み部品を個人向けに販売し、日本の電子工作・ホビー開発者に広く利用されている。",
+        "domain": "embedded",
+        "keywords": [
+          "秋葉原",
+          "電子部品",
+          "通販",
+          "マイコン",
+          "ホビー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "開発ボード",
+    "reading": "かいはつぼーど",
+    "aliases": [
+      "Development Board",
+      "評価基板",
+      "評価ボード"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンやSoCを搭載し、プログラミング・デバッグ・ペリフェラル接続のためのコネクタやインターフェースを備えた基板。Arduino UNO・Raspberry Pi Pico・STM32 Nucleo・M5Stack等がある。プロトタイピングや学習に使用される。",
+        "domain": "embedded",
+        "keywords": [
+          "プロトタイピング",
+          "マイコン",
+          "学習",
+          "評価",
+          "基板"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "電子工作",
+    "reading": "でんしこうさく",
+    "aliases": [
+      "Electronics Hobby",
+      "DIY Electronics",
+      "DIY Projects"
+    ],
+    "senses": [
+      {
+        "definition": "電子部品やマイコンを使って回路やデバイスを自作する趣味・教育活動。LEDの点灯からIoTデバイスの製作まで幅広く、Arduino・Raspberry Pi・M5Stackなどのプラットフォームの普及で参入障壁が下がっている。",
+        "domain": "embedded",
+        "keywords": [
+          "自作",
+          "ホビー",
+          "Arduino",
+          "はんだ付け",
+          "回路"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "組み込み開発",
+    "reading": "くみこみかいはつ",
+    "aliases": [
+      "Embedded Development",
+      "組み込みシステム開発",
+      "組み込み"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンやSoCを使用して専用機器に搭載するソフトウェアを開発すること。リアルタイム制御・省メモリ・低消費電力が求められ、C/C++・RTOS・ベアメタルプログラミングが主な手法。自動車・家電・医療機器・IoT機器で不可欠な分野。",
+        "domain": "embedded",
+        "keywords": [
+          "組み込み",
+          "リアルタイム",
+          "C言語",
+          "RTOS",
+          "ベアメタル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "IoT",
+    "reading": "あいおーてぃー",
+    "aliases": [
+      "Internet of Things",
+      "モノのインターネット",
+      "IoT機器",
+      "IoTセンサー"
+    ],
+    "senses": [
+      {
+        "definition": "センサーやアクチュエーターを内蔵した機器がインターネットに接続し、データの収集・分析・制御を行う技術概念。温湿度監視・スマートホーム・工場の予知保全等に応用され、ESP32やRaspberry Pi Pico W等のWi-Fi対応マイコンが基盤となる。",
+        "domain": "embedded",
+        "keywords": [
+          "センサー",
+          "クラウド",
+          "Wi-Fi",
+          "スマートホーム",
+          "データ収集"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スマートホーム",
+    "reading": "すまーとほーむ",
+    "aliases": [
+      "Smart Home",
+      "Smart Home Control",
+      "ホームオートメーション"
+    ],
+    "senses": [
+      {
+        "definition": "照明・空調・家電・セキュリティ等を自動化・遠隔制御する住宅技術。ESP32やM5Stack等のマイコンでセンサー入力やリレー制御を行い、Wi-Fi/MQTT/Bluetooth経由でスマホや音声アシスタントから操作するDIYプロジェクトも盛ん。",
+        "domain": "embedded",
+        "keywords": [
+          "自動化",
+          "リレー",
+          "MQTT",
+          "Wi-Fi",
+          "音声アシスタント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ロボット",
+    "reading": "ろぼっと",
+    "aliases": [
+      "Robot",
+      "ロボティクス"
+    ],
+    "senses": [
+      {
+        "definition": "センサー・アクチュエーター・マイコンを組み合わせて自律動作や遠隔操作を行う機械システム。サーボモーター制御・距離センサーによる障害物回避・ライントレースなどをArduinoやRaspberry Piで実装する電子工作の人気テーマ。",
+        "domain": "embedded",
+        "keywords": [
+          "サーボ",
+          "モーター",
+          "自律",
+          "Arduino",
+          "センサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リモコン",
+    "reading": "りもこん",
+    "aliases": [
+      "Remote Controller",
+      "赤外線リモコン",
+      "IRリモコン"
+    ],
+    "senses": [
+      {
+        "definition": "赤外線（IR）やBluetooth/Wi-Fiを使って機器を無線で遠隔操作する送受信デバイス。マイコンで赤外線LEDを制御してテレビやエアコンのリモコン信号を送信・学習・再生するプロジェクトが電子工作で人気。M5StickCは赤外線LED内蔵で便利。",
+        "domain": "embedded",
+        "keywords": [
+          "赤外線",
+          "IR",
+          "無線",
+          "制御",
+          "M5StickC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ATTINY1616 DIPアダプターキット",
+    "reading": "えーてぃーてぃーにーいちろくいちろくでぃっぷあだぷたーきっと",
+    "senses": [
+      {
+        "definition": "ATTiny1616マイコンをブレッドボードで使用可能にするDIPパッケージ変換アダプターキットです。実験・プロトタイプ開発に利用されます。",
+        "domain": "hardware",
+        "keywords": [
+          "ATTiny1616",
+          "DIP",
+          "アダプター",
+          "マイコン"
+        ]
+      }
+    ],
+    "aliases": [
+      "ATTINY1616 DIP Adapter Kit"
+    ]
+  }
+]

@@ -1,0 +1,1412 @@
+[
+  {
+    "term": "SOLID",
+    "senses": [
+      {
+        "definition": "オブジェクト指向設計の5原則の頭文字：単一責任・オープン/クローズド・リスコフ置換・インターフェース分離・依存性逆転。",
+        "domain": "design-principles",
+        "keywords": [
+          "OOP",
+          "設計",
+          "原則"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DRY",
+    "senses": [
+      {
+        "definition": "Don't Repeat Yourself。同じ知識・ロジックをコードベースに重複させないという原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "重複排除",
+          "原則"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "KISS",
+    "senses": [
+      {
+        "definition": "Keep It Simple, Stupid。シンプルさを最優先にし、不必要な複雑さを避ける設計原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "シンプル",
+          "原則"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オープン・クローズドの原則",
+    "reading": "おーぷんくろーずどのげんそく",
+    "senses": [
+      {
+        "definition": "ソフトウェアは拡張に対して開かれ、変更に対して閉じられているべきという原則（SOLID のO）。",
+        "domain": "design-principles",
+        "keywords": [
+          "OCP",
+          "SOLID",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": [
+      "OCP",
+      "Open-Closed Principle"
+    ]
+  },
+  {
+    "term": "インターフェース分離の原則",
+    "reading": "いんたーふぇーすぶんりのげんそく",
+    "senses": [
+      {
+        "definition": "クライアントが使わないメソッドへの依存を強制しないよう、インターフェースを細かく分割すべきという原則（SOLID のI）。",
+        "domain": "design-principles",
+        "keywords": [
+          "ISP",
+          "SOLID",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": [
+      "ISP"
+    ]
+  },
+  {
+    "term": "依存性逆転の原則",
+    "reading": "いぞんせいぎゃくてんのげんそく",
+    "senses": [
+      {
+        "definition": "上位モジュールは下位モジュールに依存すべきでなく、双方が抽象に依存すべきという原則（SOLID のD）。",
+        "domain": "design-principles",
+        "keywords": [
+          "DIP",
+          "SOLID",
+          "抽象"
+        ]
+      }
+    ],
+    "aliases": [
+      "DIP"
+    ]
+  },
+  {
+    "term": "関心の分離",
+    "reading": "かんしんのぶんり",
+    "senses": [
+      {
+        "definition": "異なる関心事（UI・ビジネスロジック・データアクセスなど）を独立したモジュールに分割する設計原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "SoC",
+          "モジュール",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "情報隠蔽",
+    "reading": "じょうほういんぺい",
+    "senses": [
+      {
+        "definition": "モジュールの内部実装を外部から隠し、公開インターフェースのみを通じてアクセスさせる設計原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "カプセル化",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Information Hiding"
+    ]
+  },
+  {
+    "term": "継承",
+    "reading": "けいしょう",
+    "senses": [
+      {
+        "definition": "既存クラスの属性・メソッドを引き継いで新しいクラスを定義するOOPの仕組み。",
+        "domain": "oop",
+        "keywords": [
+          "OOP",
+          "クラス",
+          "サブクラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ポリモーフィズム",
+    "senses": [
+      {
+        "definition": "同じインターフェースや基底クラスを持つ異なる型が、それぞれの実装で異なる振る舞いをするOOPの仕組み。",
+        "domain": "oop",
+        "keywords": [
+          "OOP",
+          "多態性",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": [
+      "多態性",
+      "polymorphism"
+    ]
+  },
+  {
+    "term": "デメテルの法則",
+    "reading": "でめてるのほうそく",
+    "senses": [
+      {
+        "definition": "オブジェクトは直接の「友人」とのみ通信すべきで、知らないオブジェクトのメソッドを呼び出すべきでないという原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "疎結合",
+          "最小知識"
+        ]
+      }
+    ],
+    "aliases": [
+      "Law of Demeter"
+    ]
+  },
+  {
+    "term": "最小知識の原則",
+    "reading": "さいしょうちしきのげんそく",
+    "senses": [
+      {
+        "definition": "モジュールは必要最低限の情報だけを知るべきという設計原則。デメテルの法則とも呼ばれる。",
+        "domain": "design-principles",
+        "keywords": [
+          "疎結合",
+          "デメテル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Principle of Least Knowledge"
+    ]
+  },
+  {
+    "term": "不変オブジェクト",
+    "reading": "ふへんおぶじぇくと",
+    "senses": [
+      {
+        "definition": "生成後に状態を変更できないオブジェクト。スレッドセーフで副作用がなく、安全に共有できる。",
+        "domain": "design-principles",
+        "keywords": [
+          "immutable",
+          "関数型",
+          "スレッドセーフ"
+        ]
+      }
+    ],
+    "aliases": [
+      "immutable object",
+      "イミュータブル"
+    ]
+  },
+  {
+    "term": "副作用",
+    "reading": "ふくさよう",
+    "senses": [
+      {
+        "definition": "関数が戻り値以外に外部の状態（グローバル変数・ファイル・DBなど）を変更すること。",
+        "domain": "design-principles",
+        "keywords": [
+          "純粋関数",
+          "関数型",
+          "side effect"
+        ]
+      }
+    ],
+    "aliases": [
+      "side effect"
+    ]
+  },
+  {
+    "term": "参照透過性",
+    "reading": "さんしょうとうかせい",
+    "senses": [
+      {
+        "definition": "同じ引数に対して常に同じ結果を返し、外部状態に依存しない関数の性質。純粋関数の条件。",
+        "domain": "design-principles",
+        "keywords": [
+          "純粋関数",
+          "関数型",
+          "referential transparency"
+        ]
+      }
+    ],
+    "aliases": [
+      "referential transparency"
+    ]
+  },
+  {
+    "term": "第一級関数",
+    "reading": "だいいっきゅうかんすう",
+    "senses": [
+      {
+        "definition": "関数を変数に代入したり引数や戻り値として扱える言語機能。関数型プログラミングの基盤。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "高階関数"
+        ]
+      }
+    ],
+    "aliases": [
+      "first-class function"
+    ]
+  },
+  {
+    "term": "高階関数",
+    "reading": "こうかいかんすう",
+    "senses": [
+      {
+        "definition": "関数を引数に取るか、または関数を返す関数。map, filter, reduce などが代表例。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "第一級関数"
+        ]
+      }
+    ],
+    "aliases": [
+      "higher-order function"
+    ]
+  },
+  {
+    "term": "関数型プログラミング",
+    "reading": "かんすうがたぷろぐらみんぐ",
+    "senses": [
+      {
+        "definition": "副作用を排除し、純粋関数・不変データ・高階関数を中心に据えるプログラミングパラダイム。",
+        "domain": "programming",
+        "keywords": [
+          "純粋関数",
+          "immutable",
+          "FP"
+        ]
+      }
+    ],
+    "aliases": [
+      "functional programming"
+    ]
+  },
+  {
+    "term": "オブジェクト指向",
+    "reading": "おぶじぇくとしこう",
+    "senses": [
+      {
+        "definition": "データと振る舞いをオブジェクトとしてまとめ、継承・カプセル化・ポリモーフィズムを活用するプログラミングパラダイム。",
+        "domain": "programming",
+        "keywords": [
+          "OOP",
+          "クラス",
+          "継承"
+        ]
+      }
+    ],
+    "aliases": [
+      "OOP",
+      "object-oriented programming"
+    ]
+  },
+  {
+    "term": "手続き型プログラミング",
+    "reading": "てつづきがたぷろぐらみんぐ",
+    "senses": [
+      {
+        "definition": "命令の手順（プロシージャ）を順番に記述するプログラミングパラダイム。C言語が代表例。",
+        "domain": "programming",
+        "keywords": [
+          "procedural",
+          "命令型"
+        ]
+      }
+    ],
+    "aliases": [
+      "procedural programming"
+    ]
+  },
+  {
+    "term": "宣言的プログラミング",
+    "reading": "せんげんてきぷろぐらみんぐ",
+    "senses": [
+      {
+        "definition": "「何をするか」を記述し「どのようにするか」は実行系に任せるパラダイム。SQL・HTMLが代表例。",
+        "domain": "programming",
+        "keywords": [
+          "declarative",
+          "SQL",
+          "HTML"
+        ]
+      }
+    ],
+    "aliases": [
+      "declarative programming"
+    ]
+  },
+  {
+    "term": "命令型プログラミング",
+    "reading": "めいれいがたぷろぐらみんぐ",
+    "senses": [
+      {
+        "definition": "「どのようにするか」の手順を明示的に記述するパラダイム。宣言的プログラミングの対義語。",
+        "domain": "programming",
+        "keywords": [
+          "imperative",
+          "手続き型"
+        ]
+      }
+    ],
+    "aliases": [
+      "imperative programming"
+    ]
+  },
+  {
+    "term": "デザインパターン",
+    "senses": [
+      {
+        "definition": "ソフトウェア設計でよく現れる問題に対する再利用可能な解法のカタログ。GoFの23パターンが有名。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "OOP",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "design pattern"
+    ]
+  },
+  {
+    "term": "GoF",
+    "senses": [
+      {
+        "definition": "Gang of Four。Gamma・Helm・Johnson・Vlissidesの4人が著した『Design Patterns』で提唱した23の設計パターン集。",
+        "domain": "design-patterns",
+        "keywords": [
+          "デザインパターン",
+          "OOP"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gang of Four"
+    ]
+  },
+  {
+    "term": "ファクトリーメソッド",
+    "senses": [
+      {
+        "definition": "オブジェクト生成をサブクラスに委譲し、インスタンス化する具象クラスをサブクラスが決定するGoF生成パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "生成パターン",
+          "factory"
+        ]
+      }
+    ],
+    "aliases": [
+      "Factory Method"
+    ]
+  },
+  {
+    "term": "抽象ファクトリー",
+    "reading": "ちゅうしょうふぁくとりー",
+    "senses": [
+      {
+        "definition": "関連するオブジェクト群を生成するインターフェースを提供し、具象クラスを指定せずにファミリーを作成するGoFパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "生成パターン",
+          "Abstract Factory"
+        ]
+      }
+    ],
+    "aliases": [
+      "Abstract Factory"
+    ]
+  },
+  {
+    "term": "ビルダー",
+    "senses": [
+      {
+        "definition": "複雑なオブジェクトを段階的に組み立て、同じ構築プロセスで異なる表現を生成するGoF生成パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "生成パターン",
+          "Builder"
+        ]
+      }
+    ],
+    "aliases": [
+      "Builder"
+    ]
+  },
+  {
+    "term": "シングルトン",
+    "senses": [
+      {
+        "definition": "クラスのインスタンスが1つだけ存在することを保証し、グローバルアクセスポイントを提供するGoFパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "生成パターン",
+          "Singleton"
+        ]
+      }
+    ],
+    "aliases": [
+      "Singleton"
+    ]
+  },
+  {
+    "term": "アダプター",
+    "senses": [
+      {
+        "definition": "互換性のないインターフェースを持つクラスを連携させるためのラッパーを提供するGoF構造パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "構造パターン",
+          "Adapter",
+          "ラッパー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Adapter"
+    ]
+  },
+  {
+    "term": "ブリッジ",
+    "senses": [
+      {
+        "definition": "抽象化と実装を分離し、それぞれ独立して変化できるようにするGoF構造パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "構造パターン",
+          "Bridge"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bridge"
+    ]
+  },
+  {
+    "term": "コンポジット",
+    "senses": [
+      {
+        "definition": "オブジェクトをツリー構造に組み合わせ、個々のオブジェクトとその集合を一様に扱えるGoF構造パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "構造パターン",
+          "Composite",
+          "ツリー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Composite"
+    ]
+  },
+  {
+    "term": "フライウェイト",
+    "senses": [
+      {
+        "definition": "多数の細粒度オブジェクトを共有して効率よくサポートするGoF構造パターン。メモリ節約に有効。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "構造パターン",
+          "Flyweight",
+          "メモリ最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Flyweight"
+    ]
+  },
+  {
+    "term": "プロキシ",
+    "senses": [
+      {
+        "definition": "別のオブジェクトへのアクセスを制御する代理オブジェクトを提供するGoF構造パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "構造パターン",
+          "Proxy",
+          "代理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Proxy"
+    ]
+  },
+  {
+    "term": "チェイン・オブ・レスポンシビリティ",
+    "senses": [
+      {
+        "definition": "リクエストをハンドラーのチェーンに沿って渡し、処理できるオブジェクトが処理するGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Chain of Responsibility"
+        ]
+      }
+    ],
+    "aliases": [
+      "Chain of Responsibility"
+    ]
+  },
+  {
+    "term": "イテレーター",
+    "senses": [
+      {
+        "definition": "コレクションの内部表現を公開せずに要素を順次アクセスする方法を提供するGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Iterator"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メディエーター",
+    "senses": [
+      {
+        "definition": "オブジェクト間の複雑な相互作用をカプセル化し、疎結合を促進するGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Mediator"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mediator"
+    ]
+  },
+  {
+    "term": "メメント",
+    "senses": [
+      {
+        "definition": "オブジェクトの内部状態をカプセル化して外部に保存し、後でその状態に復元できるGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Memento",
+          "アンドゥ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Memento"
+    ]
+  },
+  {
+    "term": "監視者パターン",
+    "reading": "かんしゃしゃぱたーん",
+    "senses": [
+      {
+        "definition": "オブジェクトの状態変化を他の依存オブジェクトに自動通知するGoF振る舞いパターン。オブザーバーとも呼ぶ。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Observer"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オブザーバー",
+    "senses": [
+      {
+        "definition": "あるオブジェクトの状態変化を複数の依存オブジェクトへ通知・更新するGoF振る舞いパターン。監視者パターンとも呼ぶ。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Observer",
+          "通知"
+        ]
+      }
+    ],
+    "aliases": [
+      "Observer"
+    ]
+  },
+  {
+    "term": "ステート",
+    "senses": [
+      {
+        "definition": "オブジェクトの内部状態が変わると振る舞いも変わるように見せるGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "State",
+          "状態機械"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ストラテジー",
+    "senses": [
+      {
+        "definition": "アルゴリズムのファミリーを定義・カプセル化し、相互に交換可能にするGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Strategy",
+          "アルゴリズム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Strategy"
+    ]
+  },
+  {
+    "term": "ビジター",
+    "senses": [
+      {
+        "definition": "データ構造の要素に対して実行する操作を、クラスを変えずに追加できるGoF振る舞いパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "GoF",
+          "振る舞いパターン",
+          "Visitor"
+        ]
+      }
+    ],
+    "aliases": [
+      "Visitor"
+    ]
+  },
+  {
+    "term": "Null Object",
+    "senses": [
+      {
+        "definition": "nullの代わりにデフォルト動作を持つオブジェクトを返すことでnullチェックを排除する設計パターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "パターン",
+          "null安全",
+          "デフォルト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Repository Pattern",
+    "senses": [
+      {
+        "definition": "データソースへのアクセスをカプセル化し、ドメインオブジェクトとデータマッピングロジックを分離するパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "DDD",
+          "データアクセス",
+          "DAO"
+        ]
+      }
+    ],
+    "aliases": [
+      "リポジトリパターン"
+    ]
+  },
+  {
+    "term": "Unit of Work",
+    "senses": [
+      {
+        "definition": "一連のビジネス操作で影響を受けるオブジェクトを記録し、一貫性を保ちながら変更をまとめてコミットするパターン。",
+        "domain": "design-patterns",
+        "keywords": [
+          "トランザクション",
+          "DDD",
+          "永続化"
+        ]
+      }
+    ],
+    "aliases": [
+      "作業単位"
+    ]
+  },
+  {
+    "term": "DIコンテナ",
+    "reading": "でぃーあいこんてな",
+    "senses": [
+      {
+        "definition": "依存性注入（DI）を自動的に管理するフレームワーク。オブジェクトの生成・ライフサイクル・依存解決を担う。",
+        "domain": "design-patterns",
+        "keywords": [
+          "DI",
+          "IoC",
+          "フレームワーク"
+        ]
+      }
+    ],
+    "aliases": [
+      "DI container"
+    ]
+  },
+  {
+    "term": "Inversion of Control",
+    "senses": [
+      {
+        "definition": "プログラムの制御フローを開発者からフレームワークへ反転させる設計原則。DIはその実現手段のひとつ。",
+        "domain": "design-principles",
+        "keywords": [
+          "IoC",
+          "DI",
+          "フレームワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Service Layer",
+    "senses": [
+      {
+        "definition": "アプリケーションのビジネスロジックをまとめ、UIとデータアクセス層の間に位置するアーキテクチャ層。",
+        "domain": "architecture",
+        "keywords": [
+          "レイヤー",
+          "DDD",
+          "ビジネスロジック"
+        ]
+      }
+    ],
+    "aliases": [
+      "サービス層"
+    ]
+  },
+  {
+    "term": "Application Service",
+    "senses": [
+      {
+        "definition": "ユースケースを調整・オーケストレーションし、ドメインオブジェクトに処理を委譲するDDDの層。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "ユースケース",
+          "オーケストレーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Domain Service",
+    "senses": [
+      {
+        "definition": "特定のエンティティや値オブジェクトに自然に属さないドメインロジックを担うDDDのサービス。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "ドメインロジック",
+          "エンティティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Entity",
+    "senses": [
+      {
+        "definition": "一意の識別子（ID）で追跡され、時間とともに状態が変化するDDDのドメインオブジェクト。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "ID",
+          "ドメインモデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Value Object",
+    "senses": [
+      {
+        "definition": "IDを持たず、属性の値によって同一性が決まるDDDのドメインオブジェクト。不変であるべき。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "immutable",
+          "ドメインモデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Aggregate",
+    "senses": [
+      {
+        "definition": "関連するエンティティと値オブジェクトをひとまとまりとして扱うDDDの概念。外部からはAggregate Rootを通じてのみアクセスする。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "集約",
+          "エンティティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Aggregate Root",
+    "senses": [
+      {
+        "definition": "集約の入口となるエンティティ。外部からは必ずAggregate Rootを経由して集約内のオブジェクトへアクセスする。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "集約",
+          "エンティティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bounded Context",
+    "senses": [
+      {
+        "definition": "特定のドメインモデルが一貫して適用される境界領域。DDDの戦略的設計の核心概念。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "境界",
+          "コンテキスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ドメイン駆動設計",
+    "reading": "どめいんくどうせっけい",
+    "senses": [
+      {
+        "definition": "ドメインの複雑さに立ち向かうため、ドメインエキスパートと開発者がユビキタス言語を共有しながら設計・実装するアプローチ。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "ユビキタス言語",
+          "戦術",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "戦術的DDD",
+    "reading": "せんじゅつてきでぃーでぃーでぃー",
+    "senses": [
+      {
+        "definition": "DDDにおける実装レベルのパターン群。Entity・Value Object・Aggregate・Repository・Domain Serviceなどが含まれる。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "実装",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Tactical DDD"
+    ]
+  },
+  {
+    "term": "戦略的DDD",
+    "reading": "せんりゃくてきでぃーでぃーでぃー",
+    "senses": [
+      {
+        "definition": "DDDにおける大局的な設計。Bounded Context・コンテキストマップ・ユビキタス言語などシステム全体の構造を扱う。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "Bounded Context",
+          "コンテキストマップ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Strategic DDD"
+    ]
+  },
+  {
+    "term": "Clean Architecture",
+    "senses": [
+      {
+        "definition": "Robert C. Martinが提唱する、依存方向をドメイン中心に向けた同心円状のレイヤードアーキテクチャ。",
+        "domain": "architecture",
+        "keywords": [
+          "クリーンアーキテクチャ",
+          "依存性逆転",
+          "レイヤー"
+        ]
+      }
+    ],
+    "aliases": [
+      "クリーンアーキテクチャ"
+    ]
+  },
+  {
+    "term": "Hexagonal Architecture",
+    "senses": [
+      {
+        "definition": "ポートとアダプターによってアプリケーションコアを外部システムから分離するアーキテクチャ。",
+        "domain": "architecture",
+        "keywords": [
+          "ポート",
+          "アダプター",
+          "疎結合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Onion Architecture",
+    "senses": [
+      {
+        "definition": "ドメインモデルを中心に同心円状のレイヤーを重ね、依存方向を内側へ向けるアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "レイヤー",
+          "ドメイン",
+          "DDD"
+        ]
+      }
+    ],
+    "aliases": [
+      "オニオンアーキテクチャ"
+    ]
+  },
+  {
+    "term": "Ports and Adapters",
+    "senses": [
+      {
+        "definition": "アプリケーションをポート（インターフェース）とアダプター（実装）で外部と繋ぐHexagonal Architectureの別称。",
+        "domain": "architecture",
+        "keywords": [
+          "ヘキサゴナル",
+          "疎結合",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Layered Architecture",
+    "senses": [
+      {
+        "definition": "プレゼンテーション・アプリケーション・ドメイン・インフラなど責任別の層に分割するアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "レイヤー",
+          "MVC",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "レイヤードアーキテクチャ",
+      "階層型アーキテクチャ"
+    ]
+  },
+  {
+    "term": "MVC",
+    "senses": [
+      {
+        "definition": "Model-View-Controllerの略。UIを持つアプリケーションをモデル・ビュー・コントローラーに分離するアーキテクチャパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "アーキテクチャ",
+          "UI",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Model-View-Controller"
+    ]
+  },
+  {
+    "term": "MVVM",
+    "senses": [
+      {
+        "definition": "Model-View-ViewModelの略。ViewとModelの間にViewModelを置き、データバインディングでUIロジックを分離するパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "アーキテクチャ",
+          "UI",
+          "データバインディング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Model-View-ViewModel"
+    ]
+  },
+  {
+    "term": "VIPER",
+    "senses": [
+      {
+        "definition": "View・Interactor・Presenter・Entity・Routerから成るiOS向けクリーンアーキテクチャパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "iOS",
+          "アーキテクチャ",
+          "モバイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Event Sourcing",
+    "senses": [
+      {
+        "definition": "状態を直接保存するのではなく、状態変化をイベントの列として永続化するアーキテクチャパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "イベント",
+          "CQRS",
+          "履歴"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Message Queue",
+    "senses": [
+      {
+        "definition": "サービス間の非同期通信を実現するためのメッセージ一時保存機構。RabbitMQ・Kafkaなどが代表例。",
+        "domain": "architecture",
+        "keywords": [
+          "非同期",
+          "メッセージング",
+          "キュー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "イベント駆動アーキテクチャ",
+    "reading": "いべんとくどうあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "イベントの発生と受信を中心にコンポーネント間の通信を構成するアーキテクチャスタイル。",
+        "domain": "architecture",
+        "keywords": [
+          "EDA",
+          "非同期",
+          "Pub/Sub"
+        ]
+      }
+    ],
+    "aliases": [
+      "EDA",
+      "Event-Driven Architecture"
+    ]
+  },
+  {
+    "term": "REST",
+    "senses": [
+      {
+        "definition": "Representational State Transfer。HTTPを利用したステートレスなAPIアーキテクチャスタイル。リソースをURLで表現しHTTPメソッドで操作する。",
+        "domain": "api-design",
+        "keywords": [
+          "API",
+          "HTTP",
+          "Webサービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GraphQL",
+    "senses": [
+      {
+        "definition": "Facebookが開発したクエリ言語・ランタイム。クライアントが必要なフィールドを指定して取得できるAPI設計スタイル。",
+        "domain": "api-design",
+        "keywords": [
+          "API",
+          "クエリ",
+          "スキーマ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "gRPC",
+    "senses": [
+      {
+        "definition": "GoogleのRPCフレームワーク。Protocol Buffersを使ったスキーマ定義と効率的なバイナリ通信が特徴。",
+        "domain": "api-design",
+        "keywords": [
+          "RPC",
+          "Protocol Buffers",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RPC",
+    "senses": [
+      {
+        "definition": "Remote Procedure Call。ネットワーク越しに別プロセスの関数を呼び出す通信方式。",
+        "domain": "api-design",
+        "keywords": [
+          "gRPC",
+          "リモート",
+          "通信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "API First",
+    "senses": [
+      {
+        "definition": "APIの設計・仕様を実装より先に行い、コントラクトを定義してから開発を進めるアプローチ。",
+        "domain": "api-design",
+        "keywords": [
+          "OpenAPI",
+          "設計",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": [
+      "APIファースト"
+    ]
+  },
+  {
+    "term": "スキーマ駆動開発",
+    "reading": "すきーまくどうかいはつ",
+    "senses": [
+      {
+        "definition": "APIやデータのスキーマ定義を先行して行い、それを契約としてクライアント・サーバーを並行開発する手法。",
+        "domain": "api-design",
+        "keywords": [
+          "OpenAPI",
+          "GraphQL",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Schema-Driven Development"
+    ]
+  },
+  {
+    "term": "Consumer Driven Contract",
+    "senses": [
+      {
+        "definition": "APIコンシューマーがプロバイダーとの契約（期待する通信仕様）を定義し、その契約をテストで検証する手法。",
+        "domain": "testing",
+        "keywords": [
+          "契約テスト",
+          "Pact",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": [
+      "CDC",
+      "コンシューマー駆動契約"
+    ]
+  },
+  {
+    "term": "Backward Compatibility",
+    "senses": [
+      {
+        "definition": "新バージョンのソフトウェアが旧バージョンのクライアントと互換性を保つ設計原則。",
+        "domain": "api-design",
+        "keywords": [
+          "後方互換性",
+          "バージョニング",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SemVer",
+    "senses": [
+      {
+        "definition": "Semantic Versioning。MAJOR.MINOR.PATCHの形式でバージョンを管理し、変更の種類を明示する規約。",
+        "domain": "development-practices",
+        "keywords": [
+          "セマンティックバージョニング",
+          "バージョン管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Anti-Corruption Layer",
+    "senses": [
+      {
+        "definition": "異なるBounded Context間の変換・翻訳を担い、外部モデルの変化からドメインモデルを守るDDDパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "DDD",
+          "統合",
+          "Bounded Context"
+        ]
+      },
+      {
+        "definition": "接続元や通信条件を絞るアクセス制御ルール。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "セキュリティ",
+          "ACL"
+        ]
+      }
+    ],
+    "aliases": [
+      "ACL",
+      "腐敗防止層"
+    ]
+  },
+  {
+    "term": "Backend for Frontend",
+    "senses": [
+      {
+        "definition": "特定のフロントエンド向けに最適化されたバックエンドAPIを用意するアーキテクチャパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "BFF",
+          "API",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Strangler Fig Pattern",
+    "senses": [
+      {
+        "definition": "レガシーシステムを段階的に新システムへ置き換える移行パターン。既存機能を徐々に新実装で包み込む。",
+        "domain": "architecture",
+        "keywords": [
+          "レガシー移行",
+          "段階的",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Strangler Pattern",
+      "ストラングラーフィグパターン"
+    ]
+  },
+  {
+    "term": "Facade Migration",
+    "senses": [
+      {
+        "definition": "ファサードを使い、旧システムと新システムを共存させながら段階的に移行するパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "移行",
+          "ファサード",
+          "レガシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "ファサード移行"
+    ]
+  },
+  {
+    "term": "Branch by Abstraction",
+    "senses": [
+      {
+        "definition": "大規模な変更をフィーチャーブランチなしに行うため、抽象化レイヤーで新旧実装を切り替えるテクニック。",
+        "domain": "development-practices",
+        "keywords": [
+          "リファクタリング",
+          "移行",
+          "抽象化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Parallel Change",
+    "senses": [
+      {
+        "definition": "既存実装を壊さずに新実装を並行して追加し、移行後に旧実装を削除する段階的変更テクニック。",
+        "domain": "development-practices",
+        "keywords": [
+          "リファクタリング",
+          "移行",
+          "後方互換性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Expand and Contract",
+      "パラレルチェンジ"
+    ]
+  }
+]

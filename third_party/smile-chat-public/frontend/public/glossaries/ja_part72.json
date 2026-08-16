@@ -1,0 +1,661 @@
+[
+  {
+    "term": "マイクロアーキテクチャ",
+    "reading": "まいくろあーきてくちゃ",
+    "aliases": [
+      "Microarchitecture",
+      "μarch"
+    ],
+    "senses": [
+      {
+        "definition": "CPUが命令セットアーキテクチャ（ISA）を実際にどのように実装しているかを表す内部設計。パイプライン段数・実行幅・分岐予測・キャッシュ構成・Out-of-Order実行の有無などが含まれ、同じISA対応でもメーカーや世代により大きく異なる。性能・消費電力・発熱に直結する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "CPU",
+          "内部設計",
+          "ISA",
+          "パイプライン",
+          "実装"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "命令セットアーキテクチャ",
+    "reading": "めいれいせっとあーきてくちゃ",
+    "aliases": [
+      "ISA",
+      "Instruction Set Architecture"
+    ],
+    "senses": [
+      {
+        "definition": "ソフトウェアから見えるCPUの仕様を定義した抽象層。命令の種類・レジスタ構成・アドレッシングモード・例外処理・メモリモデルなどのルールを規定する。プログラム互換性はISAで決まり、性能特性はマイクロアーキテクチャで変わる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "命令セット",
+          "仕様",
+          "互換性",
+          "レジスタ",
+          "アドレッシング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "命令セット",
+    "reading": "めいれいせっと",
+    "aliases": [
+      "Instruction Set",
+      "命令体系"
+    ],
+    "senses": [
+      {
+        "definition": "CPUが実行できる機械語命令の集合。算術演算・論理演算・データ転送・分岐・制御命令などで構成される。CISC（複雑命令セット）とRISC（縮小命令セット）の設計哲学があり、x86-64はCISC系、ARMはRISC系に分類される。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "機械語",
+          "CISC",
+          "RISC",
+          "命令",
+          "CPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "分岐予測",
+    "reading": "ぶんきよそく",
+    "aliases": [
+      "Branch Prediction",
+      "ブランチプレディクション"
+    ],
+    "senses": [
+      {
+        "definition": "条件分岐命令の結果を事前に予測してパイプラインの停止を回避する技術。静的予測（常に分岐する/しないと仮定）と動的予測（過去の履歴に基づく予測）があり、現代CPUでは95%以上の精度を達成する。予測ミスはパイプラインフラッシュを引き起こす。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "分岐",
+          "予測",
+          "パイプライン",
+          "フラッシュ",
+          "性能"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Out-of-Order実行",
+    "reading": "あうとおぶおーだーじっこう",
+    "aliases": [
+      "OoO実行",
+      "アウトオブオーダー実行",
+      "Out-of-Order Execution"
+    ],
+    "senses": [
+      {
+        "definition": "プログラム順序に関わらず、データ依存関係のない命令を先に実行する技術。リオーダバッファで元の順序を管理しつつ、実行ユニットの空きを最大限活用して性能を向上させる。高性能CPUの中核技術の一つ。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "順序外実行",
+          "リオーダバッファ",
+          "依存関係",
+          "並列性",
+          "高性能"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レジスタリネーミング",
+    "reading": "れじすたりねーみんぐ",
+    "aliases": [
+      "Register Renaming",
+      "レジスタ改名"
+    ],
+    "senses": [
+      {
+        "definition": "命令間の見かけ上のレジスタ依存（WAR・WAW依存）を解消するため、論理レジスタを物理レジスタに動的に割り当てる技術。Out-of-Order実行と組み合わせて使用され、命令レベル並列性を高める。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "レジスタ",
+          "依存関係",
+          "並列性",
+          "WAR",
+          "WAW"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "命令フェッチ",
+    "reading": "めいれいふぇっち",
+    "aliases": [
+      "Instruction Fetch"
+    ],
+    "senses": [
+      {
+        "definition": "メモリやキャッシュからCPUが実行すべき命令を取り出すパイプラインの最初の段階。命令キャッシュ（L1I）からの読み出し速度がスループットに直結し、分岐予測と連携して次に実行する命令のアドレスを決定する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "フェッチ",
+          "パイプライン",
+          "命令キャッシュ",
+          "L1I",
+          "スループット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "命令デコード",
+    "reading": "めいれいでこーど",
+    "aliases": [
+      "Instruction Decode",
+      "ID",
+      "デコード"
+    ],
+    "senses": [
+      {
+        "definition": "フェッチした命令を内部で処理可能な形式（マイクロオペレーション等）に分解するパイプライン段階。CISCアーキテクチャでは可変長命令を固定長の内部命令に変換する必要があり、デコーダの複雑さがボトルネックになりうる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "デコード",
+          "マイクロオペレーション",
+          "パイプライン",
+          "CISC",
+          "変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "実行ユニット",
+    "reading": "じっこうゆにっと",
+    "aliases": [
+      "Execution Unit",
+      "機能ユニット"
+    ],
+    "senses": [
+      {
+        "definition": "CPU内部で実際に演算やメモリアクセスを行うハードウェアブロックの総称。ALU・FPU・ロードストアユニット・SIMDユニット・分岐ユニットなどが含まれ、スーパースカラCPUでは複数の実行ユニットが並列に動作する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "演算",
+          "ALU",
+          "FPU",
+          "ロードストア",
+          "並列"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ALU",
+    "reading": "えーえるゆー",
+    "aliases": [
+      "算術論理演算装置",
+      "Arithmetic Logic Unit"
+    ],
+    "senses": [
+      {
+        "definition": "整数の加減算・論理演算（AND・OR・NOT・XOR）・シフト演算・比較演算を行うCPUの基本演算ユニット。現代CPUには複数のALUが搭載され、1クロックで複数の整数演算を同時実行できる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "整数演算",
+          "論理演算",
+          "加算",
+          "シフト",
+          "CPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "FPU",
+    "reading": "えふぴーゆー",
+    "aliases": [
+      "浮動小数点演算装置",
+      "Floating Point Unit"
+    ],
+    "senses": [
+      {
+        "definition": "浮動小数点数の加減乗除・平方根・型変換などを行う専用演算ユニット。科学技術計算・3Dグラフィックス・機械学習で重要。IEEE 754規格に準拠した単精度（32bit）・倍精度（64bit）演算を処理する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "浮動小数点",
+          "演算",
+          "IEEE 754",
+          "科学計算",
+          "精度"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ロードストアユニット",
+    "reading": "ろーどすとあゆにっと",
+    "aliases": [
+      "Load/Store Unit",
+      "LSU",
+      "ロード・ストアユニット"
+    ],
+    "senses": [
+      {
+        "definition": "メモリからデータを読み込む（ロード）操作とメモリへデータを書き込む（ストア）操作を担当するCPUの実行ユニット。キャッシュとの連携・メモリ順序の保証・ストアバッファの管理を行う。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "ロード",
+          "ストア",
+          "メモリ",
+          "キャッシュ",
+          "バッファ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キャッシュ階層",
+    "reading": "きゃっしゅかいそう",
+    "aliases": [
+      "Cache Hierarchy",
+      "キャッシュレベル"
+    ],
+    "senses": [
+      {
+        "definition": "L1・L2・L3と段階的に容量と遅延が増加するキャッシュメモリの多層構造。主記憶（DRAM）の遅さを隠蔽するために不可欠で、空間的局所性と時間的局所性を利用してデータアクセスを高速化する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "L1",
+          "L2",
+          "L3",
+          "局所性",
+          "DRAM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "L1キャッシュ",
+    "reading": "えるわんきゃっしゅ",
+    "aliases": [
+      "L1 Cache",
+      "一次キャッシュ"
+    ],
+    "senses": [
+      {
+        "definition": "CPUコアに最も近い最小・最高速のキャッシュメモリ。命令キャッシュ（L1I）とデータキャッシュ（L1D）に分離されることが多く、典型的な容量は32KB〜64KB、アクセス遅延は1〜4クロック程度。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "キャッシュ",
+          "最速",
+          "命令キャッシュ",
+          "データキャッシュ",
+          "遅延"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "L2キャッシュ",
+    "reading": "えるつーきゃっしゅ",
+    "aliases": [
+      "L2 Cache",
+      "二次キャッシュ"
+    ],
+    "senses": [
+      {
+        "definition": "L1キャッシュの次に参照される中間層のキャッシュメモリ。通常はコアごとに専用で256KB〜1MB程度の容量を持ち、アクセス遅延は10〜20クロック程度。L1ミス時のバックアップとして機能する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "キャッシュ",
+          "中間層",
+          "コア専用",
+          "ミス",
+          "バックアップ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "L3キャッシュ",
+    "reading": "えるすりーきゃっしゅ",
+    "aliases": [
+      "L3 Cache",
+      "三次キャッシュ",
+      "LLC"
+    ],
+    "senses": [
+      {
+        "definition": "複数のCPUコアで共有される最大容量のキャッシュメモリ。数MB〜数十MBの容量を持ち、コア間のデータ共有やL2ミス時のバックアップとして機能する。Last Level Cache（LLC）とも呼ばれる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "共有キャッシュ",
+          "LLC",
+          "マルチコア",
+          "容量",
+          "コア間共有"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リオーダバッファ",
+    "reading": "りおーだばっふぁ",
+    "aliases": [
+      "ROB",
+      "Reorder Buffer"
+    ],
+    "senses": [
+      {
+        "definition": "Out-of-Order実行されたCPU命令の結果をプログラム順序通りにコミット（確定）するためのバッファ。命令の投機実行結果を一時保持し、例外や分岐ミス予測時にロールバックを可能にする。容量が性能の上限を決める重要な構造。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "OoO",
+          "順序保証",
+          "コミット",
+          "投機実行",
+          "ロールバック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "投機実行",
+    "reading": "とうきじっこう",
+    "aliases": [
+      "Speculative Execution",
+      "投機的実行"
+    ],
+    "senses": [
+      {
+        "definition": "分岐の結果が確定する前に予測された経路の命令を先行実行する技術。予測が正しければ性能が向上し、誤りの場合は結果を破棄する。SpectreやMeltdownなどのサイドチャネル攻撃の原因として注目された。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "分岐予測",
+          "先行実行",
+          "Spectre",
+          "Meltdown",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "サイドチャネル攻撃",
+    "reading": "さいどちゃねるこうげき",
+    "aliases": [
+      "Side-Channel Attack",
+      "サイドチャネル"
+    ],
+    "senses": [
+      {
+        "definition": "暗号処理やCPU実行の副作用（実行時間・消費電力・電磁波・キャッシュ状態等）を観測して秘密情報を推定する攻撃手法。Spectre・Meltdownはキャッシュタイミングを利用した投機実行ベースのサイドチャネル攻撃として知られる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "Spectre",
+          "Meltdown",
+          "キャッシュ",
+          "タイミング",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クロック周波数",
+    "reading": "くろっくしゅうはすう",
+    "aliases": [
+      "Clock Frequency",
+      "動作周波数",
+      "Clock Speed"
+    ],
+    "senses": [
+      {
+        "definition": "CPUが1秒間に繰り返す基本動作サイクルの回数。GHz（ギガヘルツ）で表され、周波数が高いほど単位時間あたりの処理能力が上がる。ただし消費電力と発熱も増大するため、IPC（クロックあたり命令実行数）との兼ね合いが重要。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "GHz",
+          "クロック",
+          "動作速度",
+          "IPC",
+          "消費電力"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "消費電力",
+    "reading": "しょうひでんりょく",
+    "aliases": [
+      "Power Consumption",
+      "TDP",
+      "電力消費"
+    ],
+    "senses": [
+      {
+        "definition": "CPUやシステムが動作時に消費する電力。TDP（熱設計電力）として公表されることが多い。クロック周波数・電圧・トランジスタ数に比例して増加し、モバイルやデータセンターでは電力効率（ワットあたり性能）が重要な設計指標となる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "TDP",
+          "電力",
+          "発熱",
+          "効率",
+          "省電力"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アドレス空間",
+    "reading": "あどれすくうかん",
+    "aliases": [
+      "Address Space",
+      "メモリ空間"
+    ],
+    "senses": [
+      {
+        "definition": "プロセスやCPUがアクセスできるメモリアドレスの範囲。物理アドレス空間はハードウェアの実際のメモリ、仮想アドレス空間はOSが各プロセスに提供する論理的なメモリ範囲を指す。64bitCPUでは理論上16EBまでの空間を扱える。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "仮想メモリ",
+          "物理アドレス",
+          "プロセス",
+          "64bit",
+          "メモリ管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンパイラ最適化",
+    "reading": "こんぱいらさいてきか",
+    "aliases": [
+      "Compiler Optimization",
+      "最適化パス"
+    ],
+    "senses": [
+      {
+        "definition": "コンパイラがソースコードから生成する機械語をより高速・省メモリにする変換処理。ループ展開・関数インライン化・定数畳み込み・デッドコード除去・命令スケジューリングなどの技法があり、マイクロアーキテクチャに合わせた最適化が性能に大きく影響する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "最適化",
+          "ループ展開",
+          "インライン",
+          "命令スケジューリング",
+          "コンパイラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "x86-64",
+    "reading": "えっくすはちろくろくよん",
+    "aliases": [
+      "x64",
+      "AMD64",
+      "Intel 64",
+      "x86_64"
+    ],
+    "senses": [
+      {
+        "definition": "AMDが設計しIntelが採用した64bitのCISC系命令セットアーキテクチャ。32bitのx86を64bitに拡張したもので、PCやサーバーの主流CPU（Intel Core・AMD Ryzen等）で広く使用される。後方互換性により32bitアプリケーションも実行可能。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "64bit",
+          "CISC",
+          "Intel",
+          "AMD",
+          "PC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パイプラインハザード",
+    "reading": "ぱいぷらいんはざーど",
+    "aliases": [
+      "Pipeline Hazard",
+      "ハザード"
+    ],
+    "senses": [
+      {
+        "definition": "パイプライン処理で命令の正常な流れが妨げられる状況。データハザード（前の命令の結果を次が必要）・制御ハザード（分岐による経路不確定）・構造ハザード（ハードウェア資源の競合）の3種類がある。フォワーディングや分岐予測で対策する。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "データハザード",
+          "制御ハザード",
+          "構造ハザード",
+          "フォワーディング",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スーパースカラ",
+    "reading": "すーぱーすから",
+    "aliases": [
+      "Superscalar",
+      "スーパースカラプロセッサ"
+    ],
+    "senses": [
+      {
+        "definition": "1クロックサイクルで複数の命令を同時にフェッチ・デコード・実行できるCPUアーキテクチャ。命令レベル並列性を活用し、複数の実行ユニットに命令を同時投入してスループットを向上させる。現代の高性能CPUの標準的な設計手法。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "並列実行",
+          "ILP",
+          "複数命令",
+          "スループット",
+          "実行ユニット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VLIW",
+    "reading": "ぶいえるあいだぶりゅー",
+    "aliases": [
+      "Very Long Instruction Word",
+      "超長命令語"
+    ],
+    "senses": [
+      {
+        "definition": "1つの長い命令語に複数の演算操作を詰め込み、コンパイラが並列性を静的にスケジュールするCPUアーキテクチャ。ハードウェアを単純化できる利点がある一方、コンパイラ依存度が高く汎用CPUより信号処理・組込み向けで使われる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "静的スケジューリング",
+          "コンパイラ",
+          "並列",
+          "DSP",
+          "命令語"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "メモリアクセス",
+    "reading": "めもりあくせす",
+    "aliases": [
+      "Memory Access",
+      "メモリ参照"
+    ],
+    "senses": [
+      {
+        "definition": "CPUがメインメモリ（DRAM）からデータを読み書きする操作。キャッシュミス時のメモリアクセスはCPU演算の数百倍の遅延がありボトルネックとなりやすい。プリフェッチ・キャッシュ最適化・メモリアクセスパターンの工夫で性能改善できる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "DRAM",
+          "レイテンシ",
+          "キャッシュミス",
+          "プリフェッチ",
+          "ボトルネック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "並列実行",
+    "reading": "へいれつじっこう",
+    "aliases": [
+      "Parallel Execution"
+    ],
+    "senses": [
+      {
+        "definition": "複数の命令やタスクを同時に実行して処理速度を向上させる手法。CPU内部の命令レベル並列性（ILP）、マルチコアによるスレッドレベル並列性（TLP）、SIMDによるデータレベル並列性（DLP）の3つのレベルがある。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "ILP",
+          "TLP",
+          "DLP",
+          "マルチコア",
+          "SIMD"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クロックサイクル",
+    "reading": "くろっくさいくる",
+    "aliases": [
+      "Clock Cycle",
+      "クロック",
+      "サイクル"
+    ],
+    "senses": [
+      {
+        "definition": "CPUの基本動作単位となる時間間隔。クロック信号の立ち上がりから次の立ち上がりまでの1周期を指す。命令の実行にかかるクロック数（CPI: Cycles Per Instruction）はマイクロアーキテクチャによって異なり、性能指標の基本となる。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "クロック",
+          "CPI",
+          "周期",
+          "タイミング",
+          "性能指標"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "高性能コンピューティング",
+    "reading": "こうせいのうこんぴゅーてぃんぐ",
+    "aliases": [
+      "HPC",
+      "High Performance Computing",
+      "ハイパフォーマンスコンピューティング"
+    ],
+    "senses": [
+      {
+        "definition": "科学技術計算・気象予測・分子シミュレーション・AI学習など大規模な計算処理を高速に実行するための技術分野。スーパーコンピュータ・GPUクラスタ・並列プログラミング（MPI・OpenMP）を活用し、FLOPS（1秒あたりの浮動小数点演算数）で性能を測る。",
+        "domain": "computer-architecture",
+        "keywords": [
+          "HPC",
+          "スーパーコンピュータ",
+          "GPU",
+          "FLOPS",
+          "並列計算"
+        ]
+      }
+    ]
+  }
+]

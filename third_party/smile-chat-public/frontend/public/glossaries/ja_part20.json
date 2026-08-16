@@ -1,0 +1,1731 @@
+[
+  {
+    "term": "GitHub",
+    "reading": "ぎっとはぶ",
+    "senses": [
+      {
+        "definition": "ソースコードのバージョン管理とチーム開発を支援するプラットフォーム。Issue、Pull Request、Actions、Codespacesなどの機能を備える。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Git",
+          "リポジトリ",
+          "バージョン管理",
+          "PR"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GitHub Issue",
+    "senses": [
+      {
+        "definition": "GitHub上でタスク、バグ、アイデア、フィードバックを追跡するための基本単位。",
+        "domain": "github",
+        "keywords": [
+          "Issue",
+          "タスク",
+          "バグ"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶいっしゅー",
+    "aliases": []
+  },
+  {
+    "term": "Assignee",
+    "senses": [
+      {
+        "definition": "IssueやPull Requestの担当者として割り当てられる人。",
+        "domain": "github",
+        "keywords": [
+          "担当者",
+          "割り当て",
+          "Issue"
+        ]
+      }
+    ],
+    "reading": "あさいにー",
+    "aliases": []
+  },
+  {
+    "term": "Label",
+    "senses": [
+      {
+        "definition": "IssueやPull Requestを分類するためのタグ。",
+        "domain": "github",
+        "keywords": [
+          "分類",
+          "タグ",
+          "ラベル"
+        ]
+      }
+    ],
+    "reading": "らべる",
+    "aliases": []
+  },
+  {
+    "term": "Milestone",
+    "senses": [
+      {
+        "definition": "関連するIssueやPull Requestを特定の期限や目標へまとめる単位。",
+        "domain": "github",
+        "keywords": [
+          "期限",
+          "目標",
+          "マイルストーン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Issue type",
+    "senses": [
+      {
+        "definition": "Issueを種類ごとに整理するためのメタデータ。",
+        "domain": "github",
+        "keywords": [
+          "分類",
+          "メタデータ",
+          "Issue"
+        ]
+      }
+    ],
+    "reading": "いっしゅーたいぷ",
+    "aliases": []
+  },
+  {
+    "term": "Issue template",
+    "senses": [
+      {
+        "definition": "Issue作成時の定型入力を提供するテンプレート。",
+        "domain": "github",
+        "keywords": [
+          "テンプレート",
+          "Issue",
+          "定型"
+        ]
+      }
+    ],
+    "reading": "いっしゅーてんぷれーと",
+    "aliases": []
+  },
+  {
+    "term": "Issue form",
+    "senses": [
+      {
+        "definition": "フォーム形式で入力させるIssueテンプレート。",
+        "domain": "github",
+        "keywords": [
+          "フォーム",
+          "Issue",
+          "入力"
+        ]
+      }
+    ],
+    "reading": "いっしゅーふぉーむ",
+    "aliases": []
+  },
+  {
+    "term": "Sub-issue",
+    "senses": [
+      {
+        "definition": "親Issueにぶら下がる下位のIssue。作業分解に使う。",
+        "domain": "github",
+        "keywords": [
+          "子Issue",
+          "分解",
+          "階層"
+        ]
+      }
+    ],
+    "reading": "さぶいっしゅー",
+    "aliases": []
+  },
+  {
+    "term": "Parent issue",
+    "senses": [
+      {
+        "definition": "Sub-issueを束ねる親となるIssue。",
+        "domain": "github",
+        "keywords": [
+          "親Issue",
+          "階層",
+          "まとめ"
+        ]
+      }
+    ],
+    "reading": "ぺあれんといっしゅー",
+    "aliases": []
+  },
+  {
+    "term": "Sub-issue progress",
+    "senses": [
+      {
+        "definition": "親Issueに対して、Sub-issueがどの程度完了しているかを示す進捗項目。",
+        "domain": "github",
+        "keywords": [
+          "進捗",
+          "Sub-issue",
+          "完了率"
+        ]
+      }
+    ],
+    "reading": "さぶいっしゅーぷろぐれす",
+    "aliases": []
+  },
+  {
+    "term": "Issue dependency",
+    "senses": [
+      {
+        "definition": "Issue同士の依存関係。どれが他の作業にブロックされているかを示せる。",
+        "domain": "github",
+        "keywords": [
+          "依存",
+          "ブロック",
+          "関係"
+        ]
+      }
+    ],
+    "reading": "いっしゅーでぃぺんでんしー",
+    "aliases": []
+  },
+  {
+    "term": "Blocking issue",
+    "senses": [
+      {
+        "definition": "他のIssueを先に進められなくしている側のIssue。",
+        "domain": "github",
+        "keywords": [
+          "ブロック",
+          "依存",
+          "Issue"
+        ]
+      }
+    ],
+    "reading": "ぶろっきんぐいっしゅー",
+    "aliases": []
+  },
+  {
+    "term": "Blocked issue",
+    "senses": [
+      {
+        "definition": "他のIssueが終わるまで進められない側のIssue。",
+        "domain": "github",
+        "keywords": [
+          "ブロック",
+          "依存",
+          "待ち"
+        ]
+      }
+    ],
+    "reading": "ぶろっくどいっしゅー",
+    "aliases": []
+  },
+  {
+    "term": "Project view",
+    "senses": [
+      {
+        "definition": "Project内での見え方を切り替える表示単位。",
+        "domain": "github-projects",
+        "keywords": [
+          "表示",
+          "ビュー",
+          "レイアウト"
+        ]
+      }
+    ],
+    "reading": "ぷろじぇくとびゅー",
+    "aliases": []
+  },
+  {
+    "term": "Table layout",
+    "senses": [
+      {
+        "definition": "Projectを表形式で見るレイアウト。",
+        "domain": "github-projects",
+        "keywords": [
+          "テーブル",
+          "一覧",
+          "表形式"
+        ]
+      }
+    ],
+    "reading": "てーぶるれいあうと",
+    "aliases": []
+  },
+  {
+    "term": "Board layout",
+    "senses": [
+      {
+        "definition": "Projectをカンバン形式で見るレイアウト。",
+        "domain": "github-projects",
+        "keywords": [
+          "カンバン",
+          "ボード",
+          "ステータス"
+        ]
+      }
+    ],
+    "reading": "ぼーどれいあうと",
+    "aliases": []
+  },
+  {
+    "term": "Roadmap layout",
+    "senses": [
+      {
+        "definition": "Projectをタイムライン形式で見るレイアウト。",
+        "domain": "github-projects",
+        "keywords": [
+          "タイムライン",
+          "ロードマップ",
+          "計画"
+        ]
+      }
+    ],
+    "reading": "ろーどまっぷれいあうと",
+    "aliases": []
+  },
+  {
+    "term": "Custom field",
+    "senses": [
+      {
+        "definition": "Projectに独自の属性列を追加するための項目。",
+        "domain": "github-projects",
+        "keywords": [
+          "フィールド",
+          "属性",
+          "カスタム"
+        ]
+      }
+    ],
+    "reading": "かすたむふぃーるど",
+    "aliases": []
+  },
+  {
+    "term": "Iteration field",
+    "senses": [
+      {
+        "definition": "繰り返し期間を表すProjectのフィールド。ロードマップ配置にも使える。",
+        "domain": "github-projects",
+        "keywords": [
+          "イテレーション",
+          "スプリント",
+          "期間"
+        ]
+      }
+    ],
+    "reading": "いてれーしょんふぃーるど",
+    "aliases": []
+  },
+  {
+    "term": "Date field",
+    "senses": [
+      {
+        "definition": "開始日や目標日などを持つProjectフィールド。",
+        "domain": "github-projects",
+        "keywords": [
+          "日付",
+          "期限",
+          "フィールド"
+        ]
+      }
+    ],
+    "reading": "でーとふぃーるど",
+    "aliases": []
+  },
+  {
+    "term": "Grouping",
+    "senses": [
+      {
+        "definition": "Projectの項目を特定フィールド値でまとめて表示する機能。",
+        "domain": "github-projects",
+        "keywords": [
+          "グループ",
+          "分類",
+          "表示"
+        ]
+      }
+    ],
+    "reading": "ぐるーぴんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Sorting",
+    "senses": [
+      {
+        "definition": "Projectの項目順を特定フィールドで並べ替える機能。",
+        "domain": "github-projects",
+        "keywords": [
+          "並び替え",
+          "ソート",
+          "順序"
+        ]
+      }
+    ],
+    "reading": "そーてぃんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Filtering",
+    "senses": [
+      {
+        "definition": "条件に合う項目だけをProject上へ表示する機能。",
+        "domain": "github-projects",
+        "keywords": [
+          "フィルター",
+          "絞り込み",
+          "条件"
+        ]
+      }
+    ],
+    "reading": "ふぃるたりんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Slicing",
+    "senses": [
+      {
+        "definition": "Projectのロードマップなどでフィールド値ごとに分けて見る操作。",
+        "domain": "github-projects",
+        "keywords": [
+          "スライス",
+          "分割",
+          "ロードマップ"
+        ]
+      }
+    ],
+    "reading": "すらいしんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Saved view",
+    "senses": [
+      {
+        "definition": "フィルターや表示設定を保存したProjectビュー。",
+        "domain": "github-projects",
+        "keywords": [
+          "保存",
+          "ビュー",
+          "設定"
+        ]
+      }
+    ],
+    "reading": "せーぶどびゅー",
+    "aliases": []
+  },
+  {
+    "term": "Draft issue",
+    "senses": [
+      {
+        "definition": "まだ正式なIssueにしていないProject内の下書き項目。",
+        "domain": "github-projects",
+        "keywords": [
+          "下書き",
+          "Draft",
+          "Issue"
+        ]
+      }
+    ],
+    "reading": "どらふといっしゅー",
+    "aliases": []
+  },
+  {
+    "term": "Pull request",
+    "senses": [
+      {
+        "definition": "変更を取り込んでもらうための提案単位。レビューとマージの中心になる。",
+        "domain": "github",
+        "keywords": [
+          "PR",
+          "マージ",
+          "レビュー"
+        ]
+      }
+    ],
+    "reading": "ぷるりくえすと",
+    "aliases": []
+  },
+  {
+    "term": "Draft pull request",
+    "senses": [
+      {
+        "definition": "まだレビュー準備が整っていないPull Request。",
+        "domain": "github",
+        "keywords": [
+          "Draft",
+          "PR",
+          "下書き"
+        ]
+      }
+    ],
+    "reading": "どらふとぷるりくえすと",
+    "aliases": []
+  },
+  {
+    "term": "Review request",
+    "senses": [
+      {
+        "definition": "特定の人やteamにレビューを依頼すること。",
+        "domain": "github",
+        "keywords": [
+          "レビュー",
+          "依頼",
+          "PR"
+        ]
+      }
+    ],
+    "reading": "れびゅーりくえすと",
+    "aliases": []
+  },
+  {
+    "term": "Review comment",
+    "senses": [
+      {
+        "definition": "Pull Request上のコードや差分に対して付けるコメント。",
+        "domain": "github",
+        "keywords": [
+          "コメント",
+          "レビュー",
+          "差分"
+        ]
+      }
+    ],
+    "reading": "れびゅーこめんと",
+    "aliases": []
+  },
+  {
+    "term": "Approving review",
+    "senses": [
+      {
+        "definition": "マージ可能と判断したレビュー。保護ルールで必須にできる。",
+        "domain": "github",
+        "keywords": [
+          "承認",
+          "レビュー",
+          "マージ"
+        ]
+      }
+    ],
+    "reading": "あぷるーびんぐれびゅー",
+    "aliases": []
+  },
+  {
+    "term": "CODEOWNERS",
+    "senses": [
+      {
+        "definition": "パスごとに責任者やレビュー担当を定義するためのファイル。",
+        "domain": "github",
+        "keywords": [
+          "オーナー",
+          "レビュー",
+          "ファイル"
+        ]
+      }
+    ],
+    "reading": "こーどおーなーず",
+    "aliases": []
+  },
+  {
+    "term": "Code owner",
+    "senses": [
+      {
+        "definition": "特定ファイルやディレクトリのレビュー責任を持つ人やteam。",
+        "domain": "github",
+        "keywords": [
+          "オーナー",
+          "責任",
+          "レビュー"
+        ]
+      }
+    ],
+    "reading": "こーどおーなー",
+    "aliases": []
+  },
+  {
+    "term": "Protected branch",
+    "senses": [
+      {
+        "definition": "直接pushや自由なmergeを制限する保護付きブランチ。",
+        "domain": "github",
+        "keywords": [
+          "保護",
+          "ブランチ",
+          "制限"
+        ]
+      }
+    ],
+    "reading": "ぷろてくてっどぶらんち",
+    "aliases": []
+  },
+  {
+    "term": "Branch protection rule",
+    "senses": [
+      {
+        "definition": "どのブランチにどんな制約をかけるか定義するルール。",
+        "domain": "github",
+        "keywords": [
+          "保護",
+          "ルール",
+          "ブランチ"
+        ]
+      }
+    ],
+    "reading": "ぶらんちぷろてくしょんるーる",
+    "aliases": []
+  },
+  {
+    "term": "Required status checks",
+    "senses": [
+      {
+        "definition": "Merge前に必ず成功していなければならないCIなどのチェック。",
+        "domain": "github",
+        "keywords": [
+          "CI",
+          "チェック",
+          "マージ条件"
+        ]
+      }
+    ],
+    "reading": "りくわいあーどすてーたすちぇっくす",
+    "aliases": []
+  },
+  {
+    "term": "Strict status checks",
+    "senses": [
+      {
+        "definition": "ベースブランチへ最新状態で追従していることまで要求するrequired status check。",
+        "domain": "github",
+        "keywords": [
+          "CI",
+          "追従",
+          "strict"
+        ]
+      }
+    ],
+    "reading": "すとりくとすてーたすちぇっくす",
+    "aliases": []
+  },
+  {
+    "term": "Loose status checks",
+    "senses": [
+      {
+        "definition": "ベースブランチへの最新追従までは要求しないrequired status check。",
+        "domain": "github",
+        "keywords": [
+          "CI",
+          "loose",
+          "チェック"
+        ]
+      }
+    ],
+    "reading": "るーすすてーたすちぇっくす",
+    "aliases": []
+  },
+  {
+    "term": "Ruleset",
+    "senses": [
+      {
+        "definition": "ブランチやタグへ適用する統制ルール集合。ブランチ保護より柔軟に扱える。",
+        "domain": "github",
+        "keywords": [
+          "ルール",
+          "統制",
+          "ブランチ"
+        ]
+      }
+    ],
+    "reading": "るーるせっと",
+    "aliases": []
+  },
+  {
+    "term": "Merge queue",
+    "senses": [
+      {
+        "definition": "複数Pull Requestを安全に順番マージするための仕組み。",
+        "domain": "github",
+        "keywords": [
+          "マージ",
+          "キュー",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Code scanning merge protection",
+    "senses": [
+      {
+        "definition": "code scanningの結果をルールセットでmerge条件にする保護。",
+        "domain": "github",
+        "keywords": [
+          "セキュリティ",
+          "スキャン",
+          "マージ"
+        ]
+      }
+    ],
+    "reading": "こーどすきゃにんぐまーじぷろてくしょん",
+    "aliases": []
+  },
+  {
+    "term": "Status check",
+    "senses": [
+      {
+        "definition": "CIやデプロイなどが成功したかを示す判定。保護ブランチの重要条件になる。",
+        "domain": "github",
+        "keywords": [
+          "CI",
+          "チェック",
+          "判定"
+        ]
+      }
+    ],
+    "reading": "すてーたすちぇっく",
+    "aliases": []
+  },
+  {
+    "term": "Branch up-to-date requirement",
+    "senses": [
+      {
+        "definition": "マージ前にhead branchをbase branch最新へ追従させる要求。",
+        "domain": "github",
+        "keywords": [
+          "追従",
+          "マージ",
+          "ブランチ"
+        ]
+      }
+    ],
+    "reading": "ぶらんちあっぷとぅーでーとりくわいあーめんと",
+    "aliases": []
+  },
+  {
+    "term": "Secret scanning",
+    "senses": [
+      {
+        "definition": "リポジトリ内の秘密情報漏えいを検出する機能。履歴全体も対象にできる。",
+        "domain": "github",
+        "keywords": [
+          "セキュリティ",
+          "秘密情報",
+          "検出"
+        ]
+      }
+    ],
+    "reading": "しーくれっとすきゃにんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Secret scanning alert",
+    "senses": [
+      {
+        "definition": "Secret scanningが秘密情報を検知したときに生成されるアラート。",
+        "domain": "github",
+        "keywords": [
+          "アラート",
+          "秘密情報",
+          "検知"
+        ]
+      }
+    ],
+    "reading": "しーくれっとすきゃにんぐあらーと",
+    "aliases": []
+  },
+  {
+    "term": "Push protection",
+    "senses": [
+      {
+        "definition": "Push時点で秘密情報を検出し、漏えい前にブロックする仕組み。",
+        "domain": "github",
+        "keywords": [
+          "セキュリティ",
+          "push",
+          "ブロック"
+        ]
+      }
+    ],
+    "reading": "ぷっしゅぷろてくしょん",
+    "aliases": []
+  },
+  {
+    "term": "Push protection bypass",
+    "senses": [
+      {
+        "definition": "正当な理由を付けてpush protectionを回避する操作。",
+        "domain": "github",
+        "keywords": [
+          "バイパス",
+          "push",
+          "回避"
+        ]
+      }
+    ],
+    "reading": "ぷっしゅぷろてくしょんばいぱす",
+    "aliases": []
+  },
+  {
+    "term": "Push protection for users",
+    "senses": [
+      {
+        "definition": "公開リポジトリへのpushを個人単位で自動保護する機能。既定で有効。",
+        "domain": "github",
+        "keywords": [
+          "個人",
+          "保護",
+          "公開リポジトリ"
+        ]
+      }
+    ],
+    "reading": "ぷっしゅぷろてくしょんふぉーゆーざーず",
+    "aliases": []
+  },
+  {
+    "term": "Secret scanning detection scope",
+    "senses": [
+      {
+        "definition": "Secret scanningやpush protectionがどこまで検知対象にするかの範囲。",
+        "domain": "github",
+        "keywords": [
+          "範囲",
+          "検知",
+          "スコープ"
+        ]
+      }
+    ],
+    "reading": "しーくれっとすきゃにんぐでぃてくしょんすこーぷ",
+    "aliases": []
+  },
+  {
+    "term": "Dependency graph",
+    "senses": [
+      {
+        "definition": "リポジトリが依存するパッケージやワークフロー依存を可視化する仕組み。",
+        "domain": "github",
+        "keywords": [
+          "依存関係",
+          "パッケージ",
+          "可視化"
+        ]
+      }
+    ],
+    "reading": "でぃぺんでんしーぐらふ",
+    "aliases": []
+  },
+  {
+    "term": "Dependabot alert",
+    "senses": [
+      {
+        "definition": "依存関係に脆弱性が見つかったときの警告。",
+        "domain": "github",
+        "keywords": [
+          "脆弱性",
+          "依存",
+          "アラート"
+        ]
+      }
+    ],
+    "reading": "でぺんだぼっとあらーと",
+    "aliases": []
+  },
+  {
+    "term": "Dependabot security update",
+    "senses": [
+      {
+        "definition": "脆弱性修正のための自動Pull Request。",
+        "domain": "github",
+        "keywords": [
+          "脆弱性",
+          "自動修正",
+          "PR"
+        ]
+      }
+    ],
+    "reading": "でぺんだぼっとせきゅりてぃあっぷでーと",
+    "aliases": []
+  },
+  {
+    "term": "Dependabot version update",
+    "senses": [
+      {
+        "definition": "依存パッケージを新しい通常版へ上げる自動Pull Request。",
+        "domain": "github",
+        "keywords": [
+          "バージョン",
+          "更新",
+          "PR"
+        ]
+      }
+    ],
+    "reading": "でぺんだぼっとばーじょんあっぷでーと",
+    "aliases": []
+  },
+  {
+    "term": "dependabot.yml",
+    "senses": [
+      {
+        "definition": "Dependabotの更新対象や頻度を定義する設定ファイル。",
+        "domain": "github",
+        "keywords": [
+          "設定",
+          "Dependabot",
+          "YAML"
+        ]
+      }
+    ],
+    "reading": "でぺんだぼっとわいえむえる",
+    "aliases": []
+  },
+  {
+    "term": "Auto-triage rule",
+    "senses": [
+      {
+        "definition": "Dependabotやセキュリティ通知を自動分類するためのルール。",
+        "domain": "github",
+        "keywords": [
+          "自動分類",
+          "トリアージ",
+          "Dependabot"
+        ]
+      }
+    ],
+    "reading": "おーととりあーじるーる",
+    "aliases": []
+  },
+  {
+    "term": "SVN",
+    "senses": [
+      {
+        "definition": "中央集権型のバージョン管理システム。中央の1つのリポジトリを基準に更新していく方式。",
+        "domain": "version-control",
+        "keywords": [
+          "Subversion",
+          "中央集権",
+          "リポジトリ"
+        ]
+      }
+    ],
+    "reading": "エスブイエヌ",
+    "aliases": [
+      "Subversion"
+    ]
+  },
+  {
+    "term": "Redmine",
+    "senses": [
+      {
+        "definition": "課題管理、Wiki、進捗管理などをまとめて扱えるプロジェクト管理ツール。",
+        "domain": "project-management",
+        "keywords": [
+          "課題管理",
+          "Wiki",
+          "チケット"
+        ]
+      }
+    ],
+    "reading": "レッドマイン",
+    "aliases": []
+  },
+  {
+    "term": "Backlog",
+    "senses": [
+      {
+        "definition": "課題管理やチーム作業を整理するためのプロジェクト管理ツール。比較的使いやすく、チームで進捗を共有しやすい。",
+        "domain": "project-management",
+        "keywords": [
+          "課題管理",
+          "進捗",
+          "チーム"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "ばっくろぐ"
+  },
+  {
+    "term": "Git",
+    "senses": [
+      {
+        "definition": "分散型バージョン管理システム。各開発者がリポジトリの完全な複製を持ち、ローカルでコミットやブランチ操作ができる。",
+        "domain": "version-control",
+        "keywords": [
+          "分散",
+          "リポジトリ",
+          "コミット"
+        ]
+      }
+    ],
+    "reading": "ぎっと",
+    "aliases": []
+  },
+  {
+    "term": "git-svn",
+    "senses": [
+      {
+        "definition": "SVNリポジトリをGitとして操作したり、SVNからGitへ履歴付きで変換するためのコマンド。",
+        "domain": "version-control",
+        "keywords": [
+          "SVN",
+          "移行",
+          "変換"
+        ]
+      }
+    ],
+    "reading": "ぎっとえすぶいえぬ",
+    "aliases": []
+  },
+  {
+    "term": "Git LFS",
+    "senses": [
+      {
+        "definition": "大容量ファイルをGitリポジトリ外で管理し、リポジトリの肥大化を防ぐ拡張機能。",
+        "domain": "version-control",
+        "keywords": [
+          "大容量",
+          "ファイル",
+          "ストレージ"
+        ]
+      }
+    ],
+    "reading": "ぎっとえるえふえす",
+    "aliases": [
+      "Git Large File Storage"
+    ]
+  },
+  {
+    "term": "Git Flow",
+    "senses": [
+      {
+        "definition": "main、develop、feature、release、hotfixのブランチ構成で開発を進めるブランチ戦略。",
+        "domain": "version-control",
+        "keywords": [
+          "ブランチ戦略",
+          "develop",
+          "release"
+        ]
+      }
+    ],
+    "reading": "ぎっとふろー",
+    "aliases": []
+  },
+  {
+    "term": "GitHub Importer",
+    "senses": [
+      {
+        "definition": "他のバージョン管理サービスからGitHubへリポジトリを移行するためのWebツール。SVNの直接取り込みには非対応。",
+        "domain": "github",
+        "keywords": [
+          "移行",
+          "インポート",
+          "リポジトリ"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶいんぽーたー",
+    "aliases": []
+  },
+  {
+    "term": "GitHub Team",
+    "senses": [
+      {
+        "definition": "組織内で権限やアクセスをまとめて管理するためのGitHubのチーム機能。",
+        "domain": "github",
+        "keywords": [
+          "組織",
+          "権限",
+          "アクセス制御"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶちーむ",
+    "aliases": []
+  },
+  {
+    "term": "ブランチ",
+    "senses": [
+      {
+        "definition": "コードの変更履歴を分岐させて、並行作業や機能開発を独立して進めるための仕組み。",
+        "domain": "version-control",
+        "keywords": [
+          "branch",
+          "分岐",
+          "並行開発"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "ぶらんち"
+  },
+  {
+    "term": "タグ",
+    "senses": [
+      {
+        "definition": "特定のコミットにバージョン番号やリリース名などの目印を付ける仕組み。",
+        "domain": "version-control",
+        "keywords": [
+          "tag",
+          "バージョン",
+          "リリース"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "たぐ"
+  },
+  {
+    "term": "マージ",
+    "senses": [
+      {
+        "definition": "分岐したブランチの変更を別のブランチに統合する操作。",
+        "domain": "version-control",
+        "keywords": [
+          "merge",
+          "統合",
+          "ブランチ"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "まーじ"
+  },
+  {
+    "term": "trunk",
+    "senses": [
+      {
+        "definition": "SVNにおける開発の主系統。Gitのmainブランチに相当する。",
+        "domain": "svn",
+        "keywords": [
+          "主系統",
+          "main",
+          "メインライン"
+        ]
+      }
+    ],
+    "reading": "とらんく",
+    "aliases": []
+  },
+  {
+    "term": "feature branch",
+    "senses": [
+      {
+        "definition": "新機能の開発を主系統と分離して進めるためのブランチ。",
+        "domain": "version-control",
+        "keywords": [
+          "機能開発",
+          "ブランチ",
+          "分離"
+        ]
+      }
+    ],
+    "reading": "フィーチャーブランチ",
+    "aliases": []
+  },
+  {
+    "term": "hotfix",
+    "senses": [
+      {
+        "definition": "本番環境の緊急不具合を修正するために、リリース済みのコードから直接分岐して行う修正。",
+        "domain": "version-control",
+        "keywords": [
+          "緊急修正",
+          "本番",
+          "バグ修正"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "force push",
+    "senses": [
+      {
+        "definition": "リモートリポジトリの履歴を上書きして強制的に反映するpush操作。履歴改変のリスクがあるため、保護ブランチでは制限される。",
+        "domain": "version-control",
+        "keywords": [
+          "強制",
+          "push",
+          "履歴上書き"
+        ]
+      }
+    ],
+    "reading": "フォースプッシュ",
+    "aliases": []
+  },
+  {
+    "term": ".gitkeep",
+    "senses": [
+      {
+        "definition": "Gitでは空ディレクトリを管理できないため、ディレクトリ構造を維持する目的で置かれる慣習的なファイル。",
+        "domain": "version-control",
+        "keywords": [
+          "空ディレクトリ",
+          "慣習",
+          "ファイル"
+        ]
+      }
+    ],
+    "reading": "ドットぎっとキープ",
+    "aliases": []
+  },
+  {
+    "term": ".gitignore",
+    "senses": [
+      {
+        "definition": "Gitの追跡対象から除外するファイルやディレクトリのパターンを定義する設定ファイル。",
+        "domain": "version-control",
+        "keywords": [
+          "除外",
+          "設定",
+          "追跡対象外"
+        ]
+      }
+    ],
+    "reading": "ドットぎっといぐのあ",
+    "aliases": []
+  },
+  {
+    "term": "authors.txt",
+    "senses": [
+      {
+        "definition": "git-svnでSVNのユーザー名をGitの著者情報に対応付けるためのマッピングファイル。",
+        "domain": "migration",
+        "keywords": [
+          "SVN",
+          "ユーザー",
+          "マッピング"
+        ]
+      }
+    ],
+    "reading": "オーサーズテキスト",
+    "aliases": []
+  },
+  {
+    "term": "レビュー駆動",
+    "senses": [
+      {
+        "definition": "Pull Requestを中心にコードレビューを必須とし、品質と知識共有を高める開発運用の考え方。",
+        "domain": "software-engineering",
+        "keywords": [
+          "PR",
+          "レビュー",
+          "品質"
+        ]
+      }
+    ],
+    "reading": "レビューくどう",
+    "aliases": []
+  },
+  {
+    "term": "パイロット移行",
+    "senses": [
+      {
+        "definition": "全体移行の前に代表的な対象で試行し、手順や課題を確認してからの横展開に備える進め方。",
+        "domain": "project-management",
+        "keywords": [
+          "試行",
+          "移行",
+          "検証"
+        ]
+      }
+    ],
+    "reading": "パイロットいこう",
+    "aliases": []
+  },
+  {
+    "term": "コミット",
+    "senses": [
+      {
+        "definition": "ファイルの変更をリポジトリの履歴として記録する操作。",
+        "domain": "version-control",
+        "keywords": [
+          "commit",
+          "記録",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "こみっと"
+  },
+  {
+    "term": "clone",
+    "senses": [
+      {
+        "definition": "リモートリポジトリの完全な複製をローカルに作成する操作。",
+        "domain": "git",
+        "keywords": [
+          "複製",
+          "コピー",
+          "リポジトリ"
+        ]
+      }
+    ],
+    "reading": "クローン",
+    "aliases": []
+  },
+  {
+    "term": "push",
+    "senses": [
+      {
+        "definition": "ローカルのコミットをリモートリポジトリへ送信する操作。",
+        "domain": "git",
+        "keywords": [
+          "送信",
+          "リモート",
+          "反映"
+        ]
+      }
+    ],
+    "reading": "プッシュ",
+    "aliases": []
+  },
+  {
+    "term": "pull",
+    "senses": [
+      {
+        "definition": "リモートリポジトリの変更をローカルに取得して統合する操作。",
+        "domain": "git",
+        "keywords": [
+          "取得",
+          "統合",
+          "リモート"
+        ]
+      }
+    ],
+    "reading": "プル",
+    "aliases": []
+  },
+  {
+    "term": "fetch",
+    "senses": [
+      {
+        "definition": "リモートリポジトリの変更をローカルに取得するが、統合はしない操作。",
+        "domain": "git",
+        "keywords": [
+          "取得",
+          "リモート",
+          "確認"
+        ]
+      }
+    ],
+    "reading": "フェッチ",
+    "aliases": []
+  },
+  {
+    "term": "checkout",
+    "senses": [
+      {
+        "definition": "ブランチの切り替えや特定のコミット状態への移動を行う操作。",
+        "domain": "git",
+        "keywords": [
+          "切り替え",
+          "ブランチ",
+          "移動"
+        ]
+      }
+    ],
+    "reading": "チェックアウト",
+    "aliases": []
+  },
+  {
+    "term": "rebase",
+    "senses": [
+      {
+        "definition": "コミット履歴を別のブランチの先端に付け替えて、履歴を直線的に整理する操作。",
+        "domain": "git",
+        "keywords": [
+          "履歴整理",
+          "付け替え",
+          "直線化"
+        ]
+      }
+    ],
+    "reading": "リベース",
+    "aliases": []
+  },
+  {
+    "term": "stash",
+    "senses": [
+      {
+        "definition": "作業中の変更を一時的に退避させ、後から復元できるようにする機能。",
+        "domain": "git",
+        "keywords": [
+          "退避",
+          "一時保存",
+          "復元"
+        ]
+      }
+    ],
+    "reading": "スタッシュ",
+    "aliases": []
+  },
+  {
+    "term": "diff",
+    "senses": [
+      {
+        "definition": "ファイルやコミット間の差分を表示する操作。",
+        "domain": "git",
+        "keywords": [
+          "差分",
+          "比較",
+          "変更点"
+        ]
+      }
+    ],
+    "reading": "ディフ",
+    "aliases": []
+  },
+  {
+    "term": "HEAD",
+    "senses": [
+      {
+        "definition": "現在チェックアウトしているブランチやコミットを指すポインタ。",
+        "domain": "git",
+        "keywords": [
+          "ポインタ",
+          "現在位置",
+          "ブランチ"
+        ]
+      }
+    ],
+    "reading": "ヘッド",
+    "aliases": []
+  },
+  {
+    "term": "コンフリクト",
+    "senses": [
+      {
+        "definition": "同じ箇所を複数人が変更した場合に、自動統合できず手動解決が必要になる状態。",
+        "domain": "git",
+        "keywords": [
+          "競合",
+          "衝突",
+          "マージ"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "こんふりくと"
+  },
+  {
+    "term": "マージコンフリクト",
+    "senses": [
+      {
+        "definition": "マージ時に同一箇所の変更が競合し、手動で解決が必要になる状態。",
+        "domain": "git",
+        "keywords": [
+          "競合",
+          "マージ",
+          "解決"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "まーじこんふりくと"
+  },
+  {
+    "term": "リモートリポジトリ",
+    "senses": [
+      {
+        "definition": "ネットワーク上に配置され、チームで共有するリポジトリ。",
+        "domain": "git",
+        "keywords": [
+          "サーバー",
+          "共有",
+          "origin"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "りもーとりぽじとり"
+  },
+  {
+    "term": "ローカルリポジトリ",
+    "senses": [
+      {
+        "definition": "開発者の手元にある、リモートリポジトリの複製。",
+        "domain": "git",
+        "keywords": [
+          "手元",
+          "開発",
+          "複製"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "ろーかるりぽじとり"
+  },
+  {
+    "term": "ブランチ戦略",
+    "senses": [
+      {
+        "definition": "チーム開発でブランチの作り方、命名、マージ方針を統一するための運用ルール。",
+        "domain": "version-control",
+        "keywords": [
+          "Git Flow",
+          "運用",
+          "命名"
+        ]
+      }
+    ],
+    "reading": "ブランチせんりゃく",
+    "aliases": []
+  },
+  {
+    "term": "main",
+    "senses": [
+      {
+        "definition": "リリース可能な状態を維持する主ブランチ。旧称master。",
+        "domain": "git",
+        "keywords": [
+          "主ブランチ",
+          "本番",
+          "リリース"
+        ]
+      }
+    ],
+    "reading": "メイン",
+    "aliases": []
+  },
+  {
+    "term": "develop",
+    "senses": [
+      {
+        "definition": "次回リリースに向けた開発の統合先となるブランチ。",
+        "domain": "git",
+        "keywords": [
+          "開発",
+          "統合",
+          "Git Flow"
+        ]
+      }
+    ],
+    "reading": "デベロップ",
+    "aliases": []
+  },
+  {
+    "term": "release branch",
+    "senses": [
+      {
+        "definition": "リリース準備のために作成するブランチ。最終的な修正やバージョン番号付与を行う。",
+        "domain": "git",
+        "keywords": [
+          "リリース",
+          "準備",
+          "バージョン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GitHub Actions",
+    "senses": [
+      {
+        "definition": "GitHubに組み込まれたCI/CD基盤。pushやPRをトリガーにワークフローを自動実行できる。",
+        "domain": "github",
+        "keywords": [
+          "CI/CD",
+          "自動化",
+          "ワークフロー"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶアクションズ",
+    "aliases": []
+  },
+  {
+    "term": "GitHub Pages",
+    "senses": [
+      {
+        "definition": "GitHubリポジトリから静的Webサイトを公開できるホスティング機能。",
+        "domain": "github",
+        "keywords": [
+          "Webサイト",
+          "ホスティング",
+          "静的"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶページズ",
+    "aliases": []
+  },
+  {
+    "term": "GitHub Packages",
+    "senses": [
+      {
+        "definition": "GitHubに統合されたパッケージレジストリ。npm、Maven、Dockerイメージなどを管理できる。",
+        "domain": "github",
+        "keywords": [
+          "パッケージ",
+          "レジストリ",
+          "npm"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶパッケージズ",
+    "aliases": []
+  },
+  {
+    "term": "GitHub CLI",
+    "senses": [
+      {
+        "definition": "ターミナルからGitHubの操作を行うコマンドラインツール。ghコマンドで利用する。",
+        "domain": "github",
+        "keywords": [
+          "CLI",
+          "gh",
+          "コマンド"
+        ]
+      }
+    ],
+    "reading": "ぎっとはぶシーエルアイ",
+    "aliases": []
+  },
+  {
+    "term": "Fork",
+    "senses": [
+      {
+        "definition": "他人のリポジトリを自分のアカウントに複製し、独立して変更を加えられるようにする機能。",
+        "domain": "github",
+        "keywords": [
+          "複製",
+          "コントリビュート",
+          "PR"
+        ]
+      }
+    ],
+    "reading": "フォーク",
+    "aliases": []
+  },
+  {
+    "term": "Collaborator",
+    "senses": [
+      {
+        "definition": "リポジトリへの書き込み権限を持つ共同作業者。",
+        "domain": "github",
+        "keywords": [
+          "権限",
+          "共同作業",
+          "招待"
+        ]
+      }
+    ],
+    "reading": "コラボレーター",
+    "aliases": []
+  },
+  {
+    "term": "Release",
+    "senses": [
+      {
+        "definition": "特定のタグに対してバイナリやリリースノートを添付して公開する機能。",
+        "domain": "github",
+        "keywords": [
+          "タグ",
+          "配布",
+          "バイナリ"
+        ]
+      }
+    ],
+    "reading": "リリース（GitHub）",
+    "aliases": []
+  },
+  {
+    "term": "Wiki",
+    "senses": [
+      {
+        "definition": "リポジトリに付属するドキュメント管理機能。Markdown形式で記述できる。",
+        "domain": "github",
+        "keywords": [
+          "ドキュメント",
+          "Markdown",
+          "ナレッジ"
+        ]
+      }
+    ],
+    "reading": "ウィキ",
+    "aliases": []
+  },
+  {
+    "term": "README",
+    "senses": [
+      {
+        "definition": "リポジトリの概要、セットアップ手順、使い方などを記載するファイル。",
+        "domain": "github",
+        "keywords": [
+          "説明",
+          "ドキュメント",
+          "入口"
+        ]
+      }
+    ],
+    "reading": "リードミー",
+    "aliases": []
+  },
+  {
+    "term": "履歴",
+    "senses": [
+      {
+        "definition": "リポジトリに記録されたコミットの連なり。変更の追跡や復元に使う。",
+        "domain": "version-control",
+        "keywords": [
+          "ログ",
+          "コミット",
+          "追跡"
+        ]
+      }
+    ],
+    "reading": "りれき",
+    "aliases": []
+  },
+  {
+    "term": "差分",
+    "senses": [
+      {
+        "definition": "変更前後の内容の違い。コードレビューやマージ判断の基礎情報になる。",
+        "domain": "version-control",
+        "keywords": [
+          "diff",
+          "比較",
+          "変更"
+        ]
+      }
+    ],
+    "reading": "さぶん",
+    "aliases": []
+  },
+  {
+    "term": "分散型バージョン管理",
+    "senses": [
+      {
+        "definition": "各開発者が完全なリポジトリ複製を持ち、ネットワーク非接続でも作業できるバージョン管理方式。",
+        "domain": "version-control",
+        "keywords": [
+          "Git",
+          "分散",
+          "ローカル"
+        ]
+      }
+    ],
+    "reading": "ぶんさんがたバージョンかんり",
+    "aliases": []
+  },
+  {
+    "term": "中央集権型",
+    "senses": [
+      {
+        "definition": "1つの中央リポジトリを正とし、全員がそこに対して更新を行うバージョン管理方式。SVNが代表例。",
+        "domain": "version-control",
+        "keywords": [
+          "SVN",
+          "中央",
+          "サーバー"
+        ]
+      }
+    ],
+    "reading": "ちゅうおうしゅうけんがた",
+    "aliases": []
+  }
+]

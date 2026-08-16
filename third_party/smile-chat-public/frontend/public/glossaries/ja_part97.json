@@ -1,0 +1,770 @@
+[
+  {
+    "term": "OpenAPI URL",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OpenAPI定義を取得するURL。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "OpenAPI URL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "URL Endpoint",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APIやサービスの個別エンドポイントURL。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "URL Endpoint"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTPS Host Name",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "TLS証明書検証時に使うホスト名。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "HTTPS Host Name"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Base URL",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "API共通部分となるURLの前半。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Base URL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Service URL Path",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Base URLに追加するサービスごとのパス。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Service URL Path"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pagination Type",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "API結果のページ分割方式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Pagination Type"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Data Profile",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "受信データの項目構造や型のメタ情報。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Data Profile"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Discovery",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "API定義を読み取り自動推定する処理。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Discovery"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Create REST Source Manually",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "手動でRESTソースを作る方法。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Create REST Source Manually"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Root Resource Name",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "REST定義内で使う最上位リソース名。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Root Resource Name"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Batch DML",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数の更新をまとめて送るデータ更新方式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Batch DML"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST Source Catalog",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "再利用可能なRESTソース定義のカタログ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "REST Source Catalog"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Internal Name",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "内部識別に使う論理名。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Internal Name"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Refresh Endpoint URL",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "カタログ再取得に使う更新元URL。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "Refresh Endpoint URL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST Enabled SQL",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "REST経由でSQL実行や参照を可能にする仕組み。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "REST Enabled SQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST Enabled SQL Service Reference",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "REST Enabled SQL先を指す接続定義。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "REST",
+          "REST Enabled SQL Service Reference"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Static ID",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "コードや設定から安定参照する固定識別子。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "識別子",
+          "Static ID"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Prompt on Install",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "インポート時に入力を促すかを決める設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "移送",
+          "Prompt on Install"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Utilization Report",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "オブジェクトの利用箇所を一覧化するレポート。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "レポート",
+          "Utilization Report"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "History Report",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "オブジェクト変更履歴を確認するレポート。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "レポート",
+          "History Report"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Generative AI Service",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXで生成AIを使うための接続定義オブジェクト。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "Generative AI Service"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AI Provider",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "利用する生成AI提供元。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "AI Provider"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Generative AI Service",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI上の生成AIサービスをAPEXから使う選択肢。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "OCI Generative AI Service"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cohere",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXで設定可能な生成AI提供元の一つ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "Cohere"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX Assistant",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "App Builderのコード編集支援AI。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "APEX Assistant"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX_AI",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXから生成AIを呼ぶAPIパッケージ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "API",
+          "APEX_AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX_AI.CHAT",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEX_AI経由でチャット実行する手続き。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "API",
+          "APEX_AI.CHAT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Test Connection",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AI接続設定を事前検証する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "Test Connection"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Additional Attributes",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AIリクエストに付与する追加パラメータ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "Additional Attributes"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTP Headers",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AI呼び出し時に付加するHTTPヘッダ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "HTTP Headers"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Used by App Builder",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "App Builder側のAI機能で使うサービスとして有効化する設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "Used by App Builder"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AI Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリ属性内でAI関連設定を扱う画面領域。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "AI Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AI Assistant Dynamic Action",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリ実行時にAI支援を呼び出す動的アクション。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "AI",
+          "AI Assistant Dynamic Action"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Workspace Utilities",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ワークスペース共通ユーティリティの一覧画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "画面",
+          "Workspace Utilities"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Application Groups",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリを論理的にグループ分けする機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "運用",
+          "Application Groups"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Workspace Themes",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ワークスペースで使うテーマ設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "UI",
+          "Workspace Themes"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Oracle APEX Views",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXメタデータ参照用のビュー群。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "メタデータ",
+          "Oracle APEX Views"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Manage Backups",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリのバックアップ管理機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "バックアップ",
+          "Manage Backups"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cross Application Reports",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数アプリを横断して見るレポート。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "レポート",
+          "Cross Application Reports"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Import",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリや設定を取り込む操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "移送",
+          "Import"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Application Export",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリ全体を移送用ファイルとして出力すること。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "移送",
+          "Application Export"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Page Export",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページ単位で定義を書き出すこと。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "移送",
+          "Page Export"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "App Gallery",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリひな形の選択画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "画面",
+          "App Gallery"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Sample App",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "学習用に用意されたサンプルアプリ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "テンプレート",
+          "Sample App"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Starter App",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "実装の出発点として使うひな形アプリ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "テンプレート",
+          "Starter App"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Custom App",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ユーザー独自に用意したアプリ定義。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "テンプレート",
+          "Custom App"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Utility App",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "補助用途向けの実用アプリ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "テンプレート",
+          "Utility App"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Oracle APEX GitHub Repository",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サンプルや拡張部品の公開配布元。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "配布",
+          "Oracle APEX GitHub Repository"
+        ]
+      }
+    ]
+  }
+]

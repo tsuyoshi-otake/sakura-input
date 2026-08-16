@@ -1,0 +1,914 @@
+[
+  {
+    "term": "Azure AD条件付きアクセス",
+    "reading": "あじゅーるえーでぃーじょうけんつきあくせす",
+    "aliases": [
+      "Azure AD Conditional Access",
+      "条件付きアクセス"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザーの場所・デバイス状態・リスクスコアなどのシグナルを組み合わせてアクセス可否とMFA要求を制御するMicrosoft Entra IDのポリシーエンジン。ゼロトラストセキュリティの中核機能。",
+        "domain": "azure",
+        "keywords": [
+          "MFA",
+          "ゼロトラスト",
+          "Entra ID",
+          "アクセス制御",
+          "ポリシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure AD PIM",
+    "reading": "あじゅーるえーでぃーぴーあいえむ",
+    "aliases": [
+      "Privileged Identity Management",
+      "PIM"
+    ],
+    "senses": [
+      {
+        "definition": "Microsoft Entra IDにおいて特権ロールを必要な時だけ一時的に付与するPAM（特権アクセス管理）サービス。常時管理者権限を排除し、承認ワークフローや監査ログで特権操作を制御する。",
+        "domain": "azure",
+        "keywords": [
+          "PAM",
+          "特権アクセス",
+          "Entra ID",
+          "最小権限",
+          "監査"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Information Protection",
+    "reading": "あじゅーるいんふぉめーしょんぷろてくしょん",
+    "aliases": [
+      "AIP",
+      "Microsoft Purview Information Protection"
+    ],
+    "senses": [
+      {
+        "definition": "ドキュメントやメールに機密ラベルを付与して暗号化・アクセス制御を行うMicrosoftの情報保護ソリューション。組織外への情報漏洩を防ぎコンプライアンスを強化する。",
+        "domain": "azure",
+        "keywords": [
+          "情報保護",
+          "機密ラベル",
+          "暗号化",
+          "コンプライアンス",
+          "DLP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Stack HCI",
+    "reading": "あじゅーるすたっくえいちしーあい",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Azure管理機能と統合されたハイパーコンバージドインフラ（HCI）OSソリューション。オンプレミスでVMとコンテナを実行しつつAzure ArcでクラウドサービスをローカルHCIクラスターに展開できる。",
+        "domain": "azure",
+        "keywords": [
+          "HCI",
+          "ハイパーコンバージド",
+          "オンプレミス",
+          "Azure Arc",
+          "仮想化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure IoT Edge",
+    "reading": "あじゅーるあいおーてぃーえっじ",
+    "aliases": [
+      "IoT Edge"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドワークロード（AI推論・Azure Functions・Stream Analytics）をIoTデバイスに展開してエッジで実行するサービス。コンテナモジュールとして配布されオフライン動作にも対応する。",
+        "domain": "azure",
+        "keywords": [
+          "エッジコンピューティング",
+          "IoT",
+          "コンテナ",
+          "AI推論",
+          "オフライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Sphere",
+    "reading": "あじゅーるすふぃあ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "マイクロコントローラー向けのエンドツーエンドセキュリティソリューション。専用OS、カスタムチップ（MT3620）、クラウドセキュリティサービスを組み合わせ接続デバイスをサイバー攻撃から保護する。",
+        "domain": "azure",
+        "keywords": [
+          "IoT",
+          "セキュリティ",
+          "マイクロコントローラー",
+          "組み込み",
+          "証明書"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Communication Services",
+    "reading": "あじゅーるこみゅにけーしょんさーびす",
+    "aliases": [
+      "ACS"
+    ],
+    "senses": [
+      {
+        "definition": "音声・ビデオ通話、チャット、SMS、電話番号をアプリに組み込むためのクラウドネイティブ通信プラットフォーム。Microsoft Teamsと相互運用可能でWebRTCベースのリアルタイム通信を実現する。",
+        "domain": "azure",
+        "keywords": [
+          "通信",
+          "VoIP",
+          "チャット",
+          "SMS",
+          "WebRTC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Media Services",
+    "reading": "あじゅーるめでぃあさーびす",
+    "aliases": [
+      "AMS"
+    ],
+    "senses": [
+      {
+        "definition": "動画の取り込み・エンコード・パッケージング・配信を行うクラウドメディア処理プラットフォーム。ライブストリーミングとオンデマンド配信に対応しContent Delivery NetworkとDRM保護を統合する。",
+        "domain": "azure",
+        "keywords": [
+          "動画",
+          "ストリーミング",
+          "エンコード",
+          "CDN",
+          "DRM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Content Moderator",
+    "reading": "あじゅーるこんてんともでれーたー",
+    "aliases": [
+      "Content Moderator",
+      "Azure AI Content Safety"
+    ],
+    "senses": [
+      {
+        "definition": "テキスト・画像・動画から有害コンテンツ（暴力・ヘイト・成人向けなど）を自動検出・フィルタリングするAIサービス。ユーザー生成コンテンツのモデレーションを自動化しプラットフォームの安全性を維持する。",
+        "domain": "azure",
+        "keywords": [
+          "コンテンツモデレーション",
+          "安全",
+          "AI",
+          "フィルタリング",
+          "有害コンテンツ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Web PubSub",
+    "reading": "あじゅーるうぇぶぱぶさぶ",
+    "aliases": [
+      "Web PubSub"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocketプロトコルをベースにメッセージをパブリッシュ・サブスクライブできるフルマネージドのリアルタイムメッセージングサービス。接続数百万規模のライブ更新・通知・コラボレーション機能を実現する。",
+        "domain": "azure",
+        "keywords": [
+          "WebSocket",
+          "パブリッシュサブスクライブ",
+          "リアルタイム",
+          "メッセージング",
+          "スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Durable Functions",
+    "reading": "あじゅーるでゅーらぶるふぁんくしょんず",
+    "aliases": [
+      "Durable Functions"
+    ],
+    "senses": [
+      {
+        "definition": "ステートフルなワークフローをサーバーレスコードで記述できるAzure Functionsの拡張機能。オーケストレーター関数・アクティビティ関数・エンティティ関数を組み合わせて長時間実行プロセスを実装する。",
+        "domain": "azure",
+        "keywords": [
+          "サーバーレス",
+          "ワークフロー",
+          "ステートフル",
+          "Azure Functions",
+          "オーケストレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Durable Entities",
+    "reading": "でゅーらぶるえんてぃてぃーず",
+    "aliases": [
+      "Azure Durable Entities",
+      "エンティティ関数"
+    ],
+    "senses": [
+      {
+        "definition": "Azure Durable Functionsのエンティティ関数機能。小さなステート（カウンター・在庫など）をサーバーレス関数として永続化し、メッセージ経由でシリアルに操作するアクターモデルの実装を提供する。",
+        "domain": "azure",
+        "keywords": [
+          "Durable Functions",
+          "ステート管理",
+          "アクターモデル",
+          "サーバーレス",
+          "永続化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dapr",
+    "reading": "でいぱー",
+    "aliases": [
+      "Distributed Application Runtime"
+    ],
+    "senses": [
+      {
+        "definition": "マイクロサービスのための分散アプリケーションランタイム。サービス呼び出し、状態管理、パブサブ、バインディングなどの分散システム機能をサイドカーAPIで抽象化しクラウドポータビリティを高める。",
+        "domain": "azure",
+        "keywords": [
+          "マイクロサービス",
+          "分散システム",
+          "サイドカー",
+          "ポータビリティ",
+          "オープンソース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Red Hat OpenShift",
+    "reading": "あじゅーるれっどはっとおーぷんしふと",
+    "aliases": [
+      "ARO"
+    ],
+    "senses": [
+      {
+        "definition": "MicrosoftとRed Hatが共同サポートするAzure上のフルマネージドOpenShiftサービス。エンタープライズKubernetesプラットフォームの運用をクラウドにオフロードし高いセキュリティとコンプライアンスを維持する。",
+        "domain": "azure",
+        "keywords": [
+          "Kubernetes",
+          "OpenShift",
+          "Red Hat",
+          "エンタープライズ",
+          "コンテナ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure HPC",
+    "reading": "あじゅーるえいちぴーしー",
+    "aliases": [
+      "Azure High Performance Computing"
+    ],
+    "senses": [
+      {
+        "definition": "流体力学・気候シミュレーション・分子動力学などの科学技術計算をAzure上で実行するためのInfiniBandネットワーク接続HシリーズVM群と関連サービスの総称。",
+        "domain": "azure",
+        "keywords": [
+          "ハイパフォーマンスコンピューティング",
+          "InfiniBand",
+          "シミュレーション",
+          "科学技術計算",
+          "GPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Confidential Computing",
+    "reading": "あじゅーるこんふぃでんしゃるこんぴゅーてぃんぐ",
+    "aliases": [
+      "Confidential Computing"
+    ],
+    "senses": [
+      {
+        "definition": "CPU内のTEE（Trusted Execution Environment）を利用してクラウド上でも処理中のデータを暗号化・保護する技術。Intel SGXやAMD SEVを活用しクラウドプロバイダーからもデータを秘匿できる。",
+        "domain": "azure",
+        "keywords": [
+          "TEE",
+          "Intel SGX",
+          "暗号化",
+          "プライバシー",
+          "信頼実行環境"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Lighthouse",
+    "reading": "あじゅーるらいとはうす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "マネージドサービスプロバイダー（MSP）が複数顧客のAzureテナントをスケーラブルに管理できるサービス。Azure委任リソース管理によって顧客テナントへのアクセス権を一元化し運用効率を向上させる。",
+        "domain": "azure",
+        "keywords": [
+          "MSP",
+          "マルチテナント",
+          "委任管理",
+          "ガバナンス",
+          "サービスプロバイダー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureウェルアーキテクテッドフレームワーク",
+    "reading": "あじゅーるうぇるあーきてくてっどふれーむわーく",
+    "aliases": [
+      "Azure Well-Architected Framework"
+    ],
+    "senses": [
+      {
+        "definition": "信頼性・セキュリティ・コスト最適化・オペレーショナルエクセレンス・パフォーマンス効率の5つの柱でAzureアーキテクチャを評価・改善するフレームワーク。Well-Architected Reviewで現状分析ができる。",
+        "domain": "azure",
+        "keywords": [
+          "アーキテクチャ",
+          "設計原則",
+          "ベストプラクティス",
+          "5つの柱",
+          "評価"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureランディングゾーン",
+    "reading": "あじゅーるらんでぃんぐぞーん",
+    "aliases": [
+      "Azure Landing Zone"
+    ],
+    "senses": [
+      {
+        "definition": "AzureへのクラウドAdoptionを加速するためのスケーラブルなサブスクリプション設計と管理グループ階層のリファレンスアーキテクチャ。ネットワーク・ID・セキュリティ・ガバナンスの基盤を事前に整備する。",
+        "domain": "azure",
+        "keywords": [
+          "CAF",
+          "基盤設計",
+          "ガバナンス",
+          "サブスクリプション",
+          "管理グループ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure CAF",
+    "reading": "あじゅーるしーえーえふ",
+    "aliases": [
+      "Cloud Adoption Framework",
+      "CAF"
+    ],
+    "senses": [
+      {
+        "definition": "MicrosoftがAzure導入プロジェクトを成功に導くために提供するガイダンス・ツール・ベストプラクティスの集合体。戦略・計画・準備・採用・ガバナンス・管理の各フェーズで実践的指針を提供する。",
+        "domain": "azure",
+        "keywords": [
+          "クラウド移行",
+          "ガバナンス",
+          "戦略",
+          "ランディングゾーン",
+          "Best Practice"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Resource Graph",
+    "reading": "あじゅーるりそーすぐらふ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "数千規模のAzureリソースをKQLクエリで高速に検索・集計できるサービス。変更履歴の追跡やコンプライアンス評価、大規模なリソースインベントリ管理に活用される。",
+        "domain": "azure",
+        "keywords": [
+          "リソース管理",
+          "KQL",
+          "検索",
+          "コンプライアンス",
+          "インベントリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Management Groups",
+    "reading": "あじゅーるまねじめんとぐるーぷす",
+    "aliases": [
+      "Management Groups"
+    ],
+    "senses": [
+      {
+        "definition": "複数のAzureサブスクリプションをツリー階層でグループ化し、ポリシーやRBACを一括適用できる組織管理の仕組み。大企業のAzureガバナンス設計の基盤となるリソース階層の最上位概念。",
+        "domain": "azure",
+        "keywords": [
+          "ガバナンス",
+          "サブスクリプション",
+          "階層",
+          "RBAC",
+          "ポリシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Subscriptions",
+    "reading": "あじゅーるさぶすくりぷしょんず",
+    "aliases": [
+      "Subscription",
+      "Azureサブスクリプション"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースを格納し請求の単位となる論理コンテナ。管理グループの下に位置しコスト分離・アクセス制御・ポリシー適用の境界を提供する。ランディングゾーン設計ではワークロードごとに分割することが多い。",
+        "domain": "azure",
+        "keywords": [
+          "課金",
+          "リソース管理",
+          "ガバナンス",
+          "アクセス制御",
+          "ランディングゾーン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Virtual WAN",
+    "reading": "あじゅーるばーちゃるわん",
+    "aliases": [
+      "Virtual WAN",
+      "vWAN"
+    ],
+    "senses": [
+      {
+        "definition": "ブランチ拠点・リモートユーザー・Azure VNet・オンプレミスをハブアンドスポーク型で接続するネットワークサービス。SD-WAN統合とExpressRoute・VPN・Azure Firewallを一元管理する。",
+        "domain": "azure",
+        "keywords": [
+          "WAN",
+          "SD-WAN",
+          "ハブアンドスポーク",
+          "ExpressRoute",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure NAT Gateway",
+    "reading": "あじゅーるなっとげーとうぇい",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サブネット内のリソースがアウトバウンド接続をスケーラブルに行うためのマネージドNATサービス。静的パブリックIPでのSNATにより接続数増加時のSNATポート枯渇問題を解消する。",
+        "domain": "azure",
+        "keywords": [
+          "NAT",
+          "アウトバウンド",
+          "SNAT",
+          "ネットワーク",
+          "スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Virtual Network Peering",
+    "reading": "あじゅーるばーちゃるねっとわーくぴありんぐ",
+    "aliases": [
+      "VNet Peering",
+      "仮想ネットワークピアリング"
+    ],
+    "senses": [
+      {
+        "definition": "同一リージョンまたは異なるリージョンのAzure VNet同士をMicrosoftバックボーンを通じて低レイテンシで接続する機能。ゲートウェイトランジットによってオンプレミス接続の共有も可能。",
+        "domain": "azure",
+        "keywords": [
+          "VNet",
+          "ピアリング",
+          "低レイテンシ",
+          "バックボーン",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Route Table",
+    "reading": "あじゅーるるーとてーぶる",
+    "aliases": [
+      "Route Table",
+      "ユーザー定義ルート"
+    ],
+    "senses": [
+      {
+        "definition": "VNet内のサブネットにカスタムルーティングルールを適用するリソース。仮想アプライアンス（Azure FirewallやNVA）経由でトラフィックを強制転送するUDR（User Defined Routes）を定義する。",
+        "domain": "azure",
+        "keywords": [
+          "ルーティング",
+          "UDR",
+          "NVA",
+          "Azure Firewall",
+          "ネットワーク"
+        ]
+      },
+      {
+        "definition": "通信の転送先を決めるルール集合。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Route Table"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureマネージドディスク",
+    "reading": "あじゅーるまねーじどでぃすく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Azure VM向けにブロックストレージをマネージドサービスとして提供する機能。Standard HDD・Standard SSD・Premium SSD・Ultra Diskの4ティアがありスナップショットやAzure Backupとの統合でデータ保護も容易。",
+        "domain": "azure",
+        "keywords": [
+          "ブロックストレージ",
+          "VM",
+          "SSD",
+          "スナップショット",
+          "ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Data Lake Storage",
+    "reading": "あじゅーるでーたれいくすとれーじ",
+    "aliases": [
+      "ADLS",
+      "Azure Data Lake Storage Gen2"
+    ],
+    "senses": [
+      {
+        "definition": "ビッグデータ分析向けにBlobストレージを拡張したデータレイクサービス。階層型名前空間・ACL・Sparkネイティブ統合によって大規模データパイプラインを効率的に処理する。",
+        "domain": "azure",
+        "keywords": [
+          "データレイク",
+          "ビッグデータ",
+          "階層型名前空間",
+          "Spark",
+          "Analytics"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureロールベースアクセス制御",
+    "reading": "あじゅーるろーるべーすどあくせすせいぎょ",
+    "aliases": [
+      "Role-Based Access Control"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースへのアクセスをロール割り当てで管理するアクセス制御モデル。組み込みロール（Owner・Contributor・Reader等）とカスタムロールでリソースへの操作権限を最小権限の原則に従い付与する。",
+        "domain": "azure",
+        "keywords": [
+          "アクセス制御",
+          "最小権限",
+          "ロール",
+          "IAM",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure DevTest Labs",
+    "reading": "あじゅーるでぶてすとらぼ",
+    "aliases": [
+      "DevTest Labs"
+    ],
+    "senses": [
+      {
+        "definition": "開発・テスト環境のVMをポリシーベースで迅速にプロビジョニングし、コストを自動管理するサービス。環境の上限設定・自動シャットダウン・再利用可能なテンプレートで開発者の実験環境を低コストで提供する。",
+        "domain": "azure",
+        "keywords": [
+          "開発環境",
+          "テスト環境",
+          "コスト管理",
+          "自動シャットダウン",
+          "VM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Health Data Services",
+    "reading": "あじゅーるへるすでーたさーびす",
+    "aliases": [
+      "AHDS"
+    ],
+    "senses": [
+      {
+        "definition": "医療データ（FHIR・DICOM・MedTech）をセキュアに格納・変換・分析するマネージドサービス群。HL7 FHIRおよびDICOMプロトコルに対応し医療機関のデジタルヘルスソリューション構築を支援する。",
+        "domain": "azure",
+        "keywords": [
+          "医療",
+          "FHIR",
+          "DICOM",
+          "ヘルスケア",
+          "コンプライアンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureハイブリッド特典",
+    "reading": "あじゅーるはいぶりっどとくてん",
+    "aliases": [
+      "Azure Hybrid Benefit",
+      "AHB"
+    ],
+    "senses": [
+      {
+        "definition": "既存のWindows ServerやSQL ServerのオンプレミスソフトウェアライセンスをAzure VM・SQL Database・AKSに適用してコストを削減できるライセンス特典プログラム。最大80%以上のコスト削減効果がある。",
+        "domain": "azure",
+        "keywords": [
+          "ライセンス",
+          "コスト削減",
+          "Windows Server",
+          "SQL Server",
+          "FinOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureスポットインスタンス",
+    "reading": "あじゅーるすぽっといんすたんす",
+    "aliases": [
+      "Spot Instances"
+    ],
+    "senses": [
+      {
+        "definition": "Azureの余剰コンピューティング容量をオンデマンドより最大90%安く利用できる中断可能なVM。Azureが容量を必要とする場合は30秒前通知で削除されるため、耐障害性を持つバッチ処理や開発環境に適する。",
+        "domain": "azure",
+        "keywords": [
+          "コスト最適化",
+          "中断可能",
+          "バッチ処理",
+          "FinOps",
+          "余剰容量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureテナント",
+    "reading": "あじゅーるてなんと",
+    "aliases": [
+      "Azure Tenant",
+      "AAD Tenant"
+    ],
+    "senses": [
+      {
+        "definition": "Microsoft Entra ID（旧Azure AD）の専用インスタンス。組織が最初にAzureやMicrosoft 365にサインアップした際に作成され、ユーザー・グループ・アプリ登録を管理するID境界となる。複数サブスクリプションを持てる。",
+        "domain": "azure",
+        "keywords": [
+          "Entra ID",
+          "テナント",
+          "組織",
+          "IAM",
+          "境界"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure DevOps Server",
+    "reading": "あじゅーるでぶおぷすさーばー",
+    "aliases": [
+      "TFS",
+      "Team Foundation Server"
+    ],
+    "senses": [
+      {
+        "definition": "Azure DevOpsをオンプレミスで実行するセルフホスト型の開発プラットフォーム。インターネット接続なしに同等のCI/CD・バックログ・リポジトリ機能を利用でき、クラウドへの移行パスも提供する。",
+        "domain": "azure",
+        "keywords": [
+          "オンプレミス",
+          "CI/CD",
+          "DevOps",
+          "セルフホスト",
+          "ALM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Deployment Environments",
+    "reading": "あじゅーるでぷろいめんとえんばいろんめんつ",
+    "aliases": [
+      "Deployment Environments",
+      "ADE"
+    ],
+    "senses": [
+      {
+        "definition": "開発チームがセルフサービスでアプリケーション環境をプロビジョニングできるAzureサービス。ARMテンプレートやBicepを使った環境カタログをDevCenterで管理し、プロジェクトベースのコスト管理と自動削除ポリシーを提供する。",
+        "domain": "azure",
+        "keywords": [
+          "セルフサービス",
+          "DevCenter",
+          "環境管理",
+          "コスト管理",
+          "開発者体験"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Dev Box",
+    "reading": "あじゅーるでぶぼっくす",
+    "aliases": [
+      "Microsoft Dev Box"
+    ],
+    "senses": [
+      {
+        "definition": "開発者向けのクラウドPC（高性能Windows仮想マシン）をセルフサービスで迅速にプロビジョニングできるサービス。プロジェクト固有のイメージとDevCenterプールでオンボーディングを短縮しローカルPC不要の開発環境を実現する。",
+        "domain": "azure",
+        "keywords": [
+          "クラウドPC",
+          "開発環境",
+          "セルフサービス",
+          "Windows",
+          "DevCenter"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Load Testing",
+    "reading": "あじゅーるろーどてすてぃんぐ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Apache JMeterスクリプトをクラウドで大規模実行してアプリケーションのパフォーマンスとスケーラビリティを検証するフルマネージド負荷テストサービス。CI/CDパイプラインへの組み込みとリアルタイム監視ダッシュボードを提供する。",
+        "domain": "azure",
+        "keywords": [
+          "負荷テスト",
+          "パフォーマンス",
+          "JMeter",
+          "CI/CD",
+          "スケーラビリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Chaos Studio",
+    "reading": "あじゅーるけいおすすたじお",
+    "aliases": [
+      "Chaos Studio"
+    ],
+    "senses": [
+      {
+        "definition": "カオスエンジニアリングの実験をAzureリソースに対して実行するサービス。障害インジェクション（CPU過負荷・ネットワーク遅延・VMシャットダウン等）でシステムの回復力を測定し弱点を発見する。",
+        "domain": "azure",
+        "keywords": [
+          "カオスエンジニアリング",
+          "障害注入",
+          "回復力",
+          "レジリエンス",
+          "SRE"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Monitor Alerts",
+    "reading": "あじゅーるもにたーあらーと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "メトリクス・ログ・アクティビティログの条件に基づいて通知やアクション（Runbook実行・Webhook呼び出し等）を自動実行するAzure Monitorのアラート機能。アクショングループで通知先を一元管理する。",
+        "domain": "azure",
+        "keywords": [
+          "アラート",
+          "通知",
+          "自動化",
+          "Runbook",
+          "アクショングループ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Automanage",
+    "reading": "あじゅーるおーとまねーじ",
+    "aliases": [
+      "Automanage"
+    ],
+    "senses": [
+      {
+        "definition": "WindowsおよびLinux VMに対してバックアップ・監視・パッチ管理・セキュリティベースラインなどのベストプラクティスを自動的に有効化・設定するサービス。運用のオーバーヘッドを最小化しベストプラクティスへの準拠を自動維持する。",
+        "domain": "azure",
+        "keywords": [
+          "VM管理",
+          "自動化",
+          "ベストプラクティス",
+          "バックアップ",
+          "パッチ管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureプライベートエンドポイント",
+    "reading": "あじゅーるぷらいべーとえんどぽいんと",
+    "aliases": [
+      "プライベートエンドポイント"
+    ],
+    "senses": [
+      {
+        "definition": "Azure Private LinkによってPaaSサービス（StorageやSQL等）のネットワークインターフェースをVNet内のプライベートIPアドレスでアクセス可能にする機能。インターネットを経由しない閉域通信でセキュリティを強化する。",
+        "domain": "azure",
+        "keywords": [
+          "Private Link",
+          "VNet",
+          "ネットワーク分離",
+          "セキュリティ",
+          "プライベートIP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Policy イニシアチブ",
+    "reading": "あじゅーるぽりしーいにしあちぶ",
+    "aliases": [
+      "Policy Initiative",
+      "ポリシーイニシアチブ",
+      "Azure Initiative"
+    ],
+    "senses": [
+      {
+        "definition": "複数のAzure Policyをひとつのグループにまとめて一括適用するコレクション定義。CISベンチマークやNIST SP 800-53等のコンプライアンス標準を1つのイニシアチブとして管理しスコア評価できる。",
+        "domain": "azure",
+        "keywords": [
+          "Azure Policy",
+          "コンプライアンス",
+          "ガバナンス",
+          "CIS",
+          "NIST"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azureリソースロック",
+    "reading": "あじゅーるりそーすろっく",
+    "aliases": [
+      "Resource Lock",
+      "Azure Lock"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースの誤削除や変更を防ぐためにサブスクリプション・リソースグループ・リソースに適用するロック機能。CanNotDeleteロックとReadOnlyロックの2種類があり重要リソースの保護に用いる。",
+        "domain": "azure",
+        "keywords": [
+          "ガバナンス",
+          "誤削除防止",
+          "リソース管理",
+          "ロック",
+          "保護"
+        ]
+      }
+    ]
+  }
+]

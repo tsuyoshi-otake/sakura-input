@@ -1,0 +1,1592 @@
+[
+  {
+    "term": "エコシステム",
+    "reading": "えこしすてむ",
+    "senses": [
+      {
+        "definition": "IT業界において相互依存・協力関係にある企業・製品・コミュニティの生態系。プラットフォームを中心に形成される。",
+        "domain": "business-analysis",
+        "keywords": [
+          "プラットフォーム",
+          "生態系",
+          "業界",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ecosystem"
+    ]
+  },
+  {
+    "term": "ニッチ",
+    "reading": "にっち",
+    "senses": [
+      {
+        "definition": "市場や生態系における特定の隙間・専門領域。競合が少ない特定セグメントを指す。",
+        "domain": "business-analysis",
+        "keywords": [
+          "市場",
+          "特定領域",
+          "競合",
+          "セグメント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Niche"
+    ]
+  },
+  {
+    "term": "進化論",
+    "reading": "しんかろん",
+    "senses": [
+      {
+        "definition": "IT業界の変化をダーウィン進化論になぞらえて説明する概念。環境適応できる技術・企業が生き残るという考え方。",
+        "domain": "business-analysis",
+        "keywords": [
+          "適応",
+          "変化",
+          "生存",
+          "技術進化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フリーソフトウェア運動",
+    "reading": "ふりーそふとうぇあうんどう",
+    "senses": [
+      {
+        "definition": "Richard Stallmanが提唱したソフトウェアの自由（使用・研究・改変・再配布）を守る社会運動。GNUプロジェクトが代表例。",
+        "domain": "software-engineering",
+        "keywords": [
+          "GPL",
+          "GNU",
+          "オープンソース",
+          "自由"
+        ]
+      }
+    ],
+    "aliases": [
+      "Free Software Movement"
+    ]
+  },
+  {
+    "term": "オープンコア",
+    "reading": "おーぷんこあ",
+    "senses": [
+      {
+        "definition": "コア機能をオープンソースで公開し追加機能を有料提供するビジネスモデル。",
+        "domain": "business-analysis",
+        "keywords": [
+          "オープンソース",
+          "ビジネスモデル",
+          "有料",
+          "商用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Open Core"
+    ]
+  },
+  {
+    "term": "ECMAScript",
+    "reading": "えくますくりぷと",
+    "senses": [
+      {
+        "definition": "Ecma Internationalが標準化したJavaScriptのコア仕様。ES6（ES2015）以降は年次リリースが続く。",
+        "domain": "software-engineering",
+        "keywords": [
+          "JavaScript",
+          "標準",
+          "Ecma",
+          "仕様"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Node.js",
+    "senses": [
+      {
+        "definition": "V8エンジン上で動作するサーバーサイドJavaScript実行環境。非同期I/Oとイベント駆動が特徴。",
+        "domain": "software-engineering",
+        "keywords": [
+          "JavaScript",
+          "サーバーサイド",
+          "非同期",
+          "V8"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Deno",
+    "senses": [
+      {
+        "definition": "Node.jsの作者Ryan Dahlが設計したTypeScript/JavaScript実行環境。セキュリティとモジュール管理を改善している。",
+        "domain": "software-engineering",
+        "keywords": [
+          "TypeScript",
+          "JavaScript",
+          "セキュリティ",
+          "実行環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WebAssembly",
+    "reading": "うぇぶあっせんぶりー",
+    "senses": [
+      {
+        "definition": "ブラウザ上でネイティブに近い速度でバイナリコードを実行できる低レベル仮想命令セット。",
+        "domain": "software-engineering",
+        "keywords": [
+          "バイナリ",
+          "ブラウザ",
+          "高速",
+          "クロス言語"
+        ]
+      }
+    ],
+    "aliases": [
+      "Wasm"
+    ]
+  },
+  {
+    "term": "ChatGPT",
+    "senses": [
+      {
+        "definition": "OpenAIが提供するGPTモデルベースの対話型AIサービス。2022年末に公開され急速に普及した。",
+        "domain": "software-engineering",
+        "keywords": [
+          "OpenAI",
+          "GPT",
+          "対話AI",
+          "生成AI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Microsoft Copilot",
+    "senses": [
+      {
+        "definition": "MicrosoftがGPT・Azure OpenAI Serviceを基盤に提供するAIアシスタント群の総称。GitHub CopilotやOffice Copilotを含む。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Microsoft",
+          "AI",
+          "コード補完",
+          "生産性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Google Gemini",
+    "senses": [
+      {
+        "definition": "GoogleがDeepMindと共同開発したマルチモーダルLLM。Bard後継として2024年に発表。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Google",
+          "LLM",
+          "マルチモーダル",
+          "AI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Bedrock",
+    "senses": [
+      {
+        "definition": "AWSが提供するフルマネージド型の基盤モデルAPI。複数LLMをAPIで利用できるクラウドサービス。",
+        "domain": "cloud",
+        "keywords": [
+          "AWS",
+          "LLM",
+          "API",
+          "マネージドサービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Claude",
+    "senses": [
+      {
+        "definition": "AnthropicがConstitutional AIに基づいて開発した対話型LLM。安全性と有用性のバランスを重視する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "Anthropic",
+          "LLM",
+          "AI",
+          "安全性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Hugging Face",
+    "senses": [
+      {
+        "definition": "オープンソースのMLモデル・データセット・ライブラリのハブ。Transformersライブラリで広く普及。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ML",
+          "オープンソース",
+          "モデル",
+          "Transformers"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キャズム理論",
+    "reading": "きゃずむりろん",
+    "senses": [
+      {
+        "definition": "Geoffrey Mooreが提唱した技術普及モデル。アーリーアダプターとアーリーマジョリティの間に存在する普及の断絶を表す。",
+        "domain": "business-analysis",
+        "keywords": [
+          "普及",
+          "イノベーション",
+          "マーケティング",
+          "断絶"
+        ]
+      }
+    ],
+    "aliases": [
+      "Chasm Theory"
+    ]
+  },
+  {
+    "term": "革新者",
+    "reading": "かくしんしゃ",
+    "senses": [
+      {
+        "definition": "イノベーター理論における技術の最初期採用者。全体の約2.5%を占めリスクを厭わず新技術を試みる。",
+        "domain": "business-analysis",
+        "keywords": [
+          "イノベーター",
+          "採用",
+          "技術",
+          "普及"
+        ]
+      }
+    ],
+    "aliases": [
+      "イノベーター"
+    ]
+  },
+  {
+    "term": "早期採用者",
+    "reading": "そうきさいようしゃ",
+    "senses": [
+      {
+        "definition": "イノベーター理論における2番目の採用層。全体の約13.5%。オピニオンリーダーとして機能する。",
+        "domain": "business-analysis",
+        "keywords": [
+          "アーリーアダプター",
+          "普及",
+          "オピニオンリーダー",
+          "技術"
+        ]
+      }
+    ],
+    "aliases": [
+      "アーリーアダプター"
+    ]
+  },
+  {
+    "term": "実利主義者",
+    "reading": "じつりしゅぎしゃ",
+    "senses": [
+      {
+        "definition": "キャズム理論におけるアーリーマジョリティ。実用性・実績を重視してから採用する層（約34%）。",
+        "domain": "business-analysis",
+        "keywords": [
+          "アーリーマジョリティ",
+          "実用",
+          "普及",
+          "採用"
+        ]
+      }
+    ],
+    "aliases": [
+      "アーリーマジョリティ"
+    ]
+  },
+  {
+    "term": "消極的消費者",
+    "reading": "しょうきょくてきしょうひしゃ",
+    "senses": [
+      {
+        "definition": "キャズム理論におけるレイトマジョリティ。周囲に追随して採用する保守的な層（約34%）。",
+        "domain": "business-analysis",
+        "keywords": [
+          "レイトマジョリティ",
+          "保守",
+          "採用",
+          "フォロワー"
+        ]
+      }
+    ],
+    "aliases": [
+      "レイトマジョリティ"
+    ]
+  },
+  {
+    "term": "保守的消費者",
+    "reading": "ほしゅてきしょうひしゃ",
+    "senses": [
+      {
+        "definition": "キャズム理論におけるラガード。最後まで新技術を拒否するか採用が極めて遅い層（約16%）。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ラガード",
+          "拒否",
+          "保守",
+          "採用遅延"
+        ]
+      }
+    ],
+    "aliases": [
+      "ラガード"
+    ]
+  },
+  {
+    "term": "ガートナーハイプサイクル",
+    "reading": "がーとなーはいぷさいくる",
+    "senses": [
+      {
+        "definition": "Gartnerが提唱する新技術の期待と普及の過程を示すモデル。5段階のフェーズで技術成熟度を表す。",
+        "domain": "business-analysis",
+        "keywords": [
+          "技術成熟",
+          "Gartner",
+          "ハイプ",
+          "普及"
+        ]
+      }
+    ],
+    "aliases": [
+      "ハイプサイクル",
+      "Gartner Hype Cycle",
+      "Hype Cycle"
+    ]
+  },
+  {
+    "term": "黎明期",
+    "reading": "れいめいき",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第1フェーズ。技術が登場し初期の関心が生まれる段階。",
+        "domain": "business-analysis",
+        "keywords": [
+          "技術登場",
+          "初期",
+          "Gartner",
+          "ハイプ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "過度な期待のピーク期",
+    "reading": "かどなきたいのぴーくき",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第2フェーズ。過大な期待が集まりメディア露出が最大化する段階。",
+        "domain": "business-analysis",
+        "keywords": [
+          "過大期待",
+          "ピーク",
+          "Gartner",
+          "ハイプ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "幻滅期",
+    "reading": "げんめつき",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第3フェーズ。期待が外れ関心が急速に失われる段階。",
+        "domain": "business-analysis",
+        "keywords": [
+          "失望",
+          "撤退",
+          "Gartner",
+          "技術成熟"
+        ]
+      }
+    ],
+    "aliases": [
+      "Trough of Disillusionment"
+    ]
+  },
+  {
+    "term": "啓蒙活動期",
+    "reading": "けいもうかつどうき",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第4フェーズ。技術の実際の価値が理解され始め普及が進む段階。",
+        "domain": "business-analysis",
+        "keywords": [
+          "普及",
+          "理解",
+          "Gartner",
+          "実用化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "生産性の安定期",
+    "reading": "せいさんせいのあんていき",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第5フェーズ。技術が主流として定着し生産性が安定する段階。",
+        "domain": "business-analysis",
+        "keywords": [
+          "成熟",
+          "定着",
+          "安定",
+          "Gartner"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ペースレイヤリング",
+    "reading": "ぺーすれいやりんぐ",
+    "senses": [
+      {
+        "definition": "GartnerのStu Turcotte提唱モデル。システムを変化速度（Systems of Record/Differentiation/Innovation）の層に分類する。",
+        "domain": "architecture",
+        "keywords": [
+          "Gartner",
+          "ビジネスアジリティ",
+          "システム分類",
+          "変化速度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pace Layering"
+    ]
+  },
+  {
+    "term": "バイモーダルIT",
+    "reading": "ばいもーだるいーてぃ",
+    "senses": [
+      {
+        "definition": "Gartnerが提唱したITの二形態論。安定性重視のMode1と俊敏性重視のMode2を並立させる戦略。",
+        "domain": "architecture",
+        "keywords": [
+          "Gartner",
+          "Mode1",
+          "Mode2",
+          "デジタル変革"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bimodal IT"
+    ]
+  },
+  {
+    "term": "P.A.I.",
+    "senses": [
+      {
+        "definition": "Personal AI Intelligenceの略。個人のワークフローに統合されたAIアシスタントの概念。",
+        "domain": "software-engineering",
+        "keywords": [
+          "AI",
+          "個人",
+          "アシスタント",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AI Coding Assistants",
+    "senses": [
+      {
+        "definition": "コード補完・生成・レビューを支援するAIツールの総称。GitHub CopilotやCursorなどが代表例。",
+        "domain": "software-engineering",
+        "keywords": [
+          "AI",
+          "コード補完",
+          "開発支援",
+          "GitHub Copilot"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クリティカルマス",
+    "reading": "くりてぃかるます",
+    "senses": [
+      {
+        "definition": "技術・製品の普及が自律的に加速し始める臨界点の採用者数または普及率。",
+        "domain": "business-analysis",
+        "keywords": [
+          "普及",
+          "閾値",
+          "ネットワーク効果",
+          "採用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Critical Mass"
+    ]
+  },
+  {
+    "term": "OpenJ9",
+    "senses": [
+      {
+        "definition": "IBM提供のオープンソースJVM実装。メモリ使用量削減と起動時間短縮に優れる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "JVM",
+          "Java",
+          "IBM",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GraalVM",
+    "senses": [
+      {
+        "definition": "Oracleが開発した多言語対応の高性能JVM。ネイティブイメージ生成やポリグロットプログラミングをサポート。",
+        "domain": "software-engineering",
+        "keywords": [
+          "JVM",
+          "多言語",
+          "Oracle",
+          "ネイティブ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フィジビリティ",
+    "reading": "ふぃじびりてぃ",
+    "senses": [
+      {
+        "definition": "プロジェクトや技術的アイデアの実現可能性を評価すること。技術・経済・時間・運用・法的観点から検討する。",
+        "domain": "project-management",
+        "keywords": [
+          "実現可能性",
+          "評価",
+          "調査",
+          "リスク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "技術的実現可能性",
+    "reading": "ぎじゅつてきじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "提案された技術的解決策が現在の技術・ノウハウで実現できるかを評価する観点。",
+        "domain": "project-management",
+        "keywords": [
+          "技術調査",
+          "POC",
+          "リスク",
+          "実現可能性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Technical Feasibility"
+    ]
+  },
+  {
+    "term": "経済的実現可能性",
+    "reading": "けいざいてきじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "プロジェクトのコストと期待効果・ROIを評価し投資が正当化できるかを判断する観点。",
+        "domain": "project-management",
+        "keywords": [
+          "ROI",
+          "コスト",
+          "費用対効果",
+          "投資"
+        ]
+      }
+    ],
+    "aliases": [
+      "Economic Feasibility"
+    ]
+  },
+  {
+    "term": "時間的実現可能性",
+    "reading": "じかんてきじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "要求された期間内にプロジェクトを完了できるかを評価する観点。スケジュールリスクを含む。",
+        "domain": "project-management",
+        "keywords": [
+          "スケジュール",
+          "期間",
+          "リスク",
+          "納期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "運用的実現可能性",
+    "reading": "うんようてきじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "導入後にシステムが組織の業務プロセス・人材・文化に受け入れられ運用できるかを評価する観点。",
+        "domain": "project-management",
+        "keywords": [
+          "運用",
+          "組織",
+          "変更管理",
+          "受入"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "法的実現可能性",
+    "reading": "ほうてきじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "プロジェクトが関連法規・規制・契約条件を満たして実施できるかを評価する観点。",
+        "domain": "project-management",
+        "keywords": [
+          "法規制",
+          "コンプライアンス",
+          "契約",
+          "リスク"
+        ]
+      }
+    ],
+    "aliases": [
+      "Legal Feasibility"
+    ]
+  },
+  {
+    "term": "技術調査",
+    "reading": "ぎじゅつちょうさ",
+    "senses": [
+      {
+        "definition": "採用候補技術の特性・成熟度・リスクを調査し採用可否を判断するための活動。",
+        "domain": "project-management",
+        "keywords": [
+          "技術評価",
+          "POC",
+          "調査",
+          "選定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Technical Investigation"
+    ]
+  },
+  {
+    "term": "概念実証",
+    "reading": "がいねんじっしょう",
+    "senses": [
+      {
+        "definition": "アイデアや技術の実現可能性を小規模な試作で検証する活動。PoC（Proof of Concept）とも呼ぶ。",
+        "domain": "project-management",
+        "keywords": [
+          "PoC",
+          "プロトタイプ",
+          "検証",
+          "技術"
+        ]
+      }
+    ],
+    "aliases": [
+      "Proof of Concept"
+    ]
+  },
+  {
+    "term": "フィジビリティテスト",
+    "reading": "ふぃじびりてぃてすと",
+    "senses": [
+      {
+        "definition": "実現可能性を検証するために行う小規模な実験・プロトタイプ構築テスト。",
+        "domain": "project-management",
+        "keywords": [
+          "検証",
+          "実験",
+          "プロトタイプ",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "市場調査",
+    "reading": "しじょうちょうさ",
+    "senses": [
+      {
+        "definition": "対象市場の規模・競合・顧客ニーズを調査し事業機会を評価する活動。",
+        "domain": "business-analysis",
+        "keywords": [
+          "市場",
+          "競合",
+          "顧客",
+          "調査"
+        ]
+      }
+    ],
+    "aliases": [
+      "Market Research"
+    ]
+  },
+  {
+    "term": "事例調査",
+    "reading": "じれいちょうさ",
+    "senses": [
+      {
+        "definition": "類似プロジェクトや業界の先行事例を収集・分析してベストプラクティスや失敗要因を学ぶ活動。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ベストプラクティス",
+          "ベンチマーク",
+          "先行事例",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [
+      "Case Study Research"
+    ]
+  },
+  {
+    "term": "技術研究",
+    "reading": "ぎじゅつけんきゅう",
+    "senses": [
+      {
+        "definition": "将来の開発に備えて新技術の原理・適用範囲・限界を探索する研究活動。",
+        "domain": "software-engineering",
+        "keywords": [
+          "R&D",
+          "技術探索",
+          "イノベーション",
+          "調査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リバースエンジニアリング",
+    "reading": "りばーすえんじにありんぐ",
+    "senses": [
+      {
+        "definition": "既存のシステム・製品を解析してその設計・仕様を逆に解明する手法。",
+        "domain": "software-engineering",
+        "keywords": [
+          "解析",
+          "仕様解明",
+          "設計",
+          "既存システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reverse Engineering"
+    ]
+  },
+  {
+    "term": "顧客満足度",
+    "reading": "こきゃくまんぞくど",
+    "senses": [
+      {
+        "definition": "顧客がサービス・製品に対して感じる満足の度合い。NPS・CSATなどの指標で計測する。",
+        "domain": "business-analysis",
+        "keywords": [
+          "CS",
+          "NPS",
+          "品質",
+          "顧客"
+        ]
+      }
+    ],
+    "aliases": [
+      "CS",
+      "CSAT",
+      "Customer Satisfaction"
+    ]
+  },
+  {
+    "term": "期待値コントロール",
+    "reading": "きたいちこんとろーる",
+    "senses": [
+      {
+        "definition": "プロジェクトにおいてステークホルダーの期待値を適切に管理・調整するコミュニケーション活動。",
+        "domain": "project-management",
+        "keywords": [
+          "期待管理",
+          "ステークホルダー",
+          "コミュニケーション",
+          "リスク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "真なる課題",
+    "reading": "しんなるかだい",
+    "senses": [
+      {
+        "definition": "表面的な要望の背後にある本質的な問題。コンサルティングでは要望の奥にある真の課題を特定することが重要。",
+        "domain": "business-analysis",
+        "keywords": [
+          "課題分析",
+          "本質",
+          "ニーズ",
+          "コンサルティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "差別化",
+    "reading": "さべつか",
+    "senses": [
+      {
+        "definition": "競合他社との比較において自社・製品・サービスの優位性を明確にすること。",
+        "domain": "business-analysis",
+        "keywords": [
+          "競合",
+          "戦略",
+          "優位性",
+          "価値"
+        ]
+      }
+    ],
+    "aliases": [
+      "Differentiation"
+    ]
+  },
+  {
+    "term": "ソリューション設計",
+    "reading": "そりゅーしょんせっけい",
+    "senses": [
+      {
+        "definition": "顧客課題を解決するためのシステム・サービス・プロセスの組み合わせを設計する活動。",
+        "domain": "business-analysis",
+        "keywords": [
+          "課題解決",
+          "設計",
+          "提案",
+          "アーキテクチャ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Solution Design"
+    ]
+  },
+  {
+    "term": "ゼロベース思考",
+    "reading": "ぜろべーすしこう",
+    "senses": [
+      {
+        "definition": "既存の前提や制約を取り払いゼロから問題を再定義・解決策を考える思考法。",
+        "domain": "business-analysis",
+        "keywords": [
+          "前提排除",
+          "思考",
+          "イノベーション",
+          "再定義"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zero-Based Thinking"
+    ]
+  },
+  {
+    "term": "コンセプト",
+    "reading": "こんせぷと",
+    "senses": [
+      {
+        "definition": "製品・サービス・システムの核となる基本的なアイデアや方向性を言語化したもの。",
+        "domain": "business-analysis",
+        "keywords": [
+          "アイデア",
+          "方向性",
+          "ビジョン",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Concept"
+    ]
+  },
+  {
+    "term": "ストーリー",
+    "reading": "すとーりー",
+    "senses": [
+      {
+        "definition": "ユーザーの行動・感情・文脈を物語形式で記述し要件やデザインを説明するための手法。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ユーザーストーリー",
+          "ナラティブ",
+          "要件",
+          "共感"
+        ]
+      }
+    ],
+    "aliases": [
+      "Story"
+    ]
+  },
+  {
+    "term": "コンサルティング",
+    "reading": "こんさるてぃんぐ",
+    "senses": [
+      {
+        "definition": "専門知識を持つ第三者が組織の課題解決や戦略立案を支援する専門サービス。",
+        "domain": "business-analysis",
+        "keywords": [
+          "課題解決",
+          "専門家",
+          "支援",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": [
+      "Consulting"
+    ]
+  },
+  {
+    "term": "グレイヘアアプローチ",
+    "reading": "ぐれいへああぷろーち",
+    "senses": [
+      {
+        "definition": "豊富な経験・実績に基づいてベストプラクティスや定石を提供するコンサルティングスタイル。",
+        "domain": "business-analysis",
+        "keywords": [
+          "経験",
+          "ベストプラクティス",
+          "コンサルティング",
+          "実績"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ファクトアプローチ",
+    "reading": "ふぁくとあぷろーち",
+    "senses": [
+      {
+        "definition": "データ・事実・分析に基づいて客観的に課題と解決策を提示するコンサルティングスタイル。",
+        "domain": "business-analysis",
+        "keywords": [
+          "データ",
+          "事実",
+          "分析",
+          "客観"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンセプチュアルスキル",
+    "reading": "こんせぷちゅあるすきる",
+    "senses": [
+      {
+        "definition": "複雑な状況を抽象化し本質を見抜いて概念化する能力。管理職・コンサルタントに必要なスキル。",
+        "domain": "business-analysis",
+        "keywords": [
+          "抽象化",
+          "思考",
+          "概念",
+          "スキル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Conceptual Skill"
+    ]
+  },
+  {
+    "term": "ロジックツリー",
+    "reading": "ろじっくつりー",
+    "senses": [
+      {
+        "definition": "問題や原因を論理的に分解して階層的に整理する思考ツール。MECEで展開することが基本。",
+        "domain": "business-analysis",
+        "keywords": [
+          "MECE",
+          "問題分解",
+          "思考",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logic Tree"
+    ]
+  },
+  {
+    "term": "MECE",
+    "senses": [
+      {
+        "definition": "Mutually Exclusive, Collectively Exhaustiveの略。重複なく漏れなく情報や選択肢を整理する思考原則。",
+        "domain": "business-analysis",
+        "keywords": [
+          "思考",
+          "論理",
+          "分析",
+          "漏れなく重複なく"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "戦略思考",
+    "reading": "せんりゃくしこう",
+    "senses": [
+      {
+        "definition": "長期的な目標達成のために資源配分・競合優位・環境変化を考慮して計画する思考法。",
+        "domain": "business-analysis",
+        "keywords": [
+          "戦略",
+          "長期",
+          "競合",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "仮説思考",
+    "reading": "かせつしこう",
+    "senses": [
+      {
+        "definition": "限られた情報で仮説を立て検証しながら問題解決を進める効率的な思考アプローチ。",
+        "domain": "business-analysis",
+        "keywords": [
+          "仮説",
+          "検証",
+          "問題解決",
+          "思考"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PEST分析",
+    "reading": "ぺすとぶんせき",
+    "senses": [
+      {
+        "definition": "Political・Economic・Social・Technologicalの4要素で外部環境を分析するフレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "外部環境",
+          "マクロ",
+          "戦略",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [
+      "PEST Analysis"
+    ]
+  },
+  {
+    "term": "SWOT分析",
+    "reading": "すうぉっとぶんせき",
+    "senses": [
+      {
+        "definition": "Strengths・Weaknesses・Opportunities・Threatsで組織の内外環境を分析する経営フレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "強み",
+          "弱み",
+          "機会",
+          "脅威"
+        ]
+      }
+    ],
+    "aliases": [
+      "SWOT Analysis"
+    ]
+  },
+  {
+    "term": "3C分析",
+    "reading": "さんしーぶんせき",
+    "senses": [
+      {
+        "definition": "Customer・Competitor・Companyの3要素で事業環境を分析するフレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "顧客",
+          "競合",
+          "自社",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": [
+      "3C Analysis"
+    ]
+  },
+  {
+    "term": "4P分析",
+    "reading": "よんぴーぶんせき",
+    "senses": [
+      {
+        "definition": "Product・Price・Place・Promotionの4要素でマーケティングミックスを分析するフレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "マーケティング",
+          "製品",
+          "価格",
+          "流通"
+        ]
+      }
+    ],
+    "aliases": [
+      "4P Analysis"
+    ]
+  },
+  {
+    "term": "5F分析",
+    "reading": "ごえふぶんせき",
+    "senses": [
+      {
+        "definition": "Porterの5つの競争力（新規参入・代替品・買い手・売り手・競合）で業界構造を分析するフレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "Porter",
+          "競争力",
+          "業界",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": [
+      "5Forces分析"
+    ]
+  },
+  {
+    "term": "4C分析",
+    "reading": "よんしーぶんせき",
+    "senses": [
+      {
+        "definition": "Customer Value・Cost・Convenience・Communicationの4要素で顧客視点のマーケティングを分析するフレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "顧客価値",
+          "マーケティング",
+          "コスト",
+          "利便性"
+        ]
+      }
+    ],
+    "aliases": [
+      "4C Analysis"
+    ]
+  },
+  {
+    "term": "BSC分析",
+    "reading": "びーえすしーぶんせき",
+    "senses": [
+      {
+        "definition": "Balanced Scorecardの略。財務・顧客・業務プロセス・学習成長の4視点で組織戦略を評価するフレームワーク。",
+        "domain": "business-analysis",
+        "keywords": [
+          "バランス",
+          "戦略",
+          "KPI",
+          "組織"
+        ]
+      }
+    ],
+    "aliases": [
+      "BSC",
+      "バランスト・スコアカード",
+      "BSC Analysis",
+      "Balanced Scorecard"
+    ]
+  },
+  {
+    "term": "進化論（IT）",
+    "reading": "しんかろんあいてぃ",
+    "senses": [
+      {
+        "definition": "ダーウィン進化論を類比にIT業界の変化を説明する概念で、環境に適応した技術・企業が生き残ると主張します。",
+        "domain": "business-analysis",
+        "keywords": [
+          "適応",
+          "変化",
+          "生存",
+          "技術進化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Evolutionary Theory"
+    ]
+  },
+  {
+    "term": "プラグマティスト",
+    "reading": "ぷらぐまてぃすと",
+    "senses": [
+      {
+        "definition": "キャズム理論における前期多数派で、実用的価値と実績を確認してから技術を採用する層です（約34%）。",
+        "domain": "business-analysis",
+        "keywords": [
+          "前期多数派",
+          "実用的",
+          "普及",
+          "採用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pragmatists",
+      "Early Majority"
+    ]
+  },
+  {
+    "term": "スケプティクス",
+    "reading": "すけぷてぃくす",
+    "senses": [
+      {
+        "definition": "キャズム理論における後期多数派で、周囲に追随して保守的に採用する層です（約34%）。",
+        "domain": "business-analysis",
+        "keywords": [
+          "後期多数派",
+          "保守的",
+          "採用",
+          "フォロワー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Skeptics",
+      "Late Majority"
+    ]
+  },
+  {
+    "term": "テクノロジートリガー",
+    "reading": "てくのろじーとりがー",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第1フェーズで、技術が登場し初期関心が高まる段階です。",
+        "domain": "business-analysis",
+        "keywords": [
+          "技術登場",
+          "初期フェーズ",
+          "ガートナー",
+          "ハイプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Technology Trigger"
+    ]
+  },
+  {
+    "term": "過度な期待のピーク",
+    "reading": "かどなきたいのぴーく",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第2フェーズで、過剰な期待が集まりメディア露出がピークに達する段階です。",
+        "domain": "business-analysis",
+        "keywords": [
+          "過剰期待",
+          "ピーク",
+          "ガートナー",
+          "ハイプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Peak of Inflated Expectations"
+    ]
+  },
+  {
+    "term": "啓発の坂",
+    "reading": "けいはつのさか",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第4フェーズで、技術の真の価値が理解され採用が進む段階です。",
+        "domain": "business-analysis",
+        "keywords": [
+          "普及",
+          "理解",
+          "ガートナー",
+          "実用化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Slope of Enlightenment"
+    ]
+  },
+  {
+    "term": "生産性の台地",
+    "reading": "せいさんせいのだいち",
+    "senses": [
+      {
+        "definition": "ガートナーハイプサイクルの第5フェーズで、技術が主流となり生産性が安定する段階です。",
+        "domain": "business-analysis",
+        "keywords": [
+          "成熟",
+          "主流",
+          "安定",
+          "ガートナー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Plateau of Productivity"
+    ]
+  },
+  {
+    "term": "スケジュール実現可能性",
+    "reading": "すけじゅーるじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "要求された期間内にプロジェクトを完了できるかをスケジュールリスクも含めて評価することです。",
+        "domain": "project-management",
+        "keywords": [
+          "スケジュール",
+          "タイムライン",
+          "リスク",
+          "期限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Schedule Feasibility"
+    ]
+  },
+  {
+    "term": "運用実現可能性",
+    "reading": "うんようじつげんかのうせい",
+    "senses": [
+      {
+        "definition": "展開後、システムが組織の業務プロセス・人・文化のなかで運用・受け入れられるかを評価することです。",
+        "domain": "project-management",
+        "keywords": [
+          "運用",
+          "組織",
+          "変更管理",
+          "受け入れ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operational Feasibility"
+    ]
+  },
+  {
+    "term": "フィージビリティテスト",
+    "reading": "ふぃーじびりてぃてすと",
+    "senses": [
+      {
+        "definition": "実現可能性を検証するために実施する小規模な実験やプロトタイプ構築です。",
+        "domain": "project-management",
+        "keywords": [
+          "検証",
+          "実験",
+          "プロトタイプ",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": [
+      "Feasibility Test"
+    ]
+  },
+  {
+    "term": "技術リサーチ",
+    "reading": "ぎじゅつりさーち",
+    "senses": [
+      {
+        "definition": "将来の開発に備えて新技術の原理・適用可能性・限界を調査する探索的な研究活動です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "R&D",
+          "技術探索",
+          "イノベーション",
+          "リサーチ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Technology Research"
+    ]
+  },
+  {
+    "term": "真の問題",
+    "reading": "しんのもんだい",
+    "senses": [
+      {
+        "definition": "表面的な要望の背後にある本質的な問題のことです。コンサルティングでは表明された要求の裏にある真の問題を特定することが重要です。",
+        "domain": "business-analysis",
+        "keywords": [
+          "問題分析",
+          "本質",
+          "ニーズ",
+          "コンサルティング"
+        ]
+      }
+    ],
+    "aliases": [
+      "True Problem"
+    ]
+  },
+  {
+    "term": "グレーヘアアプローチ",
+    "reading": "ぐれーへああぷろーち",
+    "senses": [
+      {
+        "definition": "豊富な経験と実績に基づいてベストプラクティスと確立されたソリューションを提供するコンサルティングスタイルです。",
+        "domain": "business-analysis",
+        "keywords": [
+          "経験",
+          "ベストプラクティス",
+          "コンサルティング",
+          "実績"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gray Hair Approach"
+    ]
+  },
+  {
+    "term": "ファクトベースアプローチ",
+    "reading": "ふぁくとべーすあぷろーち",
+    "senses": [
+      {
+        "definition": "データ・事実・分析に基づき問題と解決策を客観的に提示するコンサルティングスタイルです。",
+        "domain": "business-analysis",
+        "keywords": [
+          "データ",
+          "事実",
+          "分析",
+          "客観的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fact-Based Approach"
+    ]
+  },
+  {
+    "term": "戦略的思考",
+    "reading": "せんりゃくてきしこう",
+    "senses": [
+      {
+        "definition": "リソース配分・競争優位・環境変化を考慮しながら長期的な目標達成を計画する思考アプローチです。",
+        "domain": "business-analysis",
+        "keywords": [
+          "戦略",
+          "長期",
+          "競争",
+          "計画"
+        ]
+      }
+    ],
+    "aliases": [
+      "Strategic Thinking"
+    ]
+  },
+  {
+    "term": "仮説駆動思考",
+    "reading": "かせつくどうしこう",
+    "senses": [
+      {
+        "definition": "限られた情報で仮説を立て、検証しながら進める効率的な問題解決アプローチです。",
+        "domain": "business-analysis",
+        "keywords": [
+          "仮説",
+          "検証",
+          "問題解決",
+          "思考"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hypothesis-Driven Thinking"
+    ]
+  },
+  {
+    "term": "5フォース分析",
+    "reading": "ごふぉーすぶんせき",
+    "senses": [
+      {
+        "definition": "新規参入・代替品・買い手・売り手・業界内競合の5つの競争力で業界構造を分析するポーターのフレームワークです。",
+        "domain": "business-analysis",
+        "keywords": [
+          "ポーター",
+          "競争力",
+          "業界",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": [
+      "5 Forces Analysis",
+      "5F Analysis"
+    ]
+  }
+]

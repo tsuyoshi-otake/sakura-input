@@ -1,0 +1,1273 @@
+[
+  {
+    "term": "rm",
+    "senses": [
+      {
+        "definition": "Linuxのファイルやディレクトリを削除するコマンド。`-rf`オプションで再帰削除できるが取り消しが効かないため、実行前に必ず対象を確認することが重要。",
+        "domain": "shell",
+        "keywords": [
+          "削除",
+          "bash",
+          "linux",
+          "ファイル操作",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "remove"
+    ]
+  },
+  {
+    "term": "ls",
+    "senses": [
+      {
+        "definition": "カレントディレクトリまたは指定ディレクトリのファイル・ディレクトリ一覧を表示するコマンド。`-la`で隠しファイルや詳細情報も確認できる。",
+        "domain": "shell",
+        "keywords": [
+          "一覧",
+          "ディレクトリ",
+          "bash",
+          "linux",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "pwd",
+    "senses": [
+      {
+        "definition": "現在の作業ディレクトリの絶対パスを表示するコマンド。スクリプト内でカレントディレクトリを確認する際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "カレントディレクトリ",
+          "パス",
+          "bash",
+          "linux",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "print working directory"
+    ]
+  },
+  {
+    "term": "mkdir",
+    "senses": [
+      {
+        "definition": "新しいディレクトリを作成するコマンド。`-p`オプションで中間ディレクトリも一括作成できる。",
+        "domain": "shell",
+        "keywords": [
+          "ディレクトリ作成",
+          "bash",
+          "linux",
+          "ファイル操作",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "make directory"
+    ]
+  },
+  {
+    "term": "cp",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリをコピーするコマンド。`-r`オプションでディレクトリを再帰的にコピーできる。",
+        "domain": "shell",
+        "keywords": [
+          "コピー",
+          "bash",
+          "linux",
+          "ファイル操作",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "copy"
+    ]
+  },
+  {
+    "term": "mv",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリを移動またはリネームするコマンド。移動先が同一ファイルシステム内であれば実体の移動は発生しない。",
+        "domain": "shell",
+        "keywords": [
+          "移動",
+          "リネーム",
+          "bash",
+          "linux",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "move"
+    ]
+  },
+  {
+    "term": "touch",
+    "senses": [
+      {
+        "definition": "空ファイルを新規作成するか、既存ファイルのタイムスタンプを更新するコマンド。ビルドシステムで依存関係を強制更新する際にも使われる。",
+        "domain": "shell",
+        "keywords": [
+          "ファイル作成",
+          "タイムスタンプ",
+          "bash",
+          "linux",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "cat",
+    "senses": [
+      {
+        "definition": "ファイルの内容を標準出力に表示するコマンド。複数ファイルを結合して出力する用途にも使われる。",
+        "domain": "shell",
+        "keywords": [
+          "表示",
+          "ファイル内容",
+          "bash",
+          "linux",
+          "テキスト処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "concatenate"
+    ]
+  },
+  {
+    "term": "less",
+    "senses": [
+      {
+        "definition": "ファイルの内容をページ単位でスクロール表示するコマンド。`more`と異なり上方向にもスクロールできる。",
+        "domain": "shell",
+        "keywords": [
+          "ページャー",
+          "表示",
+          "bash",
+          "linux",
+          "ファイル閲覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "more",
+    "senses": [
+      {
+        "definition": "ファイルの内容を1画面ずつ表示するページャーコマンド。`less`より機能が少ないが広く普及している。",
+        "domain": "shell",
+        "keywords": [
+          "ページャー",
+          "表示",
+          "bash",
+          "linux",
+          "ファイル閲覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "tail",
+    "senses": [
+      {
+        "definition": "ファイルの末尾を表示するコマンド。`-f`オプションでログファイルをリアルタイムに監視できる。",
+        "domain": "shell",
+        "keywords": [
+          "末尾",
+          "ログ監視",
+          "bash",
+          "linux",
+          "テキスト処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "grep",
+    "senses": [
+      {
+        "definition": "ファイルや標準入力からパターンに一致する行を検索して出力するコマンド。正規表現に対応し、ログ解析やコード検索に広く使われる。",
+        "domain": "shell",
+        "keywords": [
+          "検索",
+          "正規表現",
+          "bash",
+          "linux",
+          "テキスト処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "global regular expression print"
+    ]
+  },
+  {
+    "term": "find",
+    "senses": [
+      {
+        "definition": "ディレクトリツリーを再帰的に検索してファイルやディレクトリを探すコマンド。名前・種別・更新日時など多様な条件で絞り込める。",
+        "domain": "shell",
+        "keywords": [
+          "ファイル検索",
+          "bash",
+          "linux",
+          "ディレクトリ",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sed",
+    "senses": [
+      {
+        "definition": "ストリームエディタ。テキストの置換・削除・挿入をパイプライン上で行うコマンド。正規表現を使った一括置換に多用される。",
+        "domain": "shell",
+        "keywords": [
+          "テキスト置換",
+          "ストリーム処理",
+          "bash",
+          "linux",
+          "正規表現"
+        ]
+      }
+    ],
+    "aliases": [
+      "stream editor"
+    ]
+  },
+  {
+    "term": "awk",
+    "senses": [
+      {
+        "definition": "テキストを列単位で処理するパターンスキャン言語。CSVやログの集計・整形に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "テキスト処理",
+          "列処理",
+          "bash",
+          "linux",
+          "集計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sort",
+    "senses": [
+      {
+        "definition": "テキストの各行をソートして出力するコマンド。`-n`で数値順、`-r`で逆順など多様なオプションがある。",
+        "domain": "shell",
+        "keywords": [
+          "ソート",
+          "bash",
+          "linux",
+          "テキスト処理",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "uniq",
+    "senses": [
+      {
+        "definition": "連続する重複行を削除または集計するコマンド。`sort`と組み合わせて重複排除に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "重複削除",
+          "bash",
+          "linux",
+          "テキスト処理",
+          "集計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "wc",
+    "senses": [
+      {
+        "definition": "ファイルや標準入力の行数・単語数・バイト数を数えるコマンド。`-l`で行数のみ取得するのが一般的。",
+        "domain": "shell",
+        "keywords": [
+          "行数",
+          "文字数",
+          "bash",
+          "linux",
+          "テキスト処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "word count"
+    ]
+  },
+  {
+    "term": "cut",
+    "senses": [
+      {
+        "definition": "各行から指定したフィールドや文字位置を切り出して出力するコマンド。CSVやTSVの特定列を取得する際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "列抽出",
+          "テキスト処理",
+          "bash",
+          "linux",
+          "CSV"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "echo",
+    "senses": [
+      {
+        "definition": "引数として渡した文字列を標準出力に表示するコマンド。変数展開やスクリプト内のメッセージ出力に広く使われる。",
+        "domain": "shell",
+        "keywords": [
+          "出力",
+          "変数展開",
+          "bash",
+          "linux",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "printf",
+    "senses": [
+      {
+        "definition": "書式指定に従って文字列を出力するコマンド。`echo`より厳密な書式制御が可能で、改行の扱いも明示的に指定できる。",
+        "domain": "shell",
+        "keywords": [
+          "書式出力",
+          "bash",
+          "linux",
+          "テキスト処理",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "read",
+    "senses": [
+      {
+        "definition": "標準入力から1行を読み込み、変数に格納するシェル組み込みコマンド。インタラクティブなスクリプトで入力待ちに使われる。",
+        "domain": "shell",
+        "keywords": [
+          "入力",
+          "変数",
+          "bash",
+          "インタラクティブ",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "test",
+    "senses": [
+      {
+        "definition": "条件式を評価してtrue/falseを返すシェル組み込みコマンド。`[`と等価で、ファイルの存在確認や数値・文字列の比較に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "条件評価",
+          "bash",
+          "linux",
+          "スクリプト",
+          "比較"
+        ]
+      }
+    ],
+    "aliases": [
+      "["
+    ]
+  },
+  {
+    "term": "if",
+    "senses": [
+      {
+        "definition": "条件分岐を記述するシェルの制御構文。`then`/`else`/`fi`とセットで使い、コマンドの終了コードで分岐する。",
+        "domain": "shell",
+        "keywords": [
+          "条件分岐",
+          "bash",
+          "制御構文",
+          "スクリプト",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "for",
+    "senses": [
+      {
+        "definition": "リストや数値範囲の各要素を順に処理するシェルのループ構文。ファイルの一括処理などに使われる。",
+        "domain": "shell",
+        "keywords": [
+          "ループ",
+          "bash",
+          "制御構文",
+          "スクリプト",
+          "繰り返し"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "while",
+    "senses": [
+      {
+        "definition": "条件が真の間、処理を繰り返すシェルのループ構文。無限ループやストリーム処理に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "ループ",
+          "bash",
+          "制御構文",
+          "スクリプト",
+          "繰り返し"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "case",
+    "senses": [
+      {
+        "definition": "値をパターンと照合して分岐するシェルの制御構文。複数の条件をシンプルに書ける。",
+        "domain": "shell",
+        "keywords": [
+          "パターンマッチ",
+          "bash",
+          "制御構文",
+          "スクリプト",
+          "分岐"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "function",
+    "senses": [
+      {
+        "definition": "シェルスクリプト内で再利用可能な処理をまとめるための定義キーワード。`function name {}` または `name(){}` の形式で記述する。",
+        "domain": "shell",
+        "keywords": [
+          "関数",
+          "bash",
+          "スクリプト",
+          "再利用",
+          "モジュール化"
+        ]
+      },
+      {
+        "definition": "イベントに応じて実行される小さな処理単位。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "サーバレス",
+          "Function"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "source",
+    "senses": [
+      {
+        "definition": "指定したスクリプトファイルを現在のシェルセッション内で実行するコマンド。変数や関数の定義を現在のシェルに読み込む際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "シェル設定",
+          "bash",
+          "環境変数",
+          "スクリプト",
+          "読み込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "."
+    ]
+  },
+  {
+    "term": "unset",
+    "senses": [
+      {
+        "definition": "シェル変数や関数を削除するコマンド。設定を初期化したり、不要な変数をクリーンアップする際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "変数削除",
+          "bash",
+          "環境変数",
+          "スクリプト",
+          "クリーンアップ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "declare",
+    "senses": [
+      {
+        "definition": "シェル変数の属性（整数・配列・読み取り専用など）を宣言するbash組み込みコマンド。型付き変数を定義する際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "変数宣言",
+          "bash",
+          "型",
+          "スクリプト",
+          "配列"
+        ]
+      }
+    ],
+    "aliases": [
+      "typeset"
+    ]
+  },
+  {
+    "term": "local",
+    "senses": [
+      {
+        "definition": "関数内でローカルスコープの変数を定義するbash組み込みコマンド。関数外に影響を与えない変数を作るために使われる。",
+        "domain": "shell",
+        "keywords": [
+          "スコープ",
+          "bash",
+          "変数",
+          "関数",
+          "スクリプト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "return",
+    "senses": [
+      {
+        "definition": "シェル関数から抜けて呼び出し元に戻るコマンド。引数として終了コードを指定できる。",
+        "domain": "shell",
+        "keywords": [
+          "関数",
+          "終了コード",
+          "bash",
+          "スクリプト",
+          "制御フロー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "exit",
+    "senses": [
+      {
+        "definition": "シェルスクリプトまたはシェルセッションを終了するコマンド。引数として終了コード（0=成功、非0=失敗）を渡せる。",
+        "domain": "shell",
+        "keywords": [
+          "終了",
+          "終了コード",
+          "bash",
+          "スクリプト",
+          "エラーハンドリング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "which",
+    "senses": [
+      {
+        "definition": "指定したコマンドの実行ファイルのフルパスを表示するコマンド。コマンドがどのパスにあるか確認する際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "コマンド検索",
+          "パス",
+          "bash",
+          "linux",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "type",
+    "senses": [
+      {
+        "definition": "コマンドの種類（組み込み・エイリアス・外部コマンドなど）を表示するbash組み込みコマンド。",
+        "domain": "shell",
+        "keywords": [
+          "コマンド種別",
+          "bash",
+          "確認",
+          "エイリアス",
+          "組み込み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "man",
+    "senses": [
+      {
+        "definition": "コマンドやシステムコールのマニュアルページを表示するコマンド。詳細なオプションや使い方を確認できる。",
+        "domain": "shell",
+        "keywords": [
+          "マニュアル",
+          "ドキュメント",
+          "bash",
+          "linux",
+          "ヘルプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "manual"
+    ]
+  },
+  {
+    "term": "help",
+    "senses": [
+      {
+        "definition": "bash組み込みコマンドの使い方を表示するコマンド。外部コマンドには`man`を使う。",
+        "domain": "shell",
+        "keywords": [
+          "ヘルプ",
+          "bash",
+          "組み込み",
+          "ドキュメント",
+          "コマンド"
+        ]
+      },
+      {
+        "definition": "属性説明やヘルプを見るタブ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Help"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "history",
+    "senses": [
+      {
+        "definition": "過去に実行したコマンドの履歴を表示するbash組み込みコマンド。`!番号`で履歴から再実行できる。",
+        "domain": "shell",
+        "keywords": [
+          "コマンド履歴",
+          "bash",
+          "linux",
+          "再実行",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "unalias",
+    "senses": [
+      {
+        "definition": "設定されたエイリアスを削除するコマンド。`-a`ですべてのエイリアスを一括削除できる。",
+        "domain": "shell",
+        "keywords": [
+          "エイリアス",
+          "bash",
+          "設定削除",
+          "コマンド",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "jobs",
+    "senses": [
+      {
+        "definition": "現在のシェルで実行中または停止中のジョブ一覧を表示するbash組み込みコマンド。バックグラウンドジョブの管理に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "ジョブ管理",
+          "バックグラウンド",
+          "bash",
+          "linux",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "fg",
+    "senses": [
+      {
+        "definition": "バックグラウンドまたは停止中のジョブをフォアグラウンドに戻すコマンド。`jobs`で確認したジョブ番号を指定する。",
+        "domain": "shell",
+        "keywords": [
+          "ジョブ管理",
+          "フォアグラウンド",
+          "bash",
+          "linux",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "bg",
+    "senses": [
+      {
+        "definition": "停止中のジョブをバックグラウンドで実行再開するコマンド。Ctrl+Zで停止したプロセスを再開する際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "ジョブ管理",
+          "バックグラウンド",
+          "bash",
+          "linux",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "wait",
+    "senses": [
+      {
+        "definition": "指定したバックグラウンドプロセスまたはすべてのバックグラウンドジョブが終了するまで待機するコマンド。",
+        "domain": "shell",
+        "keywords": [
+          "待機",
+          "ジョブ管理",
+          "bash",
+          "スクリプト",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "trap",
+    "senses": [
+      {
+        "definition": "シグナルやシェルイベントを受け取ったときに実行する処理を登録するbash組み込みコマンド。スクリプトの終了時クリーンアップに使われる。",
+        "domain": "shell",
+        "keywords": [
+          "シグナル",
+          "エラーハンドリング",
+          "bash",
+          "スクリプト",
+          "クリーンアップ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "kill",
+    "senses": [
+      {
+        "definition": "プロセスにシグナルを送信するコマンド。デフォルトはSIGTERM（15）で、`-9`（SIGKILL）で強制終了できる。",
+        "domain": "shell",
+        "keywords": [
+          "プロセス終了",
+          "シグナル",
+          "bash",
+          "linux",
+          "プロセス管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "df",
+    "senses": [
+      {
+        "definition": "ファイルシステムのディスク使用量を表示するコマンド。`-h`で人が読みやすい単位で表示できる。",
+        "domain": "shell",
+        "keywords": [
+          "ディスク容量",
+          "bash",
+          "linux",
+          "ファイルシステム",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": [
+      "disk free"
+    ]
+  },
+  {
+    "term": "du",
+    "senses": [
+      {
+        "definition": "ディレクトリやファイルのディスク使用量を表示するコマンド。`-sh *`でサブディレクトリごとのサイズを把握できる。",
+        "domain": "shell",
+        "keywords": [
+          "ディスク使用量",
+          "bash",
+          "linux",
+          "ディレクトリ",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": [
+      "disk usage"
+    ]
+  },
+  {
+    "term": "free",
+    "senses": [
+      {
+        "definition": "システムのメモリ使用状況を表示するコマンド。`-h`で人が読みやすい単位で表示できる。",
+        "domain": "shell",
+        "keywords": [
+          "メモリ",
+          "bash",
+          "linux",
+          "リソース監視",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ln",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリへのリンクを作成するコマンド。`-s`でシンボリックリンクを作成する。",
+        "domain": "shell",
+        "keywords": [
+          "リンク",
+          "シンボリックリンク",
+          "bash",
+          "linux",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "link"
+    ]
+  },
+  {
+    "term": "tee",
+    "senses": [
+      {
+        "definition": "標準入力をファイルと標準出力の両方に同時に書き出すコマンド。パイプラインの途中でファイルに保存しながら処理を続けられる。",
+        "domain": "shell",
+        "keywords": [
+          "リダイレクト",
+          "bash",
+          "linux",
+          "ログ",
+          "パイプライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "xargs",
+    "senses": [
+      {
+        "definition": "標準入力から受け取った値をコマンドの引数として渡すコマンド。`find`や`grep`の結果を別のコマンドに渡す際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "引数渡し",
+          "パイプライン",
+          "bash",
+          "linux",
+          "コマンド連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "date",
+    "senses": [
+      {
+        "definition": "現在の日時を表示またはシステム日時を設定するコマンド。`+%Y-%m-%d`などの書式指定でフォーマットできる。",
+        "domain": "shell",
+        "keywords": [
+          "日時",
+          "bash",
+          "linux",
+          "タイムスタンプ",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sleep",
+    "senses": [
+      {
+        "definition": "指定した秒数だけ処理を一時停止するコマンド。スクリプト内のポーリングや待機処理に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "待機",
+          "bash",
+          "linux",
+          "スクリプト",
+          "タイマー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "watch",
+    "senses": [
+      {
+        "definition": "指定したコマンドを一定間隔で繰り返し実行し、結果を画面に更新表示するコマンド。リソース監視に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "監視",
+          "定期実行",
+          "bash",
+          "linux",
+          "リアルタイム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "curl",
+    "senses": [
+      {
+        "definition": "HTTPやFTPなど各種プロトコルでデータを転送するコマンド。APIの動作確認やファイルダウンロードに広く使われる。",
+        "domain": "shell",
+        "keywords": [
+          "HTTP",
+          "API",
+          "ダウンロード",
+          "bash",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "wget",
+    "senses": [
+      {
+        "definition": "HTTPやFTPでファイルをダウンロードするコマンド。非対話的なダウンロードに適しており、ミラーリングにも使われる。",
+        "domain": "shell",
+        "keywords": [
+          "ダウンロード",
+          "HTTP",
+          "bash",
+          "linux",
+          "ファイル転送"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ssh",
+    "senses": [
+      {
+        "definition": "暗号化されたSSHプロトコルでリモートサーバに接続するコマンド。リモート操作やポートフォワーディングにも使われる。",
+        "domain": "shell",
+        "keywords": [
+          "リモート接続",
+          "SSH",
+          "bash",
+          "linux",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "secure shell"
+    ]
+  },
+  {
+    "term": "scp",
+    "senses": [
+      {
+        "definition": "SSH経由でファイルをリモートサーバとの間でコピーするコマンド。暗号化されたファイル転送が行える。",
+        "domain": "shell",
+        "keywords": [
+          "ファイル転送",
+          "SSH",
+          "bash",
+          "linux",
+          "リモート"
+        ]
+      }
+    ],
+    "aliases": [
+      "secure copy"
+    ]
+  },
+  {
+    "term": "zip",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリをZIP形式で圧縮するコマンド。`-r`で再帰的にディレクトリを圧縮できる。",
+        "domain": "shell",
+        "keywords": [
+          "圧縮",
+          "bash",
+          "linux",
+          "アーカイブ",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "unzip",
+    "senses": [
+      {
+        "definition": "ZIPアーカイブを解凍するコマンド。`-d`で展開先ディレクトリを指定できる。",
+        "domain": "shell",
+        "keywords": [
+          "解凍",
+          "bash",
+          "linux",
+          "アーカイブ",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "env",
+    "senses": [
+      {
+        "definition": "現在の環境変数の一覧を表示するコマンド。また、特定の環境変数を設定してコマンドを実行する際にも使われる。",
+        "domain": "shell",
+        "keywords": [
+          "環境変数",
+          "bash",
+          "linux",
+          "設定",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "printenv",
+    "senses": [
+      {
+        "definition": "環境変数の値を表示するコマンド。引数なしで全環境変数、引数指定で特定の変数を表示する。",
+        "domain": "shell",
+        "keywords": [
+          "環境変数",
+          "bash",
+          "linux",
+          "確認",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スクリプト",
+    "senses": [
+      {
+        "definition": "シェルコマンドを複数行に記述して自動実行できるようにしたテキストファイル。bashスクリプトは`.sh`拡張子を持ち、繰り返し作業の自動化に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "自動化",
+          "bash",
+          "シェル",
+          "テキストファイル",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "権限設計",
+    "reading": "けんげんせっけい",
+    "senses": [
+      {
+        "definition": "システムやリソースへのアクセス可否を役割・職責に基づいて設計すること。最小権限の原則に従い、不要な権限を与えない設計が重要。",
+        "domain": "security",
+        "keywords": [
+          "アクセス制御",
+          "最小権限",
+          "ロール",
+          "セキュリティ",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オペミス",
+    "senses": [
+      {
+        "definition": "オペレーションミスの略。システム運用や操作における人為的なミス。rmなど取り消し不可のコマンドの誤実行が典型例。",
+        "domain": "operations",
+        "keywords": [
+          "ヒューマンエラー",
+          "運用",
+          "ミス",
+          "インシデント",
+          "リスク"
+        ]
+      }
+    ],
+    "aliases": [
+      "オペレーションミス"
+    ]
+  },
+  {
+    "term": "精神的ダメージ",
+    "reading": "せいしんてきだめーじ",
+    "senses": [
+      {
+        "definition": "業務上の失敗やインシデント対応によって受ける心理的なショックや疲弊。深刻なオペミス後や長時間障害対応後に生じやすく、チームとしてのサポートが重要。",
+        "domain": "operations",
+        "keywords": [
+          "メンタルヘルス",
+          "運用",
+          "ストレス",
+          "インシデント",
+          "チーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "俗言",
+    "reading": "ぞくげん",
+    "senses": [
+      {
+        "definition": "エンジニアや運用者の間で非公式に使われる略語やスラング。「オペミス」「塩漬け」「爆速」など現場感を持つ表現が多い。",
+        "domain": "operations",
+        "keywords": [
+          "スラング",
+          "現場用語",
+          "コミュニケーション",
+          "エンジニア",
+          "文化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "危険な操作",
+    "reading": "きけんなそうさ",
+    "senses": [
+      {
+        "definition": "実行すると取り消せない可能性があるシステム操作。`rm -rf`や本番DBへの直接書き込みなどが該当し、実行前の確認や二重チェックが必須。",
+        "domain": "operations",
+        "keywords": [
+          "リスク",
+          "取り消し不可",
+          "運用",
+          "安全",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "一呼吸",
+    "reading": "ひとこきゅう",
+    "senses": [
+      {
+        "definition": "危険な操作や重要な判断を行う前に、意図的に間を置いて確認するという運用上の習慣。焦りによるオペミスを防ぐための心構えを指す。",
+        "domain": "operations",
+        "keywords": [
+          "確認",
+          "運用",
+          "ヒューマンエラー防止",
+          "習慣",
+          "リスク管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "運用哲学",
+    "reading": "うんようてつがく",
+    "senses": [
+      {
+        "definition": "システム運用で大切にすべき考え方や教訓の体系。「危険な操作には一呼吸置く」「権限は最小限に」など現場で培われた知恵をまとめたもの。",
+        "domain": "operations",
+        "keywords": [
+          "運用",
+          "哲学",
+          "ベストプラクティス",
+          "教訓",
+          "文化"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

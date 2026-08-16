@@ -1,0 +1,4094 @@
+[
+  {
+    "term": "プログレッシブエンハンスメント",
+    "reading": "ぷろぐれっしぶえんはんすめんと",
+    "senses": [
+      {
+        "definition": "まず基本機能を確実に動かし、その上で高度な体験を追加していく考え方です。環境差や端末差に強く、壊れにくい画面設計につながります。",
+        "domain": "frontend",
+        "keywords": [
+          "UI",
+          "設計",
+          "基本",
+          "体験"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モバイルファースト",
+    "reading": "もばいるふぁーすと",
+    "senses": [
+      {
+        "definition": "小さな画面を起点にUIを考え、必要に応じて大きな画面へ広げる設計思想です。情報の優先順位が明確になりやすい利点があります。",
+        "domain": "frontend",
+        "keywords": [
+          "UI",
+          "レスポンシブ",
+          "画面",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セマンティックHTML",
+    "reading": "せまんてぃっくえいちてぃーえむえる",
+    "senses": [
+      {
+        "definition": "見た目ではなく意味に合ったHTML要素を使う考え方です。アクセシビリティ、保守性、検索性の面で大きな効果があります。",
+        "domain": "frontend",
+        "keywords": [
+          "HTML",
+          "アクセシビリティ",
+          "意味",
+          "要素"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ARIA",
+    "reading": "えーあーるあいえー",
+    "senses": [
+      {
+        "definition": "補助技術に意味や状態を正しく伝えるための属性群です。HTMLだけでは意味が足りない場面で補助的に使います。",
+        "domain": "accessibility",
+        "keywords": [
+          "補助技術",
+          "属性",
+          "スクリーンリーダー",
+          "HTML"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ランドマーク領域",
+    "reading": "らんどまーくりょういき",
+    "senses": [
+      {
+        "definition": "ヘッダー、メイン、ナビゲーションなど、ページの大きな意味的区画です。スクリーンリーダー利用者が素早く移動しやすくなります。",
+        "domain": "accessibility",
+        "keywords": [
+          "ページ",
+          "区画",
+          "ナビゲーション",
+          "スクリーンリーダー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スキップリンク",
+    "reading": "すきっぷりんく",
+    "senses": [
+      {
+        "definition": "繰り返し表示されるメニューを飛ばして本文へ移動できるリンクです。キーボード操作や読み上げ利用者に有効です。",
+        "domain": "accessibility",
+        "keywords": [
+          "リンク",
+          "キーボード",
+          "メニュー",
+          "読み上げ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フォーカストラップ",
+    "reading": "ふぉーかすとらっぷ",
+    "senses": [
+      {
+        "definition": "ダイアログ内などで、フォーカス移動をその領域に閉じ込める制御です。モーダル操作時の迷子を防ぐために重要です。",
+        "domain": "accessibility",
+        "keywords": [
+          "フォーカス",
+          "モーダル",
+          "ダイアログ",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キーボードショートカット",
+    "reading": "きーぼーどしょーとかっと",
+    "senses": [
+      {
+        "definition": "キーボード操作で素早く機能実行できる仕組みです。高頻度業務では、生産性向上に大きく効くことがあります。",
+        "domain": "ux-design",
+        "keywords": [
+          "キーボード",
+          "操作",
+          "効率",
+          "ショートカット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "デバウンス",
+    "reading": "でばうんす",
+    "senses": [
+      {
+        "definition": "入力が落ち着くまで処理実行を待つ制御です。検索候補表示やリアルタイム入力検証で、無駄な処理を減らすのに役立ちます。",
+        "domain": "frontend",
+        "keywords": [
+          "入力",
+          "制御",
+          "検索",
+          "イベント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "イベントデリゲーション",
+    "reading": "いべんとでりげーしょん",
+    "senses": [
+      {
+        "definition": "個々の要素ではなく親要素でイベントを受ける設計です。大量要素がある画面でも管理しやすくなります。",
+        "domain": "frontend",
+        "keywords": [
+          "イベント",
+          "要素",
+          "親",
+          "委譲"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "仮想DOM",
+    "reading": "かそうどむ",
+    "senses": [
+      {
+        "definition": "画面変更を効率化するため、実DOMの前に仮想的な構造を使う考え方です。差分更新をしやすくし、描画効率向上に寄与します。",
+        "domain": "frontend",
+        "keywords": [
+          "DOM",
+          "描画",
+          "差分",
+          "React"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ハイドレーションミスマッチ",
+    "reading": "はいどれーしょんみすまっち",
+    "senses": [
+      {
+        "definition": "サーバー描画結果とクライアント描画結果が一致せず、警告や表示不整合が出る状態です。SSR利用時の重要な注意点です。",
+        "domain": "frontend",
+        "keywords": [
+          "SSR",
+          "描画",
+          "サーバー",
+          "クライアント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コード分割",
+    "reading": "こーどぶんかつ",
+    "senses": [
+      {
+        "definition": "必要な部分だけ読み込むようにコードを分けることです。初期表示を軽くしやすくなります。",
+        "domain": "frontend",
+        "keywords": [
+          "分割",
+          "読込",
+          "バンドル",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クリティカルCSS",
+    "reading": "くりてぃかるしーえすえす",
+    "senses": [
+      {
+        "definition": "初期表示に必要な最小限のCSSだけを先に適用する考え方です。描画開始を早めるのに役立ちます。",
+        "domain": "frontend",
+        "keywords": [
+          "CSS",
+          "描画",
+          "初期表示",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キャッシュバスティング",
+    "reading": "きゃっしゅばすてぃんぐ",
+    "senses": [
+      {
+        "definition": "更新後に古い資産が使われないよう、URLや識別子を変えて再取得させる方法です。静的ファイル更新で重要です。",
+        "domain": "frontend",
+        "keywords": [
+          "キャッシュ",
+          "更新",
+          "URL",
+          "静的"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "静的資産フィンガープリント",
+    "reading": "せいてきしさんふぃんがーぷりんと",
+    "senses": [
+      {
+        "definition": "ファイル内容に応じたハッシュ値を名前へ付ける方式です。キャッシュ制御と更新反映を両立しやすくなります。",
+        "domain": "frontend",
+        "keywords": [
+          "ハッシュ",
+          "キャッシュ",
+          "ファイル",
+          "静的"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サービスワーカー",
+    "reading": "さーびすわーかー",
+    "senses": [
+      {
+        "definition": "ブラウザ外側で動き、キャッシュやオフライン制御を支援する仕組みです。PWAや高速化で重要な役割を持ちます。",
+        "domain": "frontend",
+        "keywords": [
+          "ブラウザ",
+          "オフライン",
+          "キャッシュ",
+          "PWA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PWA",
+    "reading": "ぴーだぶりゅーえー",
+    "senses": [
+      {
+        "definition": "Progressive Web Appの略で、Webでありながらアプリのような体験を提供する考え方です。オフライン利用やホーム画面追加と相性があります。",
+        "domain": "frontend",
+        "keywords": [
+          "Web",
+          "アプリ",
+          "オフライン",
+          "モバイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オフラインファースト",
+    "reading": "おふらいんふぁーすと",
+    "senses": [
+      {
+        "definition": "通信できない前提でも一定利用できるよう設計する考え方です。現場利用や不安定回線の業務で有効です。",
+        "domain": "frontend",
+        "keywords": [
+          "オフライン",
+          "通信",
+          "設計",
+          "PWA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バックグラウンド同期",
+    "reading": "ばっくぐらうんどどうき",
+    "senses": [
+      {
+        "definition": "オフライン時に保留した処理を、通信回復後に送信する仕組みです。利用者体験を損なわずに整合を取りやすくします。",
+        "domain": "frontend",
+        "keywords": [
+          "同期",
+          "オフライン",
+          "通信",
+          "バックグラウンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Webマニフェスト",
+    "reading": "うぇぶまにふぇすと",
+    "senses": [
+      {
+        "definition": "アプリ名、アイコン、起動設定などを定義するファイルです。PWA体験の基盤として使われます。",
+        "domain": "frontend",
+        "keywords": [
+          "PWA",
+          "設定",
+          "アプリ",
+          "マニフェスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ローカルストレージ",
+    "reading": "ろーかるすとれーじ",
+    "senses": [
+      {
+        "definition": "ブラウザに永続的に保存できる簡易保存領域です。便利ですが、機密情報の保存先としては慎重な判断が必要です。",
+        "domain": "frontend",
+        "keywords": [
+          "ブラウザ",
+          "保存",
+          "永続",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セッションストレージ",
+    "reading": "せっしょんすとれーじ",
+    "senses": [
+      {
+        "definition": "タブ単位で一時保存される領域です。画面遷移中の一時保持には便利ですが、長期保存には向きません。",
+        "domain": "frontend",
+        "keywords": [
+          "ブラウザ",
+          "一時",
+          "タブ",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IndexedDB",
+    "reading": "いんでっくすどでぃーびー",
+    "senses": [
+      {
+        "definition": "ブラウザ内で比較的大きな構造化データを保存できる仕組みです。オフライン対応やローカルキャッシュで力を発揮します。",
+        "domain": "frontend",
+        "keywords": [
+          "ブラウザ",
+          "データベース",
+          "保存",
+          "オフライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アクセシビリティツリー",
+    "reading": "あくせしびりてぃつりー",
+    "senses": [
+      {
+        "definition": "補助技術向けに構築される、意味ベースの画面構造です。見た目では問題なくても、このツリーが壊れていると使いにくくなります。",
+        "domain": "accessibility",
+        "keywords": [
+          "補助技術",
+          "構造",
+          "DOM",
+          "ツリー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "読み上げ意味付け",
+    "reading": "よみあげいみづけ",
+    "senses": [
+      {
+        "definition": "スクリーンリーダーに正しい意味で伝わるよう要素を設計することです。見出し、ボタン、ラベルの正確さが重要になります。",
+        "domain": "accessibility",
+        "keywords": [
+          "スクリーンリーダー",
+          "意味",
+          "要素",
+          "ラベル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "autocomplete属性",
+    "reading": "おーとこんぷりーとぞくせい",
+    "senses": [
+      {
+        "definition": "ブラウザへ入力内容の種類を伝える属性です。自動入力の精度向上や、入力負荷軽減に役立ちます。",
+        "domain": "frontend",
+        "keywords": [
+          "入力",
+          "属性",
+          "フォーム",
+          "自動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "inputmode属性",
+    "reading": "いんぷっともーどぞくせい",
+    "senses": [
+      {
+        "definition": "数字やメールなど、入力に適したキーボードを出しやすくする属性です。スマートフォン入力体験に大きく効きます。",
+        "domain": "frontend",
+        "keywords": [
+          "入力",
+          "属性",
+          "キーボード",
+          "モバイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フォーム保持",
+    "reading": "ふぉーむほじ",
+    "senses": [
+      {
+        "definition": "入力途中の内容を失わないよう保存しておく考え方です。長い申請画面や不安定通信下で有効です。",
+        "domain": "ux-design",
+        "keywords": [
+          "フォーム",
+          "入力",
+          "保存",
+          "復元"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クライアントサイドルーティング",
+    "reading": "くらいあんとさいどるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "ブラウザ側で画面遷移を制御する方式です。体感速度は上がりやすいですが、URL設計や初期読込設計が重要になります。",
+        "domain": "frontend",
+        "keywords": [
+          "ルーティング",
+          "SPA",
+          "画面遷移",
+          "URL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サーバーコンポーネント",
+    "reading": "さーばーこんぽーねんと",
+    "senses": [
+      {
+        "definition": "一部のUI構築をサーバー側で行う考え方です。表示効率やデータ取得の責務分離に役立つことがあります。",
+        "domain": "frontend",
+        "keywords": [
+          "サーバー",
+          "コンポーネント",
+          "React",
+          "描画"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エッジレンダリング",
+    "reading": "えっじれんだりんぐ",
+    "senses": [
+      {
+        "definition": "利用者に近い拠点で画面生成や処理を行う方式です。遅延低減に有効ですが、状態管理との整合が課題になります。",
+        "domain": "frontend",
+        "keywords": [
+          "エッジ",
+          "描画",
+          "CDN",
+          "遅延"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ストリーミングSSR",
+    "reading": "すとりーみんぐえすえすあーる",
+    "senses": [
+      {
+        "definition": "サーバー描画結果を完成待ちせず、順次返す方式です。初期表示体感を改善しやすくなります。",
+        "domain": "frontend",
+        "keywords": [
+          "SSR",
+          "ストリーミング",
+          "描画",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CLS",
+    "reading": "しーえるえす",
+    "senses": [
+      {
+        "definition": "Content Layout Shiftの略で、表示後に要素がずれてしまう度合いです。見た目の不快感や誤操作の原因になります。",
+        "domain": "performance",
+        "keywords": [
+          "Web Vitals",
+          "レイアウト",
+          "ずれ",
+          "UX"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "LCP",
+    "reading": "えるしーぴー",
+    "senses": [
+      {
+        "definition": "Largest Contentful Paintの略で、主要コンテンツが表示されるまでの時間指標です。初期体感速度の重要指標として使われます。",
+        "domain": "performance",
+        "keywords": [
+          "Web Vitals",
+          "表示",
+          "速度",
+          "初期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "INP",
+    "reading": "あいえぬぴー",
+    "senses": [
+      {
+        "definition": "Interaction to Next Paintの略で、操作に対する画面反応の遅れを見る指標です。体感操作性に近い品質を測りやすいです。",
+        "domain": "performance",
+        "keywords": [
+          "Web Vitals",
+          "操作",
+          "応答",
+          "遅延"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Core Web Vitals",
+    "reading": "こあうぇぶばいたるず",
+    "senses": [
+      {
+        "definition": "Web体験の重要品質指標群です。性能を「速い気がする」ではなく、共通指標で議論しやすくなります。",
+        "domain": "performance",
+        "keywords": [
+          "Web",
+          "品質",
+          "指標",
+          "CLS",
+          "LCP",
+          "INP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "空状態CTA",
+    "reading": "からじょうたいしーてぃーえー",
+    "senses": [
+      {
+        "definition": "データがない初期状態で、次に取るべき行動を案内する設計です。空画面を放置しないことが利用定着に効きます。",
+        "domain": "ux-design",
+        "keywords": [
+          "空",
+          "初期",
+          "CTA",
+          "案内"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "機能発見性",
+    "reading": "きのうはっけんせい",
+    "senses": [
+      {
+        "definition": "利用者が必要な機能を自然に見つけられる度合いです。高機能でも見つからなければ存在しないのと同じです。",
+        "domain": "ux-design",
+        "keywords": [
+          "発見",
+          "機能",
+          "UI",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エラー回復UX",
+    "reading": "えらーかいふくゆーえっくす",
+    "senses": [
+      {
+        "definition": "問題発生時に、利用者が迷わず元の流れへ戻れるようにする設計です。失敗時こそ体験品質の差が出ます。",
+        "domain": "ux-design",
+        "keywords": [
+          "エラー",
+          "回復",
+          "体験",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Undoスナックバー",
+    "reading": "あんどぅすなっくばー",
+    "senses": [
+      {
+        "definition": "操作後に短時間だけ取り消し機会を与える通知UIです。誤操作対策として確認ダイアログの代替になることがあります。",
+        "domain": "ux-design",
+        "keywords": [
+          "Undo",
+          "通知",
+          "操作",
+          "取り消し"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "楽観的UI",
+    "reading": "らっかんてきゆーあい",
+    "senses": [
+      {
+        "definition": "サーバー完了を待たず、先に成功したように見せるUI設計です。速度感は上がりますが、失敗時の巻き戻しが要ります。",
+        "domain": "ux-design",
+        "keywords": [
+          "楽観",
+          "UI",
+          "速度",
+          "更新"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "悲観的UI",
+    "reading": "ひかんてきゆーあい",
+    "senses": [
+      {
+        "definition": "実際の成功確認後にのみ画面反映する設計です。安全ですが、待ち時間をどう見せるかが課題になります。",
+        "domain": "ux-design",
+        "keywords": [
+          "悲観",
+          "UI",
+          "確認",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リクエストウォーターフォール",
+    "reading": "りくえすとうぉーたーふぉーる",
+    "senses": [
+      {
+        "definition": "通信が直列につながり、表示や処理が遅くなる状態です。画面設計やAPI分割が原因になることがあります。",
+        "domain": "performance",
+        "keywords": [
+          "リクエスト",
+          "直列",
+          "遅延",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プリフェッチ",
+    "reading": "ぷりふぇっち",
+    "senses": [
+      {
+        "definition": "近いうちに必要になりそうなデータや資産を先読みすることです。体感向上に役立ちますが、無駄読みとのバランスが必要です。",
+        "domain": "performance",
+        "keywords": [
+          "先読み",
+          "データ",
+          "体感",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プリロード",
+    "reading": "ぷりろーど",
+    "senses": [
+      {
+        "definition": "必要性の高い資産を優先して読み込ませる指示です。重要資産の到着を早めるのに有効です。",
+        "domain": "performance",
+        "keywords": [
+          "読込",
+          "優先",
+          "資産",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "遅延ハイドレーション",
+    "reading": "ちえんはいどれーしょん",
+    "senses": [
+      {
+        "definition": "画面の一部について、必要になるまでクライアント側の動作付与を遅らせる考え方です。初期表示軽量化に使われます。",
+        "domain": "frontend",
+        "keywords": [
+          "ハイドレーション",
+          "遅延",
+          "SSR",
+          "軽量化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "視覚回帰テスト",
+    "reading": "しかくかいきてすと",
+    "senses": [
+      {
+        "definition": "画面の見た目差分を自動比較して崩れを検出するテストです。UI変更の副作用を発見しやすくなります。",
+        "domain": "testing",
+        "keywords": [
+          "視覚",
+          "回帰",
+          "スクリーンショット",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アウトボックスパターン",
+    "reading": "あうとぼっくすぱたーん",
+    "senses": [
+      {
+        "definition": "DB更新とイベント送信を整合的に扱うための設計です。更新だけ成功して通知が飛ばない、といった問題を防ぎやすくします。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "イベント",
+          "DB",
+          "整合",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "インボックスパターン",
+    "reading": "いんぼっくすぱたーん",
+    "senses": [
+      {
+        "definition": "受信したメッセージを記録して重複処理を防ぐ考え方です。非同期連携の冪等性を高めるのに役立ちます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "メッセージ",
+          "重複",
+          "冪等",
+          "受信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "冪等コンシューマ",
+    "reading": "べきとうこんしゅーま",
+    "senses": [
+      {
+        "definition": "同じメッセージを何度受けても結果が崩れない受信側実装です。少なくとも一回配送の仕組みと特に相性がよいです。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "冪等",
+          "メッセージ",
+          "消費",
+          "配送"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ポイズンメッセージ",
+    "reading": "ぽいずんめっせーじ",
+    "senses": [
+      {
+        "definition": "処理しても何度も失敗し続けるメッセージです。通常キューへ残し続けると全体停滞を引き起こします。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "メッセージ",
+          "失敗",
+          "キュー",
+          "停滞"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "再試行キュー",
+    "reading": "さいしこうきゅー",
+    "senses": [
+      {
+        "definition": "失敗した処理を一定条件で後から再実行するためのキューです。瞬間的障害には強くなりますが、無限再試行は危険です。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "再試行",
+          "キュー",
+          "失敗",
+          "リトライ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "遅延キュー",
+    "reading": "ちえんきゅー",
+    "senses": [
+      {
+        "definition": "一定時間後に処理させるためのキューです。再試行間隔制御や予約実行に使われます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "遅延",
+          "キュー",
+          "予約",
+          "時間"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分散ロック",
+    "reading": "ぶんさんろっく",
+    "senses": [
+      {
+        "definition": "複数ノードが同じ処理や同じ資源を同時に扱わないようにする仕組みです。分散環境では設計と失効条件が重要です。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "ロック",
+          "排他",
+          "ノード",
+          "資源"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リーダー選出",
+    "reading": "りーだーせんしゅつ",
+    "senses": [
+      {
+        "definition": "複数ノードの中から代表一つを選んで処理を任せる仕組みです。定期ジョブや調停処理でよく使われます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "リーダー",
+          "選出",
+          "ノード",
+          "調停"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クォーラム",
+    "reading": "くぉーらむ",
+    "senses": [
+      {
+        "definition": "合意や更新成立に必要な最小多数のことです。分散構成での整合性設計に深く関わります。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "合意",
+          "多数",
+          "整合",
+          "分散"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CAP定理",
+    "reading": "きゃっぷていり",
+    "senses": [
+      {
+        "definition": "分散システムでは、一貫性、可用性、分断耐性の三つを同時に完全には満たせないという考え方です。設計の優先順位を決める土台になります。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "一貫性",
+          "可用性",
+          "分断",
+          "定理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Read-after-write整合性",
+    "reading": "りーどあふたーらいとせいごうせい",
+    "senses": [
+      {
+        "definition": "書いた直後に読むと、その更新結果が見える性質です。利用者体感に直結するため、分散環境で重要になります。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "整合",
+          "読取",
+          "書込",
+          "分散"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bounded Staleness",
+    "reading": "ばうんでっどすてーるねす",
+    "senses": [
+      {
+        "definition": "一定範囲内の遅れは許容する整合性モデルです。完全即時一致は難しいが、許容範囲を制御したいときに使います。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "整合",
+          "遅延",
+          "許容",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ロストアップデート",
+    "reading": "ろすとあっぷでーと",
+    "senses": [
+      {
+        "definition": "同時更新により、一方の変更が上書きで失われる現象です。更新競合の典型的な問題です。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "更新",
+          "競合",
+          "上書き",
+          "ロスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ライトスキュー",
+    "reading": "らいとすきゅー",
+    "senses": [
+      {
+        "definition": "個々には整合していても、複数更新の組み合わせで全体整合性が崩れる現象です。複雑な業務ルールで起きやすいです。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "整合",
+          "更新",
+          "スキュー",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Compare-And-Swap",
+    "reading": "こんぺああんどすわっぷ",
+    "senses": [
+      {
+        "definition": "ある値が期待どおりである場合にだけ更新する方式です。楽観的排他制御の実装としてよく使われます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "CAS",
+          "楽観",
+          "排他",
+          "更新"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バルクヘッドパターン",
+    "reading": "ばるくへっどぱたーん",
+    "senses": [
+      {
+        "definition": "一部の障害が全体へ広がらないよう、処理や資源を分離する考え方です。高負荷時の巻き込み防止に有効です。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "隔壁",
+          "障害",
+          "分離",
+          "耐障害"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "タイムアウトバジェット",
+    "reading": "たいむあうとばじぇっと",
+    "senses": [
+      {
+        "definition": "全体の応答時間目標の中で、各依存先へどれだけ待つか配分した考え方です。場当たり設定より整合的な設計がしやすくなります。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "タイムアウト",
+          "配分",
+          "応答",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キャンセル伝播",
+    "reading": "きゃんせるでんぱ",
+    "senses": [
+      {
+        "definition": "上流が中断されたとき、下流処理も止めるよう伝える仕組みです。無駄な負荷や不要処理を減らせます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "キャンセル",
+          "伝播",
+          "中断",
+          "下流"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Sagaオーケストレーター",
+    "reading": "さがおーけすとれーたー",
+    "senses": [
+      {
+        "definition": "複数サービスにまたがる一連処理を中央で制御する部品です。補償処理や状態管理を担うことがあります。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "Saga",
+          "オーケストレーション",
+          "補償",
+          "トランザクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アンチコラプションレイヤー",
+    "reading": "あんちこらぷしょんれいやー",
+    "senses": [
+      {
+        "definition": "外部システムの概念や都合が内部設計を汚さないよう間に置く変換層です。レガシー連携で特に有効です。",
+        "domain": "architecture",
+        "keywords": [
+          "変換",
+          "レガシー",
+          "境界",
+          "DDD"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ストラングラーパターン",
+    "reading": "すとらんぐらーぱたーん",
+    "senses": [
+      {
+        "definition": "既存システムを一気に置き換えず、周辺から少しずつ新システムへ移していく考え方です。大規模刷新で現実的な方法です。",
+        "domain": "architecture",
+        "keywords": [
+          "移行",
+          "レガシー",
+          "段階",
+          "置換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブラウンフィールド刷新",
+    "reading": "ぶらうんふぃーるどさっしん",
+    "senses": [
+      {
+        "definition": "既存資産がある状態で改善や再構築を進めることです。現行影響を見ながら進める難しさがあります。",
+        "domain": "architecture",
+        "keywords": [
+          "既存",
+          "刷新",
+          "改善",
+          "レガシー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "グリーンフィールド開発",
+    "reading": "ぐりーんふぃーるどかいはつ",
+    "senses": [
+      {
+        "definition": "既存制約の少ない新規開発です。自由度は高いですが、既存知見が少ないこともあります。",
+        "domain": "architecture",
+        "keywords": [
+          "新規",
+          "開発",
+          "自由",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モノレポ",
+    "reading": "ものれぽ",
+    "senses": [
+      {
+        "definition": "複数サービスやライブラリを一つのリポジトリで管理する方式です。全体把握や横断変更に強いです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "リポジトリ",
+          "管理",
+          "モノレポ",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ポリレポ",
+    "reading": "ぽりれぽ",
+    "senses": [
+      {
+        "definition": "機能やサービスごとにリポジトリを分ける方式です。独立性は高いですが、全体変更や依存管理が難しくなることがあります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "リポジトリ",
+          "分離",
+          "独立",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "トランクベース開発",
+    "reading": "とらんくべーすかいはつ",
+    "senses": [
+      {
+        "definition": "長寿命ブランチを作らず、短いサイクルで本流へ統合する考え方です。CIや自動テストが整っているほど機能しやすいです。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ブランチ",
+          "CI",
+          "統合",
+          "メインライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブランチ保護",
+    "reading": "ぶらんちほご",
+    "senses": [
+      {
+        "definition": "重要ブランチへ直接変更できないよう制御することです。レビューやCIを通してから統合する仕組みづくりに役立ちます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ブランチ",
+          "保護",
+          "レビュー",
+          "CI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "必須ステータスチェック",
+    "reading": "ひっすすてーたすちぇっく",
+    "senses": [
+      {
+        "definition": "マージ前にCIやレビューの合格を必須とする仕組みです。品質ゲートを自動化しやすくなります。",
+        "domain": "software-engineering",
+        "keywords": [
+          "CI",
+          "マージ",
+          "チェック",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マージキュー",
+    "reading": "まーじきゅー",
+    "senses": [
+      {
+        "definition": "複数変更を順番に安全統合する仕組みです。直前競合や統合後失敗を減らすのに役立ちます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "マージ",
+          "キュー",
+          "統合",
+          "競合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リリーストレイン",
+    "reading": "りりーすとれいん",
+    "senses": [
+      {
+        "definition": "決まった周期でまとめてリリースしていく運用方式です。",
+        "domain": "devops",
+        "keywords": [
+          "リリース",
+          "周期",
+          "運用方式",
+          "デプロイ"
+        ]
+      },
+      {
+        "definition": "決まった周期でまとめてリリースしていく運用方式です。個別最適より全体調整を重視したいときに有効です。",
+        "domain": "software-engineering",
+        "keywords": [
+          "リリース",
+          "周期",
+          "運用",
+          "調整"
+        ]
+      },
+      {
+        "definition": "決まった時刻表どおりにリリース便を出す考え方です。個別事情より全体運用の安定を重視したいときに向きます。",
+        "domain": "release",
+        "keywords": [
+          "時刻表",
+          "定期",
+          "全体",
+          "安定",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "シャドートラフィック",
+    "reading": "しゃどーとらふぃっく",
+    "senses": [
+      {
+        "definition": "本番リクエストを裏側で新システムへも流し、影響を出さずに比較する仕組みです。移行検証に有効です。",
+        "domain": "operations",
+        "keywords": [
+          "トラフィック",
+          "検証",
+          "移行",
+          "比較"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "トラフィックミラーリング",
+    "reading": "とらふぃっくみらーりんぐ",
+    "senses": [
+      {
+        "definition": "通信内容を複製して別系統へ送ることです。検証や観測に使われますが、副作用が起きないよう注意が必要です。",
+        "domain": "operations",
+        "keywords": [
+          "トラフィック",
+          "複製",
+          "ミラー",
+          "観測"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ダークローンチ",
+    "reading": "だーくろーんち",
+    "senses": [
+      {
+        "definition": "利用者には見せずに機能を本番環境へ入れておく方式です。公開前に内部挙動だけ確認したいときに役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "リリース",
+          "機能",
+          "非公開",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キルスイッチ",
+    "reading": "きるすいっち",
+    "senses": [
+      {
+        "definition": "問題発生時に機能を即時停止できる仕組みです。影響拡大防止のために重要です。",
+        "domain": "operations",
+        "keywords": [
+          "停止",
+          "緊急",
+          "機能",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フィーチャートグルライフサイクル",
+    "reading": "ふぃーちゃーとぐるらいふさいくる",
+    "senses": [
+      {
+        "definition": "機能フラグを作って終わりにせず、使い終わったら削除するまでを管理する考え方です。残骸が多いと複雑性が増します。",
+        "domain": "software-engineering",
+        "keywords": [
+          "フィーチャーフラグ",
+          "ライフサイクル",
+          "管理",
+          "削除"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Configuration as Code",
+    "reading": "こんふぃぎゅれーしょんあずこーど",
+    "senses": [
+      {
+        "definition": "設定をコードとして管理する考え方です。差分追跡や再現性向上に有効です。",
+        "domain": "operations",
+        "keywords": [
+          "設定",
+          "コード",
+          "IaC",
+          "再現性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スキーマ移行戦略",
+    "reading": "すきーまいこうせんりゃく",
+    "senses": [
+      {
+        "definition": "DB構造変更をどう安全に進めるかの考え方です。アプリ互換性と運用停止時間を意識して設計します。",
+        "domain": "database",
+        "keywords": [
+          "スキーマ",
+          "移行",
+          "DB",
+          "マイグレーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブルーグリーンDB移行",
+    "reading": "ぶるーぐりーんでぃーびーいこう",
+    "senses": [
+      {
+        "definition": "新旧DB系統を用意して切り替える移行方式です。リスクは下げやすいですが、同期設計が難しくなります。",
+        "domain": "database",
+        "keywords": [
+          "DB",
+          "移行",
+          "ブルーグリーン",
+          "切替"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "無停止マイグレーション",
+    "reading": "むていしまいぐれーしょん",
+    "senses": [
+      {
+        "definition": "サービスを止めずに構造変更や移行を行うことです。互換期間を持たせる設計が重要になります。",
+        "domain": "database",
+        "keywords": [
+          "マイグレーション",
+          "無停止",
+          "互換",
+          "移行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バックフィル",
+    "reading": "ばっくふぃる",
+    "senses": [
+      {
+        "definition": "過去データへ新項目値や新形式を埋め直す処理です。負荷や整合性への影響を考えて計画する必要があります。",
+        "domain": "database",
+        "keywords": [
+          "データ",
+          "埋め直し",
+          "移行",
+          "過去"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "照合ジョブ",
+    "reading": "しょうごうじょぶ",
+    "senses": [
+      {
+        "definition": "異なる系統のデータ差を比較して確認するジョブです。移行や非同期連携の健全性確認に役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "照合",
+          "比較",
+          "データ",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンパクション",
+    "reading": "こんぱくしょん",
+    "senses": [
+      {
+        "definition": "分散ストレージやログを整理して効率化する処理です。保存効率や読み取り性能に影響します。",
+        "domain": "database",
+        "keywords": [
+          "ストレージ",
+          "整理",
+          "ログ",
+          "効率"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "TTL",
+    "reading": "てぃーてぃーえる",
+    "senses": [
+      {
+        "definition": "データやキャッシュに寿命を持たせ、自動的に期限切れさせる仕組みです。古い情報残留防止に使えます。",
+        "domain": "operations",
+        "keywords": [
+          "有効期限",
+          "キャッシュ",
+          "期限",
+          "自動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リース",
+    "reading": "りーす",
+    "senses": [
+      {
+        "definition": "一定時間だけ有効な所有権や利用権のような仕組みです。分散ロックやリーダー選出で使われます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "有効期限",
+          "ロック",
+          "所有",
+          "時間"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ハートビート",
+    "reading": "はーとびーと",
+    "senses": [
+      {
+        "definition": "生存確認のため定期送信する信号です。途切れたら異常とみなす仕組みで多用されます。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "生存",
+          "確認",
+          "信号",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "デッドマンスイッチ",
+    "reading": "でっどまんすいっち",
+    "senses": [
+      {
+        "definition": "一定時間更新がなければ異常と判断する仕組みです。ジョブ停止や担当者不在検知にも応用されます。",
+        "domain": "operations",
+        "keywords": [
+          "異常",
+          "検知",
+          "タイマー",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "高水位線",
+    "reading": "こうすいいせん",
+    "senses": [
+      {
+        "definition": "キューやメモリ利用量などで、危険に近づいたことを示す上側閾値です。制御開始ポイントとして使われます。",
+        "domain": "operations",
+        "keywords": [
+          "閾値",
+          "上限",
+          "キュー",
+          "メモリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "低水位線",
+    "reading": "ていすいいせん",
+    "senses": [
+      {
+        "definition": "一度抑制した処理を再開してよいと判断する下側閾値です。ヒステリシス制御で安定化に役立ちます。",
+        "domain": "operations",
+        "keywords": [
+          "閾値",
+          "下限",
+          "再開",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "キュー深さ",
+    "reading": "きゅーふかさ",
+    "senses": [
+      {
+        "definition": "キューにどれだけ処理待ちがたまっているかを表す指標です。詰まりや遅延の早期発見に有効です。",
+        "domain": "operations",
+        "keywords": [
+          "キュー",
+          "深さ",
+          "監視",
+          "遅延"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ワークスティーリング",
+    "reading": "わーくすてぃーりんぐ",
+    "senses": [
+      {
+        "definition": "暇なワーカーが他のワーカーの仕事を引き取る分散処理方式です。負荷の偏りを減らしやすくなります。",
+        "domain": "distributed-systems",
+        "keywords": [
+          "負荷",
+          "分散",
+          "ワーカー",
+          "スケジューリング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FinOps",
+    "reading": "ふぃんおぷす",
+    "senses": [
+      {
+        "definition": "クラウド費用を技術、財務、事業の協働で最適化する考え方です。単なる節約ではなく、価値に対する費用最適化を目指します。",
+        "domain": "cloud",
+        "keywords": [
+          "費用",
+          "最適化",
+          "クラウド",
+          "財務"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Showback",
+    "reading": "しょーばっく",
+    "senses": [
+      {
+        "definition": "実際にかかったコストを部門やチームへ見せる仕組みです。請求まではしなくても、使い方の自覚を促せます。",
+        "domain": "finops",
+        "keywords": [
+          "コスト",
+          "可視化",
+          "部門",
+          "FinOps"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Chargeback",
+    "reading": "ちゃーじばっく",
+    "senses": [
+      {
+        "definition": "利用部門へ実コストを割り当てて負担してもらう仕組みです。責任ある利用を促しますが、運用設計は慎重さが必要です。",
+        "domain": "finops",
+        "keywords": [
+          "コスト",
+          "割当",
+          "部門",
+          "FinOps"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Rightsizing",
+    "reading": "らいとさいじんぐ",
+    "senses": [
+      {
+        "definition": "リソースを過不足ない大きさへ見直すことです。大きすぎても小さすぎても無駄や障害につながります。",
+        "domain": "cloud",
+        "keywords": [
+          "リソース",
+          "最適化",
+          "サイズ",
+          "見直し"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Zombie Resources",
+    "reading": "ぞんびりそーす",
+    "senses": [
+      {
+        "definition": "使われていないのに残り続けているクラウド資源です。費用の無駄だけでなく、管理漏れリスクにもなります。",
+        "domain": "cloud",
+        "keywords": [
+          "未使用",
+          "資源",
+          "無駄",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Orphaned Disk",
+    "reading": "おーふぁんどでぃすく",
+    "senses": [
+      {
+        "definition": "本体がなくなったのに残存しているストレージです。見えにくいコストと情報残留の原因になります。",
+        "domain": "cloud",
+        "keywords": [
+          "ディスク",
+          "孤立",
+          "ストレージ",
+          "無駄"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Egress Cost",
+    "reading": "いーぐれすこすと",
+    "senses": [
+      {
+        "definition": "外部へデータを出すときの通信費です。クラウド間連携や大量配信で大きな差が出ることがあります。",
+        "domain": "cloud",
+        "keywords": [
+          "通信費",
+          "外部",
+          "データ",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コールドスタート",
+    "reading": "こーるどすたーと",
+    "senses": [
+      {
+        "definition": "サーバーレスや一時停止環境が初回起動時に遅くなる現象です。低頻度処理では許容できても、対話系では工夫が必要です。",
+        "domain": "cloud",
+        "keywords": [
+          "起動",
+          "遅延",
+          "サーバーレス",
+          "Lambda"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ウォームスタート",
+    "reading": "うぉーむすたーと",
+    "senses": [
+      {
+        "definition": "すでに起動済み環境を再利用して速く処理を始める状態です。コールドスタート対策と対になる考え方です。",
+        "domain": "cloud",
+        "keywords": [
+          "起動",
+          "再利用",
+          "高速",
+          "サーバーレス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バーストキャパシティ",
+    "reading": "ばーすときゃぱしてぃ",
+    "senses": [
+      {
+        "definition": "短時間だけ通常以上の資源や性能を使える余力です。ピーク負荷対策として有効ですが、持続可能時間を理解する必要があります。",
+        "domain": "cloud",
+        "keywords": [
+          "バースト",
+          "ピーク",
+          "容量",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HPA",
+    "reading": "えいちぴーえー",
+    "senses": [
+      {
+        "definition": "Horizontal Pod Autoscalerの略で、負荷に応じてPod数を増減する仕組みです。Kubernetes運用の基本的な自動拡張手段です。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Pod",
+          "スケール",
+          "自動",
+          "水平"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VPA",
+    "reading": "ぶいぴーえー",
+    "senses": [
+      {
+        "definition": "Vertical Pod Autoscalerの略で、PodごとのCPUやメモリ割当を見直す仕組みです。水平スケールと使い分けが必要です。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Pod",
+          "スケール",
+          "垂直",
+          "リソース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cluster Autoscaler",
+    "reading": "くらすたーおーとすけーらー",
+    "senses": [
+      {
+        "definition": "ノード台数自体を増減させる仕組みです。Pod増減だけで足りない場合に重要になります。",
+        "domain": "kubernetes",
+        "keywords": [
+          "クラスター",
+          "ノード",
+          "スケール",
+          "自動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Pod Disruption Budget",
+    "reading": "ぽっどでぃするぷしょんばじぇっと",
+    "senses": [
+      {
+        "definition": "メンテナンス時などに同時停止してよいPod数を制御する仕組みです。可用性維持に役立ちます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Pod",
+          "メンテナンス",
+          "可用性",
+          "予算"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Taint and Toleration",
+    "reading": "ていんとあんどとれれーしょん",
+    "senses": [
+      {
+        "definition": "特定ノードに特定ワークロードだけを載せるための仕組みです。高負荷系や専用処理の隔離に使えます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "ノード",
+          "配置",
+          "制約",
+          "隔離"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Node Affinity",
+    "reading": "のーどあふぃにてぃ",
+    "senses": [
+      {
+        "definition": "Podを特定条件のノードへ配置しやすくする仕組みです。性能特性やゾーン分散を意識した配置に使われます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "ノード",
+          "配置",
+          "親和性",
+          "ゾーン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Pod Anti-Affinity",
+    "reading": "ぽっどあんちあふぃにてぃ",
+    "senses": [
+      {
+        "definition": "同種Podを同じ場所へ集めすぎないための仕組みです。単一障害点を減らすのに役立ちます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Pod",
+          "配置",
+          "分散",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Init Container",
+    "reading": "いにっとこんてな",
+    "senses": [
+      {
+        "definition": "本体起動前に一度だけ動く補助コンテナです。初期化や依存確認に使われます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "コンテナ",
+          "初期化",
+          "起動",
+          "補助"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Sidecar Container",
+    "reading": "さいどかーこんてな",
+    "senses": [
+      {
+        "definition": "本体と並んで動く補助コンテナです。ログ転送、プロキシ、監視などを本体から分離して担えます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "コンテナ",
+          "サイドカー",
+          "ログ",
+          "プロキシ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DaemonSet",
+    "reading": "でーもんせっと",
+    "senses": [
+      {
+        "definition": "各ノードに一つずつPodを配置する仕組みです。監視エージェントやログ収集などで使われます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "ノード",
+          "Pod",
+          "監視",
+          "ログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "StatefulSet",
+    "reading": "すてーとふるせっと",
+    "senses": [
+      {
+        "definition": "状態を持つワークロード向けに、安定した名前や保存領域を持たせる仕組みです。DBやメッセージ基盤で使われます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "状態",
+          "永続",
+          "DB",
+          "名前"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Deployment Rollout",
+    "reading": "でぷろいめんとろーるあうと",
+    "senses": [
+      {
+        "definition": "新しいPod群へ段階的に切り替える仕組みです。更新進行状況を管理しやすくなります。",
+        "domain": "kubernetes",
+        "keywords": [
+          "デプロイ",
+          "更新",
+          "段階",
+          "ロールアウト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Rollback Revision",
+    "reading": "ろーるばっくりびじょん",
+    "senses": [
+      {
+        "definition": "以前のデプロイ版へ戻すための記録です。失敗時の迅速な切り戻しに役立ちます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "ロールバック",
+          "履歴",
+          "戻し",
+          "デプロイ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CrashLoopBackOff",
+    "reading": "くらっしゅるーぷばっくおふ",
+    "senses": [
+      {
+        "definition": "コンテナ起動失敗が続き、再試行間隔が伸びている状態です。設定不備や依存障害の典型的なサインです。",
+        "domain": "kubernetes",
+        "keywords": [
+          "コンテナ",
+          "失敗",
+          "再起動",
+          "エラー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Eviction",
+    "reading": "えびくしょん",
+    "senses": [
+      {
+        "definition": "リソース不足などでPodがノードから退去させられることです。想定外に起きると可用性へ影響します。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Pod",
+          "退去",
+          "リソース",
+          "ノード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Resource Request",
+    "reading": "りそーすりくえすと",
+    "senses": [
+      {
+        "definition": "Podが最低限必要とするCPUやメモリ量の宣言です。スケジューリングや安定性に影響します。",
+        "domain": "kubernetes",
+        "keywords": [
+          "リソース",
+          "CPU",
+          "メモリ",
+          "宣言"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Resource Limit",
+    "reading": "りそーすりみっと",
+    "senses": [
+      {
+        "definition": "Podが使える上限資源量です。暴走防止には有効ですが、厳しすぎると正常系も落ちやすくなります。",
+        "domain": "kubernetes",
+        "keywords": [
+          "リソース",
+          "上限",
+          "制限",
+          "Pod"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Overcommit",
+    "reading": "おーばーこみっと",
+    "senses": [
+      {
+        "definition": "実際の余裕を見込んで、物理資源以上の要求を載せる考え方です。効率は上がりますが、ピーク時の競合に注意が必要です。",
+        "domain": "kubernetes",
+        "keywords": [
+          "リソース",
+          "過剰",
+          "効率",
+          "ノード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bin Packing",
+    "reading": "びんぱっきんぐ",
+    "senses": [
+      {
+        "definition": "ノードへワークロードを効率よく詰める考え方です。コスト効率向上に役立ちますが、集中しすぎると障害影響が大きくなることがあります。",
+        "domain": "kubernetes",
+        "keywords": [
+          "配置",
+          "効率",
+          "ノード",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Image Pull Policy",
+    "reading": "いめーじぷるぽりしー",
+    "senses": [
+      {
+        "definition": "イメージを毎回取得するか、ローカルを使うかを決める設定です。更新反映と起動速度のバランスに関わります。",
+        "domain": "kubernetes",
+        "keywords": [
+          "イメージ",
+          "取得",
+          "設定",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Immutable Tag",
+    "reading": "いみゅーたぶるたぐ",
+    "senses": [
+      {
+        "definition": "一度付けたら中身を変えないイメージタグ運用です。再現性と監査性を高めやすくなります。",
+        "domain": "container",
+        "keywords": [
+          "タグ",
+          "イメージ",
+          "不変",
+          "再現性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Digest Pinning",
+    "reading": "だいじぇすとぴんにんぐ",
+    "senses": [
+      {
+        "definition": "タグではなく内容ハッシュでイメージを固定することです。想定外更新を防ぎやすくなります。",
+        "domain": "container",
+        "keywords": [
+          "ハッシュ",
+          "イメージ",
+          "固定",
+          "再現性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Secret Injection",
+    "reading": "しーくれっといんじぇくしょん",
+    "senses": [
+      {
+        "definition": "実行時に秘密情報を安全に注入する仕組みです。イメージやコードへ埋め込まない設計が基本です。",
+        "domain": "security",
+        "keywords": [
+          "秘密",
+          "注入",
+          "実行時",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ConfigMap",
+    "reading": "こんふぃぐまっぷ",
+    "senses": [
+      {
+        "definition": "設定値をコンテナ本体と分離して管理する仕組みです。環境差分や設定変更を扱いやすくします。",
+        "domain": "kubernetes",
+        "keywords": [
+          "設定",
+          "コンテナ",
+          "分離",
+          "環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Service Mesh Control Plane",
+    "reading": "さーびすめっしゅこんとろーるぷれーん",
+    "senses": [
+      {
+        "definition": "通信制御ルールや証明書管理を一元的に担う中枢です。便利ですが、運用理解が浅いと逆に複雑化します。",
+        "domain": "kubernetes",
+        "keywords": [
+          "サービスメッシュ",
+          "制御",
+          "通信",
+          "証明書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Ingress Controller",
+    "reading": "いんぐれすこんとろーらー",
+    "senses": [
+      {
+        "definition": "外部からのHTTP系アクセスをKubernetes内へ振り分ける制御機構です。公開経路の標準化に役立ちます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Ingress",
+          "HTTP",
+          "振り分け",
+          "外部"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Egress Gateway",
+    "reading": "いーぐれすげーとうぇい",
+    "senses": [
+      {
+        "definition": "外向き通信を特定経路へ集約する仕組みです。外部通信制御や監査性向上に役立ちます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "外向き",
+          "通信",
+          "ゲートウェイ",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Pod Security Standard",
+    "reading": "ぽっどせきゅりてぃすたんだーど",
+    "senses": [
+      {
+        "definition": "Podに許される権限や危険設定を制限する基準です。コンテナ実行安全性の土台になります。",
+        "domain": "kubernetes",
+        "keywords": [
+          "Pod",
+          "セキュリティ",
+          "権限",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Admission Controller",
+    "reading": "あどみっしょんこんとろーらー",
+    "senses": [
+      {
+        "definition": "リソース作成時に検査や変更を行う仕組みです。危険設定を事前に防ぐのに役立ちます。",
+        "domain": "kubernetes",
+        "keywords": [
+          "検査",
+          "作成",
+          "制御",
+          "ポリシー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Policy Enforcement",
+    "reading": "ぽりしーえんふぉーすめんと",
+    "senses": [
+      {
+        "definition": "定めたルールを実際の作成、変更、実行時に強制することです。文書だけのルールより実効性が高くなります。",
+        "domain": "governance",
+        "keywords": [
+          "ポリシー",
+          "強制",
+          "ルール",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Drift Remediation",
+    "reading": "どりふとりめでぃえーしょん",
+    "senses": [
+      {
+        "definition": "標準構成からのズレを自動または半自動で元へ戻すことです。設定逸脱の放置を防ぎやすくなります。",
+        "domain": "operations",
+        "keywords": [
+          "ドリフト",
+          "修正",
+          "構成",
+          "標準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Golden Path",
+    "reading": "ごーるでんぱす",
+    "senses": [
+      {
+        "definition": "多くの案件が安全かつ速く進められる推奨ルートです。自由度を残しつつ、標準的な成功パターンを示せます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "推奨",
+          "標準",
+          "パス",
+          "プラットフォーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Internal Developer Platform",
+    "reading": "いんたーなるでぃべろっぱーぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "開発者向けの内部共通基盤です。環境作成、デプロイ、監視、テンプレートを整えて開発効率を高めます。",
+        "domain": "software-engineering",
+        "keywords": [
+          "プラットフォーム",
+          "開発者",
+          "基盤",
+          "効率"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Self-Service Infrastructure",
+    "reading": "せるふさーびすいんふら",
+    "senses": [
+      {
+        "definition": "開発者が承認範囲内で自分たちで必要資源を用意できる仕組みです。待ち時間を減らしつつ、標準も守りやすくします。",
+        "domain": "cloud",
+        "keywords": [
+          "セルフサービス",
+          "インフラ",
+          "自動",
+          "承認"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Cost Anomaly Detection",
+    "reading": "くらうどこすとあのまりーでぃてくしょん",
+    "senses": [
+      {
+        "definition": "異常な費用増加を自動検知する仕組みです。障害や設定ミスの早期発見にもつながることがあります。",
+        "domain": "finops",
+        "keywords": [
+          "コスト",
+          "異常",
+          "検知",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Reservation Coverage",
+    "reading": "りざべーしょんかばれっじ",
+    "senses": [
+      {
+        "definition": "割引契約対象となっている利用量の割合です。費用最適化の効果を測る指標として使われます。",
+        "domain": "finops",
+        "keywords": [
+          "予約",
+          "割引",
+          "カバレッジ",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Utilization Rate",
+    "reading": "ゆーてぃらいぜーしょんれーと",
+    "senses": [
+      {
+        "definition": "確保した資源がどれだけ実際に使われているかの割合です。高すぎても低すぎても問題になることがあります。",
+        "domain": "operations",
+        "keywords": [
+          "利用率",
+          "資源",
+          "効率",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Savings Plan最適化",
+    "reading": "せーびんぐすぷらんさいてきか",
+    "senses": [
+      {
+        "definition": "長期利用割引を過不足なく活用するための調整です。利用量予測の精度が重要になります。",
+        "domain": "finops",
+        "keywords": [
+          "割引",
+          "最適化",
+          "長期",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "予約利用率",
+    "reading": "よやくりようりつ",
+    "senses": [
+      {
+        "definition": "予約済み資源が実際にどれだけ消化されているかの割合です。余らせると割引効果が薄れます。",
+        "domain": "finops",
+        "keywords": [
+          "予約",
+          "利用率",
+          "消化",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コスト可視化タグ戦略",
+    "reading": "こすとかしかたぐせんりゃく",
+    "senses": [
+      {
+        "definition": "部門、案件、環境などで費用を追えるようタグ付け設計することです。FinOpsの土台になります。",
+        "domain": "finops",
+        "keywords": [
+          "タグ",
+          "コスト",
+          "可視化",
+          "FinOps"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プロンプトレジストリ",
+    "reading": "ぷろんぷとれじすとり",
+    "senses": [
+      {
+        "definition": "再利用するプロンプトを一元管理する仕組みです。個人のローカルメモから脱却し、品質を標準化しやすくなります。",
+        "domain": "llm",
+        "keywords": [
+          "プロンプト",
+          "管理",
+          "一元",
+          "標準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "評価セット",
+    "reading": "ひょうかせっと",
+    "senses": [
+      {
+        "definition": "モデルやプロンプトの品質比較に使う問題集です。感覚評価を減らし、継続改善を回しやすくします。",
+        "domain": "llm",
+        "keywords": [
+          "評価",
+          "データ",
+          "品質",
+          "比較"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ゴールデンデータセット",
+    "reading": "ごーるでんでーたせっと",
+    "senses": [
+      {
+        "definition": "信頼できる正解付きの基準データです。回帰確認や改善比較の軸として使われます。",
+        "domain": "llm",
+        "keywords": [
+          "正解",
+          "基準",
+          "データ",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レッドチームプロンプティング",
+    "reading": "れっどちーむぷろんぷてぃんぐ",
+    "senses": [
+      {
+        "definition": "意図的に危険入力や境界入力を与えて弱点を探ることです。安全性検証で重要です。",
+        "domain": "llm",
+        "keywords": [
+          "レッドチーム",
+          "安全",
+          "攻撃",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セーフティ分類器",
+    "reading": "せーふてぃぶんるいき",
+    "senses": [
+      {
+        "definition": "出力や入力が安全ポリシーに合うか判定するモデルや仕組みです。ガードレールの一部として使われます。",
+        "domain": "llm",
+        "keywords": [
+          "安全",
+          "分類",
+          "フィルター",
+          "ガードレール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Grounded Generation",
+    "reading": "ぐらうんでっどじぇねれーしょん",
+    "senses": [
+      {
+        "definition": "外部根拠に基づいて回答させる考え方です。思いつき生成を減らし、信頼性を高めやすくなります。",
+        "domain": "llm",
+        "keywords": [
+          "根拠",
+          "生成",
+          "信頼",
+          "RAG"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "検索精度",
+    "reading": "けんさくせいど",
+    "senses": [
+      {
+        "definition": "必要な文書を的確に拾える度合いです。RAGでは生成モデルより前段の検索品質が重要になることが多いです。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "精度",
+          "Precision",
+          "文書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "検索再現率",
+    "reading": "けんさくさいげんりつ",
+    "senses": [
+      {
+        "definition": "本来拾うべき文書をどれだけ漏らさず取得できたかの度合いです。精度とのバランス設計が必要です。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "再現率",
+          "Recall",
+          "文書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リランカー",
+    "reading": "りらんかー",
+    "senses": [
+      {
+        "definition": "初期検索結果を、より重要度順に並び替える仕組みです。RAGの最終品質を大きく改善することがあります。",
+        "domain": "rag",
+        "keywords": [
+          "並替",
+          "検索",
+          "順位",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "引用忠実性",
+    "reading": "いんようちゅうじつせい",
+    "senses": [
+      {
+        "definition": "回答内容が示した引用元に本当に基づいている度合いです。引用が付いていても内容がずれていれば危険です。",
+        "domain": "llm",
+        "keywords": [
+          "引用",
+          "忠実",
+          "根拠",
+          "正確"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ハルシネーション率",
+    "reading": "はるしねーしょんりつ",
+    "senses": [
+      {
+        "definition": "AIがもっともらしい誤情報を出す割合や傾向です。ゼロは難しくても、管理と抑制は可能です。",
+        "domain": "llm",
+        "keywords": [
+          "ハルシネーション",
+          "誤情報",
+          "割合",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アブステイン",
+    "reading": "あぶすていん",
+    "senses": [
+      {
+        "definition": "分からないときに無理に答えず保留または確認要求する振る舞いです。高リスク用途では非常に重要です。",
+        "domain": "llm",
+        "keywords": [
+          "保留",
+          "拒否",
+          "判断",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "拒否ポリシー",
+    "reading": "きょひぽりしー",
+    "senses": [
+      {
+        "definition": "どんな要求には答えず拒否するかを定める方針です。安全性と利用価値のバランスが問われます。",
+        "domain": "llm",
+        "keywords": [
+          "拒否",
+          "ポリシー",
+          "安全",
+          "制限"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "関数呼出ポリシー",
+    "reading": "かんすうよびだしぽりしー",
+    "senses": [
+      {
+        "definition": "どんな条件でツールや関数を呼ぶべきかを定めるルールです。自由すぎると誤作動、厳しすぎると効果不足になります。",
+        "domain": "llm",
+        "keywords": [
+          "関数",
+          "ツール",
+          "ポリシー",
+          "呼出"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エージェントメモリ",
+    "reading": "えーじぇんとめもり",
+    "senses": [
+      {
+        "definition": "AIが継続的に利用する記憶全般です。短期文脈だけでなく、長期知識や履歴も含めて設計されることがあります。",
+        "domain": "agent",
+        "keywords": [
+          "メモリ",
+          "記憶",
+          "AI",
+          "文脈"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エピソディックメモリ",
+    "reading": "えぴそでぃっくめもり",
+    "senses": [
+      {
+        "definition": "個別会話や個別タスクの出来事記憶です。過去に何をしたかを思い出す用途に向きます。",
+        "domain": "agent",
+        "keywords": [
+          "記憶",
+          "出来事",
+          "会話",
+          "履歴"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セマンティックメモリ",
+    "reading": "せまんてぃっくめもり",
+    "senses": [
+      {
+        "definition": "一般化された知識や事実の記憶です。特定会話を超えて再利用したい知見の保持に向きます。",
+        "domain": "agent",
+        "keywords": [
+          "記憶",
+          "知識",
+          "事実",
+          "汎用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ワーキングメモリ",
+    "reading": "わーきんぐめもり",
+    "senses": [
+      {
+        "definition": "今まさに考えるために保持している短期情報です。タスクの進行中だけ必要な文脈をここに載せるイメージです。",
+        "domain": "agent",
+        "keywords": [
+          "短期",
+          "記憶",
+          "文脈",
+          "処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンテキストパッキング",
+    "reading": "こんてきすとぱっきんぐ",
+    "senses": [
+      {
+        "definition": "限られたトークン内へ重要情報を効率よく詰める工夫です。長文環境でも整理力が重要です。",
+        "domain": "llm",
+        "keywords": [
+          "コンテキスト",
+          "トークン",
+          "効率",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クエリリライト",
+    "reading": "くえりりらいと",
+    "senses": [
+      {
+        "definition": "利用者質問を検索しやすい形へ言い換えることです。RAGの前段で精度向上に役立ちます。",
+        "domain": "rag",
+        "keywords": [
+          "クエリ",
+          "書換",
+          "検索",
+          "前処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マルチクエリ検索",
+    "reading": "まるちくえりけんさく",
+    "senses": [
+      {
+        "definition": "一つの質問から複数の検索表現を作って探す方法です。言い換え漏れを減らし、検索再現率向上に役立ちます。",
+        "domain": "rag",
+        "keywords": [
+          "クエリ",
+          "複数",
+          "検索",
+          "再現率"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RRF",
+    "reading": "あーるあーるえふ",
+    "senses": [
+      {
+        "definition": "Reciprocal Rank Fusionの略で、複数検索結果を統合して順位づけする方法です。異なる検索手法の良さを組み合わせやすくなります。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "統合",
+          "順位",
+          "Fusion"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "チャンクオーバーラップ",
+    "reading": "ちゃんくおーばーらっぷ",
+    "senses": [
+      {
+        "definition": "文書分割時に前後を少し重ねて切ることです。文脈切れを減らしやすくなります。",
+        "domain": "rag",
+        "keywords": [
+          "チャンク",
+          "分割",
+          "重複",
+          "文脈"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "親子検索",
+    "reading": "おやこけんさく",
+    "senses": [
+      {
+        "definition": "小さな断片で検索し、元の大きな文脈を返す考え方です。検索精度と文脈保持を両立しやすいです。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "チャンク",
+          "文脈",
+          "階層"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ハイブリッド検索",
+    "reading": "はいぶりっどけんさく",
+    "senses": [
+      {
+        "definition": "キーワード検索と意味検索を組み合わせる方法です。片方だけでは拾いにくい情報を補完できます。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "キーワード",
+          "ベクトル",
+          "組合せ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "疎検索",
+    "reading": "そけんさく",
+    "senses": [
+      {
+        "definition": "単語や出現頻度を中心に探す検索方式です。明示語に強く、説明可能性が高い利点があります。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "キーワード",
+          "BM25",
+          "頻度"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "密検索",
+    "reading": "みつけんさく",
+    "senses": [
+      {
+        "definition": "ベクトルにもとづく意味検索方式です。言い換えや概念近さに強いです。",
+        "domain": "rag",
+        "keywords": [
+          "検索",
+          "ベクトル",
+          "意味",
+          "埋め込み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クロスエンコーダ再順位付け",
+    "reading": "くろすえんこーださいじゅんいづけ",
+    "senses": [
+      {
+        "definition": "質問と候補文書をペアで精密評価して並び替える方法です。計算コストは高めですが、精度向上に有効です。",
+        "domain": "rag",
+        "keywords": [
+          "エンコーダ",
+          "順位",
+          "精度",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ガード付き実行",
+    "reading": "がーどつきじっこう",
+    "senses": [
+      {
+        "definition": "AIが実行する前後に検査や制約を挟む方式です。自律性と安全性の現実的な折衷案になります。",
+        "domain": "agent",
+        "keywords": [
+          "ガード",
+          "実行",
+          "安全",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "承認閾値",
+    "reading": "しょうにんいきち",
+    "senses": [
+      {
+        "definition": "どの危険度や影響規模から人承認を必須にするかの基準です。曖昧だと現場判断がぶれやすくなります。",
+        "domain": "agent",
+        "keywords": [
+          "承認",
+          "閾値",
+          "人間",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モデルルーター",
+    "reading": "もでるるーたー",
+    "senses": [
+      {
+        "definition": "問い合わせ内容に応じて、適切なモデルへ振り分ける仕組みです。コストと品質の最適化に役立ちます。",
+        "domain": "llm",
+        "keywords": [
+          "ルーティング",
+          "モデル",
+          "振分",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "カスケード推論",
+    "reading": "かすけーどすいろん",
+    "senses": [
+      {
+        "definition": "軽量モデルで足りなければ上位モデルへ回す方式です。費用対効果を高めやすいです。",
+        "domain": "llm",
+        "keywords": [
+          "カスケード",
+          "モデル",
+          "推論",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コスト認識ルーティング",
+    "reading": "こすとにんしきるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "費用を考慮してモデルや処理経路を選ぶ仕組みです。価値に応じたリソース配分がしやすくなります。",
+        "domain": "llm",
+        "keywords": [
+          "コスト",
+          "ルーティング",
+          "選択",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レイテンシ認識ルーティング",
+    "reading": "れいてんしにんしきるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "応答速度要件を見て処理経路を選ぶ仕組みです。対話用途と深い分析用途で使い分けやすくなります。",
+        "domain": "llm",
+        "keywords": [
+          "レイテンシ",
+          "ルーティング",
+          "速度",
+          "応答"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プロンプトキャッシュ",
+    "reading": "ぷろんぷときゃっしゅ",
+    "senses": [
+      {
+        "definition": "同一または類似プロンプトの処理結果や中間結果を再利用する仕組みです。応答速度とコスト改善に寄与します。",
+        "domain": "llm",
+        "keywords": [
+          "キャッシュ",
+          "プロンプト",
+          "再利用",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レスポンスキャッシュ",
+    "reading": "れすぽんすきゃっしゅ",
+    "senses": [
+      {
+        "definition": "既に得た回答を再利用する仕組みです。鮮度要件との整合が必要ですが、FAQ用途では効果が高いです。",
+        "domain": "llm",
+        "keywords": [
+          "キャッシュ",
+          "応答",
+          "再利用",
+          "FAQ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "評価ハーネス",
+    "reading": "ひょうかはーねす",
+    "senses": [
+      {
+        "definition": "モデルやプロンプトを同条件で比較できる評価基盤です。改善の再現性を高めます。",
+        "domain": "llm",
+        "keywords": [
+          "評価",
+          "基盤",
+          "比較",
+          "再現性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "回帰評価",
+    "reading": "かいきひょうか",
+    "senses": [
+      {
+        "definition": "変更前にできていたことが、変更後も保たれているか確認する評価です。AIでもソフトウェアと同じく重要です。",
+        "domain": "llm",
+        "keywords": [
+          "回帰",
+          "評価",
+          "品質",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "オフラインリプレイ",
+    "reading": "おふらいんりぷれい",
+    "senses": [
+      {
+        "definition": "過去の問い合わせやログを再実行して品質比較することです。本番影響なく改善検証しやすくなります。",
+        "domain": "llm",
+        "keywords": [
+          "リプレイ",
+          "ログ",
+          "検証",
+          "オフライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エージェントサンドボックス",
+    "reading": "えーじぇんとさんどぼっくす",
+    "senses": [
+      {
+        "definition": "AIエージェントが安全に試行できる隔離環境です。実行系AIでは必須に近い考え方です。",
+        "domain": "agent",
+        "keywords": [
+          "サンドボックス",
+          "隔離",
+          "安全",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ツール使用トレース",
+    "reading": "つーるしようとれーす",
+    "senses": [
+      {
+        "definition": "AIがどのツールをどの順で使ったかを追える記録です。デバッグや監査に非常に役立ちます。",
+        "domain": "agent",
+        "keywords": [
+          "ツール",
+          "トレース",
+          "監査",
+          "記録"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Plan-Act-Observeループ",
+    "reading": "ぷらんあくとおぶざーぶるーぷ",
+    "senses": [
+      {
+        "definition": "計画し、実行し、結果を観測して次へ反映するエージェント動作の基本形です。単発生成より自律性が高まります。",
+        "domain": "agent",
+        "keywords": [
+          "計画",
+          "実行",
+          "観測",
+          "ループ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "自己反省ステップ",
+    "reading": "じこはんせいすてっぷ",
+    "senses": [
+      {
+        "definition": "出力前または出力後に、自分の結果を見直させる段階です。誤り削減に効くことがありますが、万能ではありません。",
+        "domain": "llm",
+        "keywords": [
+          "反省",
+          "見直し",
+          "品質",
+          "自己"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クリティークモデル",
+    "reading": "くりてぃーくもでる",
+    "senses": [
+      {
+        "definition": "別のモデルや別の役割が出力を批判的に確認する仕組みです。実装役とレビュー役を分ける発想に近いです。",
+        "domain": "llm",
+        "keywords": [
+          "批評",
+          "モデル",
+          "レビュー",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ディベート評価",
+    "reading": "でぃべーとひょうか",
+    "senses": [
+      {
+        "definition": "複数案や複数モデルに議論させて妥当性を見る評価方法です。最終判断は人または評価器が行う必要があります。",
+        "domain": "llm",
+        "keywords": [
+          "議論",
+          "評価",
+          "複数",
+          "妥当性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ポリシーチューニング",
+    "reading": "ぽりしーちゅーにんぐ",
+    "senses": [
+      {
+        "definition": "安全性や応答方針が適切になるようルールや制御を調整することです。拒否しすぎても、緩すぎても問題になります。",
+        "domain": "llm",
+        "keywords": [
+          "ポリシー",
+          "調整",
+          "安全",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レダクションパイプライン",
+    "reading": "れだくしょんぱいぷらいん",
+    "senses": [
+      {
+        "definition": "機密情報や個人情報を伏せたうえでAIへ渡す流れです。入力安全性を高める重要な前処理になります。",
+        "domain": "llm",
+        "keywords": [
+          "レダクション",
+          "機密",
+          "PII",
+          "前処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PII検知",
+    "reading": "ぴーあいあいけんち",
+    "senses": [
+      {
+        "definition": "個人識別につながる情報を自動で見つけることです。AI利用前の入力審査やログ保護で使われます。",
+        "domain": "security",
+        "keywords": [
+          "PII",
+          "個人情報",
+          "検知",
+          "保護"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "機密操作承認",
+    "reading": "きみつそうさしょうにん",
+    "senses": [
+      {
+        "definition": "重要なデータ送信や更新を行う前に承認を必須とする仕組みです。AI実行系では特に重要です。",
+        "domain": "security",
+        "keywords": [
+          "承認",
+          "機密",
+          "操作",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "人間エスカレーション",
+    "reading": "にんげんえすかれーしょん",
+    "senses": [
+      {
+        "definition": "AIだけで判断せず、人へ引き継ぐべき場面を明確にすることです。安全性、説明責任、顧客信頼を守るための重要な境界です。",
+        "domain": "agent",
+        "keywords": [
+          "エスカレーション",
+          "人間",
+          "判断",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ランドマークリージョン",
+    "reading": "らんどまーくりーじょん",
+    "senses": [
+      {
+        "definition": "ヘッダー・メイン・ナビゲーションなど、ページの主要なセマンティックセクションです。スクリーンリーダーユーザーがセクション間を素早く移動できるようにします。",
+        "domain": "Accessibility",
+        "keywords": [
+          "ページ",
+          "セクション",
+          "ナビゲーション",
+          "スクリーンリーダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Landmark Regions"
+    ]
+  },
+  {
+    "term": "静的アセットフィンガープリンティング",
+    "reading": "せいてきあせっとふぃんがーぷりんてぃんぐ",
+    "senses": [
+      {
+        "definition": "コンテンツに基づくハッシュ値をファイル名に付加する仕組みです。キャッシュ制御と更新伝播のバランスを取りやすくします。",
+        "domain": "Frontend",
+        "keywords": [
+          "ハッシュ",
+          "キャッシュ",
+          "ファイル",
+          "静的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Static Asset Fingerprinting"
+    ]
+  },
+  {
+    "term": "スクリーンリーダーセマンティクス",
+    "reading": "すくりーんりーだーせまんてぃくす",
+    "senses": [
+      {
+        "definition": "スクリーンリーダーが正しい意味を伝えられるよう要素を設計することです。見出し・ボタン・ラベルの正確さが重要です。",
+        "domain": "Accessibility",
+        "keywords": [
+          "スクリーンリーダー",
+          "意味",
+          "要素",
+          "ラベル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Screen Reader Semantics"
+    ]
+  },
+  {
+    "term": "フォームパーシスタンス",
+    "reading": "ふぉーむぱーしすたんす",
+    "senses": [
+      {
+        "definition": "入力中のデータを保存してデータ損失を防ぐ実践です。長い申請フォームや不安定なネットワーク環境で効果的です。",
+        "domain": "UX",
+        "keywords": [
+          "フォーム",
+          "入力",
+          "保存",
+          "復元"
+        ]
+      }
+    ],
+    "aliases": [
+      "Form Persistence"
+    ]
+  },
+  {
+    "term": "機能の発見可能性",
+    "reading": "きのうのはっけんかのうせい",
+    "senses": [
+      {
+        "definition": "ユーザーが必要な機能を自然に見つけられる度合いです。どれだけ強力な機能でも、ユーザーが見つけられなければ存在しないも同然です。",
+        "domain": "UX",
+        "keywords": [
+          "発見",
+          "機能",
+          "UI",
+          "ユーザー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Feature Discoverability"
+    ]
+  },
+  {
+    "term": "エラーリカバリーUX",
+    "reading": "えらーりかばりーゆーえっくす",
+    "senses": [
+      {
+        "definition": "問題が起きたときにユーザーが混乱せず通常フローへ戻れるよう支援するデザインです。障害発生時に体験品質の差が最も現れます。",
+        "domain": "UX",
+        "keywords": [
+          "エラー",
+          "リカバリー",
+          "体験",
+          "デザイン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Error Recovery UX"
+    ]
+  },
+  {
+    "term": "ビジュアルリグレッションテスト",
+    "reading": "びじゅあるりぐれっしょんてすと",
+    "senses": [
+      {
+        "definition": "画面の視覚的差異を自動比較してレイアウト崩れを検出するテストです。UI変更の副作用を捕捉しやすくなります。",
+        "domain": "Testing",
+        "keywords": [
+          "ビジュアル",
+          "リグレッション",
+          "スクリーンショット",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": [
+      "Visual Regression Testing"
+    ]
+  },
+  {
+    "term": "冪等コンシューマー",
+    "reading": "べきとうこんしゅーまー",
+    "senses": [
+      {
+        "definition": "同じメッセージを何回受信しても一貫した結果を生む受信者実装です。少なくとも1回配信との組み合わせに特に適しています。",
+        "domain": "Distributed Systems",
+        "keywords": [
+          "冪等",
+          "メッセージ",
+          "コンシューマー",
+          "配信"
+        ]
+      }
+    ],
+    "aliases": [
+      "Idempotent Consumer"
+    ]
+  },
+  {
+    "term": "リトライキュー",
+    "reading": "りとらいきゅー",
+    "senses": [
+      {
+        "definition": "失敗した操作を一定条件下で後から再実行するためのキューです。一時的な障害に対して有効ですが、無限リトライは危険です。",
+        "domain": "Distributed Systems",
+        "keywords": [
+          "リトライ",
+          "キュー",
+          "失敗",
+          "再実行"
+        ]
+      }
+    ],
+    "aliases": [
+      "Retry Queue"
+    ]
+  },
+  {
+    "term": "書き込み後読み取り整合性",
+    "reading": "かきこみごよみとりせいごうせい",
+    "senses": [
+      {
+        "definition": "書き込み直後の読み取りが更新結果を反映するプロパティです。ユーザー体験に直結し、分散環境で重要です。",
+        "domain": "Distributed Systems",
+        "keywords": [
+          "整合性",
+          "読み取り",
+          "書き込み",
+          "分散"
+        ]
+      }
+    ],
+    "aliases": [
+      "Read-after-Write Consistency"
+    ]
+  },
+  {
+    "term": "ブラウンフィールドモダナイゼーション",
+    "reading": "ぶらうんふぃーるどもだないぜーしょん",
+    "senses": [
+      {
+        "definition": "既存資産がある環境内で改善や再構築を行うことです。現行システムへの影響を監視しながら進める課題があります。",
+        "domain": "Architecture",
+        "keywords": [
+          "既存",
+          "モダナイゼーション",
+          "改善",
+          "レガシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Brownfield Modernization"
+    ]
+  },
+  {
+    "term": "シャドウトラフィック",
+    "reading": "しゃどうとらふぃっく",
+    "senses": [
+      {
+        "definition": "ユーザーに影響を与えずに本番リクエストを新システムへミラーリングして比較する仕組みです。移行検証に役立ちます。",
+        "domain": "Operations",
+        "keywords": [
+          "トラフィック",
+          "検証",
+          "移行",
+          "比較"
+        ]
+      }
+    ],
+    "aliases": [
+      "Shadow Traffic"
+    ]
+  },
+  {
+    "term": "スキーママイグレーション戦略",
+    "reading": "すきーままいぐれーしょんせんりゃく",
+    "senses": [
+      {
+        "definition": "データベースの構造変更を安全に進めるためのアプローチです。アプリケーション互換性と運用ダウンタイムを考慮して設計します。",
+        "domain": "Database",
+        "keywords": [
+          "スキーマ",
+          "マイグレーション",
+          "DB",
+          "互換性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Schema Migration Strategy"
+    ]
+  },
+  {
+    "term": "ブルーグリーンDBマイグレーション",
+    "reading": "ぶるーぐりーんでぃーびーまいぐれーしょん",
+    "senses": [
+      {
+        "definition": "新旧両DBシステムを用意して切り替えるマイグレーション手法です。リスクは低いですが同期設計が難しくなります。",
+        "domain": "Database",
+        "keywords": [
+          "DB",
+          "マイグレーション",
+          "ブルーグリーン",
+          "切り替え"
+        ]
+      }
+    ],
+    "aliases": [
+      "Blue-Green DB Migration"
+    ]
+  },
+  {
+    "term": "ゼロダウンタイムマイグレーション",
+    "reading": "ぜろだうんたいむまいぐれーしょん",
+    "senses": [
+      {
+        "definition": "サービスを停止せずに構造変更や移行を行う手法です。互換性期間の設計が鍵となります。",
+        "domain": "Database",
+        "keywords": [
+          "マイグレーション",
+          "ゼロダウンタイム",
+          "互換性",
+          "移行"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zero-Downtime Migration"
+    ]
+  },
+  {
+    "term": "調整ジョブ",
+    "reading": "ちょうせいじょぶ",
+    "senses": [
+      {
+        "definition": "異なるシステム間のデータ差異を比較するジョブです。マイグレーションや非同期連携の健全性確認に役立ちます。",
+        "domain": "Operations",
+        "keywords": [
+          "調整",
+          "比較",
+          "データ",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reconciliation Job"
+    ]
+  },
+  {
+    "term": "デッドマンズスイッチ",
+    "reading": "でっどまんずすいっち",
+    "senses": [
+      {
+        "definition": "一定時間以内に更新がなければ異常を通知する仕組みです。ジョブの停滞や人員不在の検出にも適用されます。",
+        "domain": "Operations",
+        "keywords": [
+          "異常",
+          "検出",
+          "タイマー",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dead Man's Switch"
+    ]
+  },
+  {
+    "term": "ハイウォーターマーク",
+    "reading": "はいうぉーたーまーく",
+    "senses": [
+      {
+        "definition": "キュー深度やメモリ使用量などのメトリクスが危険水準に近づいていることを示す上限閾値です。スロットリングのトリガーポイントとして使用されます。",
+        "domain": "Operations",
+        "keywords": [
+          "閾値",
+          "上限",
+          "キュー",
+          "メモリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "High-Water Mark"
+    ]
+  },
+  {
+    "term": "ローウォーターマーク",
+    "reading": "ろーうぉーたーまーく",
+    "senses": [
+      {
+        "definition": "スロットリングされていた処理を再開できる下限閾値です。ヒステリシス制御による安定化制御に役立ちます。",
+        "domain": "Operations",
+        "keywords": [
+          "閾値",
+          "下限",
+          "再開",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Low-Water Mark"
+    ]
+  },
+  {
+    "term": "キュー深度",
+    "reading": "きゅーしんど",
+    "senses": [
+      {
+        "definition": "キューで待機しているアイテム数を示すメトリクスです。バックログとレイテンシ問題の早期検出に効果的です。",
+        "domain": "Operations",
+        "keywords": [
+          "キュー",
+          "深度",
+          "監視",
+          "レイテンシ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Queue Depth"
+    ]
+  },
+  {
+    "term": "リザベーション利用率",
+    "reading": "りざべーしょんりようりつ",
+    "senses": [
+      {
+        "definition": "予約したリソースのうち実際に消費した割合です。利用率が低いと割引メリットが薄れます。",
+        "domain": "FinOps",
+        "keywords": [
+          "リザベーション",
+          "利用率",
+          "消費",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reservation Utilization"
+    ]
+  },
+  {
+    "term": "コスト可視化タグ付け戦略",
+    "reading": "こすとかしかたぐづけせんりゃく",
+    "senses": [
+      {
+        "definition": "部門・プロジェクト・環境ごとにコストを追跡するタグ付けスキームを設計することです。FinOpsの基盤を形成します。",
+        "domain": "FinOps",
+        "keywords": [
+          "タグ",
+          "コスト",
+          "可視化",
+          "FinOps"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cost Visibility Tagging Strategy"
+    ]
+  },
+  {
+    "term": "安全性分類器",
+    "reading": "あんぜんせいぶんるいき",
+    "senses": [
+      {
+        "definition": "入出力が安全ポリシーに準拠しているかを判定するモデルや仕組みです。ガードレールの一部として使用されます。",
+        "domain": "LLM",
+        "keywords": [
+          "安全性",
+          "分類",
+          "フィルター",
+          "ガードレール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Safety Classifier"
+    ]
+  },
+  {
+    "term": "幻覚率",
+    "reading": "げんかくりつ",
+    "senses": [
+      {
+        "definition": "AIがもっともらしいが誤った情報を生成する頻度や傾向です。完全な排除は難しいですが、管理と軽減は可能です。",
+        "domain": "LLM",
+        "keywords": [
+          "幻覚",
+          "誤情報",
+          "率",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hallucination Rate"
+    ]
+  },
+  {
+    "term": "回答留保",
+    "reading": "かいとうりゅうほ",
+    "senses": [
+      {
+        "definition": "不確かな場合に推測せず回答を保留したり確認を求めたりする動作です。高リスクユースケースでは非常に重要です。",
+        "domain": "LLM",
+        "keywords": [
+          "保留",
+          "拒否",
+          "判断",
+          "安全性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Abstain"
+    ]
+  },
+  {
+    "term": "エピソードメモリ",
+    "reading": "えぴそーどめもり",
+    "senses": [
+      {
+        "definition": "個々の会話やタスクのイベント記憶です。過去に何をしたかを想起するのに適しています。",
+        "domain": "Agent",
+        "keywords": [
+          "メモリ",
+          "イベント",
+          "会話",
+          "履歴"
+        ]
+      }
+    ],
+    "aliases": [
+      "Episodic Memory"
+    ]
+  },
+  {
+    "term": "意味記憶",
+    "reading": "いみきおく",
+    "senses": [
+      {
+        "definition": "一般化された知識や事実の記憶です。特定の会話を超えて再利用すべき知見の保持に適しています。",
+        "domain": "Agent",
+        "keywords": [
+          "メモリ",
+          "知識",
+          "事実",
+          "汎用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Semantic Memory"
+    ]
+  },
+  {
+    "term": "スパース検索",
+    "reading": "すぱーすけんさく",
+    "senses": [
+      {
+        "definition": "単語頻度とキーワードマッチングを中心にした検索手法です。明示的な用語に強く、説明可能性が高いです。",
+        "domain": "RAG",
+        "keywords": [
+          "検索",
+          "キーワード",
+          "BM25",
+          "頻度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sparse Retrieval"
+    ]
+  },
+  {
+    "term": "デンス検索",
+    "reading": "でんすけんさく",
+    "senses": [
+      {
+        "definition": "ベクトルベースのセマンティック検索手法です。言い換えや概念的類似性に強みがあります。",
+        "domain": "RAG",
+        "keywords": [
+          "検索",
+          "ベクトル",
+          "セマンティック",
+          "埋め込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dense Retrieval"
+    ]
+  },
+  {
+    "term": "クロスエンコーダー再ランキング",
+    "reading": "くろすえんこーだーさいらんきんぐ",
+    "senses": [
+      {
+        "definition": "クエリと文書ペアを一緒に精密に評価して並べ替える手法です。計算コストは高いですが精度向上に効果的です。",
+        "domain": "RAG",
+        "keywords": [
+          "エンコーダー",
+          "ランキング",
+          "精度",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cross-Encoder Reranking"
+    ]
+  },
+  {
+    "term": "コスト考慮ルーティング",
+    "reading": "こすとこうりょるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "コストを考慮してモデルや処理パスを選択する仕組みです。価値に比例したリソース配分を促進します。",
+        "domain": "LLM",
+        "keywords": [
+          "コスト",
+          "ルーティング",
+          "選択",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cost-Aware Routing"
+    ]
+  },
+  {
+    "term": "レイテンシ考慮ルーティング",
+    "reading": "れいてんしこうりょるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "応答速度要件に基づいて処理パスを選択する仕組みです。会話用と深い分析用ユースケースの差別化を容易にします。",
+        "domain": "LLM",
+        "keywords": [
+          "レイテンシ",
+          "ルーティング",
+          "速度",
+          "応答"
+        ]
+      }
+    ],
+    "aliases": [
+      "Latency-Aware Routing"
+    ]
+  },
+  {
+    "term": "リグレッション評価",
+    "reading": "りぐれっしょんひょうか",
+    "senses": [
+      {
+        "definition": "変更前に存在した機能が変更後も維持されていることを確認する評価です。AIでも従来のソフトウェアと同様に重要です。",
+        "domain": "LLM",
+        "keywords": [
+          "リグレッション",
+          "評価",
+          "品質",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "Regression Evaluation"
+    ]
+  },
+  {
+    "term": "批評モデル",
+    "reading": "ひひょうもでる",
+    "senses": [
+      {
+        "definition": "別のモデルや役割が出力を批判的にレビューする仕組みです。実装とレビューの責任を分離するのに似ています。",
+        "domain": "LLM",
+        "keywords": [
+          "批評",
+          "モデル",
+          "レビュー",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Critique Model"
+    ]
+  },
+  {
+    "term": "討論評価",
+    "reading": "とうろんひょうか",
+    "senses": [
+      {
+        "definition": "複数の提案やモデルが討論して妥当性を評価する手法です。最終的な判断は人間や評価システムが行う必要があります。",
+        "domain": "LLM",
+        "keywords": [
+          "討論",
+          "評価",
+          "複数",
+          "妥当性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Debate Evaluation"
+    ]
+  },
+  {
+    "term": "リダクションパイプライン",
+    "reading": "りだくしょんぱいぷらいん",
+    "senses": [
+      {
+        "definition": "機密情報や個人情報をAIへ渡す前にマスクするパイプラインです。入力安全性のための重要な前処理ステップです。",
+        "domain": "LLM",
+        "keywords": [
+          "リダクション",
+          "機密",
+          "PII",
+          "前処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Redaction Pipeline"
+    ]
+  },
+  {
+    "term": "PII検出",
+    "reading": "ぴーあいあいけんしゅつ",
+    "senses": [
+      {
+        "definition": "個人を特定できる情報を自動識別する手法です。AI処理前の入力スクリーニングやログ保護に使用されます。",
+        "domain": "Security",
+        "keywords": [
+          "PII",
+          "個人情報",
+          "検出",
+          "保護"
+        ]
+      }
+    ],
+    "aliases": [
+      "PII Detection"
+    ]
+  }
+]

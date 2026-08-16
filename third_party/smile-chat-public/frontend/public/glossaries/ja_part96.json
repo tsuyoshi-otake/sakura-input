@@ -1,0 +1,476 @@
+[
+  {
+    "term": "Ingress Rule",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部から入る通信を許可または制限するルール。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "セキュリティ",
+          "Ingress Rule"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Egress Rule",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部へ出る通信を許可または制限するルール。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "セキュリティ",
+          "Egress Rule"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DNS Label",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DNS名生成に使う短い識別文字列。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "DNS",
+          "DNS Label"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Load Balancer",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数の接続先に通信を振り分ける仕組み。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロードバランサ",
+          "Load Balancer"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Listener",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "特定ポートやプロトコルで接続を受ける待受設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロードバランサ",
+          "Listener"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Backend Set",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "負荷分散先とルーティング条件のまとまり。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロードバランサ",
+          "Backend Set"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Backend Server",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "実際に処理を受け持つ転送先サーバ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロードバランサ",
+          "Backend Server"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Health Check",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "接続先の生死や応答可否を確認する監視。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロードバランサ",
+          "Health Check"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SSL Certificate",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "HTTPSなどで使うサーバ証明書。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "証明書",
+          "SSL Certificate"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CA Bundle",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "信頼するCA証明書をまとめた束。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "証明書",
+          "CA Bundle"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Vanity URL",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "既定URLではなく独自ドメインで公開するURL。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "URL",
+          "Vanity URL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Custom Domain",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サービス公開時に使う独自ドメイン名。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "URL",
+          "Custom Domain"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Identity Domain",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ユーザーやグループ、認証設定を管理する境界。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "Identity Domain"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Tag",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "リソース整理や追跡のために付けるキー値情報。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "メタデータ",
+          "Tag"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Bucket",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "オブジェクトを格納するコンテナ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ストレージ",
+          "Bucket"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Function Application",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "関数群をまとめる論理単位。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "サーバレス",
+          "Function Application"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Fn Project CLI",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI Functionsを作成配備するCLI。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ツール",
+          "Fn Project CLI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Connection",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サービス間接続のための設定オブジェクト。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "設定",
+          "Connection"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Policy Name",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ポリシーを識別する名前。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "Policy Name"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Policy Compartment",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "IAMポリシーを配置するCompartment。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "Policy Compartment"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Object Storage Bucket Compartment",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Bucketが属するCompartment。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ストレージ",
+          "Object Storage Bucket Compartment"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Web Credential",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部サービス接続用の資格情報オブジェクト。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "認証",
+          "Web Credential"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Remote Server",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "REST接続先の基底URLや認証をまとめる設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "連携",
+          "Remote Server"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST Data Source",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部REST APIをAPEXで扱うためのデータソース定義。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "連携",
+          "REST Data Source"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST Data Source Type",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "REST Data Sourceの利用方式や特性の種別。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "連携",
+          "REST Data Source Type"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Simple HTTP",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "単純なHTTP取得型のデータ利用方式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "連携",
+          "Simple HTTP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEXサービス用ロードバランサー",
+    "reading": "えーぺっくすさーびすようろーどばらんさー",
+    "senses": [
+      {
+        "definition": "Oracle APEX環境へのトラフィックを複数のサーバーに分散するロードバランサーです。高可用性とスケーラビリティを提供します。",
+        "domain": "oci",
+        "keywords": [
+          "ロードバランサー",
+          "APEX",
+          "Oracle",
+          "負荷分散"
+        ]
+      }
+    ],
+    "aliases": [
+      "Load Balancer for APEX Service"
+    ]
+  },
+  {
+    "term": "OCIリソースタグ",
+    "reading": "おーしーあいりそーすたぐ",
+    "senses": [
+      {
+        "definition": "OCIリソースにメタデータとして付与できるキーと値のペアです。コスト管理・アクセス制御・リソース検索を効率化するために使用します。",
+        "domain": "oci",
+        "keywords": [
+          "タグ",
+          "OCI",
+          "リソース管理",
+          "メタデータ"
+        ]
+      }
+    ],
+    "aliases": [
+      "OCI Resource Tag",
+      "Resource Tag"
+    ]
+  },
+  {
+    "term": "APEXサービス用オブジェクトストレージバケット",
+    "reading": "えーぺっくすさーびすようおぶじぇくとすとれーじばけっと",
+    "senses": [
+      {
+        "definition": "Oracle APEX環境でファイルや静的アセットを格納するOCIオブジェクトストレージのバケットです。APEXアプリケーションのリソース管理に利用します。",
+        "domain": "oci",
+        "keywords": [
+          "オブジェクトストレージ",
+          "APEX",
+          "バケット",
+          "OCI"
+        ]
+      }
+    ],
+    "aliases": [
+      "Object Storage Bucket for APEX Service"
+    ]
+  }
+]

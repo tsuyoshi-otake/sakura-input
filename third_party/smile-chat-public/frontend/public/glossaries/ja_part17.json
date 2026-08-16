@@ -1,0 +1,965 @@
+[
+  {
+    "term": "製造",
+    "reading": "せいぞう",
+    "senses": [
+      {
+        "definition": "設計書に基づいてプログラムを実装し、動作する資材として作り上げる工程。",
+        "domain": "software-engineering",
+        "keywords": [
+          "実装",
+          "コーディング",
+          "プログラミング"
+        ]
+      }
+    ],
+    "aliases": [
+      "APEX"
+    ]
+  },
+  {
+    "term": "総合テスト",
+    "reading": "そうごうテスト",
+    "senses": [
+      {
+        "definition": "システム全体を通して、業務シナリオや利用手順に沿って期待どおりに動くかを確認するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "業務シナリオ",
+          "エンドツーエンド",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "受入テスト",
+    "reading": "うけいれテスト",
+    "senses": [
+      {
+        "definition": "利用部門や発注側が、成果物が要件や業務運用に適合しているかを確認し受け入れ可否を判断するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "検収",
+          "利用者確認",
+          "受入"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "運用テスト",
+    "reading": "うんようテスト",
+    "senses": [
+      {
+        "definition": "監視、バックアップ、障害対応、ジョブ実行など、運用手順が実際に成立するかを確認するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "運用",
+          "監視",
+          "バックアップ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "パイロット検証",
+    "reading": "パイロットけんしょう",
+    "senses": [
+      {
+        "definition": "本格導入の前に一部環境や限定利用者で試行し、課題や改善点を洗い出す検証。",
+        "domain": "project-management",
+        "keywords": [
+          "試行",
+          "PoC",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モックアップ",
+    "senses": [
+      {
+        "definition": "実装前に画面や帳票の見た目、構成、操作感を確認するために作成する試作品。",
+        "domain": "design",
+        "keywords": [
+          "プロトタイプ",
+          "画面設計",
+          "ワイヤーフレーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "移行",
+    "reading": "いこう",
+    "senses": [
+      {
+        "definition": "旧システムや旧環境から、新システムや新環境へデータ、設定、運用を切り替える作業。",
+        "domain": "infrastructure",
+        "keywords": [
+          "マイグレーション",
+          "切替",
+          "移行計画"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "移行リハーサル",
+    "reading": "いこうリハーサル",
+    "senses": [
+      {
+        "definition": "本番移行と同じ手順を事前に実施し、所要時間、手順漏れ、障害時対応を確認する訓練。",
+        "domain": "infrastructure",
+        "keywords": [
+          "リハーサル",
+          "切替訓練",
+          "移行手順"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "本番稼働",
+    "reading": "ほんばんかどう",
+    "senses": [
+      {
+        "definition": "システムを正式に業務利用へ移行し、実運用を開始した状態。",
+        "domain": "project-management",
+        "keywords": [
+          "カットオーバー",
+          "本番",
+          "Go-Live"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "初期流動",
+    "reading": "しょきりゅうどう",
+    "senses": [
+      {
+        "definition": "本番稼働直後に発生しやすい不具合や問い合わせに重点対応し、稼働安定化を図る期間。",
+        "domain": "project-management",
+        "keywords": [
+          "安定化",
+          "本番直後",
+          "不具合対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プロジェクト計画書",
+    "reading": "プロジェクトけいかくしょ",
+    "senses": [
+      {
+        "definition": "目的、範囲、体制、工程、管理方法、成果物など、プロジェクトの進め方を定める文書。",
+        "domain": "project-management",
+        "keywords": [
+          "計画",
+          "体制",
+          "スケジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マスタスケジュール",
+    "senses": [
+      {
+        "definition": "プロジェクト全体の主要工程、マイルストーン、意思決定時点を俯瞰して示す計画表。",
+        "domain": "project-management",
+        "keywords": [
+          "工程表",
+          "マイルストーン",
+          "スケジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "進捗管理",
+    "reading": "しんちょくかんり",
+    "senses": [
+      {
+        "definition": "計画に対して作業の進行状況を把握し、遅延や偏りを早期に是正する管理活動。",
+        "domain": "project-management",
+        "keywords": [
+          "進捗",
+          "遅延",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "課題管理",
+    "reading": "かだいかんり",
+    "senses": [
+      {
+        "definition": "すでに顕在化している問題や懸念事項を記録し、対応方針、担当、期限を明確にして管理すること。",
+        "domain": "project-management",
+        "keywords": [
+          "課題",
+          "問題管理",
+          "対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質管理",
+    "reading": "ひんしつかんり",
+    "senses": [
+      {
+        "definition": "成果物や作業プロセスが定めた品質基準を満たすよう確認し、是正する管理活動。",
+        "domain": "project-management",
+        "keywords": [
+          "品質",
+          "QA",
+          "品質基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コミュニケーション管理",
+    "reading": "コミュニケーションかんり",
+    "senses": [
+      {
+        "definition": "会議、報告、承認、情報共有の方法や頻度を定め、関係者間の認識差を防ぐ管理活動。",
+        "domain": "project-management",
+        "keywords": [
+          "会議",
+          "報告",
+          "情報共有"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "納品物",
+    "reading": "のうひんぶつ",
+    "senses": [
+      {
+        "definition": "契約や合意に基づき、顧客へ正式に引き渡す成果物。",
+        "domain": "project-management",
+        "keywords": [
+          "納品",
+          "成果物",
+          "引渡し"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ステアリングコミッティ",
+    "senses": [
+      {
+        "definition": "重要な方針、優先順位、課題対応を経営または上位管理層が判断する会議体。",
+        "domain": "project-management",
+        "keywords": [
+          "経営判断",
+          "意思決定",
+          "会議体"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質保証委員会",
+    "reading": "ひんしつほしょういいんかい",
+    "senses": [
+      {
+        "definition": "プロジェクト外部または横断視点で品質状態を点検し、必要な是正を求める組織。",
+        "domain": "quality-management",
+        "keywords": [
+          "QA",
+          "レビュー",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "冗長構成",
+    "reading": "じょうちょうこうせい",
+    "senses": [
+      {
+        "definition": "障害発生時もサービス継続できるよう、機器や系統を複数用意しておく構成。",
+        "domain": "infrastructure",
+        "keywords": [
+          "可用性",
+          "冗長化",
+          "フェイルオーバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "運用保守性",
+    "reading": "うんようほしゅせい",
+    "senses": [
+      {
+        "definition": "障害対応、設定変更、監視、更新などを継続的に実施しやすい性質。",
+        "domain": "infrastructure",
+        "keywords": [
+          "保守",
+          "運用",
+          "非機能要件"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "閉域網",
+    "reading": "へいいきもう",
+    "senses": [
+      {
+        "definition": "インターネットから分離または制限された専用ネットワーク。",
+        "domain": "network",
+        "keywords": [
+          "専用線",
+          "閉域",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブロックボリューム",
+    "senses": [
+      {
+        "definition": "サーバにディスクとして接続して利用する単位のストレージ。",
+        "domain": "infrastructure",
+        "keywords": [
+          "ストレージ",
+          "ディスク",
+          "ボリューム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "踏み台サーバ",
+    "reading": "ふみだいサーバ",
+    "senses": [
+      {
+        "definition": "管理対象サーバへ直接入らず、中継点として経由するための管理用サーバ。",
+        "domain": "security",
+        "keywords": [
+          "踏み台",
+          "Bastion",
+          "管理接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OCI",
+    "reading": "オーシーアイ",
+    "senses": [
+      {
+        "definition": "Oracle社が提供するクラウド基盤サービス群の総称。",
+        "domain": "cloud",
+        "keywords": [
+          "Oracle",
+          "クラウド",
+          "インフラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EXE-Cloud",
+    "reading": "エグゼクラウド",
+    "senses": [
+      {
+        "definition": "システムエグゼが提供するクラウド導入・運用支援を含むサービスまたは提供形態の呼称。",
+        "domain": "cloud",
+        "keywords": [
+          "システムエグゼ",
+          "運用支援"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OCVS",
+    "reading": "オーシーブイエス",
+    "senses": [
+      {
+        "definition": "Oracle Cloud上でVMware環境を専有的に利用できるサービス。",
+        "domain": "oci",
+        "keywords": [
+          "VMware",
+          "Oracle",
+          "仮想化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Oracle Cloud VMware Solution"
+    ]
+  },
+  {
+    "term": "AD",
+    "reading": "アベイラビリティドメイン",
+    "senses": [
+      {
+        "definition": "電源や設備の障害影響を分離するための、OCI内の物理的または論理的な区画。",
+        "domain": "oci",
+        "keywords": [
+          "可用性",
+          "障害分離",
+          "データセンター"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BaseDB",
+    "reading": "ベースディービー",
+    "senses": [
+      {
+        "definition": "OCI上で提供されるOracle Databaseのマネージドサービス群の総称的な呼び方。",
+        "domain": "oci",
+        "keywords": [
+          "Oracle",
+          "データベース",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OAC",
+    "reading": "オーエーシー",
+    "senses": [
+      {
+        "definition": "Oracleが提供するクラウド型の分析・可視化サービス。",
+        "domain": "oci",
+        "keywords": [
+          "分析",
+          "BI",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Oracle Analytics Cloud"
+    ]
+  },
+  {
+    "term": "ADW",
+    "reading": "エーディーダブリュー",
+    "senses": [
+      {
+        "definition": "分析用途に最適化されたAutonomous Databaseの一種。",
+        "domain": "oci",
+        "keywords": [
+          "分析",
+          "DWH",
+          "Autonomous"
+        ]
+      }
+    ],
+    "aliases": [
+      "Autonomous Data Warehouse"
+    ]
+  },
+  {
+    "term": "Oracle APEX",
+    "reading": "オラクル エーペックス",
+    "senses": [
+      {
+        "definition": "Oracle Database上で業務アプリを比較的短期間に開発できる開発基盤。",
+        "domain": "oracle",
+        "keywords": [
+          "ローコード",
+          "開発基盤",
+          "業務アプリ"
+        ]
+      },
+      {
+        "definition": "Oracle Database上で動くローコード開発基盤。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "製品",
+          "Oracle APEX"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Object Storage",
+    "reading": "オブジェクトストレージ（OCI）",
+    "senses": [
+      {
+        "definition": "OCIでファイルやバックアップデータを大容量かつ柔軟に保存できるストレージサービス。",
+        "domain": "oci",
+        "keywords": [
+          "ストレージ",
+          "バックアップ",
+          "大容量"
+        ]
+      },
+      {
+        "definition": "オブジェクト単位でデータを保存するストレージ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ストレージ",
+          "Object Storage"
+        ]
+      }
+    ],
+    "aliases": [
+      "OCI Object Storage"
+    ]
+  },
+  {
+    "term": "AWS",
+    "reading": "エーダブリューエス",
+    "senses": [
+      {
+        "definition": "Amazon社が提供するクラウドサービス群の総称。",
+        "domain": "cloud",
+        "keywords": [
+          "Amazon",
+          "クラウド",
+          "インフラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ALB",
+    "reading": "エーエルビー",
+    "senses": [
+      {
+        "definition": "HTTPやHTTPS通信を複数のアプリケーションへ振り分けるロードバランサー。",
+        "domain": "aws",
+        "keywords": [
+          "ロードバランサー",
+          "HTTP",
+          "負荷分散"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ECS",
+    "reading": "イーシーエス",
+    "senses": [
+      {
+        "definition": "コンテナ化したアプリケーションを実行・管理するサービス。",
+        "domain": "aws",
+        "keywords": [
+          "コンテナ",
+          "Docker",
+          "オーケストレーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Elastic Container Service"
+    ]
+  },
+  {
+    "term": "Fargate",
+    "reading": "ファーゲート",
+    "senses": [
+      {
+        "definition": "サーバ管理なしでコンテナを実行できるAWSの実行基盤。",
+        "domain": "aws",
+        "keywords": [
+          "サーバーレス",
+          "コンテナ",
+          "ECS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RDS",
+    "reading": "アールディーエス",
+    "senses": [
+      {
+        "definition": "データベースの構築・運用を簡素化したマネージドDBサービス。",
+        "domain": "aws",
+        "keywords": [
+          "データベース",
+          "マネージド",
+          "MySQL"
+        ]
+      }
+    ],
+    "aliases": [
+      "Relational Database Service"
+    ]
+  },
+  {
+    "term": "ElastiCache",
+    "reading": "エラスティキャッシュ",
+    "senses": [
+      {
+        "definition": "高速なキャッシュ領域を提供し、アプリケーション応答を改善するサービス。",
+        "domain": "aws",
+        "keywords": [
+          "キャッシュ",
+          "Redis",
+          "Memcached"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CloudWatch",
+    "reading": "クラウドウォッチ",
+    "senses": [
+      {
+        "definition": "メトリクス、ログ、アラームを統合的に扱う監視サービス。",
+        "domain": "aws",
+        "keywords": [
+          "監視",
+          "ログ",
+          "アラーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cognito",
+    "reading": "コグニート",
+    "senses": [
+      {
+        "definition": "利用者認証やID管理を行うためのサービス。",
+        "domain": "aws",
+        "keywords": [
+          "認証",
+          "ID管理",
+          "ユーザー管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "S3",
+    "reading": "エススリー",
+    "senses": [
+      {
+        "definition": "高い耐久性を持つオブジェクトストレージサービス。",
+        "domain": "aws",
+        "keywords": [
+          "ストレージ",
+          "オブジェクト",
+          "バックアップ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Simple Storage Service"
+    ]
+  },
+  {
+    "term": "EFS",
+    "reading": "イーエフエス",
+    "senses": [
+      {
+        "definition": "複数サーバから共有利用できるファイルストレージサービス。",
+        "domain": "aws",
+        "keywords": [
+          "ファイルストレージ",
+          "共有",
+          "NFS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Elastic File System"
+    ]
+  },
+  {
+    "term": "Direct Connect",
+    "reading": "ダイレクトコネクト",
+    "senses": [
+      {
+        "definition": "オンプレミスとAWSを専用線で接続するサービス。",
+        "domain": "aws",
+        "keywords": [
+          "専用線",
+          "ネットワーク",
+          "閉域"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Lambda",
+    "reading": "ラムダ",
+    "senses": [
+      {
+        "definition": "サーバを意識せずにコードを実行できるサーバレスサービス。",
+        "domain": "aws",
+        "keywords": [
+          "サーバーレス",
+          "関数",
+          "イベント駆動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Step Functions",
+    "reading": "ステップファンクションズ",
+    "senses": [
+      {
+        "definition": "複数処理の流れや分岐を定義して実行管理するワークフローサービス。",
+        "domain": "aws",
+        "keywords": [
+          "ワークフロー",
+          "オーケストレーション",
+          "ステートマシン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EventBridge",
+    "reading": "イベントブリッジ",
+    "senses": [
+      {
+        "definition": "イベントを契機に他サービス連携や処理起動を行うイベント連携基盤。",
+        "domain": "aws",
+        "keywords": [
+          "イベント",
+          "連携",
+          "サーバーレス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CodePipeline",
+    "reading": "コードパイプライン",
+    "senses": [
+      {
+        "definition": "ビルド、テスト、デプロイの一連の流れを自動化するCI/CDサービス。",
+        "domain": "aws",
+        "keywords": [
+          "CI/CD",
+          "デプロイ",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ECR",
+    "reading": "イーシーアール",
+    "senses": [
+      {
+        "definition": "コンテナイメージを保管・管理するレジストリサービス。",
+        "domain": "aws",
+        "keywords": [
+          "コンテナ",
+          "レジストリ",
+          "Docker"
+        ]
+      }
+    ],
+    "aliases": [
+      "Elastic Container Registry"
+    ]
+  },
+  {
+    "term": "Microsoft Fabric",
+    "reading": "マイクロソフト ファブリック",
+    "senses": [
+      {
+        "definition": "データ統合、分析、可視化を一体的に扱うMicrosoftの統合分析基盤。",
+        "domain": "azure",
+        "keywords": [
+          "データ分析",
+          "統合基盤",
+          "BI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OneLake",
+    "reading": "ワンレイク",
+    "senses": [
+      {
+        "definition": "Fabricで利用する統合データ保存基盤であり、データを横断的に扱う中心領域。",
+        "domain": "azure",
+        "keywords": [
+          "データレイク",
+          "Fabric",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Power BI",
+    "reading": "パワービーアイ",
+    "senses": [
+      {
+        "definition": "データを集計・可視化し、ダッシュボードやレポートとして共有できるBIサービス。",
+        "domain": "azure",
+        "keywords": [
+          "BI",
+          "可視化",
+          "ダッシュボード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Synapse Analytics",
+    "reading": "アジュール シナプス アナリティクス",
+    "senses": [
+      {
+        "definition": "データ統合と分析を組み合わせて実現する分析基盤サービス。",
+        "domain": "azure",
+        "keywords": [
+          "分析",
+          "DWH",
+          "データ統合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Data Factory",
+    "reading": "アジュール データファクトリー",
+    "senses": [
+      {
+        "definition": "複数システム間のデータ連携やETL処理を構築・実行するサービス。",
+        "domain": "azure",
+        "keywords": [
+          "ETL",
+          "データ連携",
+          "パイプライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ExpressRoute",
+    "reading": "エクスプレスルート",
+    "senses": [
+      {
+        "definition": "オンプレミスとAzureを専用線で接続するサービス。",
+        "domain": "azure",
+        "keywords": [
+          "専用線",
+          "ネットワーク",
+          "閉域"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure Automation",
+    "reading": "アジュール オートメーション",
+    "senses": [
+      {
+        "definition": "定型運用作業を自動化するためのサービス。",
+        "domain": "azure",
+        "keywords": [
+          "自動化",
+          "運用",
+          "Runbook"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure OpenAI",
+    "reading": "アジュール オープンエーアイ",
+    "senses": [
+      {
+        "definition": "Azure上でOpenAI系モデルを利用するためのサービス。",
+        "domain": "azure",
+        "keywords": [
+          "AI",
+          "GPT",
+          "生成AI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Azure AI Speech",
+    "reading": "アジュール エーアイ スピーチ",
+    "senses": [
+      {
+        "definition": "音声認識や音声合成を利用できる音声AIサービス。",
+        "domain": "azure",
+        "keywords": [
+          "音声認識",
+          "音声合成",
+          "AI"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

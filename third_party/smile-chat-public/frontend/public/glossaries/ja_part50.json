@@ -1,0 +1,1808 @@
+[
+  {
+    "term": "ドキュメントDB",
+    "reading": "どきゅめんとでーびー",
+    "aliases": [
+      "Document Database",
+      "ドキュメント指向データベース"
+    ],
+    "senses": [
+      {
+        "definition": "データをJSON・BSONなどの半構造化ドキュメントとして格納するNoSQLデータベースの分類。スキーマが柔軟で階層的なデータを自然に表現でき、MongoDB・CouchDBが代表例。",
+        "domain": "data-store",
+        "keywords": [
+          "NoSQL",
+          "JSON",
+          "スキーマレス",
+          "半構造化",
+          "MongoDB"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "MongoDB",
+    "reading": "もんごでーびー",
+    "aliases": [
+      "Mongo"
+    ],
+    "senses": [
+      {
+        "definition": "BSONフォーマットでドキュメントを格納する代表的なオープンソースドキュメントDBMS。スキーマレスな柔軟性、Aggregation Pipelineによる集計、レプリカセット・シャーディングによる水平スケールを特徴とする。",
+        "domain": "data-store",
+        "keywords": [
+          "ドキュメントDB",
+          "BSON",
+          "シャーディング",
+          "NoSQL",
+          "オープンソース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キーバリューストア",
+    "reading": "きーばりゅーすとあ",
+    "aliases": [
+      "Key-Value Store",
+      "KVS"
+    ],
+    "senses": [
+      {
+        "definition": "キーと値のペアのみを格納する最もシンプルなNoSQLデータモデル。単純なルックアップに特化して超低レイテンシを実現し、Redis・Memcached・DynamoDBなどが代表例。",
+        "domain": "data-store",
+        "keywords": [
+          "NoSQL",
+          "Redis",
+          "Memcached",
+          "低レイテンシ",
+          "シンプル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Memcached",
+    "reading": "めむきゃっしゅど",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "シンプルな分散インメモリキャッシュシステム。文字列のみを格納でき、Redisより機能は少ないが軽量で水平スケールが容易。Webアプリのオブジェクトキャッシュとして広く利用されてきた。",
+        "domain": "data-store",
+        "keywords": [
+          "インメモリ",
+          "キャッシュ",
+          "分散",
+          "軽量",
+          "KVS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カラムファミリー",
+    "reading": "からむふぁみりー",
+    "aliases": [
+      "Column Family",
+      "ワイドカラムストア",
+      "Wide-Column Store"
+    ],
+    "senses": [
+      {
+        "definition": "行キーと複数のカラムグループ（カラムファミリー）でデータを管理するNoSQLデータモデル。スパースなデータを効率的に扱え、CassandraやHBaseが採用。カラム指向DBとは区別される。",
+        "domain": "data-store",
+        "keywords": [
+          "Cassandra",
+          "HBase",
+          "NoSQL",
+          "スパース",
+          "行キー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cassandra",
+    "reading": "かさんどら",
+    "aliases": [
+      "Apache Cassandra"
+    ],
+    "senses": [
+      {
+        "definition": "Facebookが開発したオープンソースの分散ワイドカラムストア。マスターレスなリング型アーキテクチャで単一障害点がなく、書き込みスループットに優れ、地理分散レプリケーションをサポートする。",
+        "domain": "data-store",
+        "keywords": [
+          "分散DB",
+          "ワイドカラム",
+          "NoSQL",
+          "高可用性",
+          "リング型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "グラフDB",
+    "reading": "ぐらふでーびー",
+    "aliases": [
+      "Graph Database",
+      "グラフデータベース"
+    ],
+    "senses": [
+      {
+        "definition": "データをノード（頂点）とエッジ（辺）およびプロパティで表現するデータベース。関係性を主体としたクエリが得意で、ソーシャルネットワーク・推薦エンジン・不正検出に適する。Neo4jが代表例。",
+        "domain": "data-store",
+        "keywords": [
+          "NoSQL",
+          "グラフ",
+          "Neo4j",
+          "ノード",
+          "エッジ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Neo4j",
+    "reading": "ねおふぉーじぇい",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "最も普及したオープンソースのグラフデータベース。プロパティグラフモデルを採用し、Cypherクエリ言語でグラフトラバーサルを直感的に記述できる。レコメンデーションや知識グラフ構築に広く使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "グラフDB",
+          "Cypher",
+          "トラバーサル",
+          "プロパティグラフ",
+          "NoSQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "時系列DB",
+    "reading": "じけいれつでーびー",
+    "aliases": [
+      "Time-Series Database",
+      "TSDB"
+    ],
+    "senses": [
+      {
+        "definition": "タイムスタンプ付きの計測値を効率的に格納・クエリするために最適化されたデータベース。メトリクス・ログ・センサーデータなど時系列データの圧縮・集計・保持ポリシー管理が得意。",
+        "domain": "data-store",
+        "keywords": [
+          "時系列",
+          "メトリクス",
+          "IoT",
+          "InfluxDB",
+          "圧縮"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "InfluxDB",
+    "reading": "いんふらっくすでーびー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "時系列データに特化したオープンソースデータベース。Measurement・Tag・Fieldの構造でデータを格納し、Flux言語で集計クエリを記述する。監視・IoT・金融データの蓄積に広く使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "時系列DB",
+          "メトリクス",
+          "IoT",
+          "Flux",
+          "監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ベクトルデータベース",
+    "reading": "べくとるでーたべーす",
+    "aliases": [
+      "Vector Database",
+      "ベクトルDB"
+    ],
+    "senses": [
+      {
+        "definition": "高次元の埋め込みベクトルを格納し、コサイン類似度や内積などで近傍ベクトルを高速検索するデータベース。LLMと組み合わせたRAGシステムや意味検索の基盤として注目される。",
+        "domain": "data-store",
+        "keywords": [
+          "埋め込み",
+          "ANN",
+          "RAG",
+          "類似検索",
+          "LLM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pinecone",
+    "reading": "ぱいんこーん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "フルマネージドのクラウドネイティブベクトルデータベース。インデックスの作成・スケーリングをサービスとして提供し、大規模な意味検索やRAGアプリケーションの構築を容易にする。",
+        "domain": "data-store",
+        "keywords": [
+          "ベクトルDB",
+          "マネージド",
+          "ANN",
+          "RAG",
+          "クラウド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Chroma",
+    "reading": "くろーま",
+    "aliases": [
+      "ChromaDB"
+    ],
+    "senses": [
+      {
+        "definition": "オープンソースの埋め込みデータベース。LangChainなどのLLMフレームワークと統合しやすく、ローカル環境での開発やプロトタイピングに適したベクトルストアとして広く利用される。",
+        "domain": "data-store",
+        "keywords": [
+          "ベクトルDB",
+          "オープンソース",
+          "LangChain",
+          "埋め込み",
+          "RAG"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Weaviate",
+    "reading": "うぃーびえいと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GraphQLインターフェースを持つオープンソースのベクトル検索エンジン。モジュールシステムで各種埋め込みモデルをプラグインでき、ハイブリッド検索（ベクトル＋キーワード）をサポートする。",
+        "domain": "data-store",
+        "keywords": [
+          "ベクトルDB",
+          "GraphQL",
+          "ハイブリッド検索",
+          "オープンソース",
+          "埋め込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "線形化可能性",
+    "reading": "せんけいかかのうせい",
+    "aliases": [
+      "Linearizability",
+      "強整合モデル"
+    ],
+    "senses": [
+      {
+        "definition": "分散システムにおける最強の整合性モデル。各操作がある瞬間にアトミックに実行されたように見える保証を与え、システム全体として単一の一貫したコピーが存在するように振る舞う。",
+        "domain": "data-store",
+        "keywords": [
+          "整合性",
+          "分散システム",
+          "アトミック",
+          "CAP定理",
+          "コンセンサス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PACELC",
+    "reading": "ぱせるく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "CAP定理を拡張したフレームワーク。分断時（P）はAとCのトレードオフ、通常時（E）はLatency（レイテンシ）とConsistency（整合性）のトレードオフが存在するという理論。",
+        "domain": "data-store",
+        "keywords": [
+          "CAP定理",
+          "レイテンシ",
+          "整合性",
+          "分散システム",
+          "トレードオフ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンセンサスアルゴリズム",
+    "reading": "こんせんさすあるごりずむ",
+    "aliases": [
+      "Consensus Algorithm"
+    ],
+    "senses": [
+      {
+        "definition": "分散システム内の複数ノードが障害やネットワーク分断があっても単一の合意値に到達するための手続き。RaftやPaxosが代表例で、分散DBやetcdなどの基盤を支える。",
+        "domain": "data-store",
+        "keywords": [
+          "分散システム",
+          "Raft",
+          "Paxos",
+          "合意",
+          "フォールトトレランス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Raft",
+    "reading": "らふと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "分散コンセンサスを実現するアルゴリズム。Paxosより理解しやすく設計され、リーダー選出・ログレプリケーション・スナップショットの3フェーズで動作する。etcdやCockroachDBが採用している。",
+        "domain": "data-store",
+        "keywords": [
+          "コンセンサス",
+          "リーダー選出",
+          "ログレプリケーション",
+          "分散システム",
+          "etcd"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Paxos",
+    "reading": "ぱくそす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Lamportが提案した分散コンセンサスアルゴリズムの古典的基盤。Proposer・Acceptor・Learnerの役割でフォールトトレラントな合意形成を実現するが、実装の複雑さからRaftへ移行するケースも多い。",
+        "domain": "data-store",
+        "keywords": [
+          "コンセンサス",
+          "分散システム",
+          "フォールトトレランス",
+          "合意",
+          "Lamport"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ゴシッププロトコル",
+    "reading": "ごしっぷぷろとこる",
+    "aliases": [
+      "Gossip Protocol",
+      "Epidemic Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "各ノードがランダムに隣接ノードへ情報を伝搬し続けることでクラスタ全体に情報を広める分散通信プロトコル。Cassandraのノード死活管理やリングメンバーシップ管理に使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "分散システム",
+          "Cassandra",
+          "メンバーシップ",
+          "障害検出",
+          "P2P"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "分散ハッシュテーブル",
+    "reading": "ぶんさんはっしゅてーぶる",
+    "aliases": [
+      "DHT",
+      "Distributed Hash Table"
+    ],
+    "senses": [
+      {
+        "definition": "キーを複数ノードに分散して格納するP2P的なデータ構造。ルックアップをO(log N)で実現し、ノード追加・削除に対して最小限のキー移動で対応できる。Chord・Kademliaが代表実装。",
+        "domain": "data-store",
+        "keywords": [
+          "P2P",
+          "分散",
+          "ハッシュ",
+          "コンシステントハッシング",
+          "スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンシステントハッシング",
+    "reading": "こんしすてんとはっしんぐ",
+    "aliases": [
+      "Consistent Hashing"
+    ],
+    "senses": [
+      {
+        "definition": "ハッシュリング上にノードとキーを配置し、ノード増減時に再分散するキーを最小限に抑える手法。分散キャッシュや分散DBのデータ配置で広く使われる。仮想ノードと組み合わせて負荷均等化を図る。",
+        "domain": "data-store",
+        "keywords": [
+          "ハッシュリング",
+          "分散",
+          "ロードバランシング",
+          "仮想ノード",
+          "キャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "仮想ノード",
+    "reading": "かそうのーど",
+    "aliases": [
+      "Virtual Node",
+      "vnode"
+    ],
+    "senses": [
+      {
+        "definition": "コンシステントハッシングで各物理ノードをハッシュリング上の複数の仮想的な位置にマッピングする手法。ノード間の負荷均等化とノード追加・削除時のデータ再分散の平準化に役立つ。",
+        "domain": "data-store",
+        "keywords": [
+          "コンシステントハッシング",
+          "Cassandra",
+          "負荷均等",
+          "分散",
+          "ハッシュリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レプリカセット",
+    "reading": "れぷりかせっと",
+    "aliases": [
+      "Replica Set"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBにおける高可用性構成の単位。プライマリ1台と複数のセカンダリからなり、プライマリ障害時にセカンダリの中から自動的に新プライマリを選出するフェイルオーバー機能を持つ。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "高可用性",
+          "フェイルオーバー",
+          "レプリケーション",
+          "プライマリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パーティションキー",
+    "reading": "ぱーてぃしょんきー",
+    "aliases": [
+      "Partition Key"
+    ],
+    "senses": [
+      {
+        "definition": "分散DBでデータをどのノード（パーティション）に配置するかを決定するキー。CassandraやDynamoDBでは値のハッシュ値でデータ配置が決まり、選定次第でホットスポットが生じるため慎重な設計が必要。",
+        "domain": "data-store",
+        "keywords": [
+          "Cassandra",
+          "DynamoDB",
+          "分散",
+          "ハッシュ",
+          "ホットスポット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ソートキー",
+    "reading": "そーときー",
+    "aliases": [
+      "Sort Key",
+      "Range Key",
+      "クラスタリングキー"
+    ],
+    "senses": [
+      {
+        "definition": "DynamoDBやCassandraでパーティション内のデータ順序を決定するキー。同一パーティションキー内でのレンジクエリを効率化し、複合プライマリキーの第2要素として定義される。",
+        "domain": "data-store",
+        "keywords": [
+          "DynamoDB",
+          "Cassandra",
+          "レンジクエリ",
+          "クラスタリング",
+          "プライマリキー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セカンダリインデックス(NoSQL)",
+    "reading": "せかんだりいんでっくす",
+    "aliases": [
+      "Secondary Index",
+      "GSI",
+      "LSI"
+    ],
+    "senses": [
+      {
+        "definition": "プライマリキー以外の属性でのクエリを可能にするNoSQLデータベースのインデックス。DynamoDBのGSI/LSI、CassandraのSAIなどがあり、書き込みコストとのトレードオフを考慮して設計する。",
+        "domain": "data-store",
+        "keywords": [
+          "DynamoDB",
+          "Cassandra",
+          "クエリ",
+          "GSI",
+          "LSI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "埋め込みドキュメント",
+    "reading": "うめこみどきゅめんと",
+    "aliases": [
+      "Embedded Document",
+      "サブドキュメント"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBなどのドキュメントDBで、関連データを別コレクションに分けず親ドキュメントの中に入れ子で格納するパターン。単一ドキュメント取得で完結するためJOIN不要だが、ドキュメントサイズ上限に注意が必要。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "ドキュメントDB",
+          "入れ子",
+          "非正規化",
+          "設計パターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "参照パターン",
+    "reading": "さんしょうぱたーん",
+    "aliases": [
+      "Reference Pattern",
+      "ドキュメント参照"
+    ],
+    "senses": [
+      {
+        "definition": "ドキュメントDBで関連データのIDのみを格納し、必要時にアプリケーション側でルックアップして結合する設計手法。埋め込みに比べデータ量は増えないが、複数回のクエリが必要になる。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "ドキュメントDB",
+          "正規化",
+          "ID参照",
+          "設計パターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Aggregation Pipeline",
+    "reading": "あぐりげーしょんぱいぷらいん",
+    "aliases": [
+      "集計パイプライン"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBで複数のステージ（$match・$group・$lookup等）を連結してドキュメントを段階的に変換・集計する処理フレームワーク。SQLのGROUP BY・JOINに相当する操作を宣言的に記述できる。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "集計",
+          "$match",
+          "$group",
+          "$lookup"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "MapReduce",
+    "reading": "まっぷりでゅーす",
+    "aliases": [
+      "Map-Reduce"
+    ],
+    "senses": [
+      {
+        "definition": "大量データを分散処理する計算モデル。Map関数でデータを中間キーバリューに変換し、Reduce関数で集約する。Hadoopの基盤として普及し、MongoDBも初期から集計手段として採用していたが現在はAggregation Pipelineが主流。",
+        "domain": "data-store",
+        "keywords": [
+          "分散処理",
+          "Hadoop",
+          "集計",
+          "Map",
+          "Reduce"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "全文検索エンジン",
+    "reading": "ぜんぶんけんさくえんじん",
+    "aliases": [
+      "Full-Text Search Engine"
+    ],
+    "senses": [
+      {
+        "definition": "テキストの全内容に対してキーワード検索を行うソフトウェア。形態素解析・転置インデックス・TF-IDFなどの技術でドキュメントの関連度をスコアリングし、高速な検索結果を返す。",
+        "domain": "data-store",
+        "keywords": [
+          "検索",
+          "転置インデックス",
+          "TF-IDF",
+          "形態素解析",
+          "Elasticsearch"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Elasticsearch",
+    "reading": "えらすてぃっくさーち",
+    "aliases": [
+      "ES"
+    ],
+    "senses": [
+      {
+        "definition": "Apache Luceneを基盤としたオープンソースの分散全文検索・分析エンジン。RESTful APIで操作し、ログ分析（ELKスタック）・サイト内検索・ビジネスインテリジェンスに幅広く利用される。",
+        "domain": "data-store",
+        "keywords": [
+          "全文検索",
+          "Lucene",
+          "分散",
+          "REST",
+          "ログ分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Solr",
+    "reading": "そーらー",
+    "aliases": [
+      "Apache Solr"
+    ],
+    "senses": [
+      {
+        "definition": "Apache Luceneを利用したオープンソースの全文検索プラットフォーム。ファセット検索・ハイライト・リッチドキュメント解析に強く、企業向けコンテンツ検索基盤として長年使われてきた。",
+        "domain": "data-store",
+        "keywords": [
+          "全文検索",
+          "Lucene",
+          "ファセット",
+          "Apache",
+          "企業向け"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "転置インデックス",
+    "reading": "てんちいんでっくす",
+    "aliases": [
+      "Inverted Index"
+    ],
+    "senses": [
+      {
+        "definition": "全文検索エンジンの核となるデータ構造。単語（トークン）をキー、その単語を含むドキュメントIDのリストを値として格納し、キーワード検索をO(1)に近い速度で実現する。",
+        "domain": "data-store",
+        "keywords": [
+          "全文検索",
+          "インデックス",
+          "Elasticsearch",
+          "Lucene",
+          "トークン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アナライザー",
+    "reading": "あならいざー",
+    "aliases": [
+      "analyzer"
+    ],
+    "senses": [
+      {
+        "definition": "Elasticsearchなどの検索エンジンでテキストをインデックス・クエリ可能なトークン列に変換するコンポーネント。Character Filter・Tokenizer・Token Filterの3段階で構成される。",
+        "domain": "data-store",
+        "keywords": [
+          "Elasticsearch",
+          "トークン化",
+          "形態素解析",
+          "全文検索",
+          "テキスト処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トークナイザー",
+    "reading": "とーくんないざー",
+    "aliases": [
+      "tokenizer"
+    ],
+    "senses": [
+      {
+        "definition": "テキストをトークン（単語や文字）のシーケンスに分割するコンポーネント。アナライザーの中核として機能し、空白分割・形態素解析・N-gram分割など様々な戦略がある。",
+        "domain": "data-store",
+        "keywords": [
+          "テキスト処理",
+          "形態素解析",
+          "N-gram",
+          "Elasticsearch",
+          "アナライザー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スコアリング",
+    "reading": "すこありんぐ",
+    "aliases": [
+      "Relevance Scoring",
+      "関連度スコアリング"
+    ],
+    "senses": [
+      {
+        "definition": "全文検索エンジンがクエリとドキュメントの関連度を数値化するプロセス。TF-IDF・BM25などのアルゴリズムを用い、スコアの高い順に検索結果を返す。ブーストやカスタムスコアで調整可能。",
+        "domain": "data-store",
+        "keywords": [
+          "TF-IDF",
+          "BM25",
+          "全文検索",
+          "関連度",
+          "ランキング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ファセット検索",
+    "reading": "ふぁせっとけんさく",
+    "aliases": [
+      "Faceted Search",
+      "ファセットナビゲーション"
+    ],
+    "senses": [
+      {
+        "definition": "検索結果をカテゴリ・価格帯・ブランドなどの属性（ファセット）で絞り込む機能。ECサイトや求人サービスのサイドバーフィルターとして広く使われ、Elasticsearchのアグリゲーション機能で実装する。",
+        "domain": "data-store",
+        "keywords": [
+          "検索UI",
+          "Elasticsearch",
+          "絞り込み",
+          "集計",
+          "EC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "近傍検索",
+    "reading": "きんぼうけんさく",
+    "aliases": [
+      "Nearest Neighbor Search",
+      "ANN",
+      "近似最近傍探索"
+    ],
+    "senses": [
+      {
+        "definition": "高次元空間で与えられたクエリベクトルに最も近いベクトルを見つける検索手法。ベクトルデータベースの中核機能であり、HNSWやIVF-PQなどのANNアルゴリズムで大規模データでも高速に処理する。",
+        "domain": "data-store",
+        "keywords": [
+          "ベクトルDB",
+          "HNSW",
+          "ANN",
+          "意味検索",
+          "埋め込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CouchDB",
+    "reading": "かうちでーびー",
+    "aliases": [
+      "Apache CouchDB"
+    ],
+    "senses": [
+      {
+        "definition": "JSONドキュメントをHTTP/REST APIで操作するオープンソースのドキュメントDB。MapReduceベースのビュー定義と、ピアツーピアでの双方向レプリケーション（マルチマスター）が特徴。",
+        "domain": "data-store",
+        "keywords": [
+          "ドキュメントDB",
+          "REST",
+          "マルチマスター",
+          "JSON",
+          "MapReduce"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RocksDB",
+    "reading": "ろっくすでーびー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "FacebookがLevelDBをフォークしたLSMツリーベースの組み込みキーバリューストア。高い書き込みスループット・圧縮・カラムファミリーをサポートし、TiKV・CockroachDB・MyRocksなど多くの分散DBの内部ストレージエンジンとして採用される。",
+        "domain": "data-store",
+        "keywords": [
+          "LSMツリー",
+          "KVS",
+          "組み込みDB",
+          "書き込み最適化",
+          "ストレージエンジン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LevelDB",
+    "reading": "れべるでーびー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GoogleがC++で開発したLSMツリーベースの組み込みキーバリューライブラリ。シーケンシャルな書き込みに最適化されており、ChromeのIndexedDB実装やビットコインノードの内部ストレージとして使われてきた。",
+        "domain": "data-store",
+        "keywords": [
+          "LSMツリー",
+          "KVS",
+          "組み込み",
+          "Google",
+          "ストレージエンジン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LMDB",
+    "reading": "えるえむでーびー",
+    "aliases": [
+      "Lightning Memory-Mapped Database"
+    ],
+    "senses": [
+      {
+        "definition": "メモリマップドファイルを用いたB+ツリーベースのMVCC対応組み込みキーバリューストア。読み取りに優れたゼロコピー設計で、OpenLDAPやMDB-LOADERなどに採用される。",
+        "domain": "data-store",
+        "keywords": [
+          "MVCC",
+          "メモリマップ",
+          "B+ツリー",
+          "KVS",
+          "組み込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LSMツリー",
+    "reading": "えるえすえむつりー",
+    "aliases": [
+      "LSM-Tree",
+      "Log-Structured Merge-Tree"
+    ],
+    "senses": [
+      {
+        "definition": "書き込みをまずメモリのMemtableに受け、一定量でSSTファイルとしてディスクにフラッシュし、バックグラウンドでマージ（Compaction）する書き込み最適化データ構造。RocksDB・Cassandraが採用する。",
+        "domain": "data-store",
+        "keywords": [
+          "書き込み最適化",
+          "Compaction",
+          "Memtable",
+          "SSTable",
+          "RocksDB"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SSTable",
+    "reading": "えすえすてーぶる",
+    "aliases": [
+      "Sorted String Table"
+    ],
+    "senses": [
+      {
+        "definition": "LSMツリーにおいてキーが昇順にソートされたイミュータブルなディスクファイル。効率的なバイナリサーチとブルームフィルタによる存在確認を組み合わせ、読み取りを最適化する。",
+        "domain": "data-store",
+        "keywords": [
+          "LSMツリー",
+          "イミュータブル",
+          "ソート",
+          "RocksDB",
+          "Cassandra"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ブルームフィルタ",
+    "reading": "ぶるーむふぃるた",
+    "aliases": [
+      "Bloom Filter"
+    ],
+    "senses": [
+      {
+        "definition": "あるキーがデータセットに存在しないことを高速に判定できる確率的データ構造。偽陽性（誤ってありと判定）は起きるが偽陰性はなく、LSMツリーの不要なディスクアクセス削減に広く使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "確率的データ構造",
+          "LSMツリー",
+          "偽陽性",
+          "読み取り最適化",
+          "Cassandra"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HBase",
+    "reading": "えいちべーす",
+    "aliases": [
+      "Apache HBase"
+    ],
+    "senses": [
+      {
+        "definition": "HadoopのHDFS上に構築されたオープンソースの分散ワイドカラムストア。BigTableの設計を実装し、数十億行・数百万列規模のスパースなデータを格納・検索できる。",
+        "domain": "data-store",
+        "keywords": [
+          "Hadoop",
+          "BigTable",
+          "ワイドカラム",
+          "分散",
+          "HDFSs"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タイムスタンプ順序付け",
+    "reading": "たいむすたんぷじゅんじょづけ",
+    "aliases": [
+      "Timestamp Ordering",
+      "TO"
+    ],
+    "senses": [
+      {
+        "definition": "各トランザクションに開始時刻をタイムスタンプとして付与し、その順序にしたがって直列化可能性を保証する同時実行制御方式。スプーラブルなスケジュールを物理的時刻またはロジカルカウンタで管理する。",
+        "domain": "data-store",
+        "keywords": [
+          "同時実行制御",
+          "タイムスタンプ",
+          "直列化",
+          "分散DB",
+          "トランザクション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ハイブリッド論理クロック",
+    "reading": "はいぶりっどろんりくろっく",
+    "aliases": [
+      "HLC",
+      "Hybrid Logical Clock"
+    ],
+    "senses": [
+      {
+        "definition": "物理クロックと論理クロック（Lamportタイムスタンプ）を組み合わせた分散時刻管理方式。物理時刻の単調増加性を維持しつつ因果関係を捕捉でき、CockroachDBやYugaByteDBが採用する。",
+        "domain": "data-store",
+        "keywords": [
+          "分散時刻",
+          "Lamport",
+          "因果整合性",
+          "CockroachDB",
+          "クロック同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dynamo論文",
+    "reading": "だいなもろんぶん",
+    "aliases": [
+      "Amazon Dynamo Paper",
+      "Dynamo Paper"
+    ],
+    "senses": [
+      {
+        "definition": "2007年AmazonがSOSPで発表したキーバリューストアの設計論文。コンシステントハッシング・ベクタークロック・ゴシップ・Merkleツリーを組み合わせた高可用設計を示し、多くのNoSQLに影響を与えた。",
+        "domain": "data-store",
+        "keywords": [
+          "NoSQL",
+          "ベクタークロック",
+          "コンシステントハッシング",
+          "高可用性",
+          "Cassandra"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ベクタークロック",
+    "reading": "べくたーくろっく",
+    "aliases": [
+      "Vector Clock"
+    ],
+    "senses": [
+      {
+        "definition": "分散システムで各ノードの論理時刻をベクトルとして管理し、イベント間の因果関係（hapend-before）を追跡するメカニズム。Dynamo論文で採用され、競合検出と解消に使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "分散システム",
+          "因果関係",
+          "Lamport",
+          "競合検出",
+          "Dynamo"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Merkleツリー",
+    "reading": "まーくるつりー",
+    "aliases": [
+      "Merkle Tree",
+      "ハッシュツリー"
+    ],
+    "senses": [
+      {
+        "definition": "各リーフがデータのハッシュで、内部ノードは子ノードのハッシュのハッシュであるツリー構造。分散DBのレプリカ間差分検出・ブロックチェーンのトランザクション検証・Gitのオブジェクト管理に利用される。",
+        "domain": "data-store",
+        "keywords": [
+          "ハッシュ",
+          "整合性検証",
+          "Cassandra",
+          "ブロックチェーン",
+          "レプリケーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "チェンジデータキャプチャ",
+    "reading": "ちぇんじでーたきゃぷちゃ",
+    "aliases": [
+      "Change Data Capture"
+    ],
+    "senses": [
+      {
+        "definition": "データベースのレコード変更（INSERT/UPDATE/DELETE）をリアルタイムに捕捉してストリームとして配信する仕組み。デバウジングなしにイベント駆動アーキテクチャ・ETL・サーチインデックス同期に利用される。",
+        "domain": "data-store",
+        "keywords": [
+          "リアルタイム",
+          "Kafka",
+          "Debezium",
+          "ETL",
+          "イベント駆動"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "シングルテーブル設計",
+    "reading": "しんぐるてーぶるせっけい",
+    "aliases": [
+      "Single Table Design",
+      "STD"
+    ],
+    "senses": [
+      {
+        "definition": "DynamoDBで複数のエンティティタイプを1つのテーブルにまとめて格納するベストプラクティス。アクセスパターンを事前定義し、パーティションキー・ソートキーを複合的に設計してJOINなしで複数エンティティを効率よく取得する。",
+        "domain": "data-store",
+        "keywords": [
+          "DynamoDB",
+          "アクセスパターン",
+          "設計",
+          "NoSQL",
+          "パーティションキー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アクセスパターン駆動設計",
+    "reading": "あくせすぱたーんくどうせっけい",
+    "aliases": [
+      "Access Pattern Driven Design",
+      "アクセスパターン設計"
+    ],
+    "senses": [
+      {
+        "definition": "NoSQLデータベースではクエリ要件を先に定義し、そのアクセスパターンに最適化されたデータモデルを設計するアプローチ。RDBの正規化から始める手法とは逆の考え方。",
+        "domain": "data-store",
+        "keywords": [
+          "NoSQL",
+          "DynamoDB",
+          "データモデリング",
+          "クエリ最適化",
+          "設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Prometheus",
+    "reading": "ぷろめてうす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "SoundCloudが開発したオープンソースの時系列メトリクス収集・監視システム。Pull型のスクレイピングとPromQL（Prometheus Query Language）によるクエリ、Alertmanagerとの連携で多くのサービスの監視基盤として採用される。",
+        "domain": "data-store",
+        "keywords": [
+          "時系列",
+          "メトリクス",
+          "監視",
+          "PromQL",
+          "アラート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "QdrantDB",
+    "reading": "くどらんとでーびー",
+    "aliases": [
+      "Qdrant"
+    ],
+    "senses": [
+      {
+        "definition": "Rustで実装されたオープンソースのベクトル検索エンジン。Payload（メタデータ）フィルタリングと高精度なHNSWインデックスを組み合わせたフィルタリング付き近傍検索が強みで、RAGシステムのバックエンドとして人気が高い。",
+        "domain": "data-store",
+        "keywords": [
+          "ベクトルDB",
+          "HNSW",
+          "Rust",
+          "フィルタリング",
+          "RAG"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Milvus",
+    "reading": "みるばす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "スケーラビリティに優れたオープンソースのベクトルデータベース。SaaS型Zilliz Cloudの基盤でもあり、IVF・HNSW・DiskANNなど多様なインデックスとGPUアクセラレーションをサポートする。",
+        "domain": "data-store",
+        "keywords": [
+          "ベクトルDB",
+          "スケール",
+          "HNSW",
+          "GPU",
+          "オープンソース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pgvector",
+    "reading": "ぴーじーべくたー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "PostgreSQLに対してベクトル型とL2・内積・コサイン類似度検索を追加するオープンソース拡張。既存のPostgreSQLインフラに近傍検索機能を追加でき、専用ベクトルDBへの移行コストをかけずにRAGを構築できる。",
+        "domain": "data-store",
+        "keywords": [
+          "PostgreSQL",
+          "ベクトル",
+          "近傍検索",
+          "RAG",
+          "拡張"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HNSWアルゴリズム",
+    "reading": "えいちえぬえすだぶりゅーあるごりずむ",
+    "aliases": [
+      "HNSW",
+      "Hierarchical Navigable Small World"
+    ],
+    "senses": [
+      {
+        "definition": "複数の層からなるグラフを構築し、上位層から下位層へグリーディに探索することで近似最近傍検索を高速化するアルゴリズム。高い再現率と低レイテンシを両立し、ベクトルDBで標準的なインデックス手法となっている。",
+        "domain": "data-store",
+        "keywords": [
+          "ANN",
+          "グラフ",
+          "ベクトルDB",
+          "インデックス",
+          "近傍検索"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "IVF-PQ",
+    "reading": "あいぶいえふぴーきゅー",
+    "aliases": [
+      "Inverted File with Product Quantization"
+    ],
+    "senses": [
+      {
+        "definition": "転置ファイル（IVF）でベクトルをクラスタリングし、積量子化（PQ）でベクトルを圧縮することで大規模ベクトルの近似最近傍探索を省メモリ・高速に実現するインデックス手法。",
+        "domain": "data-store",
+        "keywords": [
+          "ANN",
+          "量子化",
+          "ベクトルDB",
+          "クラスタリング",
+          "インデックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "グラフクエリ言語",
+    "reading": "ぐらふくえりげんご",
+    "aliases": [
+      "Graph Query Language",
+      "GQL"
+    ],
+    "senses": [
+      {
+        "definition": "グラフデータベースを操作するための問い合わせ言語の総称。ISO/IEC標準化されたGQL・CypherはNeo4jで採用・GremlinはAmazon Neptuneなどで使われ、ノードやエッジのトラバーサルを宣言的に記述する。",
+        "domain": "data-store",
+        "keywords": [
+          "グラフDB",
+          "Cypher",
+          "Gremlin",
+          "Neo4j",
+          "トラバーサル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cypher",
+    "reading": "さいふぁー",
+    "aliases": [
+      "Cypher Query Language",
+      "openCypher"
+    ],
+    "senses": [
+      {
+        "definition": "Neo4jが開発したグラフデータベース用のパターンマッチングクエリ言語。ASCII-artでノードとリレーションシップのパターンを直感的に表現でき、openCypherとしてオープン化されている。",
+        "domain": "data-store",
+        "keywords": [
+          "Neo4j",
+          "グラフDB",
+          "パターンマッチング",
+          "openCypher",
+          "クエリ言語"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トゥームストーン",
+    "reading": "とぅーむすとーん",
+    "aliases": [
+      "Tombstone",
+      "削除マーカー"
+    ],
+    "senses": [
+      {
+        "definition": "LSMツリーやCassandraで論理削除を表すための特殊マーカーレコード。物理的な削除を即時行わずトゥームストーンを書き込み、Compaction時に古い版と一緒に実際に消去する。多数のトゥームストーンは読み取りコストを増加させる。",
+        "domain": "data-store",
+        "keywords": [
+          "LSMツリー",
+          "Cassandra",
+          "論理削除",
+          "Compaction",
+          "RocksDB"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "書き込みオペレーション単位",
+    "reading": "かきこみおぺれーしょんたんい",
+    "aliases": [
+      "WCU",
+      "Write Capacity Unit"
+    ],
+    "senses": [
+      {
+        "definition": "DynamoDBで1秒あたりの書き込みスループットを表す単位。1WCUは最大1KBのアイテムを1秒に1回書き込む能力を表し、プロビジョンドモードでの課金・スロットリング管理に使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "DynamoDB",
+          "スループット",
+          "課金",
+          "キャパシティ",
+          "スロットリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "読み込みオペレーション単位",
+    "reading": "よみこみおぺれーしょんたんい",
+    "aliases": [
+      "RCU",
+      "Read Capacity Unit"
+    ],
+    "senses": [
+      {
+        "definition": "DynamoDBで1秒あたりの読み取りスループットを表す単位。1RCUは強整合読み取りで最大4KBのアイテムを1秒に1回読み込む能力を表す。最終整合性読み取りは半分のRCUで実行できる。",
+        "domain": "data-store",
+        "keywords": [
+          "DynamoDB",
+          "スループット",
+          "課金",
+          "キャパシティ",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DynamoDB Streams",
+    "reading": "だいなもでーびーすとりーむす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DynamoDBテーブルの変更（書き込み・更新・削除）を順序付きストリームとして配信するCDC機能。AWS LambdaやKinesisと連携してイベント駆動処理・クロスリージョンレプリケーション・変更通知を実装できる。",
+        "domain": "data-store",
+        "keywords": [
+          "CDC",
+          "DynamoDB",
+          "Lambda",
+          "Kinesis",
+          "イベント駆動"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CockroachDB",
+    "reading": "こっくろーちでーびー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "PostgreSQL互換の分散SQLデータベース。Raftコンセンサスで強整合性を保ちながらシャーディングによる水平スケールを実現し、マルチリージョン配置・自動フェイルオーバーで高可用性を確保する。",
+        "domain": "data-store",
+        "keywords": [
+          "分散DB",
+          "PostgreSQL",
+          "Raft",
+          "シャーディング",
+          "SQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "YugabyteDB",
+    "reading": "ゆがばいとでーびー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "PostgreSQL互換かつCassandra互換のオープンソース分散NewSQLデータベース。DocDBストレージエンジン上でYSQL（PostgreSQL互換）とYCQL（CQL互換）の両APIを提供し、分散ACID対応を実現する。",
+        "domain": "data-store",
+        "keywords": [
+          "NewSQL",
+          "PostgreSQL",
+          "Cassandra",
+          "分散",
+          "ACID"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TiDB",
+    "reading": "たいあいでーびー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "PingCAPが開発したオープンソースのHTAP対応分散NewSQLデータベース。TiKV（Raft対応KVストレージ）とTiFlash（カラム型）を組み合わせ、MySQL互換APIでOLTPとOLAPを同一クラスタで処理する。",
+        "domain": "data-store",
+        "keywords": [
+          "NewSQL",
+          "HTAP",
+          "MySQL",
+          "TiKV",
+          "分散"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NewSQL",
+    "reading": "にゅーえすきゅーえる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "RDBのACIDトランザクションとNoSQLの水平スケール可能性を両立させることを目指したデータベースカテゴリ。Google Spanner・CockroachDB・TiDBなどが代表例で、分散SQLとも呼ばれる。",
+        "domain": "data-store",
+        "keywords": [
+          "分散DB",
+          "SQL",
+          "ACID",
+          "スケール",
+          "NoSQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "整合性レベル",
+    "reading": "せいごうせいれべる",
+    "aliases": [
+      "Consistency Level",
+      "Consistency Tuning"
+    ],
+    "senses": [
+      {
+        "definition": "分散DBで読み書き操作ごとに指定できる整合性の強さの設定。CassandraではONE・QUORUM・ALL、CosmosDBでは5段階（Strong〜Eventual）などがあり、レイテンシ・可用性とのトレードオフを調整する。",
+        "domain": "data-store",
+        "keywords": [
+          "整合性",
+          "Cassandra",
+          "CosmosDB",
+          "レイテンシ",
+          "可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "読み修復",
+    "reading": "よみしゅうふく",
+    "aliases": [
+      "Read Repair"
+    ],
+    "senses": [
+      {
+        "definition": "分散DBで読み取り時にレプリカ間の不整合を検出し、最新版で他レプリカを修復するメカニズム。Cassandraのデフォルト機能であり、バックグラウンドで整合性を自動的に回復する。",
+        "domain": "data-store",
+        "keywords": [
+          "Cassandra",
+          "整合性",
+          "レプリカ",
+          "修復",
+          "分散"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アンチエントロピー",
+    "reading": "あんちえんとろぴー",
+    "aliases": [
+      "Anti-Entropy",
+      "Anti-Entropy Repair"
+    ],
+    "senses": [
+      {
+        "definition": "Merkleツリーを使ってレプリカ間の差分を定期的に検出・同期するCassandraの修復機能。Read Repairを補完し、長期間アクセスのないデータも整合性を保つ。",
+        "domain": "data-store",
+        "keywords": [
+          "Cassandra",
+          "Merkleツリー",
+          "整合性",
+          "レプリカ",
+          "修復"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "BM25",
+    "reading": "びーえむにじゅうご",
+    "aliases": [
+      "Best Match 25",
+      "Okapi BM25"
+    ],
+    "senses": [
+      {
+        "definition": "TF-IDFを改良した確率的全文検索ランキングアルゴリズム。単語頻度の飽和と文書長の正規化を組み込み、Elasticsearchのデフォルトスコアリング関数として採用されている。",
+        "domain": "data-store",
+        "keywords": [
+          "全文検索",
+          "TF-IDF",
+          "スコアリング",
+          "Elasticsearch",
+          "ランキング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スパースベクトル",
+    "reading": "すぱーすべくとる",
+    "aliases": [
+      "Sparse Vector"
+    ],
+    "senses": [
+      {
+        "definition": "ほとんどの次元の値がゼロで少数の次元だけに値を持つベクトル。BM25やTF-IDFによる語彙サイズ次元のキーワード表現が典型例で、ハイブリッド検索でデンスベクトルと組み合わせることが多い。",
+        "domain": "data-store",
+        "keywords": [
+          "検索",
+          "BM25",
+          "TF-IDF",
+          "ハイブリッド検索",
+          "キーワード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デンスベクトル",
+    "reading": "でんすべくとる",
+    "aliases": [
+      "Dense Vector"
+    ],
+    "senses": [
+      {
+        "definition": "ほとんどの次元に値を持つ低次元（数百〜数千次元）の埋め込みベクトル。Transformerモデルが生成し意味情報を圧縮して表現する。スパースベクトルとは対概念でセマンティック検索の基盤。",
+        "domain": "data-store",
+        "keywords": [
+          "埋め込み",
+          "Transformer",
+          "セマンティック検索",
+          "ベクトルDB",
+          "LLM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キャッシュウォームアップ",
+    "reading": "きゃっしゅうぉーむあっぷ",
+    "aliases": [
+      "Cache Warm-up",
+      "Cache Preloading"
+    ],
+    "senses": [
+      {
+        "definition": "キャッシュが空の状態（コールドスタート）から初期のキャッシュミス多発を防ぐため、事前に頻繁にアクセスされるデータをキャッシュに投入しておく戦略。Redisでのバッチ事前ロードなどで実装する。",
+        "domain": "data-store",
+        "keywords": [
+          "Redis",
+          "キャッシュ",
+          "コールドスタート",
+          "パフォーマンス",
+          "プリロード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キャッシュ貫通",
+    "reading": "きゃっしゅかんつう",
+    "aliases": [
+      "Cache Penetration",
+      "キャッシュペネトレーション"
+    ],
+    "senses": [
+      {
+        "definition": "存在しないキーへのリクエストがキャッシュミスしてDB直撃を繰り返す攻撃的アクセスパターン。ブルームフィルタで存在確認を事前に行うか、nullをキャッシュすることで防御する。",
+        "domain": "data-store",
+        "keywords": [
+          "Redis",
+          "キャッシュ",
+          "ブルームフィルタ",
+          "セキュリティ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キャッシュ雪崩",
+    "reading": "きゃっしゅなだれ",
+    "aliases": [
+      "Cache Avalanche",
+      "キャッシュアバランシェ"
+    ],
+    "senses": [
+      {
+        "definition": "大量のキャッシュが同時に期限切れになりDBへのリクエストが殺到する障害パターン。TTLをランダムにばらつかせる・ミューテックスロックで同時再構築を防ぐなどの対策をとる。",
+        "domain": "data-store",
+        "keywords": [
+          "Redis",
+          "キャッシュ",
+          "TTL",
+          "障害",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Redis Cluster",
+    "reading": "れでぃすくらすたー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Redisのネイティブシャーディングソリューション。16384スロットをノード間で分割し、ゴシッププロトコルでクラスタ状態を管理する。キーはスロットにハッシュされ、マルチキー操作は同一スロット内のキーのみサポート。",
+        "domain": "data-store",
+        "keywords": [
+          "Redis",
+          "シャーディング",
+          "スロット",
+          "高可用性",
+          "クラスタ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Redis Sentinel",
+    "reading": "れでぃすせんてぃねる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Redisの監視・自動フェイルオーバー・設定管理を担うプロセス群。複数のSentinelが投票（クォーラム）によりプライマリ障害を検出し、自動的にレプリカをプライマリへ昇格させる高可用性ソリューション。",
+        "domain": "data-store",
+        "keywords": [
+          "Redis",
+          "高可用性",
+          "フェイルオーバー",
+          "クォーラム",
+          "監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フルテキストインデックス",
+    "reading": "ふるてきすといんでっくす",
+    "aliases": [
+      "Full-Text Index",
+      "FULLTEXT Index"
+    ],
+    "senses": [
+      {
+        "definition": "テキストカラム全体を対象とした全文検索を高速化するインデックス。MySQLやPostgreSQLでも組み込みの全文検索インデックスを提供するが、専用の全文検索エンジン（Elasticsearch等）に比べ機能は限定的。",
+        "domain": "data-store",
+        "keywords": [
+          "全文検索",
+          "MySQL",
+          "PostgreSQL",
+          "インデックス",
+          "テキスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ドキュメントスコープトランザクション",
+    "reading": "どきゅめんとすこーぷとらんざくしょん",
+    "aliases": [
+      "Single-Document Transaction",
+      "ドキュメント内アトミック操作"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBで単一ドキュメントへの操作はネイティブにアトミックが保証される性質。埋め込みドキュメントをうまく使うことで複数コレクションをまたぐトランザクションを避け、パフォーマンスを維持できる設計指針。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "アトミック",
+          "トランザクション",
+          "埋め込み",
+          "設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マルチドキュメントトランザクション",
+    "reading": "まるちどきゅめんととらんざくしょん",
+    "aliases": [
+      "Multi-Document Transaction"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBがv4.0から提供する複数コレクション・複数ドキュメントをまたぐACIDトランザクション機能。リレーショナルDBと同様のセマンティクスを提供するが、パフォーマンスオーバーヘッドがあるため使用は最小限にとどめるべきとされる。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "ACID",
+          "トランザクション",
+          "複数コレクション",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "$lookup",
+    "reading": "るっくあっぷ",
+    "aliases": [
+      "MongoDB $lookup",
+      "左外部結合"
+    ],
+    "senses": [
+      {
+        "definition": "MongoDBのAggregation Pipelineで別コレクションのドキュメントを結合するステージ。SQLのLEFT OUTER JOINに相当し、埋め込みドキュメントで対応できないリレーション取得に使用するが、パフォーマンスへの影響を考慮する必要がある。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "Aggregation",
+          "JOIN",
+          "コレクション",
+          "クエリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インデックスヒント",
+    "reading": "いんでっくすひんと",
+    "aliases": [
+      "Index Hint",
+      "Query Hint"
+    ],
+    "senses": [
+      {
+        "definition": "クエリオプティマイザが選択するインデックスをユーザーが明示的に指定するクエリ修飾子。MongoDBの`hint()`やSQLの`USE INDEX`が該当し、オプティマイザの選択が最適でない場合に手動で最適なインデックスを指示する。",
+        "domain": "data-store",
+        "keywords": [
+          "MongoDB",
+          "クエリ最適化",
+          "インデックス",
+          "オプティマイザ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インメモリデータグリッド",
+    "reading": "いんめもりでーたぐりっど",
+    "aliases": [
+      "IMDG",
+      "In-Memory Data Grid"
+    ],
+    "senses": [
+      {
+        "definition": "複数ノードのメモリ上にデータを分散して格納し、高速なデータアクセスと計算を提供するミドルウェア。Hazelcast・Apache Igniteが代表例で、キャッシュとしての用途に加え分散計算やイベント処理にも使われる。",
+        "domain": "data-store",
+        "keywords": [
+          "インメモリ",
+          "分散",
+          "Hazelcast",
+          "Ignite",
+          "キャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OLAPキューブ",
+    "reading": "おらっぷきゅーぶ",
+    "aliases": [
+      "OLAP Cube",
+      "多次元OLAP"
+    ],
+    "senses": [
+      {
+        "definition": "多次元の集計済みデータを事前計算して格納するデータ構造。ディメンション（時間・地域・製品）とメジャー（売上・数量）の組み合わせで定義され、BI・DWHでのスライス・ダイス・ドリルダウン操作を高速化する。",
+        "domain": "data-store",
+        "keywords": [
+          "OLAP",
+          "DWH",
+          "BI",
+          "多次元",
+          "集計"
+        ]
+      }
+    ]
+  }
+]
