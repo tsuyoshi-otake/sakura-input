@@ -92,8 +92,8 @@ fn digit_rows_replace_the_numeral_edge_and_say_nothing_to_the_user() {
             (NUMERAL_CLASS, NUMERAL_CLASS),
             "digit row leaves the numeral class: {context}"
         );
-        // The annotation column is shown to the user as a candidate note, and a
-        // digit needs no gloss. This emptiness is deliberate, not an omission.
+        // The annotation column is shown to the user as a candidate note.
+        // This emptiness is deliberate, not an omission.
         assert!(
             entry.annotation.is_empty(),
             "digit row carries a user-visible note: {context}"
@@ -232,6 +232,17 @@ fn business_compounds_outrank_homophone_splits() {
         assert!(
             entry.word_cost <= 3600,
             "{surface} is still too expensive to beat a homophone split"
+        );
+    }
+}
+
+#[test]
+fn overlay_rows_say_nothing_to_the_user() {
+    for entry in overlay() {
+        let context = format!("{}\t{}", entry.reading, entry.surface);
+        assert!(
+            entry.annotation.is_empty(),
+            "overlay row carries a user-visible note: {context}"
         );
     }
 }

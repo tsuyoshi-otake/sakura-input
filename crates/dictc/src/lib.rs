@@ -361,6 +361,18 @@ fn parse_sakura_entries(
         validate_reading(source, line_number, reading)?;
         validate_text(source, line_number, "surface", surface)?;
         validate_text(source, line_number, "annotation", columns[7])?;
+        // Licensed sources are edited by hand. A `[calibration]` or `[company]`
+        // tag in this column is a developer note, but the column is the
+        // candidate note the user sees. Generated category files may still
+        // carry a baked tag until the next split; dictc strips those after
+        // extracting reviewed details.
+        if require_license && columns[7].starts_with('[') {
+            return Err(Error::at(
+                source,
+                line_number,
+                "annotation must not start with '['",
+            ));
+        }
         let left_id = parse_number::<u16>(source, line_number, "left_id", columns[2])?;
         let right_id = parse_number::<u16>(source, line_number, "right_id", columns[3])?;
         let word_cost = parse_number::<i32>(source, line_number, "word_cost", columns[4])?;
@@ -714,6 +726,13 @@ pub fn compile_with_tables(
                 format!("connection id is outside 0..{class_count}"),
             ));
         }
+        if entry.annotation.starts_with('[') {
+            return Err(Error::at(
+                &entry.source,
+                entry.line,
+                "candidate annotation must not start with '['",
+            ));
+        }
     }
     for pair in sorted.windows(2) {
         let [before, after] = pair else {
@@ -937,7 +956,9 @@ fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Er
 ///
 /// Duplicates inside either layer are source errors. When the two layers share
 /// an edge, the overlay replaces the system entry so its domain flags, boosted
-/// cost, prediction cost, and annotation remain observable at runtime.
+/// cost, and prediction cost remain observable at runtime. Overlay annotations
+/// still replace at merge so a reviewed detail source can match them; leftover
+/// candidate-list notes are cleared before the image is compiled.
 pub fn merge_entries(
     mut system: Vec<SourceEntry>,
     mut overlay: Vec<SourceEntry>,
@@ -1066,6 +1087,19 @@ pub fn extract_entry_details(
         entries[index].annotation.clear();
     }
     Ok(details)
+}
+
+/// Clears every candidate-list note after reviewed descriptions have moved
+/// into details.
+///
+/// Runtime notes such as `履歴` are not stored in the image. Anything left in
+/// this column — a `[calibration]` overlay comment, a `[company]` casing
+/// label, or a glossary gloss that was never extracted — would show next to
+/// the candidate.
+pub fn clear_candidate_list_annotations(entries: &mut [SourceEntry]) {
+    for entry in entries {
+        entry.annotation.clear();
+    }
 }
 
 fn sort_and_validate_layer(entries: &mut [SourceEntry], label: &str) -> Result<(), Error> {

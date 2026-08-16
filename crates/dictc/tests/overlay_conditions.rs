@@ -25,7 +25,7 @@ const DIGIT_RENDERED: &str = "いち|1|2044|2044|3639|4839|predict|";
 
 /// Number of parser conditions the matrix below claims to cover. Adding or
 /// retiring one is a deliberate edit, not a silent drift.
-const PARSER_CONDITIONS: usize = 31;
+const PARSER_CONDITIONS: usize = 32;
 /// Number of merge conditions, same rule.
 const MERGE_CONDITIONS: usize = 12;
 
@@ -313,6 +313,21 @@ fn parser_cases() -> Vec<ParseCase> {
             false,
             doc("いち\t1\t2044\t2044\t3639\t4839\tpredict\tnote\n"),
             Outcome::Rows(&["いち|1|2044|2044|3639|4839|predict|note"]),
+        ),
+        // Licensed sources are hand-edited. A `[calibration]` tag in this
+        // column ships as a candidate note. Generated category files may still
+        // carry a baked tag; dictc strips those after extracting details.
+        licensed(
+            "a licensed source rejects a bracket tag in the annotation",
+            true,
+            doc("きのう\t昨日\t1841\t1841\t1100\t2300\tpredict\t[calibration] date expression\n"),
+            Outcome::Rejected("annotation must not start with '['"),
+        ),
+        category(
+            "a licensed source rejects a bracket tag in the annotation",
+            false,
+            format!("{HEADER}きのう\t昨日\t1841\t1841\t1100\t2300\tpredict\t[calibration] date expression\n"),
+            Outcome::Rows(&["きのう|昨日|1841|1841|1100|2300|predict|[calibration] date expression"]),
         ),
         // `validate_text(reading)`: emptiness
         licensed(

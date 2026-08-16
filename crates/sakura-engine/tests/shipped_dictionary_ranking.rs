@@ -372,3 +372,30 @@ fn ranks_business_compounds_above_homophone_splits() {
         assert_eq!(top_text(reading), want, "{reading}");
     }
 }
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn conversion_candidates_do_not_show_bracket_tags() {
+    let readings = [
+        "きのう",
+        "きのうしょうかい",
+        "きのうしよう",
+        "きのうてすと",
+        "あまぞん",
+        "amazon",
+    ];
+    for reading in readings {
+        open_conversion()
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                for candidate in candidates {
+                    let annotation = candidate.annotation();
+                    assert!(
+                        !annotation.starts_with('['),
+                        "{reading} / {} shows bracket tag {annotation:?}",
+                        candidate.text()
+                    );
+                }
+            })
+            .unwrap_or_else(|error| panic!("{reading}: {error}"));
+    }
+}

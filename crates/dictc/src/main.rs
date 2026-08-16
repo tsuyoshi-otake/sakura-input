@@ -276,6 +276,9 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     .map_err(|error| error.to_string())?;
     let curated_details = curated_entry_details(&curated_detail_paths, &mut entries)?;
     let curated_input_count = curated_details.len();
+    // Reviewed descriptions are now details. Strip leftover list notes so a
+    // `[calibration]` overlay comment or a baked category tag cannot ship.
+    dictc::clear_candidate_list_annotations(&mut entries);
     let mut details = glossary_details(glossary_directory.as_deref(), &entries)?;
     let glossary_detail_count = details.len();
     let glossary_relations = RelationCounts::from_details(&details);

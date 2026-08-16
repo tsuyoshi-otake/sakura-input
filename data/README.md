@@ -52,8 +52,10 @@ build report records the curated and conversion-priority source hashes.
 layer. Its rows are calibrated against the checked-in corpus probes and usually
 reuse an existing `(reading, surface, left_id, right_id)` edge. Issue #62 may
 introduce missing IT or business compounds that the generated glossary never
-emitted; it still must not retune `昨日` itself. User-specific preferences remain in
-the user dictionary and learning store.
+emitted; it still must not retune `昨日` itself. The annotation column is the
+candidate note the user sees, so both this overlay and `curated-terms.tsv`
+keep it empty; developer tags such as `[calibration]` stay in `#` comments.
+User-specific preferences remain in the user dictionary and learning store.
 
 The Mozc dictionary is a mixed-license work. Its Google-authored portions use
 BSD-3-Clause, its IPAdic/ICOT portions retain their upstream conditions, and
