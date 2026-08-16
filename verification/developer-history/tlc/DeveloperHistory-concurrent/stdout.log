@@ -1,0 +1,267 @@
+TLC2 Version 2026.08.11.125311 (rev: 0894c34)
+Warning: Please run the Java VM, which executes TLC with a throughput optimized garbage collector, by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 0 and seed 20260816 with 2 workers on 4 cores with 4004MB heap and 64MB offheap memory [pid: 5049] (Linux 6.12.94+ amd64, Ubuntu 21.0.10 64bit, MSBDiskFPSet, DiskStateQueue).
+Parsing file /workspace/verification/tla/DeveloperHistory.tla
+Parsing file /tmp/tlc-6736616042127782570/Naturals.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/Naturals.tla)
+Parsing file /tmp/tlc-6736616042127782570/FiniteSets.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/FiniteSets.tla)
+Parsing file /tmp/tlc-6736616042127782570/Sequences.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/Sequences.tla)
+Parsing file /tmp/tlc-6736616042127782570/TLC.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/TLC.tla)
+Parsing file /tmp/tlc-6736616042127782570/_TLCTrace.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/_TLCTrace.tla)
+Parsing file /tmp/tlc-6736616042127782570/TLCExt.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/TLCExt.tla)
+Parsing file /tmp/tlc-6736616042127782570/Integers.tla (jar:file:/tmp/sakura-tla/tla2tools.jar!/tla2sany/StandardModules/Integers.tla)
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module Integers
+Semantic processing of module TLCExt
+Semantic processing of module _TLCTrace
+Semantic processing of module DeveloperHistory
+Linting of module TLCExt
+Linting of module _TLCTrace
+Linting of module DeveloperHistory
+Starting... (2026-08-16 00:14:02)
+Implied-temporal checking--satisfiability problem has 2 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-08-16 00:14:03.
+Checking 2 branches of temporal properties for the current state space with 314014 total distinct states at (2026-08-16 00:14:06)
+Finished checking temporal properties in 00s at 2026-08-16 00:14:06
+Progress(12) at 2026-08-16 00:14:06: 875,456 states generated (875,456 s/min), 157,007 distinct states found (157,007 ds/min), 81,620 states left on queue.
+Progress(13) at 2026-08-16 00:14:11: 2,370,365 states generated, 368,986 distinct states found, 0 states left on queue.
+Checking 2 branches of temporal properties for the complete state space with 737972 total distinct states at (2026-08-16 00:14:11)
+Finished checking temporal properties in 02s at 2026-08-16 00:14:14
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 4.0E-8
+  based on the actual fingerprints:  val = 3.0E-8
+The coverage statistics at 2026-08-16 00:14:14 (see https://explain.tlapl.us/module-coverage-statistics for how to interpret the following statistics).
+<epoch line 50, col 11 to line 50, col 15 of module DeveloperHistory>: 4
+<publishedOn line 47, col 22 to line 47, col 32 of module DeveloperHistory>: 2
+<excludedTestOnly line 49, col 30 to line 49, col 45 of module DeveloperHistory>: 12
+<dropped line 48, col 32 to line 48, col 38 of module DeveloperHistory>: 9
+<pendingPublish line 50, col 39 to line 50, col 52 of module DeveloperHistory>: 2
+<eventCount line 51, col 11 to line 51, col 20 of module DeveloperHistory>: 12
+<persistenceFailures line 49, col 48 to line 49, col 66 of module DeveloperHistory>: 12
+<requestAfterPublish line 50, col 18 to line 50, col 36 of module DeveloperHistory>: 2
+<excludedSensitive line 49, col 11 to line 49, col 27 of module DeveloperHistory>: 11
+<settingOn line 47, col 11 to line 47, col 19 of module DeveloperHistory>: 2
+<excludedUnclassified line 48, col 41 to line 48, col 60 of module DeveloperHistory>: 12
+<scope line 48, col 11 to line 48, col 15 of module DeveloperHistory>: 3
+<live line 47, col 52 to line 47, col 55 of module DeveloperHistory>: 2
+<durableCount line 48, col 18 to line 48, col 29 of module DeveloperHistory>: 4
+<queueLen line 50, col 55 to line 50, col 62 of module DeveloperHistory>: 3
+<serviceAttached line 47, col 35 to line 47, col 49 of module DeveloperHistory>: 2
+<Init line 77, col 1 to line 77, col 4 of module DeveloperHistory>: 1:1
+  line 78, col 5 to line 93, col 21 of module DeveloperHistory: 1
+<Boot line 97, col 1 to line 97, col 8 of module DeveloperHistory>: 6375:79834
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 79834
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 740548
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 740548
+  line 99, col 8 to line 99, col 12 of module DeveloperHistory: 464884
+  |line 99, col 9 to line 99, col 12 of module DeveloperHistory: 385050
+  line 100, col 8 to line 100, col 22 of module DeveloperHistory: 79834
+  line 101, col 8 to line 101, col 24 of module DeveloperHistory: 79834
+  line 102, col 8 to line 102, col 28 of module DeveloperHistory: 79834
+  line 103, col 8 to line 103, col 19 of module DeveloperHistory: 79834
+  line 104, col 8 to line 104, col 30 of module DeveloperHistory: 79834
+  line 105, col 8 to line 105, col 35 of module DeveloperHistory: 79834
+  line 106, col 8 to line 106, col 30 of module DeveloperHistory: 79834
+  line 107, col 8 to line 107, col 20 of module DeveloperHistory: 79834
+  line 108, col 8 to line 108, col 35 of module DeveloperHistory: 79834
+  line 109, col 8 to line 111, col 27 of module DeveloperHistory: 79834
+<BootNoop line 113, col 1 to line 113, col 8 of module DeveloperHistory>: 12:152608
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 152608
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 115, col 8 to line 115, col 11 of module DeveloperHistory: 152608
+  line 116, col 8 to line 116, col 35 of module DeveloperHistory: 152608
+  line 117, col 8 to line 120, col 74 of module DeveloperHistory: 152608
+<SetDeveloperMode line 122, col 1 to line 122, col 20 of module DeveloperHistory>: 9950:305216
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 305216
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 740548
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 740548
+  line 124, col 8 to line 124, col 11 of module DeveloperHistory: 305216
+  line 125, col 8 to line 125, col 22 of module DeveloperHistory: 305216
+  line 126, col 8 to line 126, col 29 of module DeveloperHistory: 305216
+  line 127, col 8 to line 127, col 35 of module DeveloperHistory: 305216
+  line 128, col 8 to line 131, col 51 of module DeveloperHistory: 305216
+<WatcherPublish line 133, col 1 to line 133, col 14 of module DeveloperHistory>: 3293:77628
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 77628
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 135, col 8 to line 135, col 11 of module DeveloperHistory: 77628
+  line 136, col 8 to line 136, col 21 of module DeveloperHistory: 77628
+  line 137, col 8 to line 137, col 31 of module DeveloperHistory: 77628
+  line 138, col 8 to line 138, col 30 of module DeveloperHistory: 77628
+  line 139, col 8 to line 139, col 35 of module DeveloperHistory: 77628
+  line 140, col 8 to line 140, col 35 of module DeveloperHistory: 77628
+  line 141, col 8 to line 143, col 76 of module DeveloperHistory: 77628
+<RequestBoundary line 149, col 1 to line 149, col 15 of module DeveloperHistory>: 15623:21371
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 21371
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 151, col 8 to line 151, col 11 of module DeveloperHistory: 21371
+  line 152, col 8 to line 152, col 36 of module DeveloperHistory: 173979
+  |line 152, col 8 to line 152, col 22 of module DeveloperHistory: 152608
+  |line 152, col 26 to line 152, col 36 of module DeveloperHistory: 152608
+  line 153, col 8 to line 153, col 37 of module DeveloperHistory: 21371
+  line 154, col 8 to line 154, col 34 of module DeveloperHistory: 21371
+  line 155, col 8 to line 155, col 35 of module DeveloperHistory: 21371
+  line 156, col 8 to line 159, col 46 of module DeveloperHistory: 21371
+<RequestProbe line 163, col 1 to line 163, col 12 of module DeveloperHistory>: 4021:131237
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 131237
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 165, col 8 to line 165, col 11 of module DeveloperHistory: 131237
+  line 166, col 8 to line 166, col 36 of module DeveloperHistory: 283845
+  |line 166, col 8 to line 166, col 22 of module DeveloperHistory: 152608
+  |line 166, col 26 to line 166, col 36 of module DeveloperHistory: 152608
+  line 167, col 8 to line 167, col 34 of module DeveloperHistory: 131237
+  line 168, col 8 to line 168, col 35 of module DeveloperHistory: 131237
+  line 169, col 8 to line 172, col 53 of module DeveloperHistory: 131237
+<Classify line 174, col 1 to line 174, col 11 of module DeveloperHistory>: 32979:457824
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 457824
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 1110822
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 1110822
+  line 176, col 8 to line 176, col 11 of module DeveloperHistory: 457824
+  line 177, col 8 to line 177, col 17 of module DeveloperHistory: 457824
+  line 178, col 8 to line 178, col 35 of module DeveloperHistory: 457824
+  line 179, col 8 to line 182, col 74 of module DeveloperHistory: 457824
+<Key line 184, col 1 to line 184, col 13 of module DeveloperHistory>: 53000:245764
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 245764
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 740548
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 740548
+  line 186, col 8 to line 186, col 11 of module DeveloperHistory: 245764
+  line 187, col 8 to line 187, col 22 of module DeveloperHistory: 245764
+  line 188, col 11 to line 188, col 18 of module DeveloperHistory: 245764
+  line 189, col 16 to line 189, col 55 of module DeveloperHistory: 122882
+  line 190, col 16 to line 191, col 57 of module DeveloperHistory: 122882
+  line 192, col 16 to line 192, col 37 of module DeveloperHistory: 122882
+  line 193, col 16 to line 193, col 63 of module DeveloperHistory: 34370
+  line 194, col 16 to line 195, col 56 of module DeveloperHistory: 34370
+  line 196, col 16 to line 196, col 34 of module DeveloperHistory: 88512
+  line 197, col 16 to line 197, col 57 of module DeveloperHistory: 40631
+  line 198, col 16 to line 199, col 56 of module DeveloperHistory: 40631
+  line 200, col 16 to line 200, col 35 of module DeveloperHistory: 47881
+  line 201, col 16 to line 201, col 37 of module DeveloperHistory: 9950
+  line 202, col 16 to line 203, col 75 of module DeveloperHistory: 9950
+  line 204, col 16 to line 204, col 40 of module DeveloperHistory: 37931
+  line 205, col 16 to line 205, col 47 of module DeveloperHistory: 35665
+  line 206, col 16 to line 206, col 39 of module DeveloperHistory: 35665
+  line 207, col 16 to line 208, col 46 of module DeveloperHistory: 35665
+  line 210, col 16 to line 210, col 37 of module DeveloperHistory: 2266
+  line 211, col 16 to line 212, col 75 of module DeveloperHistory: 2266
+  line 213, col 8 to line 213, col 35 of module DeveloperHistory: 245764
+  line 214, col 8 to line 216, col 36 of module DeveloperHistory: 245764
+<KeyWhileDetached line 218, col 1 to line 218, col 16 of module DeveloperHistory>: 0:29726
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 29726
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 220, col 8 to line 220, col 11 of module DeveloperHistory: 29726
+  line 221, col 8 to line 221, col 23 of module DeveloperHistory: 182334
+  |line 221, col 9 to line 221, col 23 of module DeveloperHistory: 152608
+  line 222, col 8 to line 222, col 35 of module DeveloperHistory: 29726
+  line 223, col 8 to line 226, col 74 of module DeveloperHistory: 29726
+<Flush line 228, col 1 to line 228, col 5 of module DeveloperHistory>: 21834:122882
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 122882
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 230, col 8 to line 230, col 11 of module DeveloperHistory: 122882
+  line 231, col 8 to line 231, col 22 of module DeveloperHistory: 122882
+  line 232, col 8 to line 232, col 20 of module DeveloperHistory: 122882
+  line 233, col 8 to line 233, col 35 of module DeveloperHistory: 122882
+  line 234, col 8 to line 237, col 64 of module DeveloperHistory: 122882
+<Clear line 239, col 1 to line 239, col 5 of module DeveloperHistory>: 24478:114682
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 114682
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 241, col 8 to line 241, col 11 of module DeveloperHistory: 114682
+  line 242, col 8 to line 242, col 22 of module DeveloperHistory: 114682
+  line 243, col 8 to line 243, col 23 of module DeveloperHistory: 114682
+  |line 243, col 8 to line 243, col 12 of module DeveloperHistory: 122882
+  |line 243, col 16 to line 243, col 23 of module DeveloperHistory: 122882
+  line 244, col 8 to line 244, col 24 of module DeveloperHistory: 114682
+  line 245, col 8 to line 245, col 20 of module DeveloperHistory: 114682
+  line 246, col 8 to line 246, col 25 of module DeveloperHistory: 114682
+  line 247, col 8 to line 247, col 35 of module DeveloperHistory: 114682
+  line 248, col 8 to line 251, col 57 of module DeveloperHistory: 114682
+<PersistFail line 253, col 1 to line 253, col 11 of module DeveloperHistory>: 119416:122882
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 122882
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 255, col 8 to line 255, col 11 of module DeveloperHistory: 122882
+  line 256, col 8 to line 256, col 22 of module DeveloperHistory: 122882
+  line 257, col 8 to line 257, col 53 of module DeveloperHistory: 122882
+  line 258, col 8 to line 258, col 35 of module DeveloperHistory: 122882
+  line 259, col 8 to line 262, col 67 of module DeveloperHistory: 122882
+<Crash line 264, col 1 to line 264, col 5 of module DeveloperHistory>: 51883:152608
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 152608
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 266, col 8 to line 266, col 11 of module DeveloperHistory: 152608
+  line 267, col 8 to line 267, col 20 of module DeveloperHistory: 152608
+  line 268, col 8 to line 268, col 31 of module DeveloperHistory: 152608
+  line 269, col 8 to line 269, col 35 of module DeveloperHistory: 152608
+  line 270, col 8 to line 270, col 30 of module DeveloperHistory: 152608
+  line 271, col 8 to line 271, col 20 of module DeveloperHistory: 152608
+  line 272, col 8 to line 272, col 35 of module DeveloperHistory: 152608
+  line 273, col 8 to line 275, col 48 of module DeveloperHistory: 152608
+<Restart line 277, col 1 to line 277, col 7 of module DeveloperHistory>: 0:39917
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 39917
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 279, col 8 to line 279, col 12 of module DeveloperHistory: 232442
+  |line 279, col 9 to line 279, col 12 of module DeveloperHistory: 192525
+  line 280, col 8 to line 280, col 19 of module DeveloperHistory: 39917
+  line 281, col 8 to line 281, col 31 of module DeveloperHistory: 39917
+  line 282, col 8 to line 282, col 35 of module DeveloperHistory: 39917
+  line 283, col 8 to line 283, col 30 of module DeveloperHistory: 39917
+  line 284, col 8 to line 284, col 35 of module DeveloperHistory: 39917
+  line 285, col 8 to line 285, col 30 of module DeveloperHistory: 39917
+  line 286, col 8 to line 286, col 20 of module DeveloperHistory: 39917
+  line 287, col 8 to line 287, col 35 of module DeveloperHistory: 39917
+  line 288, col 8 to line 290, col 27 of module DeveloperHistory: 39917
+<Shutdown line 292, col 1 to line 292, col 8 of module DeveloperHistory>: 26121:152608
+  line 95, col 17 to line 95, col 38 of module DeveloperHistory: 152608
+  |line 95, col 17 to line 95, col 26 of module DeveloperHistory: 370274
+  |line 95, col 30 to line 95, col 38 of module DeveloperHistory: 370274
+  line 294, col 8 to line 294, col 11 of module DeveloperHistory: 152608
+  line 295, col 8 to line 295, col 20 of module DeveloperHistory: 152608
+  line 296, col 8 to line 296, col 31 of module DeveloperHistory: 152608
+  line 297, col 8 to line 297, col 35 of module DeveloperHistory: 152608
+  line 298, col 8 to line 298, col 30 of module DeveloperHistory: 152608
+  line 299, col 8 to line 299, col 35 of module DeveloperHistory: 152608
+  line 300, col 8 to line 302, col 58 of module DeveloperHistory: 152608
+<Idle line 307, col 1 to line 307, col 4 of module DeveloperHistory>: 0:177749
+  line 308, col 8 to line 308, col 29 of module DeveloperHistory: 548023
+  |line 308, col 8 to line 308, col 17 of module DeveloperHistory: 370274
+  |line 308, col 21 to line 308, col 29 of module DeveloperHistory: 370274
+  line 309, col 8 to line 309, col 21 of module DeveloperHistory: 177749
+<TypeOK line 59, col 1 to line 59, col 6 of module DeveloperHistory>
+  line 60, col 5 to line 75, col 34 of module DeveloperHistory: 368986
+<AttachMatchesPublishedAfterRequest line 334, col 1 to line 334, col 34 of module DeveloperHistory>
+  line 335, col 5 to line 335, col 70 of module DeveloperHistory: 368986
+  |line 335, col 5 to line 335, col 8 of module DeveloperHistory: 368986
+  |line 335, col 14 to line 335, col 69 of module DeveloperHistory: 290981
+  ||line 335, col 14 to line 335, col 32 of module DeveloperHistory: 290981
+  ||line 335, col 38 to line 335, col 68 of module DeveloperHistory: 90702
+<ForbiddenStaleInactive line 336, col 1 to line 336, col 22 of module DeveloperHistory>
+  line 337, col 5 to line 337, col 69 of module DeveloperHistory: 368986
+  |line 337, col 7 to line 337, col 68 of module DeveloperHistory: 368986
+  ||line 337, col 7 to line 337, col 48 of module DeveloperHistory: 368986
+  |||line 337, col 7 to line 337, col 25 of module DeveloperHistory: 368986
+  ||||line 337, col 7 to line 337, col 10 of module DeveloperHistory: 368986
+  ||||line 337, col 15 to line 337, col 25 of module DeveloperHistory: 290981
+  |||line 337, col 30 to line 337, col 48 of module DeveloperHistory: 205058
+  ||line 337, col 53 to line 337, col 68 of module DeveloperHistory: 69217
+<QueueBounded line 338, col 1 to line 338, col 12 of module DeveloperHistory>
+  line 338, col 17 to line 338, col 36 of module DeveloperHistory: 368986
+<DurableBounded line 339, col 1 to line 339, col 14 of module DeveloperHistory>
+  line 339, col 19 to line 339, col 44 of module DeveloperHistory: 368986
+End of statistics.
+2370365 states generated, 368986 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 13.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 11 and the 95th percentile is 5).
+Finished in 11s at (2026-08-16 00:14:14)

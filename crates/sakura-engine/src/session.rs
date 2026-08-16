@@ -1277,6 +1277,18 @@ impl SessionTable {
         self.len = 0;
     }
 
+    /// Allocates a process-wide history session id for every live session.
+    /// Used when developer history is hot-attached after sessions already
+    /// exist, so records do not collide on the pipe-local protocol session id.
+    pub(crate) fn reallocate_history_session_ids<F>(&mut self, mut allocate: F)
+    where
+        F: FnMut() -> SessionId,
+    {
+        for slot in self.slots.iter_mut().flatten() {
+            slot.1.set_history_session_id(allocate());
+        }
+    }
+
     /// Applies settings that are safe to change while a host context remains
     /// alive. The user's current mode and composition are deliberately left
     /// untouched; only the policies that are resolved from the process profile

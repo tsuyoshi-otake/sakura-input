@@ -264,8 +264,25 @@ impl Dispatcher {
         Ok(dispatcher)
     }
 
-    pub(crate) fn set_input_history(&mut self, input_history: Arc<InputHistoryService>) {
-        self.input_history = Some(input_history);
+    /// Attaches or detaches the process-wide developer history service at a
+    /// request boundary. A configuration reload can enable history after this
+    /// dispatcher was created without an engine restart. Clearing the service
+    /// stops new durable records; existing sessions keep their allocated
+    /// history session ids until the next attach reallocates them.
+    pub(crate) fn set_input_history(&mut self, input_history: Option<Arc<InputHistoryService>>) {
+        let changed = self.input_history.as_ref().map(Arc::as_ptr)
+            != input_history.as_ref().map(Arc::as_ptr);
+        if !changed {
+            return;
+        }
+        let attaching = self.input_history.is_none() && input_history.is_some();
+        self.input_history = input_history;
+        if attaching {
+            if let Some(history) = self.input_history.as_ref() {
+                self.sessions
+                    .reallocate_history_session_ids(|| history.allocate_session_id());
+            }
+        }
     }
 
     pub(crate) fn set_ai_text(&mut self, ai_text: Arc<AiTextService>) {
@@ -4938,7 +4955,7 @@ mod tests {
         ));
         let history = InputHistoryService::open(&path).expect("history");
         let mut dispatcher = builtin_dispatcher();
-        dispatcher.set_input_history(Arc::clone(&history));
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "editor.exe");
 
@@ -5034,6 +5051,81 @@ mod tests {
     }
 
     #[test]
+    fn hot_attach_and_detach_of_developer_history_matches_stats_active() {
+        let path = std::env::temp_dir().join(format!(
+            "sakura-dispatch-history-hot-{}-{}.bin",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let history = InputHistoryService::open(&path).expect("history");
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "hot-history.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+
+        match dispatcher.dispatch(&Request::InputHistoryStats, &mut out) {
+            Reply::Message(Response::InputHistoryStats { active: false, .. }) => {}
+            other => panic!("expected inactive stats before attach, got {other:?}"),
+        }
+
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
+        match dispatcher.dispatch(&Request::InputHistoryStats, &mut out) {
+            Reply::Message(Response::InputHistoryStats { active: true, .. }) => {}
+            other => panic!("expected active stats after attach, got {other:?}"),
+        }
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('a'),
+            },
+            &mut out,
+        );
+        history.flush().expect("flush after attach");
+        assert_eq!(
+            crate::input_history::read_snapshot(&path)
+                .expect("snapshot")
+                .records
+                .len(),
+            1
+        );
+
+        dispatcher.set_input_history(None);
+        match dispatcher.dispatch(&Request::InputHistoryStats, &mut out) {
+            Reply::Message(Response::InputHistoryStats { active: false, .. }) => {}
+            other => panic!("expected inactive stats after detach, got {other:?}"),
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('b'),
+            },
+            &mut out,
+        );
+        history.flush().expect("flush after detach");
+        assert_eq!(
+            crate::input_history::read_snapshot(&path)
+                .expect("snapshot")
+                .records
+                .len(),
+            1,
+            "detached dispatcher must not append new durable keys"
+        );
+
+        history.stop().expect("stop");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn test_only_enter_preserves_learning_preference_and_input_history_before_real_enter() {
         let reading = "\u{304b}\u{306a}";
         let learning = Arc::new(LearningService::memory());
@@ -5047,7 +5139,7 @@ mod tests {
         let mut dispatcher =
             Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
                 .expect("dispatcher");
-        dispatcher.set_input_history(Arc::clone(&history));
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "test-only-enter.exe");
         dispatcher.dispatch(
@@ -5481,7 +5573,7 @@ mod tests {
             phase_one_prediction_conversion(),
             Arc::clone(&learning),
         );
-        dispatcher.set_input_history(Arc::clone(&history));
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "probe-unclassified.exe");
         assert_eq!(
@@ -5605,7 +5697,7 @@ mod tests {
             phase_one_prediction_conversion(),
             Arc::clone(&learning),
         );
-        dispatcher.set_input_history(Arc::clone(&history));
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "test-only-delete.exe");
         dispatcher.dispatch(
@@ -6855,7 +6947,7 @@ mod tests {
         let learning = Arc::new(LearningService::memory());
         let (mut dispatcher, runtime) =
             phase_one_prediction_dispatcher(phase_one_prediction_conversion(), learning);
-        dispatcher.set_input_history(Arc::clone(&history));
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "history-projection.exe");
         dispatcher.dispatch(
