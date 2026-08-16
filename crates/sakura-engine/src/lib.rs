@@ -29,6 +29,12 @@ pub mod configuration;
 pub mod context_baseline;
 pub mod context_evaluation;
 pub mod context_intelligence;
+mod developer_history_oracle;
+#[cfg(test)]
+mod developer_history_oracle_tests;
+#[cfg(test)]
+#[path = "developer_history_order_tests.rs"]
+mod developer_history_order;
 pub mod dictionary;
 pub mod dispatch;
 pub mod event_log;
@@ -39,12 +45,6 @@ pub mod prediction;
 pub mod prediction_snapshot;
 pub mod server;
 pub mod session;
-mod developer_history_oracle;
-#[cfg(test)]
-mod developer_history_oracle_tests;
-#[cfg(test)]
-#[path = "developer_history_order_tests.rs"]
-mod developer_history_order;
 mod shift_ascii_space;
 #[cfg(test)]
 mod shift_ascii_space_tests;

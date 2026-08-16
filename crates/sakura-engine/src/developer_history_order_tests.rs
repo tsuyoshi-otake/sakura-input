@@ -37,7 +37,10 @@ fn format_events(events: &[DomainEvent]) -> String {
         .join(", ")
 }
 
-fn shrink_events(events: &[DomainEvent], check: impl Fn(&[DomainEvent]) -> Option<&'static str>) -> Vec<DomainEvent> {
+fn shrink_events(
+    events: &[DomainEvent],
+    check: impl Fn(&[DomainEvent]) -> Option<&'static str>,
+) -> Vec<DomainEvent> {
     let mut best = events.to_vec();
     let mut changed = true;
     while changed && best.len() > 1 {
@@ -218,9 +221,7 @@ fn developer_history_c2_campaign_covers_oracle_polarities_and_writes_report() {
         if saw_true {
             covered += 1;
         }
-        rows.push_str(&format!(
-            "| `{id}` | {saw_false} | {saw_true} |\n"
-        ));
+        rows.push_str(&format!("| `{id}` | {saw_false} | {saw_true} |\n"));
     }
     rows.push_str(&format!(
         "\nCovered polarities: {covered}/{total} ({:.1}%). Seed `{seed:#x}`. Cases: {}.\n\n\
