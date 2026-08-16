@@ -8,6 +8,7 @@
 
 #[cfg(test)]
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 #[cfg(windows)]
@@ -20,7 +21,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sakura_proto::FixedStr;
+use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 
 use crate::session::text_hash;
 
@@ -49,6 +50,10 @@ const MAX_LOG_RECORDS: u64 = 50_000;
 const TARGET_LOG_RECORDS: u64 = 40_000;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
 const RECORD_COMMIT: u8 = 1;
+/// Marker context pair for a repair-suppress record encoded as a COMMIT frame.
+/// Keeps the learning format version unchanged while still using the CRC envelope.
+const REPAIR_SUPPRESS_CONTEXT: u16 = u16::MAX;
+const REPAIR_SUPPRESS_SURFACE: &str = "\u{E000}sakura-repair-suppress";
 /// A learned choice loses half of its effective evidence every 30 days.
 ///
 /// The same decay applies to exact-context and general preferences.  Exact
@@ -504,6 +509,14 @@ impl PredictionHistory {
             }
         }
     }
+
+    fn for_each(&self, mut visit: impl FnMut(&str, &str)) {
+        for entry in self.entries.iter() {
+            if entry.occupied {
+                visit(entry.reading.as_str(), entry.surface.as_str());
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -588,14 +601,30 @@ impl Log {
         right_context: u16,
         day: u32,
     ) -> Result<(), AppendFailure> {
+        let payload = encode_record(reading, surface, left_context, right_context, day)
+            .map_err(|_| AppendFailure::Io)?;
+        self.append_payload(&payload)
+    }
+
+    fn append_repair_suppress(&mut self, reading: &str, day: u32) -> Result<(), AppendFailure> {
+        let payload = encode_record(
+            reading,
+            REPAIR_SUPPRESS_SURFACE,
+            REPAIR_SUPPRESS_CONTEXT,
+            REPAIR_SUPPRESS_CONTEXT,
+            day,
+        )
+        .map_err(|_| AppendFailure::Io)?;
+        self.append_payload(&payload)
+    }
+
+    fn append_payload(&mut self, payload: &[u8]) -> Result<(), AppendFailure> {
         if self.path.is_none() {
             return Ok(());
         }
         let Some(file) = self.file.as_mut() else {
             return Err(AppendFailure::Io);
         };
-        let payload = encode_record(reading, surface, left_context, right_context, day)
-            .map_err(|_| AppendFailure::Io)?;
         let length = u32::try_from(payload.len()).map_err(|_| AppendFailure::Io)?;
         let frame_bytes = u64::try_from(RECORD_ENVELOPE_LEN + payload.len()).unwrap_or(u64::MAX);
         if self.bytes.saturating_add(frame_bytes) > MAX_LEARNING_LOG_BYTES {
@@ -603,8 +632,8 @@ impl Log {
         }
         let write_result = (|| -> io::Result<()> {
             file.write_all(&length.to_le_bytes())?;
-            file.write_all(&crc32(&payload).to_le_bytes())?;
-            file.write_all(&payload)
+            file.write_all(&crc32(payload).to_le_bytes())?;
+            file.write_all(payload)
         })();
         if let Err(error) = write_result {
             // A partial frame may now be present. Disable this handle so no
@@ -625,6 +654,9 @@ impl Log {
 struct State {
     index: Index,
     prediction_history: PredictionHistory,
+    /// Readings for which the user rejected automatic repair by resizing
+    /// segments. Durable via CRC-framed suppress markers in the learning log.
+    repair_suppress: HashSet<u64>,
     log: Log,
     sequence: u64,
 }
@@ -721,6 +753,7 @@ impl LearningService {
             state: Mutex::new(State {
                 index: Index::new(),
                 prediction_history: PredictionHistory::new(),
+                repair_suppress: HashSet::new(),
                 log: Log::memory(),
                 sequence: 0,
             }),
@@ -789,11 +822,13 @@ impl LearningService {
 
         let mut index = Index::new();
         let mut prediction_history = PredictionHistory::new();
+        let mut repair_suppress = HashSet::new();
         let (last_good, sequence) = replay(
             &bytes,
             LEARNING_FORMAT_VERSION,
             &mut index,
             &mut prediction_history,
+            &mut repair_suppress,
         )?;
         // `over_cap` is zero unless the file was oversized; when it is not,
         // `last_good` indexes the capped buffer (or, after an upgrade, the
@@ -809,6 +844,7 @@ impl LearningService {
         let mut state = State {
             index,
             prediction_history,
+            repair_suppress,
             log: Log {
                 file: Some(file),
                 path: Some(path.to_owned()),
@@ -877,6 +913,88 @@ impl LearningService {
         state
             .index
             .preference(reading, left_context, candidates, unix_day())
+    }
+
+    /// Remembers that the user rejected automatic repair for this exact reading
+    /// by resizing segments. Future conversions of the same reading skip repair.
+    pub fn suppress_repair_reading(&self, reading: &str) {
+        if reading.is_empty() {
+            return;
+        }
+        let day = unix_day();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let hash = text_hash(reading);
+        if !state.repair_suppress.insert(hash) {
+            return;
+        }
+        if state.log.append_repair_suppress(reading, day).is_err() {
+            self.skipped_writes.fetch_add(1, Ordering::Relaxed);
+        }
+        drop(state);
+        self.generation.fetch_add(1, Ordering::Release);
+    }
+
+    pub fn is_repair_suppressed(&self, reading: &str) -> bool {
+        if reading.is_empty() {
+            return false;
+        }
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.repair_suppress.contains(&text_hash(reading))
+    }
+
+    /// Collects dictionary readings suggested by commit history for the typed
+    /// reading. Exact prior typo commits are reconverted through `resolve_surface`
+    /// so the lattice can look up the accepted surface under its true reading.
+    pub fn collect_commit_repair_readings(
+        &self,
+        typed: &str,
+        support: sakura_core::InputSupport,
+        mut resolve_surface: impl FnMut(&str, &mut FixedStr<MAX_PREEDIT_BYTES>) -> bool,
+    ) -> Vec<FixedStr<MAX_PREEDIT_BYTES>> {
+        let mut out = Vec::new();
+        if !support.is_active() || !support.commit_based || typed.is_empty() {
+            return out;
+        }
+        let variants =
+            sakura_core::collect_repair_variants(typed, support, sakura_core::MAX_REPAIR_VARIANTS);
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.prediction_history.for_each(|reading, surface| {
+            if out.len() >= 8 {
+                return;
+            }
+            if reading == typed {
+                let mut repaired = FixedStr::new();
+                if resolve_surface(surface, &mut repaired)
+                    && repaired.as_str() != typed
+                    && !out
+                        .iter()
+                        .any(|existing| existing.as_str() == repaired.as_str())
+                {
+                    out.push(repaired);
+                }
+                return;
+            }
+            if variants
+                .iter()
+                .any(|variant| variant.repaired.as_str() == reading)
+                && !out.iter().any(|existing| existing.as_str() == reading)
+            {
+                let mut text = FixedStr::new();
+                if text.push_str(reading).is_ok() {
+                    out.push(text);
+                }
+            }
+        });
+        out
     }
 
     pub(crate) fn visit_prediction_history(
@@ -954,11 +1072,13 @@ impl LearningService {
 
         let mut rebuilt_index = Index::new();
         let mut rebuilt_history = PredictionHistory::new();
+        let mut rebuilt_suppress = HashSet::new();
         let (rebuilt_good, rebuilt_sequence) = replay(
             &rewritten,
             LEARNING_FORMAT_VERSION,
             &mut rebuilt_index,
             &mut rebuilt_history,
+            &mut rebuilt_suppress,
         )?;
         if rebuilt_good != rewritten.len() {
             return Err(io::Error::new(
@@ -1110,6 +1230,7 @@ impl LearningService {
         // committed deletion into a failure/beep outcome.
         state.index = rebuilt_index;
         state.prediction_history = rebuilt_history;
+        state.repair_suppress = rebuilt_suppress;
         state.sequence = rebuilt_sequence;
         state.log = Log {
             file: Some(replacement_file),
@@ -1204,6 +1325,7 @@ impl LearningService {
         let Some(path) = state.log.path.clone() else {
             state.index = Index::new();
             state.prediction_history = PredictionHistory::new();
+            state.repair_suppress = HashSet::new();
             state.sequence = 0;
             state.log = Log::memory();
             self.generation.fetch_add(1, Ordering::Release);
@@ -1260,6 +1382,7 @@ impl LearningService {
         let _ = fs::remove_file(&backup);
         state.index = Index::new();
         state.prediction_history = PredictionHistory::new();
+        state.repair_suppress = HashSet::new();
         state.sequence = 0;
         state.log = Log {
             file: Some(file),
@@ -1401,14 +1524,16 @@ pub fn read_snapshot(path: &Path) -> io::Result<LearningSnapshot> {
     let mut records = Vec::new();
     while let Some((next, record)) = record_at(&bytes, version, offset) {
         sequence = sequence.saturating_add(1);
-        records.push(LearningRecord {
-            sequence,
-            day: record.day,
-            left_context: record.left_context,
-            right_context: record.right_context,
-            reading: record.reading.to_owned(),
-            surface: record.surface.to_owned(),
-        });
+        if !record.is_repair_suppress() {
+            records.push(LearningRecord {
+                sequence,
+                day: record.day,
+                left_context: record.left_context,
+                right_context: record.right_context,
+                reading: record.reading.to_owned(),
+                surface: record.surface.to_owned(),
+            });
+        }
         offset = next;
     }
     Ok(LearningSnapshot {
@@ -1961,11 +2086,13 @@ fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) ->
     compacted.extend_from_slice(&source[first..last_good]);
     let mut rebuilt = Index::new();
     let mut rebuilt_history = PredictionHistory::new();
+    let mut rebuilt_suppress = HashSet::new();
     let (compacted_good, sequence) = replay(
         &compacted,
         LEARNING_FORMAT_VERSION,
         &mut rebuilt,
         &mut rebuilt_history,
+        &mut rebuilt_suppress,
     )?;
     if compacted_good != compacted.len() {
         return Err(io::Error::new(
@@ -2007,6 +2134,7 @@ fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) ->
     let _ = fs::remove_file(&backup);
     state.index = rebuilt;
     state.prediction_history = rebuilt_history;
+    state.repair_suppress = rebuilt_suppress;
     state.sequence = sequence;
     state.log = Log {
         file: Some(file),
@@ -2084,6 +2212,14 @@ struct DecodedRecord<'a> {
     right_context: u16,
     reading: &'a str,
     surface: &'a str,
+}
+
+impl DecodedRecord<'_> {
+    fn is_repair_suppress(self) -> bool {
+        self.left_context == REPAIR_SUPPRESS_CONTEXT
+            && self.right_context == REPAIR_SUPPRESS_CONTEXT
+            && self.surface == REPAIR_SUPPRESS_SURFACE
+    }
 }
 
 fn decode_record(payload: &[u8], version: u16) -> io::Result<DecodedRecord<'_>> {
@@ -2165,6 +2301,7 @@ fn replay(
     version: u16,
     index: &mut Index,
     prediction_history: &mut PredictionHistory,
+    repair_suppress: &mut HashSet<u64>,
 ) -> io::Result<(usize, u64)> {
     if read_header(bytes)? != version {
         return Err(io::Error::new(
@@ -2179,21 +2316,25 @@ fn replay(
             break;
         };
         sequence = sequence.saturating_add(1);
-        index.learn(
-            record.left_context,
-            record.right_context,
-            record.reading,
-            record.surface,
-            record.day,
-            sequence,
-        );
-        prediction_history.learn(
-            record.reading,
-            record.surface,
-            record.right_context,
-            record.day,
-            sequence,
-        );
+        if record.is_repair_suppress() {
+            repair_suppress.insert(text_hash(record.reading));
+        } else {
+            index.learn(
+                record.left_context,
+                record.right_context,
+                record.reading,
+                record.surface,
+                record.day,
+                sequence,
+            );
+            prediction_history.learn(
+                record.reading,
+                record.surface,
+                record.right_context,
+                record.day,
+                sequence,
+            );
+        }
         offset = payload_end;
     }
     Ok((offset, sequence))
@@ -3467,5 +3608,22 @@ mod tests {
     #[test]
     fn crc32_matches_the_standard_check_value() {
         assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
+    }
+
+    #[test]
+    fn repair_suppress_is_durable_and_hidden_from_snapshots() {
+        let path = temporary_log("repair-suppress");
+        let service = LearningService::open(&path).expect("open learning");
+        service.suppress_repair_reading("こにちは");
+        assert!(service.is_repair_suppressed("こにちは"));
+        drop(service);
+
+        let reopened = LearningService::open(&path).expect("reopen learning");
+        assert!(reopened.is_repair_suppressed("こにちは"));
+        assert!(
+            !snapshot_contains(&path, "こにちは", REPAIR_SUPPRESS_SURFACE),
+            "suppress markers must not appear in the settings export"
+        );
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 }

@@ -904,9 +904,9 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
 }
 
 /// `入力支援` is a category, not a duplicate settings page.  A physical click
-/// must normalize its TreeView selection to the first real child (`推測変換`)
-/// so the highlighted left item and the visible right-hand heading cannot
-/// disagree.
+/// must normalize its TreeView selection to the first real child
+/// (`入力誤りの自動修復`) so the highlighted left item and the visible
+/// right-hand heading cannot disagree.
 #[test]
 #[ignore = "requires an interactive User32 desktop"]
 fn input_support_topic_click_shows_prediction_assistance_controls() {
@@ -918,35 +918,35 @@ fn input_support_topic_click_shows_prediction_assistance_controls() {
     let input_tree = find_direct_child(root, "SysTreeView32").expect("input topic TreeView");
     let (basic_panel, profile_panel) = input_topic_panels(root);
     let input_assist_panel = input_topic_panel_with_heading(root, "入力補助");
-    let prediction_panel = input_topic_panel_with_heading(root, "推測変換");
+    let repair_panel = input_topic_panel_with_heading(root, "入力誤りの自動修復");
     raise_fixture_for_input(root);
 
     click_tree_row_until("入力支援", &cursor, input_tree, || {
-        is_visible(prediction_panel)
+        is_visible(repair_panel)
             && !is_visible(basic_panel)
             && !is_visible(profile_panel)
             && !is_visible(input_assist_panel)
     });
-    let expected_prediction = tree_item_relative(
+    let expected_repair = tree_item_relative(
         input_tree,
         TVGN_CHILD as usize,
         input_tree_item(input_tree, "入力支援"),
     );
     assert_eq!(
         selected_input_tree_item(input_tree),
-        expected_prediction,
+        expected_repair,
         "a category click must leave the first real child highlighted"
     );
     assert!(
-        is_visible(prediction_panel)
+        is_visible(repair_panel)
             && !is_visible(basic_panel)
             && !is_visible(profile_panel)
             && !is_visible(input_assist_panel),
-        "入力支援 category click selects only its prediction-assistance child page"
+        "入力支援 category click selects only its input-repair child page"
     );
     assert!(
-        find_direct_child_with_text(prediction_panel, "予測入力を使う").is_some(),
-        "prediction assistance exposes its real preference control"
+        find_direct_child_with_text(repair_panel, "入力支援を有効にする").is_some(),
+        "input-repair page exposes its master preference control"
     );
 }
 

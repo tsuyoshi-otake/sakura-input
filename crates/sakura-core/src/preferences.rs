@@ -225,6 +225,114 @@ impl NeuralRerankerScope {
     }
 }
 
+/// ATOK-style input assistance: typo repair at conversion time, English-to-
+/// katakana spelling recovery, and contextual punctuation/long-vowel swaps.
+///
+/// Every flag defaults on so a missing `[input-support]` section matches the
+/// ATOK-like factory defaults chosen for this feature. The master `enabled`
+/// gate turns the whole sheet off without clearing the individual choices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InputSupport {
+    pub enabled: bool,
+    pub commit_based: bool,
+    pub advanced: bool,
+    pub vowel_count: bool,
+    pub consonant_extra: bool,
+    pub n_count: bool,
+    pub dakuten_swap: bool,
+    pub tsu_sokuon: bool,
+    pub wa_wo: bool,
+    pub small_u: bool,
+    pub fuzzy_proper_nouns: bool,
+    pub english_to_katakana: bool,
+    pub period_after_digit: bool,
+    pub comma_after_digit: bool,
+    pub middle_dot_after_digit: bool,
+    pub long_vowel_after_alnum: bool,
+}
+
+impl Default for InputSupport {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            commit_based: true,
+            advanced: true,
+            vowel_count: true,
+            consonant_extra: true,
+            n_count: true,
+            dakuten_swap: true,
+            tsu_sokuon: true,
+            wa_wo: true,
+            small_u: true,
+            fuzzy_proper_nouns: true,
+            english_to_katakana: true,
+            period_after_digit: true,
+            comma_after_digit: true,
+            middle_dot_after_digit: true,
+            long_vowel_after_alnum: true,
+        }
+    }
+}
+
+impl InputSupport {
+    /// Effective gate used on every conversion and keystroke path.
+    pub const fn is_active(self) -> bool {
+        self.enabled
+    }
+
+    /// Shared SPELLING_CORRECTION admission used by conversion and prediction.
+    ///
+    /// Issue #63: active master + fuzzy proper nouns + not suppressed/sensitive.
+    pub const fn allows_spelling_correction(self, skip_input_repair: bool) -> bool {
+        self.is_active() && self.fuzzy_proper_nouns && !skip_input_repair
+    }
+
+    pub fn set_flag(&mut self, key: &str, value: bool) -> bool {
+        match key {
+            "enabled" => self.enabled = value,
+            "commit-based" => self.commit_based = value,
+            "advanced" => self.advanced = value,
+            "vowel-count" => self.vowel_count = value,
+            "consonant-extra" => self.consonant_extra = value,
+            "n-count" => self.n_count = value,
+            "dakuten-swap" => self.dakuten_swap = value,
+            "tsu-sokuon" => self.tsu_sokuon = value,
+            "wa-wo" => self.wa_wo = value,
+            "small-u" => self.small_u = value,
+            "fuzzy-proper-nouns" => self.fuzzy_proper_nouns = value,
+            "english-to-katakana" => self.english_to_katakana = value,
+            "period-after-digit" => self.period_after_digit = value,
+            "comma-after-digit" => self.comma_after_digit = value,
+            "middle-dot-after-digit" => self.middle_dot_after_digit = value,
+            "long-vowel-after-alnum" => self.long_vowel_after_alnum = value,
+            _ => return false,
+        }
+        true
+    }
+
+    pub fn flag(self, key: &str) -> Option<bool> {
+        Some(match key {
+            "enabled" => self.enabled,
+            "commit-based" => self.commit_based,
+            "advanced" => self.advanced,
+            "vowel-count" => self.vowel_count,
+            "consonant-extra" => self.consonant_extra,
+            "n-count" => self.n_count,
+            "dakuten-swap" => self.dakuten_swap,
+            "tsu-sokuon" => self.tsu_sokuon,
+            "wa-wo" => self.wa_wo,
+            "small-u" => self.small_u,
+            "fuzzy-proper-nouns" => self.fuzzy_proper_nouns,
+            "english-to-katakana" => self.english_to_katakana,
+            "period-after-digit" => self.period_after_digit,
+            "comma-after-digit" => self.comma_after_digit,
+            "middle-dot-after-digit" => self.middle_dot_after_digit,
+            "long-vowel-after-alnum" => self.long_vowel_after_alnum,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Preferences {
     pub keymap_preset: Preset,
@@ -250,6 +358,8 @@ pub struct Preferences {
     /// still owns candidate order and simply receives the previous segment's
     /// right-connection class when the option is enabled.
     pub association_enabled: bool,
+    /// ATOK-style input assistance (typo repair, English spelling, punctuation).
+    pub input_support: InputSupport,
     /// Scope for the optional, local neural conversion reranker.
     pub neural_reranker_scope: NeuralRerankerScope,
     /// Appearance selection shared by Sakura-owned settings and renderer UI.
@@ -273,6 +383,7 @@ impl Default for Preferences {
             prediction_enabled: true,
             suggest_accept: SuggestAccept::Tab,
             association_enabled: true,
+            input_support: InputSupport::default(),
             neural_reranker_scope: NeuralRerankerScope::LongTextOnly,
             appearance_theme: AppearanceTheme::Auto,
             developer_mode: false,
@@ -323,6 +434,7 @@ pub struct ContextPreferences {
     pub prediction_enabled: bool,
     pub suggest_accept: SuggestAccept,
     pub association_enabled: bool,
+    pub input_support: InputSupport,
 }
 
 /// Shipped profiles protect shell/IDE Tab completion before a user has opened
@@ -364,6 +476,7 @@ pub fn resolve_context_preferences(
             prediction_enabled: profile.prediction_enabled,
             suggest_accept: profile.suggest_accept,
             association_enabled: preferences.association_enabled,
+            input_support: preferences.input_support,
         };
     }
     ContextPreferences {
@@ -376,6 +489,7 @@ pub fn resolve_context_preferences(
         prediction_enabled: preferences.prediction_enabled,
         suggest_accept: preferences.suggest_accept,
         association_enabled: preferences.association_enabled,
+        input_support: preferences.input_support,
     }
 }
 
@@ -442,6 +556,7 @@ pub fn parse_preferences(source: &str) -> Result<ParsedPreferences, ParseError> 
     {
         preferences.association_enabled = enabled;
     }
+    parse_input_support(&document, &mut preferences.input_support);
     if let Some(value) = document.section(input_section).and_then(|entries| {
         entries
             .iter()
@@ -517,8 +632,9 @@ pub fn serialize_preferences_with_profiles(
     preferences: Preferences,
     profiles: &[AppProfile],
 ) -> String {
+    let support = preferences.input_support;
     let mut output = format!(
-        "[meta]\nformat-version = \"{}\"\n\n[input]\nkeymap-preset = \"{}\"\ninput-method = \"{}\"\nconversion-method = \"{}\"\ndefault-mode = \"{}\"\nprediction-enabled = \"{}\"\nsuggest-accept = \"{}\"\nassociation-enabled = \"{}\"\nneural-reranker-scope = \"{}\"\ndeveloper-mode = \"{}\"\nspace-width = \"{}\"\nshift-space = \"{}\"\n\n[appearance]\ntheme = \"{}\"\n\n[width]\nalnum = \"{}\"\nnumber = \"{}\"\nsymbol = \"{}\"\npunctuation = \"{}\"\nbrackets = \"{}\"\n",
+        "[meta]\nformat-version = \"{}\"\n\n[input]\nkeymap-preset = \"{}\"\ninput-method = \"{}\"\nconversion-method = \"{}\"\ndefault-mode = \"{}\"\nprediction-enabled = \"{}\"\nsuggest-accept = \"{}\"\nassociation-enabled = \"{}\"\nneural-reranker-scope = \"{}\"\ndeveloper-mode = \"{}\"\nspace-width = \"{}\"\nshift-space = \"{}\"\n\n[input-support]\nenabled = \"{}\"\ncommit-based = \"{}\"\nadvanced = \"{}\"\nvowel-count = \"{}\"\nconsonant-extra = \"{}\"\nn-count = \"{}\"\ndakuten-swap = \"{}\"\ntsu-sokuon = \"{}\"\nwa-wo = \"{}\"\nsmall-u = \"{}\"\nfuzzy-proper-nouns = \"{}\"\nenglish-to-katakana = \"{}\"\nperiod-after-digit = \"{}\"\ncomma-after-digit = \"{}\"\nmiddle-dot-after-digit = \"{}\"\nlong-vowel-after-alnum = \"{}\"\n\n[appearance]\ntheme = \"{}\"\n\n[width]\nalnum = \"{}\"\nnumber = \"{}\"\nsymbol = \"{}\"\npunctuation = \"{}\"\nbrackets = \"{}\"\n",
         CONFIG_FORMAT_VERSION,
         preferences.keymap_preset.name(),
         preferences.input_method.name(),
@@ -531,6 +647,22 @@ pub fn serialize_preferences_with_profiles(
         bool_name(preferences.developer_mode),
         preferences.space_width.name(),
         preferences.shift_space_behavior.name(),
+        bool_name(support.enabled),
+        bool_name(support.commit_based),
+        bool_name(support.advanced),
+        bool_name(support.vowel_count),
+        bool_name(support.consonant_extra),
+        bool_name(support.n_count),
+        bool_name(support.dakuten_swap),
+        bool_name(support.tsu_sokuon),
+        bool_name(support.wa_wo),
+        bool_name(support.small_u),
+        bool_name(support.fuzzy_proper_nouns),
+        bool_name(support.english_to_katakana),
+        bool_name(support.period_after_digit),
+        bool_name(support.comma_after_digit),
+        bool_name(support.middle_dot_after_digit),
+        bool_name(support.long_vowel_after_alnum),
         preferences.appearance_theme.name(),
         width_name(preferences.normalizer.width.alnum),
         width_name(preferences.normalizer.width.number),
@@ -629,6 +761,32 @@ fn text<'a>(document: &'a Document, section: &str, key: &str) -> Option<&'a str>
         .as_text()
 }
 
+fn parse_input_support(document: &Document, support: &mut InputSupport) {
+    const KEYS: [&str; 16] = [
+        "enabled",
+        "commit-based",
+        "advanced",
+        "vowel-count",
+        "consonant-extra",
+        "n-count",
+        "dakuten-swap",
+        "tsu-sokuon",
+        "wa-wo",
+        "small-u",
+        "fuzzy-proper-nouns",
+        "english-to-katakana",
+        "period-after-digit",
+        "comma-after-digit",
+        "middle-dot-after-digit",
+        "long-vowel-after-alnum",
+    ];
+    for key in KEYS {
+        if let Some(value) = text(document, "input-support", key).and_then(parse_bool) {
+            let _ = support.set_flag(key, value);
+        }
+    }
+}
+
 fn parse_bool(value: &str) -> Option<bool> {
     match value {
         "true" | "on" | "yes" => Some(true),
@@ -711,6 +869,7 @@ const fn brackets_name(value: BracketStyle) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dictionary::EntryFlags;
 
     #[test]
     fn current_format_roundtrips_every_setting() {
@@ -733,6 +892,24 @@ mod tests {
             prediction_enabled: false,
             suggest_accept: SuggestAccept::ShiftEnter,
             association_enabled: false,
+            input_support: InputSupport {
+                enabled: false,
+                commit_based: false,
+                advanced: true,
+                vowel_count: false,
+                consonant_extra: true,
+                n_count: false,
+                dakuten_swap: true,
+                tsu_sokuon: false,
+                wa_wo: true,
+                small_u: false,
+                fuzzy_proper_nouns: true,
+                english_to_katakana: false,
+                period_after_digit: true,
+                comma_after_digit: false,
+                middle_dot_after_digit: true,
+                long_vowel_after_alnum: false,
+            },
             neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
             appearance_theme: AppearanceTheme::Dark,
             developer_mode: true,
@@ -1087,5 +1264,58 @@ anything = "ignored"
         let missing = parse_preferences("[meta]\nformat-version = \"4\"\n")
             .expect("missing optional setting");
         assert!(missing.preferences.association_enabled);
+    }
+
+    #[test]
+    fn input_support_defaults_on_and_roundtrips_individual_flags() {
+        let defaults = Preferences::default();
+        assert!(defaults.input_support.enabled);
+        assert!(defaults.input_support.vowel_count);
+        assert!(defaults.input_support.english_to_katakana);
+        let missing =
+            parse_preferences("[meta]\nformat-version = \"4\"\n").expect("missing input-support");
+        assert_eq!(missing.preferences.input_support, InputSupport::default());
+
+        let mut support = InputSupport::default();
+        support.enabled = false;
+        support.n_count = false;
+        support.period_after_digit = false;
+        let preferences = Preferences {
+            input_support: support,
+            ..Preferences::default()
+        };
+        let serialized = serialize_preferences(preferences);
+        assert!(serialized.contains("[input-support]"));
+        assert!(serialized.contains("enabled = \"false\""));
+        assert!(serialized.contains("n-count = \"false\""));
+        assert!(serialized.contains("period-after-digit = \"false\""));
+        let parsed = parse_preferences(&serialized).expect("roundtrip");
+        assert_eq!(parsed.preferences.input_support, support);
+    }
+
+    #[test]
+    fn spelling_correction_admission_matches_issue_63_contract() {
+        // Policy matrix from Issue #63.
+        let cases = [
+            (false, false, true, false),
+            (true, true, true, false),
+            (true, false, false, false),
+            (true, false, true, true),
+        ];
+        for (active, skip, fuzzy, expect_spelling) in cases {
+            let mut support = InputSupport::default();
+            support.enabled = active;
+            support.fuzzy_proper_nouns = fuzzy;
+            assert_eq!(
+                support.allows_spelling_correction(skip),
+                expect_spelling,
+                "active={active} skip={skip} fuzzy={fuzzy}"
+            );
+            assert_eq!(
+                crate::allows_system_entry(support, skip, EntryFlags::SPELLING_CORRECTION),
+                expect_spelling
+            );
+            assert!(crate::allows_system_entry(support, skip, EntryFlags::IT));
+        }
     }
 }

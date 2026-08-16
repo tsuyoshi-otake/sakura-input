@@ -3,8 +3,8 @@ use std::thread;
 use std::time::Duration;
 
 use sakura_core::{
-    AppProfile, AppearanceTheme, ConversionMethod, InputMethod, NeuralRerankerScope, Preset,
-    ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionaryEntry, UserPartOfSpeech,
+    AppProfile, AppearanceTheme, ConversionMethod, InputMethod, InputSupport, NeuralRerankerScope,
+    Preset, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionaryEntry, UserPartOfSpeech,
 };
 use sakura_proto::Mode;
 use sakura_settings::user_dictionary::{self, ImportMode};
@@ -28,6 +28,8 @@ Usage: sakura_settings <command>\n\
   config set space-width <same-as-input|full|half>\n\
   config set shift-space <opposite|full|half>\n\
   config set developer-mode <on|off>\n\
+  config set input-support <on|off>\n\
+  config set input-support.<flag> <on|off>\n\
   profile list\n\
   profile set <process.exe> <mode> <on|off> <suggest>\n\
   profile delete <process.exe>\n\
@@ -132,6 +134,8 @@ pub enum ConfigSetting {
     SpaceWidth,
     ShiftSpace,
     DeveloperMode,
+    InputSupportMaster,
+    InputSupportFlag(&'static str),
 }
 
 pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, String> {
@@ -141,20 +145,7 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
         ["help" | "--help" | "-h"] => Ok(Command::Help),
         ["config", "show"] => Ok(Command::ConfigShow),
         ["config", "set", setting, value] => Ok(Command::ConfigSet {
-            setting: match *setting {
-                "keymap" => ConfigSetting::Keymap,
-                "input-method" => ConfigSetting::InputMethod,
-                "default-mode" => ConfigSetting::DefaultMode,
-                "conversion-method" => ConfigSetting::ConversionMethod,
-                "prediction" => ConfigSetting::Prediction,
-                "suggest" => ConfigSetting::Suggest,
-                "neural-reranker-scope" => ConfigSetting::NeuralRerankerScope,
-                "appearance" => ConfigSetting::Appearance,
-                "space-width" => ConfigSetting::SpaceWidth,
-                "shift-space" => ConfigSetting::ShiftSpace,
-                "developer-mode" => ConfigSetting::DeveloperMode,
-                _ => return Err(format!("unknown configuration setting {setting:?}")),
-            },
+            setting: parse_config_setting(setting)?,
             value: (*value).to_owned(),
         }),
         ["profile", "list"] => Ok(Command::ProfileList),
@@ -315,6 +306,18 @@ pub fn run(command: Command) -> Result<(), String> {
                     let enabled = parse_switch(&value)?;
                     document.preferences.developer_mode = enabled;
                     developer_mode = Some(enabled);
+                }
+                ConfigSetting::InputSupportMaster => {
+                    document.preferences.input_support.enabled = parse_switch(&value)?;
+                }
+                ConfigSetting::InputSupportFlag(flag) => {
+                    if !document
+                        .preferences
+                        .input_support
+                        .set_flag(flag, parse_switch(&value)?)
+                    {
+                        return Err(format!("unknown input-support flag {flag:?}"));
+                    }
                 }
             }
             document.save(&path).map_err(display)?;
@@ -606,7 +609,84 @@ fn print_configuration(document: &ConfigurationDocument) {
         "developer-mode\t{}",
         switch_name(document.preferences.developer_mode)
     );
+    println!(
+        "input-support\t{}",
+        switch_name(document.preferences.input_support.enabled)
+    );
+    for flag in [
+        "commit-based",
+        "advanced",
+        "vowel-count",
+        "consonant-extra",
+        "n-count",
+        "dakuten-swap",
+        "tsu-sokuon",
+        "wa-wo",
+        "small-u",
+        "fuzzy-proper-nouns",
+        "english-to-katakana",
+        "period-after-digit",
+        "comma-after-digit",
+        "middle-dot-after-digit",
+        "long-vowel-after-alnum",
+    ] {
+        println!(
+            "input-support.{flag}\t{}",
+            switch_name(
+                document
+                    .preferences
+                    .input_support
+                    .flag(flag)
+                    .expect("known input-support flag")
+            )
+        );
+    }
     println!("profiles\t{}", document.profiles.len());
+}
+
+fn parse_config_setting(setting: &str) -> Result<ConfigSetting, String> {
+    match setting {
+        "keymap" => Ok(ConfigSetting::Keymap),
+        "input-method" => Ok(ConfigSetting::InputMethod),
+        "default-mode" => Ok(ConfigSetting::DefaultMode),
+        "conversion-method" => Ok(ConfigSetting::ConversionMethod),
+        "prediction" => Ok(ConfigSetting::Prediction),
+        "suggest" => Ok(ConfigSetting::Suggest),
+        "neural-reranker-scope" => Ok(ConfigSetting::NeuralRerankerScope),
+        "appearance" => Ok(ConfigSetting::Appearance),
+        "space-width" => Ok(ConfigSetting::SpaceWidth),
+        "shift-space" => Ok(ConfigSetting::ShiftSpace),
+        "developer-mode" => Ok(ConfigSetting::DeveloperMode),
+        "input-support" => Ok(ConfigSetting::InputSupportMaster),
+        other => {
+            if let Some(flag) = other.strip_prefix("input-support.") {
+                if InputSupport::default().flag(flag).is_some() && flag != "enabled" {
+                    // Leak-free: the known flag names are compile-time statics.
+                    const FLAGS: [&str; 15] = [
+                        "commit-based",
+                        "advanced",
+                        "vowel-count",
+                        "consonant-extra",
+                        "n-count",
+                        "dakuten-swap",
+                        "tsu-sokuon",
+                        "wa-wo",
+                        "small-u",
+                        "fuzzy-proper-nouns",
+                        "english-to-katakana",
+                        "period-after-digit",
+                        "comma-after-digit",
+                        "middle-dot-after-digit",
+                        "long-vowel-after-alnum",
+                    ];
+                    if let Some(known) = FLAGS.iter().copied().find(|name| *name == flag) {
+                        return Ok(ConfigSetting::InputSupportFlag(known));
+                    }
+                }
+            }
+            Err(format!("unknown configuration setting {setting:?}"))
+        }
+    }
 }
 
 fn dictionary_entry(

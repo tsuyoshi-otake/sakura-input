@@ -14,6 +14,10 @@ use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
 use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::editing::{identifier_into, IdentifierStyle};
+use crate::input_repair::{
+    allows_system_entry, collect_repair_variants, english_spelling_katakana_reading,
+    COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, MAX_REPAIR_VARIANTS,
+};
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
 use crate::TextSink;
@@ -69,6 +73,11 @@ pub struct ConversionOptions {
     /// Right connection class carried from the previous commit. Zero is the
     /// ordinary beginning-of-sentence class.
     pub initial_right_id: u16,
+    /// ATOK-style input assistance applied while building the lattice.
+    pub input_support: crate::preferences::InputSupport,
+    /// When true, skip every repair / English-spelling edge. Used after the
+    /// user rejects an automatic repair by resizing segments.
+    pub skip_input_repair: bool,
 }
 
 impl Default for ConversionOptions {
@@ -79,6 +88,8 @@ impl Default for ConversionOptions {
             it_bias_per_mille: 100,
             max_it_boost: 800,
             initial_right_id: 0,
+            input_support: crate::preferences::InputSupport::default(),
+            skip_input_repair: false,
         }
     }
 }
@@ -283,6 +294,10 @@ pub struct Converter {
     initial_right_id: u16,
     lattice_node_budget: usize,
     search_state_budget: usize,
+    /// Alternate readings taken from commit history for the current query.
+    /// Cleared on every convert; populated by the engine before convert when
+    /// `InputSupport::commit_based` is active.
+    commit_repair_readings: Vec<FixedStr<MAX_PREEDIT_BYTES>>,
 }
 
 impl Converter {
@@ -301,6 +316,31 @@ impl Converter {
             initial_right_id: 0,
             lattice_node_budget: MAX_LATTICE_NODES,
             search_state_budget: MAX_SEARCH_STATES,
+            commit_repair_readings: Vec::new(),
+        }
+    }
+
+    /// Supplies commit-history repair readings for the next conversion only.
+    /// Each reading is looked up in the dictionary and attached to the typed
+    /// span with [`COMMIT_HISTORY_PENALTY`].
+    pub fn set_commit_repair_readings(&mut self, readings: &[&str]) {
+        self.commit_repair_readings.clear();
+        for reading in readings {
+            if reading.is_empty() {
+                continue;
+            }
+            let mut text = FixedStr::new();
+            if text.push_str(reading).is_err() {
+                continue;
+            }
+            if self
+                .commit_repair_readings
+                .iter()
+                .any(|existing| existing.as_str() == *reading)
+            {
+                continue;
+            }
+            self.commit_repair_readings.push(text);
         }
     }
 
@@ -375,13 +415,20 @@ impl Converter {
 
         self.reset(reading.len());
         self.initial_right_id = options.initial_right_id;
+        let commit_repairs = std::mem::take(&mut self.commit_repair_readings);
         let fallback = make_lossless_fallback(dictionary, reading, self.initial_right_id)?;
         let mut search = SearchRun {
             terminal: ConversionSearchTerminal::SearchExhausted,
             states_pushed: 0,
             incoherent_prefixes_pruned: 0,
         };
-        match self.build_lattice(dictionary, user_dictionary, reading, options) {
+        match self.build_lattice(
+            dictionary,
+            user_dictionary,
+            reading,
+            options,
+            &commit_repairs,
+        ) {
             Ok(()) => {
                 self.compute_suffix_costs(dictionary, reading.len());
                 if let Ok(best_node) = self.best_final_node(dictionary, reading.len()) {
@@ -599,6 +646,7 @@ impl Converter {
         user_dictionary: Option<&UserDictionary>,
         reading: &str,
         options: ConversionOptions,
+        commit_repairs: &[FixedStr<MAX_PREEDIT_BYTES>],
     ) -> Result<(), ConversionError> {
         if options.method == ConversionMethod::SingleSegment {
             return self.build_single_segment_lattice(
@@ -606,6 +654,7 @@ impl Converter {
                 user_dictionary,
                 reading,
                 options,
+                commit_repairs,
             );
         }
         let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
@@ -634,6 +683,13 @@ impl Converter {
             dictionary
                 .common_prefix_search(&reading[start..], |matched| {
                     if latin_token && (!at_token_start || start + matched.matched_bytes < run.end) {
+                        return true;
+                    }
+                    if !allows_system_entry(
+                        options.input_support,
+                        options.skip_input_repair,
+                        matched.entry.flags,
+                    ) {
                         return true;
                     }
                     if matched.matched_bytes != last_length {
@@ -679,6 +735,16 @@ impl Converter {
             if let Some(error) = failure {
                 return Err(error);
             }
+
+            // Repair edges are best-effort: a full lattice must not fail the
+            // conversion when only a typo-correction path ran out of room.
+            let _ = self.add_local_repair_edges(
+                dictionary,
+                &reading[start..],
+                start,
+                candidates_for_length,
+                options,
+            );
 
             if let Some(user_dictionary) = user_dictionary {
                 let mut user_candidates_for_length = 0usize;
@@ -789,7 +855,189 @@ impl Converter {
                 }
             }
         }
+        // Commit-history repairs are whole-query hints only. Keep them outside
+        // the per-character start loop so a full typed match cannot be pasted
+        // onto an intermediate suffix span (Issue #63).
+        let _ = self.add_commit_repair_edges_for_whole_query(
+            dictionary,
+            reading,
+            options,
+            commit_repairs,
+        );
         Ok(())
+    }
+
+    /// Adds bounded typo-repair and English-spelling edges for one typed span.
+    /// Exact dictionary edges keep priority: repair only fills unused slots and
+    /// always carries an explicit penalty. Lattice exhaustion drops repair edges
+    /// without failing the conversion. Commit-history hints are handled by
+    /// [`Self::add_commit_repair_edges_for_whole_query`].
+    fn add_local_repair_edges(
+        &mut self,
+        dictionary: &Dictionary<'_>,
+        typed_suffix: &str,
+        start: usize,
+        exact_edges_for_length: usize,
+        options: ConversionOptions,
+    ) -> Result<(), ConversionError> {
+        let support = options.input_support;
+        if !support.is_active() || options.skip_input_repair || typed_suffix.is_empty() {
+            return Ok(());
+        }
+        let mut remaining_slots =
+            MAX_DICTIONARY_EDGES_PER_READING.saturating_sub(exact_edges_for_length);
+        if remaining_slots == 0 {
+            return Ok(());
+        }
+
+        let variants = collect_repair_variants(typed_suffix, support, MAX_REPAIR_VARIANTS);
+        for variant in variants.iter() {
+            if remaining_slots == 0 {
+                break;
+            }
+            let added = self.add_repaired_dictionary_edges(
+                dictionary,
+                variant.repaired.as_str(),
+                start,
+                start + usize::from(variant.typed_end).min(typed_suffix.len()),
+                variant.penalty,
+                remaining_slots,
+                options,
+            )?;
+            remaining_slots = remaining_slots.saturating_sub(added);
+        }
+
+        if support.english_to_katakana {
+            if let Some(katakana) = english_spelling_katakana_reading(typed_suffix) {
+                let _ = self.add_repaired_dictionary_edges(
+                    dictionary,
+                    katakana.as_str(),
+                    start,
+                    start + typed_suffix.len(),
+                    ENGLISH_KATAKANA_PENALTY,
+                    remaining_slots,
+                    options,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Adds commit-history repair edges for the full query only.
+    ///
+    /// Invariant (Issue #63): each accepted edge has `start == 0`,
+    /// `end == reading.len()`, and was collected for this exact typed reading.
+    fn add_commit_repair_edges_for_whole_query(
+        &mut self,
+        dictionary: &Dictionary<'_>,
+        reading: &str,
+        options: ConversionOptions,
+        commit_repairs: &[FixedStr<MAX_PREEDIT_BYTES>],
+    ) -> Result<(), ConversionError> {
+        let support = options.input_support;
+        if !support.is_active()
+            || options.skip_input_repair
+            || !support.commit_based
+            || reading.is_empty()
+            || commit_repairs.is_empty()
+        {
+            return Ok(());
+        }
+        let mut remaining_slots = MAX_DICTIONARY_EDGES_PER_READING;
+        for repaired in commit_repairs {
+            if remaining_slots == 0 {
+                break;
+            }
+            if repaired.as_str() == reading {
+                continue;
+            }
+            let added = self.add_repaired_dictionary_edges(
+                dictionary,
+                repaired.as_str(),
+                0,
+                reading.len(),
+                COMMIT_HISTORY_PENALTY,
+                remaining_slots,
+                options,
+            )?;
+            remaining_slots = remaining_slots.saturating_sub(added);
+        }
+        Ok(())
+    }
+
+    fn add_repaired_dictionary_edges(
+        &mut self,
+        dictionary: &Dictionary<'_>,
+        repaired: &str,
+        start: usize,
+        typed_end: usize,
+        penalty: i64,
+        remaining_slots: usize,
+        options: ConversionOptions,
+    ) -> Result<usize, ConversionError> {
+        if remaining_slots == 0 || repaired.is_empty() {
+            return Ok(0);
+        }
+        let mut added = 0usize;
+        let mut lattice_full = false;
+        let result = dictionary.common_prefix_search(repaired, |matched| {
+            if matched.matched_bytes != repaired.len() {
+                return true;
+            }
+            if !allows_system_entry(
+                options.input_support,
+                options.skip_input_repair,
+                matched.entry.flags,
+            ) {
+                return true;
+            }
+            if added >= remaining_slots {
+                return false;
+            }
+            let boost = if matched.entry.flags.contains(EntryFlags::IT) {
+                let proportional = i64::from(matched.entry.word_cost.max(0))
+                    .saturating_mul(i64::from(options.it_bias_per_mille))
+                    / 1_000;
+                proportional.min(i64::from(options.max_it_boost))
+            } else {
+                0
+            };
+            let local_cost = i64::from(matched.entry.word_cost)
+                .saturating_sub(boost)
+                .saturating_add(penalty);
+            let Ok(entry_index) = u32::try_from(matched.entry_index) else {
+                return true;
+            };
+            match self.add_node(
+                dictionary,
+                NodeSpec {
+                    start,
+                    end: typed_end,
+                    left_id: matched.entry.left_id,
+                    right_id: matched.entry.right_id,
+                    local_cost,
+                    surface: Surface::Dictionary {
+                        entry: matched.entry,
+                        entry_index,
+                    },
+                },
+            ) {
+                Ok(()) => {
+                    added += 1;
+                    true
+                }
+                Err(ConversionError::LatticeFull) => {
+                    lattice_full = true;
+                    false
+                }
+                Err(_) => false,
+            }
+        });
+        if lattice_full {
+            return Ok(added);
+        }
+        result.map_err(ConversionError::Dictionary)?;
+        Ok(added)
     }
 
     /// Builds the intentionally narrow single-bunsetsu lattice. Restricting
@@ -802,6 +1050,7 @@ impl Converter {
         user_dictionary: Option<&UserDictionary>,
         reading: &str,
         options: ConversionOptions,
+        commit_repairs: &[FixedStr<MAX_PREEDIT_BYTES>],
     ) -> Result<(), ConversionError> {
         let reading_len = reading.len();
         let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
@@ -810,9 +1059,20 @@ impl Converter {
             0
         };
         let mut failure = None;
+        let mut exact_edges_added = 0usize;
         dictionary
             .common_prefix_search(reading, |matched| {
                 if matched.matched_bytes != reading_len {
+                    return true;
+                }
+                if !allows_system_entry(
+                    options.input_support,
+                    options.skip_input_repair,
+                    matched.entry.flags,
+                ) {
+                    return true;
+                }
+                if exact_edges_added >= MAX_DICTIONARY_EDGES_PER_READING {
                     return true;
                 }
                 let boost = if matched.entry.flags.contains(EntryFlags::IT) {
@@ -844,12 +1104,20 @@ impl Converter {
                     failure = Some(error);
                     return false;
                 }
+                exact_edges_added = exact_edges_added.saturating_add(1);
                 true
             })
             .map_err(ConversionError::Dictionary)?;
         if let Some(error) = failure {
             return Err(error);
         }
+        let _ = self.add_local_repair_edges(dictionary, reading, 0, exact_edges_added, options);
+        let _ = self.add_commit_repair_edges_for_whole_query(
+            dictionary,
+            reading,
+            options,
+            commit_repairs,
+        );
 
         if let Some(user_dictionary) = user_dictionary {
             let mut user_failure = None;

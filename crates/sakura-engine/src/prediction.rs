@@ -11,7 +11,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use sakura_core::{Dictionary, EntryFlags, UserDictionary};
+use sakura_core::{
+    collect_repair_variants, Dictionary, EntryFlags, InputSupport, UserDictionary,
+    MAX_PREDICTION_REPAIR_VARIANTS, REPAIR_PENALTY,
+};
 use sakura_proto::{FixedStr, SessionId};
 
 use crate::dictionary::ConversionService;
@@ -218,6 +221,11 @@ struct Query {
     generation: u64,
     prefix: FixedStr<MAX_PREDICTION_READING_BYTES>,
     domain_it_per_mille: u16,
+    input_support: InputSupport,
+    skip_input_repair: bool,
+    /// Snapshot of the Issue #63 SPELLING_CORRECTION gate at publish time so
+    /// a live preference change cannot widen admission mid-worker.
+    allow_spelling_correction: bool,
 }
 
 #[derive(Debug, Default)]
@@ -335,6 +343,8 @@ impl Mailbox {
         generation: u64,
         prefix: &str,
         domain_it_per_mille: u16,
+        input_support: InputSupport,
+        skip_input_repair: bool,
     ) -> Option<u64> {
         if self.stopping.load(Ordering::Acquire) || prefix.is_empty() {
             return None;
@@ -348,6 +358,9 @@ impl Mailbox {
             generation,
             prefix: fixed_prefix,
             domain_it_per_mille: domain_it_per_mille.min(1_000),
+            input_support,
+            skip_input_repair,
+            allow_spelling_correction: input_support.allows_spelling_correction(skip_input_repair),
         };
         let mut state = self
             .state
@@ -428,11 +441,18 @@ impl PredictionService {
         generation: u64,
         prefix: &str,
         domain_it_per_mille: u16,
+        input_support: InputSupport,
+        skip_input_repair: bool,
         timeout: Duration,
     ) -> Option<PredictionResult> {
-        let sequence = self
-            .mailbox
-            .publish(session, generation, prefix, domain_it_per_mille)?;
+        let sequence = self.mailbox.publish(
+            session,
+            generation,
+            prefix,
+            domain_it_per_mille,
+            input_support,
+            skip_input_repair,
+        )?;
         self.mailbox.wait(sequence, timeout)
     }
 
@@ -445,6 +465,8 @@ impl PredictionService {
         generation: u64,
         prefix: &str,
         domain_it_per_mille: u16,
+        input_support: InputSupport,
+        skip_input_repair: bool,
         timeout: Duration,
         destination: &mut PredictionResult,
     ) -> bool {
@@ -455,10 +477,14 @@ impl PredictionService {
         {
             return result;
         }
-        let Some(sequence) = self
-            .mailbox
-            .publish(session, generation, prefix, domain_it_per_mille)
-        else {
+        let Some(sequence) = self.mailbox.publish(
+            session,
+            generation,
+            prefix,
+            domain_it_per_mille,
+            input_support,
+            skip_input_repair,
+        ) else {
             return false;
         };
         self.mailbox.wait_into(sequence, timeout, destination)
@@ -676,6 +702,11 @@ impl PredictionIndex {
             let Ok(entry) = self.dictionary.entry_at(indexed.entry_index as usize) else {
                 continue;
             };
+            if entry.flags.contains(EntryFlags::SPELLING_CORRECTION)
+                && !query.allow_spelling_correction
+            {
+                continue;
+            }
             ranked.insert(Scored {
                 score: prediction_score(
                     entry.prediction_cost,
@@ -696,6 +727,45 @@ impl PredictionIndex {
             }
             true
         });
+
+        if !query.skip_input_repair && query.input_support.is_active() {
+            let variants = collect_repair_variants(
+                query.prefix.as_str(),
+                query.input_support,
+                MAX_PREDICTION_REPAIR_VARIANTS,
+            );
+            for variant in variants.iter() {
+                let repaired = variant.repaired.as_str().as_bytes();
+                let start = self.lower_bound(repaired);
+                for index in start..self.entries.len() {
+                    let indexed = self.entries[index];
+                    let Some(reading) = self.reading(indexed) else {
+                        continue;
+                    };
+                    if !reading.as_bytes().starts_with(repaired) {
+                        break;
+                    }
+                    let Ok(entry) = self.dictionary.entry_at(indexed.entry_index as usize) else {
+                        continue;
+                    };
+                    if entry.flags.contains(EntryFlags::SPELLING_CORRECTION)
+                        && !query.allow_spelling_correction
+                    {
+                        continue;
+                    }
+                    ranked.insert(Scored {
+                        score: prediction_score(
+                            entry.prediction_cost,
+                            entry.flags,
+                            query.domain_it_per_mille,
+                        )
+                        .saturating_add(REPAIR_PENALTY),
+                        source: DictionarySource::System,
+                        index: u32::try_from(index).unwrap_or(u32::MAX),
+                    });
+                }
+            }
+        }
 
         for scored in ranked.as_slice() {
             let candidate = match scored.source {
@@ -1019,6 +1089,9 @@ mod tests {
             generation: 1,
             prefix,
             domain_it_per_mille: 1_000,
+            input_support: InputSupport::default(),
+            skip_input_repair: false,
+            allow_spelling_correction: true,
         };
         let user_dictionary = conversion.user_dictionary_snapshot();
 
@@ -1039,6 +1112,8 @@ mod tests {
                 generation,
                 query.prefix.as_str(),
                 query.domain_it_per_mille,
+                sakura_core::InputSupport::default(),
+                false,
                 Duration::from_secs(1),
                 &mut worker_result,
             ));
@@ -1070,7 +1145,15 @@ mod tests {
         let service = runtime.service();
 
         let result = service
-            .request(7, 3, "かな", 1_000, Duration::from_millis(100))
+            .request(
+                7,
+                3,
+                "かな",
+                1_000,
+                sakura_core::InputSupport::default(),
+                false,
+                Duration::from_millis(100),
+            )
             .expect("result");
 
         assert_eq!(result.session(), 7);
@@ -1104,7 +1187,15 @@ mod tests {
         let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
         let result = runtime
             .service()
-            .request(8, 5, "か", 1_000, Duration::from_secs(1))
+            .request(
+                8,
+                5,
+                "か",
+                1_000,
+                sakura_core::InputSupport::default(),
+                false,
+                Duration::from_secs(1),
+            )
             .expect("capacity prediction result");
 
         assert_eq!(result.candidates().len(), MAX_SUGGESTIONS);
@@ -1145,6 +1236,9 @@ mod tests {
             generation: 1,
             prefix: query_prefix,
             domain_it_per_mille: 1_000,
+            input_support: InputSupport::default(),
+            skip_input_repair: false,
+            allow_spelling_correction: true,
         };
 
         println!("user dictionary prediction evaluation: 1,000 rounds per row");
@@ -1182,6 +1276,8 @@ mod tests {
                         generation,
                         "さ",
                         1_000,
+                        sakura_core::InputSupport::default(),
+                        false,
                         Duration::from_secs(1),
                         &mut worker_result,
                     ));
@@ -1209,7 +1305,15 @@ mod tests {
 
         let result = runtime
             .service()
-            .request(9, 4, "か", 1_000, Duration::from_millis(100))
+            .request(
+                9,
+                4,
+                "か",
+                1_000,
+                sakura_core::InputSupport::default(),
+                false,
+                Duration::from_millis(100),
+            )
             .expect("result");
 
         assert_eq!(result.candidates()[0].surface(), "仮名");
@@ -1258,7 +1362,15 @@ mod tests {
                 .expect("runtime");
         let result = runtime
             .service()
-            .request(1, 1, "history-", 0, Duration::from_millis(100))
+            .request(
+                1,
+                1,
+                "history-",
+                0,
+                sakura_core::InputSupport::default(),
+                false,
+                Duration::from_millis(100),
+            )
             .expect("prediction");
 
         assert_eq!(
@@ -1278,10 +1390,177 @@ mod tests {
     }
 
     #[test]
+    fn spelling_correction_follows_the_unified_prediction_gate() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nあい\t藍\t0\t0\t10\t1\tcorrection,predict\t\nあい\t愛\t0\t0\t100\t50\tpredict\t\nあいう\t愛う\t0\t0\t90\t40\tpredict\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let conversion = Arc::new(ConversionService::from_static_bytes(bytes).expect("service"));
+        let index = PredictionIndex::build(conversion.dictionary()).expect("prediction index");
+        let user = conversion.user_dictionary_snapshot();
+
+        let mut prefix = FixedStr::new();
+        prefix.push_str("あい").expect("prefix");
+
+        let open = Query {
+            sequence: 1,
+            session: 1,
+            generation: 1,
+            prefix: prefix.clone(),
+            domain_it_per_mille: 0,
+            input_support: InputSupport::default(),
+            skip_input_repair: false,
+            allow_spelling_correction: true,
+        };
+        let mut ranked = PredictionResult::default();
+        index.predict_into(&open, user.as_ref(), None, &mut ranked);
+        assert!(
+            ranked
+                .candidates()
+                .iter()
+                .any(|candidate| candidate.surface() == "藍"),
+            "positive control: SPELLING_CORRECTION must predict when the gate is open"
+        );
+
+        for (label, support, skip, allow) in [
+            (
+                "master-off",
+                {
+                    let mut support = InputSupport::default();
+                    support.enabled = false;
+                    support
+                },
+                false,
+                false,
+            ),
+            ("skip", InputSupport::default(), true, false),
+            (
+                "fuzzy-off",
+                {
+                    let mut support = InputSupport::default();
+                    support.fuzzy_proper_nouns = false;
+                    support
+                },
+                false,
+                false,
+            ),
+        ] {
+            assert_eq!(
+                support.allows_spelling_correction(skip),
+                allow,
+                "{label} admission snapshot"
+            );
+            let query = Query {
+                sequence: 1,
+                session: 1,
+                generation: 1,
+                prefix: prefix.clone(),
+                domain_it_per_mille: 0,
+                input_support: support,
+                skip_input_repair: skip,
+                allow_spelling_correction: allow,
+            };
+            let mut ranked = PredictionResult::default();
+            index.predict_into(&query, user.as_ref(), None, &mut ranked);
+            assert!(
+                ranked
+                    .candidates()
+                    .iter()
+                    .all(|candidate| candidate.surface() != "藍"),
+                "{label}: SPELLING_CORRECTION must stay out of the main prediction path"
+            );
+            assert!(
+                ranked
+                    .candidates()
+                    .iter()
+                    .any(|candidate| candidate.surface() == "愛"),
+                "{label}: normal predictive entries must remain"
+            );
+        }
+    }
+
+    #[test]
+    fn gated_spelling_correction_does_not_pollute_prediction_budget() {
+        let mut tsv = String::from(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        );
+        for index in 0..16 {
+            tsv.push_str(&format!(
+                "あい\t藍{index}\t0\t0\t1\t1\tcorrection,predict\t\n"
+            ));
+        }
+        for index in 0..9 {
+            tsv.push_str(&format!(
+                "あい\t愛{index}\t0\t0\t100\t{}\tpredict\t\n",
+                10 + index
+            ));
+        }
+        let entries = dictc::parse_entries("fixture.tsv", &tsv).expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let conversion = Arc::new(ConversionService::from_static_bytes(bytes).expect("service"));
+        let index = PredictionIndex::build(conversion.dictionary()).expect("prediction index");
+        let user = conversion.user_dictionary_snapshot();
+        let mut prefix = FixedStr::new();
+        prefix.push_str("あい").expect("prefix");
+        let query = Query {
+            sequence: 1,
+            session: 1,
+            generation: 1,
+            prefix,
+            domain_it_per_mille: 0,
+            input_support: InputSupport::default(),
+            skip_input_repair: true,
+            allow_spelling_correction: false,
+        };
+        let mut ranked = PredictionResult::default();
+        index.predict_into(&query, user.as_ref(), None, &mut ranked);
+        let surfaces: Vec<&str> = ranked
+            .candidates()
+            .iter()
+            .map(PredictionCandidate::surface)
+            .collect();
+        assert!(
+            surfaces.iter().all(|surface| !surface.starts_with('藍')),
+            "gated SPELLING_CORRECTION must not occupy prediction slots: {surfaces:?}"
+        );
+        assert!(
+            surfaces.iter().any(|surface| surface.starts_with('愛')),
+            "ordinary predictive entries must fill the budget: {surfaces:?}"
+        );
+        assert_eq!(surfaces.len(), MAX_SUGGESTIONS);
+    }
+
+    #[test]
     fn the_single_pending_slot_coalesces_to_the_newest_query() {
         let mailbox = Mailbox::new();
-        let first = mailbox.publish(1, 1, "か", 0).expect("first");
-        let second = mailbox.publish(2, 2, "かな", 0).expect("second");
+        let first = mailbox
+            .publish(1, 1, "か", 0, InputSupport::default(), false)
+            .expect("first");
+        let second = mailbox
+            .publish(2, 2, "かな", 0, InputSupport::default(), false)
+            .expect("second");
         assert!(second > first);
         assert_eq!(mailbox.coalesced.load(Ordering::Relaxed), 1);
         let state = mailbox.state.lock().expect("mailbox");
@@ -1296,7 +1575,15 @@ mod tests {
         let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
         let _ = runtime
             .service()
-            .request(1, 1, "か", 0, Duration::from_millis(100))
+            .request(
+                1,
+                1,
+                "か",
+                0,
+                sakura_core::InputSupport::default(),
+                false,
+                Duration::from_millis(100),
+            )
             .expect("prediction");
         let converted = conversion
             .with_candidates("かな", ConversionOptions::default(), |candidates| {

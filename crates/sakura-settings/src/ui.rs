@@ -10,9 +10,9 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use sakura_core::{
-    AppProfile, AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, NeuralRerankerScope,
-    Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionary,
-    UserDictionaryEntry, UserPartOfSpeech, Width,
+    AppProfile, AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, InputSupport,
+    NeuralRerankerScope, Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
+    UserDictionary, UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
 use sakura_reg::user_preferences::{
@@ -139,12 +139,14 @@ const INPUT_TOPIC_ASSOCIATION: usize = 5;
 const INPUT_TOPIC_DISPLAY: usize = 6;
 const INPUT_TOPIC_NORMALIZER: usize = 7;
 const INPUT_TOPIC_AI_TEXT: usize = 8;
+const INPUT_TOPIC_INPUT_REPAIR: usize = 9;
+const INPUT_TOPIC_INPUT_SYMBOL: usize = 10;
 const TREE_GROUP: usize = usize::MAX;
 // Keep the familiar property-sheet hierarchy through 連想変換, but do not
 // invent ATOK-only pages or map a label to an unrelated Sakura setting. Each
 // leaf owns the panel the user sees on the right; category rows normalize to
 // their first leaf so the TreeView highlight and right-hand page agree.
-const INPUT_TREE_LABELS: [&str; 11] = [
+const INPUT_TREE_LABELS: [&str; 13] = [
     "基本",
     "入力補助",
     "AI文章変換",
@@ -153,6 +155,8 @@ const INPUT_TREE_LABELS: [&str; 11] = [
     "文字幅・句読点",
     "表示",
     "入力支援",
+    "入力誤りの自動修復",
+    "英単語・記号置換",
     "推測変換",
     "連想変換",
     "アプリ別の設定",
@@ -173,6 +177,8 @@ struct GeneralControls {
     prediction_panel: HWND,
     association_panel: HWND,
     display_panel: HWND,
+    input_repair_panel: HWND,
+    input_symbol_panel: HWND,
     keymap: HWND,
     input_method_romaji: HWND,
     input_method_kana: HWND,
@@ -203,6 +209,23 @@ struct GeneralControls {
     punctuation_comma: HWND,
     punctuation_brackets: HWND,
     normalizer_reset: HWND,
+    input_support_enabled: HWND,
+    input_support_commit_based: HWND,
+    input_support_advanced: HWND,
+    input_support_vowel_count: HWND,
+    input_support_consonant_extra: HWND,
+    input_support_n_count: HWND,
+    input_support_dakuten_swap: HWND,
+    input_support_tsu_sokuon: HWND,
+    input_support_wa_wo: HWND,
+    input_support_small_u: HWND,
+    input_support_fuzzy_proper_nouns: HWND,
+    input_support_reset: HWND,
+    input_support_english_to_katakana: HWND,
+    input_support_period_after_digit: HWND,
+    input_support_comma_after_digit: HWND,
+    input_support_middle_dot_after_digit: HWND,
+    input_support_long_vowel_after_alnum: HWND,
     profile_list: HWND,
     profile_process: HWND,
     profile_mode: HWND,
@@ -778,6 +801,16 @@ impl App {
             self.reset_normalizer_controls();
             return Ok(());
         }
+        if source == self.general.input_support_enabled {
+            self.sync_input_support_enabled_state();
+            return Ok(());
+        }
+        if source == self.general.input_support_reset {
+            self.configuration.preferences.input_support = InputSupport::default();
+            self.load_input_support_controls();
+            self.set_status("入力支援の初期値に戻しました。");
+            return Ok(());
+        }
         if source == self.page_topics && notification == LBN_SELCHANGE as u16 {
             self.show_topic_controls(list_index(self.page_topics).unwrap_or(0));
             return Ok(());
@@ -965,20 +998,34 @@ impl App {
             self.input_tree,
             input_support,
             INPUT_TREE_LABELS[8],
-            INPUT_TOPIC_PREDICTION,
+            INPUT_TOPIC_INPUT_REPAIR,
             false,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             input_support,
             INPUT_TREE_LABELS[9],
-            INPUT_TOPIC_ASSOCIATION,
+            INPUT_TOPIC_INPUT_SYMBOL,
             false,
         );
         let _ = insert_input_tree_item(
             self.input_tree,
             Default::default(),
             INPUT_TREE_LABELS[10],
+            INPUT_TOPIC_PREDICTION,
+            false,
+        );
+        let _ = insert_input_tree_item(
+            self.input_tree,
+            Default::default(),
+            INPUT_TREE_LABELS[11],
+            INPUT_TOPIC_ASSOCIATION,
+            false,
+        );
+        let _ = insert_input_tree_item(
+            self.input_tree,
+            Default::default(),
+            INPUT_TREE_LABELS[12],
             INPUT_TOPIC_PROFILE,
             false,
         );
@@ -1056,6 +1103,22 @@ impl App {
                     let _ = ShowWindow(
                         self.general.association_panel,
                         if topic == INPUT_TOPIC_ASSOCIATION {
+                            SW_SHOW
+                        } else {
+                            SW_HIDE
+                        },
+                    );
+                    let _ = ShowWindow(
+                        self.general.input_repair_panel,
+                        if topic == INPUT_TOPIC_INPUT_REPAIR {
+                            SW_SHOW
+                        } else {
+                            SW_HIDE
+                        },
+                    );
+                    let _ = ShowWindow(
+                        self.general.input_symbol_panel,
+                        if topic == INPUT_TOPIC_INPUT_SYMBOL {
                             SW_SHOW
                         } else {
                             SW_HIDE
@@ -1174,6 +1237,7 @@ impl App {
             self.general.association,
             self.configuration.preferences.association_enabled,
         );
+        self.load_input_support_controls();
         select_combo(
             self.general.suggest,
             suggest_index(self.configuration.preferences.suggest_accept),
@@ -1248,6 +1312,7 @@ impl App {
             conversion_method_from_index(combo_index(self.general.conversion_assist_method))?;
         self.configuration.preferences.prediction_enabled = is_checked(self.general.prediction);
         self.configuration.preferences.association_enabled = is_checked(self.general.association);
+        self.save_input_support_controls();
         self.configuration.preferences.suggest_accept =
             suggest_from_index(combo_index(self.general.suggest))?;
         self.configuration.preferences.appearance_theme =
@@ -1327,6 +1392,103 @@ impl App {
             )
             .copied()
             .ok_or_else(|| "AIプロバイダーの値が不正です。".to_owned())
+    }
+
+    fn load_input_support_controls(&self) {
+        let support = self.configuration.preferences.input_support;
+        set_checked(self.general.input_support_enabled, support.enabled);
+        set_checked(
+            self.general.input_support_commit_based,
+            support.commit_based,
+        );
+        set_checked(self.general.input_support_advanced, support.advanced);
+        set_checked(self.general.input_support_vowel_count, support.vowel_count);
+        set_checked(
+            self.general.input_support_consonant_extra,
+            support.consonant_extra,
+        );
+        set_checked(self.general.input_support_n_count, support.n_count);
+        set_checked(
+            self.general.input_support_dakuten_swap,
+            support.dakuten_swap,
+        );
+        set_checked(self.general.input_support_tsu_sokuon, support.tsu_sokuon);
+        set_checked(self.general.input_support_wa_wo, support.wa_wo);
+        set_checked(self.general.input_support_small_u, support.small_u);
+        set_checked(
+            self.general.input_support_fuzzy_proper_nouns,
+            support.fuzzy_proper_nouns,
+        );
+        set_checked(
+            self.general.input_support_english_to_katakana,
+            support.english_to_katakana,
+        );
+        set_checked(
+            self.general.input_support_period_after_digit,
+            support.period_after_digit,
+        );
+        set_checked(
+            self.general.input_support_comma_after_digit,
+            support.comma_after_digit,
+        );
+        set_checked(
+            self.general.input_support_middle_dot_after_digit,
+            support.middle_dot_after_digit,
+        );
+        set_checked(
+            self.general.input_support_long_vowel_after_alnum,
+            support.long_vowel_after_alnum,
+        );
+        self.sync_input_support_enabled_state();
+    }
+
+    fn save_input_support_controls(&mut self) {
+        let mut support = InputSupport::default();
+        support.enabled = is_checked(self.general.input_support_enabled);
+        support.commit_based = is_checked(self.general.input_support_commit_based);
+        support.advanced = is_checked(self.general.input_support_advanced);
+        support.vowel_count = is_checked(self.general.input_support_vowel_count);
+        support.consonant_extra = is_checked(self.general.input_support_consonant_extra);
+        support.n_count = is_checked(self.general.input_support_n_count);
+        support.dakuten_swap = is_checked(self.general.input_support_dakuten_swap);
+        support.tsu_sokuon = is_checked(self.general.input_support_tsu_sokuon);
+        support.wa_wo = is_checked(self.general.input_support_wa_wo);
+        support.small_u = is_checked(self.general.input_support_small_u);
+        support.fuzzy_proper_nouns = is_checked(self.general.input_support_fuzzy_proper_nouns);
+        support.english_to_katakana = is_checked(self.general.input_support_english_to_katakana);
+        support.period_after_digit = is_checked(self.general.input_support_period_after_digit);
+        support.comma_after_digit = is_checked(self.general.input_support_comma_after_digit);
+        support.middle_dot_after_digit =
+            is_checked(self.general.input_support_middle_dot_after_digit);
+        support.long_vowel_after_alnum =
+            is_checked(self.general.input_support_long_vowel_after_alnum);
+        self.configuration.preferences.input_support = support;
+    }
+
+    fn sync_input_support_enabled_state(&self) {
+        let enabled = is_checked(self.general.input_support_enabled);
+        // SAFETY: every HWND belongs to this live settings window.
+        unsafe {
+            for window in [
+                self.general.input_support_commit_based,
+                self.general.input_support_advanced,
+                self.general.input_support_vowel_count,
+                self.general.input_support_consonant_extra,
+                self.general.input_support_n_count,
+                self.general.input_support_dakuten_swap,
+                self.general.input_support_tsu_sokuon,
+                self.general.input_support_wa_wo,
+                self.general.input_support_small_u,
+                self.general.input_support_fuzzy_proper_nouns,
+                self.general.input_support_english_to_katakana,
+                self.general.input_support_period_after_digit,
+                self.general.input_support_comma_after_digit,
+                self.general.input_support_middle_dot_after_digit,
+                self.general.input_support_long_vowel_after_alnum,
+            ] {
+                let _ = EnableWindow(window, enabled);
+            }
+        }
     }
 
     fn refresh_ai_provider_controls(&self, provider: AiProvider) {
@@ -2251,6 +2413,8 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     let normalizer_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let prediction_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let association_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
+    let input_repair_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
+    let input_symbol_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
     let display_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
 
     let parent = basic_panel;
@@ -2484,6 +2648,58 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         20,
     )?;
 
+    let parent = input_repair_panel;
+    label(parent, "入力誤りの自動修復", 4, 2, 220, 20)?;
+    label(
+        parent,
+        "ローマ字／カナ入力のミスを変換時に修正します。",
+        4,
+        20,
+        358,
+        18,
+    )?;
+    let input_support_enabled = checkbox(parent, "入力支援を有効にする", 12, 48, 200, 22)?;
+    let input_support_commit_based = checkbox(parent, "確定内容に応じて修正する", 12, 74, 180, 20)?;
+    let input_support_advanced = checkbox(parent, "高度な自動修復を行う", 200, 74, 170, 20)?;
+    let input_support_vowel_count = checkbox(parent, "母音の過不足", 12, 98, 180, 20)?;
+    let input_support_consonant_extra = checkbox(parent, "子音の超過", 200, 98, 170, 20)?;
+    let input_support_n_count = checkbox(parent, "Ｎの過不足", 12, 122, 180, 20)?;
+    let input_support_dakuten_swap = checkbox(parent, "゛／゜の誤り", 200, 122, 170, 20)?;
+    let input_support_tsu_sokuon = checkbox(parent, "つ→っ", 12, 146, 180, 20)?;
+    let input_support_wa_wo = checkbox(parent, "わ→を", 200, 146, 170, 20)?;
+    let input_support_small_u = checkbox(parent, "ぅ→う", 12, 170, 180, 20)?;
+    let input_support_fuzzy_proper_nouns =
+        checkbox(parent, "あいまいな固有名詞", 200, 170, 170, 20)?;
+    let input_support_reset = button(parent, "初期値に戻す", 260, 250, 116, 24, false)?;
+
+    let parent = input_symbol_panel;
+    label(parent, "英単語・記号置換", 4, 2, 220, 20)?;
+    label(
+        parent,
+        "英単語のつづりと、数字・英数字直後の記号を置換します。",
+        4,
+        20,
+        358,
+        18,
+    )?;
+    let input_support_english_to_katakana = checkbox(
+        parent,
+        "英単語のつづりをカタカナ語に変換する",
+        12,
+        56,
+        340,
+        22,
+    )?;
+    group_box(parent, "長音・句読点の自動置換", 0, 92, PANEL_WIDTH, 140)?;
+    let input_support_period_after_digit =
+        checkbox(parent, "句点（。）→ピリオド（．）", 12, 120, 340, 20)?;
+    let input_support_comma_after_digit =
+        checkbox(parent, "読点（、）→カンマ（，）", 12, 144, 340, 20)?;
+    let input_support_middle_dot_after_digit =
+        checkbox(parent, "中黒（・）→スラッシュ（／）", 12, 168, 340, 20)?;
+    let input_support_long_vowel_after_alnum =
+        checkbox(parent, "長音（ー）→マイナス（－）", 12, 192, 340, 20)?;
+
     let parent = display_panel;
     label(parent, "表示", 4, 2, 190, 20)?;
     label(
@@ -2556,6 +2772,8 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         prediction_panel,
         association_panel,
         display_panel,
+        input_repair_panel,
+        input_symbol_panel,
         keymap,
         input_method_romaji,
         input_method_kana,
@@ -2586,6 +2804,23 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         punctuation_comma,
         punctuation_brackets,
         normalizer_reset,
+        input_support_enabled,
+        input_support_commit_based,
+        input_support_advanced,
+        input_support_vowel_count,
+        input_support_consonant_extra,
+        input_support_n_count,
+        input_support_dakuten_swap,
+        input_support_tsu_sokuon,
+        input_support_wa_wo,
+        input_support_small_u,
+        input_support_fuzzy_proper_nouns,
+        input_support_reset,
+        input_support_english_to_katakana,
+        input_support_period_after_digit,
+        input_support_comma_after_digit,
+        input_support_middle_dot_after_digit,
+        input_support_long_vowel_after_alnum,
         profile_list,
         profile_process,
         profile_mode,
@@ -4078,7 +4313,7 @@ unsafe extern "system" fn window_procedure(
                         // Category nodes do not own a right-hand page.  Keep
                         // the left selection and the visible heading in sync by
                         // immediately normalizing a category click to its first
-                        // real settings child (for example 入力支援 → 推測変換).
+                        // real settings child (for example 入力支援 → 入力誤りの自動修復).
                         // SAFETY: `pointer` is the live App owned by this UI
                         // thread for the duration of this notification.
                         let input_tree = unsafe { (*pointer).input_tree };
@@ -4527,6 +4762,8 @@ mod tests {
                 "文字幅・句読点",
                 "表示",
                 "入力支援",
+                "入力誤りの自動修復",
+                "英単語・記号置換",
                 "推測変換",
                 "連想変換",
                 "アプリ別の設定",
@@ -4541,6 +4778,12 @@ mod tests {
                     .iter()
                     .position(|label| *label == "文節変換")
                     .expect("segment topic")
+        );
+        assert_eq!(
+            INPUT_TREE_LABELS
+                .iter()
+                .position(|label| *label == "入力誤りの自動修復"),
+            Some(8)
         );
     }
 
