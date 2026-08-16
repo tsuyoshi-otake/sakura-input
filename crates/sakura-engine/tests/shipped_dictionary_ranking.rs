@@ -321,3 +321,54 @@ fn preserves_existing_function_compounds_and_sibling_dates() {
     assert_eq!(top_text("きょう"), "今日");
     assert_eq!(top_text("あした"), "明日");
 }
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn ranks_more_function_compounds_above_yesterday_splits() {
+    let wanted = [
+        ("きのうついか", "機能追加"),
+        ("きのうせいげん", "機能制限"),
+        ("きのうかいぜん", "機能改善"),
+        ("きのうかくちょう", "機能拡張"),
+        ("きのうさくじょ", "機能削除"),
+        ("きのうじっそう", "機能実装"),
+        ("きのうきょうか", "機能強化"),
+        ("きのうていし", "機能停止"),
+        ("きのうようぼう", "機能要望"),
+        ("きのうへんこう", "機能変更"),
+        ("きのうせつめい", "機能説明"),
+        ("きのうひょうか", "機能評価"),
+        ("きのうかいはつ", "機能開発"),
+        ("きのうてすと", "機能テスト"),
+        ("きのうしよう", "機能仕様"),
+        ("きのうてき", "機能的"),
+        ("きのうじょう", "機能上"),
+        ("きのうめい", "機能名"),
+        ("きのうめん", "機能面"),
+    ];
+    for (reading, want) in wanted {
+        assert_eq!(top_text(reading), want, "{reading}");
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn ranks_business_compounds_above_homophone_splits() {
+    let wanted = [
+        ("けんしゅうかんりょう", "検収完了"),
+        ("けんしゅうしょ", "検収書"),
+        ("けんしゅうしけん", "検収試験"),
+        ("けっさいしょ", "決裁書"),
+        ("けっさいしゃ", "決裁者"),
+        ("いどうとどけ", "異動届"),
+        ("しゅうぎょうきてい", "就業規程"),
+        ("しゃないきてい", "社内規程"),
+        ("ふくむきてい", "服務規程"),
+        ("はいふきんじゅん", "配賦基準"),
+        ("こうつうひせいさん", "交通費精算"),
+        ("しょうひょうしょるい", "証憑書類"),
+    ];
+    for (reading, want) in wanted {
+        assert_eq!(top_text(reading), want, "{reading}");
+    }
+}
