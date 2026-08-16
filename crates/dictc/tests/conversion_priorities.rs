@@ -133,3 +133,49 @@ fn every_arabic_digit_is_calibrated_and_no_reading_is_calibrated_twice() {
         );
     }
 }
+
+#[test]
+fn yesterday_keeps_its_standalone_price() {
+    let yesterday: Vec<_> = overlay()
+        .into_iter()
+        .filter(|entry| entry.reading == "きのう" && entry.surface == "昨日")
+        .collect();
+    assert_eq!(
+        yesterday.len(),
+        2,
+        "昨日 must keep both the noun-connection and standalone edges"
+    );
+    for entry in &yesterday {
+        assert_eq!(entry.word_cost, 1100, "Issue #62 must not retune 昨日");
+        assert!(!entry.flags.contains(EntryFlags::IT));
+    }
+}
+
+#[test]
+fn function_compounds_outrank_the_yesterday_split() {
+    let wanted = [
+        ("きのうしょうかい", "機能紹介", 1851, 1851),
+        ("きのうようけん", "機能要件", 1841, 1851),
+        ("きのうこんぽーねんと", "機能コンポーネント", 1851, 1851),
+    ];
+    let overlay = overlay();
+    for (reading, surface, left_id, right_id) in wanted {
+        let entry = overlay
+            .iter()
+            .find(|entry| {
+                entry.reading == reading
+                    && entry.surface == surface
+                    && entry.left_id == left_id
+                    && entry.right_id == right_id
+            })
+            .unwrap_or_else(|| panic!("missing {reading} -> {surface}"));
+        assert!(
+            entry.flags.contains(EntryFlags::IT),
+            "{surface} is not marked IT"
+        );
+        assert!(
+            entry.word_cost <= 3600,
+            "{surface} is still too expensive to beat a 昨日 split"
+        );
+    }
+}

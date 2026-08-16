@@ -14,7 +14,7 @@ a diff, something has gone wrong.
 | `it-terms.tsv` | 2 | Generated MIT-licensed IT overlay from the pinned smile-chat glossary, including deterministic ASCII readings for Shift+English conversion |
 | `it-terms.report.json` | 2 | Import counts, ASCII-only term counts, and the explicit missing-reading gap list |
 | `curated-terms.tsv` | 2 | Project-authored MIT overlay for canonical casing and high-value terms missing from the generated glossary |
-| `conversion-priorities.tsv` | 2 | Project-authored calibration overlay for context-free top-1 conversion; replaces existing lattice edges without increasing cardinality |
+| `conversion-priorities.tsv` | 2 | Project-authored calibration overlay for context-free top-1 conversion; re-prices existing lattice edges and may add a missing IT compound such as Issue #62's 機能紹介 |
 
 The Sakura system dictionary is maintained as fourteen canonical category
 dictionaries (grammar/function words, inflections, general vocabulary, fixed
@@ -49,9 +49,11 @@ as `OPENAI`, `GITLAB`, `PYTORCH`, or `MICROSOFTTEAMS` to canonical surfaces.
 build report records the curated and conversion-priority source hashes.
 
 `conversion-priorities.tsv` is intentionally separate from the curated casing
-layer. Its rows are calibrated against the checked-in corpus probes and must
-reuse an existing `(reading, surface, left_id, right_id)` edge. User-specific
-preferences remain in the user dictionary and learning store.
+layer. Its rows are calibrated against the checked-in corpus probes and usually
+reuse an existing `(reading, surface, left_id, right_id)` edge. Issue #62 may
+introduce a missing IT compound that the generated glossary never emitted;
+it still must not retune `昨日` itself. User-specific preferences remain in
+the user dictionary and learning store.
 
 The Mozc dictionary is a mixed-license work. Its Google-authored portions use
 BSD-3-Clause, its IPAdic/ICOT portions retain their upstream conditions, and
