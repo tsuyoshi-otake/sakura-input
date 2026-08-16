@@ -73,14 +73,17 @@ struct RuntimeConfiguration {
 struct DynamicRuntimes {
     prediction: Option<PredictionRuntime>,
     long_conversion: Option<LongConversionRuntime>,
+    input_history: Option<Arc<InputHistoryService>>,
     prediction_failed: bool,
     long_conversion_failed: bool,
+    input_history_failed: bool,
 }
 
 #[derive(Debug, Default)]
 struct RuntimeServiceSnapshot {
     prediction: Option<Arc<PredictionService>>,
     long_conversion: Option<Arc<LongConversionService>>,
+    input_history: Option<Arc<InputHistoryService>>,
 }
 
 /// Why the engine stopped waiting for work.
@@ -177,6 +180,7 @@ impl Shared {
             || profiles.iter().any(|profile| profile.prediction_enabled);
         let long_requested =
             preferences.neural_reranker_scope != sakura_core::NeuralRerankerScope::Off;
+        let history_requested = preferences.developer_mode;
         let mut dynamic = match self.dynamic_runtimes.lock() {
             Ok(dynamic) => dynamic,
             Err(poisoned) => poisoned.into_inner(),
@@ -236,6 +240,33 @@ impl Shared {
             }
         }
 
+        if !history_requested {
+            // Dropping the dynamic owner stops its writer. A cold-start
+            // Shared owner is left in place for shutdown ordering; the
+            // dispatcher still receives None below so new keys are not
+            // recorded while developer-mode is off.
+            dynamic.input_history = None;
+            dynamic.input_history_failed = false;
+        } else if self.input_history.is_none()
+            && dynamic.input_history.is_none()
+            && !dynamic.input_history_failed
+        {
+            match crate::input_history::default_path()
+                .and_then(|path| InputHistoryService::open(&path))
+            {
+                Ok(service) => dynamic.input_history = Some(service),
+                Err(error) => {
+                    dynamic.input_history_failed = true;
+                    report(
+                        self,
+                        format_args!(
+                            "developer input history could not be enabled from settings: {error}"
+                        ),
+                    );
+                }
+            }
+        }
+
         RuntimeServiceSnapshot {
             prediction: if prediction_requested {
                 self.prediction
@@ -251,6 +282,13 @@ impl Shared {
                         .as_ref()
                         .map(LongConversionRuntime::service)
                 })
+            } else {
+                None
+            },
+            input_history: if history_requested {
+                self.input_history
+                    .clone()
+                    .or_else(|| dynamic.input_history.clone())
             } else {
                 None
             },
@@ -723,8 +761,11 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
             return;
         }
     };
-    if let Some(history) = shared.input_history.as_ref() {
-        dispatcher.set_input_history(Arc::clone(history));
+    {
+        let configuration = shared.configuration_snapshot();
+        let runtime_services =
+            shared.runtime_services(&configuration.preferences, &configuration.profiles);
+        dispatcher.set_input_history(runtime_services.input_history);
     }
     dispatcher.set_ai_text(Arc::clone(&shared.ai_text));
     if let Some(long_conversion) = shared.long_conversion.as_ref() {
@@ -977,6 +1018,7 @@ fn serve(
             shared.runtime_services(&configuration.preferences, &configuration.profiles);
         dispatcher.set_prediction(runtime_services.prediction);
         dispatcher.set_long_conversion(runtime_services.long_conversion);
+        dispatcher.set_input_history(runtime_services.input_history);
         if let Err(error) = dispatcher
             .apply_runtime_configuration(configuration.preferences, configuration.profiles)
         {
@@ -1246,6 +1288,67 @@ mod tests {
             dynamic.prediction.is_none(),
             "disabled worker must be joined"
         );
+    }
+
+    #[test]
+    fn optional_input_history_follows_a_live_developer_mode_change() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "sakura_input_history_hot_{}_{}",
+            std::process::id(),
+            nonce
+        ));
+        fs::create_dir_all(root.join("SakuraInput").join("history")).expect("history dir");
+        let previous = std::env::var_os("LOCALAPPDATA");
+        std::env::set_var("LOCALAPPDATA", &root);
+
+        let learning = Arc::new(LearningService::memory());
+        let server = Server::with_configuration_and_profiles(
+            false,
+            prediction_conversion_fixture(),
+            learning,
+            Preferences::default(),
+            Arc::from([]),
+        )
+        .expect("server");
+
+        let enabled = Preferences {
+            developer_mode: true,
+            ..Preferences::default()
+        };
+        let services = server.shared.runtime_services(&enabled, &[]);
+        assert!(
+            services.input_history.is_some(),
+            "enabling developer-mode must open history without an engine restart"
+        );
+
+        let disabled = Preferences {
+            developer_mode: false,
+            ..Preferences::default()
+        };
+        let services = server.shared.runtime_services(&disabled, &[]);
+        assert!(
+            services.input_history.is_none(),
+            "disabling developer-mode must detach history at the next boundary"
+        );
+        let dynamic = server
+            .shared
+            .dynamic_runtimes
+            .lock()
+            .expect("dynamic runtime lock");
+        assert!(
+            dynamic.input_history.is_none(),
+            "disabled dynamic history owner must be dropped"
+        );
+
+        match previous {
+            Some(value) => std::env::set_var("LOCALAPPDATA", value),
+            None => std::env::remove_var("LOCALAPPDATA"),
+        }
+        let _ = fs::remove_dir_all(&root);
     }
 
     fn test_learning_path() -> std::path::PathBuf {

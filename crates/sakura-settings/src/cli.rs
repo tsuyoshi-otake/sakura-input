@@ -1,4 +1,6 @@
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 use sakura_core::{
     AppProfile, AppearanceTheme, ConversionMethod, InputMethod, NeuralRerankerScope, Preset,
@@ -318,17 +320,11 @@ pub fn run(command: Command) -> Result<(), String> {
             document.save(&path).map_err(display)?;
             println!("saved {}", path.display());
             if let Some(enabled) = developer_mode {
-                match paths::input_history()
-                    .map_err(display)
-                    .and_then(|history_path| input_history::stats(&history_path).map_err(display))
-                {
-                    Ok(stats) => println!(
-                        "developer-history\t{}",
-                        developer_history_terminal(enabled, stats)
-                    ),
+                match await_developer_history_terminal(enabled) {
+                    Ok(terminal) => println!("developer-history\t{terminal}"),
                     Err(error) => {
-                        println!("developer-history\tstatus-unavailable-restart-required");
-                        eprintln!("could not verify the running history service: {error}");
+                        println!("developer-history\tsettle-failed");
+                        return Err(error);
                     }
                 }
             }
@@ -708,11 +704,42 @@ fn switch_name(enabled: bool) -> &'static str {
 fn developer_history_terminal(enabled: bool, stats: input_history::HistoryStats) -> &'static str {
     match (enabled, stats.live, stats.active) {
         (true, true, true) => "active",
-        (true, true, false) => "restart-required-to-enable",
+        (true, true, false) => "waiting-for-attach",
         (true, false, _) => "will-enable-at-next-engine-start",
-        (false, _, true) => "restart-required-to-disable",
+        (false, _, true) => "waiting-for-detach",
         (false, _, false) => "inactive",
     }
+}
+
+fn developer_history_settled(enabled: bool, stats: input_history::HistoryStats) -> bool {
+    matches!(
+        (enabled, stats.live, stats.active),
+        (true, true, true) | (true, false, _) | (false, _, false)
+    )
+}
+
+/// Waits across the configuration watcher interval so a live engine can
+/// publish `developer-mode` and attach/detach history at a request boundary.
+/// A live engine that remains mismatched after the budget is a hard failure;
+/// restart-required is not a successful terminal state.
+fn await_developer_history_terminal(enabled: bool) -> Result<&'static str, String> {
+    const ATTEMPTS: u32 = 30;
+    const DELAY: Duration = Duration::from_millis(100);
+    let history_path = paths::input_history().map_err(display)?;
+    let mut last = "waiting-for-attach";
+    for _ in 0..ATTEMPTS {
+        let stats = input_history::stats(&history_path).map_err(display)?;
+        last = developer_history_terminal(enabled, stats);
+        if developer_history_settled(enabled, stats) {
+            return Ok(last);
+        }
+        // Stats itself is a request boundary; sleep so the watcher can publish
+        // the saved preference before the next probe.
+        thread::sleep(DELAY);
+    }
+    Err(format!(
+        "developer history did not settle after configuration save (last={last})"
+    ))
 }
 
 fn display(error: impl std::fmt::Display) -> String {
@@ -923,7 +950,17 @@ mod tests {
         );
         assert_eq!(
             developer_history_terminal(true, stats(true, false)),
-            "restart-required-to-enable"
+            "waiting-for-attach"
+        );
+        assert_ne!(
+            developer_history_terminal(true, stats(true, false)),
+            "active",
+            "ON+live+inactive must not be reported as already active"
+        );
+        assert_ne!(
+            developer_history_terminal(true, stats(true, false)),
+            "restart-required-to-enable",
+            "restart-required must not be a normal terminal for hot-enable"
         );
         assert_eq!(
             developer_history_terminal(true, stats(false, false)),
@@ -931,12 +968,16 @@ mod tests {
         );
         assert_eq!(
             developer_history_terminal(false, stats(true, true)),
-            "restart-required-to-disable"
+            "waiting-for-detach"
         );
         assert_eq!(
             developer_history_terminal(false, stats(true, false)),
             "inactive"
         );
+        assert!(developer_history_settled(true, stats(true, true)));
+        assert!(!developer_history_settled(true, stats(true, false)));
+        assert!(developer_history_settled(false, stats(true, false)));
+        assert!(!developer_history_settled(false, stats(true, true)));
     }
 
     #[test]

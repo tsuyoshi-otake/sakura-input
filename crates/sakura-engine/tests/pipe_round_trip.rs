@@ -934,3 +934,208 @@ fn a_running_engine_applies_saved_conversion_method_to_real_candidates() {
         cleanup.status
     );
 }
+
+/// Developer-mode must hot-attach history on a live engine: after the settings
+/// watcher publishes ON, the next request boundary reports
+/// `InputHistoryStats.active`, and a Normal key becomes durable without an
+/// engine restart.
+#[test]
+fn live_engine_hot_enables_developer_history_and_records_a_normal_key() {
+    let mut engine = Engine::spawn_isolated();
+    let mut client = engine.client();
+    let session = session_for(&mut client, "developer-history-hot.exe");
+
+    publish_test_configuration(
+        &engine,
+        r#"[meta]
+format-version = "4"
+
+[input]
+keymap-preset = "ms-ime"
+prediction-enabled = "false"
+suggest-accept = "tab"
+association-enabled = "true"
+neural-reranker-scope = "off"
+developer-mode = "false"
+
+[appearance]
+theme = "auto"
+
+[width]
+alnum = "half"
+number = "half"
+symbol = "half"
+punctuation = "kuten-touten"
+"#,
+    );
+
+    assert!(matches!(
+        client.call(&Request::InputHistoryStats, PATIENT),
+        Ok(Response::InputHistoryStats { active: false, .. })
+    ));
+
+    publish_test_configuration(
+        &engine,
+        r#"[meta]
+format-version = "4"
+
+[input]
+keymap-preset = "ms-ime"
+prediction-enabled = "false"
+suggest-accept = "tab"
+association-enabled = "true"
+neural-reranker-scope = "off"
+developer-mode = "true"
+
+[appearance]
+theme = "auto"
+
+[width]
+alnum = "half"
+number = "half"
+symbol = "half"
+punctuation = "kuten-touten"
+"#,
+    );
+
+    let deadline = Instant::now() + PATIENT;
+    let mut active = false;
+    while Instant::now() < deadline {
+        match client.call(&Request::InputHistoryStats, PATIENT) {
+            Ok(Response::InputHistoryStats {
+                active: true,
+                ..
+            }) => {
+                active = true;
+                break;
+            }
+            Ok(Response::InputHistoryStats { active: false, .. }) => {
+                sleep(Duration::from_millis(50));
+            }
+            other => panic!("InputHistoryStats: {other:?}"),
+        }
+    }
+    assert!(
+        active,
+        "developer-mode ON must attach history without restarting the engine"
+    );
+
+    assert!(matches!(
+        client.call(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            PATIENT,
+        ),
+        Ok(Response::Ok)
+    ));
+    assert!(matches!(
+        client.call(
+            &Request::SendKey {
+                session,
+                key: char_key('a'),
+            },
+            PATIENT,
+        ),
+        Ok(Response::Output(_))
+    ));
+    assert!(matches!(
+        client.call(&Request::FlushInputHistory, PATIENT),
+        Ok(Response::Ok)
+    ));
+
+    let history_path = engine
+        .local_app_data()
+        .join("SakuraInput")
+        .join("history")
+        .join("input.bin");
+    let snapshot = sakura_engine::input_history::read_snapshot(&history_path)
+        .expect("durable history snapshot after hot-enable");
+    assert!(
+        !snapshot.records.is_empty(),
+        "Normal key after hot-enable must leave at least one durable record"
+    );
+
+    publish_test_configuration(
+        &engine,
+        r#"[meta]
+format-version = "4"
+
+[input]
+keymap-preset = "ms-ime"
+prediction-enabled = "false"
+suggest-accept = "tab"
+association-enabled = "true"
+neural-reranker-scope = "off"
+developer-mode = "false"
+
+[appearance]
+theme = "auto"
+
+[width]
+alnum = "half"
+number = "half"
+symbol = "half"
+punctuation = "kuten-touten"
+"#,
+    );
+
+    let deadline = Instant::now() + PATIENT;
+    let mut inactive = false;
+    while Instant::now() < deadline {
+        match client.call(&Request::InputHistoryStats, PATIENT) {
+            Ok(Response::InputHistoryStats {
+                active: false,
+                ..
+            }) => {
+                inactive = true;
+                break;
+            }
+            Ok(Response::InputHistoryStats { active: true, .. }) => {
+                sleep(Duration::from_millis(50));
+            }
+            other => panic!("InputHistoryStats after disable: {other:?}"),
+        }
+    }
+    assert!(
+        inactive,
+        "developer-mode OFF must detach history at a request boundary"
+    );
+
+    let before = snapshot.records.len();
+    assert!(matches!(
+        client.call(
+            &Request::SendKey {
+                session,
+                key: char_key('b'),
+            },
+            PATIENT,
+        ),
+        Ok(Response::Output(_))
+    ));
+    assert!(matches!(
+        client.call(&Request::FlushInputHistory, PATIENT),
+        Ok(Response::Ok)
+    ));
+    if history_path.exists() {
+        let after = sakura_engine::input_history::read_snapshot(&history_path)
+            .expect("snapshot after detach")
+            .records
+            .len();
+        assert_eq!(after, before, "detached engine must not record new keys");
+    }
+
+    assert!(matches!(
+        client.call(&Request::ClearInputHistory, PATIENT),
+        Ok(Response::Ok)
+    ));
+
+    drop(client);
+    let cleanup = engine.cleanup().expect("owned engine cleanup");
+    assert!(
+        cleanup.status.success(),
+        "engine exited with {}",
+        cleanup.status
+    );
+}

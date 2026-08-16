@@ -1,0 +1,25 @@
+# Scoped mutants for the developer-history hot-enable campaign.
+# Run on a Windows host with the workspace toolchain, for example:
+#   cargo mutants --manifest-path crates/sakura-engine/Cargo.toml \
+#     --file 'src/input_history.rs' --file 'src/server.rs' --file 'src/dispatch.rs' \
+#     --test-tool=cargo -- --lib
+#
+# Settings CLI mutants:
+#   cargo mutants --manifest-path crates/sakura-settings/Cargo.toml \
+#     --file 'src/cli.rs' --test-tool=cargo
+
+examine_re = [
+  "set_input_history",
+  "runtime_services",
+  "developer_mode",
+  "input_history",
+  "developer_history_terminal",
+  "await_developer_history",
+  "record_key",
+]
+
+exclude_re = [
+  "prediction",
+  "long_conversion",
+  "ai_text",
+]
