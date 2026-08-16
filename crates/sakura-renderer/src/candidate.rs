@@ -464,6 +464,45 @@ fn covers_document(rect: RECT, document: Option<ScreenRect>) -> bool {
     document.is_some_and(|document| covers_composition(rect, document))
 }
 
+fn union_rect(a: RECT, b: RECT) -> RECT {
+    RECT {
+        left: a.left.min(b.left),
+        top: a.top.min(b.top),
+        right: a.right.max(b.right),
+        bottom: a.bottom.max(b.bottom),
+    }
+}
+
+fn vertically_padded(anchor: ScreenRect, pad: i32) -> ScreenRect {
+    ScreenRect {
+        left: anchor.left,
+        top: anchor.top.saturating_sub(pad),
+        right: anchor.right,
+        bottom: anchor.bottom.saturating_add(pad),
+    }
+}
+
+/// The display HWND is one opaque rectangle around the list and the detail.
+/// A pane that misses the caret on its own can still stretch that rectangle
+/// over the line being typed, so the union is what the user actually sees.
+/// The list is placed a full `gap` away; the union must keep that gap too,
+/// otherwise a few pixels of GetTextExt error put the window on the glyphs.
+/// When the list itself already covers the composition, stretching further
+/// cannot uncover it, and the extra pane is kept.
+fn opaque_window_covers(
+    candidates: RECT,
+    pane: RECT,
+    anchor: ScreenRect,
+    document: Option<ScreenRect>,
+    gap: i32,
+) -> bool {
+    let window = union_rect(candidates, pane);
+    let padded = vertically_padded(anchor, gap);
+    let stretches_over_composition =
+        covers_composition(window, padded) && !covers_composition(candidates, anchor);
+    stretches_over_composition || covers_document(window, document)
+}
+
 /// Places below the composition when possible, flips above when needed, and
 /// clamps to the selected monitor's (possibly negative) work coordinates.
 ///
@@ -597,7 +636,10 @@ fn place_candidates(
 /// selected-candidate detail to its right, left, or bottom. The detail is
 /// omitted when no complete placement fits the current monitor work area —
 /// or when every placement that fits would cover the composition the user
-/// is typing, which an auxiliary pane is never worth.
+/// is typing, which an auxiliary pane is never worth. The painted HWND is
+/// the bounding rectangle of both panes, so a taller side definition is
+/// rejected when that bounding box — not just the pane — would cover the
+/// line.
 fn popup_placement(
     anchor: ScreenRect,
     document: Option<ScreenRect>,
@@ -646,6 +688,13 @@ fn popup_placement(
             && right.bottom <= work.bottom
             && !covers_composition(right, anchor)
             && !covers_document(right, keep_document_clear)
+            && !opaque_window_covers(
+                candidates,
+                right,
+                anchor,
+                keep_document_clear,
+                candidate_layout.gap,
+            )
         {
             return Some(right);
         }
@@ -660,6 +709,13 @@ fn popup_placement(
             && left.bottom <= work.bottom
             && !covers_composition(left, anchor)
             && !covers_document(left, keep_document_clear)
+            && !opaque_window_covers(
+                candidates,
+                left,
+                anchor,
+                keep_document_clear,
+                candidate_layout.gap,
+            )
         {
             return Some(left);
         }
@@ -677,16 +733,18 @@ fn popup_placement(
         };
         (below.bottom <= work.bottom
             && !covers_composition(below, anchor)
-            && !covers_document(below, keep_document_clear))
+            && !covers_document(below, keep_document_clear)
+            && !opaque_window_covers(
+                candidates,
+                below,
+                anchor,
+                keep_document_clear,
+                candidate_layout.gap,
+            ))
         .then_some(below)
     });
 
-    let window = detail.map_or(candidates, |detail| RECT {
-        left: candidates.left.min(detail.left),
-        top: candidates.top.min(detail.top),
-        right: candidates.right.max(detail.right),
-        bottom: candidates.bottom.max(detail.bottom),
-    });
+    let window = detail.map_or(candidates, |detail| union_rect(candidates, detail));
     let local = |rect: RECT| RECT {
         left: rect.left.saturating_sub(window.left),
         top: rect.top.saturating_sub(window.top),
@@ -2165,6 +2223,84 @@ mod tests {
         }
     }
 
+    fn screen(left: i32, top: i32, right: i32, bottom: i32) -> ScreenRect {
+        ScreenRect {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    fn inflate_y(rect: ScreenRect, px: i32) -> ScreenRect {
+        ScreenRect {
+            top: rect.top.saturating_sub(px),
+            bottom: rect.bottom.saturating_add(px),
+            ..rect
+        }
+    }
+
+    fn composition_cover_is_unavoidable(
+        anchor: ScreenRect,
+        height: i32,
+        work: RECT,
+        gap: i32,
+    ) -> bool {
+        let below = anchor.bottom.saturating_add(gap);
+        let above = anchor.top.saturating_sub(gap).saturating_sub(height);
+        below.saturating_add(height) > work.bottom && above < work.top
+    }
+
+    /// A 5px-grid oracle: if any popup origin on that grid clears both
+    /// rectangles and stays within the detour, the production placement
+    /// had a nearby alternative to covering the composition.
+    fn clear_origin_on_five_px_grid(
+        anchor: ScreenRect,
+        document: Option<ScreenRect>,
+        width: i32,
+        height: i32,
+        work: RECT,
+        detour: i32,
+    ) -> Option<RECT> {
+        let max_x = (work.right.saturating_sub(width)).max(work.left);
+        let max_y = (work.bottom.saturating_sub(height)).max(work.top);
+        let mut xs = vec![work.left, max_x, anchor.left.clamp(work.left, max_x)];
+        if let Some(document) = document {
+            xs.push(document.left.saturating_sub(8).saturating_sub(width));
+            xs.push(document.right.saturating_add(8));
+        }
+        xs.sort_unstable();
+        xs.dedup();
+        let mut y = work.top;
+        while y <= max_y {
+            for &x in &xs {
+                let left = x.clamp(work.left, max_x);
+                let rect = RECT {
+                    left,
+                    top: y,
+                    right: left.saturating_add(width),
+                    bottom: y.saturating_add(height),
+                };
+                if rect.left >= work.left
+                    && rect.right <= work.right
+                    && rect.top >= work.top
+                    && rect.bottom <= work.bottom
+                    && caret_distance(rect, anchor) <= detour
+                    && !covers_composition(rect, anchor)
+                    && !covers_document(rect, document)
+                {
+                    return Some(rect);
+                }
+            }
+            let next = y.saturating_add(5);
+            if next <= y {
+                break;
+            }
+            y = next;
+        }
+        None
+    }
+
     #[test]
     fn digit_labels_cover_exactly_the_protocol_page() {
         for index in 0..CANDIDATE_PAGE_SIZE {
@@ -2998,10 +3134,232 @@ mod tests {
         );
     }
 
+    /// Every caret line on a 5px vertical grid, plus a ±5px GetTextExt wobble.
+    /// Covering the composition is allowed only when the popup is taller than
+    /// the free space on both sides. A nearby clear origin on the same grid
+    /// means the cover was avoidable.
+    #[test]
+    fn five_px_vertical_sweep_keeps_the_composition_readable() {
+        let list = candidates(
+            (0..CANDIDATE_PAGE_SIZE)
+                .map(|_| item("変換", "へんかん"))
+                .collect(),
+            3,
+            CandidateKind::Conversion,
+        );
+        let mut avoidable_cover = Vec::new();
+        let mut avoidable_cover_count = 0usize;
+        let mut fragile_five_px = Vec::new();
+        let mut fragile_five_px_count = 0usize;
+        let mut covered_document = 0usize;
+        let mut placements = 0usize;
+        let mut unavoidable_cover = 0usize;
+
+        for dpi in [96u32, 120, 144, 192] {
+            let candidate_layout = layout(&list, dpi);
+            let width = candidate_layout.width;
+            let height = candidate_layout.height;
+            let gap = candidate_layout.gap;
+            let detour = candidate_layout.detour;
+            let caret_h = scaled(24, dpi).max(16);
+            let caret_w = scaled(64, dpi).max(24);
+            let works = [
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1_920,
+                    bottom: 1_040,
+                },
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1_280,
+                    bottom: 720,
+                },
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1_366,
+                    bottom: 728,
+                },
+            ];
+            for work in works {
+                let with_detail =
+                    detail_layout("変換", &detail(), dpi, work.bottom.saturating_sub(work.top));
+                let documents: [Option<ScreenRect>; 6] = [
+                    None,
+                    Some(screen(16, 24, 688, 60)),
+                    Some(screen(208, 191, 1_092, 772)),
+                    Some(screen(
+                        308,
+                        901.min(work.bottom - 40),
+                        1_192,
+                        work.bottom - 18,
+                    )),
+                    Some(screen(
+                        400,
+                        640.min(work.bottom - 80),
+                        1_400,
+                        work.bottom - 30,
+                    )),
+                    Some(screen(work.left, work.top, work.right, work.bottom)),
+                ];
+                for document in documents {
+                    let (x_left, x_right, y_top, y_bottom) = match document {
+                        Some(document) => {
+                            (document.left, document.right, document.top, document.bottom)
+                        }
+                        None => (work.left + 40, work.right - 40, work.top, work.bottom),
+                    };
+                    let xs = [
+                        x_left.saturating_add(8),
+                        (x_left.saturating_add(x_right)) / 2,
+                        x_right.saturating_sub(caret_w).saturating_sub(8),
+                    ];
+                    let mut caret_top = y_top;
+                    let last_top = y_bottom.saturating_sub(caret_h).max(y_top);
+                    while caret_top <= last_top {
+                        for &caret_left in &xs {
+                            let anchor = screen(
+                                caret_left,
+                                caret_top,
+                                caret_left.saturating_add(caret_w),
+                                caret_top.saturating_add(caret_h),
+                            );
+                            if !anchor.is_valid() {
+                                continue;
+                            }
+                            placements += 1;
+                            let placed = popup_placement(
+                                anchor,
+                                document,
+                                candidate_layout,
+                                Some(with_detail),
+                                work,
+                            );
+                            let covers_text = covers_composition(placed.window, anchor);
+                            if covers_text {
+                                if composition_cover_is_unavoidable(anchor, height, work, gap) {
+                                    unavoidable_cover += 1;
+                                } else {
+                                    avoidable_cover_count += 1;
+                                    if avoidable_cover.len() < 24 {
+                                        let oracle = clear_origin_on_five_px_grid(
+                                            anchor, document, width, height, work, detour,
+                                        );
+                                        avoidable_cover.push(format!(
+                                            "dpi={dpi} caret=({caret_left},{caret_top}) placed=[{},{} {}x{}] oracle={oracle:?} doc={document:?}",
+                                            placed.window.left,
+                                            placed.window.top,
+                                            placed.window.right - placed.window.left,
+                                            placed.window.bottom - placed.window.top,
+                                        ));
+                                    }
+                                }
+                            } else {
+                                let wobble = inflate_y(anchor, 5);
+                                if covers_composition(placed.window, wobble)
+                                    && !composition_cover_is_unavoidable(wobble, height, work, gap)
+                                {
+                                    fragile_five_px_count += 1;
+                                    if fragile_five_px.len() < 24 {
+                                        fragile_five_px.push(format!(
+                                            "dpi={dpi} caret=({caret_left},{caret_top}) placed=[{},{} {}x{}] wobble={wobble:?}",
+                                            placed.window.left,
+                                            placed.window.top,
+                                            placed.window.right - placed.window.left,
+                                            placed.window.bottom - placed.window.top,
+                                        ));
+                                    }
+                                }
+                            }
+                            if covers_document(placed.window, document) {
+                                covered_document += 1;
+                            }
+                        }
+                        let next = caret_top.saturating_add(5);
+                        if next <= caret_top {
+                            break;
+                        }
+                        caret_top = next;
+                    }
+                }
+            }
+        }
+
+        let summary = format!(
+            "5px sweep: placements={placements} unavoidable_composition_cover={unavoidable_cover} document_cover={covered_document} avoidable={avoidable_cover_count} fragile_5px={fragile_five_px_count}"
+        );
+        println!("{summary}");
+        if let Ok(path) = std::env::var("SAKURA_SWEEP_OUT") {
+            std::fs::write(&path, summary.as_bytes()).expect("write sweep summary");
+        }
+        assert!(
+            avoidable_cover.is_empty(),
+            "popup covered the composition while below or above still fit ({avoidable_cover_count} hits):\n{}",
+            avoidable_cover.join("\n")
+        );
+        assert!(
+            fragile_five_px.is_empty(),
+            "a ±5px GetTextExt wobble covered the composition ({fragile_five_px_count} hits):\n{}",
+            fragile_five_px.join("\n")
+        );
+    }
+
+    /// The HWND is one opaque rectangle around the list and the detail. A
+    /// taller side pane that itself misses the caret can still stretch that
+    /// rectangle down over the line being typed.
+    #[test]
+    fn taller_side_detail_must_not_stretch_the_window_over_the_composition() {
+        let list = candidates(
+            (0..CANDIDATE_PAGE_SIZE)
+                .map(|_| item("変換", "へんかん"))
+                .collect(),
+            3,
+            CandidateKind::Conversion,
+        );
+        let candidate_layout = layout(&list, 96);
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1_920,
+            bottom: 1_040,
+        };
+        let detail_layout = detail_layout("変換", &detail(), 96, work.bottom - work.top);
+        assert!(
+            detail_layout.height > candidate_layout.height,
+            "this case needs a definition taller than the list"
+        );
+        let anchor = screen(410, 980, 474, 1_004);
+        // VS Code / Electron often reports the whole frame as GetScreenExt, so
+        // every off-document detour is farther than the caret budget. Fallback
+        // sits just above the caret; a taller detail must not then stretch the
+        // opaque HWND back down over the line.
+        let document = screen(work.left, work.top, work.right, work.bottom);
+        let placed = popup_placement(
+            anchor,
+            Some(document),
+            candidate_layout,
+            Some(detail_layout),
+            work,
+        );
+        assert!(
+            !covers_composition(placed.window, anchor),
+            "window L{} T{} R{} B{} covered composition {anchor:?}; detail={:?}",
+            placed.window.left,
+            placed.window.top,
+            placed.window.right,
+            placed.window.bottom,
+            placed.layout.detail
+        );
+    }
+
     /// A candidate list that flipped above the composition leaves the
     /// bottom detail slot sitting exactly on the text being typed. The
-    /// detail must go absent rather than cover it — while a side placement
-    /// that stays clear of the composition is still taken.
+    /// detail must go absent rather than cover it. A taller side pane is
+    /// also omitted when the opaque HWND around both panes would stretch
+    /// back down over the composition; a one-line caret with room beside
+    /// the list still keeps a side pane that stays a full gap away.
     #[test]
     fn detail_below_is_omitted_rather_than_covering_the_composition() {
         let list = candidates(vec![item("候補", "")], 0, CandidateKind::Conversion);
@@ -3027,8 +3385,8 @@ mod tests {
         assert_eq!(placement.window.bottom, anchor.top - candidate_layout.gap);
         assert!(placement.layout.detail.is_none());
 
-        // The identical geometry with room on the right keeps the detail:
-        // the pane beside the list never touches the composition.
+        // The same tall composition with room on the right still omits: the
+        // side pane itself misses the text, but the HWND would not.
         let wide = RECT {
             left: 0,
             top: 0,
@@ -3036,8 +3394,21 @@ mod tests {
             bottom: 390,
         };
         let control = popup_placement(anchor, None, candidate_layout, Some(detail_layout), wide);
-        let control_detail = control.layout.detail.expect("side detail stays clear");
-        assert_eq!(control_detail.left, control.layout.candidates.right);
+        assert!(control.layout.detail.is_none());
+        assert_eq!(control.window.bottom, anchor.top - candidate_layout.gap);
+
+        let one_line = screen(20, 80, 80, 104);
+        let with_side =
+            popup_placement(one_line, None, candidate_layout, Some(detail_layout), wide);
+        let side = with_side
+            .layout
+            .detail
+            .expect("side detail stays a full gap from a one-line caret");
+        assert_eq!(side.left, with_side.layout.candidates.right);
+        assert!(!covers_composition(
+            with_side.window,
+            vertically_padded(one_line, candidate_layout.gap)
+        ));
     }
 
     /// A tall detail pane beside the list slides up to fit the work area.
