@@ -126,7 +126,7 @@ Remove-Item Env:SAKURA_SETTINGS_E2E_EXE
 | SET-U32-117 | 予測／Tiny適用範囲のライブ反映 | `推測変換`で予測入力、`文節変換`でTiny適用範囲（長文のみ／すべての通常変換／無効）を変更してApply | 隔離configへ保存され、実行中engineの次の入力境界でPredictionRuntime／LongConversionRuntimeが遅延起動または切り離される。既存の候補順・プライバシー除外・失敗時baseline保持は不変 | 実装済み（UIの保存・User32選択、engine `optional_prediction_worker_follows_a_live_configuration_change`／runtime configuration tests。UI→別engineを一つにした結合E2Eは未実装） |
 | SET-U32-118 | 枠とリセット操作の視覚的分離 | `文字幅・句読点`を物理選択し、`入力・変換`グループ枠と`初期値に戻す`の`GetWindowRect`を確認してからボタン中央を `SendInput` でクリック | リセットの上端がグループ枠の下端より8 px以上下にあり、ボタン中央の`WindowFromPoint`はリセットボタン。リセットは文字幅・句読点だけを既定値へ戻す | 実装済み（`normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer`） |
 | SET-U32-119 | 説明と推測候補枠の視覚的分離 | `推測変換`を物理選択し、説明Staticと`推測候補`グループ枠の`GetWindowRect`を確認 | グループ枠の上端が説明の下端より8 px以上下にあり、タイトルや説明と重ならない | 実装済み（`input_tree_click_shows_only_selected_conversion_controls`） |
-| SET-U32-120 | カテゴリ選択の葉への正規化 | `変換補助`／`入力支援`のカテゴリ行をそれぞれ物理クリックし、TreeViewの`TVGN_CARET`と先頭の子Itemを照合 | カテゴリの空ページを表示せず、TreeViewの選択はそれぞれ`文節変換`／`推測変換`の葉へ移り、右ペインはその葉だけを表示する | 実装済み（`conversion_category_click_normalizes_to_segment_controls`、`input_support_topic_click_shows_prediction_assistance_controls`） |
+| SET-U32-120 | カテゴリ選択の葉への正規化 | `変換補助`／`入力支援`のカテゴリ行をそれぞれ物理クリックし、TreeViewの`TVGN_CARET`と先頭の子Itemを照合 | カテゴリの空ページを表示せず、TreeViewの選択はそれぞれ`文節変換`／`入力誤りの自動修復`の葉へ移り、右ペインはその葉だけを表示する | 実装済み（`conversion_category_click_normalizes_to_segment_controls`、`input_support_topic_click_shows_prediction_assistance_controls`） |
 
 ## 判定の原則
 

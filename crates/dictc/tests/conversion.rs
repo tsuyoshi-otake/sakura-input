@@ -51,6 +51,7 @@ fn viterbi_finds_a_multiword_path_and_astar_returns_unique_n_best() {
                 it_bias_per_mille: 0,
                 max_it_boost: 0,
                 initial_right_id: 0,
+                ..ConversionOptions::default()
             },
         )
         .expect("conversion");
@@ -150,6 +151,7 @@ fn bounded_it_prior_can_change_a_close_choice_but_zero_bias_cannot() {
                 it_bias_per_mille: 0,
                 max_it_boost: 0,
                 initial_right_id: 0,
+                ..ConversionOptions::default()
             },
         )
         .expect("general");
@@ -165,6 +167,7 @@ fn bounded_it_prior_can_change_a_close_choice_but_zero_bias_cannot() {
                 it_bias_per_mille: 200,
                 max_it_boost: 800,
                 initial_right_id: 0,
+                ..ConversionOptions::default()
             },
         )
         .expect("technical");

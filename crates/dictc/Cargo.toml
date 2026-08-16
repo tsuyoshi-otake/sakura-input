@@ -52,6 +52,10 @@ path = "src/bin/llm_detail_promote.rs"
 name = "context-dataset"
 path = "src/bin/context_dataset.rs"
 
+[[bin]]
+name = "compound-homophone-scan"
+path = "src/bin/compound_homophone_scan.rs"
+
 [dependencies]
 sakura-core.workspace = true
 sakura-neural-proto.workspace = true

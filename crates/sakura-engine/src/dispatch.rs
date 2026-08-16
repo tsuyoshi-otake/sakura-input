@@ -39,10 +39,10 @@ use sakura_core::keymap::{Action, KeyMap, KeyMapError, Preset, State};
 use sakura_core::romaji::{Table, TableError};
 use sakura_core::width::Normalizer;
 use sakura_core::{
-    default_app_profiles, resolve_context_preferences, transform_into, AppProfile,
-    ConversionCandidate, ConversionMethod, ConversionOptions, ConversionSegment, EntryFlags, Input,
-    InputMethod, NeuralRerankerScope, Preferences, SegmentTransform, ShiftSpaceBehavior,
-    SpaceWidth, SuggestAccept, TextSink,
+    contextual_punctuation_swap, default_app_profiles, resolve_context_preferences, transform_into,
+    AppProfile, ConversionCandidate, ConversionDiagnostics, ConversionMethod, ConversionOptions,
+    ConversionSegment, EntryFlags, Input, InputMethod, NeuralRerankerScope, Preferences,
+    SegmentTransform, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, TextSink,
 };
 use sakura_proto::{
     AiTextOperation, AiTextStatus, CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope,
@@ -922,6 +922,7 @@ impl Dispatcher {
                 services.table,
                 services.normalizer,
                 services.conversion,
+                services.learning.as_deref(),
                 &mut self.scratch,
                 out,
             );
@@ -1491,7 +1492,11 @@ impl PredictionCache {
     }
 }
 
-fn conversion_options(session: &Session, initial_right_id: u16) -> ConversionOptions {
+fn conversion_options(
+    session: &Session,
+    initial_right_id: u16,
+    learning: Option<&LearningService>,
+) -> ConversionOptions {
     let mut options = ConversionOptions {
         method: session.conversion_method,
         initial_right_id: if session.association_enabled {
@@ -1499,6 +1504,11 @@ fn conversion_options(session: &Session, initial_right_id: u16) -> ConversionOpt
         } else {
             0
         },
+        input_support: session.input_support,
+        skip_input_repair: scope_is_sensitive(session.scope)
+            || !session.scope_classified
+            || learning
+                .is_some_and(|service| service.is_repair_suppressed(session.preedit.as_str())),
         ..ConversionOptions::default()
     };
     // The recent IT ratio strengthens the shipped prior gradually and with a
@@ -1510,6 +1520,49 @@ fn conversion_options(session: &Session, initial_right_id: u16) -> ConversionOpt
     options
 }
 
+fn commit_repair_readings_for(
+    reading: &str,
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    options: ConversionOptions,
+) -> Vec<FixedStr<MAX_PREEDIT_BYTES>> {
+    if options.skip_input_repair || !options.input_support.commit_based {
+        return Vec::new();
+    }
+    let Some(learning) = learning else {
+        return Vec::new();
+    };
+    learning.collect_commit_repair_readings(reading, options.input_support, |surface, out| {
+        conversion
+            .reconversion_reading(surface, out)
+            .unwrap_or(false)
+    })
+}
+
+fn with_session_conversion<R>(
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    reading: &str,
+    options: ConversionOptions,
+    consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+) -> Result<R, crate::dictionary::ConvertFailure> {
+    let hints = commit_repair_readings_for(reading, conversion, learning, options);
+    let hint_refs: Vec<&str> = hints.iter().map(FixedStr::as_str).collect();
+    conversion.with_conversion_hints(reading, options, &hint_refs, consume)
+}
+
+fn with_session_candidates<R>(
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    reading: &str,
+    options: ConversionOptions,
+    consume: impl FnOnce(&[ConversionCandidate]) -> R,
+) -> Result<R, crate::dictionary::ConvertFailure> {
+    with_session_conversion(conversion, learning, reading, options, |candidates, _| {
+        consume(candidates)
+    })
+}
+
 #[cfg(test)]
 mod associative_conversion_setting_tests {
     use super::*;
@@ -1518,10 +1571,10 @@ mod associative_conversion_setting_tests {
     fn association_setting_controls_the_previous_connection_class() {
         let mut session = Session::new("association-test.exe");
         session.association_enabled = true;
-        assert_eq!(conversion_options(&session, 7).initial_right_id, 7);
+        assert_eq!(conversion_options(&session, 7, None).initial_right_id, 7);
 
         session.association_enabled = false;
-        assert_eq!(conversion_options(&session, 7).initial_right_id, 0);
+        assert_eq!(conversion_options(&session, 7, None).initial_right_id, 0);
     }
 }
 
@@ -1543,7 +1596,11 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
     {
         return;
     }
-    let options = conversion_options(session, session.carry_right_id());
+    let options = conversion_options(
+        session,
+        session.carry_right_id(),
+        services.learning.as_deref(),
+    );
     let _ = long_conversion.schedule(
         services.long_conversion_owner,
         session_id,
@@ -1889,6 +1946,7 @@ fn apply_key(
         services.table,
         services.normalizer,
         services.conversion,
+        services.learning.as_deref(),
         scratch,
         out,
     )?;
@@ -2367,12 +2425,27 @@ fn feed_character(
     let mut preedit = session.preedit.clone();
     let mut cursor = session.cursor;
     if !scratch.is_empty() {
+        let previous = if cursor == 0 {
+            None
+        } else {
+            preedit.as_str().chars().nth(usize::from(cursor) - 1)
+        };
+        let mut emitted = FixedStr::<MAX_PREEDIT_BYTES>::new();
+        for character in scratch.as_str().chars() {
+            let swapped = if !scope_is_sensitive(session.scope) && session.scope_classified {
+                contextual_punctuation_swap(previous, character, session.input_support)
+                    .unwrap_or(character)
+            } else {
+                character
+            };
+            emitted.push(swapped)?;
+        }
         let at = preedit
             .byte_index(usize::from(cursor))
             .unwrap_or(preedit.len());
-        preedit.insert_str(at, scratch.as_str())?;
+        preedit.insert_str(at, emitted.as_str())?;
         cursor = cursor
-            .saturating_add(u16::try_from(scratch.as_str().chars().count()).unwrap_or(u16::MAX));
+            .saturating_add(u16::try_from(emitted.as_str().chars().count()).unwrap_or(u16::MAX));
     }
 
     session.shifted_ascii = shifted_ascii;
@@ -2415,12 +2488,26 @@ fn feed_input_character(
 }
 
 fn feed_kana_character(session: &mut Session, character: char) -> Result<(), Overflow> {
+    let previous = if session.cursor == 0 {
+        None
+    } else {
+        session
+            .preedit
+            .as_str()
+            .chars()
+            .nth(usize::from(session.cursor) - 1)
+    };
+    let mapped = if !scope_is_sensitive(session.scope) && session.scope_classified {
+        contextual_punctuation_swap(previous, character, session.input_support).unwrap_or(character)
+    } else {
+        character
+    };
     let mut preedit = session.preedit.clone();
     let at = preedit
         .byte_index(usize::from(session.cursor))
         .unwrap_or(preedit.len());
     let mut buf = [0u8; 4];
-    preedit.insert_str(at, character.encode_utf8(&mut buf))?;
+    preedit.insert_str(at, mapped.encode_utf8(&mut buf))?;
     session.preedit = preedit;
     session.cursor = session.cursor.saturating_add(1);
     session.invalidate_prediction();
@@ -2761,11 +2848,15 @@ fn apply_action(
         Action::SegmentShrink => {
             if !session.resize_focused_segment(false) {
                 out.beep = true;
+            } else if let Some(learning) = services.learning.as_deref() {
+                learning.suppress_repair_reading(session.preedit.as_str());
             }
         }
         Action::SegmentGrow => {
             if !session.resize_focused_segment(true) {
                 out.beep = true;
+            } else if let Some(learning) = services.learning.as_deref() {
+                learning.suppress_repair_reading(session.preedit.as_str());
             }
         }
         Action::CaretLeft => move_caret(session, services.table, scratch, CaretMove::Left)?,
@@ -2867,9 +2958,11 @@ fn commit_numbered_candidate(
     let selected = session.segment_selection(focused);
     let mut chosen = FixedStr::<MAX_PREEDIT_BYTES>::new();
     let mut chosen_meta = CommitSegmentMeta::default();
-    let options = conversion_options(session, session.carry_right_id());
+    let options = conversion_options(session, session.carry_right_id(), learning);
     let result = match conversion {
-        Some(service) => service.with_candidates(
+        Some(service) => with_session_candidates(
+            service,
+            learning,
             &session.preedit.as_str()[range],
             options,
             |candidates| -> Result<Option<i16>, Overflow> {
@@ -3147,8 +3240,10 @@ fn commit_converted_segments(
             return Ok(false);
         };
         let selection = session.segment_selection(index);
-        let options = conversion_options(session, context_right_id);
-        match service.with_candidates(
+        let options = conversion_options(session, context_right_id, learning);
+        match with_session_candidates(
+            service,
+            learning,
             reading,
             options,
             |candidates| -> Result<Option<CommitSegmentMeta>, Overflow> {
@@ -3234,7 +3329,7 @@ fn begin_conversion(
     let shifted_ascii_dictionary_hit = if skip_dictionary_lookup {
         false
     } else {
-        prepare_shifted_ascii_reading(session, conversion)?
+        prepare_shifted_ascii_reading(session, conversion, learning)?
     };
     match decide_shift_ascii_convert(ShiftAsciiConvertFacts {
         shifted_ascii: session.shifted_ascii,
@@ -3262,10 +3357,12 @@ fn begin_conversion(
     let mut segments: FixedVec<ConversionSegment, MAX_SEGMENTS> = FixedVec::new();
     let cached = session.cached_surface_fingerprint(session.preedit.as_str());
     let initial_context = session.carry_right_id();
-    let options = conversion_options(session, initial_context);
+    let options = conversion_options(session, initial_context, learning);
     let mut chosen_selection = initial_selection;
     let initialized = conversion.and_then(|service| {
-        match service.with_conversion(
+        match with_session_conversion(
+            service,
+            learning,
             session.preedit.as_str(),
             options,
             |candidates, _diagnostics| {
@@ -3343,6 +3440,7 @@ fn begin_conversion(
 fn prepare_shifted_ascii_reading(
     session: &mut Session,
     conversion: Option<&ConversionService>,
+    learning: Option<&LearningService>,
 ) -> Result<bool, Overflow> {
     if !session.shifted_ascii || session.raw_input.is_empty() {
         return Ok(false);
@@ -3354,9 +3452,9 @@ fn prepare_shifted_ascii_reading(
     let Some(service) = conversion else {
         return Ok(false);
     };
-    let options = conversion_options(session, session.carry_right_id());
-    let has_dictionary_candidate = service
-        .with_candidates(reading.as_str(), options, |candidates| {
+    let options = conversion_options(session, session.carry_right_id(), learning);
+    let has_dictionary_candidate =
+        with_session_candidates(service, learning, reading.as_str(), options, |candidates| {
             candidates.iter().any(|candidate| {
                 candidate
                     .segments()
@@ -3438,8 +3536,16 @@ fn build_reconversion(
     )
     .map_err(|_| ErrorCode::TooLarge)?;
     let normalizer = session.normalizer;
-    render_preedit(session, table, &normalizer, Some(conversion), scratch, out)
-        .map_err(|_| ErrorCode::TooLarge)
+    render_preedit(
+        session,
+        table,
+        &normalizer,
+        Some(conversion),
+        learning,
+        scratch,
+        out,
+    )
+    .map_err(|_| ErrorCode::TooLarge)
 }
 
 /// Enters a one-segment editing state when an F6-F10 transform is invoked
@@ -3845,6 +3951,12 @@ fn refresh_prediction(
             generation,
             session.preedit.as_str(),
             session.domain_it_ratio_per_mille(),
+            session.input_support,
+            scope_is_sensitive(session.scope)
+                || !session.scope_classified
+                || services.learning.as_ref().is_some_and(|learning| {
+                    learning.is_repair_suppressed(session.preedit.as_str())
+                }),
             PREDICTION_TIMEOUT,
             &mut cache.result,
         )
@@ -4176,6 +4288,7 @@ fn render_preedit(
     table: &Table,
     normalizer: &Normalizer,
     conversion: Option<&ConversionService>,
+    learning: Option<&LearningService>,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
@@ -4184,7 +4297,9 @@ fn render_preedit(
     }
 
     if session.converting {
-        match render_converted_segments(session, table, normalizer, conversion, scratch, out)? {
+        match render_converted_segments(
+            session, table, normalizer, conversion, learning, scratch, out,
+        )? {
             true => return Ok(()),
             false => {
                 // A missing/busy/broken conversion service has a visible and
@@ -4265,6 +4380,7 @@ fn render_converted_segments(
     table: &Table,
     normalizer: &Normalizer,
     conversion: Option<&ConversionService>,
+    learning: Option<&LearningService>,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
 ) -> Result<bool, Overflow> {
@@ -4330,8 +4446,10 @@ fn render_converted_segments(
             return Ok(false);
         };
         let requested_selection = session.segment_selection(index);
-        let options = conversion_options(session, context_right_id);
-        let rendered = service.with_candidates(
+        let options = conversion_options(session, context_right_id, learning);
+        let rendered = with_session_candidates(
+            service,
+            learning,
             reading,
             options,
             |candidates| -> Result<Option<(i16, usize, CommitSegmentMeta)>, Overflow> {
@@ -4892,6 +5010,7 @@ mod tests {
             &dispatcher.table,
             &dispatcher.normalizer,
             dispatcher.conversion.as_deref(),
+            dispatcher.learning.as_deref(),
             &mut dispatcher.scratch,
             &mut out,
         )

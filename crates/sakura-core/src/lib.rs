@@ -26,6 +26,7 @@ pub mod conversion;
 pub mod cpu;
 pub mod dictionary;
 pub mod editing;
+pub mod input_repair;
 pub mod keymap;
 pub mod preferences;
 pub mod romaji;
@@ -42,13 +43,19 @@ pub use conversion::{
 pub use cpu::{CpuFeatures, UnsupportedCpu};
 pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};
 pub use editing::{identifier_into, transform_into, IdentifierStyle, SegmentTransform};
+pub use input_repair::{
+    allows_system_entry, collect_repair_variants, contextual_punctuation_swap,
+    english_spelling_katakana_reading, RepairKind, RepairVariant, RepairVariantList,
+    ADVANCED_REPAIR_PENALTY, COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY,
+    MAX_PREDICTION_REPAIR_VARIANTS, MAX_REPAIR_VARIANTS, REPAIR_PENALTY,
+};
 pub use keymap::{Action, KeyMap, KeyMapError, KeyMapErrorKind, Preset, State};
 pub use preferences::{
     default_app_profiles, is_valid_profile_process_name, parse_preferences,
     resolve_context_preferences, serialize_preferences, serialize_preferences_with_profiles,
-    AppProfile, ContextPreferences, ConversionMethod, InputMethod, NeuralRerankerScope,
-    ParsedPreferences, Preferences, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
-    CONFIG_FORMAT_VERSION,
+    AppProfile, ContextPreferences, ConversionMethod, InputMethod, InputSupport,
+    NeuralRerankerScope, ParsedPreferences, Preferences, ShiftSpaceBehavior, SpaceWidth,
+    SuggestAccept, CONFIG_FORMAT_VERSION,
 };
 pub use romaji::{Input, Table, TableError, TableErrorKind};
 pub use sakura_proto::AppearanceTheme;

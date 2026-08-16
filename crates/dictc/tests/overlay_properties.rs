@@ -451,6 +451,7 @@ fn top_candidates(
                 it_bias_per_mille: 0,
                 max_it_boost: 0,
                 initial_right_id: 0,
+                ..ConversionOptions::default()
             },
         )
         .expect("conversion")

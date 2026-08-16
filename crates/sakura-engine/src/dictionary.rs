@@ -185,7 +185,7 @@ impl ConversionService {
         options: ConversionOptions,
         consume: impl FnOnce(&[ConversionCandidate]) -> R,
     ) -> Result<R, ConvertFailure> {
-        self.with_conversion(reading, options, |candidates, _diagnostics| {
+        self.with_conversion_hints(reading, options, &[], |candidates, _diagnostics| {
             consume(candidates)
         })
     }
@@ -199,6 +199,18 @@ impl ConversionService {
         options: ConversionOptions,
         consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
     ) -> Result<R, ConvertFailure> {
+        self.with_conversion_hints(reading, options, &[], consume)
+    }
+
+    /// Like [`Self::with_conversion`], but also installs commit-history repair
+    /// readings for the lattice build of this query only.
+    pub fn with_conversion_hints<R>(
+        &self,
+        reading: &str,
+        options: ConversionOptions,
+        commit_repair_readings: &[&str],
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
         let user_dictionary = self.user_dictionary_snapshot();
         let mut consume = Some(consume);
         for slot in &self.converters {
@@ -209,6 +221,7 @@ impl ConversionService {
                 // after a test-only unwind cannot expose half-built state.
                 Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
             };
+            converter.set_commit_repair_readings(commit_repair_readings);
             let result = converter
                 .convert_with_user_dictionary_detailed(
                     &self.dictionary,
@@ -386,6 +399,438 @@ mod tests {
             .reconversion_reading("仮名", &mut reading)
             .expect("user reverse scan"));
         assert_eq!(reading.as_str(), "かめい");
+    }
+
+    #[test]
+    fn input_repair_recovers_extra_n_and_skips_when_master_is_off() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nこんにちは\t今日は\t0\t0\t100\t100\t\t\nこんんにちは\t誤\t0\t0\t50\t50\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+
+        let repaired = service
+            .with_candidates(
+                "こんんにちは",
+                ConversionOptions::default(),
+                |candidates| {
+                    candidates
+                        .iter()
+                        .any(|candidate| candidate.text() == "今日は")
+                },
+            )
+            .expect("conversion");
+        assert!(
+            repaired,
+            "default input support should repair duplicated ん"
+        );
+
+        let mut options = ConversionOptions::default();
+        options.input_support.enabled = false;
+        let unrepaired = service
+            .with_candidates("こんんにちは", options, |candidates| {
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.text() == "今日は")
+            })
+            .expect("conversion");
+        assert!(
+            !unrepaired,
+            "master-off must not add repaired dictionary edges"
+        );
+    }
+
+    #[test]
+    fn english_spelling_hint_finds_katakana_loanwords() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nアップル\tアップル\t0\t0\t100\t100\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+        let found = service
+            .with_candidates(
+                "あっｐｌｅ",
+                ConversionOptions::default(),
+                |candidates| {
+                    candidates
+                        .iter()
+                        .any(|candidate| candidate.text() == "アップル")
+                },
+            )
+            .expect("conversion");
+        assert!(found);
+    }
+
+    #[test]
+    fn spelling_correction_entries_follow_the_unified_admission_gate() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nあい\t藍\t0\t0\t50\t50\tcorrection\t\nあい\t愛\t0\t0\t100\t100\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+
+        // Positive control: full gate open must surface SPELLING_CORRECTION.
+        let allowed = service
+            .with_candidates("あい", ConversionOptions::default(), |candidates| {
+                candidates.iter().any(|candidate| candidate.text() == "藍")
+            })
+            .expect("conversion");
+        assert!(allowed, "positive control: SPELLING_CORRECTION must appear");
+
+        let mut skip = ConversionOptions::default();
+        skip.skip_input_repair = true;
+        let skipped = service
+            .with_candidates("あい", skip, |candidates| {
+                candidates.iter().any(|candidate| candidate.text() == "藍")
+            })
+            .expect("conversion");
+        assert!(!skipped, "skip_input_repair must drop SPELLING_CORRECTION");
+
+        let mut master_off = ConversionOptions::default();
+        master_off.input_support.enabled = false;
+        let gated = service
+            .with_candidates("あい", master_off, |candidates| {
+                candidates.iter().any(|candidate| candidate.text() == "藍")
+            })
+            .expect("conversion");
+        assert!(!gated, "master-off must drop SPELLING_CORRECTION");
+
+        let mut no_fuzzy = ConversionOptions::default();
+        no_fuzzy.input_support.fuzzy_proper_nouns = false;
+        let fuzzy_off = service
+            .with_candidates("あい", no_fuzzy, |candidates| {
+                candidates.iter().any(|candidate| candidate.text() == "藍")
+            })
+            .expect("conversion");
+        assert!(
+            !fuzzy_off,
+            "fuzzy_proper_nouns off must drop SPELLING_CORRECTION"
+        );
+
+        // Contract: conversion admission matches the shared InputSupport helper.
+        assert!(allows_spelling_for_options(&ConversionOptions::default()));
+        let mut skipped = ConversionOptions::default();
+        skipped.skip_input_repair = true;
+        assert!(!allows_spelling_for_options(&skipped));
+    }
+
+    fn allows_spelling_for_options(options: &ConversionOptions) -> bool {
+        options
+            .input_support
+            .allows_spelling_correction(options.skip_input_repair)
+    }
+
+    #[test]
+    fn commit_repair_hints_only_cover_the_full_query_span() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nこんにちは\t今日は\t0\t0\t100\t100\t\t\nにちは\t日は\t0\t0\t10\t10\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+
+        // Isolate commit hints from local rule repair so a suffix n-count fix
+        // cannot masquerade as a whole-query commit paste.
+        let mut commit_only = ConversionOptions::default();
+        commit_only.input_support.advanced = false;
+        commit_only.input_support.vowel_count = false;
+        commit_only.input_support.consonant_extra = false;
+        commit_only.input_support.n_count = false;
+        commit_only.input_support.dakuten_swap = false;
+        commit_only.input_support.tsu_sokuon = false;
+        commit_only.input_support.wa_wo = false;
+        commit_only.input_support.small_u = false;
+        commit_only.input_support.english_to_katakana = false;
+
+        // Whole-query typed with a commit hint for the repaired reading.
+        let with_hint = service
+            .with_conversion_hints(
+                "こにちは",
+                commit_only,
+                &["こんにちは"],
+                |candidates, _| {
+                    candidates
+                        .iter()
+                        .any(|candidate| candidate.text() == "今日は")
+                },
+            )
+            .expect("conversion");
+        assert!(with_hint, "full typed match must accept commit repair");
+
+        // Longer reading that only contains the typo as a suffix must not paste
+        // the whole-query hint onto an intermediate start (あ + 今日は).
+        let longer = service
+            .with_conversion_hints(
+                "あこにちは",
+                commit_only,
+                &["こんにちは"],
+                |candidates, _| {
+                    candidates
+                        .iter()
+                        .map(|candidate| candidate.text().to_owned())
+                        .collect::<Vec<_>>()
+                },
+            )
+            .expect("conversion");
+        assert!(
+            longer.iter().all(|text| text != "あ今日は"),
+            "commit repair must not attach at an intermediate start: {longer:?}"
+        );
+    }
+
+    #[test]
+    fn gated_spelling_correction_does_not_pollute_exact_edge_budget() {
+        // Twelve cheap SPELLING_CORRECTION hits would fill the per-length budget
+        // if they were counted before the Issue #63 gate. A single normal entry
+        // must still be admitted when the gate is closed.
+        let mut tsv = String::from(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        );
+        for index in 0..12 {
+            tsv.push_str(&format!("あい\t藍{index}\t0\t0\t1\t1\tcorrection\t\n"));
+        }
+        tsv.push_str("あい\t愛\t0\t0\t100\t100\t\t\n");
+        let entries = dictc::parse_entries("fixture.tsv", &tsv).expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+
+        let mut skip = ConversionOptions::default();
+        skip.skip_input_repair = true;
+        let texts = service
+            .with_candidates("あい", skip, |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .expect("conversion");
+        assert!(
+            texts.iter().any(|text| text == "愛"),
+            "normal entry must keep a slot when SPELLING_CORRECTION is gated off: {texts:?}"
+        );
+        assert!(
+            texts.iter().all(|text| !text.starts_with('藍')),
+            "gated SPELLING_CORRECTION must not appear: {texts:?}"
+        );
+    }
+
+    #[test]
+    fn single_segment_repair_budget_tracks_admitted_exact_edges() {
+        use sakura_core::ConversionMethod;
+
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+
+        // exact 0: only the repaired reading is in the dictionary.
+        let zero = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nおはよう\tお早う\t0\t0\t50\t50\t\t\n",
+        )
+        .expect("entries");
+        let zero_bytes = Box::leak(
+            dictc::compile(&zero, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let zero_service = ConversionService::from_static_bytes(zero_bytes).expect("service");
+        let mut single = ConversionOptions::default();
+        single.method = ConversionMethod::SingleSegment;
+        let repaired = zero_service
+            .with_candidates("おはよ", single, |candidates| {
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.text() == "お早う")
+            })
+            .expect("conversion");
+        assert!(repaired, "exact 0 must leave full repair budget");
+
+        // exact 1: one exact surface plus a repair target both fit.
+        let one = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nおはよ\t御はよ\t0\t0\t80\t80\t\t\nおはよう\tお早う\t0\t0\t50\t50\t\t\n",
+        )
+        .expect("entries");
+        let one_bytes = Box::leak(
+            dictc::compile(&one, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let one_service = ConversionService::from_static_bytes(one_bytes).expect("service");
+        let texts = one_service
+            .with_candidates("おはよ", single, |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .expect("conversion");
+        assert!(
+            texts.iter().any(|text| text == "御はよ"),
+            "exact surface must remain: {texts:?}"
+        );
+        assert!(
+            texts.iter().any(|text| text == "お早う"),
+            "exact 1 must still allow repair into unused slots: {texts:?}"
+        );
+
+        // exact MAX (12): repair must not add a 13th surface.
+        let mut max_tsv = String::from(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        );
+        for index in 0..12 {
+            max_tsv.push_str(&format!(
+                "おはよ\t御はよ{index}\t0\t0\t{index}\t{index}\t\t\n"
+            ));
+        }
+        max_tsv.push_str("おはよう\tお早う\t0\t0\t1\t1\t\t\n");
+        let max = dictc::parse_entries("fixture.tsv", &max_tsv).expect("entries");
+        let max_bytes = Box::leak(
+            dictc::compile(&max, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let max_service = ConversionService::from_static_bytes(max_bytes).expect("service");
+        let max_texts = max_service
+            .with_candidates("おはよ", single, |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .expect("conversion");
+        assert!(
+            max_texts.iter().all(|text| text != "お早う"),
+            "exact MAX must leave zero local repair slots: {max_texts:?}"
+        );
+        assert!(
+            max_texts.iter().any(|text| text.starts_with("御はよ")),
+            "exact surfaces must still convert: {max_texts:?}"
+        );
+    }
+
+    #[test]
+    fn suppress_skip_blocks_every_repair_source_for_the_same_reading() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nあい\t藍\t0\t0\t10\t10\tcorrection\t\nあい\t愛\t0\t0\t100\t100\t\t\nおはよう\tお早う\t0\t0\t20\t20\t\t\nこんにちは\t今日は\t0\t0\t30\t30\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+
+        let mut suppressed = ConversionOptions::default();
+        suppressed.skip_input_repair = true;
+
+        let spelling = service
+            .with_candidates("あい", suppressed, |candidates| {
+                candidates.iter().any(|candidate| candidate.text() == "藍")
+            })
+            .expect("conversion");
+        assert!(!spelling, "suppress must drop SPELLING_CORRECTION");
+
+        let rule = service
+            .with_candidates("おはよ", suppressed, |candidates| {
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.text() == "お早う")
+            })
+            .expect("conversion");
+        assert!(!rule, "suppress must drop rule repair");
+
+        let commit = service
+            .with_conversion_hints(
+                "こにちは",
+                suppressed,
+                &["こんにちは"],
+                |candidates, _| {
+                    candidates
+                        .iter()
+                        .any(|candidate| candidate.text() == "今日は")
+                },
+            )
+            .expect("conversion");
+        assert!(!commit, "suppress must drop commit repair");
+
+        // A different reading is a new composition and must keep repair.
+        let other = service
+            .with_candidates("おはよ", ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.text() == "お早う")
+            })
+            .expect("conversion");
+        assert!(other, "unsuppressed reading must still repair");
     }
 
     #[test]

@@ -32,8 +32,8 @@ use sakura_core::keymap::State;
 use sakura_core::romaji;
 use sakura_core::{
     resolve_context_preferences, AppProfile, ContextPreferences, ConversionMethod,
-    ConversionSegment, InputMethod, Normalizer, Preferences, SegmentTransform, ShiftSpaceBehavior,
-    SpaceWidth, SuggestAccept,
+    ConversionSegment, InputMethod, InputSupport, Normalizer, Preferences, SegmentTransform,
+    ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
 };
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
@@ -146,6 +146,8 @@ pub struct Session {
     /// Whether conversion may carry the previous grammatical connection into
     /// the next segment. This is the bounded L1 associative-conversion switch.
     pub(crate) association_enabled: bool,
+    /// ATOK-style input assistance resolved once from the host profile.
+    pub(crate) input_support: InputSupport,
     /// The input scope of the field this session belongs to (DESIGN 9).
     pub(crate) scope: InputScope,
     /// `true` only after TSF has positively classified the scope. A default
@@ -264,6 +266,7 @@ impl Session {
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,
             association_enabled: true,
+            input_support: InputSupport::default(),
             scope: InputScope::Normal,
             scope_classified: false,
             history_session_id: 0,
@@ -316,6 +319,7 @@ impl Session {
         self.prediction_enabled = preferences.prediction_enabled;
         self.suggest_accept = preferences.suggest_accept;
         self.association_enabled = preferences.association_enabled;
+        self.input_support = preferences.input_support;
     }
 
     /// The current IME mode.
@@ -1314,6 +1318,7 @@ impl SessionTable {
             slot.1.prediction_enabled = resolved.prediction_enabled;
             slot.1.suggest_accept = resolved.suggest_accept;
             slot.1.association_enabled = resolved.association_enabled;
+            slot.1.input_support = resolved.input_support;
         }
     }
 }

@@ -103,7 +103,16 @@ fn measure(
     for sequence in 0..warmup {
         let generation = u64::try_from(sequence).map_err(|_| "warm-up sequence overflow")?;
         let prefix = PREFIXES[sequence % PREFIXES.len()];
-        if !service.request_into(1, generation, prefix, 1_000, REQUEST_TIMEOUT, &mut result) {
+        if !service.request_into(
+            1,
+            generation,
+            prefix,
+            1_000,
+            sakura_core::InputSupport::default(),
+            false,
+            REQUEST_TIMEOUT,
+            &mut result,
+        ) {
             return Err(format!(
                 "warm-up prediction timed out for prefix '{prefix}'"
             ));
@@ -118,8 +127,16 @@ fn measure(
             u64::try_from(warmup + sequence).map_err(|_| "sample sequence overflow")?;
         let prefix = PREFIXES[sequence % PREFIXES.len()];
         let started = Instant::now();
-        let completed =
-            service.request_into(1, generation, prefix, 1_000, REQUEST_TIMEOUT, &mut result);
+        let completed = service.request_into(
+            1,
+            generation,
+            prefix,
+            1_000,
+            sakura_core::InputSupport::default(),
+            false,
+            REQUEST_TIMEOUT,
+            &mut result,
+        );
         durations.push(started.elapsed());
         if !completed {
             timeouts += 1;
