@@ -71,8 +71,18 @@ else
   failc C7 "TLA/TLC record incomplete"
 fi
 
-canvas="$HOME/.cursor/projects/workspace/canvases/developer-history-verification.canvas.tsx"
-if [[ -f "$ROOT/verification/developer-history/correspondence-and-audit.md" && -f "$canvas" ]] \
+canvas=""
+for candidate in \
+  "$HOME/.cursor/projects/c-Codes-tsuyoshi-otake-sakura-input/canvases/developer-history-verification.canvas.tsx" \
+  "$HOME/.cursor/projects/workspace/canvases/developer-history-verification.canvas.tsx" \
+  "$ROOT/verification/developer-history/developer-history-verification.canvas.tsx"
+do
+  if [[ -f "$candidate" ]]; then
+    canvas="$candidate"
+    break
+  fi
+done
+if [[ -f "$ROOT/verification/developer-history/correspondence-and-audit.md" && -n "$canvas" ]] \
   && rg -q '104,163|18837|368,986' "$canvas"; then
   pass C8-audit-canvas
 else

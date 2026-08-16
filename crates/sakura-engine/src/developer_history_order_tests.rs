@@ -71,10 +71,10 @@ fn random_event(seed: &mut u64, booted: bool) -> DomainEvent {
     let pick = xorshift(seed) % if booted { 12 } else { 1 };
     match pick {
         0 => DomainEvent::Boot {
-            developer_mode: xorshift(seed) % 2 == 0,
+            developer_mode: xorshift(seed).is_multiple_of(2),
         },
         1 => DomainEvent::SetDeveloperMode {
-            on: xorshift(seed) % 2 == 0,
+            on: xorshift(seed).is_multiple_of(2),
         },
         2 => DomainEvent::WatcherPublish,
         3 => DomainEvent::RequestBoundary,
@@ -86,7 +86,7 @@ fn random_event(seed: &mut u64, booted: bool) -> DomainEvent {
             },
         },
         5 => DomainEvent::Key {
-            test_only: xorshift(seed) % 4 == 0,
+            test_only: xorshift(seed).is_multiple_of(4),
         },
         6 => DomainEvent::Flush,
         7 => DomainEvent::Clear,
@@ -94,7 +94,7 @@ fn random_event(seed: &mut u64, booted: bool) -> DomainEvent {
         9 => DomainEvent::PersistFail,
         10 => DomainEvent::Crash,
         _ => DomainEvent::Restart {
-            restore_setting: xorshift(seed) % 2 == 0,
+            restore_setting: xorshift(seed).is_multiple_of(2),
         },
     }
 }

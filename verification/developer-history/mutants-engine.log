@@ -1,0 +1,34 @@
+Found 44 mutants to test
+ok       Unmutated baseline in 28s build + 15s test
+MISSED   crates/sakura-engine/src/dispatch.rs:278:54: replace && with || in Dispatcher::set_input_history in 4s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:593:21: delete field keymap_preset from struct Preferences expression in Dispatcher::create_session in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:594:21: delete field input_method from struct Preferences expression in Dispatcher::create_session in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:595:21: delete field default_mode from struct Preferences expression in Dispatcher::create_session in 5s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:596:21: delete field conversion_method from struct Preferences expression in Dispatcher::create_session in 4s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:598:21: delete field space_width from struct Preferences expression in Dispatcher::create_session in 4s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:599:21: delete field shift_space_behavior from struct Preferences expression in Dispatcher::create_session in 4s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:600:21: delete field prediction_enabled from struct Preferences expression in Dispatcher::create_session in 4s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:601:21: delete field suggest_accept from struct Preferences expression in Dispatcher::create_session in 4s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:602:21: delete field developer_mode from struct Preferences expression in Dispatcher::create_session in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1064:17: delete field keymap_preset from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1065:17: delete field input_method from struct Preferences expression in Dispatcher::probe_key in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1066:17: delete field default_mode from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1067:17: delete field conversion_method from struct Preferences expression in Dispatcher::probe_key in 2s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1068:17: delete field normalizer from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1069:17: delete field space_width from struct Preferences expression in Dispatcher::probe_key in 2s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1070:17: delete field shift_space_behavior from struct Preferences expression in Dispatcher::probe_key in 3s build + 18s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1071:17: delete field prediction_enabled from struct Preferences expression in Dispatcher::probe_key in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1072:17: delete field suggest_accept from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1073:17: delete field developer_mode from struct Preferences expression in Dispatcher::probe_key in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1496:9: delete field method from struct ConversionOptions expression in conversion_options in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:3467:13: delete field text_end from struct ConversionSegment expression in apply_transform in 3s build + 20s test
+MISSED   crates/sakura-engine/src/server.rs:182:47: replace != with == in Shared::runtime_services in 4s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:196:13: replace && with || in Shared::runtime_services in 3s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:195:13: replace && with || in Shared::runtime_services in 3s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:219:12: delete ! in Shared::runtime_services in 3s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:224:13: replace && with || in Shared::runtime_services in 3s build + 18s test
+MISSED   crates/sakura-engine/src/server.rs:223:13: replace && with || in Shared::runtime_services in 3s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:224:16: delete ! in Shared::runtime_services in 3s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:252:13: replace && with || in Shared::runtime_services in 3s build + 19s test
+MISSED   crates/sakura-engine/src/server.rs:251:13: replace && with || in Shared::runtime_services in 3s build + 19s test
+44 mutants tested in 10m: 31 missed, 12 caught, 1 unviable
