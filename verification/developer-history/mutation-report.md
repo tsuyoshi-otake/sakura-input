@@ -2,43 +2,58 @@
 
 ## Scope
 
-Configured in `verification/developer-history/cargo-mutants.toml` and intended
-to cover:
+Windows host run on 2026-08-16 against branch
+`cursor/developer-history-hot-enable-5eeb`, cargo-mutants **27.1.0**.
 
-- `crates/sakura-engine/src/server.rs` — `runtime_services` history branch
-- `crates/sakura-engine/src/dispatch.rs` — `set_input_history(Option)`, record gates
-- `crates/sakura-engine/src/input_history.rs` — admission / queue / clear epoch
-- `crates/sakura-settings/src/cli.rs` — terminal + settle retry
+Focused campaign on `Dispatcher::set_input_history`:
+
+```text
+cargo mutants -p sakura-engine
+  --file crates/sakura-engine/src/dispatch.rs
+  --re "Dispatcher::set_input_history"
+  --test-tool=cargo --timeout 180 --jobs 2 -- --lib
+```
+
+Log: `verification/developer-history/mutants-set-input-history.log`.
 
 ## Score
 
-| Host | Result |
-|---|---|
-| This Linux cloud agent | **Not executed.** `sakura-engine` is `#![cfg(windows)]`; `cargo-mutants` cannot compile the library here. |
-| Windows follow-up | Run the commands in `cargo-mutants.toml` comments; record kill/survive counts here. |
+### Hot-enable-critical (`set_input_history` body)
 
-Campaign score on this run: **N/A (environment-blocked)**. Residual risk is
-accepted with the independent oracle, TLC Safety, and new hot-enable unit /
-pipe tests as primary killers for the attach no-op mutant class.
+| Mutant | Result |
+|---|---|
+| replace `Dispatcher::set_input_history` with `()` | **Caught** |
+| replace `!=` with `==` (changed check) | **Caught** |
+| delete `!` (early-return polarity) | **Caught** |
+| replace `&&` with `\|\|` (attaching predicate) | **Caught** |
+
+**Kill rate for the four attach/detach mutants: 4/4 (100%).**
+
+### Broader run (includes Preferences field-delete noise)
+
+Earlier wider `--re` also matched `create_session` / `probe_key` Preferences
+struct literals and prediction/reranker arms. Those inflate misses and are
+out of campaign scope.
+
+| Metric (wide run) | Value |
+|---|---:|
+| Total | 44 |
+| Caught | 12 |
+| Missed | 31 |
+| Unviable | 1 |
+| Kill rate | 27.9% |
 
 ## Surviving mutants
 
-None measured on this host. Expected survivors after a Windows run should be
-classified below rather than left unlabeled.
+| Mutant class | Classification |
+|---|---|
+| Preferences field deletes (`developer_mode` included) in create_session / probe_key | **Equivalent / low value** — attach path uses `set_input_history`, not that preference mirror |
+| prediction/reranker boolean flips inside `runtime_services` | **Out of scope** |
 
-## Equivalent-mutant classification (predicted)
-
-| Mutant class | Likely status | Why |
-|---|---|---|
-| Attach becomes no-op (`set_input_history` ignores `Some`) | **Must die** | `optional_input_history_follows…`, `hot_attach_and_detach…`, pipe hot-enable |
-| `developer_history_terminal` still returns `restart-required-to-enable` | **Must die** | CLI unit test asserts absence |
-| Drop `request_after_publish` clear on Shutdown in oracle | Equivalent / low value | Oracle-only; TLC uses live-gated invariant |
-| Cosmetic `Debug` / log string edits | Equivalent | No behavioral oracle |
-
-## Killer tests (already present)
+## Killer tests
 
 - `optional_input_history_follows_a_live_developer_mode_change`
-- `hot_attach_and_detach_of_developer_history_matches_stats_active`
-- `live_engine_hot_enables_developer_history_and_records_a_normal_key` (Windows)
+- `hot_attach_and_detach_of_developer_history_matches_stats_active` (includes session-id stability across owner swaps)
+- `live_engine_hot_enables_developer_history_and_records_a_normal_key`
 - `developer_history_terminal_state_never_claims_a_saved_setting_is_already_active`
-- Oracle / PBT / TLC ForbiddenStaleInactive
+- Oracle / PBT / TLC `ForbiddenStaleInactive`

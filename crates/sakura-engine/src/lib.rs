@@ -29,6 +29,7 @@ pub mod configuration;
 pub mod context_baseline;
 pub mod context_evaluation;
 pub mod context_intelligence;
+#[cfg(test)]
 mod developer_history_oracle;
 #[cfg(test)]
 mod developer_history_oracle_tests;
@@ -48,6 +49,7 @@ pub mod session;
 mod shift_ascii_space;
 #[cfg(test)]
 mod shift_ascii_space_tests;
+#[cfg(test)]
 mod shift_latin_oracle;
 #[cfg(test)]
 mod shift_latin_oracle_tests;

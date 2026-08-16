@@ -5082,6 +5082,35 @@ mod tests {
             Reply::Message(Response::InputHistoryStats { active: true, .. }) => {}
             other => panic!("expected active stats after attach, got {other:?}"),
         }
+        let history_session_after_attach = dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .history_session_id();
+
+        let replacement_path = path.with_extension("replacement.bin");
+        let replacement =
+            InputHistoryService::open(&replacement_path).expect("replacement history");
+        dispatcher.set_input_history(Some(Arc::clone(&replacement)));
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .history_session_id(),
+            history_session_after_attach,
+            "swapping history owners while already attached must not reallocate session ids"
+        );
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .history_session_id(),
+            history_session_after_attach,
+            "returning to the original history owner must keep the allocated session id"
+        );
 
         dispatcher.dispatch(
             &Request::SendKey {
@@ -5122,7 +5151,9 @@ mod tests {
         );
 
         history.stop().expect("stop");
+        replacement.stop().expect("stop replacement");
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(replacement_path);
     }
 
     #[test]

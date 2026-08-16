@@ -1,0 +1,24 @@
+Found 28 mutants to test
+ok       Unmutated baseline in 26s build + 15s test
+MISSED   crates/sakura-engine/src/dispatch.rs:593:21: delete field keymap_preset from struct Preferences expression in Dispatcher::create_session in 5s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:594:21: delete field input_method from struct Preferences expression in Dispatcher::create_session in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:595:21: delete field default_mode from struct Preferences expression in Dispatcher::create_session in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:596:21: delete field conversion_method from struct Preferences expression in Dispatcher::create_session in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:598:21: delete field space_width from struct Preferences expression in Dispatcher::create_session in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:599:21: delete field shift_space_behavior from struct Preferences expression in Dispatcher::create_session in 3s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:600:21: delete field prediction_enabled from struct Preferences expression in Dispatcher::create_session in 2s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:601:21: delete field suggest_accept from struct Preferences expression in Dispatcher::create_session in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:602:21: delete field developer_mode from struct Preferences expression in Dispatcher::create_session in 2s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1064:17: delete field keymap_preset from struct Preferences expression in Dispatcher::probe_key in 3s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1065:17: delete field input_method from struct Preferences expression in Dispatcher::probe_key in 2s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1066:17: delete field default_mode from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1067:17: delete field conversion_method from struct Preferences expression in Dispatcher::probe_key in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1068:17: delete field normalizer from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1069:17: delete field space_width from struct Preferences expression in Dispatcher::probe_key in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1070:17: delete field shift_space_behavior from struct Preferences expression in Dispatcher::probe_key in 3s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1071:17: delete field prediction_enabled from struct Preferences expression in Dispatcher::probe_key in 3s build + 20s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1072:17: delete field suggest_accept from struct Preferences expression in Dispatcher::probe_key in 4s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1073:17: delete field developer_mode from struct Preferences expression in Dispatcher::probe_key in 4s build + 21s test
+MISSED   crates/sakura-engine/src/dispatch.rs:1496:9: delete field method from struct ConversionOptions expression in conversion_options in 5s build + 19s test
+MISSED   crates/sakura-engine/src/dispatch.rs:3467:13: delete field text_end from struct ConversionSegment expression in apply_transform in 5s build + 15s test
+28 mutants tested in 7m: 21 missed, 7 caught
