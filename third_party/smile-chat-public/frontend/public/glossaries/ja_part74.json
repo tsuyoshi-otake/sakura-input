@@ -1,0 +1,1084 @@
+[
+  {
+    "term": "Arduino IDE",
+    "reading": "あるでゅいーのあいでぃーいー",
+    "aliases": [
+      "Arduino IDE 2.0"
+    ],
+    "senses": [
+      {
+        "definition": "Arduinoボード向けの公式統合開発環境。C/C++ベースのスケッチを記述・コンパイル・書き込みでき、ライブラリマネージャやボードマネージャで多数のボードに対応する。IDE 2.0ではVSCode由来のコード補完・デバッグ機能が追加された。",
+        "domain": "embedded",
+        "keywords": [
+          "Arduino",
+          "IDE",
+          "スケッチ",
+          "コンパイル",
+          "ライブラリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ESP-IDF",
+    "reading": "いーえすぴーあいでぃーえふ",
+    "aliases": [
+      "Espressif IoT Development Framework"
+    ],
+    "senses": [
+      {
+        "definition": "Espressif公式のESP32/ESP32-S3/ESP32-C3向けC/C++開発フレームワーク。FreeRTOS・Wi-Fi/BTスタック・暗号化・OTA更新等を含む本格的な組み込み開発環境で、Arduino環境では不十分な低レベル制御やパフォーマンスが必要な場合に使用する。",
+        "domain": "embedded",
+        "keywords": [
+          "ESP32",
+          "FreeRTOS",
+          "C言語",
+          "Espressif",
+          "低レベル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PlatformIO",
+    "reading": "ぷらっとふぉーむあいおー",
+    "aliases": [
+      "PlatformIO IDE",
+      "PIO"
+    ],
+    "senses": [
+      {
+        "definition": "VSCode拡張として動作するクロスプラットフォーム組み込み開発環境。Arduino・ESP-IDF・STM32 HAL・Mbed等の複数フレームワークに対応し、ライブラリ管理・ユニットテスト・リモートデバッグを統合した開発ワークフローを提供する。",
+        "domain": "embedded",
+        "keywords": [
+          "VSCode",
+          "クロスプラットフォーム",
+          "ライブラリ",
+          "デバッグ",
+          "統合開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "STM32CubeIDE",
+    "reading": "えすてぃーえむさんじゅうにきゅーぶあいでぃーいー",
+    "aliases": [
+      "CubeIDE",
+      "STM32CubeMX"
+    ],
+    "senses": [
+      {
+        "definition": "STMicroelectronics公式のSTM32向け統合開発環境。Eclipse/CDTベースのIDEにCubeMXのグラフィカルピン・クロック設定ツールを統合し、HAL/LLドライバのコード生成・コンパイル・ST-LINKデバッグを一貫して行える。",
+        "domain": "embedded",
+        "keywords": [
+          "STM32",
+          "Eclipse",
+          "CubeMX",
+          "HAL",
+          "ST-LINK"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "MicroPython",
+    "reading": "まいくろぱいそん",
+    "aliases": [
+      "MicroPython firmware",
+      "μPython"
+    ],
+    "senses": [
+      {
+        "definition": "マイコン上で動作するPython 3のサブセット実装。REPL対話環境でハードウェアを即座に制御でき、Raspberry Pi Pico・ESP32・M5Stackで公式サポートされる。C/C++に比べ開発速度が速く、教育やプロトタイピングに適する。",
+        "domain": "embedded",
+        "keywords": [
+          "Python",
+          "REPL",
+          "Raspberry Pi Pico",
+          "ESP32",
+          "プロトタイピング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "C/C++",
+    "reading": "しーしーぷらすぷらす",
+    "aliases": [
+      "C言語",
+      "C++"
+    ],
+    "senses": [
+      {
+        "definition": "組み込み開発で最も広く使用されるプログラミング言語。C言語はハードウェア直接制御と省メモリが強みで、C++はクラス・テンプレートによる抽象化を追加する。Arduino・ESP-IDF・STM32 HAL等の主要フレームワークがC/C++で記述されている。",
+        "domain": "embedded",
+        "keywords": [
+          "プログラミング言語",
+          "組み込み",
+          "コンパイル",
+          "低レベル",
+          "Arduino"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UiFlow1",
+    "reading": "ゆーあいふろーわん",
+    "aliases": [
+      "UIFlow",
+      "UiFlow v1"
+    ],
+    "senses": [
+      {
+        "definition": "M5Stack向けのBlockly（ブロックプログラミング）＋MicroPythonベースの視覚的開発環境。Webブラウザ上でブロックを組み合わせてプログラムを作成し、Wi-Fi経由でM5Stackに転送・実行できる。プログラミング初心者やSTEAM教育に適する。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "Blockly",
+          "ビジュアルプログラミング",
+          "MicroPython",
+          "STEAM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UiFlow2",
+    "reading": "ゆーあいふろーつー",
+    "aliases": [
+      "UiFlow v2"
+    ],
+    "senses": [
+      {
+        "definition": "UiFlow1の後継となるM5Stack向け開発環境。Blockly+MicroPythonに加えPython直接編集モードを強化し、UI改善・新デバイスサポート・クラウド連携機能を追加。M5Stack Core2やATOM系デバイスにも対応する次世代版。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "Blockly",
+          "MicroPython",
+          "クラウド",
+          "次世代"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "M5Unified",
+    "reading": "えむふぁいぶゆにふぁいど",
+    "aliases": [
+      "M5Unified library"
+    ],
+    "senses": [
+      {
+        "definition": "M5Stack全製品（Basic/Core2/StickC/Atom等）を統一APIで扱えるArduinoライブラリ。ディスプレイ・IMU・ボタン・スピーカー等のペリフェラルをデバイス種別を問わず共通コードで制御でき、機種間のコード移植が容易になる。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "Arduino",
+          "統一API",
+          "ライブラリ",
+          "移植性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Arduino Cloud",
+    "reading": "あるでゅいーのくらうど",
+    "aliases": [
+      "Arduino IoT Cloud"
+    ],
+    "senses": [
+      {
+        "definition": "Arduino公式のIoTクラウドプラットフォーム。Wi-Fi対応ボード（UNO R4 WiFi・Nano ESP32等）からセンサーデータを送信し、ダッシュボードで可視化・遠隔制御が可能。OTA更新・Webhook連携・Alexa/Google Home統合もサポートする。",
+        "domain": "embedded",
+        "keywords": [
+          "IoT",
+          "クラウド",
+          "ダッシュボード",
+          "OTA",
+          "Wi-Fi"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Wi-Fi",
+    "reading": "わいふぁい",
+    "aliases": [
+      "WiFi",
+      "無線LAN",
+      "802.11",
+      "2.4GHz Wi-Fi"
+    ],
+    "senses": [
+      {
+        "definition": "IEEE 802.11規格に基づく無線LAN技術。組み込み開発では2.4GHz帯（802.11b/g/n）が主流で、ESP32・CYW43439等のモジュールでマイコンにWi-Fi接続を追加する。IoTデバイスのクラウド通信やWebサーバ機能の実現に不可欠。",
+        "domain": "embedded",
+        "keywords": [
+          "802.11",
+          "無線LAN",
+          "2.4GHz",
+          "ESP32",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Bluetooth",
+    "reading": "ぶるーとぅーす",
+    "aliases": [
+      "BT",
+      "BR/EDR"
+    ],
+    "senses": [
+      {
+        "definition": "近距離無線通信規格。Classic Bluetooth（BR/EDR）は音声・データ通信、Bluetooth Low Energy（BLE）は低消費電力のセンサー・ビーコン通信に使用される。ESP32・CYW43439・NORA-W106等がBLE対応し、スマホ連携やウェアラブル機器に活用される。",
+        "domain": "embedded",
+        "keywords": [
+          "BLE",
+          "無線",
+          "低消費電力",
+          "スマホ連携",
+          "ビーコン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "USB",
+    "reading": "ゆーえすびー",
+    "aliases": [
+      "Universal Serial Bus",
+      "USB Type-C",
+      "USB micro B",
+      "USBデバイス"
+    ],
+    "senses": [
+      {
+        "definition": "コンピュータと周辺機器を接続するシリアル通信規格。組み込み開発ではマイコンへの電源供給・プログラム書き込み・シリアルモニタ通信に使用する。最新ボードはUSB Type-Cを採用し、旧モデルはUSB micro Bを使用する。USB 2.0 Full Speed対応が一般的。",
+        "domain": "embedded",
+        "keywords": [
+          "Type-C",
+          "micro B",
+          "シリアル",
+          "電源供給",
+          "書き込み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HID",
+    "reading": "えいちあいでぃー",
+    "aliases": [
+      "Human Interface Device",
+      "HIDエミュレーション",
+      "USBキーボードエミュレーション"
+    ],
+    "senses": [
+      {
+        "definition": "USB規格でキーボード・マウス・ゲームパッド等の入力デバイスを定義するデバイスクラス。マイコンをHIDデバイスとして認識させると、PCにキー入力やマウス操作を送信できる。Arduino Leonardo/Pro MicroやRP2040がネイティブUSB HIDに対応。",
+        "domain": "embedded",
+        "keywords": [
+          "USB",
+          "キーボード",
+          "マウス",
+          "入力デバイス",
+          "エミュレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RTC",
+    "reading": "あーるてぃーしー",
+    "aliases": [
+      "Real-Time Clock",
+      "リアルタイムクロック"
+    ],
+    "senses": [
+      {
+        "definition": "バッテリーバックアップで時刻を保持し続ける専用ICまたはマイコン内蔵の時計機能。DS3231等の外付けRTCモジュールや、STM32内蔵RTCで日時管理を行い、データロガーやスケジュール制御に使用する。",
+        "domain": "embedded",
+        "keywords": [
+          "時計",
+          "バックアップ",
+          "DS3231",
+          "日時",
+          "データロガー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "IMU",
+    "reading": "あいえむゆー",
+    "aliases": [
+      "Inertial Measurement Unit",
+      "慣性計測装置",
+      "6軸IMU"
+    ],
+    "senses": [
+      {
+        "definition": "加速度センサーとジャイロスコープを組み合わせた慣性計測ユニット。3軸加速度＋3軸ジャイロの6軸IMUが一般的で、M5StickC（MPU6886）やM5Atom等に内蔵される。姿勢検出・ジェスチャー認識・振動監視に使用する。",
+        "domain": "embedded",
+        "keywords": [
+          "加速度",
+          "ジャイロ",
+          "6軸",
+          "姿勢検出",
+          "MPU6886"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CCL",
+    "reading": "しーしーえる",
+    "aliases": [
+      "Configurable Custom Logic",
+      "カスタムロジック"
+    ],
+    "senses": [
+      {
+        "definition": "tinyAVR/megaAVR/AVR Dxシリーズに搭載されたプログラマブルロジックブロック。AND/OR/NOT等の論理演算をハードウェアで実行し、CPUを介さずにGPIO信号の組み合わせやフィルタリングを行える省電力・低遅延の機能。",
+        "domain": "embedded",
+        "keywords": [
+          "AVR",
+          "ロジック",
+          "ハードウェア",
+          "省電力",
+          "低遅延"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タッチ入力",
+    "reading": "たっちにゅうりょく",
+    "aliases": [
+      "Touch Input",
+      "静電容量タッチ",
+      "タッチセンサー"
+    ],
+    "senses": [
+      {
+        "definition": "指の接触を静電容量の変化で検出する入力方式。ESP32は内蔵タッチセンサーピンで物理ボタンなしのタッチ入力を実現でき、M5Stack Core2は静電容量式タッチパネルを搭載する。ボタン代替やジェスチャーUIに使用。",
+        "domain": "embedded",
+        "keywords": [
+          "静電容量",
+          "ESP32",
+          "タッチパネル",
+          "ボタン代替",
+          "入力"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タイマ",
+    "reading": "たいま",
+    "aliases": [
+      "Timer",
+      "ハードウェアタイマ",
+      "タイマ割り込み"
+    ],
+    "senses": [
+      {
+        "definition": "マイコン内蔵のカウンタ回路で、一定間隔での割り込み発生・PWM信号生成・パルス幅計測等に使用する。タイマ割り込みにより正確な周期処理を実現し、モーター制御やセンサーの定期読み取りに不可欠なペリフェラル。",
+        "domain": "embedded",
+        "keywords": [
+          "割り込み",
+          "PWM",
+          "カウンタ",
+          "周期処理",
+          "ペリフェラル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "赤外線送信",
+    "reading": "せきがいせんそうしん",
+    "aliases": [
+      "IR Transmitter",
+      "赤外線LED",
+      "IR送信"
+    ],
+    "senses": [
+      {
+        "definition": "赤外線LEDから変調した赤外光を発射してリモコン信号を送信する技術。NECプロトコル等の変調方式でテレビ・エアコン等の家電を制御する。M5StickCは赤外線LED内蔵で、マイコンとIRライブラリで学習リモコンを自作できる。",
+        "domain": "embedded",
+        "keywords": [
+          "赤外線",
+          "リモコン",
+          "NEC",
+          "変調",
+          "M5StickC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スリープ",
+    "reading": "すりーぷ",
+    "aliases": [
+      "Sleep Mode",
+      "深いスリープ",
+      "Deep Sleep",
+      "スリープモード"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンの消費電力を削減するために動作を一時停止する省電力モード。浅いスリープ（Idle/Standby）と深いスリープ（Deep Sleep）があり、Deep Sleepでは数μAまで消費電力が低下する。タイマや外部割り込みで復帰し、バッテリー駆動IoTデバイスで重要。",
+        "domain": "embedded",
+        "keywords": [
+          "省電力",
+          "Deep Sleep",
+          "バッテリー",
+          "復帰",
+          "μA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "低消費電力",
+    "reading": "ていしょうひでんりょく",
+    "aliases": [
+      "Low Power",
+      "省電力設計",
+      "Ultra-Low Power"
+    ],
+    "senses": [
+      {
+        "definition": "バッテリー駆動やエナジーハーベスティングで長期間動作するための設計手法。スリープモード活用・クロック低減・ペリフェラル個別停止・間欠動作等の技術を組み合わせる。STM32U5シリーズやtinyAVRは低消費電力設計に優れたマイコンファミリ。",
+        "domain": "embedded",
+        "keywords": [
+          "バッテリー",
+          "スリープ",
+          "クロック",
+          "STM32U5",
+          "間欠動作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プログラマ",
+    "reading": "ぷろぐらま",
+    "aliases": [
+      "書き込み器",
+      "ライター"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンにファームウェアを書き込むための専用デバイスまたは機能。ST-LINK（STM32用）・PICkit（PIC用）・UPDI対応ライター（tinyAVR用）等がある。多くの開発ボードはUSB経由のオンボードプログラマを内蔵している。",
+        "domain": "embedded",
+        "keywords": [
+          "書き込み",
+          "ST-LINK",
+          "PICkit",
+          "UPDI",
+          "ファームウェア"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データシート",
+    "reading": "でーたしーと",
+    "aliases": [
+      "Datasheet",
+      "データシート（電子部品）"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンや電子部品の電気的特性・ピン配置・動作条件・レジスタマップ・タイミング仕様等を記載した技術文書。組み込み開発では必ず参照する文書で、メーカーのWebサイトからPDFで入手する。レジスタ直接操作時に特に重要。",
+        "domain": "embedded",
+        "keywords": [
+          "仕様書",
+          "ピン配置",
+          "レジスタマップ",
+          "PDF",
+          "メーカー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Flash",
+    "reading": "ふらっしゅ",
+    "aliases": [
+      "プログラムメモリ"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンに搭載される不揮発性メモリで、プログラムコードや定数データを格納する。書き換え可能だが書き込み回数に制限がある（数万〜数十万回）。RP2040は外付け2MB Flash、STM32F411REは512KB内蔵Flashを搭載する。",
+        "domain": "embedded",
+        "keywords": [
+          "不揮発性",
+          "プログラム",
+          "書き換え",
+          "NOR",
+          "容量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SRAM",
+    "reading": "えすらむ",
+    "aliases": [
+      "Static RAM",
+      "スタティックRAM"
+    ],
+    "senses": [
+      {
+        "definition": "マイコン内蔵の高速揮発性メモリで、プログラム実行中の変数・スタック・ヒープを格納する。DRAMと異なりリフレッシュ不要で高速だが容量は小さい。RP2040は264KB、RP2350は520KBのSRAMを搭載する。",
+        "domain": "embedded",
+        "keywords": [
+          "揮発性",
+          "変数",
+          "スタック",
+          "高速",
+          "マイコン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EEPROM",
+    "reading": "いーいーぴーろむ",
+    "aliases": [
+      "Electrically Erasable Programmable ROM"
+    ],
+    "senses": [
+      {
+        "definition": "バイト単位で電気的に書き換え可能な不揮発性メモリ。設定値・キャリブレーションデータ等の少量データの保存に使用する。ATmega328Pは1KB、PIC16Fシリーズは256Bの内蔵EEPROMを持つ。書き込み回数は10万回程度が目安。",
+        "domain": "embedded",
+        "keywords": [
+          "不揮発性",
+          "設定保存",
+          "バイト単位",
+          "書き換え",
+          "ATmega"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ROM",
+    "reading": "ろむ",
+    "aliases": [
+      "Read-Only Memory"
+    ],
+    "senses": [
+      {
+        "definition": "読み出し専用の不揮発性メモリ。マスクROM（工場書き込み）やOTP（1回書き込み）がある。現代のマイコンではFlashメモリがROMの役割を担うことが多いが、ブートローダーや固定データの格納にROM領域が使われる場合がある。",
+        "domain": "embedded",
+        "keywords": [
+          "不揮発性",
+          "読み出し専用",
+          "ブートローダー",
+          "マスクROM",
+          "OTP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PSRAM",
+    "reading": "ぴーえすらむ",
+    "aliases": [
+      "Pseudo-SRAM",
+      "擬似SRAM"
+    ],
+    "senses": [
+      {
+        "definition": "DRAMセルをSRAMインターフェースで使用できるようにしたメモリ。ESP32-WROVER・M5Stack Basic v2.7等に外付け4〜8MBが搭載され、画像処理や大きなバッファが必要なアプリケーションでSRAMを補完する。",
+        "domain": "embedded",
+        "keywords": [
+          "メモリ",
+          "ESP32",
+          "大容量",
+          "バッファ",
+          "M5Stack"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ブレッドボード",
+    "reading": "ぶれっどぼーど",
+    "aliases": [
+      "Breadboard",
+      "試作基板"
+    ],
+    "senses": [
+      {
+        "definition": "はんだ付けなしで電子部品やジャンパー線を差し込んで回路を組める穴あき基板。内部の金属クリップで接触接続するため、回路の試作や実験が容易。DIPパッケージのICやピンヘッダー付き開発ボードと組み合わせて使用する。",
+        "domain": "embedded",
+        "keywords": [
+          "試作",
+          "はんだ不要",
+          "ジャンパー線",
+          "DIP",
+          "実験"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ピンヘッダー",
+    "reading": "ぴんへっだー",
+    "aliases": [
+      "Pin Header",
+      "ヘッダーピン"
+    ],
+    "senses": [
+      {
+        "definition": "2.54mmピッチの金属ピンが一列または二列に並んだコネクタ。開発ボードの端に実装され、ブレッドボードへの挿入やジャンパーワイヤでの接続に使用する。オス・メス・L字型があり、GPIO・電源・GNDの信号を取り出す。",
+        "domain": "embedded",
+        "keywords": [
+          "2.54mm",
+          "コネクタ",
+          "GPIO",
+          "ブレッドボード",
+          "接続"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "拡張コネクタ",
+    "reading": "かくちょうこねくた",
+    "aliases": [
+      "Expansion Connector",
+      "ST Morpho",
+      "ST Zio"
+    ],
+    "senses": [
+      {
+        "definition": "開発ボードに搭載される追加のI/Oピン接続用コネクタ。STM32 NucleoのST Morpho（72ピン/114ピン）やST Zio（Arduino Mega互換拡張）が代表例で、Arduino互換ピンヘッダーでカバーしきれないGPIOやペリフェラルにアクセスする。",
+        "domain": "embedded",
+        "keywords": [
+          "Morpho",
+          "Zio",
+          "GPIO",
+          "Nucleo",
+          "拡張"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ST-LINK",
+    "reading": "えすてぃーりんく",
+    "aliases": [
+      "ST-LINK/V2-1",
+      "ST-LINK/V3",
+      "STリンク"
+    ],
+    "senses": [
+      {
+        "definition": "STMicroelectronics社のSTM32マイコン向けオンチップデバッガ/プログラマ。SWD/JTAG接続でFlash書き込み・ブレークポイント・変数ウォッチ等のデバッグ機能を提供する。Nucleoボードには ST-LINK/V2-1が内蔵されており、USB接続のみで開発できる。",
+        "domain": "embedded",
+        "keywords": [
+          "デバッガ",
+          "SWD",
+          "JTAG",
+          "STM32",
+          "プログラマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Qwiic",
+    "reading": "くいっく",
+    "aliases": [
+      "Qwiicコネクタ",
+      "Qwiicケーブル",
+      "SparkFun Qwiic",
+      "STEMMA QT"
+    ],
+    "senses": [
+      {
+        "definition": "SparkFun社が策定したI2C接続の標準化コネクタシステム。4ピンJST SHコネクタでI2Cデバイスをデイジーチェーン接続でき、はんだ付け不要でセンサーモジュールを追加できる。Adafruit STEMMA QTと互換性があり、Arduino Plug and Make Kit等で採用。",
+        "domain": "embedded",
+        "keywords": [
+          "I2C",
+          "コネクタ",
+          "SparkFun",
+          "STEMMA QT",
+          "デイジーチェーン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HAT",
+    "reading": "はっと",
+    "aliases": [
+      "Hardware Attached on Top",
+      "M5Stack HAT"
+    ],
+    "senses": [
+      {
+        "definition": "開発ボードの上に重ねて装着する拡張モジュール。Raspberry Pi向けのHAT規格（40ピンGPIO接続）と、M5StickC向けの8ピンHAT規格がある。センサー・ディスプレイ・通信モジュール等を簡単に追加できる。",
+        "domain": "embedded",
+        "keywords": [
+          "拡張モジュール",
+          "Raspberry Pi",
+          "M5StickC",
+          "GPIO",
+          "スタック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Unit",
+    "reading": "ゆにっと",
+    "aliases": [
+      "M5Stack Unit",
+      "M5 Unit"
+    ],
+    "senses": [
+      {
+        "definition": "M5Stackシリーズ向けの小型センサー・アクチュエーターモジュール群。Grove/I2C/UART接続で温湿度・距離・光・環境・モーター等の機能を追加する。ケーブル1本で接続でき、UiFlowやM5Unifiedで簡単にプログラミングできる。",
+        "domain": "embedded",
+        "keywords": [
+          "M5Stack",
+          "Grove",
+          "センサー",
+          "モジュール",
+          "I2C"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SOIC",
+    "reading": "えすおーあいしー",
+    "aliases": [
+      "Small Outline IC",
+      "SOP20",
+      "LQFP32"
+    ],
+    "senses": [
+      {
+        "definition": "表面実装（SMD）ICの標準的なパッケージ形式。SOICは2列ガルウィングリード、LQFPは4辺フラットリード。DIPより小型だがはんだ付けには技術が必要で、ブレッドボード使用にはDIP変換基板が必要。ATTINY1616はSOIC20/VQFN20で提供される。",
+        "domain": "embedded",
+        "keywords": [
+          "表面実装",
+          "パッケージ",
+          "SMD",
+          "DIP変換",
+          "LQFP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スルーホール",
+    "reading": "するーほーる",
+    "aliases": [
+      "Through-Hole",
+      "THT",
+      "スルーホール実装"
+    ],
+    "senses": [
+      {
+        "definition": "電子部品のリード線を基板の穴に通してはんだ付けする実装方式。DIPパッケージのIC・抵抗・コンデンサ等が対象で、手はんだで作業しやすい。表面実装（SMT）に比べ基板面積は大きいが、ブレッドボードや手作業の試作に適する。",
+        "domain": "embedded",
+        "keywords": [
+          "THT",
+          "DIP",
+          "はんだ付け",
+          "基板",
+          "試作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "表面実装",
+    "reading": "ひょうめんじっそう",
+    "aliases": [
+      "Surface Mount",
+      "SMT",
+      "SMD",
+      "表面実装技術"
+    ],
+    "senses": [
+      {
+        "definition": "電子部品を基板表面のランド（パッド）に直接はんだ付けする実装方式。スルーホールより小型・高密度で量産に適するが、手はんだには高い技術が必要。SOIC・QFP・QFN・BGA等のパッケージ形式がある。リフロー炉で量産はんだ付けする。",
+        "domain": "embedded",
+        "keywords": [
+          "SMT",
+          "SMD",
+          "小型化",
+          "リフロー",
+          "量産"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バッテリー",
+    "reading": "ばってりー",
+    "aliases": [
+      "Battery",
+      "リチウムポリマー",
+      "LiPo",
+      "電池"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンボードに電源を供給する蓄電池。M5Stack系はLiPoバッテリーを内蔵し、USB充電しながら動作可能。IoTセンサーノードではCR2032コイン電池やAA電池も使用される。Deep Sleepと組み合わせて長期間のバッテリー駆動を実現する。",
+        "domain": "embedded",
+        "keywords": [
+          "LiPo",
+          "充電",
+          "IoT",
+          "Deep Sleep",
+          "電源"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LED",
+    "reading": "えるいーでぃー",
+    "aliases": [
+      "Light Emitting Diode",
+      "発光ダイオード",
+      "RGB LED",
+      "LEDマトリクス"
+    ],
+    "senses": [
+      {
+        "definition": "電流を流すと発光する半導体素子。マイコン開発では動作確認用のLチカ（LED点滅）が最初のプログラムとして定番。RGB LEDは赤緑青の3色で任意の色を表現し、NeoPixel（WS2812B）等のアドレサブルLEDやLEDマトリクスも広く使用される。",
+        "domain": "embedded",
+        "keywords": [
+          "Lチカ",
+          "NeoPixel",
+          "WS2812B",
+          "RGB",
+          "発光"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "センサー",
+    "reading": "せんさー",
+    "aliases": [
+      "Sensor",
+      "温湿度センサー",
+      "距離センサー"
+    ],
+    "senses": [
+      {
+        "definition": "物理量（温度・湿度・距離・光・加速度等）を電気信号に変換する素子。DHT11/22（温湿度）・HC-SR04（超音波距離）・BMP280（気圧）等がI2C/SPIでマイコンに接続される。IoTやスマートホームの入力デバイスとして不可欠。",
+        "domain": "embedded",
+        "keywords": [
+          "温度",
+          "湿度",
+          "距離",
+          "I2C",
+          "IoT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スピーカー",
+    "reading": "すぴーかー",
+    "aliases": [
+      "Speaker",
+      "ブザー",
+      "圧電ブザー"
+    ],
+    "senses": [
+      {
+        "definition": "電気信号を音に変換する出力デバイス。圧電ブザーはPWM信号で単純なビープ音を鳴らし、M5Stack内蔵スピーカーはDACやI2Sで音声・効果音を再生する。アラーム通知やユーザーフィードバック等のUI要素として使用。",
+        "domain": "embedded",
+        "keywords": [
+          "PWM",
+          "ブザー",
+          "音声",
+          "DAC",
+          "I2S"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "液晶",
+    "reading": "えきしょう",
+    "aliases": [
+      "LCD",
+      "TFT液晶",
+      "IPS画面",
+      "ディスプレイ"
+    ],
+    "senses": [
+      {
+        "definition": "マイコンに接続して文字・グラフィック・UIを表示する画面デバイス。M5Stack Basic v2.7は2インチIPS液晶（320×240）、M5StickC Plus2は1.14インチTFTを搭載する。SPI接続のST7789やILI9341ドライバICが一般的。",
+        "domain": "embedded",
+        "keywords": [
+          "TFT",
+          "IPS",
+          "SPI",
+          "ST7789",
+          "表示"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ロータリーエンコーダ",
+    "reading": "ろーたりーえんこーだ",
+    "aliases": [
+      "Rotary Encoder",
+      "回転エンコーダ"
+    ],
+    "senses": [
+      {
+        "definition": "軸の回転量と方向を検出する入力デバイス。A/B相の2信号で回転方向を判別し、ノブ型UIや音量調整・メニュー選択に使用する。マイコンのGPIOに接続し、割り込みやポーリングで回転パルスを読み取る。",
+        "domain": "embedded",
+        "keywords": [
+          "回転",
+          "A/B相",
+          "ノブ",
+          "入力",
+          "GPIO"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マイク",
+    "reading": "まいく",
+    "aliases": [
+      "Microphone",
+      "MEMS マイク",
+      "マイクロフォン"
+    ],
+    "senses": [
+      {
+        "definition": "音声を電気信号に変換する入力デバイス。M5StickC Plus2やCore2にMEMSマイクが内蔵され、音声レベル検出・録音・FFT周波数解析等に使用する。PDMやI2S接続のデジタルマイクが組み込み機器で主流。",
+        "domain": "embedded",
+        "keywords": [
+          "MEMS",
+          "PDM",
+          "I2S",
+          "音声",
+          "録音"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "モーター",
+    "reading": "もーたー",
+    "aliases": [
+      "Motor",
+      "DCモーター",
+      "サーボモーター",
+      "ステッピングモーター"
+    ],
+    "senses": [
+      {
+        "definition": "電力を回転運動に変換する電気機械デバイス。DCモーター（PWMで速度制御）・サーボモーター（角度制御）・ステッピングモーター（ステップ制御）があり、ロボット・CNCマシン・自動化装置の駆動に使用する。モータードライバICで制御する。",
+        "domain": "embedded",
+        "keywords": [
+          "PWM",
+          "サーボ",
+          "ステッピング",
+          "駆動",
+          "ドライバIC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ボタン",
+    "reading": "ぼたん",
+    "aliases": [
+      "Button",
+      "タクトスイッチ",
+      "押しボタン"
+    ],
+    "senses": [
+      {
+        "definition": "押下で電気的に導通するメカニカル入力デバイス。マイコンのGPIOにプルアップ/プルダウン接続し、デジタル入力として読み取る。チャタリング対策（デバウンス）が必要。M5Stack系は物理ボタンを搭載しユーザーインタラクションに使用する。",
+        "domain": "embedded",
+        "keywords": [
+          "GPIO",
+          "プルアップ",
+          "デバウンス",
+          "タクト",
+          "入力"
+        ]
+      },
+      {
+        "definition": "ユーザー操作を起点にするボタン部品。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ページ",
+          "Button"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "microSDカードスロット",
+    "reading": "まいくろえすでぃーかーどすろっと",
+    "aliases": [
+      "microSD Slot",
+      "TFカードスロット"
+    ],
+    "senses": [
+      {
+        "definition": "microSDカードを挿入してマイコンから読み書きするためのスロット。SPI接続でFATファイルシステムにアクセスし、データロギング・設定ファイル読み込み・画像/音声データの格納に使用する。M5Stack BasicやESP32-CAM等に搭載。",
+        "domain": "embedded",
+        "keywords": [
+          "microSD",
+          "SPI",
+          "データロギング",
+          "FAT",
+          "ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デバイスプログラマー",
+    "reading": "でばいすぷろぐらまー",
+    "senses": [
+      {
+        "definition": "マイコンやROMなどのデバイスにファームウェアやプログラムを書き込むためのハードウェアツールです。UPDI・ISP・JTAGなどのインターフェースを使用します。",
+        "domain": "hardware",
+        "keywords": [
+          "プログラマー",
+          "書き込み",
+          "マイコン",
+          "ファームウェア"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Programmer"
+    ]
+  }
+]

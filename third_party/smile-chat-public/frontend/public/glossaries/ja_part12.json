@@ -1,0 +1,3218 @@
+[
+  {
+    "term": "Amazon Web Services",
+    "reading": "あまぞんうぇぶさーびす",
+    "senses": [
+      {
+        "definition": "AWSのクラウドサービス群全体を指す名称です。",
+        "domain": "aws",
+        "keywords": [
+          "クラウド",
+          "Amazon",
+          "サービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Account",
+    "reading": "えーだぶりゅーえすあかうんと",
+    "senses": [
+      {
+        "definition": "AWS利用の基本単位となるアカウントです。",
+        "domain": "aws",
+        "keywords": [
+          "アカウント",
+          "管理",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Organizations",
+    "reading": "えーだぶりゅーえすおーがにぜーしょんず",
+    "senses": [
+      {
+        "definition": "複数AWSアカウントをまとめて管理する仕組みです。",
+        "domain": "aws",
+        "keywords": [
+          "マルチアカウント",
+          "組織",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Control Tower",
+    "reading": "えーだぶりゅーえすこんとろーるたわー",
+    "senses": [
+      {
+        "definition": "マルチアカウント環境を標準化して構築、統制しやすくする仕組みです。",
+        "domain": "aws",
+        "keywords": [
+          "統制",
+          "マルチアカウント",
+          "ガバナンス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon VPC",
+    "reading": "あまぞんぶいぴーしー",
+    "senses": [
+      {
+        "definition": "AWS上の論理ネットワークを作るサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "ネットワーク",
+          "VPC",
+          "仮想"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Subnet in AWS",
+    "reading": "えーだぶりゅーえすさぶねっと",
+    "senses": [
+      {
+        "definition": "VPC内を分割したネットワーク領域です。",
+        "domain": "aws",
+        "keywords": [
+          "サブネット",
+          "VPC",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Internet Gateway",
+    "reading": "いんたーねっとげーとうぇい",
+    "senses": [
+      {
+        "definition": "VPCをインターネットへ接続するためのゲートウェイです。",
+        "domain": "aws",
+        "keywords": [
+          "インターネット",
+          "VPC",
+          "接続"
+        ]
+      },
+      {
+        "definition": "仮想ネットワークをインターネットへ接続する出口。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Internet Gateway"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NAT Gateway",
+    "reading": "なっとげーとうぇい",
+    "senses": [
+      {
+        "definition": "プライベート側から外向き通信するための中継ゲートウェイです。",
+        "domain": "aws",
+        "keywords": [
+          "NAT",
+          "プライベート",
+          "通信"
+        ]
+      },
+      {
+        "definition": "内部リソースが外向き通信のみ行うための中継装置。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "NAT Gateway"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Transit Gateway",
+    "reading": "えーだぶりゅーえすとらんじっとげーとうぇい",
+    "senses": [
+      {
+        "definition": "複数VPCやオンプレミス接続を集約するための中継基盤です。",
+        "domain": "aws",
+        "keywords": [
+          "VPC",
+          "接続",
+          "集約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS PrivateLink",
+    "reading": "えーだぶりゅーえすぷらいべーとりんく",
+    "senses": [
+      {
+        "definition": "プライベートネットワーク経由でサービスへ接続する仕組みです。",
+        "domain": "aws",
+        "keywords": [
+          "プライベート",
+          "接続",
+          "エンドポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Elastic Load Balancing",
+    "reading": "えらすてぃっくろーどばらんしんぐ",
+    "senses": [
+      {
+        "definition": "AWSのロードバランサー群の総称です。",
+        "domain": "aws",
+        "keywords": [
+          "負荷分散",
+          "ELB",
+          "AWS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Application Load Balancer",
+    "reading": "あぷりけーしょんろーどばらんさー",
+    "senses": [
+      {
+        "definition": "L7で動作するロードバランサーです。",
+        "domain": "aws",
+        "keywords": [
+          "L7",
+          "ALB",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Network Load Balancer",
+    "reading": "ねっとわーくろーどばらんさー",
+    "senses": [
+      {
+        "definition": "L4で動作する高性能なロードバランサーです。",
+        "domain": "aws",
+        "keywords": [
+          "L4",
+          "NLB",
+          "TCP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Route 53",
+    "reading": "あまぞんるーとふぃふてぃすりー",
+    "senses": [
+      {
+        "definition": "AWSのDNSサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "DNS",
+          "名前解決",
+          "ルーティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon CloudFront",
+    "reading": "あまぞんくらうどふろんと",
+    "senses": [
+      {
+        "definition": "AWSのCDNサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "CDN",
+          "配信",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS WAF",
+    "reading": "えーだぶりゅーえすわふ",
+    "senses": [
+      {
+        "definition": "Webアプリケーションを保護するためのファイアウォールサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "WAF",
+          "セキュリティ",
+          "Web"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Shield",
+    "reading": "えーだぶりゅーえすしーるど",
+    "senses": [
+      {
+        "definition": "DDoS対策を支援するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "DDoS",
+          "保護",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon EC2",
+    "reading": "あまぞんいーしーつー",
+    "senses": [
+      {
+        "definition": "仮想サーバーを提供するAWSの基本的なコンピュートサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "仮想マシン",
+          "コンピュート",
+          "インスタンス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Machine Image",
+    "reading": "あまぞんましんいめーじ",
+    "senses": [
+      {
+        "definition": "EC2インスタンス作成の元になるイメージです。",
+        "domain": "aws",
+        "keywords": [
+          "AMI",
+          "イメージ",
+          "EC2"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon EC2 Auto Scaling",
+    "reading": "あまぞんいーしーつーおーとすけーりんぐ",
+    "senses": [
+      {
+        "definition": "EC2台数を自動で増減させる仕組みです。",
+        "domain": "aws",
+        "keywords": [
+          "スケーリング",
+          "自動",
+          "EC2"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Lambda",
+    "reading": "えーだぶりゅーえすらむだ",
+    "senses": [
+      {
+        "definition": "イベントに応じてコードを実行するサーバーレスサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "サーバーレス",
+          "イベント",
+          "関数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon ECS",
+    "reading": "あまぞんいーしーえす",
+    "senses": [
+      {
+        "definition": "コンテナを実行、管理するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "コンテナ",
+          "ECS",
+          "Docker"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Fargate",
+    "reading": "えーだぶりゅーえすふぁーげーと",
+    "senses": [
+      {
+        "definition": "サーバー管理なしでコンテナを実行できる基盤です。",
+        "domain": "aws",
+        "keywords": [
+          "コンテナ",
+          "サーバーレス",
+          "Fargate"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon EKS",
+    "reading": "あまぞんいーけーえす",
+    "senses": [
+      {
+        "definition": "AWSのマネージドKubernetesサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "Kubernetes",
+          "EKS",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon ECR",
+    "reading": "あまぞんいーしーあーる",
+    "senses": [
+      {
+        "definition": "コンテナイメージを保管するレジストリサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "コンテナ",
+          "レジストリ",
+          "イメージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon S3",
+    "reading": "あまぞんえすすりー",
+    "senses": [
+      {
+        "definition": "オブジェクトストレージサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "ストレージ",
+          "S3",
+          "オブジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon S3 Glacier",
+    "reading": "あまぞんえすすりーぐれいしゃー",
+    "senses": [
+      {
+        "definition": "長期保管向けのアーカイブストレージです。",
+        "domain": "aws",
+        "keywords": [
+          "アーカイブ",
+          "Glacier",
+          "長期保管"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon EBS",
+    "reading": "あまぞんいーびーえす",
+    "senses": [
+      {
+        "definition": "EC2向けのブロックストレージです。",
+        "domain": "aws",
+        "keywords": [
+          "ブロック",
+          "ストレージ",
+          "EC2"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon EFS",
+    "reading": "あまぞんいーえふえす",
+    "senses": [
+      {
+        "definition": "共有ファイルシステムを提供するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "ファイル",
+          "NFS",
+          "共有"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon RDS",
+    "reading": "あまぞんあーでぃーえす",
+    "senses": [
+      {
+        "definition": "マネージドリレーショナルデータベースサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "データベース",
+          "RDS",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Aurora",
+    "reading": "あまぞんおーろら",
+    "senses": [
+      {
+        "definition": "RDS系の高性能マネージドリレーショナルデータベースです。",
+        "domain": "aws",
+        "keywords": [
+          "Aurora",
+          "データベース",
+          "高性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon DynamoDB",
+    "reading": "あまぞんだいなもでぃーびー",
+    "senses": [
+      {
+        "definition": "マネージドNoSQLデータベースです。",
+        "domain": "aws",
+        "keywords": [
+          "NoSQL",
+          "DynamoDB",
+          "キー値"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon ElastiCache",
+    "reading": "あまぞんえらすてぃきゃっしゅ",
+    "senses": [
+      {
+        "definition": "インメモリキャッシュサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "キャッシュ",
+          "Redis",
+          "インメモリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon API Gateway",
+    "reading": "あまぞんえーぴーあいげーとうぇい",
+    "senses": [
+      {
+        "definition": "APIの公開、制御、認証連携を行うサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "API",
+          "ゲートウェイ",
+          "REST"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon SQS",
+    "reading": "あまぞんえすきゅーえす",
+    "senses": [
+      {
+        "definition": "メッセージキューサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "キュー",
+          "メッセージ",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon SNS",
+    "reading": "あまぞんえすえぬえす",
+    "senses": [
+      {
+        "definition": "通知配信を行うメッセージングサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "通知",
+          "Pub/Sub",
+          "配信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon EventBridge",
+    "reading": "あまぞんいべんとぶりっじ",
+    "senses": [
+      {
+        "definition": "イベント駆動連携を行うサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "イベント",
+          "連携",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Step Functions",
+    "reading": "えーだぶりゅーえすすてっぷふぁんくしょんず",
+    "senses": [
+      {
+        "definition": "複数処理をワークフローとして制御するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "ワークフロー",
+          "ステートマシン",
+          "オーケストレーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Kinesis",
+    "reading": "あまぞんきねしす",
+    "senses": [
+      {
+        "definition": "ストリーミングデータ処理のためのサービス群です。",
+        "domain": "aws",
+        "keywords": [
+          "ストリーム",
+          "リアルタイム",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Athena",
+    "reading": "あまぞんあてな",
+    "senses": [
+      {
+        "definition": "S3上のデータをSQLで分析するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "SQL",
+          "分析",
+          "S3"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Glue",
+    "reading": "えーだぶりゅーえすぐるー",
+    "senses": [
+      {
+        "definition": "データ統合やETLを支援するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "ETL",
+          "データ統合",
+          "カタログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon Redshift",
+    "reading": "あまぞんれっどしふと",
+    "senses": [
+      {
+        "definition": "データウェアハウスサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "DWH",
+          "分析",
+          "データウェアハウス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS IAM",
+    "reading": "えーだぶりゅーえすあいあむ",
+    "senses": [
+      {
+        "definition": "認証と権限管理の中核サービスです。",
+        "domain": "aws",
+        "keywords": [
+          "認証",
+          "権限",
+          "IAM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IAM Role",
+    "reading": "あいあむろーる",
+    "senses": [
+      {
+        "definition": "一時的に引き受ける権限のまとまりです。",
+        "domain": "aws",
+        "keywords": [
+          "ロール",
+          "権限",
+          "引き受け"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS STS",
+    "reading": "えーだぶりゅーえすえすてぃーえす",
+    "senses": [
+      {
+        "definition": "一時的な認証情報を発行するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "一時認証",
+          "トークン",
+          "STS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Secrets Manager",
+    "reading": "えーだぶりゅーえすしーくれっとまねーじゃー",
+    "senses": [
+      {
+        "definition": "秘密情報を安全に保管、取得するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "秘密情報",
+          "ローテーション",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS KMS",
+    "reading": "えーだぶりゅーえすけーえむえす",
+    "senses": [
+      {
+        "definition": "暗号鍵を管理するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "暗号鍵",
+          "KMS",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon CloudWatch",
+    "reading": "あまぞんくらうどうぉっち",
+    "senses": [
+      {
+        "definition": "メトリクス、ログ、アラートを扱う監視サービスです。",
+        "domain": "aws",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS CloudTrail",
+    "reading": "えーだぶりゅーえすくらうどとれいる",
+    "senses": [
+      {
+        "definition": "AWS API操作の記録を残す監査サービスです。",
+        "domain": "aws",
+        "keywords": [
+          "監査",
+          "API",
+          "ログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Config",
+    "reading": "えーだぶりゅーえすこんふぃぐ",
+    "senses": [
+      {
+        "definition": "設定状態や変更履歴を記録、評価するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "設定",
+          "変更",
+          "コンプライアンス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amazon GuardDuty",
+    "reading": "あまぞんがーどでゅーてぃー",
+    "senses": [
+      {
+        "definition": "脅威検知を支援するセキュリティサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "脅威",
+          "検知",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Security Hub",
+    "reading": "えーだぶりゅーえすせきゅりてぃはぶ",
+    "senses": [
+      {
+        "definition": "セキュリティ検知結果を集約するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "セキュリティ",
+          "集約",
+          "検知"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Systems Manager",
+    "reading": "えーだぶりゅーえすしすてむずまねーじゃー",
+    "senses": [
+      {
+        "definition": "運用管理、設定、自動化を支援するサービス群です。",
+        "domain": "aws",
+        "keywords": [
+          "運用",
+          "管理",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Parameter Store",
+    "reading": "ぱらめーたすとあ",
+    "senses": [
+      {
+        "definition": "Systems Managerの構成値、秘密情報の保管機能です。",
+        "domain": "aws",
+        "keywords": [
+          "パラメータ",
+          "設定",
+          "SSM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS CloudFormation",
+    "reading": "えーだぶりゅーえすくらうどふぉーめーしょん",
+    "senses": [
+      {
+        "definition": "インフラをコードで定義、管理するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "IaC",
+          "テンプレート",
+          "スタック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS CodeBuild",
+    "reading": "えーだぶりゅーえすこーどびるど",
+    "senses": [
+      {
+        "definition": "ビルドを実行するCIサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "ビルド",
+          "CI",
+          "コンパイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS CodeDeploy",
+    "reading": "えーだぶりゅーえすこーどでぷろい",
+    "senses": [
+      {
+        "definition": "アプリケーション配布を自動化するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "デプロイ",
+          "配布",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS CodePipeline",
+    "reading": "えーだぶりゅーえすこーどぱいぷらいん",
+    "senses": [
+      {
+        "definition": "ビルド、テスト、デプロイをつなぐパイプラインサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "CI/CD",
+          "パイプライン",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Direct Connect",
+    "reading": "えーだぶりゅーえすだいれくとこねくと",
+    "senses": [
+      {
+        "definition": "オンプレミスとAWSを専用線でつなぐサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "専用線",
+          "接続",
+          "オンプレミス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS VPN",
+    "reading": "えーだぶりゅーえすぶいぴーえぬ",
+    "senses": [
+      {
+        "definition": "オンプレミスや他環境とVPN接続するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "VPN",
+          "接続",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Cloud Map",
+    "reading": "えーだぶりゅーえすくらうどまっぷ",
+    "senses": [
+      {
+        "definition": "サービス検出を支援するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "サービス検出",
+          "DNS",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Backup",
+    "reading": "えーだぶりゅーえすばっくあっぷ",
+    "senses": [
+      {
+        "definition": "各種AWS資源のバックアップを管理するサービスです。",
+        "domain": "aws",
+        "keywords": [
+          "バックアップ",
+          "復元",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AWS Well-Architected Framework",
+    "reading": "えーだぶりゅーえすうぇるあーきてくてっどふれーむわーく",
+    "senses": [
+      {
+        "definition": "AWS上の設計をベストプラクティスで評価するための枠組みです。",
+        "domain": "aws",
+        "keywords": [
+          "設計",
+          "ベストプラクティス",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Google Cloud",
+    "reading": "ぐーぐるくらうど",
+    "senses": [
+      {
+        "definition": "Googleのクラウドサービス群の総称です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "Google",
+          "クラウド",
+          "GCP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Google Cloud Project",
+    "reading": "ぐーぐるくらうどぷろじぇくと",
+    "senses": [
+      {
+        "definition": "Google Cloud利用の基本単位です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "プロジェクト",
+          "管理",
+          "課金"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Folder",
+    "reading": "ふぉるだ",
+    "senses": [
+      {
+        "definition": "複数プロジェクトをまとめて管理する階層です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "階層",
+          "管理",
+          "プロジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Organization",
+    "reading": "おーがにぜーしょん",
+    "senses": [
+      {
+        "definition": "企業や組織単位でGoogle Cloudを束ねる最上位階層です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "組織",
+          "最上位",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Virtual Private Cloud",
+    "reading": "ばーちゃるぷらいべーとくらうど",
+    "senses": [
+      {
+        "definition": "Google Cloudの論理ネットワークです。略してVPCと呼ばれます。",
+        "domain": "google-cloud",
+        "keywords": [
+          "VPC",
+          "ネットワーク",
+          "仮想"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Subnet in Google Cloud",
+    "reading": "ぐーぐるくらうどさぶねっと",
+    "senses": [
+      {
+        "definition": "VPC内のネットワーク分割単位です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "サブネット",
+          "VPC",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Firewall Rules",
+    "reading": "ふぁいあうぉーるるーるず",
+    "senses": [
+      {
+        "definition": "通信の許可、拒否を制御するルールです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ファイアウォール",
+          "通信",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Router",
+    "reading": "くらうどるーたー",
+    "senses": [
+      {
+        "definition": "動的ルーティングを支援するネットワークサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ルーティング",
+          "BGP",
+          "ネットワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud NAT",
+    "reading": "くらうどなっと",
+    "senses": [
+      {
+        "definition": "内部資源の外向き通信を支援するNATサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "NAT",
+          "通信",
+          "外向き"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud DNS",
+    "reading": "くらうどでぃーえぬえす",
+    "senses": [
+      {
+        "definition": "Google CloudのDNSサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "DNS",
+          "名前解決",
+          "Google"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Interconnect",
+    "reading": "くらうどいんたーこねくと",
+    "senses": [
+      {
+        "definition": "Google Cloudとオンプレミスを専用線で接続するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "専用線",
+          "オンプレミス",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Load Balancing",
+    "reading": "くらうどろーどばらんしんぐ",
+    "senses": [
+      {
+        "definition": "Google Cloudの負荷分散サービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "負荷分散",
+          "ロードバランサー",
+          "Google"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Armor",
+    "reading": "くらうどあーまー",
+    "senses": [
+      {
+        "definition": "Webアプリケーション保護やDDoS対策に使うサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "WAF",
+          "DDoS",
+          "保護"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Compute Engine",
+    "reading": "こんぴゅーとえんじん",
+    "senses": [
+      {
+        "definition": "仮想マシンを提供するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "仮想マシン",
+          "VM",
+          "コンピュート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Managed Instance Group",
+    "reading": "まねーじどいんすたんすぐるーぷ",
+    "senses": [
+      {
+        "definition": "複数VMをまとめて運用するための仕組みです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "VM",
+          "スケーリング",
+          "グループ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Persistent Disk",
+    "reading": "ぱーしすてんとでぃすく",
+    "senses": [
+      {
+        "definition": "Compute Engine向けの永続ディスクです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ディスク",
+          "ストレージ",
+          "永続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Storage",
+    "reading": "くらうどすとれーじ",
+    "senses": [
+      {
+        "definition": "Google Cloudのオブジェクトストレージです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ストレージ",
+          "オブジェクト",
+          "バケット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Filestore",
+    "reading": "ふぁいるすとあ",
+    "senses": [
+      {
+        "definition": "マネージドファイルストレージサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ファイル",
+          "NFS",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Run",
+    "reading": "くらうどらん",
+    "senses": [
+      {
+        "definition": "フルマネージドでコンテナアプリを実行するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "コンテナ",
+          "サーバーレス",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "App Engine",
+    "reading": "あっぷえんじん",
+    "senses": [
+      {
+        "definition": "Google Cloudのアプリケーション実行サービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "PaaS",
+          "アプリ",
+          "ホスティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Google Kubernetes Engine",
+    "reading": "ぐーぐるくばねてぃすえんじん",
+    "senses": [
+      {
+        "definition": "Google CloudのマネージドKubernetesサービスです。略してGKEと呼ばれます。",
+        "domain": "google-cloud",
+        "keywords": [
+          "Kubernetes",
+          "GKE",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GKE",
+    "reading": "じーけーいー",
+    "senses": [
+      {
+        "definition": "Google Kubernetes Engineの略称です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "Kubernetes",
+          "コンテナ",
+          "Google"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Artifact Registry",
+    "reading": "あーてぃふぁくとれじすとり",
+    "senses": [
+      {
+        "definition": "コンテナイメージや成果物を保存するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "コンテナ",
+          "レジストリ",
+          "成果物"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Build",
+    "reading": "くらうどびるど",
+    "senses": [
+      {
+        "definition": "ビルドと継続的インテグレーションを支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "CI",
+          "ビルド",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Deploy",
+    "reading": "くらうどでぷろい",
+    "senses": [
+      {
+        "definition": "継続的デリバリーを支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "CD",
+          "デプロイ",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Functions",
+    "reading": "くらうどふぁんくしょんず",
+    "senses": [
+      {
+        "definition": "イベント駆動でコードを実行するサーバーレスサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "サーバーレス",
+          "関数",
+          "イベント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud SQL",
+    "reading": "くらうどえすきゅーえる",
+    "senses": [
+      {
+        "definition": "マネージドリレーショナルデータベースサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "SQL",
+          "データベース",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Firestore",
+    "reading": "ふぁいあすとあ",
+    "senses": [
+      {
+        "definition": "モバイルやWeb向けのNoSQLドキュメントデータベースです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "NoSQL",
+          "ドキュメント",
+          "モバイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bigtable",
+    "reading": "びっぐてーぶる",
+    "senses": [
+      {
+        "definition": "大規模で低遅延なNoSQLデータベースです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "NoSQL",
+          "大規模",
+          "低遅延"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spanner",
+    "reading": "すぱなー",
+    "senses": [
+      {
+        "definition": "水平分散可能なリレーショナルデータベースサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "分散",
+          "SQL",
+          "グローバル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BigQuery",
+    "reading": "びっぐくえり",
+    "senses": [
+      {
+        "definition": "分析向けのクラウドデータウェアハウスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "DWH",
+          "分析",
+          "SQL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Dataflow",
+    "reading": "でーたふろー",
+    "senses": [
+      {
+        "definition": "ストリーム処理やバッチ処理を行うサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ストリーム",
+          "バッチ",
+          "Apache Beam"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Dataproc",
+    "reading": "でーたぷろっく",
+    "senses": [
+      {
+        "definition": "HadoopやSpark系の処理を支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "Hadoop",
+          "Spark",
+          "ビッグデータ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Pub/Sub",
+    "reading": "ぱぶさぶ",
+    "senses": [
+      {
+        "definition": "非同期メッセージングサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "メッセージ",
+          "非同期",
+          "Pub/Sub"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Tasks",
+    "reading": "くらうどたすくす",
+    "senses": [
+      {
+        "definition": "非同期タスク実行を管理するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "タスク",
+          "非同期",
+          "キュー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Workflows",
+    "reading": "わーくふろーず",
+    "senses": [
+      {
+        "definition": "複数サービス処理をつなぐワークフローサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ワークフロー",
+          "オーケストレーション",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Eventarc",
+    "reading": "いべんとあーく",
+    "senses": [
+      {
+        "definition": "イベント駆動連携を支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "イベント",
+          "トリガー",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Identity and Access Management",
+    "reading": "あいでんてぃてぃあんどあくせすまねじめんと",
+    "senses": [
+      {
+        "definition": "Google Cloudの認証、権限管理基盤です。略してIAMと呼ばれます。",
+        "domain": "google-cloud",
+        "keywords": [
+          "IAM",
+          "認証",
+          "権限"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Service Account",
+    "reading": "さーびすあかうんと",
+    "senses": [
+      {
+        "definition": "アプリケーションやサービスが使う認証主体です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "認証",
+          "サービス",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud KMS",
+    "reading": "くらうどけーえむえす",
+    "senses": [
+      {
+        "definition": "暗号鍵を管理するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "暗号鍵",
+          "KMS",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Logging",
+    "reading": "くらうどろぎんぐ",
+    "senses": [
+      {
+        "definition": "中央集約ログサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ログ",
+          "集約",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Monitoring",
+    "reading": "くらうどもにたりんぐ",
+    "senses": [
+      {
+        "definition": "インフラやアプリの監視サービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Error Reporting",
+    "reading": "えらーれぽーてぃんぐ",
+    "senses": [
+      {
+        "definition": "アプリケーションエラーを集約、可視化する機能です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "エラー",
+          "集約",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Trace",
+    "reading": "くらうどとれーす",
+    "senses": [
+      {
+        "definition": "遅延やリクエスト経路を追跡するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "トレース",
+          "遅延",
+          "分散"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Profiler",
+    "reading": "くらうどぷろふぁいらー",
+    "senses": [
+      {
+        "definition": "CPUやメモリ消費を継続分析するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "プロファイル",
+          "CPU",
+          "メモリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Google Cloud Observability",
+    "reading": "ぐーぐるくらうどおぶざーばびりてぃ",
+    "senses": [
+      {
+        "definition": "監視とログの総合的な観測基盤です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "可観測性",
+          "監視",
+          "ログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Memorystore",
+    "reading": "めもりーすとあ",
+    "senses": [
+      {
+        "definition": "マネージドなインメモリデータストアサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "Redis",
+          "インメモリ",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AlloyDB for PostgreSQL",
+    "reading": "あろいでぃーびーふぉーぽすとぐれすきゅーえる",
+    "senses": [
+      {
+        "definition": "PostgreSQL互換のマネージドデータベースです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "PostgreSQL",
+          "データベース",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud VPN",
+    "reading": "くらうどぶいぴーえぬ",
+    "senses": [
+      {
+        "definition": "オンプレミスなどとVPN接続するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "VPN",
+          "接続",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud CDN",
+    "reading": "くらうどしーでぃーえぬ",
+    "senses": [
+      {
+        "definition": "Google CloudのCDNサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "CDN",
+          "配信",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VPC Service Controls",
+    "reading": "ぶいぴーしーさーびすこんとろーるず",
+    "senses": [
+      {
+        "definition": "データ境界保護を強化する仕組みです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "境界",
+          "保護",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Access Context Manager",
+    "reading": "あくせすこんてきすとまねーじゃー",
+    "senses": [
+      {
+        "definition": "属性ベースアクセス制御を支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "アクセス制御",
+          "属性",
+          "ポリシー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Asset Inventory",
+    "reading": "くらうどあせっといんべんとり",
+    "senses": [
+      {
+        "definition": "Google Cloud資産を一覧、検索できるサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "資産",
+          "一覧",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Binary Authorization",
+    "reading": "ばいなりおーそらいぜーしょん",
+    "senses": [
+      {
+        "definition": "Kubernetesデプロイ時のイメージ検証を支援する仕組みです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "検証",
+          "イメージ",
+          "Kubernetes"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Scheduler",
+    "reading": "くらうどすけじゅーらー",
+    "senses": [
+      {
+        "definition": "定期実行ジョブをトリガーするサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "スケジュール",
+          "定期実行",
+          "cron"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Run Jobs",
+    "reading": "くらうどらんじょぶず",
+    "senses": [
+      {
+        "definition": "Cloud Runでバッチ的にジョブを実行する仕組みです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "バッチ",
+          "ジョブ",
+          "Cloud Run"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud SQL Auth Proxy",
+    "reading": "くらうどえすきゅーえるおーすぷろきしー",
+    "senses": [
+      {
+        "definition": "Cloud SQLへ安全に接続するための補助コンポーネントです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "プロキシ",
+          "接続",
+          "Cloud SQL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Vertex AI",
+    "reading": "ばーてっくすえーあい",
+    "senses": [
+      {
+        "definition": "Google CloudのAI、機械学習基盤です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "AI",
+          "機械学習",
+          "モデル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Sensitive Data Protection",
+    "reading": "せんしてぃぶでーたぷろてくしょん",
+    "senses": [
+      {
+        "definition": "機微データ検出や保護を支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "データ保護",
+          "機微情報",
+          "検出"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Endpoints",
+    "reading": "くらうどえんどぽいんつ",
+    "senses": [
+      {
+        "definition": "API管理を支援するサービスです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "API",
+          "管理",
+          "エンドポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Firebase",
+    "reading": "ふぁいあべーす",
+    "senses": [
+      {
+        "definition": "モバイル、Web開発向けの統合基盤です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "モバイル",
+          "Web",
+          "BaaS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "gcloud CLI",
+    "reading": "じーくらうどしーえるあい",
+    "senses": [
+      {
+        "definition": "Google Cloudを操作するコマンドラインツールです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "CLI",
+          "コマンド",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Shell",
+    "reading": "くらうどしぇる",
+    "senses": [
+      {
+        "definition": "ブラウザから使えるコマンドライン環境です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "ブラウザ",
+          "CLI",
+          "環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Organization Policy",
+    "reading": "おーがにぜーしょんぽりしー",
+    "senses": [
+      {
+        "definition": "組織レベルで制約をかけるポリシー機能です。",
+        "domain": "google-cloud",
+        "keywords": [
+          "組織",
+          "ポリシー",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Run Service Identity",
+    "reading": "くらうどらんさーびすあいでんてぃてぃ",
+    "senses": [
+      {
+        "definition": "Cloud RunがGoogle Cloud APIを呼ぶときに使うサービスアカウントです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "Cloud Run",
+          "認証",
+          "サービスアカウント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Application Default Credentials",
+    "reading": "あぷりけーしょんでふぉるとくれでんしゃるず",
+    "senses": [
+      {
+        "definition": "Google Cloudクライアントライブラリが認証情報を見つける仕組みです。",
+        "domain": "google-cloud",
+        "keywords": [
+          "認証",
+          "ADC",
+          "ライブラリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Oracle Cloud Infrastructure",
+    "reading": "おらくるくらうどいんふらすとらくちゃ",
+    "senses": [
+      {
+        "definition": "Oracleのクラウド基盤サービス群です。略してOCIと呼ばれます。",
+        "domain": "oci",
+        "keywords": [
+          "Oracle",
+          "クラウド",
+          "インフラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Tenancy",
+    "reading": "てなんしー",
+    "senses": [
+      {
+        "definition": "OCI利用の契約、管理の最上位単位です。",
+        "domain": "oci",
+        "keywords": [
+          "契約",
+          "管理",
+          "最上位"
+        ]
+      },
+      {
+        "definition": "OCI契約全体を表す最上位の管理単位。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "Tenancy"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OCID",
+    "reading": "おーしーあいでぃー",
+    "senses": [
+      {
+        "definition": "OCIリソースを一意に識別するIDです。",
+        "domain": "oci",
+        "keywords": [
+          "ID",
+          "識別",
+          "リソース"
+        ]
+      },
+      {
+        "definition": "OCIリソースを一意に識別するID。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "識別子",
+          "OCID"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Virtual Cloud Network",
+    "reading": "ばーちゃるくらうどねっとわーく",
+    "senses": [
+      {
+        "definition": "OCIの論理ネットワークです。略してVCNと呼ばれます。",
+        "domain": "oci",
+        "keywords": [
+          "VCN",
+          "ネットワーク",
+          "仮想"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VCN",
+    "reading": "ぶいしーえぬ",
+    "senses": [
+      {
+        "definition": "Virtual Cloud Networkの略称です。",
+        "domain": "oci",
+        "keywords": [
+          "ネットワーク",
+          "OCI",
+          "仮想"
+        ]
+      },
+      {
+        "definition": "OCIにおける仮想クラウドネットワーク。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "VCN"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Subnet in OCI",
+    "reading": "おーしーあいさぶねっと",
+    "senses": [
+      {
+        "definition": "VCN内で分けるネットワーク領域です。",
+        "domain": "oci",
+        "keywords": [
+          "サブネット",
+          "VCN",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VNIC",
+    "reading": "ぶいにっく",
+    "senses": [
+      {
+        "definition": "Computeインスタンスへ接続する仮想ネットワークインターフェースです。",
+        "domain": "oci",
+        "keywords": [
+          "NIC",
+          "仮想",
+          "インスタンス"
+        ]
+      },
+      {
+        "definition": "仮想マシンやサービスに割り当てる仮想NIC。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "VNIC"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DRG",
+    "reading": "でぃーあーるじー",
+    "senses": [
+      {
+        "definition": "Dynamic Routing Gatewayの略で、VCNと外部接続をつなぐゲートウェイです。",
+        "domain": "oci",
+        "keywords": [
+          "ルーティング",
+          "ゲートウェイ",
+          "接続"
+        ]
+      },
+      {
+        "definition": "OCIでVCNと外部ネットワークを中継するルータ機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "DRG"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Internet Gateway (OCI)",
+    "reading": "おーしーあいいんたーねっとげーとうぇい",
+    "senses": [
+      {
+        "definition": "VCNをインターネット接続するためのゲートウェイです。",
+        "domain": "oci",
+        "keywords": [
+          "インターネット",
+          "VCN",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NAT Gateway (OCI)",
+    "reading": "おーしーあいなっとげーとうぇい",
+    "senses": [
+      {
+        "definition": "プライベートサブネットから外向き通信するためのゲートウェイです。",
+        "domain": "oci",
+        "keywords": [
+          "NAT",
+          "プライベート",
+          "通信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Service Gateway",
+    "reading": "さーびすげーとうぇい",
+    "senses": [
+      {
+        "definition": "VCNからObject StorageなどOCIサービスへプライベート接続する仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "プライベート",
+          "接続",
+          "OCIサービス"
+        ]
+      },
+      {
+        "definition": "クラウド内の特定サービスへ私設経路で接続する仕組み。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Service Gateway"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Local Peering Gateway",
+    "reading": "ろーかるぴありんぐげーとうぇい",
+    "senses": [
+      {
+        "definition": "同一リージョン内のVCN同士を私設接続するためのゲートウェイです。",
+        "domain": "oci",
+        "keywords": [
+          "ピアリング",
+          "VCN",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Security List",
+    "reading": "せきゅりてぃりすと",
+    "senses": [
+      {
+        "definition": "サブネット単位で適用する通信制御ルールです。",
+        "domain": "oci",
+        "keywords": [
+          "セキュリティ",
+          "通信",
+          "ルール"
+        ]
+      },
+      {
+        "definition": "サブネット単位に適用する通信制御ルール。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "セキュリティ",
+          "Security List"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Network Security Group in OCI",
+    "reading": "おーしーあいえぬえすじー",
+    "senses": [
+      {
+        "definition": "リソース単位で使える仮想ファイアウォールです。",
+        "domain": "oci",
+        "keywords": [
+          "NSG",
+          "ファイアウォール",
+          "リソース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Network Load Balancer (OCI)",
+    "reading": "おーしーあいねっとわーくろーどばらんさー",
+    "senses": [
+      {
+        "definition": "OCIのネットワーク負荷分散サービスです。",
+        "domain": "oci",
+        "keywords": [
+          "負荷分散",
+          "L4",
+          "OCI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FastConnect",
+    "reading": "ふぁすとこねくと",
+    "senses": [
+      {
+        "definition": "オンプレミスとOCIを専用線でつなぐサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "専用線",
+          "オンプレミス",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Site-to-Site VPN",
+    "reading": "さいととぅーさいとぶいぴーえぬ",
+    "senses": [
+      {
+        "definition": "オンプレミスとOCIをVPN接続する仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "VPN",
+          "オンプレミス",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Compute",
+    "reading": "こんぴゅーと",
+    "senses": [
+      {
+        "definition": "仮想マシンやベアメタルを提供するOCIのコンピュートサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "仮想マシン",
+          "ベアメタル",
+          "インスタンス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Shape",
+    "reading": "しぇいぷ",
+    "senses": [
+      {
+        "definition": "OCIでCPUやメモリ構成を表すリソース定義です。",
+        "domain": "oci",
+        "keywords": [
+          "CPU",
+          "メモリ",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Block Volume",
+    "reading": "ぶろっくぼりゅーむ",
+    "senses": [
+      {
+        "definition": "Compute向けのブロックストレージです。",
+        "domain": "oci",
+        "keywords": [
+          "ブロック",
+          "ストレージ",
+          "ボリューム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Archive Storage",
+    "reading": "あーかいぶすとれーじ",
+    "senses": [
+      {
+        "definition": "長期保管向けのストレージ階層です。",
+        "domain": "oci",
+        "keywords": [
+          "アーカイブ",
+          "長期保管",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Autonomous Database",
+    "reading": "おーとなますでーたべーす",
+    "senses": [
+      {
+        "definition": "フルマネージドで自動運用を特徴とするデータベースサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "自動運用",
+          "データベース",
+          "Oracle"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Base Database Service",
+    "reading": "べーすでーたべーすさーびす",
+    "senses": [
+      {
+        "definition": "OCI上でOracle Databaseを管理するデータベースサービス群です。",
+        "domain": "oci",
+        "keywords": [
+          "Oracle Database",
+          "管理",
+          "マネージド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Database System",
+    "reading": "でーたべーすしすてむ",
+    "senses": [
+      {
+        "definition": "OCI上で提供されるOracle Database実行基盤の一形態です。",
+        "domain": "oci",
+        "keywords": [
+          "Oracle",
+          "データベース",
+          "基盤"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Exadata Database Service",
+    "reading": "えくさでーたでーたべーすさーびす",
+    "senses": [
+      {
+        "definition": "Exadata基盤上でOracle Databaseを提供するサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "Exadata",
+          "Oracle",
+          "高性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MySQL HeatWave",
+    "reading": "まいえすきゅーえるひーとうぇーぶ",
+    "senses": [
+      {
+        "definition": "OCI上で使えるMySQL系のサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "MySQL",
+          "分析",
+          "HeatWave"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Container Instances",
+    "reading": "こんてないんすたんすず",
+    "senses": [
+      {
+        "definition": "サーバーレス的にコンテナを実行できるOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "コンテナ",
+          "サーバーレス",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Oracle Kubernetes Engine",
+    "reading": "おらくるくばねてぃすえんじん",
+    "senses": [
+      {
+        "definition": "OCIのマネージドKubernetesサービスです。略してOKEと呼ばれます。",
+        "domain": "oci",
+        "keywords": [
+          "Kubernetes",
+          "OKE",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OKE",
+    "reading": "おーけーいー",
+    "senses": [
+      {
+        "definition": "Oracle Kubernetes Engineの略称です。",
+        "domain": "oci",
+        "keywords": [
+          "Kubernetes",
+          "OCI",
+          "コンテナ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OCIR",
+    "reading": "おーしーあいあーる",
+    "senses": [
+      {
+        "definition": "OCIのコンテナレジストリサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "コンテナ",
+          "レジストリ",
+          "イメージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Functions",
+    "reading": "ふぁんくしょんず",
+    "senses": [
+      {
+        "definition": "OCIのサーバーレス関数実行サービスです。",
+        "domain": "oci",
+        "keywords": [
+          "サーバーレス",
+          "関数",
+          "Fn"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Streaming",
+    "reading": "すとりーみんぐ",
+    "senses": [
+      {
+        "definition": "イベントやストリームデータを扱うサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "ストリーム",
+          "イベント",
+          "Kafka"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Queue",
+    "reading": "きゅー",
+    "senses": [
+      {
+        "definition": "非同期メッセージ処理向けのキューサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "キュー",
+          "メッセージ",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Notifications",
+    "reading": "のてぃふぃけーしょんず",
+    "senses": [
+      {
+        "definition": "アラートやイベント通知を配信するサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "通知",
+          "アラート",
+          "配信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Events",
+    "reading": "いべんつ",
+    "senses": [
+      {
+        "definition": "OCIサービスのイベントをトリガーとして扱う仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "イベント",
+          "トリガー",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Logging",
+    "reading": "ろぎんぐ",
+    "senses": [
+      {
+        "definition": "ログを収集、保存するOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "ログ",
+          "収集",
+          "保存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Monitoring",
+    "reading": "もにたりんぐ",
+    "senses": [
+      {
+        "definition": "メトリクスとアラートを扱う監視サービスです。",
+        "domain": "oci",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Logging Analytics",
+    "reading": "ろぎんぐあなりてぃくす",
+    "senses": [
+      {
+        "definition": "ログ分析を高度化するOCIのサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "ログ",
+          "分析",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Application Performance Monitoring",
+    "reading": "あぷりけーしょんぱふぉーまんすもにたりんぐ",
+    "senses": [
+      {
+        "definition": "アプリケーション性能を可視化するサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "APM",
+          "性能",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IAM with Identity Domains",
+    "reading": "あいあむうぃずあいでんてぃてぃどめいんず",
+    "senses": [
+      {
+        "definition": "OCIの認証、認可管理基盤です。",
+        "domain": "oci",
+        "keywords": [
+          "IAM",
+          "認証",
+          "認可"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Dynamic Group",
+    "reading": "だいなみっくぐるーぷ",
+    "senses": [
+      {
+        "definition": "OCIリソースを条件でまとめて権限付与に使う仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "グループ",
+          "条件",
+          "権限"
+        ]
+      },
+      {
+        "definition": "リソースを主語にして権限付与するためのグループ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "Dynamic Group"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Policy in OCI",
+    "reading": "おーしーあいぽりしー",
+    "senses": [
+      {
+        "definition": "誰に何を許可するかを記述するルールです。",
+        "domain": "oci",
+        "keywords": [
+          "ポリシー",
+          "許可",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Vault",
+    "reading": "ぼると",
+    "senses": [
+      {
+        "definition": "鍵や秘密情報を保管するOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "鍵",
+          "秘密情報",
+          "保管"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Key Management",
+    "reading": "きーまねじめんと",
+    "senses": [
+      {
+        "definition": "暗号鍵の作成、管理を扱うOCI機能です。",
+        "domain": "oci",
+        "keywords": [
+          "暗号鍵",
+          "管理",
+          "作成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Certificates",
+    "reading": "さーてぃふぃけいつ",
+    "senses": [
+      {
+        "definition": "証明書を管理するOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "証明書",
+          "TLS",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bastion",
+    "reading": "ばすちおん",
+    "senses": [
+      {
+        "definition": "安全な踏み台接続を支援するOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "踏み台",
+          "SSH",
+          "接続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Resource Manager",
+    "reading": "りそーすまねーじゃー",
+    "senses": [
+      {
+        "definition": "Terraformベースでインフラをするサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "スタック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DevOps Service",
+    "reading": "でぶおぷすさーびす",
+    "senses": [
+      {
+        "definition": "ビルドやデプロイを支援するOCIのDevOpsサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "CI/CD",
+          "ビルド",
+          "デプロイ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Flow",
+    "reading": "おーしーあいでーたふろー",
+    "senses": [
+      {
+        "definition": "サーバーレスでSpark処理を実行するサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "Spark",
+          "サーバーレス",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Integration",
+    "reading": "でーたいんてぐれーしょん",
+    "senses": [
+      {
+        "definition": "データ統合やETLを支援するサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "ETL",
+          "データ統合",
+          "変換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Safe",
+    "reading": "でーたせーふ",
+    "senses": [
+      {
+        "definition": "データベースセキュリティを支援するサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "セキュリティ",
+          "データベース",
+          "保護"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cloud Guard",
+    "reading": "くらうどがーど",
+    "senses": [
+      {
+        "definition": "セキュリティ姿勢管理を支援するOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "CSPM",
+          "セキュリティ",
+          "検知"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Security Zones",
+    "reading": "せきゅりてぃぞーんず",
+    "senses": [
+      {
+        "definition": "高セキュリティな構成制約を適用する仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "セキュリティ",
+          "制約",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Service Connector Hub",
+    "reading": "さーびすこねくたーはぶ",
+    "senses": [
+      {
+        "definition": "ログやイベントを別サービスへつなぐ仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "ログ",
+          "イベント",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Search",
+    "reading": "さーち",
+    "senses": [
+      {
+        "definition": "OCIリソースを横断検索する機能です。",
+        "domain": "oci",
+        "keywords": [
+          "検索",
+          "リソース",
+          "横断"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Tagging in OCI",
+    "reading": "おーしーあいたぐづけ",
+    "senses": [
+      {
+        "definition": "OCIリソースへ管理用タグを付ける仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "タグ",
+          "管理",
+          "分類"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Availability Domain",
+    "reading": "あべいらびりてぃどめいん",
+    "senses": [
+      {
+        "definition": "OCIでの可用性分散単位です。",
+        "domain": "oci",
+        "keywords": [
+          "可用性",
+          "分散",
+          "データセンター"
+        ]
+      },
+      {
+        "definition": "同一リージョン内で障害分離されたデータセンター単位。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "配置",
+          "Availability Domain"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Fault Domain",
+    "reading": "ふぉーるとどめいん",
+    "senses": [
+      {
+        "definition": "同一Availability Domain内で障害分離を意識する配置単位です。",
+        "domain": "oci",
+        "keywords": [
+          "障害分離",
+          "配置",
+          "可用性"
+        ]
+      },
+      {
+        "definition": "物理障害の影響を分散するための区分。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "配置",
+          "Fault Domain"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Region in OCI",
+    "reading": "おーしーあいりーじょん",
+    "senses": [
+      {
+        "definition": "OCIがサービス提供する地理的単位です。",
+        "domain": "oci",
+        "keywords": [
+          "リージョン",
+          "地域",
+          "OCI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Autonomous Linux",
+    "reading": "おーとなますりなっくす",
+    "senses": [
+      {
+        "definition": "OCIで提供される自動運用支援付きLinux管理サービスです。",
+        "domain": "oci",
+        "keywords": [
+          "Linux",
+          "自動運用",
+          "パッチ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Health Checks",
+    "reading": "へるすちぇっくす",
+    "senses": [
+      {
+        "definition": "エンドポイントの疎通や状態を確認するOCIサービスです。",
+        "domain": "oci",
+        "keywords": [
+          "疎通",
+          "監視",
+          "エンドポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Interconnect for Microsoft Azure",
+    "reading": "いんたーこねくとふぉーまいくろそふとあじゅーる",
+    "senses": [
+      {
+        "definition": "OCIとMicrosoft Azureをインターネットを介さず接続する仕組みです。",
+        "domain": "oci",
+        "keywords": [
+          "Azure",
+          "接続",
+          "マルチクラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "モニタリング（OCI）",
+    "reading": "もにたりんぐ（おーしーあい）",
+    "senses": [
+      {
+        "definition": "OCIが提供するメトリクス収集・アラーム設定のためのモニタリングサービスです。リソースのパフォーマンスや状態を継続的に監視できます。",
+        "domain": "oci",
+        "keywords": [
+          "モニタリング",
+          "OCI",
+          "メトリクス",
+          "アラーム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monitoring (OCI)",
+      "OCI Monitoring"
+    ]
+  },
+  {
+    "term": "キー管理（OCI）",
+    "reading": "きーかんり（おーしーあい）",
+    "senses": [
+      {
+        "definition": "OCIが提供する暗号化キーのライフサイクル管理サービスです。データの暗号化・復号に使用するキーを安全に保管・管理します。",
+        "domain": "oci",
+        "keywords": [
+          "キー管理",
+          "OCI",
+          "暗号化",
+          "KMS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Key Management (OCI)",
+      "OCI KMS"
+    ]
+  }
+]

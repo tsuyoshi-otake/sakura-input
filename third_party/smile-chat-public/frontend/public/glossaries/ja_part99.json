@@ -1,0 +1,379 @@
+[
+  {
+    "term": "Gemini 2.5",
+    "aliases": [
+      "Google Gemini 2.5"
+    ],
+    "senses": [
+      {
+        "definition": "GoogleのGemini 2.5系モデル群。",
+        "domain": "ai",
+        "keywords": [
+          "Google",
+          "Gemini",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gemini 2.5 Pro",
+    "aliases": [
+      "Google Gemini 2.5 Pro"
+    ],
+    "senses": [
+      {
+        "definition": "複雑な推論や長文コンテキスト処理向けのGemini 2.5上位モデル。",
+        "domain": "ai",
+        "keywords": [
+          "Google",
+          "Gemini",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gemini 2.5 Flash",
+    "aliases": [
+      "Google Gemini 2.5 Flash"
+    ],
+    "senses": [
+      {
+        "definition": "速度とコスト効率を重視したGemini 2.5モデル。",
+        "domain": "ai",
+        "keywords": [
+          "Google",
+          "Gemini",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gemini 2.5 Flash-Lite",
+    "aliases": [
+      "Google Gemini 2.5 Flash-Lite"
+    ],
+    "senses": [
+      {
+        "definition": "低遅延ワークロード向けの軽量なGemini 2.5 Flash派生モデル。",
+        "domain": "ai",
+        "keywords": [
+          "Google",
+          "Gemini",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gemini 2.5 Pro/Flash/Flash-Lite",
+    "aliases": [
+      "Gemini 2.5 Pro / Flash / Flash-Lite",
+      "Google Gemini 2.5 Pro/Flash/Flash-Lite",
+      "Google Gemini 2.5 Pro / Flash / Flash-Lite"
+    ],
+    "senses": [
+      {
+        "definition": "Gemini 2.5系主要モデルをまとめて表す短縮表記。",
+        "domain": "ai",
+        "keywords": [
+          "Google",
+          "Gemini",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cohere Command A",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Cohereの対話・テキスト生成向けモデル。",
+        "domain": "ai",
+        "keywords": [
+          "Cohere",
+          "chat",
+          "generation",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Llama 4 Maverick",
+    "aliases": [
+      "Meta Llama 4 Maverick"
+    ],
+    "senses": [
+      {
+        "definition": "Meta Llama 4系モデルの一つ。",
+        "domain": "ai",
+        "keywords": [
+          "Meta",
+          "Llama",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Llama 4 Scout",
+    "aliases": [
+      "Meta Llama 4 Scout"
+    ],
+    "senses": [
+      {
+        "definition": "Meta Llama 4系モデルの一つ。",
+        "domain": "ai",
+        "keywords": [
+          "Meta",
+          "Llama",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Meta Llama 4 Maverick/Scout",
+    "aliases": [
+      "Meta Llama 4 Maverick / Scout"
+    ],
+    "senses": [
+      {
+        "definition": "Meta Llama 4の主要モデルをまとめて表す短縮表記。",
+        "domain": "ai",
+        "keywords": [
+          "Meta",
+          "Llama",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gpt-oss",
+    "aliases": [
+      "OpenAI gpt-oss"
+    ],
+    "senses": [
+      {
+        "definition": "OpenAIのgpt-oss系オープンウェイトモデル群。",
+        "domain": "ai",
+        "keywords": [
+          "OpenAI",
+          "gpt-oss",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gpt-oss-120b",
+    "aliases": [
+      "OpenAI gpt-oss-120b"
+    ],
+    "senses": [
+      {
+        "definition": "gpt-oss系の120Bパラメータモデル。",
+        "domain": "ai",
+        "keywords": [
+          "OpenAI",
+          "gpt-oss",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gpt-oss-20b",
+    "aliases": [
+      "OpenAI gpt-oss-20b"
+    ],
+    "senses": [
+      {
+        "definition": "gpt-oss系の20Bパラメータモデル。",
+        "domain": "ai",
+        "keywords": [
+          "OpenAI",
+          "gpt-oss",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OpenAI gpt-oss-120b/20b",
+    "aliases": [
+      "gpt-oss-120b/20b",
+      "OpenAI gpt-oss-120b / 20b"
+    ],
+    "senses": [
+      {
+        "definition": "OpenAI gpt-oss系主要モデルをまとめて表す短縮表記。",
+        "domain": "ai",
+        "keywords": [
+          "OpenAI",
+          "gpt-oss",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Grok 4",
+    "aliases": [
+      "xAI Grok 4"
+    ],
+    "senses": [
+      {
+        "definition": "xAIのGrok 4系モデル。",
+        "domain": "ai",
+        "keywords": [
+          "xAI",
+          "Grok",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Grok 4.1 Fast",
+    "aliases": [
+      "xAI Grok 4.1 Fast"
+    ],
+    "senses": [
+      {
+        "definition": "応答速度を重視したGrok 4.1系モデル。",
+        "domain": "ai",
+        "keywords": [
+          "xAI",
+          "Grok",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Grok Code Fast 1",
+    "aliases": [
+      "xAI Grok Code Fast 1"
+    ],
+    "senses": [
+      {
+        "definition": "コード生成やコーディング支援向けのxAI高速モデル。",
+        "domain": "ai",
+        "keywords": [
+          "xAI",
+          "Grok",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Grok 4/4.1 Fast/Code Fast 1",
+    "aliases": [
+      "Grok 4 / 4.1 Fast / Code Fast 1",
+      "Grok 4/4.1/Grok Code Fast 1",
+      "xAI Grok 4/4.1/Grok Code Fast 1"
+    ],
+    "senses": [
+      {
+        "definition": "Grok系主要モデルをまとめて表す短縮表記。",
+        "domain": "ai",
+        "keywords": [
+          "xAI",
+          "Grok",
+          "LLM",
+          "model"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cohere Embed 4",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "テキストや画像から埋め込みベクトルを生成するCohereのモデル。",
+        "domain": "ai",
+        "keywords": [
+          "Cohere",
+          "embedding",
+          "vector",
+          "retrieval"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Embed English 3",
+    "aliases": [
+      "Cohere Embed English 3"
+    ],
+    "senses": [
+      {
+        "definition": "英語テキスト向けに最適化された埋め込みモデル。",
+        "domain": "ai",
+        "keywords": [
+          "Cohere",
+          "embedding",
+          "vector",
+          "retrieval"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Embed Multilingual 3",
+    "aliases": [
+      "Cohere Embed Multilingual 3"
+    ],
+    "senses": [
+      {
+        "definition": "多言語テキスト向けに最適化された埋め込みモデル。",
+        "domain": "ai",
+        "keywords": [
+          "Cohere",
+          "embedding",
+          "vector",
+          "retrieval"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cohere Rerank 3.5",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "検索や取得結果の再順位付けに使うCohereのrerankモデル。",
+        "domain": "ai",
+        "keywords": [
+          "Cohere",
+          "rerank",
+          "search",
+          "retrieval"
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,1159 @@
+[
+  {
+    "term": "コマンドレット",
+    "senses": [
+      {
+        "definition": "PowerShellで使われる軽量コマンドの単位。`動詞-名詞`の命名規則（例: Get-Item）に従い、.NETオブジェクトを入出力する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "コマンド",
+          "windows",
+          "cmdlet",
+          "オブジェクト"
+        ]
+      }
+    ],
+    "aliases": [
+      "cmdlet"
+    ]
+  },
+  {
+    "term": "PSオブジェクト",
+    "senses": [
+      {
+        "definition": "PowerShellのパイプラインで流通する.NETオブジェクト。テキストではなく構造化データを受け渡しできるため、bashのテキストパイプより型安全な処理が行える。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "オブジェクト",
+          "パイプライン",
+          "windows",
+          "型"
+        ]
+      }
+    ],
+    "aliases": [
+      "PSObject",
+      "PowerShellオブジェクト"
+    ]
+  },
+  {
+    "term": "プロファイル",
+    "senses": [
+      {
+        "definition": "PowerShellの起動時に自動的に読み込まれる設定スクリプト。関数・エイリアス・環境変数などをセッション開始時に設定するために使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "設定",
+          "起動",
+          "windows",
+          "カスタマイズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "profile"
+    ]
+  },
+  {
+    "term": "Get-ChildItem",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルやディレクトリの一覧を取得するコマンドレット。bashの`ls`に相当し、`gci`や`dir`のエイリアスでも呼び出せる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ファイル一覧",
+          "コマンドレット",
+          "windows",
+          "ディレクトリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "gci",
+      "dir"
+    ]
+  },
+  {
+    "term": "Set-Location",
+    "senses": [
+      {
+        "definition": "PowerShellでカレントディレクトリを変更するコマンドレット。bashの`cd`に相当し、`sl`や`cd`のエイリアスでも使える。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ディレクトリ移動",
+          "コマンドレット",
+          "windows",
+          "cd"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Get-Content",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルの内容を読み込み表示するコマンドレット。bashの`cat`に相当し、`-Wait`オプションでログのリアルタイム監視もできる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ファイル読み込み",
+          "コマンドレット",
+          "windows",
+          "テキスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Set-Content",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルに内容を書き込むコマンドレット。既存のファイルを上書きする。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ファイル書き込み",
+          "コマンドレット",
+          "windows",
+          "テキスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "sc"
+    ]
+  },
+  {
+    "term": "New-Item",
+    "senses": [
+      {
+        "definition": "PowerShellでファイル・ディレクトリ・レジストリキーなど新しいアイテムを作成するコマンドレット。`-ItemType`で種別を指定する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ファイル作成",
+          "コマンドレット",
+          "windows",
+          "ディレクトリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "ni"
+    ]
+  },
+  {
+    "term": "Remove-Item",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルやディレクトリを削除するコマンドレット。`-Recurse -Force`で再帰的に強制削除できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "削除",
+          "コマンドレット",
+          "windows",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "ri",
+      "del"
+    ]
+  },
+  {
+    "term": "Copy-Item",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルやディレクトリをコピーするコマンドレット。`-Recurse`でディレクトリを再帰コピーできる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "コピー",
+          "コマンドレット",
+          "windows",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "cpi"
+    ]
+  },
+  {
+    "term": "Move-Item",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルやディレクトリを移動するコマンドレット。bashの`mv`に相当する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "移動",
+          "コマンドレット",
+          "windows",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "mi"
+    ]
+  },
+  {
+    "term": "Rename-Item",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルやディレクトリの名前を変更するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "リネーム",
+          "コマンドレット",
+          "windows",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "rni"
+    ]
+  },
+  {
+    "term": "Get-Process",
+    "senses": [
+      {
+        "definition": "PowerShellで実行中のプロセス一覧を取得するコマンドレット。bashの`ps`に相当し、CPU・メモリ使用量も確認できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "プロセス",
+          "コマンドレット",
+          "windows",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": [
+      "gps"
+    ]
+  },
+  {
+    "term": "Stop-Process",
+    "senses": [
+      {
+        "definition": "PowerShellで実行中のプロセスを停止するコマンドレット。`-Force`で強制終了できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "プロセス終了",
+          "コマンドレット",
+          "windows",
+          "強制終了"
+        ]
+      }
+    ],
+    "aliases": [
+      "spps"
+    ]
+  },
+  {
+    "term": "Start-Process",
+    "senses": [
+      {
+        "definition": "PowerShellで新しいプロセスを起動するコマンドレット。管理者権限での実行や非表示実行も指定できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "プロセス起動",
+          "コマンドレット",
+          "windows",
+          "管理者"
+        ]
+      }
+    ],
+    "aliases": [
+      "saps"
+    ]
+  },
+  {
+    "term": "Get-Service",
+    "senses": [
+      {
+        "definition": "PowerShellでWindowsサービスの一覧と状態を取得するコマンドレット。特定のサービスをフィルタして確認できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "サービス",
+          "コマンドレット",
+          "windows",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": [
+      "gsv"
+    ]
+  },
+  {
+    "term": "Set-Service",
+    "senses": [
+      {
+        "definition": "PowerShellでWindowsサービスのスタートアップの種別や説明を変更するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "サービス設定",
+          "コマンドレット",
+          "windows",
+          "スタートアップ"
+        ]
+      }
+    ],
+    "aliases": [
+      "ssv"
+    ]
+  },
+  {
+    "term": "Start-Service",
+    "senses": [
+      {
+        "definition": "PowerShellで停止中のWindowsサービスを起動するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "サービス起動",
+          "コマンドレット",
+          "windows",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": [
+      "sasv"
+    ]
+  },
+  {
+    "term": "Stop-Service",
+    "senses": [
+      {
+        "definition": "PowerShellで実行中のWindowsサービスを停止するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "サービス停止",
+          "コマンドレット",
+          "windows",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": [
+      "spsv"
+    ]
+  },
+  {
+    "term": "Restart-Service",
+    "senses": [
+      {
+        "definition": "PowerShellでWindowsサービスを再起動するコマンドレット。設定変更後の反映などに使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "サービス再起動",
+          "コマンドレット",
+          "windows",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Get-EventLog",
+    "senses": [
+      {
+        "definition": "PowerShellでWindowsイベントログを取得するコマンドレット。エラーや警告の調査に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "イベントログ",
+          "コマンドレット",
+          "windows",
+          "障害調査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Write-Host",
+    "senses": [
+      {
+        "definition": "PowerShellでコンソールに直接メッセージを表示するコマンドレット。パイプラインには出力されないため、ログ表示に限定して使う。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "出力",
+          "コマンドレット",
+          "windows",
+          "コンソール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Write-Output",
+    "senses": [
+      {
+        "definition": "PowerShellでオブジェクトをパイプラインに出力するコマンドレット。次のコマンドレットに値を渡すために使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "出力",
+          "パイプライン",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Read-Host",
+    "senses": [
+      {
+        "definition": "PowerShellでコンソールからユーザー入力を受け取るコマンドレット。インタラクティブなスクリプトで使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "入力",
+          "インタラクティブ",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Write-Error",
+    "senses": [
+      {
+        "definition": "PowerShellでエラーメッセージをエラーストリームに出力するコマンドレット。エラーハンドリングのデバッグに使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "エラー",
+          "コマンドレット",
+          "windows",
+          "デバッグ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Write-Warning",
+    "senses": [
+      {
+        "definition": "PowerShellで警告メッセージを警告ストリームに出力するコマンドレット。非致命的な問題をユーザーに通知する際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "警告",
+          "コマンドレット",
+          "windows",
+          "通知"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Get-Variable",
+    "senses": [
+      {
+        "definition": "PowerShellでシェル変数の一覧または特定変数の値を取得するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "変数",
+          "コマンドレット",
+          "windows",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "gv"
+    ]
+  },
+  {
+    "term": "Set-Variable",
+    "senses": [
+      {
+        "definition": "PowerShellで変数の値や属性を設定するコマンドレット。読み取り専用属性も指定できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "変数設定",
+          "コマンドレット",
+          "windows",
+          "スクリプト"
+        ]
+      }
+    ],
+    "aliases": [
+      "sv"
+    ]
+  },
+  {
+    "term": "Remove-Variable",
+    "senses": [
+      {
+        "definition": "PowerShellで変数を削除するコマンドレット。変数のクリーンアップに使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "変数削除",
+          "コマンドレット",
+          "windows",
+          "スクリプト"
+        ]
+      }
+    ],
+    "aliases": [
+      "rv"
+    ]
+  },
+  {
+    "term": "Get-Command",
+    "senses": [
+      {
+        "definition": "PowerShellで利用可能なコマンドレット・関数・エイリアスを一覧取得するコマンドレット。コマンド名の探索に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "コマンド探索",
+          "コマンドレット",
+          "windows",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": [
+      "gcm"
+    ]
+  },
+  {
+    "term": "Get-Help",
+    "senses": [
+      {
+        "definition": "PowerShellでコマンドレットや関数のヘルプ情報を表示するコマンドレット。`-Examples`オプションで使用例を確認できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ヘルプ",
+          "コマンドレット",
+          "windows",
+          "ドキュメント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Get-Member",
+    "senses": [
+      {
+        "definition": "PowerShellでオブジェクトのプロパティとメソッドの一覧を表示するコマンドレット。オブジェクトの構造を調べる際に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "オブジェクト",
+          "プロパティ",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "gm"
+    ]
+  },
+  {
+    "term": "Select-Object",
+    "senses": [
+      {
+        "definition": "PowerShellでパイプラインオブジェクトから特定のプロパティを選択して出力するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "プロパティ選択",
+          "コマンドレット",
+          "windows",
+          "フィルタ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Where-Object",
+    "senses": [
+      {
+        "definition": "PowerShellでパイプラインオブジェクトを条件でフィルタリングするコマンドレット。bashの`grep`に相当する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "フィルタ",
+          "コマンドレット",
+          "windows",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "?"
+    ]
+  },
+  {
+    "term": "ForEach-Object",
+    "senses": [
+      {
+        "definition": "PowerShellでパイプラインの各オブジェクトに対して処理を繰り返すコマンドレット。bashの`xargs`に近い使い方ができる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ループ",
+          "コマンドレット",
+          "windows",
+          "繰り返し"
+        ]
+      }
+    ],
+    "aliases": [
+      "foreach",
+      "%"
+    ]
+  },
+  {
+    "term": "Sort-Object",
+    "senses": [
+      {
+        "definition": "PowerShellでパイプラインオブジェクトをプロパティ値でソートするコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ソート",
+          "コマンドレット",
+          "windows",
+          "並び替え"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Group-Object",
+    "senses": [
+      {
+        "definition": "PowerShellでパイプラインオブジェクトを特定のプロパティ値でグループ化するコマンドレット。集計や分類に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "グループ化",
+          "コマンドレット",
+          "windows",
+          "集計"
+        ]
+      }
+    ],
+    "aliases": [
+      "group"
+    ]
+  },
+  {
+    "term": "Measure-Object",
+    "senses": [
+      {
+        "definition": "PowerShellでパイプラインオブジェクトの数値プロパティの合計・平均・最大・最小などを計算するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "集計",
+          "コマンドレット",
+          "windows",
+          "統計"
+        ]
+      }
+    ],
+    "aliases": [
+      "measure"
+    ]
+  },
+  {
+    "term": "Format-Table",
+    "senses": [
+      {
+        "definition": "PowerShellでオブジェクトをテーブル形式でコンソールに表示するコマンドレット。列のカスタマイズが可能。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "表示",
+          "テーブル",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "ft"
+    ]
+  },
+  {
+    "term": "Format-List",
+    "senses": [
+      {
+        "definition": "PowerShellでオブジェクトをプロパティ名と値のリスト形式で表示するコマンドレット。詳細情報の確認に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "表示",
+          "リスト形式",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "fl"
+    ]
+  },
+  {
+    "term": "Export-Csv",
+    "senses": [
+      {
+        "definition": "PowerShellでオブジェクトをCSVファイルに書き出すコマンドレット。Excelなどで開けるデータとして出力できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "CSV",
+          "エクスポート",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "epcsv"
+    ]
+  },
+  {
+    "term": "Import-Csv",
+    "senses": [
+      {
+        "definition": "PowerShellでCSVファイルを読み込みオブジェクトとして返すコマンドレット。列名がプロパティ名になる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "CSV",
+          "インポート",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "ipcsv"
+    ]
+  },
+  {
+    "term": "ConvertTo-Json",
+    "senses": [
+      {
+        "definition": "PowerShellでオブジェクトをJSON文字列に変換するコマンドレット。APIレスポンスの整形や設定ファイルの生成に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "JSON",
+          "変換",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ConvertFrom-Json",
+    "senses": [
+      {
+        "definition": "PowerShellでJSON文字列をPowerShellオブジェクトに変換するコマンドレット。APIレスポンスの解析に使われる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "JSON",
+          "パース",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Invoke-WebRequest",
+    "senses": [
+      {
+        "definition": "PowerShellでHTTPリクエストを送信してWebコンテンツを取得するコマンドレット。bashの`curl`に相当する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "HTTP",
+          "ダウンロード",
+          "コマンドレット",
+          "API"
+        ]
+      }
+    ],
+    "aliases": [
+      "iwr"
+    ]
+  },
+  {
+    "term": "Invoke-RestMethod",
+    "senses": [
+      {
+        "definition": "PowerShellでREST APIにHTTPリクエストを送り、レスポンスを自動でパースして返すコマンドレット。JSON/XMLを直接オブジェクトとして扱える。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "REST",
+          "API",
+          "コマンドレット",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": [
+      "irm"
+    ]
+  },
+  {
+    "term": "Test-Path",
+    "senses": [
+      {
+        "definition": "PowerShellでファイルやディレクトリ・レジストリキーが存在するか確認してtrue/falseを返すコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "存在確認",
+          "パス",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Test-Connection",
+    "senses": [
+      {
+        "definition": "PowerShellでネットワーク接続を確認するコマンドレット。bashの`ping`に相当する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "ネットワーク",
+          "ping",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Get-Date",
+    "senses": [
+      {
+        "definition": "PowerShellで現在の日時を取得するコマンドレット。書式指定で任意のフォーマットに変換できる。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "日時",
+          "タイムスタンプ",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Start-Sleep",
+    "senses": [
+      {
+        "definition": "PowerShellでスクリプトの実行を指定秒数またはミリ秒だけ一時停止するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "待機",
+          "スリープ",
+          "コマンドレット",
+          "スクリプト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Get-History",
+    "senses": [
+      {
+        "definition": "PowerShellで現在のセッションで実行したコマンドの履歴を取得するコマンドレット。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "履歴",
+          "コマンドレット",
+          "windows",
+          "セッション"
+        ]
+      }
+    ],
+    "aliases": [
+      "h"
+    ]
+  },
+  {
+    "term": "Clear-Host",
+    "senses": [
+      {
+        "definition": "PowerShellのコンソール画面をクリアするコマンドレット。bashの`clear`に相当する。",
+        "domain": "shell",
+        "keywords": [
+          "PowerShell",
+          "クリア",
+          "コンソール",
+          "コマンドレット",
+          "windows"
+        ]
+      }
+    ],
+    "aliases": [
+      "clear"
+    ]
+  },
+  {
+    "term": "凡人",
+    "reading": "ぼんじん",
+    "senses": [
+      {
+        "definition": "特別な才能や突出したスキルを持たない普通の人。エンジニアリングの文脈では「天才ではない普通のエンジニアが継続的に成果を出すには仕組みや習慣が重要」という議論で使われる。",
+        "domain": "culture",
+        "keywords": [
+          "人材",
+          "スキル",
+          "自己認識",
+          "チーム",
+          "文化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スケール",
+    "senses": [
+      {
+        "definition": "システムや組織が規模の増大に対応できる能力。水平スケール（サーバ追加）と垂直スケール（サーバ強化）があり、成長戦略に応じて選択する。",
+        "domain": "software-engineering",
+        "keywords": [
+          "スケーラビリティ",
+          "インフラ",
+          "成長",
+          "アーキテクチャ",
+          "負荷"
+        ]
+      }
+    ],
+    "aliases": [
+      "scale",
+      "スケーラビリティ"
+    ]
+  },
+  {
+    "term": "安定供給",
+    "reading": "あんていきょうきゅう",
+    "senses": [
+      {
+        "definition": "システムやサービスを中断なく継続的に提供し続けること。SLAや可用性目標を達成するための運用・設計が求められる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "可用性",
+          "SLA",
+          "運用",
+          "信頼性",
+          "サービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "少数精鋭",
+    "reading": "しょうすうせいえい",
+    "senses": [
+      {
+        "definition": "少ない人数でも高いスキルを持つメンバーを集め、効率よく成果を出すチームや組織の考え方。人海戦術と対比される。",
+        "domain": "business",
+        "keywords": [
+          "チーム",
+          "組織",
+          "効率",
+          "人材",
+          "少人数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "人海戦術",
+    "reading": "じんかいせんじゅつ",
+    "senses": [
+      {
+        "definition": "多くの人員を投入することで作業量をこなすアプローチ。品質より速度・量を重視する場合に使われるが、コミュニケーションコストも増大する。",
+        "domain": "business",
+        "keywords": [
+          "チーム",
+          "組織",
+          "リソース",
+          "規模",
+          "プロジェクト管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "未経験",
+    "reading": "みけいけん",
+    "senses": [
+      {
+        "definition": "特定の業務や技術に対して実務経験がない状態。採用文脈では「未経験歓迎」として使われ、スキルより意欲・適性を重視する場合に多い。",
+        "domain": "business",
+        "keywords": [
+          "採用",
+          "スキル",
+          "経験",
+          "人材",
+          "教育"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "良いコード",
+    "reading": "よいこーど",
+    "senses": [
+      {
+        "definition": "可読性・保守性・テスト容易性・拡張性を兼ね備えたコード。チームの共通認識によって基準は異なるが、SOLID原則やDRYなどが指針となる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "コード品質",
+          "可読性",
+          "保守性",
+          "設計",
+          "ベストプラクティス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "既存機能",
+    "reading": "きそんきのう",
+    "senses": [
+      {
+        "definition": "すでにシステムに実装されている機能。新機能開発の際には既存機能との整合性や影響範囲を確認することが重要。",
+        "domain": "software-engineering",
+        "keywords": [
+          "機能",
+          "システム",
+          "影響範囲",
+          "保守",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "標準機能",
+    "reading": "ひょうじゅんきのう",
+    "senses": [
+      {
+        "definition": "プラットフォームやフレームワークがデフォルトで提供する機能。独自実装より標準機能を活用することで保守コストを下げられる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "フレームワーク",
+          "デフォルト",
+          "再利用",
+          "保守",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エンジニアリング",
+    "senses": [
+      {
+        "definition": "技術的な問題を体系的に解決する営み全般。ソフトウェア開発に限らず、設計・運用・品質保証を包括する概念として使われる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "技術",
+          "設計",
+          "開発",
+          "問題解決",
+          "プロフェッショナル"
+        ]
+      }
+    ],
+    "aliases": [
+      "engineering"
+    ]
+  },
+  {
+    "term": "顧客対応",
+    "reading": "こきゃくたいおう",
+    "senses": [
+      {
+        "definition": "顧客からの問い合わせ・クレーム・要望に対して適切に回答・調整・対処すること。エンジニアが直接対応する場合は技術的な説明能力も求められる。",
+        "domain": "business",
+        "keywords": [
+          "顧客",
+          "問い合わせ",
+          "コミュニケーション",
+          "サポート",
+          "CS"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

@@ -1,0 +1,619 @@
+[
+  {
+    "term": "Shared Components",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリ共通部品をまとめて管理する画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "Shared Components"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Static Application Files",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "アプリ内で使う静的ファイル置き場。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ファイル",
+          "Static Application Files"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "#APP_FILES#",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "静的アプリファイル参照に使う置換記法。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "置換文字列",
+          "#APP_FILES#"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Component Groups",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "共通部品をまとめて再利用する単位。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "共通部品",
+          "Component Groups"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Plug-ins",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "標準以外の宣言的コンポーネント拡張。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "拡張",
+          "Plug-ins"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Component Settings",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "コンポーネントのアプリ共通設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "設定",
+          "Component Settings"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Shortcuts",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "HTMLやPL/SQL断片を再利用する仕組み。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "共通化",
+          "Shortcuts"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Session State Protection",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "URL改ざんなどを防ぐ保護機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "セキュリティ",
+          "Session State Protection"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Map Backgrounds",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "地図表示用の背景マップ定義。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "地図",
+          "Map Backgrounds"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Page Designer",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページを統合的に編集する開発画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IDE",
+          "Page Designer"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Rendering",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "画面描画系コンポーネントを扱う領域。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Rendering"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dynamic Actions",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "クライアント側イベント処理を定義する領域。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Dynamic Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Property Editor",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "選択部品の属性を編集するペイン。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Property Editor"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Component View",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "コンポーネント種別ごとに見るタブ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Component View"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Page Search",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページ内の構成要素を検索する機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Page Search"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Item",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "入力や表示に使うページ部品。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ページ",
+          "Item"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Computation",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "値を計算してセットする定義。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ページ",
+          "Computation"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Copy Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "既存ページを複製する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Copy Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Comment Out",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "一時的に無効化して残す操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Comment Out"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Uncomment",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "無効化状態を解除する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Uncomment"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Quick SQL",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "簡易記法からDDLを自動生成する機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Quick SQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Data Workshop",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "データのロードやアンロードを行う機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Data Workshop"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Data Generator",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サンプルデータを生成する機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Data Generator"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Sample Datasets",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "学習や検証用に用意されたサンプルデータ集合。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Sample Datasets"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Object Browser",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DBオブジェクトを閲覧作成する画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Object Browser"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SQL Commands",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "その場で単発SQLを実行する画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "SQL Commands"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SQL Scripts",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "SQLスクリプトを保存実行する機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "SQL Scripts"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Schema Comparison",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "2つのスキーマ差分を比較する機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Schema Comparison"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Monitor Database",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DBの状態や性能を監視すること。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "監視",
+          "Monitor Database"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Database Dashboard",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DBの状態を要約表示するダッシュボード。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "監視",
+          "Database Dashboard"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Database Accounts Authentication",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DBユーザー名とパスワードによる認証方式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "認証",
+          "Database Accounts Authentication"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Schema-based Authentication",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "スキーマ利用前提で接続可否を決める方式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "認証",
+          "Schema-based Authentication"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Database Connection",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DBへ接続するための設定情報全般。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "接続",
+          "Database Connection"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Wallet",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "DB接続用の証明書や設定をまとめた資格情報一式。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "接続",
+          "Wallet"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "tnsnames.ora",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Oracle接続先名を定義する設定ファイル。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "接続",
+          "tnsnames.ora"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEXレンダリング",
+    "reading": "えーぺっくすれんだりんぐ",
+    "senses": [
+      {
+        "definition": "Oracle APEXがページや各コンポーネントをHTMLとして生成・表示するプロセスです。テンプレートやプラグインによって出力を制御できます。",
+        "domain": "apex",
+        "keywords": [
+          "APEX",
+          "レンダリング",
+          "Oracle",
+          "HTML生成"
+        ]
+      }
+    ],
+    "aliases": [
+      "APEX Rendering"
+    ]
+  },
+  {
+    "term": "APEXアイテム",
+    "reading": "えーぺっくすあいてむ",
+    "senses": [
+      {
+        "definition": "Oracle APEXのページ上に配置される入力フィールドや表示要素などのUIコンポーネントです。セッション変数として値を管理します。",
+        "domain": "apex",
+        "keywords": [
+          "APEX",
+          "アイテム",
+          "フォーム要素",
+          "Oracle"
+        ]
+      }
+    ],
+    "aliases": [
+      "APEX Item"
+    ]
+  },
+  {
+    "term": "APEXバリデーション",
+    "reading": "えーぺっくすばりでーしょん",
+    "senses": [
+      {
+        "definition": "Oracle APEXでページ送信時にアイテムの値を検証するルールです。必須チェック・書式チェック・カスタムPL/SQLによる検証が可能です。",
+        "domain": "apex",
+        "keywords": [
+          "APEX",
+          "バリデーション",
+          "入力検証",
+          "Oracle"
+        ]
+      }
+    ],
+    "aliases": [
+      "APEX Validation"
+    ]
+  }
+]

@@ -1,0 +1,980 @@
+[
+  {
+    "term": "ノイマン型コンピュータ",
+    "reading": "のいまんがたこんぴゅーた",
+    "senses": [
+      {
+        "definition": "ノイマン型コンピュータは、命令とデータを同じメモリ空間に格納し順次処理するアーキテクチャです。現代のコンピュータの多くがこの方式を基本としています。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "アーキテクチャ",
+          "ストアドプログラム",
+          "メモリ",
+          "CPU設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Von Neumann Computer"
+    ]
+  },
+  {
+    "term": "フェッチデコード実行サイクル",
+    "reading": "ふぇっちでこーどじっこうさいくる",
+    "senses": [
+      {
+        "definition": "フェッチデコード実行サイクルは、CPUが命令を読み出し・解析・実行することを繰り返す基本動作循環です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "CPU",
+          "命令サイクル",
+          "実行",
+          "フェッチ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fetch-Decode-Execute Cycle"
+    ]
+  },
+  {
+    "term": "マイクロプログラム制御",
+    "reading": "まいくろぷろぐらむせいぎょ",
+    "senses": [
+      {
+        "definition": "マイクロプログラム制御は、CPUの制御信号をコントロールメモリに格納したマイクロ命令によって実装する方式です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "制御ユニット",
+          "マイクロ命令",
+          "CPU設計",
+          "ファームウェア"
+        ]
+      }
+    ],
+    "aliases": [
+      "Microprogrammed Control"
+    ]
+  },
+  {
+    "term": "ハーバードアーキテクチャ",
+    "reading": "はーばーどあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "ハーバードアーキテクチャは、命令メモリとデータメモリを分離し並行アクセスパスを実現するアーキテクチャです。マイコントローラ等に採用されています。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "メモリ分離",
+          "命令",
+          "データパス",
+          "並行アクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Harvard Architecture"
+    ]
+  },
+  {
+    "term": "RISC設計",
+    "reading": "りすくせっけい",
+    "senses": [
+      {
+        "definition": "RISC設計は、小規模でシンプルな命令セットを用いて高速かつ均一なパイプライン実行に最適化されたCPU設計手法です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "命令セット",
+          "パイプライン",
+          "CPU",
+          "ARM"
+        ]
+      }
+    ],
+    "aliases": [
+      "RISC Design"
+    ]
+  },
+  {
+    "term": "CISC設計",
+    "reading": "しすくせっけい",
+    "senses": [
+      {
+        "definition": "CISC設計は、多数の複雑な命令を提供することでプログラムサイズを削減し多様な操作を直接サポートするCPU設計手法です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "命令セット",
+          "複雑命令",
+          "CPU",
+          "x86"
+        ]
+      }
+    ],
+    "aliases": [
+      "CISC Design"
+    ]
+  },
+  {
+    "term": "命令パイプライン",
+    "reading": "めいれいぱいぷらいん",
+    "senses": [
+      {
+        "definition": "命令パイプラインは、複数の命令の各ステージを重ね合わせて同時に処理しCPUのスループットを向上する技術です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "パイプライン",
+          "スループット",
+          "CPU",
+          "命令処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Instruction Pipeline"
+    ]
+  },
+  {
+    "term": "ハザード制御",
+    "reading": "はざーどせいぎょ",
+    "senses": [
+      {
+        "definition": "ハザード制御は、データハザード・構造的ハザード・制御ハザードなどのパイプライン競合を防ぎ正しい実行を保証する仕組みです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "パイプラインハザード",
+          "ストール",
+          "フォワーディング",
+          "CPU"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hazard Control"
+    ]
+  },
+  {
+    "term": "静的分岐予測",
+    "reading": "せいてきぶんぎよそく",
+    "senses": [
+      {
+        "definition": "静的分岐予測は、コンパイル時または設計時に知られた固定ルールに基づいて分岐結果を予測する手法です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "分岐予測",
+          "コンパイラ",
+          "パイプライン",
+          "CPU"
+        ]
+      }
+    ],
+    "aliases": [
+      "Static Branch Prediction"
+    ]
+  },
+  {
+    "term": "VLIWアーキテクチャ",
+    "reading": "ぶいえるあいだぶりゅーあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "VLIWアーキテクチャは、複数の独立した命令を長い命令ワードにまとめて並行実行するアーキテクチャです。コンパイラが並行性を抽出します。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "並行性",
+          "命令ワード",
+          "コンパイラ",
+          "CPU設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "VLIW Architecture"
+    ]
+  },
+  {
+    "term": "アウトオブオーダ実行",
+    "reading": "あうとおぶおーだじっこう",
+    "senses": [
+      {
+        "definition": "アウトオブオーダ実行は、依存関係がない命令をプログラム順と異なる順序で実行しCPUの利用率を高める技術です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "命令スケジューリング",
+          "並行性",
+          "CPU",
+          "スーパースカラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レジスタ割付",
+    "reading": "れじすたわりつけ",
+    "senses": [
+      {
+        "definition": "レジスタ割付は、プログラム変数を限られたCPUレジスタに割り当て、メモリアクセスを削減するコンパイラの最適化処理です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "コンパイラ",
+          "レジスタ",
+          "最適化",
+          "CPU"
+        ]
+      }
+    ],
+    "aliases": [
+      "Register Allocation"
+    ]
+  },
+  {
+    "term": "メモリマップトI/O",
+    "reading": "めもりまっぷといーおー",
+    "senses": [
+      {
+        "definition": "メモリマップトI/Oは、入出力デバイスのレジスタをメモリアドレス空間にマッピングし通常のメモリ命令でアクセスできるようにするI/O方式です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "メモリマップ",
+          "I/O",
+          "デバイス",
+          "CPU"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DMA転送",
+    "reading": "でぃーえむえーてんそう",
+    "senses": [
+      {
+        "definition": "DMA転送は、周辺機器がCPUの介在なしにメモリとの間で直接データを転送できる仕組みです。CPUの負荷を軽減し高速転送を実現します。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "DMA",
+          "I/O",
+          "メモリ転送",
+          "CPU負荷軽減"
+        ]
+      }
+    ],
+    "aliases": [
+      "DMA Transfer"
+    ]
+  },
+  {
+    "term": "割込みベクタ",
+    "reading": "わりこみべくた",
+    "senses": [
+      {
+        "definition": "割込みベクタとは、特定の割込みに対応するハンドラのアドレスを格納したテーブルエントリまたはアドレスです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "割込み",
+          "ハンドラ",
+          "ベクタテーブル",
+          "ビャンドアドレス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Interrupt Vector"
+    ]
+  },
+  {
+    "term": "優先割込み",
+    "reading": "ゆうせんわりこみ",
+    "senses": [
+      {
+        "definition": "優先割込み処理は、優先度の高い割込み要求を低い要求より先に処理する仕組みです。リアルタイムシステムで重要です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "割込み",
+          "優先度",
+          "リアルタイム",
+          "CPUスケジューリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Priority Interrupt"
+    ]
+  },
+  {
+    "term": "メモリ階層",
+    "reading": "めもりかいそう",
+    "senses": [
+      {
+        "definition": "メモリ階層は、データアクセスの速度と容量のトレードオフを最適化するため、レジスタ・キャッシュ・主記憶・ストレージを階層的に組み合わせたメモリ構成です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "キャッシュ",
+          "局所性",
+          "メモリ技術",
+          "CPU設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Memory Hierarchy"
+    ]
+  },
+  {
+    "term": "連想メモリ",
+    "reading": "れんそうめもり",
+    "senses": [
+      {
+        "definition": "連想メモリ（コンテンツアドレサブルメモリ）は、アドレスではなく内容をキーに検索を行うメモリです。TLB等に使われます。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "CAM",
+          "ルックアップ",
+          "メモリ",
+          "TLB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Associative Memory"
+    ]
+  },
+  {
+    "term": "キャッシュ一貫性",
+    "reading": "きゃっしゅいっかんせい",
+    "senses": [
+      {
+        "definition": "キャッシュ一貫性とは、マルチプロセッサ環境で各CPUキャッシュの内容を一致させるプロトコル・仕組みの総称です。MESIプロトコルが代表例です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "キャッシュ",
+          "マルチコア",
+          "一貫性",
+          "MESI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "書込みバック",
+    "reading": "かきこみばっく",
+    "senses": [
+      {
+        "definition": "書込みバック（ライトバック）キャッシュは、キャッシュからページをエビクトするまで主メモリへの更新を遅らせ書込みトラフィックを削減するキャッシュ戦略です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "キャッシュポリシー",
+          "メモリ書込み",
+          "性能",
+          "ライトバック"
+        ]
+      }
+    ],
+    "aliases": [
+      "Write-Back"
+    ]
+  },
+  {
+    "term": "仮想記憶方式",
+    "reading": "かそうきおくほうしき",
+    "senses": [
+      {
+        "definition": "仮想記憶方式は、仮想アドレスを物理メモリおよびディスクにマッピングし各プロセスに大きな論理空間を提供するメモリ管理方式です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ページング",
+          "アドレス変換",
+          "メモリ",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Virtual Memory System"
+    ]
+  },
+  {
+    "term": "ページ置換アルゴリズム",
+    "reading": "ぺーじちかんあるごりずむ",
+    "senses": [
+      {
+        "definition": "ページ置換アルゴリズムは、新しいページをRAMに読み込む際にどのメモリページを追い出すかを決定するアルゴリズムです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ページング",
+          "置換",
+          "仮想記憶",
+          "LRU"
+        ]
+      }
+    ],
+    "aliases": [
+      "Page Replacement Algorithm"
+    ]
+  },
+  {
+    "term": "LRU方式",
+    "reading": "えるあーるゆーほうしき",
+    "senses": [
+      {
+        "definition": "LRU（Least Recently Used）は、最も長い間参照されていないページを置換する方式です。局所性に基づく効率的な戦略です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "LRU",
+          "ページ置換",
+          "キャッシュ",
+          "局所性"
+        ]
+      }
+    ],
+    "aliases": [
+      "LRU Policy"
+    ]
+  },
+  {
+    "term": "FIFO方式",
+    "reading": "ふぁいふぉほうしき",
+    "senses": [
+      {
+        "definition": "FIFO置換は、最も古く読み込まれたページを最初に置換する方式です。最近の使用状況に関係なく適用されます。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "FIFO",
+          "ページ置換",
+          "キュー",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "FIFO Policy"
+    ]
+  },
+  {
+    "term": "スラッシング",
+    "reading": "すらっしんぐ",
+    "senses": [
+      {
+        "definition": "スラッシングとは、過度なページングによりシステムが実行よりスワッピングに大部分の時間を費やしてしまうパフォーマンス劣化現象です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ページング",
+          "パフォーマンス劣化",
+          "仮想記憶",
+          "ワーキングセット"
+        ]
+      }
+    ],
+    "aliases": [
+      "Thrashing"
+    ]
+  },
+  {
+    "term": "ワーキングセット",
+    "reading": "わーきんぐせっと",
+    "senses": [
+      {
+        "definition": "ワーキングセットとは、プロセスが一定時間内に効率的に実行するために必要なページの集合です。局所性の原理に基づいています。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ページ集合",
+          "局所性",
+          "仮想記憶",
+          "スラッシング防止"
+        ]
+      }
+    ],
+    "aliases": [
+      "Working Set"
+    ]
+  },
+  {
+    "term": "セグメンテーション方式",
+    "reading": "せぐめんてーしょんほうしき",
+    "senses": [
+      {
+        "definition": "セグメンテーション方式は、メモリをコード・データ・スタックなどの論理的な領域に分割し、各セグメントに独自の境界を設けるメモリ管理方式です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "セグメンテーション",
+          "メモリ管理",
+          "アドレッシング",
+          "論理空間"
+        ]
+      }
+    ],
+    "aliases": [
+      "Segmentation Scheme"
+    ]
+  },
+  {
+    "term": "メモリ保護",
+    "reading": "めもりほご",
+    "senses": [
+      {
+        "definition": "メモリ保護は、プロセスが他のプロセスの保護されたメモリ領域を不正に読み書きできないようアクセス権限を強制する仕組みです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "保護",
+          "アクセス権限",
+          "プロセス分離",
+          "アドレス空間"
+        ]
+      }
+    ],
+    "aliases": [
+      "Memory Protection"
+    ]
+  },
+  {
+    "term": "プロセス制御ブロック",
+    "reading": "ぷろせすせいぎょぶろっく",
+    "senses": [
+      {
+        "definition": "プロセス制御ブロック（PCB）は、プロセスの状態・スケジューリング情報・リソース参照をコンテキストスイッチ用に格納したデータ構造です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "PCB",
+          "プロセス",
+          "コンテキストスイッチ",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Process Control Block"
+    ]
+  },
+  {
+    "term": "スレッドスケジューリング",
+    "reading": "すれっどすけじゅーりんぐ",
+    "senses": [
+      {
+        "definition": "スレッドスケジューリングは、実行待機中のスレッドのうちどれがCPU時間を割り当てられるか、どの順序で実行するかを決定します。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "スケジューラ",
+          "スレッド",
+          "CPU時間",
+          "プリエンプティブ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Thread Scheduling"
+    ]
+  },
+  {
+    "term": "ラウンドロビン方式",
+    "reading": "らうんどろびんほうしき",
+    "senses": [
+      {
+        "definition": "ラウンドロビン方式は、各タスクに一定のタイムスライスを循環的に割り当てる公平なスケジューリング方式です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "タイムスライス",
+          "公平性",
+          "スケジューラ",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Round-Robin Scheduling"
+    ]
+  },
+  {
+    "term": "多段フィードバックキュー",
+    "reading": "ただんふぃーどばっくきゅー",
+    "senses": [
+      {
+        "definition": "多段フィードバックキューは、プロセスの振る舞いと待機時間に基づいて優先度を動的に調整するスケジューリングアルゴリズムです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "優先度",
+          "スケジューラ",
+          "キュー",
+          "動的調整"
+        ]
+      }
+    ],
+    "aliases": [
+      "Multilevel Feedback Queue"
+    ]
+  },
+  {
+    "term": "デッドロック回避",
+    "reading": "でっどろっくかいひ",
+    "senses": [
+      {
+        "definition": "デッドロック回避は、リソース割り当てを安全な状態に保つことで循環待ち条件を未然に防ぐ仕組みです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "デッドロック",
+          "リソース割り当て",
+          "安全状態",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deadlock Avoidance"
+    ]
+  },
+  {
+    "term": "銀行家アルゴリズム",
+    "reading": "ぎんこうかあるごりずむ",
+    "senses": [
+      {
+        "definition": "銀行家アルゴリズムは、リソース要求を許可することでシステムが安全な状態を維持できるかを検査するデッドロック回避アルゴリズムです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "デッドロック回避",
+          "安全状態",
+          "リソース",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Banker's Algorithm"
+    ]
+  },
+  {
+    "term": "クリティカルセクション",
+    "reading": "くりてぃかるせくしょん",
+    "senses": [
+      {
+        "definition": "クリティカルセクションとは、共有リソースにアクセスするコード領域であり、相互排他的に実行されなければなりません。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "相互排他",
+          "共有リソース",
+          "並行性",
+          "メモリアクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Critical Section"
+    ]
+  },
+  {
+    "term": "セマフォ同期",
+    "reading": "せまふぉどうき",
+    "senses": [
+      {
+        "definition": "セマフォ同期は、カウンタエントリのwait/signal操作を使って並行アクセスを制御する同期機構です。OSの核で広く使われます。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "セマフォ",
+          "同期",
+          "並行性",
+          "P/V操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "Semaphore Synchronization"
+    ]
+  },
+  {
+    "term": "モニタ同期",
+    "reading": "もにたどうき",
+    "senses": [
+      {
+        "definition": "モニタ同期は、共有データと同期メソッドを条件変数による待機機構とともにカプセル化する同期機構です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "モニタ",
+          "条件変数",
+          "相互排他",
+          "Java synchronized"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monitor Synchronization"
+    ]
+  },
+  {
+    "term": "メッセージパッシング",
+    "reading": "めっせーじぱっしんぐ",
+    "senses": [
+      {
+        "definition": "メッセージパッシングは、プロセスがメモリを共有せずメッセージの送受信で通信するプロセス間通信手法です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "IPC",
+          "メッセージ",
+          "プロセス通信",
+          "非共有メモリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Message Passing"
+    ]
+  },
+  {
+    "term": "システムコール",
+    "reading": "しすてむこーる",
+    "senses": [
+      {
+        "definition": "システムコールは、ユーザプログラムがカーネルサービスを要求するための制御されたインターフェースです。トラップ命令でCPUを特権モードに切り替えます。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "カーネルAPI",
+          "OSサービス",
+          "トラップ",
+          "特権モード"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Call"
+    ]
+  },
+  {
+    "term": "カーネルモード",
+    "reading": "かーねるもーど",
+    "senses": [
+      {
+        "definition": "カーネルモードは、すべてのハードウェアとメモリにフルアクセスできるCPU特権実行モードです。OSカーネルがこのモードで動作します。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "特権",
+          "CPUモード",
+          "オペレーティングシステム",
+          "カーネル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Kernel Mode"
+    ]
+  },
+  {
+    "term": "ユーザモード",
+    "reading": "ゆーざもーど",
+    "senses": [
+      {
+        "definition": "ユーザモードは、アプリケーションが直接的な特権ハードウェアアクセスなしに実行される制限されたモードです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "特権制限",
+          "CPUモード",
+          "アプリケーション",
+          "サンドボックス"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Mode"
+    ]
+  },
+  {
+    "term": "ブートローダ",
+    "reading": "ぶーとろーだ",
+    "senses": [
+      {
+        "definition": "ブートローダは、コンピュータ起動時に最初に実行されるソフトウェアで、ハードウェア初期化とOSロードを担当します。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "起動プロセス",
+          "BIOS",
+          "UEFI",
+          "OSロード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Boot Loader"
+    ]
+  },
+  {
+    "term": "デバイスドライバ",
+    "reading": "でばいすどらいば",
+    "senses": [
+      {
+        "definition": "デバイスドライバは、カーネルとハードウェアデバイスの間を仲介するソフトウェアモジュールで、デバイスを抽象化するインターフェースを提供します。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "カーネル",
+          "ハードウェア",
+          "抽象化",
+          "OS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ファイルディスクリプタ",
+    "reading": "ふぁいるでぃすくりぷた",
+    "senses": [
+      {
+        "definition": "ファイルディスクリプタは、OSがオープン中のファイルやI/Oストリームを参照するために使用する小さな整数のハンドルです。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ハンドル",
+          "ファイルI/O",
+          "プロセス",
+          "POSIX"
+        ]
+      }
+    ],
+    "aliases": [
+      "File Descriptor"
+    ]
+  },
+  {
+    "term": "ジャーナリングファイルシステム",
+    "reading": "じゃーなりんぐふぁいるしすてむ",
+    "senses": [
+      {
+        "definition": "ジャーナリングファイルシステムは、メタデータの更新をジャーナルに記録してクラッシュ後の復元性を向上させるファイルシステムです。ext4が代表例です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ファイルシステム",
+          "ジャーナル",
+          "クラッシュ復元",
+          "ext4"
+        ]
+      }
+    ],
+    "aliases": [
+      "Journaling File System"
+    ]
+  },
+  {
+    "term": "スワップ領域",
+    "reading": "すわっぷりょういき",
+    "senses": [
+      {
+        "definition": "スワップ領域は、物理RAMが不足しているときにメモリページを一時的に格納するために使用されるディスク領域です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "スワップ",
+          "ページング",
+          "仮想記憶",
+          "ディスク"
+        ]
+      }
+    ],
+    "aliases": [
+      "Swap Area"
+    ]
+  },
+  {
+    "term": "仮想化支援機能",
+    "reading": "かそうかしえんきのう",
+    "senses": [
+      {
+        "definition": "仮想化支援機能は、仮想マシンの実行を高速化・隔離するCPUのハードウェア拡張機能です。Intel VT-xやAMD-Vが代表例です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "仮想化",
+          "CPU拡張",
+          "VM",
+          "Intel VT-x"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hardware Virtualization Support"
+    ]
+  },
+  {
+    "term": "ハイパーバイザ型",
+    "reading": "はいぱーばいざがた",
+    "senses": [
+      {
+        "definition": "ハイパーバイザ型仮想化は、ハイパーバイザレイヤを通じてホスト上で複数の仮想マシンを実行する仮想化方式です。VMwareやKVMが代表例です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "ハイパーバイザ",
+          "仮想マシン",
+          "VMware",
+          "KVM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hypervisor-Based Virtualization"
+    ]
+  },
+  {
+    "term": "コンテナ仮想化",
+    "reading": "こんてなかそうか",
+    "senses": [
+      {
+        "definition": "コンテナ仮想化は、同じOSカーネルを共有しながらアプリケーションをOSレベルで隔離する仮想化技術です。Dockerが代表例です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "コンテナ",
+          "ネームスペース",
+          "隔離",
+          "Docker"
+        ]
+      }
+    ],
+    "aliases": [
+      "Container Virtualization"
+    ]
+  },
+  {
+    "term": "リアルタイムスケジューリング",
+    "reading": "りあるたいむすけじゅーりんぐ",
+    "senses": [
+      {
+        "definition": "リアルタイムスケジューリングは、時間的に決定論的なシステムでデッドラインを確実に守るため、タスクの優先度を決定するスケジューリング技術です。",
+        "domain": "fe-architecture-os",
+        "keywords": [
+          "デッドライン",
+          "決定論的",
+          "スケジューラ",
+          "RTOS"
+        ]
+      }
+    ],
+    "aliases": [
+      "Real-Time Scheduling"
+    ]
+  },
+  {
+    "term": "仮想化基盤",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "仮想マシン、仮想ネットワーク、ストレージなどをまとめて提供・管理する基盤です。ハイパーバイザ、管理ツール、クラスタ機能などで構成されます。",
+        "domain": "virtualization",
+        "keywords": [
+          "ハイパーバイザ",
+          "仮想マシン",
+          "クラスタ",
+          "ネットワーク",
+          "ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "仮想化プラットフォーム",
+    "reading": "かそうかぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "仮想マシン・仮想ネットワーク・ストレージをまとめて提供・管理するプラットフォームです。ハイパーバイザ、管理ツール、クラスタリング機能などで構成されます。",
+        "domain": "virtualization",
+        "keywords": [
+          "ハイパーバイザ",
+          "仮想マシン",
+          "クラスタ",
+          "管理基盤"
+        ]
+      }
+    ],
+    "aliases": [
+      "Virtualization Platform"
+    ]
+  }
+]

@@ -1,0 +1,1529 @@
+[
+  {
+    "term": "BDD",
+    "senses": [
+      {
+        "definition": "Behavior-Driven Development。Given-When-Then形式でビジネス仕様をシナリオとして記述し、テストと仕様を一致させる開発手法。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "振る舞い",
+          "Given-When-Then"
+        ]
+      }
+    ],
+    "aliases": [
+      "振る舞い駆動開発",
+      "Behavior-Driven Development"
+    ]
+  },
+  {
+    "term": "ATDD",
+    "senses": [
+      {
+        "definition": "Acceptance Test-Driven Development。受け入れテストを先に作成し、それをパスする実装を行う開発手法。",
+        "domain": "testing",
+        "keywords": [
+          "受け入れテスト",
+          "TDD",
+          "BDD"
+        ]
+      }
+    ],
+    "aliases": [
+      "受け入れテスト駆動開発",
+      "Acceptance Test-Driven Development"
+    ]
+  },
+  {
+    "term": "Given-When-Then",
+    "senses": [
+      {
+        "definition": "テストシナリオを「前提条件（Given）・操作（When）・期待結果（Then）」の3段階で記述するBDDの構造テンプレート。",
+        "domain": "testing",
+        "keywords": [
+          "BDD",
+          "シナリオ",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ユニットテスト",
+    "reading": "ゆにっとてすと",
+    "senses": [
+      {
+        "definition": "関数やクラスなどの最小単位を個別に検証するテスト。高速で独立性が高く、テストピラミッドの底辺を担う。",
+        "domain": "testing",
+        "keywords": [
+          "単体テスト",
+          "テスト",
+          "JUnit"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "統合テスト",
+    "reading": "とうごうてすと",
+    "senses": [
+      {
+        "definition": "複数コンポーネントやモジュールを組み合わせ、相互作用が正しく機能するかを検証するテスト。",
+        "domain": "testing",
+        "keywords": [
+          "テスト",
+          "コンポーネント",
+          "インテグレーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "integration test"
+    ]
+  },
+  {
+    "term": "受け入れテスト",
+    "reading": "うけいれてすと",
+    "senses": [
+      {
+        "definition": "ビジネス要件や仕様を満たすかをステークホルダー視点で検証するテスト。ATDDの核心。",
+        "domain": "testing",
+        "keywords": [
+          "ATDD",
+          "ビジネス要件",
+          "E2E"
+        ]
+      }
+    ],
+    "aliases": [
+      "acceptance test"
+    ]
+  },
+  {
+    "term": "回帰テスト",
+    "reading": "かいきてすと",
+    "senses": [
+      {
+        "definition": "変更によって既存機能が壊れていないかを確認するテスト。CI/CDパイプラインで自動実行されることが多い。",
+        "domain": "testing",
+        "keywords": [
+          "リグレッション",
+          "CI",
+          "自動テスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スナップショットテスト",
+    "senses": [
+      {
+        "definition": "UIや関数の出力を「スナップショット」として保存し、変更時に差分を検出するテスト手法。Jestが有名。",
+        "domain": "testing",
+        "keywords": [
+          "Jest",
+          "UI",
+          "差分検出"
+        ]
+      }
+    ],
+    "aliases": [
+      "snapshot test"
+    ]
+  },
+  {
+    "term": "テストダブル",
+    "senses": [
+      {
+        "definition": "テスト対象が依存するコンポーネントの代替品の総称。モック・スタブ・スパイ・フェイクなどが含まれる。",
+        "domain": "testing",
+        "keywords": [
+          "モック",
+          "スタブ",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "test double"
+    ]
+  },
+  {
+    "term": "モック",
+    "senses": [
+      {
+        "definition": "依存オブジェクトの代替品で、呼び出し検証（振る舞い確認）を主目的とするテストダブル。",
+        "domain": "testing",
+        "keywords": [
+          "テストダブル",
+          "スタブ",
+          "JUnit"
+        ]
+      }
+    ],
+    "aliases": [
+      "mock"
+    ]
+  },
+  {
+    "term": "スタブ",
+    "senses": [
+      {
+        "definition": "テスト中に依存オブジェクトの代わりに固定値を返すテストダブル。状態確認テストで使われる。",
+        "domain": "testing",
+        "keywords": [
+          "テストダブル",
+          "モック",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "stub"
+    ]
+  },
+  {
+    "term": "スパイ",
+    "senses": [
+      {
+        "definition": "実際のオブジェクトに呼び出し記録機能を追加したテストダブル。本物の処理も実行しつつ呼び出しを検証する。",
+        "domain": "testing",
+        "keywords": [
+          "テストダブル",
+          "モック",
+          "振る舞い検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "spy",
+      "test spy"
+    ]
+  },
+  {
+    "term": "フェイク",
+    "senses": [
+      {
+        "definition": "実際の依存コンポーネントの軽量代替実装（インメモリDBなど）。本物に近い動作をするテストダブル。",
+        "domain": "testing",
+        "keywords": [
+          "テストダブル",
+          "インメモリ",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "fake"
+    ]
+  },
+  {
+    "term": "リファクタリング",
+    "senses": [
+      {
+        "definition": "外部から見た振る舞いを変えずにコードの内部構造を改善すること。技術的負債の解消やコード品質向上が目的。",
+        "domain": "development-practices",
+        "keywords": [
+          "コード品質",
+          "設計改善",
+          "技術的負債"
+        ]
+      }
+    ],
+    "aliases": [
+      "refactoring"
+    ]
+  },
+  {
+    "term": "リライト",
+    "senses": [
+      {
+        "definition": "既存システムをゼロから書き直すこと。リファクタリングと異なり既存コードを使わず全面的に再実装する。",
+        "domain": "development-practices",
+        "keywords": [
+          "rewrite",
+          "移行",
+          "レガシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "rewrite"
+    ]
+  },
+  {
+    "term": "継続的インテグレーション",
+    "reading": "けいぞくてきいんてぐれーしょん",
+    "senses": [
+      {
+        "definition": "コードの変更をリポジトリに頻繁にマージし、自動ビルド・テストで品質を維持するプラクティス。",
+        "domain": "devops",
+        "keywords": [
+          "CI",
+          "GitHub Actions",
+          "自動テスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "継続的デリバリー",
+    "reading": "けいぞくてきでりばりー",
+    "senses": [
+      {
+        "definition": "コードをいつでも本番リリースできる状態に保つプラクティス。テスト・ビルド・ステージングを自動化する。",
+        "domain": "devops",
+        "keywords": [
+          "CD",
+          "CI",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "継続的デプロイ",
+    "reading": "けいぞくてきでぷろい",
+    "senses": [
+      {
+        "definition": "テストを通過したコードを自動的に本番環境にデプロイするプラクティス。継続的デリバリーの上位概念。",
+        "domain": "devops",
+        "keywords": [
+          "CD",
+          "CI/CD",
+          "自動デプロイ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Continuous Deployment"
+    ]
+  },
+  {
+    "term": "Trunk-Based Development",
+    "senses": [
+      {
+        "definition": "長命ブランチを避け、全開発者が頻繁にmain/trunkブランチへ統合する開発スタイル。Feature Flagと組み合わせることが多い。",
+        "domain": "development-practices",
+        "keywords": [
+          "ブランチ戦略",
+          "CI",
+          "Feature Flag"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Feature Flag",
+    "senses": [
+      {
+        "definition": "コードを変更せずに機能のON/OFFを切り替える仕組み。未完成機能のデプロイや段階的リリースに使う。",
+        "domain": "development-practices",
+        "keywords": [
+          "フィーチャートグル",
+          "段階的リリース",
+          "A/Bテスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Feature Toggle",
+      "フィーチャーフラグ",
+      "フィーチャートグル"
+    ]
+  },
+  {
+    "term": "Blue-Green Deployment",
+    "senses": [
+      {
+        "definition": "本番環境（Blue）と新バージョン環境（Green）を並行稼働させ、切り替えでゼロダウンタイムリリースを実現するデプロイ戦略。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "ダウンタイムゼロ",
+          "ロールバック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Canary Release",
+    "senses": [
+      {
+        "definition": "新バージョンを少数のユーザーから段階的に展開し、問題がなければ全体に適用するリリース戦略。",
+        "domain": "devops",
+        "keywords": [
+          "段階的リリース",
+          "リスク低減",
+          "デプロイ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ロールバック",
+    "senses": [
+      {
+        "definition": "デプロイした変更に問題が発生した際、以前の安定バージョンに戻す操作。",
+        "domain": "devops",
+        "keywords": [
+          "デプロイ",
+          "リリース管理",
+          "障害対応"
+        ]
+      }
+    ],
+    "aliases": [
+      "rollback"
+    ]
+  },
+  {
+    "term": "オブザーバビリティ",
+    "senses": [
+      {
+        "definition": "システムの外部出力（メトリクス・ログ・トレース）から内部状態を推測できる性質。可観測性とも呼ぶ。",
+        "domain": "operations",
+        "keywords": [
+          "メトリクス",
+          "ログ",
+          "トレース",
+          "可観測性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フェイルファスト",
+    "senses": [
+      {
+        "definition": "エラーを早期に検出してシステムを即座に停止させ、障害の伝播を防ぐ設計原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "fail-fast",
+          "耐障害性",
+          "エラー処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "fail-fast"
+    ]
+  },
+  {
+    "term": "フェイルセーフ",
+    "senses": [
+      {
+        "definition": "障害発生時にシステムが安全な状態へ自動的に移行する設計原則。",
+        "domain": "design-principles",
+        "keywords": [
+          "fail-safe",
+          "安全設計",
+          "耐障害性"
+        ]
+      }
+    ],
+    "aliases": [
+      "fail-safe"
+    ]
+  },
+  {
+    "term": "Idempotency",
+    "senses": [
+      {
+        "definition": "同じ操作を何度実行しても結果が変わらない性質。APIリトライやメッセージ再送時の安全性を保証する。",
+        "domain": "design-principles",
+        "keywords": [
+          "冪等性",
+          "API",
+          "リトライ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "再入可能性",
+    "reading": "さいにゅうかのうせい",
+    "senses": [
+      {
+        "definition": "関数が実行中に再度呼び出されても正しく動作する性質。マルチスレッド・シグナルハンドラーで重要。",
+        "domain": "design-principles",
+        "keywords": [
+          "reentrant",
+          "スレッドセーフ",
+          "並行処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "reentrant",
+      "再入可能"
+    ]
+  },
+  {
+    "term": "ACID",
+    "senses": [
+      {
+        "definition": "トランザクションが持つべき4つの性質：原子性（Atomicity）・一貫性（Consistency）・独立性（Isolation）・永続性（Durability）。",
+        "domain": "database",
+        "keywords": [
+          "トランザクション",
+          "データベース",
+          "整合性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BASE",
+    "senses": [
+      {
+        "definition": "分散システムで採用される一貫性モデル：Basically Available・Soft state・Eventually consistentの略。ACIDの対比概念。",
+        "domain": "database",
+        "keywords": [
+          "分散システム",
+          "結果整合性",
+          "NoSQL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Saga",
+    "senses": [
+      {
+        "definition": "マイクロサービス間にまたがる長期トランザクションを、補償トランザクションで整合性を保ちながら管理するパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "マイクロサービス",
+          "トランザクション",
+          "補償"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レートリミット",
+    "senses": [
+      {
+        "definition": "一定時間内のリクエスト数を制限し、APIの過負荷・乱用を防ぐ仕組み。",
+        "domain": "design-principles",
+        "keywords": [
+          "rate limiting",
+          "スロットリング",
+          "API保護"
+        ]
+      }
+    ],
+    "aliases": [
+      "rate limiting",
+      "レート制限"
+    ]
+  },
+  {
+    "term": "サーキットブレーカー",
+    "senses": [
+      {
+        "definition": "依存サービスの障害を検知し、一定時間リクエストを遮断してシステム全体の連鎖障害を防ぐパターン。",
+        "domain": "design-principles",
+        "keywords": [
+          "circuit breaker",
+          "耐障害性",
+          "マイクロサービス"
+        ]
+      }
+    ],
+    "aliases": [
+      "circuit breaker"
+    ]
+  },
+  {
+    "term": "リトライ",
+    "senses": [
+      {
+        "definition": "一時的な障害時に自動的に操作を再試行する仕組み。冪等性が保証されている操作に適用すべき。",
+        "domain": "design-principles",
+        "keywords": [
+          "retry",
+          "冪等性",
+          "耐障害性"
+        ]
+      }
+    ],
+    "aliases": [
+      "retry"
+    ]
+  },
+  {
+    "term": "タイムアウト",
+    "senses": [
+      {
+        "definition": "処理が一定時間内に完了しない場合に強制的に中断する仕組み。スレッド枯渇やリソースリークを防ぐ。",
+        "domain": "design-principles",
+        "keywords": [
+          "timeout",
+          "耐障害性",
+          "レスポンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "timeout"
+    ]
+  },
+  {
+    "term": "スロットリング",
+    "senses": [
+      {
+        "definition": "リソース使用量やリクエスト速度を意図的に制限し、システムの安定性を保つ仕組み。",
+        "domain": "design-principles",
+        "keywords": [
+          "throttling",
+          "レートリミット",
+          "過負荷対策"
+        ]
+      }
+    ],
+    "aliases": [
+      "throttling"
+    ]
+  },
+  {
+    "term": "バルクヘッド",
+    "senses": [
+      {
+        "definition": "システムをリソースプールで区画化し、一部の障害が他の部分に波及しないよう隔離するパターン。",
+        "domain": "design-principles",
+        "keywords": [
+          "bulkhead",
+          "隔離",
+          "耐障害性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "耐障害性",
+    "reading": "たいしょうがいせい",
+    "senses": [
+      {
+        "definition": "システムが部分的な障害が発生しても機能を維持し続ける能力。冗長化・フェイルオーバーなどで実現。",
+        "domain": "design-principles",
+        "keywords": [
+          "fault tolerance",
+          "可用性",
+          "冗長化"
+        ]
+      }
+    ],
+    "aliases": [
+      "fault tolerance"
+    ]
+  },
+  {
+    "term": "回復性",
+    "reading": "かいふくせい",
+    "senses": [
+      {
+        "definition": "障害から自動的に回復し、通常状態に戻る能力。リトライ・サーキットブレーカーなどで実現。",
+        "domain": "design-principles",
+        "keywords": [
+          "resilience",
+          "レジリエンス",
+          "耐障害性"
+        ]
+      }
+    ],
+    "aliases": [
+      "resilience",
+      "レジリエンス"
+    ]
+  },
+  {
+    "term": "入力検証",
+    "reading": "にゅうりょくけんしょう",
+    "senses": [
+      {
+        "definition": "ユーザーや外部システムから受け取ったデータの形式・型・範囲を検証し、不正な値を拒否するセキュリティプラクティス。",
+        "domain": "security",
+        "keywords": [
+          "バリデーション",
+          "セキュアコーディング",
+          "XSS防止"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サニタイズ",
+    "senses": [
+      {
+        "definition": "入力データから危険な文字や構造を除去・無害化し、インジェクション攻撃を防ぐ処理。",
+        "domain": "security",
+        "keywords": [
+          "sanitize",
+          "XSS",
+          "セキュアコーディング"
+        ]
+      }
+    ],
+    "aliases": [
+      "sanitize",
+      "サニタイゼーション"
+    ]
+  },
+  {
+    "term": "エスケープ",
+    "senses": [
+      {
+        "definition": "特殊文字を無害な表現に変換してインジェクション攻撃を防ぐ処理。HTMLエスケープ・SQLエスケープなどがある。",
+        "domain": "security",
+        "keywords": [
+          "escape",
+          "XSS",
+          "SQLインジェクション防止"
+        ]
+      }
+    ],
+    "aliases": [
+      "escape",
+      "エスケープ処理"
+    ]
+  },
+  {
+    "term": "クロスサイトスクリプティング",
+    "senses": [
+      {
+        "definition": "悪意あるスクリプトをWebページに埋め込み、閲覧者のブラウザで実行させる攻撃手法。",
+        "domain": "security",
+        "keywords": [
+          "XSS",
+          "攻撃",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "静的解析",
+    "reading": "せいてきかいせき",
+    "senses": [
+      {
+        "definition": "コードを実行せずに文法・型・セキュリティ・コーディング規約などの問題を検出するツール・手法。",
+        "domain": "development-practices",
+        "keywords": [
+          "static analysis",
+          "リンター",
+          "型チェック"
+        ]
+      }
+    ],
+    "aliases": [
+      "static analysis",
+      "静的コード解析"
+    ]
+  },
+  {
+    "term": "リンター",
+    "senses": [
+      {
+        "definition": "コードのスタイル・構文エラー・アンチパターンを自動検出するツール。ESLint・Pylintが代表例。",
+        "domain": "development-practices",
+        "keywords": [
+          "静的解析",
+          "ESLint",
+          "コード品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "linter"
+    ]
+  },
+  {
+    "term": "フォーマッター",
+    "senses": [
+      {
+        "definition": "コードを決められたスタイル規約に従って自動整形するツール。Prettier・gofmtが代表例。",
+        "domain": "development-practices",
+        "keywords": [
+          "formatter",
+          "Prettier",
+          "コードスタイル"
+        ]
+      }
+    ],
+    "aliases": [
+      "formatter",
+      "コードフォーマッター"
+    ]
+  },
+  {
+    "term": "型安全性",
+    "reading": "かたあんぜんせい",
+    "senses": [
+      {
+        "definition": "型システムによって型の不一致エラーをコンパイル時に検出し、ランタイムエラーを防ぐ性質。",
+        "domain": "programming",
+        "keywords": [
+          "type safety",
+          "TypeScript",
+          "静的型付け"
+        ]
+      }
+    ],
+    "aliases": [
+      "type safety"
+    ]
+  },
+  {
+    "term": "型推論",
+    "reading": "かたすいろん",
+    "senses": [
+      {
+        "definition": "コンパイラが変数や式の型を文脈から自動的に推定する機能。明示的な型注釈を省略できる。",
+        "domain": "programming",
+        "keywords": [
+          "type inference",
+          "TypeScript",
+          "コンパイラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コンパイル時検査",
+    "reading": "こんぱいるじけんさ",
+    "senses": [
+      {
+        "definition": "コードのビルド時に型・構文・依存関係などのエラーを検出する仕組み。ランタイムエラーを事前に防ぐ。",
+        "domain": "programming",
+        "keywords": [
+          "compile-time check",
+          "型安全性",
+          "静的解析"
+        ]
+      }
+    ],
+    "aliases": [
+      "compile-time check"
+    ]
+  },
+  {
+    "term": "ランタイムエラー",
+    "senses": [
+      {
+        "definition": "プログラムの実行中に発生するエラー。ヌルポインター・配列境界外アクセスなどがある。",
+        "domain": "programming",
+        "keywords": [
+          "runtime error",
+          "例外",
+          "デバッグ"
+        ]
+      }
+    ],
+    "aliases": [
+      "runtime error",
+      "実行時エラー"
+    ]
+  },
+  {
+    "term": "ヌル安全",
+    "reading": "ぬるあんぜん",
+    "senses": [
+      {
+        "definition": "null参照によるエラーをコンパイル時に防ぐ言語・型システムの機能。KotlinやSwiftに採用されている。",
+        "domain": "programming",
+        "keywords": [
+          "null safety",
+          "Kotlin",
+          "Swift"
+        ]
+      }
+    ],
+    "aliases": [
+      "null safety",
+      "Null安全"
+    ]
+  },
+  {
+    "term": "Optional",
+    "senses": [
+      {
+        "definition": "値が存在しない可能性を型で表現する仕組み。Javaのjava.util.Optional、SwiftのOptional型などが代表例。",
+        "domain": "programming",
+        "keywords": [
+          "ヌル安全",
+          "null",
+          "型"
+        ]
+      }
+    ],
+    "aliases": [
+      "Optional型"
+    ]
+  },
+  {
+    "term": "Result型",
+    "reading": "りざるとがた",
+    "senses": [
+      {
+        "definition": "成功値またはエラー値のいずれかを保持する型。例外に代わるエラー処理手段として関数型言語で多用される。",
+        "domain": "programming",
+        "keywords": [
+          "エラー処理",
+          "Either型",
+          "Rust",
+          "関数型"
+        ]
+      }
+    ],
+    "aliases": [
+      "Result",
+      "Result type"
+    ]
+  },
+  {
+    "term": "Either型",
+    "reading": "いーざーがた",
+    "senses": [
+      {
+        "definition": "2つの異なる型のいずれかを保持できる型。Left（エラー）/Right（成功）の慣習でエラー処理に使われる。",
+        "domain": "programming",
+        "keywords": [
+          "Result型",
+          "関数型",
+          "エラー処理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Either",
+      "Either type"
+    ]
+  },
+  {
+    "term": "例外安全",
+    "reading": "れいがいあんぜん",
+    "senses": [
+      {
+        "definition": "例外が発生してもリソースリークやデータ破損が起きないよう保証されているコードの性質。",
+        "domain": "programming",
+        "keywords": [
+          "exception safety",
+          "RAII",
+          "C++"
+        ]
+      }
+    ],
+    "aliases": [
+      "exception safety"
+    ]
+  },
+  {
+    "term": "ガベージコレクション",
+    "senses": [
+      {
+        "definition": "プログラムが使用しなくなったメモリを自動的に回収する仕組み。GCとも略される。",
+        "domain": "programming",
+        "keywords": [
+          "GC",
+          "メモリ管理",
+          "自動メモリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "GC",
+      "garbage collection"
+    ]
+  },
+  {
+    "term": "メモリリーク",
+    "senses": [
+      {
+        "definition": "確保したメモリが解放されず累積し続けるバグ。長時間稼働するプロセスでメモリ不足を引き起こす。",
+        "domain": "programming",
+        "keywords": [
+          "memory leak",
+          "GC",
+          "デバッグ"
+        ]
+      }
+    ],
+    "aliases": [
+      "memory leak"
+    ]
+  },
+  {
+    "term": "オフバイワンエラー",
+    "senses": [
+      {
+        "definition": "ループや配列のインデックス計算で境界値を1つ誤るバグ。「一つずれ」とも呼ばれる。",
+        "domain": "programming",
+        "keywords": [
+          "off-by-one",
+          "バグ",
+          "境界値"
+        ]
+      }
+    ],
+    "aliases": [
+      "off-by-one error",
+      "一つずれ"
+    ]
+  },
+  {
+    "term": "デッドロック",
+    "senses": [
+      {
+        "definition": "複数のスレッドまたはプロセスが互いにリソースの解放を待ち、永久に処理が進まなくなる状態。",
+        "domain": "programming",
+        "keywords": [
+          "deadlock",
+          "並行処理",
+          "排他制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "deadlock"
+    ]
+  },
+  {
+    "term": "レースコンディション",
+    "senses": [
+      {
+        "definition": "複数スレッドが共有リソースへ競合してアクセスし、実行順序によって異なる結果をもたらすバグ。",
+        "domain": "programming",
+        "keywords": [
+          "race condition",
+          "並行処理",
+          "スレッドセーフ"
+        ]
+      }
+    ],
+    "aliases": [
+      "race condition",
+      "競合状態"
+    ]
+  },
+  {
+    "term": "ドキュメンテーション",
+    "senses": [
+      {
+        "definition": "コード・API・アーキテクチャ・使い方などを文書化したもの。保守性・チームの知識共有に不可欠。",
+        "domain": "development-practices",
+        "keywords": [
+          "文書化",
+          "README",
+          "ADR"
+        ]
+      }
+    ],
+    "aliases": [
+      "documentation"
+    ]
+  },
+  {
+    "term": "アーキテクチャ決定記録",
+    "reading": "あーきてくちゃけっていきろく",
+    "senses": [
+      {
+        "definition": "重要な設計判断・採用理由・代替案・結果を記録するドキュメント。チームの知識継承に役立つ。",
+        "domain": "development-practices",
+        "keywords": [
+          "ADR",
+          "意思決定",
+          "ドキュメント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ボーイスカウト・ルール",
+    "reading": "ぼーいすかうとるーる",
+    "senses": [
+      {
+        "definition": "コードを触るたびに見つけた箇所を以前より少し改善して去るという開発プラクティス。技術的負債の漸進的解消を促す。",
+        "domain": "development-practices",
+        "keywords": [
+          "リファクタリング",
+          "コード品質",
+          "技術的負債"
+        ]
+      }
+    ],
+    "aliases": [
+      "Boy Scout Rule"
+    ]
+  },
+  {
+    "term": "Broken Windows Theory",
+    "senses": [
+      {
+        "definition": "小さな問題（壊れた窓）を放置するとさらなる劣化を招くという理論。コード品質維持の比喩として使われる。",
+        "domain": "development-practices",
+        "keywords": [
+          "コード品質",
+          "技術的負債",
+          "文化"
+        ]
+      }
+    ],
+    "aliases": [
+      "割れ窓理論"
+    ]
+  },
+  {
+    "term": "Leaky Abstraction",
+    "senses": [
+      {
+        "definition": "抽象化が内部の実装詳細をにじみ出させてしまう現象。完全な抽象化は不可能というJoel Spolskyの法則。",
+        "domain": "design-principles",
+        "keywords": [
+          "抽象化",
+          "設計",
+          "漏れた抽象化"
+        ]
+      }
+    ],
+    "aliases": [
+      "漏れた抽象化"
+    ]
+  },
+  {
+    "term": "Premature Optimization",
+    "senses": [
+      {
+        "definition": "必要性が確認される前にパフォーマンス最適化を行うこと。「時期尚早な最適化は諸悪の根源」という格言で有名。",
+        "domain": "design-principles",
+        "keywords": [
+          "最適化",
+          "アンチパターン",
+          "Donald Knuth"
+        ]
+      }
+    ],
+    "aliases": [
+      "時期尚早な最適化"
+    ]
+  },
+  {
+    "term": "Cargo Cult Programming",
+    "senses": [
+      {
+        "definition": "理解せずにコードやパターンを模倣するプログラミング慣行。本質を理解せずに形式だけを真似すること。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "アンチパターン",
+          "慣行",
+          "理解"
+        ]
+      }
+    ],
+    "aliases": [
+      "カーゴカルトプログラミング"
+    ]
+  },
+  {
+    "term": "Spaghetti Code",
+    "senses": [
+      {
+        "definition": "制御フローが複雑に絡み合い読み解くのが困難なコード。適切なモジュール化・関数分割がないまま成長したコードベース。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "アンチパターン",
+          "保守性",
+          "リファクタリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "スパゲッティコード"
+    ]
+  },
+  {
+    "term": "God Object",
+    "senses": [
+      {
+        "definition": "過剰な責任と知識を持ち、多数の他クラスと結合した巨大なクラス。単一責任原則の違反。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "アンチパターン",
+          "単一責任",
+          "大きすぎるクラス"
+        ]
+      }
+    ],
+    "aliases": [
+      "God Class",
+      "神クラス"
+    ]
+  },
+  {
+    "term": "Big Ball of Mud",
+    "senses": [
+      {
+        "definition": "構造が欠如し、場当たり的に成長した混沌としたシステム。最も一般的なアーキテクチャアンチパターン。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "アンチパターン",
+          "アーキテクチャ",
+          "技術的負債"
+        ]
+      }
+    ],
+    "aliases": [
+      "大きな泥団子"
+    ]
+  },
+  {
+    "term": "Shotgun Surgery",
+    "senses": [
+      {
+        "definition": "1つの変更を行うために多数のクラスや場所を修正しなければならないアンチパターン。高凝集・疎結合の欠如。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "アンチパターン",
+          "保守性",
+          "変更コスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "ショットガンサージャリー"
+    ]
+  },
+  {
+    "term": "Feature Envy",
+    "senses": [
+      {
+        "definition": "メソッドが自分のクラスよりも他クラスのデータや機能を多用するコードの臭い。責任の誤配置を示す。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "コードの臭い",
+          "リファクタリング",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "フィーチャーエンビー"
+    ]
+  },
+  {
+    "term": "Primitive Obsession",
+    "senses": [
+      {
+        "definition": "小さなオブジェクト（金額・日付・座標など）にプリミティブ型を多用するコードの臭い。Value Objectで解消する。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "コードの臭い",
+          "Value Object",
+          "リファクタリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "基本型への執着"
+    ]
+  },
+  {
+    "term": "Long Method",
+    "senses": [
+      {
+        "definition": "長くなりすぎて理解・テスト・再利用が難しくなったメソッドのコードの臭い。小さなメソッドに分割すべき。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "コードの臭い",
+          "リファクタリング",
+          "単一責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "長いメソッド"
+    ]
+  },
+  {
+    "term": "Long Parameter List",
+    "senses": [
+      {
+        "definition": "引数が多すぎて使いにくいメソッドのコードの臭い。パラメータオブジェクトや設定クラスに置き換える。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "コードの臭い",
+          "リファクタリング",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "長いパラメータリスト"
+    ]
+  },
+  {
+    "term": "Duplicated Code",
+    "senses": [
+      {
+        "definition": "同じまたは類似のコードが複数箇所に存在するコードの臭い。DRY原則違反の典型。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "コードの臭い",
+          "DRY",
+          "リファクタリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "重複コード"
+    ]
+  },
+  {
+    "term": "Magic Number",
+    "senses": [
+      {
+        "definition": "意味が不明な数値・文字列リテラルがコード中に直接書かれているコードの臭い。定数・列挙型に置き換える。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "コードの臭い",
+          "定数",
+          "可読性"
+        ]
+      }
+    ],
+    "aliases": [
+      "マジックナンバー",
+      "マジックストリング"
+    ]
+  },
+  {
+    "term": "Temporal Coupling",
+    "senses": [
+      {
+        "definition": "メソッドや操作が特定の順序で呼ばれることを暗黙的に前提とする設計上の問題。",
+        "domain": "anti-patterns",
+        "keywords": [
+          "時間的結合",
+          "設計",
+          "アンチパターン"
+        ]
+      }
+    ],
+    "aliases": [
+      "時間的結合"
+    ]
+  },
+  {
+    "term": "Tight Coupling",
+    "senses": [
+      {
+        "definition": "コンポーネント間の依存が強く、一方の変更が他方に影響しやすい設計状態。テストや再利用が困難。",
+        "domain": "design-principles",
+        "keywords": [
+          "密結合",
+          "疎結合",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": [
+      "密結合"
+    ]
+  },
+  {
+    "term": "Loose Coupling",
+    "senses": [
+      {
+        "definition": "コンポーネント間の依存を最小化し、互いに独立して変更・テスト・再利用できる設計状態。",
+        "domain": "design-principles",
+        "keywords": [
+          "疎結合",
+          "依存性逆転",
+          "テスト容易性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cohesion",
+    "senses": [
+      {
+        "definition": "モジュールやクラス内の要素が同一の目的に向けて強く結びついている度合い。高凝集が望ましい。",
+        "domain": "design-principles",
+        "keywords": [
+          "凝集度",
+          "高凝集",
+          "単一責任"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Seam",
+    "senses": [
+      {
+        "definition": "コードを変更せずにプログラムの振る舞いを変更できる箇所。テスト容易性を高めるための設計上の「継ぎ目」。",
+        "domain": "testing",
+        "keywords": [
+          "テスト容易性",
+          "リファクタリング",
+          "Legacy Code"
+        ]
+      }
+    ],
+    "aliases": [
+      "継ぎ目"
+    ]
+  },
+  {
+    "term": "Legacy Code",
+    "senses": [
+      {
+        "definition": "テストがなく変更が困難な既存コード。Michael Feathersの定義では「テストのないコード」。",
+        "domain": "development-practices",
+        "keywords": [
+          "レガシーコード",
+          "リファクタリング",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "レガシーコード"
+    ]
+  },
+  {
+    "term": "12-Factor App",
+    "senses": [
+      {
+        "definition": "クラウドネイティブなSaaSアプリケーションを構築するための12の方法論。Herokuが提唱。",
+        "domain": "architecture",
+        "keywords": [
+          "クラウドネイティブ",
+          "SaaS",
+          "Heroku"
+        ]
+      }
+    ],
+    "aliases": [
+      "Twelve-Factor App",
+      "12ファクターアプリ"
+    ]
+  },
+  {
+    "term": "Infrastructure as Code",
+    "senses": [
+      {
+        "definition": "インフラの構成をコードとして記述・管理し、自動化・バージョン管理・再現性を実現する手法。",
+        "domain": "devops",
+        "keywords": [
+          "IaC",
+          "Terraform",
+          "インフラ自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Platform Engineering",
+    "senses": [
+      {
+        "definition": "開発者が本番環境へのパスを自律的に利用できるよう内部開発者プラットフォーム（IDP）を構築・運用する規律。",
+        "domain": "devops",
+        "keywords": [
+          "IDP",
+          "DevOps",
+          "開発者体験"
+        ]
+      }
+    ],
+    "aliases": [
+      "プラットフォームエンジニアリング"
+    ]
+  },
+  {
+    "term": "Runbook",
+    "senses": [
+      {
+        "definition": "特定の運用手順・インシデント対応の手順書。自動化可能な手順をまとめたドキュメント。",
+        "domain": "devops",
+        "keywords": [
+          "運用",
+          "手順書",
+          "インシデント対応"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Playbook",
+    "senses": [
+      {
+        "definition": "特定の状況や問題に対する対応手順・戦略をまとめた包括的な運用ドキュメント。Runbookより広い文脈で使われる。",
+        "domain": "devops",
+        "keywords": [
+          "運用",
+          "手順書",
+          "SRE"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Postmortem",
+    "senses": [
+      {
+        "definition": "インシデントや障害後に原因・影響・改善策を振り返るレポートと会議。",
+        "domain": "devops",
+        "keywords": [
+          "インシデント対応",
+          "SRE",
+          "改善"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Blameless Postmortem",
+    "senses": [
+      {
+        "definition": "個人を責めることなくシステムや手順の問題に焦点を当てるポストモーテム文化。心理的安全性を高め改善を促す。",
+        "domain": "devops",
+        "keywords": [
+          "ポストモーテム",
+          "SRE",
+          "心理的安全性"
+        ]
+      }
+    ],
+    "aliases": [
+      "ブレームレスポストモーテム"
+    ]
+  }
+]

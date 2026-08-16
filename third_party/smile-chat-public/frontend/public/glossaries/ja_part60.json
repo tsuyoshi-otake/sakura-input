@@ -1,0 +1,1297 @@
+[
+  {
+    "term": "Largest Contentful Paint",
+    "reading": "らーじぇすとこんてんとふるぺいんと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページの主要コンテンツが画面に描画されるまでの時間を示すCore Web Vitalsの指標。画像やテキストブロックなど最大の要素の描画完了時点を計測し、2.5秒以内が良好とされる。",
+        "domain": "performance",
+        "keywords": [
+          "Core Web Vitals",
+          "描画",
+          "ユーザー体験",
+          "Lighthouse",
+          "計測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "First Input Delay",
+    "reading": "ふぁーすといんぷっとでれい",
+    "aliases": [
+      "FID"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザーが最初にページを操作した瞬間からブラウザが実際に応答を開始するまでの遅延時間。メインスレッドの処理が長いとFIDが増大し、100ms以内が良好とされる。",
+        "domain": "performance",
+        "keywords": [
+          "Core Web Vitals",
+          "応答性",
+          "メインスレッド",
+          "インタラクション",
+          "INP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Interaction to Next Paint",
+    "reading": "いんたらくしょんとぅねくすとぺいんと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ユーザーのすべてのインタラクションに対する応答時間の99パーセンタイルを計測するCore Web Vitals指標。FIDの後継として導入され、200ms以内が良好とされる。",
+        "domain": "performance",
+        "keywords": [
+          "Core Web Vitals",
+          "応答性",
+          "インタラクション",
+          "FID",
+          "ユーザー体験"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cumulative Layout Shift",
+    "reading": "きゅむらてぃぶれいあうとしふと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページ表示中に発生する予期しないレイアウトのズレの累積量を計測するCore Web Vitals指標。広告や遅延読み込み画像の挿入などが原因で発生し、0.1以下が良好とされる。",
+        "domain": "performance",
+        "keywords": [
+          "Core Web Vitals",
+          "レイアウト",
+          "視覚的安定性",
+          "ユーザー体験",
+          "Lighthouse"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "First Contentful Paint",
+    "reading": "ふぁーすとこんてんとふるぺいんと",
+    "aliases": [
+      "FCP"
+    ],
+    "senses": [
+      {
+        "definition": "ページがブラウザに読み込まれてから最初のテキストや画像が描画されるまでの時間を計測する指標。ユーザーがページの読み込みを知覚する最初の瞬間を示し、1.8秒以内が良好とされる。Core Web Vitalsの関連指標。",
+        "domain": "performance",
+        "keywords": [
+          "描画",
+          "ユーザー体験",
+          "Lighthouse",
+          "ページ読み込み",
+          "Core Web Vitals"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Time to First Byte",
+    "reading": "たいむとぅふぁーすとばいと",
+    "aliases": [
+      "TTFB"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザがリクエストを送信してからサーバーから最初の1バイトを受信するまでの時間を示す指標。サーバー処理速度・ネットワーク遅延・CDNの効果を総合的に評価でき、800ms以内が良好とされる。",
+        "domain": "performance",
+        "keywords": [
+          "サーバー応答",
+          "ネットワーク",
+          "CDN",
+          "Lighthouse",
+          "計測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Total Blocking Time",
+    "reading": "とーたるぶろっきんぐたいむ",
+    "aliases": [
+      "TBT"
+    ],
+    "senses": [
+      {
+        "definition": "FCPからTime to Interactiveまでの間にメインスレッドが50ms以上ブロックされた時間の合計。Long Taskの影響を計測し、インタラクティビティの遅延を示す指標。",
+        "domain": "performance",
+        "keywords": [
+          "メインスレッド",
+          "Long Task",
+          "インタラクティビティ",
+          "Lighthouse",
+          "FCP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Speed Index",
+    "reading": "すぴーどいんでっくす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページの表示コンテンツが視覚的にどれだけ速く埋まるかを数値化した指標。Lighthouseで計測され、数値が小さいほど素早くコンテンツが描画されており、3.4秒以内が良好とされる。",
+        "domain": "performance",
+        "keywords": [
+          "Lighthouse",
+          "視覚的完成",
+          "描画",
+          "ユーザー体験",
+          "計測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Lighthouse",
+    "reading": "らいとはうす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Googleが提供するオープンソースのWebページ品質自動計測ツール。パフォーマンス・アクセシビリティ・SEO・ベストプラクティスを100点満点でスコアリングし、改善提案も提示する。",
+        "domain": "performance",
+        "keywords": [
+          "パフォーマンス計測",
+          "Core Web Vitals",
+          "Chrome DevTools",
+          "PageSpeed",
+          "SEO"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PageSpeed Insights",
+    "reading": "ぺーじすぴーどいんさいつ",
+    "aliases": [
+      "PSI"
+    ],
+    "senses": [
+      {
+        "definition": "GoogleのPageSpeed Insightsサービス。URLを入力すると実際のユーザーデータ（CrUX）とLighthouseによるラボデータの両方でパフォーマンスを分析し、改善提案を表示する。",
+        "domain": "performance",
+        "keywords": [
+          "Lighthouse",
+          "Core Web Vitals",
+          "CrUX",
+          "フィールドデータ",
+          "Google"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebPageTest",
+    "reading": "うぇぶぺーじてすと",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "様々な地域・ブラウザ・ネットワーク環境でWebページのパフォーマンスを詳細計測できる無料ツール。ウォーターフォールチャートやフィルムストリップで読み込みプロセスを可視化する。",
+        "domain": "performance",
+        "keywords": [
+          "パフォーマンス計測",
+          "ウォーターフォール",
+          "ネットワーク",
+          "フィルムストリップ",
+          "計測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Performance Budget",
+    "reading": "ぱふぉーまんすばじぇっと",
+    "aliases": [
+      "パフォーマンスバジェット"
+    ],
+    "senses": [
+      {
+        "definition": "Webパフォーマンス指標に設ける上限値の制約。バンドルサイズ・読み込み時間・Lighthouseスコアなどに閾値を設け、CI/CDで自動検証することで品質劣化を防ぐ。",
+        "domain": "performance",
+        "keywords": [
+          "品質管理",
+          "CI/CD",
+          "バンドルサイズ",
+          "Lighthouse",
+          "継続的監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Preconnect",
+    "reading": "ぷりこねくと",
+    "aliases": [
+      "プリコネクト"
+    ],
+    "senses": [
+      {
+        "definition": "外部オリジンへの接続をリソース取得前に事前に確立しておくResource Hints。DNSルックアップ・TCPハンドシェイク・TLSネゴシエーションを先行して実行し、クロスオリジンリソースの取得を高速化する。",
+        "domain": "performance",
+        "keywords": [
+          "Resource Hints",
+          "DNS",
+          "TCP",
+          "TLS",
+          "クロスオリジン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Priority Hints",
+    "reading": "ぷらいおりてぃひんつ",
+    "aliases": [
+      "優先度ヒント"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザのリソース取得優先度を明示的に制御するWeb標準機能。`fetchpriority`属性でhigh/low/autoを指定し、LCPに影響する重要リソースの優先取得やスクリプトの優先度下げに使用する。",
+        "domain": "performance",
+        "keywords": [
+          "fetchpriority",
+          "LCP",
+          "リソース取得",
+          "ブラウザ最適化",
+          "Core Web Vitals"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "fetchpriority",
+    "reading": "ふぇっちぷらいおりてぃ",
+    "aliases": [
+      "fetchpriority属性"
+    ],
+    "senses": [
+      {
+        "definition": "画像・スクリプト・スタイルシートなどのリソース取得優先度を`high`・`low`・`auto`で指定するHTML属性。特にLCPとなるヒーロー画像に`fetchpriority=\"high\"`を付与することで表示を高速化できる。",
+        "domain": "performance",
+        "keywords": [
+          "Priority Hints",
+          "LCP",
+          "画像最適化",
+          "ブラウザ",
+          "リソース優先度"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レンダーブロッキング",
+    "reading": "れんだーぶろっきんぐ",
+    "aliases": [
+      "Render Blocking",
+      "レンダリングブロック"
+    ],
+    "senses": [
+      {
+        "definition": "スタイルシートや同期スクリプトがブラウザの描画処理を停止させる現象。CSSは常にレンダーブロッキングだがメディアクエリで回避可能。スクリプトはasync/defer属性でブロッキングを回避できる。",
+        "domain": "performance",
+        "keywords": [
+          "Critical Rendering Path",
+          "CSS",
+          "スクリプト",
+          "async",
+          "defer"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "非同期スクリプト",
+    "reading": "ひどうきすくりぷと",
+    "aliases": [
+      "async script",
+      "defer script"
+    ],
+    "senses": [
+      {
+        "definition": "HTMLのパースをブロックせずにJavaScriptを読み込む仕組み。`async`属性は読み込み完了次第即時実行、`defer`属性はHTML解析完了後に順序を保って実行する。レンダーブロッキングの排除に使用する。",
+        "domain": "performance",
+        "keywords": [
+          "レンダーブロッキング",
+          "async",
+          "defer",
+          "スクリプト読み込み",
+          "Critical Rendering Path"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GPU Acceleration",
+    "reading": "じーぴーゆーあくせられーしょん",
+    "aliases": [
+      "GPU加速",
+      "ハードウェアアクセラレーション"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザのレンダリング処理の一部をGPUに委譲し、CPUの負荷を下げてスムーズなアニメーションを実現する技術。CSS transformやopacityをアニメーションさせることでComposite段階のみで処理しGPUを活用できる。",
+        "domain": "performance",
+        "keywords": [
+          "Composite",
+          "アニメーション",
+          "will-change",
+          "パフォーマンス",
+          "レンダリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "requestIdleCallback",
+    "reading": "りくえすとあいどるこーるばっく",
+    "aliases": [
+      "rIC"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザのメインスレッドがアイドル状態になったタイミングで非優先タスクを実行するAPIv。分析処理やログ送信など重要度の低い処理をアイドル時間に後回しにすることでユーザー操作への応答性を維持する。",
+        "domain": "performance",
+        "keywords": [
+          "メインスレッド",
+          "アイドル時間",
+          "パフォーマンス",
+          "非同期",
+          "ユーザー体験"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Long Task",
+    "reading": "ろんぐたすく",
+    "aliases": [
+      "ロングタスク"
+    ],
+    "senses": [
+      {
+        "definition": "メインスレッドを50ms以上占有するJavaScript処理のこと。Long Taskが発生するとユーザーのインタラクションに対する応答が遅延し、FIDやINPなどCore Web Vitals指標を悪化させる。",
+        "domain": "performance",
+        "keywords": [
+          "メインスレッド",
+          "TBT",
+          "FID",
+          "INP",
+          "JavaScript実行"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Main Thread",
+    "reading": "めいんすれっど",
+    "aliases": [
+      "メインスレッド"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザのJavaScript実行・DOM操作・レイアウト・ペイントなどを担う単一のスレッド。JavaScriptはシングルスレッドで動作するため、重い処理がメインスレッドをブロックするとUIが応答不能になる。",
+        "domain": "performance",
+        "keywords": [
+          "JavaScript",
+          "DOM",
+          "Long Task",
+          "Web Worker",
+          "シングルスレッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Web Worker",
+    "reading": "うぇぶわーかー",
+    "aliases": [
+      "WebWorker"
+    ],
+    "senses": [
+      {
+        "definition": "メインスレッドとは独立したバックグラウンドスレッドでJavaScriptを実行するAPI。重い計算処理をWeb Workerに移すことでメインスレッドのブロッキングを防ぎ、UIの応答性を維持できる。DOMへのアクセスはできない。",
+        "domain": "performance",
+        "keywords": [
+          "メインスレッド",
+          "バックグラウンド処理",
+          "並列処理",
+          "パフォーマンス",
+          "OffscreenCanvas"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OffscreenCanvas",
+    "reading": "おふすくりーんきゃんばす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "メインスレッド外（Web Worker内）でCanvas描画処理を実行するAPI。グラフィック処理やゲームのレンダリングをバックグラウンドで行うことでメインスレッドの負荷を軽減し、UIのスムーズさを維持する。",
+        "domain": "performance",
+        "keywords": [
+          "Web Worker",
+          "Canvas",
+          "メインスレッド",
+          "GPU",
+          "レンダリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Virtual Scrolling",
+    "reading": "ばーちゃるすくろーりんぐ",
+    "aliases": [
+      "仮想スクロール",
+      "Virtualization"
+    ],
+    "senses": [
+      {
+        "definition": "大量のリストアイテムのうち画面に表示される部分のみをDOMに保持し、スクロールに合わせて動的に入れ替えるレンダリング最適化技術。数万件のデータでも高速にスクロールできる。",
+        "domain": "performance",
+        "keywords": [
+          "Windowing",
+          "DOM",
+          "レンダリング最適化",
+          "リスト",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "再レンダリング最適化",
+    "reading": "さいれんだりんぐさいてきか",
+    "aliases": [
+      "unnecessary rerender prevention"
+    ],
+    "senses": [
+      {
+        "definition": "Reactアプリで不要なコンポーネントの再レンダリングを防ぐための手法の総称。React.memo・useMemo・useCallback・コンポーネント分割・状態の局所化などを組み合わせてパフォーマンスを改善する。",
+        "domain": "performance",
+        "keywords": [
+          "React",
+          "React.memo",
+          "useMemo",
+          "useCallback",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Chrome DevTools Performance",
+    "reading": "くろーむでぃーえぶつーるずぱふぉーまんす",
+    "aliases": [
+      "パフォーマンスパネル",
+      "Performance Panel"
+    ],
+    "senses": [
+      {
+        "definition": "Chrome DevToolsのパフォーマンスパネル。ページの動作を記録してメインスレッドの処理・レイアウト・ペイント・JavaScript実行を時系列で可視化し、パフォーマンスボトルネックの特定に使用する。",
+        "domain": "performance",
+        "keywords": [
+          "Chrome DevTools",
+          "プロファイリング",
+          "Long Task",
+          "メインスレッド",
+          "ボトルネック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Memory Profiling",
+    "reading": "めもりぷろふぁいりんぐ",
+    "aliases": [
+      "メモリプロファイリング"
+    ],
+    "senses": [
+      {
+        "definition": "アプリケーションのメモリ使用量を経時的に記録・分析するパフォーマンス調査手法。Chrome DevToolsのMemoryパネルでHeap Snapshotや割り当てタイムラインを取得し、メモリリークや過剰な消費を特定する。",
+        "domain": "performance",
+        "keywords": [
+          "Heap Snapshot",
+          "Memory Leak",
+          "Chrome DevTools",
+          "ガベージコレクション",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Heap Snapshot",
+    "reading": "ひーぷすなっぷしょっと",
+    "aliases": [
+      "ヒープスナップショット"
+    ],
+    "senses": [
+      {
+        "definition": "特定の時点でJavaScriptのヒープメモリの内容を丸ごとキャプチャしたもの。Chrome DevToolsのMemoryパネルで取得でき、どのオブジェクトがどれだけメモリを占有しているかを分析してメモリリーク調査に使う。",
+        "domain": "performance",
+        "keywords": [
+          "Memory Profiling",
+          "Memory Leak",
+          "ガベージコレクション",
+          "Chrome DevTools",
+          "ヒープメモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バンドルサイズ分析",
+    "reading": "ばんどるさいずぶんせき",
+    "aliases": [
+      "Bundle Size Analysis"
+    ],
+    "senses": [
+      {
+        "definition": "WebアプリのJavaScriptバンドルの内訳をモジュールごとに可視化し、サイズ削減の対象を特定する作業。webpack-bundle-analyzerやvite-bundle-visualizerなどのツールを使用する。",
+        "domain": "performance",
+        "keywords": [
+          "Tree Shaking",
+          "Code Splitting",
+          "webpack",
+          "バンドル",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "webpack-bundle-analyzer",
+    "reading": "うぇぶぱっくばんどるあなりざー",
+    "aliases": [
+      "bundle-analyzer"
+    ],
+    "senses": [
+      {
+        "definition": "webpackのバンドル内容をインタラクティブなツリーマップで可視化するツール。各モジュールが占めるサイズを一目で把握でき、大きな依存関係や重複モジュールを発見してバンドルサイズ削減に活用する。",
+        "domain": "performance",
+        "keywords": [
+          "バンドルサイズ分析",
+          "webpack",
+          "Tree Shaking",
+          "可視化",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebP",
+    "reading": "うぇぶぴー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Googleが開発した次世代Web向け画像フォーマット。JPEG比で同等品質を25〜34%小さいファイルサイズで実現し、可逆圧縮・非可逆圧縮・アルファチャンネルをサポートする。主要ブラウザで広くサポートされている。",
+        "domain": "performance",
+        "keywords": [
+          "画像最適化",
+          "AVIF",
+          "次世代フォーマット",
+          "圧縮",
+          "Core Web Vitals"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "AVIF",
+    "reading": "えーぶぃふ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "AV1コーデックをベースにした次世代画像フォーマット。WebPよりさらに高い圧縮率を持ち、同等品質でJPEGの約半分のファイルサイズを実現する。HDR・広色域にも対応し普及が進んでいる。",
+        "domain": "performance",
+        "keywords": [
+          "画像最適化",
+          "WebP",
+          "次世代フォーマット",
+          "圧縮",
+          "LCP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Responsive Images",
+    "reading": "れすぽんしぶいめーじず",
+    "aliases": [
+      "レスポンシブ画像"
+    ],
+    "senses": [
+      {
+        "definition": "デバイスのViewportサイズや解像度に応じて最適な画像を配信する技術。`<picture>`要素やsrcset・sizes属性を使い、モバイル端末に過大なサイズの画像を送らず帯域とレンダリング時間を節約する。",
+        "domain": "performance",
+        "keywords": [
+          "srcset",
+          "sizes",
+          "画像最適化",
+          "LCP",
+          "モバイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "srcset",
+    "reading": "そーすせっと",
+    "aliases": [
+      "srcset属性"
+    ],
+    "senses": [
+      {
+        "definition": "img要素でブラウザに複数の画像候補とその幅・密度情報を提供するHTML属性。ブラウザがデバイスのDPRや表示サイズに合わせて最適な画像を自動選択し、不要な大きさの画像を読み込まずに済む。",
+        "domain": "performance",
+        "keywords": [
+          "Responsive Images",
+          "sizes",
+          "画像最適化",
+          "img",
+          "DPR"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "sizes属性",
+    "reading": "さいずぞくせい",
+    "aliases": [
+      "sizes"
+    ],
+    "senses": [
+      {
+        "definition": "img要素でViewportの幅に応じた画像の表示サイズをブラウザに伝えるHTML属性。srcsetと組み合わせてブラウザが最適な画像を選択できるよう助け、レスポンシブ画像の精度を高める。",
+        "domain": "performance",
+        "keywords": [
+          "Responsive Images",
+          "srcset",
+          "画像最適化",
+          "Viewport",
+          "img"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CrUX",
+    "reading": "くろーむゆーざーえくすぺりえんすれぽーと",
+    "aliases": [
+      "Chrome User Experience Report"
+    ],
+    "senses": [
+      {
+        "definition": "実際のChromeユーザーのCore Web Vitals計測データを集約したGoogleのデータセット。PageSpeed InsightsやSearch ConsoleでフィールドデータとしてCrUXが参照され、実環境でのパフォーマンス評価に使用される。",
+        "domain": "performance",
+        "keywords": [
+          "Core Web Vitals",
+          "RUM",
+          "フィールドデータ",
+          "Google",
+          "PageSpeed Insights"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Time to Interactive",
+    "reading": "たいむとぅいんたらくてぃぶ",
+    "aliases": [
+      "TTI"
+    ],
+    "senses": [
+      {
+        "definition": "ページが完全にインタラクティブになるまでの時間。メインスレッドが少なくとも5秒間アイドル状態になり、Long Taskがなくなった時点を計測する指標。JavaScriptの実行量が多いとTTIが増大する。",
+        "domain": "performance",
+        "keywords": [
+          "メインスレッド",
+          "Long Task",
+          "TBT",
+          "Lighthouse",
+          "インタラクティビティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Layout Thrashing",
+    "reading": "れいあうとすらっしんぐ",
+    "aliases": [
+      "レイアウトスラッシング",
+      "Forced Synchronous Layout"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptからレイアウト情報を読み取る操作と変更操作を交互に繰り返すことで、ブラウザが強制的に同期的なレイアウト再計算を何度も実行してしまうパフォーマンス問題。offsetHeightやgetBoundingClientRectの多用が原因となる。",
+        "domain": "performance",
+        "keywords": [
+          "Reflow",
+          "パフォーマンス",
+          "DOM操作",
+          "JavaScript",
+          "レンダリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Throttle",
+    "reading": "すろっとる",
+    "aliases": [
+      "スロットル"
+    ],
+    "senses": [
+      {
+        "definition": "一定時間内に関数が呼び出される頻度を制限するパフォーマンス最適化テクニック。スクロールやマウス移動イベントなど高頻度で発生するイベントの処理回数を間引き、過剰な処理を防ぐ。Debounceと使い分ける。",
+        "domain": "performance",
+        "keywords": [
+          "Debounce",
+          "イベント",
+          "JavaScript",
+          "パフォーマンス",
+          "スクロール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Jank",
+    "reading": "じゃんく",
+    "aliases": [
+      "ジャンク"
+    ],
+    "senses": [
+      {
+        "definition": "フレームレートが60fps（16.67ms/frame）を下回ることで発生するアニメーションやスクロールのカクつき現象。Long TaskやLayout Thrashingが原因で発生し、ユーザー体験を大きく損なう。",
+        "domain": "performance",
+        "keywords": [
+          "フレームレート",
+          "Long Task",
+          "Repaint",
+          "アニメーション",
+          "ユーザー体験"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Navigation Timing",
+    "reading": "なびげーしょんたいみんぐ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ページナビゲーション（リダイレクト・DNS・TCP接続・リクエスト・レスポンス・DOMパース）の各段階の時刻を取得するブラウザAPI。TTFB・DOMContentLoadedなどの指標算出の基盤となる。",
+        "domain": "performance",
+        "keywords": [
+          "TTFB",
+          "パフォーマンス計測",
+          "Performance Timeline",
+          "Resource Timing",
+          "ブラウザAPI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Resource Timing",
+    "reading": "りそーすたいみんぐ",
+    "aliases": [
+      "Resource Timing API"
+    ],
+    "senses": [
+      {
+        "definition": "ページが読み込む各リソース（画像・スクリプト・スタイルシートなど）の取得に要した時間の詳細を取得するブラウザAPI。ネットワーク遅延やTTFBをリソースごとに計測し、ボトルネックを特定できる。",
+        "domain": "performance",
+        "keywords": [
+          "Navigation Timing",
+          "TTFB",
+          "パフォーマンス計測",
+          "ネットワーク",
+          "ボトルネック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Paint Timing",
+    "reading": "ぺいんとたいみんぐ",
+    "aliases": [
+      "Paint Timing API"
+    ],
+    "senses": [
+      {
+        "definition": "FCPなどのペイント系パフォーマンス指標の時刻を取得するブラウザAPI。`performance.getEntriesByType('paint')`でfirst-paintとfirst-contentful-paintのタイムスタンプを取得でき、RUM実装の基盤となる。",
+        "domain": "performance",
+        "keywords": [
+          "FCP",
+          "RUM",
+          "パフォーマンス計測",
+          "Performance Observer",
+          "ブラウザAPI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Font Loading",
+    "reading": "ふぉんとろーでぃんぐ",
+    "aliases": [
+      "フォント読み込み",
+      "Web Font Loading"
+    ],
+    "senses": [
+      {
+        "definition": "Webフォントのダウンロードと適用のプロセス。フォントの読み込み戦略（font-display: swap/optional/blockなど）の選択がFCPやCLS、FOIT/FOUTに大きく影響するため、適切な指定が必要。",
+        "domain": "performance",
+        "keywords": [
+          "font-display",
+          "FOIT",
+          "FOUT",
+          "CLS",
+          "FCP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Static Site Generation",
+    "reading": "すたてぃっくさいとじぇねれーしょん",
+    "aliases": [
+      "静的サイト生成"
+    ],
+    "senses": [
+      {
+        "definition": "ビルド時にHTMLを事前生成してCDNから配信するレンダリング方式。サーバー処理が不要でTTFBが極めて短く、パフォーマンスと可用性が高い。頻繁に更新されないコンテンツに最適。",
+        "domain": "performance",
+        "keywords": [
+          "SSR",
+          "CDN",
+          "TTFB",
+          "Next.js",
+          "ビルド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Partial Hydration",
+    "reading": "ぱーしゃるはいどれーしょん",
+    "aliases": [
+      "部分的ハイドレーション"
+    ],
+    "senses": [
+      {
+        "definition": "ページ全体ではなくインタラクティブな部分のみをHydrationするレンダリング最適化手法。静的なコンテンツ部分のJavaScriptを送信せず、インタラクティブコンポーネントのみをクライアントで活性化してTTIを改善する。",
+        "domain": "performance",
+        "keywords": [
+          "Hydration",
+          "Islands Architecture",
+          "TTI",
+          "SSR",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Islands Architecture",
+    "reading": "あいらんどあーきてくちゃ",
+    "aliases": [
+      "アイランドアーキテクチャ",
+      "コンポーネントアイランド"
+    ],
+    "senses": [
+      {
+        "definition": "静的HTMLの海に「インタラクティブなコンポーネントの島」を配置するWebアーキテクチャ。各アイランドは独立してHydrationされ、静的部分はJavaScriptを送信しない。AstroやFreshなどが採用する。",
+        "domain": "performance",
+        "keywords": [
+          "Partial Hydration",
+          "Hydration",
+          "SSR",
+          "パフォーマンス",
+          "Astro"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Speculation Rules",
+    "reading": "すぺきゅれーしょんるーるず",
+    "aliases": [
+      "Speculation Rules API",
+      "投機的ルール"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザーが次に訪問しそうなページをブラウザが予め先読みまたは先レンダリングするためのJSON形式のルールを記述するAPI。prefetchやprerenderをコードで制御し、ナビゲーション体験を大幅に高速化する。",
+        "domain": "performance",
+        "keywords": [
+          "Prefetch",
+          "Prerender",
+          "Resource Hints",
+          "ナビゲーション",
+          "ブラウザAPI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Workbox",
+    "reading": "わーくぼっくす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GoogleのService Workerツールキット。キャッシュ戦略（StaleWhileRevalidate・NetworkFirst・CacheFirstなど）の実装を簡素化し、PWAのオフライン対応とリソースキャッシュをシンプルに構築できる。",
+        "domain": "performance",
+        "keywords": [
+          "Service Worker",
+          "Cache API",
+          "PWA",
+          "キャッシュ戦略",
+          "オフライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Prerender",
+    "reading": "ぷりれんだー",
+    "aliases": [
+      "プリレンダリング",
+      "事前レンダリング"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザーが訪問する前にページ全体をバックグラウンドでレンダリングしておく技術。Speculation Rules APIやrel=\"prerender\"で指示でき、リンクをクリックした瞬間にレンダリング済みのページを即時表示できる。",
+        "domain": "performance",
+        "keywords": [
+          "Speculation Rules",
+          "Prefetch",
+          "Resource Hints",
+          "ナビゲーション",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Module Preload",
+    "reading": "もじゅーるぷりろーど",
+    "aliases": [
+      "modulepreload",
+      "モジュールプリロード"
+    ],
+    "senses": [
+      {
+        "definition": "ES Modulesとその依存関係を事前にダウンロード・パース・コンパイルするResource Hints。`<link rel=\"modulepreload\">`で指定し、通常のpreloadとは異なりモジュールグラフ全体を先行処理するため動的インポートの待機時間を削減する。",
+        "domain": "performance",
+        "keywords": [
+          "ES Modules",
+          "Preload",
+          "Resource Hints",
+          "Dynamic Import",
+          "Code Splitting"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Unused JavaScript",
+    "reading": "みしようじゃばすくりぷと",
+    "aliases": [
+      "不要なJavaScript",
+      "Dead JavaScript"
+    ],
+    "senses": [
+      {
+        "definition": "ページの初期表示に不要なJavaScriptコードがバンドルに含まれ読み込まれる問題。Lighthouseの「Remove unused JavaScript」監査で検出でき、Code SplittingやDynamic Importで遅延読み込みすることで改善する。",
+        "domain": "performance",
+        "keywords": [
+          "Lighthouse",
+          "Code Splitting",
+          "Tree Shaking",
+          "バンドルサイズ",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Frame Rate",
+    "reading": "ふれーむれーと",
+    "aliases": [
+      "フレームレート",
+      "FPS"
+    ],
+    "senses": [
+      {
+        "definition": "1秒間に描画されるフレーム数（Frames Per Second）。Web UIでは60fps（1フレーム16.67ms）が滑らかさの基準とされ、これを下回るとJankとして知覚される。アニメーション最適化の目標値として使用する。",
+        "domain": "performance",
+        "keywords": [
+          "Jank",
+          "アニメーション",
+          "requestAnimationFrame",
+          "Composite",
+          "Chrome DevTools"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Benchmarking",
+    "reading": "べんちまーきんぐ",
+    "aliases": [
+      "ベンチマーキング"
+    ],
+    "senses": [
+      {
+        "definition": "コードやシステムの処理速度を定量的に計測・比較する行為。ブラウザAPIのperformance.now()やVitest・Jest・benchmark.jsなどのツールを使って実装の高速化効果を客観的に評価する。",
+        "domain": "performance",
+        "keywords": [
+          "パフォーマンス計測",
+          "プロファイリング",
+          "最適化",
+          "比較",
+          "計測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Memoize",
+    "reading": "めもいず",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "関数の計算結果を引数をキーとしてキャッシュし、同じ引数での再呼び出し時にキャッシュ済みの結果を返す最適化技術。ReactのuseMemo・useCallbackはこの原理を応用し、不要な再計算と再レンダリングを防ぐ。",
+        "domain": "performance",
+        "keywords": [
+          "useMemo",
+          "useCallback",
+          "React.memo",
+          "キャッシュ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Scope Hoisting",
+    "reading": "すこーぷほいすてぃんぐ",
+    "aliases": [
+      "モジュール結合",
+      "スコープホイスティング"
+    ],
+    "senses": [
+      {
+        "definition": "複数のES Moduleを単一の関数スコープにまとめてバンドルする最適化。モジュールごとのクロージャをなくすことでコードサイズを削減し、実行時のパース速度とランタイムパフォーマンスを向上させる。Rollupが先行実装した。",
+        "domain": "performance",
+        "keywords": [
+          "Tree Shaking",
+          "バンドル",
+          "ES Modules",
+          "Rollup",
+          "webpack"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Network Throttling",
+    "reading": "ねっとわーくすろっとりんぐ",
+    "aliases": [
+      "ネットワーク制限",
+      "帯域制限"
+    ],
+    "senses": [
+      {
+        "definition": "Chrome DevToolsなどでネットワーク速度を意図的に制限してページのパフォーマンスをテストする手法。3G・4G・低速回線などを模擬し、実際のモバイルユーザーが体験するパフォーマンスを開発環境で再現できる。",
+        "domain": "performance",
+        "keywords": [
+          "Chrome DevTools",
+          "パフォーマンステスト",
+          "モバイル",
+          "ネットワーク",
+          "計測"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Font Subsetting",
+    "reading": "ふぉんとさぶせっとぐ",
+    "aliases": [
+      "フォントサブセット化",
+      "フォントサブセッティング"
+    ],
+    "senses": [
+      {
+        "definition": "使用する文字のみをWebフォントに含める最適化手法。日本語フォントは数万文字を含むため非常に大きいが、ページで実際に使用する文字だけに絞ることでダウンロードサイズを劇的に削減し、Font Loadingを高速化する。",
+        "domain": "performance",
+        "keywords": [
+          "Font Loading",
+          "WebP",
+          "ファイルサイズ",
+          "日本語",
+          "LCP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Image Lazy Loading",
+    "reading": "いめーじれいじーろーでぃんぐ",
+    "aliases": [
+      "ネイティブ遅延読み込み",
+      "native lazy loading"
+    ],
+    "senses": [
+      {
+        "definition": "img要素に`loading=\"lazy\"`属性を付与することでブラウザが標準サポートするネイティブの遅延読み込み。Viewportに近づいたタイミングで画像を取得し、初期ページロード時のネットワーク消費とリソース優先度を最適化する。",
+        "domain": "performance",
+        "keywords": [
+          "Lazy Loading",
+          "Intersection Observer",
+          "LCP",
+          "ページ速度",
+          "img"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dead Code Elimination",
+    "reading": "でっどこーどえりみねーしょん",
+    "aliases": [
+      "デッドコード除去",
+      "DCE"
+    ],
+    "senses": [
+      {
+        "definition": "ビルド時に実行されることのないコード（到達不能コード・未使用エクスポートなど）を除去する最適化技術。Tree Shakingとセットで使われ、JavaScriptやTypeScriptのバンドルサイズを削減してダウンロードとパース時間を短縮する。",
+        "domain": "performance",
+        "keywords": [
+          "Tree Shaking",
+          "バンドル",
+          "デッドコード",
+          "webpack",
+          "Rollup"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Content Delivery Network",
+    "reading": "こんてんつでりばりーねっとわーく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "世界各地にサーバーを配置し、ユーザーに地理的に最も近いサーバーからコンテンツを配信するインフラ。物理的なネットワーク距離を短縮してTTFBを削減し、静的アセットの配信速度を大幅に改善する。",
+        "domain": "performance",
+        "keywords": [
+          "TTFB",
+          "キャッシュ",
+          "ネットワーク",
+          "SSG",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Render Pipeline",
+    "reading": "れんだりんぐぱいぷらいん",
+    "aliases": [
+      "レンダリングパイプライン",
+      "ブラウザレンダリングパイプライン"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザがHTMLから画面を描画するまでの処理段階の全体像。Parse→Style→Layout→Paint→Compositeの各フェーズからなる。各フェーズのコストを理解し、Compositeのみで完結するアニメーションを選択することがパフォーマンス最適化の基本となる。",
+        "domain": "performance",
+        "keywords": [
+          "レンダリング",
+          "Reflow",
+          "Repaint",
+          "Composite",
+          "Critical Rendering Path"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PurgeCSS",
+    "reading": "ぱーじしーえすえす",
+    "aliases": [
+      "CSS Purging",
+      "未使用CSS除去"
+    ],
+    "senses": [
+      {
+        "definition": "HTMLやJavaScriptファイルを解析して実際に使用されているCSSセレクターのみを残し、未使用のCSSを除去するツール。Tailwind CSSと組み合わせて使われることが多く、CSSバンドルサイズを大幅に削減する。",
+        "domain": "performance",
+        "keywords": [
+          "CSS",
+          "バンドルサイズ",
+          "Tailwind CSS",
+          "Tree Shaking",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Above the Fold",
+    "reading": "あぼーぶざふぉーるど",
+    "aliases": [
+      "ファーストビュー",
+      "ATF"
+    ],
+    "senses": [
+      {
+        "definition": "ページを開いた際にスクロールなしで表示されるコンテンツ領域。このエリアのリソースは優先的に読み込む必要があり、LCP・FCP改善の最重要対象となる。Critical CSSの対象やPriority Hintsのhigh指定はAbove the Foldのコンテンツに適用する。",
+        "domain": "performance",
+        "keywords": [
+          "LCP",
+          "FCP",
+          "Critical CSS",
+          "Priority Hints",
+          "ユーザー体験"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Performance Timeline",
+    "reading": "ぱふげーまんすたいむらいん",
+    "aliases": [
+      "パフォーマンスタイムライン"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザが収集する各種パフォーマンスエントリ（ナビゲーション・リソース・ペイント・ユーザータイミングなど）を時系列で管理するフレームワーク。performance.getEntries()で取得でき、RUM実装やパフォーマンス分析の基盤となる。",
+        "domain": "performance",
+        "keywords": [
+          "Navigation Timing",
+          "Resource Timing",
+          "Paint Timing",
+          "RUM",
+          "Performance Observer"
+        ]
+      }
+    ]
+  }
+]

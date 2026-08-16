@@ -1,0 +1,642 @@
+[
+  {
+    "term": "Oracle APEX Application Development",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCIでOracle APEXを利用するためのマネージドサービス。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "サービス",
+          "Oracle APEX Application Development"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX Service",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI上のAPEX向けサービスの通称。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "サービス",
+          "APEX Service"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEXインスタンス",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI上で管理されるAPEX利用環境の実体。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "リソース",
+          "APEXインスタンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Autonomous AI Database",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Oracleのフルマネージド自律型データベース。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "DB",
+          "Autonomous AI Database"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Autonomous AI Transaction Processing",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "トランザクション処理向けに最適化されたAutonomous Database系ワークロード。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "DB",
+          "Autonomous AI Transaction Processing"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ワークスペース",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXでユーザーやアプリを分けて管理する作業領域。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "ワークスペース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEXユーザー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXへサインインするための利用者アカウント。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "認証",
+          "APEXユーザー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ワークスペース管理者",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ワークスペース内の設定や利用者を管理する役割。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロール",
+          "ワークスペース管理者"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インスタンス管理者",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXインスタンス全体を管理する役割。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ロール",
+          "インスタンス管理者"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ADMIN",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Administration Servicesへ入る管理者アカウント名。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "認証",
+          "ADMIN"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Administration Services",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXインスタンス管理用の画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "管理",
+          "Administration Services"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "App Builder",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXアプリを作成編集する中心画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "App Builder"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SQL Workshop",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "SQLやDBオブジェクトを扱う開発メニュー。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "SQL Workshop"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Team Development",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "タスクやマイルストーンを管理する機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "Team Development"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gallery",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サンプルやスターターアプリを取得する入口。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "Gallery"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Workspace Home Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サインイン直後に表示されるホーム画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "画面",
+          "Workspace Home Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "App Builder Home Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "CreateやImportなどの入口がある画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "画面",
+          "App Builder Home Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Application Home Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "個別アプリの設定や操作を行う画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "画面",
+          "Application Home Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX Instances Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI ConsoleでAPEXインスタンス一覧を見る画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "OCI画面",
+          "APEX Instances Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX Instance Details Page",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "APEXインスタンスの詳細や操作を行う画面。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "OCI画面",
+          "APEX Instance Details Page"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Launch APEX",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI ConsoleからAPEXを開く操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Launch APEX"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Launch Database Actions",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCI ConsoleからDatabase Actionsを開く操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Launch Database Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Database Actions",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "ブラウザベースでDB操作や管理を行うツール群。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "開発",
+          "Database Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SQL Developer Web",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Database Actionsの旧称。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "別名",
+          "SQL Developer Web"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "APEX Version",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "その環境で動作しているAPEXの版情報。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "バージョン",
+          "APEX Version"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ORDS Version",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "その環境で動作しているORDSの版情報。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "バージョン",
+          "ORDS Version"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Workload Type",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "データベースやサービスの用途分類。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "属性",
+          "Workload Type"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ECPU",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Oracleの計算リソースの割当単位。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "リソース",
+          "ECPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Auto Scaling",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "負荷に応じて計算資源を自動で拡張する仕組み。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "スケール",
+          "Auto Scaling"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Start",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "停止中のサービスを起動する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Start"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Stop",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "稼働中のサービスを停止する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Stop"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Restart",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "サービスや基盤DBを再起動する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Restart"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Terminate",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "リソースを終了削除する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Terminate"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Move Resource",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "リソースの所属Compartmentを変更する操作。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "操作",
+          "Move Resource"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Configure Document Generator",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "文書生成機能を使うための設定。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "連携",
+          "Configure Document Generator"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Compartment",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "OCIリソースを整理分離する論理区画。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "IAM",
+          "Compartment"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Subnet",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "仮想ネットワーク内を分割したIPアドレス範囲。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Subnet"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Public Subnet",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部公開向けの到達性を持たせやすいサブネット。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Public Subnet"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Private Subnet",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "外部へ直接公開しない内部向けサブネット。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Private Subnet"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Region",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "クラウドリソースを配置する地理的な領域。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "配置",
+          "Region"
+        ]
+      }
+    ]
+  }
+]

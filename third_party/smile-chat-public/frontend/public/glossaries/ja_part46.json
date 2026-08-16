@@ -1,0 +1,1788 @@
+[
+  {
+    "term": "useRef",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。レンダー間で値を保持するミュータブルなrefオブジェクトを返す。DOMノードへの直接参照やレンダーをトリガーしない値の保存に使われ、currentプロパティで値にアクセスする。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "DOM参照",
+          "ミュータブル",
+          "レンダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "useRef hook"
+    ]
+  },
+  {
+    "term": "useReducer",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。reduxのようなreducer関数とdispatchを用いた状態管理パターンを実現する。複雑な状態ロジックや次の状態が前の状態に依存する場合にuseStateより適している。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "状態管理",
+          "reducer",
+          "dispatch"
+        ]
+      }
+    ],
+    "aliases": [
+      "useReducer hook"
+    ]
+  },
+  {
+    "term": "useId",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。アクセシビリティ属性（aria-labelledbyなど）向けにサーバーとクライアントで一致する一意なIDを生成する。ハイドレーションの不一致を防ぎつつ安定したIDを提供する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "アクセシビリティ",
+          "ハイドレーション",
+          "一意ID"
+        ]
+      }
+    ],
+    "aliases": [
+      "useId hook"
+    ]
+  },
+  {
+    "term": "useDeferredValue",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。値の更新を遅延させ、UIの緊急な更新（入力など）を優先させる。重いレンダリングをバックグラウンドに回すConcurrentモードの機能で、検索フィルタリング等に有効。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "Concurrent",
+          "パフォーマンス",
+          "遅延"
+        ]
+      }
+    ],
+    "aliases": [
+      "useDeferredValue hook"
+    ]
+  },
+  {
+    "term": "useTransition",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。状態更新を非緊急のトランジションとしてマークし、UIの応答性を維持しながら重い更新を遅延実行する。isPendingフラグとstartTransition関数を返す。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "Concurrent",
+          "トランジション",
+          "isPending"
+        ]
+      }
+    ],
+    "aliases": [
+      "useTransition hook"
+    ]
+  },
+  {
+    "term": "useSyncExternalStore",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。React外部のストア（Redux、ブラウザAPIなど）をサブスクライブし、ティアリングなしに値を読み取るための低レベルAPI。ライブラリ作者向けの設計となっている。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "外部ストア",
+          "ティアリング",
+          "サブスクライブ"
+        ]
+      }
+    ],
+    "aliases": [
+      "useSyncExternalStore hook"
+    ]
+  },
+  {
+    "term": "useOptimistic",
+    "senses": [
+      {
+        "definition": "React 19が提供するフック。非同期操作（Server Actionsなど）の完了を待たずに楽観的に更新後のUIを先行表示する。エラー時には自動的に元の状態に戻るため整合性を保ちやすい。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "楽観的UI",
+          "Server Actions",
+          "UX"
+        ]
+      }
+    ],
+    "aliases": [
+      "useOptimistic hook"
+    ]
+  },
+  {
+    "term": "useImperativeHandle",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。forwardRefと組み合わせて、親コンポーネントに公開するrefオブジェクトのインターフェースをカスタマイズする。子の内部実装を隠蔽しつつ必要な操作だけを公開できる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "forwardRef",
+          "ref",
+          "カプセル化"
+        ]
+      }
+    ],
+    "aliases": [
+      "useImperativeHandle hook"
+    ]
+  },
+  {
+    "term": "useLayoutEffect",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。useEffectと同様だがDOM更新後・ブラウザ描画前に同期的に実行される。スクロール位置取得やツールチップ位置計算など描画前にDOMを計測・変更する場合に使う。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "DOM",
+          "レイアウト",
+          "同期"
+        ]
+      }
+    ],
+    "aliases": [
+      "useLayoutEffect hook"
+    ]
+  },
+  {
+    "term": "useDebugValue",
+    "senses": [
+      {
+        "definition": "Reactが提供するフック。React DevToolsにカスタムフックのラベルを表示するためのデバッグ用API。ライブラリ作者がカスタムフックの内部状態をわかりやすく可視化するために使う。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フック",
+          "デバッグ",
+          "DevTools",
+          "カスタムフック"
+        ]
+      }
+    ],
+    "aliases": [
+      "useDebugValue hook"
+    ]
+  },
+  {
+    "term": "Fiberアーキテクチャ",
+    "reading": "ふぁいばーあーきてくちゃ",
+    "senses": [
+      {
+        "definition": "React 16で導入された再設計されたコアアルゴリズム。レンダリング作業を小さな単位（Fiber）に分割し、優先度に基づいて中断・再開・破棄が可能。Concurrent Renderingの基盤となる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "アーキテクチャ",
+          "Concurrent",
+          "スケジューリング",
+          "再設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "React Fiber",
+      "Fiber"
+    ]
+  },
+  {
+    "term": "React Compiler",
+    "senses": [
+      {
+        "definition": "Reactのコードを静的解析して自動的にメモ化を適用するコンパイラ。React 19で安定版リリース。useMemo/useCallbackを手動で書かずともパフォーマンス最適化を実現し、コードの冗長さを削減する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "コンパイラ",
+          "メモ化",
+          "最適化",
+          "React 19"
+        ]
+      }
+    ],
+    "aliases": [
+      "React Forget"
+    ]
+  },
+  {
+    "term": "ErrorBoundary",
+    "senses": [
+      {
+        "definition": "Reactのクラスコンポーネントで実装するエラーキャッチ機構。子コンポーネントツリーのレンダリング・ライフサイクル中に発生したJavaScriptエラーをキャッチしフォールバックUIを表示する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "エラーハンドリング",
+          "クラスコンポーネント",
+          "フォールバック",
+          "UX"
+        ]
+      }
+    ],
+    "aliases": [
+      "Error Boundary",
+      "エラー境界"
+    ]
+  },
+  {
+    "term": "React.lazy",
+    "senses": [
+      {
+        "definition": "Reactが提供するコード分割のためのAPI。動的importを使ってコンポーネントを遅延読み込みし、バンドルサイズを削減する。Suspenseと組み合わせてローディング状態を表示する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "コード分割",
+          "遅延読み込み",
+          "バンドル",
+          "Suspense"
+        ]
+      }
+    ],
+    "aliases": [
+      "React lazy loading"
+    ]
+  },
+  {
+    "term": "Concurrent Rendering",
+    "senses": [
+      {
+        "definition": "React 18で導入された並行レンダリング機能。レンダリング作業を中断可能にし、ユーザー操作などの緊急な更新を優先処理することでUIの応答性を維持する。useTransitionなどのAPIで活用する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "並行",
+          "パフォーマンス",
+          "レンダリング",
+          "React 18"
+        ]
+      }
+    ],
+    "aliases": [
+      "Concurrent Mode",
+      "並行レンダリング"
+    ]
+  },
+  {
+    "term": "選択的ハイドレーション",
+    "reading": "せんたくてきはいどれーしょん",
+    "senses": [
+      {
+        "definition": "React 18のConcurrent SSRで実現した機能。ページ全体のハイドレーション完了を待たず、ユーザーがインタラクションした部分を優先的にハイドレーションする。TTIの改善に貢献する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "SSR",
+          "ハイドレーション",
+          "Concurrent",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "selective hydration"
+    ]
+  },
+  {
+    "term": "制御コンポーネント",
+    "reading": "せいぎょこんぽーねんと",
+    "senses": [
+      {
+        "definition": "フォーム要素の値をReactのstateで管理するパターン。入力のたびにonChangeでstateを更新し、valueとしてstateを渡すことで単一の信頼できる情報源を実現する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フォーム",
+          "state",
+          "入力",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "controlled component",
+      "制御されたコンポーネント"
+    ]
+  },
+  {
+    "term": "非制御コンポーネント",
+    "reading": "ひせいぎょこんぽーねんと",
+    "senses": [
+      {
+        "definition": "フォーム要素の値をReactのstateではなくDOMに直接管理させるパターン。refを使って値を読み取り、シンプルなフォームや外部ライブラリとの統合に適している。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フォーム",
+          "ref",
+          "DOM",
+          "非制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "uncontrolled component",
+      "非制御されたコンポーネント"
+    ]
+  },
+  {
+    "term": "forwardRef",
+    "senses": [
+      {
+        "definition": "Reactが提供するAPI。親コンポーネントからrefをコンポーネントの内部DOM要素や子コンポーネントに転送する。ライブラリのUIコンポーネントがDOMアクセスを外部に公開する際に使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "ref",
+          "コンポーネント",
+          "DOM",
+          "転送"
+        ]
+      }
+    ],
+    "aliases": [
+      "React.forwardRef",
+      "ref forwarding",
+      "refフォワーディング"
+    ]
+  },
+  {
+    "term": "React.memo",
+    "senses": [
+      {
+        "definition": "Reactが提供する高階コンポーネント。propsが変わらない限り再レンダーをスキップするメモ化を行う。不必要な子コンポーネントの再レンダーを防ぎパフォーマンスを最適化する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "メモ化",
+          "パフォーマンス",
+          "最適化",
+          "再レンダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "React memo"
+    ]
+  },
+  {
+    "term": "keyプロパティ",
+    "reading": "きーぷろぱてぃ",
+    "senses": [
+      {
+        "definition": "Reactがリストのレンダリング時に各要素を識別するための特別なプロパティ。兄弟要素間でユニークな値を指定することで、追加・削除・並び替え時のDOM更新を最小化する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "リスト",
+          "パフォーマンス",
+          "差分検出",
+          "DOM"
+        ]
+      }
+    ],
+    "aliases": [
+      "key prop",
+      "key",
+      "keyプロップ"
+    ]
+  },
+  {
+    "term": "ポータル",
+    "reading": "ぽーたる",
+    "senses": [
+      {
+        "definition": "ReactのcreatePortal APIを使い、親コンポーネントのDOM階層外の任意のDOMノードに子をレンダーする機能。モーダル・トースト・ツールチップなどDOMの最上位に配置したいUIに使う。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "DOM",
+          "createPortal",
+          "モーダル",
+          "レンダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "portal",
+      "createPortal",
+      "React Portal"
+    ]
+  },
+  {
+    "term": "propsのバケツリレー",
+    "reading": "ぷろぷすのばけつりれー",
+    "senses": [
+      {
+        "definition": "必要なコンポーネントに届けるために中間のコンポーネント群を経由してpropsを渡し続けるアンチパターン。コードの冗長化とメンテナンス性の低下を招く。Contextやstate管理ライブラリで解決する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "アンチパターン",
+          "props",
+          "Context",
+          "状態管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "props drilling",
+      "prop drilling",
+      "プロップドリリング"
+    ]
+  },
+  {
+    "term": "複合コンポーネント",
+    "reading": "ふくごうこんぽーねんと",
+    "senses": [
+      {
+        "definition": "複数の関連コンポーネントをContextで内部状態を共有しながら組み合わせるReactの設計パターン。Select/Option、Tabs/Tab等のUIライブラリで使われ、高い柔軟性と表現力を提供する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "設計パターン",
+          "Context",
+          "コンポーネント",
+          "コンポジション"
+        ]
+      }
+    ],
+    "aliases": [
+      "compound component",
+      "Compound Components"
+    ]
+  },
+  {
+    "term": "レンダープロップ",
+    "reading": "れんだーぷろぷ",
+    "senses": [
+      {
+        "definition": "コンポーネントがレンダリング内容を決定するためにpropとして関数を受け取るReactのパターン。ロジックを再利用しながら表示の柔軟性を持たせる。カスタムフックの登場で代替されることも多い。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "設計パターン",
+          "関数",
+          "再利用",
+          "ロジック共有"
+        ]
+      }
+    ],
+    "aliases": [
+      "render props",
+      "Render Props Pattern"
+    ]
+  },
+  {
+    "term": "高階コンポーネント",
+    "reading": "こうかいこんぽーねんと",
+    "senses": [
+      {
+        "definition": "コンポーネントを受け取り新しいコンポーネントを返すReactの設計パターン。共通の振る舞い（認証、ロギング等）を横断的に追加するために使われる。カスタムフックで代替されることが多い。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "設計パターン",
+          "HOC",
+          "再利用",
+          "横断的関心事"
+        ]
+      }
+    ],
+    "aliases": [
+      "HOC",
+      "higher-order component",
+      "Higher Order Component"
+    ]
+  },
+  {
+    "term": "Server Actions",
+    "senses": [
+      {
+        "definition": "Next.js App Routerで導入されたサーバー側で実行される非同期関数。'use server'ディレクティブでマークしフォームやクライアントコードから直接呼び出せる。APIルートを別途作成せずにデータ変更を行える。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "サーバー",
+          "フォーム",
+          "データ変更",
+          "App Router"
+        ]
+      }
+    ],
+    "aliases": [
+      "サーバーアクション",
+      "server action"
+    ]
+  },
+  {
+    "term": "部分的プリレンダリング",
+    "reading": "ぶぶんてきぷりれんだりんぐ",
+    "senses": [
+      {
+        "definition": "Next.jsのPPR（Partial Prerendering）機能。ページの静的な外枠を事前生成しSuspenseで囲んだ動的コンテンツをストリーミングで配信する。SSGとSSRの利点を組み合わせたハイブリッド手法。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "PPR",
+          "Suspense",
+          "ストリーミング",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "PPR",
+      "Partial Prerendering"
+    ]
+  },
+  {
+    "term": "並列ルート",
+    "reading": "へいれつるーと",
+    "senses": [
+      {
+        "definition": "Next.js App Routerの機能。@slotの命名規則で同一レイアウト内に複数のページを同時にレンダリングできる。ダッシュボードのタブ表示やモーダルの実装に活用される。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "App Router",
+          "ルーティング",
+          "レイアウト",
+          "スロット"
+        ]
+      }
+    ],
+    "aliases": [
+      "parallel routes"
+    ]
+  },
+  {
+    "term": "インターセプトルート",
+    "reading": "いんたーせぷとるーと",
+    "senses": [
+      {
+        "definition": "Next.js App Routerの機能。(..)記法で現在のレイアウトを保ちつつ別URLのルートをキャプチャし、モーダルやソフトナビゲーションを実現する。画像ギャラリーのモーダルプレビュー等で活用される。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "App Router",
+          "ルーティング",
+          "モーダル",
+          "ナビゲーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "intercepting routes"
+    ]
+  },
+  {
+    "term": "ルートグループ",
+    "reading": "るーとぐるーぷ",
+    "senses": [
+      {
+        "definition": "Next.js App Routerの(folderName)記法によるフォルダ構造整理の仕組み。URLパスに影響せずルートを論理的にグループ化し、グループごとに異なるレイアウトを適用できる。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "App Router",
+          "ルーティング",
+          "レイアウト",
+          "整理"
+        ]
+      }
+    ],
+    "aliases": [
+      "route groups"
+    ]
+  },
+  {
+    "term": "layout.tsx",
+    "senses": [
+      {
+        "definition": "Next.js App Routerで特定のルートセグメントとその子で共有されるUIを定義するファイル。ナビゲーション時に状態を保持したまま再レンダーせず、入れ子にして複数レイアウトを実現できる。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "App Router",
+          "レイアウト",
+          "共有UI",
+          "ルーティング"
+        ]
+      }
+    ],
+    "aliases": [
+      "レイアウトファイル",
+      "Next.js Layout"
+    ]
+  },
+  {
+    "term": "template.tsx",
+    "senses": [
+      {
+        "definition": "Next.js App Routerでlayout.tsxに似た共有UIを定義するファイル。ナビゲーションのたびにコンポーネントの新しいインスタンスが生成されstateはリセットされる。アニメーションやページビューログに使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "App Router",
+          "テンプレート",
+          "ナビゲーション",
+          "state"
+        ]
+      }
+    ],
+    "aliases": [
+      "テンプレートファイル",
+      "Next.js Template"
+    ]
+  },
+  {
+    "term": "Metadata API",
+    "senses": [
+      {
+        "definition": "Next.js App Routerが提供するHTMLメタデータ（title、OGP、canonical等）を型安全に生成するAPI。layout.tsxやpage.tsxからmetadataオブジェクトまたはgenerateMetadata関数をエクスポートして使用する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "SEO",
+          "OGP",
+          "メタデータ",
+          "App Router"
+        ]
+      }
+    ],
+    "aliases": [
+      "Next.js Metadata",
+      "generateMetadata"
+    ]
+  },
+  {
+    "term": "Next.js App Router",
+    "senses": [
+      {
+        "definition": "Next.js 13で導入されたappディレクトリベースの新しいルーティングシステム。React Server Components、Server Actions、Streaming SSRをネイティブサポートし、従来のPages Routerを置き換える。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "App Router",
+          "RSC",
+          "ルーティング",
+          "React"
+        ]
+      }
+    ],
+    "aliases": [
+      "appディレクトリ"
+    ]
+  },
+  {
+    "term": "バンドル分割",
+    "reading": "ばんどるぶんかつ",
+    "senses": [
+      {
+        "definition": "アプリケーションのJavaScriptバンドルを複数のファイルに分け、並列ダウンロードやキャッシュ効率を高める手法。ベンダーバンドルとアプリバンドルの分離が代表例。",
+        "domain": "frontend",
+        "keywords": [
+          "バンドル",
+          "最適化",
+          "キャッシュ",
+          "webpack",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "bundle splitting"
+    ]
+  },
+  {
+    "term": "Turbopack",
+    "senses": [
+      {
+        "definition": "Vercelが開発したRustベースの高速バンドラー。Next.js 13以降の開発サーバーで採用。webpackと比べてコールドスタートや変更検出が大幅に高速化され、大規模プロジェクトの開発体験を改善する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "バンドラー",
+          "Rust",
+          "高速",
+          "ビルド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "webpack",
+    "senses": [
+      {
+        "definition": "JavaScriptエコシステムで長年標準として使われてきたモジュールバンドラー。JS・CSS・画像などあらゆるアセットを依存グラフとして解析しバンドルする。プラグインとローダーで高度にカスタマイズ可能。",
+        "domain": "frontend",
+        "keywords": [
+          "バンドラー",
+          "モジュール",
+          "ビルド",
+          "JavaScript",
+          "プラグイン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Vite",
+    "senses": [
+      {
+        "definition": "ESモジュールのネイティブブラウザサポートを活用した高速な開発サーバーとビルドツール。開発時はバンドルレスで動作し、本番ビルドにはRollupを使用する。Vue・React・Svelteなど幅広いフレームワークに対応。",
+        "domain": "frontend",
+        "keywords": [
+          "ビルドツール",
+          "ESM",
+          "高速",
+          "開発サーバー",
+          "HMR"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "React DevTools",
+    "senses": [
+      {
+        "definition": "Reactアプリのコンポーネントツリー・state・props・パフォーマンスを検査するブラウザ拡張機能。プロファイラーで再レンダーの原因を特定し、コンポーネント間のデータフローを可視化する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "デバッグ",
+          "開発ツール",
+          "パフォーマンス",
+          "プロファイラー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "React Query",
+    "senses": [
+      {
+        "definition": "サーバー状態の取得・キャッシュ・同期・更新を管理するReact向けのデータフェッチングライブラリ。TanStack QueryのReact版。キャッシュ戦略・背景再フェッチ・楽観的更新などを宣言的に扱える。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "データフェッチ",
+          "キャッシュ",
+          "状態管理",
+          "サーバー状態"
+        ]
+      }
+    ],
+    "aliases": [
+      "@tanstack/react-query"
+    ]
+  },
+  {
+    "term": "SWR",
+    "senses": [
+      {
+        "definition": "VercelのReact向けデータフェッチングフック。stale-while-revalidate戦略を用い、まずキャッシュからデータを返しつつバックグラウンドで再検証する。シンプルなAPIでREST・GraphQL双方に対応。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "データフェッチ",
+          "キャッシュ",
+          "stale-while-revalidate",
+          "Vercel"
+        ]
+      }
+    ],
+    "aliases": [
+      "stale-while-revalidate"
+    ]
+  },
+  {
+    "term": "Tailwind CSS",
+    "senses": [
+      {
+        "definition": "ユーティリティクラスを組み合わせてスタイリングするCSSフレームワーク。クラス名をHTMLに直接記述し、JITコンパイルで使用したクラスのみを出力する。カスタマイズ性が高くNext.jsと相性が良い。",
+        "domain": "frontend",
+        "keywords": [
+          "CSS",
+          "ユーティリティファースト",
+          "スタイリング",
+          "JIT",
+          "Next.js"
+        ]
+      }
+    ],
+    "aliases": [
+      "tailwindcss"
+    ]
+  },
+  {
+    "term": "CSSモジュール",
+    "reading": "しーえすえすもじゅーる",
+    "senses": [
+      {
+        "definition": "CSSクラス名をコンポーネントにスコープするビルドツール機能。.module.cssファイルを使い、クラス名がハッシュ化されグローバルな名前衝突を防ぐ。Next.jsがデフォルトでサポートする。",
+        "domain": "frontend",
+        "keywords": [
+          "CSS",
+          "スコープ",
+          "Next.js",
+          "スタイリング",
+          "衝突防止"
+        ]
+      }
+    ],
+    "aliases": [
+      "CSS Modules"
+    ]
+  },
+  {
+    "term": "CSS-in-JS",
+    "senses": [
+      {
+        "definition": "JavaScriptコード内にCSSを記述するスタイリング手法の総称。コンポーネントと密結合したスタイル定義・動的スタイリング・TypeScript補完が特徴。styled-componentsやEmotionが代表例。",
+        "domain": "frontend",
+        "keywords": [
+          "CSS",
+          "スタイリング",
+          "JavaScript",
+          "コンポーネント",
+          "動的"
+        ]
+      }
+    ],
+    "aliases": [
+      "CSSinJS"
+    ]
+  },
+  {
+    "term": "styled-components",
+    "senses": [
+      {
+        "definition": "テンプレートリテラルを使ってReactコンポーネントに直接CSSを記述するCSS-in-JSライブラリ。コンポーネント名付きのスタイルを定義でき、propsに基づく動的スタイリングが可能。",
+        "domain": "frontend",
+        "keywords": [
+          "CSS-in-JS",
+          "React",
+          "スタイリング",
+          "テンプレートリテラル",
+          "動的"
+        ]
+      }
+    ],
+    "aliases": [
+      "styled components"
+    ]
+  },
+  {
+    "term": "Emotion",
+    "senses": [
+      {
+        "definition": "高パフォーマンスなCSS-in-JSライブラリ。css prop記法とstyled API両方をサポートし、サーバーサイドレンダリングにも対応。MUIなど多くのコンポーネントライブラリの基盤として採用されている。",
+        "domain": "frontend",
+        "keywords": [
+          "CSS-in-JS",
+          "React",
+          "パフォーマンス",
+          "SSR",
+          "MUI"
+        ]
+      }
+    ],
+    "aliases": [
+      "@emotion/react",
+      "@emotion/styled"
+    ]
+  },
+  {
+    "term": "Radix UI",
+    "senses": [
+      {
+        "definition": "アクセシビリティとカスタマイズ性を重視したReact向けヘッドレスUIコンポーネントライブラリ。スタイルは持たずWAI-ARIAに準拠した振る舞いを提供する。shadcn/uiの基盤として広く使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "ヘッドレスUI",
+          "アクセシビリティ",
+          "WAI-ARIA",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Radix Primitives"
+    ]
+  },
+  {
+    "term": "shadcn/ui",
+    "senses": [
+      {
+        "definition": "Radix UIとTailwind CSSをベースにしたコンポーネント集。npmパッケージとしてインストールするのではなくコードを直接コピーするアプローチを取り、完全なカスタマイズ性を提供する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "コンポーネント",
+          "Tailwind",
+          "Radix UI",
+          "カスタマイズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "shadcn"
+    ]
+  },
+  {
+    "term": "Headless UI",
+    "senses": [
+      {
+        "definition": "Tailwind Labsが開発したアクセシビリティ対応の完全スタイルなしUIコンポーネントライブラリ。React・Vueに対応し、Tailwind CSSとの組み合わせを前提に設計されている。",
+        "domain": "frontend",
+        "keywords": [
+          "ヘッドレスUI",
+          "React",
+          "Tailwind",
+          "アクセシビリティ",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "HeadlessUI"
+    ]
+  },
+  {
+    "term": "Storybook",
+    "senses": [
+      {
+        "definition": "UIコンポーネントを独立して開発・テスト・ドキュメント化するツール。コンポーネントをisolated環境でレンダリングし、ビジュアルリグレッションテストやデザインシステムの構築に使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "コンポーネント",
+          "開発ツール",
+          "ドキュメント",
+          "ビジュアルテスト",
+          "デザインシステム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Framer Motion",
+    "senses": [
+      {
+        "definition": "Reactアプリケーション向けの宣言的アニメーションライブラリ。シンプルなAPIでジェスチャー・レイアウトアニメーション・共有レイアウトトランジションを実現し、高品質なUIを構築できる。",
+        "domain": "frontend",
+        "keywords": [
+          "アニメーション",
+          "React",
+          "宣言的",
+          "ジェスチャー",
+          "モーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "framer-motion"
+    ]
+  },
+  {
+    "term": "React Router",
+    "senses": [
+      {
+        "definition": "Reactアプリケーション向けのクライアントサイドルーティングライブラリ。URLとコンポーネントのマッピングを宣言的に定義し、SPA内のナビゲーションを実現する。v6でフック中心のAPIに刷新された。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "ルーティング",
+          "SPA",
+          "クライアント",
+          "ナビゲーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "react-router",
+      "React Router DOM"
+    ]
+  },
+  {
+    "term": "TanStack Router",
+    "senses": [
+      {
+        "definition": "型安全性を重視したReact向けの完全型付きルーティングライブラリ。URLパラメータ・検索パラメータの型推論、コード分割との統合、データローディングをサポートする。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "ルーティング",
+          "型安全",
+          "TypeScript",
+          "データローディング"
+        ]
+      }
+    ],
+    "aliases": [
+      "@tanstack/router"
+    ]
+  },
+  {
+    "term": "Redux Toolkit",
+    "senses": [
+      {
+        "definition": "Reduxの公式推奨ツールセット。ボイラープレートを大幅に削減するcreateSlice・configureStore・createAsyncThunkなどを提供し、Immerによるイミュータブルな状態更新を簡潔に記述できる。",
+        "domain": "frontend",
+        "keywords": [
+          "Redux",
+          "状態管理",
+          "React",
+          "Immer",
+          "ボイラープレート削減"
+        ]
+      }
+    ],
+    "aliases": [
+      "RTK",
+      "@reduxjs/toolkit"
+    ]
+  },
+  {
+    "term": "Recoil",
+    "senses": [
+      {
+        "definition": "Metaが開発したReact向けアトムベースの状態管理ライブラリ。atom（状態の単位）とselector（派生値）で状態を細粒度に管理し、必要なコンポーネントのみ再レンダーする。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "状態管理",
+          "atom",
+          "selector",
+          "Meta"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Jotai",
+    "senses": [
+      {
+        "definition": "Reactアプリ向けのシンプルなアトムベース状態管理ライブラリ。Recoilに触発されつつよりミニマルなAPIを提供する。atomとuseAtomフックで状態を定義・購読し、不要なプロバイダーを排除する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "状態管理",
+          "atom",
+          "ミニマル",
+          "プリミティブ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MobX",
+    "senses": [
+      {
+        "definition": "オブザーバブルパターンに基づくReact/Vue対応の状態管理ライブラリ。状態をオブザーバブルとして定義し変更を自動追跡、リアクションが自動実行される。型付きクラスとデコレータが特徴。",
+        "domain": "frontend",
+        "keywords": [
+          "状態管理",
+          "オブザーバブル",
+          "リアクティブ",
+          "自動追跡",
+          "React"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "XState",
+    "senses": [
+      {
+        "definition": "JavaScript/TypeScript向けの状態機械とステートチャートのライブラリ。有限状態機械を使いUIの状態遷移を明示的にモデル化する。複雑なUI状態管理やビジネスロジックのモデリングに有効。",
+        "domain": "frontend",
+        "keywords": [
+          "状態機械",
+          "ステートチャート",
+          "React",
+          "UI状態",
+          "状態管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "State Machine"
+    ]
+  },
+  {
+    "term": "React Hook Form",
+    "senses": [
+      {
+        "definition": "パフォーマンスに優れたReact向けフォーム管理ライブラリ。非制御コンポーネントとrefベースのアプローチで再レンダーを最小化し、バリデーションはZodやYupと組み合わせることが多い。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フォーム",
+          "バリデーション",
+          "パフォーマンス",
+          "非制御コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "RHF",
+      "react-hook-form"
+    ]
+  },
+  {
+    "term": "Zod",
+    "senses": [
+      {
+        "definition": "TypeScript向けのスキーマ宣言とバリデーションライブラリ。スキーマ定義から型推論が自動生成され、ランタイムとコンパイル時の両方でデータ検証ができる。React Hook FormやServer Actionsとの統合が一般的。",
+        "domain": "frontend",
+        "keywords": [
+          "TypeScript",
+          "バリデーション",
+          "スキーマ",
+          "型推論",
+          "フォーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Yup",
+    "senses": [
+      {
+        "definition": "JavaScript/TypeScript向けのスキーマバリデーションライブラリ。Formikと組み合わせて使われることが多く、連鎖メソッドで直感的なバリデーションルールを記述できる。",
+        "domain": "frontend",
+        "keywords": [
+          "バリデーション",
+          "スキーマ",
+          "フォーム",
+          "JavaScript",
+          "TypeScript"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "React Testing Library",
+    "senses": [
+      {
+        "definition": "ユーザーの操作視点でReactコンポーネントをテストするライブラリ。実装の詳細ではなくDOMの振る舞いをテストする方針を持ち、アクセシビリティロールなどで要素を検索する。Vitestやjestと組み合わせる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "テスト",
+          "コンポーネント",
+          "ユーザー操作",
+          "アクセシビリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "RTL",
+      "@testing-library/react"
+    ]
+  },
+  {
+    "term": "Vitest",
+    "senses": [
+      {
+        "definition": "Viteを基盤とした高速なユニットテストフレームワーク。Jestと互換性のあるAPIを持ちながら、ESMネイティブで動作しViteの設定を共有できる。React・Vue・SvelteなどのUIテストに対応。",
+        "domain": "frontend",
+        "keywords": [
+          "テスト",
+          "Vite",
+          "ユニットテスト",
+          "Jest互換",
+          "ESM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Jest",
+    "senses": [
+      {
+        "definition": "Metaが開発したJavaScript向けのテスティングフレームワーク。自動モック、スナップショットテスト、コードカバレッジを内蔵し、React Testing Libraryと組み合わせたコンポーネントテストが一般的。",
+        "domain": "frontend",
+        "keywords": [
+          "テスト",
+          "JavaScript",
+          "スナップショット",
+          "モック",
+          "Meta"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cypress",
+    "senses": [
+      {
+        "definition": "ブラウザで実行されるE2Eテストフレームワーク。実際のブラウザ内でテストが動作し、タイムトラベルデバッグ・自動スクリーンショット・ネットワーク傍受などの機能を持つ。コンポーネントテストにも対応。",
+        "domain": "frontend",
+        "keywords": [
+          "E2Eテスト",
+          "ブラウザ",
+          "コンポーネントテスト",
+          "デバッグ",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "revalidatePath",
+    "senses": [
+      {
+        "definition": "Next.js App Routerが提供するキャッシュ無効化関数。Server ActionsやRoute Handlersで特定パスのキャッシュをオンデマンドで破棄し、ページを最新データで再生成する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "キャッシュ",
+          "再検証",
+          "Server Actions",
+          "App Router"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "revalidateTag",
+    "senses": [
+      {
+        "definition": "Next.js App Routerでfetchにタグを付け、Server ActionsやRoute Handlersからタグ単位でキャッシュを無効化する関数。関連するデータをまとめて再検証する際に使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "キャッシュ",
+          "タグ",
+          "再検証",
+          "データフェッチ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "エッジランタイム",
+    "reading": "えっじらんたいむ",
+    "senses": [
+      {
+        "definition": "Next.jsのMiddlewareやRoute Handlersで利用できるランタイム環境。CDNエッジに近い場所でV8エンジンベースで実行され低レイテンシを実現するが、Node.js APIへのアクセスは制限される。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "エッジ",
+          "ランタイム",
+          "CDN",
+          "レイテンシ"
+        ]
+      }
+    ],
+    "aliases": [
+      "edge runtime"
+    ]
+  },
+  {
+    "term": "useFormState",
+    "senses": [
+      {
+        "definition": "React DOM（React 19以前）が提供するフック。フォームのServer Actionの戻り値を状態として管理し、送信後のサーバーレスポンスをUIに反映する。React 19でuseActionStateに統合された。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "フォーム",
+          "Server Actions",
+          "状態管理",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": [
+      "useFormState hook"
+    ]
+  },
+  {
+    "term": "flushSync",
+    "senses": [
+      {
+        "definition": "ReactのDOM更新を同期的に強制実行するAPI。通常Reactはバッチ処理で更新するが、flushSyncでラップした更新は即座にDOMに反映される。サードパーティライブラリとの統合やアニメーション同期に使う。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "DOM更新",
+          "同期",
+          "バッチ",
+          "副作用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Strict Mode",
+    "senses": [
+      {
+        "definition": "ReactのStrictModeコンポーネントで有効化される開発専用チェック。副作用の重複実行・非推奨APIの検出・意図しない状態の共有検出を行い、将来の機能との互換性問題を早期発見する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "開発",
+          "デバッグ",
+          "副作用",
+          "非推奨"
+        ]
+      }
+    ],
+    "aliases": [
+      "StrictMode",
+      "React.StrictMode",
+      "Reactストリクトモード"
+    ]
+  },
+  {
+    "term": "Reactプロファイラー",
+    "reading": "りあくとぷろふぁいらー",
+    "senses": [
+      {
+        "definition": "ReactのProfilerコンポーネントとDevToolsのProfilerタブを使ってコンポーネントのレンダリング時間・頻度を計測する機能。パフォーマンスボトルネックの特定と最適化に使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "パフォーマンス",
+          "プロファイル",
+          "計測",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Profiler",
+      "React Profiler",
+      "DevTools Profiler"
+    ]
+  },
+  {
+    "term": "自動バッチング",
+    "reading": "じどうばっちんぐ",
+    "senses": [
+      {
+        "definition": "React 18で強化された機能。イベントハンドラ内に限らずPromise・setTimeout・ネイティブイベントハンドラ内でも複数のstate更新を自動的に1回のレンダーにまとめる最適化。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "バッチ",
+          "パフォーマンス",
+          "レンダー",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "automatic batching"
+    ]
+  },
+  {
+    "term": "合成イベント",
+    "reading": "ごうせいいべんと",
+    "senses": [
+      {
+        "definition": "Reactがブラウザのネイティブイベントをラップした仮想イベントシステム。クロスブラウザ互換性を保証しイベントのプロパティを正規化する。React 17以降はイベントのプーリングは廃止された。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "イベント",
+          "クロスブラウザ",
+          "正規化",
+          "SyntheticEvent"
+        ]
+      }
+    ],
+    "aliases": [
+      "synthetic event",
+      "SyntheticEvent"
+    ]
+  },
+  {
+    "term": "コールバックref",
+    "reading": "こーるばっくれふ",
+    "senses": [
+      {
+        "definition": "refにコールバック関数を渡すReactの手法。DOMノードがマウント・アンマウントされるときに呼び出され、ref.currentへの代入以上の柔軟な処理が可能。IntersectionObserverの設定などに使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "ref",
+          "DOM",
+          "コールバック",
+          "マウント"
+        ]
+      }
+    ],
+    "aliases": [
+      "callback ref"
+    ]
+  },
+  {
+    "term": "React Fragment",
+    "senses": [
+      {
+        "definition": "余分なDOMノードを追加せずに複数の要素をグループ化するReactコンポーネント。<Fragment>または短縮記法の<>...</>で使用する。テーブル行やリストアイテムのグループ化に便利。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "DOM",
+          "グループ化",
+          "JSX",
+          "レンダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fragment",
+      "<>",
+      "React.Fragment"
+    ]
+  },
+  {
+    "term": "条件付きレンダリング",
+    "reading": "じょうけんつきれんだりんぐ",
+    "senses": [
+      {
+        "definition": "条件に応じて異なるコンポーネントやJSX要素を表示するReactのパターン。&&演算子・三項演算子・if文などを使い、stateやpropsの値に基づいてUIを動的に切り替える。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "JSX",
+          "条件",
+          "UI",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": [
+      "conditional rendering"
+    ]
+  },
+  {
+    "term": "React 19",
+    "senses": [
+      {
+        "definition": "2024年末にリリースされたReactのメジャーバージョン。useOptimistic・useActionState・use・React Compilerの安定版が含まれる。Server Actionsのネイティブサポートとformアクション統合が主な新機能。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "バージョン",
+          "新機能",
+          "useOptimistic",
+          "React Compiler"
+        ]
+      }
+    ],
+    "aliases": [
+      "React v19"
+    ]
+  },
+  {
+    "term": "use clientディレクティブ",
+    "reading": "ゆーずくらいあんとでぃれくてぃぶ",
+    "senses": [
+      {
+        "definition": "Next.js App RouterとReact Server Componentsにおいてファイルの先頭に記述することでそのモジュールをクライアントコンポーネントとしてマークするディレクティブ。state・イベントハンドラ・ブラウザAPIを使う場合に必要。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "RSC",
+          "クライアント",
+          "ディレクティブ",
+          "App Router"
+        ]
+      }
+    ],
+    "aliases": [
+      "'use client'",
+      "use client"
+    ]
+  },
+  {
+    "term": "use serverディレクティブ",
+    "reading": "ゆーずさーばーでぃれくてぃぶ",
+    "senses": [
+      {
+        "definition": "Next.jsのServer Actionsを定義する際にファイルまたは関数の先頭に記述するディレクティブ。クライアントから呼び出せるサーバー側の非同期関数としてマークし、RPC的な呼び出しを可能にする。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "Server Actions",
+          "サーバー",
+          "ディレクティブ",
+          "RSC"
+        ]
+      }
+    ],
+    "aliases": [
+      "'use server'",
+      "use server"
+    ]
+  },
+  {
+    "term": "ティアリング",
+    "reading": "てぃありんぐ",
+    "senses": [
+      {
+        "definition": "Concurrent Renderingにおいて同一のグローバル状態が一回のレンダー中に複数の値を返し、UIが引き裂かれたような不一致状態になる問題。useSyncExternalStoreを使うことで防止できる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "Concurrent",
+          "状態管理",
+          "一貫性",
+          "useSyncExternalStore"
+        ]
+      }
+    ],
+    "aliases": [
+      "tearing",
+      "UI tearing"
+    ]
+  },
+  {
+    "term": "時間分割",
+    "reading": "じかんぶんかつ",
+    "senses": [
+      {
+        "definition": "Concurrent Renderingの仕組みで、長時間のレンダリング作業を小さなタイムスライスに分割してブラウザのメインスレッドを占有しないようにする技術。ユーザー操作への応答性を維持する。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "Concurrent",
+          "スケジューリング",
+          "パフォーマンス",
+          "メインスレッド"
+        ]
+      }
+    ],
+    "aliases": [
+      "time slicing"
+    ]
+  },
+  {
+    "term": "React Server Components",
+    "senses": [
+      {
+        "definition": "サーバー上でのみレンダリングされるReactコンポーネント。クライアントバンドルに含まれずDBや外部APIへ直接アクセスできる。Next.js App RouterではデフォルトがRSCとなる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "サーバー",
+          "RSC",
+          "Next.js",
+          "バンドルサイズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "RSC"
+    ]
+  },
+  {
+    "term": "Next.js Route Handler",
+    "senses": [
+      {
+        "definition": "Next.js App RouterのAPIエンドポイントを定義するファイル。appディレクトリのroute.tsファイルにGET・POST等のHTTPメソッドをエクスポートして実装する。Pages RouterのAPI Routesに相当する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "API",
+          "App Router",
+          "HTTPメソッド",
+          "エンドポイント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Route Handler",
+      "route.ts"
+    ]
+  },
+  {
+    "term": "Next.js Middleware",
+    "senses": [
+      {
+        "definition": "リクエストが完了する前にエッジランタイムで実行されるNext.jsの機能。認証チェック・リダイレクト・リクエストヘッダー操作などをCDNエッジで行いレスポンスを高速化する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "エッジ",
+          "ミドルウェア",
+          "認証",
+          "リダイレクト"
+        ]
+      }
+    ],
+    "aliases": [
+      "middleware.ts"
+    ]
+  },
+  {
+    "term": "Next.js Font",
+    "senses": [
+      {
+        "definition": "Next.jsが提供するフォント最適化機能。Google FontsなどのWebフォントをビルド時にダウンロードしセルフホストすることでプライバシー保護とCLS削減を実現する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "フォント",
+          "最適化",
+          "CLS",
+          "Google Fonts"
+        ]
+      }
+    ],
+    "aliases": [
+      "next/font",
+      "Font Optimization"
+    ]
+  },
+  {
+    "term": "createRef",
+    "senses": [
+      {
+        "definition": "ReactがクラスコンポーネントでDOMノードやコンポーネントインスタンスへの参照を作成するAPI。関数コンポーネントではuseRefが推奨され、createRefは主にクラスコンポーネントで使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "ref",
+          "DOM",
+          "クラスコンポーネント",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": [
+      "React.createRef"
+    ]
+  },
+  {
+    "term": "オンデマンド再検証",
+    "reading": "おんでまんどさいけんしょう",
+    "senses": [
+      {
+        "definition": "Next.jsでrevalidatePathやrevalidateTagを使い特定パスやタグに紐づくキャッシュを任意のタイミングで無効化する機能。CMSのコンテンツ更新やデータ変更後に即座にページを最新化する際に使われる。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "キャッシュ",
+          "ISR",
+          "再検証",
+          "CMS"
+        ]
+      }
+    ],
+    "aliases": [
+      "on-demand revalidation"
+    ]
+  },
+  {
+    "term": "リストレンダリング",
+    "reading": "りすとれんだりんぐ",
+    "senses": [
+      {
+        "definition": "配列データをmap()でJSX要素の配列に変換してReactで表示するパターン。各要素に一意のkeyプロパティを指定することが必須で、keyにより差分検出の効率化と不必要なDOM再構築を防ぐ。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "JSX",
+          "map",
+          "key",
+          "配列"
+        ]
+      }
+    ],
+    "aliases": [
+      "list rendering"
+    ]
+  },
+  {
+    "term": "コンポーネントのライフサイクル",
+    "reading": "こんぽーねんとのらいふさいくる",
+    "senses": [
+      {
+        "definition": "Reactコンポーネントがマウント・更新・アンマウントされる一連の過程。クラスコンポーネントではライフサイクルメソッドで制御し、関数コンポーネントではuseEffectが同等の処理を担う。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "マウント",
+          "更新",
+          "アンマウント",
+          "useEffect"
+        ]
+      }
+    ],
+    "aliases": [
+      "component lifecycle",
+      "ライフサイクル"
+    ]
+  },
+  {
+    "term": "Next.js Script",
+    "senses": [
+      {
+        "definition": "Next.jsが提供するサードパーティスクリプトの読み込みを最適化するコンポーネント。strategyプロパティでbeforeInteractive・afterInteractive・lazyOnloadを指定しスクリプトの読み込みタイミングを制御してパフォーマンスを改善する。",
+        "domain": "frontend",
+        "keywords": [
+          "Next.js",
+          "スクリプト",
+          "パフォーマンス",
+          "サードパーティ",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "next/script",
+      "Script Component"
+    ]
+  }
+]

@@ -1,0 +1,277 @@
+[
+  {
+    "term": "FP法",
+    "reading": "エフピーほう",
+    "aliases": [
+      "Function Point法"
+    ],
+    "senses": [
+      {
+        "definition": "システムの大きさを、画面や帳票、入出力などの機能の量で見積もる方法です。人の作業量ではなく、まず機能の大きさを数える考え方です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "人時",
+    "reading": "にんじ",
+    "aliases": [
+      "時間工数"
+    ],
+    "senses": [
+      {
+        "definition": "1人が1時間働いた作業量です。工数を細かく表すときに使います。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "標準工期",
+    "reading": "ひょうじゅんこうき",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "過去の実績データから見た、同規模プロジェクトの標準的な工期です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "計画工期",
+    "reading": "けいかくこうき",
+    "aliases": [
+      "予定工期"
+    ],
+    "senses": [
+      {
+        "definition": "プロジェクト開始前に計画として定めた工期です。予定している期間を表します。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "実績工期",
+    "reading": "じっせきこうき",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "プロジェクト完了後に実際にかかった工期です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "工期遅延",
+    "reading": "こうきちえん",
+    "aliases": [
+      "納期遅延"
+    ],
+    "senses": [
+      {
+        "definition": "計画していた工期より、実際の完了が遅れることです。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "開発費用",
+    "reading": "かいはつひよう",
+    "aliases": [
+      "開発コスト"
+    ],
+    "senses": [
+      {
+        "definition": "システムを開発するためにかかる費用です。人件費や外注費などを含みます。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "人月単価",
+    "reading": "にんげつたんか",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "1人月あたりの費用です。工数から開発費用を計算するときの基準になります。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "回帰式",
+    "reading": "かいきしき",
+    "aliases": [
+      "回帰モデル"
+    ],
+    "senses": [
+      {
+        "definition": "過去データの傾向をもとに、ある値から別の値を予測するための式です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "決定係数",
+    "reading": "けっていけいすう",
+    "aliases": [
+      "R2",
+      "R^2"
+    ],
+    "senses": [
+      {
+        "definition": "回帰式が実際のデータにどれだけよく当てはまっているかを表す指標です。1に近いほど当てはまりが良いです。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "自由度調整済み決定係数",
+    "reading": "じゆうどちょうせいずみけっていけいすう",
+    "aliases": [
+      "adjusted R2",
+      "adj. R2",
+      "調整済み決定係数"
+    ],
+    "senses": [
+      {
+        "definition": "決定係数を補正した指標です。説明変数の数の影響をならして、回帰式の当てはまりをより適切に見ます。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "ユーザー総合テスト",
+    "reading": "ユーザーそうごうテスト",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "利用者の視点で、実際の業務に近い形でシステム全体を確認するテストです。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "初期フォロー",
+    "reading": "しょきフォロー",
+    "aliases": [
+      "稼働後フォロー"
+    ],
+    "senses": [
+      {
+        "definition": "本番稼働の直後に、利用開始時の問い合わせや不具合対応を行う期間です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "換算欠陥数",
+    "reading": "かんさんけっかんすう",
+    "aliases": [
+      "重み付け欠陥数"
+    ],
+    "senses": [
+      {
+        "definition": "重大度に応じて重み付けして数え直した欠陥数です。重い障害をより大きく評価します。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "換算欠陥率",
+    "reading": "かんさんけっかんりつ",
+    "aliases": [
+      "重み付け欠陥率"
+    ],
+    "senses": [
+      {
+        "definition": "換算欠陥数を工数で割った指標です。作業量に対してどれだけ欠陥が出たかを見ます。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "品質目標",
+    "reading": "ひんしつもくひょう",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "プロジェクトで達成を目指す品質の基準値です。欠陥率やテスト基準などで設定します。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "スクラッチ開発",
+    "reading": "スクラッチかいはつ",
+    "aliases": [
+      "フルスクラッチ"
+    ],
+    "senses": [
+      {
+        "definition": "既製品に頼らず、必要なシステムを最初から個別に作る開発方式です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "パッケージ利用開発",
+    "reading": "パッケージりようかいはつ",
+    "aliases": [
+      "パッケージ開発"
+    ],
+    "senses": [
+      {
+        "definition": "既存の業務パッケージを利用し、設定や追加開発を行ってシステムを実現する方式です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "SaaS利用開発",
+    "reading": "サースりようかいはつ",
+    "aliases": [
+      "SaaS開発"
+    ],
+    "senses": [
+      {
+        "definition": "クラウド上の既存サービスを利用して業務システムを構成する開発方式です。",
+        "domain": "software"
+      }
+    ]
+  },
+  {
+    "term": "FP",
+    "reading": "エフピー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Function Point。画面・帳票・入力・出力など、利用者に見える機能量を表す規模指標で、見積や工数算定の基準として使います。",
+        "reading": "ふぁんくしょんぽいんと",
+        "domain": "estimation",
+        "keywords": [
+          "見積",
+          "規模",
+          "工数",
+          "機能規模",
+          "EI",
+          "EO",
+          "EQ",
+          "ILF",
+          "EIF"
+        ]
+      },
+      {
+        "definition": "Functional Programming。純粋関数・不変データ・高階関数を重視し、副作用をできるだけ避けるプログラミングの考え方です。",
+        "domain": "programming",
+        "keywords": [
+          "純粋関数",
+          "副作用",
+          "高階関数",
+          "immutable",
+          "ラムダ式",
+          "関数型"
+        ]
+      }
+    ]
+  }
+]

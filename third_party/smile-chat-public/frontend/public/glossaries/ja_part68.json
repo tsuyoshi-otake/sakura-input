@@ -1,0 +1,2012 @@
+[
+  {
+    "term": "OCI Logging Analytics",
+    "reading": "おーしーあい ろぎんぐあなりてぃくす",
+    "aliases": [
+      "Oracle Cloud Infrastructure Logging Analytics"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習を活用してOCIおよびオンプレミスのログを分析し、異常検知やパターン抽出を行うサービス。ログエクスプローラによる視覚的分析とカスタムアラートの設定ができる。",
+        "domain": "oci",
+        "keywords": [
+          "ログ分析",
+          "機械学習",
+          "異常検知",
+          "パターン",
+          "可視化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Application Performance Monitoring",
+    "reading": "おーしーあい あぷりけーしょんぱふぉーまんすもにたりんぐ",
+    "aliases": [
+      "APM",
+      "OCI APM"
+    ],
+    "senses": [
+      {
+        "definition": "分散トレーシング・合成モニタリング・リアルユーザーモニタリングを統合してアプリケーションのパフォーマンスを可視化するOCIサービス。レイテンシのボトルネック特定に役立つ。",
+        "domain": "oci",
+        "keywords": [
+          "APM",
+          "分散トレーシング",
+          "パフォーマンス",
+          "レイテンシ",
+          "可視化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Connector Hub",
+    "reading": "おーしーあい こねくたーはぶ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Connector Hub"
+    ],
+    "senses": [
+      {
+        "definition": "OCIサービス間のデータ移動とイベント連携を設定ベースで構築するマネージドサービス。LoggingからObject StorageへのアーカイブやStreamingからFunctionsへのルーティングを簡単に設定できる。",
+        "domain": "oci",
+        "keywords": [
+          "データ連携",
+          "パイプライン",
+          "イベント",
+          "統合",
+          "ノーコード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIスタック",
+    "reading": "おーしーあいすたっく",
+    "aliases": [
+      "OCI Stack",
+      "Resource Manager Stack"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Resource Manager上でTerraform設定ファイルを管理する単位。スタックを適用することでOCIリソースが作成され、Destroyで削除できるライフサイクル管理の基本単位。",
+        "domain": "oci",
+        "keywords": [
+          "Resource Manager",
+          "Terraform",
+          "IaC",
+          "ライフサイクル",
+          "プロビジョニング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Terraform on OCI",
+    "reading": "てらふぉーむ おん おーしーあい",
+    "aliases": [
+      "OCI Terraform Provider"
+    ],
+    "senses": [
+      {
+        "definition": "HashiCorp TerraformのOCIプロバイダを使ってOracle Cloud Infrastructureのリソースをコードで管理する手法。OCI Resource Manager上でも動作し、CI/CDとの統合が可能。",
+        "domain": "oci",
+        "keywords": [
+          "Terraform",
+          "IaC",
+          "プロバイダ",
+          "自動化",
+          "インフラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Data Safe",
+    "reading": "おーしーあい でーたせーふ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Data Safe"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle Databaseのセキュリティを管理するサービス。センシティブデータの検出・マスキング、セキュリティアセスメント、アクティビティ監査、ユーザーリスク管理機能を提供する。",
+        "domain": "oci",
+        "keywords": [
+          "データセキュリティ",
+          "データマスキング",
+          "監査",
+          "センシティブデータ",
+          "Oracle Database"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Data Catalog",
+    "reading": "おーしーあい でーたかたろぐ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Data Catalog"
+    ],
+    "senses": [
+      {
+        "definition": "データ資産のメタデータを収集・管理するサービス。テクニカルメタデータとビジネスメタデータを統合し、データの検索・分類・系譜追跡を可能にしてデータガバナンスを支援する。",
+        "domain": "oci",
+        "keywords": [
+          "データカタログ",
+          "メタデータ",
+          "データガバナンス",
+          "リネージ",
+          "データ発見"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI AI Services",
+    "reading": "おーしーあい えーあい さーびすず",
+    "aliases": [
+      "Oracle Cloud Infrastructure AI Services"
+    ],
+    "senses": [
+      {
+        "definition": "事前トレーニング済みモデルを利用した各種AI機能をREST APIで提供するOCIサービス群の総称。Language・Vision・Speech・Anomaly DetectionなどのドメインAIを含む。",
+        "domain": "oci",
+        "keywords": [
+          "AIサービス",
+          "事前学習モデル",
+          "REST API",
+          "AI",
+          "マネージドAI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Anomaly Detection",
+    "reading": "おーしーあい あのまりーでぃてくしょん",
+    "aliases": [
+      "Oracle Cloud Infrastructure Anomaly Detection"
+    ],
+    "senses": [
+      {
+        "definition": "時系列データの異常をAIで自動検出するマネージドサービス。独自データでモデルをトレーニングし、IoTセンサーや運用メトリクスの外れ値検知に利用できるOCIのAIサービス。",
+        "domain": "oci",
+        "keywords": [
+          "異常検知",
+          "時系列",
+          "機械学習",
+          "IoT",
+          "外れ値"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Document Understanding",
+    "reading": "おーしーあい どきゅめんとあんだーすたんでぃんぐ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Document Understanding"
+    ],
+    "senses": [
+      {
+        "definition": "請求書・レシート・運転免許証などのドキュメントからテキスト・表・フォームデータをAIで抽出するサービス。事前構築モデルとカスタムモデルによる処理をサポートする。",
+        "domain": "oci",
+        "keywords": [
+          "ドキュメント処理",
+          "OCR",
+          "フォーム抽出",
+          "AIサービス",
+          "請求書"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Generative AI",
+    "reading": "おーしーあい じぇねれーてぃぶえーあい",
+    "aliases": [
+      "Oracle Cloud Infrastructure Generative AI",
+      "OCI Gen AI"
+    ],
+    "senses": [
+      {
+        "definition": "LLMを活用したテキスト生成・要約・埋め込みをAPI経由で提供するOCIのジェネレーティブAIサービス。Meta LlamaやCohereなどの基盤モデルをホストし、プライベートエンドポイントでのアクセスが可能。",
+        "domain": "oci",
+        "keywords": [
+          "生成AI",
+          "LLM",
+          "テキスト生成",
+          "埋め込み",
+          "基盤モデル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Digital Assistant",
+    "reading": "おーしーあい でじたるあしすたんと",
+    "aliases": [
+      "Oracle Digital Assistant"
+    ],
+    "senses": [
+      {
+        "definition": "チャットボットと音声ボットを構築・デプロイするOCIのAIプラットフォーム。NLPエンジン・スキルとフロー設計・Slack/Teamsなど複数チャネルへの統合機能を提供する。",
+        "domain": "oci",
+        "keywords": [
+          "チャットボット",
+          "対話AI",
+          "NLP",
+          "スキル",
+          "マルチチャネル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Artifact Registry",
+    "reading": "おーしーあい あーてぃふぁくとれじすとり",
+    "aliases": [
+      "Oracle Cloud Infrastructure Artifact Registry"
+    ],
+    "senses": [
+      {
+        "definition": "コンテナイメージ以外のビルド成果物（Helmチャート・汎用アーティファクトなど）をバージョン管理付きで保存・配布するOCIのリポジトリサービス。DevOpsパイプラインと統合して使う。",
+        "domain": "oci",
+        "keywords": [
+          "アーティファクト",
+          "Helmチャート",
+          "バージョン管理",
+          "CI/CD",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Build Pipeline",
+    "reading": "おーしーあい びるどぱいぷらいん",
+    "aliases": [
+      "Oracle Cloud Infrastructure Build Pipeline"
+    ],
+    "senses": [
+      {
+        "definition": "OCI DevOpsサービスのCI機能。コードのビルド・テスト・アーティファクト生成を自動化するステージを定義し、コードリポジトリへのプッシュをトリガーにして実行できる。",
+        "domain": "oci",
+        "keywords": [
+          "CI",
+          "ビルド",
+          "テスト",
+          "自動化",
+          "DevOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Deployment Pipeline",
+    "reading": "おーしーあい でぷろいめんとぱいぷらいん",
+    "aliases": [
+      "Oracle Cloud Infrastructure Deployment Pipeline"
+    ],
+    "senses": [
+      {
+        "definition": "OCI DevOpsサービスのCD機能。OKEやFunctionsなどのターゲット環境にアーティファクトをデプロイするステージを定義し、カナリアやブルーグリーンなどのデプロイ戦略を設定できる。",
+        "domain": "oci",
+        "keywords": [
+          "CD",
+          "デプロイ",
+          "カナリア",
+          "ブルーグリーン",
+          "DevOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Visual Builder",
+    "reading": "おーしーあい びじゅあるびるだー",
+    "aliases": [
+      "Oracle Visual Builder"
+    ],
+    "senses": [
+      {
+        "definition": "WebアプリケーションとモバイルアプリをローコードGUIで構築するOCIのプラットフォーム。REST APIとの統合・ページデザイン・ビジネスロジックをビジュアルに設定できる。",
+        "domain": "oci",
+        "keywords": [
+          "ローコード",
+          "Webアプリ",
+          "モバイル",
+          "REST API",
+          "ビジュアル開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Content Management",
+    "reading": "おーしーあい こんてんとまねじめんと",
+    "aliases": [
+      "Oracle Content Management"
+    ],
+    "senses": [
+      {
+        "definition": "デジタルコンテンツとアセットを一元管理するOCIのクラウドCMSサービス。ヘッドレスCMS・ドキュメント管理・デジタルアセット管理を統合し、マルチチャネルへのコンテンツ配信を支援する。",
+        "domain": "oci",
+        "keywords": [
+          "CMS",
+          "ヘッドレスCMS",
+          "デジタルアセット",
+          "コンテンツ管理",
+          "マルチチャネル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Oracle Blockchain Platform",
+    "reading": "おらくる ぶろっくちぇーんぷらっとふぉーむ",
+    "aliases": [
+      "OBP"
+    ],
+    "senses": [
+      {
+        "definition": "Hyperledger Fabricベースのエンタープライズブロックチェーンネットワークを構築・管理するOCIのマネージドサービス。スマートコントラクトのデプロイとネットワーク参加者の管理を簡素化する。",
+        "domain": "oci",
+        "keywords": [
+          "ブロックチェーン",
+          "Hyperledger Fabric",
+          "スマートコントラクト",
+          "エンタープライズ",
+          "分散台帳"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Health Checks",
+    "reading": "おーしーあい へるすちぇっくす",
+    "aliases": [
+      "Oracle Cloud Infrastructure Health Checks"
+    ],
+    "senses": [
+      {
+        "definition": "グローバルな複数拠点からHTTP・TCPのヘルスチェックを実行してエンドポイントの可用性を監視するサービス。レスポンスタイムとアップタイムを記録し、障害時にアラートを送信できる。",
+        "domain": "oci",
+        "keywords": [
+          "ヘルスチェック",
+          "可用性監視",
+          "HTTP",
+          "TCP",
+          "エンドポイント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Network Visualizer",
+    "reading": "おーしーあい ねっとわーくびじゅあらいざー",
+    "aliases": [
+      "Oracle Cloud Infrastructure Network Visualizer"
+    ],
+    "senses": [
+      {
+        "definition": "OCIテナンシのネットワークリソースとその接続関係をグラフィカルに可視化するツール。VCN・サブネット・ゲートウェイ・ピアリングの構成をダイアグラムとして表示し、設計確認に役立つ。",
+        "domain": "oci",
+        "keywords": [
+          "ネットワーク可視化",
+          "VCN",
+          "トポロジー",
+          "ダイアグラム",
+          "ネットワーク設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Network Path Analyzer",
+    "reading": "おーしーあい ねっとわーくぱすあなりざー",
+    "aliases": [
+      "Oracle Cloud Infrastructure Network Path Analyzer"
+    ],
+    "senses": [
+      {
+        "definition": "OCIネットワーク上の送信元から宛先へのトラフィック経路を分析し、セキュリティリスト・NSG・ルートテーブルによる通信可否を視覚的に確認するトラブルシューティングツール。",
+        "domain": "oci",
+        "keywords": [
+          "ネットワーク診断",
+          "トラブルシューティング",
+          "経路分析",
+          "セキュリティリスト",
+          "NSG"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIクォータ",
+    "reading": "おーしーあいくぉーた",
+    "aliases": [
+      "OCI Quota",
+      "OCI Service Quota"
+    ],
+    "senses": [
+      {
+        "definition": "OCIリソースの使用量を制限するポリシー。テナンシまたはコンパートメントレベルでリソース数の上限を設定し、特定のチームやプロジェクトが過剰にリソースを消費しないよう制御する。",
+        "domain": "oci",
+        "keywords": [
+          "クォータ",
+          "リソース制限",
+          "コンパートメント",
+          "ガバナンス",
+          "ポリシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Dedicated Region",
+    "reading": "おーしーあい でぃけーてぃっどりーじょん",
+    "aliases": [
+      "Oracle Dedicated Region Cloud@Customer"
+    ],
+    "senses": [
+      {
+        "definition": "顧客のデータセンターにOracle Cloud全サービスをプライベートに提供するデプロイメントオプション。パブリッククラウドと同一のAPIと価格で、データレジデンシ要件が厳格な業界に対応する。",
+        "domain": "oci",
+        "keywords": [
+          "プライベートクラウド",
+          "データレジデンシ",
+          "専用環境",
+          "ハイブリッドクラウド",
+          "オンプレミス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Roving Edge Infrastructure",
+    "reading": "おーしーあい ろーびんぐ えっじ いんふらすとらくちゃ",
+    "aliases": [
+      "OCI Roving Edge Device"
+    ],
+    "senses": [
+      {
+        "definition": "ネットワーク接続のない遠隔地や移動中の環境でOCIワークロードを実行するハードウェアアプライアンス。船舶・軍事施設・石油掘削基地などで使用し、後でOCIにデータを同期する。",
+        "domain": "oci",
+        "keywords": [
+          "エッジコンピューティング",
+          "オフライン",
+          "遠隔地",
+          "アプライアンス",
+          "データ同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Oracle Database@Azure",
+    "reading": "おらくる でーたべーす あっと あじゅーる",
+    "aliases": [
+      "OracleDB@Azure"
+    ],
+    "senses": [
+      {
+        "definition": "Microsoft AzureのデータセンターにOracle Exadataインフラを直接配置し、AzureネイティブサービスとOracle Databaseを超低レイテンシで統合するマルチクラウドソリューション。",
+        "domain": "oci",
+        "keywords": [
+          "マルチクラウド",
+          "Azure",
+          "Exadata",
+          "Oracle Database",
+          "超低レイテンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIマルチクラウド",
+    "reading": "おーしーあいまるちくらうど",
+    "aliases": [
+      "OCI Multicloud"
+    ],
+    "senses": [
+      {
+        "definition": "OCIをAzure・AWSなど他クラウドプロバイダと組み合わせて使うアーキテクチャ戦略。Oracle Interconnectを通じた高速プライベート接続でクラウド間のネットワーク遅延を最小化する。",
+        "domain": "oci",
+        "keywords": [
+          "マルチクラウド",
+          "Azure",
+          "ハイブリッド",
+          "相互接続",
+          "クラウド戦略"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI NoSQL Database",
+    "reading": "おーしーあい のーえすきゅーる でーたべーす",
+    "aliases": [
+      "Oracle NoSQL Database Cloud Service"
+    ],
+    "senses": [
+      {
+        "definition": "予測可能な低レイテンシで動作するフルマネージドのスキーマレスNoSQLサービス。テーブル・JSON・Key-Valueデータモデルをサポートし、読み取り・書き込みキャパシティユニットで課金される。",
+        "domain": "oci",
+        "keywords": [
+          "NoSQL",
+          "低レイテンシ",
+          "スキーマレス",
+          "JSON",
+          "Key-Value"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Cache",
+    "reading": "おーしーあい きゃっしゅ",
+    "aliases": [
+      "OCI Cache with Redis"
+    ],
+    "senses": [
+      {
+        "definition": "Redis互換のフルマネージドインメモリキャッシュサービス。アプリケーションのレスポンスタイム改善やDBの負荷軽減に使用し、クラスター構成による高可用性をサポートする。",
+        "domain": "oci",
+        "keywords": [
+          "Redis",
+          "インメモリ",
+          "キャッシュ",
+          "高可用性",
+          "レスポンス改善"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Auto Scaling",
+    "reading": "おーしーあい おーとすけーりんぐ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Autoscaling"
+    ],
+    "senses": [
+      {
+        "definition": "CPU使用率などのメトリクスやスケジュールに基づいてインスタンスプールのサイズを自動調整するOCIの機能。需要のピーク時に自動でスケールアウトし、コスト最適化のためにスケールインする。",
+        "domain": "oci",
+        "keywords": [
+          "Auto Scaling",
+          "スケールアウト",
+          "スケールイン",
+          "メトリクス",
+          "コスト最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI SDK",
+    "reading": "おーしーあい えすでぃーけー",
+    "aliases": [
+      "OCI Software Development Kit"
+    ],
+    "senses": [
+      {
+        "definition": "Java・Python・TypeScript/JavaScript・Go・Ruby・.NETなど複数言語向けに提供されるOCI操作用ライブラリ。署名認証・ページネーション・リトライ処理などを組み込みで提供する。",
+        "domain": "oci",
+        "keywords": [
+          "SDK",
+          "プログラムアクセス",
+          "Python",
+          "Java",
+          "TypeScript"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Resource Principal",
+    "reading": "おーしーあい りそーすぷりんしぱる",
+    "aliases": [
+      "Resource Principal"
+    ],
+    "senses": [
+      {
+        "definition": "OCI FunctionsやコンピュートインスタンスなどのOCIリソース自身にIAMポリシーを付与し、APIキーなしでOCIサービスにアクセスできるようにする認証メカニズム。インスタンスプリンシパルを一般化したもの。",
+        "domain": "oci",
+        "keywords": [
+          "認証",
+          "APIキー不要",
+          "IAM",
+          "Functions",
+          "セキュリティ"
+        ]
+      },
+      {
+        "definition": "リソース自身にAPI呼び出し権限を持たせる仕組み。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "認証",
+          "Resource Principal"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Tag Namespace",
+    "reading": "おーしーあい たぐなむすぺーす",
+    "aliases": [
+      "Tag Namespace",
+      "OCI Defined Tags"
+    ],
+    "senses": [
+      {
+        "definition": "OCIリソースに定義済みタグを付与するためのスキーマ。タグ名前空間・タグキー・バリデータを定義し、コスト配賦・アクセス制御・リソース検索に活用する構造化されたメタデータ管理基盤。",
+        "domain": "oci",
+        "keywords": [
+          "タグ",
+          "メタデータ",
+          "コスト配賦",
+          "アクセス制御",
+          "ガバナンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Work Request",
+    "reading": "おーしーあい わーくりくえすと",
+    "aliases": [
+      "Work Request"
+    ],
+    "senses": [
+      {
+        "definition": "OCIの非同期API操作の進捗状態を追跡するための仕組み。長時間かかるリソース作成・削除などのオペレーションは即座にWork Request IDを返し、ポーリングで完了状態を確認できる。",
+        "domain": "oci",
+        "keywords": [
+          "非同期API",
+          "進捗管理",
+          "ポーリング",
+          "オペレーション",
+          "REST API"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Disaster Recovery",
+    "reading": "おーしーあい でぃざすたりかばりー",
+    "aliases": [
+      "OCI Full Stack DR",
+      "Full Stack Disaster Recovery"
+    ],
+    "senses": [
+      {
+        "definition": "アプリケーション全体のDR計画と自動フェイルオーバーをオーケストレーションするOCIサービス。DR保護グループとDRプランを定義し、リージョン間フェイルオーバーをワンクリックで実行できる。",
+        "domain": "oci",
+        "keywords": [
+          "DR",
+          "フェイルオーバー",
+          "事業継続",
+          "リージョン間",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Data Transfer Service",
+    "reading": "おーしーあい でーたとらんすふぁーさーびす",
+    "aliases": [
+      "Oracle Cloud Infrastructure Data Transfer Service"
+    ],
+    "senses": [
+      {
+        "definition": "大容量データを物理的なアプライアンスデバイスを使ってOCIに移行するサービス。インターネット経由では時間がかかる数TB以上のデータ移行に適し、暗号化されたデバイスを郵送してOCIにアップロードする。",
+        "domain": "oci",
+        "keywords": [
+          "データ移行",
+          "物理移送",
+          "大容量",
+          "オフライン転送",
+          "Object Storage"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Storage Gateway",
+    "reading": "おーしーあい すとれーじげーとうぇい",
+    "aliases": [
+      "Oracle Cloud Infrastructure Storage Gateway"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスのNFS/SMBクライアントからOCI Object Storageをファイルシステムとして使えるようにするソフトウェアアプライアンス。データのキャッシュとライフサイクル管理を透過的に提供する。",
+        "domain": "oci",
+        "keywords": [
+          "ストレージゲートウェイ",
+          "Object Storage",
+          "NFS",
+          "ハイブリッドクラウド",
+          "オンプレミス連携"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Operations Insights",
+    "reading": "おーしーあい おぺれーしょんずいんさいつ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Operations Insights",
+      "OPSI"
+    ],
+    "senses": [
+      {
+        "definition": "データベースとホストの長期的なリソース使用率・キャパシティ・SQLパフォーマンスを分析するOCIサービス。機械学習で将来のリソース不足を予測し、データベースのワークロード最適化を支援する。",
+        "domain": "oci",
+        "keywords": [
+          "キャパシティプランニング",
+          "パフォーマンス分析",
+          "SQL",
+          "予測",
+          "Oracle Database"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Database Management",
+    "reading": "おーしーあい でーたべーすまねじめんと",
+    "aliases": [
+      "Oracle Cloud Infrastructure Database Management"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle DatabaseのフリートをOCIコンソールから一元管理するサービス。パフォーマンスハブ・SQLチューニングアドバイザ・ユーザー管理・メモリ管理をOCI上のDBとオンプレミスDBに統合して提供する。",
+        "domain": "oci",
+        "keywords": [
+          "データベース管理",
+          "フリート管理",
+          "SQLチューニング",
+          "パフォーマンス",
+          "Oracle Database"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Service Mesh",
+    "reading": "おーしーあい さーびすめっしゅ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Service Mesh"
+    ],
+    "senses": [
+      {
+        "definition": "Envoyサイドカープロキシに基づくマネージドサービスメッシュ。OKE上のマイクロサービス間通信のmTLS暗号化・トラフィック管理・可観測性を実現し、Kubernetesネイティブな設定APIで管理する。",
+        "domain": "oci",
+        "keywords": [
+          "サービスメッシュ",
+          "Envoy",
+          "mTLS",
+          "マイクロサービス",
+          "可観測性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Managed Access",
+    "reading": "おーしーあい まねーじどあくせす",
+    "aliases": [
+      "Oracle Cloud Infrastructure Managed Access"
+    ],
+    "senses": [
+      {
+        "definition": "外部パートナーやサードパーティベンダーにOCIリソースへの時限付きアクセスを許可するガバナンスサービス。アクセスリクエスト・承認ワークフロー・監査記録を管理し最小権限の外部アクセスを実現する。",
+        "domain": "oci",
+        "keywords": [
+          "外部アクセス管理",
+          "承認ワークフロー",
+          "ガバナンス",
+          "時限アクセス",
+          "監査"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI GoldenGate Microservices",
+    "reading": "おーしーあい ごーるでんげーと まいくろさーびすず",
+    "aliases": [
+      "GoldenGate Microservices Architecture"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle GoldenGateをREST APIとWebUIで管理するマイクロサービスアーキテクチャ版。Service Manager・Admin Server・Distribution Server・Receiver Serverを独立プロセスとして分離しスケール管理しやすくした設計。",
+        "domain": "oci",
+        "keywords": [
+          "GoldenGate",
+          "マイクロサービス",
+          "データレプリケーション",
+          "REST API",
+          "CDC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Big Data Service",
+    "reading": "おーしーあい びっぐでーたさーびす",
+    "aliases": [
+      "Oracle Cloud Infrastructure Big Data Service",
+      "OCI BDS"
+    ],
+    "senses": [
+      {
+        "definition": "フルマネージドのHadoopおよびSparkクラスターをOCI上で展開するサービス。HDFS・YARN・Hive・SparkをOCIコンピュート上に自動構築し、Object Storageとの連携とHA構成をサポートする。",
+        "domain": "oci",
+        "keywords": [
+          "Hadoop",
+          "Spark",
+          "ビッグデータ",
+          "HDFS",
+          "マネージドクラスター"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Search Service",
+    "reading": "おーしーあい さーちさーびす",
+    "aliases": [
+      "OCI Search Service with OpenSearch"
+    ],
+    "senses": [
+      {
+        "definition": "OpenSearch（Elasticsearch互換）をフルマネージドで提供するOCIのサービス。ログ分析・全文検索・ダッシュボードをマネージドクラスターで利用でき、インデックス管理を簡素化する。",
+        "domain": "oci",
+        "keywords": [
+          "OpenSearch",
+          "Elasticsearch",
+          "全文検索",
+          "ログ分析",
+          "マネージドクラスター"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Media Services",
+    "reading": "おーしーあい めでぃあさーびすず",
+    "aliases": [
+      "Oracle Cloud Infrastructure Media Services"
+    ],
+    "senses": [
+      {
+        "definition": "動画ファイルのトランスコーディング・配信・ストリーミングをマネージドで提供するOCIサービス。Media Flow（ワークフロー管理）とMedia Streams（HLS/DASHライブ配信）で構成される。",
+        "domain": "oci",
+        "keywords": [
+          "動画配信",
+          "トランスコーディング",
+          "HLS",
+          "ライブストリーミング",
+          "メディア処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Kubernetes Cluster Autoscaler",
+    "reading": "おーしーあい くばねてぃす くらすたーおーとすけーらー",
+    "aliases": [
+      "OKE Cluster Autoscaler"
+    ],
+    "senses": [
+      {
+        "definition": "OKEのノードプールをPodのリソース要求に応じて自動的に増減するKubernetesのクラスターオートスケーラー。スケジュール不可なPod発生時にノードを追加し、不要なノードを削除してコストを最適化する。",
+        "domain": "oci",
+        "keywords": [
+          "Kubernetes",
+          "Auto Scaling",
+          "OKE",
+          "ノードプール",
+          "コスト最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI BYOI",
+    "reading": "おーしーあい びーわいおーあい",
+    "aliases": [
+      "Bring Your Own Image",
+      "OCI Custom Image"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスや他クラウドの仮想マシンイメージ（VMDK・VHD・Qcow2）をOCIにインポートしてカスタムイメージとして使う機能。既存環境のクラウドリフト移行を容易にする。",
+        "domain": "oci",
+        "keywords": [
+          "カスタムイメージ",
+          "リフト移行",
+          "VMDK",
+          "インポート",
+          "コンピュート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Shielded Instances",
+    "reading": "おーしーあい しーるでっどいんすたんす",
+    "aliases": [
+      "Shielded Instances"
+    ],
+    "senses": [
+      {
+        "definition": "セキュアブート・TPMチップ・Measured Bootを活用してブートプロセスの完全性を検証するOCIのセキュアコンピュートインスタンス機能。ルートキットやブートキットによる改ざんを防止する。",
+        "domain": "oci",
+        "keywords": [
+          "セキュアブート",
+          "TPM",
+          "完全性検証",
+          "セキュリティ",
+          "コンピュート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Confidential Computing",
+    "reading": "おーしーあい こんふぃでんしゃる こんぴゅーてぃんぐ",
+    "aliases": [
+      "Confidential Instances"
+    ],
+    "senses": [
+      {
+        "definition": "AMD SEV-SNPまたはIntel TDX技術を使って、実行中のデータをメモリ上で暗号化し管理者やクラウドプロバイダからも保護するOCIのセキュアエンクレーブコンピュート機能。",
+        "domain": "oci",
+        "keywords": [
+          "機密コンピューティング",
+          "AMD SEV",
+          "TEE",
+          "メモリ暗号化",
+          "ゼロトラスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Process Automation",
+    "reading": "おーしーあい ぷろせすおーとめーしょん",
+    "aliases": [
+      "Oracle Cloud Infrastructure Process Automation"
+    ],
+    "senses": [
+      {
+        "definition": "ローコードでビジネスプロセスを設計・自動化するOCIのワークフローサービス。承認フロー・タスク割り当て・SLA管理をビジュアルなプロセスデザイナーで構築し、Oracle Integration Cloudと補完関係にある。",
+        "domain": "oci",
+        "keywords": [
+          "ワークフロー",
+          "ビジネスプロセス",
+          "ローコード",
+          "承認フロー",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIアラーム",
+    "reading": "おーしーあいあらーむ",
+    "aliases": [
+      "OCI Alarm",
+      "OCI Monitoring Alarm"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Monitoringでメトリクスの閾値条件を定義し、条件が満たされたときにOCI Notificationsを通じてアラートを送信するリソース。アラーム状態の遷移ごとに通知を制御できる。",
+        "domain": "oci",
+        "keywords": [
+          "アラーム",
+          "メトリクス",
+          "閾値",
+          "通知",
+          "監視"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIメトリクス",
+    "reading": "おーしーあいめとりくす",
+    "aliases": [
+      "OCI Monitoring Metrics"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Monitoringサービスが収集するリソースの定量的なパフォーマンス指標。CPUUtilizationなどの組み込みメトリクスと、エージェントやSDK経由で送信するカスタムメトリクスがある。",
+        "domain": "oci",
+        "keywords": [
+          "メトリクス",
+          "パフォーマンス",
+          "監視",
+          "カスタムメトリクス",
+          "可観測性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Loggingサービスログ",
+    "reading": "おーしーあいろぎんぐさーびすろぐ",
+    "aliases": [
+      "OCI Service Log",
+      "OCI Log Category"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Loggingが各OCIサービスから自動収集するリソース固有のログカテゴリ。VCNフローログ・API GatewayアクセスログなどOCIサービスが生成するログをロギングサービスが直接収集する仕組み。",
+        "domain": "oci",
+        "keywords": [
+          "サービスログ",
+          "VCNフローログ",
+          "ログカテゴリ",
+          "自動収集",
+          "Logging"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Ampere A1",
+    "reading": "おーしーあい あんぺあ えーわん",
+    "aliases": [
+      "Ampere A1 Compute"
+    ],
+    "senses": [
+      {
+        "definition": "Ampere Altra ARMプロセッサを使用したOCIのコンピュートシェイプ。x86相当以上のパフォーマンスをコスト効率よく提供し、Free Tier枠でも4 OCPUと24GBメモリを利用できる。",
+        "domain": "oci",
+        "keywords": [
+          "ARM",
+          "Ampere",
+          "コスト効率",
+          "Free Tier",
+          "コンピュート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Bare Metal",
+    "reading": "おーしーあい べあめたる",
+    "aliases": [
+      "Bare Metal Compute"
+    ],
+    "senses": [
+      {
+        "definition": "ハイパーバイザを介さず物理サーバーを専有するOCIのコンピュートオプション。NVMeローカルディスクや100Gbpsネットワークを直接利用できるため、データベース・HPC・VMwareワークロードに適する。",
+        "domain": "oci",
+        "keywords": [
+          "ベアメタル",
+          "専有サーバー",
+          "HPC",
+          "ハイパーバイザレス",
+          "高性能"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Cloud@Customer",
+    "reading": "おーしーあい くらうど あっと かすたまー",
+    "aliases": [
+      "Cloud@Customer"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle ExadataまたはOCIサービスを顧客のオンプレミスデータセンターに設置するプライベートクラウドサービス。OCIコンソールと同一UXで管理でき、データをクラウドに送らないコンプライアンス要件を満たす。",
+        "domain": "oci",
+        "keywords": [
+          "プライベートクラウド",
+          "オンプレミス",
+          "Exadata",
+          "データレジデンシ",
+          "ハイブリッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Security Advisor",
+    "reading": "おーしーあい せきゅりてぃあどばいざー",
+    "aliases": [
+      "Oracle Cloud Infrastructure Security Advisor"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Vaultとセキュリティゾーンをガイドするセキュリティベストプラクティスのウィザード型ツール。暗号鍵ポリシーやセキュリティゾーン設定の推奨事項を対話形式で提示し、安全な環境構築を支援する。",
+        "domain": "oci",
+        "keywords": [
+          "セキュリティ",
+          "ベストプラクティス",
+          "Vault",
+          "セキュリティゾーン",
+          "ウィザード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Announcements",
+    "reading": "おーしーあい あなうんすめんつ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Announcements"
+    ],
+    "senses": [
+      {
+        "definition": "OCI側からメンテナンス・障害・新機能リリースなどの重要なお知らせをテナンシ単位で配信するサービス。フィルタリングしたアナウンスをOCI Notificationsや電子メールで受け取ることができる。",
+        "domain": "oci",
+        "keywords": [
+          "アナウンス",
+          "メンテナンス通知",
+          "障害情報",
+          "新機能",
+          "テナンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIサブスクリプション",
+    "reading": "おーしーあいさぶすくりぷしょん",
+    "aliases": [
+      "OCI Universal Credit",
+      "OCI Subscription"
+    ],
+    "senses": [
+      {
+        "definition": "OCI サービスを利用するための契約形態の総称。Pay-as-you-go・Annual Universal Credit・Monthly Flexibleなどがあり、コミット量や期間に応じた割引とクレジット利用ルールが異なる。",
+        "domain": "oci",
+        "keywords": [
+          "課金",
+          "サブスクリプション",
+          "Annual Credit",
+          "Pay-as-you-go",
+          "コスト管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIサービス上限",
+    "reading": "おーしーあいさーびすじょうげん",
+    "aliases": [
+      "OCI Service Limits",
+      "OCI Limits"
+    ],
+    "senses": [
+      {
+        "definition": "テナンシが利用できる各OCIサービスリソースの最大数を定めたデフォルト上限。インスタンス数・IPアドレス数などの上限はOCIコンソールから確認でき、増加リクエストをOracleサポートに申請できる。",
+        "domain": "oci",
+        "keywords": [
+          "サービス制限",
+          "上限",
+          "リソース管理",
+          "テナンシ",
+          "サポートリクエスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Oracleサポート",
+    "reading": "おらくるさぽーと",
+    "aliases": [
+      "My Oracle Support",
+      "Oracle Cloud Support"
+    ],
+    "senses": [
+      {
+        "definition": "OCIおよびOracle製品に関する技術サポートを提供するOracleの公式サポート体制。Basic・Developer・Business CriticalなどのSLAプランがあり、My Oracle Supportポータルからサービスリクエストを起票できる。",
+        "domain": "oci",
+        "keywords": [
+          "サポート",
+          "SLA",
+          "サービスリクエスト",
+          "テクニカルサポート",
+          "Oracle"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Well-Architected Framework",
+    "reading": "おーしーあい うぇるあーきてくてっどふれーむわーく",
+    "aliases": [
+      "Oracle Well-Architected Framework"
+    ],
+    "senses": [
+      {
+        "definition": "OCI上で信頼性・セキュリティ・パフォーマンス・コスト最適化・運用効率の5つの柱に沿ったシステムを設計するためのベストプラクティスフレームワーク。AWSのWell-Architectedに相当するOracleの指針。",
+        "domain": "oci",
+        "keywords": [
+          "ベストプラクティス",
+          "アーキテクチャ設計",
+          "セキュリティ",
+          "コスト最適化",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Landing Zone",
+    "reading": "おーしーあい らんでぃんぐぞーん",
+    "aliases": [
+      "Oracle Landing Zone",
+      "OCI Landing Zone Accelerator"
+    ],
+    "senses": [
+      {
+        "definition": "OCI上に安全でスケーラブルなマルチアカウント環境を素早く構築するためのTerraformテンプレートとアーキテクチャガイドの総称。コンパートメント構造・IAMポリシー・ネットワーク基盤を標準化する。",
+        "domain": "oci",
+        "keywords": [
+          "ランディングゾーン",
+          "Terraform",
+          "マルチアカウント",
+          "ベストプラクティス",
+          "基盤設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Generative AI Agents",
+    "reading": "おーしーあい じぇねれーてぃぶ えーあい えーじぇんつ",
+    "aliases": [
+      "OCI Gen AI Agents"
+    ],
+    "senses": [
+      {
+        "definition": "LLMを使ったRAG（Retrieval-Augmented Generation）エージェントをフルマネージドで構築・デプロイするOCIサービス。OCI Object StorageやOpenSearchを知識ベースとして接続し、自然言語での質疑応答を実現する。",
+        "domain": "oci",
+        "keywords": [
+          "生成AI",
+          "RAG",
+          "エージェント",
+          "LLM",
+          "知識ベース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Data Labeling",
+    "reading": "おーしーあい でーたらべりんぐ",
+    "aliases": [
+      "Oracle Cloud Infrastructure Data Labeling"
+    ],
+    "senses": [
+      {
+        "definition": "機械学習モデルのトレーニングに使うデータセットにラベルを付与・管理するOCIサービス。画像分類・物体検出・テキスト分類のアノテーションをUIまたはAPIで行い、OCI Data Scienceと統合できる。",
+        "domain": "oci",
+        "keywords": [
+          "データラベリング",
+          "アノテーション",
+          "機械学習",
+          "データセット",
+          "AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Model Deployment",
+    "reading": "おーしーあい もでるでぷろいめんと",
+    "aliases": [
+      "OCI Data Science Model Deployment"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Data ScienceでトレーニングしたモデルをスケーラブルなHTTPエンドポイントとして公開する機能。AutoScalingとロードバランシングで本番推論を高可用性で提供し、ログとメトリクスを統合監視できる。",
+        "domain": "oci",
+        "keywords": [
+          "モデルデプロイ",
+          "推論エンドポイント",
+          "MLOps",
+          "AutoScaling",
+          "Data Science"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Language Translation",
+    "reading": "おーしーあい らんぐえっじ とらんすれーしょん",
+    "aliases": [
+      "OCI Translation"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Languageサービスが提供する機械翻訳機能。英語・日本語・スペイン語など複数言語間のテキスト翻訳をREST APIで利用でき、ドキュメント翻訳バッチ処理にも対応する。",
+        "domain": "oci",
+        "keywords": [
+          "機械翻訳",
+          "NLP",
+          "多言語",
+          "REST API",
+          "OCILanguage"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIロググループ",
+    "reading": "おーしーあいろぐぐるーぷ",
+    "aliases": [
+      "OCI Log Group"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Loggingでログオブジェクトを論理的にグループ化する管理単位。アクセス制御をロググループ単位で設定でき、Connector HubでロググループごとにObject Storageや外部SIEMへのエクスポートを構成できる。",
+        "domain": "oci",
+        "keywords": [
+          "ロググループ",
+          "Logging",
+          "アクセス制御",
+          "グループ管理",
+          "ログ集約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIストリーミングコンシューマグループ",
+    "reading": "おーしーあいすとりーみんぐこんしゅーまーぐるーぷ",
+    "aliases": [
+      "Streaming Consumer Group",
+      "OCI Streaming Consumer Group"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Streamingでメッセージを消費する複数のコンシューマをグループ化し、パーティションを分担させて並列処理を実現する仕組み。Kafkaのコンシューマグループと同等の概念でオフセット管理が自動化される。",
+        "domain": "oci",
+        "keywords": [
+          "コンシューマグループ",
+          "Kafka",
+          "並列処理",
+          "パーティション",
+          "ストリーミング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI APM Trace Explorer",
+    "reading": "おーしーあい えーぴーえむ とれーすえくすぷろーらー",
+    "aliases": [
+      "APM Trace Explorer"
+    ],
+    "senses": [
+      {
+        "definition": "OCI APMが収集した分散トレーシングデータを視覚的に探索するツール。サービス間の呼び出し連鎖をウォーターフォール図で表示し、レイテンシの大きいスパンを特定してパフォーマンス問題を診断できる。",
+        "domain": "oci",
+        "keywords": [
+          "分散トレーシング",
+          "スパン",
+          "APM",
+          "ウォーターフォール",
+          "パフォーマンス診断"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIコスト管理",
+    "reading": "おーしーあいこすとかんり",
+    "aliases": [
+      "OCI Cost and Usage Reports"
+    ],
+    "senses": [
+      {
+        "definition": "OCIの詳細な使用量と費用を日次・月次でCSVレポートとして自動的にObject Storageに出力する機能。Cost AnalysisやBudgetと組み合わせることで包括的なFinOpsの基盤を構築できる。",
+        "domain": "oci",
+        "keywords": [
+          "コスト管理",
+          "レポート",
+          "FinOps",
+          "Object Storage",
+          "使用量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIホームリージョン",
+    "reading": "おーしーあいほーむりーじょん",
+    "aliases": [
+      "OCI Home Region"
+    ],
+    "senses": [
+      {
+        "definition": "OCIテナンシ作成時に指定するプライマリリージョン。IAMリソース（ユーザー・グループ・ポリシー）はホームリージョンに作成され、他リージョンに自動レプリケーションされる。変更は不可能な重要な設定。",
+        "domain": "oci",
+        "keywords": [
+          "ホームリージョン",
+          "IAM",
+          "テナンシ",
+          "リージョン",
+          "アイデンティティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIアクセスポリシー",
+    "reading": "おーしーあいあくせすぽりしー",
+    "aliases": [
+      "OCI IAM Policy Statement"
+    ],
+    "senses": [
+      {
+        "definition": "OCI IAMでグループやリソースプリンシパルがどのOCIリソースに対してどの操作を実行できるかを宣言する文。「Allow group X to manage all-resources in compartment Y」のような構文でアクセス権を付与する。",
+        "domain": "oci",
+        "keywords": [
+          "IAM",
+          "アクセス制御",
+          "認可",
+          "コンパートメント",
+          "ポリシー文"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI DRGルートテーブル",
+    "reading": "おーしーあい でぃーあーるじー るーとてーぶる",
+    "aliases": [
+      "DRG Route Table",
+      "OCI DRG Route Distribution"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Dynamic Routing Gateway内でVCN間や外部接続の経路を細かく制御するルーティングテーブル。インポート・エクスポートルート配布を設定することでハブアンドスポーク型のネットワーク設計を実現する。",
+        "domain": "oci",
+        "keywords": [
+          "DRG",
+          "ルーティング",
+          "VCN",
+          "ハブアンドスポーク",
+          "ネットワーク設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI VCNローカルピアリング",
+    "reading": "おーしーあい ぶいしーえぬ ろーかるぴありんぐ",
+    "aliases": [
+      "OCI LPG Peering"
+    ],
+    "senses": [
+      {
+        "definition": "同一リージョン内の2つのVCNをLocal Peering Gateway経由でプライベートに接続する手法。異なるコンパートメントやテナンシのVCN間でもプライベートIPで通信できるよう構成できる。",
+        "domain": "oci",
+        "keywords": [
+          "VCNピアリング",
+          "ローカルピアリング",
+          "LPG",
+          "同一リージョン",
+          "プライベートネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI VCNリモートピアリング",
+    "reading": "おーしーあい ぶいしーえぬ りもーとぴありんぐ",
+    "aliases": [
+      "OCI Cross-Region VCN Peering"
+    ],
+    "senses": [
+      {
+        "definition": "異なるリージョン間のVCNをRemote Peering ConnectionとDRGを経由してプライベートに接続するVCNピアリング手法。マルチリージョンDR構成やグローバルアーキテクチャの拠点間接続に使われる。",
+        "domain": "oci",
+        "keywords": [
+          "リージョン間ピアリング",
+          "DRG",
+          "マルチリージョン",
+          "DR",
+          "プライベートネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI WAFカスタムルール",
+    "reading": "おーしーあい わふ かすたむるーる",
+    "aliases": [
+      "OCI WAF Custom Protection Rule"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Web Application Firewallで管理者が独自のHTTPリクエスト条件（ヘッダ・URI・IPアドレスなど）を定義してブロックや許可を行うカスタムルール機能。OWASPルールを補完し特定アプリの要件に対応する。",
+        "domain": "oci",
+        "keywords": [
+          "WAF",
+          "カスタムルール",
+          "Webセキュリティ",
+          "HTTPフィルタリング",
+          "ブロック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Objectストレージ階層化",
+    "reading": "おーしーあい おぶじぇくとすとれーじかいそうか",
+    "aliases": [
+      "OCI Object Storage Lifecycle",
+      "OCI Storage Tiering"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Object Storageのオブジェクトをアクセス頻度に応じてStandard・Infrequent Access・Archiveの3階層間でライフサイクルルールにより自動移行するコスト最適化機能。",
+        "domain": "oci",
+        "keywords": [
+          "ストレージ階層",
+          "ライフサイクル",
+          "コスト最適化",
+          "Archive",
+          "Infrequent Access"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Autonomous Data Warehouseサービス",
+    "reading": "おーとのますでーたうぇあはうすさーびす",
+    "aliases": [
+      "Oracle ADW Service"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Autonomous Databaseのデータウェアハウス特化型サービス。OLAP・バッチ分析クエリ向けに自動チューニングされ、Oracle Analytics Cloudやサードパーティ分析ツールと連携して大規模分析を行う。",
+        "domain": "oci",
+        "keywords": [
+          "データウェアハウス",
+          "OLAP",
+          "Autonomous Database",
+          "分析",
+          "自動チューニング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Autonomous Transaction Processingサービス",
+    "reading": "おーとのますとらんざくしょんぷろせっしんぐさーびす",
+    "aliases": [
+      "Oracle ATP Service"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Autonomous DatabaseのOLTP特化型サービス。高頻度の短時間トランザクション向けに自動チューニングされ、ERP・モバイルアプリ・Webサービスのバックエンドデータベースとして広く使われる。",
+        "domain": "oci",
+        "keywords": [
+          "OLTP",
+          "Autonomous Database",
+          "トランザクション",
+          "自動チューニング",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI ExaDB-D",
+    "reading": "おーしーあい えぐざでぃーびー でぃー",
+    "aliases": [
+      "Exadata Database Service on Dedicated Infrastructure"
+    ],
+    "senses": [
+      {
+        "definition": "Exadataハードウェアを顧客専有で利用するOCIのデータベースサービス形態。共有インフラと異なり物理マシンを占有するため最大のパフォーマンスと高度なカスタマイズが可能で、金融系大規模DBに使われる。",
+        "domain": "oci",
+        "keywords": [
+          "Exadata",
+          "専有インフラ",
+          "Oracle Database",
+          "高性能",
+          "金融システム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIフローログ",
+    "reading": "おーしーあいふろーろぐ",
+    "aliases": [
+      "OCI VCN Flow Log",
+      "VCN Flow Logs"
+    ],
+    "senses": [
+      {
+        "definition": "VCNのサブネットを流れるIPトラフィックのメタデータ（送信元・宛先IP・ポート・プロトコル・送受信バイト数）を記録するOCI Loggingの機能。セキュリティ分析やネットワークトラブルシューティングに活用する。",
+        "domain": "oci",
+        "keywords": [
+          "フローログ",
+          "VCN",
+          "ネットワーク監視",
+          "トラフィック分析",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Dedicated VM Host",
+    "reading": "おーしーあい でぃけーてぃっど ぶいえむ ほすと",
+    "aliases": [
+      "OCI Dedicated Host"
+    ],
+    "senses": [
+      {
+        "definition": "単一テナント専用の物理サーバーを確保してVMを起動するOCIの機能。ハードウェアを他テナントと共有しないため、コンプライアンス要件やBYOLライセンス条件を満たす必要がある場合に使用する。",
+        "domain": "oci",
+        "keywords": [
+          "専有ホスト",
+          "シングルテナント",
+          "BYOL",
+          "コンプライアンス",
+          "分離"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Capacity Reservation",
+    "reading": "おーしーあい きゃぱしてぃりざべーしょん",
+    "aliases": [
+      "OCI Compute Capacity Reservation"
+    ],
+    "senses": [
+      {
+        "definition": "特定のAvailability DomainとFault Domainにコンピュートキャパシティを事前予約するOCIの機能。災害復旧シナリオや急なスケールアウトに備えて、必要なときにインスタンスを確実に起動できるよう保証する。",
+        "domain": "oci",
+        "keywords": [
+          "キャパシティ予約",
+          "可用性保証",
+          "DR",
+          "コンピュート",
+          "リソース確保"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIコンピュートインスタンスプール",
+    "reading": "おーしーあいこんぴゅーといんすたんすぷーる",
+    "aliases": [
+      "OCI Compute Instance Pool"
+    ],
+    "senses": [
+      {
+        "definition": "同一構成のコンピュートインスタンスをグループとして管理するOCIの機能。OCI Auto Scalingと組み合わせることで、負荷に応じてインスタンス数を自動的に増減させる水平スケーリングを実現する。",
+        "domain": "oci",
+        "keywords": [
+          "Auto Scaling",
+          "インスタンス管理",
+          "水平スケーリング",
+          "グループ管理",
+          "コンピュート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Marketplace Publisher",
+    "reading": "おーしーあい まーけっとぷれいす ぱぶりっしゃー",
+    "aliases": [
+      "OCI Marketplace Publisher Portal"
+    ],
+    "senses": [
+      {
+        "definition": "ISVやOracleパートナーがOCI Marketplaceにソフトウェア製品を登録・販売するためのポータル。イメージの審査プロセス・ライセンス管理・利用状況レポートを提供しパートナーエコシステムを支援する。",
+        "domain": "oci",
+        "keywords": [
+          "Marketplace",
+          "パートナー",
+          "ISV",
+          "ソフトウェア販売",
+          "エコシステム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Network Firewall",
+    "reading": "おーしーあい ねっとわーくふぁいあうぉーる",
+    "aliases": [
+      "Oracle Cloud Infrastructure Network Firewall"
+    ],
+    "senses": [
+      {
+        "definition": "Palo Alto NetworksのNGFWエンジンをベースにしたOCIのマネージドネットワークファイアウォールサービス。URLフィルタリング・IDS/IPS・TLSインスペクションをVCN内に配置してゼロトラストネットワークを実現する。",
+        "domain": "oci",
+        "keywords": [
+          "NGFW",
+          "IDS/IPS",
+          "URLフィルタリング",
+          "ゼロトラスト",
+          "ネットワークセキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Private DNS",
+    "reading": "おーしーあい ぷらいべーとでぃーえぬえす",
+    "aliases": [
+      "OCI Private DNS Zone"
+    ],
+    "senses": [
+      {
+        "definition": "VCN内部のリソース名前解決をカスタムドメインで行うOCIのプライベートDNSゾーン機能。ハイブリッドクラウド環境でオンプレミスとOCIが同一ドメイン体系を共有し、スプリットホライゾンDNSも設定できる。",
+        "domain": "oci",
+        "keywords": [
+          "プライベートDNS",
+          "VCN",
+          "名前解決",
+          "ハイブリッドクラウド",
+          "ゾーン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Resource Scheduler",
+    "reading": "おーしーあい りそーすすけじゅーらー",
+    "aliases": [
+      "Oracle Cloud Infrastructure Resource Scheduler"
+    ],
+    "senses": [
+      {
+        "definition": "OCI上のコンピュートインスタンスなどのリソースを時刻ベースで自動的に起動・停止するスケジューリングサービス。開発環境の夜間停止など稼働時間を制限してコストを削減するためのFinOpsツール。",
+        "domain": "oci",
+        "keywords": [
+          "スケジューリング",
+          "コスト削減",
+          "起動停止",
+          "FinOps",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Vulnerability Scanning Service",
+    "reading": "おーしーあい ぜいじゃくせいすきゃにんぐさーびす",
+    "aliases": [
+      "OCI VSS"
+    ],
+    "senses": [
+      {
+        "definition": "OCI上のコンピュートインスタンスとコンテナイメージの脆弱性を定期スキャンして報告するセキュリティサービス。CVEベースの検出結果をCloud Guardと連携して管理し、推奨対処策とリスクスコアを提供する。",
+        "domain": "oci",
+        "keywords": [
+          "脆弱性スキャン",
+          "CVE",
+          "セキュリティ",
+          "コンテナ",
+          "Cloud Guard"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Bastion Session",
+    "reading": "おーしーあい ばすちょん せっしょん",
+    "aliases": [
+      "Bastion Session"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Bastionサービスが作成する時間制限付きのSSH/RDPトンネルセッション。セッションは最大3時間で自動終了し、プライベートサブネットのリソースへの安全な一時アクセスを提供して踏み台サーバーを不要にする。",
+        "domain": "oci",
+        "keywords": [
+          "Bastion",
+          "踏み台",
+          "SSH",
+          "セッション管理",
+          "プライベートアクセス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIインフラストラクチャリソース",
+    "reading": "おーしーあいいんふらすとらくちゃりそーす",
+    "aliases": [
+      "OCI Infrastructure Resources"
+    ],
+    "senses": [
+      {
+        "definition": "OCI上で管理されるコンピュート・ストレージ・ネットワーク・データベースなどの全サービスリソースの総称。OCID（Oracle Cloud ID）で一意に識別され、コンパートメントとタグで分類・管理される。",
+        "domain": "oci",
+        "keywords": [
+          "OCIリソース",
+          "OCID",
+          "コンパートメント",
+          "タグ",
+          "リソース管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI GoldenGate Trail",
+    "reading": "おーしーあい ごーるでんげーと とれいる",
+    "aliases": [
+      "GoldenGate Trail File"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle GoldenGateがソースデータベースの変更データキャプチャ（CDC）ログから抽出したトランザクションレコードを格納する中間ファイル。Trailファイルを介してソースとターゲット間の非同期レプリケーションを実現する。",
+        "domain": "oci",
+        "keywords": [
+          "GoldenGate",
+          "CDC",
+          "トレイルファイル",
+          "データレプリケーション",
+          "非同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Integration Adapters",
+    "reading": "おーしーあい いんてぐれーしょん あだぷたーず",
+    "aliases": [
+      "OIC Adapters"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle Integration Cloud（OIC）が提供するSalesforce・SAP・ServiceNow・Twitter等のSaaS/オンプレミスアプリとの接続コンポーネント。400以上のアダプターを使いノーコードで異種システム間のデータ連携を実現する。",
+        "domain": "oci",
+        "keywords": [
+          "OIC",
+          "アダプター",
+          "SaaS統合",
+          "コネクタ",
+          "ノーコード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI OAC Data Sets",
+    "reading": "おーしーあい おーえーしー でーたせっと",
+    "aliases": [
+      "OAC Dataset",
+      "Oracle Analytics Cloud Dataset"
+    ],
+    "senses": [
+      {
+        "definition": "Oracle Analytics Cloud（OAC）でビジュアライゼーションの元データとなる論理データセット。Autonomous DB・Object Storage・スプレッドシートなど複数ソースを結合して定義し、ビジネスユーザーが自己サービスで分析できる単位。",
+        "domain": "oci",
+        "keywords": [
+          "OAC",
+          "データセット",
+          "BI",
+          "セルフサービス分析",
+          "データ結合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI DevOpsコードリポジトリ",
+    "reading": "おーしーあい でぶおぷすこーどりぽじとり",
+    "aliases": [
+      "OCI DevOps Code Repository"
+    ],
+    "senses": [
+      {
+        "definition": "OCI DevOpsサービスに組み込まれたGit互換のソースコードリポジトリ。ビルドパイプラインのトリガーと統合されており、プッシュ時に自動的にCI/CDパイプラインを起動できる。",
+        "domain": "oci",
+        "keywords": [
+          "Git",
+          "ソースコード管理",
+          "CI/CD",
+          "DevOps",
+          "コードリポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Logging Analytics ML異常検知",
+    "reading": "おーしーあい ろぎんぐあなりてぃくす えむえる いじょうけんち",
+    "aliases": [
+      "OCI Logging Analytics ML Anomaly Detection"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Logging Analyticsが機械学習アルゴリズムを使ってログの正常パターンを学習し、通常とは異なるログパターンや急激なカウント変化を自動検出する機能。インシデント予兆検知に活用できる。",
+        "domain": "oci",
+        "keywords": [
+          "ログ分析",
+          "機械学習",
+          "異常検知",
+          "インシデント",
+          "Logging Analytics"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI APM合成モニタリング",
+    "reading": "おーしーあい えーぴーえむ ごうせいもにたりんぐ",
+    "aliases": [
+      "APM Synthetic Monitoring"
+    ],
+    "senses": [
+      {
+        "definition": "OCI APMが世界中の拠点から定期的にスクリプトベースのWebトランザクションを実行し、エンドユーザー視点でのサービス可用性とレスポンスタイムを監視する機能。エラー発生前の予防的検知に使う。",
+        "domain": "oci",
+        "keywords": [
+          "合成モニタリング",
+          "APM",
+          "可用性監視",
+          "エンドユーザー",
+          "シンセティック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCIコンソールWebUI",
+    "reading": "おーしーあいこんそーるうぇぶゆーあい",
+    "aliases": [
+      "Oracle Cloud Management Console"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザからOCIリソースを管理するWebベースのグラフィカル管理インターフェース。リソースの作成・設定・監視・コスト確認をGUIで行え、Cloud Shellや診断ツールとの統合も提供する。",
+        "domain": "oci",
+        "keywords": [
+          "管理コンソール",
+          "GUI",
+          "WebUI",
+          "リソース管理",
+          "ブラウザ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCI Data Science Job",
+    "reading": "おーしーあい でーたさいえんす じょぶ",
+    "aliases": [
+      "OCI DS Job"
+    ],
+    "senses": [
+      {
+        "definition": "OCI Data Scienceプラットフォームで機械学習のトレーニングやデータ処理スクリプトをバッチ実行するジョブ機能。コンピュートシェイプとOCPU数を指定してジョブを定義し、スケジュール実行や並列実行に対応する。",
+        "domain": "oci",
+        "keywords": [
+          "バッチ実行",
+          "機械学習",
+          "ジョブ",
+          "Data Science",
+          "スケジュール"
+        ]
+      }
+    ]
+  }
+]

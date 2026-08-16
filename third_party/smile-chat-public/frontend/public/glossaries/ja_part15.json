@@ -1,0 +1,2720 @@
+[
+  {
+    "term": "実際の貢献",
+    "reading": "じっさいのこうけん",
+    "senses": [
+      {
+        "definition": "発言だけでなく、成果物や改善を実際に生み出すこと。",
+        "domain": "Development",
+        "keywords": [
+          "成果",
+          "行動"
+        ]
+      }
+    ],
+    "aliases": [
+      "Actual Contribution"
+    ]
+  },
+  {
+    "term": "貢献",
+    "reading": "こうけん",
+    "senses": [
+      {
+        "definition": "プロジェクトや組織に価値を加える行為。",
+        "domain": "Development",
+        "keywords": [
+          "価値",
+          "行動"
+        ]
+      }
+    ],
+    "aliases": [
+      "Contribution"
+    ]
+  },
+  {
+    "term": "決定権",
+    "reading": "けっていけん",
+    "senses": [
+      {
+        "definition": "最終的に方向や方針を決める力。",
+        "domain": "Development",
+        "keywords": [
+          "権限",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Decision Authority"
+    ]
+  },
+  {
+    "term": "権威",
+    "reading": "けんい",
+    "senses": [
+      {
+        "definition": "立場や肩書きによる影響力。",
+        "domain": "Development",
+        "keywords": [
+          "影響力",
+          "立場"
+        ]
+      }
+    ],
+    "aliases": [
+      "Authority"
+    ]
+  },
+  {
+    "term": "肩書き",
+    "reading": "かたがき",
+    "senses": [
+      {
+        "definition": "役職や立場を表す名称。",
+        "domain": "Development",
+        "keywords": [
+          "役職",
+          "名称"
+        ]
+      }
+    ],
+    "aliases": [
+      "Job Title"
+    ]
+  },
+  {
+    "term": "責任",
+    "reading": "せきにん",
+    "senses": [
+      {
+        "definition": "結果や問題に対して引き受ける義務。",
+        "domain": "Development",
+        "keywords": [
+          "義務",
+          "結果"
+        ]
+      }
+    ],
+    "aliases": [
+      "Responsibility"
+    ]
+  },
+  {
+    "term": "実装責任",
+    "reading": "じっそうせきにん",
+    "senses": [
+      {
+        "definition": "作るだけでなく、品質や結果まで引き受ける責任。",
+        "domain": "Development",
+        "keywords": [
+          "品質",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Implementation Responsibility"
+    ]
+  },
+  {
+    "term": "最終責任",
+    "reading": "さいしゅうせきにん",
+    "senses": [
+      {
+        "definition": "結果に対して最後に負う責任。",
+        "domain": "Development",
+        "keywords": [
+          "結果",
+          "最終"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ultimate Responsibility"
+    ]
+  },
+  {
+    "term": "コミットメント",
+    "reading": "こみっとめんと",
+    "senses": [
+      {
+        "definition": "やり切る意思や引き受ける覚悟。",
+        "domain": "Development",
+        "keywords": [
+          "意思",
+          "覚悟"
+        ]
+      }
+    ],
+    "aliases": [
+      "Commitment"
+    ]
+  },
+  {
+    "term": "発言量",
+    "reading": "はつげんりょう",
+    "senses": [
+      {
+        "definition": "どれだけ多く話したかという量。",
+        "domain": "Development",
+        "keywords": [
+          "発言",
+          "量"
+        ]
+      }
+    ],
+    "aliases": [
+      "Volume of Remarks"
+    ]
+  },
+  {
+    "term": "現実主義",
+    "reading": "げんじつしゅぎ",
+    "senses": [
+      {
+        "definition": "理想よりも、実際に機能するかを重視する考え方。",
+        "domain": "Development",
+        "keywords": [
+          "現実",
+          "実用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pragmatism"
+    ]
+  },
+  {
+    "term": "動作",
+    "reading": "どうさ",
+    "senses": [
+      {
+        "definition": "システムが期待どおりに機能すること。",
+        "domain": "Development",
+        "keywords": [
+          "システム",
+          "機能"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Behavior"
+    ]
+  },
+  {
+    "term": "失敗のコスト",
+    "reading": "しっぱいのこすと",
+    "senses": [
+      {
+        "definition": "誤りや障害によって生じる損失や手戻り。",
+        "domain": "Development",
+        "keywords": [
+          "損失",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cost of Failure"
+    ]
+  },
+  {
+    "term": "コードレビュー",
+    "reading": "こーどれびゅー",
+    "senses": [
+      {
+        "definition": "コードを他者が確認し、品質や問題を見つけること。",
+        "domain": "Development",
+        "keywords": [
+          "コード",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Code Review"
+    ]
+  },
+  {
+    "term": "ドキュメント",
+    "reading": "どきゅめんと",
+    "senses": [
+      {
+        "definition": "仕様、手順、設計などを記録した文書。",
+        "domain": "development",
+        "keywords": [
+          "文書",
+          "仕様"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ユーザー視点",
+    "reading": "ゆーざーしてん",
+    "senses": [
+      {
+        "definition": "利用者にとっての価値や使いやすさを重視する見方。",
+        "domain": "Development",
+        "keywords": [
+          "利用者",
+          "価値"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Perspective"
+    ]
+  },
+  {
+    "term": "問題設定",
+    "reading": "もんだいせってい",
+    "senses": [
+      {
+        "definition": "何を解くべきかを定義すること。",
+        "domain": "Development",
+        "keywords": [
+          "定義",
+          "課題"
+        ]
+      }
+    ],
+    "aliases": [
+      "Problem Definition"
+    ]
+  },
+  {
+    "term": "基本設計",
+    "reading": "きほんせっけい",
+    "senses": [
+      {
+        "definition": "画面、機能、データ構造などの大きな設計を決める工程。",
+        "domain": "Development",
+        "keywords": [
+          "設計",
+          "画面",
+          "機能"
+        ]
+      }
+    ],
+    "aliases": [
+      "High-Level Design"
+    ]
+  },
+  {
+    "term": "詳細設計",
+    "reading": "しょうさいせっけい",
+    "senses": [
+      {
+        "definition": "実際に作れるレベルまで具体化する設計工程。",
+        "domain": "Development",
+        "keywords": [
+          "設計",
+          "具体化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Detailed Design"
+    ]
+  },
+  {
+    "term": "仕様化",
+    "reading": "しようか",
+    "senses": [
+      {
+        "definition": "要求や意図を実装できる形へ明確化すること。",
+        "domain": "Development",
+        "keywords": [
+          "仕様",
+          "明確化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Specification Writing"
+    ]
+  },
+  {
+    "term": "例外時の判断",
+    "reading": "れいがいじのはんだん",
+    "senses": [
+      {
+        "definition": "想定外の状況に対して行う判断。",
+        "domain": "Development",
+        "keywords": [
+          "例外",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Exception Handling Decision"
+    ]
+  },
+  {
+    "term": "価値判断",
+    "reading": "かちはんだん",
+    "senses": [
+      {
+        "definition": "何を優先し、何を重視するかを決める判断。",
+        "domain": "Development",
+        "keywords": [
+          "優先",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Value Judgment"
+    ]
+  },
+  {
+    "term": "判断の質",
+    "reading": "はんだんのしつ",
+    "senses": [
+      {
+        "definition": "目的や責任を踏まえて適切に判断する力。",
+        "domain": "Development",
+        "keywords": [
+          "判断",
+          "適切"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality of Judgment"
+    ]
+  },
+  {
+    "term": "評価軸",
+    "reading": "ひょうかじく",
+    "senses": [
+      {
+        "definition": "人や成果を評価するときの観点。",
+        "domain": "Development",
+        "keywords": [
+          "評価",
+          "観点"
+        ]
+      }
+    ],
+    "aliases": [
+      "Evaluation Criteria (Assessment)"
+    ]
+  },
+  {
+    "term": "利害調整",
+    "reading": "りがいちょうせい",
+    "senses": [
+      {
+        "definition": "関係者の要望や利益の違いを整えること。",
+        "domain": "Development",
+        "keywords": [
+          "利害",
+          "調整"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stakeholder Alignment (Interest Coordination)"
+    ]
+  },
+  {
+    "term": "品質",
+    "reading": "ひんしつ",
+    "senses": [
+      {
+        "definition": "成果物の正しさ、安定性、使いやすさなどの総合的なよさ。",
+        "domain": "Development",
+        "keywords": [
+          "正しさ",
+          "安定性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality"
+    ]
+  },
+  {
+    "term": "品質水準",
+    "reading": "ひんしつすいじゅん",
+    "senses": [
+      {
+        "definition": "どの完成度で公開・納品するかの基準。",
+        "domain": "Development",
+        "keywords": [
+          "完成度",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Standard (Acceptance Level)"
+    ]
+  },
+  {
+    "term": "単体テスト",
+    "reading": "たんたいてすと",
+    "senses": [
+      {
+        "definition": "小さな部品ごとに正しく動くか確認するテスト。",
+        "domain": "Development",
+        "keywords": [
+          "テスト",
+          "部品"
+        ]
+      }
+    ],
+    "aliases": [
+      "Unit Testing"
+    ]
+  },
+  {
+    "term": "結合テスト",
+    "reading": "けつごうてすと",
+    "senses": [
+      {
+        "definition": "複数の部品をつないだときに正しく動くかを見るテスト。",
+        "domain": "Development",
+        "keywords": [
+          "テスト",
+          "結合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Integration Testing"
+    ]
+  },
+  {
+    "term": "システムテスト",
+    "reading": "しすてむてすと",
+    "senses": [
+      {
+        "definition": "システム全体として要件どおり動くか確認するテスト。",
+        "domain": "Development",
+        "keywords": [
+          "テスト",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Testing"
+    ]
+  },
+  {
+    "term": "不具合",
+    "reading": "ふぐあい",
+    "senses": [
+      {
+        "definition": "本来あるべき動きや仕様と違っている問題。",
+        "domain": "Development",
+        "keywords": [
+          "問題",
+          "仕様"
+        ]
+      }
+    ],
+    "aliases": [
+      "Defect"
+    ]
+  },
+  {
+    "term": "DX",
+    "reading": "でぃーえっくす",
+    "senses": [
+      {
+        "definition": "デジタル技術で業務や事業、顧客価値を変革すること。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "デジタル",
+          "変革"
+        ]
+      }
+    ],
+    "aliases": [
+      "Digital Transformation"
+    ]
+  },
+  {
+    "term": "モダナイゼーション",
+    "reading": "もだないぜーしょん",
+    "senses": [
+      {
+        "definition": "既存システムや業務を現在の技術や要件に合わせて刷新すること。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "刷新",
+          "既存システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Modernization"
+    ]
+  },
+  {
+    "term": "アライアンス",
+    "reading": "あらいあんす",
+    "senses": [
+      {
+        "definition": "他社やパートナーと連携して提案力や事業力を高めること。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "連携",
+          "パートナー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Alliance"
+    ]
+  },
+  {
+    "term": "共創",
+    "reading": "きょうそう",
+    "senses": [
+      {
+        "definition": "顧客やパートナーと一緒に価値や事業を作ること。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "協働",
+          "価値"
+        ]
+      }
+    ],
+    "aliases": [
+      "Co-Creation"
+    ]
+  },
+  {
+    "term": "R&D",
+    "reading": "あーるあんどでぃー",
+    "senses": [
+      {
+        "definition": "新技術や新サービスのための研究開発活動。",
+        "domain": "business-strategy",
+        "keywords": [
+          "研究",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "インバウンドマーケティング",
+    "reading": "いんばうんどまーけてぃんぐ",
+    "senses": [
+      {
+        "definition": "情報発信によって見込み顧客からの接点を得る手法。",
+        "domain": "Marketing",
+        "keywords": [
+          "集客",
+          "情報発信"
+        ]
+      }
+    ],
+    "aliases": [
+      "Inbound Marketing"
+    ]
+  },
+  {
+    "term": "アウトバウンドマーケティング",
+    "reading": "あうとばうんどまーけてぃんぐ",
+    "senses": [
+      {
+        "definition": "企業側から顧客へ働きかけて接点を作る手法。",
+        "domain": "Marketing",
+        "keywords": [
+          "営業",
+          "働きかけ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Outbound Marketing"
+    ]
+  },
+  {
+    "term": "ストックビジネス",
+    "reading": "すとっくびじねす",
+    "senses": [
+      {
+        "definition": "継続契約などで収益が積み上がる事業モデル。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "継続",
+          "収益"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stock Business"
+    ]
+  },
+  {
+    "term": "オフショア開発",
+    "reading": "おふしょあかいはつ",
+    "senses": [
+      {
+        "definition": "海外拠点や海外人材を活用して行う開発体制。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "海外",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "Offshore Development"
+    ]
+  },
+  {
+    "term": "サービス化",
+    "reading": "さーびすか",
+    "senses": [
+      {
+        "definition": "個別案件の知見や強みを再利用可能な形で提供すること。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "再利用",
+          "提供"
+        ]
+      }
+    ],
+    "aliases": [
+      "Productization"
+    ]
+  },
+  {
+    "term": "重点顧客深耕",
+    "reading": "じゅうてんこきゃくしんこう",
+    "senses": [
+      {
+        "definition": "重要顧客との関係を深め、取引領域を広げること。",
+        "domain": "Sales",
+        "keywords": [
+          "顧客",
+          "深耕"
+        ]
+      }
+    ],
+    "aliases": [
+      "Key Account Development"
+    ]
+  },
+  {
+    "term": "新規顧客開拓",
+    "reading": "しんきこきゃくかいたく",
+    "senses": [
+      {
+        "definition": "新たな顧客との取引を生み出す営業活動。",
+        "domain": "Sales",
+        "keywords": [
+          "新規",
+          "開拓"
+        ]
+      }
+    ],
+    "aliases": [
+      "New Customer Acquisition"
+    ]
+  },
+  {
+    "term": "内製化",
+    "reading": "ないせいか",
+    "senses": [
+      {
+        "definition": "外部委託ではなく、自社や顧客自身で開発・運用機能を持つこと。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "自社",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "In-House Development"
+    ]
+  },
+  {
+    "term": "見込み顧客",
+    "reading": "みこみこきゃく",
+    "senses": [
+      {
+        "definition": "将来顧客になる可能性がある相手。",
+        "domain": "Sales",
+        "keywords": [
+          "顧客",
+          "候補"
+        ]
+      }
+    ],
+    "aliases": [
+      "Prospect"
+    ]
+  },
+  {
+    "term": "提案",
+    "reading": "ていあん",
+    "senses": [
+      {
+        "definition": "相手の課題に対して解決策や条件を示すこと。",
+        "domain": "Sales",
+        "keywords": [
+          "解決策",
+          "課題"
+        ]
+      }
+    ],
+    "aliases": [
+      "Proposal (Sales)"
+    ]
+  },
+  {
+    "term": "事業計画",
+    "reading": "じぎょうけいかく",
+    "senses": [
+      {
+        "definition": "事業の目標、戦略、数値計画などをまとめた計画。",
+        "domain": "Business Strategy",
+        "keywords": [
+          "目標",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Plan"
+    ]
+  },
+  {
+    "term": "PM",
+    "reading": "ぴーえむ",
+    "senses": [
+      {
+        "definition": "プロジェクト全体を統括する責任者。",
+        "domain": "Project Management",
+        "keywords": [
+          "責任者",
+          "統括"
+        ]
+      }
+    ],
+    "aliases": [
+      "Project Manager (PM)"
+    ]
+  },
+  {
+    "term": "PL",
+    "reading": "ぴーえる",
+    "senses": [
+      {
+        "definition": "プロジェクトや開発チームの実行面を主導する役割。",
+        "domain": "Project Management",
+        "keywords": [
+          "リーダー",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": [
+      "Project Lead"
+    ]
+  },
+  {
+    "term": "TL",
+    "reading": "てぃーえる",
+    "senses": [
+      {
+        "definition": "技術面または小チーム単位でメンバーをリードする役割。",
+        "domain": "Project Management",
+        "keywords": [
+          "技術",
+          "リード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Tech Lead (TL)"
+    ]
+  },
+  {
+    "term": "PMO",
+    "reading": "ぴーえむおー",
+    "senses": [
+      {
+        "definition": "プロジェクト管理を支援し、標準化や可視化を担う機能。",
+        "domain": "project-management",
+        "keywords": [
+          "支援",
+          "標準化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質保証",
+    "reading": "ひんしつほしょう",
+    "senses": [
+      {
+        "definition": "成果物や運営が品質基準を満たすよう確認・管理する活動。",
+        "domain": "project-management",
+        "keywords": [
+          "品質",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リスクマネジメント",
+    "reading": "りすくまねじめんと",
+    "senses": [
+      {
+        "definition": "リスクを把握し、評価し、対策すること。",
+        "domain": "Project Management",
+        "keywords": [
+          "リスク",
+          "対策"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk Management"
+    ]
+  },
+  {
+    "term": "アジャイル開発",
+    "reading": "あじゃいるかいはつ",
+    "senses": [
+      {
+        "definition": "短いサイクルで設計・実装・確認を繰り返す開発手法。",
+        "domain": "Project Management",
+        "keywords": [
+          "反復",
+          "短期サイクル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Agile Development"
+    ]
+  },
+  {
+    "term": "ローコード開発",
+    "reading": "ろーこーどかいはつ",
+    "senses": [
+      {
+        "definition": "最小限のコーディングでアプリを構築する方式。",
+        "domain": "Development",
+        "keywords": [
+          "低コード",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Low-Code Development"
+    ]
+  },
+  {
+    "term": "ノーコード開発",
+    "reading": "のーこーどかいはつ",
+    "senses": [
+      {
+        "definition": "コーディングをほとんど行わずにアプリを構築する方式。",
+        "domain": "Development",
+        "keywords": [
+          "ノーコード",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "No-Code Development"
+    ]
+  },
+  {
+    "term": "監視業務",
+    "reading": "かんしぎょうむ",
+    "senses": [
+      {
+        "definition": "システムやインフラの状態を継続的に確認する業務。",
+        "domain": "Operations",
+        "keywords": [
+          "監視",
+          "システム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monitoring Operations"
+    ]
+  },
+  {
+    "term": "構成管理",
+    "reading": "こうせいかんり",
+    "senses": [
+      {
+        "definition": "システムを構成する要素や設定を管理すること。",
+        "domain": "Operations",
+        "keywords": [
+          "構成",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Configuration Management"
+    ]
+  },
+  {
+    "term": "ベンダー管理",
+    "reading": "べんだーかんり",
+    "senses": [
+      {
+        "definition": "外部委託先の進捗、品質、契約、役割を管理すること。",
+        "domain": "Project Management",
+        "keywords": [
+          "委託",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vendor Management (Outsourcing)"
+    ]
+  },
+  {
+    "term": "進捗",
+    "reading": "しんちょく",
+    "senses": [
+      {
+        "definition": "作業がどれだけ進んでいるかの状況。",
+        "domain": "Project Management",
+        "keywords": [
+          "進行",
+          "状況"
+        ]
+      }
+    ],
+    "aliases": [
+      "Progress"
+    ]
+  },
+  {
+    "term": "コスト",
+    "reading": "こすと",
+    "senses": [
+      {
+        "definition": "業務やプロジェクトにかかる費用。",
+        "domain": "Project Management",
+        "keywords": [
+          "費用",
+          "予算"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cost (Project)"
+    ]
+  },
+  {
+    "term": "要員",
+    "reading": "よういん",
+    "senses": [
+      {
+        "definition": "プロジェクトに関わる人員。",
+        "domain": "Project Management",
+        "keywords": [
+          "人員",
+          "配置"
+        ]
+      }
+    ],
+    "aliases": [
+      "Personnel"
+    ]
+  },
+  {
+    "term": "完璧なセキュリティ",
+    "reading": "かんぺきなせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "すべての事故や攻撃を防げるという理想状態。",
+        "domain": "Security",
+        "keywords": [
+          "理想",
+          "完全"
+        ]
+      }
+    ],
+    "aliases": [
+      "Perfect Security"
+    ]
+  },
+  {
+    "term": "リスク管理",
+    "reading": "りすくかんり",
+    "senses": [
+      {
+        "definition": "被害の可能性と影響を見積もり、優先的に下げていくこと。",
+        "domain": "Security",
+        "keywords": [
+          "被害",
+          "優先"
+        ]
+      }
+    ],
+    "aliases": [
+      "Risk Control"
+    ]
+  },
+  {
+    "term": "理想論",
+    "reading": "りそうろん",
+    "senses": [
+      {
+        "definition": "現実の制約を十分に考慮しない考え方。",
+        "domain": "Security",
+        "keywords": [
+          "非現実",
+          "考え方"
+        ]
+      }
+    ],
+    "aliases": [
+      "Idealism"
+    ]
+  },
+  {
+    "term": "現実",
+    "reading": "げんじつ",
+    "senses": [
+      {
+        "definition": "予算、時間、人材、運用条件などの制約がある実務の状態。",
+        "domain": "Security",
+        "keywords": [
+          "制約",
+          "実務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reality"
+    ]
+  },
+  {
+    "term": "弱点",
+    "reading": "じゃくてん",
+    "senses": [
+      {
+        "definition": "攻撃や障害のきっかけになりうる不足。",
+        "domain": "Security",
+        "keywords": [
+          "脆弱",
+          "不足"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vulnerability (Security)"
+    ]
+  },
+  {
+    "term": "利便性",
+    "reading": "りべんせい",
+    "senses": [
+      {
+        "definition": "使いやすさや業務のしやすさ。",
+        "domain": "security",
+        "keywords": [
+          "使いやすさ",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "侵害",
+    "reading": "しんがい",
+    "senses": [
+      {
+        "definition": "不正アクセスや漏えいなどで守るべきものが破られること。",
+        "domain": "Security",
+        "keywords": [
+          "不正",
+          "漏えい"
+        ]
+      }
+    ],
+    "aliases": [
+      "Breach"
+    ]
+  },
+  {
+    "term": "優先順位",
+    "reading": "ゆうせんじゅんい",
+    "senses": [
+      {
+        "definition": "どの課題や対策を先に扱うかの順番。",
+        "domain": "Security",
+        "keywords": [
+          "順番",
+          "優先"
+        ]
+      }
+    ],
+    "aliases": [
+      "Prioritization (Security)"
+    ]
+  },
+  {
+    "term": "防御",
+    "reading": "ぼうぎょ",
+    "senses": [
+      {
+        "definition": "攻撃や被害を防ぐための対策。",
+        "domain": "Security",
+        "keywords": [
+          "防止",
+          "対策"
+        ]
+      }
+    ],
+    "aliases": [
+      "Defense"
+    ]
+  },
+  {
+    "term": "改善",
+    "reading": "かいぜん",
+    "senses": [
+      {
+        "definition": "状態を段階的によくしていくこと。",
+        "domain": "Security",
+        "keywords": [
+          "改良",
+          "段階"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "検知",
+    "reading": "けんち",
+    "senses": [
+      {
+        "definition": "異常や攻撃の発生を見つけること。",
+        "domain": "Security",
+        "keywords": [
+          "異常",
+          "発見"
+        ]
+      }
+    ],
+    "aliases": [
+      "Detection"
+    ]
+  },
+  {
+    "term": "復旧",
+    "reading": "ふっきゅう",
+    "senses": [
+      {
+        "definition": "障害や事故の後に元の状態へ戻すこと。",
+        "domain": "Security",
+        "keywords": [
+          "障害",
+          "回復"
+        ]
+      }
+    ],
+    "aliases": [
+      "Recovery"
+    ]
+  },
+  {
+    "term": "復旧手順",
+    "reading": "ふっきゅうてじゅん",
+    "senses": [
+      {
+        "definition": "障害や事故から戻すための具体的な手順。",
+        "domain": "Security",
+        "keywords": [
+          "手順",
+          "回復"
+        ]
+      }
+    ],
+    "aliases": [
+      "Recovery Procedure"
+    ]
+  },
+  {
+    "term": "リカバリー",
+    "reading": "りかばりー",
+    "senses": [
+      {
+        "definition": "障害発生後にシステムやデータを回復させること。",
+        "domain": "Security",
+        "keywords": [
+          "回復",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Recovery"
+    ]
+  },
+  {
+    "term": "総合的な意思決定",
+    "reading": "そうごうてきないしけってい",
+    "senses": [
+      {
+        "definition": "技術、運用、監査、復旧まで含めて判断すること。",
+        "domain": "Security",
+        "keywords": [
+          "総合",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Holistic Decision Making"
+    ]
+  },
+  {
+    "term": "悪用可能性",
+    "reading": "あくようかのうせい",
+    "senses": [
+      {
+        "definition": "弱点が実際に攻撃へ使われる見込みの高さ。",
+        "domain": "Security",
+        "keywords": [
+          "攻撃",
+          "可能性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Exploitability"
+    ]
+  },
+  {
+    "term": "影響度",
+    "reading": "えいきょうど",
+    "senses": [
+      {
+        "definition": "問題が起きたときの被害の大きさ。",
+        "domain": "Security",
+        "keywords": [
+          "被害",
+          "大きさ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Impact Severity"
+    ]
+  },
+  {
+    "term": "統制",
+    "reading": "とうせい",
+    "senses": [
+      {
+        "definition": "重要な操作や情報を管理・制限する仕組み。",
+        "domain": "Security",
+        "keywords": [
+          "管理",
+          "制限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Control"
+    ]
+  },
+  {
+    "term": "特権操作",
+    "reading": "とっけんそうさ",
+    "senses": [
+      {
+        "definition": "強い権限で行う重要な操作。",
+        "domain": "Security",
+        "keywords": [
+          "権限",
+          "重要"
+        ]
+      }
+    ],
+    "aliases": [
+      "Privileged Operation"
+    ]
+  },
+  {
+    "term": "高リスク領域",
+    "reading": "こうりすくりょういき",
+    "senses": [
+      {
+        "definition": "被害が大きくなりやすい対象や業務範囲。",
+        "domain": "Security",
+        "keywords": [
+          "被害",
+          "範囲"
+        ]
+      }
+    ],
+    "aliases": [
+      "High-Risk Area"
+    ]
+  },
+  {
+    "term": "重要データアクセス",
+    "reading": "じゅうようでーたあくせす",
+    "senses": [
+      {
+        "definition": "機密性の高い情報へ接触・閲覧・変更すること。",
+        "domain": "Security",
+        "keywords": [
+          "機密",
+          "アクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sensitive Data Access"
+    ]
+  },
+  {
+    "term": "ログ監視",
+    "reading": "ろぐかんし",
+    "senses": [
+      {
+        "definition": "操作やイベントの記録を継続的に確認すること。",
+        "domain": "Security",
+        "keywords": [
+          "ログ",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Log Monitoring"
+    ]
+  },
+  {
+    "term": "権限分離",
+    "reading": "けんげんぶんり",
+    "senses": [
+      {
+        "definition": "役割ごとに権限を分け、被害や不正を抑えること。",
+        "domain": "Security",
+        "keywords": [
+          "権限",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": [
+      "Separation of Privileges"
+    ]
+  },
+  {
+    "term": "安心感の演出",
+    "reading": "あんしんかんのえんしゅつ",
+    "senses": [
+      {
+        "definition": "実効性よりも、対策しているように見せることを優先する状態。",
+        "domain": "Security",
+        "keywords": [
+          "見せかけ",
+          "実効性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Theater"
+    ]
+  },
+  {
+    "term": "被害期待値",
+    "reading": "ひがいきたいち",
+    "senses": [
+      {
+        "definition": "被害の起こりやすさと大きさを合わせて見た損失の見込み。",
+        "domain": "Security",
+        "keywords": [
+          "損失",
+          "見込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "Expected Loss"
+    ]
+  },
+  {
+    "term": "投資判断",
+    "reading": "とうしはんだん",
+    "senses": [
+      {
+        "definition": "どこに資源を配分するか決めること。",
+        "domain": "Security",
+        "keywords": [
+          "資源",
+          "配分"
+        ]
+      }
+    ],
+    "aliases": [
+      "Investment Decision"
+    ]
+  },
+  {
+    "term": "受容できるリスク",
+    "reading": "じゅようできるりすく",
+    "senses": [
+      {
+        "definition": "対策せずに受け入れると判断したリスク。",
+        "domain": "Security",
+        "keywords": [
+          "受容",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Acceptable Risk"
+    ]
+  },
+  {
+    "term": "監査",
+    "reading": "かんさ",
+    "senses": [
+      {
+        "definition": "ルールどおりに仕事や会計が行われているか確認すること。",
+        "domain": "Governance",
+        "keywords": [
+          "確認",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Audit"
+    ]
+  },
+  {
+    "term": "教育",
+    "reading": "きょういく",
+    "senses": [
+      {
+        "definition": "知識や行動を身につけ、ミスや事故を減らすこと。",
+        "domain": "Governance",
+        "keywords": [
+          "知識",
+          "ミス防止"
+        ]
+      }
+    ],
+    "aliases": [
+      "Training"
+    ]
+  },
+  {
+    "term": "ガバナンス",
+    "reading": "がばなんす",
+    "senses": [
+      {
+        "definition": "組織として適切に管理し、責任ある判断を行う仕組み。",
+        "domain": "Governance",
+        "keywords": [
+          "組織",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Governance"
+    ]
+  },
+  {
+    "term": "被害確率",
+    "reading": "ひがいかくりつ",
+    "senses": [
+      {
+        "definition": "事故や侵害が起こる可能性。",
+        "domain": "Security",
+        "keywords": [
+          "確率",
+          "事故"
+        ]
+      }
+    ],
+    "aliases": [
+      "Damage Probability"
+    ]
+  },
+  {
+    "term": "被害規模",
+    "reading": "ひがいきぼ",
+    "senses": [
+      {
+        "definition": "事故や侵害が起こったときの損失の大きさ。",
+        "domain": "Security",
+        "keywords": [
+          "損失",
+          "規模"
+        ]
+      }
+    ],
+    "aliases": [
+      "Damage Scale"
+    ]
+  },
+  {
+    "term": "無事故の約束",
+    "reading": "むじこのやくそく",
+    "senses": [
+      {
+        "definition": "事故が絶対に起きないとする非現実的な考え方。",
+        "domain": "Security",
+        "keywords": [
+          "非現実",
+          "約束"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zero-Incident Promise"
+    ]
+  },
+  {
+    "term": "信頼性",
+    "reading": "しんらいせい",
+    "senses": [
+      {
+        "definition": "安定して期待どおりに動く度合い。",
+        "domain": "Security",
+        "keywords": [
+          "安定",
+          "期待"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reliability"
+    ]
+  },
+  {
+    "term": "倫理",
+    "reading": "りんり",
+    "senses": [
+      {
+        "definition": "社会的・道徳的に適切かを考える基準。",
+        "domain": "Governance",
+        "keywords": [
+          "道徳",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ethics"
+    ]
+  },
+  {
+    "term": "社会との整合",
+    "reading": "しゃかいとのせいごう",
+    "senses": [
+      {
+        "definition": "技術や判断が社会のルールや期待と合っていること。",
+        "domain": "Governance",
+        "keywords": [
+          "社会",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Social Alignment"
+    ]
+  },
+  {
+    "term": "法令",
+    "reading": "ほうれい",
+    "senses": [
+      {
+        "definition": "法律や政令、省令など守るべき決まり。",
+        "domain": "Governance",
+        "keywords": [
+          "法律",
+          "規則"
+        ]
+      }
+    ],
+    "aliases": [
+      "Legislation"
+    ]
+  },
+  {
+    "term": "通報",
+    "reading": "つうほう",
+    "senses": [
+      {
+        "definition": "不正や問題行為を窓口などへ知らせること。",
+        "domain": "Governance",
+        "keywords": [
+          "不正",
+          "知らせ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Whistleblowing"
+    ]
+  },
+  {
+    "term": "内部通報",
+    "reading": "ないぶつうほう",
+    "senses": [
+      {
+        "definition": "会社内の不正や違反を定められた窓口へ知らせる仕組み。",
+        "domain": "Governance",
+        "keywords": [
+          "内部",
+          "窓口"
+        ]
+      }
+    ],
+    "aliases": [
+      "Internal Whistleblowing"
+    ]
+  },
+  {
+    "term": "通報窓口",
+    "reading": "つうほうまどぐち",
+    "senses": [
+      {
+        "definition": "通報や相談を受け付ける窓口。",
+        "domain": "Governance",
+        "keywords": [
+          "窓口",
+          "相談"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reporting Channel"
+    ]
+  },
+  {
+    "term": "是正措置",
+    "reading": "ぜせいそち",
+    "senses": [
+      {
+        "definition": "問題を直すために行う対応。",
+        "domain": "Governance",
+        "keywords": [
+          "対応",
+          "修正"
+        ]
+      }
+    ],
+    "aliases": [
+      "Corrective Action (Governance)"
+    ]
+  },
+  {
+    "term": "利益相反",
+    "reading": "りえきそうはん",
+    "senses": [
+      {
+        "definition": "個人や別の立場の利益が会社の利益とぶつかること。",
+        "domain": "Governance",
+        "keywords": [
+          "利益",
+          "対立"
+        ]
+      }
+    ],
+    "aliases": [
+      "Conflict of Interest"
+    ]
+  },
+  {
+    "term": "反社会的勢力",
+    "reading": "はんしゃかいてきせいりょく",
+    "senses": [
+      {
+        "definition": "社会のルールに反する活動をする集団や個人。",
+        "domain": "Governance",
+        "keywords": [
+          "反社",
+          "排除"
+        ]
+      }
+    ],
+    "aliases": [
+      "Antisocial Forces"
+    ]
+  },
+  {
+    "term": "安全管理措置",
+    "reading": "あんぜんかんりそち",
+    "senses": [
+      {
+        "definition": "情報漏えいなどを防ぐための組織的・人的・物理的・技術的対策。",
+        "domain": "Security",
+        "keywords": [
+          "対策",
+          "組織的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security Safeguards"
+    ]
+  },
+  {
+    "term": "アクセス権限",
+    "reading": "あくせすけんげん",
+    "senses": [
+      {
+        "definition": "誰がどの情報を見たり使ったりできるかという権限。",
+        "domain": "Security",
+        "keywords": [
+          "権限",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Access Permissions"
+    ]
+  },
+  {
+    "term": "アクセスログ",
+    "reading": "あくせすろぐ",
+    "senses": [
+      {
+        "definition": "誰がいつどの情報にアクセスしたかの記録。",
+        "domain": "Security",
+        "keywords": [
+          "記録",
+          "アクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Access Log"
+    ]
+  },
+  {
+    "term": "情報漏えい",
+    "reading": "じょうほうろうえい",
+    "senses": [
+      {
+        "definition": "本来見てはいけない人に情報が渡ってしまうこと。",
+        "domain": "Security",
+        "keywords": [
+          "漏えい",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Information Leakage"
+    ]
+  },
+  {
+    "term": "インシデント",
+    "reading": "いんしでんと",
+    "senses": [
+      {
+        "definition": "情報漏えいや障害など問題や事故につながる出来事。",
+        "domain": "Security",
+        "keywords": [
+          "事故",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incident"
+    ]
+  },
+  {
+    "term": "AI",
+    "reading": "えーあい",
+    "senses": [
+      {
+        "definition": "判断や生成を支援・自動化する技術。",
+        "domain": "ai",
+        "keywords": [
+          "自動化",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AIコーディング",
+    "reading": "えーあいこーでぃんぐ",
+    "senses": [
+      {
+        "definition": "AIを使ってコード作成や修正を進めること。",
+        "domain": "AI",
+        "keywords": [
+          "コード",
+          "修正"
+        ]
+      }
+    ],
+    "aliases": [
+      "AI Coding"
+    ]
+  },
+  {
+    "term": "AIソフトウェアエンジニア",
+    "reading": "えーあいそふとうぇあえんじにあ",
+    "senses": [
+      {
+        "definition": "ソフトウェア開発を支援・実行するAIを指す表現。",
+        "domain": "AI",
+        "keywords": [
+          "開発",
+          "支援"
+        ]
+      }
+    ],
+    "aliases": [
+      "AI Software Engineer"
+    ]
+  },
+  {
+    "term": "ソフトウェア課題",
+    "reading": "そふとうぇあかだい",
+    "senses": [
+      {
+        "definition": "開発や運用の現場で解決すべき問題。",
+        "domain": "AI",
+        "keywords": [
+          "開発",
+          "問題"
+        ]
+      }
+    ],
+    "aliases": [
+      "Software Challenge"
+    ]
+  },
+  {
+    "term": "高リスク行動",
+    "reading": "こうりすくこうどう",
+    "senses": [
+      {
+        "definition": "失敗時の被害が大きい操作や判断。",
+        "domain": "AI",
+        "keywords": [
+          "被害",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "High-Risk Action"
+    ]
+  },
+  {
+    "term": "人間の監督",
+    "reading": "にんげんのかんとく",
+    "senses": [
+      {
+        "definition": "AIの行動や出力を人が確認・制御すること。",
+        "domain": "AI",
+        "keywords": [
+          "確認",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Human Oversight"
+    ]
+  },
+  {
+    "term": "確認",
+    "reading": "かくにん",
+    "senses": [
+      {
+        "definition": "出力や判断が妥当か確かめること。",
+        "domain": "AI",
+        "keywords": [
+          "妥当",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "Verification"
+    ]
+  },
+  {
+    "term": "人間とAIのチーム",
+    "reading": "にんげんとえーあいのちーむ",
+    "senses": [
+      {
+        "definition": "人とAIが役割分担しながら協働する体制。",
+        "domain": "AI",
+        "keywords": [
+          "協働",
+          "役割"
+        ]
+      }
+    ],
+    "aliases": [
+      "Human-AI Team"
+    ]
+  },
+  {
+    "term": "定型実装",
+    "reading": "ていけいじっそう",
+    "senses": [
+      {
+        "definition": "よくある決まった形のコードや処理の実装。",
+        "domain": "AI",
+        "keywords": [
+          "定型",
+          "パターン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Boilerplate Implementation"
+    ]
+  },
+  {
+    "term": "既存パターン",
+    "reading": "きぞんぱたーん",
+    "senses": [
+      {
+        "definition": "広く使われている設計や実装の型。",
+        "domain": "AI",
+        "keywords": [
+          "設計",
+          "実装"
+        ]
+      }
+    ],
+    "aliases": [
+      "Established Pattern"
+    ]
+  },
+  {
+    "term": "慣習",
+    "reading": "かんしゅう",
+    "senses": [
+      {
+        "definition": "チームや環境内で定着しているやり方。",
+        "domain": "AI",
+        "keywords": [
+          "チーム",
+          "やり方"
+        ]
+      }
+    ],
+    "aliases": [
+      "Convention"
+    ]
+  },
+  {
+    "term": "知的な協働者",
+    "reading": "ちてきなきょうどうしゃ",
+    "senses": [
+      {
+        "definition": "考える作業を補助する相手としてのAI。",
+        "domain": "AI",
+        "keywords": [
+          "補助",
+          "思考"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intellectual Collaborator"
+    ]
+  },
+  {
+    "term": "社会的パートナー",
+    "reading": "しゃかいてきぱーとなー",
+    "senses": [
+      {
+        "definition": "利害や責任を共有する主体としての相手。",
+        "domain": "AI",
+        "keywords": [
+          "責任",
+          "共有"
+        ]
+      }
+    ],
+    "aliases": [
+      "Social Partner"
+    ]
+  },
+  {
+    "term": "解の探索",
+    "reading": "かいのたんさく",
+    "senses": [
+      {
+        "definition": "問題に対する答えや候補を探すこと。",
+        "domain": "AI",
+        "keywords": [
+          "探索",
+          "候補"
+        ]
+      }
+    ],
+    "aliases": [
+      "Solution Exploration"
+    ]
+  },
+  {
+    "term": "目的関数",
+    "reading": "もくてきかんすう",
+    "senses": [
+      {
+        "definition": "何を最適化するかを定める基準。",
+        "domain": "ai",
+        "keywords": [
+          "最適化",
+          "基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "人間の方向づけ",
+    "reading": "にんげんのほうこうづけ",
+    "senses": [
+      {
+        "definition": "AIが進む目的や方針を人が与えること。",
+        "domain": "AI",
+        "keywords": [
+          "方針",
+          "目的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Human Direction"
+    ]
+  },
+  {
+    "term": "不可逆な行為",
+    "reading": "ふかぎゃくなこうい",
+    "senses": [
+      {
+        "definition": "取り消しややり直しが難しい操作。",
+        "domain": "AI",
+        "keywords": [
+          "取り消し",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "Irreversible Action"
+    ]
+  },
+  {
+    "term": "実装量",
+    "reading": "じっそうりょう",
+    "senses": [
+      {
+        "definition": "どれだけ多くのコードや機能を作ったかという量。",
+        "domain": "AI",
+        "keywords": [
+          "コード",
+          "量"
+        ]
+      }
+    ],
+    "aliases": [
+      "Implementation Volume"
+    ]
+  },
+  {
+    "term": "一次出典",
+    "reading": "いちじしゅってん",
+    "senses": [
+      {
+        "definition": "情報の最初の発信元となる資料。",
+        "domain": "AI",
+        "keywords": [
+          "情報",
+          "資料"
+        ]
+      }
+    ],
+    "aliases": [
+      "Primary Source"
+    ]
+  },
+  {
+    "term": "趣旨に基づく解釈",
+    "reading": "しゅしにもとづくかいしゃく",
+    "senses": [
+      {
+        "definition": "厳密な文言より意味の中心をもとに理解すること。",
+        "domain": "AI",
+        "keywords": [
+          "解釈",
+          "意味"
+        ]
+      }
+    ],
+    "aliases": [
+      "Spirit-Based Interpretation"
+    ]
+  },
+  {
+    "term": "BA",
+    "reading": "びーえー",
+    "senses": [
+      {
+        "definition": "予測や最適化まで含めて課題発見につなげる分析領域。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "予測",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Analytics"
+    ]
+  },
+  {
+    "term": "DWH",
+    "reading": "でぃーだぶりゅーえいち",
+    "senses": [
+      {
+        "definition": "分析しやすい形に整理・統合されたデータの蓄積基盤。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "統合",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Warehouse (DWH)"
+    ]
+  },
+  {
+    "term": "ETL",
+    "reading": "いーてぃーえる",
+    "senses": [
+      {
+        "definition": "データの抽出、変換、格納を行う処理。",
+        "domain": "data-analysis",
+        "keywords": [
+          "抽出",
+          "変換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データマネジメント",
+    "reading": "でーたまねじめんと",
+    "senses": [
+      {
+        "definition": "データの収集、整備、品質管理、活用まで含めた管理。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "収集",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Management"
+    ]
+  },
+  {
+    "term": "データ分析基盤",
+    "reading": "でーたぶんせききばん",
+    "senses": [
+      {
+        "definition": "データの収集、保管、加工、分析、可視化を担う基盤全体。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "基盤",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Analytics Platform"
+    ]
+  },
+  {
+    "term": "データマイニング",
+    "reading": "でーたまいにんぐ",
+    "senses": [
+      {
+        "definition": "大量データから傾向や相関などの知見を見つける手法。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "傾向",
+          "知見"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Mining"
+    ]
+  },
+  {
+    "term": "OLAP分析",
+    "reading": "おーらっぷぶんせき",
+    "senses": [
+      {
+        "definition": "多次元的に集計・分析して傾向を確認する手法。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "多次元",
+          "集計"
+        ]
+      }
+    ],
+    "aliases": [
+      "OLAP Analysis"
+    ]
+  },
+  {
+    "term": "可視化",
+    "reading": "かしか",
+    "senses": [
+      {
+        "definition": "数字や状態をグラフや図などでわかりやすく見せること。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "グラフ",
+          "図"
+        ]
+      }
+    ],
+    "aliases": [
+      "Visualization"
+    ]
+  },
+  {
+    "term": "集計",
+    "reading": "しゅうけい",
+    "senses": [
+      {
+        "definition": "データをまとめて数値化すること。",
+        "domain": "data-analysis",
+        "keywords": [
+          "データ",
+          "数値"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "予測",
+    "reading": "よそく",
+    "senses": [
+      {
+        "definition": "過去や現在のデータをもとに将来を見通すこと。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "将来",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Forecasting"
+    ]
+  },
+  {
+    "term": "最適化",
+    "reading": "さいてきか",
+    "senses": [
+      {
+        "definition": "条件の中で最もよい状態に近づけること。",
+        "domain": "Data Analytics",
+        "keywords": [
+          "条件",
+          "状態"
+        ]
+      }
+    ],
+    "aliases": [
+      "Optimization"
+    ]
+  },
+  {
+    "term": "クラウドネイティブ",
+    "reading": "くらうどねいてぃぶ",
+    "senses": [
+      {
+        "definition": "クラウドの特性を前提に設計・開発する考え方。",
+        "domain": "Cloud",
+        "keywords": [
+          "設計",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cloud Native"
+    ]
+  },
+  {
+    "term": "ハイブリッドクラウド",
+    "reading": "はいぶりっどくらうど",
+    "senses": [
+      {
+        "definition": "オンプレミスとクラウドなど異なる環境を組み合わせる構成。",
+        "domain": "Cloud",
+        "keywords": [
+          "オンプレミス",
+          "組み合わせ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hybrid Cloud"
+    ]
+  },
+  {
+    "term": "ゼロトラストセキュリティ",
+    "reading": "ぜろとらすとせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "すべてのアクセスを都度検証する前提のセキュリティ設計。",
+        "domain": "Cloud",
+        "keywords": [
+          "検証",
+          "アクセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zero Trust Security"
+    ]
+  },
+  {
+    "term": "DB基盤",
+    "reading": "でぃーびーきばん",
+    "senses": [
+      {
+        "definition": "データベースを安定稼働させるための基盤。",
+        "domain": "Cloud",
+        "keywords": [
+          "データベース",
+          "基盤"
+        ]
+      }
+    ],
+    "aliases": [
+      "Database Platform"
+    ]
+  },
+  {
+    "term": "インフラ",
+    "reading": "いんふら",
+    "senses": [
+      {
+        "definition": "システムを支える基盤となる設備や環境。",
+        "domain": "Cloud",
+        "keywords": [
+          "基盤",
+          "設備"
+        ]
+      }
+    ],
+    "aliases": [
+      "Infrastructure"
+    ]
+  },
+  {
+    "term": "サーバ",
+    "reading": "さーば",
+    "senses": [
+      {
+        "definition": "システムやデータを提供するコンピュータ。",
+        "domain": "Cloud",
+        "keywords": [
+          "提供",
+          "コンピュータ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Server"
+    ]
+  },
+  {
+    "term": "データベース",
+    "reading": "でーたべーす",
+    "senses": [
+      {
+        "definition": "データを整理して保存・利用する仕組み。",
+        "domain": "Cloud",
+        "keywords": [
+          "保存",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Database"
+    ]
+  },
+  {
+    "term": "会社",
+    "reading": "かいしゃ",
+    "senses": [
+      {
+        "definition": "事業活動を行うための組織。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "事業",
+          "組織"
+        ]
+      }
+    ],
+    "aliases": [
+      "Company"
+    ]
+  },
+  {
+    "term": "組織",
+    "reading": "そしき",
+    "senses": [
+      {
+        "definition": "仕事を分担して進めるためのまとまり。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "分担",
+          "まとまり"
+        ]
+      }
+    ],
+    "aliases": [
+      "Organization (Corporate)"
+    ]
+  },
+  {
+    "term": "職位",
+    "reading": "しょくい",
+    "senses": [
+      {
+        "definition": "会社の中での立場や役職。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "立場",
+          "役職"
+        ]
+      }
+    ],
+    "aliases": [
+      "Job Grade"
+    ]
+  },
+  {
+    "term": "役員",
+    "reading": "やくいん",
+    "senses": [
+      {
+        "definition": "会社の経営に責任を持つ立場の人。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "経営",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Executive Officer"
+    ]
+  },
+  {
+    "term": "取締役",
+    "reading": "とりしまりやく",
+    "senses": [
+      {
+        "definition": "会社の経営方針を決め、業務の実行を監督する人。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "経営",
+          "監督"
+        ]
+      }
+    ],
+    "aliases": [
+      "Director"
+    ]
+  },
+  {
+    "term": "取締役会",
+    "reading": "とりしまりやくかい",
+    "senses": [
+      {
+        "definition": "会社の重要事項を決める会議。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "会議",
+          "重要事項"
+        ]
+      }
+    ],
+    "aliases": [
+      "Board of Directors"
+    ]
+  },
+  {
+    "term": "株主総会",
+    "reading": "かぶぬしそうかい",
+    "senses": [
+      {
+        "definition": "株主が集まり、会社の重要事項を決める場。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "株主",
+          "決議"
+        ]
+      }
+    ],
+    "aliases": [
+      "General Shareholders Meeting"
+    ]
+  },
+  {
+    "term": "監査役",
+    "reading": "かんさやく",
+    "senses": [
+      {
+        "definition": "取締役や会社の業務に問題がないかを監督する人。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "監督",
+          "問題"
+        ]
+      }
+    ],
+    "aliases": [
+      "Statutory Auditor"
+    ]
+  },
+  {
+    "term": "執行役員",
+    "reading": "しっこうやくいん",
+    "senses": [
+      {
+        "definition": "決められた方針に基づいて実際の業務を進める立場の人。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "業務",
+          "執行"
+        ]
+      }
+    ],
+    "aliases": [
+      "Managing Officer"
+    ]
+  },
+  {
+    "term": "職務権限",
+    "reading": "しょくむけんげん",
+    "senses": [
+      {
+        "definition": "誰がどこまで決めてよいかを示す権限範囲。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "権限",
+          "範囲"
+        ]
+      }
+    ],
+    "aliases": [
+      "Job Authority"
+    ]
+  },
+  {
+    "term": "決裁",
+    "reading": "けっさい",
+    "senses": [
+      {
+        "definition": "責任者が申請や案を正式に認めること。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "承認",
+          "正式"
+        ]
+      }
+    ],
+    "aliases": [
+      "Approval (Kessai)"
+    ]
+  },
+  {
+    "term": "承認",
+    "reading": "しょうにん",
+    "senses": [
+      {
+        "definition": "内容を確認し、問題ないと認めること。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "確認",
+          "認可"
+        ]
+      }
+    ],
+    "aliases": [
+      "Approval"
+    ]
+  },
+  {
+    "term": "起案",
+    "reading": "きあん",
+    "senses": [
+      {
+        "definition": "申請書や提案書を作って正式に出すこと。",
+        "domain": "Corporate Operations",
+        "keywords": [
+          "申請",
+          "提出"
+        ]
+      }
+    ],
+    "aliases": [
+      "Drafting"
+    ]
+  }
+]

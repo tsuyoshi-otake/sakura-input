@@ -1,0 +1,615 @@
+[
+  {
+    "term": "贈収賄",
+    "reading": "ぞうしゅうわい",
+    "aliases": [
+      "Bribery and Corruption",
+      "Bribery Offense",
+      "Corrupt Payment"
+    ],
+    "senses": [
+      {
+        "definition": "公務員等への贈賄（金品の提供）および公務員等による収賄（金品の受領）の行為。刑法・不正競争防止法等で禁止されており、コンプライアンス上の重大リスクとして接待・贈答の管理規程で予防措置を講じる。",
+        "domain": "compliance",
+        "keywords": [
+          "贈賄",
+          "収賄",
+          "不正競争防止法",
+          "刑事罰",
+          "腐敗防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "接待交際費等管理規程",
+    "reading": "せったいこうさいひとうかんりきてい",
+    "aliases": [
+      "Entertainment Expense Management Policy",
+      "Business Entertainment Regulations",
+      "Hospitality and Gift Management Policy"
+    ],
+    "senses": [
+      {
+        "definition": "接待・贈答・交際費の支出基準・上限額・承認フロー・記録方法を定めた社内規程。贈収賄リスクの管理と適正な経費利用を目的とし、外国公務員への提供禁止条項も含む。",
+        "domain": "compliance",
+        "keywords": [
+          "接待費",
+          "交際費",
+          "上限額",
+          "承認フロー",
+          "贈収賄防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "贈答規程",
+    "reading": "ぞうとうきてい",
+    "aliases": [
+      "Gift Policy",
+      "Gift Giving Regulations",
+      "Business Gift Management Policy"
+    ],
+    "senses": [
+      {
+        "definition": "取引先等への贈り物（贈答品・商品券等）の取り扱い基準・金額上限・禁止ケースを定めた社内規程。社会通念の範囲内での贈答に限定し、利益誘導や贈収賄への抵触を防止する。",
+        "domain": "compliance",
+        "keywords": [
+          "贈答品",
+          "商品券",
+          "金額上限",
+          "社会通念",
+          "贈収賄防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "懲戒処分",
+    "reading": "ちょうかいしょぶん",
+    "aliases": [
+      "Disciplinary Action",
+      "Disciplinary Measures",
+      "Employee Disciplinary Sanction"
+    ],
+    "senses": [
+      {
+        "definition": "就業規則・懲戒規程に基づき、規律違反・不正行為を行った従業員に対して会社が下す制裁。けん責・減給・出勤停止・懲戒解雇等の種類があり、適正手続き（弁明の機会付与等）を踏む必要がある。",
+        "domain": "compliance",
+        "keywords": [
+          "懲戒解雇",
+          "減給",
+          "出勤停止",
+          "けん責",
+          "就業規則"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "賞罰規程",
+    "reading": "しょうばつきてい",
+    "aliases": [
+      "Awards and Disciplinary Regulations",
+      "Reward and Punishment Policy",
+      "Recognition and Discipline Policy"
+    ],
+    "senses": [
+      {
+        "definition": "良い業績や行動をした従業員への表彰と、規則違反への処罰の両方を定めた社内規則。表彰基準・懲戒の種類・手続きを規定し、公平・公正な人事管理の基盤となる。",
+        "domain": "compliance",
+        "keywords": [
+          "表彰",
+          "懲戒",
+          "賞罰",
+          "公正管理",
+          "就業規則"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ハラスメント防止規程",
+    "reading": "ハラスメントぼうしきてい",
+    "aliases": [
+      "Harassment Prevention Policy",
+      "Anti-Harassment Regulations",
+      "Workplace Harassment Policy"
+    ],
+    "senses": [
+      {
+        "definition": "セクシャルハラスメント・パワーハラスメント等の防止方針・禁止行為・相談・調査・処分手続きを定めた社内規程。労働施策総合推進法等の法令要件に対応し、安全な職場環境の維持を目的とする。",
+        "domain": "compliance",
+        "keywords": [
+          "パワハラ",
+          "セクハラ",
+          "ハラスメント禁止",
+          "相談窓口",
+          "職場環境"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ハラスメント通報窓口",
+    "reading": "ハラスメントつうほうまどぐち",
+    "aliases": [
+      "Harassment Reporting Hotline",
+      "Harassment Complaint Desk",
+      "Harassment Reporting Channel"
+    ],
+    "senses": [
+      {
+        "definition": "ハラスメント被害を申告・相談するための社内外の窓口。匿名通報を受け付けることも多く、通報者の保護を規程で保証し、受け付けた案件は速やかに調査・対処するプロセスを整備する。",
+        "domain": "compliance",
+        "keywords": [
+          "通報窓口",
+          "匿名通報",
+          "通報者保護",
+          "ハラスメント相談",
+          "調査手続き"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "内部監査規程",
+    "reading": "ないぶかんさきてい",
+    "aliases": [
+      "Internal Audit Policy",
+      "Internal Audit Regulations",
+      "Internal Audit Charter"
+    ],
+    "senses": [
+      {
+        "definition": "内部監査の目的・組織・権限・手続き・報告・フォローアップを定めた社内規程。内部監査部門の独立性と客観性を担保し、経営陣・取締役会への直接報告ラインを確保する。",
+        "domain": "compliance",
+        "keywords": [
+          "内部監査",
+          "監査権限",
+          "独立性",
+          "フォローアップ",
+          "取締役会報告"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "監査役会",
+    "reading": "かんさやくかい",
+    "aliases": [
+      "Board of Auditors",
+      "Statutory Auditor Board",
+      "Corporate Auditor Committee"
+    ],
+    "senses": [
+      {
+        "definition": "監査役で構成される合議体。取締役の職務執行の監査・会計監査・内部統制の監視を担い、大会社では設置が義務付けられる。監査役会は独立した立場から経営監視機能を果たす。",
+        "domain": "compliance",
+        "keywords": [
+          "監査役",
+          "職務執行監査",
+          "会計監査",
+          "内部統制監視",
+          "大会社"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "監査役監査基準",
+    "reading": "かんさやくかんさきじゅん",
+    "aliases": [
+      "Auditor Audit Standards",
+      "Statutory Auditor Audit Criteria",
+      "Board of Auditors Audit Standards"
+    ],
+    "senses": [
+      {
+        "definition": "監査役が監査を実施する際の基準・手続き・判断指針をまとめた文書。監査役会が制定し、実効ある監査の基盤とするとともに、日本監査役協会の指針を参考に策定されることが多い。",
+        "domain": "compliance",
+        "keywords": [
+          "監査基準",
+          "監査手続き",
+          "判断指針",
+          "監査役協会",
+          "実効性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "監査役会規則",
+    "reading": "かんさやくかいきそく",
+    "aliases": [
+      "Board of Auditors Regulations",
+      "Auditor Committee Rules",
+      "Statutory Auditor Board Operating Rules"
+    ],
+    "senses": [
+      {
+        "definition": "監査役会の運営（招集・決議・記録・報告等）に関する手続きを定めた内規。監査役会の実効性を確保するために整備し、議事録の作成・保管・取締役会への報告方法も含む。",
+        "domain": "compliance",
+        "keywords": [
+          "監査役会運営",
+          "招集手続き",
+          "議事録",
+          "監査報告",
+          "内規"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "監査法人",
+    "reading": "かんさほうじん",
+    "aliases": [
+      "Audit Corporation",
+      "Certified Public Accountant Firm",
+      "Statutory Audit Firm"
+    ],
+    "senses": [
+      {
+        "definition": "公認会計士5名以上で設立された法人で、大会社等の財務諸表の法定監査を実施する。会計監査人として選任され、独立した立場から財務報告の適正性を検証する機能を担う。",
+        "domain": "compliance",
+        "keywords": [
+          "公認会計士",
+          "法定監査",
+          "会計監査人",
+          "財務諸表",
+          "独立性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "財務報告内部統制",
+    "reading": "ざいむほうこくないぶとうせい",
+    "aliases": [
+      "Internal Control over Financial Reporting",
+      "Financial Reporting Controls",
+      "ICFR"
+    ],
+    "senses": [
+      {
+        "definition": "財務報告の信頼性を確保するために整備・運用する内部統制の仕組み。J-SOXの評価対象となり、経営者が有効性を評価・報告し、監査法人による監査証明を受ける必要がある。",
+        "domain": "compliance",
+        "keywords": [
+          "財務報告",
+          "J-SOX",
+          "有効性評価",
+          "監査証明",
+          "信頼性確保"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "監査報告",
+    "reading": "かんさほうこく",
+    "aliases": [
+      "Audit Report",
+      "Internal Audit Report",
+      "Audit Finding Report"
+    ],
+    "senses": [
+      {
+        "definition": "内部監査または外部監査の実施結果をまとめた報告書。指摘事項・改善勧告・経営者へのフォローアップ要請などを記載し、被監査部門および取締役会・経営陣に提出される。",
+        "domain": "compliance",
+        "keywords": [
+          "指摘事項",
+          "改善勧告",
+          "フォローアップ",
+          "監査結果",
+          "経営報告"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "定期監査",
+    "reading": "ていきかんさ",
+    "aliases": [
+      "Periodic Audit",
+      "Scheduled Audit",
+      "Regular Audit"
+    ],
+    "senses": [
+      {
+        "definition": "監査計画に基づいて定期的に実施する監査。内部監査・会計監査・監査役監査のいずれにおいても年間計画の下で行われ、リスクベースアプローチにより重点領域を選定する。",
+        "domain": "compliance",
+        "keywords": [
+          "年間監査計画",
+          "リスクベース",
+          "監査スケジュール",
+          "計画的監査",
+          "内部監査"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "臨時監査",
+    "reading": "りんじかんさ",
+    "aliases": [
+      "Special Audit",
+      "Unscheduled Audit",
+      "Ad Hoc Audit"
+    ],
+    "senses": [
+      {
+        "definition": "不正の疑い・重大なリスク発生・経営層の要請などにより、定期監査とは別に臨時で実施する監査。迅速な対応が求められ、調査結果は速やかに経営陣・監査役へ報告される。",
+        "domain": "compliance",
+        "keywords": [
+          "臨時調査",
+          "不正調査",
+          "緊急監査",
+          "リスク対応",
+          "経営報告"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "証憑管理",
+    "reading": "しょうひょうかんり",
+    "aliases": [
+      "Evidence Document Management",
+      "Source Document Management",
+      "Transaction Evidence Management"
+    ],
+    "senses": [
+      {
+        "definition": "取引の証拠となる書類（請求書・領収証・契約書等）を適切に収集・保管・管理する業務。法定保存期間・アクセス管理・廃棄ルールを定め、会計監査・内部監査への対応も含む。",
+        "domain": "compliance",
+        "keywords": [
+          "証憑書類",
+          "請求書管理",
+          "法定保存期間",
+          "文書保管",
+          "監査対応"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "社会的信用",
+    "reading": "しゃかいてきしんよう",
+    "aliases": [
+      "Corporate Social Credibility",
+      "Social Reputation",
+      "Corporate Trustworthiness"
+    ],
+    "senses": [
+      {
+        "definition": "企業や個人が社会から得る信頼と評判。コンプライアンス違反・不祥事・情報漏洩などは社会的信用の失墜につながり、事業継続・採用・取引関係に深刻な影響を与える。",
+        "domain": "compliance",
+        "keywords": [
+          "企業信頼",
+          "評判リスク",
+          "不祥事",
+          "レピュテーション",
+          "社会的責任"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "遵守義務",
+    "reading": "じゅんしゅぎむ",
+    "aliases": [
+      "Compliance Obligation",
+      "Legal Compliance Duty",
+      "Regulatory Compliance Requirement"
+    ],
+    "senses": [
+      {
+        "definition": "法令・社内規程・業界ルール等を守る義務のこと。役職員全員に課される基本的な義務で、コンプライアンス規程の根幹をなし、違反した場合は懲戒処分や法的責任の対象となる。",
+        "domain": "compliance",
+        "keywords": [
+          "法令遵守",
+          "義務違反",
+          "コンプライアンス義務",
+          "規程遵守",
+          "懲戒処分"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "社会倫理",
+    "reading": "しゃかいりんり",
+    "aliases": [
+      "Social Ethics",
+      "Business Social Ethics",
+      "Societal Ethical Standards"
+    ],
+    "senses": [
+      {
+        "definition": "社会一般に共有されている倫理的な価値観や行動規範。法令を遵守するだけでなく、社会倫理に沿った行動が企業には求められ、CSR・ESGの観点からも重要視される。",
+        "domain": "compliance",
+        "keywords": [
+          "倫理観",
+          "行動規範",
+          "CSR",
+          "ESG",
+          "社会的責任"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "損失危険管理体制",
+    "reading": "そんしつきけんかんりたいせい",
+    "aliases": [
+      "Loss Risk Management System",
+      "Risk Loss Management Framework",
+      "Business Risk Management Structure"
+    ],
+    "senses": [
+      {
+        "definition": "リスクが顕在化した際の損失を最小化するための管理体制。リスクの早期検知・初動対応・事業継続計画（BCP）を含み、会社法上の内部統制システムの一要素として整備が求められる。",
+        "domain": "compliance",
+        "keywords": [
+          "損失管理",
+          "リスク顕在化",
+          "BCP",
+          "初動対応",
+          "内部統制システム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "情報漏洩",
+    "aliases": [
+      "Confidential Data Leak"
+    ],
+    "senses": [
+      {
+        "definition": "機密情報・個人情報・営業秘密が不正または過失によって社外に流出すること。発生時は速やかな報告・調査・被害拡大防止が求められ、個人情報漏洩の場合は個人情報保護法に基づく通知・報告義務が生じる。",
+        "domain": "compliance",
+        "keywords": [
+          "情報流出",
+          "データ漏洩",
+          "個人情報保護法",
+          "インシデント対応",
+          "被害拡大防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "反社対応マニュアル",
+    "reading": "はんしゃたいおうマニュアル",
+    "aliases": [
+      "Anti-Social Forces Response Manual",
+      "Organized Crime Response Procedures",
+      "Anti-Gang Response Guidelines"
+    ],
+    "senses": [
+      {
+        "definition": "反社会的勢力からの接触・要求があった場合の対応手順を定めたマニュアル。警察・弁護士との連携方法・対応フロー・記録方法を示し、組織的かつ毅然とした対応を担保する。",
+        "domain": "compliance",
+        "keywords": [
+          "反社対応",
+          "警察連携",
+          "弁護士連携",
+          "対応フロー",
+          "記録管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "KYC",
+    "reading": "",
+    "aliases": [
+      "Know Your Customer",
+      "Customer Identity Verification",
+      "Customer Due Diligence"
+    ],
+    "senses": [
+      {
+        "definition": "Know Your Customer の略。顧客の実在性・身元・取引目的を確認するプロセス。マネーロンダリング・反社対応のために金融機関等で義務付けられ、犯罪収益移転防止法への対応として実施される。",
+        "domain": "compliance",
+        "keywords": [
+          "本人確認",
+          "顧客確認",
+          "マネーロンダリング防止",
+          "犯罪収益移転防止法",
+          "デューデリジェンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "顧客管理",
+    "reading": "こきゃくかんり",
+    "aliases": [
+      "Customer Relationship Management",
+      "Client Account Management",
+      "Customer Data Management"
+    ],
+    "senses": [
+      {
+        "definition": "顧客の情報・取引履歴・与信状況等を適切に管理すること。CRMシステムや顧客管理規程に基づき、個人情報保護・反社チェック・与信管理を含む包括的な管理体制を整備する。",
+        "domain": "compliance",
+        "keywords": [
+          "CRM",
+          "与信管理",
+          "反社チェック",
+          "個人情報保護",
+          "取引履歴"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "反社通報",
+    "reading": "はんしゃつうほう",
+    "aliases": [
+      "Anti-Social Forces Reporting",
+      "Organized Crime Connection Reporting",
+      "Anti-Gang Incident Reporting"
+    ],
+    "senses": [
+      {
+        "definition": "取引先や関係者が反社会的勢力との関係を有することを発見した際に社内の担当部門へ通報すること。通報後は調査・関係解消の手続きに進み、通報者の保護を規程で保証する。",
+        "domain": "compliance",
+        "keywords": [
+          "反社発覚",
+          "社内通報",
+          "関係解消",
+          "通報者保護",
+          "調査手続き"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンプライアンス教育",
+    "reading": "コンプライアンスきょういく",
+    "aliases": [
+      "Compliance Training",
+      "Ethics and Compliance Education",
+      "Regulatory Compliance Training"
+    ],
+    "senses": [
+      {
+        "definition": "役職員がコンプライアンスの重要性・具体的なルール・違反事例を学ぶための研修。定期的・階層別に実施し、理解度確認テストや e-learning を活用して実効性を高める。",
+        "domain": "compliance",
+        "keywords": [
+          "コンプライアンス研修",
+          "階層別教育",
+          "e-learning",
+          "理解度確認",
+          "違反事例"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "社外監査",
+    "reading": "しゃがいかんさ",
+    "aliases": [
+      "External Audit",
+      "Third-Party Audit",
+      "Independent External Audit"
+    ],
+    "senses": [
+      {
+        "definition": "第三者機関・外部監査法人・規制当局による監査。独立した視点での検証が行われ、指摘事項は社内の改善活動に活用するとともに、規制対応・認証維持のために重要な役割を担う。",
+        "domain": "compliance",
+        "keywords": [
+          "外部監査",
+          "第三者検証",
+          "監査法人",
+          "規制当局",
+          "独立性"
+        ]
+      }
+    ]
+  }
+]

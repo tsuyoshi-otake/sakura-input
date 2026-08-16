@@ -1,0 +1,1049 @@
+[
+  {
+    "term": "製造業",
+    "reading": "せいぞうぎょう",
+    "senses": [
+      {
+        "definition": "モノを生産する産業分野。IT導入の主要対象業界のひとつ。",
+        "domain": "manufacturing",
+        "keywords": [
+          "産業",
+          "IT導入",
+          "生産"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "新規システム導入提案書",
+    "reading": "しんきシステムどうにゅうていあんしょ",
+    "senses": [
+      {
+        "definition": "新しい業務システム導入を提案する資料。背景・課題・方針・効果・体制・スケジュールで構成される。",
+        "domain": "proposal",
+        "keywords": [
+          "提案書",
+          "システム導入",
+          "資料"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PowerPoint",
+    "senses": [
+      {
+        "definition": "プレゼン資料作成ソフト。提案書やスライド形式の資料作成に広く使われる。",
+        "domain": "proposal",
+        "keywords": [
+          "プレゼン",
+          "スライド",
+          "資料作成"
+        ]
+      }
+    ],
+    "aliases": [
+      "パワーポイント",
+      "PPT"
+    ]
+  },
+  {
+    "term": "表紙",
+    "reading": "ひょうし",
+    "senses": [
+      {
+        "definition": "提案書や資料の最初のページ。会社名・提案タイトル・日付・提案先を記載する。",
+        "domain": "proposal",
+        "keywords": [
+          "提案書",
+          "資料",
+          "スライド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "次世代業務システム",
+    "reading": "じせだいぎょうむシステム",
+    "senses": [
+      {
+        "definition": "より高度・効率的な新しい業務システム。現行システムの課題解消と将来拡張性を両立する。",
+        "domain": "proposal",
+        "keywords": [
+          "業務システム",
+          "システム刷新",
+          "拡張性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "現場力",
+    "reading": "げんばりょく",
+    "senses": [
+      {
+        "definition": "現場で業務を遂行・改善する力。ITシステム導入後の定着にも影響する。",
+        "domain": "manufacturing",
+        "keywords": [
+          "現場",
+          "改善",
+          "定着化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "生産",
+    "senses": [
+      {
+        "definition": "製品を作る活動。製造業の中核業務であり、生産計画や在庫管理と密接に関わる。",
+        "domain": "manufacturing",
+        "keywords": [
+          "製造",
+          "生産計画",
+          "在庫管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "在庫",
+    "reading": "ざいこ",
+    "senses": [
+      {
+        "definition": "保管中の原材料・仕掛品・製品。過剰・欠品どちらもコストやリスクにつながる。",
+        "domain": "manufacturing",
+        "keywords": [
+          "在庫管理",
+          "原材料",
+          "欠品"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "生産計画",
+    "reading": "せいさんけいかく",
+    "senses": [
+      {
+        "definition": "何をいつどれだけ作るかの計画。需要予測と生産能力を踏まえて立案する。",
+        "domain": "manufacturing",
+        "keywords": [
+          "計画",
+          "需要予測",
+          "生産"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "在庫管理",
+    "reading": "ざいこかんり",
+    "senses": [
+      {
+        "definition": "在庫数量や状態を管理すること。在庫差異や欠品を防ぎ、適正在庫を維持する。",
+        "domain": "manufacturing",
+        "keywords": [
+          "在庫",
+          "欠品",
+          "適正在庫"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "進捗把握",
+    "reading": "しんちょくはあく",
+    "senses": [
+      {
+        "definition": "業務や生産の進み具合を確認すること。遅延検知や意思決定の基礎になる。",
+        "domain": "proposal",
+        "keywords": [
+          "進捗",
+          "遅延",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分散",
+    "reading": "ぶんさん",
+    "senses": [
+      {
+        "definition": "情報や機能が別々に存在すること。分散した情報は一元化によって統合する。",
+        "domain": "proposal",
+        "keywords": [
+          "情報管理",
+          "一元化",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "重複入力",
+    "reading": "ちょうふくにゅうりょく",
+    "senses": [
+      {
+        "definition": "同じ情報を何度も入力すること。二重入力とも呼ばれ、工数増加とミスの原因になる。",
+        "domain": "proposal",
+        "keywords": [
+          "入力",
+          "工数",
+          "二重入力"
+        ]
+      }
+    ],
+    "aliases": [
+      "じゅうふくにゅうりょく"
+    ]
+  },
+  {
+    "term": "確認作業",
+    "reading": "かくにんさぎょう",
+    "senses": [
+      {
+        "definition": "内容の正しさや状況を確認する作業。自動化・一元化で削減できることが多い。",
+        "domain": "proposal",
+        "keywords": [
+          "確認",
+          "作業",
+          "省力化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "状況把握",
+    "reading": "じょうきょうはあく",
+    "senses": [
+      {
+        "definition": "現在の状態を理解すること。リアルタイムなデータ共有によって改善できる。",
+        "domain": "proposal",
+        "keywords": [
+          "状況",
+          "把握",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "管理コスト",
+    "reading": "かんりコスト",
+    "senses": [
+      {
+        "definition": "管理に必要な時間・人件費・運用負荷。システム化により削減できる間接コスト。",
+        "domain": "proposal",
+        "keywords": [
+          "コスト",
+          "管理",
+          "省力化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "想定課題",
+    "reading": "そうていかだい",
+    "senses": [
+      {
+        "definition": "あらかじめ見込まれる問題点。提案書では現状分析から導き出す。",
+        "domain": "proposal",
+        "keywords": [
+          "課題",
+          "提案書",
+          "現状分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リアルタイム",
+    "senses": [
+      {
+        "definition": "ほぼ即時に情報が反映されること。システム連携や自動更新で実現する。",
+        "domain": "proposal",
+        "keywords": [
+          "即時",
+          "情報反映",
+          "システム連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "real-time",
+      "realtime"
+    ]
+  },
+  {
+    "term": "在庫差異",
+    "reading": "ざいこさい",
+    "senses": [
+      {
+        "definition": "実在庫と帳簿在庫のずれ。棚卸作業の負担増加や欠品・過剰在庫の原因になる。",
+        "domain": "manufacturing",
+        "keywords": [
+          "在庫",
+          "棚卸",
+          "欠品"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "欠品",
+    "reading": "けっぴん",
+    "senses": [
+      {
+        "definition": "必要な在庫が不足している状態。納期遅延や機会損失に直結する。",
+        "domain": "manufacturing",
+        "keywords": [
+          "在庫",
+          "納期",
+          "機会損失"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "品質情報",
+    "reading": "ひんしつじょうほう",
+    "senses": [
+      {
+        "definition": "不良・検査結果・原因など品質関連データ。原因分析や再発防止に活用する。",
+        "domain": "manufacturing",
+        "keywords": [
+          "品質",
+          "不良",
+          "検査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "紙運用",
+    "reading": "かみうんよう",
+    "senses": [
+      {
+        "definition": "紙を中心にした業務管理方法。データ化・共有・検索が難しく、デジタル化の対象になりやすい。",
+        "domain": "proposal",
+        "keywords": [
+          "紙",
+          "デジタル化",
+          "業務管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "部門間連携",
+    "reading": "ぶもんかんれんけい",
+    "senses": [
+      {
+        "definition": "複数部門が情報共有して協力すること。情報一元化によって連携の質が向上する。",
+        "domain": "proposal",
+        "keywords": [
+          "部門",
+          "連携",
+          "情報共有"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "基幹業務",
+    "reading": "きかんぎょうむ",
+    "senses": [
+      {
+        "definition": "会社の中核となる重要業務。受注・生産・在庫・出荷・会計などがこれにあたる。",
+        "domain": "proposal",
+        "keywords": [
+          "業務",
+          "基幹システム",
+          "ERP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "現場",
+    "reading": "げんば",
+    "senses": [
+      {
+        "definition": "実際に業務や生産を行う場所・部門。IT導入では現場の使いやすさが定着を左右する。",
+        "domain": "manufacturing",
+        "keywords": [
+          "現場力",
+          "定着",
+          "IT導入"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "管理部門",
+    "reading": "かんりぶもん",
+    "senses": [
+      {
+        "definition": "管理・統制・集計などを担う部門。現場からの情報を集約して経営へ報告する。",
+        "domain": "proposal",
+        "keywords": [
+          "管理",
+          "部門",
+          "経営報告"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "経営層",
+    "reading": "けいえいそう",
+    "senses": [
+      {
+        "definition": "経営判断を行う責任者層。提案書では意思決定者として重要なステークホルダー。",
+        "domain": "proposal",
+        "keywords": [
+          "経営",
+          "意思決定",
+          "ステークホルダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "経営陣"
+    ]
+  },
+  {
+    "term": "情報の一元管理",
+    "reading": "じょうほうのいちげんかんり",
+    "senses": [
+      {
+        "definition": "情報を1か所に集約して管理すること。分散・重複入力の解消に直結する。",
+        "domain": "proposal",
+        "keywords": [
+          "一元化",
+          "情報管理",
+          "集約"
+        ]
+      }
+    ],
+    "aliases": [
+      "情報一元管理"
+    ]
+  },
+  {
+    "term": "現場改善",
+    "reading": "げんばかいぜん",
+    "senses": [
+      {
+        "definition": "現場業務をより良くする取り組み。小さな改善の積み重ねが大きな成果になる。",
+        "domain": "manufacturing",
+        "keywords": [
+          "改善",
+          "カイゼン",
+          "現場"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "経営判断",
+    "reading": "けいえいはんだん",
+    "senses": [
+      {
+        "definition": "経営上の重要な意思決定。リアルタイムデータの可視化が高速化を支援する。",
+        "domain": "proposal",
+        "keywords": [
+          "経営",
+          "意思決定",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "統合システム",
+    "reading": "とうごうシステム",
+    "senses": [
+      {
+        "definition": "複数機能をまとめたシステム。分散していた業務を一元管理できる。",
+        "domain": "proposal",
+        "keywords": [
+          "システム",
+          "一元化",
+          "ERP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "実績収集",
+    "reading": "じっせきしゅうしゅう",
+    "senses": [
+      {
+        "definition": "実際の作業結果や数量を集めること。生産・在庫・品質の管理基盤となる。",
+        "domain": "manufacturing",
+        "keywords": [
+          "実績",
+          "データ収集",
+          "生産管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "レポート可視化",
+    "reading": "レポートかしか",
+    "senses": [
+      {
+        "definition": "数字や状況を見やすく表示すること。グラフ・ダッシュボードによる経営判断支援に使う。",
+        "domain": "proposal",
+        "keywords": [
+          "レポート",
+          "可視化",
+          "ダッシュボード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "出荷",
+    "reading": "しゅっか",
+    "senses": [
+      {
+        "definition": "製品を顧客へ発送すること。納期遵守率の管理対象となる業務。",
+        "domain": "manufacturing",
+        "keywords": [
+          "物流",
+          "納期",
+          "配送"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "見える化",
+    "reading": "みえるか",
+    "senses": [
+      {
+        "definition": "状況を誰でも分かる形にすること。データの可視化・共有によって現場と経営をつなぐ。",
+        "domain": "proposal",
+        "keywords": [
+          "可視化",
+          "データ",
+          "ダッシュボード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "納期遵守率",
+    "reading": "のうきじゅんしゅりつ",
+    "senses": [
+      {
+        "definition": "納期を守れた割合。導入効果のKPIとしてよく使われる指標。",
+        "domain": "proposal",
+        "keywords": [
+          "納期",
+          "KPI",
+          "指標"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "適正化",
+    "reading": "てきせいか",
+    "senses": [
+      {
+        "definition": "多すぎず少なすぎず適切にすること。在庫最適化・コスト適正化などで使う。",
+        "domain": "proposal",
+        "keywords": [
+          "最適化",
+          "在庫",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "余剰在庫",
+    "reading": "よじょうざいこ",
+    "senses": [
+      {
+        "definition": "必要以上に持っている在庫。資金固定化やスペース圧迫の原因になる。",
+        "domain": "manufacturing",
+        "keywords": [
+          "在庫",
+          "過剰",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "抑制",
+    "reading": "よくせい",
+    "senses": [
+      {
+        "definition": "増えすぎないように抑えること。コスト抑制・在庫抑制のように使う。",
+        "domain": "proposal",
+        "keywords": [
+          "コスト",
+          "在庫",
+          "削減"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "不良要因分析",
+    "reading": "ふりょうよういんぶんせき",
+    "senses": [
+      {
+        "definition": "不良が起きた原因を分析すること。品質改善と再発防止の出発点。",
+        "domain": "manufacturing",
+        "keywords": [
+          "不良",
+          "品質",
+          "原因分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "二重入力",
+    "reading": "にじゅうにゅうりょく",
+    "senses": [
+      {
+        "definition": "同じ情報を別の場所にも入力すること。重複入力の典型例。工数増加とミスの原因になる。",
+        "domain": "proposal",
+        "keywords": [
+          "入力",
+          "重複",
+          "工数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "省力化",
+    "reading": "しょうりょくか",
+    "senses": [
+      {
+        "definition": "人手や工数を減らすこと。自動化・システム化の主要な導入効果のひとつ。",
+        "domain": "proposal",
+        "keywords": [
+          "自動化",
+          "工数削減",
+          "効率化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "間接業務負荷",
+    "reading": "かんせつぎょうむふか",
+    "senses": [
+      {
+        "definition": "直接生産ではない周辺業務の負担。集計・転記・確認作業などが該当する。",
+        "domain": "proposal",
+        "keywords": [
+          "業務負荷",
+          "間接業務",
+          "省力化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "導入後の業務イメージ",
+    "reading": "どうにゅうごのぎょうむイメージ",
+    "senses": [
+      {
+        "definition": "導入後にどう業務が変わるかの想定。提案書のビフォーアフター比較で使う。",
+        "domain": "proposal",
+        "keywords": [
+          "提案書",
+          "業務改善",
+          "ビフォーアフター"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "即時反映",
+    "reading": "そくじはんえい",
+    "senses": [
+      {
+        "definition": "入力内容がすぐにシステムへ反映されること。リアルタイム性の具体的な表現。",
+        "domain": "proposal",
+        "keywords": [
+          "リアルタイム",
+          "データ",
+          "即時"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "集約されたデータ",
+    "reading": "しゅうやくされたデータ",
+    "senses": [
+      {
+        "definition": "まとめられた情報。一元管理によって実現し、分析や報告の基盤になる。",
+        "domain": "proposal",
+        "keywords": [
+          "データ",
+          "集約",
+          "一元管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "稼働支援",
+    "reading": "かどうしえん",
+    "senses": [
+      {
+        "definition": "本番利用開始時のサポート。システム切り替え直後の混乱を最小化する活動。",
+        "domain": "proposal",
+        "keywords": [
+          "サポート",
+          "導入支援",
+          "立ち上げ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "初期支援",
+    "reading": "しょきしえん",
+    "senses": [
+      {
+        "definition": "稼働直後の立ち上がり支援。利用者の操作習熟と課題対応が中心になる。",
+        "domain": "proposal",
+        "keywords": [
+          "サポート",
+          "導入支援",
+          "立ち上げ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "現場定着",
+    "reading": "げんばていちゃく",
+    "senses": [
+      {
+        "definition": "現場で継続的に使われる状態。定着化支援の最終目標。",
+        "domain": "proposal",
+        "keywords": [
+          "定着化",
+          "現場",
+          "継続利用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "伴走",
+    "reading": "ばんそう",
+    "senses": [
+      {
+        "definition": "相手に寄り添って継続支援すること。導入後の運用支援を表す提案書用語。",
+        "domain": "proposal",
+        "keywords": [
+          "支援",
+          "運用",
+          "継続"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務の分断",
+    "reading": "ぎょうむのぶんだん",
+    "senses": [
+      {
+        "definition": "業務や情報がつながっていない状態。部門間・システム間の連携不足で発生する。",
+        "domain": "proposal",
+        "keywords": [
+          "業務",
+          "連携",
+          "分断"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "在庫最適化",
+    "reading": "ざいこさいてきか",
+    "senses": [
+      {
+        "definition": "過不足のない在庫状態にすること。欠品・余剰在庫の両方を抑える取り組み。",
+        "domain": "manufacturing",
+        "keywords": [
+          "在庫",
+          "最適化",
+          "欠品"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "意思決定の高速化",
+    "reading": "いしけっていのこうそくか",
+    "senses": [
+      {
+        "definition": "判断をより早く行えるようにすること。リアルタイムデータ可視化が実現手段。",
+        "domain": "proposal",
+        "keywords": [
+          "意思決定",
+          "経営",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "情報システム部門",
+    "reading": "じょうほうシステムぶもん",
+    "senses": [
+      {
+        "definition": "社内ITを担当する部門。IT導入プロジェクトの社内窓口・推進主体になる。",
+        "domain": "proposal",
+        "keywords": [
+          "IT部門",
+          "社内IT",
+          "プロジェクト推進"
+        ]
+      }
+    ],
+    "aliases": [
+      "情シス",
+      "IS部門"
+    ]
+  },
+  {
+    "term": "現場責任者",
+    "reading": "げんばせきにんしゃ",
+    "senses": [
+      {
+        "definition": "現場運用を管理する責任者。IT導入では業務要件のキーパーソンになる。",
+        "domain": "proposal",
+        "keywords": [
+          "責任者",
+          "現場",
+          "キーパーソン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "役割明確化",
+    "reading": "やくわりめいかくか",
+    "senses": [
+      {
+        "definition": "誰が何を担当するか明確にすること。プロジェクト推進や定着化に不可欠。",
+        "domain": "proposal",
+        "keywords": [
+          "役割",
+          "プロジェクト",
+          "体制"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "想定スケジュール",
+    "reading": "そうていスケジュール",
+    "senses": [
+      {
+        "definition": "予定している工程の時系列計画。提案書の導入の進め方セクションで示す。",
+        "domain": "proposal",
+        "keywords": [
+          "スケジュール",
+          "工程",
+          "提案書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "当社の強み",
+    "reading": "とうしゃのつよみ",
+    "senses": [
+      {
+        "definition": "提案企業の優位性。業務理解・実績・サポート体制などで差別化を示す。",
+        "domain": "proposal",
+        "keywords": [
+          "強み",
+          "差別化",
+          "提案書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務理解",
+    "reading": "ぎょうむりかい",
+    "senses": [
+      {
+        "definition": "業務内容を深く理解していること。提案の説得力を高める重要な要素。",
+        "domain": "proposal",
+        "keywords": [
+          "業務",
+          "理解",
+          "提案"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "一貫して対応",
+    "reading": "いっかんしてたいおう",
+    "senses": [
+      {
+        "definition": "上流から導入後まで通して支援すること。提案企業の強みとして訴求するケースが多い。",
+        "domain": "proposal",
+        "keywords": [
+          "一貫支援",
+          "上流",
+          "導入後"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務システム",
+    "reading": "ぎょうむシステム",
+    "senses": [
+      {
+        "definition": "受発注、会計、在庫、人事など、組織の業務を支えるために使う情報システムです。正確性、権限管理、監査、運用継続性が重視されます。",
+        "domain": "business",
+        "keywords": [
+          "基幹",
+          "業務",
+          "権限",
+          "監査",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "公式サポート",
+    "reading": "こうしきさぽーと",
+    "senses": [
+      {
+        "definition": "製品やOSSに対して提供元が問い合わせ対応、バグ修正、パッチ提供、サポート窓口などを公式に用意していることです。",
+        "domain": "technology-selection",
+        "keywords": [
+          "ベンダー",
+          "保守",
+          "パッチ",
+          "問い合わせ",
+          "サポート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "企業向け製品との親和性",
+    "reading": "きぎょうむけせいひんとのしんわせい",
+    "senses": [
+      {
+        "definition": "ERP、SSO、ディレクトリサービス、監視、ITSMなどの企業向け製品や運用基盤と無理なく組み合わせられる度合いです。",
+        "domain": "technology-selection",
+        "keywords": [
+          "ERP",
+          "SSO",
+          "監視",
+          "ITSM",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "企業向け製品との親和"
+    ]
+  },
+  {
+    "term": "エンタープライズ製品互換性",
+    "reading": "えんたーぷらいずせいひんごかんせい",
+    "senses": [
+      {
+        "definition": "企業向け製品間の互換性・相互運用性を示す指標です。異なるベンダー製品やバージョン間でのデータ交換や共同動作を保証します。",
+        "domain": "enterprise",
+        "keywords": [
+          "互換性",
+          "エンタープライズ",
+          "相互運用性",
+          "製品"
+        ]
+      }
+    ],
+    "aliases": [
+      "Enterprise Product Compatibility"
+    ]
+  }
+]

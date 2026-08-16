@@ -1,0 +1,1282 @@
+[
+  {
+    "term": "TDD",
+    "senses": [
+      {
+        "definition": "テストを先に書いて、実装と設計を導く開発技法。",
+        "domain": "testing",
+        "keywords": [
+          "テスト駆動",
+          "Test-Driven",
+          "開発手法"
+        ]
+      }
+    ],
+    "reading": "てぃーでぃーでぃー",
+    "aliases": []
+  },
+  {
+    "term": "Test-Driven Development",
+    "senses": [
+      {
+        "definition": "TDDの正式名称。",
+        "domain": "testing",
+        "keywords": [
+          "TDD",
+          "テスト駆動",
+          "開発手法"
+        ]
+      }
+    ],
+    "reading": "てすとどりぶんでぃべろっぷめんと",
+    "aliases": []
+  },
+  {
+    "term": "Red-Green-Refactor",
+    "senses": [
+      {
+        "definition": "失敗するテストを書く、通す、整える、の反復サイクル。",
+        "domain": "tdd",
+        "keywords": [
+          "赤",
+          "緑",
+          "リファクタ"
+        ]
+      }
+    ],
+    "reading": "れっどぐりーんりふぁくたー",
+    "aliases": []
+  },
+  {
+    "term": "Test case list",
+    "senses": [
+      {
+        "definition": "TDDの最初に書き出しておくテスト候補一覧。",
+        "domain": "tdd",
+        "keywords": [
+          "候補",
+          "一覧",
+          "計画"
+        ]
+      }
+    ],
+    "reading": "てすとけーすりすと",
+    "aliases": []
+  },
+  {
+    "term": "Failing test first",
+    "senses": [
+      {
+        "definition": "まず失敗するテストを用意してから実装へ進む考え方。",
+        "domain": "tdd",
+        "keywords": [
+          "失敗",
+          "テスト先行",
+          "Red"
+        ]
+      }
+    ],
+    "reading": "ふぇいりんぐてすとふぁーすと",
+    "aliases": []
+  },
+  {
+    "term": "Make it work",
+    "senses": [
+      {
+        "definition": "まずテストを通すことへ集中する段階。",
+        "domain": "tdd",
+        "keywords": [
+          "Green",
+          "テスト通過",
+          "実装"
+        ]
+      }
+    ],
+    "reading": "めいくいっとわーく",
+    "aliases": []
+  },
+  {
+    "term": "Make it clean",
+    "senses": [
+      {
+        "definition": "テストが通った後に設計や構造を整える段階。",
+        "domain": "tdd",
+        "keywords": [
+          "Refactor",
+          "整理",
+          "設計改善"
+        ]
+      }
+    ],
+    "reading": "めいくいっとくりーん",
+    "aliases": []
+  },
+  {
+    "term": "JUnit Jupiter",
+    "senses": [
+      {
+        "definition": "JUnit 5の中でテスト記述を担うプログラミングモデル。",
+        "domain": "junit",
+        "keywords": [
+          "JUnit 5",
+          "テスト",
+          "Java"
+        ]
+      }
+    ],
+    "reading": "じゅにっとじゅぴたー",
+    "aliases": []
+  },
+  {
+    "term": "Test class",
+    "senses": [
+      {
+        "definition": "1つ以上のtest methodを含むJUnitのテストクラス。",
+        "domain": "junit",
+        "keywords": [
+          "クラス",
+          "テスト",
+          "Java"
+        ]
+      }
+    ],
+    "reading": "てすとくらす",
+    "aliases": []
+  },
+  {
+    "term": "Test method",
+    "senses": [
+      {
+        "definition": "@Testや@ParameterizedTestなどで示される実行対象メソッド。",
+        "domain": "junit",
+        "keywords": [
+          "メソッド",
+          "@Test",
+          "実行"
+        ]
+      }
+    ],
+    "reading": "てすとめそっど",
+    "aliases": []
+  },
+  {
+    "term": "@Test",
+    "senses": [
+      {
+        "definition": "通常のテストメソッドを示すJUnit Jupiterアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "アノテーション",
+          "テスト",
+          "Jupiter"
+        ]
+      }
+    ],
+    "reading": "あっとてすと",
+    "aliases": []
+  },
+  {
+    "term": "@Disabled",
+    "senses": [
+      {
+        "definition": "そのテストを実行対象から外すアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "無効化",
+          "スキップ",
+          "アノテーション"
+        ]
+      }
+    ],
+    "reading": "あっとでぃせーぶるど",
+    "aliases": []
+  },
+  {
+    "term": "@BeforeEach",
+    "senses": [
+      {
+        "definition": "各テストメソッドの前に実行される初期化メソッド。",
+        "domain": "junit",
+        "keywords": [
+          "初期化",
+          "setUp",
+          "前処理"
+        ]
+      }
+    ],
+    "reading": "あっとびふぉーいーち",
+    "aliases": []
+  },
+  {
+    "term": "@AfterEach",
+    "senses": [
+      {
+        "definition": "各テストメソッドの後に実行される後始末メソッド。",
+        "domain": "junit",
+        "keywords": [
+          "後処理",
+          "tearDown",
+          "クリーンアップ"
+        ]
+      }
+    ],
+    "reading": "あっとあふたーいーち",
+    "aliases": []
+  },
+  {
+    "term": "@BeforeAll",
+    "senses": [
+      {
+        "definition": "クラス全体のテスト前に一度だけ実行されるメソッド。",
+        "domain": "junit",
+        "keywords": [
+          "初期化",
+          "static",
+          "クラス"
+        ]
+      }
+    ],
+    "reading": "あっとびふぉーおーる",
+    "aliases": []
+  },
+  {
+    "term": "@AfterAll",
+    "senses": [
+      {
+        "definition": "クラス全体のテスト後に一度だけ実行されるメソッド。",
+        "domain": "junit",
+        "keywords": [
+          "後処理",
+          "static",
+          "クラス"
+        ]
+      }
+    ],
+    "reading": "あっとあふたーおーる",
+    "aliases": []
+  },
+  {
+    "term": "Aborted test",
+    "senses": [
+      {
+        "definition": "assumption不成立などで途中中止になるテスト。",
+        "domain": "junit",
+        "keywords": [
+          "中止",
+          "assumption",
+          "スキップ"
+        ]
+      }
+    ],
+    "reading": "あぼーてっどてすと",
+    "aliases": []
+  },
+  {
+    "term": "Assumptions",
+    "senses": [
+      {
+        "definition": "条件が成り立たなければテストを中止するための仕組み。",
+        "domain": "junit",
+        "keywords": [
+          "前提条件",
+          "中止",
+          "assumeTrue"
+        ]
+      }
+    ],
+    "reading": "あさんぷしょんず",
+    "aliases": []
+  },
+  {
+    "term": "@RepeatedTest",
+    "senses": [
+      {
+        "definition": "同じテストを複数回繰り返し実行するためのアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "繰り返し",
+          "回数",
+          "反復"
+        ]
+      }
+    ],
+    "reading": "あっとりぴーてっどてすと",
+    "aliases": []
+  },
+  {
+    "term": "Failure threshold",
+    "senses": [
+      {
+        "definition": "@RepeatedTestで、一定回数失敗したら残りを自動スキップする閾値。",
+        "domain": "junit",
+        "keywords": [
+          "閾値",
+          "失敗",
+          "スキップ"
+        ]
+      }
+    ],
+    "reading": "ふぇいりゃーすれっしょるど",
+    "aliases": []
+  },
+  {
+    "term": "@ParameterizedTest",
+    "senses": [
+      {
+        "definition": "複数の引数パターンで同じテストロジックを実行するためのアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "パラメータ",
+          "引数",
+          "テスト"
+        ]
+      }
+    ],
+    "reading": "あっとぱらめたらいずどてすと",
+    "aliases": []
+  },
+  {
+    "term": "@ValueSource",
+    "senses": [
+      {
+        "definition": "単純な値配列を@ParameterizedTestへ供給するアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "値",
+          "配列",
+          "ソース"
+        ]
+      }
+    ],
+    "reading": "あっとばりゅーそーす",
+    "aliases": []
+  },
+  {
+    "term": "@CsvSource",
+    "senses": [
+      {
+        "definition": "CSV形式で引数を与えるparameterized test用アノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "CSV",
+          "引数",
+          "パラメータ"
+        ]
+      }
+    ],
+    "reading": "あっとしーえすぶいそーす",
+    "aliases": []
+  },
+  {
+    "term": "@CsvFileSource",
+    "senses": [
+      {
+        "definition": "CSVファイルから引数を読むparameterized test用アノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "CSV",
+          "ファイル",
+          "パラメータ"
+        ]
+      }
+    ],
+    "reading": "あっとしーえすぶいふぁいるそーす",
+    "aliases": []
+  },
+  {
+    "term": "@MethodSource",
+    "senses": [
+      {
+        "definition": "メソッドが返す値列を引数ソースとして使うアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "メソッド",
+          "ソース",
+          "Stream"
+        ]
+      }
+    ],
+    "reading": "あっとめそっどそーす",
+    "aliases": []
+  },
+  {
+    "term": "Factory method convention",
+    "senses": [
+      {
+        "definition": "@MethodSourceでソース名を省略した場合、同名メソッドを探す規約。",
+        "domain": "junit",
+        "keywords": [
+          "規約",
+          "@MethodSource",
+          "同名"
+        ]
+      }
+    ],
+    "reading": "ふぁくとりーめそっどこんべんしょん",
+    "aliases": []
+  },
+  {
+    "term": "ArgumentsAccessor",
+    "senses": [
+      {
+        "definition": "@ParameterizedTestの引数へまとめてアクセスする補助型。",
+        "domain": "junit",
+        "keywords": [
+          "引数",
+          "アクセス",
+          "補助"
+        ]
+      }
+    ],
+    "reading": "あーぎゅめんつあくせさー",
+    "aliases": []
+  },
+  {
+    "term": "ArgumentsAggregator",
+    "senses": [
+      {
+        "definition": "複数引数を1つのオブジェクトへまとめるための集約インターフェース。",
+        "domain": "junit",
+        "keywords": [
+          "集約",
+          "引数",
+          "変換"
+        ]
+      }
+    ],
+    "reading": "あーぎゅめんつあぐりげーたー",
+    "aliases": []
+  },
+  {
+    "term": "@AggregateWith",
+    "senses": [
+      {
+        "definition": "ArgumentsAggregatorを@ParameterizedTest引数へ適用するアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "集約",
+          "アノテーション",
+          "変換"
+        ]
+      }
+    ],
+    "reading": "あっとあぐりげーとうぃず",
+    "aliases": []
+  },
+  {
+    "term": "ParameterResolver",
+    "senses": [
+      {
+        "definition": "JUnit拡張としてテストメソッド引数を注入するための仕組み。",
+        "domain": "junit",
+        "keywords": [
+          "DI",
+          "拡張",
+          "注入"
+        ]
+      }
+    ],
+    "reading": "ぱらめーたりぞるばー",
+    "aliases": []
+  },
+  {
+    "term": "@TestFactory",
+    "senses": [
+      {
+        "definition": "実行時にdynamic testsを生成するfactory methodを示すアノテーション。",
+        "domain": "junit",
+        "keywords": [
+          "動的",
+          "生成",
+          "factory"
+        ]
+      }
+    ],
+    "reading": "あっとてすとふぁくとりー",
+    "aliases": []
+  },
+  {
+    "term": "DynamicTest",
+    "senses": [
+      {
+        "definition": "実行時に生成されるテストケース。display nameとexecutableを持つ。",
+        "domain": "junit",
+        "keywords": [
+          "動的",
+          "テスト",
+          "生成"
+        ]
+      }
+    ],
+    "reading": "だいなみっくてすと",
+    "aliases": []
+  },
+  {
+    "term": "DynamicNode",
+    "senses": [
+      {
+        "definition": "DynamicTestやDynamicContainerの共通上位概念。",
+        "domain": "junit",
+        "keywords": [
+          "ノード",
+          "動的",
+          "階層"
+        ]
+      }
+    ],
+    "reading": "だいなみっくのーど",
+    "aliases": []
+  },
+  {
+    "term": "DynamicContainer",
+    "senses": [
+      {
+        "definition": "DynamicNodeを階層構造でまとめるための実行時コンテナ。",
+        "domain": "junit",
+        "keywords": [
+          "コンテナ",
+          "階層",
+          "動的"
+        ]
+      }
+    ],
+    "reading": "だいなみっくこんてな",
+    "aliases": []
+  },
+  {
+    "term": "@TestTemplate",
+    "senses": [
+      {
+        "definition": "拡張機構により複数回呼び出されるテンプレート型テスト。",
+        "domain": "junit",
+        "keywords": [
+          "テンプレート",
+          "拡張",
+          "反復"
+        ]
+      }
+    ],
+    "reading": "あっとてすとてんぷれーと",
+    "aliases": []
+  },
+  {
+    "term": "@Nested",
+    "senses": [
+      {
+        "definition": "入れ子のテストクラスを表すアノテーション。文脈ごとのグルーピングに使える。",
+        "domain": "junit",
+        "keywords": [
+          "入れ子",
+          "グループ",
+          "内部クラス"
+        ]
+      }
+    ],
+    "reading": "あっとねすてっど",
+    "aliases": []
+  },
+  {
+    "term": "@Tag",
+    "senses": [
+      {
+        "definition": "テストへ分類タグを付けるアノテーション。実行対象の絞り込みに使える。",
+        "domain": "junit",
+        "keywords": [
+          "タグ",
+          "分類",
+          "フィルター"
+        ]
+      }
+    ],
+    "reading": "あっとたぐ",
+    "aliases": []
+  },
+  {
+    "term": "Meta-annotation test",
+    "senses": [
+      {
+        "definition": "@Tagと@Testをまとめた独自アノテーションを作る使い方。",
+        "domain": "junit",
+        "keywords": [
+          "メタ",
+          "カスタム",
+          "アノテーション"
+        ]
+      }
+    ],
+    "reading": "めたいあのてーしょんてすと",
+    "aliases": []
+  },
+  {
+    "term": "Display name generation",
+    "senses": [
+      {
+        "definition": "Parameterized testやrepeated testの表示名を規則で生成する仕組み。",
+        "domain": "junit",
+        "keywords": [
+          "表示名",
+          "生成",
+          "規則"
+        ]
+      }
+    ],
+    "reading": "でぃすぷれいねーむじぇねれーしょん",
+    "aliases": []
+  },
+  {
+    "term": "Dynamic test lifecycle",
+    "senses": [
+      {
+        "definition": "Dynamic testは通常の@Testとライフサイクルが異なる。",
+        "domain": "junit",
+        "keywords": [
+          "ライフサイクル",
+          "動的",
+          "違い"
+        ]
+      }
+    ],
+    "reading": "だいなみっくてすとらいふさいくる",
+    "aliases": []
+  },
+  {
+    "term": "No lifecycle callbacks for dynamic tests",
+    "senses": [
+      {
+        "definition": "Dynamic testでは@BeforeEachや@AfterEachが各DynamicTestごとには実行されない。",
+        "domain": "junit",
+        "keywords": [
+          "コールバック",
+          "制約",
+          "動的"
+        ]
+      }
+    ],
+    "reading": "だいなみっくてすとではらいふさいくるこーるばっくがない",
+    "aliases": []
+  },
+  {
+    "term": "jqwik",
+    "senses": [
+      {
+        "definition": "Java向けのproperty-based testingフレームワーク。",
+        "domain": "pbt",
+        "keywords": [
+          "Java",
+          "プロパティ",
+          "テスト"
+        ]
+      }
+    ],
+    "reading": "じぇいくうぃっく",
+    "aliases": []
+  },
+  {
+    "term": "@Property",
+    "senses": [
+      {
+        "definition": "jqwikでproperty-based testを示すアノテーション。",
+        "domain": "jqwik",
+        "keywords": [
+          "プロパティ",
+          "テスト",
+          "アノテーション"
+        ]
+      }
+    ],
+    "reading": "あっとぷろぱてぃ",
+    "aliases": []
+  },
+  {
+    "term": "@ForAll",
+    "senses": [
+      {
+        "definition": "jqwikで生成値をpropertyへ注入するためのアノテーション。",
+        "domain": "jqwik",
+        "keywords": [
+          "注入",
+          "生成",
+          "引数"
+        ]
+      }
+    ],
+    "reading": "あっとふぉーおーる",
+    "aliases": []
+  },
+  {
+    "term": "Arbitrary",
+    "senses": [
+      {
+        "definition": "jqwikにおける値生成戦略の基本型。",
+        "domain": "jqwik",
+        "keywords": [
+          "生成",
+          "戦略",
+          "型"
+        ]
+      }
+    ],
+    "reading": "あーびとらりー",
+    "aliases": []
+  },
+  {
+    "term": "Arbitraries",
+    "senses": [
+      {
+        "definition": "文字列、整数などの基本Arbitraryを作るためのファクトリ群。",
+        "domain": "jqwik",
+        "keywords": [
+          "ファクトリ",
+          "生成",
+          "基本型"
+        ]
+      }
+    ],
+    "reading": "あーびとらりーず",
+    "aliases": []
+  },
+  {
+    "term": "Domain Arbitrary",
+    "senses": [
+      {
+        "definition": "自分のドメイン型専用に作るArbitrary。",
+        "domain": "jqwik",
+        "keywords": [
+          "ドメイン",
+          "カスタム",
+          "生成"
+        ]
+      }
+    ],
+    "reading": "どめいんあーびとらりー",
+    "aliases": []
+  },
+  {
+    "term": "Combinators.combine",
+    "senses": [
+      {
+        "definition": "複数Arbitraryを組み合わせて複雑なドメインオブジェクトを作るjqwikの機能。",
+        "domain": "jqwik",
+        "keywords": [
+          "合成",
+          "組み合わせ",
+          "ビルダー"
+        ]
+      }
+    ],
+    "reading": "こんびねーたーずこんばいん",
+    "aliases": []
+  },
+  {
+    "term": "Shrinking",
+    "senses": [
+      {
+        "definition": "失敗例が見つかったときに、より小さく単純な失敗例へ縮めていく処理。",
+        "domain": "pbt",
+        "keywords": [
+          "縮小",
+          "最小化",
+          "反例"
+        ]
+      }
+    ],
+    "reading": "しゅりんきんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Integrated shrinking",
+    "senses": [
+      {
+        "definition": "jqwikが採用しているshrinking方式。",
+        "domain": "jqwik",
+        "keywords": [
+          "統合",
+          "shrinking",
+          "方式"
+        ]
+      }
+    ],
+    "reading": "いんてぐれーてっどしゅりんきんぐ",
+    "aliases": []
+  },
+  {
+    "term": "Shrunk Sample",
+    "senses": [
+      {
+        "definition": "Shrinkingの結果として得られる、最小化された失敗入力例。",
+        "domain": "pbt",
+        "keywords": [
+          "最小化",
+          "反例",
+          "サンプル"
+        ]
+      }
+    ],
+    "reading": "しゅらんくさんぷる",
+    "aliases": []
+  },
+  {
+    "term": "ShrinkingMode.OFF",
+    "senses": [
+      {
+        "definition": "jqwikでshrinkingを無効化する設定。",
+        "domain": "jqwik",
+        "keywords": [
+          "無効化",
+          "設定",
+          "OFF"
+        ]
+      }
+    ],
+    "reading": "しゅりんきんぐもーどおふ",
+    "aliases": []
+  },
+  {
+    "term": "ShrinkingMode.FULL",
+    "senses": [
+      {
+        "definition": "jqwikでより徹底的にshrinkingする設定。",
+        "domain": "jqwik",
+        "keywords": [
+          "徹底",
+          "FULL",
+          "設定"
+        ]
+      }
+    ],
+    "reading": "しゅりんきんぐもーどふる",
+    "aliases": []
+  },
+  {
+    "term": "shrinking bound reached",
+    "senses": [
+      {
+        "definition": "jqwikが一定回数shrinkingしても最終候補へ収束しきれなかったことを示すメッセージ。",
+        "domain": "jqwik",
+        "keywords": [
+          "上限",
+          "収束",
+          "メッセージ"
+        ]
+      }
+    ],
+    "reading": "しゅりんきんぐばうんどりーちど",
+    "aliases": []
+  },
+  {
+    "term": "shrinkTowards",
+    "senses": [
+      {
+        "definition": "数値などのshrinking先を0以外へ寄せるjqwikの指定。",
+        "domain": "jqwik",
+        "keywords": [
+          "目標値",
+          "数値",
+          "shrinking"
+        ]
+      }
+    ],
+    "reading": "しゅりんくとぅわーず",
+    "aliases": []
+  },
+  {
+    "term": "flat mapping Arbitraries",
+    "senses": [
+      {
+        "definition": "先に生成した値に依存して次のArbitraryを決める作り方。",
+        "domain": "jqwik",
+        "keywords": [
+          "flatMap",
+          "依存",
+          "生成"
+        ]
+      }
+    ],
+    "reading": "ふらっとまっぴんぐあーびとらりーず",
+    "aliases": []
+  },
+  {
+    "term": "unshrinkable permutations",
+    "senses": [
+      {
+        "definition": "jqwikのshuffleが返す、縮小しない並び替え生成。",
+        "domain": "jqwik",
+        "keywords": [
+          "shuffle",
+          "順列",
+          "縮小不可"
+        ]
+      }
+    ],
+    "reading": "あんしゅりんかぶるぱーみゅてーしょんず",
+    "aliases": []
+  },
+  {
+    "term": "stateful testing",
+    "senses": [
+      {
+        "definition": "操作列全体がシステムを壊すかを検証するtestingスタイル。",
+        "domain": "pbt",
+        "keywords": [
+          "状態",
+          "操作列",
+          "モデル"
+        ]
+      }
+    ],
+    "reading": "すてーとふるてすてぃんぐ",
+    "aliases": []
+  },
+  {
+    "term": "invariant",
+    "senses": [
+      {
+        "definition": "どの状態でも成り立つべき性質。stateful testingの中心概念。",
+        "domain": "pbt",
+        "keywords": [
+          "不変条件",
+          "性質",
+          "検証"
+        ]
+      }
+    ],
+    "reading": "いんばりあんと",
+    "aliases": []
+  },
+  {
+    "term": "InvariantFailedError",
+    "senses": [
+      {
+        "definition": "jqwikのstateful testingでinvariantが破られたことを示すエラー。",
+        "domain": "jqwik",
+        "keywords": [
+          "エラー",
+          "invariant",
+          "失敗"
+        ]
+      }
+    ],
+    "reading": "いんばりあんとふぇいるどえらー",
+    "aliases": []
+  },
+  {
+    "term": "ServiceLoader-based Arbitrary registration",
+    "senses": [
+      {
+        "definition": "jqwikでdomain Arbitraryを全propertyから使えるようにするための登録方式。",
+        "domain": "jqwik",
+        "keywords": [
+          "ServiceLoader",
+          "登録",
+          "グローバル"
+        ]
+      }
+    ],
+    "reading": "さーびすろーだーべーすどあーびとらりーれじすとれーしょん",
+    "aliases": []
+  },
+  {
+    "term": "Hypothesis",
+    "senses": [
+      {
+        "definition": "Python向けのproperty-based testingライブラリ。",
+        "domain": "pbt",
+        "keywords": [
+          "Python",
+          "プロパティ",
+          "テスト"
+        ]
+      }
+    ],
+    "reading": "はいぽせしす",
+    "aliases": []
+  },
+  {
+    "term": "@given",
+    "senses": [
+      {
+        "definition": "Hypothesisでtest関数へ生成値を与えるデコレータ。",
+        "domain": "hypothesis",
+        "keywords": [
+          "デコレータ",
+          "生成",
+          "引数"
+        ]
+      }
+    ],
+    "reading": "あっとぎぶん",
+    "aliases": []
+  },
+  {
+    "term": "strategies as st",
+    "senses": [
+      {
+        "definition": "Hypothesisで生成戦略群をstとして使う慣用的インポート。",
+        "domain": "hypothesis",
+        "keywords": [
+          "import",
+          "戦略",
+          "慣習"
+        ]
+      }
+    ],
+    "reading": "すとらてじーずあずえすてぃー",
+    "aliases": []
+  },
+  {
+    "term": "@settings",
+    "senses": [
+      {
+        "definition": "Hypothesisテストごとの挙動を調整するデコレータ。",
+        "domain": "hypothesis",
+        "keywords": [
+          "設定",
+          "デコレータ",
+          "調整"
+        ]
+      }
+    ],
+    "reading": "あっとせってぃんぐす",
+    "aliases": []
+  },
+  {
+    "term": "settings profile",
+    "senses": [
+      {
+        "definition": "Hypothesisの共通設定を名前付きで登録、読み込む仕組み。",
+        "domain": "hypothesis",
+        "keywords": [
+          "プロファイル",
+          "設定",
+          "共通化"
+        ]
+      }
+    ],
+    "reading": "せってぃんぐすぷろふぁいる",
+    "aliases": []
+  },
+  {
+    "term": "max_examples",
+    "senses": [
+      {
+        "definition": "Hypothesisが生成して試す例の上限設定。",
+        "domain": "hypothesis",
+        "keywords": [
+          "上限",
+          "例数",
+          "設定"
+        ]
+      }
+    ],
+    "reading": "まっくすえぐざんぷるず",
+    "aliases": []
+  },
+  {
+    "term": "replaying failures",
+    "senses": [
+      {
+        "definition": "過去に失敗した例を再利用して再現確認する機能。",
+        "domain": "hypothesis",
+        "keywords": [
+          "再現",
+          "失敗例",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "reading": "りぷれいんぐふぇいりゃーず",
+    "aliases": []
+  },
+  {
+    "term": "@example",
+    "senses": [
+      {
+        "definition": "生成例に加えて明示的な例を追加するHypothesisのデコレータ。",
+        "domain": "hypothesis",
+        "keywords": [
+          "明示",
+          "例",
+          "デコレータ"
+        ]
+      }
+    ],
+    "reading": "あっとえぐざんぷる",
+    "aliases": []
+  },
+  {
+    "term": "explicit example",
+    "senses": [
+      {
+        "definition": "@exampleで与える手書きの具体例。",
+        "domain": "hypothesis",
+        "keywords": [
+          "手書き",
+          "具体例",
+          "@example"
+        ]
+      }
+    ],
+    "reading": "えくすぷりしっとえぐざんぷる",
+    "aliases": []
+  },
+  {
+    "term": "explicit examples do not shrink",
+    "senses": [
+      {
+        "definition": "@exampleで与えた失敗例は自動shrinkingの対象にならない。",
+        "domain": "hypothesis",
+        "keywords": [
+          "shrinking",
+          "対象外",
+          "制約"
+        ]
+      }
+    ],
+    "reading": "えくすぷりしっとえぐざんぷるはしゅりんくしない",
+    "aliases": []
+  },
+  {
+    "term": "example database",
+    "senses": [
+      {
+        "definition": "失敗例や有用な例を保存し、次回以降に再利用するHypothesisの仕組み。",
+        "domain": "hypothesis",
+        "keywords": [
+          "保存",
+          "再利用",
+          "データベース"
+        ]
+      }
+    ],
+    "reading": "えぐざんぷるでーたべーす",
+    "aliases": []
+  },
+  {
+    "term": "database key",
+    "senses": [
+      {
+        "definition": "どのテストへ保存例をひもづけるかを決める識別。",
+        "domain": "hypothesis",
+        "keywords": [
+          "キー",
+          "識別",
+          "保存"
+        ]
+      }
+    ],
+    "reading": "でーたべーすきー",
+    "aliases": []
+  },
+  {
+    "term": "HealthCheck",
+    "senses": [
+      {
+        "definition": "テストが非効率、遅い、生成品質が悪いなどを知らせるHypothesisの警告機構。",
+        "domain": "hypothesis",
+        "keywords": [
+          "警告",
+          "品質",
+          "効率"
+        ]
+      }
+    ],
+    "reading": "へるすちぇっく",
+    "aliases": []
+  },
+  {
+    "term": "suppress_health_check",
+    "senses": [
+      {
+        "definition": "特定のHealthCheckを抑制するための設定。",
+        "domain": "hypothesis",
+        "keywords": [
+          "抑制",
+          "設定",
+          "警告"
+        ]
+      }
+    ],
+    "reading": "さぷれすへるすちぇっく",
+    "aliases": []
+  },
+  {
+    "term": "deadline",
+    "senses": [
+      {
+        "definition": "1テストケースあたりの実行時間目安を制御するHypothesisの設定。",
+        "domain": "hypothesis",
+        "keywords": [
+          "時間",
+          "制限",
+          "タイムアウト"
+        ]
+      }
+    ],
+    "reading": "でっどらいん",
+    "aliases": []
+  },
+  {
+    "term": "verbosity",
+    "senses": [
+      {
+        "definition": "Hypothesisの出力詳細度を調整する設定。",
+        "domain": "hypothesis",
+        "keywords": [
+          "詳細度",
+          "出力",
+          "ログ"
+        ]
+      }
+    ],
+    "reading": "ばーぼしてぃ",
+    "aliases": []
+  },
+  {
+    "term": "falsifying example",
+    "senses": [
+      {
+        "definition": "Propertyを破る具体的な反例。",
+        "domain": "pbt",
+        "keywords": [
+          "反例",
+          "失敗",
+          "具体例"
+        ]
+      }
+    ],
+    "reading": "ふぁるしふぁいんぐえぐざんぷる",
+    "aliases": []
+  },
+  {
+    "term": "shrinker performance",
+    "senses": [
+      {
+        "definition": "失敗例をどれだけ効率よく小さくできるかという観点。",
+        "domain": "pbt",
+        "keywords": [
+          "効率",
+          "shrinking",
+          "性能"
+        ]
+      }
+    ],
+    "reading": "しゅりんかーぱふぉーまんす",
+    "aliases": []
+  },
+  {
+    "term": "property-based testing",
+    "senses": [
+      {
+        "definition": "個別例ではなく、成り立つべき性質そのものを検証するテスト手法。",
+        "domain": "testing",
+        "keywords": [
+          "PBT",
+          "性質",
+          "自動生成"
+        ]
+      }
+    ],
+    "reading": "ぷろぱてぃべーすどてすてぃんぐ",
+    "aliases": []
+  }
+]

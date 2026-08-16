@@ -1,0 +1,1831 @@
+[
+  {
+    "term": "条件型",
+    "reading": "じょうけんがた",
+    "aliases": [
+      "Conditional Types"
+    ],
+    "senses": [
+      {
+        "definition": "型レベルの三項演算子`T extends U ? X : Y`で表される型。型Tが型Uに代入可能な場合はX、そうでなければYを返す。`infer`と組み合わせて型から内部の型を抽出する高度な型プログラミングに使われる。",
+        "domain": "typescript",
+        "keywords": [
+          "型プログラミング",
+          "extends",
+          "infer",
+          "型抽出",
+          "型レベル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マップ型",
+    "reading": "まっぷがた",
+    "aliases": [
+      "Mapped Types"
+    ],
+    "senses": [
+      {
+        "definition": "既存の型のプロパティを反復処理して新しい型を生成するTypeScriptの機能。`{ [K in keyof T]: ... }`構文を使い、`Partial<T>`や`Readonly<T>`などのユーティリティ型の基盤となる。",
+        "domain": "typescript",
+        "keywords": [
+          "型変換",
+          "プロパティ",
+          "ユーティリティ型",
+          "keyof",
+          "型プログラミング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "テンプレートリテラル型",
+    "reading": "てんぷれーとりてらるがた",
+    "aliases": [
+      "Template Literal Types"
+    ],
+    "senses": [
+      {
+        "definition": "文字列テンプレートリテラルの構文を型レベルで使用できるTypeScript 4.1以降の機能。`type EventName = `on${string}``のように文字列パターンを型として表現し、APIの命名規則などを型で強制できる。",
+        "domain": "typescript",
+        "keywords": [
+          "文字列型",
+          "パターン",
+          "型プログラミング",
+          "リテラル型",
+          "文字列操作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ユニオン型",
+    "reading": "ゆにおんがた",
+    "aliases": [
+      "Union Types"
+    ],
+    "senses": [
+      {
+        "definition": "複数の型のいずれかであることを表す型。`string | number`のように`|`で連結する。型の絞り込みと組み合わせて安全に各型固有の操作が行え、判別共用体パターンの基盤にもなる。",
+        "domain": "typescript",
+        "keywords": [
+          "型の組み合わせ",
+          "型の絞り込み",
+          "判別共用体",
+          "|演算子",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "交差型",
+    "reading": "こうさがた",
+    "aliases": [
+      "Intersection Types"
+    ],
+    "senses": [
+      {
+        "definition": "複数の型すべてのプロパティを同時に持つ型を表す。`A & B`と書き、Aの全プロパティとBの全プロパティを合わせた型になる。ミックスインパターンやオブジェクトの拡張に使われるが、プリミティブ型への適用では`never`になることがある。",
+        "domain": "typescript",
+        "keywords": [
+          "型の組み合わせ",
+          "&演算子",
+          "ミックスイン",
+          "型拡張",
+          "プロパティ結合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型ガード",
+    "reading": "かたがーど",
+    "aliases": [
+      "Type Guard"
+    ],
+    "senses": [
+      {
+        "definition": "ランタイムで型チェックを行い、その後のスコープで型を絞り込むTypeScriptの仕組み。`typeof`、`instanceof`、`in`演算子による組み込みガードや、型述語を返すユーザー定義型ガードがある。",
+        "domain": "typescript",
+        "keywords": [
+          "型の絞り込み",
+          "typeof",
+          "instanceof",
+          "型述語",
+          "ランタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型述語",
+    "reading": "かたじゅつご",
+    "aliases": [
+      "Type Predicates"
+    ],
+    "senses": [
+      {
+        "definition": "関数の戻り値型として`param is Type`の形式で記述するTypeScriptの構文。真を返した場合に引数の型が特定の型であることをコンパイラに伝え、呼び出し元で型の絞り込みを実現するユーザー定義型ガードの仕組み。",
+        "domain": "typescript",
+        "keywords": [
+          "型ガード",
+          "is構文",
+          "型の絞り込み",
+          "ユーザー定義",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型の絞り込み",
+    "reading": "かたのしぼりこみ",
+    "aliases": [
+      "Type Narrowing"
+    ],
+    "senses": [
+      {
+        "definition": "条件分岐内でTypeScriptコンパイラが変数の型をより具体的な型に自動的に限定する機能。`typeof`チェック、`instanceof`、nullチェック、判別共用体のswitch文などによって自動で型が絞り込まれる。",
+        "domain": "typescript",
+        "keywords": [
+          "型ガード",
+          "型推論",
+          "ユニオン型",
+          "コントロールフロー",
+          "コンパイラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "判別共用体",
+    "reading": "はんべつきょうようたい",
+    "aliases": [
+      "Discriminated Union",
+      "Tagged Union"
+    ],
+    "senses": [
+      {
+        "definition": "共通のリテラル型プロパティ（判別子）を持つ複数の型をユニオンで結合したパターン。`switch`文や`if`文で判別子をチェックすると型が自動的に絞り込まれ、各ケースを型安全に処理できる。",
+        "domain": "typescript",
+        "keywords": [
+          "ユニオン型",
+          "型の絞り込み",
+          "パターンマッチ",
+          "リテラル型",
+          "状態管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ブランド型",
+    "reading": "ぶらんどがた",
+    "aliases": [
+      "Branded Types",
+      "Opaque Types"
+    ],
+    "senses": [
+      {
+        "definition": "構造的型システムに名義的な制約を加えるパターン。交差型を使い`type UserId = string & { __brand: 'UserId' }`のように実際には存在しないプロパティを付与して、同じ基底型でも異なる型として扱えるようにする。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "名義型",
+          "交差型",
+          "ドメインモデル",
+          "誤使用防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ファントム型",
+    "reading": "ふぁんとむがた",
+    "aliases": [
+      "Phantom Types"
+    ],
+    "senses": [
+      {
+        "definition": "型パラメータを値の表現には使わず、コンパイル時のメタ情報として型に付随させるパターン。`type Tagged<T, Tag> = T & { _tag?: Tag }`のように状態や権限を型レベルで追跡し、不正な操作をコンパイル時に防ぐ。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "型パラメータ",
+          "コンパイル時検証",
+          "状態機械",
+          "ブランド型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "共変性",
+    "reading": "きょうへんせい",
+    "aliases": [
+      "Covariance"
+    ],
+    "senses": [
+      {
+        "definition": "型のサブタイプ関係が型引数のサブタイプ関係と同方向に保たれる性質。`Cat`が`Animal`のサブタイプなら`Array<Cat>`は`Array<Animal>`のサブタイプになる。TypeScriptでは戻り値の型や読み取り専用プロパティが共変。",
+        "domain": "typescript",
+        "keywords": [
+          "型変性",
+          "型パラメータ",
+          "サブタイプ",
+          "配列",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "反変性",
+    "reading": "はんぺんせい",
+    "aliases": [
+      "Contravariance"
+    ],
+    "senses": [
+      {
+        "definition": "型のサブタイプ関係が型引数のサブタイプ関係と逆方向になる性質。`Animal`を受け取る関数は`Cat`を受け取る関数のサブタイプになる。TypeScriptでは`strictFunctionTypes`有効時に関数引数が反変として扱われる。",
+        "domain": "typescript",
+        "keywords": [
+          "型変性",
+          "関数型",
+          "型パラメータ",
+          "サブタイプ",
+          "strictFunctionTypes"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "satisfies演算子",
+    "reading": "さてぃすふぁいずえんざんし",
+    "aliases": [
+      "satisfies operator"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScript 4.9で追加された演算子。値が指定した型を満たすことを検証しつつ、変数の型を広い型ではなく推論された具体的な型として保持できる。`as`による型アサーションとは異なり型安全性を犠牲にしない。",
+        "domain": "typescript",
+        "keywords": [
+          "型検証",
+          "型推論",
+          "型アサーション",
+          "TypeScript 4.9",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "const assertion",
+    "reading": "こんすとあさーしょん",
+    "aliases": [
+      "as const"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトや配列リテラルに`as const`を付けると全プロパティが`readonly`かつリテラル型として推論されるTypeScriptの機能。型の一般化を防ぎ、定数オブジェクトやタプルとして扱いたい場合に使う。",
+        "domain": "typescript",
+        "keywords": [
+          "リテラル型",
+          "readonly",
+          "型推論",
+          "イミュータブル",
+          "定数"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "enum",
+    "reading": "いなむ",
+    "aliases": [
+      "Enumeration",
+      "列挙型"
+    ],
+    "senses": [
+      {
+        "definition": "名前付き定数の集合を定義するTypeScriptの機能。数値enum・文字列enum・const enumがある。ただし通常のenumはランタイムオブジェクトを生成するため、バンドルサイズや型安全性の観点からユニオン型やconst assertionで代替することも多い。",
+        "domain": "typescript",
+        "keywords": [
+          "定数",
+          "列挙",
+          "const enum",
+          "型安全",
+          "バンドル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "宣言マージ",
+    "reading": "せんげんまーじ",
+    "aliases": [
+      "Declaration Merging"
+    ],
+    "senses": [
+      {
+        "definition": "同名の宣言が複数ある場合にTypeScriptコンパイラが自動的に一つの定義へ統合する仕組み。インターフェースの拡張やnamespaceとクラスの結合などで使われ、型定義ファイルでライブラリを拡張する際に重要。",
+        "domain": "typescript",
+        "keywords": [
+          "interface",
+          "namespace",
+          "型拡張",
+          "型定義ファイル",
+          "コンパイラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "モジュール拡張",
+    "reading": "もじゅーるかくちょう",
+    "aliases": [
+      "Module Augmentation"
+    ],
+    "senses": [
+      {
+        "definition": "既存モジュールの型定義に対して新しいプロパティやメソッドを追加する仕組み。`declare module 'express'`などで外部ライブラリの型を拡張でき、宣言マージと組み合わせてグローバルな型を安全に拡張できる。",
+        "domain": "typescript",
+        "keywords": [
+          "型定義拡張",
+          "宣言マージ",
+          "declare module",
+          "ライブラリ拡張",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アンビエント宣言",
+    "reading": "あんびえんとせんげん",
+    "aliases": [
+      "Ambient Declaration"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptに実装を持たず型情報だけを宣言するための構文。`declare`キーワードを使い、JavaScriptライブラリのグローバル変数やモジュールの型情報を.d.tsファイルで提供する際に用いる。",
+        "domain": "typescript",
+        "keywords": [
+          "declare",
+          "型定義ファイル",
+          "グローバル",
+          "ライブラリ",
+          "型情報"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型定義ファイル",
+    "reading": "かたていぎふぁいる",
+    "aliases": [
+      ".d.ts",
+      "Declaration File"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptの型情報のみを含む`.d.ts`拡張子のファイル。JavaScriptライブラリに型情報を付与するためや、モジュールのパブリックAPIを宣言するために使われる。DefinitelyTypedでサードパーティライブラリの型定義が公開されている。",
+        "domain": "typescript",
+        "keywords": [
+          "アンビエント宣言",
+          "型情報",
+          "DefinitelyTyped",
+          "@types",
+          "ライブラリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロジェクト参照",
+    "reading": "ぷろじぇくとさんしょう",
+    "aliases": [
+      "Project References"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScript 3.0以降で複数のtsconfig間に依存関係を定義できる機能。`composite`フラグと組み合わせてインクリメンタルビルドを実現し、モノレポや大規模プロジェクトでビルド時間を大幅に削減できる。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "モノレポ",
+          "ビルド最適化",
+          "composite",
+          "incremental"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パスエイリアス",
+    "reading": "ぱすえいりあす",
+    "aliases": [
+      "Path Aliases",
+      "Path Mapping"
+    ],
+    "senses": [
+      {
+        "definition": "tsconfig.jsonの`paths`オプションで相対インポートに代わる短縮エイリアスを定義する機能。`@/components`のように書けるようになり、深いディレクトリ構造でのimport文を簡潔にする。バンドラー側でも同様の設定が必要な場合がある。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "paths",
+          "import",
+          "モジュール解決",
+          "保守性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バレルファイル",
+    "reading": "ばれるふぁいる",
+    "aliases": [
+      "Barrel File",
+      "index.ts"
+    ],
+    "senses": [
+      {
+        "definition": "ディレクトリ内の複数モジュールをre-exportする`index.ts`ファイル。`import { A, B } from './components'`のようにディレクトリ単位でimportできるが、ツリーシェイキングを妨げたり循環依存を生みやすいため使用に注意が必要。",
+        "domain": "typescript",
+        "keywords": [
+          "re-export",
+          "モジュール",
+          "import",
+          "ツリーシェイキング",
+          "index.ts"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ESM/CJS相互運用",
+    "reading": "いーえすえむしーじぇいえすそうごうんよう",
+    "aliases": [
+      "ESM/CJS Interop",
+      "esModuleInterop"
+    ],
+    "senses": [
+      {
+        "definition": "ECMAScript ModulesとCommonJSの間で互換性を保ちながらモジュールをimport/exportする仕組み。`esModuleInterop`フラグにより`import fs from 'fs'`のようなdefaultインポートが可能になる。デュアルパッケージハザードなど複雑な問題も存在する。",
+        "domain": "typescript",
+        "keywords": [
+          "モジュール",
+          "CommonJS",
+          "ESModules",
+          "esModuleInterop",
+          "バンドル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "isolatedModules",
+    "reading": "あいそれーてっどもじゅーるず",
+    "aliases": [
+      "isolatedModules flag"
+    ],
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。各ファイルを独立したモジュールとしてトランスパイルできることを保証し、型のみのexportにエラーを出す。esbuildやSWCなどの単一ファイルトランスパイラとの互換性確保に必須。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "トランスパイル",
+          "esbuild",
+          "swc",
+          "型export"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "verbatimModuleSyntax",
+    "reading": "ばーばてぃむもじゅーるしんたっくす",
+    "aliases": [
+      "verbatimModuleSyntax flag"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScript 5.0で導入されたtsconfig.jsonフラグ。型のみのimport/exportには`import type`/`export type`を強制し、モジュール構文をそのまま出力することを保証する。`isolatedModules`の後継として推奨される設定。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "import type",
+          "モジュール",
+          "TypeScript 5.0",
+          "型import"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "tsc",
+    "senses": [
+      {
+        "definition": "TypeScriptの公式コンパイラCLIコマンド。`.ts`ファイルをJavaScriptに変換するほか、型チェックのみを行う`--noEmit`オプションも持つ。`tsconfig.json`を読み込み、プロジェクト全体のコンパイルを担う。",
+        "domain": "typescript",
+        "keywords": [
+          "TypeScriptコンパイラ",
+          "CLI",
+          "型チェック",
+          "noEmit",
+          "ビルド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ts-node",
+    "senses": [
+      {
+        "definition": "TypeScriptファイルをNode.js上で直接実行するためのランタイム。コンパイルステップを省略して`.ts`ファイルを実行でき、スクリプト実行や開発時のREPLに使われる。ESM対応の`ts-node/esm`やより高速な`tsx`が代替として台頭している。",
+        "domain": "typescript",
+        "keywords": [
+          "Node.js",
+          "実行",
+          "ランタイム",
+          "開発ツール",
+          "トランスパイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "tsx",
+    "senses": [
+      {
+        "definition": "esbuildを内部で使用してTypeScriptとJSXを高速にトランスパイルするNode.js実行ツール。`ts-node`の代替として普及しており、ESMとCJSの両方をサポートしつつ型チェックなしで非常に高速に動作する。",
+        "domain": "typescript",
+        "keywords": [
+          "トランスパイル",
+          "esbuild",
+          "高速",
+          "Node.js",
+          "ESM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "esbuild",
+    "senses": [
+      {
+        "definition": "GoLanguageで書かれた超高速なJavaScript/TypeScriptバンドラー兼トランスパイラ。型チェックは行わないが変換速度が従来のwebpackより数十倍速く、Viteやtsxなどのビルドツールのコアとして広く採用されている。",
+        "domain": "typescript",
+        "keywords": [
+          "バンドラー",
+          "トランスパイル",
+          "高速",
+          "Vite",
+          "ビルドツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "swc",
+    "senses": [
+      {
+        "definition": "RustLanguageで書かれた高速なJavaScript/TypeScriptコンパイラ。Next.jsやJestがデフォルトのトランスパイラとして採用しており、Babelと互換性のあるプラグイン変換を提供しながら大幅に高速化する。",
+        "domain": "typescript",
+        "keywords": [
+          "コンパイラ",
+          "Rust",
+          "高速",
+          "Next.js",
+          "Babel互換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "TypeScriptコンパイラAPI",
+    "reading": "たいぷすくりぷとこんぱいらえーぴーあい",
+    "aliases": [
+      "TypeScript Compiler API"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptが公開するプログラム的にASTの解析・変換・型チェックを行うためのNodeJS API。コードジェネレーターやlintツール、IDEプラグインなどの開発に使われ、`ts.createProgram`や`ts.createSourceFile`が主要エントリポイント。",
+        "domain": "typescript",
+        "keywords": [
+          "AST",
+          "コード生成",
+          "プログラム変換",
+          "ツール開発",
+          "型チェック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リテラル型",
+    "reading": "りてらるがた",
+    "aliases": [
+      "Literal Types"
+    ],
+    "senses": [
+      {
+        "definition": "特定の値そのものを型として表現するTypeScriptの機能。`'red'`、`42`、`true`などの具体的な値を型として使え、`'left' | 'right'`のようにユニオンと組み合わせて有限の選択肢を型で表現できる。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "ユニオン型",
+          "文字列型",
+          "数値型",
+          "const"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タプル型",
+    "reading": "たぷるがた",
+    "aliases": [
+      "Tuple Types"
+    ],
+    "senses": [
+      {
+        "definition": "各要素の型と数を固定した配列型。`[string, number]`のように宣言し、位置ごとに型が決まる。残余要素`...T[]`や省略可能要素`T?`もサポートする。React hooksの戻り値型やCSVパースなどで活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "配列",
+          "固定長",
+          "位置",
+          "残余要素",
+          "React Hooks"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インデックスシグネチャ",
+    "reading": "いんでっくすしぐねちゃ",
+    "aliases": [
+      "Index Signature"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクト型において任意のキーに対する値の型を定義する構文。`{ [key: string]: number }`のように記述する。`noUncheckedIndexedAccess`を有効にすると値の型に`undefined`が付与され、アクセス時の安全性が高まる。",
+        "domain": "typescript",
+        "keywords": [
+          "オブジェクト型",
+          "動的キー",
+          "Record型",
+          "noUncheckedIndexedAccess",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "keyof演算子",
+    "reading": "きーおふえんざんし",
+    "aliases": [
+      "keyof operator"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクト型の全プロパティ名をユニオン型として取得するTypeScriptの型演算子。`keyof User`が`'id' | 'name' | 'email'`となるように型から安全にキーの集合を得られ、汎用的なアクセサー関数の型付けに不可欠。",
+        "domain": "typescript",
+        "keywords": [
+          "型演算子",
+          "プロパティ",
+          "ユニオン型",
+          "型レベル",
+          "マップ型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "typeof演算子（型）",
+    "reading": "たいぷおふえんざんし",
+    "aliases": [
+      "typeof operator (type level)"
+    ],
+    "senses": [
+      {
+        "definition": "型の文脈で使う`typeof`演算子。変数や関数から型を抽出して再利用できる。`typeof someObj`で値の型を取得したり、`ReturnType<typeof fn>`のように関数の戻り値型を得るなど、型定義の重複を避けるために活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "型演算子",
+          "型抽出",
+          "型推論",
+          "ReturnType",
+          "型の再利用"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "inferキーワード",
+    "reading": "いんふぁーきーわーど",
+    "aliases": [
+      "infer keyword"
+    ],
+    "senses": [
+      {
+        "definition": "条件型の`extends`節内で型を推論・キャプチャするためのキーワード。`T extends Promise<infer U> ? U : never`のように関数の引数や戻り値、配列の要素型などをパターンマッチングで取り出す型プログラミングの中核をなす。",
+        "domain": "typescript",
+        "keywords": [
+          "条件型",
+          "型抽出",
+          "型プログラミング",
+          "パターンマッチ",
+          "型推論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "never型",
+    "reading": "ねばーがた",
+    "aliases": [
+      "never type"
+    ],
+    "senses": [
+      {
+        "definition": "到達不能なコードや空のユニオン型を表す底型（Bottom Type）。例外のみをthrowする関数の戻り値型や、すべての条件を網羅したswitch文のdefaultブロックの型になる。型の絞り込みで使い切ったユニオンが`never`になることを利用した網羅性チェックにも使われる。",
+        "domain": "typescript",
+        "keywords": [
+          "底型",
+          "到達不能",
+          "網羅性チェック",
+          "ユニオン型",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "unknown型",
+    "reading": "あんのうんがた",
+    "aliases": [
+      "unknown type"
+    ],
+    "senses": [
+      {
+        "definition": "任意の値を受け取れるが使用前に型チェックを強制するTypeScriptの型。`any`と異なり操作前に型ガードが必要で、外部からのデータ（APIレスポンスやJSONパース結果）の受け取りに`any`より安全な代替として推奨される。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "any",
+          "型ガード",
+          "外部データ",
+          "エラーハンドリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "any型",
+    "reading": "えにーがた",
+    "aliases": [
+      "any type"
+    ],
+    "senses": [
+      {
+        "definition": "型チェックを無効にするTypeScriptの脱出ハッチ型。あらゆる操作が許容されコンパイルエラーが出ないが、型安全性が失われる。JavaScriptからの段階的移行や型が複雑すぎて記述が困難な場合に限定的に使うべきで、可能なら`unknown`で代替する。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "型チェック無効",
+          "移行",
+          "unknown",
+          "アンチパターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "void型",
+    "reading": "ぼいどがた",
+    "aliases": [
+      "void type"
+    ],
+    "senses": [
+      {
+        "definition": "値を返さない関数の戻り値型を表すTypeScriptの型。`undefined`に似ているが戻り値を無視することを明示的に表し、コールバック関数の戻り値型として`void`を使うと実際には値を返す関数でも代入可能になる特殊な互換性ルールがある。",
+        "domain": "typescript",
+        "keywords": [
+          "関数型",
+          "戻り値",
+          "undefined",
+          "コールバック",
+          "型互換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Utility Types",
+    "reading": "ゆーてぃりてぃたいぷす",
+    "aliases": [
+      "組み込みユーティリティ型"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptが標準で提供する型変換ユーティリティの総称。`Partial<T>`、`Required<T>`、`Readonly<T>`、`Pick<T,K>`、`Omit<T,K>`、`ReturnType<T>`などがある。マップ型・条件型・inferを組み合わせて実装されており、型プログラミングの参考にもなる。",
+        "domain": "typescript",
+        "keywords": [
+          "Partial",
+          "Omit",
+          "Pick",
+          "ReturnType",
+          "型変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Partial",
+    "senses": [
+      {
+        "definition": "オブジェクト型の全プロパティをオプショナルにするTypeScript組み込みユーティリティ型。`Partial<User>`とすると全フィールドが`?`付きになり、更新操作のリクエスト型や段階的なオブジェクト構築パターンで活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "オプショナル",
+          "型変換",
+          "PATCH",
+          "更新"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Readonly",
+    "senses": [
+      {
+        "definition": "オブジェクト型の全プロパティを読み取り専用にするTypeScript組み込みユーティリティ型。`Readonly<Config>`とすると全フィールドが`readonly`になり、設定オブジェクトや不変データの型表現に使う。深いネストには`DeepReadonly`などの拡張が必要。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "readonly",
+          "イミュータブル",
+          "型変換",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Pick",
+    "senses": [
+      {
+        "definition": "オブジェクト型から指定したプロパティのみを抽出して新しい型を作るTypeScript組み込みユーティリティ型。`Pick<User, 'id' | 'name'>`で必要なフィールドだけを持つ型を得られ、APIのレスポンス型やコンポーネントのProps型の定義に役立つ。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "プロパティ抽出",
+          "型変換",
+          "サブセット",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Omit",
+    "senses": [
+      {
+        "definition": "オブジェクト型から指定したプロパティを除いた新しい型を作るTypeScript組み込みユーティリティ型。`Omit<User, 'password'>`でパスワードを除外した安全な型が得られる。`Pick`の逆操作で、除外するプロパティが少ない場合に有効。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "プロパティ除外",
+          "型変換",
+          "セキュリティ",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Exclude",
+    "senses": [
+      {
+        "definition": "ユニオン型から特定の型メンバーを除外するTypeScript組み込みユーティリティ型。`Exclude<'a' | 'b' | 'c', 'a'>`は`'b' | 'c'`になる。オブジェクトの`Omit`とは異なりユニオン型に作用する。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "ユニオン型",
+          "型除外",
+          "条件型",
+          "型フィルタ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extract",
+    "senses": [
+      {
+        "definition": "ユニオン型から特定の型メンバーのみを抽出するTypeScript組み込みユーティリティ型。`Extract<string | number | boolean, string | number>`は`string | number`になる。`Exclude`の逆操作。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "ユニオン型",
+          "型抽出",
+          "条件型",
+          "型フィルタ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ReturnType",
+    "senses": [
+      {
+        "definition": "関数型から戻り値の型を取得するTypeScript組み込みユーティリティ型。`ReturnType<typeof fetchUser>`のように関数の戻り値型を型定義から分離して再利用でき、関数の実装を変更したときに戻り値型が自動で追従する。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "関数型",
+          "infer",
+          "型抽出",
+          "typeof"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Parameters",
+    "senses": [
+      {
+        "definition": "関数型の引数型をタプル型として取得するTypeScript組み込みユーティリティ型。`Parameters<typeof fn>`で引数の型リストが得られ、ラッパー関数の引数型定義や高階関数の型付けに活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "関数型",
+          "タプル型",
+          "引数",
+          "infer"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Awaited",
+    "senses": [
+      {
+        "definition": "Promiseの解決値の型を取得するTypeScript 4.5以降の組み込みユーティリティ型。`Awaited<Promise<string>>`は`string`になる。ネストしたPromiseも再帰的に解決し、非同期関数の戻り値型から実際のデータ型を得るのに使う。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "Promise",
+          "非同期",
+          "TypeScript 4.5",
+          "infer"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NonNullable",
+    "senses": [
+      {
+        "definition": "型から`null`と`undefined`を除外するTypeScript組み込みユーティリティ型。`NonNullable<string | null | undefined>`は`string`になる。nullチェック後の型として使ったり、厳格なnull安全性が保証されるコンテキストで活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "null安全",
+          "undefined",
+          "型除外",
+          "strictNullChecks"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "InstanceType",
+    "senses": [
+      {
+        "definition": "コンストラクタ型からインスタンスの型を取得するTypeScript組み込みユーティリティ型。`InstanceType<typeof MyClass>`でクラスのインスタンス型が得られ、クラスを値として渡す汎用的なファクトリ関数の型付けに使う。",
+        "domain": "typescript",
+        "keywords": [
+          "ユーティリティ型",
+          "クラス",
+          "コンストラクタ",
+          "インスタンス",
+          "ファクトリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "readonly修飾子",
+    "reading": "りーどおんりーしゅうしょくし",
+    "aliases": [
+      "readonly modifier"
+    ],
+    "senses": [
+      {
+        "definition": "プロパティや配列要素に再代入を禁止するTypeScriptのキーワード。`readonly`プロパティは宣言時またはコンストラクタでのみ代入可能で、`ReadonlyArray<T>`や`readonly T[]`で配列の変更も防げる。コンパイル時のチェックで不変性を保証する。",
+        "domain": "typescript",
+        "keywords": [
+          "イミュータブル",
+          "プロパティ",
+          "型安全",
+          "コンパイル時",
+          "const"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型引数",
+    "reading": "かたひきすう",
+    "aliases": [
+      "Type Arguments"
+    ],
+    "senses": [
+      {
+        "definition": "ジェネリック型や関数を使用する際に具体的な型を指定する部分。`Array<string>`の`string`や`Promise<number>`の`number`が型引数にあたる。型推論により省略できる場合が多く、明示的に指定することで意図を明確にできる。",
+        "domain": "typescript",
+        "keywords": [
+          "ジェネリクス",
+          "型パラメータ",
+          "型推論",
+          "型の具体化",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型パラメータ",
+    "reading": "かたぱらめーた",
+    "aliases": [
+      "Type Parameters"
+    ],
+    "senses": [
+      {
+        "definition": "ジェネリック型や関数の定義側で宣言する型の変数。`function identity<T>(arg: T): T`における`T`が型パラメータ。`extends`で制約を加えたり`=`でデフォルト型を設定できる。呼び出し時に型引数が渡されるか推論で決定される。",
+        "domain": "typescript",
+        "keywords": [
+          "ジェネリクス",
+          "型変数",
+          "型制約",
+          "デフォルト型引数",
+          "型推論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型制約",
+    "reading": "かたせいやく",
+    "aliases": [
+      "Type Constraints",
+      "extends constraint"
+    ],
+    "senses": [
+      {
+        "definition": "ジェネリクスの型パラメータに`extends`キーワードで課す条件。`<T extends object>`とすることで型パラメータTにプリミティブ以外しか渡せなくなる。型パラメータ内で特定のプロパティへのアクセスを安全に行うために必要。",
+        "domain": "typescript",
+        "keywords": [
+          "ジェネリクス",
+          "extends",
+          "型パラメータ",
+          "型安全",
+          "制約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デフォルト型引数",
+    "reading": "でふぉるとかたひきすう",
+    "aliases": [
+      "Default Type Arguments"
+    ],
+    "senses": [
+      {
+        "definition": "ジェネリクスの型パラメータに`= Type`でデフォルト値を設定する機能。`<T = string>`とすると型引数を省略したときに`string`が使われる。ライブラリAPIで後方互換性を維持しながら型パラメータを追加する際に有用。",
+        "domain": "typescript",
+        "keywords": [
+          "ジェネリクス",
+          "型パラメータ",
+          "デフォルト値",
+          "型推論",
+          "後方互換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "再帰的型",
+    "reading": "さいきてきがた",
+    "aliases": [
+      "Recursive Types"
+    ],
+    "senses": [
+      {
+        "definition": "型定義の中に自分自身を参照する型。ツリー構造`type Tree<T> = { value: T; children: Tree<T>[] }`やJSONのような再帰的データ構造を型で正確に表現できる。TypeScript 3.7以降で条件型や配列型でも再帰が安定して動作するようになった。",
+        "domain": "typescript",
+        "keywords": [
+          "型プログラミング",
+          "ツリー",
+          "JSON型",
+          "再帰",
+          "型定義"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型レベルプログラミング",
+    "reading": "かたれべるぷろぐらみんぐ",
+    "aliases": [
+      "Type-Level Programming"
+    ],
+    "senses": [
+      {
+        "definition": "条件型、マップ型、inferキーワードなどを駆使してコンパイル時に複雑な型計算を行うTypeScript技術。型で文字列操作、型の検証、型の変換を行えるが可読性・保守性との兼ね合いが重要で、複雑すぎる型はコンパイラパフォーマンスを低下させることもある。",
+        "domain": "typescript",
+        "keywords": [
+          "条件型",
+          "マップ型",
+          "infer",
+          "コンパイル時",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "overload",
+    "reading": "おーばーろーど",
+    "aliases": [
+      "Function Overload",
+      "オーバーロード宣言"
+    ],
+    "senses": [
+      {
+        "definition": "同じ関数名で引数の型や数が異なる複数のシグネチャを定義するTypeScriptの機能。実装シグネチャはオーバーロードシグネチャよりも広い型を持つ必要があり、ユーザーは実装シグネチャを直接呼び出せない。引数によって戻り値型が変わる関数を正確に型付けできる。",
+        "domain": "typescript",
+        "keywords": [
+          "関数型",
+          "シグネチャ",
+          "型安全",
+          "戻り値型",
+          "引数"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型互換性",
+    "reading": "かたごかんせい",
+    "aliases": [
+      "Type Compatibility"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptの構造的型システムにおいて型Aが型Bに代入可能かどうかを決定するルール。必要なプロパティを持っていれば代入可能（構造的サブタイピング）であり、関数型については引数と戻り値の共変・反変ルールに従う。",
+        "domain": "typescript",
+        "keywords": [
+          "構造的型システム",
+          "サブタイプ",
+          "代入可能性",
+          "共変性",
+          "反変性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型アサーション",
+    "reading": "かたあさーしょん",
+    "aliases": [
+      "Type Assertion",
+      "as型アサーション"
+    ],
+    "senses": [
+      {
+        "definition": "コンパイラの型推論を上書きして特定の型として扱うTypeScriptの構文。`value as string`または旧スタイルの`<string>value`で記述する。型チェックを部分的に迂回するため誤用するとランタイムエラーの原因になり、型ガードや`unknown`との組み合わせで代替することが推奨される。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "コンパイラ迂回",
+          "as",
+          "型ガード",
+          "型変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "non-null assertion",
+    "reading": "のんぬるあさーしょん",
+    "aliases": [
+      "Non-null Assertion Operator",
+      "!演算子"
+    ],
+    "senses": [
+      {
+        "definition": "値が`null`や`undefined`でないことをコンパイラに宣言する`!`後置演算子。`document.getElementById('app')!`のように使うが、実際にnullであればランタイムエラーになる。nullチェックが面倒なときの安易な使用は避け、明確な根拠がある場合に限定すべき。",
+        "domain": "typescript",
+        "keywords": [
+          "null安全",
+          "演算子",
+          "型アサーション",
+          "strictNullChecks",
+          "ランタイムエラー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "strict",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonで型チェックを最も厳格にする`compilerOptions.strict`フラグ。`strictNullChecks`、`strictFunctionTypes`、`noImplicitAny`、`strictPropertyInitialization`など複数のフラグをまとめて有効にする。新規プロジェクトでは必ず有効にすることが推奨される。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "厳格モード",
+          "型安全",
+          "コンパイラオプション",
+          "strictNullChecks"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "strictNullChecks",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。有効にすると`null`と`undefined`が他の型に代入できなくなり、nullに起因するランタイムエラーをコンパイル時に検出できる。`strict`に含まれており、TypeScript開発で最も重要な設定のひとつ。",
+        "domain": "typescript",
+        "keywords": [
+          "null安全",
+          "tsconfig",
+          "strict",
+          "コンパイラオプション",
+          "型安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "noUncheckedIndexedAccess",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。有効にするとインデックスシグネチャや配列の添字アクセスで返される型に`undefined`が自動的に付与される。配列の範囲外アクセスやキーが存在しないオブジェクトへのアクセスを型レベルで安全に扱えるようになる。",
+        "domain": "typescript",
+        "keywords": [
+          "型安全",
+          "tsconfig",
+          "配列",
+          "インデックスシグネチャ",
+          "undefined"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "exactOptionalPropertyTypes",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。有効にすると`{ prop?: string }`のオプショナルプロパティに明示的に`undefined`を代入することが禁止される。プロパティが「存在する」ことと「undefinedである」ことを区別して型で正確に表現できる。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "オプショナル",
+          "undefined",
+          "型安全",
+          "プロパティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "noImplicitAny",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。型推論で`any`型が暗黙的に付与される場合にエラーを発生させる。`strict`に含まれており、型のない変数や引数を明示的に型付けすることを強制してコードベース全体の型安全性を保つ。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "any",
+          "型安全",
+          "strict",
+          "コンパイラオプション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sourceMap",
+    "senses": [
+      {
+        "definition": "TypeScriptコンパイル時に生成される`.js.map`ファイル。コンパイル後のJavaScriptと元の`.ts`ソースを対応付けるマッピング情報を含み、ブラウザやNode.jsのデバッガでTypeScriptソースを直接デバッグできるようにする。",
+        "domain": "typescript",
+        "keywords": [
+          "デバッグ",
+          "tsconfig",
+          "コンパイル",
+          "マッピング",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "declaration",
+    "reading": "でくられーしょん",
+    "aliases": [
+      "declaration flag"
+    ],
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。有効にするとコンパイル時に`.d.ts`型定義ファイルを自動生成する。ライブラリを公開する際に必須で、利用者がTypeScriptで型情報付きでライブラリを使えるようになる。`composite`を有効にすると暗黙的に有効になる。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "型定義ファイル",
+          "ライブラリ公開",
+          "d.ts",
+          "composite"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "incremental",
+    "reading": "いんくりめんたる",
+    "aliases": [
+      "incremental compilation"
+    ],
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。有効にすると前回のビルド情報を`.tsbuildinfo`ファイルに保存し、変更があったファイルのみ再コンパイルするインクリメンタルビルドを実現する。大規模プロジェクトでコンパイル時間を大幅に削減できる。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "ビルド最適化",
+          "tsbuildinfo",
+          "インクリメンタル",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "moduleResolution",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonでモジュール解決アルゴリズムを指定するオプション。`node`（CommonJS）、`node16`/`nodenext`（ESMサポート）、`bundler`（Vite/esbuildなどのバンドラー向け）などがある。設定を間違えるとimportが正しく解決されないエラーが発生する。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "モジュール",
+          "import",
+          "バンドラー",
+          "ESM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "allowSyntheticDefaultImports",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。defaultエクスポートを持たないモジュールへのdefaultインポートを型エラーなしに許可する。`esModuleInterop`を有効にすると自動的に有効になる。型チェック上の許可のみでランタイムの変換は行わない。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "defaultインポート",
+          "esModuleInterop",
+          "型チェック",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "skipLibCheck",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。`.d.ts`ファイル内の型エラーをスキップする。サードパーティライブラリの型定義に不整合がある場合のエラー回避に使われるが、本来の型エラーも見逃す可能性があるため、依存関係の型定義が整備されている場合は無効が望ましい。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "型定義ファイル",
+          "サードパーティ",
+          "型エラー",
+          "d.ts"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "baseUrl",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのコンパイラオプション。モジュール解決の基点となるディレクトリを指定する。`paths`オプションのエイリアス解決の起点にもなる。バンドラーが`bundler`モードの場合は`baseUrl`が不要になることが多く、設定の重複に注意が必要。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "モジュール解決",
+          "パスエイリアス",
+          "paths",
+          "インポート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "lib",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのコンパイラオプション。コンパイラに含める組み込み型定義ライブラリを指定する。`DOM`、`ES2022`、`WebWorker`などが選べ、対象実行環境で利用できるAPIだけを型として含めることでブラウザとNode.jsで型の混在を防ぐ。",
+        "domain": "typescript",
+        "keywords": [
+          "tsconfig",
+          "型定義",
+          "DOM",
+          "組み込み型",
+          "実行環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "experimentalDecorators",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。ステージ2のデコレータ仕様を有効にする。Angular、NestJSなどのフレームワークで使用されてきたが、TC39でステージ3のデコレータ仕様（動作が異なる）が確定したため、新規プロジェクトでは最新仕様への移行が推奨される。",
+        "domain": "typescript",
+        "keywords": [
+          "デコレータ",
+          "tsconfig",
+          "フレームワーク",
+          "Angular",
+          "NestJS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "emitDecoratorMetadata",
+    "senses": [
+      {
+        "definition": "tsconfig.jsonのフラグ。デコレータを使ったクラスのプロパティや引数の型情報をランタイムに`Reflect.metadata`として出力する。NestJSの依存性注入などで型情報を利用するフレームワークに必要で、`experimentalDecorators`と合わせて設定する。",
+        "domain": "typescript",
+        "keywords": [
+          "デコレータ",
+          "リフレクション",
+          "NestJS",
+          "DI",
+          "tsconfig"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "デコレータ（TypeScript）",
+    "reading": "でこれーたー",
+    "aliases": [
+      "クラスデコレータ"
+    ],
+    "senses": [
+      {
+        "definition": "クラス、メソッド、プロパティ、引数に付加できる`@expression`形式のメタプログラミング構文。AOPやDIコンテナの実装に使われる。TypeScript 5.0でTC39ステージ3デコレータが実装され、`experimentalDecorators`とは別の仕様として共存している。",
+        "domain": "typescript",
+        "keywords": [
+          "メタプログラミング",
+          "AOP",
+          "DI",
+          "クラス",
+          "フレームワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "名前空間（TypeScript）",
+    "reading": "なまえくうかん",
+    "aliases": [
+      "Namespace（TypeScript）"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScript固有のモジュール整理機能。`namespace`キーワードで関連する型や関数をグループ化する。ESモジュールが普及した現在は非推奨とされることが多く、主に`.d.ts`型定義ファイルでのグローバル型整理やアンビエント宣言で使われる。",
+        "domain": "typescript",
+        "keywords": [
+          "モジュール",
+          "型整理",
+          "アンビエント",
+          "d.ts",
+          "レガシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トリプルスラッシュ指令",
+    "reading": "とりぷるすらっしゅしれい",
+    "aliases": [
+      "Triple-Slash Directives",
+      "/// <reference>"
+    ],
+    "senses": [
+      {
+        "definition": "ファイル先頭に記述する`/// <reference types=\"...\"/>`などのXML形式のコメント。型定義ファイルへの参照、グローバル型の追加、`lib`ライブラリのインクルードに使われる。モジュールシステムが使える環境ではimportが推奨される。",
+        "domain": "typescript",
+        "keywords": [
+          "型参照",
+          "d.ts",
+          "アンビエント",
+          "コメント",
+          "コンパイラ指令"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型の広がり",
+    "reading": "かたのひろがり",
+    "aliases": [
+      "Type Widening"
+    ],
+    "senses": [
+      {
+        "definition": "変数に値を代入した際に型が具体的なリテラル型から広い型に自動的に変換されるTypeScriptの動作。`let x = 'hello'`はstringに広がるが`const x = 'hello'`はリテラル型`'hello'`のまま保持される。`as const`でリテラル型を維持できる。",
+        "domain": "typescript",
+        "keywords": [
+          "リテラル型",
+          "型推論",
+          "const",
+          "let",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型の縮小",
+    "reading": "かたのしゅくしょう",
+    "aliases": [
+      "Type Narrowing（縮小）",
+      "Type Reduction"
+    ],
+    "senses": [
+      {
+        "definition": "ユニオン型などの広い型が特定のスコープ内でより具体的な型に絞り込まれること。制御フロー解析によって`typeof`チェックや`instanceof`、nullチェックの後に型が自動的に縮小される。TypeScriptのコントロールフロー解析（CFA）が担う。",
+        "domain": "typescript",
+        "keywords": [
+          "型の絞り込み",
+          "コントロールフロー",
+          "型ガード",
+          "CFA",
+          "型推論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コントロールフロー解析",
+    "reading": "こんとろーるふろーかいせき",
+    "aliases": [
+      "Control Flow Analysis",
+      "CFA"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptコンパイラが条件分岐・ループ・例外処理などの制御フローを追跡し、各コードポイントで変数の型を精密に決定する機能。型の絞り込みや`never`型の検出、到達不能コードの判定などに活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "型の絞り込み",
+          "型推論",
+          "never",
+          "到達不能",
+          "コンパイラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型ユーティリティ設計",
+    "reading": "かたゆーてぃりてぃせっけい",
+    "aliases": [
+      "Type Utility Design"
+    ],
+    "senses": [
+      {
+        "definition": "再利用可能な型変換・型検証のユーティリティ型をプロジェクト内で設計・整備する実践。DeepPartial、Nullable、Promisify、ValuesOfなど標準ライブラリにない型を自前で定義し、型安全なコードベースの基盤を作る。",
+        "domain": "typescript",
+        "keywords": [
+          "型プログラミング",
+          "再利用",
+          "ユーティリティ型",
+          "型安全",
+          "設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "const enum",
+    "reading": "こんすとえなむ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "コンパイル時にインライン展開されるTypeScriptの列挙型。通常のenumと異なりランタイムオブジェクトを生成せず、使用箇所にリテラル値が直接埋め込まれるためバンドルサイズが小さい。ただし`isolatedModules`環境やdeclare const enumの扱いに制約がある。",
+        "domain": "typescript",
+        "keywords": [
+          "enum",
+          "インライン展開",
+          "バンドルサイズ",
+          "コンパイル時",
+          "isolatedModules"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型のインポート",
+    "reading": "かたのいんぽーと",
+    "aliases": [
+      "import type"
+    ],
+    "senses": [
+      {
+        "definition": "型情報のみをインポートし、JavaScriptのバンドルに含めないことを明示する`import type`構文。ランタイムには不要な型定義をimportする際に使い、循環依存の解消やバンドルサイズ削減に効果がある。`isolatedModules`環境では型のみのexportに必須。",
+        "domain": "typescript",
+        "keywords": [
+          "import type",
+          "モジュール",
+          "バンドル最適化",
+          "isolatedModules",
+          "型定義"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型の再利用",
+    "reading": "かたのさいりよう",
+    "aliases": [
+      "Type Reuse"
+    ],
+    "senses": [
+      {
+        "definition": "既存の型定義からユーティリティ型や型演算子を使って新しい型を導出し、同じ情報を複数箇所で定義しないようにする実践。DRY原則を型レベルで適用し、型変更時に漏れが生じにくいコードベースを作る。",
+        "domain": "typescript",
+        "keywords": [
+          "DRY",
+          "ユーティリティ型",
+          "型プログラミング",
+          "保守性",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Discriminant Property",
+    "reading": "はんべつしきぷろぱてぃ",
+    "aliases": [
+      "Discriminant",
+      "判別子プロパティ"
+    ],
+    "senses": [
+      {
+        "definition": "判別共用体において各メンバーを識別するためのリテラル型プロパティ。`type: 'success'`や`kind: 'circle'`のように固有のリテラル値を持ち、TypeScriptの制御フロー解析がこれを利用して型を自動絞り込みする。",
+        "domain": "typescript",
+        "keywords": [
+          "判別共用体",
+          "リテラル型",
+          "型の絞り込み",
+          "パターンマッチ",
+          "ユニオン型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Mapped Type Modifier",
+    "reading": "まっぷどたいぷもでぃふぁいあ",
+    "aliases": [
+      "Mapped Type Modifiers"
+    ],
+    "senses": [
+      {
+        "definition": "マップ型においてプロパティの`readonly`や`?`（オプショナル）を制御する修飾子。`-readonly`や`-?`で既存の修飾子を除去でき、`Mutable<T>`（readonly除去）や`Required<T>`（?除去）などのユーティリティ型の実装に使われる。",
+        "domain": "typescript",
+        "keywords": [
+          "マップ型",
+          "readonly",
+          "オプショナル",
+          "ユーティリティ型",
+          "型変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Template Literal Type Manipulation",
+    "reading": "てんぷれーとりてらるがたそうさ",
+    "aliases": [
+      "Uppercase",
+      "Lowercase",
+      "Capitalize",
+      "Uncapitalize"
+    ],
+    "senses": [
+      {
+        "definition": "テンプレートリテラル型と組み合わせて使用するTypeScript組み込みの文字列操作ユーティリティ型。`Uppercase<'hello'>`は`'HELLO'`になる。APIのイベント名生成やCSSプロパティの型付けなど文字列パターンの型表現に活用される。",
+        "domain": "typescript",
+        "keywords": [
+          "テンプレートリテラル型",
+          "文字列操作",
+          "ユーティリティ型",
+          "型プログラミング",
+          "大文字小文字"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Opaque Type",
+    "reading": "おぺーくたいぷ",
+    "aliases": [
+      "不透明型"
+    ],
+    "senses": [
+      {
+        "definition": "内部構造を隠蔽し、専用のコンストラクタ関数を通じてのみ生成できる型パターン。TypeScriptにはネイティブサポートがないが、ブランド型や`unique symbol`を使って同等の効果を得られる。ドメイン駆動設計の値オブジェクトを型レベルで強制するのに使われる。",
+        "domain": "typescript",
+        "keywords": [
+          "ブランド型",
+          "型安全",
+          "ドメインモデル",
+          "値オブジェクト",
+          "unique symbol"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デコレーター（TypeScript）",
+    "reading": "でこれーたー（たいぷすくりぷと）",
+    "senses": [
+      {
+        "definition": "TypeScriptにおいてクラス・メソッド・プロパティに付加的な機能を追加するための構文です。@記号を使ってメタプログラミングを実現します。",
+        "domain": "typescript",
+        "keywords": [
+          "デコレーター",
+          "TypeScript",
+          "メタプログラミング",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Decorator (TypeScript)",
+      "TypeScript Decorator"
+    ]
+  }
+]

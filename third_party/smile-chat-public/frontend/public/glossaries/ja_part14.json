@@ -1,0 +1,3242 @@
+[
+  {
+    "term": "Java",
+    "reading": "じゃば",
+    "senses": [
+      {
+        "definition": "オブジェクト指向を基盤にしたプログラミング言語で、Java Platform 上で動くアプリケーション開発に使われます。",
+        "domain": "java",
+        "keywords": [
+          "言語",
+          "オブジェクト指向",
+          "プラットフォーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Java SE",
+    "reading": "じゃばえすいー",
+    "senses": [
+      {
+        "definition": "Java Platform, Standard Edition の略で、標準的な Java 実行、開発、ライブラリ群を指します。",
+        "domain": "java",
+        "keywords": [
+          "プラットフォーム",
+          "標準",
+          "ライブラリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JDK",
+    "reading": "じぇいでぃーけー",
+    "senses": [
+      {
+        "definition": "Java Development Kit の略で、JRE に加えてコンパイラやデバッガーなど開発用ツールを含む一式です。",
+        "domain": "java",
+        "keywords": [
+          "開発",
+          "ツール",
+          "コンパイラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JRE",
+    "reading": "じぇいあーるいー",
+    "senses": [
+      {
+        "definition": "Java Runtime Environment の略で、Java アプリケーションを実行するためのライブラリ、JVM などを含む実行環境です。",
+        "domain": "java",
+        "keywords": [
+          "実行環境",
+          "ライブラリ",
+          "JVM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JVM",
+    "reading": "じぇいぶいえむ",
+    "senses": [
+      {
+        "definition": "Java Virtual Machine の略で、Java バイトコードを実行する仮想マシンです。",
+        "domain": "java",
+        "keywords": [
+          "仮想マシン",
+          "バイトコード",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Java HotSpot VM",
+    "reading": "じゃばほっとすぽっとぶいえむ",
+    "senses": [
+      {
+        "definition": "Oracle の JVM 実装で、JIT 最適化やガベージコレクションなどを提供します。",
+        "domain": "java",
+        "keywords": [
+          "JVM",
+          "JIT",
+          "ガベージコレクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "bytecode",
+    "reading": "ばいとこーど",
+    "senses": [
+      {
+        "definition": "javac が生成し、JVM が実行する中間コードです。",
+        "domain": "java",
+        "keywords": [
+          "中間コード",
+          "コンパイル",
+          "JVM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "class file",
+    "reading": "くらすふぁいる",
+    "senses": [
+      {
+        "definition": "Java ソースをコンパイルして得られる .class ファイルです。JVM が直接読み取ります。",
+        "domain": "java",
+        "keywords": [
+          "ファイル",
+          "コンパイル",
+          "バイトコード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "javac",
+    "reading": "じゃばっく",
+    "senses": [
+      {
+        "definition": "Java のコンパイラです。クラスやインターフェース定義を読み、バイトコードとクラスファイルへ変換します。",
+        "domain": "java",
+        "keywords": [
+          "コンパイラ",
+          "ツール",
+          "変換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "java command",
+    "reading": "じゃばこまんど",
+    "senses": [
+      {
+        "definition": "Java アプリケーションを起動するランチャーです。",
+        "domain": "java",
+        "keywords": [
+          "起動",
+          "コマンド",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "javadoc",
+    "reading": "じゃばどっく",
+    "senses": [
+      {
+        "definition": "Java ソースから API ドキュメントの HTML を生成するツールです。",
+        "domain": "java",
+        "keywords": [
+          "ドキュメント",
+          "HTML",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "jar",
+    "reading": "じゃー",
+    "senses": [
+      {
+        "definition": "クラスやリソースをまとめた Java Archive を作成、管理するためのツールです。",
+        "domain": "java",
+        "keywords": [
+          "アーカイブ",
+          "ツール",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JAR file",
+    "reading": "じゃーふぁいる",
+    "senses": [
+      {
+        "definition": "クラスファイルやリソースをまとめたアーカイブ形式です。配布や再利用によく使われます。",
+        "domain": "java",
+        "keywords": [
+          "アーカイブ",
+          "配布",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "classpath",
+    "reading": "くらすぱす",
+    "senses": [
+      {
+        "definition": "JRE や JDK ツールがクラスやリソースを探す検索パスです。-classpath や CLASSPATH で指定できます。",
+        "domain": "java",
+        "keywords": [
+          "パス",
+          "検索",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "package",
+    "reading": "ぱっけーじ",
+    "senses": [
+      {
+        "definition": "関連するクラスやインターフェースを整理する名前空間です。",
+        "domain": "java",
+        "keywords": [
+          "名前空間",
+          "整理",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "API (Java)",
+    "reading": "えーぴーあい（じゃば）",
+    "senses": [
+      {
+        "definition": "Java Platform が提供するパッケージ、クラス、インターフェース、メソッドなどの利用可能な仕様群です。",
+        "domain": "java",
+        "keywords": [
+          "仕様",
+          "インターフェース",
+          "メソッド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "class",
+    "reading": "くらす",
+    "senses": [
+      {
+        "definition": "オブジェクトを作るための設計図です。状態と振る舞いを定義します。",
+        "domain": "java",
+        "keywords": [
+          "設計図",
+          "オブジェクト",
+          "定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "object",
+    "reading": "おぶじぇくと",
+    "senses": [
+      {
+        "definition": "状態と振る舞いを持つ実体で、クラスから生成されます。",
+        "domain": "java",
+        "keywords": [
+          "実体",
+          "状態",
+          "振る舞い"
+        ]
+      },
+      {
+        "definition": "Object Storageに保存される個別データ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ストレージ",
+          "Object"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "field",
+    "reading": "ふぃーるど",
+    "senses": [
+      {
+        "definition": "オブジェクトやクラスが保持するデータです。状態を表すのに使います。",
+        "domain": "java",
+        "keywords": [
+          "データ",
+          "状態",
+          "変数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "method",
+    "reading": "めそっど",
+    "senses": [
+      {
+        "definition": "クラスやオブジェクトが持つ振る舞いです。オブジェクト間の主要なやり取り手段になります。",
+        "domain": "java",
+        "keywords": [
+          "振る舞い",
+          "関数",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "interface",
+    "reading": "いんたーふぇーす",
+    "senses": [
+      {
+        "definition": "関連するメソッド契約をまとめた型です。実装クラスに提供すべき振る舞いを要求できます。",
+        "domain": "java",
+        "keywords": [
+          "契約",
+          "型",
+          "メソッド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "implements",
+    "reading": "いんぷりめんつ",
+    "senses": [
+      {
+        "definition": "クラスがインターフェースを実装することを示す Java のキーワードです。",
+        "domain": "java",
+        "keywords": [
+          "キーワード",
+          "実装",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "inheritance",
+    "reading": "いんへりたんす",
+    "senses": [
+      {
+        "definition": "既存クラスの状態や振る舞いを継承して再利用する仕組みです。",
+        "domain": "java",
+        "keywords": [
+          "継承",
+          "再利用",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "extends",
+    "reading": "えくすてんず",
+    "senses": [
+      {
+        "definition": "クラスが別のクラスを継承することを示すキーワードです。",
+        "domain": "java",
+        "keywords": [
+          "キーワード",
+          "継承",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "superclass",
+    "reading": "すーぱーくらす",
+    "senses": [
+      {
+        "definition": "継承元となる親クラスです。共通の状態や振る舞いを定義します。",
+        "domain": "java",
+        "keywords": [
+          "親クラス",
+          "継承",
+          "基底"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "subclass",
+    "reading": "さぶくらす",
+    "senses": [
+      {
+        "definition": "別クラスを継承して作られる子クラスです。親クラスの機能を受け継ぎつつ拡張できます。",
+        "domain": "java",
+        "keywords": [
+          "子クラス",
+          "継承",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Object class",
+    "reading": "おぶじぇくとくらす",
+    "senses": [
+      {
+        "definition": "Java のすべてのクラスの最上位にある基本クラスです。toString や equals などの基本メソッドを持ちます。",
+        "domain": "java",
+        "keywords": [
+          "基本クラス",
+          "最上位",
+          "toString"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "single inheritance",
+    "reading": "しんぐるいんへりたんす",
+    "senses": [
+      {
+        "definition": "Java では各クラスが直接継承できる親クラスは一つだけという性質です。",
+        "domain": "java",
+        "keywords": [
+          "単一継承",
+          "制約",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "abstract class",
+    "reading": "あぶすとらくとくらす",
+    "senses": [
+      {
+        "definition": "不完全実装を含められ、自身は通常インスタンス化せず、継承前提で使うクラスです。",
+        "domain": "java",
+        "keywords": [
+          "抽象",
+          "継承",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "final class",
+    "reading": "ふぁいなるくらす",
+    "senses": [
+      {
+        "definition": "継承を禁止したクラスです。拡張を意図しない設計に使われます。",
+        "domain": "java",
+        "keywords": [
+          "継承禁止",
+          "設計",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "exception",
+    "reading": "えくせぷしょん",
+    "senses": [
+      {
+        "definition": "プログラム実行中に通常の流れを乱す異常事象です。Java はこれを例外として扱います。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "エラー",
+          "異常"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "checked exception",
+    "reading": "ちぇっくどえくせぷしょん",
+    "senses": [
+      {
+        "definition": "コンパイル時に捕捉または宣言が要求される例外です。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "コンパイル",
+          "検査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "unchecked exception",
+    "reading": "あんちぇっくどえくせぷしょん",
+    "senses": [
+      {
+        "definition": "RuntimeException 系など、捕捉や宣言が必須ではない例外です。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "非検査",
+          "RuntimeException"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RuntimeException",
+    "reading": "らんたいむえくせぷしょん",
+    "senses": [
+      {
+        "definition": "API の誤用や前提違反を示すことが多い unchecked exception 系の基本クラスです。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "基本クラス",
+          "非検査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "try block",
+    "reading": "とらいぶろっく",
+    "senses": [
+      {
+        "definition": "例外が起こりうる処理を囲むブロックです。例外処理の起点になります。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "ブロック",
+          "処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "catch block",
+    "reading": "きゃっちぶろっく",
+    "senses": [
+      {
+        "definition": "特定例外を受け止めて処理するブロックです。複数定義もできます。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "捕捉",
+          "処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "finally block",
+    "reading": "ふぁいなりーぶろっく",
+    "senses": [
+      {
+        "definition": "例外の有無に関わらず後始末を行うブロックです。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "後始末",
+          "必ず実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "try-with-resources",
+    "reading": "とらいうぃずりそーしず",
+    "senses": [
+      {
+        "definition": "リソースを自動的に close するための try 構文です。",
+        "domain": "java",
+        "keywords": [
+          "リソース",
+          "自動",
+          "close"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "throw statement",
+    "reading": "すろーすてーとめんと",
+    "senses": [
+      {
+        "definition": "例外を明示的に発生させるための文です。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "発生",
+          "文"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "throws clause",
+    "reading": "すろーずくらうず",
+    "senses": [
+      {
+        "definition": "メソッドが送出しうる例外を宣言する部分です。",
+        "domain": "java",
+        "keywords": [
+          "例外",
+          "宣言",
+          "メソッド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "generics",
+    "reading": "じぇねりくす",
+    "senses": [
+      {
+        "definition": "型をパラメータ化して、型安全で再利用しやすいコードを書く仕組みです。",
+        "domain": "java",
+        "keywords": [
+          "型",
+          "パラメータ",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "type parameter",
+    "reading": "たいぷぱらめーたー",
+    "senses": [
+      {
+        "definition": "ジェネリクスでクラス、インターフェース、メソッドへ渡す型のパラメータです。",
+        "domain": "java",
+        "keywords": [
+          "型",
+          "ジェネリクス",
+          "パラメータ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "generic class",
+    "reading": "じぇねりっくくらす",
+    "senses": [
+      {
+        "definition": "型パラメータを宣言するクラスです。使用時に具体型を与えます。",
+        "domain": "java",
+        "keywords": [
+          "ジェネリクス",
+          "クラス",
+          "型"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "generic method",
+    "reading": "じぇねりっくめそっど",
+    "senses": [
+      {
+        "definition": "メソッド単位で型パラメータを持つメソッドです。",
+        "domain": "java",
+        "keywords": [
+          "ジェネリクス",
+          "メソッド",
+          "型"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "type inference",
+    "reading": "たいぷいんふぁれんす",
+    "senses": [
+      {
+        "definition": "コンパイラが引数や代入先を見て型引数を推論する仕組みです。",
+        "domain": "java",
+        "keywords": [
+          "型推論",
+          "コンパイラ",
+          "自動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Collections Framework",
+    "reading": "これくしょんずふれーむわーく",
+    "senses": [
+      {
+        "definition": "Java のコレクション関連インターフェース、実装、アルゴリズム群です。",
+        "domain": "java",
+        "keywords": [
+          "コレクション",
+          "フレームワーク",
+          "データ構造"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Collection",
+    "reading": "これくしょん",
+    "senses": [
+      {
+        "definition": "要素集合を表す基本インターフェースです。List、Set、Queue などの基礎になります。",
+        "domain": "java",
+        "keywords": [
+          "インターフェース",
+          "集合",
+          "基本"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "List",
+    "reading": "りすと",
+    "senses": [
+      {
+        "definition": "順序を持ち、重複を許すコレクションです。要素位置を制御したい場面に向きます。",
+        "domain": "java",
+        "keywords": [
+          "順序",
+          "重複",
+          "コレクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Set",
+    "reading": "せっと",
+    "senses": [
+      {
+        "definition": "重複を許さないコレクションです。集合的な扱いに向きます。",
+        "domain": "java",
+        "keywords": [
+          "集合",
+          "重複なし",
+          "コレクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Map",
+    "reading": "まっぷ",
+    "senses": [
+      {
+        "definition": "キーと値を対応づけるコレクション系インターフェースです。Collection 系とは別の系統として整理されます。",
+        "domain": "java",
+        "keywords": [
+          "キー",
+          "値",
+          "マッピング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Queue (Java)",
+    "reading": "きゅー（じゃば）",
+    "senses": [
+      {
+        "definition": "順番に要素を処理するためのコレクションインターフェースです。",
+        "domain": "java",
+        "keywords": [
+          "キュー",
+          "順番",
+          "コレクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Deque",
+    "reading": "でっく",
+    "senses": [
+      {
+        "definition": "両端から要素を追加、取得できる双方向キューです。",
+        "domain": "java",
+        "keywords": [
+          "双方向",
+          "キュー",
+          "コレクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Iterator",
+    "reading": "いてれーたー",
+    "senses": [
+      {
+        "definition": "コレクション要素を順に走査するためのインターフェースです。",
+        "domain": "java",
+        "keywords": [
+          "走査",
+          "反復",
+          "コレクション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ListIterator",
+    "reading": "りすといてれーたー",
+    "senses": [
+      {
+        "definition": "List 専用の反復子で、前後移動や要素変更をより柔軟に扱えます。",
+        "domain": "java",
+        "keywords": [
+          "List",
+          "反復",
+          "柔軟"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spring Framework",
+    "reading": "すぷりんぐふれーむわーく",
+    "senses": [
+      {
+        "definition": "モダンな Java エンタープライズアプリ向けの包括的なプログラミング、設定モデルを提供するフレームワークです。",
+        "domain": "spring",
+        "keywords": [
+          "フレームワーク",
+          "Java",
+          "エンタープライズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spring Core Technologies",
+    "reading": "すぷりんぐこあてくのろじーず",
+    "senses": [
+      {
+        "definition": "Spring Framework の中核技術群で、IoC、AOP、validation、data binding などを含みます。",
+        "domain": "spring",
+        "keywords": [
+          "中核",
+          "IoC",
+          "AOP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IoC",
+    "reading": "あいおーしー",
+    "senses": [
+      {
+        "definition": "Inversion of Control の略で、依存関係の生成と組み立てをフレームワーク側へ委ねる考え方です。",
+        "domain": "spring",
+        "keywords": [
+          "制御反転",
+          "依存",
+          "フレームワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IoC Container",
+    "reading": "あいおーしーこんてな",
+    "senses": [
+      {
+        "definition": "Spring が bean を生成、管理、注入する中核コンテナです。",
+        "domain": "spring",
+        "keywords": [
+          "コンテナ",
+          "bean",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BeanFactory",
+    "reading": "びーんふぁくとり",
+    "senses": [
+      {
+        "definition": "Spring の基本的なコンテナインターフェースです。bean の取得や生成管理の基礎になります。",
+        "domain": "spring",
+        "keywords": [
+          "コンテナ",
+          "基本",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ApplicationContext",
+    "reading": "あぷりけーしょんこんてきすと",
+    "senses": [
+      {
+        "definition": "BeanFactory を拡張した、より高機能な Spring コンテナです。一般的な Spring アプリではこちらが中心です。",
+        "domain": "spring",
+        "keywords": [
+          "コンテナ",
+          "高機能",
+          "Spring"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "bean",
+    "reading": "びーん",
+    "senses": [
+      {
+        "definition": "Spring コンテナが生成、管理するオブジェクトです。依存注入の基本単位になります。",
+        "domain": "spring",
+        "keywords": [
+          "オブジェクト",
+          "管理",
+          "DI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dependency injection",
+    "reading": "でぺんでんしーいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "必要な依存オブジェクトを外部から注入する考え方です。Spring の中心的な設計思想です。",
+        "domain": "spring",
+        "keywords": [
+          "DI",
+          "注入",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Autowired",
+    "reading": "おーとわいやーど",
+    "senses": [
+      {
+        "definition": "型にもとづいて依存を自動注入するための代表的な Spring アノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "アノテーション",
+          "自動注入",
+          "型"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "required=false in @Autowired",
+    "reading": "おーとわいやーどのりくわいあーどふぉるす",
+    "senses": [
+      {
+        "definition": "依存が見つからない場合でも注入失敗にしないオプションです。任意依存を表すときに使います。",
+        "domain": "spring",
+        "keywords": [
+          "任意",
+          "オプション",
+          "注入"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Qualifier",
+    "reading": "くおりふぁいやー",
+    "senses": [
+      {
+        "definition": "複数の候補 bean があるとき、絞り込み条件を与えるアノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "アノテーション",
+          "絞り込み",
+          "bean"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Primary",
+    "reading": "ぷらいまりー",
+    "senses": [
+      {
+        "definition": "複数候補のうち、優先して注入される bean を示すアノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "優先",
+          "bean",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "type-driven injection",
+    "reading": "たいぷどりぶんいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "型を基準に依存解決する Spring の注入方式です。@Autowired は基本的にこの考え方です。",
+        "domain": "spring",
+        "keywords": [
+          "型",
+          "注入",
+          "解決"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Configuration",
+    "reading": "こんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "Spring へ bean 定義や設定を与える構成クラスを示すアノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "構成",
+          "bean定義",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Bean",
+    "reading": "あっとびーん",
+    "senses": [
+      {
+        "definition": "@Configuration クラス内で、生成したい bean をメソッド単位で定義するためのアノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "定義",
+          "メソッド",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "component scanning",
+    "reading": "こんぽーねんとすきゃにんぐ",
+    "senses": [
+      {
+        "definition": "指定パッケージを走査し、Spring 管理対象コンポーネントを自動検出する仕組みです。",
+        "domain": "spring",
+        "keywords": [
+          "走査",
+          "自動検出",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Component",
+    "reading": "あっとこんぽーねんと",
+    "senses": [
+      {
+        "definition": "Spring 管理対象の汎用コンポーネントを示すアノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "アノテーション",
+          "汎用",
+          "Spring"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Service",
+    "reading": "さーびす",
+    "senses": [
+      {
+        "definition": "サービス層の役割を持つコンポーネントを示すアノテーションで、@Component の特化形です。",
+        "domain": "spring",
+        "keywords": [
+          "サービス層",
+          "アノテーション",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Repository",
+    "reading": "りぽじとりー",
+    "senses": [
+      {
+        "definition": "永続化層や DAO 的役割を持つコンポーネントを示すアノテーションです。例外変換などの意味も持ちます。",
+        "domain": "spring",
+        "keywords": [
+          "永続化",
+          "DAO",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@Controller",
+    "reading": "あっとこんとろーらー",
+    "senses": [
+      {
+        "definition": "プレゼンテーション層のコントローラを示すアノテーションです。MVC 文脈で使われます。",
+        "domain": "spring",
+        "keywords": [
+          "MVC",
+          "コントローラ",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@RestController",
+    "reading": "れすとこんとろーらー",
+    "senses": [
+      {
+        "definition": "@Controller と @ResponseBody を組み合わせたメタアノテーションです。REST API 実装でよく使われます。",
+        "domain": "spring",
+        "keywords": [
+          "REST",
+          "API",
+          "アノテーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@ResponseBody",
+    "reading": "れすぽんすぼでぃー",
+    "senses": [
+      {
+        "definition": "メソッド戻り値を HTTP レスポンスボディへシリアライズするためのアノテーションです。",
+        "domain": "spring",
+        "keywords": [
+          "レスポンス",
+          "シリアライズ",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HttpMessageConverter",
+    "reading": "えいちてぃーてぃーぴーめっせーじこんばーたー",
+    "senses": [
+      {
+        "definition": "Spring MVC がオブジェクトと HTTP ボディを相互変換する仕組みです。",
+        "domain": "spring",
+        "keywords": [
+          "変換",
+          "HTTP",
+          "オブジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spring AOP",
+    "reading": "すぷりんぐえーおーぴー",
+    "senses": [
+      {
+        "definition": "Spring の AOP フレームワークです。IoC を補完し、横断的関心事を分離しやすくします。",
+        "domain": "spring",
+        "keywords": [
+          "AOP",
+          "横断",
+          "フレームワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AOP (Spring)",
+    "reading": "えーおーぴー（すぷりんぐ）",
+    "senses": [
+      {
+        "definition": "Aspect-Oriented Programming の略で、クラス横断的な関心事を分離して扱う考え方です。",
+        "domain": "spring",
+        "keywords": [
+          "アスペクト",
+          "横断",
+          "分離"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "aspect",
+    "reading": "あすぺくと",
+    "senses": [
+      {
+        "definition": "AOP におけるモジュール化単位です。トランザクションやログのような横断関心事を表現できます。",
+        "domain": "spring",
+        "keywords": [
+          "モジュール",
+          "横断",
+          "AOP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "crosscutting concern",
+    "reading": "くろすかってぃんぐこーんさーん",
+    "senses": [
+      {
+        "definition": "複数クラスや層にまたがって現れる関心事です。AOP が対象とする代表概念です。",
+        "domain": "spring",
+        "keywords": [
+          "横断",
+          "関心事",
+          "AOP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spring Boot",
+    "reading": "すぷりんぐぶーと",
+    "senses": [
+      {
+        "definition": "最小限の設定で stand-alone な production-grade Spring アプリを作りやすくする基盤です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "フレームワーク",
+          "自動設定",
+          "Spring"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "stand-alone application",
+    "reading": "すたんどあろーんあぷりけーしょん",
+    "senses": [
+      {
+        "definition": "単独で起動できるアプリケーションです。Spring Boot はこれを作りやすいことを特徴にしています。",
+        "domain": "spring-boot",
+        "keywords": [
+          "単独",
+          "起動",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "production-ready features",
+    "reading": "ぷろだくしょんれでぃふぃーちゃーず",
+    "senses": [
+      {
+        "definition": "本番運用向けの監視、管理、健全性確認などの機能群です。Spring Boot では Actuator が代表です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "本番",
+          "監視",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spring Initializr",
+    "reading": "すぷりんぐいにしゃらいざー",
+    "senses": [
+      {
+        "definition": "Spring Boot プロジェクトのひな形を生成する仕組みです。start.spring.io が代表的な入口です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "ひな形",
+          "生成",
+          "プロジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "starter",
+    "reading": "すたーたー",
+    "senses": [
+      {
+        "definition": "典型的な用途に必要な依存関係をまとめた Spring Boot 用パッケージ群です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "依存",
+          "パッケージ",
+          "まとめ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "spring-boot-starter",
+    "reading": "すぷりんぐぶーとすたーたー",
+    "senses": [
+      {
+        "definition": "Spring Boot のコアスターターで、自動設定やロギングなど基本機能を含みます。",
+        "domain": "spring-boot",
+        "keywords": [
+          "コア",
+          "基本",
+          "自動設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "spring-boot-starter-actuator",
+    "reading": "すぷりんぐぶーとすたーたーあくちゅえーたー",
+    "senses": [
+      {
+        "definition": "運用監視、管理、メトリクス、ヘルスチェックなどを有効化する starter です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "監視",
+          "メトリクス",
+          "ヘルスチェック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "auto-configuration",
+    "reading": "おーとこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "クラスパスや既存 bean を見て、必要な設定や bean を自動適用する Spring Boot の仕組みです。",
+        "domain": "spring-boot",
+        "keywords": [
+          "自動",
+          "設定",
+          "bean"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@AutoConfiguration",
+    "reading": "あっとおーとこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "Spring Boot の自動設定クラスを表すアノテーションです。",
+        "domain": "spring-boot",
+        "keywords": [
+          "アノテーション",
+          "自動設定",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@ConditionalOnClass",
+    "reading": "こんでぃしょなるおんくらす",
+    "senses": [
+      {
+        "definition": "指定クラスが見つかる場合にだけ auto-configuration を適用する条件アノテーションです。",
+        "domain": "spring-boot",
+        "keywords": [
+          "条件",
+          "クラス",
+          "自動設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "@ConditionalOnMissingBean",
+    "reading": "こんでぃしょなるおんみっしんぐびーん",
+    "senses": [
+      {
+        "definition": "利用者が同種 bean を定義していない場合にだけ自動設定を有効にする条件です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "条件",
+          "bean",
+          "自動設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "externalized configuration",
+    "reading": "えくすたーならいずどこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "設定値をコード外へ出し、環境ごとに切り替えやすくする考え方です。Spring Boot の特徴の一つです。",
+        "domain": "spring-boot",
+        "keywords": [
+          "設定",
+          "外部化",
+          "環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "embedded server",
+    "reading": "えんべでっどさーばー",
+    "senses": [
+      {
+        "definition": "アプリ内部へ組み込まれた Web サーバーです。Spring Boot では Tomcat、Jetty、Undertow を直接組み込めます。",
+        "domain": "spring-boot",
+        "keywords": [
+          "組み込み",
+          "Webサーバー",
+          "Tomcat"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "java -jar deployment",
+    "reading": "じゃばじゃーでぷろいめんと",
+    "senses": [
+      {
+        "definition": "生成した JAR を java -jar でそのまま起動する配布方式です。Spring Boot の代表的な実行方法です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "JAR",
+          "起動",
+          "配布"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Actuator",
+    "reading": "あくちゅえーたー",
+    "senses": [
+      {
+        "definition": "Spring Boot の production-ready 機能群で、監視、管理、健全性確認を提供します。",
+        "domain": "spring-boot",
+        "keywords": [
+          "監視",
+          "管理",
+          "健全性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "actuator endpoint",
+    "reading": "あくちゅえーたーえんどぽいんと",
+    "senses": [
+      {
+        "definition": "Actuator が提供する各種管理用エンドポイントです。Spring Boot には組み込み endpoint が複数あります。",
+        "domain": "spring-boot",
+        "keywords": [
+          "エンドポイント",
+          "管理",
+          "組み込み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "health endpoint (Spring Boot)",
+    "reading": "へるすえんどぽいんと（すぷりんぐぶーと）",
+    "senses": [
+      {
+        "definition": "アプリケーションの健全性を示す Actuator endpoint です。既定では /actuator/health にマップされます。",
+        "domain": "spring-boot",
+        "keywords": [
+          "健全性",
+          "ヘルスチェック",
+          "エンドポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "info endpoint",
+    "reading": "いんふぉえんどぽいんと",
+    "senses": [
+      {
+        "definition": "任意のアプリケーション情報を返す Actuator endpoint です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "情報",
+          "エンドポイント",
+          "Actuator"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "metrics endpoint",
+    "reading": "めとりくすえんどぽいんと",
+    "senses": [
+      {
+        "definition": "アプリが記録したメトリクス情報を確認するための Actuator endpoint です。",
+        "domain": "spring-boot",
+        "keywords": [
+          "メトリクス",
+          "エンドポイント",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "monitoring and management over HTTP",
+    "reading": "もにたりんぐあんどまねじめんとおーばーえいちてぃーてぃーぴー",
+    "senses": [
+      {
+        "definition": "Spring Boot Actuator の有効 endpoint を HTTP 経由で公開する考え方です。Web アプリではこれが自動設定されます。",
+        "domain": "spring-boot",
+        "keywords": [
+          "監視",
+          "HTTP",
+          "公開"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "React (library)",
+    "reading": "りあくと（らいぶらり）",
+    "senses": [
+      {
+        "definition": "コンポーネントで UI を構築するためのライブラリです。Hooks や Components を中心に構成されています。",
+        "domain": "react",
+        "keywords": [
+          "ライブラリ",
+          "UI",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "component",
+    "reading": "こんぽーねんと（りあくと）",
+    "senses": [
+      {
+        "definition": "React で UI を構成する再利用可能な単位です。関数コンポーネントが中心です。",
+        "domain": "react",
+        "keywords": [
+          "再利用",
+          "UI",
+          "関数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "props (React)",
+    "reading": "ぷろっぷす（りあくと）",
+    "senses": [
+      {
+        "definition": "親コンポーネントから子コンポーネントへ渡す読み取り専用の入力です。",
+        "domain": "react",
+        "keywords": [
+          "入力",
+          "読み取り専用",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "children prop",
+    "reading": "ちるどれんぷろっぷ",
+    "senses": [
+      {
+        "definition": "JSX をネストしたときに渡される特別な props です。",
+        "domain": "react",
+        "keywords": [
+          "JSX",
+          "ネスト",
+          "特別"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "state (React)",
+    "reading": "すてーと（りあくと）",
+    "senses": [
+      {
+        "definition": "コンポーネントがレンダー間で覚えておく内部データです。props と違いコンポーネント自身に属します。",
+        "domain": "react",
+        "keywords": [
+          "内部データ",
+          "レンダー",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Hook (React)",
+    "reading": "ふっく（りあくと）",
+    "senses": [
+      {
+        "definition": "React の状態や副作用などの機能を関数コンポーネントへ持ち込むための仕組みです。通常 use で始まる名前を持ちます。",
+        "domain": "react",
+        "keywords": [
+          "状態",
+          "副作用",
+          "関数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Rules of Hooks",
+    "reading": "るーるずおぶふっくす",
+    "senses": [
+      {
+        "definition": "Hooks はトップレベルで、React 関数の中からだけ呼ぶべきというルールです。",
+        "domain": "react",
+        "keywords": [
+          "ルール",
+          "トップレベル",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "top-level Hook call",
+    "reading": "とっぷれべるふっくこーる",
+    "senses": [
+      {
+        "definition": "Hook を条件分岐やループ内ではなく、コンポーネント本体のトップレベルで呼ぶことです。",
+        "domain": "react",
+        "keywords": [
+          "トップレベル",
+          "呼び出し",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "custom Hook",
+    "reading": "かすたむふっく",
+    "senses": [
+      {
+        "definition": "複数コンポーネントで再利用したい Hook ロジックを関数化したものです。",
+        "domain": "react",
+        "keywords": [
+          "再利用",
+          "関数",
+          "ロジック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useState",
+    "reading": "ゆーずすてーと",
+    "senses": [
+      {
+        "definition": "コンポーネントへ state 変数を追加する React Hook です。",
+        "domain": "react",
+        "keywords": [
+          "state",
+          "Hook",
+          "変数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "state setter",
+    "reading": "すてーとせったー",
+    "senses": [
+      {
+        "definition": "useState が返す、state を更新して再レンダーを起こす関数です。",
+        "domain": "react",
+        "keywords": [
+          "更新",
+          "関数",
+          "再レンダー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "state is private to the component",
+    "reading": "すてーとはこんぽーねんとぷらいべーと",
+    "senses": [
+      {
+        "definition": "React の state は、その state を宣言したコンポーネントに属し、親から直接変更はできません。",
+        "domain": "react",
+        "keywords": [
+          "プライベート",
+          "コンポーネント",
+          "所有"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "lifting state up",
+    "reading": "りふてぃんぐすてーとあっぷ",
+    "senses": [
+      {
+        "definition": "複数コンポーネントで状態を共有したいとき、共通の親へ state を持ち上げる設計です。",
+        "domain": "react",
+        "keywords": [
+          "共有",
+          "親",
+          "持ち上げ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useEffect",
+    "reading": "ゆーずえふぇくと",
+    "senses": [
+      {
+        "definition": "外部システムとの同期や副作用処理を記述する React Hook です。",
+        "domain": "react",
+        "keywords": [
+          "副作用",
+          "同期",
+          "Hook"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "effect setup",
+    "reading": "えふぇくとせっとあっぷ",
+    "senses": [
+      {
+        "definition": "useEffect 内で行う初期化や接続処理です。必要に応じて cleanup を返せます。",
+        "domain": "react",
+        "keywords": [
+          "初期化",
+          "接続",
+          "setup"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "effect cleanup",
+    "reading": "えふぇくとくりーんあっぷ",
+    "senses": [
+      {
+        "definition": "useEffect が返す後始末関数です。接続解除やイベント解除などに使います。",
+        "domain": "react",
+        "keywords": [
+          "後始末",
+          "解除",
+          "cleanup"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dependency array",
+    "reading": "でぺんでんしーあれい",
+    "senses": [
+      {
+        "definition": "useEffect、useMemo、useCallback などで依存値を指定する配列です。",
+        "domain": "react",
+        "keywords": [
+          "依存",
+          "配列",
+          "Hook"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "external system synchronization",
+    "reading": "えくすたーなるしすてむしんくろないぜーしょん",
+    "senses": [
+      {
+        "definition": "useEffect の代表用途で、React 外のシステムと状態を合わせることです。",
+        "domain": "react",
+        "keywords": [
+          "外部",
+          "同期",
+          "useEffect"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useMemo",
+    "reading": "ゆーずめも",
+    "senses": [
+      {
+        "definition": "再レンダー間で計算結果をキャッシュする React Hook です。主に性能最適化に使います。",
+        "domain": "react",
+        "keywords": [
+          "キャッシュ",
+          "計算",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useCallback",
+    "reading": "ゆーずこーるばっく",
+    "senses": [
+      {
+        "definition": "再レンダー間で関数自体をキャッシュする React Hook です。性能最適化目的で使います。",
+        "domain": "react",
+        "keywords": [
+          "キャッシュ",
+          "関数",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "memoization",
+    "reading": "めもいぜーしょん",
+    "senses": [
+      {
+        "definition": "同じ条件なら前回結果を再利用する最適化手法です。useMemo と useCallback が代表です。",
+        "domain": "react",
+        "keywords": [
+          "最適化",
+          "再利用",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "performance optimization",
+    "reading": "ぱふぉーまんすおぷてぃまいぜーしょん",
+    "senses": [
+      {
+        "definition": "React 公式では useMemo や useCallback を意味論ではなく最適化のために使うと説明しています。",
+        "domain": "react",
+        "keywords": [
+          "最適化",
+          "useMemo",
+          "useCallback"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "createContext",
+    "reading": "くりえいとこんてきすと",
+    "senses": [
+      {
+        "definition": "コンポーネントツリーへ深く値を渡すための context を作る React API です。",
+        "domain": "react",
+        "keywords": [
+          "context",
+          "API",
+          "ツリー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "context object",
+    "reading": "こんてきすとおぶじぇくと",
+    "senses": [
+      {
+        "definition": "createContext が返す、提供と参照のためのコンテキスト表現です。",
+        "domain": "react",
+        "keywords": [
+          "context",
+          "オブジェクト",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "provider",
+    "reading": "ぷろばいだー（りあくと）",
+    "senses": [
+      {
+        "definition": "context 値を子孫へ配るためのコンポーネントです。React 19 では SomeContext 自体を provider として使えます。",
+        "domain": "react",
+        "keywords": [
+          "context",
+          "配信",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "consumer",
+    "reading": "こんしゅーまー",
+    "senses": [
+      {
+        "definition": "Hook 登場前からある、context 値を読むための古い方式です。新規コードでは useContext が推奨されます。",
+        "domain": "react",
+        "keywords": [
+          "context",
+          "レガシー",
+          "読み取り"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useContext",
+    "reading": "ゆーずこんてきすと",
+    "senses": [
+      {
+        "definition": "最も近い provider の context 値を読み取り、変化へ追従する React Hook です。",
+        "domain": "react",
+        "keywords": [
+          "context",
+          "Hook",
+          "読み取り"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "defaultValue in context",
+    "reading": "こんてきすとのでふぉるとばりゅー",
+    "senses": [
+      {
+        "definition": "対応する provider が存在しない場合にだけ使われる context の既定値です。",
+        "domain": "react",
+        "keywords": [
+          "既定値",
+          "context",
+          "フォールバック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "context re-render propagation",
+    "reading": "こんてきすとりれんだーぷろぱげーしょん",
+    "senses": [
+      {
+        "definition": "provider の value が変わると、それを読む子コンポーネント群が再レンダーされる挙動です。",
+        "domain": "react",
+        "keywords": [
+          "再レンダー",
+          "伝播",
+          "context"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "memo",
+    "reading": "めも",
+    "senses": [
+      {
+        "definition": "同じ props なら再レンダーを省略できる React API です。useMemo や useCallback と組み合わせて使うことがあります。",
+        "domain": "react",
+        "keywords": [
+          "最適化",
+          "再レンダー",
+          "props"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "lazy",
+    "reading": "れいじー",
+    "senses": [
+      {
+        "definition": "コンポーネントコードを初回レンダー時まで遅延読み込みする React API です。",
+        "domain": "react",
+        "keywords": [
+          "遅延",
+          "読み込み",
+          "コード分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Suspense",
+    "reading": "さすぺんす",
+    "senses": [
+      {
+        "definition": "非同期な読み込み待ちの間に fallback UI を出すための React 機能です。Next.js App Router とも深く関わります。",
+        "domain": "react",
+        "keywords": [
+          "非同期",
+          "fallback",
+          "読み込み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "startTransition",
+    "reading": "すたーととらんじしょん",
+    "senses": [
+      {
+        "definition": "非緊急な state 更新としてマークする React API です。UI 応答性改善に使われます。",
+        "domain": "react",
+        "keywords": [
+          "遷移",
+          "非緊急",
+          "応答性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "use",
+    "reading": "ゆーず",
+    "senses": [
+      {
+        "definition": "Promise や context のような resource をレンダー中に読むための React API です。React 19 文脈で重要です。",
+        "domain": "react",
+        "keywords": [
+          "Promise",
+          "context",
+          "resource"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "resource reading",
+    "reading": "りそーすりーでぃんぐ",
+    "senses": [
+      {
+        "definition": "use を使って Promise や context などの resource を読むことです。",
+        "domain": "react",
+        "keywords": [
+          "resource",
+          "読み取り",
+          "use"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useActionState",
+    "reading": "ゆーずあくしょんすてーと",
+    "senses": [
+      {
+        "definition": "副作用を伴う Action と state 更新を組み合わせて扱う React Hook です。",
+        "domain": "react",
+        "keywords": [
+          "Action",
+          "state",
+          "Hook"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useFormStatus",
+    "reading": "ゆーずふぉーむすてーたす",
+    "senses": [
+      {
+        "definition": "直近の form submit 状態を取得する React DOM Hook です。送信中表示などに使います。",
+        "domain": "react",
+        "keywords": [
+          "form",
+          "送信",
+          "状態"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JSX",
+    "reading": "じぇいえすえっくす",
+    "senses": [
+      {
+        "definition": "React コンポーネントの UI を記述するための構文です。props や children の扱いと密接です。",
+        "domain": "react",
+        "keywords": [
+          "構文",
+          "UI",
+          "記述"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "props are read-only",
+    "reading": "ぷろっぷすはりーどおんりー",
+    "senses": [
+      {
+        "definition": "React 公式では props は読み取り専用のスナップショットとして扱うべきと説明されています。",
+        "domain": "react",
+        "keywords": [
+          "読み取り専用",
+          "スナップショット",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "component memory",
+    "reading": "こんぽーねんとめもりー",
+    "senses": [
+      {
+        "definition": "React 公式で state を説明するときに使われる比喩で、コンポーネントがレンダー間で覚える情報を指します。",
+        "domain": "react",
+        "keywords": [
+          "state",
+          "比喩",
+          "記憶"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "state updater function",
+    "reading": "すてーとあっぷでーたーふぁんくしょん",
+    "senses": [
+      {
+        "definition": "前の state をもとに次の state を計算するために setState へ渡せる関数形式です。",
+        "domain": "react",
+        "keywords": [
+          "更新",
+          "関数",
+          "setState"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Strict Mode behavior",
+    "reading": "すとりくともーどびへいびあ",
+    "senses": [
+      {
+        "definition": "React 開発時には useState 初期化関数や useEffect setup/cleanup が追加実行されることがあります。",
+        "domain": "react",
+        "keywords": [
+          "開発",
+          "追加実行",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "effect dependency correctness",
+    "reading": "えふぇくとでぺんでんしーこーれくとねす",
+    "senses": [
+      {
+        "definition": "Effect が依存値を正しく宣言していることです。React では dependencies を省略しすぎると不整合が起きやすいです。",
+        "domain": "react",
+        "keywords": [
+          "依存",
+          "正確性",
+          "Effect"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "unnecessary effect",
+    "reading": "あんねせさりーえふぇくと",
+    "senses": [
+      {
+        "definition": "外部システムと同期していないのに useEffect を使うことです。React 公式では不要な Effect を避けるよう案内しています。",
+        "domain": "react",
+        "keywords": [
+          "不要",
+          "useEffect",
+          "アンチパターン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "context fallback",
+    "reading": "こんてきすとふぉーるばっく",
+    "senses": [
+      {
+        "definition": "provider が存在しないときに defaultValue を使う挙動です。",
+        "domain": "react",
+        "keywords": [
+          "フォールバック",
+          "defaultValue",
+          "context"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "custom Hook composition",
+    "reading": "かすたむふっくこんぽじしょん",
+    "senses": [
+      {
+        "definition": "custom Hook の中から別の Hook を呼んでロジックを組み立てることです。",
+        "domain": "react",
+        "keywords": [
+          "組み合わせ",
+          "Hook",
+          "ロジック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "React Compiler note",
+    "reading": "りあくとこんぱいらーのーと",
+    "senses": [
+      {
+        "definition": "React 公式では useMemo の説明で React Compiler が値や関数を自動メモ化できる旨に触れています。",
+        "domain": "react",
+        "keywords": [
+          "コンパイラ",
+          "メモ化",
+          "自動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "component identity",
+    "reading": "こんぽーねんとあいでんてぃてぃ",
+    "senses": [
+      {
+        "definition": "React が Hook state を対応づける際に重要な概念で、同じ tree 上の位置関係に結びつきます。",
+        "domain": "react",
+        "keywords": [
+          "識別",
+          "位置",
+          "Hook"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "state sharing via common parent",
+    "reading": "こもんぺあれんとによるすてーときょうゆう",
+    "senses": [
+      {
+        "definition": "複数子の state を同期したいとき、最も近い共通親へ state を持たせるやり方です。",
+        "domain": "react",
+        "keywords": [
+          "共有",
+          "親",
+          "同期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Next.js (framework)",
+    "reading": "ねくすとじぇいえす（ふれーむわーく）",
+    "senses": [
+      {
+        "definition": "React を土台にフルスタック Web アプリを構築するためのフレームワークです。下位ツール設定を自動化して開発を進めやすくします。",
+        "domain": "nextjs",
+        "keywords": [
+          "フレームワーク",
+          "React",
+          "フルスタック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "React framework",
+    "reading": "りあくとふれーむわーく",
+    "senses": [
+      {
+        "definition": "Next.js は公式 docs で React framework として位置づけられています。React Components で UI を作り、Next.js が追加機能を担います。",
+        "domain": "nextjs",
+        "keywords": [
+          "フレームワーク",
+          "React",
+          "位置づけ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "App Router",
+    "reading": "あっぷるーたー",
+    "senses": [
+      {
+        "definition": "Next.js の新しいルーターで、React Server Components、Suspense、Server Functions などの最新機能を使います。",
+        "domain": "nextjs",
+        "keywords": [
+          "ルーター",
+          "Server Components",
+          "新しい"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Pages Router",
+    "reading": "ぺーじずるーたー",
+    "senses": [
+      {
+        "definition": "Next.js の従来ルーターです。現在もサポートされていますが、最新機能には App Router が推奨されています。",
+        "domain": "nextjs",
+        "keywords": [
+          "ルーター",
+          "従来",
+          "Pages"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "file-system based router",
+    "reading": "ふぁいるしすてむべーするーたー",
+    "senses": [
+      {
+        "definition": "ファイルやフォルダ構造からルートが決まる方式です。App Router も Pages Router もこの考え方を採用しています。",
+        "domain": "nextjs",
+        "keywords": [
+          "ファイル",
+          "フォルダ",
+          "ルーティング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "app directory",
+    "reading": "あっぷでぃれくとり",
+    "senses": [
+      {
+        "definition": "App Router のルートやレイアウト、ルートハンドラなどを置くディレクトリです。",
+        "domain": "nextjs",
+        "keywords": [
+          "ディレクトリ",
+          "App Router",
+          "ルート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "pages directory",
+    "reading": "ぺーじずでぃれくとり",
+    "senses": [
+      {
+        "definition": "Pages Router でファイルごとにルートを作るためのディレクトリです。",
+        "domain": "nextjs",
+        "keywords": [
+          "ディレクトリ",
+          "Pages Router",
+          "ルート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "create-next-app",
+    "reading": "くりえいとねくすとあっぷ",
+    "senses": [
+      {
+        "definition": "Next.js アプリを作成する公式 CLI です。TypeScript や ESLint なども初期設定できます。",
+        "domain": "nextjs",
+        "keywords": [
+          "CLI",
+          "作成",
+          "初期設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Layout",
+    "reading": "れいあうと",
+    "senses": [
+      {
+        "definition": "複数ページで共有される UI 構造です。App Router ではレイアウトがルート設計の重要要素になります。",
+        "domain": "nextjs",
+        "keywords": [
+          "共有",
+          "UI",
+          "ルート"
+        ]
+      },
+      {
+        "definition": "配置を視覚的に確認するタブ。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "Page Designer",
+          "Layout"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Page",
+    "reading": "ぺーじ",
+    "senses": [
+      {
+        "definition": "ルートに対応する表示単位です。App Router と Pages Router のどちらでも中心概念です。",
+        "domain": "nextjs",
+        "keywords": [
+          "表示",
+          "ルート",
+          "中心"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Link component",
+    "reading": "りんくこんぽーねんと",
+    "senses": [
+      {
+        "definition": "next/link が提供するリンク用コンポーネントで、prefetching と client-side navigation を提供します。",
+        "domain": "nextjs",
+        "keywords": [
+          "リンク",
+          "prefetch",
+          "ナビゲーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "client-side navigation",
+    "reading": "くらいあんとさいどなびげーしょん",
+    "senses": [
+      {
+        "definition": "ブラウザ全体再読込なしに、クライアント側でルート遷移する方式です。Next.js の Link がこれを支えます。",
+        "domain": "nextjs",
+        "keywords": [
+          "遷移",
+          "クライアント",
+          "ルート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "prefetching",
+    "reading": "ぷりふぇっちんぐ",
+    "senses": [
+      {
+        "definition": "ユーザーが遷移する前にルート資産やデータを先読みする仕組みです。Next.js は Link で自動 prefetch を行います。",
+        "domain": "nextjs",
+        "keywords": [
+          "先読み",
+          "Link",
+          "自動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "automatic prefetch",
+    "reading": "おーとまちっくぷりふぇっち",
+    "senses": [
+      {
+        "definition": "Link がビューポートへ入ったときなどに自動で行われる prefetch です。",
+        "domain": "nextjs",
+        "keywords": [
+          "自動",
+          "ビューポート",
+          "Link"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "manual prefetch",
+    "reading": "まにゅあるぷりふぇっち",
+    "senses": [
+      {
+        "definition": "自動ではなく、明示的に prefetch を制御するパターンです。",
+        "domain": "nextjs",
+        "keywords": [
+          "手動",
+          "制御",
+          "prefetch"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "hover-triggered prefetch",
+    "reading": "ほばーとりがーどぷりふぇっち",
+    "senses": [
+      {
+        "definition": "ホバー時だけ prefetch する方式です。大きなリンク一覧で無駄な先読みを減らすのに役立ちます。",
+        "domain": "nextjs",
+        "keywords": [
+          "ホバー",
+          "prefetch",
+          "節約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "prefetch={false}",
+    "reading": "ぷりふぇっちふぉるす",
+    "senses": [
+      {
+        "definition": "Link の自動 prefetch を無効化する指定です。リソース節約目的で使います。",
+        "domain": "nextjs",
+        "keywords": [
+          "無効化",
+          "Link",
+          "節約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Server Components",
+    "reading": "さーばーこんぽーねんつ",
+    "senses": [
+      {
+        "definition": "サーバー側でレンダリングされる React コンポーネントです。App Router はこれを前提にしています。",
+        "domain": "nextjs",
+        "keywords": [
+          "サーバー",
+          "レンダリング",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Client Components",
+    "reading": "くらいあんとこんぽーねんつ",
+    "senses": [
+      {
+        "definition": "ブラウザ側で動作する React コンポーネントです。インタラクションや Hook 使用で必要になります。",
+        "domain": "nextjs",
+        "keywords": [
+          "ブラウザ",
+          "インタラクション",
+          "Hook"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Server Rendering",
+    "reading": "さーばーれんだりんぐ",
+    "senses": [
+      {
+        "definition": "ルートやページをサーバー側で生成してからクライアントへ送ることです。App Router では基本動作の一部です。",
+        "domain": "nextjs",
+        "keywords": [
+          "サーバー",
+          "生成",
+          "基本"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Static Rendering",
+    "reading": "すたてぃっくれんだりんぐ",
+    "senses": [
+      {
+        "definition": "ビルド時または再検証時に生成され、結果がキャッシュされるレンダリング方式です。",
+        "domain": "nextjs",
+        "keywords": [
+          "静的",
+          "ビルド",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Dynamic Rendering",
+    "reading": "だいなみっくれんだりんぐ",
+    "senses": [
+      {
+        "definition": "リクエスト時にサーバー側で生成されるレンダリング方式です。動的ルートや変動データで使われます。",
+        "domain": "nextjs",
+        "keywords": [
+          "動的",
+          "リクエスト",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "streaming (Next.js)",
+    "reading": "すとりーみんぐ（ねくすとじぇいえす）",
+    "senses": [
+      {
+        "definition": "画面生成結果を部分的に先に返し、待ち時間を感じにくくする仕組みです。Next.js は navigation 最適化文脈で説明しています。",
+        "domain": "nextjs",
+        "keywords": [
+          "部分",
+          "先行",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "client-side transition",
+    "reading": "くらいあんとさいどとらんじしょん",
+    "senses": [
+      {
+        "definition": "新しいページへ遷移するとき、全ページ再読込ではなくクライアント遷移にすることです。Next.js はこれで体感速度を高めます。",
+        "domain": "nextjs",
+        "keywords": [
+          "遷移",
+          "体感",
+          "クライアント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dynamic route",
+    "reading": "だいなみっくるーと",
+    "senses": [
+      {
+        "definition": "URL パラメータを含むルートです。App Router でも Pages Router でも対応しています。",
+        "domain": "nextjs",
+        "keywords": [
+          "動的",
+          "URL",
+          "パラメータ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dynamic segment",
+    "reading": "だいなみっくせぐめんと",
+    "senses": [
+      {
+        "definition": "ルートパスの可変部分です。App Router では route handlers にも使えます。",
+        "domain": "nextjs",
+        "keywords": [
+          "可変",
+          "セグメント",
+          "ルート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "loading.tsx",
+    "reading": "ろーでぃんぐてぃーえすえっくす",
+    "senses": [
+      {
+        "definition": "動的ルートや遅い画面で loading UI を出すための特別ファイルです。部分 prefetch や即時遷移の体感改善に役立ちます。",
+        "domain": "nextjs",
+        "keywords": [
+          "loading",
+          "UI",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "error.tsx",
+    "reading": "えらーてぃーえすえっくす",
+    "senses": [
+      {
+        "definition": "ルート単位のエラー UI を定義するための特別ファイルです。App Router のエラーハンドリングで重要です。",
+        "domain": "nextjs",
+        "keywords": [
+          "エラー",
+          "UI",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "generateStaticParams",
+    "reading": "じぇねれーとすたてぃっくぱらむず",
+    "senses": [
+      {
+        "definition": "動的セグメントの静的生成対象をビルド時に列挙するための関数です。",
+        "domain": "nextjs",
+        "keywords": [
+          "静的生成",
+          "ビルド",
+          "関数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Route Handlers",
+    "reading": "るーとはんどらーず",
+    "senses": [
+      {
+        "definition": "App Router の app ディレクトリ内で custom request handlers を作る仕組みです。Web Request/Response API を使います。",
+        "domain": "nextjs",
+        "keywords": [
+          "ハンドラ",
+          "API",
+          "リクエスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "route.ts / route.js",
+    "reading": "るーとてぃーえす るーとじぇいえす",
+    "senses": [
+      {
+        "definition": "Route Handlers を定義する特別ファイルです。app ディレクトリ内で使います。",
+        "domain": "nextjs",
+        "keywords": [
+          "ファイル",
+          "Route Handlers",
+          "定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "supported HTTP methods in Route Handlers",
+    "reading": "さぽーとえいちてぃーてぃーぴーめそっずいんるーとはんどらーず",
+    "senses": [
+      {
+        "definition": "Route Handlers では GET、POST、PUT、PATCH、DELETE、HEAD、OPTIONS を扱えます。",
+        "domain": "nextjs",
+        "keywords": [
+          "HTTP",
+          "メソッド",
+          "Route Handlers"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "API Routes",
+    "reading": "えーぴーあいるーつ",
+    "senses": [
+      {
+        "definition": "Pages Router 側で API を作るための仕組みです。App Router では Route Handlers が相当機能になります。",
+        "domain": "nextjs",
+        "keywords": [
+          "API",
+          "Pages Router",
+          "ルート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "middleware (Next.js)",
+    "reading": "みどるうぇあ（ねくすとじぇいえす）",
+    "senses": [
+      {
+        "definition": "リクエスト処理の前段で共通制御を行うための仕組みです。App Router の route handlers and middleware docs で案内されています。",
+        "domain": "nextjs",
+        "keywords": [
+          "共通制御",
+          "リクエスト",
+          "前段"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "file-system conventions",
+    "reading": "ふぁいるしすてむこんべんしょんず",
+    "senses": [
+      {
+        "definition": "page、layout、route、loading など特別ファイル名に意味を持たせる Next.js の規約です。",
+        "domain": "nextjs",
+        "keywords": [
+          "規約",
+          "ファイル名",
+          "特別"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "partial prefetching",
+    "reading": "ぱーしゃるぷりふぇっちんぐ",
+    "senses": [
+      {
+        "definition": "動的ルートで loading.tsx を使うことで、全部ではなく一部だけ先読みする考え方です。",
+        "domain": "nextjs",
+        "keywords": [
+          "部分",
+          "先読み",
+          "loading"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "partial rendering",
+    "reading": "ぱーしゃるれんだりんぐ",
+    "senses": [
+      {
+        "definition": "Next.js App Router で、変わったセグメントだけ再レンダーする考え方です。",
+        "domain": "nextjs",
+        "keywords": [
+          "部分",
+          "再レンダー",
+          "セグメント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "soft navigation",
+    "reading": "そふとなびげーしょん",
+    "senses": [
+      {
+        "definition": "App Router で shared layout を保持しつつ、必要部分だけ更新する遷移方式です。",
+        "domain": "nextjs",
+        "keywords": [
+          "遷移",
+          "layout",
+          "保持"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "shared layout preservation",
+    "reading": "しぇあどれいあうとぷりざべーしょん",
+    "senses": [
+      {
+        "definition": "兄弟ルート間遷移でも共有レイアウトを保つ App Router の挙動です。",
+        "domain": "nextjs",
+        "keywords": [
+          "共有",
+          "レイアウト",
+          "保持"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "next/image",
+    "reading": "ねくすといめーじ",
+    "senses": [
+      {
+        "definition": "Next.js の組み込み画像コンポーネントです。サイズ最適化、lazy loading、layout shift 防止を提供します。",
+        "domain": "nextjs",
+        "keywords": [
+          "画像",
+          "最適化",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "image optimization",
+    "reading": "いめーじおぷてぃまいぜーしょん",
+    "senses": [
+      {
+        "definition": "Next.js が画像サイズ最適化、WebP 活用、lazy loading などを行う仕組みです。",
+        "domain": "nextjs",
+        "keywords": [
+          "画像",
+          "最適化",
+          "WebP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "visual stability",
+    "reading": "びじゅあるすたびりてぃ",
+    "senses": [
+      {
+        "definition": "next/image が画像読み込み時の layout shift を防ぐことで得られる表示安定性です。",
+        "domain": "nextjs",
+        "keywords": [
+          "安定性",
+          "layout shift",
+          "画像"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "remotePatterns",
+    "reading": "りもーとぱたーんず",
+    "senses": [
+      {
+        "definition": "外部画像を安全に許可するため next.config で指定する URL パターンです。",
+        "domain": "nextjs",
+        "keywords": [
+          "外部画像",
+          "設定",
+          "URL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Link viewport prefetch",
+    "reading": "りんくびゅーぽーとぷりふぇっち",
+    "senses": [
+      {
+        "definition": "Link がビューポートへ入ったときに route を自動 prefetch する挙動です。",
+        "domain": "nextjs",
+        "keywords": [
+          "ビューポート",
+          "prefetch",
+          "Link"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useLinkStatus",
+    "reading": "ゆーずりんくすてーたす",
+    "senses": [
+      {
+        "definition": "遷移待ち状態を UI へ反映するための hook 的機能です。遅いネットワーク時のフィードバックに使えます。",
+        "domain": "nextjs",
+        "keywords": [
+          "遷移",
+          "状態",
+          "フィードバック"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "slow network navigation feedback",
+    "reading": "すろーねっとわーくなびげーしょんふぃーどばっく",
+    "senses": [
+      {
+        "definition": "prefetch が間に合わないときに、useLinkStatus などで即時ヒントを出す設計です。",
+        "domain": "nextjs",
+        "keywords": [
+          "ネットワーク",
+          "フィードバック",
+          "ヒント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "bundle analyzer for Next.js",
+    "reading": "ばんどるあならいざーふぉーねくすとじぇいえす",
+    "senses": [
+      {
+        "definition": "大きな JavaScript bundle を見つけ、削減するための分析補助です。Next.js docs では @next/bundle-analyzer に触れています。",
+        "domain": "nextjs",
+        "keywords": [
+          "バンドル",
+          "分析",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "TypeScript in App Router",
+    "reading": "たいぷすくりぷといんあっぷるーたー",
+    "senses": [
+      {
+        "definition": "Next.js App Router は型安全性強化を案内しており、TypeScript と組み合わせて使いやすくなっています。",
+        "domain": "nextjs",
+        "keywords": [
+          "TypeScript",
+          "型安全",
+          "App Router"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "App Router and React version handling",
+    "reading": "あっぷるーたーあんどりあくとばーじょんはんどりんぐ",
+    "senses": [
+      {
+        "definition": "Next.js docs では App Router が React の built-in canary releases を扱うと説明されています。",
+        "domain": "nextjs",
+        "keywords": [
+          "バージョン",
+          "React",
+          "canary"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "full-stack web applications in Next.js",
+    "reading": "ねくすとじぇいえすのふるすたっくうぇぶあぷりけーしょん",
+    "senses": [
+      {
+        "definition": "Next.js は公式 docs で full-stack web applications を構築するための React framework として案内されています。",
+        "domain": "nextjs",
+        "keywords": [
+          "フルスタック",
+          "Web",
+          "React"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "画像最適化（Next.js）",
+    "reading": "がぞうさいてきか（ねくすとじぇいえす）",
+    "senses": [
+      {
+        "definition": "Next.jsのImageコンポーネントが提供する自動画像最適化機能です。WebPへの変換やリサイズ、遅延読み込みを自動で行い表示速度を向上させます。",
+        "domain": "nextjs",
+        "keywords": [
+          "画像最適化",
+          "Next.js",
+          "WebP",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "image optimization (Next.js)",
+      "Next.js Image"
+    ]
+  }
+]

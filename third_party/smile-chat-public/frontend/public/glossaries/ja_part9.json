@@ -1,0 +1,3750 @@
+[
+  {
+    "term": "モバイルアプリ",
+    "reading": "もばいるあぷり",
+    "senses": [
+      {
+        "definition": "スマートフォンやタブレットで動くアプリケーションです。Webより端末機能に近く、現場利用や外出先利用との相性が高いです。",
+        "domain": "mobile",
+        "keywords": [
+          "スマートフォン",
+          "タブレット",
+          "端末",
+          "現場",
+          "アプリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mobile App"
+    ]
+  },
+  {
+    "term": "ネイティブアプリ",
+    "reading": "ねいてぃぶあぷり",
+    "senses": [
+      {
+        "definition": "iOSやAndroid向けにそれぞれ専用実装されたアプリです。性能や端末連携に強い一方、開発と保守が二重化しやすいです。",
+        "domain": "mobile",
+        "keywords": [
+          "iOS",
+          "Android",
+          "専用",
+          "性能",
+          "保守"
+        ]
+      }
+    ],
+    "aliases": [
+      "Native App"
+    ]
+  },
+  {
+    "term": "ハイブリッドアプリ",
+    "reading": "はいぶりっどあぷり",
+    "senses": [
+      {
+        "definition": "Web技術を土台にしつつ、アプリとして配布する形式です。共通化しやすい反面、複雑な端末機能では制約が出ることがあります。",
+        "domain": "mobile",
+        "keywords": [
+          "Web",
+          "共通化",
+          "配布",
+          "端末",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hybrid App"
+    ]
+  },
+  {
+    "term": "クロスプラットフォーム開発",
+    "reading": "くろすぷらっとふぉーむかいはつ",
+    "senses": [
+      {
+        "definition": "一つのコードベースから複数OS向けアプリを作る考え方です。速度と共通化に強いですが、OS差異の吸収設計が重要です。",
+        "domain": "mobile",
+        "keywords": [
+          "コードベース",
+          "OS",
+          "共通化",
+          "差異",
+          "吸収"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cross-Platform Development"
+    ]
+  },
+  {
+    "term": "React Native",
+    "reading": "りあくとねいてぃぶ",
+    "senses": [
+      {
+        "definition": "JavaScriptやTypeScriptでモバイルアプリを作るための代表的な基盤です。Web知識を活かしやすい一方、ネイティブ理解も必要になります。",
+        "domain": "mobile",
+        "keywords": [
+          "JavaScript",
+          "TypeScript",
+          "Web",
+          "ネイティブ",
+          "基盤"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Flutter",
+    "reading": "ふらったー",
+    "senses": [
+      {
+        "definition": "Google系のクロスプラットフォーム開発基盤です。描画一貫性に強く、UI表現の自由度も高いです。",
+        "domain": "mobile",
+        "keywords": [
+          "Google",
+          "クロスプラットフォーム",
+          "描画",
+          "UI",
+          "自由度"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Swift",
+    "reading": "すいふと",
+    "senses": [
+      {
+        "definition": "Apple系アプリ開発で主に使われる言語です。iOSネイティブ開発の中心的な選択肢です。",
+        "domain": "mobile",
+        "keywords": [
+          "Apple",
+          "iOS",
+          "言語",
+          "ネイティブ",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Kotlin",
+    "reading": "ことりん",
+    "senses": [
+      {
+        "definition": "Android開発で主に使われる言語です。簡潔で安全性の高い記法が特徴です。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "言語",
+          "簡潔",
+          "安全性",
+          "記法"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "端末最適化",
+    "reading": "たんまつさいてきか",
+    "senses": [
+      {
+        "definition": "画面サイズ、性能、通信環境、操作方法に応じて体験を整えることです。PC向け前提の設計をそのまま移すと使いにくくなりやすいです。",
+        "domain": "mobile",
+        "keywords": [
+          "画面",
+          "性能",
+          "通信",
+          "操作",
+          "体験"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Optimization"
+    ]
+  },
+  {
+    "term": "端末機能連携",
+    "reading": "たんまつきのうれんけい",
+    "senses": [
+      {
+        "definition": "カメラ、GPS、通知、ストレージ、指紋認証などをアプリから利用することです。便利ですが、権限管理とプライバシー配慮が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "カメラ",
+          "GPS",
+          "通知",
+          "権限",
+          "プライバシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Feature Integration"
+    ]
+  },
+  {
+    "term": "プッシュ通知",
+    "reading": "ぷっしゅつうち",
+    "senses": [
+      {
+        "definition": "アプリを開いていなくても利用者へ通知を届ける仕組みです。即時性に強いですが、出しすぎると無視されやすくなります。",
+        "domain": "mobile",
+        "keywords": [
+          "通知",
+          "即時",
+          "配信",
+          "アプリ",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": [
+      "Push Notification"
+    ]
+  },
+  {
+    "term": "ローカル通知",
+    "reading": "ろーかるつうち",
+    "senses": [
+      {
+        "definition": "端末内でスケジュールや条件に応じて出す通知です。サーバー依存を減らせますが、端末側の状態に左右されます。",
+        "domain": "mobile",
+        "keywords": [
+          "端末",
+          "スケジュール",
+          "通知",
+          "条件",
+          "ローカル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Local Notification"
+    ]
+  },
+  {
+    "term": "通知許諾",
+    "reading": "つうちきょだく",
+    "senses": [
+      {
+        "definition": "利用者が通知を受け取ることに同意した状態です。通知の価値を感じてもらえないと、初回で拒否されやすいです。",
+        "domain": "mobile",
+        "keywords": [
+          "同意",
+          "許可",
+          "通知",
+          "利用者",
+          "初回"
+        ]
+      }
+    ],
+    "aliases": [
+      "Notification Permission"
+    ]
+  },
+  {
+    "term": "バックグラウンド実行",
+    "reading": "ばっくぐらうんどじっこう",
+    "senses": [
+      {
+        "definition": "アプリが前面にない状態でも一定処理を続けることです。便利ですが、OS制約とバッテリー消費に注意が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "バックグラウンド",
+          "処理",
+          "OS",
+          "バッテリー",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Background Execution"
+    ]
+  },
+  {
+    "term": "フォアグラウンド処理",
+    "reading": "ふぉあぐらうんどしょり",
+    "senses": [
+      {
+        "definition": "利用者がアプリを見て操作している前面状態での処理です。応答性や体感速度が強く求められます。",
+        "domain": "mobile",
+        "keywords": [
+          "前面",
+          "操作",
+          "応答性",
+          "体感",
+          "速度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Foreground Processing"
+    ]
+  },
+  {
+    "term": "バッテリー最適化",
+    "reading": "ばってりーさいてきか",
+    "senses": [
+      {
+        "definition": "端末の電力消費を抑えながら必要機能を維持する設計です。バックグラウンド処理や位置情報利用で特に重要です。",
+        "domain": "mobile",
+        "keywords": [
+          "電力",
+          "消費",
+          "バックグラウンド",
+          "位置情報",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Battery Optimization"
+    ]
+  },
+  {
+    "term": "オフラインキャッシュ",
+    "reading": "おふらいんきゃっしゅ",
+    "senses": [
+      {
+        "definition": "通信できないときにも一定情報を使えるよう端末に保持する仕組みです。現場作業や移動中利用で有効です。",
+        "domain": "mobile",
+        "keywords": [
+          "オフライン",
+          "キャッシュ",
+          "端末",
+          "現場",
+          "保持"
+        ]
+      }
+    ],
+    "aliases": [
+      "Offline Cache"
+    ]
+  },
+  {
+    "term": "同期競合",
+    "reading": "どうききょうごう",
+    "senses": [
+      {
+        "definition": "オフライン中の変更とサーバー側変更がぶつかる状態です。どちらを優先するかの設計が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "オフライン",
+          "競合",
+          "サーバー",
+          "優先",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sync Conflict"
+    ]
+  },
+  {
+    "term": "ローカルファースト",
+    "reading": "ろーかるふぁーすと",
+    "senses": [
+      {
+        "definition": "まず端末側で素早く扱い、その後で同期を考える設計思想です。体感はよくなりますが、整合性設計が難しくなります。",
+        "domain": "mobile",
+        "keywords": [
+          "端末",
+          "同期",
+          "体感",
+          "整合性",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Local-First"
+    ]
+  },
+  {
+    "term": "デバイスバインディング",
+    "reading": "でばいすばいんでぃんぐ",
+    "senses": [
+      {
+        "definition": "特定利用者と特定端末を結びつけて管理することです。不正利用防止や本人性強化に使われます。",
+        "domain": "mobile",
+        "keywords": [
+          "端末",
+          "利用者",
+          "不正",
+          "本人性",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Binding"
+    ]
+  },
+  {
+    "term": "MAM",
+    "reading": "えむえーえむ",
+    "senses": [
+      {
+        "definition": "Mobile Application Managementの略で、端末全体ではなくアプリ単位で管理する考え方です。BYOD環境でも使いやすいことがあります。",
+        "domain": "mobile",
+        "keywords": [
+          "アプリ",
+          "管理",
+          "BYOD",
+          "端末",
+          "モバイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BYOD",
+    "reading": "びーわいおーでぃー",
+    "senses": [
+      {
+        "definition": "個人所有端末を業務利用することです。利便性は高い一方、データ分離と統制設計が重要になります。",
+        "domain": "mobile",
+        "keywords": [
+          "個人",
+          "端末",
+          "業務",
+          "データ分離",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "端末暗号化",
+    "reading": "たんまつあんごうか",
+    "senses": [
+      {
+        "definition": "端末内保存データを暗号化することです。紛失や盗難時の被害軽減に有効です。",
+        "domain": "mobile",
+        "keywords": [
+          "暗号化",
+          "端末",
+          "紛失",
+          "盗難",
+          "保護"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Encryption"
+    ]
+  },
+  {
+    "term": "アプリサンドボックス",
+    "reading": "あぷりさんどぼっくす",
+    "senses": [
+      {
+        "definition": "アプリごとにアクセス範囲を分離する仕組みです。他アプリやシステム全体への影響を抑えやすくなります。",
+        "domain": "mobile",
+        "keywords": [
+          "分離",
+          "アクセス",
+          "アプリ",
+          "影響",
+          "制限"
+        ]
+      }
+    ],
+    "aliases": [
+      "App Sandbox"
+    ]
+  },
+  {
+    "term": "ディープリンク",
+    "reading": "でぃーぷりんく",
+    "senses": [
+      {
+        "definition": "アプリ内の特定画面や状態へ直接遷移させるリンクです。通知やメールから目的画面へすぐ移動させたいときに役立ちます。",
+        "domain": "mobile",
+        "keywords": [
+          "リンク",
+          "画面",
+          "遷移",
+          "通知",
+          "直接"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deep Link"
+    ]
+  },
+  {
+    "term": "ユニバーサルリンク",
+    "reading": "ゆにばーさるりんく",
+    "senses": [
+      {
+        "definition": "Webリンクから適切にアプリ起動やWeb表示へつなぐ仕組みです。体験と導線を統一しやすくなります。",
+        "domain": "mobile",
+        "keywords": [
+          "Web",
+          "アプリ",
+          "起動",
+          "導線",
+          "統一"
+        ]
+      }
+    ],
+    "aliases": [
+      "Universal Link"
+    ]
+  },
+  {
+    "term": "アプリ内ブラウザ",
+    "reading": "あぷりないぶらうざ",
+    "senses": [
+      {
+        "definition": "アプリの中でWebページを表示する機能です。素早く導入しやすい一方、認証や操作感には注意が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "Web",
+          "表示",
+          "認証",
+          "操作",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "In-App Browser"
+    ]
+  },
+  {
+    "term": "ネイティブブリッジ",
+    "reading": "ねいてぃぶぶりっじ",
+    "senses": [
+      {
+        "definition": "Web側と端末ネイティブ機能をつなぐ仕組みです。ハイブリッド構成で重要な接点になります。",
+        "domain": "mobile",
+        "keywords": [
+          "Web",
+          "ネイティブ",
+          "ハイブリッド",
+          "接点",
+          "連携"
+        ]
+      }
+    ],
+    "aliases": [
+      "Native Bridge"
+    ]
+  },
+  {
+    "term": "ストア配布",
+    "reading": "すとあはいふ",
+    "senses": [
+      {
+        "definition": "App StoreやGoogle Play経由でアプリを配布することです。審査や公開手順を考慮したリリース運用が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "App Store",
+          "Google Play",
+          "配布",
+          "審査",
+          "公開"
+        ]
+      }
+    ],
+    "aliases": [
+      "Store Distribution"
+    ]
+  },
+  {
+    "term": "企業内配布",
+    "reading": "きぎょうないはいふ",
+    "senses": [
+      {
+        "definition": "ストアではなく組織内向けにアプリを配布する方法です。業務専用アプリで使われることがあります。",
+        "domain": "mobile",
+        "keywords": [
+          "組織",
+          "配布",
+          "業務",
+          "専用",
+          "内部"
+        ]
+      }
+    ],
+    "aliases": [
+      "Enterprise Distribution"
+    ]
+  },
+  {
+    "term": "アプリ審査",
+    "reading": "あぷりしんさ",
+    "senses": [
+      {
+        "definition": "ストア側がアプリ内容やポリシー適合性を確認する手続きです。技術品質だけでなく、規約理解も重要です。",
+        "domain": "mobile",
+        "keywords": [
+          "審査",
+          "ストア",
+          "ポリシー",
+          "規約",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "App Review"
+    ]
+  },
+  {
+    "term": "バージョン審査待ち",
+    "reading": "ばーじょんしんさまち",
+    "senses": [
+      {
+        "definition": "申請後に公開待ちとなっている状態です。緊急修正でも即公開できるとは限らない点に注意が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "審査",
+          "申請",
+          "公開",
+          "待ち",
+          "緊急"
+        ]
+      }
+    ],
+    "aliases": [
+      "Version Review Pending"
+    ]
+  },
+  {
+    "term": "段階公開",
+    "reading": "だんかいこうかい",
+    "senses": [
+      {
+        "definition": "一部利用者から順に新バージョンを配る方式です。問題を限定範囲で見つけやすくなります。",
+        "domain": "mobile",
+        "keywords": [
+          "段階",
+          "公開",
+          "利用者",
+          "バージョン",
+          "限定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Staged Rollout"
+    ]
+  },
+  {
+    "term": "強制アップデート",
+    "reading": "きょうせいあっぷでーと",
+    "senses": [
+      {
+        "definition": "古い版の利用を止め、新版更新を必須にする運用です。重大バグやセキュリティ対応で使われます。",
+        "domain": "mobile",
+        "keywords": [
+          "更新",
+          "必須",
+          "セキュリティ",
+          "バグ",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Forced Update"
+    ]
+  },
+  {
+    "term": "互換版維持",
+    "reading": "ごかんばんいじ",
+    "senses": [
+      {
+        "definition": "旧版利用者のため、しばらく後方互換を保つことです。更新率が低い現場アプリで重要になることがあります。",
+        "domain": "mobile",
+        "keywords": [
+          "互換",
+          "旧版",
+          "後方",
+          "維持",
+          "更新"
+        ]
+      }
+    ],
+    "aliases": [
+      "Backward Compatibility Maintenance"
+    ]
+  },
+  {
+    "term": "クラッシュレポート",
+    "reading": "くらっしゅれぽーと",
+    "senses": [
+      {
+        "definition": "アプリ異常終了時の状況を収集する仕組みです。端末依存の不具合解析に有効です。",
+        "domain": "mobile",
+        "keywords": [
+          "異常終了",
+          "収集",
+          "不具合",
+          "解析",
+          "端末"
+        ]
+      }
+    ],
+    "aliases": [
+      "Crash Report"
+    ]
+  },
+  {
+    "term": "ANR",
+    "reading": "えーえぬあーる",
+    "senses": [
+      {
+        "definition": "Androidで応答なし状態になる問題です。見た目は落ちていなくても、利用者体験は大きく悪化します。",
+        "domain": "mobile",
+        "keywords": [
+          "Android",
+          "応答なし",
+          "フリーズ",
+          "体験",
+          "悪化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "アプリフリーズ",
+    "reading": "あぷりふりーず",
+    "senses": [
+      {
+        "definition": "アプリが操作不能になる状態です。クラッシュより原因が見えにくいこともあり、監視設計が重要です。",
+        "domain": "mobile",
+        "keywords": [
+          "操作不能",
+          "フリーズ",
+          "監視",
+          "原因",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "App Freeze"
+    ]
+  },
+  {
+    "term": "クラッシュフリー率",
+    "reading": "くらっしゅふりーりつ",
+    "senses": [
+      {
+        "definition": "異常終了せずに使えたセッション割合です。モバイル品質を見る代表指標の一つです。",
+        "domain": "mobile",
+        "keywords": [
+          "異常終了",
+          "セッション",
+          "品質",
+          "指標",
+          "割合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Crash-Free Rate"
+    ]
+  },
+  {
+    "term": "端末断片化",
+    "reading": "たんまつだんぺんか",
+    "senses": [
+      {
+        "definition": "OS版、画面サイズ、メーカー差異が多く、挙動がばらつきやすい状態です。テスト戦略へ大きく影響します。",
+        "domain": "mobile",
+        "keywords": [
+          "OS",
+          "画面",
+          "メーカー",
+          "差異",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Fragmentation"
+    ]
+  },
+  {
+    "term": "サポートOS範囲",
+    "reading": "さぽーとおーえすはんい",
+    "senses": [
+      {
+        "definition": "対応するOSバージョン範囲です。広げるほど利用者は増えますが、開発と検証負荷も増えます。",
+        "domain": "mobile",
+        "keywords": [
+          "OS",
+          "バージョン",
+          "範囲",
+          "検証",
+          "負荷"
+        ]
+      }
+    ],
+    "aliases": [
+      "Supported OS Range"
+    ]
+  },
+  {
+    "term": "端末テストマトリクス",
+    "reading": "たんまつてすとまとりくす",
+    "senses": [
+      {
+        "definition": "どの端末、OS、画面サイズで確認するかを整理した表です。闇雲に増やさず、利用実態に沿って絞ることが重要です。",
+        "domain": "mobile",
+        "keywords": [
+          "端末",
+          "OS",
+          "画面",
+          "テスト",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device Test Matrix"
+    ]
+  },
+  {
+    "term": "エミュレータ検証",
+    "reading": "えみゅれーたけんしょう",
+    "senses": [
+      {
+        "definition": "仮想端末上で行う確認です。初期検証には便利ですが、実機特有の問題は見落としやすいです。",
+        "domain": "mobile",
+        "keywords": [
+          "仮想",
+          "端末",
+          "検証",
+          "初期",
+          "エミュレータ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Emulator Testing"
+    ]
+  },
+  {
+    "term": "実機検証",
+    "reading": "じっきけんしょう",
+    "senses": [
+      {
+        "definition": "実際の端末で行う確認です。性能、通知、カメラ、センサー周りでは特に重要です。",
+        "domain": "mobile",
+        "keywords": [
+          "実機",
+          "端末",
+          "性能",
+          "通知",
+          "センサー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Real Device Testing"
+    ]
+  },
+  {
+    "term": "リッチインタラクション",
+    "reading": "りっちいんたらくしょん",
+    "senses": [
+      {
+        "definition": "アニメーションやジェスチャーを含む高密度な操作体験です。見た目のよさだけでなく、誤操作防止との両立が必要です。",
+        "domain": "mobile",
+        "keywords": [
+          "アニメーション",
+          "ジェスチャー",
+          "操作",
+          "体験",
+          "誤操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "Rich Interaction"
+    ]
+  },
+  {
+    "term": "ジェスチャーナビゲーション",
+    "reading": "じぇすちゃーなびげーしょん",
+    "senses": [
+      {
+        "definition": "スワイプやピンチなどの操作で画面移動や機能実行する設計です。自然ですが、発見性が低くなりやすいです。",
+        "domain": "mobile",
+        "keywords": [
+          "スワイプ",
+          "ピンチ",
+          "操作",
+          "画面",
+          "発見性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gesture Navigation"
+    ]
+  },
+  {
+    "term": "ハプティクス",
+    "reading": "はぷてぃくす",
+    "senses": [
+      {
+        "definition": "振動など触覚フィードバックを使う表現です。操作結果の即時理解を助けることがあります。",
+        "domain": "mobile",
+        "keywords": [
+          "振動",
+          "触覚",
+          "フィードバック",
+          "操作",
+          "即時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Haptics"
+    ]
+  },
+  {
+    "term": "コンテキスト保持",
+    "reading": "こんてきすとほじ",
+    "senses": [
+      {
+        "definition": "画面遷移や再起動後も、作業途中の状態を失わないようにすることです。業務中断の多い現場では特に価値があります。",
+        "domain": "mobile",
+        "keywords": [
+          "状態",
+          "保持",
+          "遷移",
+          "再起動",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Context Preservation"
+    ]
+  },
+  {
+    "term": "モバイル利用分析",
+    "reading": "もばいるりようぶんせき",
+    "senses": [
+      {
+        "definition": "端末種別、通信状況、利用時間帯、操作傾向を分析することです。PCとは異なる使われ方を前提に改善しやすくなります。",
+        "domain": "mobile",
+        "keywords": [
+          "端末",
+          "通信",
+          "利用",
+          "分析",
+          "改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mobile Usage Analytics"
+    ]
+  },
+  {
+    "term": "リリースエンジニアリング",
+    "reading": "りりーすえんじにありんぐ",
+    "senses": [
+      {
+        "definition": "安全かつ再現可能に成果物を配布するための技術と運用全体です。開発と運用の橋渡しとして非常に重要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "リリース",
+          "配布",
+          "再現",
+          "運用",
+          "技術"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Engineering"
+    ]
+  },
+  {
+    "term": "ビルドパイプライン",
+    "reading": "びるどぱいぷらいん",
+    "senses": [
+      {
+        "definition": "ソースコードから成果物を生成する自動化の流れです。毎回同じ手順で作れることが品質の土台になります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "ビルド",
+          "自動化",
+          "成果物",
+          "手順",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Build Pipeline"
+    ]
+  },
+  {
+    "term": "デプロイパイプライン",
+    "reading": "でぷろいぱいぷらいん",
+    "senses": [
+      {
+        "definition": "成果物を各環境へ展開する自動化の流れです。環境ごとの差分管理と承認プロセスを含めて設計する必要があります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "デプロイ",
+          "環境",
+          "自動化",
+          "承認",
+          "差分"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deploy Pipeline"
+    ]
+  },
+  {
+    "term": "パイプライン失敗解析",
+    "reading": "ぱいぷらいんしっぱいかいせき",
+    "senses": [
+      {
+        "definition": "CI/CD途中で失敗した原因を追うことです。テスト失敗、依存取得失敗、環境差異など原因は多岐にわたります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "失敗",
+          "原因",
+          "テスト",
+          "依存",
+          "環境"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pipeline Failure Analysis"
+    ]
+  },
+  {
+    "term": "ビルドキャッシュ",
+    "reading": "びるどきゃっしゅ",
+    "senses": [
+      {
+        "definition": "前回結果を再利用してビルド時間を短縮する仕組みです。速度向上に有効ですが、汚染時の切り分けも考慮が必要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "キャッシュ",
+          "ビルド",
+          "再利用",
+          "速度",
+          "短縮"
+        ]
+      }
+    ],
+    "aliases": [
+      "Build Cache"
+    ]
+  },
+  {
+    "term": "増分ビルド",
+    "reading": "ぞうぶんびるど",
+    "senses": [
+      {
+        "definition": "変更部分だけを対象にビルドする方式です。大規模リポジトリで効果が高いですが、依存関係把握が重要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "増分",
+          "変更",
+          "ビルド",
+          "依存",
+          "大規模"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incremental Build"
+    ]
+  },
+  {
+    "term": "マトリクスビルド",
+    "reading": "まとりくすびるど",
+    "senses": [
+      {
+        "definition": "複数OS、複数バージョン、複数条件で並列にビルドやテストする方式です。互換性確認に役立ちます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "マトリクス",
+          "並列",
+          "OS",
+          "バージョン",
+          "互換"
+        ]
+      }
+    ],
+    "aliases": [
+      "Matrix Build"
+    ]
+  },
+  {
+    "term": "セルフホストランナー",
+    "reading": "せるふほすとらんなー",
+    "senses": [
+      {
+        "definition": "自前環境でCIジョブを実行する仕組みです。柔軟性は高いですが、管理責任も増えます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "自前",
+          "CI",
+          "ジョブ",
+          "環境",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "共有ランナー",
+    "reading": "きょうゆうらんなー",
+    "senses": [
+      {
+        "definition": "提供基盤上で共用されるCI実行環境です。準備が少なく始めやすい一方、制約や待ち時間が出ることがあります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "共有",
+          "CI",
+          "環境",
+          "待ち",
+          "制約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Shared Runner"
+    ]
+  },
+  {
+    "term": "環境昇格",
+    "reading": "かんきょうしょうかく",
+    "senses": [
+      {
+        "definition": "開発、検証、本番など上位環境へ成果物を順に進めることです。同じものを昇格させる考え方が再現性を高めます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "環境",
+          "昇格",
+          "成果物",
+          "再現性",
+          "段階"
+        ]
+      }
+    ],
+    "aliases": [
+      "Environment Promotion"
+    ]
+  },
+  {
+    "term": "アーティファクト昇格",
+    "reading": "あーてぃふぁくとしょうかく",
+    "senses": [
+      {
+        "definition": "環境ごとに作り直さず、同一成果物を次環境へ進める方式です。本番との差異を減らしやすいです。",
+        "domain": "ci-cd",
+        "keywords": [
+          "成果物",
+          "昇格",
+          "同一",
+          "差異",
+          "本番"
+        ]
+      }
+    ],
+    "aliases": [
+      "Artifact Promotion"
+    ]
+  },
+  {
+    "term": "環境プロモーション",
+    "reading": "かんきょうぷろもーしょん",
+    "senses": [
+      {
+        "definition": "成果物や設定を段階的に上位環境へ進めることです。承認と検証を組み込むと統制しやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "環境",
+          "昇格",
+          "承認",
+          "検証",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": [
+      "Environment Promotion Process"
+    ]
+  },
+  {
+    "term": "環境ロック",
+    "reading": "かんきょうろっく",
+    "senses": [
+      {
+        "definition": "同時に複数変更が入らないよう環境利用を制御する仕組みです。重要環境の競合反映を防ぎやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "環境",
+          "ロック",
+          "競合",
+          "制御",
+          "重要"
+        ]
+      }
+    ],
+    "aliases": [
+      "Environment Lock"
+    ]
+  },
+  {
+    "term": "デプロイウィンドウ",
+    "reading": "でぷろいうぃんどう",
+    "senses": [
+      {
+        "definition": "反映を許可する時間帯や期間です。業務影響や監視体制に合わせて設計します。",
+        "domain": "ci-cd",
+        "keywords": [
+          "デプロイ",
+          "時間帯",
+          "許可",
+          "監視",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deploy Window"
+    ]
+  },
+  {
+    "term": "リリースカット",
+    "reading": "りりーすかっと",
+    "senses": [
+      {
+        "definition": "今回リリースへ何を含め、何を外すかを決めることです。全部入れるより、リスクと価値のバランスで絞ることが多いです。",
+        "domain": "ci-cd",
+        "keywords": [
+          "リリース",
+          "選別",
+          "リスク",
+          "価値",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Cut"
+    ]
+  },
+  {
+    "term": "ブランチカット",
+    "reading": "ぶらんちかっと",
+    "senses": [
+      {
+        "definition": "リリース用ブランチを切ることです。以後の修正対象を安定化させやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "ブランチ",
+          "リリース",
+          "安定化",
+          "切り出し",
+          "修正"
+        ]
+      }
+    ],
+    "aliases": [
+      "Branch Cut"
+    ]
+  },
+  {
+    "term": "リリースブランチ",
+    "reading": "りりーすぶらんち",
+    "senses": [
+      {
+        "definition": "本番へ出す候補を安定化するためのブランチです。新規開発と切り分けて最終調整しやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "ブランチ",
+          "本番",
+          "安定化",
+          "候補",
+          "調整"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ホットフィックス",
+    "reading": "ほっとふぃっくす",
+    "senses": [
+      {
+        "definition": "本番重大障害に対する緊急修正です。速さが重要ですが、通常品質確認をどこまで残すかの設計が必要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "緊急",
+          "修正",
+          "本番",
+          "障害",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cherry-pick",
+    "reading": "ちぇりーぴっく",
+    "senses": [
+      {
+        "definition": "特定コミットだけを別ブランチへ取り込む操作です。緊急対応では便利ですが、履歴複雑化に注意が必要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "コミット",
+          "ブランチ",
+          "取り込み",
+          "緊急",
+          "履歴"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リリースタグ",
+    "reading": "りりーすたぐ",
+    "senses": [
+      {
+        "definition": "特定バージョンを識別するためのラベルです。後から何を出したか追跡しやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "タグ",
+          "バージョン",
+          "識別",
+          "追跡",
+          "ラベル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Tag"
+    ]
+  },
+  {
+    "term": "セマンティックバージョニング",
+    "reading": "せまんてぃっくばーじょにんぐ",
+    "senses": [
+      {
+        "definition": "互換性の有無に応じて版番号の意味を持たせる考え方です。変更の重さが伝わりやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "バージョン",
+          "互換性",
+          "番号",
+          "意味",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "Semantic Versioning"
+    ]
+  },
+  {
+    "term": "メジャーバージョン",
+    "reading": "めじゃーばーじょん",
+    "senses": [
+      {
+        "definition": "破壊的変更を含む大きな版区切りです。利用者への周知と移行支援が重要になります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "破壊的",
+          "変更",
+          "移行",
+          "周知",
+          "大版"
+        ]
+      }
+    ],
+    "aliases": [
+      "Major Version"
+    ]
+  },
+  {
+    "term": "マイナーバージョン",
+    "reading": "まいなーばーじょん",
+    "senses": [
+      {
+        "definition": "互換性を保ちつつ機能追加を行った版です。新価値追加の単位としてよく使われます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "互換",
+          "機能追加",
+          "新機能",
+          "小版",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": [
+      "Minor Version"
+    ]
+  },
+  {
+    "term": "パッチバージョン",
+    "reading": "ぱっちばーじょん",
+    "senses": [
+      {
+        "definition": "主にバグ修正など小さな変更を示す版です。影響が小さいことを期待されますが、実際は検証が必要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "バグ修正",
+          "小変更",
+          "パッチ",
+          "検証",
+          "影響"
+        ]
+      }
+    ],
+    "aliases": [
+      "Patch Version"
+    ]
+  },
+  {
+    "term": "ビルドメタデータ",
+    "reading": "びるどめたでーた",
+    "senses": [
+      {
+        "definition": "どのコミット、どの環境で作られたかなど、成果物に付与する補足情報です。追跡性向上に役立ちます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "コミット",
+          "環境",
+          "成果物",
+          "追跡",
+          "補足"
+        ]
+      }
+    ],
+    "aliases": [
+      "Build Metadata"
+    ]
+  },
+  {
+    "term": "リリース候補版",
+    "reading": "りりーすこうほばん",
+    "senses": [
+      {
+        "definition": "本番版に近い候補として扱う版です。最終確認や受入に使われることがあります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "候補",
+          "本番",
+          "確認",
+          "受入",
+          "最終"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Candidate"
+    ]
+  },
+  {
+    "term": "ステージング検証",
+    "reading": "すてーじんぐけんしょう",
+    "senses": [
+      {
+        "definition": "本番に近い環境での最終確認です。ここを省くと、構成差異由来の事故が起こりやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "ステージング",
+          "環境",
+          "最終",
+          "確認",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": [
+      "Staging Verification"
+    ]
+  },
+  {
+    "term": "プレプロダクション環境",
+    "reading": "ぷれぷろだくしょんかんきょう",
+    "senses": [
+      {
+        "definition": "本番直前の環境として使う準本番環境です。性能、権限、構成を本番へ近づけて確認する場になります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "準本番",
+          "環境",
+          "性能",
+          "権限",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pre-Production Environment"
+    ]
+  },
+  {
+    "term": "インフラドリフト検知",
+    "reading": "いんふらどりふとけんち",
+    "senses": [
+      {
+        "definition": "定義と実環境のズレを見つけることです。手作業変更の放置を防ぐうえで重要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "ドリフト",
+          "検知",
+          "ズレ",
+          "定義",
+          "手作業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Infrastructure Drift Detection"
+    ]
+  },
+  {
+    "term": "構成差分比較",
+    "reading": "こうせいさぶんひかく",
+    "senses": [
+      {
+        "definition": "環境間や定義間の違いを比較することです。開発では動くが本番で動かない問題の予防に役立ちます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "構成",
+          "差分",
+          "比較",
+          "環境",
+          "予防"
+        ]
+      }
+    ],
+    "aliases": [
+      "Configuration Diff Comparison"
+    ]
+  },
+  {
+    "term": "リリース監査証跡",
+    "reading": "りりーすかんさしょうせき",
+    "senses": [
+      {
+        "definition": "誰が何をいつ出したか追える記録です。障害調査や監査で非常に重要です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "監査",
+          "証跡",
+          "記録",
+          "障害",
+          "追跡"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Audit Trail"
+    ]
+  },
+  {
+    "term": "変更セット",
+    "reading": "へんこうせっと",
+    "senses": [
+      {
+        "definition": "一回の反映でまとめて扱う変更のまとまりです。粒度が大きすぎるとリスクが上がり、小さすぎると管理コストが増えます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "変更",
+          "まとまり",
+          "粒度",
+          "リスク",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Change Set"
+    ]
+  },
+  {
+    "term": "デプロイ健全性チェック",
+    "reading": "でぷろいけんぜんせいちぇっく",
+    "senses": [
+      {
+        "definition": "反映後に期待どおり立ち上がっているかを確認する自動または手動チェックです。単なる完了ログより実用的です。",
+        "domain": "ci-cd",
+        "keywords": [
+          "デプロイ",
+          "健全性",
+          "確認",
+          "自動",
+          "実用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deploy Health Check"
+    ]
+  },
+  {
+    "term": "ポストデプロイフック",
+    "reading": "ぽすとでぷろいふっく",
+    "senses": [
+      {
+        "definition": "反映後に自動で行う追加処理です。キャッシュクリア、通知、検証実行などに使えます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "フック",
+          "反映後",
+          "自動",
+          "キャッシュ",
+          "通知"
+        ]
+      }
+    ],
+    "aliases": [
+      "Post-Deploy Hook"
+    ]
+  },
+  {
+    "term": "プレビルド検証",
+    "reading": "ぷれびるどけんしょう",
+    "senses": [
+      {
+        "definition": "本格ビルド前に設定や依存関係の不備を確認することです。重い処理に入る前に落とせると効率がよくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "ビルド前",
+          "検証",
+          "設定",
+          "依存",
+          "効率"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pre-Build Verification"
+    ]
+  },
+  {
+    "term": "デプロイ頻度",
+    "reading": "でぷろいひんど",
+    "senses": [
+      {
+        "definition": "どのくらいの頻度で本番へ変更を出せるかの指標です。高いほどよいとは限りませんが、変更の小ささと運用成熟度を示すことがあります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "頻度",
+          "本番",
+          "指標",
+          "成熟度",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deploy Frequency"
+    ]
+  },
+  {
+    "term": "変更失敗率",
+    "reading": "へんこうしっぱいりつ",
+    "senses": [
+      {
+        "definition": "反映した変更のうち、障害やロールバックにつながった割合です。速度だけでなく、安定性との両方を見るのに使われます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "失敗",
+          "変更",
+          "障害",
+          "ロールバック",
+          "安定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Change Failure Rate"
+    ]
+  },
+  {
+    "term": "デプロイメントヘルス",
+    "reading": "でぷろいめんとへるす",
+    "senses": [
+      {
+        "definition": "今回の反映が健全に進んだかを示す概念です。成功ログだけでなく、遅延や警告も含めて見る必要があります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "デプロイ",
+          "健全",
+          "遅延",
+          "警告",
+          "概念"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deployment Health"
+    ]
+  },
+  {
+    "term": "ロールフォワード",
+    "reading": "ろーるふぉわーど",
+    "senses": [
+      {
+        "definition": "問題を戻すのではなく、さらに修正版を出して前へ進める対応です。構造的に戻しづらい変更で使われることがあります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "修正",
+          "前進",
+          "ロールバック",
+          "構造",
+          "対応"
+        ]
+      }
+    ],
+    "aliases": [
+      "Roll Forward"
+    ]
+  },
+  {
+    "term": "デプロイ凍結解除",
+    "reading": "でぷろいとうけつかいじょ",
+    "senses": [
+      {
+        "definition": "凍結していた変更制限を通常運用へ戻すことです。解除条件を明確にしておくと混乱を防ぎやすいです。",
+        "domain": "ci-cd",
+        "keywords": [
+          "凍結",
+          "解除",
+          "運用",
+          "条件",
+          "制限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deploy Freeze Lift"
+    ]
+  },
+  {
+    "term": "継続的デリバリー成熟度",
+    "reading": "けいぞくてきでりばりーせいじゅくど",
+    "senses": [
+      {
+        "definition": "どの程度安全かつ高速に継続配信できる状態かの度合いです。自動化だけでなく、レビューや運用文化も含まれます。",
+        "domain": "ci-cd",
+        "keywords": [
+          "継続配信",
+          "成熟度",
+          "自動化",
+          "文化",
+          "安全"
+        ]
+      }
+    ],
+    "aliases": [
+      "Continuous Delivery Maturity"
+    ]
+  },
+  {
+    "term": "リリース準備完了",
+    "reading": "りりーすじゅんびかんりょう",
+    "senses": [
+      {
+        "definition": "本番へ出せる条件がそろった状態です。コード完成だけでなく、文書、運用、周知も含めて確認する必要があります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "準備",
+          "完了",
+          "条件",
+          "文書",
+          "周知"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Readiness"
+    ]
+  },
+  {
+    "term": "変更証明書",
+    "reading": "へんこうしょうめいしょ",
+    "senses": [
+      {
+        "definition": "変更内容、影響、承認、検証結果をまとめた証跡資料です。厳格な運用環境や規制業界で使われることがあります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "証明",
+          "変更",
+          "承認",
+          "検証",
+          "規制"
+        ]
+      }
+    ],
+    "aliases": [
+      "Change Certificate"
+    ]
+  },
+  {
+    "term": "パイプラインテンプレート",
+    "reading": "ぱいぷらいんてんぷれーと",
+    "senses": [
+      {
+        "definition": "CI/CD定義を共通パターン化したものです。各案件の品質を底上げしやすくなります。",
+        "domain": "ci-cd",
+        "keywords": [
+          "テンプレート",
+          "CI/CD",
+          "共通",
+          "パターン",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pipeline Template"
+    ]
+  },
+  {
+    "term": "リリース標準化",
+    "reading": "りりーすひょうじゅんか",
+    "senses": [
+      {
+        "definition": "反映手順、承認、確認項目、記録形式をそろえることです。属人的な本番反映を減らし、事故を防ぎやすくします。",
+        "domain": "ci-cd",
+        "keywords": [
+          "標準化",
+          "手順",
+          "承認",
+          "記録",
+          "属人"
+        ]
+      }
+    ],
+    "aliases": [
+      "Release Standardization"
+    ]
+  },
+  {
+    "term": "BPM",
+    "reading": "びーぴーえむ",
+    "senses": [
+      {
+        "definition": "Business Process Managementの略で、業務プロセスを可視化し、改善し、継続的に運用する考え方です。システム導入だけでなく業務そのものの改善に関わります。",
+        "domain": "business-process",
+        "keywords": [
+          "業務",
+          "プロセス",
+          "可視化",
+          "改善",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務プロセス",
+    "reading": "ぎょうむぷろせす",
+    "senses": [
+      {
+        "definition": "一連の仕事の流れと、その中の役割、判断、入力、出力を含む概念です。システム設計はこの流れの理解から始まります。",
+        "domain": "business-process",
+        "keywords": [
+          "流れ",
+          "役割",
+          "判断",
+          "入力",
+          "出力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Process"
+    ]
+  },
+  {
+    "term": "業務フローモデル",
+    "reading": "ぎょうむふろーもでる",
+    "senses": [
+      {
+        "definition": "業務の流れを図や構造として表したものです。ボトルネックや重複作業を見つけやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "図",
+          "構造",
+          "ボトルネック",
+          "重複",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Flow Model"
+    ]
+  },
+  {
+    "term": "BPMN",
+    "reading": "びーぴーえむえぬ",
+    "senses": [
+      {
+        "definition": "業務プロセスを図で表現するための標準記法です。関係者間の認識合わせに役立ちます。",
+        "domain": "business-process",
+        "keywords": [
+          "標準",
+          "記法",
+          "図",
+          "認識",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "タスク",
+    "reading": "たすく",
+    "senses": [
+      {
+        "definition": "プロセスの中の個別作業です。誰が行うか、何を入力として何を出力するかを明確にすると設計しやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "作業",
+          "個別",
+          "入力",
+          "出力",
+          "担当"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ゲートウェイ",
+    "reading": "げーとうぇい",
+    "senses": [
+      {
+        "definition": "条件分岐や並行処理を表すプロセス上の分岐点です。業務ルールの明示に役立ちます。",
+        "domain": "business-process",
+        "keywords": [
+          "分岐",
+          "条件",
+          "並行",
+          "ルール",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gateway"
+    ]
+  },
+  {
+    "term": "イベント",
+    "reading": "いべんと",
+    "senses": [
+      {
+        "definition": "プロセス開始や進行、終了のきっかけになる出来事です。申請、承認、入金確認などが該当します。",
+        "domain": "business-process",
+        "keywords": [
+          "開始",
+          "終了",
+          "きっかけ",
+          "申請",
+          "承認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Event"
+    ]
+  },
+  {
+    "term": "スイムレーン",
+    "reading": "すいむれーん",
+    "senses": [
+      {
+        "definition": "プロセス図の中で役割や部門ごとに流れを分ける表現です。誰が何を担うか見えやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "役割",
+          "部門",
+          "プロセス図",
+          "分担",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Swimlane"
+    ]
+  },
+  {
+    "term": "担当者割当",
+    "reading": "たんとうしゃわりあて",
+    "senses": [
+      {
+        "definition": "作業を誰が行うか決めることです。役割ベースにするか、個人固定にするかで運用性が変わります。",
+        "domain": "business-process",
+        "keywords": [
+          "担当",
+          "割当",
+          "役割",
+          "個人",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Assignee Allocation"
+    ]
+  },
+  {
+    "term": "責任分担表",
+    "reading": "せきにんぶんたんひょう",
+    "senses": [
+      {
+        "definition": "各業務や判断を誰が担うか一覧化した表です。組織変更時にも有効な資産になります。",
+        "domain": "business-process",
+        "keywords": [
+          "責任",
+          "分担",
+          "一覧",
+          "組織",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Responsibility Assignment Matrix"
+    ]
+  },
+  {
+    "term": "申請フロー",
+    "reading": "しんせいふろー",
+    "senses": [
+      {
+        "definition": "申請から承認、差戻し、完了までの流れです。内部統制や証跡管理と強く結びつきます。",
+        "domain": "business-process",
+        "keywords": [
+          "申請",
+          "承認",
+          "差戻し",
+          "統制",
+          "証跡"
+        ]
+      }
+    ],
+    "aliases": [
+      "Request Flow"
+    ]
+  },
+  {
+    "term": "差戻し",
+    "reading": "さしもどし",
+    "senses": [
+      {
+        "definition": "内容不備などで前段階へ戻すことです。差戻理由を残せる設計にすると再提出がしやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "不備",
+          "戻し",
+          "理由",
+          "再提出",
+          "段階"
+        ]
+      }
+    ],
+    "aliases": [
+      "Rejection"
+    ]
+  },
+  {
+    "term": "代理承認",
+    "reading": "だいりしょうにん",
+    "senses": [
+      {
+        "definition": "本来の承認者が不在時に代理で承認する仕組みです。緊急時対応に有効ですが、権限と証跡が重要です。",
+        "domain": "business-process",
+        "keywords": [
+          "代理",
+          "不在",
+          "承認",
+          "緊急",
+          "権限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Proxy Approval"
+    ]
+  },
+  {
+    "term": "業務例外処理",
+    "reading": "ぎょうむれいがいしょり",
+    "senses": [
+      {
+        "definition": "標準フローでは扱えないケースへの対応です。例外が多い業務ほど、例外設計が品質を左右します。",
+        "domain": "business-process",
+        "keywords": [
+          "例外",
+          "標準",
+          "ケース",
+          "対応",
+          "品質"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Exception Handling"
+    ]
+  },
+  {
+    "term": "ケース管理",
+    "reading": "けーすかんり",
+    "senses": [
+      {
+        "definition": "定型フローに乗り切らない案件ごとの進行管理です。相談、クレーム、審査業務などで使われます。",
+        "domain": "business-process",
+        "keywords": [
+          "ケース",
+          "案件",
+          "進行",
+          "相談",
+          "審査"
+        ]
+      }
+    ],
+    "aliases": [
+      "Case Management"
+    ]
+  },
+  {
+    "term": "ケースワーク",
+    "reading": "けーすわーく",
+    "senses": [
+      {
+        "definition": "一件ごとの事情に応じた個別対応型の業務です。完全自動化より支援設計が向くことが多いです。",
+        "domain": "business-process",
+        "keywords": [
+          "個別",
+          "対応",
+          "事情",
+          "支援",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Casework"
+    ]
+  },
+  {
+    "term": "SOP",
+    "reading": "えすおーぴー",
+    "senses": [
+      {
+        "definition": "Standard Operating Procedureの略で、標準作業手順書です。業務品質の平準化に役立ちます。",
+        "domain": "business-process",
+        "keywords": [
+          "標準",
+          "手順",
+          "作業",
+          "品質",
+          "平準化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務手順標準化",
+    "reading": "ぎょうむてじゅんひょうじゅんか",
+    "senses": [
+      {
+        "definition": "人によるやり方の差を減らし、一定品質で回せるようにすることです。自動化やAI化の前提として重要です。",
+        "domain": "business-process",
+        "keywords": [
+          "標準化",
+          "手順",
+          "品質",
+          "自動化",
+          "差"
+        ]
+      }
+    ],
+    "aliases": [
+      "Work Procedure Standardization"
+    ]
+  },
+  {
+    "term": "RPA",
+    "reading": "あーるぴーえー",
+    "senses": [
+      {
+        "definition": "画面操作や定型作業を自動化する仕組みです。短期導入しやすい反面、画面変更に弱いことがあります。",
+        "domain": "business-process",
+        "keywords": [
+          "自動化",
+          "画面操作",
+          "定型",
+          "導入",
+          "ロボット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ハイパーオートメーション",
+    "reading": "はいぱーおーとめーしょん",
+    "senses": [
+      {
+        "definition": "RPA、AI、ワークフロー、分析を組み合わせて広範囲に自動化する考え方です。部分最適で終わらせない視点が重要です。",
+        "domain": "business-process",
+        "keywords": [
+          "RPA",
+          "AI",
+          "自動化",
+          "広範囲",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hyperautomation"
+    ]
+  },
+  {
+    "term": "ヒューマンタスク",
+    "reading": "ひゅーまんたすく",
+    "senses": [
+      {
+        "definition": "人の判断や入力が必要な作業です。AIや自動化と組み合わせる場合、この境界を明確にする必要があります。",
+        "domain": "business-process",
+        "keywords": [
+          "人",
+          "判断",
+          "入力",
+          "AI",
+          "境界"
+        ]
+      }
+    ],
+    "aliases": [
+      "Human Task"
+    ]
+  },
+  {
+    "term": "システムタスク",
+    "reading": "しすてむたすく",
+    "senses": [
+      {
+        "definition": "人手を介さずシステムが自動で行う作業です。条件やエラー時扱いを詳細設計で詰める必要があります。",
+        "domain": "business-process",
+        "keywords": [
+          "自動",
+          "システム",
+          "条件",
+          "エラー",
+          "詳細設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Task"
+    ]
+  },
+  {
+    "term": "手作業残置",
+    "reading": "てさぎょうざんち",
+    "senses": [
+      {
+        "definition": "あえて手作業として残す業務です。自動化しない理由を明確にしておくと、将来の改善判断に役立ちます。",
+        "domain": "business-process",
+        "keywords": [
+          "手作業",
+          "残置",
+          "自動化",
+          "理由",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Manual Task Retention"
+    ]
+  },
+  {
+    "term": "業務分岐条件",
+    "reading": "ぎょうむぶんきじょうけん",
+    "senses": [
+      {
+        "definition": "フローがどこで、何を基準に分かれるかの条件です。曖昧だと利用者ごとに解釈差が出やすいです。",
+        "domain": "business-process",
+        "keywords": [
+          "分岐",
+          "条件",
+          "基準",
+          "解釈",
+          "フロー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Branching Condition"
+    ]
+  },
+  {
+    "term": "業務イベント駆動",
+    "reading": "ぎょうむいべんとくどう",
+    "senses": [
+      {
+        "definition": "業務上の出来事をトリガーに後続処理を進める設計です。通知、審査、記録更新などに使われます。",
+        "domain": "business-process",
+        "keywords": [
+          "イベント",
+          "トリガー",
+          "業務",
+          "通知",
+          "審査"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Event-Driven"
+    ]
+  },
+  {
+    "term": "SLA連動フロー",
+    "reading": "えすえるえーれんどうふろー",
+    "senses": [
+      {
+        "definition": "期限や対応時間に応じて自動催促やエスカレーションを行うフローです。サービス業務で有効です。",
+        "domain": "business-process",
+        "keywords": [
+          "SLA",
+          "期限",
+          "催促",
+          "エスカレーション",
+          "サービス"
+        ]
+      }
+    ],
+    "aliases": [
+      "SLA-Linked Flow"
+    ]
+  },
+  {
+    "term": "督促フロー",
+    "reading": "とくそくふろー",
+    "senses": [
+      {
+        "definition": "未対応や遅延に対して催促する流れです。機械的すぎると反発を招くため、文面や段階設計が重要です。",
+        "domain": "business-process",
+        "keywords": [
+          "催促",
+          "遅延",
+          "未対応",
+          "段階",
+          "文面"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reminder Flow"
+    ]
+  },
+  {
+    "term": "期限超過検知",
+    "reading": "きげんちょうかけんち",
+    "senses": [
+      {
+        "definition": "期限内に終わらなかった案件を見つけることです。放置すると品質や顧客満足へ影響します。",
+        "domain": "business-process",
+        "keywords": [
+          "期限",
+          "超過",
+          "検知",
+          "案件",
+          "放置"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deadline Overdue Detection"
+    ]
+  },
+  {
+    "term": "業務KPI連動",
+    "reading": "ぎょうむけーぴーあいれんどう",
+    "senses": [
+      {
+        "definition": "業務フローと指標をつなげて管理することです。処理件数、滞留時間、差戻率などが対象になります。",
+        "domain": "business-process",
+        "keywords": [
+          "KPI",
+          "指標",
+          "業務",
+          "処理",
+          "滞留"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business KPI Linkage"
+    ]
+  },
+  {
+    "term": "リードタイム",
+    "reading": "りーどたいむ",
+    "senses": [
+      {
+        "definition": "依頼受付から完了までにかかる全体時間です。業務改善では非常に重要な指標になります。",
+        "domain": "business-process",
+        "keywords": [
+          "時間",
+          "完了",
+          "受付",
+          "指標",
+          "改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lead Time"
+    ]
+  },
+  {
+    "term": "処理時間",
+    "reading": "しょりじかん",
+    "senses": [
+      {
+        "definition": "実際に作業している時間です。待ち時間と分けて見ると、改善余地が見えやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "作業",
+          "時間",
+          "待ち",
+          "改善",
+          "実際"
+        ]
+      }
+    ],
+    "aliases": [
+      "Processing Time"
+    ]
+  },
+  {
+    "term": "待ち時間",
+    "reading": "まちじかん",
+    "senses": [
+      {
+        "definition": "作業はされずに止まっている時間です。多くの業務では、実作業より待ち時間のほうが長いことがあります。",
+        "domain": "business-process",
+        "keywords": [
+          "待ち",
+          "停止",
+          "作業",
+          "業務",
+          "長い"
+        ]
+      }
+    ],
+    "aliases": [
+      "Wait Time"
+    ]
+  },
+  {
+    "term": "滞留",
+    "reading": "たいりゅう",
+    "senses": [
+      {
+        "definition": "案件や申請が途中段階で止まっている状態です。ボトルネック把握に重要です。",
+        "domain": "business-process",
+        "keywords": [
+          "停滞",
+          "案件",
+          "段階",
+          "ボトルネック",
+          "申請"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "再処理率",
+    "reading": "さいしょりりつ",
+    "senses": [
+      {
+        "definition": "一度で終わらず、差戻しや修正でやり直しが発生する割合です。入力品質やルール明確性の問題が見えます。",
+        "domain": "business-process",
+        "keywords": [
+          "差戻し",
+          "やり直し",
+          "割合",
+          "品質",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Rework Rate"
+    ]
+  },
+  {
+    "term": "直行率",
+    "reading": "ちょっこうりつ",
+    "senses": [
+      {
+        "definition": "一度も差戻しや再処理なく完了した割合です。業務品質を示す指標として使えます。",
+        "domain": "business-process",
+        "keywords": [
+          "完了",
+          "差戻し",
+          "品質",
+          "指標",
+          "一度"
+        ]
+      }
+    ],
+    "aliases": [
+      "First-Pass Rate"
+    ]
+  },
+  {
+    "term": "受付チャネル",
+    "reading": "うけつけちゃねる",
+    "senses": [
+      {
+        "definition": "依頼や申請を受け付ける入口です。メール、Webフォーム、電話、APIなど複数あると統合設計が必要になります。",
+        "domain": "business-process",
+        "keywords": [
+          "受付",
+          "チャネル",
+          "入口",
+          "統合",
+          "申請"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intake Channel"
+    ]
+  },
+  {
+    "term": "チケット起票",
+    "reading": "ちけっときひょう",
+    "senses": [
+      {
+        "definition": "依頼や問題を管理単位として登録することです。記録が残ることで追跡しやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "チケット",
+          "登録",
+          "管理",
+          "記録",
+          "追跡"
+        ]
+      }
+    ],
+    "aliases": [
+      "Ticket Creation"
+    ]
+  },
+  {
+    "term": "業務棚卸し",
+    "reading": "ぎょうむたなおろし",
+    "senses": [
+      {
+        "definition": "どんな業務があり、誰が、どの頻度で、どれだけ手間をかけているか洗い出すことです。改善の出発点として重要です。",
+        "domain": "business-process",
+        "keywords": [
+          "洗い出し",
+          "業務",
+          "頻度",
+          "手間",
+          "改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Inventory"
+    ]
+  },
+  {
+    "term": "標準業務",
+    "reading": "ひょうじゅんぎょうむ",
+    "senses": [
+      {
+        "definition": "通常ルールに従って進む代表的な業務です。自動化はここから始めると効果を出しやすいです。",
+        "domain": "business-process",
+        "keywords": [
+          "標準",
+          "ルール",
+          "自動化",
+          "代表",
+          "効果"
+        ]
+      }
+    ],
+    "aliases": [
+      "Standard Business Operation"
+    ]
+  },
+  {
+    "term": "例外業務",
+    "reading": "れいがいぎょうむ",
+    "senses": [
+      {
+        "definition": "標準フローから外れる業務です。少数なら手運用でもよいですが、多いなら標準自体を見直す必要があります。",
+        "domain": "business-process",
+        "keywords": [
+          "例外",
+          "標準",
+          "手運用",
+          "見直し",
+          "少数"
+        ]
+      }
+    ],
+    "aliases": [
+      "Exception Business Operation"
+    ]
+  },
+  {
+    "term": "部門横断業務",
+    "reading": "ぶもんおうだんぎょうむ",
+    "senses": [
+      {
+        "definition": "複数部門にまたがって進む業務です。責任の受け渡しが多く、滞留しやすい傾向があります。",
+        "domain": "business-process",
+        "keywords": [
+          "部門",
+          "横断",
+          "責任",
+          "受け渡し",
+          "滞留"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cross-Departmental Process"
+    ]
+  },
+  {
+    "term": "ハンドオフ",
+    "reading": "はんどおふ",
+    "senses": [
+      {
+        "definition": "作業や責任を別担当へ渡すことです。回数が多いほど、待ちや認識差が増えやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "引き渡し",
+          "担当",
+          "責任",
+          "待ち",
+          "認識"
+        ]
+      }
+    ],
+    "aliases": [
+      "Handoff"
+    ]
+  },
+  {
+    "term": "業務境界",
+    "reading": "ぎょうむきょうかい",
+    "senses": [
+      {
+        "definition": "どこまでがある部門や役割の責任かという境目です。境界が曖昧だと責任の押し付け合いが起こりやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "境界",
+          "責任",
+          "部門",
+          "役割",
+          "曖昧"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Boundary"
+    ]
+  },
+  {
+    "term": "業務ルールエンジン",
+    "reading": "ぎょうむるーるえんじん",
+    "senses": [
+      {
+        "definition": "条件判定やルール適用を外部定義で管理する仕組みです。頻繁に変わる業務条件に対応しやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "ルール",
+          "条件",
+          "外部定義",
+          "判定",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Rule Engine"
+    ]
+  },
+  {
+    "term": "ケース優先順位付け",
+    "reading": "けーすゆうせんじゅんいつけ",
+    "senses": [
+      {
+        "definition": "受付案件を重要度や期限で並べ替えることです。処理漏れや重要案件の放置を防げます。",
+        "domain": "business-process",
+        "keywords": [
+          "優先",
+          "順位",
+          "重要度",
+          "期限",
+          "案件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Case Prioritization"
+    ]
+  },
+  {
+    "term": "サービスカタログ",
+    "reading": "さーびすかたろぐ",
+    "senses": [
+      {
+        "definition": "提供している業務サービスや申請可能メニューを一覧化したものです。利用者が何を頼めるか分かりやすくなります。",
+        "domain": "business-process",
+        "keywords": [
+          "サービス",
+          "一覧",
+          "メニュー",
+          "申請",
+          "利用者"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サービス要求管理",
+    "reading": "さーびすようきゅうかんり",
+    "senses": [
+      {
+        "definition": "利用者からの標準依頼を受付、処理、追跡する管理です。インシデント管理と分けて設計すると整理しやすいです。",
+        "domain": "business-process",
+        "keywords": [
+          "要求",
+          "受付",
+          "追跡",
+          "インシデント",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Service Request Management"
+    ]
+  },
+  {
+    "term": "ERP",
+    "reading": "いーあーるぴー",
+    "senses": [
+      {
+        "definition": "Enterprise Resource Planningの略で、会計、人事、購買、生産などを統合管理する仕組みです。全体最適を目指しやすい一方、Fit to Standardの発想が重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "統合",
+          "会計",
+          "人事",
+          "購買",
+          "全体最適"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CRM",
+    "reading": "しーあーるえむ",
+    "senses": [
+      {
+        "definition": "顧客との関係や接点を管理する仕組みです。営業活動だけでなく、問い合わせや継続率改善にも関わります。",
+        "domain": "enterprise",
+        "keywords": [
+          "顧客",
+          "関係",
+          "営業",
+          "問い合わせ",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SFA",
+    "reading": "えすえふえー",
+    "senses": [
+      {
+        "definition": "営業活動支援のための仕組みです。案件管理、商談履歴、見込管理などを通じて営業の可視化に役立ちます。",
+        "domain": "enterprise",
+        "keywords": [
+          "営業",
+          "支援",
+          "案件",
+          "商談",
+          "可視化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SCM",
+    "reading": "えすしーえむ",
+    "senses": [
+      {
+        "definition": "Supply Chain Managementの略で、調達、生産、在庫、配送の流れを管理する考え方です。部門横断で最適化が必要になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "調達",
+          "生産",
+          "在庫",
+          "配送",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WMS",
+    "reading": "だぶりゅーえむえす",
+    "senses": [
+      {
+        "definition": "倉庫管理システムです。入庫、出庫、棚卸し、在庫配置など物流現場に深く関わります。",
+        "domain": "enterprise",
+        "keywords": [
+          "倉庫",
+          "入庫",
+          "出庫",
+          "棚卸し",
+          "物流"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "TMS",
+    "reading": "てぃーえむえす",
+    "senses": [
+      {
+        "definition": "輸配送管理システムとして使われることが多い言葉です。配送計画や実績管理に関わります。",
+        "domain": "enterprise",
+        "keywords": [
+          "輸配送",
+          "配送",
+          "計画",
+          "実績",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "会計システム",
+    "reading": "かいけいしすてむ",
+    "senses": [
+      {
+        "definition": "仕訳、帳簿、決算、税務関連処理を支えるシステムです。内部統制と法令対応の観点が特に強く求められます。",
+        "domain": "enterprise",
+        "keywords": [
+          "仕訳",
+          "帳簿",
+          "決算",
+          "税務",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accounting System"
+    ]
+  },
+  {
+    "term": "販売管理システム",
+    "reading": "はんばいかんりしすてむ",
+    "senses": [
+      {
+        "definition": "見積、受注、売上、請求、入金など販売業務を管理するシステムです。商流や契約条件との整合が重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "見積",
+          "受注",
+          "売上",
+          "請求",
+          "販売"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sales Management System"
+    ]
+  },
+  {
+    "term": "購買管理システム",
+    "reading": "こうばいかんりしすてむ",
+    "senses": [
+      {
+        "definition": "発注、検収、支払など購買業務を管理するシステムです。契約管理や予算統制と結びつくことが多いです。",
+        "domain": "enterprise",
+        "keywords": [
+          "発注",
+          "検収",
+          "支払",
+          "契約",
+          "予算"
+        ]
+      }
+    ],
+    "aliases": [
+      "Procurement Management System"
+    ]
+  },
+  {
+    "term": "在庫管理システム",
+    "reading": "ざいこかんりしすてむ",
+    "senses": [
+      {
+        "definition": "在庫数量、場所、入出庫履歴を管理するシステムです。リアルタイム性と整合性のバランスが重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "在庫",
+          "数量",
+          "入出庫",
+          "リアルタイム",
+          "整合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Inventory Management System"
+    ]
+  },
+  {
+    "term": "生産管理システム",
+    "reading": "せいさんかんりしすてむ",
+    "senses": [
+      {
+        "definition": "生産計画、工程、実績、在庫、原価を管理するシステムです。現場実態と標準化の折り合いが設計ポイントになります。",
+        "domain": "enterprise",
+        "keywords": [
+          "生産",
+          "工程",
+          "実績",
+          "原価",
+          "現場"
+        ]
+      }
+    ],
+    "aliases": [
+      "Production Management System"
+    ]
+  },
+  {
+    "term": "人事システム",
+    "reading": "じんじしすてむ",
+    "senses": [
+      {
+        "definition": "組織、人員、異動、評価、給与前提情報などを管理するシステムです。個人情報保護要件が強くなります。",
+        "domain": "enterprise",
+        "keywords": [
+          "組織",
+          "人員",
+          "異動",
+          "評価",
+          "個人情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "HR System"
+    ]
+  },
+  {
+    "term": "勤怠管理システム",
+    "reading": "きんたいかんりしすてむ",
+    "senses": [
+      {
+        "definition": "出退勤、休暇、残業など勤務実績を管理するシステムです。労務ルールや法令対応が重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "出退勤",
+          "休暇",
+          "残業",
+          "労務",
+          "法令"
+        ]
+      }
+    ],
+    "aliases": [
+      "Attendance Management System"
+    ]
+  },
+  {
+    "term": "経費精算システム",
+    "reading": "けいひせいさんしすてむ",
+    "senses": [
+      {
+        "definition": "交通費や立替経費の申請、承認、支払を管理するシステムです。ワークフローと会計連携が中心になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "交通費",
+          "立替",
+          "申請",
+          "承認",
+          "会計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Expense Reimbursement System"
+    ]
+  },
+  {
+    "term": "原価計算",
+    "reading": "げんかけいさん",
+    "senses": [
+      {
+        "definition": "商品や案件にどれだけ費用がかかったかを計算することです。価格戦略や採算管理の基礎になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "原価",
+          "費用",
+          "計算",
+          "採算",
+          "価格"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cost Accounting"
+    ]
+  },
+  {
+    "term": "部門別採算",
+    "reading": "ぶもんべつさいさん",
+    "senses": [
+      {
+        "definition": "部門ごとの収益やコストを把握する考え方です。全社数字だけでは見えない改善余地が見えます。",
+        "domain": "enterprise",
+        "keywords": [
+          "部門",
+          "収益",
+          "コスト",
+          "改善",
+          "把握"
+        ]
+      }
+    ],
+    "aliases": [
+      "Departmental Profitability"
+    ]
+  },
+  {
+    "term": "配賦",
+    "reading": "はいふ",
+    "senses": [
+      {
+        "definition": "共通費用を一定ルールで各部門や案件へ割り振ることです。公平性と説明可能性が重要になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "共通費",
+          "割り振り",
+          "部門",
+          "公平",
+          "ルール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cost Allocation"
+    ]
+  },
+  {
+    "term": "共通費",
+    "reading": "きょうつうひ",
+    "senses": [
+      {
+        "definition": "個別案件へ直接ひもづけにくい費用です。配賦方法しだいで採算の見え方が変わります。",
+        "domain": "enterprise",
+        "keywords": [
+          "費用",
+          "配賦",
+          "案件",
+          "間接",
+          "共通"
+        ]
+      }
+    ],
+    "aliases": [
+      "Shared Cost"
+    ]
+  },
+  {
+    "term": "変動費",
+    "reading": "へんどうひ",
+    "senses": [
+      {
+        "definition": "量や活動に応じて増減する費用です。クラウド利用料や配送費などが典型です。",
+        "domain": "enterprise",
+        "keywords": [
+          "変動",
+          "量",
+          "費用",
+          "クラウド",
+          "配送"
+        ]
+      }
+    ],
+    "aliases": [
+      "Variable Cost"
+    ]
+  },
+  {
+    "term": "固定費",
+    "reading": "こていひ",
+    "senses": [
+      {
+        "definition": "利用量に関係なく一定でかかる費用です。人件費や契約基本料などが該当することがあります。",
+        "domain": "enterprise",
+        "keywords": [
+          "固定",
+          "一定",
+          "人件費",
+          "契約",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fixed Cost"
+    ]
+  },
+  {
+    "term": "損益分岐点",
+    "reading": "そんえきぶんきてん",
+    "senses": [
+      {
+        "definition": "赤字でも黒字でもない境目となる売上水準です。価格や原価構造の見直しに役立ちます。",
+        "domain": "enterprise",
+        "keywords": [
+          "損益",
+          "分岐",
+          "売上",
+          "原価",
+          "価格"
+        ]
+      }
+    ],
+    "aliases": [
+      "Break-Even Point"
+    ]
+  },
+  {
+    "term": "収支計画",
+    "reading": "しゅうしけいかく",
+    "senses": [
+      {
+        "definition": "売上と費用の見込みを整理した計画です。案件単位でも部門単位でも重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "収支",
+          "計画",
+          "売上",
+          "費用",
+          "見込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "Revenue and Expense Plan"
+    ]
+  },
+  {
+    "term": "予実管理",
+    "reading": "よじつかんり",
+    "senses": [
+      {
+        "definition": "予算や計画と実績を比較し、差を管理することです。差異理由を分析して次の判断へつなげる必要があります。",
+        "domain": "enterprise",
+        "keywords": [
+          "予算",
+          "実績",
+          "比較",
+          "差異",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Budget vs. Actual Management"
+    ]
+  },
+  {
+    "term": "差異分析",
+    "reading": "さいぶんぶんせき",
+    "senses": [
+      {
+        "definition": "計画と実績の差をなぜ生んだか調べることです。数字の差だけ見ても、改善にはつながりにくいです。",
+        "domain": "enterprise",
+        "keywords": [
+          "差異",
+          "分析",
+          "計画",
+          "実績",
+          "原因"
+        ]
+      }
+    ],
+    "aliases": [
+      "Variance Analysis"
+    ]
+  },
+  {
+    "term": "月次締め",
+    "reading": "げつじめ",
+    "senses": [
+      {
+        "definition": "月単位で取引や実績を確定させる処理です。早く正確に締められるかは業務基盤の重要品質です。",
+        "domain": "enterprise",
+        "keywords": [
+          "月次",
+          "締め",
+          "取引",
+          "確定",
+          "正確"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monthly Close"
+    ]
+  },
+  {
+    "term": "年次決算",
+    "reading": "ねんじけっさん",
+    "senses": [
+      {
+        "definition": "年度単位で財務数値を確定し報告する作業です。システムはこの正確性と証跡性を支える必要があります。",
+        "domain": "enterprise",
+        "keywords": [
+          "年次",
+          "決算",
+          "財務",
+          "報告",
+          "証跡"
+        ]
+      }
+    ],
+    "aliases": [
+      "Annual Settlement"
+    ]
+  },
+  {
+    "term": "内部取引消去",
+    "reading": "ないぶとりひきしょうきょ",
+    "senses": [
+      {
+        "definition": "グループ内取引を連結上相殺する処理です。複数法人をまたぐシステムでは設計上重要になることがあります。",
+        "domain": "enterprise",
+        "keywords": [
+          "内部",
+          "取引",
+          "消去",
+          "連結",
+          "グループ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intercompany Elimination"
+    ]
+  },
+  {
+    "term": "連結会計",
+    "reading": "れんけつかいけい",
+    "senses": [
+      {
+        "definition": "グループ会社全体を一つとして財務状況を把握する考え方です。単体会計と粒度が異なるため、データ設計も工夫が必要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "連結",
+          "グループ",
+          "財務",
+          "会計",
+          "単体"
+        ]
+      }
+    ],
+    "aliases": [
+      "Consolidated Accounting"
+    ]
+  },
+  {
+    "term": "予算統制",
+    "reading": "よさんとうせい",
+    "senses": [
+      {
+        "definition": "予算超過を防ぐため、申請や支出を制御することです。購買や稟議フローと組み合わせて設計されることがあります。",
+        "domain": "enterprise",
+        "keywords": [
+          "予算",
+          "統制",
+          "超過",
+          "申請",
+          "購買"
+        ]
+      }
+    ],
+    "aliases": [
+      "Budget Control"
+    ]
+  },
+  {
+    "term": "購買稟議",
+    "reading": "こうばいりんぎ",
+    "senses": [
+      {
+        "definition": "購入や契約前に必要な内部承認です。金額や内容に応じた承認経路設計が必要になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "購買",
+          "稟議",
+          "承認",
+          "金額",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Purchase Approval"
+    ]
+  },
+  {
+    "term": "支払依頼",
+    "reading": "しはらいいらい",
+    "senses": [
+      {
+        "definition": "経理や財務へ支払実行を依頼する処理です。請求書、検収、契約条件との整合が求められます。",
+        "domain": "enterprise",
+        "keywords": [
+          "支払",
+          "依頼",
+          "経理",
+          "請求書",
+          "検収"
+        ]
+      }
+    ],
+    "aliases": [
+      "Payment Reconciliation"
+    ]
+  },
+  {
+    "term": "入金消込",
+    "reading": "にゅうきんけしこみ",
+    "senses": [
+      {
+        "definition": "入金実績を売掛や請求データへひもづけることです。自動化しにくい例外も多く、設計の工夫が必要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "入金",
+          "消込",
+          "売掛",
+          "請求",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "売掛管理",
+    "reading": "うりかけかんり",
+    "senses": [
+      {
+        "definition": "請求済みでまだ回収していない金額を管理することです。営業、経理、契約管理の接点になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "売掛",
+          "請求",
+          "回収",
+          "営業",
+          "経理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accounts Receivable Management"
+    ]
+  },
+  {
+    "term": "買掛管理",
+    "reading": "かいかけかんり",
+    "senses": [
+      {
+        "definition": "仕入や外注費など、まだ支払っていない債務を管理することです。支払サイトや検収条件と連動します。",
+        "domain": "enterprise",
+        "keywords": [
+          "買掛",
+          "仕入",
+          "外注",
+          "債務",
+          "支払"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accounts Payable Management"
+    ]
+  },
+  {
+    "term": "案件台帳",
+    "reading": "あんけんだいちょう",
+    "senses": [
+      {
+        "definition": "案件ごとの契約、売上、進捗、採算を一覧管理する台帳です。営業と現場と経理をつなぐ重要資産になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "案件",
+          "台帳",
+          "契約",
+          "売上",
+          "採算"
+        ]
+      }
+    ],
+    "aliases": [
+      "Project Ledger"
+    ]
+  },
+  {
+    "term": "顧客台帳",
+    "reading": "こきゃくだいちょう",
+    "senses": [
+      {
+        "definition": "顧客情報や契約状況をまとめた基礎台帳です。営業、請求、サポートなど多くの業務の起点になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "顧客",
+          "台帳",
+          "契約",
+          "営業",
+          "サポート"
+        ]
+      }
+    ],
+    "aliases": [
+      "Customer Master"
+    ]
+  },
+  {
+    "term": "ベンダー台帳",
+    "reading": "べんだーだいちょう",
+    "senses": [
+      {
+        "definition": "取引先ベンダーの情報、契約、評価などを管理する台帳です。委託先管理や購買統制に役立ちます。",
+        "domain": "enterprise",
+        "keywords": [
+          "ベンダー",
+          "台帳",
+          "契約",
+          "評価",
+          "委託"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vendor Master"
+    ]
+  },
+  {
+    "term": "保守更新",
+    "reading": "ほしゅこうしん",
+    "senses": [
+      {
+        "definition": "保守契約やサポート契約を継続更新することです。切れると障害時に大きな支障が出ることがあります。",
+        "domain": "enterprise",
+        "keywords": [
+          "保守",
+          "契約",
+          "更新",
+          "サポート",
+          "障害"
+        ]
+      }
+    ],
+    "aliases": [
+      "Maintenance Renewal"
+    ]
+  },
+  {
+    "term": "ライセンス更新",
+    "reading": "らいせんすこうしん",
+    "senses": [
+      {
+        "definition": "ソフトウェア利用権を更新することです。期限切れによる機能停止や監査指摘を防ぐ必要があります。",
+        "domain": "enterprise",
+        "keywords": [
+          "ライセンス",
+          "更新",
+          "期限",
+          "監査",
+          "停止"
+        ]
+      }
+    ],
+    "aliases": [
+      "License Renewal"
+    ]
+  },
+  {
+    "term": "資産管理台帳",
+    "reading": "しさんかんりだいちょう",
+    "senses": [
+      {
+        "definition": "ハードウェア、ソフトウェア、クラウド資源などを一覧管理する台帳です。費用管理と統制の基盤になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "資産",
+          "台帳",
+          "管理",
+          "費用",
+          "統制"
+        ]
+      }
+    ],
+    "aliases": [
+      "Asset Management Ledger"
+    ]
+  },
+  {
+    "term": "構成品目",
+    "reading": "こうせいひんもく",
+    "senses": [
+      {
+        "definition": "システムや資産を構成する個々の要素です。構成管理では、この単位をどう定義するかが重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "構成",
+          "品目",
+          "要素",
+          "管理",
+          "定義"
+        ]
+      }
+    ],
+    "aliases": [
+      "Configuration Item"
+    ]
+  },
+  {
+    "term": "CMDB",
+    "reading": "しーえむでぃーびー",
+    "senses": [
+      {
+        "definition": "構成管理データベースの略で、資産と関係性を管理する基盤です。障害影響や変更影響の把握に役立ちます。",
+        "domain": "enterprise",
+        "keywords": [
+          "構成管理",
+          "データベース",
+          "資産",
+          "関係",
+          "影響"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サービス資産",
+    "reading": "さーびすしさん",
+    "senses": [
+      {
+        "definition": "システム、文書、人材、契約など、サービス提供に必要な資産全体です。物理資産だけでなく無形要素も含まれます。",
+        "domain": "enterprise",
+        "keywords": [
+          "サービス",
+          "資産",
+          "文書",
+          "人材",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Service Asset"
+    ]
+  },
+  {
+    "term": "事業継続要件",
+    "reading": "じぎょうけいぞくようけん",
+    "senses": [
+      {
+        "definition": "業務を止めないために必要な条件です。RTOやRPOだけでなく、代替手順や人員確保も含みます。",
+        "domain": "enterprise",
+        "keywords": [
+          "事業継続",
+          "RTO",
+          "RPO",
+          "代替",
+          "人員"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Continuity Requirement"
+    ]
+  },
+  {
+    "term": "重要業務識別",
+    "reading": "じゅうようぎょうむしきべつ",
+    "senses": [
+      {
+        "definition": "何が止まると最も困る業務かを見極めることです。BCPや優先復旧順序の前提になります。",
+        "domain": "enterprise",
+        "keywords": [
+          "重要",
+          "業務",
+          "識別",
+          "BCP",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": [
+      "Critical Business Identification"
+    ]
+  },
+  {
+    "term": "復旧優先順位",
+    "reading": "ふっきゅうゆうせんじゅんい",
+    "senses": [
+      {
+        "definition": "障害時にどこから戻すかの順番です。全部同時に戻すより、重要業務優先が現実的です。",
+        "domain": "enterprise",
+        "keywords": [
+          "復旧",
+          "優先",
+          "順位",
+          "障害",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Recovery Priority"
+    ]
+  },
+  {
+    "term": "組織体制図",
+    "reading": "そしきたいせいず",
+    "senses": [
+      {
+        "definition": "組織と役割、指揮系統を図で表したものです。承認経路や責任分担の理解に役立ちます。",
+        "domain": "enterprise",
+        "keywords": [
+          "組織",
+          "体制",
+          "図",
+          "指揮",
+          "責任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Organizational Structure Chart"
+    ]
+  },
+  {
+    "term": "経営レポートライン",
+    "reading": "けいえいれぽーとらいん",
+    "senses": [
+      {
+        "definition": "誰が誰へ報告責任を持つかの系統です。障害報告や案件エスカレーションでも重要です。",
+        "domain": "enterprise",
+        "keywords": [
+          "報告",
+          "経営",
+          "責任",
+          "系統",
+          "エスカレーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Management Reporting Line"
+    ]
+  },
+  {
+    "term": "業務基盤整備",
+    "reading": "ぎょうむきばんせいび",
+    "senses": [
+      {
+        "definition": "個別システムではなく、組織全体の業務を支える基盤を整えることです。台帳、ワークフロー、契約、会計、知識管理がつながると、全体最適が進みやすくなります。",
+        "domain": "enterprise",
+        "keywords": [
+          "基盤",
+          "整備",
+          "台帳",
+          "ワークフロー",
+          "全体最適"
+        ]
+      }
+    ],
+    "aliases": [
+      "Business Infrastructure Development"
+    ]
+  }
+]

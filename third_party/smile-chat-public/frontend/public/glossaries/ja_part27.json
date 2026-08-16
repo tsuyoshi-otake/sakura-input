@@ -1,0 +1,898 @@
+[
+  {
+    "term": "異常系",
+    "reading": "いじょうけい",
+    "senses": [
+      {
+        "definition": "不正な入力や想定外の操作でシステムがどう振る舞うかをテストする。「空のパスワードでログインしようとするとエラーが表示される」などを確認する。",
+        "domain": "testing",
+        "keywords": [
+          "異常系",
+          "エラーケース",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "異常ケース",
+      "エラーケース",
+      "unhappy path"
+    ]
+  },
+  {
+    "term": "境界値",
+    "reading": "きょうかいち",
+    "senses": [
+      {
+        "definition": "テストの重要な手法の一つ。有効範囲の端の値をテストする。「年齢は1〜120」なら0、1、120、121をテストする。境界でバグが多く発見される。",
+        "domain": "testing",
+        "keywords": [
+          "境界値",
+          "境界値分析",
+          "テスト技法"
+        ]
+      }
+    ],
+    "aliases": [
+      "boundary value",
+      "boundary value analysis"
+    ]
+  },
+  {
+    "term": "テスト計画",
+    "reading": "てすとけいかく",
+    "senses": [
+      {
+        "definition": "テストの範囲、スケジュール、担当者、環境、合格基準などを定めた計画書。テスト開始前に作成し、プロジェクト全体のテスト活動を管理する。",
+        "domain": "testing",
+        "keywords": [
+          "テスト計画",
+          "テスト管理",
+          "スケジュール"
+        ]
+      }
+    ],
+    "aliases": [
+      "test plan"
+    ]
+  },
+  {
+    "term": "バグ報告",
+    "reading": "ばぐほうこく",
+    "senses": [
+      {
+        "definition": "テストで発見した不具合の内容を記録・報告すること。再現手順、期待する動作、実際の動作、スクリーンショットなどを含める。バグチケット、不具合票とも呼ぶ。",
+        "domain": "testing",
+        "keywords": [
+          "バグ報告",
+          "不具合報告",
+          "バグチケット"
+        ]
+      }
+    ],
+    "aliases": [
+      "bug report",
+      "不具合報告",
+      "バグチケット"
+    ]
+  },
+  {
+    "term": "再現手順",
+    "reading": "さいげんてじゅん",
+    "senses": [
+      {
+        "definition": "バグや不具合を再現させるための操作手順。「1.ログインする 2.○○ボタンを押す 3.エラーが発生する」のように具体的に書く。開発者がバグを修正するために必要。",
+        "domain": "testing",
+        "keywords": [
+          "再現手順",
+          "バグ",
+          "手順"
+        ]
+      }
+    ],
+    "aliases": [
+      "再現ステップ",
+      "steps to reproduce"
+    ]
+  },
+  {
+    "term": "QA",
+    "reading": "きゅーえー",
+    "senses": [
+      {
+        "definition": "Quality Assuranceの略。品質保証のこと。テストや検査を通じてシステムの品質を確認・保証する活動・部門。QAエンジニアはテスト設計・実行・品質管理を担当する。",
+        "domain": "quality-management",
+        "keywords": [
+          "QA",
+          "品質保証",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quality Assurance"
+    ]
+  },
+  {
+    "term": "指摘",
+    "reading": "してき",
+    "senses": [
+      {
+        "definition": "レビューやテストで発見した問題点や改善点を伝えること。設計書レビューやコードレビューでの「この部分は修正が必要」という意見を指摘と呼ぶ。",
+        "domain": "quality-management",
+        "keywords": [
+          "指摘",
+          "レビュー",
+          "コメント"
+        ]
+      }
+    ],
+    "aliases": [
+      "レビュー指摘",
+      "コメント",
+      "指摘事項"
+    ]
+  },
+  {
+    "term": "不具合票",
+    "reading": "ふぐあいひょう",
+    "senses": [
+      {
+        "definition": "テストで発見したバグ・不具合を記録する票（チケット）。発見日、重要度、再現手順、担当者などを記載する。バグ管理ツール（Redmine、JIRAなど）で管理することが多い。",
+        "domain": "quality-management",
+        "keywords": [
+          "不具合票",
+          "バグ票",
+          "バグ管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "バグ票",
+      "障害票",
+      "defect ticket"
+    ]
+  },
+  {
+    "term": "バグ管理",
+    "reading": "ばぐかんり",
+    "senses": [
+      {
+        "definition": "テストで発見したバグの登録・優先度付け・修正・検証・クローズまでのライフサイクルを管理すること。JIRAやRedmineなどのツールを使って管理する。",
+        "domain": "quality-management",
+        "keywords": [
+          "バグ管理",
+          "不具合管理",
+          "チケット管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "defect management",
+      "不具合管理",
+      "バグトラッキング"
+    ]
+  },
+  {
+    "term": "原因分析",
+    "reading": "げんいんぶんせき",
+    "senses": [
+      {
+        "definition": "発生した不具合やインシデントの根本的な原因を特定する活動。「なぜなぜ分析」（なぜを5回繰り返す）がよく使われる手法。再発防止策の前提となる。",
+        "domain": "quality-management",
+        "keywords": [
+          "原因分析",
+          "根本原因",
+          "なぜなぜ分析",
+          "RCA"
+        ]
+      }
+    ],
+    "aliases": [
+      "root cause analysis",
+      "RCA",
+      "なぜなぜ分析"
+    ]
+  },
+  {
+    "term": "再発防止",
+    "reading": "さいはつぼうし",
+    "senses": [
+      {
+        "definition": "同じ問題が再度起きないための対策を立てること。原因分析の後に行い、プロセス改善・テスト強化・教育など具体的な対策を実施する。",
+        "domain": "quality-management",
+        "keywords": [
+          "再発防止",
+          "対策",
+          "プロセス改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "recurrence prevention"
+    ]
+  },
+  {
+    "term": "ジョブ管理",
+    "reading": "じょぶかんり",
+    "senses": [
+      {
+        "definition": "バッチ処理などの定期実行ジョブをスケジュール管理・監視する仕組み。ジョブの実行順序や依存関係を定義し、成功・失敗を監視する。JP1やHINEOSが有名なツール。",
+        "domain": "operations",
+        "keywords": [
+          "ジョブ管理",
+          "スケジューラ",
+          "バッチ",
+          "JP1"
+        ]
+      }
+    ],
+    "aliases": [
+      "job management",
+      "ジョブスケジューラ"
+    ]
+  },
+  {
+    "term": "バッチスケジューラ",
+    "reading": "ばっちすけじゅーらー",
+    "senses": [
+      {
+        "definition": "バッチ処理を自動的に指定した時刻や条件で実行するソフトウェア。「毎日深夜2時に請求データを集計する」などの定期処理を管理する。",
+        "domain": "operations",
+        "keywords": [
+          "バッチスケジューラ",
+          "ジョブ管理",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": [
+      "batch scheduler",
+      "ジョブスケジューラー"
+    ]
+  },
+  {
+    "term": "運用手順書",
+    "reading": "うんようてじゅんしょ",
+    "senses": [
+      {
+        "definition": "システムの日常的な運用・監視・障害対応の手順をまとめたドキュメント。誰でも同じ手順で作業できるように具体的な操作手順を記載する。",
+        "domain": "operations",
+        "keywords": [
+          "運用手順書",
+          "マニュアル",
+          "手順書"
+        ]
+      }
+    ],
+    "aliases": [
+      "operations manual",
+      "操作手順書",
+      "手順書"
+    ]
+  },
+  {
+    "term": "パッチ適用",
+    "reading": "ぱっちてきよう",
+    "senses": [
+      {
+        "definition": "ソフトウェアのバグ修正やセキュリティ対応のための更新プログラム（パッチ）を適用すること。OSやミドルウェアに定期的に適用することでセキュリティを維持する。",
+        "domain": "operations",
+        "keywords": [
+          "パッチ",
+          "セキュリティ更新",
+          "アップデート"
+        ]
+      }
+    ],
+    "aliases": [
+      "patch application",
+      "セキュリティパッチ",
+      "patch"
+    ]
+  },
+  {
+    "term": "定期メンテナンス",
+    "reading": "ていきめんてなんす",
+    "senses": [
+      {
+        "definition": "システムを安定稼働させるために定期的に行う保守作業。ログ削除、データバックアップ確認、OSアップデート適用、性能確認などが含まれる。",
+        "domain": "operations",
+        "keywords": [
+          "定期メンテナンス",
+          "保守",
+          "メンテナンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "scheduled maintenance",
+      "定期保守"
+    ]
+  },
+  {
+    "term": "RFI",
+    "reading": "あーるえふあい",
+    "senses": [
+      {
+        "definition": "Request For Informationの略。提案依頼前にベンダーから情報収集するための文書。「どんな技術や製品を持っているか」「費用感は」などを確認するために発行する。",
+        "domain": "proposal",
+        "keywords": [
+          "RFI",
+          "情報提供依頼",
+          "ベンダー選定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Request For Information",
+      "情報提供依頼書"
+    ]
+  },
+  {
+    "term": "制約事項",
+    "reading": "せいやくじこう",
+    "senses": [
+      {
+        "definition": "プロジェクトや提案において守らなければならない条件・制限のこと。「既存システムとの互換性を保つ」「予算は○○万円以内」などが制約事項にあたる。",
+        "domain": "proposal",
+        "keywords": [
+          "制約事項",
+          "制約",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "constraints",
+      "制限事項"
+    ]
+  },
+  {
+    "term": "提案背景",
+    "reading": "ていあんはいけい",
+    "senses": [
+      {
+        "definition": "提案書においてなぜこの提案をするに至ったかの背景・状況を記述するセクション。顧客の課題・市場の変化・業務上の問題点などを説明し、提案の必然性を示す。",
+        "domain": "proposal",
+        "keywords": [
+          "提案背景",
+          "背景",
+          "課題"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "課題整理",
+    "reading": "かだいせいり",
+    "senses": [
+      {
+        "definition": "顧客や自社が抱える問題点・課題をまとめ整理すること。提案書の作成や要件定義前に行い、何を解決すべきかを明確にする作業。",
+        "domain": "proposal",
+        "keywords": [
+          "課題整理",
+          "課題",
+          "問題点"
+        ]
+      }
+    ],
+    "aliases": [
+      "課題分析",
+      "issue analysis"
+    ]
+  },
+  {
+    "term": "As-Is",
+    "reading": "あずいず",
+    "senses": [
+      {
+        "definition": "現状のビジネスプロセスや業務フローのこと。「現状」とも呼ばれる。業務改善では現状（As-Is）を把握してから、あるべき姿（To-Be）を定義する。",
+        "domain": "business-improvement",
+        "keywords": [
+          "As-Is",
+          "現状",
+          "業務フロー"
+        ]
+      }
+    ],
+    "aliases": [
+      "現状",
+      "現行",
+      "as is",
+      "現状業務"
+    ]
+  },
+  {
+    "term": "To-Be",
+    "reading": "とぅーびー",
+    "senses": [
+      {
+        "definition": "改善後の目指すべき姿・業務フローのこと。「あるべき姿」とも呼ばれる。現状（As-Is）の課題を解決した理想的な状態を定義する。",
+        "domain": "business-improvement",
+        "keywords": [
+          "To-Be",
+          "あるべき姿",
+          "目標",
+          "改善後"
+        ]
+      }
+    ],
+    "aliases": [
+      "あるべき姿",
+      "to be",
+      "改善後"
+    ]
+  },
+  {
+    "term": "業務改善",
+    "reading": "ぎょうむかいぜん",
+    "senses": [
+      {
+        "definition": "業務の効率化・品質向上・コスト削減を目的として、現行の業務プロセスを見直し改善する取り組み。システム化、自動化、手順の標準化などが手段として使われる。",
+        "domain": "business-improvement",
+        "keywords": [
+          "業務改善",
+          "業務効率化",
+          "プロセス改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "業務効率化",
+      "process improvement",
+      "BPI"
+    ]
+  },
+  {
+    "term": "システム化対象",
+    "reading": "しすてむかたいしょう",
+    "senses": [
+      {
+        "definition": "業務改善においてシステムで自動化・効率化する業務の範囲のこと。全ての業務をシステム化するのではなく、費用対効果の高いものを対象として選定する。",
+        "domain": "business-improvement",
+        "keywords": [
+          "システム化対象",
+          "スコープ",
+          "自動化対象"
+        ]
+      }
+    ],
+    "aliases": [
+      "システム化範囲"
+    ]
+  },
+  {
+    "term": "自動化",
+    "reading": "じどうか",
+    "senses": [
+      {
+        "definition": "手作業で行っていた業務をシステムやロボット（RPA）で自動的に処理すること。反復的・定型的な業務を自動化することで、人的ミスの削減と業務効率向上を図る。",
+        "domain": "business-improvement",
+        "keywords": [
+          "自動化",
+          "automation",
+          "RPA",
+          "効率化"
+        ]
+      }
+    ],
+    "aliases": [
+      "automation",
+      "オートメーション"
+    ]
+  },
+  {
+    "term": "定着化",
+    "reading": "ていちゃくか",
+    "senses": [
+      {
+        "definition": "新しいシステムや業務プロセスを導入した後、利用者が継続的に使い続けられるように定着させること。研修・マニュアル整備・サポート体制などにより促進する。",
+        "domain": "business-improvement",
+        "keywords": [
+          "定着化",
+          "浸透",
+          "導入後",
+          "change management"
+        ]
+      }
+    ],
+    "aliases": [
+      "浸透",
+      "定着",
+      "change management"
+    ]
+  },
+  {
+    "term": "費用対効果",
+    "reading": "ひようたいこうか",
+    "senses": [
+      {
+        "definition": "投資した費用に対してどれだけの効果・利益が得られるかの比率。「○○万円かけて○○時間削減できる」のように示す。プロジェクト承認の重要な判断材料になる。",
+        "domain": "business-improvement",
+        "keywords": [
+          "費用対効果",
+          "ROI",
+          "コスト",
+          "効果"
+        ]
+      }
+    ],
+    "aliases": [
+      "コスト対効果",
+      "cost-effectiveness"
+    ]
+  },
+  {
+    "term": "設計書",
+    "reading": "せっけいしょ",
+    "senses": [
+      {
+        "definition": "システムの設計内容を記述した文書の総称。基本設計書・詳細設計書・DB設計書・画面設計書など様々な種類がある。要件を実装に変換するための重要な成果物。",
+        "domain": "documentation",
+        "keywords": [
+          "設計書",
+          "仕様書",
+          "成果物"
+        ]
+      }
+    ],
+    "aliases": [
+      "設計ドキュメント",
+      "design document"
+    ]
+  },
+  {
+    "term": "テーブル定義書",
+    "reading": "てーぶるていぎしょ",
+    "senses": [
+      {
+        "definition": "データベースの各テーブルの構造を定義したドキュメント。テーブル名、カラム名、データ型、桁数、NULL可否、デフォルト値、主キーなどを記載する。",
+        "domain": "documentation",
+        "keywords": [
+          "テーブル定義書",
+          "DB設計",
+          "テーブル設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "テーブル定義",
+      "テーブル仕様書",
+      "table definition"
+    ]
+  },
+  {
+    "term": "画面設計書",
+    "reading": "がめんせっけいしょ",
+    "senses": [
+      {
+        "definition": "各画面のレイアウト・項目・動作を詳細に定義したドキュメント。画面の項目一覧、入力チェック、画面遷移、ボタン動作などを記載する。",
+        "domain": "documentation",
+        "keywords": [
+          "画面設計書",
+          "UI設計",
+          "画面仕様"
+        ]
+      }
+    ],
+    "aliases": [
+      "画面仕様書",
+      "screen design document"
+    ]
+  },
+  {
+    "term": "変更管理表",
+    "reading": "へんこうかんりひょう",
+    "senses": [
+      {
+        "definition": "プロジェクト中に発生した仕様変更や要件変更を管理する一覧表。変更内容、変更理由、影響範囲、担当者、対応状況などを記録する。",
+        "domain": "documentation",
+        "keywords": [
+          "変更管理表",
+          "変更管理",
+          "仕様変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "変更管理台帳",
+      "change log",
+      "変更履歴"
+    ]
+  },
+  {
+    "term": "プロジェクトリーダー",
+    "reading": "ぷろじぇくとりーだー",
+    "senses": [
+      {
+        "definition": "プロジェクトの現場での技術的なリーダー。PMの指示のもと、開発チームをまとめてプログラマーへのタスク割り当て、技術課題の解決、進捗管理を行う。PLと略される。",
+        "domain": "team",
+        "keywords": [
+          "PL",
+          "プロジェクトリーダー",
+          "リーダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "project leader"
+    ]
+  },
+  {
+    "term": "SE",
+    "reading": "えすいー",
+    "senses": [
+      {
+        "definition": "Systems Engineerの略。システムエンジニアの略称。顧客との要件定義、設計書作成、開発の取りまとめを行う技術者。プログラマーより上位工程を担当することが多い。",
+        "domain": "team",
+        "keywords": [
+          "SE",
+          "システムエンジニア",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": [
+      "Systems Engineer",
+      "システムエンジニア"
+    ]
+  },
+  {
+    "term": "PG",
+    "reading": "ぴーじー",
+    "senses": [
+      {
+        "definition": "Programmerの略。プログラマーの略称。設計書に基づいてプログラムを実際に書く（コーディングする）担当者。SEの設計したものをコードに変換する役割。",
+        "domain": "team",
+        "keywords": [
+          "PG",
+          "プログラマー",
+          "コーディング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Programmer",
+      "プログラマー"
+    ]
+  },
+  {
+    "term": "インフラエンジニア",
+    "reading": "いんふらえんじにあ",
+    "senses": [
+      {
+        "definition": "サーバー、ネットワーク、クラウドなどのインフラ（基盤）を設計・構築・運用するエンジニア。AWSやAzureなどのクラウド基盤の管理も担当することが多い。",
+        "domain": "team",
+        "keywords": [
+          "インフラエンジニア",
+          "インフラ",
+          "サーバー",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": [
+      "infrastructure engineer"
+    ]
+  },
+  {
+    "term": "プロダクトオーナー",
+    "reading": "ぷろだくとおーなー",
+    "senses": [
+      {
+        "definition": "アジャイル開発（スクラム）でプロダクトの価値を最大化する責任者。バックログの優先順位付けや要件の最終決定を担当する。顧客・ビジネス側の代表としてチームと連携する。",
+        "domain": "team",
+        "keywords": [
+          "プロダクトオーナー",
+          "PO",
+          "スクラム",
+          "アジャイル"
+        ]
+      }
+    ],
+    "aliases": [
+      "PO"
+    ]
+  },
+  {
+    "term": "改修",
+    "reading": "かいしゅう",
+    "senses": [
+      {
+        "definition": "既存のシステムに対して変更・修正を加えること。バグ修正や機能追加、仕様変更への対応など。「改修依頼」「改修対応」のように使われる。",
+        "domain": "change-management",
+        "keywords": [
+          "改修",
+          "変更",
+          "修正",
+          "機能追加"
+        ]
+      }
+    ],
+    "aliases": [
+      "修正",
+      "enhancement",
+      "機能改修"
+    ]
+  },
+  {
+    "term": "追加開発",
+    "reading": "ついかかいはつ",
+    "senses": [
+      {
+        "definition": "既存システムに新しい機能や画面を追加する開発作業。リリース後に顧客から要望が上がったり、業務拡張に合わせて行う。",
+        "domain": "change-management",
+        "keywords": [
+          "追加開発",
+          "機能追加",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": [
+      "機能追加",
+      "機能拡張",
+      "add-on development"
+    ]
+  },
+  {
+    "term": "影響調査",
+    "reading": "えいきょうちょうさ",
+    "senses": [
+      {
+        "definition": "仕様変更や改修を行う際に、変更内容が他のシステムや機能に与える影響範囲を調査すること。影響範囲が大きいほど変更コストやリスクが高くなる。",
+        "domain": "change-management",
+        "keywords": [
+          "影響調査",
+          "影響範囲",
+          "変更管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "影響範囲調査",
+      "impact analysis"
+    ]
+  },
+  {
+    "term": "互換性",
+    "reading": "ごかんせい",
+    "senses": [
+      {
+        "definition": "新旧バージョンや異なるシステム間でデータや機能が問題なく動作すること。後方互換性（新しいバージョンが古いデータを扱える）・前方互換性がある。",
+        "domain": "change-management",
+        "keywords": [
+          "互換性",
+          "compatibility",
+          "後方互換"
+        ]
+      }
+    ],
+    "aliases": [
+      "compatibility"
+    ]
+  },
+  {
+    "term": "デグレード",
+    "reading": "でぐれーど",
+    "senses": [
+      {
+        "definition": "改修や変更によって、以前は正常に動作していた機能が壊れてしまうこと。「デグレが発生した」のように使う。リグレッションバグとも言い、リグレッションテストで検出する。",
+        "domain": "change-management",
+        "keywords": [
+          "デグレード",
+          "デグレ",
+          "リグレッション",
+          "regression"
+        ]
+      }
+    ],
+    "aliases": [
+      "デグレ",
+      "regression",
+      "リグレッション",
+      "退行"
+    ]
+  },
+  {
+    "term": "変更依頼",
+    "reading": "へんこういらい",
+    "senses": [
+      {
+        "definition": "顧客や関係者からシステムの仕様を変更するよう依頼すること。変更依頼書（CR）として正式に提出されることが多い。範囲・コスト・スケジュールへの影響を確認して対応する。",
+        "domain": "change-management",
+        "keywords": [
+          "変更依頼",
+          "CR",
+          "仕様変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "CR",
+      "仕様変更依頼"
+    ]
+  },
+  {
+    "term": "整合性",
+    "reading": "せいごうせい",
+    "senses": [
+      {
+        "definition": "データや処理の内容が矛盾なく一致していること。「データの整合性を保つ」「設計書と実装の整合性を確認する」のように使われる。DBのトランザクションは整合性を守るための仕組み。",
+        "domain": "cross-cutting",
+        "keywords": [
+          "整合性",
+          "consistency",
+          "データ整合性"
+        ]
+      }
+    ],
+    "aliases": [
+      "consistency",
+      "一貫性"
+    ]
+  },
+  {
+    "term": "権限管理",
+    "reading": "けんげんかんり",
+    "senses": [
+      {
+        "definition": "システムの機能やデータにアクセスできる権限を管理すること。「管理者のみ削除できる」「一般ユーザーは閲覧のみ」のように、役割ごとにできることを制限する。",
+        "domain": "cross-cutting",
+        "keywords": [
+          "権限管理",
+          "アクセス制御",
+          "RBAC"
+        ]
+      }
+    ],
+    "aliases": [
+      "access control",
+      "アクセス制御",
+      "ロール管理"
+    ]
+  },
+  {
+    "term": "再利用",
+    "reading": "さいりよう",
+    "senses": [
+      {
+        "definition": "既存のコードやコンポーネントを別の場所でも使い回すこと。共通部品化・ライブラリ化により、開発効率の向上とバグの削減が期待できる。",
+        "domain": "cross-cutting",
+        "keywords": [
+          "再利用",
+          "reuse",
+          "部品化",
+          "共通化"
+        ]
+      }
+    ],
+    "aliases": [
+      "reuse",
+      "コンポーネント再利用",
+      "共通化"
+    ]
+  },
+  {
+    "term": "ディザスタリカバリ",
+    "reading": "でぃざすたりかばり",
+    "senses": [
+      {
+        "definition": "自然災害・システム障害などの重大な事象が発生した際に、業務を復旧させるための計画・手順・仕組み。DRとも略す。バックアップサイトへの切り替えやデータ復旧が含まれる。",
+        "domain": "cross-cutting",
+        "keywords": [
+          "ディザスタリカバリ",
+          "DR",
+          "事業継続",
+          "BCP"
+        ]
+      }
+    ],
+    "aliases": [
+      "disaster recovery",
+      "事業継続計画"
+    ]
+  }
+]

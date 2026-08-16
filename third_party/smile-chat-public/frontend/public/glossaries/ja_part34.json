@@ -1,0 +1,1151 @@
+[
+  {
+    "term": "機能設計",
+    "reading": "きのうせっけい",
+    "senses": [
+      {
+        "definition": "システムが提供する機能の外部仕様を設計すること。画面・帳票・API仕様などを定義する。",
+        "domain": "architecture",
+        "keywords": [
+          "機能",
+          "設計",
+          "外部仕様",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "非機能設計",
+    "reading": "ひきのうせっけい",
+    "senses": [
+      {
+        "definition": "可用性・性能・セキュリティなど非機能要件を満たすためのシステム設計。",
+        "domain": "architecture",
+        "keywords": [
+          "非機能",
+          "設計",
+          "性能",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Basic Design",
+    "senses": [
+      {
+        "definition": "システムの基本的な外部仕様を定義する設計工程。画面・API・DBの概要を確定する。",
+        "domain": "architecture",
+        "keywords": [
+          "設計",
+          "外部仕様",
+          "基本",
+          "フェーズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Detail Design",
+    "senses": [
+      {
+        "definition": "Basic Designを受けてモジュール内部のロジック・アルゴリズムを詳細に設計する工程。",
+        "domain": "architecture",
+        "keywords": [
+          "詳細設計",
+          "ロジック",
+          "モジュール",
+          "内部仕様"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Design",
+    "senses": [
+      {
+        "definition": "データ構造・スキーマ・アクセスパターンを設計する工程。DB設計と密接に関連する。",
+        "domain": "database",
+        "keywords": [
+          "データ",
+          "スキーマ",
+          "DB",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Function Design",
+    "senses": [
+      {
+        "definition": "各機能のI/F・処理フロー・業務ロジックを設計する工程。",
+        "domain": "architecture",
+        "keywords": [
+          "機能",
+          "I/F",
+          "処理フロー",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "External Specification",
+    "senses": [
+      {
+        "definition": "外部仕様書。システムが外部から見てどのように振る舞うかを定義したドキュメント。",
+        "domain": "architecture",
+        "keywords": [
+          "外部仕様",
+          "ドキュメント",
+          "API",
+          "仕様書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Architecture Design",
+    "senses": [
+      {
+        "definition": "システム全体の構成・技術スタック・コンポーネント間の関係を設計する工程。",
+        "domain": "architecture",
+        "keywords": [
+          "アーキテクチャ",
+          "設計",
+          "コンポーネント",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "構造化設計",
+    "reading": "こうぞうかせっけい",
+    "senses": [
+      {
+        "definition": "DFDやモジュール分割を用いてシステムを階層的なモジュール構造に分解する伝統的な設計手法。",
+        "domain": "architecture",
+        "keywords": [
+          "DFD",
+          "モジュール",
+          "分割",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "STS分割",
+    "senses": [
+      {
+        "definition": "Source-Transform-Sinkの略。データの入力・変換・出力の役割に基づいてシステムをモジュール分割する手法。",
+        "domain": "architecture",
+        "keywords": [
+          "STS",
+          "モジュール",
+          "分割",
+          "構造化設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "TR分割",
+    "senses": [
+      {
+        "definition": "Transaction（トランザクション）の種類に基づいてシステムをモジュール分割する手法。",
+        "domain": "architecture",
+        "keywords": [
+          "トランザクション",
+          "モジュール",
+          "分割",
+          "構造化設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "共通機能分割",
+    "reading": "きょうつうきのうぶんかつ",
+    "senses": [
+      {
+        "definition": "複数の処理で共有される共通機能を独立したモジュールとして分割する設計手法。",
+        "domain": "architecture",
+        "keywords": [
+          "共通化",
+          "モジュール",
+          "再利用",
+          "分割"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ジャクソン法",
+    "reading": "じゃくそんほう",
+    "senses": [
+      {
+        "definition": "データ構造からプログラム構造を導出するJackson Structured Programming（JSP）設計手法。",
+        "domain": "architecture",
+        "keywords": [
+          "JSP",
+          "データ構造",
+          "プログラム構造",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ワーニエ法",
+    "reading": "わーにえほう",
+    "senses": [
+      {
+        "definition": "Warnier-Orr記法を用いてデータ階層からプログラム構造を設計する手法。",
+        "domain": "architecture",
+        "keywords": [
+          "Warnier",
+          "プログラム構造",
+          "階層",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CRUD表",
+    "reading": "くるっどひょう",
+    "senses": [
+      {
+        "definition": "エンティティに対してCreate・Read・Update・Deleteのどの操作を行うかを一覧化したマトリクス。",
+        "domain": "architecture",
+        "keywords": [
+          "CRUD",
+          "データ",
+          "操作",
+          "マトリクス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分析クラスモデル",
+    "reading": "ぶんせきくらすもでる",
+    "senses": [
+      {
+        "definition": "ドメイン分析で得られたクラスとその関連をUMLクラス図で表現したモデル。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "クラス",
+          "分析",
+          "ドメイン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GoF23",
+    "senses": [
+      {
+        "definition": "Gang of Fourが提唱した23種のオブジェクト指向デザインパターン。生成・構造・振る舞いの3カテゴリに分類される。",
+        "domain": "software-engineering",
+        "keywords": [
+          "デザインパターン",
+          "OOP",
+          "GoF",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Decorator",
+    "senses": [
+      {
+        "definition": "既存オブジェクトにラッパーを追加して機能を動的に拡張するGoFの構造パターン。",
+        "domain": "software-engineering",
+        "keywords": [
+          "デザインパターン",
+          "GoF",
+          "ラッパー",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Facade",
+    "senses": [
+      {
+        "definition": "複雑なサブシステムへの統一インターフェースを提供するGoFの構造パターン。",
+        "domain": "software-engineering",
+        "keywords": [
+          "デザインパターン",
+          "GoF",
+          "インターフェース",
+          "簡略化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Template Method",
+    "senses": [
+      {
+        "definition": "アルゴリズムの骨格を親クラスで定義しサブクラスで詳細を実装するGoFの振る舞いパターン。",
+        "domain": "software-engineering",
+        "keywords": [
+          "デザインパターン",
+          "GoF",
+          "テンプレート",
+          "継承"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "J2EEデザインパターン",
+    "senses": [
+      {
+        "definition": "Java EE（J2EE）プラットフォーム向けに定義されたエンタープライズアプリケーションデザインパターン集。",
+        "domain": "architecture",
+        "keywords": [
+          "Java",
+          "J2EE",
+          "デザインパターン",
+          "エンタープライズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Front Controller",
+    "senses": [
+      {
+        "definition": "Webアプリケーションの全リクエストを単一のコントローラで受け付けるJ2EEデザインパターン。",
+        "domain": "architecture",
+        "keywords": [
+          "Webアプリ",
+          "パターン",
+          "コントローラ",
+          "MVC"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OSI参照モデル",
+    "reading": "おーえすあいさんしょうもでる",
+    "senses": [
+      {
+        "definition": "ネットワーク通信を7層に分けて定義したISO標準モデル。各層が独立した役割を担う。",
+        "domain": "network",
+        "keywords": [
+          "OSI",
+          "7層",
+          "標準",
+          "プロトコル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "TCP/IPモデル",
+    "reading": "てぃーしーぴーあいぴーもでる",
+    "senses": [
+      {
+        "definition": "インターネットの基盤プロトコル群をアプリケーション・トランスポート・インターネット・リンクの4層で定義したモデル。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "IP",
+          "インターネット",
+          "プロトコル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "セッション層",
+    "reading": "せっしょんそう",
+    "senses": [
+      {
+        "definition": "OSI参照モデルの第5層。通信セッションの確立・維持・終了を管理する。",
+        "domain": "network",
+        "keywords": [
+          "OSI",
+          "セッション",
+          "通信",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "トランスポート層",
+    "reading": "とらんすぽーとそう",
+    "senses": [
+      {
+        "definition": "OSI参照モデルの第4層。エンドツーエンドの信頼性ある通信（TCP）や軽量通信（UDP）を提供する。",
+        "domain": "network",
+        "keywords": [
+          "OSI",
+          "TCP",
+          "UDP",
+          "エンドツーエンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ネットワーク層",
+    "reading": "ねっとわーくそう",
+    "senses": [
+      {
+        "definition": "OSI参照モデルの第3層。IPアドレスを用いたルーティングとパケット転送を担う。",
+        "domain": "network",
+        "keywords": [
+          "OSI",
+          "IP",
+          "ルーティング",
+          "パケット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データリンク層",
+    "reading": "でーたりんくそう",
+    "senses": [
+      {
+        "definition": "OSI参照モデルの第2層。MACアドレスを用いた同一ネットワーク内の通信とエラー検出を担う。",
+        "domain": "network",
+        "keywords": [
+          "OSI",
+          "MAC",
+          "Ethernet",
+          "エラー検出"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "物理層",
+    "reading": "ぶつりそう",
+    "senses": [
+      {
+        "definition": "OSI参照モデルの第1層。電気信号・光信号・無線などの物理的な伝送を担う。",
+        "domain": "network",
+        "keywords": [
+          "OSI",
+          "電気信号",
+          "物理",
+          "伝送"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プロトコルスタック",
+    "reading": "ぷろとこるすたっく",
+    "senses": [
+      {
+        "definition": "複数の通信プロトコルを階層的に組み合わせた実装の集合体。TCP/IPスタックが代表例。",
+        "domain": "network",
+        "keywords": [
+          "プロトコル",
+          "階層",
+          "TCP/IP",
+          "通信"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Ethernet",
+    "senses": [
+      {
+        "definition": "IEEE 802.3で規格化されたLAN技術。MACアドレスを用いてフレームをやり取りする。",
+        "domain": "network",
+        "keywords": [
+          "LAN",
+          "IEEE",
+          "MAC",
+          "フレーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MACアドレス",
+    "senses": [
+      {
+        "definition": "ネットワークインターフェースに割り当てられた48ビットのハードウェアアドレス。",
+        "domain": "network",
+        "keywords": [
+          "MAC",
+          "アドレス",
+          "Ethernet",
+          "データリンク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "L2スイッチ",
+    "reading": "えるつーすいっち",
+    "senses": [
+      {
+        "definition": "MACアドレステーブルをもとにフレームを転送するデータリンク層のネットワーク機器。",
+        "domain": "network",
+        "keywords": [
+          "スイッチ",
+          "MAC",
+          "LAN",
+          "フレーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "フラッディング",
+    "reading": "ふらっでぃんぐ",
+    "senses": [
+      {
+        "definition": "L2スイッチが宛先MACアドレスを学習していない場合にすべてのポートへフレームを送出する動作。",
+        "domain": "network",
+        "keywords": [
+          "スイッチ",
+          "MAC",
+          "ブロードキャスト",
+          "学習"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Spanning Tree Protocol",
+    "senses": [
+      {
+        "definition": "L2ネットワークのループを防ぎ冗長パスを論理的にブロックするプロトコル（IEEE 802.1D）。",
+        "domain": "network",
+        "keywords": [
+          "STP",
+          "ループ防止",
+          "冗長",
+          "IEEE"
+        ]
+      }
+    ],
+    "aliases": [
+      "STP"
+    ]
+  },
+  {
+    "term": "ルートブリッジ",
+    "reading": "るーとぶりっじ",
+    "senses": [
+      {
+        "definition": "Spanning Tree Protocolでネットワークの基準点となるスイッチ。最小のブリッジIDが選ばれる。",
+        "domain": "network",
+        "keywords": [
+          "STP",
+          "スイッチ",
+          "ルート",
+          "選出"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ブロックポート",
+    "reading": "ぶろっくぽーと",
+    "senses": [
+      {
+        "definition": "Spanning Tree Protocolでループ防止のために通信を遮断しているポート。",
+        "domain": "network",
+        "keywords": [
+          "STP",
+          "ポート",
+          "ループ防止",
+          "遮断"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VLAN",
+    "senses": [
+      {
+        "definition": "Virtual LANの略。物理的なネットワークを論理的に分割する技術。セキュリティと管理性を向上させる。",
+        "domain": "network",
+        "keywords": [
+          "仮想LAN",
+          "セグメント",
+          "スイッチ",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スタティックVLAN",
+    "reading": "すたてぃっくぶいらん",
+    "senses": [
+      {
+        "definition": "管理者がスイッチポートに手動でVLANを割り当てる方式。",
+        "domain": "network",
+        "keywords": [
+          "VLAN",
+          "静的",
+          "設定",
+          "ポート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ダイナミックVLAN",
+    "reading": "だいなみっくぶいらん",
+    "senses": [
+      {
+        "definition": "接続端末のMACアドレスや認証情報をもとに自動的にVLANを割り当てる方式。",
+        "domain": "network",
+        "keywords": [
+          "VLAN",
+          "動的",
+          "MAC",
+          "認証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "グローバルIPアドレス",
+    "reading": "ぐろーばるあいぴーあどれす",
+    "senses": [
+      {
+        "definition": "インターネット上で一意に識別できるIPアドレス。ISPから割り当てられる。",
+        "domain": "network",
+        "keywords": [
+          "IP",
+          "インターネット",
+          "アドレス",
+          "一意"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プライベートIPアドレス",
+    "reading": "ぷらいべーとあいぴーあどれす",
+    "senses": [
+      {
+        "definition": "組織内のプライベートネットワークで使用するIPアドレス。10.x・172.16.x・192.168.xの範囲。",
+        "domain": "network",
+        "keywords": [
+          "IP",
+          "プライベート",
+          "LAN",
+          "RFC1918"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "L3スイッチ",
+    "reading": "えるさんすいっち",
+    "senses": [
+      {
+        "definition": "IPアドレスに基づいたルーティング機能を持つスイッチ。ルータとL2スイッチの機能を統合した機器。",
+        "domain": "network",
+        "keywords": [
+          "ルーティング",
+          "スイッチ",
+          "IP",
+          "L3"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ルータ",
+    "reading": "るーた",
+    "senses": [
+      {
+        "definition": "異なるネットワーク間でパケットをルーティングするネットワーク機器。",
+        "domain": "network",
+        "keywords": [
+          "ルーティング",
+          "IP",
+          "ネットワーク",
+          "転送"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ARPテーブル",
+    "reading": "えーあーるぴーてーぶる",
+    "senses": [
+      {
+        "definition": "IPアドレスとMACアドレスの対応を記録したテーブル。ARP（Address Resolution Protocol）で更新される。",
+        "domain": "network",
+        "keywords": [
+          "ARP",
+          "MAC",
+          "IP",
+          "対応表"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ルーティングテーブル",
+    "reading": "るーてぃんぐてーぶる",
+    "senses": [
+      {
+        "definition": "ルータがパケットを転送する際に参照するネットワーク宛先と次ホップのマッピング表。",
+        "domain": "network",
+        "keywords": [
+          "ルーティング",
+          "転送",
+          "IP",
+          "テーブル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スタティックルーティング",
+    "reading": "すたてぃっくるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "管理者が手動でルーティングテーブルを設定する方式。シンプルだが変化に弱い。",
+        "domain": "network",
+        "keywords": [
+          "ルーティング",
+          "静的",
+          "設定",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ダイナミックルーティング",
+    "reading": "だいなみっくるーてぃんぐ",
+    "senses": [
+      {
+        "definition": "ルーティングプロトコル（OSPF・BGPなど）を使ってルーティングテーブルを自動更新する方式。",
+        "domain": "network",
+        "keywords": [
+          "ルーティング",
+          "動的",
+          "OSPF",
+          "BGP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "L7スイッチ",
+    "reading": "えるしちすいっち",
+    "senses": [
+      {
+        "definition": "HTTPヘッダ・URLなどアプリケーション層の情報を基に通信を振り分けるスイッチ。ロードバランサとも呼ばれる。",
+        "domain": "network",
+        "keywords": [
+          "L7",
+          "ロードバランサ",
+          "HTTP",
+          "振り分け"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ADC",
+    "senses": [
+      {
+        "definition": "Application Delivery Controllerの略。L7スイッチ機能を持ちアプリケーション配信を最適化する機器。",
+        "domain": "network",
+        "keywords": [
+          "ロードバランサ",
+          "ADC",
+          "L7",
+          "アプリケーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "L7ファイアウォール",
+    "reading": "えるしちふぁいあうぉーる",
+    "senses": [
+      {
+        "definition": "HTTPSや通信内容まで検査できるアプリケーション層のファイアウォール。",
+        "domain": "security",
+        "keywords": [
+          "ファイアウォール",
+          "L7",
+          "HTTP",
+          "WAF"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "UTM",
+    "senses": [
+      {
+        "definition": "Unified Threat Managementの略。ファイアウォール・IDS・アンチウイルスなど複数のセキュリティ機能を統合した機器。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ",
+          "統合",
+          "ファイアウォール",
+          "IDS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NGFW",
+    "senses": [
+      {
+        "definition": "Next Generation Firewallの略。アプリケーション認識・ユーザーID・侵入防止（IPS）を統合した次世代ファイアウォール。",
+        "domain": "security",
+        "keywords": [
+          "ファイアウォール",
+          "次世代",
+          "IPS",
+          "アプリケーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "サーバサイジング",
+    "reading": "さーばさいじんぐ",
+    "senses": [
+      {
+        "definition": "要件（TPS・データ量・ユーザー数など）に基づいてサーバのCPU・メモリ・ストレージを見積もること。",
+        "domain": "architecture",
+        "keywords": [
+          "サーバ",
+          "性能",
+          "見積もり",
+          "容量設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "リバースプロキシ",
+    "reading": "りばーすぷろきしー",
+    "senses": [
+      {
+        "definition": "クライアントとサーバの間でサーバ側に代理動作するプロキシ。SSLオフロード・ロードバランシング・キャッシュを提供する。",
+        "domain": "network",
+        "keywords": [
+          "プロキシ",
+          "SSL",
+          "ロードバランサ",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ロードバランシング",
+    "reading": "ろーどばらんしんぐ",
+    "senses": [
+      {
+        "definition": "複数サーバに負荷を分散してシステムの可用性と性能を向上させる技術。",
+        "domain": "network",
+        "keywords": [
+          "負荷分散",
+          "可用性",
+          "スケーラビリティ",
+          "クラスタ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "クラスタリング",
+    "reading": "くらすたりんぐ",
+    "senses": [
+      {
+        "definition": "複数サーバを一つの論理的なシステムとして連携させ可用性・性能を向上させる技術。",
+        "domain": "architecture",
+        "keywords": [
+          "HA",
+          "フェイルオーバー",
+          "可用性",
+          "サーバ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分析クラスモデリング",
+    "reading": "ぶんせきくらすもでりんぐ",
+    "senses": [
+      {
+        "definition": "ドメイン分析の結果をクラスとその関連として整理するモデリング活動。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "クラス",
+          "分析",
+          "ドメイン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ビジネスユースケース",
+    "reading": "びじねすゆーすけーす",
+    "senses": [
+      {
+        "definition": "組織レベルのビジネスプロセスをアクターとユースケースで表現したモデル。",
+        "domain": "modeling",
+        "keywords": [
+          "ユースケース",
+          "ビジネス",
+          "UML",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BCEモデル",
+    "senses": [
+      {
+        "definition": "Boundary・Control・Entityの3要素でシステムの責務を分類するモデル。ロバストネス分析の基礎。",
+        "domain": "modeling",
+        "keywords": [
+          "BCE",
+          "ロバストネス",
+          "責務",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ミドルウェア",
+    "senses": [
+      {
+        "definition": "OSとアプリケーションの中間に位置するソフトウェア。DBMSやWebサーバ・メッセージキューなどが含まれる。",
+        "domain": "software-engineering",
+        "keywords": [
+          "OS",
+          "DBMS",
+          "Webサーバ",
+          "基盤"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DBMS",
+    "senses": [
+      {
+        "definition": "Database Management Systemの略。データを永続的に管理・検索・更新するソフトウェアシステム。",
+        "domain": "database",
+        "keywords": [
+          "データベース",
+          "SQL",
+          "RDBMS",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ODBMS",
+    "senses": [
+      {
+        "definition": "Object Database Management Systemの略。オブジェクトを直接格納・管理するデータベース管理システム。",
+        "domain": "database",
+        "keywords": [
+          "オブジェクト",
+          "データベース",
+          "OOP",
+          "永続化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ORDBMS",
+    "senses": [
+      {
+        "definition": "Object-Relational DBMSの略。リレーショナルモデルにオブジェクト指向機能を追加したDBMS。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "オブジェクト",
+          "SQL",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "インメモリDBMS",
+    "reading": "いんめもりでぃびーえむえす",
+    "senses": [
+      {
+        "definition": "データをディスクではなくメモリ上に格納するDBMS。高速な読み書きが可能。",
+        "domain": "database",
+        "keywords": [
+          "メモリ",
+          "高速",
+          "DBMS",
+          "キャッシュ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "分散KVS",
+    "reading": "ぶんさんけーぶいえす",
+    "senses": [
+      {
+        "definition": "キーと値でデータを管理し複数ノードに分散して高可用性・高スループットを実現するデータストア。",
+        "domain": "database",
+        "keywords": [
+          "KVS",
+          "分散",
+          "NoSQL",
+          "スケール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データベース物理設計",
+    "reading": "でーたべーすぶつりせっけい",
+    "senses": [
+      {
+        "definition": "インデックス・パーティション・テーブルスペースなどDBMSの実装詳細を設計する工程。",
+        "domain": "database",
+        "keywords": [
+          "物理設計",
+          "インデックス",
+          "DB",
+          "チューニング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ディスクサイジング",
+    "reading": "でぃすくさいじんぐ",
+    "senses": [
+      {
+        "definition": "データ量・成長率・バックアップを考慮してストレージ容量を見積もること。",
+        "domain": "architecture",
+        "keywords": [
+          "ストレージ",
+          "容量",
+          "見積もり",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "メモリサイジング",
+    "reading": "めもりさいじんぐ",
+    "senses": [
+      {
+        "definition": "アプリケーション・DBMSのメモリ使用量を見積もりサーバメモリ容量を決定すること。",
+        "domain": "architecture",
+        "keywords": [
+          "メモリ",
+          "容量",
+          "見積もり",
+          "性能"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

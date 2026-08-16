@@ -1,0 +1,1908 @@
+[
+  {
+    "term": "HTML5",
+    "senses": [
+      {
+        "definition": "HTMLの第5版仕様。セマンティック要素、マルチメディア対応、Canvas・SVG・Web Storageなどの新APIを標準化し、プラグインなしでリッチなWebアプリを構築できる基盤を整えた。",
+        "domain": "html",
+        "keywords": [
+          "マークアップ",
+          "セマンティック",
+          "ブラウザ",
+          "標準",
+          "Web API"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTML 5",
+      "HTML Living Standard"
+    ]
+  },
+  {
+    "term": "セマンティックマークアップ",
+    "reading": "せまんてぃっくまーくあっぷ",
+    "senses": [
+      {
+        "definition": "HTMLタグが持つ意味（セマンティクス）に従って文書構造を記述する手法。header・main・article・sectionなどの要素を適切に使うことでアクセシビリティとSEOを向上させる。",
+        "domain": "html",
+        "keywords": [
+          "HTML5",
+          "アクセシビリティ",
+          "SEO",
+          "要素",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": [
+      "Semantic Markup"
+    ]
+  },
+  {
+    "term": "Web Components",
+    "senses": [
+      {
+        "definition": "Custom Elements・Shadow DOM・HTMLテンプレートを組み合わせて再利用可能なカスタムUI要素をネイティブブラウザ機能で実装する標準仕様の総称。フレームワーク非依存で動作する。",
+        "domain": "web",
+        "keywords": [
+          "カスタム要素",
+          "Shadow DOM",
+          "テンプレート",
+          "再利用",
+          "ブラウザ標準"
+        ]
+      }
+    ],
+    "aliases": [
+      "ウェブコンポーネント"
+    ]
+  },
+  {
+    "term": "Shadow DOM",
+    "senses": [
+      {
+        "definition": "DOM要素に付属するカプセル化されたサブツリー。スタイルとマークアップを外部のCSSやJavaScriptから隔離し、Web Componentsの実装で内部実装を隠蔽するために使用する。",
+        "domain": "web",
+        "keywords": [
+          "カプセル化",
+          "Web Components",
+          "スタイル隔離",
+          "ホスト要素",
+          "スロット"
+        ]
+      }
+    ],
+    "aliases": [
+      "シャドウDOM",
+      "Shadow Root"
+    ]
+  },
+  {
+    "term": "Canvas API",
+    "senses": [
+      {
+        "definition": "HTMLの`<canvas>`要素上でJavaScriptを使って2Dグラフィックスを描画するAPI。図形・画像合成・ピクセル操作が可能で、ゲームやデータビジュアライゼーションに広く利用される。",
+        "domain": "web-api",
+        "keywords": [
+          "2D描画",
+          "グラフィックス",
+          "ビジュアライゼーション",
+          "ゲーム",
+          "ピクセル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Canvas 2D API",
+      "CanvasRenderingContext2D"
+    ]
+  },
+  {
+    "term": "SVG",
+    "senses": [
+      {
+        "definition": "Scalable Vector Graphicsの略。XMLベースのベクター画像フォーマットで、解像度に依存せず拡大縮小できる。HTMLに埋め込んでCSSやJavaScriptで操作でき、アイコンやチャートに利用される。",
+        "domain": "web",
+        "keywords": [
+          "ベクター",
+          "グラフィックス",
+          "XML",
+          "スケーラブル",
+          "アニメーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Scalable Vector Graphics",
+      "スケーラブルベクターグラフィックス"
+    ]
+  },
+  {
+    "term": "Web Workers",
+    "senses": [
+      {
+        "definition": "ブラウザのメインスレッドとは別のバックグラウンドスレッドでJavaScriptを実行する仕組み。UIをブロックせずに重い計算処理を行え、postMessageでメインスレッドと通信する。",
+        "domain": "web-api",
+        "keywords": [
+          "マルチスレッド",
+          "バックグラウンド処理",
+          "メインスレッド",
+          "非同期",
+          "postMessage"
+        ]
+      }
+    ],
+    "aliases": [
+      "ウェブワーカー",
+      "Dedicated Worker"
+    ]
+  },
+  {
+    "term": "localStorage",
+    "senses": [
+      {
+        "definition": "ブラウザが提供するキーバリュー型のクライアントサイドストレージ。オリジンごとに永続的にデータを保存でき、タブやウィンドウ間で共有される。容量は通常5〜10MB程度。",
+        "domain": "web-api",
+        "keywords": [
+          "ブラウザストレージ",
+          "永続化",
+          "オリジン",
+          "キーバリュー",
+          "Web Storage"
+        ]
+      }
+    ],
+    "aliases": [
+      "Local Storage"
+    ]
+  },
+  {
+    "term": "Fetch API",
+    "senses": [
+      {
+        "definition": "ブラウザ標準のHTTPリクエストAPI。XMLHttpRequestの後継で、Promiseベースのインターフェースを持ち、リクエストとレスポンスをRequestオブジェクトとResponseオブジェクトで表現する。",
+        "domain": "web-api",
+        "keywords": [
+          "HTTP",
+          "非同期",
+          "Promise",
+          "XMLHttpRequest",
+          "ネットワーク"
+        ]
+      }
+    ],
+    "aliases": [
+      "フェッチAPI"
+    ]
+  },
+  {
+    "term": "History API",
+    "senses": [
+      {
+        "definition": "ブラウザの閲覧履歴を操作するWeb API。`pushState`・`replaceState`でURLを変更しページ遷移なしに履歴エントリを追加でき、SPAのルーティング実装の基盤となる。",
+        "domain": "web-api",
+        "keywords": [
+          "SPA",
+          "ルーティング",
+          "URL",
+          "ブラウザ履歴",
+          "pushState"
+        ]
+      }
+    ],
+    "aliases": [
+      "History Interface",
+      "Web History API"
+    ]
+  },
+  {
+    "term": "Geolocation API",
+    "senses": [
+      {
+        "definition": "ユーザーの現在位置（緯度・経度）をブラウザから取得するWeb API。デバイスのGPSやWi-Fi位置情報を利用し、ユーザーの許可を得た後に位置データを提供する。",
+        "domain": "web-api",
+        "keywords": [
+          "位置情報",
+          "GPS",
+          "緯度経度",
+          "ブラウザ",
+          "プライバシー"
+        ]
+      }
+    ],
+    "aliases": [
+      "ジオロケーション API",
+      "Geolocation Interface"
+    ]
+  },
+  {
+    "term": "Web Audio API",
+    "senses": [
+      {
+        "definition": "ブラウザでオーディオを生成・処理・分析するための高度なAPI。AudioContextを中心にオーディオノードを接続するグラフ構造でエフェクト処理や音楽生成、波形解析が可能。",
+        "domain": "web-api",
+        "keywords": [
+          "オーディオ",
+          "AudioContext",
+          "WebApp",
+          "サウンド",
+          "リアルタイム"
+        ]
+      }
+    ],
+    "aliases": [
+      "ウェブオーディオAPI",
+      "AudioContext"
+    ]
+  },
+  {
+    "term": "WebGL",
+    "senses": [
+      {
+        "definition": "ブラウザ上でOpenGL ES 2.0/3.0ベースの3DグラフィックスをGPUを用いてレンダリングするWeb API。`<canvas>`要素と組み合わせてゲームや3Dビジュアライゼーションを実現する。",
+        "domain": "web-api",
+        "keywords": [
+          "3D",
+          "GPU",
+          "グラフィックス",
+          "シェーダー",
+          "レンダリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Graphics Library",
+      "WebGL 2.0"
+    ]
+  },
+  {
+    "term": "Intersection Observer",
+    "senses": [
+      {
+        "definition": "対象要素がビューポートや指定コンテナと交差した際に非同期でコールバックを呼び出すWeb API。スクロール連動のアニメーションや遅延読み込みを効率よく実装できる。",
+        "domain": "web-api",
+        "keywords": [
+          "スクロール",
+          "遅延読み込み",
+          "ビューポート",
+          "パフォーマンス",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": [
+      "IntersectionObserver",
+      "交差オブザーバー"
+    ]
+  },
+  {
+    "term": "Mutation Observer",
+    "senses": [
+      {
+        "definition": "DOMツリーへの変更（要素の追加・削除・属性変更など）を非同期で監視するWeb API。deprecated になった MutationEvent の代替で、パフォーマンスへの影響が小さい。",
+        "domain": "web-api",
+        "keywords": [
+          "DOM監視",
+          "変更検知",
+          "非同期",
+          "MutationObserver",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "MutationObserver",
+      "ミューテーションオブザーバー"
+    ]
+  },
+  {
+    "term": "ResizeObserver",
+    "senses": [
+      {
+        "definition": "DOM要素のサイズ変化を効率的に監視するWeb API。ウィンドウのresizeイベントと違い要素単位で変化を検知でき、レスポンシブなコンポーネント実装に利用される。",
+        "domain": "web-api",
+        "keywords": [
+          "サイズ変化",
+          "DOM",
+          "レスポンシブ",
+          "監視",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "リサイズオブザーバー"
+    ]
+  },
+  {
+    "term": "Custom Elements",
+    "senses": [
+      {
+        "definition": "Web Components仕様の一部で、独自のHTMLタグを定義し登録する機能。`customElements.define()`でクラスをタグ名に紐付け、ブラウザネイティブのコンポーネントとして動作させる。",
+        "domain": "web",
+        "keywords": [
+          "Web Components",
+          "カスタムタグ",
+          "HTMLElement",
+          "定義",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": [
+      "カスタム要素",
+      "Custom Element Registry"
+    ]
+  },
+  {
+    "term": "requestAnimationFrame",
+    "senses": [
+      {
+        "definition": "ブラウザの次の描画フレームに合わせてコールバックを実行するWeb API。`setInterval`より滑らかなアニメーションを実現でき、非表示タブでは自動的に停止してCPU消費を抑える。",
+        "domain": "web-api",
+        "keywords": [
+          "アニメーション",
+          "描画",
+          "60fps",
+          "パフォーマンス",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "rAF",
+      "アニメーションフレーム"
+    ]
+  },
+  {
+    "term": "Web Animations API",
+    "senses": [
+      {
+        "definition": "CSSアニメーションをJavaScriptで生成・制御するブラウザ標準API。`element.animate()`でキーフレームを指定し、再生速度や逆再生、一時停止をプログラムから操作できる。",
+        "domain": "web-api",
+        "keywords": [
+          "アニメーション",
+          "JavaScript",
+          "CSSアニメーション",
+          "キーフレーム",
+          "制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "WAAPI",
+      "ウェブアニメーションAPI"
+    ]
+  },
+  {
+    "term": "Clipboard API",
+    "senses": [
+      {
+        "definition": "クリップボードへの読み書きをブラウザから行うWeb API。`navigator.clipboard.writeText()`などを使い、テキストや画像をコピー・ペーストできる。ユーザー操作または権限許可が必要。",
+        "domain": "web-api",
+        "keywords": [
+          "クリップボード",
+          "コピー",
+          "ペースト",
+          "権限",
+          "navigator"
+        ]
+      }
+    ],
+    "aliases": [
+      "クリップボードAPI"
+    ]
+  },
+  {
+    "term": "Drag and Drop API",
+    "senses": [
+      {
+        "definition": "HTMLのドラッグ＆ドロップ操作をネイティブに扱うブラウザAPI。`draggable`属性と`dragstart`・`drop`などのイベントを組み合わせ、要素の並べ替えやファイル投入を実装する。",
+        "domain": "web-api",
+        "keywords": [
+          "ドラッグ",
+          "ドロップ",
+          "イベント",
+          "ファイル",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTML Drag and Drop API",
+      "ドラッグアンドドロップ"
+    ]
+  },
+  {
+    "term": "File API",
+    "senses": [
+      {
+        "definition": "ユーザーが選択したファイルをJavaScriptで読み取るWeb API。FileオブジェクトとFileReaderを使い、テキスト・バイナリ・DataURLとしてファイルの内容にアクセスできる。",
+        "domain": "web-api",
+        "keywords": [
+          "ファイル",
+          "FileReader",
+          "ブラウザ",
+          "アップロード",
+          "バイナリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "File Web API",
+      "ファイルAPI"
+    ]
+  },
+  {
+    "term": "FormData",
+    "senses": [
+      {
+        "definition": "HTMLフォームのデータをキーバリュー形式で表すオブジェクト。ファイルを含むマルチパートデータを簡単に構築でき、Fetch APIと組み合わせてファイルアップロードを実装する。",
+        "domain": "web-api",
+        "keywords": [
+          "フォーム",
+          "マルチパート",
+          "ファイルアップロード",
+          "Fetch",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": [
+      "FormData API"
+    ]
+  },
+  {
+    "term": "Blob",
+    "senses": [
+      {
+        "definition": "Binary Large Objectの略。ブラウザで任意のバイナリデータを表すオブジェクト。画像・動画・テキストなどのデータをメモリ上で扱い、URL.createObjectURL()でURLに変換して利用できる。",
+        "domain": "web-api",
+        "keywords": [
+          "バイナリ",
+          "ファイル",
+          "URL",
+          "メモリ",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Binary Large Object",
+      "ブロブ"
+    ]
+  },
+  {
+    "term": "URL API",
+    "senses": [
+      {
+        "definition": "URLを解析・構築するブラウザ標準API。`new URL()`でURLオブジェクトを生成し、`searchParams`でクエリパラメータをセーフに操作できる。`URL.createObjectURL()`でBlobをURLに変換する機能も持つ。",
+        "domain": "web-api",
+        "keywords": [
+          "URL",
+          "クエリパラメータ",
+          "解析",
+          "構築",
+          "Blob"
+        ]
+      }
+    ],
+    "aliases": [
+      "URL Interface",
+      "URLSearchParams"
+    ]
+  },
+  {
+    "term": "SharedArrayBuffer",
+    "senses": [
+      {
+        "definition": "複数のWeb Workerやメインスレッドでゼロコピーのバイナリデータを共有するためのブラウザAPI。Atomicsと組み合わせてスレッド間の同期処理を実装できる。Cross-Origin Isolationが必要。",
+        "domain": "web-api",
+        "keywords": [
+          "共有メモリ",
+          "Web Workers",
+          "Atomics",
+          "スレッド",
+          "Cross-Origin Isolation"
+        ]
+      }
+    ],
+    "aliases": [
+      "共有配列バッファ"
+    ]
+  },
+  {
+    "term": "Performance API",
+    "senses": [
+      {
+        "definition": "ページ読み込みやユーザーマーク、リソース取得のタイミングをブラウザから計測するWeb API。`performance.now()`や`PerformanceObserver`でRUM(リアルユーザーモニタリング)データを収集できる。",
+        "domain": "web-api",
+        "keywords": [
+          "パフォーマンス",
+          "計測",
+          "RUM",
+          "PerformanceObserver",
+          "タイミング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Navigation Timing API",
+      "User Timing API"
+    ]
+  },
+  {
+    "term": "Navigation API",
+    "senses": [
+      {
+        "definition": "SPAでの画面遷移をネイティブにインターセプト・制御する比較的新しいWeb API。`navigation.navigate()`や`navigate`イベントで遷移をキャッチし、ブラウザの戻る・進むボタンと統合した履歴管理ができる。",
+        "domain": "web-api",
+        "keywords": [
+          "SPA",
+          "ルーティング",
+          "ナビゲーション",
+          "履歴",
+          "遷移制御"
+        ]
+      }
+    ],
+    "aliases": [
+      "Navigation Interface",
+      "App History API"
+    ]
+  },
+  {
+    "term": "View Transitions API",
+    "senses": [
+      {
+        "definition": "ページ遷移や状態変化時にスムーズなクロスフェードなどのアニメーションを実現するブラウザAPI。`document.startViewTransition()`でDOM更新を包むだけでアニメーションが適用される。",
+        "domain": "web-api",
+        "keywords": [
+          "アニメーション",
+          "遷移",
+          "SPA",
+          "MPA",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": [
+      "ビュートランジションAPI"
+    ]
+  },
+  {
+    "term": "Popover API",
+    "senses": [
+      {
+        "definition": "ツールチップやドロップダウンなどのポップオーバーUIをHTMLネイティブで実装するブラウザAPI。`popover`属性と`popovertarget`属性を使いJavaScript最小限でLight dismiss挙動を実現できる。",
+        "domain": "web-api",
+        "keywords": [
+          "ポップオーバー",
+          "UI",
+          "ツールチップ",
+          "属性",
+          "アクセシビリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Popover",
+      "ポップオーバーAPI"
+    ]
+  },
+  {
+    "term": "dialog要素",
+    "reading": "だいあろぐようそ",
+    "senses": [
+      {
+        "definition": "HTMLネイティブのモーダルおよびノンモーダルダイアログを表す要素。`showModal()`でモーダル表示・フォーカストラップを実現し、`::backdrop`疑似要素で背景のスタイリングも可能。",
+        "domain": "html",
+        "keywords": [
+          "モーダル",
+          "ダイアログ",
+          "HTML",
+          "アクセシビリティ",
+          "フォーカス"
+        ]
+      }
+    ],
+    "aliases": [
+      "<dialog>",
+      "HTMLDialogElement"
+    ]
+  },
+  {
+    "term": "details要素",
+    "reading": "でぃてぃるずようそ",
+    "senses": [
+      {
+        "definition": "開閉可能なディスクロージャーウィジェットを実装するHTML要素。`<summary>`子要素がクリックラベルになり、JavaScriptなしでアコーディオンUIを実現できる。`open`属性で初期展開状態を設定する。",
+        "domain": "html",
+        "keywords": [
+          "アコーディオン",
+          "折りたたみ",
+          "HTML",
+          "summary",
+          "ウィジェット"
+        ]
+      }
+    ],
+    "aliases": [
+      "<details>",
+      "詳細要素"
+    ]
+  },
+  {
+    "term": "summary要素",
+    "reading": "さまりーようそ",
+    "senses": [
+      {
+        "definition": "`<details>`要素の見出し・トグルボタンとして機能するHTML要素。クリックで詳細コンテンツの表示・非表示を切り替える。`details`の最初の子要素として配置する必要がある。",
+        "domain": "html",
+        "keywords": [
+          "details",
+          "アコーディオン",
+          "トグル",
+          "HTML",
+          "ウィジェット"
+        ]
+      }
+    ],
+    "aliases": [
+      "<summary>"
+    ]
+  },
+  {
+    "term": "picture要素",
+    "reading": "ぴくちゃーようそ",
+    "senses": [
+      {
+        "definition": "ブラウザが最適な画像ソースを選択できるようにする`<img>`のラッパーHTML要素。`<source>`子要素でメディアクエリやフォーマット(WebP/AVIFなど)ごとに代替画像を指定し、レスポンシブ画像を実現する。",
+        "domain": "html",
+        "keywords": [
+          "レスポンシブ画像",
+          "WebP",
+          "AVIF",
+          "メディアクエリ",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "<picture>",
+      "ピクチャー要素"
+    ]
+  },
+  {
+    "term": "source要素",
+    "reading": "そーすようそ",
+    "senses": [
+      {
+        "definition": "`<picture>`・`<video>`・`<audio>`要素内で複数のメディアリソースを指定するHTML要素。ブラウザはサポートするフォーマットや条件に合う最初の`<source>`を選択する。",
+        "domain": "html",
+        "keywords": [
+          "メディア",
+          "フォールバック",
+          "video",
+          "audio",
+          "picture"
+        ]
+      }
+    ],
+    "aliases": [
+      "<source>"
+    ]
+  },
+  {
+    "term": "meta viewport",
+    "senses": [
+      {
+        "definition": "`<meta name=\"viewport\">`タグでブラウザのビューポートの幅やスケールを制御する設定。`width=device-width, initial-scale=1`を指定することでレスポンシブデザインの前提となるピクセル比を合わせる。",
+        "domain": "html",
+        "keywords": [
+          "レスポンシブ",
+          "ビューポート",
+          "モバイル",
+          "スケール",
+          "meta"
+        ]
+      }
+    ],
+    "aliases": [
+      "viewport meta tag",
+      "ビューポートメタタグ"
+    ]
+  },
+  {
+    "term": "Content Security Policy",
+    "senses": [
+      {
+        "definition": "Webページが読み込むリソースのソースを制限するブラウザのセキュリティ機構。HTTPヘッダーまたはmeta要素で設定し、XSS攻撃やデータインジェクションのリスクを低減する。",
+        "domain": "web",
+        "keywords": [
+          "セキュリティ",
+          "XSS",
+          "HTTPヘッダー",
+          "ポリシー",
+          "リソース制限"
+        ]
+      }
+    ],
+    "aliases": [
+      "コンテンツセキュリティポリシー"
+    ]
+  },
+  {
+    "term": "Web Storage",
+    "senses": [
+      {
+        "definition": "ブラウザがクライアント側にデータを永続または一時的に保存するためのAPIの総称。localStorageとsessionStorageの2種類があり、どちらも文字列のキーバリュー形式でデータを管理する。",
+        "domain": "web-api",
+        "keywords": [
+          "localStorage",
+          "sessionStorage",
+          "クライアントサイド",
+          "ストレージ",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Storage API",
+      "ウェブストレージ"
+    ]
+  },
+  {
+    "term": "Broadcast Channel",
+    "senses": [
+      {
+        "definition": "同じオリジンの複数のブラウザコンテキスト（タブ、ウィンドウ、iframe）間でメッセージをブロードキャストするWeb API。タブ間の状態同期やサインアウト伝播などに利用する。",
+        "domain": "web-api",
+        "keywords": [
+          "タブ間通信",
+          "メッセージング",
+          "オリジン",
+          "同期",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "BroadcastChannel",
+      "BroadcastChannel API"
+    ]
+  },
+  {
+    "term": "MessageChannel",
+    "senses": [
+      {
+        "definition": "2つのポートを持つ双方向通信チャンネルを作成するWeb API。iframeや別のWorkerとpostMessageで専用の通信路を確立する際に使い、メッセージの混線を防げる。",
+        "domain": "web-api",
+        "keywords": [
+          "通信",
+          "iframe",
+          "Worker",
+          "postMessage",
+          "双方向"
+        ]
+      }
+    ],
+    "aliases": [
+      "MessageChannel API",
+      "メッセージチャンネル"
+    ]
+  },
+  {
+    "term": "postMessage",
+    "senses": [
+      {
+        "definition": "異なるオリジンのウィンドウ、iframe、Web Worker間でメッセージを安全に送受信するブラウザAPI。送信先のオリジンを明示的に指定することでセキュリティを確保する。",
+        "domain": "web-api",
+        "keywords": [
+          "クロスオリジン",
+          "通信",
+          "iframe",
+          "Worker",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "window.postMessage",
+      "postMessage API"
+    ]
+  },
+  {
+    "term": "iframe sandboxing",
+    "reading": "いふれーむさんどぼっくしんぐ",
+    "senses": [
+      {
+        "definition": "`<iframe>`の`sandbox`属性を使って埋め込みコンテンツの権限を制限するセキュリティ機能。スクリプト実行・フォーム送信・ポップアップなどを個別に許可または禁止できる。",
+        "domain": "web",
+        "keywords": [
+          "iframe",
+          "セキュリティ",
+          "sandbox属性",
+          "権限",
+          "埋め込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "iframe sandbox",
+      "サンドボックス"
+    ]
+  },
+  {
+    "term": "template要素",
+    "reading": "てんぷれーとようそ",
+    "senses": [
+      {
+        "definition": "DOMに挿入されず描画もされないHTMLのコンテンツを宣言的に定義するHTML要素。`content`プロパティから取得したDocumentFragmentをクローンして動的にDOMへ挿入する。Web Componentsで多用される。",
+        "domain": "html",
+        "keywords": [
+          "Web Components",
+          "DocumentFragment",
+          "クローン",
+          "テンプレート",
+          "HTML"
+        ]
+      }
+    ],
+    "aliases": [
+      "<template>",
+      "HTMLTemplateElement"
+    ]
+  },
+  {
+    "term": "slot要素",
+    "reading": "すろっとようそ",
+    "senses": [
+      {
+        "definition": "Shadow DOM内でホスト要素から渡されたコンテンツを受け取るプレースホルダーHTML要素。名前付きスロット（`name`属性）と匿名スロットがあり、Web Componentsのコンテンツ挿入ポイントとして機能する。",
+        "domain": "html",
+        "keywords": [
+          "Shadow DOM",
+          "Web Components",
+          "スロット",
+          "コンテンツ投影",
+          "HTML"
+        ]
+      }
+    ],
+    "aliases": [
+      "<slot>",
+      "スロット"
+    ]
+  },
+  {
+    "term": "CustomEvent",
+    "senses": [
+      {
+        "definition": "開発者が独自の型名とカスタムデータ（`detail`プロパティ）を持つDOMイベントを作成するインターフェース。コンポーネント間の疎結合な通信やカスタムDOM通知に利用する。",
+        "domain": "web-api",
+        "keywords": [
+          "イベント",
+          "DOM",
+          "カスタム",
+          "通信",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "カスタムイベント",
+      "CustomEvent API"
+    ]
+  },
+  {
+    "term": "EventSource",
+    "senses": [
+      {
+        "definition": "サーバーからクライアントへのServer-Sent Events（SSE）を受信するためのブラウザAPI。HTTPコネクションを維持してサーバーからのプッシュ型テキストイベントをリアルタイムに受け取れる。",
+        "domain": "web-api",
+        "keywords": [
+          "SSE",
+          "サーバープッシュ",
+          "リアルタイム",
+          "HTTP",
+          "ストリーミング"
+        ]
+      }
+    ],
+    "aliases": [
+      "SSE Client",
+      "EventSource API"
+    ]
+  },
+  {
+    "term": "Server-Sent Events",
+    "senses": [
+      {
+        "definition": "HTTPを使ってサーバーからクライアントへ一方向のリアルタイムイベントストリームを送るWeb標準技術。WebSocketより軽量でHTTPキャッシュや再接続が自動化されており、通知・ログ配信に適する。",
+        "domain": "web",
+        "keywords": [
+          "リアルタイム",
+          "サーバープッシュ",
+          "EventSource",
+          "ストリーミング",
+          "HTTP"
+        ]
+      }
+    ],
+    "aliases": [
+      "サーバー送信イベント"
+    ]
+  },
+  {
+    "term": "WebRTC",
+    "senses": [
+      {
+        "definition": "ブラウザ間でプラグインなしにリアルタイムの音声・映像・データ通信を実現するWeb標準技術。P2PのピアコネクションとNAT越えのためのICE/STUNプロトコルを使用する。",
+        "domain": "web",
+        "keywords": [
+          "P2P",
+          "音声通話",
+          "ビデオ通話",
+          "リアルタイム",
+          "ピアコネクション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Real-Time Communication",
+      "ウェブRTC"
+    ]
+  },
+  {
+    "term": "MediaDevices API",
+    "senses": [
+      {
+        "definition": "カメラ・マイク・画面などのメディアデバイスにアクセスするWeb API。`navigator.mediaDevices.getUserMedia()`でストリームを取得し、WebRTCや録音・録画アプリを構築できる。",
+        "domain": "web-api",
+        "keywords": [
+          "カメラ",
+          "マイク",
+          "MediaStream",
+          "getUserMedia",
+          "WebRTC"
+        ]
+      }
+    ],
+    "aliases": [
+      "getUserMedia",
+      "MediaDevices Interface"
+    ]
+  },
+  {
+    "term": "Notifications API",
+    "senses": [
+      {
+        "definition": "Webアプリからオペレーティングシステムのネイティブ通知を表示するブラウザAPI。ユーザーの許可を取得後にService Workerと組み合わせてバックグラウンド通知を実現できる。",
+        "domain": "web-api",
+        "keywords": [
+          "プッシュ通知",
+          "Service Worker",
+          "PWA",
+          "許可",
+          "ネイティブ通知"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Notifications API",
+      "通知API"
+    ]
+  },
+  {
+    "term": "Push API",
+    "senses": [
+      {
+        "definition": "Service Workerと連携してサーバーからブラウザへプッシュメッセージを送受信するWeb API。アプリが非アクティブなときもプッシュサーバー経由で通知を受け取れ、PWAのエンゲージメント向上に使われる。",
+        "domain": "web-api",
+        "keywords": [
+          "プッシュ通知",
+          "Service Worker",
+          "PWA",
+          "バックグラウンド",
+          "サブスクリプション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Push API",
+      "プッシュAPI"
+    ]
+  },
+  {
+    "term": "Cache API",
+    "senses": [
+      {
+        "definition": "Service Workerが使用するネットワークリクエストとレスポンスのペアを保存・管理するストレージAPI。オフライン対応やキャッシュ戦略(Cache-First、Network-Firstなど)の実装基盤となる。",
+        "domain": "web-api",
+        "keywords": [
+          "Service Worker",
+          "オフライン",
+          "キャッシュ",
+          "PWA",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "CacheStorage",
+      "Cache Storage API"
+    ]
+  },
+  {
+    "term": "Payment Request API",
+    "senses": [
+      {
+        "definition": "ブラウザネイティブの支払いUIを通じてチェックアウトフローを標準化するWeb API。クレジットカード情報やApple Pay・Google Payなどのデジタルウォレットを統一インターフェースで扱える。",
+        "domain": "web-api",
+        "keywords": [
+          "決済",
+          "支払い",
+          "UX",
+          "デジタルウォレット",
+          "チェックアウト"
+        ]
+      }
+    ],
+    "aliases": [
+      "Payment Request",
+      "決済API"
+    ]
+  },
+  {
+    "term": "Web Share API",
+    "senses": [
+      {
+        "definition": "WebアプリからネイティブのOS共有シートを呼び出してURLやテキスト・ファイルを他のアプリと共有するブラウザAPI。モバイルSNSシェアボタンなどをネイティブ連携で実装できる。",
+        "domain": "web-api",
+        "keywords": [
+          "共有",
+          "OS連携",
+          "モバイル",
+          "PWA",
+          "navigator"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Share",
+      "シェアAPI"
+    ]
+  },
+  {
+    "term": "Vibration API",
+    "senses": [
+      {
+        "definition": "デバイスのバイブレーション機能をWebアプリから制御するブラウザAPI。`navigator.vibrate()`でバイブレーションのパターンを指定し、ゲームやフォームバリデーションの触覚フィードバックに使う。",
+        "domain": "web-api",
+        "keywords": [
+          "バイブレーション",
+          "触覚",
+          "モバイル",
+          "navigator",
+          "フィードバック"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vibration",
+      "バイブレーションAPI"
+    ]
+  },
+  {
+    "term": "Fullscreen API",
+    "senses": [
+      {
+        "definition": "Webアプリの特定要素をフルスクリーン表示に切り替えるブラウザAPI。`element.requestFullscreen()`で動画プレーヤーやゲームキャンバスをフルスクリーン化し、ユーザー操作をトリガーにする必要がある。",
+        "domain": "web-api",
+        "keywords": [
+          "フルスクリーン",
+          "動画",
+          "ゲーム",
+          "画面",
+          "UX"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fullscreen",
+      "フルスクリーンAPI"
+    ]
+  },
+  {
+    "term": "Pointer Events",
+    "senses": [
+      {
+        "definition": "マウス・タッチ・スタイラスなど複数の入力デバイスを統一的に処理するWeb標準のイベントモデル。`pointerdown`・`pointermove`・`pointerup`でデバイス種別を問わず入力を扱える。",
+        "domain": "web-api",
+        "keywords": [
+          "タッチ",
+          "マウス",
+          "スタイラス",
+          "イベント",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pointer Events API",
+      "ポインターイベント"
+    ]
+  },
+  {
+    "term": "Touch Events",
+    "senses": [
+      {
+        "definition": "タッチスクリーン入力をブラウザで処理するイベントAPI。`touchstart`・`touchmove`・`touchend`でマルチタッチジェスチャーを実装できる。モバイルブラウザで広くサポートされている。",
+        "domain": "web-api",
+        "keywords": [
+          "タッチ",
+          "モバイル",
+          "ジェスチャー",
+          "イベント",
+          "マルチタッチ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Touch API",
+      "タッチイベント"
+    ]
+  },
+  {
+    "term": "Gamepad API",
+    "senses": [
+      {
+        "definition": "ゲームパッドやジョイスティックのボタン・軸の状態をブラウザから読み取るWeb API。`navigator.getGamepads()`でデバイス一覧を取得し、requestAnimationFrameのループ内でポーリングして使う。",
+        "domain": "web-api",
+        "keywords": [
+          "ゲームパッド",
+          "ジョイスティック",
+          "ゲーム",
+          "入力",
+          "コントローラー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gamepad Interface",
+      "ゲームパッドAPI"
+    ]
+  },
+  {
+    "term": "Web Bluetooth",
+    "senses": [
+      {
+        "definition": "WebアプリからBluetoothデバイスと通信するブラウザAPI。HTTPS環境でユーザーの許可後にBLEデバイスとGATTプロファイル経由でデータを読み書きできる。ChromeおよびChromiumベースブラウザが主なサポート。",
+        "domain": "web-api",
+        "keywords": [
+          "Bluetooth",
+          "BLE",
+          "IoT",
+          "デバイス",
+          "navigator"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Bluetooth API",
+      "ウェブブルートゥース"
+    ]
+  },
+  {
+    "term": "Web USB",
+    "senses": [
+      {
+        "definition": "WebアプリからUSBデバイスと直接通信するブラウザAPI。HTTPS環境でユーザー許可のもとマイコンやカスタムデバイスとデータを交換でき、ドライバ不要のデバイス連携を実現する。",
+        "domain": "web-api",
+        "keywords": [
+          "USB",
+          "デバイス",
+          "IoT",
+          "navigator",
+          "HTTPS"
+        ]
+      }
+    ],
+    "aliases": [
+      "WebUSB API",
+      "ウェブUSB"
+    ]
+  },
+  {
+    "term": "Web Serial",
+    "senses": [
+      {
+        "definition": "WebアプリからシリアルポートやUSB-シリアル変換アダプタと通信するブラウザAPI。Arduinoなどのマイコンとのシリアル通信をブラウザだけで実現でき、IoTプロトタイピングに活用される。",
+        "domain": "web-api",
+        "keywords": [
+          "シリアル通信",
+          "Arduino",
+          "IoT",
+          "マイコン",
+          "navigator"
+        ]
+      }
+    ],
+    "aliases": [
+      "WebSerial API",
+      "ウェブシリアル"
+    ]
+  },
+  {
+    "term": "File System Access API",
+    "senses": [
+      {
+        "definition": "ユーザーのローカルファイルシステムへのアクセスをブラウザから可能にするWeb API。ファイルを選択・読み書き・ディレクトリを開く操作をネイティブダイアログ経由で安全に実行できる。",
+        "domain": "web-api",
+        "keywords": [
+          "ファイルシステム",
+          "ローカルファイル",
+          "読み書き",
+          "picker",
+          "OPFS"
+        ]
+      }
+    ],
+    "aliases": [
+      "File System Access",
+      "ファイルシステムアクセスAPI"
+    ]
+  },
+  {
+    "term": "Origin Private File System",
+    "senses": [
+      {
+        "definition": "ブラウザがオリジンごとに提供するサンドボックス化されたファイルシステム領域。File System Access APIの一部で、ユーザーには見えないがSQLiteデータベースファイルなどの高速なファイル操作に使われる。",
+        "domain": "web-api",
+        "keywords": [
+          "OPFS",
+          "ファイルシステム",
+          "サンドボックス",
+          "IndexedDB",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "OPFS",
+      "プライベートファイルシステム"
+    ]
+  },
+  {
+    "term": "Streams API",
+    "senses": [
+      {
+        "definition": "データを小さなチャンクに分けて逐次処理するブラウザのストリーミングAPI。ReadableStream・WritableStream・TransformStreamで大容量データや継続的なデータを効率的に扱う。Fetch APIのレスポンスボディもReadableStreamで提供される。",
+        "domain": "web-api",
+        "keywords": [
+          "ストリーム",
+          "チャンク",
+          "ReadableStream",
+          "Fetch",
+          "バックプレッシャー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Streams",
+      "ReadableStream"
+    ]
+  },
+  {
+    "term": "CompressionStream",
+    "senses": [
+      {
+        "definition": "ブラウザ標準のデータ圧縮・展開TransformStream。gzipやdeflateアルゴリズムでデータをストリーム形式で圧縮・解凍でき、サードパーティライブラリなしに圧縮処理を実装できる。",
+        "domain": "web-api",
+        "keywords": [
+          "圧縮",
+          "gzip",
+          "deflate",
+          "TransformStream",
+          "バイナリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "DecompressionStream",
+      "CompressionStream API"
+    ]
+  },
+  {
+    "term": "TextEncoder",
+    "senses": [
+      {
+        "definition": "文字列をUTF-8のバイト列（Uint8Array）にエンコードするブラウザ標準API。バイナリ処理やStreams APIとの連携でテキストデータを効率的に変換する際に使用する。",
+        "domain": "web-api",
+        "keywords": [
+          "文字列",
+          "UTF-8",
+          "バイト列",
+          "エンコード",
+          "バイナリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "TextEncoder API"
+    ]
+  },
+  {
+    "term": "TextDecoder",
+    "senses": [
+      {
+        "definition": "バイト列（ArrayBuffer・Uint8Array）を文字列にデコードするブラウザ標準API。UTF-8以外のエンコーディング指定も可能で、バイナリプロトコルやファイル解析時のテキスト変換に利用する。",
+        "domain": "web-api",
+        "keywords": [
+          "デコード",
+          "文字列",
+          "バイト列",
+          "UTF-8",
+          "エンコーディング"
+        ]
+      }
+    ],
+    "aliases": [
+      "TextDecoder API"
+    ]
+  },
+  {
+    "term": "PerformanceObserver",
+    "senses": [
+      {
+        "definition": "ブラウザのパフォーマンスタイムラインエントリ（ナビゲーション・リソース・ペイント・レイアウトシフトなど）を非同期で監視するAPI。Core Web Vitalsの計測に使われる。",
+        "domain": "web-api",
+        "keywords": [
+          "パフォーマンス",
+          "LCP",
+          "CLS",
+          "Core Web Vitals",
+          "計測"
+        ]
+      }
+    ],
+    "aliases": [
+      "Performance Observer"
+    ]
+  },
+  {
+    "term": "AbortController",
+    "senses": [
+      {
+        "definition": "非同期処理（Fetch APIなど）をキャンセルするためのシグナルを生成・送信するブラウザAPI。`controller.abort()`を呼ぶとAbortSignalに紐付いたリクエストが中断される。",
+        "domain": "web-api",
+        "keywords": [
+          "キャンセル",
+          "Fetch",
+          "AbortSignal",
+          "非同期",
+          "タイムアウト"
+        ]
+      }
+    ],
+    "aliases": [
+      "AbortController API",
+      "アボートコントローラー"
+    ]
+  },
+  {
+    "term": "AbortSignal",
+    "senses": [
+      {
+        "definition": "AbortControllerから生成されるシグナルオブジェクト。FetchリクエストやReact Query、その他の非同期処理に渡すことでキャンセル通知を受け取る仕組みを提供する。",
+        "domain": "web-api",
+        "keywords": [
+          "キャンセル",
+          "AbortController",
+          "Fetch",
+          "シグナル",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": [
+      "Abort Signal"
+    ]
+  },
+  {
+    "term": "queueMicrotask",
+    "senses": [
+      {
+        "definition": "マイクロタスクキューにコールバックをスケジュールするブラウザAPIとNode.js API。現在のタスク完了直後・次のマクロタスク前に実行されるため、Promise.resolve().then()より明示的なマイクロタスク挿入手段として使われる。",
+        "domain": "web-api",
+        "keywords": [
+          "マイクロタスク",
+          "イベントループ",
+          "Promise",
+          "非同期",
+          "スケジューリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "queueMicrotask API",
+      "マイクロタスクキュー"
+    ]
+  },
+  {
+    "term": "structuredClone",
+    "senses": [
+      {
+        "definition": "JavaScriptオブジェクトのディープクローンを作成するブラウザ・Node.js標準関数。JSON.parse(JSON.stringify())と違い、Date・Map・Set・ArrayBufferなど多様な型を正確に複製できる。",
+        "domain": "web-api",
+        "keywords": [
+          "ディープコピー",
+          "クローン",
+          "JavaScript",
+          "オブジェクト",
+          "シリアライズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Structured Clone Algorithm",
+      "ストラクチャードクローン"
+    ]
+  },
+  {
+    "term": "Web Crypto API",
+    "senses": [
+      {
+        "definition": "暗号化・復号・ハッシュ・電子署名・鍵生成などの暗号処理をブラウザネイティブで実行するAPI。SubtleCryptoインターフェースを通じてAES・RSA・ECDSAなどのアルゴリズムを利用できる。",
+        "domain": "web-api",
+        "keywords": [
+          "暗号化",
+          "SubtleCrypto",
+          "ハッシュ",
+          "電子署名",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Web Cryptography API",
+      "SubtleCrypto"
+    ]
+  },
+  {
+    "term": "Selection API",
+    "senses": [
+      {
+        "definition": "ユーザーがページ上で選択したテキスト範囲を取得・操作するブラウザAPI。`window.getSelection()`でSelectionオブジェクトを取得し、選択範囲のテキスト抽出やプログラムによる選択変更が可能。",
+        "domain": "web-api",
+        "keywords": [
+          "テキスト選択",
+          "Range",
+          "DOM",
+          "getSelection",
+          "エディタ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Selection Interface",
+      "テキスト選択API"
+    ]
+  },
+  {
+    "term": "Range API",
+    "senses": [
+      {
+        "definition": "ドキュメント内の任意のコンテンツ範囲を表し操作するブラウザAPI。`document.createRange()`で生成し、テキスト範囲の選択・コピー・変更をプログラムで行うリッチテキストエディタ実装などに使う。",
+        "domain": "web-api",
+        "keywords": [
+          "DOM",
+          "テキスト範囲",
+          "Selection",
+          "エディタ",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "Range Interface",
+      "DOM Range"
+    ]
+  },
+  {
+    "term": "contenteditable",
+    "senses": [
+      {
+        "definition": "HTML要素をブラウザネイティブの編集可能コンテンツ領域にする属性。`contenteditable=\"true\"`を設定するとキーボード入力・ペーストが可能になり、WYSIWYGエディタの土台として利用される。",
+        "domain": "html",
+        "keywords": [
+          "編集",
+          "WYSIWYG",
+          "エディタ",
+          "DOM",
+          "HTML属性"
+        ]
+      }
+    ],
+    "aliases": [
+      "contenteditable属性",
+      "Content Editable"
+    ]
+  },
+  {
+    "term": "EventTarget",
+    "senses": [
+      {
+        "definition": "DOMイベントを受信・送信するオブジェクトの基底インターフェース。`addEventListener`・`removeEventListener`・`dispatchEvent`を持ち、Element・Window・WorkerなどほぼすべてのDOM APIがこれを継承する。",
+        "domain": "web-api",
+        "keywords": [
+          "イベント",
+          "DOM",
+          "addEventListener",
+          "dispatchEvent",
+          "インターフェース"
+        ]
+      }
+    ],
+    "aliases": [
+      "EventTarget Interface",
+      "イベントターゲット"
+    ]
+  },
+  {
+    "term": "addEventListener",
+    "senses": [
+      {
+        "definition": "EventTargetにイベントハンドラを登録するDOMメソッド。第3引数でオプション（capture・passive・once）を指定でき、passiveオプションをtrueにするとスクロールパフォーマンスが向上する。",
+        "domain": "web-api",
+        "keywords": [
+          "イベント",
+          "DOM",
+          "ハンドラ",
+          "passive",
+          "キャプチャ"
+        ]
+      }
+    ],
+    "aliases": [
+      "addEventListener API",
+      "イベントリスナー登録"
+    ]
+  },
+  {
+    "term": "dispatchEvent",
+    "senses": [
+      {
+        "definition": "EventTargetに対して指定したEventオブジェクトを同期的に発火するDOMメソッド。CustomEventと組み合わせてコンポーネント間の通知やテストでのイベントシミュレーションに利用する。",
+        "domain": "web-api",
+        "keywords": [
+          "イベント",
+          "DOM",
+          "カスタムイベント",
+          "シミュレーション",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "dispatchEvent API",
+      "イベント発火"
+    ]
+  },
+  {
+    "term": "querySelector",
+    "senses": [
+      {
+        "definition": "CSSセレクタを使ってドキュメントまたは要素ツリー内の最初にマッチする要素を取得するDOMメソッド。`document.querySelector('.btn')`のように直感的に要素を取得でき、モダンなDOM操作の標準的な手段。",
+        "domain": "web-api",
+        "keywords": [
+          "DOM",
+          "CSSセレクタ",
+          "要素取得",
+          "JavaScript",
+          "querySelectorAll"
+        ]
+      }
+    ],
+    "aliases": [
+      "querySelector API",
+      "DOM Selector"
+    ]
+  },
+  {
+    "term": "innerHTML",
+    "senses": [
+      {
+        "definition": "要素のHTMLコンテンツを文字列として取得または設定するDOMプロパティ。設定時は文字列がHTMLとしてパースされ既存の子要素を置き換える。ユーザー入力をそのまま設定するとXSSリスクがあるため注意が必要。",
+        "domain": "web-api",
+        "keywords": [
+          "DOM",
+          "HTML文字列",
+          "XSS",
+          "プロパティ",
+          "操作"
+        ]
+      }
+    ],
+    "aliases": [
+      "innerHTML プロパティ"
+    ]
+  },
+  {
+    "term": "textContent",
+    "senses": [
+      {
+        "definition": "要素内のすべてのテキストノードを連結した文字列を取得または設定するDOMプロパティ。innerHTMLと違いHTMLタグを解釈せずテキストとして扱うため、XSSリスクがなくテキスト操作に適する。",
+        "domain": "web-api",
+        "keywords": [
+          "DOM",
+          "テキスト",
+          "XSS安全",
+          "プロパティ",
+          "innerHTML"
+        ]
+      }
+    ],
+    "aliases": [
+      "textContent プロパティ"
+    ]
+  },
+  {
+    "term": "Web App Manifest",
+    "senses": [
+      {
+        "definition": "PWAのメタデータ（名前・アイコン・テーマカラー・起動URLなど）を記述するJSONファイル。ブラウザがこれを読みホーム画面への追加やスタンドアロン表示の設定に利用する。",
+        "domain": "web",
+        "keywords": [
+          "PWA",
+          "マニフェスト",
+          "アイコン",
+          "ホーム画面",
+          "JSON"
+        ]
+      }
+    ],
+    "aliases": [
+      "Webアプリマニフェスト",
+      "manifest.json"
+    ]
+  },
+  {
+    "term": "DOM",
+    "senses": [
+      {
+        "definition": "Document Object Modelの略。HTMLやXMLドキュメントをツリー状のオブジェクト構造で表現するブラウザのプログラミングインターフェース。JavaScriptからノードを取得・変更・追加・削除して動的なWebページを実現する。",
+        "domain": "web",
+        "keywords": [
+          "ドキュメント",
+          "ツリー",
+          "JavaScript",
+          "ノード",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Document Object Model",
+      "ドキュメントオブジェクトモデル"
+    ]
+  },
+  {
+    "term": "クリティカルレンダリングパス",
+    "reading": "くりてぃかるれんだりんぐぱす",
+    "senses": [
+      {
+        "definition": "ブラウザがHTMLを受信してから画面に表示するまでの一連の処理フロー。HTML解析・DOM構築・CSSOM構築・レンダリングツリー生成・レイアウト・ペイントの各ステップで構成され、最適化がページ表示速度に直結する。",
+        "domain": "web",
+        "keywords": [
+          "レンダリング",
+          "パフォーマンス",
+          "ブラウザ",
+          "DOM",
+          "CSSOM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Critical Rendering Path",
+      "CRP"
+    ]
+  },
+  {
+    "term": "Reflow",
+    "senses": [
+      {
+        "definition": "DOM要素のサイズや位置を再計算するブラウザのレイアウト処理。要素のサイズ変更・DOM挿入・ウィンドウリサイズなどがトリガーになる。Reflowは高コストなためバッチ化や読み取りの一括化でパフォーマンスを改善する。",
+        "domain": "web",
+        "keywords": [
+          "レイアウト",
+          "パフォーマンス",
+          "DOM",
+          "リペイント",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "リフロー"
+    ]
+  },
+  {
+    "term": "Compositing",
+    "senses": [
+      {
+        "definition": "ブラウザがレイヤーを合成して最終的な画面表示を生成するレンダリングフェーズ。`transform`や`opacity`によるアニメーションはメインスレッドを使わずGPUでコンポジットされるためパフォーマンスが高い。",
+        "domain": "web",
+        "keywords": [
+          "レンダリング",
+          "GPU",
+          "レイヤー",
+          "アニメーション",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "コンポジティング",
+      "Layer Compositing"
+    ]
+  },
+  {
+    "term": "Cross-Origin Isolation",
+    "senses": [
+      {
+        "definition": "SharedArrayBufferなどの強力なAPIを有効にするためにオリジンを分離するセキュリティモデル。`Cross-Origin-Opener-Policy`と`Cross-Origin-Embedder-Policy`ヘッダーを設定して適用する。",
+        "domain": "web",
+        "keywords": [
+          "セキュリティ",
+          "SharedArrayBuffer",
+          "HTTP ヘッダー",
+          "オリジン",
+          "COOP"
+        ]
+      }
+    ],
+    "aliases": [
+      "クロスオリジン分離",
+      "COOP/COEP"
+    ]
+  },
+  {
+    "term": "Same-Origin Policy",
+    "senses": [
+      {
+        "definition": "スクリプトが読み込まれたオリジン以外のリソースへのアクセスをブラウザが制限するセキュリティポリシー。プロトコル・ホスト・ポートがすべて一致する場合のみ同一オリジンとみなされる。",
+        "domain": "web",
+        "keywords": [
+          "セキュリティ",
+          "オリジン",
+          "CORS",
+          "XSS",
+          "ブラウザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "同一オリジンポリシー"
+    ]
+  },
+  {
+    "term": "Resource Hints",
+    "senses": [
+      {
+        "definition": "ブラウザにリソース取得のタイミングや優先度を事前に伝えるHTMLの仕組みの総称。preload・prefetch・preconnect・dns-prefetchなどがあり、ページパフォーマンスを改善するための宣言的な最適化手段。",
+        "domain": "html",
+        "keywords": [
+          "パフォーマンス",
+          "preload",
+          "prefetch",
+          "preconnect",
+          "最適化"
+        ]
+      }
+    ],
+    "aliases": [
+      "リソースヒント"
+    ]
+  },
+  {
+    "term": "Web Vitals",
+    "senses": [
+      {
+        "definition": "GoogleがWebページのユーザー体験を定量化するために定めた指標群。LCP（最大コンテンツの描画）・INP（次のペイントへの応答性）・CLS（累積レイアウトシフト）がCore Web Vitalsとして検索ランキングにも影響する。",
+        "domain": "web",
+        "keywords": [
+          "パフォーマンス",
+          "LCP",
+          "INP",
+          "CLS",
+          "SEO"
+        ]
+      }
+    ],
+    "aliases": [
+      "ウェブバイタル"
+    ]
+  },
+  {
+    "term": "HTTP/2",
+    "senses": [
+      {
+        "definition": "HTTP/1.1の後継プロトコル。多重化・ヘッダー圧縮（HPACK）・サーバープッシュ・優先度制御により、単一TCP接続で複数リクエストを並列処理してWebページの読み込みを高速化する。",
+        "domain": "web",
+        "keywords": [
+          "プロトコル",
+          "多重化",
+          "HTTP",
+          "パフォーマンス",
+          "TLS"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTTP 2.0",
+      "h2"
+    ]
+  },
+  {
+    "term": "HTTP/3",
+    "senses": [
+      {
+        "definition": "QUICプロトコル（UDP上に実装されたTLS暗号化コネクション）をベースにしたHTTPの最新版。TCP HoLブロッキングを解消し、不安定なモバイルネットワークでも高速な通信を実現する。",
+        "domain": "web",
+        "keywords": [
+          "QUIC",
+          "UDP",
+          "プロトコル",
+          "パフォーマンス",
+          "レイテンシ"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTTP 3.0",
+      "h3"
+    ]
+  },
+  {
+    "term": "OpenGraph",
+    "senses": [
+      {
+        "definition": "WebページのメタデータをSNSシェア時に正しく表示するためのプロトコル。`<meta property=\"og:title\">`などのタグでタイトル・説明・画像を定義し、TwitterカードやLINEプレビューなどに利用される。",
+        "domain": "web",
+        "keywords": [
+          "SNS",
+          "メタデータ",
+          "SEO",
+          "シェア",
+          "meta"
+        ]
+      }
+    ],
+    "aliases": [
+      "Open Graph Protocol",
+      "OGP"
+    ]
+  },
+  {
+    "term": "WAI-ARIA",
+    "senses": [
+      {
+        "definition": "W3Cが策定したスクリーンリーダーなどの支援技術向けにDOMのセマンティクスを補足するHTML属性仕様。`role`・`aria-label`・`aria-expanded`などでHTMLが意味を伝えられない場合にアクセシビリティを向上させる。",
+        "domain": "html",
+        "keywords": [
+          "アクセシビリティ",
+          "スクリーンリーダー",
+          "ARIA",
+          "セマンティクス",
+          "HTML"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accessible Rich Internet Applications"
+    ]
+  }
+]

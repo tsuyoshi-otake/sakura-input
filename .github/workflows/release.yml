@@ -37,28 +37,8 @@ jobs:
             LICENSE
             src/data/dictionary_oss
 
-      # Same private-repository credential the installer workflow needs; see
-      # the comment there. Checked before the signing material so a release
-      # candidate fails on the cheaper, more likely cause first.
-      - name: Require access to the pinned IT glossary source
-        shell: pwsh
-        env:
-          SMILE_CHAT_TOKEN: ${{ secrets.SMILE_CHAT_TOKEN }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:SMILE_CHAT_TOKEN)) {
-            Write-Host '::error::SMILE_CHAT_TOKEN is not configured. The pinned IT glossary lives in the private repository systemexe-research-and-development/smile-chat, which the default GITHUB_TOKEN cannot read. Add a fine-grained personal access token with Contents:Read on that repository as the SMILE_CHAT_TOKEN secret.'
-            exit 1
-          }
-
-      - name: Check out pinned IT glossary data
-        uses: actions/checkout@v4
-        with:
-          repository: systemexe-research-and-development/smile-chat
-          ref: b5cada441b41c207ab49bf2cd5f1d9c5614c5b92
-          path: .sources/smile-chat
-          token: ${{ secrets.SMILE_CHAT_TOKEN }}
-          sparse-checkout: |
-            frontend/public
+      # IT glossary input is the MIT snapshot under
+      # third_party/smile-chat-public (no private-repo token).
 
       - uses: Swatinem/rust-cache@v2
 
@@ -106,7 +86,7 @@ jobs:
         run: >-
           ./scripts/build-dictionary.ps1
           -MozcSource .sources/mozc
-          -GlossarySource .sources/smile-chat
+          -GlossarySource third_party/smile-chat-public
           -OutputDirectory artifacts/release
       # build-dictionary obtains Japanese WordNet from its official fixed
       # artifact and verifies its pinned byte length and SHA-256 itself.

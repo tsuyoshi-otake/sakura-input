@@ -1,0 +1,1429 @@
+[
+  {
+    "term": "GitHub Copilot Chat",
+    "aliases": [
+      "Copilot Chat"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub CopilotのチャットインターフェースでIDEやGitHub.com上で自然言語によりコードの説明・生成・デバッグを対話的に行える機能。コンテキストを認識して的確な回答を提供する。",
+        "domain": "github",
+        "keywords": [
+          "AI",
+          "チャット",
+          "自然言語",
+          "コード生成",
+          "デバッグ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Copilot Workspace",
+    "aliases": [
+      "Copilot Workspace"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Issueから出発してコード変更の計画・実装・テストをAIが支援するタスク指向の開発環境。Issue→計画→コード→PRの一連のフローをCopilotが補助するプレビュー機能。",
+        "domain": "github",
+        "keywords": [
+          "AI",
+          "開発環境",
+          "Issue",
+          "自動化",
+          "タスク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Copilot for CLI",
+    "aliases": [
+      "gh copilot"
+    ],
+    "senses": [
+      {
+        "definition": "ターミナル上でシェルコマンドやGitコマンドをAIが提案・説明するGitHub Copilotの拡張機能。`gh copilot suggest`でコマンド提案、`gh copilot explain`でコマンド解説が利用できる。",
+        "domain": "github",
+        "keywords": [
+          "CLI",
+          "AI",
+          "シェル",
+          "コマンド提案",
+          "ターミナル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Copilot Suggestions",
+    "reading": "こぱいろとさじぇすちょんず",
+    "aliases": [
+      "インラインサジェスト",
+      "コード候補"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Copilotがエディタ上でリアルタイムに提示するコード補完候補。コメントや関数シグネチャを元に数行から数十行のコードをゴースト表示し、Tabキーで受け入れられる。",
+        "domain": "github",
+        "keywords": [
+          "コード補完",
+          "AI",
+          "エディタ",
+          "インライン",
+          "補完候補"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Copilot Context",
+    "reading": "こぱいろとこんてきすと",
+    "aliases": [
+      "コパイロットコンテキスト"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Copilotが回答生成に利用するコードや情報の範囲。開いているファイル・関連ファイル・リポジトリのコードベース・カスタム指示（copilot-instructions.md）などが含まれる。",
+        "domain": "github",
+        "keywords": [
+          "AI",
+          "コンテキスト",
+          "コードベース",
+          "カスタム指示",
+          "RAG"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Copilot Enterprise",
+    "aliases": [
+      "Copilot Enterprise"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Enterprise Cloud向けの最上位Copilotプラン。組織のコードベースに基づくパーソナライズ提案・Copilot Chat on GitHub.com・ドキュメント検索・Pull Request要約・Fine-tuningなどのエンタープライズ機能を提供する。",
+        "domain": "github",
+        "keywords": [
+          "エンタープライズ",
+          "AI",
+          "コードベース",
+          "カスタマイズ",
+          "組織"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Copilot Business",
+    "aliases": [
+      "Copilot Business"
+    ],
+    "senses": [
+      {
+        "definition": "組織向けGitHub Copilotのビジネスプラン。管理者によるポリシー管理・コンテンツ除外設定・使用状況レポートを提供しつつ、全開発者にCopilot補完とChatを展開できるプラン。",
+        "domain": "github",
+        "keywords": [
+          "組織",
+          "AI",
+          "管理",
+          "ポリシー",
+          "ライセンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Code Search",
+    "aliases": [
+      "コード検索"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのリポジトリを横断してコードを高精度に検索できる機能。正規表現・言語フィルタ・リポジトリ指定に対応し、シンボルやパスで絞り込めるIndexed検索エンジンを採用する。",
+        "domain": "github",
+        "keywords": [
+          "検索",
+          "コード",
+          "正規表現",
+          "インデックス",
+          "クロスリポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Code Navigation",
+    "reading": "ぎっとはぶこーどなびげーしょん",
+    "aliases": [
+      "コードナビゲーション"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub.com上でコードを閲覧する際に定義ジャンプや参照検索ができる機能。`Go to definition`・`Find all references`を使い、ブラウザ上でIDEに近いコード探索が可能になる。",
+        "domain": "github",
+        "keywords": [
+          "定義ジャンプ",
+          "参照検索",
+          "コード閲覧",
+          "IDE",
+          "ブラウザ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Codespaces Prebuilds",
+    "reading": "こーどすぺーすぷりびるど",
+    "aliases": [
+      "コードスペースプレビルド"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Codespaceの起動を高速化するため、リポジトリのDevContainerイメージを事前にビルドしてキャッシュする機能。ブランチやリージョンごとに設定でき、初回起動時間を大幅に短縮する。",
+        "domain": "github",
+        "keywords": [
+          "Codespaces",
+          "起動高速化",
+          "キャッシュ",
+          "DevContainer",
+          "ビルド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Codespaces Dev Container",
+    "reading": "こーどすぺーすでぶこんてなー",
+    "aliases": [
+      "開発コンテナ"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Codespacesが使用する開発環境の定義コンテナ。`devcontainer.json`でOSイメージ・拡張機能・ポートフォワード・初期化スクリプトを宣言的に設定し、チーム全員が同一環境を使用できる。",
+        "domain": "github",
+        "keywords": [
+          "Codespaces",
+          "Docker",
+          "環境定義",
+          "再現性",
+          "チーム開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Webhooks",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHubのイベント（push・PR・Issue等）発生時に指定URLへHTTP POSTリクエストを送信する仕組み。外部サービスとのリアルタイム連携・自動化ワークフローのトリガーに利用される。",
+        "domain": "github",
+        "keywords": [
+          "イベント",
+          "HTTP POST",
+          "自動化",
+          "連携",
+          "通知"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub OAuth Apps",
+    "reading": "ぎっとはぶおーおーすあぷす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHubユーザーに代わってAPIアクセスを行うOAuth 2.0ベースのアプリ。ユーザーが認可したスコープで動作し、アクセストークンを発行してGitHub APIを呼び出す。GitHub Appsに比べ権限が粗い。",
+        "domain": "github",
+        "keywords": [
+          "OAuth",
+          "認証",
+          "トークン",
+          "スコープ",
+          "サードパーティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Personal Access Token",
+    "reading": "ぎっとはぶぱーそなるあくせすとーくん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHubユーザーがAPIやGit操作に使用する認証トークン。クラシック版とFine-grained版があり、スコープ（権限）を設定して発行する。パスワードの代替として使用され、有効期限の設定を推奨。",
+        "domain": "github",
+        "keywords": [
+          "認証",
+          "トークン",
+          "API",
+          "セキュリティ",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Fine-grained PAT",
+    "reading": "ぎっとはぶふぁいんぐれいんどぱーそなるあくせすとーくん",
+    "aliases": [
+      "きめ細かいPAT"
+    ],
+    "senses": [
+      {
+        "definition": "特定のリポジトリ・特定の権限に限定できる次世代のPersonal Access Token。従来のクラシックPATより最小権限の原則を適用でき、有効期限・対象リポジトリ・細粒度の権限設定が可能。",
+        "domain": "github",
+        "keywords": [
+          "PAT",
+          "最小権限",
+          "セキュリティ",
+          "トークン",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub SSH Keys",
+    "reading": "ぎっとはぶえすえすえいちきー",
+    "aliases": [
+      "SSH Key"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubへのGit操作をパスワードなしで行うためのSSH公開鍵。アカウント設定に登録した公開鍵と対応する秘密鍵で認証し、`git@github.com`形式のURLでリポジトリを操作する。",
+        "domain": "github",
+        "keywords": [
+          "SSH",
+          "認証",
+          "公開鍵",
+          "Git",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub GPG Keys",
+    "reading": "ぎっとはぶじーぴーじーきー",
+    "aliases": [
+      "コミット署名"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubアカウントに登録するGPG公開鍵。コミットやタグにGPG署名を付与し、GitHub.com上で「Verified」バッジを表示させるために使用する。なりすまし防止とコード改ざん検知に有効。",
+        "domain": "github",
+        "keywords": [
+          "GPG",
+          "署名",
+          "コミット",
+          "Verified",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Deploy Keys",
+    "reading": "ぎっとはぶでぷろいきー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "特定のリポジトリへのアクセスに限定したSSH鍵。CI/CDサーバーやデプロイスクリプトからリポジトリをクローン・プッシュするために使用し、個人アカウントのSSH鍵とは独立して管理できる。",
+        "domain": "github",
+        "keywords": [
+          "SSH",
+          "デプロイ",
+          "CI/CD",
+          "セキュリティ",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Advanced Security",
+    "reading": "ぎっとはぶあどばんすどせきゅりてぃ",
+    "aliases": [
+      "GHAS"
+    ],
+    "senses": [
+      {
+        "definition": "コードスキャン・シークレットスキャン・依存関係レビューを含むGitHubのセキュリティ機能セット。GitHub Enterprise Cloud/Server向けのアドオンライセンスで提供され、開発プロセスにセキュリティを組み込む。",
+        "domain": "github",
+        "keywords": [
+          "セキュリティ",
+          "コードスキャン",
+          "シークレットスキャン",
+          "エンタープライズ",
+          "DevSecOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CodeQL",
+    "reading": "こーどくえる",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHubが開発したコード解析エンジン・クエリ言語。コードをデータベースとして扱いSQLライクなクエリで脆弱性パターンを検索できる。GitHub Code ScanningのデフォルトSASTエンジンとして使用される。",
+        "domain": "github",
+        "keywords": [
+          "静的解析",
+          "脆弱性検出",
+          "クエリ言語",
+          "SAST",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Secret Scanning",
+    "reading": "ぎっとはぶしーくれっとすきゃにんぐ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "リポジトリのコミット・Issue・PRからAPIキーやパスワード等の機密情報を自動検出するGitHub機能。検出時はアラートを発行し、一部のパートナーサービスと連携してトークンを即座に無効化する。",
+        "domain": "github",
+        "keywords": [
+          "シークレット",
+          "APIキー",
+          "漏洩検知",
+          "セキュリティ",
+          "アラート"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dependabot Security Updates",
+    "reading": "でぃぺんだぼっとせきゅりてぃあっぷでーと",
+    "aliases": [
+      "Dependabotセキュリティアップデート"
+    ],
+    "senses": [
+      {
+        "definition": "Dependabot Alertsが検出した脆弱性を修正するため、影響ライブラリを安全なバージョンへ更新するPRをDependabotが自動作成する機能。脆弱性の修正を迅速に適用するための自動化手段。",
+        "domain": "github",
+        "keywords": [
+          "セキュリティ",
+          "自動PR",
+          "脆弱性修正",
+          "依存関係",
+          "Dependabot"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dependabot Version Updates",
+    "reading": "でぃぺんだぼっとばーじょんあっぷでーと",
+    "aliases": [
+      "Dependabotバージョンアップデート"
+    ],
+    "senses": [
+      {
+        "definition": "セキュリティに関係なく定期的に依存ライブラリの最新バージョンへの更新PRをDependabotが作成する機能。`dependabot.yml`でスケジュール・対象エコシステム・無視ルールを設定できる。",
+        "domain": "github",
+        "keywords": [
+          "依存関係",
+          "バージョン管理",
+          "自動PR",
+          "メンテナンス",
+          "Dependabot"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Dependency Graph",
+    "reading": "ぎっとはぶでぃぺんでんしーぐらふ",
+    "aliases": [
+      "依存関係グラフ"
+    ],
+    "senses": [
+      {
+        "definition": "リポジトリの依存ライブラリとその依存ライブラリを可視化するGitHub機能。package.json・Gemfile・requirements.txt等のマニフェストを解析し、Dependabot AlertsやSBOM生成の基盤となる。",
+        "domain": "github",
+        "keywords": [
+          "依存関係",
+          "可視化",
+          "マニフェスト",
+          "SBOM",
+          "Dependabot"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Advisory Database",
+    "reading": "ぎっとはぶあどばいざりーでーたべーす",
+    "aliases": [
+      "Advisory Database",
+      "セキュリティアドバイザリDB"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが管理するオープンソースソフトウェアのセキュリティ脆弱性データベース。CVEと独自のGHSA識別子でエントリを管理し、Dependabot AlertsやCode Scanningの脆弱性情報源として使用される。",
+        "domain": "github",
+        "keywords": [
+          "CVE",
+          "脆弱性DB",
+          "セキュリティ",
+          "GHSA",
+          "Dependabot"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub SBOM",
+    "reading": "ぎっとはぶえすびーおーえむ",
+    "aliases": [
+      "Software Bill of Materials"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのDependency GraphからSPDX形式のSBOM（ソフトウェア部品表）を生成・エクスポートできる機能。コンプライアンス・ライセンス管理・サプライチェーンセキュリティの証跡として使用する。",
+        "domain": "github",
+        "keywords": [
+          "SBOM",
+          "SPDX",
+          "サプライチェーン",
+          "コンプライアンス",
+          "依存関係"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Attestations",
+    "reading": "ぎっとはぶあてすてーしょん",
+    "aliases": [
+      "Build Provenance",
+      "ビルドプロバナンス"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Actionsでビルドされたアーティファクトのビルドプロセスを暗号署名付きで記録するサプライチェーンセキュリティ機能。SigstoreとOIDCを利用し、成果物の出所と改ざん有無を検証可能にする。",
+        "domain": "github",
+        "keywords": [
+          "サプライチェーン",
+          "署名",
+          "Sigstore",
+          "OIDC",
+          "ビルド証明"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions OIDC",
+    "reading": "ぎっとはぶあくしょんずおーあいでぃーしー",
+    "aliases": [
+      "OIDC",
+      "Workload Identity"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub ActionsワークフローがOIDCトークンを用いてAWS・Azure・GCP等のクラウドに長期シークレットなしで認証できる仕組み。Workload Identity Federationと組み合わせて一時的な認証情報を取得する。",
+        "domain": "github",
+        "keywords": [
+          "OIDC",
+          "認証",
+          "クラウド",
+          "シークレットレス",
+          "Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Audit Log",
+    "reading": "ぎっとはぶおーでぃっとろぐ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHubのOrganizationやEnterpriseで発生した操作（設定変更・メンバー変更・リポジトリ操作等）を記録するログ機能。コンプライアンス監査・インシデント調査・不正アクセス検知に使用する。",
+        "domain": "github",
+        "keywords": [
+          "監査",
+          "ログ",
+          "セキュリティ",
+          "コンプライアンス",
+          "Organization"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Enterprise Managed Users",
+    "reading": "ぎっとはぶえんたーぷらいずまねーじどゆーざー",
+    "aliases": [
+      "EMU",
+      "Enterprise Managed Users"
+    ],
+    "senses": [
+      {
+        "definition": "企業のIdP（AzureAD・Okta等）でGitHubユーザーアカウントを完全管理するGitHub Enterpriseの機能。SCIM/SAMLで自動プロビジョニングし、個人の既存GitHubアカウントと分離された管理アカウントを使用する。",
+        "domain": "github",
+        "keywords": [
+          "エンタープライズ",
+          "IdP",
+          "SCIM",
+          "SAML",
+          "ユーザー管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub SCIM",
+    "reading": "ぎっとはぶすきむ",
+    "aliases": [
+      "SCIM",
+      "SCIMプロビジョニング"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのOrganizationやEnterpriseにおいてIdP（AzureAD・Okta等）からSCIM 2.0プロトコルでユーザーのプロビジョニング・デプロビジョニングを自動化する機能。SAML SSOと組み合わせて使用される。",
+        "domain": "github",
+        "keywords": [
+          "SCIM",
+          "プロビジョニング",
+          "IdP",
+          "ユーザー管理",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub SAML SSO",
+    "reading": "ぎっとはぶさむるえすえすおー",
+    "aliases": [
+      "SAML SSO"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのOrganizationやEnterpriseでSAML 2.0を用いてIdPによるシングルサインオン認証を強制する機能。メンバーはIdPのアカウントでGitHubにアクセスし、組織の認証ポリシーに従った管理が可能。",
+        "domain": "github",
+        "keywords": [
+          "SAML",
+          "SSO",
+          "IdP",
+          "認証",
+          "Organization"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub IP Allow List",
+    "reading": "ぎっとはぶあいぴーあろーりすと",
+    "aliases": [
+      "IPアローリスト",
+      "IP許可リスト"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのOrganizationやEnterpriseへのアクセスを特定のIPアドレス・CIDRブロックに制限するセキュリティ機能。社内ネットワークやVPNからのみアクセスを許可するゼロトラスト施策として利用される。",
+        "domain": "github",
+        "keywords": [
+          "IPアドレス",
+          "アクセス制限",
+          "セキュリティ",
+          "ファイアウォール",
+          "Organization"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Repository Rules",
+    "reading": "ぎっとはぶりぽじとりるーるず",
+    "aliases": [
+      "Rulesets",
+      "リポジトリルールセット"
+    ],
+    "senses": [
+      {
+        "definition": "ブランチやタグへの操作を制御するルールを柔軟に定義できるGitHub機能。プッシュ制限・PRレビュー必須・ステータスチェック・署名必須等をOrganization/リポジトリレベルで階層管理できる。",
+        "domain": "github",
+        "keywords": [
+          "ブランチ保護",
+          "ルール",
+          "Organization",
+          "ポリシー",
+          "ガバナンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Forks",
+    "reading": "ぎっとはぶふぉーく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "他人のGitHubリポジトリを自分のアカウントにコピーを作成する操作。OSS貢献のワークフローで使用し、フォーク先でブランチを作りPull Requestで元リポジトリへ変更を提案する。",
+        "domain": "github",
+        "keywords": [
+          "フォーク",
+          "OSS",
+          "コントリビュート",
+          "Pull Request",
+          "コピー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Stars",
+    "reading": "ぎっとはぶすたー",
+    "aliases": [
+      "スター",
+      "Star"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリに「お気に入り」や「いいね」として付けられる評価機能。スター数はリポジトリの人気や信頼度の指標として使われ、後で参照したいリポジトリをブックマークする用途にも利用する。",
+        "domain": "github",
+        "keywords": [
+          "スター",
+          "ブックマーク",
+          "人気",
+          "評価",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Watch",
+    "reading": "ぎっとはぶうぉっち",
+    "aliases": [
+      "ウォッチ",
+      "リポジトリ購読"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリの活動（Issue・PR・リリース等）を購読してNotificationsで受け取る設定。Watching（全通知）・Releases only・Ignoring・Participating only の4段階で通知量を調整できる。",
+        "domain": "github",
+        "keywords": [
+          "通知",
+          "購読",
+          "Watch",
+          "Notifications",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Notifications",
+    "reading": "ぎっとはぶのてぃふぃけーしょん",
+    "aliases": [
+      "通知"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubがIssue・PR・コメント・@メンション・セキュリティアラート等のイベントをユーザーに届ける通知機能。Webインボックス・メール・モバイルアプリで受け取れ、Watchや参加状況でフィルタリングできる。",
+        "domain": "github",
+        "keywords": [
+          "通知",
+          "インボックス",
+          "メール",
+          "モバイル",
+          "Watch"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Education",
+    "reading": "ぎっとはぶえでゅけーしょん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "教育機関の学生・教員・学校に対してGitHubの有料機能を無償または割引で提供するプログラム。Student Developer Pack・GitHub Classroom・Campus Expertプログラム等を含む教育支援の総称。",
+        "domain": "github",
+        "keywords": [
+          "教育",
+          "学生",
+          "無償",
+          "Campus",
+          "プログラム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Student Developer Pack",
+    "reading": "ぎっとはぶすちゅーでんとでべろっぱーぱっく",
+    "aliases": [
+      "Student Developer Pack",
+      "学生開発者パック"
+    ],
+    "senses": [
+      {
+        "definition": "在学中の学生に対してGitHub ProやJetBrains・Namecheap・DigitalOcean等100以上のサービスを無償提供するGitHub Educationの特典パック。学籍メールや学生証で資格を確認して申請する。",
+        "domain": "github",
+        "keywords": [
+          "学生",
+          "無償特典",
+          "教育",
+          "ツール",
+          "GitHub Pro"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Classroom",
+    "reading": "ぎっとはぶくらするーむ",
+    "aliases": [
+      "クラスルーム"
+    ],
+    "senses": [
+      {
+        "definition": "教師がGitHubを使ったプログラミング課題の配布・収集・自動採点を管理できる教育向けツール。課題をテンプレートリポジトリから学生ごとに自動生成し、GitHub Actionsで自動採点を実行できる。",
+        "domain": "github",
+        "keywords": [
+          "教育",
+          "課題管理",
+          "自動採点",
+          "学生",
+          "Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Community",
+    "reading": "ぎっとはぶこみゅにてぃ",
+    "aliases": [
+      "コミュニティフォーラム"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub公式の質問・情報共有フォーラム。GitHub製品への質問・フィードバック・活用事例の共有が行われるオンラインコミュニティで、GitHub Discussions機能を使って運営されている。",
+        "domain": "github",
+        "keywords": [
+          "フォーラム",
+          "コミュニティ",
+          "サポート",
+          "Discussions",
+          "情報共有"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub README",
+    "reading": "ぎっとはぶりーどみー",
+    "aliases": [
+      "README.md"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリのルートに置くと自動表示されるMarkdownファイル。プロジェクトの概要・インストール手順・使い方・コントリビューション方法を記載し、リポジトリの「玄関」として機能する。",
+        "domain": "github",
+        "keywords": [
+          "ドキュメント",
+          "Markdown",
+          "リポジトリ",
+          "説明",
+          "OSS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Profile README",
+    "reading": "ぎっとはぶぷろふぁいるりーどみー",
+    "aliases": [
+      "Profile README",
+      "プロフィールREADME"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubユーザー名と同名のリポジトリに作成したREADMEがプロフィールページに表示される機能。Markdownやバッジ・統計ウィジェットを使って自己紹介・スキル・活動をビジュアルに表現できる。",
+        "domain": "github",
+        "keywords": [
+          "プロフィール",
+          "README",
+          "自己紹介",
+          "カスタマイズ",
+          "Markdown"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Social Preview",
+    "reading": "ぎっとはぶそーしゃるぷれびゅー",
+    "aliases": [
+      "Social Preview",
+      "OGP画像"
+    ],
+    "senses": [
+      {
+        "definition": "SNSやチャットでGitHubリポジトリのURLを共有した際にリンクカードとして表示されるプレビュー画像。リポジトリのSettings > Social previewからカスタム画像をアップロードして設定する。",
+        "domain": "github",
+        "keywords": [
+          "OGP",
+          "SNS",
+          "プレビュー",
+          "ブランディング",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Topics",
+    "reading": "ぎっとはぶとぴっくす",
+    "aliases": [
+      "Topics",
+      "リポジトリトピック"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリに付与するタグ・カテゴリラベル。`react`・`machine-learning`等のトピックを設定するとExplore検索でリポジトリが発見されやすくなり、類似リポジトリとの関連付けに使われる。",
+        "domain": "github",
+        "keywords": [
+          "タグ",
+          "カテゴリ",
+          "発見",
+          "検索",
+          "分類"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Explore",
+    "reading": "ぎっとはぶえくすぷろあ",
+    "aliases": [
+      "Explore",
+      "Githubエクスプロア"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubがユーザーの興味・アクティビティに基づいてリポジトリ・トピック・コレクション・トレンドを推薦するディスカバリーページ。新しいOSSプロジェクトや開発トレンドを発見するポータル。",
+        "domain": "github",
+        "keywords": [
+          "発見",
+          "レコメンド",
+          "トレンド",
+          "OSS",
+          "キュレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Trending",
+    "reading": "ぎっとはぶとれんでぃんぐ",
+    "aliases": [
+      "Trending",
+      "トレンド"
+    ],
+    "senses": [
+      {
+        "definition": "日・週・月単位でスター獲得数が多いリポジトリや開発者をランキング表示するGitHubページ。プログラミング言語でフィルタリングでき、注目されているOSSプロジェクトや技術トレンドの把握に使われる。",
+        "domain": "github",
+        "keywords": [
+          "トレンド",
+          "スター",
+          "ランキング",
+          "OSS",
+          "発見"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Archive Program",
+    "reading": "ぎっとはぶあーかいぶぷろぐらむ",
+    "aliases": [
+      "Arctic Code Vault",
+      "アークティックコードボルト"
+    ],
+    "senses": [
+      {
+        "definition": "重要なOSSコードを長期保存するGitHubの取り組み。北極圏の廃炭鉱に21mm厚のフィルムとしてコードを保存するArctic Code Vault（1000年保存）や複数データセンターへのバックアップを含む。",
+        "domain": "github",
+        "keywords": [
+          "アーカイブ",
+          "長期保存",
+          "OSS",
+          "Arctic",
+          "文化遺産"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Status",
+    "reading": "ぎっとはぶすてーたす",
+    "aliases": [
+      "GitHubステータスページ",
+      "githubstatus.com"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのサービス稼働状況をリアルタイムで確認できる公式ステータスページ（githubstatus.com）。各コンポーネント（Git操作・API・Actions・Pages等）の状態と過去のインシデント履歴を公開している。",
+        "domain": "github",
+        "keywords": [
+          "ステータス",
+          "障害情報",
+          "稼働監視",
+          "インシデント",
+          "SLA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Changelog",
+    "reading": "ぎっとはぶちぇんじろぐ",
+    "aliases": [
+      "Changelog",
+      "changelog.github.blog"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが新機能・改善・廃止機能を公式発表するブログ（changelog.github.blog）。日々のリリースノートが掲載され、GitHub Actionsの新機能やAPI変更、UIのアップデートを追うために利用される。",
+        "domain": "github",
+        "keywords": [
+          "リリースノート",
+          "新機能",
+          "アップデート",
+          "ブログ",
+          "追跡"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Feature Flags",
+    "reading": "ぎっとはぶふぃーちゃーふらぐ",
+    "aliases": [
+      "Feature Flags",
+      "機能フラグ",
+      "GitHub Feature Preview"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが段階的に新機能をユーザーへロールアウトするための仕組み。アカウント設定のFeature Previewから実験的機能を有効化できる一般ユーザー向け機能プレビューとしても知られている。",
+        "domain": "github",
+        "keywords": [
+          "フィーチャーフラグ",
+          "プレビュー",
+          "ロールアウト",
+          "A/Bテスト",
+          "機能管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Mobile",
+    "reading": "ぎっとはぶもばいる",
+    "aliases": [
+      "GitHubモバイルアプリ"
+    ],
+    "senses": [
+      {
+        "definition": "iOS・Android向けのGitHub公式モバイルアプリ。通知管理・Issue/PRのレビューとコメント・コード閲覧・マージ操作・GitHub Copilot Chatへのアクセスをスマートフォンやタブレットからできるようにするアプリ。",
+        "domain": "github",
+        "keywords": [
+          "モバイル",
+          "iOS",
+          "Android",
+          "通知",
+          "コードレビュー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Desktop",
+    "reading": "ぎっとはぶですくとっぷ",
+    "aliases": [
+      "GitHubデスクトップ"
+    ],
+    "senses": [
+      {
+        "definition": "Windows・macOS向けのGitHub公式GUIクライアント。コマンドラインなしにリポジトリのクローン・コミット・ブランチ管理・PRの作成・差分確認ができ、Git初学者やGUIを好む開発者向けツール。",
+        "domain": "github",
+        "keywords": [
+          "GUI",
+          "Git",
+          "デスクトップ",
+          "Windows",
+          "macOS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Models",
+    "reading": "ぎっとはぶもでるず",
+    "aliases": [
+      "モデルプレイグラウンド"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Marketplaceに統合されたAIモデルのプレイグラウンドとAPIアクセスサービス。GPT-4o・Llama・Mistral・Phi等のモデルをブラウザ上でテストしたりGitHub Personal Access Tokenで呼び出したりできる。",
+        "domain": "github",
+        "keywords": [
+          "AI",
+          "LLM",
+          "モデル",
+          "プレイグラウンド",
+          "API"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Spark",
+    "reading": "ぎっとはぶすぱーく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "自然言語でマイクロアプリ（Spark）を作成・共有・実行できるGitHubのAIネイティブ開発ツール（プレビュー）。コーディング不要でWebアプリを生成し、GitHub Modelsのバックエンドで動作するノーコード/ローコード環境。",
+        "domain": "github",
+        "keywords": [
+          "AI",
+          "ノーコード",
+          "マイクロアプリ",
+          "自然言語",
+          "生成AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Wiki",
+    "reading": "ぎっとはぶうぃき",
+    "aliases": [
+      "リポジトリWiki"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリに付属するMarkdown形式のドキュメントサイト機能。サイドバーでページを階層整理でき、Gitリポジトリとして管理されるためバージョン管理可能。READMEより詳細なドキュメントの置き場として使う。",
+        "domain": "github",
+        "keywords": [
+          "ドキュメント",
+          "Wiki",
+          "Markdown",
+          "バージョン管理",
+          "リポジトリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub CODEOWNERS",
+    "reading": "ぎっとはぶこーどおーなーず",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "リポジトリ内のファイル・ディレクトリごとに責任者（オーナー）を宣言するファイル（`CODEOWNERS`）。PR作成時にオーナーが自動でレビュアーに追加され、ブランチ保護ルールと組み合わせてオーナーのレビューを必須化できる。",
+        "domain": "github",
+        "keywords": [
+          "コードオーナー",
+          "レビュー",
+          "ブランチ保護",
+          "責任",
+          "PR"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions Reusable Workflows",
+    "reading": "ぎっとはぶあくしょんずさいりようかのうわーくふろー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHub ActionsのWorkflowを`workflow_call`イベントで他のWorkflowから呼び出せる再利用機能。CI/CDの共通ロジックをDRY化し、Organizationリポジトリ間で標準化されたパイプラインを共有できる。",
+        "domain": "github",
+        "keywords": [
+          "Actions",
+          "再利用",
+          "DRY",
+          "CI/CD",
+          "ワークフロー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions Composite Actions",
+    "reading": "ぎっとはぶあくしょんずこんぽじっとあくしょん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "複数のステップをひとつのアクションとして再利用可能にするGitHub Actionsの機能。シェルスクリプトや他のアクション呼び出しをまとめてActionとしてパッケージ化し、ワークフローをシンプルに保てる。",
+        "domain": "github",
+        "keywords": [
+          "Actions",
+          "再利用",
+          "ステップ",
+          "カプセル化",
+          "CI/CD"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Dependency Review",
+    "reading": "ぎっとはぶでぃぺんでんしーれびゅー",
+    "aliases": [
+      "Dependency Review",
+      "依存関係レビュー"
+    ],
+    "senses": [
+      {
+        "definition": "PRで追加・変更される依存パッケージにCVEが含まれていないかをレビュー画面でインライン表示するGitHub機能。`dependency-review-action`を使いCI上で脆弱な依存追加をブロックできる。",
+        "domain": "github",
+        "keywords": [
+          "依存関係",
+          "脆弱性",
+          "PR",
+          "CVE",
+          "レビュー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Branch Protection",
+    "reading": "ぎっとはぶぶらんちぷろてくしょん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "特定のブランチへの直接プッシュ・強制プッシュ・削除を制限し、PRレビュー・ステータスチェック合格・署名付きコミットを必須化できるGitHub機能。mainブランチを保護するための重要な設定。",
+        "domain": "github",
+        "keywords": [
+          "ブランチ保護",
+          "PR必須",
+          "ステータスチェック",
+          "ガバナンス",
+          "mainブランチ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Repository Insights",
+    "reading": "ぎっとはぶりぽじとりいんさいと",
+    "aliases": [
+      "Insights",
+      "リポジトリ統計"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリの活動統計を表示するページ。コントリビューター数・コミット頻度・コードの増減・フォーク数・依存関係ネットワーク・IssueとPRのフローなどをグラフで可視化する。",
+        "domain": "github",
+        "keywords": [
+          "統計",
+          "可視化",
+          "コントリビュータ",
+          "コミット",
+          "分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Traffic Analytics",
+    "reading": "ぎっとはぶとらふぃくあなりてぃくす",
+    "aliases": [
+      "Traffic",
+      "トラフィック分析"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリへのアクセス数（ビュー・ユニーク訪問者）・クローン数・参照元を14日間分表示するInsightsの一機能。リポジトリがどこから発見されているか・どの程度利用されているかを把握できる。",
+        "domain": "github",
+        "keywords": [
+          "トラフィック",
+          "アクセス解析",
+          "クローン",
+          "訪問者",
+          "分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions Job",
+    "reading": "ぎっとはぶあくしょんずじょぶ",
+    "aliases": [
+      "ワークフロージョブ"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Actionsワークフロー内の実行単位。各ジョブは独立したランナー上で実行されデフォルトで並列に動作する。`needs`キーワードで依存関係を定義し順次実行や成果物の受け渡しができる。",
+        "domain": "github",
+        "keywords": [
+          "CI/CD",
+          "ランナー",
+          "並列",
+          "依存関係",
+          "Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions Step",
+    "reading": "ぎっとはぶあくしょんずすてっぷ",
+    "aliases": [
+      "ワークフローステップ"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub ActionsのJob内の最小実行単位。シェルコマンド（`run`）またはアクション（`uses`）のいずれかで定義し、同一ランナー上で順次実行される。前のステップの成果物や環境変数を引き継げる。",
+        "domain": "github",
+        "keywords": [
+          "CI/CD",
+          "ステップ",
+          "シェル",
+          "アクション",
+          "Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Packages Registry",
+    "reading": "ぎっとはぶぱっけーじずれじすとりー",
+    "aliases": [
+      "パッケージレジストリ"
+    ],
+    "senses": [
+      {
+        "definition": "npm・Maven・NuGet・PyPI・RubyGems・Docker等のパッケージをGitHubリポジトリに紐付けてホストできるパッケージ管理サービス。GitHub Actionsと統合してCI/CDからの自動パブリッシュが容易。",
+        "domain": "github",
+        "keywords": [
+          "パッケージ",
+          "npm",
+          "Docker",
+          "Maven",
+          "GitHub Packages"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Deployment Protection Rules",
+    "reading": "ぎっとはぶでぷろいめんとぷろてくしょんるーるず",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHub EnvironmentsにおいてGitHub Appsによるカスタム承認ロジックをデプロイゲートとして挿入できる機能。外部のITSMシステムや変更管理ツールとデプロイ承認フローを統合する際に使用する。",
+        "domain": "github",
+        "keywords": [
+          "デプロイ",
+          "承認",
+          "保護",
+          "GitHub Apps",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Release Notes",
+    "reading": "ぎっとはぶりりーすのーつ",
+    "aliases": [
+      "自動リリースノート",
+      "Release Notes"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのリリース機能でPRのタイトルやラベルを元にリリースノートを自動生成する機能。`.github/release.yml`でカテゴリ・除外ラベルを設定し、CHANGELOG的な文書を自動作成できる。",
+        "domain": "github",
+        "keywords": [
+          "リリースノート",
+          "自動生成",
+          "PR",
+          "CHANGELOG",
+          "バージョン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Pull Request Review",
+    "reading": "ぎっとはぶぷるりくえすとれびゅー",
+    "aliases": [
+      "PRレビュー"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのPull RequestでコードをレビューしてApprove・Request Changes・Commentを行う機能。行レベルのコメント・サジェスチョン（提案編集）・レビューグループによる承認ルールを組み合わせてコードレビューを体系化できる。",
+        "domain": "github",
+        "keywords": [
+          "コードレビュー",
+          "Approve",
+          "PR",
+          "サジェスチョン",
+          "品質"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Copilot Instructions",
+    "reading": "ぎっとはぶこぱいろといんすとらくしょんず",
+    "aliases": [
+      "copilot-instructions.md",
+      "カスタム指示"
+    ],
+    "senses": [
+      {
+        "definition": "リポジトリの`.github/copilot-instructions.md`に記述するGitHub Copilot向けカスタム指示ファイル。コーディング規約・技術スタック・禁止パターン等を自然言語で定義し、Copilotの補完やChatの回答を組織のガイドラインに合わせる。",
+        "domain": "github",
+        "keywords": [
+          "Copilot",
+          "カスタム指示",
+          "コーディング規約",
+          "コンテキスト",
+          "AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions Self-hosted Runner",
+    "reading": "ぎっとはぶあくしょんずせるふほすとどらんなー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "GitHub Actionsのジョブを自社管理のサーバー・VM・コンテナで実行するランナー。特定ハードウェア・ネットワーク要件やGitHub-hosted Runnerにない環境（GPUやオンプレDB接続等）が必要な場合に使用する。",
+        "domain": "github",
+        "keywords": [
+          "Actions",
+          "ランナー",
+          "オンプレミス",
+          "CI/CD",
+          "カスタム環境"
+        ]
+      }
+    ]
+  }
+]

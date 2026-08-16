@@ -1,0 +1,868 @@
+[
+  {
+    "term": "Oracle Database",
+    "reading": "オラクルデータベース",
+    "senses": [
+      {
+        "definition": "大規模業務システムで広く使われる商用リレーショナルデータベース製品。",
+        "domain": "database",
+        "keywords": [
+          "Oracle",
+          "RDBMS",
+          "商用DB"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SQL Server",
+    "reading": "エスキューエルサーバー",
+    "senses": [
+      {
+        "definition": "Microsoftが提供する商用データベース製品。",
+        "domain": "database",
+        "keywords": [
+          "Microsoft",
+          "RDBMS",
+          "商用DB"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PostgreSQL",
+    "reading": "ポストグレスキューエル",
+    "senses": [
+      {
+        "definition": "機能性と拡張性に優れたオープンソースのリレーショナルデータベース。",
+        "domain": "database",
+        "keywords": [
+          "OSS",
+          "RDBMS",
+          "Postgres"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MySQL",
+    "reading": "マイエスキューエル",
+    "senses": [
+      {
+        "definition": "Web系を中心に広く利用されるオープンソースデータベース。",
+        "domain": "database",
+        "keywords": [
+          "OSS",
+          "RDBMS",
+          "Web"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Snowflake",
+    "reading": "スノーフレイク",
+    "senses": [
+      {
+        "definition": "データ分析に特化したクラウド型データプラットフォーム。",
+        "domain": "database",
+        "keywords": [
+          "DWH",
+          "クラウド",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ビュー",
+    "senses": [
+      {
+        "definition": "SQLで定義した仮想的な表であり、参照や集計を簡潔にするために使う。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "仮想表",
+          "VIEW"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Guard",
+    "reading": "データガード",
+    "senses": [
+      {
+        "definition": "Oracle Databaseで待機系DBを用意し、障害時の継続性を高める仕組み。",
+        "domain": "oracle",
+        "keywords": [
+          "DR",
+          "待機系",
+          "フェイルオーバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RAC",
+    "reading": "アールエーシー",
+    "senses": [
+      {
+        "definition": "複数サーバで単一のOracle Databaseを構成し、可用性と処理能力を高める仕組み。",
+        "domain": "oracle",
+        "keywords": [
+          "クラスタ",
+          "可用性",
+          "Oracle"
+        ]
+      }
+    ],
+    "aliases": [
+      "Real Application Clusters"
+    ]
+  },
+  {
+    "term": "RMAN",
+    "reading": "アールマン",
+    "senses": [
+      {
+        "definition": "Oracle Databaseのバックアップ・復旧を管理する標準ツール。",
+        "domain": "oracle",
+        "keywords": [
+          "バックアップ",
+          "復旧",
+          "Oracle"
+        ]
+      }
+    ],
+    "aliases": [
+      "Recovery Manager"
+    ]
+  },
+  {
+    "term": "Data Pump",
+    "reading": "データポンプ",
+    "senses": [
+      {
+        "definition": "Oracle Database間でデータや定義を高速に移行するための機能。",
+        "domain": "oracle",
+        "keywords": [
+          "エクスポート",
+          "インポート",
+          "移行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GoldenGate",
+    "reading": "ゴールデンゲート",
+    "senses": [
+      {
+        "definition": "データベース間で変更データを複製・同期するための製品。",
+        "domain": "oracle",
+        "keywords": [
+          "レプリケーション",
+          "同期",
+          "CDC"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Python",
+    "reading": "パイソン",
+    "senses": [
+      {
+        "definition": "AI、データ分析、Web API、自動化など幅広い用途で使われる言語。",
+        "domain": "programming",
+        "keywords": [
+          "AI",
+          "データ分析",
+          "スクリプト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "FastAPI",
+    "reading": "ファストエーピーアイ",
+    "senses": [
+      {
+        "definition": "Pythonで高速かつシンプルにAPIを構築しやすいフレームワーク。",
+        "domain": "python",
+        "keywords": [
+          "API",
+          "Web",
+          "非同期"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Nginx",
+    "reading": "エンジンエックス",
+    "senses": [
+      {
+        "definition": "Webサーバやリバースプロキシとして使われる高性能なミドルウェア。",
+        "domain": "infrastructure",
+        "keywords": [
+          "Webサーバ",
+          "リバースプロキシ",
+          "ミドルウェア"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WebLogic",
+    "reading": "ウェブログイック",
+    "senses": [
+      {
+        "definition": "Oracleが提供するエンタープライズ向けJavaアプリケーションサーバ。",
+        "domain": "java",
+        "keywords": [
+          "Oracle",
+          "APサーバ",
+          "エンタープライズ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Apache Tomcat",
+    "reading": "アパッチ トムキャット",
+    "senses": [
+      {
+        "definition": "Java系Webアプリケーションを実行するためのサーバソフトウェア。",
+        "domain": "java",
+        "keywords": [
+          "APサーバ",
+          "Servlet",
+          "Web"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JUnit",
+    "reading": "ジェイユニット",
+    "senses": [
+      {
+        "definition": "Javaプログラムの単体テストを自動化するための標準的なテストフレームワーク。",
+        "domain": "java",
+        "keywords": [
+          "テスト",
+          "単体テスト",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "pytest",
+    "reading": "パイテスト",
+    "senses": [
+      {
+        "definition": "Python向けの柔軟で記述しやすいテストフレームワーク。",
+        "domain": "python",
+        "keywords": [
+          "テスト",
+          "単体テスト",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "CI/CD",
+    "reading": "シーアイシーディー",
+    "senses": [
+      {
+        "definition": "ビルド、テスト、配備を継続的に自動化し、変更を素早く安全に反映する仕組み。",
+        "domain": "software-engineering",
+        "keywords": [
+          "自動化",
+          "デプロイ",
+          "パイプライン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DevOps",
+    "reading": "デブオプス",
+    "senses": [
+      {
+        "definition": "開発と運用が連携し、継続的改善と迅速な提供を目指す考え方。",
+        "domain": "software-engineering",
+        "keywords": [
+          "CI/CD",
+          "自動化",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SPA",
+    "reading": "エスピーエー",
+    "senses": [
+      {
+        "definition": "画面遷移のたびに全面再読込せず、動的に表示更新するWebアプリ方式。",
+        "domain": "frontend",
+        "keywords": [
+          "React",
+          "シングルページ",
+          "Web"
+        ]
+      }
+    ],
+    "aliases": [
+      "Single Page Application"
+    ]
+  },
+  {
+    "term": "CRUD",
+    "reading": "クラッド",
+    "senses": [
+      {
+        "definition": "データの登録、参照、更新、削除という基本操作の総称。",
+        "domain": "development",
+        "keywords": [
+          "Create",
+          "Read",
+          "Update",
+          "Delete"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スクラム開発",
+    "reading": "スクラムかいはつ",
+    "senses": [
+      {
+        "definition": "役割とイベントを定め、反復的に価値提供するアジャイル開発の代表的なフレームワーク。",
+        "domain": "agile",
+        "keywords": [
+          "スクラム",
+          "スプリント",
+          "フレームワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "バックログ",
+    "senses": [
+      {
+        "definition": "実施候補の作業、要求、改善項目を優先順位付きで管理した一覧。",
+        "domain": "agile",
+        "keywords": [
+          "優先順位",
+          "タスク",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スプリントプランニング",
+    "senses": [
+      {
+        "definition": "次のスプリントで何を実施するか、どう進めるかを決める計画会議。",
+        "domain": "agile",
+        "keywords": [
+          "計画",
+          "スプリント",
+          "見積もり"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "デイリースクラム",
+    "senses": [
+      {
+        "definition": "日々の進捗、障害、予定を短時間で共有し、認識を揃える定例会。",
+        "domain": "agile",
+        "keywords": [
+          "朝会",
+          "進捗",
+          "スタンドアップ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スプリントレビュー",
+    "senses": [
+      {
+        "definition": "スプリント成果を関係者へ共有し、フィードバックを得る会議。",
+        "domain": "agile",
+        "keywords": [
+          "デモ",
+          "フィードバック",
+          "成果物"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ISMAP",
+    "reading": "アイエスマップ",
+    "senses": [
+      {
+        "definition": "政府情報システムで利用するクラウドサービスの安全性を評価・登録する制度。",
+        "domain": "security",
+        "keywords": [
+          "政府",
+          "クラウド",
+          "認証制度"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ゼロトラスト",
+    "senses": [
+      {
+        "definition": "社内外を問わず無条件に信頼せず、常に認証・認可・検証を行う考え方。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "信頼",
+          "アクセス制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SSO",
+    "reading": "エスエスオー",
+    "senses": [
+      {
+        "definition": "一度の認証で複数システムへ連携して利用できる仕組み。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "シングルサインオン",
+          "ID管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "LDAP",
+    "reading": "エルダップ",
+    "senses": [
+      {
+        "definition": "利用者情報や組織情報を階層的に管理・参照するための標準プロトコル。",
+        "domain": "security",
+        "keywords": [
+          "ディレクトリ",
+          "認証",
+          "ID管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lightweight Directory Access Protocol"
+    ]
+  },
+  {
+    "term": "DDoS",
+    "reading": "ディードス",
+    "senses": [
+      {
+        "definition": "大量の通信を送りつけ、サービス停止や遅延を引き起こす攻撃。",
+        "domain": "security",
+        "keywords": [
+          "攻撃",
+          "DoS",
+          "ネットワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Zabbix",
+    "reading": "ザビックス",
+    "senses": [
+      {
+        "definition": "サーバやネットワーク機器の稼働監視に利用される監視ソフトウェア。",
+        "domain": "monitoring",
+        "keywords": [
+          "OSS",
+          "サーバ監視",
+          "アラート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "OpenVPN",
+    "reading": "オープンブイピーエヌ",
+    "senses": [
+      {
+        "definition": "安全な遠隔接続を実現するVPNソフトウェア。",
+        "domain": "security",
+        "keywords": [
+          "VPN",
+          "リモートアクセス",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Sophos",
+    "reading": "ソフォス",
+    "senses": [
+      {
+        "definition": "エンドポイント保護やネットワーク防御を提供するセキュリティ製品群。",
+        "domain": "security",
+        "keywords": [
+          "エンドポイント",
+          "ファイアウォール",
+          "マルウェア対策"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Arcserve UDP",
+    "reading": "アークサーブ ユーディーピー",
+    "senses": [
+      {
+        "definition": "バックアップと復旧を統合的に管理するための製品。",
+        "domain": "operations",
+        "keywords": [
+          "バックアップ",
+          "DR",
+          "復旧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SiteScope",
+    "reading": "サイトスコープ",
+    "senses": [
+      {
+        "definition": "エージェントレス方式でサーバやサービスを監視する運用ツール。",
+        "domain": "monitoring",
+        "keywords": [
+          "エージェントレス",
+          "監視",
+          "運用"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Dr.Sum",
+    "reading": "ドクターサム",
+    "senses": [
+      {
+        "definition": "集計・分析用途に強みを持つ国産系データベース／分析基盤製品。",
+        "domain": "bi",
+        "keywords": [
+          "集計",
+          "分析",
+          "ウイングアーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MotionBoard",
+    "reading": "モーションボード",
+    "senses": [
+      {
+        "definition": "グラフや地図などを使ってデータを可視化するダッシュボード製品。",
+        "domain": "bi",
+        "keywords": [
+          "ダッシュボード",
+          "可視化",
+          "ウイングアーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Datalizer",
+    "reading": "データライザー",
+    "senses": [
+      {
+        "definition": "Dr.Sum上のデータを帳票や分析画面として利用しやすくするツール。",
+        "domain": "bi",
+        "keywords": [
+          "Dr.Sum",
+          "帳票",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Tableau",
+    "reading": "タブロー",
+    "senses": [
+      {
+        "definition": "データの可視化と探索的分析に強いBIツール。",
+        "domain": "bi",
+        "keywords": [
+          "可視化",
+          "ダッシュボード",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SVF",
+    "reading": "エスブイエフ",
+    "senses": [
+      {
+        "definition": "帳票レイアウト設計や印刷出力に広く使われる帳票基盤製品。",
+        "domain": "reporting",
+        "keywords": [
+          "印刷",
+          "帳票設計",
+          "ウイングアーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "JasperReports",
+    "reading": "ジャスパーレポーツ",
+    "senses": [
+      {
+        "definition": "Java系システムで利用される帳票出力ライブラリ。",
+        "domain": "reporting",
+        "keywords": [
+          "Java",
+          "レポート",
+          "OSS"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Apache POI",
+    "reading": "アパッチ ポイ",
+    "senses": [
+      {
+        "definition": "ExcelやWordなどのOfficeファイルをプログラムから操作するためのライブラリ。",
+        "domain": "java",
+        "keywords": [
+          "Excel",
+          "Office",
+          "ファイル操作"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "HULFT Square",
+    "reading": "ハルフトスクエア",
+    "senses": [
+      {
+        "definition": "システム間データ連携や変換処理をクラウド上で実現するサービス。",
+        "domain": "data-integration",
+        "keywords": [
+          "HULFT",
+          "ETL",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Snowpark",
+    "reading": "スノーパーク",
+    "senses": [
+      {
+        "definition": "Snowflake上でアプリケーションやデータ処理を実行できる開発基盤。",
+        "domain": "database",
+        "keywords": [
+          "Snowflake",
+          "開発",
+          "データ処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ROLAP",
+    "reading": "ローラップ",
+    "senses": [
+      {
+        "definition": "リレーショナルデータベース上で集計・分析を行う方式。",
+        "domain": "bi",
+        "keywords": [
+          "OLAP",
+          "RDB",
+          "集計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MOLAP",
+    "reading": "モーラップ",
+    "senses": [
+      {
+        "definition": "事前集計した多次元データ構造を用いて高速に分析する方式。",
+        "domain": "bi",
+        "keywords": [
+          "OLAP",
+          "多次元",
+          "キューブ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "業務フロー",
+    "reading": "ぎょうむフロー",
+    "senses": [
+      {
+        "definition": "業務の手順、担当、分岐、判断を時系列または流れとして整理したもの。",
+        "domain": "business",
+        "keywords": [
+          "フロー図",
+          "手順",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "機能一覧",
+    "reading": "きのういちらん",
+    "senses": [
+      {
+        "definition": "システムが提供する機能を整理して一覧化した資料。",
+        "domain": "design",
+        "keywords": [
+          "設計",
+          "機能",
+          "一覧"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マスタ",
+    "senses": [
+      {
+        "definition": "商品、顧客、組織など、業務の基準となる共通データ。",
+        "domain": "business",
+        "keywords": [
+          "マスタデータ",
+          "基準",
+          "共通"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "マスタメンテナンス",
+    "senses": [
+      {
+        "definition": "マスタデータを登録、変更、削除して最新状態に保つ作業または機能。",
+        "domain": "business",
+        "keywords": [
+          "マスタ",
+          "メンテナンス",
+          "データ管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "インターフェース",
+    "senses": [
+      {
+        "definition": "他システムとのデータ授受や連携方法を定めた接続仕様。",
+        "domain": "integration",
+        "keywords": [
+          "I/F",
+          "連携",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "スプリント計画",
+    "reading": "すぷりんとけいかく",
+    "senses": [
+      {
+        "definition": "スプリントの目標と実施するバックログアイテムをチームで決定する会議です。",
+        "domain": "Agile",
+        "keywords": [
+          "計画",
+          "スプリント",
+          "見積もり"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sprint Planning"
+    ]
+  }
+]

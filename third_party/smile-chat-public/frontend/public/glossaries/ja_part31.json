@@ -1,0 +1,1603 @@
+[
+  {
+    "term": "開発モデル",
+    "reading": "かいはつもでる",
+    "senses": [
+      {
+        "definition": "ソフトウェア開発の進め方を体系化したフレームワーク。ウォーターフォール、アジャイルなど多数が存在する。",
+        "domain": "methodology",
+        "keywords": [
+          "SDLC",
+          "プロセス",
+          "フレームワーク",
+          "開発手法"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development Model"
+    ]
+  },
+  {
+    "term": "ウォーターフォールモデル",
+    "reading": "うぉーたーふぉーるもでる",
+    "senses": [
+      {
+        "definition": "要件定義から設計・製造・テスト・リリースまでを順番に進める線形の開発モデル。前工程の成果物を次工程の入力とする。",
+        "domain": "methodology",
+        "keywords": [
+          "線形",
+          "工程",
+          "順序",
+          "計画駆動"
+        ]
+      }
+    ],
+    "aliases": [
+      "Waterfall Model"
+    ]
+  },
+  {
+    "term": "カスケードウォーターフォールモデル",
+    "reading": "かすけーどうぉーたーふぉーるもでる",
+    "senses": [
+      {
+        "definition": "ウォーターフォールモデルの変形で各工程間にフィードバックループを持たせ前工程への差し戻しを許容する開発モデル。",
+        "domain": "methodology",
+        "keywords": [
+          "フィードバック",
+          "差し戻し",
+          "工程",
+          "ウォーターフォール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cascade Waterfall Model"
+    ]
+  },
+  {
+    "term": "プロトタイピングモデル",
+    "reading": "ぷろとたいぴんぐもでる",
+    "senses": [
+      {
+        "definition": "開発初期にプロトタイプを作成しユーザーのフィードバックを得ながら要件を確定させる開発モデル。",
+        "domain": "methodology",
+        "keywords": [
+          "プロトタイプ",
+          "フィードバック",
+          "要件確定",
+          "反復"
+        ]
+      }
+    ],
+    "aliases": [
+      "Prototyping Model"
+    ]
+  },
+  {
+    "term": "SDLC",
+    "senses": [
+      {
+        "definition": "Software Development Life Cycleの略。ソフトウェア開発の全工程を定義したライフサイクルモデル。",
+        "domain": "methodology",
+        "keywords": [
+          "ソフトウェア開発",
+          "ライフサイクル",
+          "工程",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "えすでぃーえるしー"
+  },
+  {
+    "term": "インクリメンタルモデル",
+    "reading": "いんくりめんたるもでる",
+    "senses": [
+      {
+        "definition": "システムを小さな増分に分割して段階的に開発・リリースしていく開発モデル。",
+        "domain": "methodology",
+        "keywords": [
+          "増分",
+          "段階的",
+          "リリース",
+          "反復"
+        ]
+      }
+    ],
+    "aliases": [
+      "Incremental Model"
+    ]
+  },
+  {
+    "term": "スパイラル開発",
+    "reading": "すぱいらるかいはつ",
+    "senses": [
+      {
+        "definition": "リスク分析を軸に計画・設計・実装・評価を繰り返すBoehm提唱の開発モデル。リスク駆動型反復開発。",
+        "domain": "methodology",
+        "keywords": [
+          "リスク分析",
+          "反復",
+          "Boehm",
+          "プロトタイプ"
+        ]
+      }
+    ],
+    "aliases": [
+      "スパイラルモデル",
+      "Spiral Development",
+      "Spiral Model"
+    ]
+  },
+  {
+    "term": "アジャイル開発モデル",
+    "reading": "あじゃいるかいはつもでる",
+    "senses": [
+      {
+        "definition": "短い反復サイクルで動作するソフトウェアを継続的に提供するアジャイル宣言に基づく開発モデル群の総称。",
+        "domain": "methodology",
+        "keywords": [
+          "反復",
+          "スプリント",
+          "アジャイル宣言",
+          "スクラム"
+        ]
+      }
+    ],
+    "aliases": [
+      "Agile Development Model"
+    ]
+  },
+  {
+    "term": "アジリティ",
+    "reading": "あじりてぃ",
+    "senses": [
+      {
+        "definition": "変化に素早く適応する組織・チームの能力。アジャイル開発において重要な概念。",
+        "domain": "methodology",
+        "keywords": [
+          "適応力",
+          "変化対応",
+          "スピード",
+          "組織能力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Agility"
+    ]
+  },
+  {
+    "term": "スコープ固定",
+    "reading": "すこーぷこてい",
+    "senses": [
+      {
+        "definition": "ウォーターフォール型開発において要件・機能範囲を契約時に確定させ変更しないアプローチ。",
+        "domain": "project-management",
+        "keywords": [
+          "要件固定",
+          "契約",
+          "変更管理",
+          "ウォーターフォール"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fixed Scope"
+    ]
+  },
+  {
+    "term": "コスト・タイム固定",
+    "reading": "こすと・たいむこてい",
+    "senses": [
+      {
+        "definition": "アジャイル開発においてコストと期間を固定しスコープを変動させるアプローチ。",
+        "domain": "project-management",
+        "keywords": [
+          "固定費",
+          "期間",
+          "スコープ",
+          "アジャイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ICONIX",
+    "senses": [
+      {
+        "definition": "ユースケース駆動でロバストネス分析を中心に据えた軽量オブジェクト指向開発プロセス。",
+        "domain": "methodology",
+        "keywords": [
+          "ユースケース",
+          "ロバストネス",
+          "OOP",
+          "軽量プロセス"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "あいこにっくす"
+  },
+  {
+    "term": "コンテキスト中心モデル",
+    "reading": "こんてきすとちゅうしんもでる",
+    "senses": [
+      {
+        "definition": "システムの使われる文脈・状況を中心に分析・設計を進める開発アプローチ。",
+        "domain": "methodology",
+        "keywords": [
+          "コンテキスト",
+          "文脈",
+          "分析",
+          "ユースケース"
+        ]
+      }
+    ],
+    "aliases": [
+      "Context-Centered Model"
+    ]
+  },
+  {
+    "term": "コンテンツ中心モデル",
+    "reading": "こんてんつちゅうしんもでる",
+    "senses": [
+      {
+        "definition": "扱うデータやコンテンツの構造を中心に据えて開発を進めるモデル。データ中心アプローチとも関連する。",
+        "domain": "methodology",
+        "keywords": [
+          "データ",
+          "コンテンツ",
+          "構造",
+          "DOA"
+        ]
+      }
+    ],
+    "aliases": [
+      "Content-Centered Model"
+    ]
+  },
+  {
+    "term": "EXE標準工程モデル",
+    "reading": "えぐぜひょうじゅんこうていもでる",
+    "senses": [
+      {
+        "definition": "特定組織が定義した標準的な開発工程モデル。各フェーズの成果物と検証基準を規定する。",
+        "domain": "methodology",
+        "keywords": [
+          "標準工程",
+          "成果物",
+          "フェーズ",
+          "プロセス定義"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "共通フレーム",
+    "reading": "きょうつうふれーむ",
+    "senses": [
+      {
+        "definition": "日本のソフトウェア開発・取引における共通の枠組み。SLCP-JCF（共通フレーム）として標準化されている。",
+        "domain": "methodology",
+        "keywords": [
+          "SLCP",
+          "標準",
+          "JIS",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": [
+      "SLCP-JCF"
+    ]
+  },
+  {
+    "term": "要件定義工程",
+    "reading": "ようけんていぎこうてい",
+    "senses": [
+      {
+        "definition": "システムが実現すべき機能・性能・制約を明確化する工程。利害関係者の要望を要件として文書化する。",
+        "domain": "methodology",
+        "keywords": [
+          "要件",
+          "機能",
+          "文書化",
+          "ステークホルダー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "基本設計工程",
+    "reading": "きほんせっけいこうてい",
+    "senses": [
+      {
+        "definition": "要件定義をもとにシステムの外部仕様・アーキテクチャを設計する工程。画面・帳票・DB概要設計を含む。",
+        "domain": "methodology",
+        "keywords": [
+          "外部仕様",
+          "アーキテクチャ",
+          "設計",
+          "基本設計書"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "詳細設計工程",
+    "reading": "しょうさいせっけいこうてい",
+    "senses": [
+      {
+        "definition": "基本設計を受けてモジュール単位の内部仕様・ロジックを設計する工程。プログラム仕様書を作成する。",
+        "domain": "methodology",
+        "keywords": [
+          "内部仕様",
+          "モジュール",
+          "ロジック",
+          "プログラム設計"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "製造＋UT工程",
+    "reading": "せいぞうぷらすゆーてぃこうてい",
+    "senses": [
+      {
+        "definition": "ソースコードのコーディングとユニットテスト（単体テスト）を合わせて実施する開発工程。",
+        "domain": "methodology",
+        "keywords": [
+          "コーディング",
+          "単体テスト",
+          "UT",
+          "製造"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "機能単体テスト工程",
+    "reading": "きのうたんたいてすとこうてい",
+    "senses": [
+      {
+        "definition": "個々の機能単位でインプット・アウトプットを検証するテスト工程。機能間の統合前に実施する。",
+        "domain": "testing",
+        "keywords": [
+          "機能テスト",
+          "単体テスト",
+          "検証",
+          "テスト工程"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "結合テスト工程",
+    "reading": "けつごうてすとこうてい",
+    "senses": [
+      {
+        "definition": "複数のモジュール・コンポーネントを組み合わせてインターフェースや連携動作を検証するテスト工程。",
+        "domain": "testing",
+        "keywords": [
+          "インテグレーション",
+          "結合",
+          "インターフェース",
+          "テスト"
+        ]
+      }
+    ],
+    "aliases": [
+      "IT工程"
+    ]
+  },
+  {
+    "term": "システムテスト工程",
+    "reading": "しすてむてすとこうてい",
+    "senses": [
+      {
+        "definition": "システム全体を通して要件を満たすか検証するテスト工程。非機能要件も対象とする。",
+        "domain": "testing",
+        "keywords": [
+          "システムテスト",
+          "検証",
+          "非機能",
+          "受入前"
+        ]
+      }
+    ],
+    "aliases": [
+      "ST工程"
+    ]
+  },
+  {
+    "term": "ユーザーテスト工程",
+    "reading": "ゆーざーてすとこうてい",
+    "senses": [
+      {
+        "definition": "実際のユーザーがシステムを操作して業務要件・使用性を検証するテスト工程。UAT（User Acceptance Test）とも呼ばれる。",
+        "domain": "testing",
+        "keywords": [
+          "UAT",
+          "受入テスト",
+          "ユーザー",
+          "業務検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "テーラリング",
+    "reading": "てーらりんぐ",
+    "senses": [
+      {
+        "definition": "標準プロセスをプロジェクトの特性に合わせてカスタマイズすること。工程・成果物・レビュー基準などを調整する。",
+        "domain": "methodology",
+        "keywords": [
+          "カスタマイズ",
+          "プロセス",
+          "調整",
+          "標準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Tailoring"
+    ]
+  },
+  {
+    "term": "開発プロセス設計",
+    "reading": "かいはつぷろせすせっけい",
+    "senses": [
+      {
+        "definition": "プロジェクトに適した開発手法・工程・成果物・品質基準を定義しプロセスを設計する活動。",
+        "domain": "methodology",
+        "keywords": [
+          "プロセス定義",
+          "工程設計",
+          "成果物",
+          "品質基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development Process Design"
+    ]
+  },
+  {
+    "term": "開発と製造",
+    "reading": "かいはつとせいぞう",
+    "senses": [
+      {
+        "definition": "ソフトウェア開発における設計（開発）とコーディング（製造）の二つのフェーズを区別した概念。",
+        "domain": "methodology",
+        "keywords": [
+          "設計",
+          "コーディング",
+          "フェーズ",
+          "工程"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development and Construction"
+    ]
+  },
+  {
+    "term": "開発フレームワーク構築",
+    "reading": "かいはつふれーむわーくこうちく",
+    "senses": [
+      {
+        "definition": "プロジェクト全体で使用する技術的な骨格（フレームワーク）を早期に実装・検証する活動。",
+        "domain": "software-engineering",
+        "keywords": [
+          "フレームワーク",
+          "骨格",
+          "初期構築",
+          "アーキテクチャ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Development Framework Construction"
+    ]
+  },
+  {
+    "term": "成果物フロー",
+    "reading": "せいかぶつふろー",
+    "senses": [
+      {
+        "definition": "各開発工程で作成される成果物の入出力関係を示したフロー。工程間のドキュメント依存関係を明示する。",
+        "domain": "methodology",
+        "keywords": [
+          "成果物",
+          "入出力",
+          "工程",
+          "ドキュメント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deliverable Flow"
+    ]
+  },
+  {
+    "term": "検収モデル",
+    "reading": "けんしゅうもでる",
+    "senses": [
+      {
+        "definition": "発注者がシステムを受け入れる際の検査・承認プロセスを定義したモデル。受入基準と手順を規定する。",
+        "domain": "project-management",
+        "keywords": [
+          "受入",
+          "検収",
+          "承認",
+          "品質基準"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "構造化手法",
+    "reading": "こうぞうかしゅほう",
+    "senses": [
+      {
+        "definition": "DFD・ERDなどの記法を用いてシステムを機能・データ構造から分析・設計する伝統的な手法。",
+        "domain": "methodology",
+        "keywords": [
+          "DFD",
+          "ERD",
+          "機能分解",
+          "データフロー"
+        ]
+      }
+    ],
+    "aliases": [
+      "SA/SD",
+      "Structured Method"
+    ]
+  },
+  {
+    "term": "POA",
+    "senses": [
+      {
+        "definition": "Process-Oriented Approachの略。業務プロセスを中心に据えてシステムを分析・設計する手法。",
+        "domain": "methodology",
+        "keywords": [
+          "プロセス指向",
+          "業務フロー",
+          "分析",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "ぴーおーえー"
+  },
+  {
+    "term": "DOA",
+    "senses": [
+      {
+        "definition": "Data-Oriented Approachの略。データ構造を中心に据えてシステムを分析・設計する手法。",
+        "domain": "methodology",
+        "keywords": [
+          "データ指向",
+          "ERモデル",
+          "構造",
+          "分析"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "でぃーおーえー"
+  },
+  {
+    "term": "OOA",
+    "senses": [
+      {
+        "definition": "Object-Oriented Analysisの略。オブジェクトの概念を用いてシステムを分析する手法。クラス・関連・振る舞いを定義する。",
+        "domain": "methodology",
+        "keywords": [
+          "オブジェクト指向",
+          "分析",
+          "クラス",
+          "UML"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "おーおーえー"
+  },
+  {
+    "term": "図解言語",
+    "reading": "ずかいげんご",
+    "senses": [
+      {
+        "definition": "概念や構造を視覚的に表現するための図・記号・記法の体系。UMLやDFDなどが代表例。",
+        "domain": "modeling",
+        "keywords": [
+          "記法",
+          "可視化",
+          "図",
+          "モデリング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ホムンクルス",
+    "reading": "ほむんくるす",
+    "senses": [
+      {
+        "definition": "図解において人間を表す棒人間アイコン。ユースケース図のアクターなどに使用される。",
+        "domain": "modeling",
+        "keywords": [
+          "アクター",
+          "UML",
+          "棒人間",
+          "ユースケース"
+        ]
+      }
+    ],
+    "aliases": [
+      "Homunculus"
+    ]
+  },
+  {
+    "term": "マジックナンバー4±1",
+    "reading": "まじっくなんばーよんぷらすまいなすいち",
+    "senses": [
+      {
+        "definition": "人間が短期記憶で同時に保持できる情報の数は約4±1であるという認知心理学の知見。図解の情報量設計に活用。",
+        "domain": "modeling",
+        "keywords": [
+          "認知",
+          "短期記憶",
+          "情報量",
+          "図解"
+        ]
+      }
+    ],
+    "aliases": [
+      "Magic Number 4±1"
+    ]
+  },
+  {
+    "term": "マインドマップ",
+    "reading": "まいんどまっぷ",
+    "senses": [
+      {
+        "definition": "中心テーマから放射状に関連アイデアを枝として展開するビジュアル思考ツール。",
+        "domain": "modeling",
+        "keywords": [
+          "ブレインストーミング",
+          "発散思考",
+          "可視化",
+          "アイデア"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mind Map"
+    ]
+  },
+  {
+    "term": "自由形式の図",
+    "reading": "じゆうけいしきのず",
+    "senses": [
+      {
+        "definition": "厳密な記法に縛られず概念や構造を自由に表現するための非形式的な図。スケッチとも呼ばれる。",
+        "domain": "modeling",
+        "keywords": [
+          "スケッチ",
+          "非形式",
+          "自由",
+          "コミュニケーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "UMLスケッチ",
+    "reading": "ゆーえむえるすけっち",
+    "senses": [
+      {
+        "definition": "UMLの記法を厳密に守らずコミュニケーション目的でラフに描いたUML図。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "スケッチ",
+          "コミュニケーション",
+          "非形式"
+        ]
+      }
+    ],
+    "aliases": [
+      "UML Sketch"
+    ]
+  },
+  {
+    "term": "デバイス",
+    "reading": "でばいす",
+    "senses": [
+      {
+        "definition": "UML配置図においてハードウェアノードを表すステレオタイプ。サーバ・PC・モバイル端末などを示す。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "配置図",
+          "ハードウェア",
+          "ノード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "実行環境",
+    "reading": "じっこうかんきょう",
+    "senses": [
+      {
+        "definition": "ソフトウェアコンポーネントが動作する実行時の基盤。OSやアプリケーションサーバなどを含む。",
+        "domain": "software-engineering",
+        "keywords": [
+          "ランタイム",
+          "OS",
+          "アプリケーションサーバ",
+          "デプロイ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Execution Environment"
+    ]
+  },
+  {
+    "term": "提供インターフェース",
+    "reading": "ていきょうインターフェース",
+    "senses": [
+      {
+        "definition": "UMLコンポーネント図においてコンポーネントが外部に提供するインターフェース（ロリポップ記号）。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "コンポーネント",
+          "インターフェース",
+          "提供"
+        ]
+      }
+    ],
+    "aliases": [
+      "Provided Interface"
+    ]
+  },
+  {
+    "term": "要求インターフェース",
+    "reading": "ようきゅうインターフェース",
+    "senses": [
+      {
+        "definition": "UMLコンポーネント図においてコンポーネントが外部に要求するインターフェース（ソケット記号）。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "コンポーネント",
+          "依存",
+          "要求"
+        ]
+      }
+    ],
+    "aliases": [
+      "Required Interface"
+    ]
+  },
+  {
+    "term": "ロバストネス図",
+    "reading": "ろばすとねすず",
+    "senses": [
+      {
+        "definition": "ICONIXプロセスで用いるユースケースをバウンダリ・コントロール・エンティティの3要素で表現した分析図。",
+        "domain": "modeling",
+        "keywords": [
+          "ICONIX",
+          "BCE",
+          "分析",
+          "ユースケース"
+        ]
+      }
+    ],
+    "aliases": [
+      "ロバストネス分析図",
+      "Robustness Diagram",
+      "Robustness Analysis Diagram"
+    ]
+  },
+  {
+    "term": "バウンダリ",
+    "reading": "ばうんだりぃ",
+    "senses": [
+      {
+        "definition": "ロバストネス図において境界（画面・外部システムなど）を表すオブジェクト種別。",
+        "domain": "modeling",
+        "keywords": [
+          "BCE",
+          "境界",
+          "画面",
+          "ロバストネス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Boundary"
+    ]
+  },
+  {
+    "term": "コントロール",
+    "reading": "こんとろーる",
+    "senses": [
+      {
+        "definition": "ロバストネス図においてビジネスロジック・制御を担うオブジェクト種別。",
+        "domain": "modeling",
+        "keywords": [
+          "BCE",
+          "ロジック",
+          "制御",
+          "ロバストネス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "属性",
+    "reading": "ぞくせい",
+    "senses": [
+      {
+        "definition": "UMLクラス図においてクラスのデータ項目を表す要素。型と可視性を持つ。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "クラス",
+          "データ",
+          "フィールド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "操作",
+    "reading": "そうさ",
+    "senses": [
+      {
+        "definition": "UMLクラス図においてクラスの振る舞い（メソッド）を表す要素。シグニチャと可視性を持つ。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "メソッド",
+          "振る舞い",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "可視性",
+    "reading": "かしせい",
+    "senses": [
+      {
+        "definition": "UMLにおいてクラスのメンバーへのアクセス制御を示す概念。public(+)・protected(#)・private(-)などがある。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "アクセス制御",
+          "カプセル化",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "抽象クラス",
+    "reading": "ちゅうしょうくらす",
+    "senses": [
+      {
+        "definition": "インスタンス化できないクラス。サブクラスが実装すべき抽象メソッドを定義する。UMLではクラス名をイタリック体で表記。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "抽象",
+          "継承",
+          "OOP"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "汎化",
+    "reading": "はんか",
+    "senses": [
+      {
+        "definition": "UMLにおけるクラス間の継承関係を表す関係。サブクラスはスーパークラスを特殊化したもの。",
+        "domain": "modeling",
+        "keywords": [
+          "継承",
+          "UML",
+          "スーパークラス",
+          "サブクラス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Generalization"
+    ]
+  },
+  {
+    "term": "ライフライン",
+    "reading": "らいふらいん",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図において参加オブジェクト・コンポーネントを表す垂直の破線。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "UML",
+          "オブジェクト",
+          "時系列"
+        ]
+      }
+    ],
+    "aliases": [
+      "Lifeline"
+    ]
+  },
+  {
+    "term": "アクティベーション",
+    "reading": "あくてぃべーしょん",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図においてオブジェクトがメッセージを処理している期間を示す薄い矩形。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "UML",
+          "処理期間",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "同期メッセージ",
+    "reading": "どうきめっせーじ",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図において送信側が応答を待つメッセージ。実線塗りつぶし矢印で表す。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "同期",
+          "呼び出し",
+          "UML"
+        ]
+      }
+    ],
+    "aliases": [
+      "Synchronous Message"
+    ]
+  },
+  {
+    "term": "非同期メッセージ",
+    "reading": "ひどうきめっせーじ",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図において送信側が応答を待たないメッセージ。開いた矢印で表す。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "非同期",
+          "イベント",
+          "UML"
+        ]
+      }
+    ],
+    "aliases": [
+      "Asynchronous Message"
+    ]
+  },
+  {
+    "term": "戻り値メッセージ",
+    "reading": "もどりちめっせーじ",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図において呼び出しの応答として返されるメッセージ。破線矢印で表す。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "レスポンス",
+          "戻り値",
+          "UML"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "データモデリング",
+    "reading": "でーたもでりんぐ",
+    "senses": [
+      {
+        "definition": "業務で扱うデータの構造・関係・制約を抽象的に表現するモデルを作成する活動。",
+        "domain": "modeling",
+        "keywords": [
+          "ERモデル",
+          "データ設計",
+          "構造",
+          "DB"
+        ]
+      }
+    ],
+    "aliases": [
+      "Data Modeling"
+    ]
+  },
+  {
+    "term": "ERモデル",
+    "reading": "いーあーるもでる",
+    "senses": [
+      {
+        "definition": "エンティティ（実体）とリレーションシップ（関連）を用いてデータ構造を表現するモデル。",
+        "domain": "modeling",
+        "keywords": [
+          "エンティティ",
+          "リレーションシップ",
+          "データベース",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "E-Rモデル",
+      "実体関連モデル",
+      "ER Model",
+      "E-R Model",
+      "Entity-Relationship Model"
+    ]
+  },
+  {
+    "term": "Peter Chen記法",
+    "reading": "ぴーたーちぇんきほう",
+    "senses": [
+      {
+        "definition": "ERモデルの原典的記法。エンティティを矩形・関連をひし形・属性を楕円で表現する。",
+        "domain": "modeling",
+        "keywords": [
+          "ER図",
+          "記法",
+          "エンティティ",
+          "関連"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Crow's Foot記法",
+    "reading": "くろーずふっときほう",
+    "senses": [
+      {
+        "definition": "ERモデルの記法の一つ。関係の多重度をカラスの足に似た記号で表現する。",
+        "domain": "modeling",
+        "keywords": [
+          "ER図",
+          "多重度",
+          "記法",
+          "カーディナリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "鳥の足記法"
+    ]
+  },
+  {
+    "term": "IDEF1X",
+    "senses": [
+      {
+        "definition": "米国防総省が標準化したERモデリング記法。主にデータ統合・リレーショナルDB設計に使われる。",
+        "domain": "modeling",
+        "keywords": [
+          "ER図",
+          "記法",
+          "標準",
+          "データ統合"
+        ]
+      }
+    ],
+    "aliases": [],
+    "reading": "あいでふわんえっくす"
+  },
+  {
+    "term": "概念ER",
+    "reading": "がいねんいーあーる",
+    "senses": [
+      {
+        "definition": "業務の概念・ルールをエンティティと関連で表現したERモデルの最初の抽象レベル。",
+        "domain": "modeling",
+        "keywords": [
+          "抽象",
+          "概念",
+          "ER",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "概念ERモデル",
+      "Conceptual ER",
+      "Conceptual ER Model"
+    ]
+  },
+  {
+    "term": "論理ER",
+    "reading": "ろんりいーあーる",
+    "senses": [
+      {
+        "definition": "概念ERをDBMS非依存の形で正規化・詳細化したERモデルの中間レベル。",
+        "domain": "modeling",
+        "keywords": [
+          "正規化",
+          "論理",
+          "ER",
+          "DBMS非依存"
+        ]
+      }
+    ],
+    "aliases": [
+      "論理ERモデル",
+      "Logical ER",
+      "Logical ER Model"
+    ]
+  },
+  {
+    "term": "物理ER",
+    "reading": "ぶつりいーあーる",
+    "senses": [
+      {
+        "definition": "特定DBMSの制約・実装を考慮した最終的なERモデル。テーブル定義書と対応する。",
+        "domain": "database",
+        "keywords": [
+          "DBMS",
+          "テーブル",
+          "物理設計",
+          "ER"
+        ]
+      }
+    ],
+    "aliases": [
+      "物理ERモデル",
+      "Physical ER",
+      "Physical ER Model"
+    ]
+  },
+  {
+    "term": "Mermaid",
+    "reading": "まーめいど",
+    "senses": [
+      {
+        "definition": "Markdownライクなテキストからフローチャート、シーケンス図、ER図などを生成できる図表記法・ツールです。",
+        "domain": "modeling",
+        "keywords": [
+          "diagram",
+          "flowchart",
+          "sequence",
+          "ER図",
+          "markdown"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mermaid.js"
+    ]
+  },
+  {
+    "term": "コスト・期間固定",
+    "reading": "こすときかんこてい",
+    "senses": [
+      {
+        "definition": "コストとスケジュールを固定し、スコープを変動させることを許容するアジャイルのアプローチです。",
+        "domain": "project-management",
+        "keywords": [
+          "固定コスト",
+          "スケジュール",
+          "スコープ",
+          "アジャイル"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fixed Cost and Time"
+    ]
+  },
+  {
+    "term": "EXE標準プロセスモデル",
+    "reading": "いーえっくすいーひょうじゅんぷろせすもでる",
+    "senses": [
+      {
+        "definition": "特定組織が定義した標準開発プロセスモデルで、各フェーズの成果物と検証基準を明示したものです。",
+        "domain": "methodology",
+        "keywords": [
+          "標準プロセス",
+          "成果物",
+          "フェーズ",
+          "プロセス定義"
+        ]
+      }
+    ],
+    "aliases": [
+      "EXE Standard Process Model"
+    ]
+  },
+  {
+    "term": "要件定義フェーズ",
+    "reading": "ようけんていぎふぇーず",
+    "senses": [
+      {
+        "definition": "ステークホルダーのニーズに基づき、システムが満たすべき機能・性能・制約を明確化してドキュメント化するフェーズです。",
+        "domain": "methodology",
+        "keywords": [
+          "要件",
+          "機能",
+          "ドキュメント化",
+          "ステークホルダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Requirements Definition Phase"
+    ]
+  },
+  {
+    "term": "基本設計フェーズ",
+    "reading": "きほんせっけいふぇーず",
+    "senses": [
+      {
+        "definition": "要件を基にシステムの外部仕様とアーキテクチャを設計するフェーズで、画面・帳票・データベース概要の設計を含みます。",
+        "domain": "methodology",
+        "keywords": [
+          "外部仕様",
+          "アーキテクチャ",
+          "設計",
+          "基本設計書"
+        ]
+      }
+    ],
+    "aliases": [
+      "Basic Design Phase"
+    ]
+  },
+  {
+    "term": "詳細設計フェーズ",
+    "reading": "しょうさいせっけいふぇーず",
+    "senses": [
+      {
+        "definition": "基本設計に続き、モジュール単位で内部仕様とロジックを設計し、プログラム仕様書を作成するフェーズです。",
+        "domain": "methodology",
+        "keywords": [
+          "内部仕様",
+          "モジュール",
+          "ロジック",
+          "プログラム設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Detailed Design Phase"
+    ]
+  },
+  {
+    "term": "製造・単体テストフェーズ",
+    "reading": "せいぞうたんたいてすとふぇーず",
+    "senses": [
+      {
+        "definition": "ソースコードを記述し、単体テストを実施する開発フェーズです。",
+        "domain": "methodology",
+        "keywords": [
+          "コーディング",
+          "単体テスト",
+          "UT",
+          "製造"
+        ]
+      }
+    ],
+    "aliases": [
+      "Construction and Unit Testing Phase"
+    ]
+  },
+  {
+    "term": "機能単体テストフェーズ",
+    "reading": "きのうたんたいてすとふぇーず",
+    "senses": [
+      {
+        "definition": "結合前に個々の機能単位の入出力を検証するテストフェーズです。",
+        "domain": "testing",
+        "keywords": [
+          "機能テスト",
+          "単体テスト",
+          "検証",
+          "テストフェーズ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Functional Unit Testing Phase"
+    ]
+  },
+  {
+    "term": "結合テストフェーズ",
+    "reading": "けつごうてすとふぇーず",
+    "senses": [
+      {
+        "definition": "複数のモジュールやコンポーネントを組み合わせてインターフェースと連携動作を検証するテストフェーズです。",
+        "domain": "testing",
+        "keywords": [
+          "結合",
+          "インターフェース",
+          "テスト",
+          "コンポーネント"
+        ]
+      }
+    ],
+    "aliases": [
+      "Integration Testing Phase",
+      "IT Phase"
+    ]
+  },
+  {
+    "term": "システムテストフェーズ",
+    "reading": "しすてむてすとふぇーず",
+    "senses": [
+      {
+        "definition": "システム全体が要件を満たしているかを非機能要件も含めて検証するテストフェーズです。",
+        "domain": "testing",
+        "keywords": [
+          "システムテスト",
+          "検証",
+          "非機能",
+          "受入前"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Testing Phase",
+      "ST Phase"
+    ]
+  },
+  {
+    "term": "ユーザーテストフェーズ",
+    "reading": "ゆーざーてすとふぇーず",
+    "senses": [
+      {
+        "definition": "実際のユーザーがシステムを操作し業務要件と使いやすさを確認するテストフェーズです。UAT（ユーザー受入テスト）とも呼ばれます。",
+        "domain": "testing",
+        "keywords": [
+          "UAT",
+          "受入テスト",
+          "ユーザー",
+          "業務検証"
+        ]
+      }
+    ],
+    "aliases": [
+      "User Testing Phase"
+    ]
+  },
+  {
+    "term": "受入モデル",
+    "reading": "うけいれもでる",
+    "senses": [
+      {
+        "definition": "クライアントがシステムを検収・承認する際に使用する検査・承認プロセスを定義したモデルです。",
+        "domain": "project-management",
+        "keywords": [
+          "検収",
+          "検査",
+          "承認",
+          "品質基準"
+        ]
+      }
+    ],
+    "aliases": [
+      "Acceptance Model"
+    ]
+  },
+  {
+    "term": "図式言語",
+    "reading": "ずしきげんご",
+    "senses": [
+      {
+        "definition": "概念や構造を視覚的に表現するための図・記号・記法体系です。UMLやDFDが代表例です。",
+        "domain": "modeling",
+        "keywords": [
+          "記法",
+          "可視化",
+          "図",
+          "モデリング"
+        ]
+      }
+    ],
+    "aliases": [
+      "Diagramming Language"
+    ]
+  },
+  {
+    "term": "フリーフォーム図",
+    "reading": "ふりーふぉーむず",
+    "senses": [
+      {
+        "definition": "厳密な記法にとらわれず概念や構造を自由に表現したインフォーマルな図です。スケッチとも呼ばれます。",
+        "domain": "modeling",
+        "keywords": [
+          "スケッチ",
+          "非公式",
+          "自由",
+          "コミュニケーション"
+        ]
+      }
+    ],
+    "aliases": [
+      "Free-Form Diagram"
+    ]
+  },
+  {
+    "term": "デバイス（UML）",
+    "reading": "でばいすゆーえむえる",
+    "senses": [
+      {
+        "definition": "UML配置図においてサーバーやPC、モバイル機器などのハードウェアノードを表すステレオタイプです。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "配置図",
+          "ハードウェア",
+          "ノード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Device"
+    ]
+  },
+  {
+    "term": "属性（UML）",
+    "reading": "ぞくせいゆーえむえる",
+    "senses": [
+      {
+        "definition": "UMLクラス図においてクラスのデータ項目を表す要素で、型と可視性を持ちます。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "クラス",
+          "データ",
+          "フィールド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Attribute"
+    ]
+  },
+  {
+    "term": "オペレーション",
+    "reading": "おぺれーしょん",
+    "senses": [
+      {
+        "definition": "UMLクラス図においてクラスの振る舞い（メソッド）を表す要素で、シグネチャと可視性を持ちます。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "メソッド",
+          "振る舞い",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operation"
+    ]
+  },
+  {
+    "term": "可視性（UML）",
+    "reading": "かしせいゆーえむえる",
+    "senses": [
+      {
+        "definition": "UMLにおけるクラスメンバーのアクセス制御の概念です。public(+)・protected(#)・private(-)などの値があります。",
+        "domain": "modeling",
+        "keywords": [
+          "UML",
+          "アクセス制御",
+          "カプセル化",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": [
+      "Visibility"
+    ]
+  },
+  {
+    "term": "実行仕様（アクティベーション）",
+    "reading": "じっこうしようあくてぃべーしょん",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図においてオブジェクトがメッセージを処理している期間を示す細い矩形です。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "UML",
+          "処理期間",
+          "実行"
+        ]
+      }
+    ],
+    "aliases": [
+      "Activation"
+    ]
+  },
+  {
+    "term": "応答メッセージ",
+    "reading": "おうとうめっせーじ",
+    "senses": [
+      {
+        "definition": "UMLシーケンス図において呼び出しへの応答として返されるメッセージで、破線矢印で表現されます。",
+        "domain": "modeling",
+        "keywords": [
+          "シーケンス図",
+          "応答",
+          "戻り値",
+          "UML"
+        ]
+      }
+    ],
+    "aliases": [
+      "Return Message"
+    ]
+  },
+  {
+    "term": "クロウズフット記法",
+    "reading": "くろうずふっときほう",
+    "senses": [
+      {
+        "definition": "リレーションシップのカーディナリティをカラス足記号で表現するER記法です。",
+        "domain": "modeling",
+        "keywords": [
+          "ER図",
+          "カーディナリティ",
+          "記法",
+          "多重度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Crow's Foot Notation",
+      "Bird's Foot Notation"
+    ]
+  }
+]

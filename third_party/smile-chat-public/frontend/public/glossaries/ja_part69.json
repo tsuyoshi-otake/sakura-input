@@ -1,0 +1,1947 @@
+[
+  {
+    "term": "GitHubリポジトリ",
+    "reading": "ぎっとはぶりぽじとり",
+    "aliases": [
+      "GitHub Repository"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubでコードやファイルをGit管理するプロジェクトの保存場所。Issue・PR・Actions・Wikiなどの機能が統合されており、公開・非公開・内部の3種の可視性を選択できる。",
+        "domain": "github",
+        "keywords": [
+          "リポジトリ",
+          "ソースコード",
+          "バージョン管理",
+          "GitHub",
+          "プロジェクト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Organization",
+    "reading": "ぎっとはぶおーがにぜーしょん",
+    "aliases": [
+      "GitHub Org"
+    ],
+    "senses": [
+      {
+        "definition": "企業やOSSプロジェクトが複数のリポジトリとメンバーをまとめて管理するGitHubのアカウント単位。チーム・権限・ポリシー・支払いを一元管理でき、個人アカウントとは独立して運用する。",
+        "domain": "github",
+        "keywords": [
+          "組織",
+          "チーム",
+          "権限",
+          "リポジトリ管理",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Enterprise",
+    "reading": "ぎっとはぶえんたーぷらいず",
+    "aliases": [
+      "GHE",
+      "GitHub Enterprise Cloud",
+      "GitHub Enterprise Server"
+    ],
+    "senses": [
+      {
+        "definition": "大規模企業向けのGitHubプラン。SAML SSO・監査ログ・SCIM・Enterpriseポリシー・IPホワイトリストなどを提供する。クラウド版とオンプレミスのServer版がある。",
+        "domain": "github",
+        "keywords": [
+          "エンタープライズ",
+          "SSO",
+          "監査",
+          "SCIM",
+          "プラン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Gist",
+    "reading": "ぎっとはぶぎすと",
+    "aliases": [
+      "Gist"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが提供するコードスニペットやテキストを共有するサービス。単一ファイルから複数ファイルのセットを公開・非公開で保存でき、各GistはGitリポジトリとして管理されバージョン履歴も持つ。",
+        "domain": "github",
+        "keywords": [
+          "スニペット",
+          "共有",
+          "コード",
+          "メモ",
+          "バージョン管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Discussions",
+    "reading": "ぎっとはぶでぃすかっしょんず",
+    "aliases": [
+      "Discussions"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリやOrganization内でコミュニティの会話・Q&A・アイデア共有を行うフォーラム機能。Issueと異なり具体的なタスクではなくオープンな議論や情報共有を目的とする。",
+        "domain": "github",
+        "keywords": [
+          "コミュニティ",
+          "フォーラム",
+          "Q&A",
+          "議論",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Issues",
+    "reading": "ぎっとはぶいしゅーず",
+    "aliases": [
+      "Issues",
+      "Issue Tracker"
+    ],
+    "senses": [
+      {
+        "definition": "バグ報告・機能要望・タスク管理などをリポジトリ単位で追跡するGitHubの課題管理機能。ラベル・マイルストーン・アサイニー・プロジェクトと連携して進捗を管理する。",
+        "domain": "github",
+        "keywords": [
+          "課題管理",
+          "バグ",
+          "タスク",
+          "トラッキング",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Projects",
+    "reading": "ぎっとはぶぷろじぇくつ",
+    "aliases": [
+      "Projects",
+      "GitHub Projects v2"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub IssueやPRをボード・テーブル・ロードマップなど複数ビューで管理するプロジェクト管理ツール。カスタムフィールドや自動化ワークフローを持ち、Organizationをまたいで利用できる。",
+        "domain": "github",
+        "keywords": [
+          "プロジェクト管理",
+          "ボード",
+          "ロードマップ",
+          "Issue",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHubマイルストーン",
+    "reading": "ぎっとはぶまいるすとーん",
+    "aliases": [
+      "GitHub Milestones",
+      "Sprint Milestone"
+    ],
+    "senses": [
+      {
+        "definition": "特定のリリースや期限に向けてIssueやPRをグループ化するGitHubの機能。オープン/クローズ数から進捗率が可視化され、バージョン計画やスプリント管理に活用される。",
+        "domain": "github",
+        "keywords": [
+          "マイルストーン",
+          "リリース",
+          "進捗",
+          "Issue",
+          "スプリント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHubラベル",
+    "reading": "ぎっとはぶらべる",
+    "aliases": [
+      "GitHub Labels",
+      "Issue Label"
+    ],
+    "senses": [
+      {
+        "definition": "IssueやPRを分類・フィルタリングするためにリポジトリ単位で設定するタグ。bug・enhancementなどデフォルトラベルのほかカスタムラベルを色付きで定義でき、自動化トリガーにも使われる。",
+        "domain": "github",
+        "keywords": [
+          "ラベル",
+          "分類",
+          "フィルタ",
+          "Issue",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHubアサイニー",
+    "reading": "ぎっとはぶあさいにー",
+    "aliases": [
+      "GitHub Assignees",
+      "PR Assignee"
+    ],
+    "senses": [
+      {
+        "definition": "IssueやPRの担当者として設定されるGitHubユーザー。1件につき複数人を割り当て可能で、作業の責任者を明確にしてチームの進捗管理やレビュー依頼に役立てる仕組み。",
+        "domain": "github",
+        "keywords": [
+          "担当者",
+          "割り当て",
+          "Issue",
+          "PR",
+          "責任"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プルリクエストレビュー",
+    "reading": "ぷるりくえすとれびゅー",
+    "aliases": [
+      "Pull Request Review",
+      "PR Review"
+    ],
+    "senses": [
+      {
+        "definition": "PRに対してレビュアーがコメント・変更要求・承認を行う仕組み。Approve・Request changes・Commentの3種類があり、ブランチ保護ルールと組み合わせてマージ前の品質ゲートとして機能する。",
+        "domain": "github",
+        "keywords": [
+          "コードレビュー",
+          "承認",
+          "変更要求",
+          "品質",
+          "PR"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プルリクエストテンプレート",
+    "reading": "ぷるりくえすとてんぷれーと",
+    "aliases": [
+      "Pull Request Template",
+      "PR Template"
+    ],
+    "senses": [
+      {
+        "definition": "新規PR作成時の説明欄に自動入力されるMarkdownテンプレート。`.github/pull_request_template.md`に配置し、変更内容・テスト手順・チェックリストなどを記述して標準化する。",
+        "domain": "github",
+        "keywords": [
+          "テンプレート",
+          "PR",
+          "説明",
+          "チェックリスト",
+          "標準化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "自動マージ",
+    "reading": "じどうまーじ",
+    "aliases": [
+      "Auto-merge",
+      "GitHub Auto-merge"
+    ],
+    "senses": [
+      {
+        "definition": "すべての必須ステータスチェックとレビューが通過した時点でPRを自動的にマージするGitHubの機能。手動マージの待ち時間を削減し、マージキューと組み合わせて競合を防ぐことができる。",
+        "domain": "github",
+        "keywords": [
+          "自動化",
+          "マージ",
+          "CI",
+          "PR",
+          "効率化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ブランチ保護ルール",
+    "reading": "ぶらんちほごるーる",
+    "aliases": [
+      "Branch Protection Rules",
+      "Branch Protection"
+    ],
+    "senses": [
+      {
+        "definition": "特定ブランチへの直接プッシュ禁止・必須レビュー数・必須ステータスチェックなどを強制するGitHub設定。mainブランチなどを誤操作から保護し、チームのコード品質ポリシーを強制する。",
+        "domain": "github",
+        "keywords": [
+          "ブランチ保護",
+          "レビュー",
+          "ステータスチェック",
+          "セキュリティ",
+          "ポリシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "必須レビュー",
+    "reading": "ひっすれびゅー",
+    "aliases": [
+      "Required Reviews",
+      "Required Pull Request Reviews"
+    ],
+    "senses": [
+      {
+        "definition": "PRをマージするために必要な承認レビュー数を強制するブランチ保護の設定項目。最低承認数・コードオーナーによるレビュー必須・強制プッシュ後の承認リセットなどを細かく設定できる。",
+        "domain": "github",
+        "keywords": [
+          "レビュー",
+          "承認",
+          "ブランチ保護",
+          "品質",
+          "マージ条件"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CODEOWNERSファイル",
+    "reading": "こーどおーなーずふぁいる",
+    "aliases": [
+      "CODEOWNERS file",
+      ".github/CODEOWNERS"
+    ],
+    "senses": [
+      {
+        "definition": "リポジトリ内のファイルやディレクトリのオーナーを指定するファイル。`.github/CODEOWNERS`に配置し、該当パスを変更するPRが作成されると指定ユーザー・チームが自動でレビュアーに追加される。",
+        "domain": "github",
+        "keywords": [
+          "コードオーナー",
+          "レビュアー",
+          "自動割当",
+          "ブランチ保護",
+          "責任"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions ワークフロー",
+    "reading": "ぎっとはぶあくしょんずわーくふろー",
+    "aliases": [
+      "Actions Workflow"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Actionsの実行単位。YAMLファイルで定義し、トリガー（push・PR・スケジュールなど）とジョブのステップを記述する。`.github/workflows/`ディレクトリに配置して動作する。",
+        "domain": "github",
+        "keywords": [
+          "GitHub Actions",
+          "CI/CD",
+          "YAML",
+          "自動化",
+          "ジョブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ワークフロー・ディスパッチ",
+    "aliases": [
+      "Workflow Dispatch",
+      "workflow_dispatch event"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub ActionsワークフローをUIまたはAPIから手動でトリガーするイベント。入力パラメータを定義でき、任意のタイミングでデプロイやバッチ処理を実行する際に活用される。",
+        "domain": "github",
+        "keywords": [
+          "手動実行",
+          "トリガー",
+          "GitHub Actions",
+          "デプロイ",
+          "パラメータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "再利用可能ワークフロー",
+    "reading": "さいりようかのうわーくふろー",
+    "aliases": [
+      "Reusable Workflows",
+      "workflow_call"
+    ],
+    "senses": [
+      {
+        "definition": "他のワークフローから呼び出して利用できるGitHub Actionsのワークフロー。`workflow_call`トリガーで定義し、共通CI処理をDRY原則に従って一元管理することができる。",
+        "domain": "github",
+        "keywords": [
+          "再利用",
+          "GitHub Actions",
+          "DRY",
+          "共通化",
+          "ワークフロー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンポジットアクション",
+    "aliases": [
+      "Composite Actions"
+    ],
+    "senses": [
+      {
+        "definition": "複数のステップをひとつのカスタムActionとしてまとめるGitHub Actionsの仕組み。`action.yml`にcompositeタイプで定義し、シェルスクリプトや他のActionを組み合わせてワークフロー間で再利用できる。",
+        "domain": "github",
+        "keywords": [
+          "カスタムアクション",
+          "再利用",
+          "GitHub Actions",
+          "ステップ",
+          "共通化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub ホステッドランナー",
+    "aliases": [
+      "GitHub-hosted Runners",
+      "GitHub Hosted Runner"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが管理・提供する仮想マシン上で動作するGitHub Actionsの実行環境。ubuntu-latest・windows-latest・macos-latestなどOSを選択でき、毎回クリーンな状態で起動する。",
+        "domain": "github",
+        "keywords": [
+          "ランナー",
+          "CI/CD",
+          "仮想マシン",
+          "GitHub Actions",
+          "実行環境"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ラージャーランナー",
+    "reading": "らーじゃーらんなー",
+    "aliases": [
+      "Larger Runners",
+      "GitHub Larger Runners"
+    ],
+    "senses": [
+      {
+        "definition": "標準より多くのCPU・メモリ・ストレージを持つGitHubホステッドランナー。大規模ビルドやテストを高速化するために使用し、TeamおよびEnterpriseプランで利用可能なオプション。",
+        "domain": "github",
+        "keywords": [
+          "ランナー",
+          "高性能",
+          "CI/CD",
+          "GitHub Actions",
+          "スケール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Actionsマーケットプレイス",
+    "reading": "あくしょんずまーけっとぷれいす",
+    "aliases": [
+      "Actions Marketplace",
+      "GitHub Marketplace"
+    ],
+    "senses": [
+      {
+        "definition": "コミュニティや企業が公開するGitHub Actionsのアクションを検索・利用できるプラットフォーム。`uses:`キーワードでワークフローに組み込み、多様なCI/CD処理を手軽に追加できる。",
+        "domain": "github",
+        "keywords": [
+          "マーケットプレイス",
+          "再利用",
+          "アクション",
+          "GitHub Actions",
+          "エコシステム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actionsキャッシュ",
+    "reading": "ぎっとはぶあくしょんずきゃっしゅ",
+    "aliases": [
+      "GitHub Actions Cache",
+      "actions/cache"
+    ],
+    "senses": [
+      {
+        "definition": "ワークフロー実行間でnode_modulesやビルド成果物などを保存・再利用するGitHub Actionsの機能。`actions/cache`アクションで制御し、依存関係のダウンロード時間を削減してビルドを高速化する。",
+        "domain": "github",
+        "keywords": [
+          "キャッシュ",
+          "高速化",
+          "ビルド",
+          "GitHub Actions",
+          "依存関係"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actionsアーティファクト",
+    "reading": "ぎっとはぶあくしょんずあーてぃふぁくと",
+    "aliases": [
+      "GitHub Actions Artifacts",
+      "actions/upload-artifact"
+    ],
+    "senses": [
+      {
+        "definition": "ワークフロー実行後にビルド成果物やテストレポートをGitHubに保存・ダウンロードするための仕組み。`actions/upload-artifact`と`actions/download-artifact`アクションで操作する。",
+        "domain": "github",
+        "keywords": [
+          "アーティファクト",
+          "成果物",
+          "テストレポート",
+          "GitHub Actions",
+          "保存"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Actionsマトリックス",
+    "reading": "あくしょんずまとりっくす",
+    "aliases": [
+      "GitHub Actions Matrix"
+    ],
+    "senses": [
+      {
+        "definition": "複数のOSやNode.jsバージョンなどの組み合わせで同一ジョブを並列実行するGitHub Actionsの`strategy.matrix`機能。クロスプラットフォームテストを効率よく行えるようになる。",
+        "domain": "github",
+        "keywords": [
+          "マトリックス",
+          "並列実行",
+          "クロスプラットフォーム",
+          "GitHub Actions",
+          "テスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Actionsコンカレンシー",
+    "reading": "あくしょんずこんかれんしー",
+    "aliases": [
+      "GitHub Actions Concurrency",
+      "concurrency group"
+    ],
+    "senses": [
+      {
+        "definition": "同一グループのワークフロー実行をキャンセルまたは待機させるGitHub Actionsの`concurrency`設定。古いデプロイジョブを自動キャンセルし最新コードのみをデプロイするために多用される。",
+        "domain": "github",
+        "keywords": [
+          "同時実行",
+          "キャンセル",
+          "デプロイ",
+          "GitHub Actions",
+          "制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actionsシークレット",
+    "reading": "ぎっとはぶあくしょんずしーくれっと",
+    "aliases": [
+      "GitHub Actions Secrets",
+      "Actions Secrets"
+    ],
+    "senses": [
+      {
+        "definition": "APIキーやパスワードなどの機密情報をGitHub Actionsのワークフローに安全に渡すための暗号化変数。Organization・リポジトリ・環境レベルで設定でき、ログにはマスクされて表示される。",
+        "domain": "github",
+        "keywords": [
+          "シークレット",
+          "セキュリティ",
+          "機密情報",
+          "GitHub Actions",
+          "暗号化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Actions変数",
+    "reading": "ぎっとはぶあくしょんずへんすう",
+    "aliases": [
+      "GitHub Actions Variables",
+      "Actions Variables"
+    ],
+    "senses": [
+      {
+        "definition": "機密ではない設定値をワークフロー間で共有するためのGitHub Actionsの変数機能。Secretsとは異なりログに値が表示される。Organization・リポジトリ・環境レベルで管理できる。",
+        "domain": "github",
+        "keywords": [
+          "変数",
+          "設定",
+          "GitHub Actions",
+          "環境",
+          "共有"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub環境",
+    "reading": "ぎっとはぶかんきょう",
+    "aliases": [
+      "GitHub Environments",
+      "Deployment Environment"
+    ],
+    "senses": [
+      {
+        "definition": "production・stagingなどのデプロイ先環境をGitHubで管理する仕組み。環境ごとにシークレット・変数・保護ルールを設定でき、ワークフローのジョブに`environment:`キーで紐付ける。",
+        "domain": "github",
+        "keywords": [
+          "環境",
+          "デプロイ",
+          "production",
+          "staging",
+          "GitHub Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デプロイ保護ルール",
+    "reading": "でぷろいほごるーる",
+    "aliases": [
+      "Deployment Protection Rules"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub環境へのデプロイ前に承認・待機・カスタムチェックを要求するルール。特定レビュアーによる手動承認やタイマー待機を設定して本番環境への誤デプロイを防ぐことができる。",
+        "domain": "github",
+        "keywords": [
+          "デプロイ",
+          "保護",
+          "承認",
+          "環境",
+          "GitHub Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub コンテナレジストリ",
+    "reading": "ぎっとはぶこんてなれじすとり",
+    "aliases": [
+      "GitHub Container Registry",
+      "GHCR",
+      "ghcr.io"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが提供するDockerコンテナイメージのホスティングサービス。`ghcr.io`ドメインでアクセスし、GitHub Packagesの一部としてリポジトリやOrganizationに紐付けて管理できる。",
+        "domain": "github",
+        "keywords": [
+          "コンテナ",
+          "Docker",
+          "レジストリ",
+          "GitHub Packages",
+          "ghcr.io"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub npm レジストリ",
+    "reading": "ぎっとはぶえぬぴーえむれじすとり",
+    "aliases": [
+      "npm Registry (GitHub)",
+      "GitHub npm Registry"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Packagesでnpmパッケージをホストするサービス。`@scope/package`形式で公開・インストールでき、プライベートパッケージをOrganization内で安全に共有する際に使われる。",
+        "domain": "github",
+        "keywords": [
+          "npm",
+          "パッケージ",
+          "GitHub Packages",
+          "プライベート",
+          "公開"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Releases",
+    "reading": "ぎっとはぶりりーすず",
+    "aliases": [
+      "Releases",
+      "GitHub Release"
+    ],
+    "senses": [
+      {
+        "definition": "タグに基づいてリリースバイナリ・リリースノート・アセットをGitHub上で公開する仕組み。ユーザーへの配布ページとして機能し、GitHub Actions経由で自動作成することも多い。",
+        "domain": "github",
+        "keywords": [
+          "リリース",
+          "タグ",
+          "配布",
+          "バイナリ",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "自動生成リリースノート",
+    "reading": "じどうせいせいりりーすのーと",
+    "aliases": [
+      "Release Notes (Auto-generated)",
+      "Auto-generated Release Notes"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubがPRのタイトルやラベルをもとにリリースノートを自動生成する機能。`.github/release.yml`で貢献者・変更カテゴリの表示形式をカスタマイズして整ったChangelogを作成できる。",
+        "domain": "github",
+        "keywords": [
+          "リリースノート",
+          "自動生成",
+          "PR",
+          "GitHub Releases",
+          "Changelog"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitタグ",
+    "reading": "ぎっとたぐ",
+    "aliases": [
+      "Git Tag",
+      "Version Tag"
+    ],
+    "senses": [
+      {
+        "definition": "特定のコミットに付ける名前付き参照でバージョン番号（v1.0.0など）の記録に使われる。軽量タグと、署名付きメタデータを持つ注釈付きタグ（git tag -a）の2種類がある。",
+        "domain": "github",
+        "keywords": [
+          "タグ",
+          "バージョン",
+          "コミット",
+          "リリース",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "注釈付きタグ",
+    "reading": "ちゅうしゃくつきたぐ",
+    "aliases": [
+      "Annotated Tag",
+      "git tag -a"
+    ],
+    "senses": [
+      {
+        "definition": "作成者・日時・GPG署名・メッセージを持つGitタグ。`git tag -a`で作成し、リリースなど公式なバージョニングに推奨される。軽量タグと異なりGitオブジェクトとして個別に保存される。",
+        "domain": "github",
+        "keywords": [
+          "タグ",
+          "署名",
+          "バージョン",
+          "Git",
+          "リリース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitブランチ",
+    "reading": "ぎっとぶらんち",
+    "aliases": [
+      "Git Branch",
+      "Branch Pointer"
+    ],
+    "senses": [
+      {
+        "definition": "Gitの特定コミットを指す軽量な可動ポインタ。並行開発に使われ、featureブランチ・mainブランチなどを使い分ける。コミットのたびにブランチ先端のポインタが前方に移動する。",
+        "domain": "github",
+        "keywords": [
+          "ブランチ",
+          "並行開発",
+          "ポインタ",
+          "Git",
+          "コミット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitコミット",
+    "reading": "ぎっとこみっと",
+    "aliases": [
+      "Git Commit",
+      "Commit Object"
+    ],
+    "senses": [
+      {
+        "definition": "変更内容のスナップショットをリポジトリの歴史に記録するGitの基本操作。SHA-1ハッシュで一意に識別され、作成者・コミッタ・メッセージ・親コミットへの参照を持つ。",
+        "domain": "github",
+        "keywords": [
+          "コミット",
+          "スナップショット",
+          "履歴",
+          "SHA",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitマージ",
+    "reading": "ぎっとまーじ",
+    "aliases": [
+      "Git Merge",
+      "Branch Merge"
+    ],
+    "senses": [
+      {
+        "definition": "2つのブランチの変更履歴を統合するGit操作。Fast-forwardマージとマージコミットを作るthree-way mergeがある。競合が発生した場合はコンフリクト箇所の手動解消が必要となる。",
+        "domain": "github",
+        "keywords": [
+          "マージ",
+          "統合",
+          "ブランチ",
+          "コンフリクト解消",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git チェリーピック",
+    "reading": "ぎっとちぇりーぴっく",
+    "aliases": [
+      "Git Cherry-pick",
+      "cherry-pick command"
+    ],
+    "senses": [
+      {
+        "definition": "特定のコミットを別のブランチに個別に適用するGit操作。`git cherry-pick <hash>`で実行し、hotfixのbackportや特定変更の選択的な取り込みに使われる。",
+        "domain": "github",
+        "keywords": [
+          "チェリーピック",
+          "コミット",
+          "適用",
+          "バックポート",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitリセット",
+    "reading": "ぎっとりせっと",
+    "aliases": [
+      "Git Reset"
+    ],
+    "senses": [
+      {
+        "definition": "HEADや作業ツリーの状態を指定コミットに戻すGit操作。`--soft`（インデックス保持）・`--mixed`（デフォルト）・`--hard`（全変更破棄）の3モードがあり使い分ける。",
+        "domain": "github",
+        "keywords": [
+          "リセット",
+          "undo",
+          "コミット",
+          "HEAD",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitリバート",
+    "reading": "ぎっとりばーと",
+    "aliases": [
+      "Git Revert"
+    ],
+    "senses": [
+      {
+        "definition": "特定コミットの変更を打ち消す新しいコミットを作成するGit操作。履歴を書き換えないため共有ブランチで安全に変更を取り消せる。`git reset`の代わりに本番ブランチで推奨される。",
+        "domain": "github",
+        "keywords": [
+          "リバート",
+          "取り消し",
+          "コミット",
+          "履歴保全",
+          "安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git バイセクト",
+    "reading": "ぎっとばいせくと",
+    "aliases": [
+      "Git Bisect"
+    ],
+    "senses": [
+      {
+        "definition": "二分探索で不具合を導入したコミットを特定するGitコマンド。良好と不良なコミットを指定すると自動的に中間コミットをチェックアウトし、原因コミットを効率よく絞り込める。",
+        "domain": "github",
+        "keywords": [
+          "デバッグ",
+          "二分探索",
+          "バグ特定",
+          "コミット",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitワークツリー",
+    "reading": "ぎっとわーくつりー",
+    "aliases": [
+      "Git Worktree"
+    ],
+    "senses": [
+      {
+        "definition": "1つのGitリポジトリから複数の作業ツリーをチェックアウトして同時に操作できる機能。`git worktree add`で追加し、ブランチ切り替えなしに異なるブランチを並行して作業できる。",
+        "domain": "github",
+        "keywords": [
+          "ワークツリー",
+          "並行作業",
+          "ブランチ",
+          "Git",
+          "checkout"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitサブモジュール",
+    "reading": "ぎっとさぶもじゅーる",
+    "aliases": [
+      "Git Submodule",
+      "Submodule"
+    ],
+    "senses": [
+      {
+        "definition": "あるGitリポジトリを別のリポジトリのサブディレクトリとして埋め込む仕組み。`.gitmodules`ファイルでURLとパスを管理し、共通ライブラリを外部リポジトリとして参照する場合に使う。",
+        "domain": "github",
+        "keywords": [
+          "サブモジュール",
+          "依存",
+          "外部リポジトリ",
+          "埋め込み",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git サブツリー",
+    "reading": "ぎっとさぶつりー",
+    "aliases": [
+      "Git Subtree"
+    ],
+    "senses": [
+      {
+        "definition": "外部リポジトリの内容を別リポジトリのサブディレクトリに統合するGitの仕組み。サブモジュールと異なりファイルが直接リポジトリに含まれるため、クローン時に追加の初期化手順が不要。",
+        "domain": "github",
+        "keywords": [
+          "サブツリー",
+          "統合",
+          "外部リポジトリ",
+          "Git",
+          "モノレポ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git フック",
+    "reading": "ぎっとふっく",
+    "aliases": [
+      "Git Hooks",
+      "pre-commit hook"
+    ],
+    "senses": [
+      {
+        "definition": "コミット・プッシュ・マージなどのGitイベント発生時に自動実行されるスクリプト。`pre-commit`でlint実行、`commit-msg`でメッセージ検証などに使われ、`.git/hooks/`ディレクトリに配置する。",
+        "domain": "github",
+        "keywords": [
+          "フック",
+          "自動化",
+          "lint",
+          "コミット",
+          "pre-commit"
+        ]
+      }
+    ]
+  },
+  {
+    "term": ".gitattributes",
+    "aliases": [
+      "gitattributes",
+      "git attributes file"
+    ],
+    "senses": [
+      {
+        "definition": "ファイルパスごとにGitの振る舞いを設定するファイル。改行コード正規化（eol）・diff設定・マージ戦略・言語統計の除外（linguist-vendored）などをパスパターンで指定できる。",
+        "domain": "github",
+        "keywords": [
+          "gitattributes",
+          "改行",
+          "diff",
+          "マージ",
+          "言語統計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ホットフィックスブランチ",
+    "reading": "ほっとふぃっくすぶらんち",
+    "aliases": [
+      "Hotfix Branch"
+    ],
+    "senses": [
+      {
+        "definition": "本番環境の緊急バグを修正するためにmain（またはproduction）ブランチから直接分岐するブランチ。修正後にmainとdevelopの両方へマージしてバージョンタグを付けるのが標準的な運用。",
+        "domain": "github",
+        "keywords": [
+          "ホットフィックス",
+          "緊急修正",
+          "ブランチ",
+          "バグ",
+          "リリース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "developブランチ",
+    "reading": "でべろっぷぶらんち",
+    "aliases": [
+      "develop Branch",
+      "Integration Branch"
+    ],
+    "senses": [
+      {
+        "definition": "Git Flowにおける統合ブランチ。完了したfeatureブランチをマージして次回リリースの内容を蓄積する役割を持ち、リリース準備が整ったらreleaseブランチに分岐する。",
+        "domain": "github",
+        "keywords": [
+          "Git Flow",
+          "統合",
+          "ブランチ",
+          "開発",
+          "リリース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リモートリポジトリ管理",
+    "reading": "りもーとりぽじとりかんり",
+    "aliases": [
+      "Remote Management",
+      "git remote"
+    ],
+    "senses": [
+      {
+        "definition": "ネットワーク越しにアクセスするGitリポジトリを`git remote`コマンドで管理すること。originやupstreamとして複数のリモートを登録でき、fetch・push・pullの対象を柔軟に切り替えられる。",
+        "domain": "github",
+        "keywords": [
+          "リモート",
+          "origin",
+          "upstream",
+          "Git",
+          "同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アップストリームリモート",
+    "reading": "あっぷすとりーむりもーと",
+    "aliases": [
+      "Upstream Remote"
+    ],
+    "senses": [
+      {
+        "definition": "フォーク元の本家リポジトリを指すGitの慣習的なリモート名。`git remote add upstream <url>`で登録し、本家の変更を`git fetch upstream`で取り込んで自分のフォークに同期する。",
+        "domain": "github",
+        "keywords": [
+          "upstream",
+          "フォーク",
+          "本家",
+          "リモート",
+          "同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オリジンリモート",
+    "reading": "おりじんりもーと",
+    "aliases": [
+      "Origin Remote",
+      "origin"
+    ],
+    "senses": [
+      {
+        "definition": "`git clone`時に自動設定されるデフォルトのリモートリポジトリ名。自分のフォークまたはプロジェクトのリモートを指し、`git push origin`や`git pull origin`の操作対象となる。",
+        "domain": "github",
+        "keywords": [
+          "origin",
+          "リモート",
+          "デフォルト",
+          "push",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git reflog",
+    "reading": "ぎっとりふろぐ",
+    "aliases": [
+      "reflog"
+    ],
+    "senses": [
+      {
+        "definition": "HEADや各ブランチ参照の変更履歴をローカルに記録するGitのログ。誤ったリセットやブランチ削除後でも`git reflog`で過去のコミットSHAを確認し、`git reset`で復元できる。",
+        "domain": "github",
+        "keywords": [
+          "reflog",
+          "復元",
+          "履歴",
+          "HEAD",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git diff",
+    "reading": "ぎっとでぃふ",
+    "aliases": [
+      "Git Diff Command"
+    ],
+    "senses": [
+      {
+        "definition": "作業ツリー・インデックス・コミット間の差分を表示するGitコマンド。`git diff HEAD`で未コミット変更、`git diff branch1..branch2`でブランチ間差分を確認できる。",
+        "domain": "github",
+        "keywords": [
+          "差分",
+          "変更確認",
+          "コミット",
+          "ブランチ",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git blame",
+    "reading": "ぎっとぶれいむ",
+    "aliases": [
+      "Blame View"
+    ],
+    "senses": [
+      {
+        "definition": "ファイルの各行が最後に変更されたコミットと変更者を表示するGitコマンド。バグの原因コミットや変更理由を追跡するときに使い、GitHub UIのBlameビューでも確認できる。",
+        "domain": "github",
+        "keywords": [
+          "blame",
+          "変更追跡",
+          "コミット",
+          "責任",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スカッシュマージ",
+    "reading": "すかっしゅまーじ",
+    "aliases": [
+      "Squash Merge",
+      "Squash and Merge"
+    ],
+    "senses": [
+      {
+        "definition": "PRのすべてのコミットを1つのコミットにまとめてmainブランチにマージするGitHubのマージ方式。mainブランチの履歴を簡潔に保てるが、個別コミットの詳細な経緯は失われる。",
+        "domain": "github",
+        "keywords": [
+          "スカッシュ",
+          "マージ",
+          "履歴",
+          "PR",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ファストフォワードマージ",
+    "reading": "ふぁすとふぉわーどまーじ",
+    "aliases": [
+      "Fast-forward Merge",
+      "FF Merge"
+    ],
+    "senses": [
+      {
+        "definition": "マージ先ブランチがマージ元の祖先の場合にマージコミットを作成せずポインタを先端に移動するマージ方式。余分なコミットが不要で履歴が線形に保たれるため、履歴を整然と保ちたい場合に有効。",
+        "domain": "github",
+        "keywords": [
+          "ファストフォワード",
+          "マージ",
+          "線形履歴",
+          "ブランチ",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マージコミット",
+    "reading": "まーじこみっと",
+    "aliases": [
+      "Merge Commit",
+      "Three-way Merge"
+    ],
+    "senses": [
+      {
+        "definition": "2つのブランチを統合するために自動生成される親コミットを2つ持つ特別なコミット。マージ履歴が明確に残る反面、履歴が複雑になる。`--no-ff`オプションで強制的に作成できる。",
+        "domain": "github",
+        "keywords": [
+          "マージコミット",
+          "履歴",
+          "ブランチ",
+          "統合",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git fetch",
+    "reading": "ぎっとふぇっち",
+    "aliases": [
+      "Fetch Command"
+    ],
+    "senses": [
+      {
+        "definition": "リモートリポジトリの最新変更をローカルにダウンロードするが作業ツリーには反映しないGit操作。`git fetch origin`でリモート追跡ブランチを更新し、内容確認後にmergeかrebaseする。",
+        "domain": "github",
+        "keywords": [
+          "fetch",
+          "リモート",
+          "同期",
+          "ダウンロード",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git pull",
+    "reading": "ぎっとぷる",
+    "aliases": [
+      "Pull Command"
+    ],
+    "senses": [
+      {
+        "definition": "リモートリポジトリの変更をfetchしてローカルブランチにマージまたはrebaseするGit操作。`git fetch`＋`git merge`の短縮形で、`--rebase`オプションで線形履歴を保つことができる。",
+        "domain": "github",
+        "keywords": [
+          "pull",
+          "fetch",
+          "マージ",
+          "リモート",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git push",
+    "reading": "ぎっとぷっしゅ",
+    "aliases": [
+      "Push Command"
+    ],
+    "senses": [
+      {
+        "definition": "ローカルブランチの変更をリモートリポジトリに送信するGit操作。`--force-with-lease`は他者の変更を上書きしない安全な強制プッシュで、rebase後のブランチ更新に推奨される。",
+        "domain": "github",
+        "keywords": [
+          "push",
+          "リモート",
+          "送信",
+          "force-with-lease",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ステージングエリア",
+    "reading": "すてーじんぐえりあ",
+    "aliases": [
+      "Staging Area",
+      "Git Index Area"
+    ],
+    "senses": [
+      {
+        "definition": "コミット前に変更をまとめるGitの中間領域。`git add`でファイルをインデックスに追加し、`git commit`でインデックスの内容をリポジトリに記録する。ワーキングツリーとリポジトリの橋渡し役。",
+        "domain": "github",
+        "keywords": [
+          "ステージング",
+          "インデックス",
+          "コミット",
+          "git add",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ワーキングツリー",
+    "reading": "わーきんぐつりー",
+    "aliases": [
+      "Working Tree",
+      "Working Directory"
+    ],
+    "senses": [
+      {
+        "definition": "現在チェックアウトされているコミットのファイル群が展開されたディレクトリ。編集・削除・追加した変更は`git status`で確認でき、ステージングエリアに追加するまでは未追跡の状態。",
+        "domain": "github",
+        "keywords": [
+          "作業ディレクトリ",
+          "チェックアウト",
+          "変更",
+          "Git",
+          "ファイル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デタッチドHEAD",
+    "reading": "でたっちどへっど",
+    "aliases": [
+      "Detached HEAD",
+      "Detached HEAD state"
+    ],
+    "senses": [
+      {
+        "definition": "HEADがブランチではなく特定のコミットSHAを直接指している状態。`git checkout <hash>`で発生し、この状態でのコミットはブランチに属さないため新たなブランチを作成して保存する必要がある。",
+        "domain": "github",
+        "keywords": [
+          "デタッチドHEAD",
+          "コミット",
+          "ブランチ",
+          "HEAD",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git config",
+    "reading": "ぎっとこんふぃぐ",
+    "aliases": [
+      ".gitconfig"
+    ],
+    "senses": [
+      {
+        "definition": "Gitの動作設定を管理するコマンドおよびファイル。`--global`でユーザー全体、`--local`でリポジトリ固有の設定を管理し、ユーザー名・メール・エディタ・エイリアスなどを設定する。",
+        "domain": "github",
+        "keywords": [
+          "設定",
+          "gitconfig",
+          "ユーザー",
+          "グローバル",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub REST API",
+    "reading": "ぎっとはぶれすとえーぴーあい",
+    "aliases": [
+      "GitHub API"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのリソースをHTTP経由で操作するREST形式のAPI。リポジトリ・Issue・PR・Actionsなどを操作でき、`Authorization: Bearer <token>`ヘッダーによるトークン認証を使用する。",
+        "domain": "github",
+        "keywords": [
+          "API",
+          "REST",
+          "GitHub",
+          "自動化",
+          "プログラム操作"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub GraphQL API",
+    "reading": "ぎっとはぶぐらふきゅーえるえーぴーあい",
+    "aliases": [
+      "GitHub GraphQL",
+      "GraphQL API"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが提供するGraphQL形式のAPI。必要なフィールドのみを1リクエストで取得できるためREST APIより効率的なデータ取得が可能。`api.github.com/graphql`エンドポイントで利用する。",
+        "domain": "github",
+        "keywords": [
+          "GraphQL",
+          "API",
+          "GitHub",
+          "効率",
+          "クエリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Octokit",
+    "reading": "おくときっと",
+    "aliases": [
+      "@octokit/rest",
+      "Octokit SDK"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub公式が提供するGitHub API用のSDK。JavaScript/TypeScript向けの`@octokit/rest`が広く使われ、GitHub Actionsのカスタムアクション開発やCI/CDスクリプトでの自動化に活用される。",
+        "domain": "github",
+        "keywords": [
+          "SDK",
+          "API",
+          "JavaScript",
+          "GitHub",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パーソナルアクセストークン",
+    "reading": "ぱーそなるあくせすとーくん",
+    "aliases": [
+      "Personal Access Token",
+      "PAT"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのAPIやgit操作でパスワードの代わりに使用する認証トークン。クラシックPATとFine-grained PATの2種類があり、スコープや有効期限を設定して発行・管理する。",
+        "domain": "github",
+        "keywords": [
+          "PAT",
+          "認証",
+          "トークン",
+          "API",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "きめ細かいパーソナルアクセストークン",
+    "reading": "きめこまかいぱーそなるあくせすとーくん",
+    "aliases": [
+      "Fine-grained Personal Access Token",
+      "Fine-grained PAT"
+    ],
+    "senses": [
+      {
+        "definition": "特定のリポジトリと詳細な権限スコープを個別に指定できる新世代のGitHub PAT。クラシックPATより最小権限の原則に従った設定が可能で、有効期限の設定も必須となっている。",
+        "domain": "github",
+        "keywords": [
+          "PAT",
+          "細粒度",
+          "最小権限",
+          "認証",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub App",
+    "reading": "ぎっとはぶあっぷ",
+    "aliases": [
+      "GitHub Apps",
+      "GitHub Application"
+    ],
+    "senses": [
+      {
+        "definition": "Organization・リポジトリ単位でインストールして使うGitHub統合アプリ。JWT認証でインストールトークンを取得し、CIボット・レビューボットなどに使われる。OAuthアプリより細かい権限設定が可能。",
+        "domain": "github",
+        "keywords": [
+          "GitHub App",
+          "認証",
+          "ボット",
+          "インテグレーション",
+          "JWT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OAuthアプリ",
+    "reading": "おーあーすあっぷ",
+    "aliases": [
+      "OAuth App",
+      "GitHub OAuth App"
+    ],
+    "senses": [
+      {
+        "definition": "OAuthフローを通じてユーザーの代理でGitHub APIを操作するアプリケーション。ユーザーが権限を付与するとアクセストークンを取得し、アプリがそのユーザーとして各種操作を行う。",
+        "domain": "github",
+        "keywords": [
+          "OAuth",
+          "認証",
+          "API",
+          "ユーザー委任",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デプロイキー",
+    "reading": "でぷろいきー",
+    "aliases": [
+      "Deploy Key",
+      "SSH Deploy Key"
+    ],
+    "senses": [
+      {
+        "definition": "特定リポジトリへのSSHアクセスを許可するためにリポジトリに登録するSSH公開鍵。読み取り専用または読み書き権限を付与でき、CIサーバーからのclone・pushなどの認証に使われる。",
+        "domain": "github",
+        "keywords": [
+          "デプロイキー",
+          "SSH",
+          "認証",
+          "リポジトリ",
+          "CI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Webhook",
+    "reading": "ぎっとはぶうぇぶふっく",
+    "aliases": [
+      "Repository Webhook"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubのイベント（push・PR作成・Issueコメントなど）発生時に指定URLへHTTP POSTリクエストを送信する仕組み。外部サービスとのリアルタイム連携やCI起動に使われる。",
+        "domain": "github",
+        "keywords": [
+          "Webhook",
+          "イベント",
+          "HTTP",
+          "連携",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リポジトリディスパッチ",
+    "reading": "りぽじとりでぃすぱっち",
+    "aliases": [
+      "Repository Dispatch",
+      "repository_dispatch event"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub APIを通じて外部からGitHub Actionsワークフローをトリガーするイベント。`event_type`と`client_payload`でデータを渡せ、外部システムからCI/CDパイプラインを起動する際に使う。",
+        "domain": "github",
+        "keywords": [
+          "repository_dispatch",
+          "外部トリガー",
+          "API",
+          "GitHub Actions",
+          "CI/CD"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アウトサイドコラボレーター",
+    "reading": "あうとさいどこらぼれーたー",
+    "aliases": [
+      "Outside Collaborator",
+      "External Collaborator"
+    ],
+    "senses": [
+      {
+        "definition": "Organizationのメンバーではないが特定リポジトリへのアクセスが付与されているユーザー。外部委託先や一時的な貢献者に限定したリポジトリアクセスを与える際に利用される仕組み。",
+        "domain": "github",
+        "keywords": [
+          "外部コラボレーター",
+          "権限",
+          "Organization",
+          "リポジトリ",
+          "外部アクセス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リポジトリ可視性",
+    "reading": "りぽじとりかしせい",
+    "aliases": [
+      "Repository Visibility",
+      "Public Private Internal"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubリポジトリのアクセス範囲設定。Public（全員閲覧可）・Private（招待者のみ）・Internal（Enterpriseメンバーのみ）の3種類があり、リポジトリ設定からいつでも変更できる。",
+        "domain": "github",
+        "keywords": [
+          "可視性",
+          "公開",
+          "非公開",
+          "Private",
+          "Internal"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GITHUB_TOKENシークレット",
+    "reading": "ぎっとはぶとーくんしーくれっと",
+    "aliases": [
+      "GITHUB_TOKEN secret",
+      "Actions Token"
+    ],
+    "senses": [
+      {
+        "definition": "GitHub Actionsワークフロー実行時に自動生成されるアクセストークン。実行中のリポジトリへのアクセス権を持ち、別途PATを発行せずにAPIやgit操作が行えるセキュリティ上の仕組み。",
+        "domain": "github",
+        "keywords": [
+          "GITHUB_TOKEN",
+          "Actions",
+          "認証",
+          "自動",
+          "トークン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Dependabot",
+    "reading": "でぃぺんだぼっと",
+    "aliases": [
+      "GitHub Dependabot",
+      "Dependabot Alerts"
+    ],
+    "senses": [
+      {
+        "definition": "依存パッケージのセキュリティ脆弱性や新バージョンを検知して自動でPRを作成するGitHub機能。`dependabot.yml`で更新スケジュールやターゲットエコシステムを設定する。",
+        "domain": "github",
+        "keywords": [
+          "依存関係",
+          "自動更新",
+          "セキュリティ",
+          "PR",
+          "GitHub"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コードスキャニング",
+    "reading": "こーどすきゃにんぐ",
+    "aliases": [
+      "Code Scanning",
+      "GitHub Code Scanning"
+    ],
+    "senses": [
+      {
+        "definition": "CodeQLなどの静的解析エンジンでリポジトリのコードセキュリティ脆弱性を自動検出するGitHub機能。プッシュやPR作成時にActionsで実行し、検出結果をセキュリティタブに表示する。",
+        "domain": "github",
+        "keywords": [
+          "SAST",
+          "CodeQL",
+          "脆弱性",
+          "セキュリティ",
+          "GitHub Actions"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Copilot",
+    "reading": "ぎっとはぶこぱいろっと",
+    "aliases": [
+      "Copilot",
+      "AI Coding Assistant"
+    ],
+    "senses": [
+      {
+        "definition": "OpenAIのモデルを基盤とするGitHubのAIコーディング支援ツール。IDE内でコードの補完・チャット・コードレビューを提供し、個人・Business・Enterpriseの各プランで利用できる。",
+        "domain": "github",
+        "keywords": [
+          "AI",
+          "コード補完",
+          "Copilot",
+          "IDE",
+          "生産性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Sponsors",
+    "reading": "ぎっとはぶすぽんさーず",
+    "aliases": [
+      "Sponsors",
+      "GitHub Sponsoring"
+    ],
+    "senses": [
+      {
+        "definition": "OSSメンテナーや開発者を金銭的に支援するGitHubのプラットフォーム。月額または一回払いで支援でき、GitHubは手数料を徴収しない。スポンサーバッジがプロフィールに表示される。",
+        "domain": "github",
+        "keywords": [
+          "スポンサー",
+          "OSS",
+          "支援",
+          "マネタイズ",
+          "コントリビュータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub セキュリティアドバイザリ",
+    "reading": "ぎっとはぶせきゅりてぃあどばいざり",
+    "aliases": [
+      "GitHub Security Advisories",
+      "Security Advisory"
+    ],
+    "senses": [
+      {
+        "definition": "リポジトリに影響する脆弱性をプライベートで調査・公開するためのGitHub機能。CVE番号の取得・非公開での協力者招待・修正完了後の公開までを一連のフローで管理できる。",
+        "domain": "github",
+        "keywords": [
+          "セキュリティ",
+          "CVE",
+          "脆弱性",
+          "開示",
+          "アドバイザリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "git log",
+    "reading": "ぎっとろぐ",
+    "aliases": [
+      "git log command"
+    ],
+    "senses": [
+      {
+        "definition": "リポジトリのコミット履歴を一覧表示するGitコマンド。`--oneline`・`--graph`・`--author`・`--since`など豊富なオプションで絞り込みやグラフ形式の表示が可能。",
+        "domain": "github",
+        "keywords": [
+          "ログ",
+          "履歴",
+          "コミット",
+          "グラフ",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リベースマージ",
+    "reading": "りべーすまーじ",
+    "aliases": [
+      "Rebase Merge",
+      "Rebase and Merge"
+    ],
+    "senses": [
+      {
+        "definition": "PRのコミットをmainブランチの先端にrebaseしてからマージするGitHubの選択肢。マージコミットを作らず線形な履歴を維持しつつ各コミットの詳細も保持できる中間的なマージ方式。",
+        "domain": "github",
+        "keywords": [
+          "リベースマージ",
+          "線形履歴",
+          "PR",
+          "GitHub",
+          "コミット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インタラクティブリベース",
+    "reading": "いんたらくてぃぶりべーす",
+    "aliases": [
+      "Interactive Rebase",
+      "git rebase -i"
+    ],
+    "senses": [
+      {
+        "definition": "コミット履歴を対話的に書き換えるGit操作。`git rebase -i HEAD~N`でNコミット分を対象に、pick・squash・edit・dropなどでコミットの順番・統合・削除を行える強力な機能。",
+        "domain": "github",
+        "keywords": [
+          "インタラクティブリベース",
+          "履歴整理",
+          "squash",
+          "コミット",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "git stash",
+    "reading": "ぎっとすたっしゅ",
+    "aliases": [
+      "stash push"
+    ],
+    "senses": [
+      {
+        "definition": "コミットしていない変更を一時的に退避させるGit操作。`git stash push`で退避し`git stash pop`で復元する。ブランチ切り替え前に未完了の作業を安全に保存するために使われる。",
+        "domain": "github",
+        "keywords": [
+          "スタッシュ",
+          "退避",
+          "作業中断",
+          "ブランチ切り替え",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Git rebase",
+    "reading": "ぎっとりべーす",
+    "aliases": [
+      "Rebase Operation"
+    ],
+    "senses": [
+      {
+        "definition": "あるブランチのコミット列を別のコミットの上に再適用するGit操作。マージと異なり線形な履歴を作れるが共有ブランチでは履歴書き換えとなるため、個人ブランチのみで行うのが原則。",
+        "domain": "github",
+        "keywords": [
+          "リベース",
+          "線形履歴",
+          "コミット",
+          "ブランチ",
+          "Git"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アーカイブリポジトリ",
+    "reading": "あーかいぶりぽじとり",
+    "aliases": [
+      "Archived Repository",
+      "Read-only Archive"
+    ],
+    "senses": [
+      {
+        "definition": "読み取り専用状態に設定されたGitHubリポジトリ。IssueやPRの作成・コードのプッシュが禁止され、過去プロジェクトの参照目的で公開・保存する場合に使用する設定。",
+        "domain": "github",
+        "keywords": [
+          "アーカイブ",
+          "読み取り専用",
+          "保存",
+          "GitHub",
+          "非アクティブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "テンプレートリポジトリ",
+    "reading": "てんぷれーとりぽじとり",
+    "aliases": [
+      "Template Repository",
+      "Repository Template"
+    ],
+    "senses": [
+      {
+        "definition": "新しいリポジトリを作成するひな型として使えるGitHubリポジトリ。コード・ディレクトリ構造・Actionsワークフローなどを含む標準構成を素早く展開でき、プロジェクト初期化を効率化する。",
+        "domain": "github",
+        "keywords": [
+          "テンプレート",
+          "リポジトリ",
+          "ひな型",
+          "標準化",
+          "初期設定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GitHub Codespaces 環境",
+    "reading": "ぎっとはぶこーどすぺーすずかんきょう",
+    "aliases": [
+      "Codespaces",
+      "Cloud Dev Environment"
+    ],
+    "senses": [
+      {
+        "definition": "GitHubが提供するブラウザまたはVS Code経由でアクセスできるクラウド開発環境。`devcontainer.json`で環境を定義し、どこからでも同一の開発環境を即座に再現できる。",
+        "domain": "github",
+        "keywords": [
+          "クラウドIDE",
+          "devcontainer",
+          "開発環境",
+          "GitHub",
+          "VS Code"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Shallow Clone",
+    "reading": "しゃろーくろーん",
+    "aliases": [
+      "git clone --depth",
+      "Shallow Checkout"
+    ],
+    "senses": [
+      {
+        "definition": "全履歴ではなく最新N件のコミットのみを取得する浅いクローン操作。`git clone --depth 1`でCI/CDのクローン時間を大幅に短縮でき、GitHub Actionsの`actions/checkout`でも利用される。",
+        "domain": "github",
+        "keywords": [
+          "shallow clone",
+          "depth",
+          "高速化",
+          "CI/CD",
+          "Git"
+        ]
+      }
+    ]
+  }
+]

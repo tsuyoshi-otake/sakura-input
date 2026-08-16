@@ -1,0 +1,1905 @@
+[
+  {
+    "term": "Azure Active Directory",
+    "aliases": [
+      "Azure AD",
+      "AAD"
+    ],
+    "senses": [
+      {
+        "definition": "Microsoftが提供するクラウドベースのIDおよびアクセス管理サービス。シングルサインオン（SSO）、多要素認証（MFA）、条件付きアクセスなどの機能でユーザー認証と認可を管理する。現在はMicrosoft Entra IDに改称されている。",
+        "domain": "azure",
+        "keywords": [
+          "認証",
+          "SSO",
+          "MFA",
+          "アクセス管理",
+          "クラウド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure AD B2C",
+    "aliases": [
+      "Azure Active Directory B2C",
+      "AAD B2C"
+    ],
+    "senses": [
+      {
+        "definition": "外部向けアプリケーション向けのB2C（Business to Consumer）IDプロバイダーサービス。ソーシャルログイン（Google、Facebook等）や独自のカスタムユーザーフローをサポートし、数百万ユーザーのID管理に対応する。",
+        "domain": "azure",
+        "keywords": [
+          "B2C",
+          "認証",
+          "ソーシャルログイン",
+          "ユーザー管理",
+          "カスタムフロー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Logic Apps",
+    "aliases": [
+      "Logic Apps"
+    ],
+    "senses": [
+      {
+        "definition": "ローコードでビジネスプロセスやワークフローを自動化するサービス。200以上のコネクタを介してSaaS・オンプレミスシステムを連携し、定期実行やイベントトリガーで処理フローを構成できる。",
+        "domain": "azure",
+        "keywords": [
+          "ワークフロー",
+          "ローコード",
+          "コネクタ",
+          "自動化",
+          "統合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure API Management",
+    "aliases": [
+      "APIM",
+      "Azure APIM"
+    ],
+    "senses": [
+      {
+        "definition": "複数のAPIをまとめて管理・公開するためのフルマネージドAPIゲートウェイサービス。レート制限、認証、変換、モニタリング、開発者ポータルを一元提供し、APIエコノミー構築を支援する。",
+        "domain": "azure",
+        "keywords": [
+          "API",
+          "ゲートウェイ",
+          "レート制限",
+          "開発者ポータル",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Table Storage",
+    "aliases": [
+      "Table Storage"
+    ],
+    "senses": [
+      {
+        "definition": "Azureが提供するNoSQL型のキー・バリューストアサービス。スキーマレスで大量の構造化データを低コストで保存でき、パーティションキーと行キーによる高速なデータ参照が可能。",
+        "domain": "azure",
+        "keywords": [
+          "NoSQL",
+          "キーバリュー",
+          "ストレージ",
+          "スキーマレス",
+          "テーブル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Database for PostgreSQL",
+    "aliases": [
+      "Azure PostgreSQL"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLのフルマネージドサービス。高可用性、自動バックアップ、スケーリング、セキュリティパッチ適用をMicrosoftが管理する。柔軟なサーバーオプションとCitus拡張によるハイパースケール構成もサポート。",
+        "domain": "azure",
+        "keywords": [
+          "PostgreSQL",
+          "マネージドDB",
+          "高可用性",
+          "スケーリング",
+          "リレーショナル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Database for MySQL",
+    "aliases": [
+      "Azure MySQL"
+    ],
+    "senses": [
+      {
+        "definition": "MySQLのフルマネージドサービス。自動バックアップ、自動パッチ適用、高可用性構成をMicrosoftが管理し、開発者がデータベース運用ではなくアプリ開発に集中できる環境を提供する。",
+        "domain": "azure",
+        "keywords": [
+          "MySQL",
+          "マネージドDB",
+          "高可用性",
+          "バックアップ",
+          "リレーショナル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Cache for Redis",
+    "aliases": [
+      "Azure Redis Cache"
+    ],
+    "senses": [
+      {
+        "definition": "Redisをベースにしたフルマネージドのインメモリキャッシュサービス。セッション管理、データキャッシュ、メッセージブローカーとして活用でき、アプリケーションの応答速度とスループットを向上させる。",
+        "domain": "azure",
+        "keywords": [
+          "Redis",
+          "キャッシュ",
+          "インメモリ",
+          "セッション",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Cognitive Services",
+    "aliases": [
+      "Cognitive Services",
+      "Azure AI Services"
+    ],
+    "senses": [
+      {
+        "definition": "AIと機械学習の機能をAPIとして提供するサービス群。視覚、音声、言語、意思決定などのカテゴリがあり、専門的なMLスキルなしにAI機能をアプリに組み込める。現在はAzure AI Servicesに改称。",
+        "domain": "azure",
+        "keywords": [
+          "AI",
+          "機械学習",
+          "API",
+          "音声認識",
+          "画像認識"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure OpenAI Service",
+    "aliases": [
+      "AOAI"
+    ],
+    "senses": [
+      {
+        "definition": "OpenAIのGPT-4、DALL-E、Whisperなどのモデルをエンタープライズレベルのセキュリティとコンプライアンスで利用できるAzureサービス。プライベートネットワーク接続や独自データとの連携も可能。",
+        "domain": "azure",
+        "keywords": [
+          "OpenAI",
+          "GPT",
+          "生成AI",
+          "エンタープライズ",
+          "LLM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Machine Learning",
+    "aliases": [
+      "Azure ML",
+      "AML"
+    ],
+    "senses": [
+      {
+        "definition": "MLモデルの構築、トレーニング、デプロイ、管理を行うためのクラウドプラットフォーム。AutoML、デザイナー（GUI）、Pythonエンドツーエンドのワークフローをサポートし、MLOpsを実現する。",
+        "domain": "azure",
+        "keywords": [
+          "機械学習",
+          "MLOps",
+          "AutoML",
+          "トレーニング",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Databricks",
+    "aliases": [
+      "Databricks on Azure"
+    ],
+    "senses": [
+      {
+        "definition": "Apacheスパークベースの統合データ分析プラットフォーム。データエンジニアリング、機械学習、データウェアハウスを協調作業環境（ノートブック）で実行でき、Azure Data Factoryやシナプスとも統合される。",
+        "domain": "azure",
+        "keywords": [
+          "Spark",
+          "データ分析",
+          "MLOps",
+          "ノートブック",
+          "ビッグデータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Stream Analytics",
+    "aliases": [
+      "Stream Analytics"
+    ],
+    "senses": [
+      {
+        "definition": "IoTデバイスやアプリケーションからのリアルタイムストリームデータをSQL系クエリで分析するフルマネージドサービス。Event HubsやIoT Hubと連携し、ミリ秒単位の遅延で分析結果を出力する。",
+        "domain": "azure",
+        "keywords": [
+          "ストリーム処理",
+          "リアルタイム",
+          "IoT",
+          "SQL",
+          "Event Hubs"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure HDInsight",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Hadoop、Spark、Hive、HBase、Kafkaなどのオープンソースビッグデータフレームワークをフルマネージドで提供するサービス。大規模なバッチ処理や対話型クエリをクラスター単位で実行する。",
+        "domain": "azure",
+        "keywords": [
+          "Hadoop",
+          "Spark",
+          "ビッグデータ",
+          "クラスター",
+          "オープンソース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Purview",
+    "aliases": [
+      "Microsoft Purview",
+      "Azure Data Catalog"
+    ],
+    "senses": [
+      {
+        "definition": "組織全体のデータ資産を検出、分類、管理するデータガバナンスサービス。データカタログ、データリネージ、秘密度ラベルを統合し、コンプライアンスとデータ品質を維持する。現在はMicrosoft Purviewに統合。",
+        "domain": "azure",
+        "keywords": [
+          "データガバナンス",
+          "データカタログ",
+          "データリネージ",
+          "コンプライアンス",
+          "分類"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Virtual Machines",
+    "aliases": [
+      "Azure VM",
+      "IaaS VM"
+    ],
+    "senses": [
+      {
+        "definition": "AzureのIaaSコンピューティングサービス。Windows・Linuxのさまざまなサイズ（SKU）のVMを数分でプロビジョニングでき、フルコントロールのOSレベルアクセスと豊富なインスタンスタイプを提供する。",
+        "domain": "azure",
+        "keywords": [
+          "IaaS",
+          "仮想マシン",
+          "コンピューティング",
+          "Windows",
+          "Linux"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure CDN",
+    "aliases": [
+      "Azure Content Delivery Network"
+    ],
+    "senses": [
+      {
+        "definition": "世界中のPoP（Point of Presence）に静的コンテンツをキャッシュし、ユーザーに最も近いエッジサーバーから配信するコンテンツデリバリーネットワーク。レイテンシ削減とオリジンサーバーの負荷軽減に使われる。",
+        "domain": "azure",
+        "keywords": [
+          "CDN",
+          "キャッシュ",
+          "エッジ",
+          "静的コンテンツ",
+          "レイテンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Traffic Manager",
+    "aliases": [
+      "Traffic Manager"
+    ],
+    "senses": [
+      {
+        "definition": "DNSベースのグローバルロードバランサー。パフォーマンス、地理的、重み付け、優先度などのルーティング方法でトラフィックを複数リージョンのエンドポイントに分散し、可用性を高める。",
+        "domain": "azure",
+        "keywords": [
+          "DNSロードバランシング",
+          "グローバル",
+          "ルーティング",
+          "高可用性",
+          "フェイルオーバー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure ExpressRoute",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "オンプレミスとAzureをインターネットを経由せずに専用線で接続するサービス。高帯域・低レイテンシで安定した接続を実現し、セキュリティやコンプライアンス要件が厳しいエンタープライズ向けに利用される。",
+        "domain": "azure",
+        "keywords": [
+          "専用線",
+          "プライベート接続",
+          "ハイブリッドクラウド",
+          "帯域",
+          "レイテンシ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure VPN Gateway",
+    "aliases": [
+      "VPN Gateway"
+    ],
+    "senses": [
+      {
+        "definition": "AzureとオンプレミスネットワークをIPsec/IKEで暗号化したVPNトンネルで接続するゲートウェイサービス。サイト間VPN、ポイント対サイトVPN、VNet間接続の3種類の接続形態をサポートする。",
+        "domain": "azure",
+        "keywords": [
+          "VPN",
+          "IPsec",
+          "サイト間",
+          "ハイブリッドクラウド",
+          "暗号化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Bastion",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Azureポータルからブラウザ経由で仮想マシンにRDP/SSHアクセスを提供するフルマネージドサービス。パブリックIPアドレスをVMに付与せずに安全な管理アクセスを実現し、踏み台サーバーが不要になる。",
+        "domain": "azure",
+        "keywords": [
+          "踏み台",
+          "RDP",
+          "SSH",
+          "セキュリティ",
+          "パブリックIP不要"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Firewall",
+    "aliases": [
+      "Azure Firewall Premium"
+    ],
+    "senses": [
+      {
+        "definition": "VNetを保護するクラウドネイティブなフルマネージドファイアウォールサービス。ステートフルパケット検査、FQDN フィルタリング、脅威インテリジェンス連携、TLS検査（Premiumエディション）を提供する。",
+        "domain": "azure",
+        "keywords": [
+          "ファイアウォール",
+          "ネットワーク保護",
+          "ステートフル",
+          "FQDN",
+          "脅威インテリジェンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure DDoS Protection",
+    "aliases": [
+      "DDoS Protection"
+    ],
+    "senses": [
+      {
+        "definition": "AzureリソースをDDoS攻撃から保護するサービス。BasicとStandardの2プランがあり、StandardプランはML機械学習ベースの攻撃検知、適応型チューニング、攻撃レポートなどの高度な保護を提供する。",
+        "domain": "azure",
+        "keywords": [
+          "DDoS",
+          "セキュリティ",
+          "攻撃対策",
+          "ネットワーク保護",
+          "機械学習"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Network Security Group",
+    "aliases": [
+      "ネットワークセキュリティグループ"
+    ],
+    "senses": [
+      {
+        "definition": "仮想マシンやサブネットへの受信・送信ネットワークトラフィックをフィルタリングするアクセス制御リスト。ポート、プロトコル、送受信元IPなどを基にルールを定義しトラフィックを許可または拒否する。",
+        "domain": "azure",
+        "keywords": [
+          "ファイアウォール",
+          "アクセス制御",
+          "セキュリティ",
+          "受信規則",
+          "送信規則"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Private Endpoint",
+    "aliases": [
+      "Private Endpoint"
+    ],
+    "senses": [
+      {
+        "definition": "AzureサービスへのアクセスをVNet内のプライベートIPアドレス経由で実現するネットワークインターフェース。インターネットを経由せずにストレージ、SQLなどのPaaSサービスにセキュアにアクセスできる。",
+        "domain": "azure",
+        "keywords": [
+          "プライベート接続",
+          "セキュリティ",
+          "PaaS",
+          "VNet",
+          "プライベートIP"
+        ]
+      },
+      {
+        "definition": "公開せず私設ネットワーク経由で到達させる接続点。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ネットワーク",
+          "Private Endpoint"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Private Link",
+    "aliases": [
+      "Private Link"
+    ],
+    "senses": [
+      {
+        "definition": "Azure PaaSサービスや独自サービスをVNetに閉じたプライベートエンドポイント経由でアクセスできるようにするサービス。データがMicrosoftのバックボーンネットワーク上を流れ、インターネット露出を排除する。",
+        "domain": "azure",
+        "keywords": [
+          "プライベート接続",
+          "セキュリティ",
+          "プライベートエンドポイント",
+          "VNet",
+          "PaaS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Service Endpoint",
+    "aliases": [
+      "VNet Service Endpoint",
+      "サービスエンドポイント"
+    ],
+    "senses": [
+      {
+        "definition": "VNetからAzure PaaSサービス（ストレージ、SQLなど）へのルートをMicrosoftバックボーン経由に最適化する機能。トラフィックがパブリックインターネットに出ずに済むが、Private Endpointと異なりサービス側でVNet外からのアクセスを遮断できる。",
+        "domain": "azure",
+        "keywords": [
+          "VNet",
+          "セキュリティ",
+          "ルーティング",
+          "PaaS",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Availability Zones",
+    "aliases": [
+      "AZ"
+    ],
+    "senses": [
+      {
+        "definition": "同一Azureリージョン内の物理的に独立したデータセンターの集合体。電力・冷却・ネットワークが独立しており、ゾーン冗長化によってデータセンター障害に対する高可用性（SLA 99.99%）を実現する。",
+        "domain": "azure",
+        "keywords": [
+          "高可用性",
+          "冗長化",
+          "データセンター",
+          "SLA",
+          "ゾーン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Regions",
+    "aliases": [
+      "Azureリージョン"
+    ],
+    "senses": [
+      {
+        "definition": "Azureのデータセンターが集中する世界各地の地理的エリア。60以上のリージョンが存在し、データ主権や法規制要件に合わせてリソースの配置先を選択する。各リージョンはリージョンペアで構成される。",
+        "domain": "azure",
+        "keywords": [
+          "リージョン",
+          "地理",
+          "データ主権",
+          "データセンター",
+          "グローバル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Management Group",
+    "aliases": [
+      "管理グループ"
+    ],
+    "senses": [
+      {
+        "definition": "複数のサブスクリプションを階層的にまとめるコンテナ。ポリシーとRBAC（役割ベースのアクセス制御）を管理グループレベルで適用することで、大規模組織でのガバナンスを一元管理できる。",
+        "domain": "azure",
+        "keywords": [
+          "ガバナンス",
+          "サブスクリプション",
+          "階層",
+          "ポリシー",
+          "RBAC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Blueprints",
+    "aliases": [
+      "Blueprints"
+    ],
+    "senses": [
+      {
+        "definition": "リソースグループ、ポリシー割り当て、RBACロール割り当て、ARMテンプレートなどを組み合わせた環境定義をまとめて管理・展開するサービス。標準的なガバナンス構成を繰り返し適用する際に活用する。",
+        "domain": "azure",
+        "keywords": [
+          "ガバナンス",
+          "テンプレート",
+          "環境標準化",
+          "ポリシー",
+          "コンプライアンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Resource Manager",
+    "aliases": [
+      "ARM",
+      "Azure Resource Managerレイヤー"
+    ],
+    "senses": [
+      {
+        "definition": "AzureリソースのデプロイとライフサイクルをAPIレベルで管理するコントロールプレーン。すべてのAzureリソース操作はARMを経由し、一貫した認証・認可・タグ付け・ロック機能を提供する。",
+        "domain": "azure",
+        "keywords": [
+          "コントロールプレーン",
+          "デプロイ",
+          "API",
+          "IaC",
+          "リソース管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ARMテンプレート",
+    "aliases": [
+      "ARM Template",
+      "Azure Resource Manager Template"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースの構成をJSONフォーマットで宣言的に記述するInfrastructure as Codeファイル。べき等なデプロイが可能で、インクリメンタル・完全の2モードでリソースを管理する。現在はBicepへの移行も進む。",
+        "domain": "azure",
+        "keywords": [
+          "IaC",
+          "JSON",
+          "宣言的",
+          "デプロイ",
+          "べき等"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Bicep",
+    "aliases": [
+      "Azure Bicep"
+    ],
+    "senses": [
+      {
+        "definition": "ARMテンプレートを簡潔に記述するためのAzure専用のドメイン固有言語（DSL）。JSONよりも読みやすいシンタックスで同等のAzureリソース定義を記述でき、コンパイル時にARMテンプレートに変換される。",
+        "domain": "azure",
+        "keywords": [
+          "IaC",
+          "DSL",
+          "ARMテンプレート",
+          "宣言的",
+          "シンタックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure CLI",
+    "aliases": [
+      "az CLI"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースを管理するためのクロスプラットフォームのコマンドラインツール。Windows、Mac、Linux上で動作し、スクリプトやCI/CDパイプラインからAzureリソースの作成・変更・削除を自動化できる。",
+        "domain": "azure",
+        "keywords": [
+          "CLI",
+          "コマンドライン",
+          "自動化",
+          "スクリプト",
+          "クロスプラットフォーム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure PowerShell",
+    "aliases": [
+      "Az PowerShell"
+    ],
+    "senses": [
+      {
+        "definition": "PowerShellからAzureリソースを管理するためのモジュール群。`Az`モジュールとして提供され、PowerShellスクリプトやパイプラインでAzure操作を自動化する際に利用する。Windows管理者に親しみやすいインターフェース。",
+        "domain": "azure",
+        "keywords": [
+          "PowerShell",
+          "自動化",
+          "スクリプト",
+          "管理",
+          "モジュール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Portal",
+    "aliases": [
+      "Azureポータル",
+      "portal.azure.com"
+    ],
+    "senses": [
+      {
+        "definition": "Webブラウザ経由でAzureリソースを管理できるGUIベースの管理コンソール。リソースの作成・設定・監視・請求確認をビジュアルに操作でき、ダッシュボードのカスタマイズも可能。",
+        "domain": "azure",
+        "keywords": [
+          "GUI",
+          "管理コンソール",
+          "Web",
+          "ダッシュボード",
+          "ビジュアル管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Cloud Shell",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Azureポータルやブラウザからすぐにアクセスできるクラウドホスティングのインタラクティブシェル。BashとPowerShellをサポートし、Azure CLI・Azure PowerShell・Terraformなどのツールが事前インストール済み。",
+        "domain": "azure",
+        "keywords": [
+          "シェル",
+          "CLI",
+          "ブラウザ",
+          "事前設定",
+          "インタラクティブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Active Directory Domain Services",
+    "aliases": [
+      "Azure AD DS",
+      "AAD DS"
+    ],
+    "senses": [
+      {
+        "definition": "Azure ADをベースにしたマネージドのActive Directoryドメインサービス。ドメイン参加、グループポリシー、LDAP、Kerberosなど従来のADと互換性のある機能をクラウドで提供し、オンプレミスADなしに利用できる。",
+        "domain": "azure",
+        "keywords": [
+          "Active Directory",
+          "ドメイン",
+          "LDAP",
+          "Kerberos",
+          "マネージド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure AD Connect",
+    "aliases": [
+      "AAD Connect",
+      "Azure Active Directory Connect"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスのActive DirectoryとAzure ADの間でユーザー・グループ・パスワードを同期するツール。ハイブリッドID構成を実現し、オンプレミスとクラウドで統一したSSOを可能にする。",
+        "domain": "azure",
+        "keywords": [
+          "ハイブリッドID",
+          "同期",
+          "Active Directory",
+          "SSO",
+          "オンプレミス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Log Analytics",
+    "aliases": [
+      "Log Analytics Workspace"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースや他のソースから収集したログとパフォーマンスデータをクエリ・分析するサービス。Kusto Query Language（KQL）で高度なデータ分析が可能で、Azure Monitorの中核コンポーネント。",
+        "domain": "azure",
+        "keywords": [
+          "ログ分析",
+          "KQL",
+          "モニタリング",
+          "Azure Monitor",
+          "クエリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Application Insights",
+    "aliases": [
+      "App Insights"
+    ],
+    "senses": [
+      {
+        "definition": "Webアプリケーションのパフォーマンスと障害をリアルタイムに監視するAPMサービス。リクエスト、依存関係、例外、パフォーマンスカウンターを自動収集し、Azure Monitorのコンポーネントとして機能する。",
+        "domain": "azure",
+        "keywords": [
+          "APM",
+          "アプリ監視",
+          "パフォーマンス",
+          "例外",
+          "トレーシング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Security Center",
+    "aliases": [
+      "Microsoft Defender for Cloud"
+    ],
+    "senses": [
+      {
+        "definition": "Azureとハイブリッドクラウドのセキュリティポスチャーをリアルタイム評価する統合セキュリティ管理サービス。現在はMicrosoft Defender for Cloudに改称され、セキュリティスコアや推奨対策を提示する。",
+        "domain": "azure",
+        "keywords": [
+          "セキュリティ",
+          "クラウドセキュリティ",
+          "セキュリティスコア",
+          "CSPM",
+          "推奨事項"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Sentinel",
+    "aliases": [
+      "Microsoft Sentinel"
+    ],
+    "senses": [
+      {
+        "definition": "クラウドネイティブのSIEM（セキュリティ情報およびイベント管理）とSOARプラットフォーム。ログを大規模収集してAIによる脅威検知・調査・対応の自動化を行う。現在はMicrosoft Sentinelに改称。",
+        "domain": "azure",
+        "keywords": [
+          "SIEM",
+          "SOAR",
+          "脅威検知",
+          "インシデント対応",
+          "セキュリティ自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Defender",
+    "aliases": [
+      "Azure Defender for Servers"
+    ],
+    "senses": [
+      {
+        "definition": "仮想マシン、コンテナ、データベースなどAzureリソースを対象とした高度な脅威保護サービス。ランタイムの脅威検知、脆弱性評価、適応型アプリケーション制御などをリソース種別ごとに提供する。",
+        "domain": "azure",
+        "keywords": [
+          "脅威保護",
+          "脆弱性評価",
+          "ランタイム保護",
+          "EDR",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Container Registry",
+    "aliases": [
+      "ACR"
+    ],
+    "senses": [
+      {
+        "definition": "DockerコンテナイメージやHelmチャートをプライベートに保存・管理するフルマネージドのOCIコンテナレジストリ。Azure Kubernetes ServiceやAzure Container Appsとネイティブに統合され、地理的レプリケーションにも対応する。",
+        "domain": "azure",
+        "keywords": [
+          "コンテナ",
+          "Docker",
+          "レジストリ",
+          "Helm",
+          "イメージ管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Container Instances",
+    "aliases": [
+      "ACI"
+    ],
+    "senses": [
+      {
+        "definition": "仮想マシンやオーケストレーションシステムなしにコンテナを直接実行できるサーバーレスコンテナサービス。秒単位の課金と高速起動が特徴で、バッチ処理や短命なコンテナワークロードに最適。",
+        "domain": "azure",
+        "keywords": [
+          "コンテナ",
+          "サーバーレス",
+          "秒課金",
+          "バッチ",
+          "軽量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Static Web Apps",
+    "aliases": [
+      "Static Web Apps",
+      "SWA"
+    ],
+    "senses": [
+      {
+        "definition": "静的フロントエンド（HTML/CSS/JS）とサーバーレスAPIバックエンド（Azure Functions）を統合してホスティングするサービス。GitHubやAzure DevOpsとCI/CD連携し、グローバルCDN配信と無料SSLを自動設定する。",
+        "domain": "azure",
+        "keywords": [
+          "静的サイト",
+          "JAMstack",
+          "CI/CD",
+          "CDN",
+          "サーバーレス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Spring Apps",
+    "aliases": [
+      "Azure Spring Cloud",
+      "Spring Apps"
+    ],
+    "senses": [
+      {
+        "definition": "Spring Bootアプリケーションをフルマネージドで実行するPaaSサービス。サービスディスカバリー、設定管理、スケーリング、Blue/Greenデプロイをサービスとして提供し、Javaエンタープライズアプリの移行を容易にする。",
+        "domain": "azure",
+        "keywords": [
+          "Spring Boot",
+          "Java",
+          "PaaS",
+          "マイクロサービス",
+          "エンタープライズ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure SignalR Service",
+    "aliases": [
+      "SignalR Service"
+    ],
+    "senses": [
+      {
+        "definition": "リアルタイム双方向通信機能をアプリに追加するフルマネージドサービス。WebSocket、Server-Sent Events、Long Pollingを自動管理し、チャット、ライブダッシュボード、ゲームなどの用途で使われる。",
+        "domain": "azure",
+        "keywords": [
+          "リアルタイム",
+          "WebSocket",
+          "プッシュ通知",
+          "双方向通信",
+          "SignalR"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Notification Hubs",
+    "aliases": [
+      "Notification Hubs"
+    ],
+    "senses": [
+      {
+        "definition": "iOS（APNs）、Android（FCM）、Windows（WNS）などのプッシュ通知プラットフォームを統一APIで扱えるスケーラブルなプッシュ通知サービス。タグやテンプレートで対象者を絞り込んで大規模配信が可能。",
+        "domain": "azure",
+        "keywords": [
+          "プッシュ通知",
+          "モバイル",
+          "APNs",
+          "FCM",
+          "スケーラブル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Relay",
+    "aliases": [
+      "Relay",
+      "Azure Service Bus Relay"
+    ],
+    "senses": [
+      {
+        "definition": "ファイアウォールやNATの内側にあるオンプレミスサービスをクラウドから安全に呼び出すためのハイブリッド接続サービス。クライアントが発信した接続をRelayサーバーが橋渡しし、インバウンドのファイアウォール設定変更が不要。",
+        "domain": "azure",
+        "keywords": [
+          "ハイブリッド",
+          "接続",
+          "ファイアウォール",
+          "オンプレミス",
+          "中継"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Batch",
+    "aliases": [
+      "Batch"
+    ],
+    "senses": [
+      {
+        "definition": "大規模な並列バッチコンピューティングジョブを管理するサービス。VMのプール管理、ジョブスケジューリング、タスク依存関係の解決を自動化し、レンダリング、シミュレーション、トランスコードなどの計算集約型処理に最適。",
+        "domain": "azure",
+        "keywords": [
+          "バッチ処理",
+          "並列計算",
+          "HPC",
+          "ジョブスケジューリング",
+          "VM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Artifacts",
+    "aliases": [
+      "Artifacts",
+      "Azure DevOps Artifacts"
+    ],
+    "senses": [
+      {
+        "definition": "npm、NuGet、Maven、Python、Universalパッケージなどを管理するプライベートパッケージレジストリ。Azure DevOpsの一機能として提供され、CI/CDパイプライン内でのパッケージ共有と依存関係管理を支援する。",
+        "domain": "azure",
+        "keywords": [
+          "パッケージ管理",
+          "npm",
+          "NuGet",
+          "Maven",
+          "CI/CD"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Test Plans",
+    "aliases": [
+      "Test Plans"
+    ],
+    "senses": [
+      {
+        "definition": "Azure DevOpsの手動テスト・探索的テスト管理ツール。テストケースの作成、実行、追跡を管理し、バグを直接作業項目として記録しながらテスト結果とカバレッジレポートを提供する。",
+        "domain": "azure",
+        "keywords": [
+          "テスト管理",
+          "手動テスト",
+          "探索的テスト",
+          "Azure DevOps",
+          "品質"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Boards",
+    "aliases": [
+      "Boards",
+      "Azure DevOps Boards"
+    ],
+    "senses": [
+      {
+        "definition": "スクラム・カンバン・スクラムボードをサポートするアジャイルプロジェクト管理ツール。作業項目（エピック、フィーチャー、ユーザーストーリー、タスク）をバックログやボードで管理し、Azure Pipelinesと統合する。",
+        "domain": "azure",
+        "keywords": [
+          "プロジェクト管理",
+          "スクラム",
+          "カンバン",
+          "バックログ",
+          "Azure DevOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Cognitive Search",
+    "aliases": [
+      "Azure AI Search",
+      "Cognitive Search"
+    ],
+    "senses": [
+      {
+        "definition": "エンタープライズ向けのフルテキスト検索・AIエンリッチメントサービス。複数データソースからのインデックス構築、セマンティック検索、ベクター検索に対応し、RAGアーキテクチャのナレッジリトリーバルにも活用される。",
+        "domain": "azure",
+        "keywords": [
+          "全文検索",
+          "セマンティック検索",
+          "ベクター検索",
+          "RAG",
+          "インデックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Form Recognizer",
+    "aliases": [
+      "Azure AI Document Intelligence",
+      "Form Recognizer"
+    ],
+    "senses": [
+      {
+        "definition": "領収書、請求書、名刺、フォームなどのドキュメントからテキストやキーバリューペアを自動抽出するAIサービス。OCR機能とカスタムモデルのトレーニングにより様々なドキュメント形式に対応する。",
+        "domain": "azure",
+        "keywords": [
+          "OCR",
+          "ドキュメント解析",
+          "AI",
+          "データ抽出",
+          "フォーム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Text Analytics",
+    "aliases": [
+      "Azure AI Language",
+      "Text Analytics"
+    ],
+    "senses": [
+      {
+        "definition": "自然言語処理（NLP）APIを提供するサービス。感情分析、キーフレーズ抽出、エンティティ認識、言語検出、テキスト要約などの機能を備え、テキストデータからインサイトを自動的に得られる。",
+        "domain": "azure",
+        "keywords": [
+          "NLP",
+          "感情分析",
+          "エンティティ認識",
+          "キーフレーズ",
+          "自然言語処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Computer Vision",
+    "aliases": [
+      "Computer Vision",
+      "Azure AI Vision"
+    ],
+    "senses": [
+      {
+        "definition": "画像や動画を解析するAPIを提供するコンピュータービジョンサービス。物体検出、画像分類、OCR、顔検出、シーン記述などの機能を提供し、カスタムビジョンモデルのトレーニングも可能。",
+        "domain": "azure",
+        "keywords": [
+          "コンピュータービジョン",
+          "画像認識",
+          "物体検出",
+          "OCR",
+          "AI"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Face API",
+    "aliases": [
+      "Face API",
+      "Azure AI Face"
+    ],
+    "senses": [
+      {
+        "definition": "顔検出、属性分析（年齢・表情・感情）、顔照合、顔識別の機能を提供するAIサービス。セキュリティゲートやアクセス制御、本人確認ユースケースで利用されるが、プライバシーへの配慮が求められる。",
+        "domain": "azure",
+        "keywords": [
+          "顔認識",
+          "顔照合",
+          "生体認証",
+          "AI",
+          "プライバシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Translator",
+    "aliases": [
+      "Azure AI Translator",
+      "Cognitive Services Translator"
+    ],
+    "senses": [
+      {
+        "definition": "リアルタイムのテキスト・ドキュメント翻訳を提供するニューラル機械翻訳サービス。100言語以上に対応し、カスタム用語集による翻訳精度カスタマイズや、カスタムトレーニングモデルの構築も可能。",
+        "domain": "azure",
+        "keywords": [
+          "機械翻訳",
+          "多言語",
+          "NLP",
+          "翻訳API",
+          "カスタム翻訳"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Speech Services",
+    "aliases": [
+      "Speech Services"
+    ],
+    "senses": [
+      {
+        "definition": "音声認識（STT）、音声合成（TTS）、音声翻訳、話者認識の機能を提供するAIサービス。ニューラルTTSによる自然な音声合成とリアルタイム会話文字起こしをAPIで利用できる。",
+        "domain": "azure",
+        "keywords": [
+          "音声認識",
+          "音声合成",
+          "STT",
+          "TTS",
+          "話者認識"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Bot Service",
+    "aliases": [
+      "Bot Service",
+      "Azure Bot Framework"
+    ],
+    "senses": [
+      {
+        "definition": "チャットボットやコンバーサルAIを構築・管理・接続するためのサービス。Bot Framework SDKと統合し、Teams、Slack、WebチャットなどのチャンネルへのボットデプロイとAzure OpenAI連携が可能。",
+        "domain": "azure",
+        "keywords": [
+          "チャットボット",
+          "会話AI",
+          "Bot Framework",
+          "チャンネル統合",
+          "Teams"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Maps",
+    "aliases": [
+      "Azure Location Services"
+    ],
+    "senses": [
+      {
+        "definition": "地図表示、ルート案内、ジオコーディング、交通情報、空間分析などの位置情報サービスを提供するAPI群。Webおよびモバイルアプリに地図・位置情報機能を組み込めるエンタープライズグレードのサービス。",
+        "domain": "azure",
+        "keywords": [
+          "地図",
+          "位置情報",
+          "ルート",
+          "ジオコーディング",
+          "空間分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Time Series Insights",
+    "aliases": [
+      "Time Series Insights",
+      "TSI"
+    ],
+    "senses": [
+      {
+        "definition": "IoTデバイスからの大規模時系列データの収集・保存・クエリ・可視化を行うサービス。センサーデータや産業機器のテレメトリを長期保存し、パターン分析や異常検知に活用する。",
+        "domain": "azure",
+        "keywords": [
+          "IoT",
+          "時系列",
+          "センサーデータ",
+          "可視化",
+          "異常検知"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Digital Twins",
+    "aliases": [
+      "Digital Twins"
+    ],
+    "senses": [
+      {
+        "definition": "現実世界のデバイス・場所・ビジネスプロセスのデジタルツインモデルをクラウド上に構築するサービス。DTDL（Digital Twins Definition Language）でモデルを定義し、IoT HubやTime Series Insightsと連携する。",
+        "domain": "azure",
+        "keywords": [
+          "デジタルツイン",
+          "IoT",
+          "DTDL",
+          "シミュレーション",
+          "モデリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure IoT Central",
+    "aliases": [
+      "IoT Central"
+    ],
+    "senses": [
+      {
+        "definition": "IoTデバイスの接続・監視・管理をノーコード/ローコードで実現するSaaSプラットフォーム。デバイステンプレートによる迅速なデバイスオンボーディングとダッシュボード・アラート設定ができ、IoT Hub上に構築されている。",
+        "domain": "azure",
+        "keywords": [
+          "IoT",
+          "SaaS",
+          "ノーコード",
+          "デバイス管理",
+          "ダッシュボード"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Dedicated Host",
+    "aliases": [
+      "Dedicated Host"
+    ],
+    "senses": [
+      {
+        "definition": "単一テナント専用の物理ホストサーバーをAzureで提供するサービス。ホスト上のVMはそのサーバーのみが使用し、コンプライアンス要件やライセンス（Windows Server BYOL）の理由でサーバーの占有が必要な場合に利用される。",
+        "domain": "azure",
+        "keywords": [
+          "専有ホスト",
+          "コンプライアンス",
+          "シングルテナント",
+          "VM",
+          "BYOL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Spot VMs",
+    "aliases": [
+      "Azure Spot Virtual Machines",
+      "スポットVM"
+    ],
+    "senses": [
+      {
+        "definition": "Azureの未使用容量を割引価格（最大90%オフ）で利用できる仮想マシン。容量が必要になればAzureからの強制退去があるため、中断耐性のあるバッチ処理や開発・テスト環境に最適。",
+        "domain": "azure",
+        "keywords": [
+          "スポット",
+          "割引",
+          "バッチ",
+          "コスト最適化",
+          "強制退去"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Reserved Instances",
+    "aliases": [
+      "Reserved Instances",
+      "予約インスタンス",
+      "Azure Reservations"
+    ],
+    "senses": [
+      {
+        "definition": "1年または3年のAzureリソース利用をあらかじめ予約し、従量課金より大幅に割引（最大72%）で利用できるコスト最適化オプション。VMだけでなくSQL Database、Cosmos DBなどにも適用可能。",
+        "domain": "azure",
+        "keywords": [
+          "コスト最適化",
+          "予約",
+          "割引",
+          "VM",
+          "キャパシティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Scale Sets",
+    "aliases": [
+      "Virtual Machine Scale Sets",
+      "VMSS"
+    ],
+    "senses": [
+      {
+        "definition": "同一構成の仮想マシンを自動でスケールアウト・スケールインできるVMグループ。ロードバランサーと組み合わせてトラフィックに応じたVM数の自動調整を行い、大規模ステートレスアプリのホスティングに使われる。",
+        "domain": "azure",
+        "keywords": [
+          "自動スケール",
+          "VM",
+          "負荷分散",
+          "水平スケーリング",
+          "可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Proximity Placement Groups",
+    "aliases": [
+      "Proximity Placement Groups",
+      "PPG",
+      "近接配置グループ"
+    ],
+    "senses": [
+      {
+        "definition": "複数のAzure VMやVMSSを物理的に近いデータセンターに配置するための制約グループ。VM間のネットワークレイテンシを最小化し、高性能コンピューティングやタイトに連携するアプリ層の低遅延通信を実現する。",
+        "domain": "azure",
+        "keywords": [
+          "低レイテンシ",
+          "HPC",
+          "VM配置",
+          "ネットワーク",
+          "近接"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Arc",
+    "aliases": [
+      "Arc"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミス、マルチクラウド、エッジ環境のサーバー・Kubernetes・データサービスをAzureのコントロールプレーンで一元管理する拡張サービス。Azure Policy、RBAC、Monitor、Security Centerをハイブリッド環境に適用できる。",
+        "domain": "azure",
+        "keywords": [
+          "ハイブリッドクラウド",
+          "マルチクラウド",
+          "一元管理",
+          "Kubernetes",
+          "エッジ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Stack Hub",
+    "aliases": [
+      "Stack Hub",
+      "Azure Stack"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスのデータセンターにAzureサービスを展開できるハイブリッドクラウドプラットフォーム。インターネット接続が制限される環境や規制産業向けに、Azureと一貫したAPIとツールで運用できる。",
+        "domain": "azure",
+        "keywords": [
+          "ハイブリッドクラウド",
+          "オンプレミス",
+          "Azure互換",
+          "規制産業",
+          "エアギャップ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Stack Edge",
+    "aliases": [
+      "Stack Edge",
+      "Azure Data Box Edge"
+    ],
+    "senses": [
+      {
+        "definition": "エッジコンピューティングとAIアクセラレーション機能を持つハードウェアアプライアンス。現地でデータを処理してからAzureに転送するため、帯域幅が限られる工場・小売・遠隔地でのIoTと機械学習に活用される。",
+        "domain": "azure",
+        "keywords": [
+          "エッジコンピューティング",
+          "AI",
+          "ハードウェア",
+          "IoT",
+          "オフライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Migrate",
+    "aliases": [
+      "Azure Migration"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスのVM・データベース・Webアプリを評価・移行するための中央ハブ。移行前の依存関係マッピング、コスト見積り、適切なAzure SKUの推奨、そして移行ツール（レプリケーション）を統合的に提供する。",
+        "domain": "azure",
+        "keywords": [
+          "移行",
+          "クラウド移行",
+          "評価",
+          "VM",
+          "リフトアンドシフト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Site Recovery",
+    "aliases": [
+      "ASR",
+      "Site Recovery"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスVM、AzureVMのディザスタリカバリー（DR）と移行を管理するサービス。継続的なレプリケーション、定期テストフェイルオーバー、RPO/RTOのモニタリングでビジネス継続性計画をサポートする。",
+        "domain": "azure",
+        "keywords": [
+          "ディザスタリカバリー",
+          "レプリケーション",
+          "フェイルオーバー",
+          "RPO",
+          "RTO"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Backup",
+    "aliases": [
+      "Azure Backup Service"
+    ],
+    "senses": [
+      {
+        "definition": "VM、SQLデータベース、ファイル、SAP HANAなど多様なワークロードをクラウドにバックアップするフルマネージドサービス。増分バックアップ、ソフト削除、長期保存ポリシーをシンプルなUIで設定できる。",
+        "domain": "azure",
+        "keywords": [
+          "バックアップ",
+          "データ保護",
+          "増分バックアップ",
+          "復元",
+          "保持ポリシー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure File Sync",
+    "aliases": [
+      "File Sync"
+    ],
+    "senses": [
+      {
+        "definition": "オンプレミスのWindowsファイルサーバーとAzure Filesを同期し、クラウドをファイルの一元バックアップとして機能させるサービス。クラウド階層化によりアクセス頻度の低いファイルをクラウドに移動してローカルストレージを節約する。",
+        "domain": "azure",
+        "keywords": [
+          "ファイル同期",
+          "ハイブリッド",
+          "クラウド階層化",
+          "Windowsファイルサーバー",
+          "バックアップ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Import/Export",
+    "aliases": [
+      "Azure Import Export"
+    ],
+    "senses": [
+      {
+        "definition": "大量データをインターネット経由でなく、HDDやSSDをMicrosoftデータセンターに物理的に送付することでAzure Storageにインポート・エクスポートするサービス。数十TBのデータを効率よく転送する際に使用する。",
+        "domain": "azure",
+        "keywords": [
+          "データ転送",
+          "物理デバイス",
+          "大容量データ",
+          "ストレージ",
+          "オフライン転送"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Data Box",
+    "aliases": [
+      "Data Box"
+    ],
+    "senses": [
+      {
+        "definition": "大規模データをAzureに移行するためのオフライン転送デバイス。Data Box（100TB）、Data Box Disk（8TB×5）、Data Box Heavy（1PB）のラインナップがあり、インターネット帯域が不十分な場合のデータ移行に使われる。",
+        "domain": "azure",
+        "keywords": [
+          "データ移行",
+          "オフライン",
+          "物理デバイス",
+          "大容量",
+          "ペタバイト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure NetApp Files",
+    "aliases": [
+      "NetApp Files",
+      "ANF"
+    ],
+    "senses": [
+      {
+        "definition": "Netapp ONTAPをベースにしたエンタープライズグレードのNASファイルストレージサービス。高いIOPS・低レイテンシが求められるSAP HANA、Oracle、高性能コンピューティングなどのワークロードに対応する。",
+        "domain": "azure",
+        "keywords": [
+          "NAS",
+          "NetApp",
+          "ONTAP",
+          "高性能",
+          "ファイルストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Managed Disks",
+    "aliases": [
+      "Managed Disks",
+      "マネージドディスク"
+    ],
+    "senses": [
+      {
+        "definition": "Azureが冗長性とスナップショットを管理するVMアタッチ型のブロックストレージ。Ultra Disk、Premium SSD v2、Premium SSD、Standard SSD、Standard HDDの5ラインがあり、ワークロードに合わせて選択する。",
+        "domain": "azure",
+        "keywords": [
+          "ブロックストレージ",
+          "SSD",
+          "HDD",
+          "VM",
+          "ストレージ管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Shared Disk",
+    "aliases": [
+      "Shared Disk"
+    ],
+    "senses": [
+      {
+        "definition": "複数のVMから同時に共有マウントできるAzure Managed Diskの機能。Windows Server Failover ClusteringやLinux Pacemakerを使ったクラスター化アプリケーションの共有ストレージとして利用される。",
+        "domain": "azure",
+        "keywords": [
+          "共有ストレージ",
+          "クラスター",
+          "フェイルオーバー",
+          "マルチVM",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Ultra Disk",
+    "aliases": [
+      "Ultra Disk",
+      "Ultra SSD"
+    ],
+    "senses": [
+      {
+        "definition": "サブミリ秒レイテンシと最大160,000 IOPSを提供するAzureの最高性能ブロックストレージ。SAP HANA、Oracle、SQL Server Tier-1などのI/O集約型ワークロード専用で、実行中のVMからもディスク性能を変更できる。",
+        "domain": "azure",
+        "keywords": [
+          "高性能ストレージ",
+          "SSD",
+          "低レイテンシ",
+          "IOPS",
+          "SAP HANA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Object Replication",
+    "aliases": [
+      "オブジェクトレプリケーション",
+      "Blob Object Replication"
+    ],
+    "senses": [
+      {
+        "definition": "Azure Blob Storageのコンテナ間でオブジェクトを非同期的にレプリケートする機能。リージョン間のデータ冗長化、読み取りレイテンシ低減、コンプライアンス要件への対応などの目的で使用する。",
+        "domain": "azure",
+        "keywords": [
+          "Blob",
+          "レプリケーション",
+          "非同期",
+          "冗長化",
+          "ストレージ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Geo-Redundant Storage",
+    "aliases": [
+      "GRS",
+      "Geo-Redundant Storage",
+      "地理冗長ストレージ"
+    ],
+    "senses": [
+      {
+        "definition": "プライマリリージョンに3コピー、500マイル以上離れたセカンダリリージョンに3コピーの計6コピーでデータを保存するストレージ冗長性オプション。リージョン障害時もデータを保護し、読み取り専用フェイルオーバーも可能（RA-GRS）。",
+        "domain": "azure",
+        "keywords": [
+          "冗長性",
+          "ストレージ",
+          "地理冗長",
+          "リージョン障害",
+          "RA-GRS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Zone-Redundant Storage",
+    "aliases": [
+      "ZRS",
+      "Zone-Redundant Storage",
+      "ゾーン冗長ストレージ"
+    ],
+    "senses": [
+      {
+        "definition": "同一リージョン内の複数の可用性ゾーンにデータを分散して3コピーを保存するストレージ冗長性オプション。単一ゾーン障害に対する高い耐久性を提供し、重要なデータのゾーン障害耐性を実現する。",
+        "domain": "azure",
+        "keywords": [
+          "冗長性",
+          "ストレージ",
+          "ゾーン冗長",
+          "可用性ゾーン",
+          "耐久性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Lifecycle Management",
+    "aliases": [
+      "Blob Lifecycle Management",
+      "ストレージライフサイクル管理"
+    ],
+    "senses": [
+      {
+        "definition": "Blob Storageオブジェクトのアクセス頻度に応じてストレージ層（Hot/Cool/Cold/Archive）を自動的に移行するポリシーを設定する機能。コストを最適化しながらデータ保持要件を自動管理する。",
+        "domain": "azure",
+        "keywords": [
+          "ストレージ層",
+          "コスト最適化",
+          "Hot",
+          "Cool",
+          "Archive"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Cost Management",
+    "aliases": [
+      "Azure Cost Management and Billing",
+      "コスト管理"
+    ],
+    "senses": [
+      {
+        "definition": "Azureリソースのコストを可視化・分析・最適化するサービス。コスト分析ダッシュボード、予算アラート、予約とスポットの推奨、コスト配賦タグの活用などでクラウド支出を制御する。",
+        "domain": "azure",
+        "keywords": [
+          "コスト管理",
+          "予算",
+          "コスト分析",
+          "最適化",
+          "タグ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Advisor",
+    "aliases": [
+      "Advisor"
+    ],
+    "senses": [
+      {
+        "definition": "AzureリソースのコスティングとベストプラクティスをAIが分析し、コスト削減・セキュリティ向上・高可用性・パフォーマンス改善・オペレーショナルエクセレンスの観点で推奨事項を提示するサービス。",
+        "domain": "azure",
+        "keywords": [
+          "推奨事項",
+          "コスト最適化",
+          "セキュリティ",
+          "パフォーマンス",
+          "ベストプラクティス"
+        ]
+      },
+      {
+        "definition": "アプリ定義の改善点を点検する支援機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "品質",
+          "Advisor"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Service Health",
+    "aliases": [
+      "Service Health"
+    ],
+    "senses": [
+      {
+        "definition": "Azureサービスの稼働状況、メンテナンス情報、障害通知を個人化されたビューで確認できるサービス。影響を受けるリソースを特定し、アラートやアクショングループと連携して障害対応を迅速化する。",
+        "domain": "azure",
+        "keywords": [
+          "サービス稼働状況",
+          "障害通知",
+          "メンテナンス",
+          "アラート",
+          "インシデント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Resource Health",
+    "aliases": [
+      "Resource Health"
+    ],
+    "senses": [
+      {
+        "definition": "個々のAzureリソースの正常性と過去の可用性履歴を確認できるサービス。プラットフォームイベントやユーザー起因の問題を区別し、リソース固有の診断と修復アクションを提案する。",
+        "domain": "azure",
+        "keywords": [
+          "リソース監視",
+          "正常性",
+          "可用性",
+          "診断",
+          "Azure Monitor"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Metrics",
+    "aliases": [
+      "Azureメトリクス",
+      "Azure Monitor Metrics"
+    ],
+    "senses": [
+      {
+        "definition": "AzureリソースのパフォーマンスデータをリアルタイムにMonitorに保存する時系列データ。CPUやメモリ使用率、リクエスト数、レイテンシなどをグラフ表示・アラート設定・自動スケールトリガーに利用できる。",
+        "domain": "azure",
+        "keywords": [
+          "メトリクス",
+          "監視",
+          "時系列",
+          "Azure Monitor",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Alerts",
+    "aliases": [
+      "Azureアラート",
+      "Monitor Alerts"
+    ],
+    "senses": [
+      {
+        "definition": "メトリクス、ログ、Activity Logの条件を設定してしきい値違反時に通知やアクションを自動起動するサービス。メール・SMS・Webhook・Logic Appsなど多彩なアクショングループで自動対応フローを構築できる。",
+        "domain": "azure",
+        "keywords": [
+          "アラート",
+          "通知",
+          "自動対応",
+          "アクショングループ",
+          "Azure Monitor"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Azure Workbooks",
+    "aliases": [
+      "Workbooks",
+      "Azure Monitor Workbooks"
+    ],
+    "senses": [
+      {
+        "definition": "メトリクス、ログ、リソースデータを組み合わせたインタラクティブなレポートとダッシュボードを作成するAzure Monitor内の可視化ツール。テンプレートとパラメータ化により複数環境のデータを一画面で比較できる。",
+        "domain": "azure",
+        "keywords": [
+          "可視化",
+          "ダッシュボード",
+          "Azure Monitor",
+          "ログ",
+          "レポート"
+        ]
+      }
+    ]
+  }
+]

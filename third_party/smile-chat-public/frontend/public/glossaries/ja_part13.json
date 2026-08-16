@@ -1,0 +1,2637 @@
+[
+  {
+    "term": "Visual Studio Code",
+    "reading": "びじゅあるすたじおこーど",
+    "senses": [
+      {
+        "definition": "Microsoft が提供する、拡張性を重視した軽量コードエディタです。拡張機能によって言語、デバッガー、各種ツールを追加できます。",
+        "domain": "vs-code",
+        "keywords": [
+          "エディタ",
+          "Microsoft",
+          "拡張機能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VS Code",
+    "reading": "ぶいえすこーど",
+    "senses": [
+      {
+        "definition": "Visual Studio Code の略称です。日常実務ではこの略称で呼ばれることがほとんどです。",
+        "domain": "vs-code",
+        "keywords": [
+          "エディタ",
+          "略称"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extension Marketplace",
+    "reading": "えくすてんしょんまーけっとぷれいす",
+    "senses": [
+      {
+        "definition": "VS Code の拡張機能を検索、導入するための配布基盤です。Visual Studio Marketplace から直接インストールできます。",
+        "domain": "vs-code",
+        "keywords": [
+          "拡張機能",
+          "配布",
+          "マーケットプレイス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extension",
+    "reading": "えくすてんしょん",
+    "senses": [
+      {
+        "definition": "VS Code に機能を追加する拡張機能です。言語サポート、デバッガー、ツール連携などを後から足せます。",
+        "domain": "vs-code",
+        "keywords": [
+          "拡張",
+          "プラグイン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extension API",
+    "reading": "えくすてんしょんえーぴーあい",
+    "senses": [
+      {
+        "definition": "VS Code を拡張するための公式 API 群です。多くのコア機能自体も拡張として実装されていると説明されています。",
+        "domain": "vs-code",
+        "keywords": [
+          "API",
+          "拡張開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VSIX",
+    "reading": "ぶいしっくす",
+    "senses": [
+      {
+        "definition": "VS Code 拡張機能の配布パッケージ形式です。Marketplace を使わずに配布するときにも使えます。",
+        "domain": "vs-code",
+        "keywords": [
+          "パッケージ",
+          "配布",
+          "拡張機能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "vsce",
+    "reading": "ぶいえすしーいー",
+    "senses": [
+      {
+        "definition": "VS Code 拡張機能を package、publish、unpublish するための CLI ツールです。拡張機能公開時の中心ツールです。",
+        "domain": "vs-code",
+        "keywords": [
+          "CLI",
+          "公開",
+          "拡張機能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Workspace",
+    "reading": "わーくすぺーす",
+    "senses": [
+      {
+        "definition": "VS Code で開いている作業対象のフォルダ、またはそのまとまりです。複数フォルダを扱うワークスペースにも対応します。",
+        "domain": "vs-code",
+        "keywords": [
+          "フォルダ",
+          "作業環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Workspace Trust",
+    "reading": "わーくすぺーすとらすと",
+    "senses": [
+      {
+        "definition": "開いているフォルダを信頼するかどうかで、タスク実行やデバッグなど危険な操作を制御する仕組みです。Restricted Mode と深く関係します。",
+        "domain": "vs-code",
+        "keywords": [
+          "信頼",
+          "セキュリティ",
+          "制限"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Restricted Mode",
+    "reading": "りすとりくてっどもーど",
+    "senses": [
+      {
+        "definition": "信頼していないワークスペースを制限付きで開くモードです。タスク実行やデバッグは制限されます。",
+        "domain": "vs-code",
+        "keywords": [
+          "制限",
+          "セキュリティ",
+          "信頼"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Activity Bar",
+    "reading": "あくてぃびてぃばー",
+    "senses": [
+      {
+        "definition": "エクスプローラーや拡張機能ビューなどを開くサイドバー上の主要ナビゲーション領域です。Extensions ビューもここから開けます。",
+        "domain": "vs-code",
+        "keywords": [
+          "UI",
+          "サイドバー",
+          "ナビゲーション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Command Palette",
+    "reading": "こまんどぱれっと",
+    "senses": [
+      {
+        "definition": "VS Code のコマンドをキーボード中心で呼び出せる UI です。拡張機能が追加したコマンドもここに集約されます。",
+        "domain": "vs-code",
+        "keywords": [
+          "コマンド",
+          "キーボード",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Settings",
+    "reading": "せってぃんぐす",
+    "senses": [
+      {
+        "definition": "VS Code のエディタや拡張機能の設定です。GUI でも JSON でも管理できます。",
+        "domain": "vs-code",
+        "keywords": [
+          "設定",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "settings.json",
+    "reading": "せってぃんぐすじぇいそん",
+    "senses": [
+      {
+        "definition": "VS Code の設定を JSON 形式で記述するファイルです。ユーザー設定とワークスペース設定の両方で使えます。",
+        "domain": "vs-code",
+        "keywords": [
+          "設定",
+          "JSON",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "launch.json",
+    "reading": "らんちじぇいそん",
+    "senses": [
+      {
+        "definition": "デバッグ構成を定義するファイルです。通常はワークスペース配下の .vscode フォルダに置かれます。",
+        "domain": "vs-code",
+        "keywords": [
+          "デバッグ",
+          "構成",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "tasks.json",
+    "reading": "たすくすじぇいそん",
+    "senses": [
+      {
+        "definition": "ビルドやテストなどのタスク定義を記述するファイルです。ワークスペースの .vscode フォルダで共有されます。",
+        "domain": "vs-code",
+        "keywords": [
+          "タスク",
+          "ビルド",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".vscode folder",
+    "reading": "どっとぶいえすこーどふぉるだ",
+    "senses": [
+      {
+        "definition": "ワークスペース固有の設定やデバッグ構成、タスク定義などを置くフォルダです。launch.json と tasks.json も通常ここに置かれます。",
+        "domain": "vs-code",
+        "keywords": [
+          "フォルダ",
+          "設定",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Debug Configuration",
+    "reading": "でばっぐこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "VS Code でどのプログラムをどうデバッグ起動するかを定義する設定です。launch.json に書かれます。",
+        "domain": "vs-code",
+        "keywords": [
+          "デバッグ",
+          "設定",
+          "起動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Debugger Extension",
+    "reading": "でばっがーえくすてんしょん",
+    "senses": [
+      {
+        "definition": "特定言語やランタイムのデバッグ機能を提供する拡張です。インストールされたデバッグ拡張が type を導入します。",
+        "domain": "vs-code",
+        "keywords": [
+          "デバッグ",
+          "拡張",
+          "言語"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "preLaunchTask",
+    "reading": "ぷりらんちたすく",
+    "senses": [
+      {
+        "definition": "デバッグ開始前に実行するタスクを指定する設定です。tasks.json のタスクと組み合わせて使います。",
+        "domain": "vs-code",
+        "keywords": [
+          "デバッグ",
+          "タスク",
+          "事前実行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Variable Substitution",
+    "reading": "ばりあぶるさぶすてぃちゅーしょん",
+    "senses": [
+      {
+        "definition": "launch.json や tasks.json 内で ${workspaceFolder} などの変数展開を行う仕組みです。設定の再利用性を高めます。",
+        "domain": "vs-code",
+        "keywords": [
+          "変数",
+          "展開",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extensions View",
+    "reading": "えくすてんしょんずびゅー",
+    "senses": [
+      {
+        "definition": "拡張機能を検索、インストール、無効化するための VS Code 画面です。Activity Bar の拡張機能アイコンから開けます。",
+        "domain": "vs-code",
+        "keywords": [
+          "拡張機能",
+          "UI",
+          "画面"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Publisher Trust",
+    "reading": "ぱぶりっしゃーとらすと",
+    "senses": [
+      {
+        "definition": "サードパーティ拡張機能の発行元を信頼するかを確認する仕組みです。VS Code は拡張機能の実行リスクを明示しています。",
+        "domain": "vs-code",
+        "keywords": [
+          "信頼",
+          "発行元",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extension Runtime Security",
+    "reading": "えくすてんしょんらんたいむせきゅりてぃ",
+    "senses": [
+      {
+        "definition": "拡張機能がローカルファイル操作やネットワーク通信、外部プロセス実行などを行える点を前提に、安全に扱う考え方です。",
+        "domain": "vs-code",
+        "keywords": [
+          "セキュリティ",
+          "拡張機能",
+          "ランタイム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Allowed Extensions Policy",
+    "reading": "あらうどえくすてんしょんずぽりしー",
+    "senses": [
+      {
+        "definition": "エンタープライズ環境で、インストール可能な拡張機能を制限するための VS Code ポリシーです。extensions.allowed などで制御できます。",
+        "domain": "vs-code",
+        "keywords": [
+          "ポリシー",
+          "エンタープライズ",
+          "制限"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Private Marketplace",
+    "reading": "ぷらいべーとまーけっとぷれいす",
+    "senses": [
+      {
+        "definition": "組織内で拡張機能を自己ホスト配布できる VS Code の企業向け機能です。許可済み拡張の配布統制に使えます。",
+        "domain": "vs-code",
+        "keywords": [
+          "エンタープライズ",
+          "配布",
+          "自己ホスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bootstrap Extensions",
+    "reading": "ぶーとすとらっぷえくすてんしょんず",
+    "senses": [
+      {
+        "definition": "初回起動時にあらかじめインストールさせる拡張機能群です。エンタープライズ環境での標準配布に使えます。",
+        "domain": "vs-code",
+        "keywords": [
+          "初回起動",
+          "エンタープライズ",
+          "配布"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Task Provider",
+    "reading": "たすくぷろばいだー",
+    "senses": [
+      {
+        "definition": "ワークスペース内容を見て自動的に VS Code タスクを提供できる拡張機能 API です。手書き tasks.json を減らせることがあります。",
+        "domain": "vs-code",
+        "keywords": [
+          "タスク",
+          "API",
+          "自動検出"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Virtual Workspace",
+    "reading": "ばーちゃるわーくすぺーす",
+    "senses": [
+      {
+        "definition": "ローカルファイルシステム前提ではない作業環境です。制約があり、対応していない拡張機能ではデバッグ不可な場合があります。",
+        "domain": "vs-code",
+        "keywords": [
+          "仮想",
+          "リモート",
+          "ワークスペース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Profiles",
+    "reading": "ぷろふぁいるず",
+    "senses": [
+      {
+        "definition": "用途ごとに拡張機能や設定を切り替えるための仕組みです。技術スタックごとの環境分離に役立ちます。",
+        "domain": "vs-code",
+        "keywords": [
+          "プロファイル",
+          "設定",
+          "切り替え"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Visual Studio",
+    "reading": "びじゅあるすたじお",
+    "senses": [
+      {
+        "definition": "Microsoft が提供する統合開発環境です。.NET、C++、各種デスクトップ、Web、クラウド開発を幅広く支援します。",
+        "domain": "visual-studio",
+        "keywords": [
+          "IDE",
+          "Microsoft",
+          "開発環境"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Integrated Development Environment",
+    "reading": "いんてぐれーてっどでぃべろっぷめんとえんばいろんめんと",
+    "senses": [
+      {
+        "definition": "コード編集、ビルド、デバッグ、テストなどを一体的に行える開発環境です。Visual Studio はその代表的な IDE の一つです。",
+        "domain": "visual-studio",
+        "keywords": [
+          "IDE",
+          "開発",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Solution",
+    "reading": "そりゅーしょん（びじゅあるすたじお）",
+    "senses": [
+      {
+        "definition": "Visual Studio で複数プロジェクトをまとめるコンテナです。.sln ファイルで表され、プロジェクト群や構成情報をまとめます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "プロジェクト",
+          "コンテナ",
+          "sln"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Project",
+    "reading": "ぷろじぇくと（びじゅあるすたじお）",
+    "senses": [
+      {
+        "definition": "アプリやライブラリなど、ビルド可能な単位です。ソリューションの中に含まれます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "ビルド",
+          "アプリ",
+          "ライブラリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".sln file",
+    "reading": "どっとえすえるえぬふぁいる",
+    "senses": [
+      {
+        "definition": "Visual Studio の solution ファイルです。ソリューション内のプロジェクト構成などを整理するために使われます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "ファイル",
+          "ソリューション",
+          "構成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".suo file",
+    "reading": "どっとえすゆーおーふぁいる",
+    "senses": [
+      {
+        "definition": "Visual Studio のユーザー単位設定などを保持する solution user options ファイルです。ブレークポイントなどユーザー依存情報を含みます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "ファイル",
+          "ユーザー設定",
+          "ブレークポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Solution Explorer",
+    "reading": "そりゅーしょんえくすぷろーらー",
+    "senses": [
+      {
+        "definition": "ソリューション、プロジェクト、ファイルを階層的に表示するビューです。開発中の資産を俯瞰しやすくなります。",
+        "domain": "visual-studio",
+        "keywords": [
+          "ビュー",
+          "階層",
+          "ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Solution Folder",
+    "reading": "そりゅーしょんふぉるだ",
+    "senses": [
+      {
+        "definition": "Visual Studio 内だけで使う仮想フォルダで、プロジェクトを論理的にグループ化するために使います。実際のフォルダ構造とは別です。",
+        "domain": "visual-studio",
+        "keywords": [
+          "仮想フォルダ",
+          "グループ",
+          "整理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Solution Filter",
+    "reading": "そりゅーしょんふぃるたー",
+    "senses": [
+      {
+        "definition": "大きな solution のうち必要な一部 project だけを読み込むための仕組みです。読み込み時間や操作性の改善に役立ちます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "フィルター",
+          "部分読み込み",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Project Properties",
+    "reading": "ぷろじぇくとぷろぱてぃず",
+    "senses": [
+      {
+        "definition": "対象プロジェクトのビルド設定、デバッグ設定、参照などを定義するプロパティ群です。ビルド挙動や出力結果に大きく影響します。",
+        "domain": "visual-studio",
+        "keywords": [
+          "プロパティ",
+          "ビルド",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Build Configuration",
+    "reading": "びるどこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "Debug や Release など、ビルド時の構成を切り替える設定です。最適化やデバッグ情報の有無が変わります。",
+        "domain": "visual-studio",
+        "keywords": [
+          "ビルド",
+          "Debug",
+          "Release"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Debug Configuration in Visual Studio",
+    "reading": "びじゅあるすたじおでばっぐこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "デバッグ実行時に使う設定群です。起動対象、引数、シンボル情報などが関わります。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "設定",
+          "起動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Debugger",
+    "reading": "でばっがー",
+    "senses": [
+      {
+        "definition": "実行中のプログラムを停止、追跡、変数確認するための機能です。Visual Studio の代表的な生産性機能の一つです。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "追跡",
+          "変数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Breakpoint",
+    "reading": "ぶれーくぽいんと",
+    "senses": [
+      {
+        "definition": "指定した行で実行を停止させる印です。Visual Studio のデバッガーで最も基本的な機能です。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "停止",
+          "行"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Conditional Breakpoint",
+    "reading": "こんでぃしょなるぶれーくぽいんと",
+    "senses": [
+      {
+        "definition": "特定条件を満たしたときだけ停止するブレークポイントです。不要な停止を減らし、狙ったケースを追いやすくなります。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "条件",
+          "ブレークポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Hit Count Breakpoint",
+    "reading": "ひっとかうんとぶれーくぽいんと",
+    "senses": [
+      {
+        "definition": "何回目の通過で停止するかを指定できるブレークポイントです。繰り返し処理の調査に便利です。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "回数",
+          "ブレークポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Solid Red Circle",
+    "reading": "そりっどれっどさーくる",
+    "senses": [
+      {
+        "definition": "Visual Studio のデバッガーで、正しく設定されたブレークポイントを示す状態です。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "ブレークポイント",
+          "アイコン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Hollow Circle",
+    "reading": "ほろーさーくる",
+    "senses": [
+      {
+        "definition": "無効、または警告付きで設定されたブレークポイントを示す状態です。シンボル未読込などの問題がある場合に見られます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "ブレークポイント",
+          "警告"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Symbols",
+    "reading": "しんぼるず",
+    "senses": [
+      {
+        "definition": "デバッグ時にソースコードと実行コードを対応づけるための情報です。ブレークポイントが効かない原因としてよく登場します。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "シンボル",
+          "PDB"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Watch Window",
+    "reading": "うぉっちうぃんどう",
+    "senses": [
+      {
+        "definition": "特定式や変数を監視するためのデバッグウィンドウです。Visual Studio ではデバッグ中に表示されます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "監視",
+          "変数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Locals Window",
+    "reading": "ろーかるずうぃんどう",
+    "senses": [
+      {
+        "definition": "現在スコープ内のローカル変数を表示するデバッグウィンドウです。Visual Studio の変数調査でよく使われます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "ローカル変数",
+          "スコープ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Autos Window",
+    "reading": "おーとずうぃんどう",
+    "senses": [
+      {
+        "definition": "現在行や直前行に関係する変数を自動で表示するデバッグウィンドウです。調査の導入として便利です。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "自動",
+          "変数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Break Mode",
+    "reading": "ぶれーくもーど",
+    "senses": [
+      {
+        "definition": "Visual Studio デバッガーが実行を停止している状態です。Watch など一部ウィンドウはこのとき利用可能になります。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "停止",
+          "モード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Immediate Window",
+    "reading": "いみーでぃえっとうぃんどう",
+    "senses": [
+      {
+        "definition": "デバッグ中に式評価や簡単な命令実行を行えるウィンドウです。変数確認や一時的な操作に使われます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デバッグ",
+          "式評価",
+          "コンソール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IntelliSense",
+    "reading": "いんてりせんす",
+    "senses": [
+      {
+        "definition": "コード補完、候補提示、シグネチャ表示などを行う支援機能です。Visual Studio の生産性を支える代表機能です。",
+        "domain": "visual-studio",
+        "keywords": [
+          "補完",
+          "候補",
+          "コード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Code Completion",
+    "reading": "こーどこんぷりーしょん",
+    "senses": [
+      {
+        "definition": "入力途中の識別子や構文候補を補完する機能です。IntelliSense の中心機能の一つです。",
+        "domain": "visual-studio",
+        "keywords": [
+          "補完",
+          "IntelliSense",
+          "入力"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Design Surface",
+    "reading": "でざいんさーふぇす",
+    "senses": [
+      {
+        "definition": "XAML やフォームを視覚的に編集できるデザイナ画面です。Visual Studio で UI を視覚的に調整するときに使われます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "デザイナ",
+          "UI",
+          "視覚"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "XAML Designer",
+    "reading": "ざむるでざいなー",
+    "senses": [
+      {
+        "definition": "XAML ベース UI を Visual Studio 上で視覚的に編集するための機能です。WPF などで利用されます。",
+        "domain": "visual-studio",
+        "keywords": [
+          "XAML",
+          "デザイナ",
+          "WPF"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Developer Command Prompt",
+    "reading": "でぃべろっぱーこまんどぷろんぷと",
+    "senses": [
+      {
+        "definition": "Visual Studio や .NET の開発用コマンドを実行しやすいコマンド環境です。ビルドや設定初期化で使うことがあります。",
+        "domain": "visual-studio",
+        "keywords": [
+          "コマンド",
+          "ビルド",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Visual Studio Extensibility SDK",
+    "reading": "びじゅあるすたじおえくすてんしびりてぃえすでぃーけー",
+    "senses": [
+      {
+        "definition": "Visual Studio 拡張開発向けの SDK です。近年は IDE のメインプロセス外で動く拡張の方向も案内されています。",
+        "domain": "visual-studio",
+        "keywords": [
+          "拡張",
+          "SDK",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".NET",
+    "reading": "どっとねっと",
+    "senses": [
+      {
+        "definition": "無料、クロスプラットフォーム、オープンソースの開発プラットフォームです。Web、デスクトップ、モバイル、クラウド、IoT など多様な用途に使えます。",
+        "domain": "dotnet",
+        "keywords": [
+          "プラットフォーム",
+          "Microsoft",
+          "クロスプラットフォーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".NET Platform",
+    "reading": "どっとねっとぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "C#、F#、Visual Basic など複数言語とライブラリ、ランタイムを含む .NET の全体を指す言い方です。",
+        "domain": "dotnet",
+        "keywords": [
+          "プラットフォーム",
+          "言語",
+          "ランタイム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cross-platform",
+    "reading": "くろすぷらっとふぉーむ",
+    "senses": [
+      {
+        "definition": "Windows、Linux、macOS など複数 OS で動かせる性質です。.NET の大きな特徴の一つです。",
+        "domain": "dotnet",
+        "keywords": [
+          "OS",
+          "マルチプラットフォーム",
+          "互換"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Open Source",
+    "reading": "おーぷんそーす",
+    "senses": [
+      {
+        "definition": "ソースコードが公開され、開発へ参加できる性質です。.NET と WPF、WinForms なども現代ではオープンソース実装が案内されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "公開",
+          "コミュニティ",
+          "GitHub"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".NET SDK",
+    "reading": "どっとねっとえすでぃーけー",
+    "senses": [
+      {
+        "definition": "アプリの開発、ビルド、実行、公開に必要なツール一式です。CLI も含まれます。",
+        "domain": "dotnet",
+        "keywords": [
+          "SDK",
+          "ツール",
+          "開発"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SDK-style project",
+    "reading": "えすでぃーけーすたいるぷろじぇくと",
+    "senses": [
+      {
+        "definition": "現代の .NET で使われる簡潔な project 記述形式です。PackageReference や target framework を csproj に直接書く流れと相性がよいです。",
+        "domain": "dotnet",
+        "keywords": [
+          "プロジェクト",
+          "csproj",
+          "簡潔"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dotnet CLI",
+    "reading": "どっとねっとしーえるあい",
+    "senses": [
+      {
+        "definition": "dotnet コマンドでビルド、実行、パッケージ操作などを行う CLI です。.NET 開発の基本ツールです。",
+        "domain": "dotnet",
+        "keywords": [
+          "CLI",
+          "コマンド",
+          "ツール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dotnet restore",
+    "reading": "どっとねっとりすとあ",
+    "senses": [
+      {
+        "definition": "NuGet パッケージ依存を復元するコマンドです。クローン直後やビルド前に重要になります。",
+        "domain": "dotnet",
+        "keywords": [
+          "NuGet",
+          "復元",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dotnet build",
+    "reading": "どっとねっとびるど",
+    "senses": [
+      {
+        "definition": ".NET プロジェクトをビルドする CLI コマンドです。MSBuild ベースで動作します。",
+        "domain": "dotnet",
+        "keywords": [
+          "ビルド",
+          "MSBuild",
+          "CLI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dotnet run",
+    "reading": "どっとねっとらん",
+    "senses": [
+      {
+        "definition": "ビルドと実行をまとめて行える CLI コマンドです。サンプルや検証でよく使われます。",
+        "domain": "dotnet",
+        "keywords": [
+          "実行",
+          "CLI",
+          "検証"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dotnet publish",
+    "reading": "どっとねっとぱぶりっしゅ",
+    "senses": [
+      {
+        "definition": "配布用成果物を生成する CLI コマンドです。デプロイや配布準備で使います。",
+        "domain": "dotnet",
+        "keywords": [
+          "配布",
+          "デプロイ",
+          "CLI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MSBuild",
+    "reading": "えむえすびるど",
+    "senses": [
+      {
+        "definition": ".NET や Visual Studio プロジェクトをビルドするための基盤です。NuGet パッケージ生成でも利用されます。",
+        "domain": "dotnet",
+        "keywords": [
+          "ビルド",
+          "基盤",
+          "プロジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Runtime",
+    "reading": "らんたいむ",
+    "senses": [
+      {
+        "definition": "アプリを実行するための基盤部分です。.NET では SDK とランタイムを分けて考えることがあります。",
+        "domain": "dotnet",
+        "keywords": [
+          "実行",
+          "基盤",
+          "SDK"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Target Framework",
+    "reading": "たーげっとふれーむわーく",
+    "senses": [
+      {
+        "definition": "アプリがどの .NET 実行環境向けに作られているかを示す指定です。互換性や利用可能 API に影響します。",
+        "domain": "dotnet",
+        "keywords": [
+          "フレームワーク",
+          "互換性",
+          "API"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Multi-targeting",
+    "reading": "まるちたーげてぃんぐ",
+    "senses": [
+      {
+        "definition": "一つのプロジェクトやパッケージで複数 target framework に対応することです。再利用ライブラリでよく使われます。",
+        "domain": "dotnet",
+        "keywords": [
+          "複数",
+          "フレームワーク",
+          "ライブラリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NuGet",
+    "reading": "ぬーげっと",
+    "senses": [
+      {
+        "definition": ".NET のパッケージマネージャーです。ライブラリの作成、共有、利用を支えます。",
+        "domain": "dotnet",
+        "keywords": [
+          "パッケージ",
+          "ライブラリ",
+          "依存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NuGet Package",
+    "reading": "ぬーげっとぱっけーじ",
+    "senses": [
+      {
+        "definition": ".nupkg 形式で配布される .NET ライブラリや関連資産の単位です。DLL やメタデータなどを含みます。",
+        "domain": "dotnet",
+        "keywords": [
+          "パッケージ",
+          "DLL",
+          "配布"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NuGet Package Manager",
+    "reading": "ぬーげっとぱっけーじまねーじゃー",
+    "senses": [
+      {
+        "definition": "Visual Studio 上で NuGet パッケージを追加、更新、削除するための UI や機能群です。",
+        "domain": "dotnet",
+        "keywords": [
+          "パッケージ",
+          "管理",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Package Manager Console",
+    "reading": "ぱっけーじまねーじゃーこんそーる",
+    "senses": [
+      {
+        "definition": "Visual Studio on Windows に組み込まれた PowerShell ベースの NuGet 管理コンソールです。VS Code には含まれません。",
+        "domain": "dotnet",
+        "keywords": [
+          "コンソール",
+          "PowerShell",
+          "NuGet"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PackageReference",
+    "reading": "ぱっけーじりふぁれんす",
+    "senses": [
+      {
+        "definition": "プロジェクトファイルに直接パッケージ依存を書く現代的な NuGet 管理方式です。.NET Core 系では基本的にこちらが使われます。",
+        "domain": "dotnet",
+        "keywords": [
+          "依存",
+          "csproj",
+          "NuGet"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "packages.config",
+    "reading": "ぱっけーじずこんふぃぐ",
+    "senses": [
+      {
+        "definition": "NuGet の旧来の依存管理形式です。現在は legacy 向けで、積極的な新規推奨はされていません。",
+        "domain": "dotnet",
+        "keywords": [
+          "レガシー",
+          "依存",
+          "NuGet"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "project.assets.json",
+    "reading": "ぷろじぇくとあせっつじぇいそん",
+    "senses": [
+      {
+        "definition": "NuGet の依存グラフ解決結果を保持する中間ファイルです。PackageReference 利用時に生成されます。",
+        "domain": "dotnet",
+        "keywords": [
+          "依存",
+          "中間ファイル",
+          "NuGet"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "C#",
+    "reading": "しーしゃーぷ",
+    "senses": [
+      {
+        "definition": ".NET の代表的な言語で、オブジェクト指向を土台にしつつ関数型的要素や高効率な機能も持つクロスプラットフォーム言語です。",
+        "domain": "dotnet",
+        "keywords": [
+          "言語",
+          "オブジェクト指向",
+          "プログラミング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Object-oriented programming in C#",
+    "reading": "しーしゃーぷのおぶじぇくとしこうぷろぐらみんぐ",
+    "senses": [
+      {
+        "definition": "C# はオブジェクト指向言語であり、抽象化、カプセル化、継承、ポリモーフィズムが基本原則として説明されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "オブジェクト指向",
+          "継承",
+          "カプセル化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Visual Basic on .NET",
+    "reading": "びじゅあるべーしっくおんどっとねっと",
+    "senses": [
+      {
+        "definition": ".NET で使える Visual Basic 言語です。Microsoft Learn では .NET が C#、F#、Visual Basic など複数言語を支えると案内されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "Visual Basic",
+          "言語",
+          "多言語"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "F#",
+    "reading": "えふしゃーぷ",
+    "senses": [
+      {
+        "definition": ".NET 上で動く関数型寄りの言語です。.NET プラットフォームの多言語性を示す代表例です。",
+        "domain": "dotnet",
+        "keywords": [
+          "関数型",
+          "言語",
+          "プログラミング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Common Language Infrastructure",
+    "reading": "こもんらんげーじいんふらすとらくちゃ",
+    "senses": [
+      {
+        "definition": "CLI は C# と .NET の標準化文脈で登場する共通実行基盤概念です。.NET の標準仕様とも関係します。",
+        "domain": "dotnet",
+        "keywords": [
+          "CLI",
+          "標準",
+          "実行基盤"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ECMA standard for C#",
+    "reading": "いーしーえむえーすたんだーどふぉーしーしゃーぷ",
+    "senses": [
+      {
+        "definition": "C# 言語仕様は Ecma International を通じて標準化されています。.NET の標準化理解で重要です。",
+        "domain": "dotnet",
+        "keywords": [
+          "標準",
+          "ECMA",
+          "仕様"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ASP.NET Core",
+    "reading": "えーえすぴーどっとねっとこあ",
+    "senses": [
+      {
+        "definition": "高速、安全、クロスプラットフォーム、クラウド向けの Web アプリとサービスを作るための .NET フレームワークです。",
+        "domain": "dotnet",
+        "keywords": [
+          "Web",
+          "フレームワーク",
+          "クラウド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ASP.NET",
+    "reading": "えーえすぴーどっとねっと",
+    "senses": [
+      {
+        "definition": "ASP.NET Core より前からある Microsoft の Web 開発基盤です。公式 overview では ASP.NET Core をその代替として位置づけています。",
+        "domain": "dotnet",
+        "keywords": [
+          "Web",
+          "レガシー",
+          "フレームワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Web API",
+    "reading": "うぇぶえーぴーあい",
+    "senses": [
+      {
+        "definition": "ASP.NET 系で HTTP ベースの API を作る考え方や機能群です。Web サービス構築の中心になります。",
+        "domain": "dotnet",
+        "keywords": [
+          "API",
+          "HTTP",
+          "サービス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Razor Pages",
+    "reading": "れーざーぺーじず",
+    "senses": [
+      {
+        "definition": "ASP.NET Core でページ中心に Web アプリを構築する方式です。簡潔なページ単位実装に向きます。",
+        "domain": "dotnet",
+        "keywords": [
+          "ページ",
+          "Web",
+          "ASP.NET Core"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MVC in ASP.NET Core",
+    "reading": "えむぶいしーいんえーえすぴーどっとねっとこあ",
+    "senses": [
+      {
+        "definition": "Model-View-Controller パターンで ASP.NET Core アプリを作る方式です。画面分離や責務整理に向きます。",
+        "domain": "dotnet",
+        "keywords": [
+          "MVC",
+          "パターン",
+          "ASP.NET Core"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Middleware",
+    "reading": "みどるうぇあ",
+    "senses": [
+      {
+        "definition": "ASP.NET Core リクエストパイプラインを構成する処理単位です。認証、ログ、例外処理などを組み込みます。",
+        "domain": "dotnet",
+        "keywords": [
+          "パイプライン",
+          "リクエスト",
+          "処理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Routing in ASP.NET Core",
+    "reading": "るーてぃんぐいんえーえすぴーどっとねっとこあ",
+    "senses": [
+      {
+        "definition": "URL と処理を結びつける仕組みです。Web アプリや API の入口設計を担います。",
+        "domain": "dotnet",
+        "keywords": [
+          "URL",
+          "ルーティング",
+          "エンドポイント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Dependency Injection in .NET",
+    "reading": "どっとねっとのではいんじぇくしょん",
+    "senses": [
+      {
+        "definition": "ASP.NET Core を含む .NET アプリでは DI を前提に構成することが多く、サービス登録や注入が基本になります。",
+        "domain": "dotnet",
+        "keywords": [
+          "DI",
+          "サービス",
+          "注入"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Configuration in .NET",
+    "reading": "どっとねっとこんふぃぎゅれーしょん",
+    "senses": [
+      {
+        "definition": "JSON、環境変数など複数ソースから設定を読み込む考え方です。ASP.NET Core で特に重要です。",
+        "domain": "dotnet",
+        "keywords": [
+          "設定",
+          "JSON",
+          "環境変数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Entity Framework Core",
+    "reading": "えんてぃてぃふれーむわーくこあ",
+    "senses": [
+      {
+        "definition": ".NET 向けの ORM です。LINQ、変更追跡、更新、スキーマ migration をサポートします。",
+        "domain": "dotnet",
+        "keywords": [
+          "ORM",
+          "データベース",
+          "LINQ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EF Core",
+    "reading": "いーえふこあ",
+    "senses": [
+      {
+        "definition": "Entity Framework Core の略称です。.NET データアクセスの代表的技術です。",
+        "domain": "dotnet",
+        "keywords": [
+          "ORM",
+          "略称",
+          "データアクセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DbContext",
+    "reading": "でぃーびーこんてきすと",
+    "senses": [
+      {
+        "definition": "EF Core でデータアクセスや変更追跡の中心になるクラスです。エンティティ集合とデータベースを結びつけます。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "データアクセス",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DbSet",
+    "reading": "でぃーびーせっと",
+    "senses": [
+      {
+        "definition": "EF Core でエンティティ集合を表すプロパティです。どの C# エンティティが DB に対応するかを知らせます。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "エンティティ",
+          "プロパティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Change Tracking",
+    "reading": "ちぇんじとらっきんぐ",
+    "senses": [
+      {
+        "definition": "EF Core がエンティティ変更を追跡する機能です。SaveChanges() 時に必要な INSERT、UPDATE、DELETE を判断します。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "追跡",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SaveChanges",
+    "reading": "せーぶちぇんじず",
+    "senses": [
+      {
+        "definition": "EF Core で追跡中の変更をデータベースへ反映するメソッドです。変更追跡と対になる中心操作です。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "保存",
+          "データベース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Schema Migrations",
+    "reading": "すきーままいぐれーしょんず",
+    "senses": [
+      {
+        "definition": "EF Core がサポートするスキーマ変更管理機能です。コードから DB 変更履歴を扱いやすくします。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "マイグレーション",
+          "スキーマ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Database Provider",
+    "reading": "でーたべーすぷろばいだー",
+    "senses": [
+      {
+        "definition": "EF Core で使う DB 種別ごとのパッケージです。SQL Server や SQLite などの provider を選んで追加します。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "プロバイダー",
+          "データベース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Microsoft.EntityFrameworkCore.SqlServer",
+    "reading": "まいくろそふとどっとえんてぃてぃふれーむわーくこあどっとえすきゅーえるさーばー",
+    "senses": [
+      {
+        "definition": "SQL Server 用の EF Core provider パッケージです。dotnet add package で追加する例が公式にあります。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "SQL Server",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Microsoft.EntityFrameworkCore.Sqlite",
+    "reading": "まいくろそふとどっとえんてぃてぃふれーむわーくこあどっとえすきゅーらいと",
+    "senses": [
+      {
+        "definition": "SQLite 用の EF Core provider パッケージです。WPF や小規模アプリのサンプルでもよく登場します。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "SQLite",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Microsoft.EntityFrameworkCore.Tools",
+    "reading": "まいくろそふとどっとえんてぃてぃふれーむわーくこあどっとつーるず",
+    "senses": [
+      {
+        "definition": "EF Core の Package Manager Console ツールを取得するためのパッケージです。",
+        "domain": "dotnet",
+        "keywords": [
+          "EF Core",
+          "ツール",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Lazy Loading",
+    "reading": "れいじーろーでぃんぐ",
+    "senses": [
+      {
+        "definition": "必要になるまで関連データを読み込まない考え方です。EF Core の Proxies パッケージで支援されることがあります。",
+        "domain": "dotnet",
+        "keywords": [
+          "遅延",
+          "読み込み",
+          "EF Core"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "LINQ",
+    "reading": "りんく",
+    "senses": [
+      {
+        "definition": "Language Integrated Query の略で、C# 言語から統合的に問い合わせを書ける仕組みです。複雑な IQueryable provider は SQL などへ翻訳できます。",
+        "domain": "dotnet",
+        "keywords": [
+          "クエリ",
+          "C#",
+          "統合"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "IQueryable",
+    "reading": "あいくえりえいぶる",
+    "senses": [
+      {
+        "definition": "LINQ クエリを式として外部 provider へ渡せる仕組みです。EF Core はこれを SQL へ翻訳できます。",
+        "domain": "dotnet",
+        "keywords": [
+          "LINQ",
+          "式",
+          "SQL"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Object Initializer",
+    "reading": "おぶじぇくといにしゃらいざー",
+    "senses": [
+      {
+        "definition": "オブジェクト生成と同時にプロパティ初期化を書く C# の構文です。C# how-to の代表例として紹介されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "C#",
+          "初期化",
+          "構文"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Extension Member",
+    "reading": "えくすてんしょんめんばー",
+    "senses": [
+      {
+        "definition": "既存型へ機能を追加する C# の拡張メンバーです。C# how-to で一般的手法として案内されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "C#",
+          "拡張",
+          "メンバー"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Enum Extension Method",
+    "reading": "いなむえくすてんしょんめそっど",
+    "senses": [
+      {
+        "definition": "enum 型へ新しい振る舞いを追加する拡張メンバーの使い方です。C# how-to に例があります。",
+        "domain": "dotnet",
+        "keywords": [
+          "enum",
+          "拡張",
+          "C#"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Record",
+    "reading": "れこーど（しーしゃーぷ）",
+    "senses": [
+      {
+        "definition": "データ中心の型定義に向いた C# の型概念です。class や struct と並んで how-to の分類に登場します。",
+        "domain": "dotnet",
+        "keywords": [
+          "C#",
+          "型",
+          "データ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Struct",
+    "reading": "すとらくと",
+    "senses": [
+      {
+        "definition": "値型として扱う C# の型です。class や record と並ぶ主要型です。",
+        "domain": "dotnet",
+        "keywords": [
+          "C#",
+          "値型",
+          "型"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Property",
+    "reading": "ぷろぱてぃ",
+    "senses": [
+      {
+        "definition": "C# でデータの get、set を抽象化して扱うメンバーです。自動実装プロパティなどが一般的です。",
+        "domain": "dotnet",
+        "keywords": [
+          "C#",
+          "get",
+          "set"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Constant in C#",
+    "reading": "しーしゃーぷのこんすたんと",
+    "senses": [
+      {
+        "definition": "固定値を定義する const などの考え方です。How-to セクションでも取り上げられています。",
+        "domain": "dotnet",
+        "keywords": [
+          "const",
+          "固定値",
+          "C#"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ToString override",
+    "reading": "とぅーすとりんぐおーばーらいど",
+    "senses": [
+      {
+        "definition": "オブジェクトの文字列表現を提供する一般的な C# 実践です。How-to でも代表例として紹介されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "文字列",
+          "オーバーライド",
+          "C#"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WPF",
+    "reading": "だぶりゅーぴーえふ",
+    "senses": [
+      {
+        "definition": "Windows Presentation Foundation の略で、.NET 向けのデスクトップ UI フレームワークです。XAML、データバインディング、アニメーションなどを備えます。",
+        "domain": "dotnet",
+        "keywords": [
+          "デスクトップ",
+          "UI",
+          "XAML"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Windows Presentation Foundation",
+    "reading": "うぃんどうずぷれぜんてーしょんふぁうんでーしょん",
+    "senses": [
+      {
+        "definition": "解像度非依存でベクターベース描画を使う .NET デスクトップ UI フレームワークです。",
+        "domain": "dotnet",
+        "keywords": [
+          "デスクトップ",
+          "ベクター",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WinForms",
+    "reading": "うぃんふぉーむず",
+    "senses": [
+      {
+        "definition": "Windows Forms の略で、.NET デスクトップアプリ向けの UI フレームワークです。WPF と並んで .NET デスクトップの主要選択肢です。",
+        "domain": "dotnet",
+        "keywords": [
+          "デスクトップ",
+          "UI",
+          "フォーム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Windows Forms",
+    "reading": "うぃんどうずふぉーむず",
+    "senses": [
+      {
+        "definition": "イベント駆動の Windows デスクトップ UI フレームワークです。現在はオープンソース実装としても案内されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "デスクトップ",
+          "イベント駆動",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "XAML",
+    "reading": "ざむる",
+    "senses": [
+      {
+        "definition": "Extensible Application Markup Language の略で、宣言的に UI オブジェクトやプロパティを定義できる言語です。WPF や各種 XAML 系 UI 技術で使われます。",
+        "domain": "dotnet",
+        "keywords": [
+          "マークアップ",
+          "UI",
+          "宣言"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Declarative Language",
+    "reading": "でくららてぃぶらんげーじ",
+    "senses": [
+      {
+        "definition": "XAML のように、手順よりも構造や宣言を表現する言語の性質です。UI 定義で特に有効です。",
+        "domain": "dotnet",
+        "keywords": [
+          "宣言",
+          "言語",
+          "構造"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Code-behind",
+    "reading": "こーどびはいんど",
+    "senses": [
+      {
+        "definition": "XAML で宣言した UI に対してイベント処理や制御ロジックを書くコード側ファイルです。XAML とペアで使われます。",
+        "domain": "dotnet",
+        "keywords": [
+          "XAML",
+          "イベント",
+          "コード"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Data Binding",
+    "reading": "でーたばいんでぃんぐ",
+    "senses": [
+      {
+        "definition": "UI とデータを結びつける仕組みです。WPF の中核機能の一つです。",
+        "domain": "dotnet",
+        "keywords": [
+          "UI",
+          "データ",
+          "WPF"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Styles and Templates",
+    "reading": "すたいるずあんどてんぷれーつ",
+    "senses": [
+      {
+        "definition": "WPF で見た目や再利用可能な UI 表現を管理する仕組みです。UI 一貫性や再利用に役立ちます。",
+        "domain": "dotnet",
+        "keywords": [
+          "WPF",
+          "スタイル",
+          "テンプレート"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Device-independent Pixel",
+    "reading": "でばいすいんでぃぺんでんとぴくせる",
+    "senses": [
+      {
+        "definition": "WPF の描画基準単位で、解像度に依存しない表示を支える考え方です。1/96 インチを基準に説明されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "WPF",
+          "解像度",
+          "ピクセル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": ".NET Desktop Workload",
+    "reading": "どっとねっとですくとっぷわーくろーど",
+    "senses": [
+      {
+        "definition": "Visual Studio で WPF や WinForms を扱うために必要なワークロードです。EF Core の WPF チュートリアルでも前提として示されています。",
+        "domain": "dotnet",
+        "keywords": [
+          "Visual Studio",
+          "ワークロード",
+          "デスクトップ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VBA",
+    "reading": "ぶいびーえー",
+    "senses": [
+      {
+        "definition": "Visual Basic for Applications の略で、Office 製品をカスタマイズ、自動化するための言語です。Office VBA language reference の中心対象です。",
+        "domain": "vba",
+        "keywords": [
+          "Office",
+          "自動化",
+          "言語"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Visual Basic for Applications",
+    "reading": "びじゅあるべーしっくふぉーあぷりけーしょんず",
+    "senses": [
+      {
+        "definition": "Office アプリケーションを中心に、業務自動化や画面拡張を行うための組み込み言語です。概念説明、タスク、サンプル、リファレンスが公式に整理されています。",
+        "domain": "vba",
+        "keywords": [
+          "Office",
+          "自動化",
+          "組み込み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Office VBA",
+    "reading": "おふぃすぶいびーえー",
+    "senses": [
+      {
+        "definition": "Word、Excel、Access など Office 製品内で使う VBA を指す言い方です。Office 共通の言語リファレンスがあります。",
+        "domain": "vba",
+        "keywords": [
+          "Office",
+          "Word",
+          "Excel"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Excel VBA",
+    "reading": "えくせるぶいびーえー",
+    "senses": [
+      {
+        "definition": "Excel を自動化、拡張するための VBA です。Excel object model reference が公式に用意されています。",
+        "domain": "vba",
+        "keywords": [
+          "Excel",
+          "自動化",
+          "マクロ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Access VBA",
+    "reading": "あくせすぶいびーえー",
+    "senses": [
+      {
+        "definition": "Access ベースのソリューション開発に使う VBA です。概念、タスク、オブジェクトモデル参照が公式に整理されています。",
+        "domain": "vba",
+        "keywords": [
+          "Access",
+          "データベース",
+          "ソリューション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Macro",
+    "reading": "まくろ",
+    "senses": [
+      {
+        "definition": "Office 内の作業を自動化する記述や機能です。VBA と密接に結びついています。",
+        "domain": "vba",
+        "keywords": [
+          "自動化",
+          "Office",
+          "記録"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Object Model",
+    "reading": "おぶじぇくともでる",
+    "senses": [
+      {
+        "definition": "Excel や Access などが持つオブジェクト、プロパティ、メソッド、イベントの体系です。VBA はこれを通じてアプリを操作します。",
+        "domain": "vba",
+        "keywords": [
+          "オブジェクト",
+          "プロパティ",
+          "メソッド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Excel Object Model",
+    "reading": "えくせるおぶじぇくともでる",
+    "senses": [
+      {
+        "definition": "Excel のシート、ブック、セルなどを扱うためのオブジェクトモデルです。VBA からの Excel 自動化の土台になります。",
+        "domain": "vba",
+        "keywords": [
+          "Excel",
+          "シート",
+          "セル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Access Object Model",
+    "reading": "あくせすおぶじぇくともでる",
+    "senses": [
+      {
+        "definition": "Access アプリケーションやモジュール、フォームなどを扱うオブジェクトモデルです。VBA で Access ソリューションを組むときの中心になります。",
+        "domain": "vba",
+        "keywords": [
+          "Access",
+          "フォーム",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "UserForm",
+    "reading": "ゆーざーふぉーむ",
+    "senses": [
+      {
+        "definition": "VBA で作るウィンドウやダイアログボックスです。UserForms コレクションで現在読み込まれている UserForm を扱えます。",
+        "domain": "vba",
+        "keywords": [
+          "フォーム",
+          "ダイアログ",
+          "UI"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "UserForms Collection",
+    "reading": "ゆーざーふぉーむずこれくしょん",
+    "senses": [
+      {
+        "definition": "読み込まれている UserForm 要素をまとめたコレクションです。Count、Item、Add などを持ちます。",
+        "domain": "vba",
+        "keywords": [
+          "コレクション",
+          "UserForm",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Standard Module",
+    "reading": "ひょうじゅんもじゅーる",
+    "senses": [
+      {
+        "definition": "VBA で通常の手続きや関数を置くモジュールです。VBE glossary では code module が後の Visual Basic で standard module と呼ばれると説明されています。",
+        "domain": "vba",
+        "keywords": [
+          "モジュール",
+          "手続き",
+          "関数"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Class Module",
+    "reading": "くらすもじゅーる",
+    "senses": [
+      {
+        "definition": "クラス定義を記述するモジュールです。プロパティやメソッドを持つカスタムオブジェクトを作れます。",
+        "domain": "vba",
+        "keywords": [
+          "クラス",
+          "オブジェクト",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Module Object",
+    "reading": "もじゅーるおぶじぇくと",
+    "senses": [
+      {
+        "definition": "Access VBA では standard module または class module を表すオブジェクトです。Modules コレクションから取得できます。",
+        "domain": "vba",
+        "keywords": [
+          "Access",
+          "モジュール",
+          "オブジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Modules Collection",
+    "reading": "もじゅーるずこれくしょん",
+    "senses": [
+      {
+        "definition": "Access で現在開いている標準モジュールとクラスモジュールを保持するコレクションです。コンパイル済み、未コンパイル、break mode のものも含まれます。",
+        "domain": "vba",
+        "keywords": [
+          "Access",
+          "コレクション",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Module.Type",
+    "reading": "もじゅーるたいぷ",
+    "senses": [
+      {
+        "definition": "Access の Module object が standard module か class module かを判定するためのプロパティです。",
+        "domain": "vba",
+        "keywords": [
+          "Access",
+          "プロパティ",
+          "判定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Application Object in Access",
+    "reading": "あぷりけーしょんおぶじぇくといんあくせす",
+    "senses": [
+      {
+        "definition": "Access の Application object は Access 全体のオブジェクトやコレクションを保持します。VBA からアプリ全体へ作用する設定にも使えます。",
+        "domain": "vba",
+        "keywords": [
+          "Access",
+          "Application",
+          "オブジェクト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Reference",
+    "reading": "りふぁれんす",
+    "senses": [
+      {
+        "definition": "他のタイプライブラリやプロジェクトへの参照設定を表すオブジェクトです。VBA で外部オブジェクトを使う前提になります。",
+        "domain": "vba",
+        "keywords": [
+          "参照",
+          "ライブラリ",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "References Collection",
+    "reading": "りふぁれんしずこれくしょん",
+    "senses": [
+      {
+        "definition": "現在設定されている参照設定をまとめたコレクションです。Access の Application object に属します。",
+        "domain": "vba",
+        "keywords": [
+          "参照",
+          "コレクション",
+          "Access"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Reference Dialog",
+    "reading": "りふぁれんすだいあろぐ",
+    "senses": [
+      {
+        "definition": "VBA で参照ライブラリを選択するダイアログです。Access docs では Tools メニューの References と対応づけて説明されています。",
+        "domain": "vba",
+        "keywords": [
+          "ダイアログ",
+          "参照",
+          "ライブラリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Type Library Reference",
+    "reading": "たいぷらいぶらりりふぁれんす",
+    "senses": [
+      {
+        "definition": "別アプリケーションやプロジェクトの型ライブラリへの参照です。Reference object がこれを表します。",
+        "domain": "vba",
+        "keywords": [
+          "型",
+          "ライブラリ",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Object Library Reference",
+    "reading": "おぶじぇくとらいぶらりりふぁれんす",
+    "senses": [
+      {
+        "definition": "Office VBA docs で案内されている、Office の members、properties、methods を参照するためのライブラリ概念です。",
+        "domain": "vba",
+        "keywords": [
+          "Office",
+          "ライブラリ",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Event Procedure",
+    "reading": "いべんとぷろしーじゃ",
+    "senses": [
+      {
+        "definition": "UserForm や各種オブジェクトのイベントに応答するための手続きです。VBA UI 開発の中心になります。",
+        "domain": "vba",
+        "keywords": [
+          "イベント",
+          "手続き",
+          "UserForm"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Property Get",
+    "reading": "ぷろぱてぃげっと",
+    "senses": [
+      {
+        "definition": "クラスモジュールでプロパティ値を返す手続きです。カスタムオブジェクト定義の基本になります。",
+        "domain": "vba",
+        "keywords": [
+          "プロパティ",
+          "取得",
+          "クラス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Property Let",
+    "reading": "ぷろぱてぃれっと",
+    "senses": [
+      {
+        "definition": "値型プロパティへ値を設定する手続きです。クラスモジュールで使います。",
+        "domain": "vba",
+        "keywords": [
+          "プロパティ",
+          "値",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Property Set",
+    "reading": "ぷろぱてぃせっと",
+    "senses": [
+      {
+        "definition": "オブジェクト参照プロパティへ値を設定する手続きです。クラスモジュールのプロパティ設計に使います。",
+        "domain": "vba",
+        "keywords": [
+          "プロパティ",
+          "オブジェクト",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Instance of a Class",
+    "reading": "いんすたんすおぶあくらす",
+    "senses": [
+      {
+        "definition": "クラスモジュール定義から生成される実体です。Access docs では Dim で型を宣言し新しいインスタンスを作る例が示されています。",
+        "domain": "vba",
+        "keywords": [
+          "インスタンス",
+          "クラス",
+          "生成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VBE Glossary",
+    "reading": "ぶいびーいーぐろっさりー",
+    "senses": [
+      {
+        "definition": "Visual Basic Editor まわりの用語を説明する公式 glossary です。standard module や class などの説明に使えます。",
+        "domain": "vba",
+        "keywords": [
+          "用語集",
+          "VBE",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "VBE",
+    "reading": "ぶいびーいー",
+    "senses": [
+      {
+        "definition": "Visual Basic Editor の略で、VBA コードを記述、編集、デバッグする環境を指します。VBE glossary が公式に存在します。",
+        "domain": "vba",
+        "keywords": [
+          "エディタ",
+          "開発環境",
+          "VBA"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Option Private Module",
+    "reading": "おぷしょんぷらいべーともじゅーる",
+    "senses": [
+      {
+        "definition": "他プロジェクトからの可視性を制限するために使うステートメントです。複数 project を読み込む Excel などで意味を持ちます。",
+        "domain": "vba",
+        "keywords": [
+          "可視性",
+          "制限",
+          "モジュール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Immediate Window in VBA",
+    "reading": "いみーでぃえっとうぃんどういんぶいびーえー",
+    "senses": [
+      {
+        "definition": "デバッグ時に Debug.Print などの結果確認や式評価に使うウィンドウです。Modules collection の例でも Immediate window が使われています。",
+        "domain": "vba",
+        "keywords": [
+          "デバッグ",
+          "式評価",
+          "出力"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Debug.Print",
+    "reading": "でばっぐどっとぷりんと",
+    "senses": [
+      {
+        "definition": "Immediate window へ情報を出すための典型的なデバッグ出力です。公式例でも使われています。",
+        "domain": "vba",
+        "keywords": [
+          "デバッグ",
+          "出力",
+          "Immediate"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Office Add-ins",
+    "reading": "おふぃすあどいんず",
+    "senses": [
+      {
+        "definition": "Microsoft は VBA docs 内でも、複数プラットフォームへ拡張する新しい Office Add-ins モデルを案内しています。VBA との対比で重要です。",
+        "domain": "vba",
+        "keywords": [
+          "Office",
+          "アドイン",
+          "拡張"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Cross-project visibility",
+    "reading": "くろすぷろじぇくとびじびりてぃ",
+    "senses": [
+      {
+        "definition": "VBA で他 project からモジュールやクラスが見えるかどうかの概念です。Option Private Module や参照設定と関係します。",
+        "domain": "vba",
+        "keywords": [
+          "可視性",
+          "プロジェクト",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "External Class Access in VBA",
+    "reading": "えくすたなるくらすあくせすいんぶいびーえー",
+    "senses": [
+      {
+        "definition": "別 VBA project の class module を参照して使うことです。Microsoft は class module を他 project から使うための手順を案内しています。",
+        "domain": "vba",
+        "keywords": [
+          "外部",
+          "クラス",
+          "参照"
+        ]
+      }
+    ],
+    "aliases": []
+  }
+]

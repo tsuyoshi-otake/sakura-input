@@ -1,0 +1,1655 @@
+[
+  {
+    "term": "UDP",
+    "aliases": [
+      "User Datagram Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "コネクションレス型のトランスポートプロトコル。信頼性や順序保証はないが、ヘッダが小さくオーバーヘッドが低いため、リアルタイム通信（音声・動画）やDNS、QUICなどの基盤として使われる。",
+        "domain": "network",
+        "keywords": [
+          "トランスポート",
+          "コネクションレス",
+          "低遅延",
+          "リアルタイム",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTP/1.1",
+    "aliases": [
+      "HyperText Transfer Protocol 1.1"
+    ],
+    "senses": [
+      {
+        "definition": "1997年に標準化されたHTTPのバージョン。Keep-Aliveによるコネクション再利用、チャンク転送エンコーディング、ホストヘッダ必須化などを導入した。1コネクションで1リクエストしか同時に処理できないHead-of-Line Blockingが課題だった。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "Keep-Alive",
+          "HOLブロッキング",
+          "コネクション",
+          "Webプロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "QUIC",
+    "aliases": [
+      "Quick UDP Internet Connections"
+    ],
+    "senses": [
+      {
+        "definition": "Googleが開発しRFC9000で標準化されたUDPベースのトランスポートプロトコル。TCPとTLSの機能を統合し、接続確立を1-RTTまたは0-RTTで完了できる。HTTP/3の基盤として採用されており、モバイル環境でのネットワーク切り替えにも強い。",
+        "domain": "network",
+        "keywords": [
+          "UDP",
+          "低遅延",
+          "HTTP/3",
+          "トランスポート",
+          "暗号化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TLS",
+    "aliases": [
+      "Transport Layer Security",
+      "SSL/TLS"
+    ],
+    "senses": [
+      {
+        "definition": "通信の暗号化・認証・完全性保護を提供するプロトコル。SSLの後継で、現在はTLS 1.2とTLS 1.3が主流。HTTPSやSMTPS、IMAPSなど多くのプロトコルの安全な通信基盤として使われる。",
+        "domain": "network",
+        "keywords": [
+          "暗号化",
+          "認証",
+          "HTTPS",
+          "セキュリティ",
+          "プロトコル"
+        ]
+      },
+      {
+        "definition": "通信を暗号化する標準プロトコル。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "接続",
+          "TLS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TLS 1.3",
+    "aliases": [
+      "RFC 8446"
+    ],
+    "senses": [
+      {
+        "definition": "2018年に標準化されたTLSの最新メジャーバージョン。ハンドシェイクを1-RTTに短縮し、0-RTT再開も可能。古い暗号アルゴリズムを廃止してセキュリティを強化し、前方秘匿性を必須とした。TLS 1.0/1.1は非推奨とされている。",
+        "domain": "network",
+        "keywords": [
+          "暗号化",
+          "1-RTT",
+          "前方秘匿性",
+          "セキュリティ",
+          "ハンドシェイク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "X.509",
+    "aliases": [
+      "X.509証明書",
+      "PKI証明書"
+    ],
+    "senses": [
+      {
+        "definition": "ITU-Tが標準化したデジタル証明書のフォーマット。公開鍵・サブジェクト・有効期限・発行CAの署名などを含み、TLSやコードサイニングなど幅広く使われるPKIの基盤。PEMやDER形式でエンコードされる。",
+        "domain": "network",
+        "keywords": [
+          "PKI",
+          "証明書",
+          "公開鍵",
+          "TLS",
+          "認証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CA",
+    "reading": "しーえー",
+    "aliases": [
+      "Certificate Authority",
+      "認証局"
+    ],
+    "senses": [
+      {
+        "definition": "デジタル証明書を発行・管理する信頼された第三者機関。ルートCA・中間CAの階層構造を持ち、クライアントはOSやブラウザに組み込まれたルートCAを信頼の起点とする。証明書の失効管理もCAの責務。",
+        "domain": "network",
+        "keywords": [
+          "PKI",
+          "証明書",
+          "信頼",
+          "ルートCA",
+          "認証"
+        ]
+      },
+      {
+        "definition": "証明書を発行署名する認証局。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "証明書",
+          "CA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Let's Encrypt",
+    "aliases": [
+      "ISRG",
+      "無料SSL"
+    ],
+    "senses": [
+      {
+        "definition": "非営利団体ISRGが運営する無料の自動化されたCA。ACMEプロトコルを使って証明書発行・更新を自動化でき、90日間有効な証明書を無料で取得できる。HTTPSの普及に大きく貢献した。",
+        "domain": "network",
+        "keywords": [
+          "CA",
+          "無料証明書",
+          "ACME",
+          "HTTPS",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OCSP",
+    "aliases": [
+      "Online Certificate Status Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "証明書の失効状態をリアルタイムで確認するプロトコル。CAのOCSPレスポンダにクエリを送り、証明書が有効か失効かを確認する。OCSP Staplingにより、サーバが事前にOCSP応答をキャッシュしてクライアントに提供できる。",
+        "domain": "network",
+        "keywords": [
+          "証明書失効",
+          "PKI",
+          "TLS",
+          "OCSP Stapling",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CRL",
+    "reading": "しーあーるえる",
+    "aliases": [
+      "Certificate Revocation List",
+      "証明書失効リスト"
+    ],
+    "senses": [
+      {
+        "definition": "CAが失効させた証明書のシリアル番号を一覧にしたリスト。定期的に公開・配布され、クライアントはTLS接続時にCRLを参照して証明書の有効性を確認する。OCSPに比べてリアルタイム性に劣るが、オフラインでも参照可能。",
+        "domain": "network",
+        "keywords": [
+          "証明書失効",
+          "PKI",
+          "TLS",
+          "CA",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "証明書チェーン",
+    "reading": "しょうめいしょちぇーん",
+    "aliases": [
+      "Certificate Chain",
+      "証明書の連鎖"
+    ],
+    "senses": [
+      {
+        "definition": "エンドエンティティ証明書から中間CA、ルートCAまでの証明書の連鎖。各証明書は上位CAの署名で信頼を継承する。TLSハンドシェイク時にサーバが証明書チェーンを送り、クライアントが信頼できるルートCAまで検証する。",
+        "domain": "network",
+        "keywords": [
+          "PKI",
+          "TLS",
+          "ルートCA",
+          "中間CA",
+          "信頼"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SNI",
+    "aliases": [
+      "Server Name Indication"
+    ],
+    "senses": [
+      {
+        "definition": "TLSハンドシェイクのClientHelloにホスト名を含める拡張。1つのIPアドレスで複数のドメインの証明書を使い分けるために使われる。ほぼ全モダンブラウザが対応しており、共有ホスティング環境でHTTPSを実現する基盤技術。",
+        "domain": "network",
+        "keywords": [
+          "TLS",
+          "ホスト名",
+          "仮想ホスト",
+          "証明書",
+          "HTTPS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ALPN",
+    "aliases": [
+      "Application-Layer Protocol Negotiation"
+    ],
+    "senses": [
+      {
+        "definition": "TLSハンドシェイク時にアプリケーション層プロトコルを交渉するTLS拡張。クライアントとサーバがHTTP/2やHTTP/3などを選択する際に使われ、プロトコルのネゴシエーションを追加ラウンドトリップなしに実現できる。",
+        "domain": "network",
+        "keywords": [
+          "TLS",
+          "プロトコルネゴシエーション",
+          "HTTP/2",
+          "HTTP/3",
+          "拡張"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TLSハンドシェイク",
+    "reading": "てぃーえるえすはんどしぇいく",
+    "aliases": [
+      "TLS Handshake"
+    ],
+    "senses": [
+      {
+        "definition": "TLS接続確立時に行われる暗号パラメータのネゴシエーション手順。クライアントとサーバが暗号スイートを選択し、証明書を交換して認証を行い、セッション鍵を安全に共有する。TLS 1.3では1-RTTで完了する。",
+        "domain": "network",
+        "keywords": [
+          "TLS",
+          "接続確立",
+          "鍵交換",
+          "認証",
+          "暗号化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "STUN",
+    "aliases": [
+      "Session Traversal Utilities for NAT"
+    ],
+    "senses": [
+      {
+        "definition": "NATの外側から見たクライアントのパブリックIPアドレスとポートを調べるためのプロトコル。WebRTCのICEフレームワークで利用され、P2P接続の候補アドレス収集に使う。STUNサーバはシンプルでリレーは行わない。",
+        "domain": "network",
+        "keywords": [
+          "NAT",
+          "WebRTC",
+          "ICE",
+          "P2P",
+          "パブリックIP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TURN",
+    "aliases": [
+      "Traversal Using Relays around NAT"
+    ],
+    "senses": [
+      {
+        "definition": "直接P2P接続できない場合にトラフィックをリレーするNAT越えプロトコル。STUNで解決できない対称NAT環境などで使われる。WebRTCのフォールバック手段として重要だが、リレーサーバのコストが高い。",
+        "domain": "network",
+        "keywords": [
+          "NAT",
+          "WebRTC",
+          "リレー",
+          "ICE",
+          "P2P"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ICE",
+    "aliases": [
+      "Interactive Connectivity Establishment"
+    ],
+    "senses": [
+      {
+        "definition": "WebRTCでP2P接続を確立するためのフレームワーク。STUN・TURN候補を収集しSDPで交換し、優先度順に接続を試みる。ホスト候補・サーバリフレクシブ候補・リレー候補の3種を扱い最適なパスを選択する。",
+        "domain": "network",
+        "keywords": [
+          "WebRTC",
+          "NAT",
+          "P2P",
+          "STUN",
+          "TURN"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SDP",
+    "aliases": [
+      "Session Description Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "WebRTCや音声・映像セッションのメディア情報（コーデック、IPアドレス、ポートなど）を記述するテキスト形式のプロトコル。WebRTCではOfferとAnswerの交換（シグナリング）に使われ、ICE候補もSDPに含まれる。",
+        "domain": "network",
+        "keywords": [
+          "WebRTC",
+          "シグナリング",
+          "メディア",
+          "コーデック",
+          "ICE"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NAT traversal",
+    "reading": "なっととらばーさる",
+    "aliases": [
+      "NATトラバーサル"
+    ],
+    "senses": [
+      {
+        "definition": "NATルータの内側にいるノード同士がP2P通信を確立するための技術群。STUN・TURN・ICE・UDPホールパンチングなどが含まれる。WebRTCやVoIPで不可欠な技術で、NAT種別（フルコーン・対称型など）によって難易度が異なる。",
+        "domain": "network",
+        "keywords": [
+          "NAT",
+          "P2P",
+          "WebRTC",
+          "STUN",
+          "TURN"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DHCP",
+    "aliases": [
+      "Dynamic Host Configuration Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "ネットワークに接続したホストにIPアドレス・サブネットマスク・デフォルトゲートウェイ・DNSサーバを動的に割り当てるプロトコル。DISCOVER→OFFER→REQUEST→ACKの4ステップで動作し、リース期間で管理する。",
+        "domain": "network",
+        "keywords": [
+          "IPアドレス",
+          "自動割り当て",
+          "ネットワーク設定",
+          "リース",
+          "DNS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ARP",
+    "aliases": [
+      "Address Resolution Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "IPアドレスからMACアドレスを解決するリンク層プロトコル。送信ホストはブロードキャストでARP Requestを送り、対象ホストがUnicastでARP Replyを返す。結果はARPキャッシュに保存される。ARP Poisoningはセキュリティ攻撃に悪用される。",
+        "domain": "network",
+        "keywords": [
+          "MACアドレス",
+          "IPアドレス",
+          "リンク層",
+          "ブロードキャスト",
+          "ARPキャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ICMP",
+    "aliases": [
+      "Internet Control Message Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "ネットワーク診断やエラー報告のためのIPプロトコル上の制御プロトコル。pingはICMP Echo Request/Replyを使い、tracerouteはICMP Time Exceededを利用する。ICMPv6はIPv6で近隣探索にも使われる。",
+        "domain": "network",
+        "keywords": [
+          "診断",
+          "ping",
+          "traceroute",
+          "エラー報告",
+          "IPv6"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ping",
+    "senses": [
+      {
+        "definition": "ICMP Echo RequestとEcho Replyを使って、ホストの到達可能性とラウンドトリップ時間を計測するネットワーク診断コマンド。最も基本的なネットワーク疎通確認手段で、パケットロス率やRTTの統計も表示する。",
+        "domain": "network",
+        "keywords": [
+          "ICMP",
+          "疎通確認",
+          "RTT",
+          "診断",
+          "ネットワーク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "MTU",
+    "reading": "えむてぃーゆー",
+    "aliases": [
+      "Maximum Transmission Unit",
+      "最大転送単位"
+    ],
+    "senses": [
+      {
+        "definition": "ネットワークインターフェースが1フレームで送信できる最大データサイズ。イーサネットの標準MTUは1500バイト。MTUを超えるパケットはIPフラグメンテーションされるか、DF（Don't Fragment）ビットが立っている場合は破棄される。",
+        "domain": "network",
+        "keywords": [
+          "フラグメンテーション",
+          "イーサネット",
+          "パケット",
+          "IP",
+          "ネットワーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCP輻輳制御",
+    "reading": "てぃーしーぴーふくそうせいぎょ",
+    "aliases": [
+      "TCP Congestion Control"
+    ],
+    "senses": [
+      {
+        "definition": "TCPがネットワークの輻輳を検出して送信レートを自動調整するメカニズム。スロースタート・輻輳回避・高速再転送・高速回復のフェーズがあり、CUBICやBBRなどのアルゴリズムで実装される。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "輻輳",
+          "スロースタート",
+          "CUBIC",
+          "BBR"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCPウィンドウ",
+    "reading": "てぃーしーぴーうぃんどう",
+    "aliases": [
+      "TCP Window",
+      "受信ウィンドウ",
+      "送信ウィンドウ"
+    ],
+    "senses": [
+      {
+        "definition": "TCPの受信バッファサイズを示す値。受信側が確認応答なしに受け入れられるデータ量を制御し、フロー制御に使われる。ウィンドウスケーリング拡張によりサイズを65535バイト以上に拡大できる。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "フロー制御",
+          "バッファ",
+          "スライディングウィンドウ",
+          "受信バッファ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Nagleアルゴリズム",
+    "reading": "ねーぐるあるごりずむ",
+    "aliases": [
+      "Nagle's Algorithm"
+    ],
+    "senses": [
+      {
+        "definition": "小さなTCPパケットを結合して送信効率を上げるアルゴリズム。未確認応答データがある間は小パケットを蓄積してから送信する。インタラクティブアプリ（SSH、ゲームなど）ではTCP_NODELAYで無効化することが多い。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "パケット結合",
+          "効率化",
+          "TCP_NODELAY",
+          "遅延"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCP Keep-Alive",
+    "aliases": [
+      "TCPキープアライブ"
+    ],
+    "senses": [
+      {
+        "definition": "アイドル状態のTCP接続が生きているかを確認する仕組み。一定時間データがない場合にプローブパケットを送り、応答がなければ接続を切断する。NAT経路のタイムアウトを防いだりゾンビ接続を検出するために使われる。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "接続維持",
+          "NAT",
+          "ゾンビ接続",
+          "アイドル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SO_REUSEPORT",
+    "aliases": [
+      "SO_REUSEADDR"
+    ],
+    "senses": [
+      {
+        "definition": "複数のソケットを同じポートにバインドできるソケットオプション。マルチプロセス・マルチスレッドサーバで各ワーカーが同じポートをリッスンしてカーネルレベルで負荷分散できる。Linuxのnginxやnodejsのクラスタモードで使われる。",
+        "domain": "network",
+        "keywords": [
+          "ソケット",
+          "マルチプロセス",
+          "負荷分散",
+          "Linux",
+          "サーバ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "epoll",
+    "senses": [
+      {
+        "definition": "Linuxのスケーラブルなイベント通知インターフェース。監視するファイルディスクリプタをカーネルに登録しておき、準備完了イベントのみを効率的に取得できる。select/pollと異なりO(1)でイベント通知でき、大規模接続サーバの基盤となる。",
+        "domain": "network",
+        "keywords": [
+          "Linux",
+          "非同期I/O",
+          "イベント駆動",
+          "スケーラビリティ",
+          "ファイルディスクリプタ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "kqueue",
+    "senses": [
+      {
+        "definition": "BSD系OS（macOS、FreeBSDなど）のスケーラブルなカーネルイベント通知機構。ファイルディスクリプタの読み書き・タイマー・プロセスイベントなどを統一的に監視できる。LinuxのepollやWindowsのIOCPに相当する。",
+        "domain": "network",
+        "keywords": [
+          "BSD",
+          "macOS",
+          "非同期I/O",
+          "イベント駆動",
+          "ファイルディスクリプタ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "io_uring",
+    "senses": [
+      {
+        "definition": "Linux 5.1で導入されたカーネルとユーザ空間の間でリングバッファを共有する非同期I/Oインターフェース。システムコールのオーバーヘッドを削減し、ネットワーク・ディスクI/Oを高スループットで処理できる。epollより低レイテンシ。",
+        "domain": "network",
+        "keywords": [
+          "Linux",
+          "非同期I/O",
+          "リングバッファ",
+          "高性能",
+          "カーネル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "select/poll",
+    "aliases": [
+      "selectシステムコール",
+      "pollシステムコール"
+    ],
+    "senses": [
+      {
+        "definition": "POSIX標準の同期的な多重化I/Oシステムコール。複数のファイルディスクリプタを一括監視し、いずれかが準備完了になったら返る。selectはFD_SETSIZEの制限があり、pollはそれを解消するが、どちらもO(n)のスキャンが必要でスケールしにくい。",
+        "domain": "network",
+        "keywords": [
+          "I/O多重化",
+          "POSIX",
+          "ファイルディスクリプタ",
+          "同期",
+          "スケーラビリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "非同期I/O",
+    "reading": "ひどうきあいおー",
+    "aliases": [
+      "Asynchronous I/O",
+      "AIO"
+    ],
+    "senses": [
+      {
+        "definition": "I/O操作の完了を待たずに他の処理を続け、完了時にコールバックやイベントで通知を受けるI/Oモデル。Node.jsのイベントループやPythonのasyncio、Rustのtokioなどが非同期I/Oを活用して高スループットなサーバを実現する。",
+        "domain": "network",
+        "keywords": [
+          "イベント駆動",
+          "コールバック",
+          "高スループット",
+          "Node.js",
+          "スケーラビリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マルチプレクシング",
+    "reading": "まるちぷれくしんぐ",
+    "aliases": [
+      "Multiplexing",
+      "多重化"
+    ],
+    "senses": [
+      {
+        "definition": "1つの通信路で複数の独立したデータストリームを同時に送受信する技術。HTTP/2は1TCP接続上で複数ストリームを多重化し、HTTP/1.1のリクエストキューイングによる遅延を解消する。TDM・FDM・OFDM等の方式がある。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/2",
+          "ストリーム",
+          "並行処理",
+          "効率化",
+          "接続"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTP/2フレーム",
+    "reading": "えいちてぃーてぃーぴーにふれーむ",
+    "aliases": [
+      "HTTP/2 Frame"
+    ],
+    "senses": [
+      {
+        "definition": "HTTP/2通信の最小単位。DATAフレーム（ボディ）、HEADERSフレーム（ヘッダ）、SETTINGSフレーム（設定交換）、WINDOW_UPDATEフレームなど10種類以上が定義されている。各フレームはストリームIDで多重化される。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/2",
+          "バイナリ",
+          "プロトコル",
+          "ストリーム",
+          "通信単位"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTP/2ストリーム",
+    "reading": "えいちてぃーてぃーぴーにすとりーむ",
+    "aliases": [
+      "HTTP/2 Stream"
+    ],
+    "senses": [
+      {
+        "definition": "HTTP/2接続内の独立した双方向バイトシーケンス。各ストリームは整数のIDを持ち、HEADERSとDATAフレームで構成される。1接続内で並行して複数のリクエスト/レスポンスを処理でき、優先度（Priority）も設定可能。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/2",
+          "多重化",
+          "並行",
+          "リクエスト",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Server Push",
+    "aliases": [
+      "HTTP/2 Server Push"
+    ],
+    "senses": [
+      {
+        "definition": "HTTP/2でサーバがクライアントのリクエストを待たずにリソースをプッシュする機能。HTMLレスポンスと同時にCSSやJSをプッシュすることでラウンドトリップを削減できるが、キャッシュ済みリソースの無駄送信が問題となりHTTP/3で廃止の方向。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/2",
+          "パフォーマンス",
+          "プッシュ",
+          "ラウンドトリップ",
+          "キャッシュ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HPACK",
+    "aliases": [
+      "HTTP/2 Header Compression"
+    ],
+    "senses": [
+      {
+        "definition": "HTTP/2で使われるヘッダ圧縮仕様（RFC 7541）。静的テーブル（共通ヘッダの定義済み一覧）と動的テーブルを組み合わせてヘッダをインデックス参照し、ハフマン符号化も使って圧縮する。HTTP/3ではQPACKに進化した。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/2",
+          "ヘッダ圧縮",
+          "ハフマン",
+          "静的テーブル",
+          "プロトコル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gzip圧縮",
+    "reading": "じーずぃっぷあっしゅく",
+    "aliases": [
+      "DEFLATE圧縮"
+    ],
+    "senses": [
+      {
+        "definition": "DEFLATEアルゴリズムを使ったデータ圧縮形式。HTTPレスポンスのContent-Encoding: gzipとして広く使われ、テキストコンテンツを70-90%圧縮できる。ブラウザはAccept-Encodingヘッダで対応を宣言し、サーバが圧縮して送信する。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "圧縮",
+          "Content-Encoding",
+          "DEFLATE",
+          "帯域削減"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Content-Encoding",
+    "aliases": [
+      "コンテンツエンコーディング"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPレスポンスボディに適用されたエンコーディング（圧縮）を示すヘッダ。gzip・br（Brotli）・deflate・zstdなどの値をとる。クライアントはAccept-Encodingで対応エンコーディングを通知し、デコード後にボディを処理する。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "圧縮",
+          "ヘッダ",
+          "gzip",
+          "Brotli"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Transfer-Encoding",
+    "aliases": [
+      "転送エンコーディング"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPメッセージのボディをネットワーク越しに転送する際のエンコーディング形式を指定するヘッダ。chunkedが最もよく使われ、ボディを複数チャンクに分割してサイズ不明のままストリーム送信できる。Content-Encodingとは異なりホップバイホップのヘッダ。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "chunked",
+          "ストリーム",
+          "ヘッダ",
+          "転送"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "chunked encoding",
+    "reading": "ちゃんくどえんこーでぃんぐ",
+    "aliases": [
+      "チャンク転送"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPでレスポンスボディを可変長のチャンクに分割して送信するエンコーディング。コンテンツ全体のサイズが事前にわからない場合（動的生成、ストリーミングなど）に使われる。各チャンクにはサイズが付き、空チャンクで終端を示す。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "ストリーミング",
+          "動的コンテンツ",
+          "Transfer-Encoding",
+          "レスポンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Range Request",
+    "aliases": [
+      "レンジリクエスト",
+      "部分取得",
+      "HTTP Range"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPでリソースの一部分のみを取得するリクエスト。RangeヘッダでバイトレンジをしてHTTP 206 Partial Contentが返る。大容量ファイルのダウンロード再開、動画のシーク、並列ダウンロードなどに使われる。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "部分取得",
+          "ダウンロード",
+          "動画",
+          "レジューム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "304 Not Modified",
+    "aliases": [
+      "HTTPキャッシュ検証"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPの条件付きリクエスト（If-None-Match・If-Modified-Since）でリソースが変更されていない場合に返るステータスコード。ボディなしで返り、クライアントはキャッシュを再利用する。帯域節約とレスポンス高速化に貢献する。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "キャッシュ",
+          "ETag",
+          "If-None-Match",
+          "帯域節約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リダイレクト",
+    "reading": "りだいれくと",
+    "aliases": [
+      "HTTPリダイレクト",
+      "301/302/307/308"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPでクライアントを別のURLに転送するレスポンス群。301（恒久移動）・302（一時移動）・307（一時リダイレクト、メソッド保持）・308（恒久リダイレクト、メソッド保持）の種類があり、SEOや正規URL統一に使われる。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "ステータスコード",
+          "URL転送",
+          "SEO",
+          "301"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フォワードプロキシ",
+    "reading": "ふぉわーどぷろきしー",
+    "aliases": [
+      "Forward Proxy",
+      "透過プロキシ"
+    ],
+    "senses": [
+      {
+        "definition": "クライアントの代わりにインターネットへリクエストを送るプロキシ。クライアントIPを隠したり、企業ネットワークでの通信制御・キャッシュ・ログ取得に使われる。クライアント側で設定が必要な明示プロキシと、設定不要の透過プロキシがある。",
+        "domain": "network",
+        "keywords": [
+          "プロキシ",
+          "キャッシュ",
+          "企業ネットワーク",
+          "アクセス制御",
+          "匿名化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SOCKS",
+    "aliases": [
+      "SOCKS5",
+      "SOCKS4"
+    ],
+    "senses": [
+      {
+        "definition": "任意のTCP/UDP接続をプロキシ経由でルーティングするプロキシプロトコル。SOCKS5は認証とUDPをサポートし、HTTPプロキシより汎用的。SSH動的転送やTorがSOCKSプロトコルを使って通信を中継する。",
+        "domain": "network",
+        "keywords": [
+          "プロキシ",
+          "TCP",
+          "UDP",
+          "SSH",
+          "匿名化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCP三方向ハンドシェイク",
+    "reading": "てぃーしーぴーさんほうこうはんどしぇいく",
+    "aliases": [
+      "TCP 3-Way Handshake",
+      "SYN-SYN/ACK-ACK"
+    ],
+    "senses": [
+      {
+        "definition": "TCP接続確立のプロセス。クライアントがSYNを送り、サーバがSYN/ACKで応答し、クライアントがACKを返して接続が確立する。この3ステップに1RTTかかるため、TLS 1.3やQUICではこのオーバーヘッドを削減する仕組みが導入された。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "接続確立",
+          "SYN",
+          "ハンドシェイク",
+          "RTT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCPフラグ",
+    "reading": "てぃーしーぴーふらぐ",
+    "aliases": [
+      "TCP Flags",
+      "SYN/ACK/FIN/RST"
+    ],
+    "senses": [
+      {
+        "definition": "TCPセグメントのコントロールビット群。SYN（接続開始）、ACK（確認応答）、FIN（接続終了）、RST（接続リセット）、PSH（即時転送）、URG（緊急）などがあり、接続状態のフェーズ制御に使われる。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "SYN",
+          "FIN",
+          "RST",
+          "接続制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCPシーケンス番号",
+    "reading": "てぃーしーぴーしーけんすばんごう",
+    "aliases": [
+      "TCP Sequence Number"
+    ],
+    "senses": [
+      {
+        "definition": "TCPセグメントのデータバイト位置を示す32ビットの番号。受信側はシーケンス番号を使ってパケットの順序を復元し、欠落を検出する。初期シーケンス番号（ISN）はランダム値から始まり、TCPスプーフィング攻撃を防ぐ。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "順序制御",
+          "信頼性",
+          "パケット",
+          "再組み立て"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCP確認応答",
+    "reading": "てぃーしーぴーかくにんおうとう",
+    "aliases": [
+      "TCP ACK",
+      "TCP Acknowledgment"
+    ],
+    "senses": [
+      {
+        "definition": "TCPで受信したデータバイト数の累積確認を行うACKセグメント。ACK番号は次に期待するシーケンス番号を示す。遅延ACK（200ms待ってまとめてACK）はパフォーマンス最適化だが、Nagleアルゴリズムと組み合わさると遅延を引き起こすことがある。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "信頼性",
+          "ACK",
+          "遅延ACK",
+          "確認応答"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "輻輳制御",
+    "reading": "ふくそうせいぎょ",
+    "aliases": [
+      "Congestion Control"
+    ],
+    "senses": [
+      {
+        "definition": "ネットワーク全体の輻輳を防ぐためにTCPが送信レートを自動調整する仕組み。パケットロスや遅延増加を輻輳の兆候と見なし、輻輳ウィンドウ（CWND）を削減する。CUBIC・BBR・VENOなど多くのアルゴリズムが存在する。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "CWND",
+          "CUBIC",
+          "BBR",
+          "スループット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "輻輳ウィンドウ",
+    "reading": "ふくそうういんどう",
+    "aliases": [
+      "CWND",
+      "Congestion Window"
+    ],
+    "senses": [
+      {
+        "definition": "TCP送信者が輻輳制御アルゴリズムで管理する内部的な送信制限値。受信ウィンドウとCWNDの小さい方が実際の送信ウィンドウサイズになる。パケットロスで削減され、スロースタートや輻輳回避フェーズで増加する。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "輻輳制御",
+          "スロースタート",
+          "スループット",
+          "送信制限"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スロースタート",
+    "reading": "すろーすたーと",
+    "aliases": [
+      "Slow Start"
+    ],
+    "senses": [
+      {
+        "definition": "TCP接続開始時または輻輳後の輻輳ウィンドウを指数的に増加させるフェーズ。ACKを受信するたびにCWNDを1MSS増やし、閾値（ssthresh）に達するまで指数的に成長する。名前とは裏腹に急速に拡大するため大容量転送では有利。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "輻輳制御",
+          "CWND",
+          "ssthresh",
+          "スループット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "再送タイムアウト",
+    "reading": "さいそうたいむあうと",
+    "aliases": [
+      "Retransmission Timeout"
+    ],
+    "senses": [
+      {
+        "definition": "TCPがACKを受信できない場合にパケット再送を行うまでの待機時間。RTTとその分散（Jacobsonアルゴリズム）から動的に計算される。RTOが発生するとCWNDが1MSSにリセットされスロースタートから再開するため、接続品質への影響が大きい。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "再送",
+          "輻輳制御",
+          "RTT",
+          "信頼性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CUBIC",
+    "senses": [
+      {
+        "definition": "LinuxカーネルのデフォルトTCP輻輳制御アルゴリズム。3次関数のウィンドウ増加カーブを使って、高帯域・高遅延ネットワーク（HBDP）でも効率的にスループットを引き出す。3重重複ACKで輻輳を検出し、ウィンドウを削減して回復する。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "輻輳制御",
+          "Linux",
+          "CWND",
+          "スループット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "BBR",
+    "aliases": [
+      "Bottleneck Bandwidth and RTT"
+    ],
+    "senses": [
+      {
+        "definition": "Googleが開発したTCP輻輳制御アルゴリズム。パケットロスではなく帯域幅とRTTの計測値を使って最適な送信レートを決定する。高帯域・高遅延・パケットロスがある環境でCUBICより優れたスループットを発揮する。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "輻輳制御",
+          "Google",
+          "帯域幅",
+          "低遅延"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "IPsec",
+    "aliases": [
+      "IP Security"
+    ],
+    "senses": [
+      {
+        "definition": "IP層でパケットを暗号化・認証するプロトコルスイート。AHプロトコル（認証のみ）とESPプロトコル（暗号化+認証）があり、トンネルモードとトランスポートモードを持つ。企業VPNの基盤技術として広く使われている。",
+        "domain": "network",
+        "keywords": [
+          "VPN",
+          "暗号化",
+          "認証",
+          "トンネル",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WireGuard",
+    "senses": [
+      {
+        "definition": "シンプルで高性能なオープンソースVPNプロトコル。Linuxカーネルに統合済みで、ChaCha20で暗号化しCurve25519で鍵交換する。OpenVPNやIPsecより設定が簡単でコードが少なく、セキュリティ監査がしやすい。",
+        "domain": "network",
+        "keywords": [
+          "VPN",
+          "暗号化",
+          "Linux",
+          "オープンソース",
+          "低遅延"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "DTLS",
+    "aliases": [
+      "Datagram Transport Layer Security"
+    ],
+    "senses": [
+      {
+        "definition": "UDPなどのデータグラムプロトコル上でTLSに相当する暗号化・認証を提供するプロトコル。WebRTCのメディア暗号化に使われるSRTPと組み合わせて利用される。パケットの並べ替えやロスを前提とした設計になっている。",
+        "domain": "network",
+        "keywords": [
+          "TLS",
+          "UDP",
+          "WebRTC",
+          "暗号化",
+          "データグラム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SRTP",
+    "aliases": [
+      "Secure Real-time Transport Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "RTPに暗号化と認証を追加した安全なリアルタイム転送プロトコル。WebRTCでは音声・映像データの暗号化にSRTPが使われ、鍵交換にはDTLSが使われる。AES-128-CTRで暗号化しHMAC-SHA1で認証するのが標準的な構成。",
+        "domain": "network",
+        "keywords": [
+          "WebRTC",
+          "暗号化",
+          "音声",
+          "映像",
+          "リアルタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RTP",
+    "aliases": [
+      "Real-time Transport Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "音声・映像データをリアルタイムでUDP上に転送するプロトコル。シーケンス番号とタイムスタンプでジッタバッファの同期に使われる。制御情報はRTCPで別に送られ、セキュリティ版はSRTPを使う。VoIPやWebRTCの基盤。",
+        "domain": "network",
+        "keywords": [
+          "音声",
+          "映像",
+          "UDP",
+          "リアルタイム",
+          "WebRTC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RTCP",
+    "aliases": [
+      "RTP Control Protocol"
+    ],
+    "senses": [
+      {
+        "definition": "RTPセッションの品質制御情報を伝えるプロトコル。パケットロス率・ジッタ・遅延などの統計をSenderReport/ReceiverReportで定期的に交換し、コーデックのビットレート適応などに使われる。RTPと同じセッションで別ポートを使う。",
+        "domain": "network",
+        "keywords": [
+          "RTP",
+          "QoS",
+          "音声",
+          "映像",
+          "リアルタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "長持続接続",
+    "reading": "ながもちぞくせつぞく",
+    "aliases": [
+      "Long-lived Connection",
+      "持続的接続",
+      "パーシステント接続"
+    ],
+    "senses": [
+      {
+        "definition": "1つのTCP接続を複数のHTTPリクエスト/レスポンスに再利用する仕組み。HTTP/1.1ではデフォルトで有効（Keep-Alive）で、接続確立のオーバーヘッドを削減する。ただし同時接続数の制限（通常6本/ドメイン）がボトルネックになる。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "Keep-Alive",
+          "接続再利用",
+          "TCP",
+          "効率化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Keep-Aliveヘッダ",
+    "reading": "きーぷあらいぶへっだ",
+    "aliases": [
+      "Connection: Keep-Alive",
+      "Keepaliveヘッダ"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPの接続持続化を制御するヘッダ。HTTP/1.0ではデフォルト非持続なので明示的に指定が必要だった。HTTP/1.1ではデフォルト持続接続だがConnection: keep-aliveで明示することも多い。タイムアウトと最大リクエスト数を交渉できる。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "接続管理",
+          "Keep-Alive",
+          "HTTP/1.0",
+          "HTTP/1.1"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTP/1.0",
+    "aliases": [
+      "HTTP 1.0"
+    ],
+    "senses": [
+      {
+        "definition": "1996年に公開された初期のHTTP仕様（RFC 1945）。デフォルトで非持続接続（リクエストごとにTCP接続を確立・切断）で、ホストヘッダが必須でなかった。HTTP/1.1への移行で持続接続・仮想ホスト・チャンク転送が標準化された。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "非持続接続",
+          "Webプロトコル",
+          "RFC",
+          "歴史"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTPパイプライン",
+    "reading": "えいちてぃーてぃーぴーぱいぷらいん",
+    "aliases": [
+      "HTTP Pipelining"
+    ],
+    "senses": [
+      {
+        "definition": "HTTP/1.1でACKを待たずに複数のリクエストを連続送信する機能。Head-of-Line Blockingの問題（最初のレスポンスが遅れると後続が詰まる）があり、多くのブラウザでデフォルト無効。HTTP/2の多重化がこの問題を根本解決した。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/1.1",
+          "Head-of-Line Blocking",
+          "多重化",
+          "パフォーマンス",
+          "パイプライン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "接続多重化",
+    "reading": "せつぞくたじゅうか",
+    "aliases": [
+      "Connection Multiplexing",
+      "多重化接続"
+    ],
+    "senses": [
+      {
+        "definition": "1つのTCP接続上で複数の独立したリクエスト/レスポンスを同時に処理する技術。HTTP/2とHTTP/3がこれを実現し、ブラウザが1ドメインあたり6接続を張っていたHTTP/1.1の制約を解消した。HOLブロッキングの解消にも貢献する。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/2",
+          "HTTP/3",
+          "パフォーマンス",
+          "HOLブロッキング",
+          "TCP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ドメインシャーディング",
+    "reading": "どめいんしゃーでぃんぐ",
+    "aliases": [
+      "Domain Sharding"
+    ],
+    "senses": [
+      {
+        "definition": "HTTP/1.1時代に複数のサブドメインを使ってブラウザの1ドメインあたり接続数制限（通常6本）を回避するパフォーマンス最適化手法。HTTP/2では多重化により不要となり、むしろTLS接続増加でパフォーマンスが悪化する場合がある。",
+        "domain": "network",
+        "keywords": [
+          "HTTP/1.1",
+          "パフォーマンス",
+          "接続数",
+          "サブドメイン",
+          "アンチパターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DNS Prefetch",
+    "aliases": [
+      "dns-prefetch",
+      "DNSプリフェッチ"
+    ],
+    "senses": [
+      {
+        "definition": "ブラウザがページ上のリンク先ドメインのDNS解決を事前に行うリソースヒント。<link rel=\"dns-prefetch\" href=\"//example.com\">で指定する。ユーザがリンクをクリックした際の接続遅延を削減するが、preconnectより軽量でDNS解決のみ行う。",
+        "domain": "network",
+        "keywords": [
+          "パフォーマンス",
+          "DNS",
+          "ブラウザ",
+          "リソースヒント",
+          "先読み"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTP早期ヒント",
+    "reading": "えいちてぃーてぃーぴーそうきひんと",
+    "aliases": [
+      "HTTP 103 Early Hints",
+      "103 Early Hints"
+    ],
+    "senses": [
+      {
+        "definition": "サーバが最終レスポンスを生成する前にLink: preloadヘッダを含む103ステータスを先行送信するHTTP機能。ブラウザはこのヒントを受け取り次第、CSSやJSのプリロードを開始できる。サーバサイドの処理時間を活用してページロードを高速化する。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "パフォーマンス",
+          "preload",
+          "早期ヒント",
+          "ブラウザ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cookie属性",
+    "reading": "くっきーぞくせい",
+    "aliases": [
+      "Cookie Attributes",
+      "クッキー属性"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPクッキーの動作を制御するオプション群。Secure（HTTPS必須）・HttpOnly（JSからアクセス不可）・SameSite（クロスサイト制御）・Domain・Path・Expires/Max-Ageなどがある。適切な属性設定がXSSやCSRF対策の基本となる。",
+        "domain": "network",
+        "keywords": [
+          "Cookie",
+          "セキュリティ",
+          "Secure",
+          "HttpOnly",
+          "SameSite"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Secure Cookie",
+    "aliases": [
+      "Secureフラグ",
+      "Secure属性"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPSの暗号化通信上でのみ送信されるCookieを指定するSecure属性。平文HTTP通信ではCookieが送られないため、ネットワーク盗聴によるセッションハイジャックを防ぐ。本番環境のセッションCookieには必須の属性。",
+        "domain": "network",
+        "keywords": [
+          "Cookie",
+          "HTTPS",
+          "セキュリティ",
+          "セッション",
+          "盗聴防止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HttpOnly Cookie",
+    "aliases": [
+      "HttpOnlyフラグ",
+      "HttpOnly属性"
+    ],
+    "senses": [
+      {
+        "definition": "JavaScriptのdocument.cookieからアクセスできないよう保護するCookieのHttpOnly属性。XSS攻撃でスクリプトが実行されてもCookieを窃取できなくなる。セッションCookieに必ず設定すべき重要なセキュリティ属性。",
+        "domain": "network",
+        "keywords": [
+          "Cookie",
+          "XSS",
+          "セキュリティ",
+          "JavaScript",
+          "セッション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "XSS対策",
+    "reading": "くろすさいとすくりぷてぃんぐたいさく",
+    "aliases": [
+      "XSS Protection",
+      "Cross-Site Scripting対策"
+    ],
+    "senses": [
+      {
+        "definition": "クロスサイトスクリプティング攻撃を防ぐセキュリティ施策。出力時のHTMLエスケープ、Content Security Policy（CSP）の設定、HttpOnly Cookie、入力値のサニタイズなどが含まれる。モダンフレームワークはデフォルトでエスケープ処理を行う。",
+        "domain": "network",
+        "keywords": [
+          "セキュリティ",
+          "XSS",
+          "CSP",
+          "エスケープ",
+          "Webセキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSRF対策",
+    "reading": "くろすさいとりくえすとふぉーじぇりーたいさく",
+    "aliases": [
+      "CSRF Protection",
+      "Cross-Site Request Forgery対策"
+    ],
+    "senses": [
+      {
+        "definition": "ユーザが意図しないリクエストを第三者サイトから送らせる攻撃への防御策。CSRFトークンの埋め込み・検証、SameSite Cookie属性の設定、Origin/Refererヘッダの検証が主な対策。モダンフレームワークではCSRFトークンが自動生成される。",
+        "domain": "network",
+        "keywords": [
+          "セキュリティ",
+          "CSRF",
+          "CSRFトークン",
+          "SameSite",
+          "Webセキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Expect-CT",
+    "aliases": [
+      "Certificate Transparency"
+    ],
+    "senses": [
+      {
+        "definition": "Certificate Transparency（CT）ログへの証明書記録を要求するHTTPヘッダ。不正発行された証明書の検出を強制し、enforce指定時はCT未記録の証明書接続をブロックする。2024年現在、ほぼ廃止方向にあり主要ブラウザはCTをデフォルト強制している。",
+        "domain": "network",
+        "keywords": [
+          "証明書",
+          "セキュリティ",
+          "TLS",
+          "HTTP",
+          "CA"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HPKP",
+    "aliases": [
+      "HTTP Public Key Pinning"
+    ],
+    "senses": [
+      {
+        "definition": "サーバ証明書の公開鍵ハッシュをHTTPヘッダでブラウザに記憶させ、次回から異なる証明書を拒否させるセキュリティ機能。不正証明書によるMITM攻撃を防ぐが、設定ミスで正規サイトも接続不能になるリスクが高く、現在は非推奨・廃止方向。",
+        "domain": "network",
+        "keywords": [
+          "証明書",
+          "セキュリティ",
+          "TLS",
+          "HTTP",
+          "廃止"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Last-Modified",
+    "aliases": [
+      "最終更新日時"
+    ],
+    "senses": [
+      {
+        "definition": "リソースの最終変更日時を示すHTTPレスポンスヘッダ。クライアントはIf-Modified-Sinceヘッダで条件付きリクエストを送り、変更がなければ304 Not Modifiedが返る。ETagより精度が低い（秒単位）がシンプルな実装で広く使われる。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "キャッシュ",
+          "304",
+          "条件付きリクエスト",
+          "更新日時"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Vary",
+    "aliases": [
+      "Varyヘッダ"
+    ],
+    "senses": [
+      {
+        "definition": "レスポンスのキャッシュキーに含めるリクエストヘッダ名を指定するHTTPヘッダ。例えばVary: Accept-Encodingを指定するとgzip版とbr版が別々にキャッシュされる。Vary: Cookieはキャッシュ効率を著しく低下させるため注意が必要。",
+        "domain": "network",
+        "keywords": [
+          "HTTP",
+          "キャッシュ",
+          "CDN",
+          "Accept-Encoding",
+          "キャッシュキー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCPスリーウェイハンドシェイク",
+    "reading": "てぃーしーぴーすりーうぇいはんどしぇいく",
+    "senses": [
+      {
+        "definition": "TCP接続確立時にSYN・SYN-ACK・ACKの3段階のやり取りで行う接続確立プロセスです。信頼性のある通信チャネルを開設します。",
+        "domain": "network",
+        "keywords": [
+          "TCP",
+          "ハンドシェイク",
+          "接続確立",
+          "SYN"
+        ]
+      }
+    ],
+    "aliases": [
+      "TCP Three-Way Handshake",
+      "3-way handshake"
+    ]
+  },
+  {
+    "term": "Keep-Aliveヘッダー",
+    "reading": "きーぷあらいぶへっだー",
+    "senses": [
+      {
+        "definition": "HTTPの持続的接続を制御するヘッダーです。同一TCP接続上で複数のHTTPリクエストを処理できるようにし、接続のオーバーヘッドを削減します。",
+        "domain": "web",
+        "keywords": [
+          "Keep-Alive",
+          "持続接続",
+          "HTTP",
+          "ヘッダー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Keep-Alive Header",
+      "Keep-Alive"
+    ]
+  }
+]

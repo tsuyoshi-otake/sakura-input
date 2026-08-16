@@ -1,0 +1,3302 @@
+[
+  {
+    "term": "予算",
+    "reading": "よさん",
+    "senses": [
+      {
+        "definition": "収入や支出の計画として定める金額。",
+        "domain": "corporate-management",
+        "keywords": [
+          "計画",
+          "金額"
+        ]
+      }
+    ],
+    "aliases": [
+      "Budget"
+    ]
+  },
+  {
+    "term": "組織変更",
+    "reading": "そしきへんこう",
+    "senses": [
+      {
+        "definition": "部署や役割の構成を変えること。",
+        "domain": "corporate-management",
+        "keywords": [
+          "部署",
+          "変更"
+        ]
+      }
+    ],
+    "aliases": [
+      "Organizational Change"
+    ]
+  },
+  {
+    "term": "人事",
+    "reading": "じんじ",
+    "senses": [
+      {
+        "definition": "人の配置、評価、採用、育成などに関する活動。",
+        "domain": "corporate-management",
+        "keywords": [
+          "配置",
+          "評価"
+        ]
+      }
+    ],
+    "aliases": [
+      "Human Resources"
+    ]
+  },
+  {
+    "term": "人事考課",
+    "reading": "じんじこうか",
+    "senses": [
+      {
+        "definition": "社員の仕事ぶりや成果を評価すること。",
+        "domain": "corporate-management",
+        "keywords": [
+          "評価",
+          "成果"
+        ]
+      }
+    ],
+    "aliases": [
+      "Performance Review"
+    ]
+  },
+  {
+    "term": "契約",
+    "reading": "けいやく",
+    "senses": [
+      {
+        "definition": "当事者どうしが条件や責任を合意すること。",
+        "domain": "legal",
+        "keywords": [
+          "合意",
+          "条件"
+        ]
+      }
+    ],
+    "aliases": [
+      "Contract"
+    ]
+  },
+  {
+    "term": "解除",
+    "reading": "かいじょ",
+    "senses": [
+      {
+        "definition": "結んだ契約を途中で終わらせること。",
+        "domain": "legal",
+        "keywords": [
+          "契約",
+          "終了"
+        ]
+      }
+    ],
+    "aliases": [
+      "Termination"
+    ]
+  },
+  {
+    "term": "懲戒",
+    "reading": "ちょうかい",
+    "senses": [
+      {
+        "definition": "重大なルール違反に対して会社が行う処分。",
+        "domain": "legal",
+        "keywords": [
+          "処分",
+          "違反"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "諭旨退職",
+    "reading": "ゆしたいしょく",
+    "senses": [
+      {
+        "definition": "会社が退職を求め、本人が応じて退職する形の処分。",
+        "domain": "legal",
+        "keywords": [
+          "退職",
+          "処分"
+        ]
+      }
+    ],
+    "aliases": [
+      "Advised Resignation"
+    ]
+  },
+  {
+    "term": "懲戒解雇",
+    "reading": "ちょうかいかいこ",
+    "senses": [
+      {
+        "definition": "重大な問題行為があったときの最も重い解雇処分。",
+        "domain": "legal",
+        "keywords": [
+          "解雇",
+          "処分"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dismissal for Cause"
+    ]
+  },
+  {
+    "term": "就業規則",
+    "reading": "しゅうぎょうきそく",
+    "senses": [
+      {
+        "definition": "働くうえでの基本ルールをまとめたもの。",
+        "domain": "legal",
+        "keywords": [
+          "ルール",
+          "基本"
+        ]
+      }
+    ],
+    "aliases": [
+      "Employment Regulations"
+    ]
+  },
+  {
+    "term": "規程",
+    "reading": "きてい",
+    "senses": [
+      {
+        "definition": "会社の業務や運用について定めたルール。",
+        "domain": "legal",
+        "keywords": [
+          "ルール",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Company Regulations"
+    ]
+  },
+  {
+    "term": "服務",
+    "reading": "ふくむ",
+    "senses": [
+      {
+        "definition": "社員として守るべき行動や勤務上の規律。",
+        "domain": "legal",
+        "keywords": [
+          "規律",
+          "行動"
+        ]
+      }
+    ],
+    "aliases": [
+      "Service Discipline"
+    ]
+  },
+  {
+    "term": "法務",
+    "reading": "ほうむ",
+    "senses": [
+      {
+        "definition": "契約や法令対応など法律に関する業務。",
+        "domain": "legal",
+        "keywords": [
+          "法律",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": [
+      "Legal Affairs"
+    ]
+  },
+  {
+    "term": "会社法",
+    "reading": "かいしゃほう",
+    "senses": [
+      {
+        "definition": "会社の設立や運営などを定める法律。",
+        "domain": "legal",
+        "keywords": [
+          "法律",
+          "設立"
+        ]
+      }
+    ],
+    "aliases": [
+      "Companies Act"
+    ]
+  },
+  {
+    "term": "法令遵守",
+    "reading": "ほうれいじゅんしゅ",
+    "senses": [
+      {
+        "definition": "法令を守って業務を行うこと。",
+        "domain": "legal",
+        "keywords": [
+          "遵守",
+          "業務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Legal Compliance"
+    ]
+  },
+  {
+    "term": "違反",
+    "reading": "いはん",
+    "senses": [
+      {
+        "definition": "ルールや法令に反すること。",
+        "domain": "legal",
+        "keywords": [
+          "ルール",
+          "反する"
+        ]
+      }
+    ],
+    "aliases": [
+      "Violation"
+    ]
+  },
+  {
+    "term": "相談窓口",
+    "reading": "そうだんまどぐち",
+    "senses": [
+      {
+        "definition": "問題や不安を相談できる受付先。",
+        "domain": "legal",
+        "keywords": [
+          "相談",
+          "受付"
+        ]
+      }
+    ],
+    "aliases": [
+      "Consultation Desk"
+    ]
+  },
+  {
+    "term": "労働条件",
+    "reading": "ろうどうじょうけん",
+    "senses": [
+      {
+        "definition": "給料、勤務時間、休日、仕事内容、勤務地など働く条件。",
+        "domain": "labor",
+        "keywords": [
+          "給料",
+          "勤務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Employment Conditions"
+    ]
+  },
+  {
+    "term": "試用期間",
+    "reading": "しようきかん",
+    "senses": [
+      {
+        "definition": "正式採用前に適性を見るための期間。",
+        "domain": "labor",
+        "keywords": [
+          "採用",
+          "適性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Probationary Period"
+    ]
+  },
+  {
+    "term": "配置転換",
+    "reading": "はいちてんかん",
+    "senses": [
+      {
+        "definition": "同じ会社の中で仕事や所属を変えること。",
+        "domain": "labor",
+        "keywords": [
+          "異動",
+          "所属"
+        ]
+      }
+    ],
+    "aliases": [
+      "Relocation"
+    ]
+  },
+  {
+    "term": "転勤",
+    "reading": "てんきん",
+    "senses": [
+      {
+        "definition": "勤務地を変えて働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "勤務地",
+          "移動"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "出向",
+    "reading": "しゅっこう",
+    "senses": [
+      {
+        "definition": "元の会社に籍を置いたまま別の会社などで働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "在籍",
+          "別会社"
+        ]
+      }
+    ],
+    "aliases": [
+      "Secondment"
+    ]
+  },
+  {
+    "term": "転籍",
+    "reading": "てんせき",
+    "senses": [
+      {
+        "definition": "元の会社との雇用関係を終えて別の会社へ移ること。",
+        "domain": "labor",
+        "keywords": [
+          "雇用",
+          "移籍"
+        ]
+      }
+    ],
+    "aliases": [
+      "Permanent Transfer"
+    ]
+  },
+  {
+    "term": "休職",
+    "reading": "きゅうしょく",
+    "senses": [
+      {
+        "definition": "病気などの理由でしばらく仕事を休むこと。",
+        "domain": "labor",
+        "keywords": [
+          "休み",
+          "病気"
+        ]
+      }
+    ],
+    "aliases": [
+      "Leave of Absence"
+    ]
+  },
+  {
+    "term": "復職",
+    "reading": "ふくしょく",
+    "senses": [
+      {
+        "definition": "休職していた人が職場に戻ること。",
+        "domain": "labor",
+        "keywords": [
+          "復帰",
+          "職場"
+        ]
+      }
+    ],
+    "aliases": [
+      "Return to Work"
+    ]
+  },
+  {
+    "term": "退職",
+    "reading": "たいしょく",
+    "senses": [
+      {
+        "definition": "社員が会社を辞めること。",
+        "domain": "labor",
+        "keywords": [
+          "辞職",
+          "退社"
+        ]
+      }
+    ],
+    "aliases": [
+      "Resignation"
+    ]
+  },
+  {
+    "term": "解雇",
+    "reading": "かいこ",
+    "senses": [
+      {
+        "definition": "会社の判断で雇用を終了させること。",
+        "domain": "labor",
+        "keywords": [
+          "雇用",
+          "終了"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dismissal"
+    ]
+  },
+  {
+    "term": "定年",
+    "reading": "ていねん",
+    "senses": [
+      {
+        "definition": "一定年齢で原則退職となる制度。",
+        "domain": "labor",
+        "keywords": [
+          "年齢",
+          "制度"
+        ]
+      }
+    ],
+    "aliases": [
+      "Mandatory Retirement"
+    ]
+  },
+  {
+    "term": "再雇用",
+    "reading": "さいこよう",
+    "senses": [
+      {
+        "definition": "定年後にあらためて雇用契約を結んで働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "定年後",
+          "雇用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Re-Employment"
+    ]
+  },
+  {
+    "term": "勤続年数",
+    "reading": "きんぞくねんすう",
+    "senses": [
+      {
+        "definition": "その会社で働き続けている年数。",
+        "domain": "labor",
+        "keywords": [
+          "年数",
+          "在籍"
+        ]
+      }
+    ],
+    "aliases": [
+      "Years of Service"
+    ]
+  },
+  {
+    "term": "昇給",
+    "reading": "しょうきゅう",
+    "senses": [
+      {
+        "definition": "給料が上がること。",
+        "domain": "labor",
+        "keywords": [
+          "給料",
+          "上昇"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pay Raise"
+    ]
+  },
+  {
+    "term": "降給",
+    "reading": "こうきゅう",
+    "senses": [
+      {
+        "definition": "給料が下がること。",
+        "domain": "labor",
+        "keywords": [
+          "給料",
+          "減少"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pay Cut"
+    ]
+  },
+  {
+    "term": "昇格",
+    "reading": "しょうかく",
+    "senses": [
+      {
+        "definition": "より上の等級や役職になること。",
+        "domain": "labor",
+        "keywords": [
+          "等級",
+          "昇進"
+        ]
+      }
+    ],
+    "aliases": [
+      "Promotion"
+    ]
+  },
+  {
+    "term": "降格",
+    "reading": "こうかく",
+    "senses": [
+      {
+        "definition": "等級や役職が下がること。",
+        "domain": "labor",
+        "keywords": [
+          "等級",
+          "降下"
+        ]
+      }
+    ],
+    "aliases": [
+      "Demotion"
+    ]
+  },
+  {
+    "term": "賞与",
+    "reading": "しょうよ",
+    "senses": [
+      {
+        "definition": "毎月の給料とは別に支給されるお金。",
+        "domain": "labor",
+        "keywords": [
+          "ボーナス",
+          "支給"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bonus"
+    ]
+  },
+  {
+    "term": "手当",
+    "reading": "てあて",
+    "senses": [
+      {
+        "definition": "特定条件に応じて基本給とは別に支給されるお金。",
+        "domain": "labor",
+        "keywords": [
+          "補助",
+          "支給"
+        ]
+      }
+    ],
+    "aliases": [
+      "Allowance"
+    ]
+  },
+  {
+    "term": "通勤手当",
+    "reading": "つうきんてあて",
+    "senses": [
+      {
+        "definition": "通勤費を補助するために支給されるお金。",
+        "domain": "labor",
+        "keywords": [
+          "通勤",
+          "補助"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "住宅手当",
+    "reading": "じゅうたくてあて",
+    "senses": [
+      {
+        "definition": "住居費を補助するために支給されるお金。",
+        "domain": "labor",
+        "keywords": [
+          "住居",
+          "補助"
+        ]
+      }
+    ],
+    "aliases": [
+      "Housing Allowance"
+    ]
+  },
+  {
+    "term": "固定残業手当",
+    "reading": "こていざんぎょうてあて",
+    "senses": [
+      {
+        "definition": "あらかじめ一定時間分の残業代を含めて支給する手当。",
+        "domain": "labor",
+        "keywords": [
+          "残業",
+          "固定"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fixed Overtime Allowance"
+    ]
+  },
+  {
+    "term": "超過手当",
+    "reading": "ちょうかてあて",
+    "senses": [
+      {
+        "definition": "固定分を超えた残業や深夜勤務などに対する手当。",
+        "domain": "labor",
+        "keywords": [
+          "超過",
+          "残業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Excess Work Allowance"
+    ]
+  },
+  {
+    "term": "年次有給休暇",
+    "reading": "ねんじゆうきゅうきゅうか",
+    "senses": [
+      {
+        "definition": "給料が出る休暇。",
+        "domain": "labor",
+        "keywords": [
+          "有給",
+          "休暇"
+        ]
+      }
+    ],
+    "aliases": [
+      "Annual Paid Leave"
+    ]
+  },
+  {
+    "term": "特別休暇",
+    "reading": "とくべつきゅうか",
+    "senses": [
+      {
+        "definition": "特別な事情があるときに認められる休暇。",
+        "domain": "labor",
+        "keywords": [
+          "特別",
+          "休暇"
+        ]
+      }
+    ],
+    "aliases": [
+      "Special Leave"
+    ]
+  },
+  {
+    "term": "産前産後休暇",
+    "reading": "さんぜんさんごきゅうか",
+    "senses": [
+      {
+        "definition": "出産の前後に取得できる休暇。",
+        "domain": "labor",
+        "keywords": [
+          "出産",
+          "休暇"
+        ]
+      }
+    ],
+    "aliases": [
+      "Maternity Leave"
+    ]
+  },
+  {
+    "term": "育児休業",
+    "reading": "いくじきゅうぎょう",
+    "senses": [
+      {
+        "definition": "子どもを育てるために一定期間休む制度。",
+        "domain": "labor",
+        "keywords": [
+          "育児",
+          "休業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Childcare Leave"
+    ]
+  },
+  {
+    "term": "介護休業",
+    "reading": "かいごきゅうぎょう",
+    "senses": [
+      {
+        "definition": "家族を介護するために一定期間休む制度。",
+        "domain": "labor",
+        "keywords": [
+          "介護",
+          "休業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Nursing Care Leave"
+    ]
+  },
+  {
+    "term": "短時間勤務",
+    "reading": "たんじかんきんむ",
+    "senses": [
+      {
+        "definition": "通常より短い時間で働く制度。",
+        "domain": "labor",
+        "keywords": [
+          "短時間",
+          "勤務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Reduced Working Hours"
+    ]
+  },
+  {
+    "term": "テレワーク",
+    "reading": "てれわーく",
+    "senses": [
+      {
+        "definition": "会社以外の場所でパソコンなどを使って働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "リモート",
+          "在宅"
+        ]
+      }
+    ],
+    "aliases": [
+      "Telework"
+    ]
+  },
+  {
+    "term": "所定労働時間",
+    "reading": "しょていろうどうじかん",
+    "senses": [
+      {
+        "definition": "会社があらかじめ決めている通常の勤務時間。",
+        "domain": "labor",
+        "keywords": [
+          "勤務時間",
+          "通常"
+        ]
+      }
+    ],
+    "aliases": [
+      "Scheduled Working Hours"
+    ]
+  },
+  {
+    "term": "所定外労働",
+    "reading": "しょていがいろうどう",
+    "senses": [
+      {
+        "definition": "決められた勤務時間を超えて働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "残業",
+          "超過"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overtime Work"
+    ]
+  },
+  {
+    "term": "休日出勤",
+    "reading": "きゅうじつしゅっきん",
+    "senses": [
+      {
+        "definition": "会社の休日に働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "休日",
+          "出勤"
+        ]
+      }
+    ],
+    "aliases": [
+      "Holiday Work"
+    ]
+  },
+  {
+    "term": "深夜業",
+    "reading": "しんやぎょう",
+    "senses": [
+      {
+        "definition": "夜10時から朝5時までの時間帯に働くこと。",
+        "domain": "labor",
+        "keywords": [
+          "深夜",
+          "勤務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Late-Night Work"
+    ]
+  },
+  {
+    "term": "代休",
+    "reading": "だいきゅう",
+    "senses": [
+      {
+        "definition": "休日勤務の代わりに別の日に休むこと。",
+        "domain": "labor",
+        "keywords": [
+          "休み",
+          "代替"
+        ]
+      }
+    ],
+    "aliases": [
+      "Compensatory Day Off"
+    ]
+  },
+  {
+    "term": "振替休日",
+    "reading": "ふりかえきゅうじつ",
+    "senses": [
+      {
+        "definition": "あらかじめ勤務日と休日を入れ替えること。",
+        "domain": "labor",
+        "keywords": [
+          "入れ替え",
+          "休日"
+        ]
+      }
+    ],
+    "aliases": [
+      "Substituted Holiday"
+    ]
+  },
+  {
+    "term": "勤務地",
+    "reading": "きんむち",
+    "senses": [
+      {
+        "definition": "働く場所。",
+        "domain": "labor",
+        "keywords": [
+          "場所",
+          "勤務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Work Location"
+    ]
+  },
+  {
+    "term": "給料",
+    "reading": "きゅうりょう",
+    "senses": [
+      {
+        "definition": "労働の対価として支払われるお金。",
+        "domain": "labor",
+        "keywords": [
+          "対価",
+          "支払い"
+        ]
+      }
+    ],
+    "aliases": [
+      "Salary"
+    ]
+  },
+  {
+    "term": "個人データ",
+    "reading": "こじんでーた",
+    "senses": [
+      {
+        "definition": "検索しやすい形で整理された個人情報。",
+        "domain": "information-management",
+        "keywords": [
+          "検索",
+          "整理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Personal Data"
+    ]
+  },
+  {
+    "term": "保有個人データ",
+    "reading": "ほゆうこじんでーた",
+    "senses": [
+      {
+        "definition": "会社が開示や訂正などに対応できる形で保有している個人データ。",
+        "domain": "information-management",
+        "keywords": [
+          "開示",
+          "保有"
+        ]
+      }
+    ],
+    "aliases": [
+      "Retained Personal Data"
+    ]
+  },
+  {
+    "term": "要配慮個人情報",
+    "reading": "ようはいりょこじんじょうほう",
+    "senses": [
+      {
+        "definition": "特に慎重に扱うべき個人情報。",
+        "domain": "information-management",
+        "keywords": [
+          "慎重",
+          "配慮"
+        ]
+      }
+    ],
+    "aliases": [
+      "Sensitive Personal Information"
+    ]
+  },
+  {
+    "term": "特定個人情報",
+    "reading": "とくていこじんじょうほう",
+    "senses": [
+      {
+        "definition": "個人番号を含む個人情報。",
+        "domain": "information-management",
+        "keywords": [
+          "個人番号",
+          "マイナンバー"
+        ]
+      }
+    ],
+    "aliases": [
+      "Specific Personal Information"
+    ]
+  },
+  {
+    "term": "個人番号",
+    "reading": "こじんばんごう",
+    "senses": [
+      {
+        "definition": "税や社会保険の手続きなどに使う個人ごとの番号。",
+        "domain": "information-management",
+        "keywords": [
+          "税",
+          "社会保険"
+        ]
+      }
+    ],
+    "aliases": [
+      "Individual Number"
+    ]
+  },
+  {
+    "term": "利用目的",
+    "reading": "りようもくてき",
+    "senses": [
+      {
+        "definition": "集めた情報を何のために使うかという目的。",
+        "domain": "information-management",
+        "keywords": [
+          "目的",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Purpose of Use"
+    ]
+  },
+  {
+    "term": "目的外利用",
+    "reading": "もくてきがいりよう",
+    "senses": [
+      {
+        "definition": "定めた利用目的の範囲を超えて情報を使うこと。",
+        "domain": "information-management",
+        "keywords": [
+          "範囲外",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Use Beyond Purpose"
+    ]
+  },
+  {
+    "term": "第三者提供",
+    "reading": "だいさんしゃていきょう",
+    "senses": [
+      {
+        "definition": "本人や会社以外の相手に個人情報などを渡すこと。",
+        "domain": "information-management",
+        "keywords": [
+          "提供",
+          "外部"
+        ]
+      }
+    ],
+    "aliases": [
+      "Third-Party Provision"
+    ]
+  },
+  {
+    "term": "開示",
+    "reading": "かいじ",
+    "senses": [
+      {
+        "definition": "本人が自分の情報の提示を求めること、またはそれに応じて見せること。",
+        "domain": "information-management",
+        "keywords": [
+          "情報",
+          "提示"
+        ]
+      }
+    ],
+    "aliases": [
+      "Disclosure"
+    ]
+  },
+  {
+    "term": "訂正",
+    "reading": "ていせい",
+    "senses": [
+      {
+        "definition": "間違っている情報を直すこと。",
+        "domain": "information-management",
+        "keywords": [
+          "修正",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Correction"
+    ]
+  },
+  {
+    "term": "利用停止",
+    "reading": "りようていし",
+    "senses": [
+      {
+        "definition": "本人の求めなどに応じて情報の利用をやめること。",
+        "domain": "information-management",
+        "keywords": [
+          "停止",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Suspension of Use"
+    ]
+  },
+  {
+    "term": "削除",
+    "reading": "さくじょ",
+    "senses": [
+      {
+        "definition": "情報を消すこと。",
+        "domain": "information-management",
+        "keywords": [
+          "消去",
+          "情報"
+        ]
+      }
+    ],
+    "aliases": [
+      "Deletion"
+    ]
+  },
+  {
+    "term": "廃棄",
+    "reading": "はいき",
+    "senses": [
+      {
+        "definition": "書類や記録媒体を処分して使えないようにすること。",
+        "domain": "information-management",
+        "keywords": [
+          "処分",
+          "媒体"
+        ]
+      }
+    ],
+    "aliases": [
+      "Disposal"
+    ]
+  },
+  {
+    "term": "機密保持",
+    "reading": "きみつほじ",
+    "senses": [
+      {
+        "definition": "外部に漏らしてはいけない情報を守ること。",
+        "domain": "information-management",
+        "keywords": [
+          "機密",
+          "保護"
+        ]
+      }
+    ],
+    "aliases": [
+      "Confidentiality (Information Management)"
+    ]
+  },
+  {
+    "term": "入退室管理",
+    "reading": "にゅうたいしつかんり",
+    "senses": [
+      {
+        "definition": "誰がいつ部屋や設備に出入りしたかを管理すること。",
+        "domain": "information-management",
+        "keywords": [
+          "出入り",
+          "管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "Entry and Exit Management"
+    ]
+  },
+  {
+    "term": "パスワード管理",
+    "reading": "ぱすわーどかんり",
+    "senses": [
+      {
+        "definition": "パスワードを適切に設定・保管・更新すること。",
+        "domain": "information-management",
+        "keywords": [
+          "パスワード",
+          "更新"
+        ]
+      }
+    ],
+    "aliases": [
+      "Password Management"
+    ]
+  },
+  {
+    "term": "見積書",
+    "reading": "みつもりしょ",
+    "senses": [
+      {
+        "definition": "商品やサービスの内容、金額、条件を事前に示す書類。",
+        "domain": "trading",
+        "keywords": [
+          "金額",
+          "書類"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quotation"
+    ]
+  },
+  {
+    "term": "受注",
+    "reading": "じゅちゅう",
+    "senses": [
+      {
+        "definition": "顧客から正式に注文を受けること。",
+        "domain": "trading",
+        "keywords": [
+          "注文",
+          "顧客"
+        ]
+      }
+    ],
+    "aliases": [
+      "Receiving an Order"
+    ]
+  },
+  {
+    "term": "発注",
+    "reading": "はっちゅう",
+    "senses": [
+      {
+        "definition": "外部の相手に仕事や物品を注文すること。",
+        "domain": "trading",
+        "keywords": [
+          "注文",
+          "外部"
+        ]
+      }
+    ],
+    "aliases": [
+      "Placing an Order"
+    ]
+  },
+  {
+    "term": "納品",
+    "reading": "のうひん",
+    "senses": [
+      {
+        "definition": "商品や成果物を相手に渡すこと。",
+        "domain": "trading",
+        "keywords": [
+          "成果物",
+          "渡す"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "売掛金",
+    "reading": "うりかけきん",
+    "senses": [
+      {
+        "definition": "先に提供した商品やサービスの代金を後で受け取る権利。",
+        "domain": "trading",
+        "keywords": [
+          "代金",
+          "権利"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accounts Receivable (Urikakekin)"
+    ]
+  },
+  {
+    "term": "買掛金",
+    "reading": "かいかけきん",
+    "senses": [
+      {
+        "definition": "先に受け取った商品やサービスの代金を後で支払う義務。",
+        "domain": "trading",
+        "keywords": [
+          "代金",
+          "義務"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accounts Payable"
+    ]
+  },
+  {
+    "term": "債権",
+    "reading": "さいけん",
+    "senses": [
+      {
+        "definition": "相手にお金を払ってもらう権利。",
+        "domain": "trading",
+        "keywords": [
+          "権利",
+          "金銭"
+        ]
+      }
+    ],
+    "aliases": [
+      "Receivable"
+    ]
+  },
+  {
+    "term": "債務",
+    "reading": "さいむ",
+    "senses": [
+      {
+        "definition": "相手にお金を払う義務。",
+        "domain": "trading",
+        "keywords": [
+          "義務",
+          "金銭"
+        ]
+      }
+    ],
+    "aliases": [
+      "Payable"
+    ]
+  },
+  {
+    "term": "与信",
+    "reading": "よしん",
+    "senses": [
+      {
+        "definition": "相手にあと払いを認めること、またはその信用力を見ること。",
+        "domain": "trading",
+        "keywords": [
+          "信用",
+          "あと払い"
+        ]
+      }
+    ],
+    "aliases": [
+      "Credit Assessment"
+    ]
+  },
+  {
+    "term": "与信限度額",
+    "reading": "よしんげんどがく",
+    "senses": [
+      {
+        "definition": "あと払いで取引してよい上限額。",
+        "domain": "trading",
+        "keywords": [
+          "上限",
+          "取引"
+        ]
+      }
+    ],
+    "aliases": [
+      "Credit Limit"
+    ]
+  },
+  {
+    "term": "信用調査",
+    "reading": "しんようちょうさ",
+    "senses": [
+      {
+        "definition": "取引先の支払い能力や経営状態を調べること。",
+        "domain": "trading",
+        "keywords": [
+          "支払い",
+          "調査"
+        ]
+      }
+    ],
+    "aliases": [
+      "Credit Investigation"
+    ]
+  },
+  {
+    "term": "値引き",
+    "reading": "ねびき",
+    "senses": [
+      {
+        "definition": "本来の価格より安くすること。",
+        "domain": "trading",
+        "keywords": [
+          "価格",
+          "割引"
+        ]
+      }
+    ],
+    "aliases": [
+      "Discount"
+    ]
+  },
+  {
+    "term": "返品",
+    "reading": "へんぴん",
+    "senses": [
+      {
+        "definition": "売った商品などを相手から返してもらうこと。",
+        "domain": "trading",
+        "keywords": [
+          "商品",
+          "返却"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "苦情",
+    "reading": "くじょう",
+    "senses": [
+      {
+        "definition": "商品やサービスに対して相手から寄せられる不満や指摘。",
+        "domain": "trading",
+        "keywords": [
+          "不満",
+          "指摘"
+        ]
+      }
+    ],
+    "aliases": [
+      "Complaint"
+    ]
+  },
+  {
+    "term": "クレーム",
+    "reading": "くれーむ",
+    "senses": [
+      {
+        "definition": "会社として正式な対応が必要な苦情。",
+        "domain": "trading",
+        "keywords": [
+          "対応",
+          "苦情"
+        ]
+      }
+    ],
+    "aliases": [
+      "Formal Complaint"
+    ]
+  },
+  {
+    "term": "取引先",
+    "reading": "とりひきさき",
+    "senses": [
+      {
+        "definition": "商品やサービスの売買や契約を行う相手。",
+        "domain": "trading",
+        "keywords": [
+          "相手",
+          "契約"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "会計年度",
+    "reading": "かいけいねんど",
+    "senses": [
+      {
+        "definition": "会社がお金や業績をまとめる1年間の区切り。",
+        "domain": "accounting",
+        "keywords": [
+          "年度",
+          "区切り"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fiscal Year"
+    ]
+  },
+  {
+    "term": "決算",
+    "reading": "けっさん",
+    "senses": [
+      {
+        "definition": "一定期間の売上、費用、利益、財産の状況をまとめること。",
+        "domain": "accounting",
+        "keywords": [
+          "売上",
+          "利益"
+        ]
+      }
+    ],
+    "aliases": [
+      "Financial Closing"
+    ]
+  },
+  {
+    "term": "月次決算",
+    "reading": "げつじけっさん",
+    "senses": [
+      {
+        "definition": "1か月ごとに業績や財務状況をまとめること。",
+        "domain": "accounting",
+        "keywords": [
+          "月次",
+          "業績"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monthly Closing"
+    ]
+  },
+  {
+    "term": "四半期決算",
+    "reading": "しはんきけっさん",
+    "senses": [
+      {
+        "definition": "3か月ごとに行う決算。",
+        "domain": "accounting",
+        "keywords": [
+          "四半期",
+          "決算"
+        ]
+      }
+    ],
+    "aliases": [
+      "Quarterly Closing"
+    ]
+  },
+  {
+    "term": "期末決算",
+    "reading": "きまつけっさん",
+    "senses": [
+      {
+        "definition": "1年の終わりに行う正式な決算。",
+        "domain": "accounting",
+        "keywords": [
+          "期末",
+          "正式"
+        ]
+      }
+    ],
+    "aliases": [
+      "Year-End Closing"
+    ]
+  },
+  {
+    "term": "財務諸表",
+    "reading": "ざいむしょひょう",
+    "senses": [
+      {
+        "definition": "会社のお金の状態や経営成績を示す書類の総称。",
+        "domain": "accounting",
+        "keywords": [
+          "書類",
+          "経営"
+        ]
+      }
+    ],
+    "aliases": [
+      "Financial Statements"
+    ]
+  },
+  {
+    "term": "貸借対照表",
+    "reading": "たいしゃくたいしょうひょう",
+    "senses": [
+      {
+        "definition": "ある時点の資産、負債、純資産を示す表。",
+        "domain": "accounting",
+        "keywords": [
+          "資産",
+          "負債"
+        ]
+      }
+    ],
+    "aliases": [
+      "Balance Sheet"
+    ]
+  },
+  {
+    "term": "損益計算書",
+    "reading": "そんえきけいさんしょ",
+    "senses": [
+      {
+        "definition": "一定期間の売上、費用、利益や損失を示す表。",
+        "domain": "accounting",
+        "keywords": [
+          "売上",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Income Statement"
+    ]
+  },
+  {
+    "term": "キャッシュ・フロー",
+    "reading": "きゃっしゅふろー",
+    "senses": [
+      {
+        "definition": "実際のお金の出入りの流れ。",
+        "domain": "accounting",
+        "keywords": [
+          "資金",
+          "流れ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Cash Flow"
+    ]
+  },
+  {
+    "term": "減価償却",
+    "reading": "げんかしょうきゃく",
+    "senses": [
+      {
+        "definition": "長く使う資産の購入費用を複数年に分けて費用化すること。",
+        "domain": "accounting",
+        "keywords": [
+          "資産",
+          "費用化"
+        ]
+      }
+    ],
+    "aliases": [
+      "Depreciation"
+    ]
+  },
+  {
+    "term": "固定資産",
+    "reading": "こていしさん",
+    "senses": [
+      {
+        "definition": "長期間使う前提で持つ資産。",
+        "domain": "accounting",
+        "keywords": [
+          "長期",
+          "資産"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fixed Asset"
+    ]
+  },
+  {
+    "term": "無形固定資産",
+    "reading": "むけいこていしさん",
+    "senses": [
+      {
+        "definition": "形はないが価値があり長く使う資産。",
+        "domain": "accounting",
+        "keywords": [
+          "無形",
+          "価値"
+        ]
+      }
+    ],
+    "aliases": [
+      "Intangible Fixed Asset"
+    ]
+  },
+  {
+    "term": "引当金",
+    "reading": "ひきあてきん",
+    "senses": [
+      {
+        "definition": "将来発生するかもしれない費用や損失に備えて計上するもの。",
+        "domain": "accounting",
+        "keywords": [
+          "備え",
+          "計上"
+        ]
+      }
+    ],
+    "aliases": [
+      "Provision"
+    ]
+  },
+  {
+    "term": "貸倒引当金",
+    "reading": "かしだおれひきあてきん",
+    "senses": [
+      {
+        "definition": "売掛金を回収できない可能性に備えて計上する引当金。",
+        "domain": "accounting",
+        "keywords": [
+          "回収",
+          "備え"
+        ]
+      }
+    ],
+    "aliases": [
+      "Bad Debt Provision"
+    ]
+  },
+  {
+    "term": "受注損失引当金",
+    "reading": "じゅちゅうそんしつひきあてきん",
+    "senses": [
+      {
+        "definition": "受注案件で将来赤字が出そうなときに計上する引当金。",
+        "domain": "accounting",
+        "keywords": [
+          "赤字",
+          "備え"
+        ]
+      }
+    ],
+    "aliases": [
+      "Order Loss Provision"
+    ]
+  },
+  {
+    "term": "減損",
+    "reading": "げんそん",
+    "senses": [
+      {
+        "definition": "資産価値が大きく下がったときに帳簿価額を下げること。",
+        "domain": "accounting",
+        "keywords": [
+          "価値",
+          "下落"
+        ]
+      }
+    ],
+    "aliases": [
+      "Impairment"
+    ]
+  },
+  {
+    "term": "資本的支出",
+    "reading": "しほんてきししゅつ",
+    "senses": [
+      {
+        "definition": "資産の価値を高めたり長持ちさせたりするための支出。",
+        "domain": "accounting",
+        "keywords": [
+          "投資",
+          "支出"
+        ]
+      }
+    ],
+    "aliases": [
+      "Capital Expenditure"
+    ]
+  },
+  {
+    "term": "修繕費",
+    "reading": "しゅうぜんひ",
+    "senses": [
+      {
+        "definition": "壊れたものを元の状態に戻すための費用。",
+        "domain": "accounting",
+        "keywords": [
+          "修理",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Repair Expense"
+    ]
+  },
+  {
+    "term": "税務申告",
+    "reading": "ぜいむしんこく",
+    "senses": [
+      {
+        "definition": "税金の計算結果を税務署などに届け出ること。",
+        "domain": "accounting",
+        "keywords": [
+          "税金",
+          "届出"
+        ]
+      }
+    ],
+    "aliases": [
+      "Tax Filing"
+    ]
+  },
+  {
+    "term": "売上",
+    "reading": "うりあげ",
+    "senses": [
+      {
+        "definition": "製品やサービス提供によって得られる収益。",
+        "domain": "accounting",
+        "keywords": [
+          "収益",
+          "提供"
+        ]
+      }
+    ],
+    "aliases": [
+      "Revenue"
+    ]
+  },
+  {
+    "term": "粗利率",
+    "reading": "あらりりつ",
+    "senses": [
+      {
+        "definition": "売上に対する粗利益の割合。",
+        "domain": "accounting",
+        "keywords": [
+          "割合",
+          "利益"
+        ]
+      }
+    ],
+    "aliases": [
+      "Gross Profit Margin"
+    ]
+  },
+  {
+    "term": "営業利益",
+    "reading": "えいぎょうりえき",
+    "senses": [
+      {
+        "definition": "本業によって得られる利益。",
+        "domain": "accounting",
+        "keywords": [
+          "本業",
+          "利益"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operating Profit"
+    ]
+  },
+  {
+    "term": "営業利益率",
+    "reading": "えいぎょうりえきりつ",
+    "senses": [
+      {
+        "definition": "売上に対する営業利益の割合。",
+        "domain": "accounting",
+        "keywords": [
+          "割合",
+          "利益"
+        ]
+      }
+    ],
+    "aliases": [
+      "Operating Profit Margin"
+    ]
+  },
+  {
+    "term": "プロジェクト粗利率",
+    "reading": "ぷろじぇくとあらりりつ",
+    "senses": [
+      {
+        "definition": "個別案件の売上に対する粗利益の割合。",
+        "domain": "accounting",
+        "keywords": [
+          "案件",
+          "割合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Project Gross Margin"
+    ]
+  },
+  {
+    "term": "CAGR",
+    "reading": "しーえーじーあーる",
+    "senses": [
+      {
+        "definition": "複数年にわたる年平均成長率。",
+        "domain": "accounting",
+        "keywords": [
+          "成長率",
+          "年平均"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ROE",
+    "reading": "あーるおーいー",
+    "senses": [
+      {
+        "definition": "自己資本に対してどれだけ利益を生んだかを見る指標。",
+        "domain": "accounting",
+        "keywords": [
+          "自己資本",
+          "指標"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PBR",
+    "reading": "ぴーびーあーる",
+    "senses": [
+      {
+        "definition": "純資産に対する市場評価を示す指標。",
+        "domain": "accounting",
+        "keywords": [
+          "純資産",
+          "市場"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ROIC",
+    "reading": "ろいっく",
+    "senses": [
+      {
+        "definition": "投下資本に対する収益性を示す指標。",
+        "domain": "accounting",
+        "keywords": [
+          "投下資本",
+          "収益"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "WACC",
+    "reading": "わっく",
+    "senses": [
+      {
+        "definition": "資金調達全体にかかる平均コスト。",
+        "domain": "accounting",
+        "keywords": [
+          "資金",
+          "コスト"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "配当性向",
+    "reading": "はいとうせいこう",
+    "senses": [
+      {
+        "definition": "利益のうちどれだけを配当に回したかを示す割合。",
+        "domain": "accounting",
+        "keywords": [
+          "配当",
+          "割合"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dividend Payout Ratio"
+    ]
+  },
+  {
+    "term": "資本政策",
+    "reading": "しほんせいさく",
+    "senses": [
+      {
+        "definition": "成長や株主還元を見据えて資本構成を設計すること。",
+        "domain": "accounting",
+        "keywords": [
+          "資本",
+          "設計"
+        ]
+      }
+    ],
+    "aliases": [
+      "Capital Policy"
+    ]
+  },
+  {
+    "term": "会計監査",
+    "reading": "かいけいかんさ",
+    "senses": [
+      {
+        "definition": "会計処理や財務諸表が正しく作られているか確認する監査。",
+        "domain": "audit",
+        "keywords": [
+          "会計",
+          "確認"
+        ]
+      }
+    ],
+    "aliases": [
+      "Financial Audit"
+    ]
+  },
+  {
+    "term": "監査報告書",
+    "reading": "かんさほうこくしょ",
+    "senses": [
+      {
+        "definition": "監査結果や改善点をまとめた報告書。",
+        "domain": "audit",
+        "keywords": [
+          "結果",
+          "報告"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "全社的な内部統制",
+    "reading": "ぜんしゃてきないぶとうせい",
+    "senses": [
+      {
+        "definition": "会社全体に共通する内部統制。",
+        "domain": "audit",
+        "keywords": [
+          "全社",
+          "共通"
+        ]
+      }
+    ],
+    "aliases": [
+      "Company-Wide Internal Controls"
+    ]
+  },
+  {
+    "term": "評価",
+    "reading": "ひょうか",
+    "senses": [
+      {
+        "definition": "仕組みや運用が機能しているか確認すること。",
+        "domain": "audit",
+        "keywords": [
+          "確認",
+          "機能"
+        ]
+      }
+    ],
+    "aliases": [
+      "Evaluation (Audit)"
+    ]
+  },
+  {
+    "term": "是正",
+    "reading": "ぜせい",
+    "senses": [
+      {
+        "definition": "見つかった問題点を修正すること。",
+        "domain": "audit",
+        "keywords": [
+          "修正",
+          "問題"
+        ]
+      }
+    ],
+    "aliases": [
+      "Remediation"
+    ]
+  },
+  {
+    "term": "フォローアップ",
+    "reading": "ふぉろーあっぷ",
+    "senses": [
+      {
+        "definition": "改善後に実際うまく機能しているか再確認すること。",
+        "domain": "audit",
+        "keywords": [
+          "再確認",
+          "改善"
+        ]
+      }
+    ],
+    "aliases": [
+      "Follow-Up"
+    ]
+  },
+  {
+    "term": "J-SOX",
+    "reading": "じぇいそっくす",
+    "senses": [
+      {
+        "definition": "財務報告に関する内部統制の整備・運用・評価の枠組み。",
+        "domain": "audit",
+        "keywords": [
+          "財務",
+          "枠組み"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "コーポレートガバナンス",
+    "reading": "こーぽれーとがばなんす",
+    "senses": [
+      {
+        "definition": "企業が健全かつ透明性高く経営されるための統治の仕組み。",
+        "domain": "audit",
+        "keywords": [
+          "統治",
+          "透明性"
+        ]
+      }
+    ],
+    "aliases": [
+      "Corporate Governance"
+    ]
+  },
+  {
+    "term": "IR",
+    "reading": "あいあーる",
+    "senses": [
+      {
+        "definition": "株主や投資家に経営状況を説明・発信する活動。",
+        "domain": "management",
+        "keywords": [
+          "株主",
+          "投資家"
+        ]
+      }
+    ],
+    "aliases": [
+      "Investor Relations"
+    ]
+  },
+  {
+    "term": "適時開示",
+    "reading": "てきじかいじ",
+    "senses": [
+      {
+        "definition": "投資判断に重要な情報を適切な時点で公開すること。",
+        "domain": "management",
+        "keywords": [
+          "公開",
+          "投資"
+        ]
+      }
+    ],
+    "aliases": [
+      "Timely Disclosure"
+    ]
+  },
+  {
+    "term": "人的資本経営",
+    "reading": "じんてきしほんけいえい",
+    "senses": [
+      {
+        "definition": "人材を価値創出の源泉として経営戦略に結びつける考え方。",
+        "domain": "management",
+        "keywords": [
+          "人材",
+          "戦略"
+        ]
+      }
+    ],
+    "aliases": [
+      "Human Capital Management"
+    ]
+  },
+  {
+    "term": "タレントマネジメント",
+    "reading": "たれんとまねじめんと",
+    "senses": [
+      {
+        "definition": "社員の経験やスキルを可視化し、配置や育成に活かすこと。",
+        "domain": "management",
+        "keywords": [
+          "スキル",
+          "育成"
+        ]
+      }
+    ],
+    "aliases": [
+      "Talent Management"
+    ]
+  },
+  {
+    "term": "エンゲージメント",
+    "reading": "えんげーじめんと",
+    "senses": [
+      {
+        "definition": "社員の会社や仕事への愛着、共感、貢献意欲。",
+        "domain": "management",
+        "keywords": [
+          "愛着",
+          "貢献"
+        ]
+      }
+    ],
+    "aliases": [
+      "Employee Engagement"
+    ]
+  },
+  {
+    "term": "DE&I",
+    "reading": "でぃーいーあんどあい",
+    "senses": [
+      {
+        "definition": "多様な人材が公平に尊重され活躍できる状態を目指す考え方。",
+        "domain": "management",
+        "keywords": [
+          "多様性",
+          "公平"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ESG",
+    "reading": "いーえすじー",
+    "senses": [
+      {
+        "definition": "環境、社会、ガバナンスの観点で企業価値を見る考え方。",
+        "domain": "management",
+        "keywords": [
+          "環境",
+          "社会"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "SDGs",
+    "reading": "えすでぃーじーず",
+    "senses": [
+      {
+        "definition": "持続可能な社会の実現に向けた国際目標。",
+        "domain": "management",
+        "keywords": [
+          "持続可能",
+          "目標"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "上場準備",
+    "reading": "じょうじょうじゅんび",
+    "senses": [
+      {
+        "definition": "株式上場に向けて開示や統制、規程整備などを進めること。",
+        "domain": "management",
+        "keywords": [
+          "上場",
+          "整備"
+        ]
+      }
+    ],
+    "aliases": [
+      "IPO Preparation"
+    ]
+  },
+  {
+    "term": "校閲",
+    "reading": "こうえつ",
+    "senses": [
+      {
+        "definition": "文章の誤りや不自然さを確認し、整えること。",
+        "domain": "writing",
+        "keywords": [
+          "確認",
+          "整え"
+        ]
+      }
+    ],
+    "aliases": [
+      "Proofreading"
+    ]
+  },
+  {
+    "term": "自然な表現",
+    "reading": "しぜんなひょうげん",
+    "senses": [
+      {
+        "definition": "日本語として無理がなく読みやすい言い方。",
+        "domain": "writing",
+        "keywords": [
+          "日本語",
+          "読みやすさ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Natural Expression"
+    ]
+  },
+  {
+    "term": "伝わりやすい表現",
+    "reading": "つたわりやすいひょうげん",
+    "senses": [
+      {
+        "definition": "意味が明確で、誤解されにくい表現。",
+        "domain": "writing",
+        "keywords": [
+          "明確",
+          "誤解"
+        ]
+      }
+    ],
+    "aliases": [
+      "Clear Expression"
+    ]
+  },
+  {
+    "term": "文言",
+    "reading": "もんごん",
+    "senses": [
+      {
+        "definition": "文書や案内で使う言い回し。",
+        "domain": "writing",
+        "keywords": [
+          "言い回し",
+          "文書"
+        ]
+      }
+    ],
+    "aliases": [
+      "Wording"
+    ]
+  },
+  {
+    "term": "適切",
+    "reading": "てきせつ",
+    "senses": [
+      {
+        "definition": "文脈や目的に合っていること。",
+        "domain": "writing",
+        "keywords": [
+          "文脈",
+          "目的"
+        ]
+      }
+    ],
+    "aliases": [
+      "Appropriate"
+    ]
+  },
+  {
+    "term": "誤記",
+    "reading": "ごき",
+    "senses": [
+      {
+        "definition": "書き間違いや不適切な表記。",
+        "domain": "writing",
+        "keywords": [
+          "間違い",
+          "表記"
+        ]
+      }
+    ],
+    "aliases": [
+      "Typographical Error"
+    ]
+  },
+  {
+    "term": "定義",
+    "reading": "ていぎ",
+    "senses": [
+      {
+        "definition": "用語や概念の意味を明確に示したもの。",
+        "domain": "writing",
+        "keywords": [
+          "意味",
+          "明確"
+        ]
+      }
+    ],
+    "aliases": [
+      "Definition"
+    ]
+  },
+  {
+    "term": "クレジット",
+    "reading": "くれじっと",
+    "senses": [
+      {
+        "definition": "サービス利用量を管理するための単位。",
+        "domain": "billing",
+        "keywords": [
+          "利用量",
+          "単位"
+        ]
+      }
+    ],
+    "aliases": [
+      "Credit (Billing)"
+    ]
+  },
+  {
+    "term": "付与",
+    "reading": "ふよ",
+    "senses": [
+      {
+        "definition": "一定量を利用者へ与えること。",
+        "domain": "billing",
+        "keywords": [
+          "利用者",
+          "与える"
+        ]
+      }
+    ],
+    "aliases": [
+      "Grant"
+    ]
+  },
+  {
+    "term": "毎月",
+    "reading": "まいつき",
+    "senses": [
+      {
+        "definition": "月ごとに繰り返されること。",
+        "domain": "billing",
+        "keywords": [
+          "月次",
+          "繰り返し"
+        ]
+      }
+    ],
+    "aliases": [
+      "Monthly"
+    ]
+  },
+  {
+    "term": "利用",
+    "reading": "りよう",
+    "senses": [
+      {
+        "definition": "サービスや機能を使うこと。",
+        "domain": "billing",
+        "keywords": [
+          "サービス",
+          "使用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Usage"
+    ]
+  },
+  {
+    "term": "利用上限",
+    "reading": "りようじょうげん",
+    "senses": [
+      {
+        "definition": "基本枠として使える最大量。",
+        "domain": "billing",
+        "keywords": [
+          "上限",
+          "基本枠"
+        ]
+      }
+    ],
+    "aliases": [
+      "Usage Limit"
+    ]
+  },
+  {
+    "term": "超過",
+    "reading": "ちょうか",
+    "senses": [
+      {
+        "definition": "定められた上限を超えること。",
+        "domain": "billing",
+        "keywords": [
+          "上限",
+          "超える"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overage"
+    ]
+  },
+  {
+    "term": "従量課金",
+    "reading": "じゅうりょうかきん",
+    "senses": [
+      {
+        "definition": "使った分だけ料金が発生する方式。",
+        "domain": "billing",
+        "keywords": [
+          "料金",
+          "使用量"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pay-Per-Use Billing"
+    ]
+  },
+  {
+    "term": "消化ペース",
+    "reading": "しょうかぺーす",
+    "senses": [
+      {
+        "definition": "利用枠や予算がどの速さで使われているか。",
+        "domain": "billing",
+        "keywords": [
+          "速度",
+          "利用枠"
+        ]
+      }
+    ],
+    "aliases": [
+      "Consumption Pace"
+    ]
+  },
+  {
+    "term": "お知らせ",
+    "reading": "おしらせ",
+    "senses": [
+      {
+        "definition": "状況や変化を相手に伝えること。",
+        "domain": "billing",
+        "keywords": [
+          "通知",
+          "伝達"
+        ]
+      }
+    ],
+    "aliases": [
+      "Notification"
+    ]
+  },
+  {
+    "term": "上位プラン",
+    "reading": "じょういぷらん",
+    "senses": [
+      {
+        "definition": "現在より多くの機能や利用枠を持つ料金プラン。",
+        "domain": "billing",
+        "keywords": [
+          "プラン",
+          "アップグレード"
+        ]
+      }
+    ],
+    "aliases": [
+      "Higher Plan"
+    ]
+  },
+  {
+    "term": "切り替え",
+    "reading": "きりかえ",
+    "senses": [
+      {
+        "definition": "別の方式やプランへ変更すること。",
+        "domain": "billing",
+        "keywords": [
+          "変更",
+          "プラン"
+        ]
+      }
+    ],
+    "aliases": [
+      "Switching"
+    ]
+  },
+  {
+    "term": "検討",
+    "reading": "けんとう",
+    "senses": [
+      {
+        "definition": "状況を踏まえて適切かどうか考えること。",
+        "domain": "billing",
+        "keywords": [
+          "考慮",
+          "判断"
+        ]
+      }
+    ],
+    "aliases": [
+      "Consideration"
+    ]
+  },
+  {
+    "term": "料金体系",
+    "reading": "りょうきんたいけい",
+    "senses": [
+      {
+        "definition": "料金が決まる仕組み全体。",
+        "domain": "billing",
+        "keywords": [
+          "料金",
+          "仕組み"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pricing Structure"
+    ]
+  },
+  {
+    "term": "海外子会社",
+    "reading": "かいがいこがいしゃ",
+    "senses": [
+      {
+        "definition": "親会社が海外で経営している会社。",
+        "domain": "international-business",
+        "keywords": [
+          "親会社",
+          "海外"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Subsidiary"
+    ]
+  },
+  {
+    "term": "現地法人",
+    "reading": "げんちほうじん",
+    "senses": [
+      {
+        "definition": "現地の法律にしたがって設立された会社。",
+        "domain": "international-business",
+        "keywords": [
+          "設立",
+          "現地"
+        ]
+      }
+    ],
+    "aliases": [
+      "Local Corporation"
+    ]
+  },
+  {
+    "term": "海外支店",
+    "reading": "かいがいしてん",
+    "senses": [
+      {
+        "definition": "本社の一部として海外に置かれる拠点。",
+        "domain": "international-business",
+        "keywords": [
+          "本社",
+          "拠点"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Branch"
+    ]
+  },
+  {
+    "term": "駐在員事務所",
+    "reading": "ちゅうざいいんじむしょ",
+    "senses": [
+      {
+        "definition": "海外で市場調査や情報収集を行うための拠点。",
+        "domain": "international-business",
+        "keywords": [
+          "市場調査",
+          "情報収集"
+        ]
+      }
+    ],
+    "aliases": [
+      "Representative Office"
+    ]
+  },
+  {
+    "term": "海外赴任",
+    "reading": "かいがいふにん",
+    "senses": [
+      {
+        "definition": "日本で採用された社員が海外拠点で働くこと。",
+        "domain": "international-business",
+        "keywords": [
+          "赴任",
+          "海外拠点"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Assignment"
+    ]
+  },
+  {
+    "term": "帰任",
+    "reading": "きにん",
+    "senses": [
+      {
+        "definition": "海外勤務を終えて元の国や本拠地に戻ること。",
+        "domain": "international-business",
+        "keywords": [
+          "帰国",
+          "復帰"
+        ]
+      }
+    ],
+    "aliases": [
+      "Repatriation"
+    ]
+  },
+  {
+    "term": "赴任地",
+    "reading": "ふにんち",
+    "senses": [
+      {
+        "definition": "海外赴任した人が実際に働く場所。",
+        "domain": "international-business",
+        "keywords": [
+          "勤務地",
+          "海外"
+        ]
+      }
+    ],
+    "aliases": [
+      "Assignment Location"
+    ]
+  },
+  {
+    "term": "帯同家族",
+    "reading": "たいどうかぞく",
+    "senses": [
+      {
+        "definition": "海外赴任する社員と一緒に現地で生活する家族。",
+        "domain": "international-business",
+        "keywords": [
+          "家族",
+          "現地"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accompanying Family"
+    ]
+  },
+  {
+    "term": "単身赴任",
+    "reading": "たんしんふにん",
+    "senses": [
+      {
+        "definition": "家族を残して一人で赴任すること。",
+        "domain": "international-business",
+        "keywords": [
+          "一人",
+          "赴任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Unaccompanied Assignment"
+    ]
+  },
+  {
+    "term": "海外基本給",
+    "reading": "かいがいきほんきゅう",
+    "senses": [
+      {
+        "definition": "海外勤務を前提に設定される給与の基本部分。",
+        "domain": "international-business",
+        "keywords": [
+          "給与",
+          "基本"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Base Salary"
+    ]
+  },
+  {
+    "term": "単身赴任手当",
+    "reading": "たんしんふにんてあて",
+    "senses": [
+      {
+        "definition": "単身赴任に伴う負担を補うための手当。",
+        "domain": "international-business",
+        "keywords": [
+          "手当",
+          "負担"
+        ]
+      }
+    ],
+    "aliases": [
+      "Unaccompanied Assignment Allowance"
+    ]
+  },
+  {
+    "term": "海外赴任手当",
+    "reading": "かいがいふにんてあて",
+    "senses": [
+      {
+        "definition": "海外勤務に伴う負担や特殊性を考慮して支給する手当。",
+        "domain": "international-business",
+        "keywords": [
+          "手当",
+          "海外"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Assignment Allowance"
+    ]
+  },
+  {
+    "term": "ハードシップ手当",
+    "reading": "はーどしっぷてあて",
+    "senses": [
+      {
+        "definition": "生活環境や治安などの条件が厳しい地域で働く負担を補う手当。",
+        "domain": "international-business",
+        "keywords": [
+          "手当",
+          "厳しい"
+        ]
+      }
+    ],
+    "aliases": [
+      "Hardship Allowance"
+    ]
+  },
+  {
+    "term": "帯同家族手当",
+    "reading": "たいどうかぞくてあて",
+    "senses": [
+      {
+        "definition": "家族を現地に帯同して生活する場合に支給される手当。",
+        "domain": "international-business",
+        "keywords": [
+          "手当",
+          "家族"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accompanying Family Allowance"
+    ]
+  },
+  {
+    "term": "支度金",
+    "reading": "したくきん",
+    "senses": [
+      {
+        "definition": "赴任や帰任の準備費用を補うためのお金。",
+        "domain": "international-business",
+        "keywords": [
+          "準備",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Relocation Preparation Payment"
+    ]
+  },
+  {
+    "term": "一時帰国",
+    "reading": "いちじきこく",
+    "senses": [
+      {
+        "definition": "海外赴任中に一時的に母国へ戻ること。",
+        "domain": "international-business",
+        "keywords": [
+          "帰国",
+          "一時"
+        ]
+      }
+    ],
+    "aliases": [
+      "Home Leave"
+    ]
+  },
+  {
+    "term": "一時帰国休暇",
+    "reading": "いちじきこくきゅうか",
+    "senses": [
+      {
+        "definition": "海外赴任者が一時帰国のために取得する休暇。",
+        "domain": "international-business",
+        "keywords": [
+          "休暇",
+          "帰国"
+        ]
+      }
+    ],
+    "aliases": [
+      "Home Leave Vacation"
+    ]
+  },
+  {
+    "term": "特別帰国",
+    "reading": "とくべつきこく",
+    "senses": [
+      {
+        "definition": "病気や家族事情など特別な理由で急いで帰国すること。",
+        "domain": "international-business",
+        "keywords": [
+          "緊急",
+          "帰国"
+        ]
+      }
+    ],
+    "aliases": [
+      "Emergency Return"
+    ]
+  },
+  {
+    "term": "呼び寄せ",
+    "reading": "よびよせ",
+    "senses": [
+      {
+        "definition": "あとから家族を赴任地に来てもらうこと。",
+        "domain": "international-business",
+        "keywords": [
+          "家族",
+          "合流"
+        ]
+      }
+    ],
+    "aliases": [
+      "Family Joining Later"
+    ]
+  },
+  {
+    "term": "海外出張",
+    "reading": "かいがいしゅっちょう",
+    "senses": [
+      {
+        "definition": "仕事のために国外へ比較的短期間行くこと。",
+        "domain": "international-business",
+        "keywords": [
+          "出張",
+          "短期"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Business Trip"
+    ]
+  },
+  {
+    "term": "宿泊料",
+    "reading": "しゅくはくりょう",
+    "senses": [
+      {
+        "definition": "出張先で宿泊するための費用。",
+        "domain": "international-business",
+        "keywords": [
+          "宿泊",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Accommodation Fee"
+    ]
+  },
+  {
+    "term": "日当",
+    "reading": "にっとう",
+    "senses": [
+      {
+        "definition": "出張中の食事代や日用品代などを補うために支給されるお金。",
+        "domain": "international-business",
+        "keywords": [
+          "食事",
+          "支給"
+        ]
+      }
+    ],
+    "aliases": [
+      "Daily Allowance"
+    ]
+  },
+  {
+    "term": "渡航手続費",
+    "reading": "とこうてつづきひ",
+    "senses": [
+      {
+        "definition": "パスポートやビザなど渡航手続きにかかる費用。",
+        "domain": "international-business",
+        "keywords": [
+          "パスポート",
+          "ビザ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Travel Procedure Costs"
+    ]
+  },
+  {
+    "term": "旅行雑費",
+    "reading": "りょこうざっぴ",
+    "senses": [
+      {
+        "definition": "出張中に必要となる細かな費用。",
+        "domain": "international-business",
+        "keywords": [
+          "雑費",
+          "出張"
+        ]
+      }
+    ],
+    "aliases": [
+      "Miscellaneous Travel Expenses"
+    ]
+  },
+  {
+    "term": "支度料",
+    "reading": "したくりょう",
+    "senses": [
+      {
+        "definition": "出張前の準備に必要な費用を補うためのお金。",
+        "domain": "international-business",
+        "keywords": [
+          "準備",
+          "出張"
+        ]
+      }
+    ],
+    "aliases": [
+      "Trip Preparation Allowance"
+    ]
+  },
+  {
+    "term": "出張経路",
+    "reading": "しゅっちょうけいろ",
+    "senses": [
+      {
+        "definition": "出張のために移動するルート。",
+        "domain": "international-business",
+        "keywords": [
+          "ルート",
+          "移動"
+        ]
+      }
+    ],
+    "aliases": [
+      "Travel Route"
+    ]
+  },
+  {
+    "term": "仮払い",
+    "reading": "かりばらい",
+    "senses": [
+      {
+        "definition": "出張前に見込み費用を先に受け取ること。",
+        "domain": "international-business",
+        "keywords": [
+          "先払い",
+          "費用"
+        ]
+      }
+    ],
+    "aliases": [
+      "Advance Payment (Karibarai)"
+    ]
+  },
+  {
+    "term": "精算",
+    "reading": "せいさん",
+    "senses": [
+      {
+        "definition": "実際に使った金額を確認して過不足を調整すること。",
+        "domain": "international-business",
+        "keywords": [
+          "調整",
+          "金額"
+        ]
+      }
+    ],
+    "aliases": [
+      "Expense Settlement"
+    ]
+  },
+  {
+    "term": "契約締結",
+    "reading": "けいやくていけつ",
+    "senses": [
+      {
+        "definition": "契約内容に正式に合意し効力を持たせること。",
+        "domain": "international-business",
+        "keywords": [
+          "合意",
+          "効力"
+        ]
+      }
+    ],
+    "aliases": [
+      "Contract Execution"
+    ]
+  },
+  {
+    "term": "先行着手",
+    "reading": "せんこうちゃくしゅ",
+    "senses": [
+      {
+        "definition": "正式契約の前に先に作業を始めること。",
+        "domain": "international-business",
+        "keywords": [
+          "先行",
+          "作業"
+        ]
+      }
+    ],
+    "aliases": [
+      "Advance Commencement"
+    ]
+  },
+  {
+    "term": "先行発注",
+    "reading": "せんこうはっちゅう",
+    "senses": [
+      {
+        "definition": "正式契約の前に先に発注すること。",
+        "domain": "international-business",
+        "keywords": [
+          "先行",
+          "発注"
+        ]
+      }
+    ],
+    "aliases": [
+      "Advance Ordering"
+    ]
+  },
+  {
+    "term": "住居上限額",
+    "reading": "じゅうきょじょうげんがく",
+    "senses": [
+      {
+        "definition": "会社が住居費として負担する上限額。",
+        "domain": "international-business",
+        "keywords": [
+          "住居",
+          "上限"
+        ]
+      }
+    ],
+    "aliases": [
+      "Housing Allowance Limit"
+    ]
+  },
+  {
+    "term": "家具付き住居",
+    "reading": "かぐつきじゅうきょ",
+    "senses": [
+      {
+        "definition": "家具や家電が最初から備え付けられている住居。",
+        "domain": "international-business",
+        "keywords": [
+          "家具",
+          "住居"
+        ]
+      }
+    ],
+    "aliases": [
+      "Furnished Housing"
+    ]
+  },
+  {
+    "term": "移転貨物",
+    "reading": "いてんかもつ",
+    "senses": [
+      {
+        "definition": "赴任や帰任のときに運ぶ家財や荷物。",
+        "domain": "international-business",
+        "keywords": [
+          "荷物",
+          "赴任"
+        ]
+      }
+    ],
+    "aliases": [
+      "Relocation Cargo"
+    ]
+  },
+  {
+    "term": "残置家財",
+    "reading": "ざんちかざい",
+    "senses": [
+      {
+        "definition": "赴任中に元の住居などへ残しておく家財。",
+        "domain": "international-business",
+        "keywords": [
+          "家財",
+          "保管"
+        ]
+      }
+    ],
+    "aliases": [
+      "Stored Household Goods"
+    ]
+  },
+  {
+    "term": "留守宅費用",
+    "reading": "るすたくひよう",
+    "senses": [
+      {
+        "definition": "海外赴任中に元の住居を維持・管理するための費用。",
+        "domain": "international-business",
+        "keywords": [
+          "維持",
+          "住居"
+        ]
+      }
+    ],
+    "aliases": [
+      "Home Maintenance Costs"
+    ]
+  },
+  {
+    "term": "予防接種",
+    "reading": "よぼうせっしゅ",
+    "senses": [
+      {
+        "definition": "感染症予防のために受けるワクチン接種。",
+        "domain": "international-business",
+        "keywords": [
+          "ワクチン",
+          "予防"
+        ]
+      }
+    ],
+    "aliases": [
+      "Vaccination"
+    ]
+  },
+  {
+    "term": "海外旅行傷害保険",
+    "reading": "かいがいりょこうしょうがいほけん",
+    "senses": [
+      {
+        "definition": "海外出張や赴任中の病気、けが、事故などに備える保険。",
+        "domain": "international-business",
+        "keywords": [
+          "保険",
+          "海外"
+        ]
+      }
+    ],
+    "aliases": [
+      "Overseas Travel Insurance"
+    ]
+  },
+  {
+    "term": "医療費補助",
+    "reading": "いりょうひほじょ",
+    "senses": [
+      {
+        "definition": "現地でかかった医療費を会社や保険が補助する仕組み。",
+        "domain": "international-business",
+        "keywords": [
+          "医療",
+          "補助"
+        ]
+      }
+    ],
+    "aliases": [
+      "Medical Expense Subsidy"
+    ]
+  },
+  {
+    "term": "教育費補助",
+    "reading": "きょういくひほじょ",
+    "senses": [
+      {
+        "definition": "帯同した子どもの学校費用などを補助すること。",
+        "domain": "international-business",
+        "keywords": [
+          "教育",
+          "補助"
+        ]
+      }
+    ],
+    "aliases": [
+      "Education Expense Subsidy"
+    ]
+  },
+  {
+    "term": "通貨レート",
+    "reading": "つうかれーと",
+    "senses": [
+      {
+        "definition": "通貨を交換するときの比率。給与や経費精算に影響する。",
+        "domain": "international-business",
+        "keywords": [
+          "為替",
+          "比率"
+        ]
+      }
+    ],
+    "aliases": [
+      "Currency Exchange Rate"
+    ]
+  }
+]

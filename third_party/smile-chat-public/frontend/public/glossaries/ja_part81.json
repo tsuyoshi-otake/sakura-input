@@ -1,0 +1,632 @@
+[
+  {
+    "term": "売上原価",
+    "reading": "うりあげげんか",
+    "aliases": [
+      "Cost of Goods Sold",
+      "Cost of Sales"
+    ],
+    "senses": [
+      {
+        "definition": "売上高に対応する商品・製品を販売するために要したコスト。商品仕入れ・製造にかかる材料費・労務費・製造経費などから構成される。損益計算書において売上高から差し引いて売上総利益（粗利益）を算出する。",
+        "domain": "finance",
+        "keywords": [
+          "売上総利益",
+          "粗利益",
+          "製造原価",
+          "仕入原価",
+          "損益計算書"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "原価要素",
+    "reading": "げんかようそ",
+    "aliases": [
+      "Cost Components",
+      "Elements of Manufacturing Cost"
+    ],
+    "senses": [
+      {
+        "definition": "原価計算において製品やサービスのコストを構成する基本的な要素。材料費・労務費・経費の3つが主要な原価要素であり、それぞれを製造直接費と製造間接費に分けて管理する。正確な原価要素の把握が原価計算精度の向上につながる。",
+        "domain": "finance",
+        "keywords": [
+          "材料費",
+          "労務費",
+          "製造経費",
+          "直接費",
+          "間接費"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "費目別管理",
+    "reading": "ひもくべつかんり",
+    "aliases": [
+      "Cost Item Classification Management",
+      "Expense Category Control"
+    ],
+    "senses": [
+      {
+        "definition": "費用を勘定科目（材料費・人件費・地代家賃・通信費等）ごとに分類して収集・管理する手法。予算管理・原価計算・コスト削減活動の基礎となり、部門別管理や製品別管理と組み合わせて活用される。月次で予算と実績を対比する際の基本単位。",
+        "domain": "finance",
+        "keywords": [
+          "費用分類",
+          "予算実績対比",
+          "部門別管理",
+          "コスト削減",
+          "原価計算"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "稟議規程",
+    "reading": "りんぎきてい",
+    "aliases": [
+      "Internal Approval Procedure Rules",
+      "Ringi Process Regulations"
+    ],
+    "senses": [
+      {
+        "definition": "稟議書の作成・回覧・承認・保管に関する社内ルールを定めた規程。起案できる権限・承認ルート・決裁権限基準額（金額による承認レベルの区分）・保管期間などを明確にする。ワークフローシステムを活用した電子稟議も普及している。",
+        "domain": "finance",
+        "keywords": [
+          "稟議書",
+          "決裁権限",
+          "承認ルート",
+          "起案権限",
+          "電子稟議"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "予算管理規程",
+    "reading": "よさんかんりきてい",
+    "aliases": [
+      "Budget Management Regulations",
+      "Annual Budget Control Policy"
+    ],
+    "senses": [
+      {
+        "definition": "年度予算の策定・配分・実績管理・差異分析に関する社内ルールを定めた規程。予算編成スケジュール・編成手順・部門別の責任者・修正予算の手続きなどを定める。経営目標の達成に向けて会社全体を管理する仕組みの根拠となる。",
+        "domain": "finance",
+        "keywords": [
+          "予算編成",
+          "差異分析",
+          "月次管理",
+          "修正予算",
+          "部門責任者"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "年度予算",
+    "reading": "ねんどよさん",
+    "aliases": [
+      "Annual Operating Budget",
+      "Fiscal Year Budget Plan"
+    ],
+    "senses": [
+      {
+        "definition": "事業年度ごとに策定する収益・費用・投資・資金の計画。経営目標を数値に落とし込み、月次の実績と対比して進捗を管理する。売上予算・費用予算・設備投資予算・人員計画などから構成される。中期経営計画の下位計画として位置づけられる。",
+        "domain": "finance",
+        "keywords": [
+          "予算策定",
+          "月次予実対比",
+          "売上予算",
+          "費用予算",
+          "設備投資計画"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "中期経営計画",
+    "reading": "ちゅうきけいえいけいかく",
+    "aliases": [
+      "Medium-Term Business Plan",
+      "Three to Five Year Corporate Strategy"
+    ],
+    "senses": [
+      {
+        "definition": "通常3〜5年の事業期間にわたる経営目標・事業戦略・財務目標をまとめた計画。年度予算の上位計画として位置づけられ、経営幹部が作成して取締役会で承認される。売上・利益・ROE・投資計画などの数値目標を設定する。",
+        "domain": "finance",
+        "keywords": [
+          "経営目標",
+          "財務目標",
+          "事業戦略",
+          "ROE",
+          "取締役会承認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "資金調達",
+    "reading": "しきんちょうたつ",
+    "aliases": [
+      "Corporate Fundraising",
+      "Capital Procurement"
+    ],
+    "senses": [
+      {
+        "definition": "事業活動や設備投資に必要な資金を外部から確保すること。銀行借入・社債発行・株式増資・補助金・クラウドファンディングなど複数の手段がある。調達手段によってコスト（金利・配当）や財務への影響が異なるため、最適な手段を選択する。",
+        "domain": "finance",
+        "keywords": [
+          "銀行借入",
+          "社債発行",
+          "増資",
+          "財務レバレッジ",
+          "調達コスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "借入",
+    "reading": "かりいれ",
+    "aliases": [
+      "Bank Loan Borrowing",
+      "Debt Financing"
+    ],
+    "senses": [
+      {
+        "definition": "金融機関や取引先から資金を借りること。1年以内に返済する短期借入金と1年超の長期借入金に分類され、貸借対照表の負債の部に計上する。借入時には金利・返済期間・担保・保証などの条件を金融機関と交渉する。",
+        "domain": "finance",
+        "keywords": [
+          "短期借入金",
+          "長期借入金",
+          "金利",
+          "担保",
+          "返済スケジュール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "社債",
+    "reading": "しゃさい",
+    "aliases": [
+      "Corporate Bond",
+      "Company Issued Bond"
+    ],
+    "senses": [
+      {
+        "definition": "会社が資金調達のために発行する債券。投資家（個人・機関投資家）から資金を集め、償還期限に元本を返済し期間中は利息を支払う。普通社債・転換社債・新株予約権付社債などの種類があり、発行時に有価証券届出書の提出が必要な場合がある。",
+        "domain": "finance",
+        "keywords": [
+          "普通社債",
+          "転換社債",
+          "償還期限",
+          "利息支払い",
+          "社債発行費"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "資金繰り",
+    "reading": "しきんぐり",
+    "aliases": [
+      "Cash Flow Management",
+      "Liquidity Planning"
+    ],
+    "senses": [
+      {
+        "definition": "日常的な資金の収支を管理し、支払いが滞らないように調整すること。資金繰り表（キャッシュフロー計画表）を作成し、入金タイミングと出金タイミングを把握して資金不足を未然に防ぐ。特に中小企業では黒字倒産を防ぐためにも重要な業務。",
+        "domain": "finance",
+        "keywords": [
+          "資金繰り表",
+          "入金タイミング",
+          "出金管理",
+          "黒字倒産防止",
+          "流動性確保"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "資金管理",
+    "reading": "しきんかんり",
+    "aliases": [
+      "Treasury Management",
+      "Corporate Cash Management"
+    ],
+    "senses": [
+      {
+        "definition": "会社の資金の調達・運用・回収・決済を総合的に管理する業務。余剰資金の安全な運用・必要資金の確保・外国為替リスク管理・金利リスク管理などを含む。財務部門が中心となり、銀行との関係管理も重要な役割となる。",
+        "domain": "finance",
+        "keywords": [
+          "余剰資金運用",
+          "外国為替リスク",
+          "金利リスク",
+          "財務部門",
+          "銀行取引管理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "印章管理",
+    "reading": "いんしょうかんり",
+    "aliases": [
+      "Corporate Seal Management",
+      "Company Stamp Control"
+    ],
+    "senses": [
+      {
+        "definition": "会社印・代表者印・銀行印・角印などの印章の保管・使用・廃棄を管理する業務。印章の種類ごとに保管責任者を定め、使用の都度に使用簿へ記録して不正使用を防止する。社内規程（印章管理規程）に基づいて厳格に運用する。",
+        "domain": "finance",
+        "keywords": [
+          "会社印",
+          "代表者印",
+          "銀行印",
+          "印章使用簿",
+          "印章管理規程"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "有価証券管理規程",
+    "reading": "ゆうかしょうけんかんりきてい",
+    "aliases": [
+      "Securities Management Policy",
+      "Investment Securities Control Rules"
+    ],
+    "senses": [
+      {
+        "definition": "株式・社債・国債・投資信託等の有価証券の取得・保有・処分・評価に関する社内ルールを定めた規程。取得の目的・承認権限・評価方法・保管方法・処分手続きなどを規定し、有価証券の適正管理と不正防止を図る。",
+        "domain": "finance",
+        "keywords": [
+          "株式保有",
+          "取得承認",
+          "評価方法",
+          "処分手続き",
+          "有価証券台帳"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "投資有価証券",
+    "reading": "とうしゆうかしょうけん",
+    "aliases": [
+      "Long-Term Investment Securities",
+      "Non-Current Investment Holdings"
+    ],
+    "senses": [
+      {
+        "definition": "長期保有を目的として保有する株式・社債・投資信託等の有価証券。短期売買目的の流動資産に分類される有価証券と区別し、貸借対照表の固定資産に計上する。その他有価証券は時価評価し、評価差額を純資産の部に計上する。",
+        "domain": "finance",
+        "keywords": [
+          "長期保有目的",
+          "固定資産計上",
+          "時価評価",
+          "その他有価証券",
+          "評価差額金"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "法人税",
+    "reading": "ほうじんぜい",
+    "aliases": [
+      "Corporate Income Tax",
+      "Company Tax Liability"
+    ],
+    "senses": [
+      {
+        "definition": "法人の所得（益金から損金を差し引いた課税所得）に対して課される国税。事業年度終了後2ヶ月以内に申告・納付が必要。税率は会社の規模・所得金額によって異なり、中小企業向けの軽減税率が適用される場合がある。",
+        "domain": "finance",
+        "keywords": [
+          "課税所得",
+          "申告納付",
+          "軽減税率",
+          "益金",
+          "損金"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "消費税",
+    "reading": "しょうひぜい",
+    "aliases": [
+      "Consumption Tax",
+      "Value Added Tax"
+    ],
+    "senses": [
+      {
+        "definition": "商品の販売やサービス提供に対して課される間接税。一定規模以上の課税事業者が消費者から預かり、申告・納付する。課税売上高・非課税売上高の区分・仕入税額控除の計算（一般課税・簡易課税）が経理処理の重要ポイント。",
+        "domain": "finance",
+        "keywords": [
+          "課税事業者",
+          "仕入税額控除",
+          "簡易課税",
+          "非課税売上",
+          "インボイス制度"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "税務調査",
+    "reading": "ぜいむちょうさ",
+    "aliases": [
+      "Tax Authority Audit",
+      "Revenue Investigation"
+    ],
+    "senses": [
+      {
+        "definition": "税務署（国税局）が企業の税務申告内容の正確性を確認するために行う調査。帳簿・証憑・申告書・取引記録などの検査が実施される。申告漏れや誤りが発見された場合は修正申告や更正が行われ、追徴税額・加算税・延滞税が発生することがある。",
+        "domain": "finance",
+        "keywords": [
+          "修正申告",
+          "更正処分",
+          "追徴税額",
+          "加算税",
+          "国税局調査"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "会計監査人",
+    "reading": "かいけいかんさにん",
+    "aliases": [
+      "Statutory Auditor CPA",
+      "External Audit Firm"
+    ],
+    "senses": [
+      {
+        "definition": "公認会計士または監査法人が会社の財務諸表の適正性を独立した立場から審査する役割。大会社（資本金5億円以上または負債200億円以上）等では会計監査人の設置が会社法・金融商品取引法で義務付けられている。監査報告書を株主総会に提出する。",
+        "domain": "finance",
+        "keywords": [
+          "公認会計士",
+          "監査法人",
+          "財務諸表監査",
+          "監査報告書",
+          "独立性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "会計方針",
+    "reading": "かいけいほうしん",
+    "aliases": [
+      "Accounting Policy",
+      "Financial Statement Preparation Policy"
+    ],
+    "senses": [
+      {
+        "definition": "財務諸表の作成において企業が採用する会計処理の基準・方法・手続きの総称。棚卸資産の評価方法・固定資産の減価償却方法・収益認識の方法などが含まれる。一度採用した方針は継続して適用し、変更する場合には注記で開示が必要。",
+        "domain": "finance",
+        "keywords": [
+          "継続性の原則",
+          "棚卸評価方法",
+          "減価償却方法",
+          "収益認識",
+          "会計方針変更"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "会計基準",
+    "reading": "かいけいきじゅん",
+    "aliases": [
+      "Accounting Standards",
+      "Financial Reporting Standards"
+    ],
+    "senses": [
+      {
+        "definition": "財務諸表の作成に際して準拠すべき基準。日本では企業会計基準委員会（ASBJ）が設定する「企業会計基準」が中心で、上場企業向け・中小企業向け・公益法人向けなど複数の基準体系がある。IFRSとの任意適用も認められている。",
+        "domain": "finance",
+        "keywords": [
+          "企業会計基準",
+          "ASBJ",
+          "IFRS",
+          "中小企業会計要領",
+          "基準適用"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "配当金",
+    "reading": "はいとうきん",
+    "aliases": [
+      "Dividend Payment",
+      "Shareholder Profit Distribution"
+    ],
+    "senses": [
+      {
+        "definition": "会社が株主に対して利益の一部を分配するために支払う金銭。定時株主総会の決議または中間配当として支払われる。会社側では純資産（利益剰余金）の減少として処理し、受取側（個人株主）では配当所得として課税される。",
+        "domain": "finance",
+        "keywords": [
+          "利益剰余金",
+          "株主総会決議",
+          "中間配当",
+          "配当性向",
+          "配当所得"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "剰余金",
+    "reading": "じょうよきん",
+    "aliases": [
+      "Retained Surplus",
+      "Corporate Surplus Funds"
+    ],
+    "senses": [
+      {
+        "definition": "資本金を超えて蓄積された純資産の部分。資本剰余金（資本取引から生じたもの）と利益剰余金（利益の蓄積）に区分される。配当の財源・内部留保として活用され、株主総会の決議に基づいて処分される。",
+        "domain": "finance",
+        "keywords": [
+          "資本剰余金",
+          "利益剰余金",
+          "内部留保",
+          "純資産",
+          "株主資本"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "資本準備金",
+    "reading": "しほんじゅんびきん",
+    "aliases": [
+      "Capital Reserve Fund",
+      "Additional Paid-in Capital Reserve"
+    ],
+    "senses": [
+      {
+        "definition": "株式発行・合併等の資本取引により生じた払込剰余金のうち、資本金として組み入れなかった部分。会社法により資本金の4分の1に達するまで積み立てが義務付けられる（法定準備金）。減資や欠損補填に充当できる。",
+        "domain": "finance",
+        "keywords": [
+          "法定準備金",
+          "払込剰余金",
+          "欠損補填",
+          "減資",
+          "株主資本等変動計算書"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "登記",
+    "reading": "とうき",
+    "aliases": [
+      "Corporate Registration",
+      "Legal Entity Filing"
+    ],
+    "senses": [
+      {
+        "definition": "法人の設立・本店所在地・商号・役員・資本金・事業目的などを法務局に申請して公的に記録すること。会社設立時の設立登記のほか、役員変更・増資・本店移転・組織再編時には変更登記を一定期間内（2週間以内が原則）に行う義務がある。",
+        "domain": "finance",
+        "keywords": [
+          "変更登記",
+          "法務局",
+          "設立登記",
+          "商業登記簿",
+          "登録免許税"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "保険料",
+    "reading": "ほけんりょう",
+    "aliases": [
+      "Insurance Premium Expense",
+      "Insurance Coverage Payment"
+    ],
+    "senses": [
+      {
+        "definition": "損害保険・生命保険・賠償責任保険等に加入するために保険会社へ支払う対価。当期に対応する部分は費用（保険料）として計上し、次期以降に対応する長期の前払い分は前払費用として貸借対照表に計上する。期間按分の処理が必要。",
+        "domain": "finance",
+        "keywords": [
+          "前払費用",
+          "期間按分",
+          "損害保険",
+          "賠償責任保険",
+          "費用計上"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "現金管理",
+    "reading": "げんきんかんり",
+    "aliases": [
+      "Cash Handling Control",
+      "Petty Cash Administration"
+    ],
+    "senses": [
+      {
+        "definition": "手元現金の収支・残高・保管を適正に管理する業務。現金担当者が日次で出納帳を記帳し、帳簿残高と実際の手持ち現金を照合する。金庫への保管・現金確認の実施・複数名によるチェック体制などで横領や紛失を防止する。",
+        "domain": "finance",
+        "keywords": [
+          "出納帳記帳",
+          "残高照合",
+          "金庫保管",
+          "不正防止",
+          "日次確認"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "支店勘定",
+    "reading": "してんかんじょう",
+    "aliases": [
+      "Branch Office Account",
+      "Head Office Branch Intercompany Account"
+    ],
+    "senses": [
+      {
+        "definition": "本店と支店間の取引（資金の移動・費用の立替等）を記録するための内部勘定科目。本店側に「支店勘定」、支店側に「本店勘定」を設け、残高を相互に照合する。決算時には本支店間の内部取引を相殺して合算財務諸表を作成する。",
+        "domain": "finance",
+        "keywords": [
+          "本店勘定",
+          "内部取引消去",
+          "合算財務諸表",
+          "本支店会計",
+          "内部勘定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "社外秘",
+    "reading": "しゃがいひ",
+    "aliases": [
+      "Company Confidential Classification",
+      "Internal Use Only Document"
+    ],
+    "senses": [
+      {
+        "definition": "会社内部でのみ取り扱い、社外へは開示・持ち出しを禁じる情報・文書の機密区分。機密情報管理規程に基づいて設定され、財務データ・人事情報・取引先情報・技術情報などが対象となる。文書への表示・アクセス権限管理・廃棄方法が規程で定められる。",
+        "domain": "finance",
+        "keywords": [
+          "機密区分",
+          "情報管理規程",
+          "アクセス権限",
+          "文書管理",
+          "情報セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "有価証券",
+    "reading": "ゆうかしょうけん",
+    "aliases": [
+      "Marketable Securities",
+      "Negotiable Financial Instruments"
+    ],
+    "senses": [
+      {
+        "definition": "株式・社債・国債・手形・小切手など、財産権を表示する証券の総称。保有目的によって売買目的有価証券・満期保有目的債券・子会社株式・その他有価証券に分類され、それぞれ異なる評価基準（時価または原価法）が適用される。",
+        "domain": "finance",
+        "keywords": [
+          "売買目的有価証券",
+          "満期保有目的債券",
+          "時価評価",
+          "原価法",
+          "保有目的分類"
+        ]
+      }
+    ]
+  }
+]

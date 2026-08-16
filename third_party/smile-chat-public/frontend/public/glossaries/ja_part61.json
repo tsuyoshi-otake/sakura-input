@@ -1,0 +1,1655 @@
+[
+  {
+    "term": "永続データ構造",
+    "reading": "えいぞくでーたこうぞう",
+    "aliases": [
+      "Persistent Data Structure"
+    ],
+    "senses": [
+      {
+        "definition": "更新操作を行っても以前のバージョンが保持される不変データ構造。変更された部分だけを共有（構造共有）することでメモリ効率を保ちながら履歴管理や並行アクセスを実現する。Clojureのコアデータ構造が代表例。",
+        "domain": "programming",
+        "keywords": [
+          "不変",
+          "構造共有",
+          "関数型",
+          "バージョン管理",
+          "並行処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ポイントフリースタイル",
+    "reading": "ぽいんとふりーすたいる",
+    "aliases": [
+      "Point-Free Style",
+      "Tacit Programming"
+    ],
+    "senses": [
+      {
+        "definition": "関数の定義において引数（ポイント）を明示せず、関数合成や高階関数の組み合わせだけで処理を記述するプログラミングスタイル。簡潔で数学的な表現が可能だが、過度に使うと可読性が低下する場合もある。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "関数合成",
+          "Haskell",
+          "可読性",
+          "宣言的"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "モナド",
+    "reading": "もなど",
+    "aliases": [
+      "Monad"
+    ],
+    "senses": [
+      {
+        "definition": "値をコンテキスト（計算の文脈）に包み、`bind`（`>>=`）と`return`（`unit`）の2つの操作を持つ代数的構造。Maybe/IO/Stateなど副作用や失敗を型安全に表現するために用いられ、Haskellやその他関数型言語で重要な役割を持つ。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "Haskell",
+          "副作用",
+          "コンテキスト",
+          "代数的構造"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ファンクタ",
+    "reading": "ふぁんくた",
+    "aliases": [
+      "Functor"
+    ],
+    "senses": [
+      {
+        "definition": "値を保持するコンテナ型に対して`map`操作を定義した型クラスまたはインターフェース。コンテナ内の値に関数を適用し、同じコンテナ構造を保った結果を返す。モナドやアプリカティブの基礎となる概念。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "map",
+          "型クラス",
+          "コンテナ",
+          "モナド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アプリカティブ",
+    "reading": "あぷりかてぃぶ",
+    "aliases": [
+      "Applicative",
+      "Applicative Functor"
+    ],
+    "senses": [
+      {
+        "definition": "ファンクタを拡張し、コンテキストに包まれた関数をコンテキストに包まれた値に適用できる型クラス。`pure`と`<*>`（apply）を持ち、ファンクタとモナドの中間に位置する抽象。フォーム検証などの独立した計算の組み合わせに有用。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "型クラス",
+          "ファンクタ",
+          "モナド",
+          "Haskell"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "代数的データ型",
+    "reading": "だいすうてきでーたがた",
+    "aliases": [
+      "ADT",
+      "Algebraic Data Type"
+    ],
+    "senses": [
+      {
+        "definition": "直和型と直積型を組み合わせて定義されるデータ型の総称。型理論に基づきデータの構造を正確に表現でき、パターンマッチングと組み合わせることで型安全な分岐処理を実現する。HaskellやRust、Elmなどで採用。",
+        "domain": "programming",
+        "keywords": [
+          "型理論",
+          "直和型",
+          "直積型",
+          "パターンマッチ",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パターンマッチ",
+    "reading": "ぱたーんまっち",
+    "aliases": [
+      "Pattern Matching"
+    ],
+    "senses": [
+      {
+        "definition": "値の構造や内容を照合して対応する処理を選択する言語機能。switch文を拡張したもので、代数的データ型の各コンストラクタに対して網羅的に処理を記述でき、コンパイラが未処理ケースを警告する。Rustの`match`、Haskellのパターンマッチなどが代表。",
+        "domain": "programming",
+        "keywords": [
+          "代数的データ型",
+          "分岐",
+          "型安全",
+          "網羅性",
+          "Rust"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "直和型",
+    "reading": "ちょくわがた",
+    "aliases": [
+      "Sum Type",
+      "Variant"
+    ],
+    "senses": [
+      {
+        "definition": "複数の異なる型のうちいずれか1つをとりうる型。Rustの`enum`やHaskellのデータ型がこれに相当し、値がどの「場合」に属するかをタグで区別する。Option型やResult型の実装基盤。",
+        "domain": "programming",
+        "keywords": [
+          "代数的データ型",
+          "union",
+          "enum",
+          "関数型",
+          "型理論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "直積型",
+    "reading": "ちょくせきがた",
+    "aliases": [
+      "Product Type"
+    ],
+    "senses": [
+      {
+        "definition": "複数のフィールドを同時に持つ型。構造体（struct）やタプルがこれに相当し、フィールド数の積だけ可能な値の組み合わせが存在する。代数的データ型の一方の構成要素で直和型と組み合わせて複雑なデータを表現する。",
+        "domain": "programming",
+        "keywords": [
+          "代数的データ型",
+          "struct",
+          "タプル",
+          "関数型",
+          "型理論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Option型",
+    "reading": "おぷしょんがた",
+    "aliases": [
+      "Option",
+      "Maybe"
+    ],
+    "senses": [
+      {
+        "definition": "値が存在するかもしれないし存在しないかもしれない状況を型安全に表現する直和型。`Some(value)`または`None`の2つの状態を持ち、nullポインタ例外を防ぐ。Rustでは`Option<T>`、Haskellでは`Maybe`として提供される。",
+        "domain": "programming",
+        "keywords": [
+          "直和型",
+          "null安全",
+          "関数型",
+          "Rust",
+          "エラーハンドリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "末尾呼び出し最適化",
+    "reading": "まつびよびだしさいてきか",
+    "aliases": [
+      "Tail Call Optimization"
+    ],
+    "senses": [
+      {
+        "definition": "関数の末尾に位置する再帰呼び出しをループに変換することでスタックオーバーフローを防ぐコンパイラ最適化。これにより再帰を使っても定数空間で実行できる。Scheme規格では必須とされ、多くの関数型言語が対応している。",
+        "domain": "programming",
+        "keywords": [
+          "再帰",
+          "スタックオーバーフロー",
+          "最適化",
+          "関数型",
+          "コンパイラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "遅延評価",
+    "reading": "ちえんひょうか",
+    "aliases": [
+      "Lazy Evaluation",
+      "Call-by-Need"
+    ],
+    "senses": [
+      {
+        "definition": "式の値が実際に必要になるまで計算を遅らせる評価戦略。無限リストの扱いやコストの高い計算の回避が可能になる。HaskellはデフォルトでLazyを採用。PythonのジェネレータやJavaScriptのイテレータも遅延評価の一形態。",
+        "domain": "programming",
+        "keywords": [
+          "評価戦略",
+          "Haskell",
+          "無限リスト",
+          "メモ化",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "先行評価",
+    "reading": "せんこうひょうか",
+    "aliases": [
+      "Eager Evaluation",
+      "Strict Evaluation",
+      "Call-by-Value"
+    ],
+    "senses": [
+      {
+        "definition": "式を評価するタイミングで即座に値を計算する評価戦略。ほとんどのプログラミング言語のデフォルト。遅延評価と対比され、副作用の発生タイミングが予測しやすいが、不必要な計算も行われる場合がある。",
+        "domain": "programming",
+        "keywords": [
+          "評価戦略",
+          "遅延評価",
+          "副作用",
+          "関数型",
+          "計算順序"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トランポリン",
+    "reading": "とらんぽりん",
+    "aliases": [
+      "Trampoline"
+    ],
+    "senses": [
+      {
+        "definition": "末尾呼び出し最適化をサポートしない言語で相互再帰や深い再帰を安全に実行するための技法。関数を直接呼び出す代わりに「次に実行すべき処理を返すサンク」を返し、ループで繰り返し評価することでスタックを消費しない。",
+        "domain": "programming",
+        "keywords": [
+          "再帰",
+          "スタックオーバーフロー",
+          "TCO",
+          "JavaScript",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "継続渡しスタイル",
+    "reading": "けいぞくわたしすたいる",
+    "aliases": [
+      "CPS",
+      "Continuation-Passing Style"
+    ],
+    "senses": [
+      {
+        "definition": "関数が結果を返す代わりに「次に実行する処理（継続）」をコールバックとして受け取り、それに結果を渡すプログラミングスタイル。制御フローを明示的に扱え、非同期処理や例外処理の実装基盤となる。コンパイラの中間表現にも使われる。",
+        "domain": "programming",
+        "keywords": [
+          "継続",
+          "コールバック",
+          "制御フロー",
+          "非同期",
+          "コンパイラ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "並列処理",
+    "reading": "へいれつしょり",
+    "aliases": [
+      "Parallelism"
+    ],
+    "senses": [
+      {
+        "definition": "複数のプロセッサコアを活用して複数の計算を物理的に同時に実行する処理モデル。並行処理が「同時に扱う」概念であるのに対し、並列処理は「同時に実行する」概念。データ並列とタスク並列が主な種別。",
+        "domain": "programming",
+        "keywords": [
+          "マルチコア",
+          "並行処理",
+          "パフォーマンス",
+          "データ並列",
+          "タスク並列"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マルチプロセス",
+    "reading": "まるちぷろせす",
+    "aliases": [
+      "Multiprocessing",
+      "Multi-process"
+    ],
+    "senses": [
+      {
+        "definition": "複数のOSプロセスを起動して並行・並列処理を実現するモデル。プロセス間はメモリ空間が独立しているため安全性が高いが、プロセス間通信（IPC）のコストが大きい。Pythonはこれを使ってGILを回避する。",
+        "domain": "programming",
+        "keywords": [
+          "プロセス",
+          "IPC",
+          "Python",
+          "GIL",
+          "並行処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コルーチン",
+    "reading": "これーちん",
+    "aliases": [
+      "Coroutine"
+    ],
+    "senses": [
+      {
+        "definition": "実行を途中で一時停止し、後から再開できる協調型の軽量スレッド。OSスレッドより低コストで大量に生成でき、非同期I/Oや複雑な状態機械の実装に適する。Pythonの`asyncio`コルーチン、Kotlinのコルーチンが代表例。",
+        "domain": "programming",
+        "keywords": [
+          "非同期",
+          "軽量スレッド",
+          "async/await",
+          "協調マルチタスク",
+          "ジェネレータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Goroutine",
+    "reading": "ごるーちん",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "Go言語が提供する軽量な並行実行単位。OSスレッドより少ないメモリ（初期2KB程度）で動作し、Goランタイムがスケジューリングを管理する。ChannelやWaitGroupと組み合わせて安全な並行処理を構築する。",
+        "domain": "programming",
+        "keywords": [
+          "Go",
+          "並行処理",
+          "軽量スレッド",
+          "Channel",
+          "ランタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Channel",
+    "reading": "ちゃねる",
+    "aliases": [
+      "チャネル"
+    ],
+    "senses": [
+      {
+        "definition": "Go言語で採用される、Goroutine間でデータを安全に送受信するための通信機構。「共有メモリで通信するのではなく、通信によって共有する」というCSPの哲学を体現する。バッファなし・バッファありの2種類がある。",
+        "domain": "programming",
+        "keywords": [
+          "Go",
+          "Goroutine",
+          "CSP",
+          "並行処理",
+          "同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Actorモデル",
+    "reading": "あくたーもでる",
+    "aliases": [
+      "Actor Model"
+    ],
+    "senses": [
+      {
+        "definition": "並行処理のための計算モデルで、各アクターが独立した状態とメールボックスを持ち、メッセージ交換によってのみ通信する。共有メモリが不要なためデッドロックが発生しにくい。ErlangやAkkaが代表的な実装。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "メッセージパッシング",
+          "Erlang",
+          "Akka",
+          "分散システム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Future",
+    "reading": "ふゅーちゃー",
+    "aliases": [
+      "CompletableFuture"
+    ],
+    "senses": [
+      {
+        "definition": "非同期計算の結果を表すオブジェクト。計算が完了していなくても参照を保持でき、完了時に値を取り出すかコールバックを登録できる。JavaのCompletableFuture、ScalaのFutureなどが代表例。Promiseとほぼ同義で使われることも多い。",
+        "domain": "programming",
+        "keywords": [
+          "非同期",
+          "並行処理",
+          "Promise",
+          "コールバック",
+          "Java"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Promise",
+    "reading": "ぷろみす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "非同期操作の最終的な結果（成功または失敗）を表すオブジェクト。JavaScriptで広く普及し、コールバック地獄を解消する手段として登場した。`then`と`catch`でチェーン処理が可能でasync/awaitの基盤となる。",
+        "domain": "programming",
+        "keywords": [
+          "JavaScript",
+          "非同期",
+          "コールバック",
+          "async/await",
+          "Future"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Reactorパターン",
+    "reading": "りあくたーぱたーん",
+    "aliases": [
+      "Reactor Pattern"
+    ],
+    "senses": [
+      {
+        "definition": "イベント駆動の非同期I/Oを処理するデザインパターン。多重化されたI/Oイベントを1つのスレッドで待機し、発生したイベントを対応するハンドラにディスパッチする。Node.jsやNginxの内部実装に使われる。",
+        "domain": "programming",
+        "keywords": [
+          "非同期I/O",
+          "イベント駆動",
+          "ノンブロッキング",
+          "Node.js",
+          "デザインパターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "同期処理",
+    "reading": "どうきしょり",
+    "aliases": [
+      "Synchronous Processing"
+    ],
+    "senses": [
+      {
+        "definition": "操作が完了するまで呼び出し元がブロックされる処理方式。コードの実行順序が直感的でデバッグしやすい一方、I/O待ちでCPUが無駄になりやすい。非同期処理と対比される。",
+        "domain": "programming",
+        "keywords": [
+          "ブロッキング",
+          "非同期",
+          "I/O",
+          "逐次実行",
+          "シングルスレッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ライブロック",
+    "reading": "らいぶろっく",
+    "aliases": [
+      "Livelock"
+    ],
+    "senses": [
+      {
+        "definition": "複数のスレッドやプロセスが互いの状態変化に反応し続け、作業が全く進まない状態。デッドロックと異なり各スレッドは実行中だが有意な進捗がない。礼儀正しすぎるスレッドが互いに譲り合い続ける例が有名。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "デッドロック",
+          "スレッド",
+          "競合",
+          "進行保証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "飢餓状態",
+    "reading": "きがじょうたい",
+    "aliases": [
+      "Starvation",
+      "Resource Starvation"
+    ],
+    "senses": [
+      {
+        "definition": "あるスレッドやプロセスが必要なリソースを長期間取得できず処理が進まない状態。優先度の高いスレッドが常にCPUを占有する場合などに発生する。公平なスケジューリングアルゴリズムで緩和できる。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "スケジューリング",
+          "リソース",
+          "デッドロック",
+          "公平性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セマフォ",
+    "reading": "せまふぉ",
+    "aliases": [
+      "Semaphore"
+    ],
+    "senses": [
+      {
+        "definition": "共有リソースへのアクセスを制限するための非負整数カウンタを持つ同期プリミティブ。P操作（取得）でカウンタを減らしV操作（解放）で増やす。バイナリセマフォはミューテックスに相当し、カウンティングセマフォは最大同時アクセス数を制御する。",
+        "domain": "programming",
+        "keywords": [
+          "同期",
+          "並行処理",
+          "ミューテックス",
+          "リソース制御",
+          "OS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ミューテックス",
+    "reading": "みゅーてっくす",
+    "aliases": [
+      "Mutex",
+      "Mutual Exclusion"
+    ],
+    "senses": [
+      {
+        "definition": "クリティカルセクションへの相互排他アクセスを保証する同期プリミティブ。ロックを取得したスレッドのみが保護されたコードを実行でき、終了後ロックを解放する。RustはMutex<T>型でデータと所有権を結びつけた安全な実装を提供する。",
+        "domain": "programming",
+        "keywords": [
+          "同期",
+          "クリティカルセクション",
+          "ロック",
+          "並行処理",
+          "スレッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "条件変数",
+    "reading": "じょうけんへんすう",
+    "aliases": [
+      "Condition Variable"
+    ],
+    "senses": [
+      {
+        "definition": "スレッドが特定の条件が満たされるまで待機し、別のスレッドから通知を受けて再開する同期機構。ミューテックスと組み合わせて使い、プロデューサー・コンシューマーパターンなどの実装に用いられる。",
+        "domain": "programming",
+        "keywords": [
+          "同期",
+          "スレッド",
+          "待機",
+          "ミューテックス",
+          "プロデューサー・コンシューマー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CAS",
+    "reading": "かんぽうしきあとみっく",
+    "aliases": [
+      "Compare-And-Exchange",
+      "CAS操作"
+    ],
+    "senses": [
+      {
+        "definition": "「メモリの値が期待値と等しければ新しい値に書き換える」という操作をアトミックに行うCPU命令。ロックフリーデータ構造の基本操作で、楽観的ロックの実装に広く使われる。ABA問題に注意が必要。",
+        "domain": "programming",
+        "keywords": [
+          "アトミック",
+          "ロックフリー",
+          "並行処理",
+          "CPU命令",
+          "楽観的ロック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ロックフリー",
+    "reading": "ろっくふりー",
+    "aliases": [
+      "Lock-Free"
+    ],
+    "senses": [
+      {
+        "definition": "ミューテックスなどのロック機構を使わずに並行アクセスの安全性を保証するアルゴリズム設計。CASなどのアトミック操作を使い、少なくとも1つのスレッドが常に進捗する性質（lock-freedom）を保証する。デッドロックが発生しない。",
+        "domain": "programming",
+        "keywords": [
+          "CAS",
+          "アトミック",
+          "並行処理",
+          "デッドロックフリー",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Wait-Free",
+    "reading": "うぇいとふりー",
+    "aliases": [
+      "Wait-Free Algorithm"
+    ],
+    "senses": [
+      {
+        "definition": "すべてのスレッドが有限ステップ以内に操作を完了できることを保証する並行アルゴリズムの性質。ロックフリーより強い保証で飢餓が発生しない。実装が困難なため実用的なデータ構造は限られる。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "ロックフリー",
+          "進行保証",
+          "アトミック",
+          "公平性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "メモリモデル",
+    "reading": "めもりもでる",
+    "aliases": [
+      "Memory Model"
+    ],
+    "senses": [
+      {
+        "definition": "マルチスレッド環境において各スレッドがメモリの読み書きをどの順序で観測できるかを定義した仕様。CPUやコンパイラの最適化による命令の並び替えの範囲を規定し、happens-before関係に基づいてスレッド間の可視性を保証する。",
+        "domain": "programming",
+        "keywords": [
+          "マルチスレッド",
+          "happens-before",
+          "Java",
+          "C++",
+          "可視性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "happens-before",
+    "reading": "はっぷんすびふぉー",
+    "aliases": [
+      "happens-before関係",
+      "happened-before"
+    ],
+    "senses": [
+      {
+        "definition": "並行処理において「操作AはBより前に起きた」という因果関係を定義する概念。Javaメモリモデルや各種メモリモデルで採用され、スレッド間でのメモリ可視性の保証範囲を規定する。同期プリミティブは通常このhappens-before関係を生成する。",
+        "domain": "programming",
+        "keywords": [
+          "メモリモデル",
+          "並行処理",
+          "マルチスレッド",
+          "可視性",
+          "因果関係"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "volatile",
+    "reading": "ぼらたいる",
+    "aliases": [
+      "volatile変数"
+    ],
+    "senses": [
+      {
+        "definition": "コンパイラやCPUがキャッシュや命令並び替えの最適化を行わないようにするための変数修飾子。Javaのvolatileはhappens-before関係を提供し可視性を保証するが、複合操作のアトミック性は保証しない。C/C++では主に外部からの変更を通知するために使う。",
+        "domain": "programming",
+        "keywords": [
+          "メモリモデル",
+          "並行処理",
+          "可視性",
+          "最適化",
+          "Java"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Atomic操作",
+    "reading": "あとみっくそうさ",
+    "aliases": [
+      "Atomic Operation",
+      "アトミック操作"
+    ],
+    "senses": [
+      {
+        "definition": "他のスレッドから見て分割不可能な単一操作として実行されることが保証される操作。読み取り・変更・書き込みが一体となってCPU命令レベルで保証される。java.util.concurrent.atomic、C++のstd::atomicなどが提供するプリミティブ。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "CAS",
+          "メモリモデル",
+          "ロックフリー",
+          "CPU"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スレッドプール",
+    "reading": "すれっどぷーる",
+    "aliases": [
+      "Thread Pool"
+    ],
+    "senses": [
+      {
+        "definition": "あらかじめ一定数のスレッドを生成してプールしておき、タスク投入のたびにスレッドを再利用する並行処理パターン。スレッド生成・破棄のオーバーヘッドを削減し、リソースを制御しながらタスクを並列実行できる。Executors.newFixedThreadPoolが典型例。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "パフォーマンス",
+          "リソース管理",
+          "Java",
+          "Executor"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Fork/Join",
+    "reading": "ふぉーくじょいん",
+    "aliases": [
+      "Fork/Join Framework",
+      "フォーク/ジョイン"
+    ],
+    "senses": [
+      {
+        "definition": "分割統治アルゴリズムを並列実行するためのフレームワーク。タスクをサブタスクに再帰的に分割し（fork）、完了後に結果をマージ（join）する。JavaのForkJoinPoolはWork-Stealingスケジューラを使い効率的に実行する。",
+        "domain": "programming",
+        "keywords": [
+          "並列処理",
+          "分割統治",
+          "Work-Stealing",
+          "Java",
+          "再帰"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Observable",
+    "reading": "おぶざーばぶる",
+    "aliases": [
+      "オブザーバブル"
+    ],
+    "senses": [
+      {
+        "definition": "時間とともに0個以上の値を非同期に発行し、完了またはエラーで終了するデータストリームを表す抽象。ReactiveXの中心概念でsubscribeにより購読する。単一値のPromiseを一般化したもので、イベント・APIレスポンス・ユーザー入力などに適用できる。",
+        "domain": "programming",
+        "keywords": [
+          "リアクティブ",
+          "ReactiveX",
+          "ストリーム",
+          "非同期",
+          "RxJS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ReactiveX",
+    "reading": "りあくてぃぶえっくす",
+    "aliases": [
+      "Rx",
+      "RxJS",
+      "RxJava",
+      "ReactiveExtensions"
+    ],
+    "senses": [
+      {
+        "definition": "Observableパターンを中心に非同期・イベントベースのプログラムを構成するライブラリ群。RxJS（JavaScript）、RxJava（Java）、RxSwift（Swift）など多言語で実装されている。map/filter/mergeなどの演算子でストリームを宣言的に変換する。",
+        "domain": "programming",
+        "keywords": [
+          "Observable",
+          "リアクティブ",
+          "非同期",
+          "ストリーム",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "λ計算",
+    "reading": "らむだけいさん",
+    "aliases": [
+      "Lambda Calculus",
+      "ラムダ計算"
+    ],
+    "senses": [
+      {
+        "definition": "変数・関数抽象・関数適用の3要素のみから成る形式的な計算体系。1930年代にAlonzo Churchが考案し、チューリング計算と同等の計算能力を持つ。関数型プログラミングの理論的基盤であり、型理論や証明論とも深く関係する。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "型理論",
+          "計算論",
+          "Haskell",
+          "形式言語"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ダイナミックスコープ",
+    "reading": "だいなみっくすこーぷ",
+    "aliases": [
+      "Dynamic Scope",
+      "動的スコープ"
+    ],
+    "senses": [
+      {
+        "definition": "変数の参照が実行時のコールスタックによって決まるスコープ規則。関数の呼び出し元の変数を参照できるため柔軟だが、動作の予測が難しくなる。Emacs Lispや古いLisp方言で採用。Perlの`local`変数が部分的に動的スコープを使う。",
+        "domain": "programming",
+        "keywords": [
+          "スコープ",
+          "変数",
+          "Lisp",
+          "実行時",
+          "レキシカルスコープ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レコード型",
+    "reading": "れこーどがた",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "名前付きフィールドを持つ直積型。構造体（struct）と同義で使われることが多く、フィールドへのアクセスに名前を使う。HaskellのRecord構文、Elmのレコード、TypeScriptのオブジェクト型などが代表例。",
+        "domain": "programming",
+        "keywords": [
+          "直積型",
+          "struct",
+          "フィールド",
+          "代数的データ型",
+          "Haskell"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "多相型",
+    "reading": "たそうがた",
+    "aliases": [
+      "Polymorphic Type"
+    ],
+    "senses": [
+      {
+        "definition": "型パラメータを持ち複数の異なる型に対して統一的に動作できる型。パラメトリック多相（Generics）とアドホック多相（型クラス/オーバーロード）の2種類が主要。コードの再利用性と型安全性を両立する。",
+        "domain": "programming",
+        "keywords": [
+          "ジェネリクス",
+          "型クラス",
+          "型理論",
+          "パラメトリック多相",
+          "アドホック多相"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パラメトリック多相",
+    "reading": "ぱらめとりっくたそう",
+    "aliases": [
+      "Parametric Polymorphism"
+    ],
+    "senses": [
+      {
+        "definition": "型パラメータを持つ関数やデータ型が、どの具体的な型に対しても同一のコードで動作する多相性。Javaのジェネリクス、HaskellやRustの型パラメータが代表例。型パラメータに対して均一な振る舞いをする（パラメトリシティ）。",
+        "domain": "programming",
+        "keywords": [
+          "ジェネリクス",
+          "型パラメータ",
+          "多相型",
+          "型安全",
+          "Haskell"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アドホック多相",
+    "reading": "あどほくたそう",
+    "aliases": [
+      "Ad-hoc Polymorphism",
+      "Overloading"
+    ],
+    "senses": [
+      {
+        "definition": "同じ関数名を異なる型に対して異なる実装で動作させる多相性。オーバーロード（静的ディスパッチ）と型クラス/インターフェースによる動的ディスパッチが含まれる。パラメトリック多相と対比される。",
+        "domain": "programming",
+        "keywords": [
+          "オーバーロード",
+          "型クラス",
+          "多相型",
+          "ディスパッチ",
+          "インターフェース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "型クラス",
+    "reading": "かたくらす",
+    "aliases": [
+      "Type Class"
+    ],
+    "senses": [
+      {
+        "definition": "特定の操作を実装することを型に要求するHaskell由来の抽象化機構。インターフェースに似るが、既存の型に後から実装（インスタンス）を追加できる点が異なる（オープンワールド仮定）。RustのtraitやScalaの型クラスパターンが類似。",
+        "domain": "programming",
+        "keywords": [
+          "Haskell",
+          "アドホック多相",
+          "抽象化",
+          "Rust trait",
+          "インターフェース"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "エフェクトシステム",
+    "reading": "えふぇくとしすてむ",
+    "aliases": [
+      "Effect System",
+      "側効果システム"
+    ],
+    "senses": [
+      {
+        "definition": "関数が持つ副作用（I/O、例外、状態変更など）を型として明示的に追跡する型システムの拡張。コンパイル時に副作用の伝播を制御でき、純粋性を型レベルで保証する。Haskellのモナドトランスフォーマーや代数的エフェクトが実現手段。",
+        "domain": "programming",
+        "keywords": [
+          "副作用",
+          "型システム",
+          "純粋関数",
+          "代数的エフェクト",
+          "Haskell"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "代数的エフェクト",
+    "reading": "だいすうてきえふぇくと",
+    "aliases": [
+      "Algebraic Effects",
+      "Algebraic Effects and Handlers"
+    ],
+    "senses": [
+      {
+        "definition": "副作用を宣言的に定義・処理する言語機能。副作用の操作（エフェクト）とその解釈（ハンドラ）を分離し、依存性注入や例外・非同期・コルーチンを統一的に扱える。OCamlのEffect、Koka言語などが実装している。",
+        "domain": "programming",
+        "keywords": [
+          "副作用",
+          "エフェクトハンドラ",
+          "継続",
+          "代数的",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "継続",
+    "reading": "けいぞく",
+    "aliases": [
+      "Continuation"
+    ],
+    "senses": [
+      {
+        "definition": "プログラムのある時点での「残りの計算全体」を表す第一級の値。継続を操作することで例外、バックトラッキング、コルーチン、async/awaitなど多様な制御フローを統一的に実装できる。SchemeのcallccがContinuationを直接扱う代表例。",
+        "domain": "programming",
+        "keywords": [
+          "制御フロー",
+          "CPS",
+          "Scheme",
+          "callcc",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スレッドセーフ",
+    "reading": "すれっどせーふ",
+    "aliases": [
+      "Thread-Safe",
+      "Thread Safety"
+    ],
+    "senses": [
+      {
+        "definition": "複数のスレッドから同時にアクセスされても正しく動作することが保証されたコードやデータ構造の性質。ロック・アトミック操作・不変データなどの手法でスレッドセーフ性を実現する。スレッドセーフでないコードを並行使用すると競合状態が発生する。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "ミューテックス",
+          "アトミック",
+          "不変",
+          "競合状態"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "メモリバリア",
+    "reading": "めもりばりあ",
+    "aliases": [
+      "Memory Barrier",
+      "Memory Fence",
+      "フェンス命令"
+    ],
+    "senses": [
+      {
+        "definition": "CPUやコンパイラが命令を最適化で並び替える際の境界を設けるCPU命令またはコンパイラ指令。バリアの前後で読み書きが適切な順序で見えることを保証し、マルチコア環境でのメモリ可視性を確立する。",
+        "domain": "programming",
+        "keywords": [
+          "メモリモデル",
+          "CPU",
+          "並行処理",
+          "happens-before",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キャッシュコヒーレンス",
+    "reading": "きゃっしゅこひーれんす",
+    "aliases": [
+      "Cache Coherence",
+      "キャッシュ整合性"
+    ],
+    "senses": [
+      {
+        "definition": "マルチプロセッサシステムで各コアのキャッシュが共有メモリの最新の値を適切に反映するための一貫性保証。MESIプロトコルなどのハードウェア機構が実装する。False sharingはキャッシュコヒーレンストラフィックを増加させるパフォーマンス問題。",
+        "domain": "programming",
+        "keywords": [
+          "マルチコア",
+          "メモリモデル",
+          "CPU",
+          "パフォーマンス",
+          "False sharing"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "線形型",
+    "reading": "せんけいがた",
+    "aliases": [
+      "Linear Type"
+    ],
+    "senses": [
+      {
+        "definition": "値がプログラム中でちょうど1回だけ使用されることを型システムが強制する型。使い捨てリソース（ファイルハンドル、ネットワーク接続など）の管理に適し、二重解放などのリソースリークをコンパイル時に防ぐ。Rustの所有権システムの理論的背景。",
+        "domain": "programming",
+        "keywords": [
+          "型システム",
+          "所有権",
+          "リソース管理",
+          "Rust",
+          "型理論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アフィン型",
+    "reading": "あふぃんがた",
+    "aliases": [
+      "Affine Type"
+    ],
+    "senses": [
+      {
+        "definition": "値が高々1回しか使用されないことを保証する型。線形型は「ちょうど1回」であるのに対しアフィン型は「0回または1回」。Rustの所有権システムはアフィン型に近い意味論を持ち、値のmoveによる消費を型システムで追跡する。",
+        "domain": "programming",
+        "keywords": [
+          "型システム",
+          "所有権",
+          "Rust",
+          "線形型",
+          "型理論"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "所有権システム",
+    "reading": "しょゆうけんしすてむ",
+    "aliases": [
+      "Ownership System",
+      "Ownership Model"
+    ],
+    "senses": [
+      {
+        "definition": "Rust言語が採用するメモリ管理モデル。各値は1つの所有者を持ち、所有者がスコープを抜けると自動解放される。借用チェッカと組み合わせてGCなしにメモリ安全性とスレッド安全性をコンパイル時に保証する。",
+        "domain": "programming",
+        "keywords": [
+          "Rust",
+          "メモリ安全",
+          "GC不要",
+          "借用チェッカ",
+          "ライフタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "借用チェッカ",
+    "reading": "しゃくようちぇっか",
+    "aliases": [
+      "Borrow Checker"
+    ],
+    "senses": [
+      {
+        "definition": "Rustコンパイラに組み込まれた、参照（借用）のライフタイムと可変性を検証する機構。「同時に複数の不変参照、または1つの可変参照のみ許可」というルールを強制し、データ競合をコンパイル時に排除する。",
+        "domain": "programming",
+        "keywords": [
+          "Rust",
+          "所有権",
+          "ライフタイム",
+          "メモリ安全",
+          "コンパイル時検証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ライフタイム",
+    "reading": "らいふたいむ",
+    "aliases": [
+      "Lifetime"
+    ],
+    "senses": [
+      {
+        "definition": "Rustにおいて参照が有効なスコープの範囲を表すアノテーション。借用チェッカがライフタイムを解析し、ダングリング参照を防ぐ。多くの場合ライフタイムは推論されるが、関数シグネチャや構造体で明示が必要な場合は`'a`などの記法で表す。",
+        "domain": "programming",
+        "keywords": [
+          "Rust",
+          "借用チェッカ",
+          "参照",
+          "メモリ安全",
+          "スコープ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "依存型",
+    "reading": "いぞんがた",
+    "aliases": [
+      "Dependent Type"
+    ],
+    "senses": [
+      {
+        "definition": "型が値に依存できる型システム。たとえば「長さnの配列型」のように実行時の値を型の一部として使える。定理証明と同等の表現力を持ちCoq、Agda、Idrisなどの証明支援系で採用される。型安全性の究極形ともいわれる。",
+        "domain": "programming",
+        "keywords": [
+          "型理論",
+          "型システム",
+          "Idris",
+          "Agda",
+          "定理証明"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GADT",
+    "reading": "じーえーでぃーてぃー",
+    "aliases": [
+      "Generalized Algebraic Data Type",
+      "一般化代数的データ型"
+    ],
+    "senses": [
+      {
+        "definition": "代数的データ型を拡張し、各コンストラクタが異なる型パラメータの具体化を返せるようにした型。型安全な式評価器やDSLの実装に使われ、型レベルで不変条件を表現できる。HaskellとOCamlが対応している。",
+        "domain": "programming",
+        "keywords": [
+          "代数的データ型",
+          "型システム",
+          "Haskell",
+          "型パラメータ",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ並列",
+    "reading": "でーたへいれつ",
+    "aliases": [
+      "Data Parallelism"
+    ],
+    "senses": [
+      {
+        "definition": "同一の操作を大量のデータ要素に対して並列に適用する並列処理スタイル。GPU演算やSIMD命令、MapReduceなどが典型例。データを分割して各プロセッサが独立して処理するためスケールしやすい。",
+        "domain": "programming",
+        "keywords": [
+          "並列処理",
+          "GPU",
+          "SIMD",
+          "MapReduce",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "タスク並列",
+    "reading": "たすくへいれつ",
+    "aliases": [
+      "Task Parallelism"
+    ],
+    "senses": [
+      {
+        "definition": "異なる処理（タスク）を複数のスレッドや計算資源が並列に実行する並列処理スタイル。各タスクは独立していても依存関係を持っていてもよい。データ並列と対比され、Fork/Joinフレームワークで実装されることが多い。",
+        "domain": "programming",
+        "keywords": [
+          "並列処理",
+          "Fork/Join",
+          "スレッド",
+          "スケジューリング",
+          "データ並列"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SIMD",
+    "reading": "しむど",
+    "aliases": [
+      "Single Instruction Multiple Data"
+    ],
+    "senses": [
+      {
+        "definition": "1つの命令で複数のデータ要素を同時に処理するCPUアーキテクチャ拡張。x86のSSE/AVX、ARMのNEONが代表。画像処理・音声処理・機械学習推論の高速化に活用される。RustやC++のautovectorizationによって自動的に利用されることもある。",
+        "domain": "programming",
+        "keywords": [
+          "CPU",
+          "データ並列",
+          "パフォーマンス",
+          "ベクトル演算",
+          "AVX"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "STM",
+    "reading": "えすてぃーえむ",
+    "aliases": [
+      "Software Transactional Memory",
+      "ソフトウェアトランザクショナルメモリ"
+    ],
+    "senses": [
+      {
+        "definition": "データベーストランザクションの概念を共有メモリの並行アクセスに適用するプログラミングモデル。コードブロックをトランザクションとして実行し、競合時は自動的にリトライする。デッドロックが発生せず宣言的に書けるがオーバーヘッドがある。HaskellのSTMが著名。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "トランザクション",
+          "Haskell",
+          "ロックフリー",
+          "共有メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "純粋関数型言語",
+    "reading": "じゅんすいかんすうがたげんご",
+    "aliases": [
+      "Pure Functional Language"
+    ],
+    "senses": [
+      {
+        "definition": "言語全体が純粋関数と参照透過性に基づいて設計されたプログラミング言語。副作用はモナドや代数的エフェクトによって型システムで管理される。HaskellやElmが代表で、不変性・遅延評価・強力な型推論が特徴。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "Haskell",
+          "純粋関数",
+          "参照透過性",
+          "副作用"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "エフェクトハンドラ",
+    "reading": "えふぇくとはんどら",
+    "aliases": [
+      "Effect Handler"
+    ],
+    "senses": [
+      {
+        "definition": "代数的エフェクトシステムにおいて、宣言されたエフェクト操作の具体的な解釈・実装を提供する構造。エフェクトの呼び出しと処理を分離することで、同じコードを異なる文脈（テスト用スタブなど）で実行できる。",
+        "domain": "programming",
+        "keywords": [
+          "代数的エフェクト",
+          "副作用",
+          "継続",
+          "関数型",
+          "テスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バックトラッキング",
+    "reading": "ばっくとらっきんぐ",
+    "aliases": [
+      "Backtracking"
+    ],
+    "senses": [
+      {
+        "definition": "問題解決において行き詰まったら直前の選択に戻って別の選択肢を試す探索アルゴリズムの戦略。論理プログラミング（Prolog）の基本的な実行モデルで、継続を使って関数型言語でも実装できる。パズルや組み合わせ最適化に使われる。",
+        "domain": "programming",
+        "keywords": [
+          "アルゴリズム",
+          "Prolog",
+          "探索",
+          "継続",
+          "非決定性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "非決定性計算",
+    "reading": "ひけっていせいけいさん",
+    "aliases": [
+      "Nondeterministic Computation"
+    ],
+    "senses": [
+      {
+        "definition": "1つの入力に対して複数の実行経路や結果が存在しうる計算モデル。リスト/Maybeモナドを使うと「すべての可能な結果」を計算する非決定性をエミュレートできる。バックトラッキングや論理プログラミングと密接に関係する。",
+        "domain": "programming",
+        "keywords": [
+          "計算モデル",
+          "モナド",
+          "バックトラッキング",
+          "論理プログラミング",
+          "関数型"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "モナドトランスフォーマー",
+    "reading": "もなどとらんすふぉーまー",
+    "aliases": [
+      "Monad Transformer"
+    ],
+    "senses": [
+      {
+        "definition": "複数のモナドの効果を合成するための型クラス。例えばMaybeTはMaybeの失敗処理とIOなど別のモナドを組み合わせる。StateT、ReaderT、WriterTなどがあり、モナドスタックとして積み重ねて複合エフェクトを表現する。",
+        "domain": "programming",
+        "keywords": [
+          "モナド",
+          "Haskell",
+          "合成",
+          "エフェクト",
+          "型クラス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "遅延初期化",
+    "reading": "ちえんしょきか",
+    "aliases": [
+      "Lazy Initialization"
+    ],
+    "senses": [
+      {
+        "definition": "オブジェクトや値をプログラム起動時ではなく初めて必要とされた時点で初期化するパターン。起動時間の短縮・メモリ効率の向上に有効。マルチスレッド環境では二重チェックロッキングなどのパターンで安全に実装する必要がある。",
+        "domain": "programming",
+        "keywords": [
+          "遅延評価",
+          "パフォーマンス",
+          "初期化",
+          "デザインパターン",
+          "マルチスレッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "デルミテッド継続",
+    "reading": "でるみてっどけいぞく",
+    "aliases": [
+      "Delimited Continuation",
+      "区切り継続"
+    ],
+    "senses": [
+      {
+        "definition": "プログラムの残りの計算全体ではなく、特定のマーカー（プロンプト）までの部分的な継続を第一級の値として扱う機能。代数的エフェクトやジェネレータのより一般的な実装基盤となる。Racket、OCaml 5.xなどが提供する。",
+        "domain": "programming",
+        "keywords": [
+          "継続",
+          "制御フロー",
+          "代数的エフェクト",
+          "Racket",
+          "OCaml"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ストランド",
+    "reading": "すとらんど",
+    "aliases": [
+      "Strand",
+      "Green Thread"
+    ],
+    "senses": [
+      {
+        "definition": "OSスレッドの上に実装されたユーザー空間の軽量スレッド。グリーンスレッドとも呼ばれ、ランタイムが協調スケジューリングを管理する。GoのGoroutine、Erlangのプロセスが代表例。OSスレッドより少ないリソースで大量に生成できる。",
+        "domain": "programming",
+        "keywords": [
+          "軽量スレッド",
+          "コルーチン",
+          "Goroutine",
+          "並行処理",
+          "ランタイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロデューサー・コンシューマー",
+    "reading": "ぷろでゅーさーこんしゅーまー",
+    "aliases": [
+      "Producer-Consumer Pattern",
+      "生産者消費者パターン"
+    ],
+    "senses": [
+      {
+        "definition": "データを生成するプロデューサーと消費するコンシューマーを分離し、バッファ（キュー）を介して疎結合に連携する並行処理パターン。生産・消費速度の差を吸収しスループットを向上させる。BlockingQueueやChannelを使って実装される。",
+        "domain": "programming",
+        "keywords": [
+          "並行処理",
+          "キュー",
+          "スレッド",
+          "Channel",
+          "デザインパターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "読み書きロック",
+    "reading": "よみかきろっく",
+    "aliases": [
+      "Read-Write Lock",
+      "RWLock",
+      "ReaderWriterLock"
+    ],
+    "senses": [
+      {
+        "definition": "複数の読み取り操作は同時に許可しつつ、書き込み操作は排他的に行う同期プリミティブ。読み取りが多く書き込みが少ないデータ構造で、ミューテックスよりも高いスループットを実現する。",
+        "domain": "programming",
+        "keywords": [
+          "同期",
+          "並行処理",
+          "ミューテックス",
+          "パフォーマンス",
+          "スレッド"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バリア同期",
+    "reading": "ばりあどうき",
+    "aliases": [
+      "Barrier Synchronization",
+      "Barrier"
+    ],
+    "senses": [
+      {
+        "definition": "並列処理において全スレッドが特定の地点に到達するまで先に進んだスレッドを待機させる同期メカニズム。フェーズに分かれた並列アルゴリズムや並列ループの終端同期に使われる。CyclicBarrierやCountDownLatchが実装例。",
+        "domain": "programming",
+        "keywords": [
+          "並列処理",
+          "同期",
+          "スレッド",
+          "待機",
+          "Java"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "アクターシステム",
+    "reading": "あくたーしすてむ",
+    "aliases": [
+      "Actor System"
+    ],
+    "senses": [
+      {
+        "definition": "Actorモデルを実装したランタイムシステム。アクターの生成・終了・監視、メッセージルーティング、障害回復（supervision）を管理する。AkkaやErlang/OTPの「supervision tree」が代表的で、フォールトトレラントな分散システムの構築に使われる。",
+        "domain": "programming",
+        "keywords": [
+          "Actorモデル",
+          "Akka",
+          "Erlang",
+          "分散システム",
+          "フォールトトレランス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "イベント駆動プログラミング",
+    "reading": "いべんとくどうぷろぐらみんぐ",
+    "aliases": [
+      "Event-Driven Programming",
+      "EDP"
+    ],
+    "senses": [
+      {
+        "definition": "プログラムの実行フローをイベントの発生によって制御するプログラミングパラダイム。GUIアプリ、ゲーム、非同期サーバーで広く採用される。イベントリスナーやハンドラを登録し、イベントループがイベントを検出してディスパッチする。",
+        "domain": "programming",
+        "keywords": [
+          "イベントループ",
+          "非同期",
+          "GUI",
+          "コールバック",
+          "パラダイム"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "副作用管理",
+    "reading": "ふくさようかんり",
+    "aliases": [
+      "Effect Management",
+      "Side Effect Management"
+    ],
+    "senses": [
+      {
+        "definition": "プログラムの副作用（I/O、状態変更、例外など）を型システムや設計パターンを使って制御・分離する取り組み。モナド、代数的エフェクト、Dependency Injectionなどが手段として使われ、テスト容易性と保守性を高める。",
+        "domain": "programming",
+        "keywords": [
+          "副作用",
+          "関数型",
+          "モナド",
+          "代数的エフェクト",
+          "テスト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ゼロコスト抽象化",
+    "reading": "ぜろこすとちゅうしょうか",
+    "aliases": [
+      "Zero-Cost Abstraction"
+    ],
+    "senses": [
+      {
+        "definition": "高レベルな抽象化を使っても実行時オーバーヘッドが生じない言語設計原則。C++やRustが掲げるコンセプトで、イテレータ・クロージャ・ジェネリクスなどのコストは手書きの低レベルコードと同等にコンパイルされる。",
+        "domain": "programming",
+        "keywords": [
+          "Rust",
+          "C++",
+          "最適化",
+          "パフォーマンス",
+          "抽象化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プログラミングパラダイム",
+    "reading": "ぷろぐらみんぐぱらだいむ",
+    "aliases": [
+      "Programming Paradigm"
+    ],
+    "senses": [
+      {
+        "definition": "プログラムの構造と実行に関する根本的なスタイルや考え方の枠組み。命令型・オブジェクト指向・関数型・論理型・宣言型などがあり、多くの現代言語は複数のパラダイムをサポートするマルチパラダイム言語である。",
+        "domain": "programming",
+        "keywords": [
+          "関数型",
+          "命令型",
+          "オブジェクト指向",
+          "宣言型",
+          "言語設計"
+        ]
+      }
+    ]
+  }
+]

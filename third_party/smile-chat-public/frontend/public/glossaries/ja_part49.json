@@ -1,0 +1,1834 @@
+[
+  {
+    "term": "ウィンドウ関数",
+    "reading": "うぃんどうかんすう",
+    "aliases": [
+      "Window Function",
+      "分析関数"
+    ],
+    "senses": [
+      {
+        "definition": "OVER句で定義したウィンドウ（行の集合）に対して集計・順位付け・移動平均などを計算するSQL関数。GROUP BYと異なり行を集約せずに各行へ結果を付与できる。ROW_NUMBER・RANK・LAG・LEAD・SUM OVERなどが代表例。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "分析",
+          "OVER句",
+          "順位付け",
+          "集計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CTE",
+    "reading": "しーてぃーいー",
+    "aliases": [
+      "共通テーブル式",
+      "Common Table Expression",
+      "WITH句"
+    ],
+    "senses": [
+      {
+        "definition": "WITH句を使って一時的な名前付き結果セットを定義するSQL構文。複雑なクエリを読みやすいサブ式に分割でき、同一クエリ内で複数回参照可能。再帰CTEも実現できる。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "WITH句",
+          "可読性",
+          "再帰",
+          "一時テーブル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "再帰CTE",
+    "reading": "さいきしーてぃーいー",
+    "aliases": [
+      "Recursive CTE",
+      "再帰WITH句"
+    ],
+    "senses": [
+      {
+        "definition": "WITH RECURSIVEを使い自己参照することで階層構造やグラフを再帰的に走査するCTE。アンカー部と再帰部を UNION ALL でつなぎ、終了条件を満たすまで繰り返す。組織図やツリー構造の処理に有効。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "再帰",
+          "階層構造",
+          "WITH RECURSIVE",
+          "ツリー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "相関サブクエリ",
+    "reading": "そうかんさぶくえり",
+    "aliases": [
+      "Correlated Subquery",
+      "相関副問い合わせ"
+    ],
+    "senses": [
+      {
+        "definition": "外側クエリの各行を参照しながら実行されるサブクエリ。外側クエリの列値をサブクエリ内で使用するため行ごとに再評価される。EXISTSと組み合わせた存在確認や行ごとの集計計算に使われる。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "サブクエリ",
+          "外側クエリ",
+          "EXISTS",
+          "行ごと"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EXISTS",
+    "aliases": [
+      "EXISTSサブクエリ",
+      "EXISTS述語"
+    ],
+    "senses": [
+      {
+        "definition": "サブクエリが1行以上返すかどうかを真偽値で評価するSQL述語。IN句より大きな結果セットで効率的なことが多く、相関サブクエリと組み合わせた存在確認パターンで広く使われる。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "サブクエリ",
+          "述語",
+          "存在確認",
+          "相関サブクエリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "LATERAL JOIN",
+    "aliases": [
+      "LATERAL結合",
+      "LATERAL句"
+    ],
+    "senses": [
+      {
+        "definition": "FROMリスト内の前の項目を参照できるサブクエリやテーブル関数を結合するSQL構文。PostgreSQL等が対応し、行ごとに異なるパラメータでサブクエリを評価できるため相関サブクエリを結合形式で書き直す際に有効。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "JOIN",
+          "サブクエリ",
+          "PostgreSQL",
+          "行ごと"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CROSS APPLY",
+    "aliases": [
+      "CROSS APPLY演算子"
+    ],
+    "senses": [
+      {
+        "definition": "SQL Serverで使われるLATERAL JOINに相当する構文。テーブル値関数や行セットを返すサブクエリを各行に適用し結合する。結果が空の行はAPPLY後から除外される点でOUTER APPLYと異なる。",
+        "domain": "database",
+        "keywords": [
+          "SQL Server",
+          "LATERAL",
+          "テーブル値関数",
+          "行ごと",
+          "結合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PIVOT",
+    "aliases": [
+      "PIVOT演算子",
+      "ピボット"
+    ],
+    "senses": [
+      {
+        "definition": "行データを列に転換するSQL操作。縦持ちデータを横持ち（クロス集計表）形式に変換する。SQL ServerはPIVOT構文を持ち、標準SQLでは条件付き集計（CASE SUM）で代替する。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "クロス集計",
+          "行列変換",
+          "集計",
+          "データ整形"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UNPIVOT",
+    "aliases": [
+      "UNPIVOT演算子",
+      "アンピボット"
+    ],
+    "senses": [
+      {
+        "definition": "PIVOTの逆操作で列データを行に変換するSQL操作。横持ちデータを縦持ち形式に正規化する際に使用する。SQL ServerはUNPIVOT構文を、標準SQLではUNION ALLで代替する。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "正規化",
+          "列行変換",
+          "PIVOT",
+          "データ整形"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "MERGE文",
+    "reading": "まーじぶん",
+    "aliases": [
+      "MERGE INTO",
+      "UPSERTのSQL標準形"
+    ],
+    "senses": [
+      {
+        "definition": "1つのSQL文でソースとターゲットを照合しINSERT・UPDATE・DELETEを条件分岐して実行するSQL標準構文。ETLや差分同期に便利だが、実装は方言が多くロック動作に注意が必要。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "UPSERT",
+          "ETL",
+          "差分同期",
+          "INSERT UPDATE"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UPSERT",
+    "reading": "あっぷさーと",
+    "aliases": [
+      "ON CONFLICT DO UPDATE",
+      "INSERT OR REPLACE",
+      "競合時更新"
+    ],
+    "senses": [
+      {
+        "definition": "レコードが存在すればUPDATE、なければINSERTを一操作で行うデータ書き込みパターン。PostgreSQLはINSERT … ON CONFLICT DO UPDATE、MySQLはINSERT … ON DUPLICATE KEY UPDATEで実現する。",
+        "domain": "database",
+        "keywords": [
+          "INSERT",
+          "UPDATE",
+          "競合",
+          "冪等性",
+          "PostgreSQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "RETURNING句",
+    "reading": "りたーにんぐく",
+    "aliases": [
+      "RETURNING",
+      "OUTPUT句"
+    ],
+    "senses": [
+      {
+        "definition": "INSERT・UPDATE・DELETEの実行結果として変更された行のデータを返すSQL拡張。PostgreSQLが対応し、採番されたIDや更新後の値を追加SELECTなしに取得できる。SQL ServerではOUTPUT句が同等機能を持つ。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "INSERT",
+          "UPDATE",
+          "DELETE",
+          "結果取得"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "実行計画",
+    "reading": "じっこうけいかく",
+    "aliases": [
+      "Query Plan",
+      "クエリプラン",
+      "Execution Plan"
+    ],
+    "senses": [
+      {
+        "definition": "データベースがSQLを実行する際に選択したアクセス経路・結合アルゴリズム・演算子の組み合わせを木構造で表したもの。EXPLAIN/EXPLAIN ANALYZEで確認し、パフォーマンスチューニングの出発点となる。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "チューニング",
+          "EXPLAIN",
+          "オプティマイザ",
+          "アクセスパス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EXPLAIN ANALYZE",
+    "aliases": [
+      "EXPLAIN ANALYZE実行",
+      "実行計画詳細"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQL等でSQLを実際に実行しながら各ノードの推定コスト・実測行数・実測時間を計画ツリーに付加して表示するコマンド。推定と実測の乖離がボトルネック特定に役立つ。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "チューニング",
+          "実行計画",
+          "コスト",
+          "性能分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クエリオプティマイザ",
+    "reading": "くえりおぷてぃまいざ",
+    "aliases": [
+      "Query Optimizer",
+      "クエリ最適化器"
+    ],
+    "senses": [
+      {
+        "definition": "SQLを受け取り統計情報を基に最も効率的な実行計画を選択するデータベースエンジンの中核コンポーネント。ルールベースとコストベースの2方式があり、現代のDBMSは主にコストベースを採用する。",
+        "domain": "database",
+        "keywords": [
+          "DBMS",
+          "実行計画",
+          "コストベース",
+          "統計情報",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コストベース最適化",
+    "reading": "こすとべーすさいてきか",
+    "aliases": [
+      "CBO",
+      "Cost-Based Optimization"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルの統計情報（行数・カーディナリティ・ヒストグラム）を用いて各実行計画のコストを推定し、最小コストの計画を選ぶクエリ最適化手法。統計情報の精度が最適化品質を左右する。",
+        "domain": "database",
+        "keywords": [
+          "オプティマイザ",
+          "統計情報",
+          "実行計画",
+          "カーディナリティ",
+          "コスト推定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "統計情報",
+    "reading": "とうけいじょうほう",
+    "aliases": [
+      "Statistics",
+      "テーブル統計"
+    ],
+    "senses": [
+      {
+        "definition": "オプティマイザがコストを推定するために収集するテーブル・列・インデックスに関するメタデータ。行数・平均行長・カーディナリティ・ヒストグラムなどを含み、ANALYZEコマンドで更新する。",
+        "domain": "database",
+        "keywords": [
+          "オプティマイザ",
+          "ANALYZE",
+          "カーディナリティ",
+          "ヒストグラム",
+          "メタデータ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ヒストグラム",
+    "reading": "ひすとぐらむ",
+    "aliases": [
+      "Histogram",
+      "列ヒストグラム"
+    ],
+    "senses": [
+      {
+        "definition": "列の値分布をバケットに分けて集計した統計情報の一種。オプティマイザが選択率を推定するために使用し、偏ったデータ分布でも精度の高いコスト推定を可能にする。",
+        "domain": "database",
+        "keywords": [
+          "統計情報",
+          "オプティマイザ",
+          "選択率",
+          "データ分布",
+          "コスト推定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "テーブルスキャン",
+    "reading": "てーぶるすきゃん",
+    "aliases": [
+      "Full Table Scan",
+      "Sequential Scan",
+      "Seq Scan"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルの全行を先頭から順に読み取るアクセス方式。インデックスが使われない場合や大部分の行を取得する際に選択される。行数が多いと遅くなるため、適切なインデックス設計が重要。",
+        "domain": "database",
+        "keywords": [
+          "アクセスパス",
+          "インデックス",
+          "フルスキャン",
+          "パフォーマンス",
+          "実行計画"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インデックススキャン",
+    "reading": "いんでっくすすきゃん",
+    "aliases": [
+      "Index Scan",
+      "インデックス走査"
+    ],
+    "senses": [
+      {
+        "definition": "B-Treeなどのインデックス構造を辿って対象行を特定しテーブルから取得するアクセス方式。テーブルスキャンより少ない読み込みで絞り込める場合に選択され、選択率が低いほど効果的。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "アクセスパス",
+          "B-Tree",
+          "実行計画",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カバリングインデックス",
+    "reading": "かばりんぐいんでっくす",
+    "aliases": [
+      "Covering Index",
+      "Index Only Scan",
+      "インデックスオンリースキャン"
+    ],
+    "senses": [
+      {
+        "definition": "クエリが必要とするすべての列をインデックスが含むため、テーブル本体にアクセスせずインデックスのみで結果を返せる最適化。ランダムI/Oを排除し大幅な高速化が可能。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "パフォーマンス",
+          "I/O削減",
+          "複合インデックス",
+          "アクセスパス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "複合インデックス",
+    "reading": "ふくごういんでっくす",
+    "aliases": [
+      "Composite Index",
+      "Multi-column Index",
+      "多列インデックス"
+    ],
+    "senses": [
+      {
+        "definition": "複数列を組み合わせて作成するインデックス。先頭列から順に有効で、列順序・選択率・カバリングを考慮した設計が重要。左端プレフィックス原則により使える条件が限定される。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "多列",
+          "左端プレフィックス",
+          "カバリング",
+          "設計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "部分インデックス",
+    "reading": "ぶぶんいんでっくす",
+    "aliases": [
+      "Partial Index",
+      "Filtered Index"
+    ],
+    "senses": [
+      {
+        "definition": "WHERE句の条件を満たす行のみを対象とした絞り込みインデックス。インデックスサイズを削減し、特定条件のクエリに特化した高速化が可能。PostgreSQL・SQL Serverが対応する。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "PostgreSQL",
+          "絞り込み",
+          "サイズ削減",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "関数インデックス",
+    "reading": "かんすういんでっくす",
+    "aliases": [
+      "Function-based Index",
+      "Expression Index",
+      "式インデックス"
+    ],
+    "senses": [
+      {
+        "definition": "列値そのものではなく列に関数や式を適用した結果に対して作成するインデックス。大文字小文字を無視した検索（LOWER(name)）や計算列の高速化に使われる。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "式",
+          "LOWER",
+          "最適化",
+          "PostgreSQL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "B-Treeインデックス",
+    "reading": "びーつりーいんでっくす",
+    "aliases": [
+      "B-Tree Index",
+      "バランスドツリーインデックス"
+    ],
+    "senses": [
+      {
+        "definition": "バランスド木構造でキーを格納するRDBMSの標準インデックス形式。等値・範囲・ORDER BYに対応しほぼすべてのRDBMSのデフォルト。挿入時のツリーバランス維持により均一な検索性能を提供する。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "B-Tree",
+          "範囲検索",
+          "ソート",
+          "RDBMS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GINインデックス",
+    "reading": "じんいんでっくす",
+    "aliases": [
+      "GIN Index",
+      "Generalized Inverted Index"
+    ],
+    "senses": [
+      {
+        "definition": "配列・JSONB・全文検索など複数値を含む列に対応したPostgreSQLのインデックス種類。転置インデックス構造を持ち、配列要素の包含検索やtsvectorの全文検索で高速化に使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "全文検索",
+          "JSONB",
+          "配列",
+          "転置インデックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GiSTインデックス",
+    "reading": "じすといんでっくす",
+    "aliases": [
+      "GiST Index",
+      "Generalized Search Tree"
+    ],
+    "senses": [
+      {
+        "definition": "汎用検索木（Generalized Search Tree）に基づくPostgreSQLのインデックス。地理座標（PostGIS）・範囲型・全文検索など多様なデータ型と演算子に対応し、拡張可能なインデックス基盤として機能する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "PostGIS",
+          "地理情報",
+          "範囲型",
+          "拡張インデックス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "BRIN",
+    "aliases": [
+      "Block Range INdex",
+      "ブロックレンジインデックス"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルの物理ブロック範囲ごとに最小値・最大値を記録する軽量なPostgreSQLインデックス。タイムスタンプのような物理順と論理順が一致する列に有効で、非常に小さなインデックスサイズを実現する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "インデックス",
+          "ブロック範囲",
+          "タイムスタンプ",
+          "大規模テーブル"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ハッシュインデックス",
+    "reading": "はっしゅいんでっくす",
+    "aliases": [
+      "Hash Index"
+    ],
+    "senses": [
+      {
+        "definition": "キーのハッシュ値でバケットを特定する等値検索専用のインデックス。B-Treeより等値検索が高速な場合があるが範囲検索には使えない。PostgreSQL 10以降でWAL対応となりクラッシュ安全になった。",
+        "domain": "database",
+        "keywords": [
+          "インデックス",
+          "ハッシュ",
+          "等値検索",
+          "PostgreSQL",
+          "バケット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "VACUUM",
+    "aliases": [
+      "VACUUMコマンド",
+      "バキューム"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLのMVCCで生じる不要な旧バージョン行（デッドタプル）を物理的に回収しディスクスペースを解放するメンテナンス操作。トランザクションIDの周回問題（XIDラップアラウンド）防止にも不可欠。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "MVCC",
+          "デッドタプル",
+          "ディスク回収",
+          "メンテナンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ANALYZE",
+    "aliases": [
+      "ANALYZEコマンド",
+      "統計更新"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルの列値をサンプリングして統計情報を更新するPostgreSQLコマンド。オプティマイザが正確なコスト推定を行うために必要で、大量データ変更後に実行することで実行計画の品質を維持する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "統計情報",
+          "オプティマイザ",
+          "サンプリング",
+          "コスト推定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "autovacuum",
+    "aliases": [
+      "自動バキューム",
+      "Autovacuum Daemon"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLがVACUUMとANALYZEを自動実行するバックグラウンドデーモン。設定した閾値を超えたデッドタプル数や変更行数に応じて起動し、手動管理不要で統計と空き領域を維持する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "VACUUM",
+          "ANALYZE",
+          "自動化",
+          "デーモン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WAL",
+    "reading": "わる",
+    "aliases": [
+      "Write-Ahead Logging",
+      "先行書き込みログ"
+    ],
+    "senses": [
+      {
+        "definition": "データ変更をデータファイルに書き込む前にログに記録することでクラッシュ後の回復を保証するRDBMSの基本技術。PostgreSQLのWALはレプリケーションのデータ転送にも使われ、チェックポイントとともにACIDの耐久性を実現する。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "クラッシュリカバリ",
+          "耐久性",
+          "レプリケーション",
+          "チェックポイント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ストリーミングレプリケーション",
+    "reading": "すとりーみんぐれぷりけーしょん",
+    "aliases": [
+      "Streaming Replication",
+      "WALストリーミング"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLでWALレコードをリアルタイムにスタンバイサーバへ送信し続ける物理レプリケーション方式。同期・非同期を選択でき、バイト単位のWAL転送のためスタンバイはプライマリと同じPostgreSQLバージョンが必要。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "WAL",
+          "物理レプリケーション",
+          "スタンバイ",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "論理レプリケーション",
+    "reading": "ろんりれぷりけーしょん",
+    "aliases": [
+      "Logical Replication",
+      "論理デコーディング"
+    ],
+    "senses": [
+      {
+        "definition": "行レベルの変更（INSERT/UPDATE/DELETE）をパブリッシャーからサブスクライバーへ論理的に転送するレプリケーション方式。バージョンやプラットフォームを跨いだ複製・特定テーブルのみの複製・データ移行に使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "パブリッシャー",
+          "サブスクライバー",
+          "行レプリケーション",
+          "データ移行"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マテリアライズドビュー",
+    "reading": "まてりあらいずどびゅー",
+    "aliases": [
+      "Materialized View",
+      "具体化ビュー"
+    ],
+    "senses": [
+      {
+        "definition": "ビューのクエリ結果をディスクに実体化した特殊なビュー。通常ビューとは異なり参照時に再計算せず高速に読み取れる。REFRESHコマンドで内容を更新する必要があり、更新頻度とクエリ速度のトレードオフがある。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "ビュー",
+          "キャッシュ",
+          "REFRESH",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PgBouncer",
+    "reading": "ぴーじーばうんさー",
+    "aliases": [
+      "PgBouncer接続プーラー"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQL向けの軽量な接続プーラー。セッション・トランザクション・ステートメントの3モードで接続を管理し、数千クライアントを少数のデータベース接続に多重化することでスケールを実現する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "コネクションプーリング",
+          "スケール",
+          "多重化",
+          "軽量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CHECK制約",
+    "reading": "ちぇっくせいやく",
+    "aliases": [
+      "CHECK Constraint",
+      "チェック制約"
+    ],
+    "senses": [
+      {
+        "definition": "列に格納できる値を任意のブール式で制限するテーブル制約。たとえばage > 0やstatus IN ('active','inactive')のような業務ルールをデータベースレベルで強制し、アプリ側のバリデーション漏れを防ぐ。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "制約",
+          "データ整合性",
+          "DDL",
+          "バリデーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UNIQUE制約",
+    "reading": "ゆにーくせいやく",
+    "aliases": [
+      "UNIQUE Constraint",
+      "一意制約"
+    ],
+    "senses": [
+      {
+        "definition": "列または列の組み合わせに重複値を許可しない制約。NULLの扱いはRDBMSによって異なり、PostgreSQLはNULL同士を別値とみなす。UNIQUEインデックスが自動作成されることが多い。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "制約",
+          "重複禁止",
+          "DDL",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NOT NULL制約",
+    "reading": "のっとぬるせいやく",
+    "aliases": [
+      "NOT NULL Constraint",
+      "非NULL制約"
+    ],
+    "senses": [
+      {
+        "definition": "列にNULLを格納することを禁止する制約。必須項目の強制適用に使われ、オプティマイザもNOT NULLを利用して最適化を行う場合がある。DEFAULT値とセットで使うことが多い。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "制約",
+          "NULL",
+          "DDL",
+          "必須項目"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DEFAULT制約",
+    "reading": "でふぉるとせいやく",
+    "aliases": [
+      "DEFAULT Constraint",
+      "デフォルト値"
+    ],
+    "senses": [
+      {
+        "definition": "INSERT時に値が指定されなかった列に自動で設定するデフォルト値を定義する制約。定数・関数（NOW()・gen_random_uuid()など）を指定でき、アプリケーション側の省略可能な値を一元管理できる。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "DDL",
+          "INSERT",
+          "デフォルト値",
+          "制約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "集計関数",
+    "reading": "しゅうけいかんすう",
+    "aliases": [
+      "Aggregate Function",
+      "集約関数"
+    ],
+    "senses": [
+      {
+        "definition": "GROUP BYと組み合わせてグループ内の複数行を集約し1つの値を返すSQL関数。SUM・COUNT・AVG・MAX・MINが基本で、STRING_AGG・ARRAY_AGGなど拡張集計関数もある。ウィンドウ関数としても利用可能。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "GROUP BY",
+          "SUM",
+          "COUNT",
+          "集約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GROUPING SETS",
+    "aliases": [
+      "グルーピングセット",
+      "CUBE"
+    ],
+    "senses": [
+      {
+        "definition": "複数のGROUP BY条件をまとめて記述し小計・合計・ピボットを単一クエリで算出するSQL構文。ROLLUP（階層小計）・CUBE（全組み合わせ）・GROUPING SETSの3形式があり、UNIONより可読性と効率が高い。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "GROUP BY",
+          "ROLLUP",
+          "CUBE",
+          "小計"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ロールアップ",
+    "reading": "ろーるあっぷ",
+    "aliases": [
+      "階層集計"
+    ],
+    "senses": [
+      {
+        "definition": "GROUP BY ROLLUPで指定した列の階層に沿って小計・合計を一度に算出するSQL構文。(a,b,c)を指定するとab→a→総計の順に集計した結果を含む。レポートや分析クエリで活用される。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "GROUP BY",
+          "GROUPING SETS",
+          "集計",
+          "OLAP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JSONB",
+    "aliases": [
+      "JSONB型",
+      "バイナリJSON"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLがJSONデータをバイナリ形式に変換して格納する列型。テキストJSON型より解析済みのため検索が高速で、GIN/GiSTインデックスが利用でき、@>・?などの豊富な演算子で半構造データを扱える。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "JSON",
+          "バイナリ",
+          "GINインデックス",
+          "半構造データ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "フルテキスト検索",
+    "reading": "ふるてきすとけんさく",
+    "aliases": [
+      "Full-Text Search",
+      "全文検索",
+      "FTS"
+    ],
+    "senses": [
+      {
+        "definition": "文書全体を形態素解析・トークナイズしてインデックス化し、単語や句の含有を高速に検索する機能。PostgreSQLはtsvector・tsqueryとGINインデックスで実現し、ROUNDしたランキング算出も可能。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "tsvector",
+          "tsquery",
+          "GINインデックス",
+          "全文検索"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ロック",
+    "reading": "ろっく",
+    "aliases": [
+      "Lock",
+      "データベースロック",
+      "行ロック",
+      "テーブルロック"
+    ],
+    "senses": [
+      {
+        "definition": "複数のトランザクションが同じデータを同時変更する際の整合性を保つために一方の操作を待機させる仕組み。行レベル・テーブルレベル・ページレベルがあり、共有ロックと排他ロックの2種類が基本。",
+        "domain": "database",
+        "keywords": [
+          "トランザクション",
+          "並行制御",
+          "ACID",
+          "デッドロック",
+          "共有ロック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "行レベルロック",
+    "reading": "ぎょうれべるろっく",
+    "aliases": [
+      "Row-Level Lock"
+    ],
+    "senses": [
+      {
+        "definition": "テーブル全体ではなく変更対象の行だけにロックをかける粒度の細かいロック方式。テーブルロックより並行性が高く、PostgreSQL・InnoDBはデフォルトで行レベルロックを採用している。",
+        "domain": "database",
+        "keywords": [
+          "ロック",
+          "PostgreSQL",
+          "InnoDB",
+          "並行性",
+          "トランザクション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "選択率",
+    "reading": "せんたくりつ",
+    "aliases": [
+      "Selectivity",
+      "フィルタ率"
+    ],
+    "senses": [
+      {
+        "definition": "WHERE条件が全行のうちどの割合を返すかを表す0〜1の値。選択率が低い（絞り込みが強い）ほどインデックスが有効で、オプティマイザがインデックススキャンとフルスキャンを選択する基準となる。",
+        "domain": "database",
+        "keywords": [
+          "オプティマイザ",
+          "インデックス",
+          "WHERE",
+          "フィルタ",
+          "コスト推定"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ネステッドループ結合",
+    "reading": "ねすてっどるーぷけつごう",
+    "aliases": [
+      "Nested Loop Join",
+      "NL結合"
+    ],
+    "senses": [
+      {
+        "definition": "外側テーブルの各行に対して内側テーブルを順次走査する結合アルゴリズム。内側テーブルにインデックスがあれば高速で少量データに強いが、大量データ間ではマージ結合やハッシュ結合より遅い。",
+        "domain": "database",
+        "keywords": [
+          "JOIN",
+          "実行計画",
+          "アルゴリズム",
+          "インデックス",
+          "結合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ハッシュ結合",
+    "reading": "はっしゅけつごう",
+    "aliases": [
+      "Hash Join",
+      "Hash結合"
+    ],
+    "senses": [
+      {
+        "definition": "小さい方のテーブルをハッシュテーブルに構築してから大きいテーブルを走査する結合アルゴリズム。等値結合かつインデックスがない大規模テーブル間に有効で、メモリに収まらない場合はディスクスピルが発生する。",
+        "domain": "database",
+        "keywords": [
+          "JOIN",
+          "実行計画",
+          "アルゴリズム",
+          "メモリ",
+          "等値結合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マージ結合",
+    "reading": "まーじけつごう",
+    "aliases": [
+      "Merge Join",
+      "Sort Merge Join"
+    ],
+    "senses": [
+      {
+        "definition": "両テーブルを結合キーでソート済みの状態にしてからポインタを進めながらマージする結合アルゴリズム。ソート済みインデックスがある場合や範囲条件での結合で効率的。",
+        "domain": "database",
+        "keywords": [
+          "JOIN",
+          "実行計画",
+          "ソート",
+          "アルゴリズム",
+          "範囲結合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ワークメモリ",
+    "reading": "わーくめもり",
+    "aliases": [
+      "Work Memory",
+      "work_mem",
+      "ソートメモリ"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLでソートや結合のハッシュテーブルに使う一時メモリ量を制御するパラメータ。不足するとディスクへのスピルが発生し速度低下する。クエリの演算ノードごとに割り当てられるため過大設定はメモリ枯渇を招く。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "メモリ",
+          "ソート",
+          "ハッシュ結合",
+          "work_mem"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セーブポイント",
+    "reading": "せーぶぽいんと",
+    "aliases": [
+      "Savepoint"
+    ],
+    "senses": [
+      {
+        "definition": "トランザクション内の特定地点に名前を付けて保存し、その地点まで部分ロールバックできるSQL機能。長いトランザクションの途中エラーを全体ロールバックせずに復旧する際に使われる。",
+        "domain": "database",
+        "keywords": [
+          "トランザクション",
+          "ROLLBACK",
+          "PostgreSQL",
+          "部分的ロールバック",
+          "ACID"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DDL",
+    "aliases": [
+      "Data Definition Language",
+      "データ定義言語"
+    ],
+    "senses": [
+      {
+        "definition": "データベースのスキーマ（テーブル・インデックス・ビュー・スキーマ・ドメインなど）を定義・変更・削除するSQLの分類。CREATE・ALTER・DROPがDDLに属し、多くのRDBMSでDDLは自動コミットされる。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "CREATE",
+          "ALTER",
+          "DROP",
+          "スキーマ"
+        ]
+      },
+      {
+        "definition": "データベース定義文の総称。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "DDL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DML",
+    "aliases": [
+      "Data Manipulation Language",
+      "データ操作言語"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルのデータを操作するSQLの分類。SELECT・INSERT・UPDATE・DELETEがDMLに属し、トランザクション制御下で実行されてロールバックが可能。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "SELECT",
+          "INSERT",
+          "UPDATE",
+          "DELETE"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DCL",
+    "aliases": [
+      "Data Control Language",
+      "データ制御言語"
+    ],
+    "senses": [
+      {
+        "definition": "データベースのアクセス権限を制御するSQLの分類。GRANT（権限付与）・REVOKE（権限剥奪）がDCLに属し、セキュリティポリシーの実装に使われる。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "GRANT",
+          "REVOKE",
+          "権限管理",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TCL",
+    "aliases": [
+      "Transaction Control Language",
+      "トランザクション制御言語"
+    ],
+    "senses": [
+      {
+        "definition": "トランザクションを制御するSQLコマンドの分類。COMMIT・ROLLBACK・SAVEPOINTがTCLに属し、DML操作の確定または取り消しを管理する。",
+        "domain": "database",
+        "keywords": [
+          "SQL",
+          "COMMIT",
+          "ROLLBACK",
+          "SAVEPOINT",
+          "トランザクション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "シーケンス",
+    "reading": "しーくえんす",
+    "aliases": [
+      "Sequence",
+      "自動採番"
+    ],
+    "senses": [
+      {
+        "definition": "連番を自動生成するデータベースオブジェクト。PostgreSQLのSERIAL/BIGSERIALの内部実装であり、NEXTVAL関数で採番する。トランザクションをロールバックしても番号は戻らない（ギャップが発生する）。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "自動採番",
+          "SERIAL",
+          "NEXTVAL",
+          "主キー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "UUID",
+    "aliases": [
+      "Universally Unique Identifier",
+      "GUID",
+      "一意識別子"
+    ],
+    "senses": [
+      {
+        "definition": "128ビットのランダムまたは時刻ベースの一意識別子。分散システムで採番サーバなしに重複しないIDを生成でき、PostgreSQLではgen_random_uuid()（v4）で生成する。インデックスの断片化に注意が必要。",
+        "domain": "database",
+        "keywords": [
+          "主キー",
+          "分散システム",
+          "PostgreSQL",
+          "ULID",
+          "UUID v7"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "外部キー制約",
+    "reading": "がいぶきせいやく",
+    "aliases": [
+      "Foreign Key Constraint",
+      "FOREIGN KEY"
+    ],
+    "senses": [
+      {
+        "definition": "子テーブルの列値が必ず親テーブルの主キーまたはユニークキーに存在することを強制する制約。ON DELETE CASCADE・SET NULLなどのアクション指定でカスケード処理を定義でき、参照整合性を保証する。",
+        "domain": "database",
+        "keywords": [
+          "RDBMS",
+          "制約",
+          "参照整合性",
+          "CASCADE",
+          "DDL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "テーブル継承",
+    "reading": "てーぶるけいしょう",
+    "aliases": [
+      "Table Inheritance",
+      "PostgreSQL継承",
+      "INHERITS"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQL固有の機能で、子テーブルが親テーブルの列定義を継承し親テーブルへのクエリで子テーブルの行も取得できる。パーティショニング前身の仕組みとして使われたが、現在は宣言的パーティショニングが推奨される。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "INHERITS",
+          "パーティショニング",
+          "継承",
+          "スキーマ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "宣言的パーティショニング",
+    "reading": "せんげんてきぱーてぃしょにんぐ",
+    "aliases": [
+      "Declarative Partitioning",
+      "PostgreSQL 10パーティショニング"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQL 10以降のPARTITION BY構文を用いてDDLレベルでテーブルを範囲・リスト・ハッシュに分割する仕組み。オプティマイザがパーティションプルーニングを自動適用し、古いトリガーベースの実装より管理が容易。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "パーティショニング",
+          "PARTITION BY",
+          "プルーニング",
+          "DDL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "パーティションプルーニング",
+    "reading": "ぱーてぃしょんぷるーにんぐ",
+    "aliases": [
+      "Partition Pruning",
+      "パーティション刈り込み"
+    ],
+    "senses": [
+      {
+        "definition": "WHERE条件から不要なパーティションをスキャン対象外にするオプティマイザの最適化。パーティショニングの最大の恩恵であり、月別パーティションに対して特定月だけを検索する場合に効果を発揮する。",
+        "domain": "database",
+        "keywords": [
+          "パーティショニング",
+          "オプティマイザ",
+          "スキャン削減",
+          "実行計画",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "行セキュリティポリシー",
+    "reading": "ぎょうせきゅりてぃぽりしー",
+    "aliases": [
+      "Row-Level Security",
+      "Row Security Policy"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルの各行に対してユーザーやロールごとにアクセスできる行を制限するPostgreSQLのセキュリティ機能。SaaSのマルチテナントでテナントIDで行を絞り込む実装に活用される。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "セキュリティ",
+          "マルチテナント",
+          "RLS",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pglogical",
+    "aliases": [
+      "pglogical拡張",
+      "論理レプリケーション拡張"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLの論理レプリケーションを拡張し、テーブル単位・行フィルタ・双方向レプリケーション・バージョン間移行を可能にするサードパーティ拡張。Citus等の分散DB基盤に使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "論理レプリケーション",
+          "拡張",
+          "マイグレーション",
+          "双方向"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ストアドファンクション",
+    "reading": "すとあどふぁんくしょん",
+    "aliases": [
+      "Stored Function",
+      "ユーザー定義関数",
+      "UDF"
+    ],
+    "senses": [
+      {
+        "definition": "データベース内に保存して再利用可能なSQL・PL/pgSQL等で書かれた関数。値を返す点でプロシージャと異なり、SELECT文のなかで呼び出せる。ロジックのDB側集約とネットワーク往復削減に使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "PL/pgSQL",
+          "関数",
+          "再利用",
+          "DB内処理"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トリガー関数",
+    "reading": "とりがーかんすう",
+    "aliases": [
+      "Trigger Function",
+      "トリガー定義関数"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLでトリガーが実行するPL/pgSQL等で書かれた特殊な関数。BEFORE/AFTER/INSTEAD OF × INSERT/UPDATE/DELETE/TRUNCATEの組み合わせで起動タイミングを設定し、監査ログや派生列更新に使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "トリガー",
+          "PL/pgSQL",
+          "監査",
+          "自動化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PL/pgSQL",
+    "reading": "ぴーえるぴーじーえすきゅーえる",
+    "aliases": [
+      "手続き型拡張SQL"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLの標準手続き型言語。変数・条件分岐・ループ・例外処理をSQLと組み合わせて使える。ストアドファンクション・ストアドプロシージャ・トリガー関数の実装に広く用いられる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "ストアドプロシージャ",
+          "トリガー",
+          "手続き型",
+          "PL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OLAP",
+    "aliases": [
+      "Online Analytical Processing",
+      "オンライン分析処理"
+    ],
+    "senses": [
+      {
+        "definition": "大量の履歴データに対して複雑な集計・ドリルダウン・スライシングを高速実行するデータ処理パラダイム。OLTPと対比される。列指向DBやキューブエンジンが用いられDWHの分析ワークロードを担う。",
+        "domain": "database",
+        "keywords": [
+          "DWH",
+          "列指向",
+          "分析",
+          "BI",
+          "OLTPとの対比"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コネクション数上限",
+    "reading": "こねくしょんすうじょうげん",
+    "aliases": [
+      "Max Connections",
+      "max_connections",
+      "接続数制限"
+    ],
+    "senses": [
+      {
+        "definition": "データベースサーバが同時に受け入れられるクライアント接続数の上限設定。PostgreSQLではmax_connectionsパラメータで制御し、接続ごとにメモリを消費するため無制限には増やせず接続プーラーで管理する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "コネクションプーリング",
+          "スケール",
+          "max_connections",
+          "メモリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "オンラインDDL",
+    "reading": "おんらいんでぃーでぃーえる",
+    "aliases": [
+      "Online DDL",
+      "無停止DDL",
+      "pt-online-schema-change"
+    ],
+    "senses": [
+      {
+        "definition": "本番サービスを停止せずにALTER TABLEなどのDDLを適用する手法やDB機能。MySQLのOnline DDL・pg_repack・gh-ostなどが代表的で、大規模テーブルのカラム追加・インデックス作成時のロック時間を最小化する。",
+        "domain": "database",
+        "keywords": [
+          "DDL",
+          "ALTER TABLE",
+          "無停止",
+          "MySQL",
+          "pg_repack"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インデックスの再構築",
+    "reading": "いんでっくすのさいこうちく",
+    "aliases": [
+      "REINDEX",
+      "インデックス再構築",
+      "Index Rebuild"
+    ],
+    "senses": [
+      {
+        "definition": "断片化や破損したインデックスを作り直すメンテナンス操作。PostgreSQLはREINDEX CONCURRENTLY（10以降）でサービスを止めずに再構築できる。定期的な再構築で書き込みが多いテーブルのインデックス肥大化を解消する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "REINDEX",
+          "インデックス",
+          "メンテナンス",
+          "断片化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "テーブルスペース",
+    "reading": "てーぶるすぺーす",
+    "aliases": [
+      "Tablespace",
+      "格納先指定"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルやインデックスを格納する物理ディレクトリをデータベース上で抽象化したオブジェクト。高速SSDに頻繁アクセステーブルを配置するなど、ストレージ配置戦略を実装するために使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "ストレージ",
+          "物理設計",
+          "SSD",
+          "DDL"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "接続文字列",
+    "reading": "せつぞくもじれつ",
+    "aliases": [
+      "Connection String",
+      "DSN",
+      "Database URL"
+    ],
+    "senses": [
+      {
+        "definition": "データベースへの接続に必要なホスト・ポート・データベース名・ユーザー・パスワードをまとめた文字列。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "DSN",
+          "接続設定",
+          "認証",
+          "JDBC"
+        ]
+      },
+      {
+        "definition": "接続先やサービス名を表す接続記述。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "接続",
+          "Connection String"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pgAdmin",
+    "aliases": [
+      "pgAdmin4",
+      "PostgreSQL管理GUI"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLのオープンソースGUI管理ツール。クエリエディタ・テーブル閲覧・実行計画の可視化・バックアップ・ユーザー管理をWebブラウザ上で提供し、コマンドラインを使わずにDBを操作できる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "GUIツール",
+          "管理",
+          "クエリエディタ",
+          "ビジュアライズ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pg_stat_statements",
+    "aliases": [
+      "pg_stat_statementsビュー",
+      "クエリ統計"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLの組み込み拡張で、実行されたSQLの総実行時間・コール数・平均時間・行数を集計する。スロークエリの特定やワークロード分析の主要ツールとして、DBチューニングの第一歩となる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "スロークエリ",
+          "パフォーマンス",
+          "拡張",
+          "クエリ分析"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スロークエリログ",
+    "reading": "すろーくえりろぐ",
+    "aliases": [
+      "Slow Query Log",
+      "遅延クエリログ"
+    ],
+    "senses": [
+      {
+        "definition": "設定した閾値（例：1秒）を超えた実行時間のSQLを記録するデータベースのログ機能。MySQLのslow_query_log・PostgreSQLのlog_min_duration_statementで有効化でき、ボトルネッククエリを発見する出発点となる。",
+        "domain": "database",
+        "keywords": [
+          "パフォーマンス",
+          "チューニング",
+          "MySQL",
+          "PostgreSQL",
+          "ログ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ホットスタンバイ",
+    "reading": "ほっとすたんばい",
+    "aliases": [
+      "Hot Standby",
+      "読み取り可能スタンバイ"
+    ],
+    "senses": [
+      {
+        "definition": "スタンバイサーバをリードオンリーとして読み取りクエリに使いながらレプリケーションも受け取り続けるモード。PostgreSQLはhot_standbyパラメータで有効化でき、リードレプリカとして読み取りスケールアウトを実現する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "スタンバイ",
+          "レプリケーション",
+          "リードスケール",
+          "高可用性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レプリケーション遅延",
+    "reading": "れぷりけーしょんちえん",
+    "aliases": [
+      "Replication Lag",
+      "複製遅延"
+    ],
+    "senses": [
+      {
+        "definition": "プライマリでコミットされた変更がスタンバイに反映されるまでの時間的なずれ。非同期レプリケーションで発生し、重い書き込みやネットワーク帯域不足で増大する。監視し読み取り先の選択に考慮する必要がある。",
+        "domain": "database",
+        "keywords": [
+          "レプリケーション",
+          "非同期",
+          "スタンバイ",
+          "監視",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WALアーカイブ",
+    "reading": "わるあーかいぶ",
+    "aliases": [
+      "WAL Archive",
+      "PITR"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLでWALファイルを継続的に外部ストレージに保存し任意の時点へのリストアを可能にする仕組み。archive_commandで転送先を指定し、pg_basebackup＋WALアーカイブでPITR（時点回復）を構成する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "PITR",
+          "バックアップ",
+          "WAL",
+          "クラッシュリカバリ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pg_basebackup",
+    "aliases": [
+      "pg_basebackupコマンド",
+      "ベースバックアップ"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLのデータクラスタをオンラインでストリーミングコピーするバックアップコマンド。WALアーカイブと組み合わせてPITRを構成し、レプリケーションのスタンバイ初期化にも使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "バックアップ",
+          "PITR",
+          "WAL",
+          "スタンバイ初期化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "pg_dump",
+    "aliases": [
+      "pg_dumpコマンド",
+      "論理バックアップ"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLのデータベースをSQLスクリプトまたはカスタム形式でダンプする論理バックアップコマンド。pg_restoreで復元し、クロスバージョン移行や特定スキーマのエクスポートに使われる。pg_dumpallでクラスタ全体を対象にできる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "バックアップ",
+          "論理バックアップ",
+          "マイグレーション",
+          "pg_restore"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データベースクラスタ",
+    "reading": "でーたべーすくらすた",
+    "aliases": [
+      "Database Cluster",
+      "PostgreSQLクラスタ"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLにおいて単一のpostgresプロセスが管理するデータベース群の集合体。物理ディレクトリ（PGDATA）に対応し複数のデータベースを内包する。MySQLの「クラスタ」とは意味が異なる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "PGDATA",
+          "データベース",
+          "インスタンス",
+          "アーキテクチャ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Citus",
+    "aliases": [
+      "Citus拡張",
+      "PostgreSQL分散DB"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLをシャーディングで水平スケールさせるオープンソース拡張。分散テーブル・参照テーブル・コロケーションを管理し、マルチテナントSaaSや時系列大規模分析に使われる。Microsoft Azure Cosmos for PostgreSQLとして提供されている。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "シャーディング",
+          "分散データベース",
+          "スケールアウト",
+          "マルチテナント"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TimescaleDB",
+    "aliases": [
+      "Timescale",
+      "時系列DB拡張"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLを拡張した時系列データ専用の列指向ハイパーテーブルを提供するOSS拡張。自動パーティショニング・連続集計・データ圧縮・データ保持ポリシーを提供し、IoT・監視・ログ分析に使われる。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "時系列",
+          "IoT",
+          "ハイパーテーブル",
+          "パーティショニング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "PostGIS",
+    "aliases": [
+      "PostGIS拡張",
+      "地理情報DB"
+    ],
+    "senses": [
+      {
+        "definition": "PostgreSQLに地理空間データ型（GEOMETRY・GEOGRAPHY）とGISクエリ（ST_Within・ST_Distance等）を追加するオープンソース拡張。GiSTインデックスと組み合わせて近傍検索・経路計算・ポリゴン演算を高速実行する。",
+        "domain": "database",
+        "keywords": [
+          "PostgreSQL",
+          "GIS",
+          "地理空間",
+          "GiSTインデックス",
+          "空間検索"
+        ]
+      }
+    ]
+  }
+]

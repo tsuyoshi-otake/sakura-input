@@ -1,0 +1,1599 @@
+[
+  {
+    "term": "Express",
+    "aliases": [
+      "Express.js",
+      "expressjs"
+    ],
+    "senses": [
+      {
+        "definition": "Node.js向けの軽量Webフレームワーク。最小限のAPIでHTTPサーバーを構築でき、ミドルウェアチェーンによるリクエスト処理が特徴。長年Node.jsのデファクトスタンダードとして広く採用されている。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "フレームワーク",
+          "HTTP",
+          "ミドルウェア",
+          "軽量"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Fastify",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "高パフォーマンスなNode.js Webフレームワーク。JSON Schemaを使ったルート定義と高速なシリアライゼーションにより、Expressより大幅に高いスループットを実現する。プラグインシステムによる拡張性も優れる。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "高速",
+          "JSON Schema",
+          "スループット",
+          "プラグイン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "NestJS",
+    "reading": "ねすとじぇいえす",
+    "aliases": [
+      "Nest"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptファーストのNode.js Webフレームワーク。Angular風のデコレータベースアーキテクチャを採用し、DIコンテナ、モジュール分割、ガード、インターセプタなどエンタープライズ向け機能を標準提供する。",
+        "domain": "backend",
+        "keywords": [
+          "TypeScript",
+          "DI",
+          "デコレータ",
+          "モジュール",
+          "エンタープライズ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Koa",
+    "aliases": [
+      "koa.js"
+    ],
+    "senses": [
+      {
+        "definition": "Expressの後継として設計されたNode.js向けWebフレームワーク。コールバック地獄を排除するためasync/awaitを前提とした設計で、コアは最小限にとどめミドルウェアで機能を拡張する。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "async/await",
+          "ミドルウェア",
+          "軽量",
+          "Express後継"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Hono",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "エッジランタイム（Cloudflare Workers、Deno、Bun等）向けに設計された超軽量Webフレームワーク。Web Standards APIに準拠しており、Node.jsを含む多様なランタイムで動作する高速なルーターを持つ。",
+        "domain": "backend",
+        "keywords": [
+          "エッジ",
+          "Cloudflare Workers",
+          "軽量",
+          "Web標準",
+          "高速"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "リクエストハンドラ",
+    "reading": "りくえすとはんどら",
+    "aliases": [
+      "Request Handler",
+      "ルートハンドラ"
+    ],
+    "senses": [
+      {
+        "definition": "特定のHTTPルートとメソッドの組み合わせに対応する処理関数。リクエストオブジェクトからパラメータやボディを取得し、処理を行ってレスポンスを返す役割を担う。コントローラメソッドとも呼ばれる。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "ルート",
+          "コントローラ",
+          "レスポンス",
+          "Express"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データアクセス層",
+    "reading": "でーたあくせすそう",
+    "aliases": [
+      "Data Access Layer",
+      "DAL"
+    ],
+    "senses": [
+      {
+        "definition": "データベースやストレージへのアクセスをカプセル化するレイヤー。サービス層からデータの永続化の詳細を隠蔽し、リポジトリパターンやActiveRecordパターンで実装されることが多い。",
+        "domain": "backend",
+        "keywords": [
+          "データベース",
+          "リポジトリ",
+          "永続化",
+          "抽象化",
+          "アーキテクチャ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Prisma",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "TypeScript向けの次世代ORM。スキーマファイルからDBマイグレーションと型付きクライアントコードを自動生成する。型安全なクエリAPIにより実行時エラーを防ぎ、開発体験を大幅に向上させる。",
+        "domain": "backend",
+        "keywords": [
+          "TypeScript",
+          "ORM",
+          "スキーマ",
+          "マイグレーション",
+          "型安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Drizzle",
+    "aliases": [
+      "Drizzle ORM",
+      "drizzle-orm"
+    ],
+    "senses": [
+      {
+        "definition": "TypeScriptファーストの軽量ORM。SQLに近い直感的なAPIでクエリを記述でき、SQLiteからPostgreSQLまで対応。バンドルサイズが小さくエッジランタイムとの相性が良い。",
+        "domain": "backend",
+        "keywords": [
+          "TypeScript",
+          "ORM",
+          "軽量",
+          "SQL",
+          "エッジ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "TypeORM",
+    "reading": "たいぷおーあーえむ",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "TypeScript/JavaScript向けのORM。Active RecordとData Mapperの両パターンをサポートし、デコレータによるエンティティ定義とマイグレーション管理機能を持つ。NestJSとの組み合わせで広く使われる。",
+        "domain": "backend",
+        "keywords": [
+          "TypeScript",
+          "ORM",
+          "デコレータ",
+          "NestJS",
+          "マイグレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "クエリビルダ",
+    "reading": "くえりびるだ",
+    "aliases": [
+      "Query Builder"
+    ],
+    "senses": [
+      {
+        "definition": "生のSQLを文字列で記述せずに、メソッドチェーンやAPIを使ってプログラム的にSQLクエリを構築する仕組み。SQLインジェクション防止と動的クエリ生成の両立を助ける。",
+        "domain": "backend",
+        "keywords": [
+          "SQL",
+          "安全",
+          "動的クエリ",
+          "ORM",
+          "Knex"
+        ]
+      },
+      {
+        "definition": "ドラッグ操作でSQLを組み立てる支援機能。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "SQL",
+          "Query Builder"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "BullMQ",
+    "reading": "ぶるえむきゅー",
+    "aliases": [
+      "Bull"
+    ],
+    "senses": [
+      {
+        "definition": "RedisをバックエンドとするNode.js向けの高機能ジョブキューライブラリ。優先度付きキュー、遅延ジョブ、繰り返しスケジュール、進捗追跡、ジョブ間依存関係などを備える。",
+        "domain": "backend",
+        "keywords": [
+          "Redis",
+          "ジョブキュー",
+          "Node.js",
+          "非同期",
+          "スケジュール"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Worker Threads",
+    "reading": "わーかーすれっず",
+    "aliases": [
+      "worker_threads"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsのビルトインモジュールで、CPUバウンドな処理をメインスレッドから切り離した別スレッドで実行する機能。SharedArrayBufferを介したスレッド間データ共有も可能で、並列計算の性能を改善する。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "マルチスレッド",
+          "並列処理",
+          "CPU",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Cluster",
+    "reading": "くらすた",
+    "aliases": [
+      "cluster module"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsのビルトインモジュールで、マルチコアCPUを活用するためにマスタープロセスが複数のワーカープロセスをフォークする仕組み。各ワーカーは同じポートを共有してリクエストを並列処理できる。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "マルチプロセス",
+          "マルチコア",
+          "スケーリング",
+          "フォーク"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "child_process",
+    "reading": "ちゃいるどぷろせす",
+    "aliases": [
+      "child process"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsのビルトインモジュールで、子プロセスを生成して外部コマンドやスクリプトを実行する機能。exec/spawn/forkなどのAPIがあり、標準入出力のストリームを通じて親子プロセス間でデータをやり取りする。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "プロセス",
+          "外部コマンド",
+          "spawn",
+          "exec"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Node.js Stream",
+    "reading": "のーどじぇいえすすとりーむ",
+    "aliases": [
+      "readable stream",
+      "writable stream",
+      "Transform Stream"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsにおけるデータを逐次的に処理するための抽象インターフェース。大きなファイルやネットワークデータをメモリに全部読み込まずチャンク単位で処理できる。Readable、Writable、Transform等の種類がある。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "ストリーム",
+          "チャンク",
+          "メモリ効率",
+          "パイプ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "EventEmitter",
+    "reading": "いべんとえみったー",
+    "aliases": [
+      "events module"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsの組み込みイベントシステムの基底クラス。on/emitメソッドで任意のイベントをリスナーに伝達するPub/Subパターンを提供し、HTTPサーバーやStreamなどNode.jsコアAPIの多くがこれを継承する。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "イベント",
+          "Pub/Sub",
+          "リスナー",
+          "非同期"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "fs/promises",
+    "reading": "えふえすぷろみせす",
+    "aliases": [
+      "fs.promises",
+      "filesystem API"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsのファイルシステム操作をPromiseベースで提供するAPIセット。コールバックスタイルのfsモジュールとは異なり、async/awaitで直感的にファイルの読み書き・ディレクトリ操作が記述できる。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "ファイルシステム",
+          "Promise",
+          "async/await",
+          "I/O"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "process.env",
+    "reading": "ぷろせすえんぶ",
+    "aliases": [
+      "environment object"
+    ],
+    "senses": [
+      {
+        "definition": "Node.jsプロセスが起動時に受け取った環境変数へのアクセスオブジェクト。APIキーや接続文字列などの秘匿情報をソースコードに埋め込まずに外部から注入するために利用する。dotenvと組み合わせて使われる。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "環境変数",
+          "設定",
+          "セキュリティ",
+          "dotenv"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "dotenv",
+    "reading": "どっとえんぶ",
+    "aliases": [
+      ".env file"
+    ],
+    "senses": [
+      {
+        "definition": ".envファイルに記述したキーバリューペアをprocess.envに読み込むNode.jsライブラリ。開発環境での設定管理を簡素化し、本番環境との設定分離を促す。.envファイルはgitignoreで管理する。",
+        "domain": "backend",
+        "keywords": [
+          "環境変数",
+          "設定",
+          "Node.js",
+          "開発環境",
+          "シークレット"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "helmet",
+    "reading": "へるめっと",
+    "aliases": [
+      "helmet.js"
+    ],
+    "senses": [
+      {
+        "definition": "Express/Fastify向けのセキュリティヘッダー設定ミドルウェア。Content-Security-Policy、X-Frame-Options、X-XSS-Protectionなど複数のHTTPセキュリティヘッダーを適切に設定し、一般的なWeb攻撃を軽減する。",
+        "domain": "backend",
+        "keywords": [
+          "セキュリティ",
+          "HTTPヘッダー",
+          "Express",
+          "CSP",
+          "XSS対策"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CORS設定",
+    "reading": "こーすせってい",
+    "aliases": [
+      "Cross-Origin Resource Sharing設定",
+      "cors middleware"
+    ],
+    "senses": [
+      {
+        "definition": "異なるオリジン（ドメイン・ポート・プロトコル）からのHTTPリクエストを許可・制限するサーバーサイドの設定。許可するオリジン、メソッド、ヘッダーを明示的に指定し、ブラウザのセキュリティポリシーと連携する。",
+        "domain": "backend",
+        "keywords": [
+          "セキュリティ",
+          "HTTP",
+          "オリジン",
+          "ブラウザ",
+          "プリフライト"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "セッション管理",
+    "reading": "せっしょんかんり",
+    "aliases": [
+      "Session Management"
+    ],
+    "senses": [
+      {
+        "definition": "ステートレスなHTTPプロトコル上でユーザーの状態を保持する仕組み。セッションIDをCookieで管理し、サーバー側またはRedisなどの外部ストアにセッションデータを保存する。スケールアウト時はセッションの共有が課題になる。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "認証",
+          "Cookie",
+          "状態管理",
+          "Redis"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "JWT認証",
+    "reading": "じぇいだぶりゅーてぃーにんしょう",
+    "aliases": [
+      "JWT Authentication",
+      "JSON Web Token認証"
+    ],
+    "senses": [
+      {
+        "definition": "JSON Web Tokenを使ったステートレスな認証方式。ヘッダー・ペイロード・署名の3部構成で、サーバーはトークン検証のみで認証でき状態保持が不要。アクセストークンとリフレッシュトークンの組み合わせが一般的。",
+        "domain": "backend",
+        "keywords": [
+          "JWT",
+          "認証",
+          "ステートレス",
+          "トークン",
+          "セキュリティ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Passport.js",
+    "reading": "ぱすぽーとじぇいえす",
+    "aliases": [
+      "passport",
+      "passport strategy"
+    ],
+    "senses": [
+      {
+        "definition": "Node.js向けの認証ミドルウェア。Strategy パターンを採用し、Local Strategy（ユーザー名/パスワード）やOAuth Strategy（Google、GitHubなど）など多様な認証方式をプラグイン形式で切り替えられる。",
+        "domain": "backend",
+        "keywords": [
+          "認証",
+          "Node.js",
+          "Strategy",
+          "OAuth",
+          "ミドルウェア"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "bcrypt",
+    "reading": "びーくりぷと",
+    "aliases": [
+      "bcryptjs"
+    ],
+    "senses": [
+      {
+        "definition": "パスワードのハッシュ化アルゴリズムおよびNode.jsライブラリ。ソルトとコストファクター（ストレッチング回数）により、ブルートフォース攻撃やレインボーテーブル攻撃に対して堅牢なパスワード保存を実現する。",
+        "domain": "backend",
+        "keywords": [
+          "パスワード",
+          "ハッシュ",
+          "セキュリティ",
+          "ソルト",
+          "暗号"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQL Resolver",
+    "reading": "ぐらふきゅーえるりぞるば",
+    "aliases": [
+      "Resolver",
+      "リゾルバ"
+    ],
+    "senses": [
+      {
+        "definition": "GraphQLスキーマの各フィールドに対してデータを取得・加工して返す関数。クエリ・ミューテーション・サブスクリプションそれぞれにResolverを定義し、データソース（DB、外部API等）から値を解決する。",
+        "domain": "backend",
+        "keywords": [
+          "GraphQL",
+          "スキーマ",
+          "データ取得",
+          "フィールド",
+          "API"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "WebSocket Server",
+    "reading": "うぇぶそけっとさーば",
+    "aliases": [
+      "WebSocketサーバー",
+      "ws library"
+    ],
+    "senses": [
+      {
+        "definition": "WebSocketプロトコルを実装したサーバーコンポーネント。クライアントと双方向の持続的な接続を確立し、リアルタイムな双方向データ通信を実現する。Node.jsではwsライブラリやSocket.IOが代表的。",
+        "domain": "backend",
+        "keywords": [
+          "WebSocket",
+          "リアルタイム",
+          "双方向通信",
+          "Node.js",
+          "ws"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "SSEサーバー",
+    "reading": "えすえすいーさーば",
+    "aliases": [
+      "SSE Server",
+      "Server-Sent Eventsサーバー"
+    ],
+    "senses": [
+      {
+        "definition": "Server-Sent Events（SSE）プロトコルを実装したサーバー。text/event-streamコンテントタイプのHTTPレスポンスを使ってサーバーからクライアントへ単方向のストリーミングデータを送り続ける。AIチャットのストリーミングに多用される。",
+        "domain": "backend",
+        "keywords": [
+          "SSE",
+          "ストリーミング",
+          "HTTP",
+          "リアルタイム",
+          "Server-Sent Events"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "multer",
+    "reading": "まるたー",
+    "aliases": [
+      "multer middleware"
+    ],
+    "senses": [
+      {
+        "definition": "multipart/form-dataを扱うExpress向けのミドルウェア。ファイルアップロードをハンドリングし、アップロードされたファイルをメモリまたはディスクに保存する。保存先・ファイルサイズ制限・ファイル名の設定が可能。",
+        "domain": "backend",
+        "keywords": [
+          "ファイルアップロード",
+          "Express",
+          "multipart",
+          "フォーム",
+          "Node.js"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "formidable",
+    "reading": "ふぉーみだぶる",
+    "aliases": [
+      "node-formidable"
+    ],
+    "senses": [
+      {
+        "definition": "Node.js向けのフォームデータおよびファイルアップロードパーサーライブラリ。大容量ファイルをストリームベースで処理し、multerよりフレームワーク非依存でありNext.jsのAPIルートなどでも利用される。",
+        "domain": "backend",
+        "keywords": [
+          "ファイルアップロード",
+          "Node.js",
+          "フォーム",
+          "ストリーム",
+          "パーサー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "compression",
+    "reading": "こんぷれっしょん",
+    "aliases": [
+      "gzip middleware",
+      "brotli compression"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPレスポンスボディをgzipやBrotliで圧縮して転送量を削減するミドルウェア。ネットワーク帯域の節約とページロード速度の改善に効果的で、テキスト系コンテンツ（HTML/JSON/CSS）で特に有効。",
+        "domain": "backend",
+        "keywords": [
+          "パフォーマンス",
+          "gzip",
+          "Brotli",
+          "HTTP",
+          "帯域節約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ETag",
+    "reading": "いーたぐ",
+    "aliases": [
+      "Entity Tag"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPレスポンスのコンテンツを一意に識別するためのヘッダー値。リソースが変更されていなければクライアントはキャッシュを再利用でき、304 Not Modifiedを返すことで不要なデータ転送を省く条件付きリクエストに使われる。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "キャッシュ",
+          "条件付きリクエスト",
+          "304",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "条件付きリクエスト",
+    "reading": "じょうけんつきりくえすと",
+    "aliases": [
+      "Conditional Request",
+      "If-None-Match",
+      "If-Modified-Since"
+    ],
+    "senses": [
+      {
+        "definition": "クライアントが保持するキャッシュの鮮度をサーバーに問い合わせるHTTPリクエスト。ETagを使うIf-None-Matchや最終更新日時を使うIf-Modified-Sinceヘッダーで条件を指定し、変更なければ304で返す。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "キャッシュ",
+          "ETag",
+          "304",
+          "帯域節約"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "コンテントネゴシエーション",
+    "reading": "こんてんとねごしえーしょん",
+    "aliases": [
+      "Content Negotiation"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPリクエストのAcceptヘッダーに基づきサーバーが最適なレスポンス形式（JSON、XML、HTML等）を選択するメカニズム。同一エンドポイントで複数のメディアタイプに対応する際に使われる。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "Accept",
+          "メディアタイプ",
+          "REST",
+          "API"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ミドルウェアパターン",
+    "reading": "みどるうぇあぱたーん",
+    "aliases": [
+      "Middleware Pattern",
+      "パイプラインパターン"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPリクエストとレスポンスの処理を複数の独立した関数（ミドルウェア）のチェーンとして構成するパターン。各ミドルウェアはリクエストを受け取り、処理を行い、次のミドルウェアへ渡すか、レスポンスを完了させる。",
+        "domain": "backend",
+        "keywords": [
+          "Express",
+          "パイプライン",
+          "チェーン",
+          "関心の分離",
+          "HTTP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "インターセプタ",
+    "reading": "いんたーせぷた",
+    "aliases": [
+      "Interceptor",
+      "NestJS Interceptor"
+    ],
+    "senses": [
+      {
+        "definition": "NestJSなどのフレームワークでメソッド実行の前後に追加処理を差し込む仕組み。ロギング、レスポンス変換、キャッシュ、タイムアウト処理などを横断的に適用するアスペクト指向的なアプローチ。",
+        "domain": "backend",
+        "keywords": [
+          "NestJS",
+          "AOP",
+          "横断的関心事",
+          "ロギング",
+          "変換"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バリデーションパイプ",
+    "reading": "ばりでーしょんぱいぷ",
+    "aliases": [
+      "Validation Pipe",
+      "NestJS Pipe"
+    ],
+    "senses": [
+      {
+        "definition": "NestJSにおいてルートハンドラへの入力データを変換・検証するコンポーネント。class-validatorと組み合わせてDTOのバリデーションを自動化し、型変換やデータ整形も担う。",
+        "domain": "backend",
+        "keywords": [
+          "NestJS",
+          "バリデーション",
+          "変換",
+          "入力検証",
+          "class-validator"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "ルートガード",
+    "reading": "るーとがーど",
+    "aliases": [
+      "Route Guard",
+      "NestJS Guard"
+    ],
+    "senses": [
+      {
+        "definition": "NestJSにおいてルートハンドラの実行可否を制御するコンポーネント。認証・認可チェックに使われ、canActivate()メソッドでリクエストを許可するか拒否するかを返す。ロールベースの認可実装に多用される。",
+        "domain": "backend",
+        "keywords": [
+          "NestJS",
+          "認証",
+          "認可",
+          "アクセス制御",
+          "RBAC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データ転送オブジェクト",
+    "reading": "でーたてんそうおぶじぇくと",
+    "aliases": [
+      "Data Transfer Object"
+    ],
+    "senses": [
+      {
+        "definition": "レイヤー間でデータを転送するために使うオブジェクト。HTTPリクエストボディやレスポンスの形状を型安全に定義し、余分なフィールドの混入を防ぐ。class-validatorデコレータと組み合わせてバリデーションにも使う。",
+        "domain": "backend",
+        "keywords": [
+          "型安全",
+          "バリデーション",
+          "API設計",
+          "NestJS",
+          "レイヤー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データベースマイグレーション",
+    "reading": "でーたべーすまいぐれーしょん",
+    "aliases": [
+      "Migration",
+      "DB Migration"
+    ],
+    "senses": [
+      {
+        "definition": "データベーススキーマの変更をバージョン管理されたスクリプトで管理する仕組み。カラム追加・テーブル変更などをコードで定義し、適用・ロールバックを制御可能にする。PrismaやFlyway、Liquibaseが代表的ツール。",
+        "domain": "backend",
+        "keywords": [
+          "データベース",
+          "スキーマ",
+          "バージョン管理",
+          "Prisma",
+          "ロールバック"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "シード",
+    "reading": "しーど",
+    "aliases": [
+      "Seeding",
+      "DB Seed",
+      "データシード"
+    ],
+    "senses": [
+      {
+        "definition": "開発・テスト環境のデータベースに初期データや参照データを投入するスクリプトや処理。本番データのサブセットやダミーデータを使って開発環境を再現性高くセットアップする。",
+        "domain": "backend",
+        "keywords": [
+          "データベース",
+          "テスト",
+          "初期データ",
+          "開発環境",
+          "Prisma"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "トランザクション管理",
+    "reading": "とらんざくしょんかんり",
+    "aliases": [
+      "Transaction Management",
+      "DB Transaction"
+    ],
+    "senses": [
+      {
+        "definition": "複数のDB操作をひとまとまりとして、すべて成功するかすべて失敗する（原子性）ように制御する仕組み。ACID特性を保証し、部分的更新によるデータ不整合を防ぐ。サービス層やORMのトランザクションAPIで管理する。",
+        "domain": "backend",
+        "keywords": [
+          "ACID",
+          "データベース",
+          "原子性",
+          "整合性",
+          "ORM"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "グレースフルシャットダウン",
+    "reading": "ぐれーすふるしゃっとだうん",
+    "aliases": [
+      "Graceful Shutdown",
+      "優雅な終了"
+    ],
+    "senses": [
+      {
+        "definition": "サーバーがシャットダウン要求を受けた際、処理中のリクエストを完了してから安全に終了する仕組み。進行中のリクエストを強制切断するのを避け、データ損失やユーザー向けエラーを防ぐ。",
+        "domain": "backend",
+        "keywords": [
+          "可用性",
+          "Node.js",
+          "シグナル",
+          "SIGTERM",
+          "デプロイ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "環境変数",
+    "reading": "かんきょうへんすう",
+    "aliases": [
+      "Environment Variable",
+      "env var"
+    ],
+    "senses": [
+      {
+        "definition": "プロセスの実行環境に設定されるキーバリューペア。APIキー、DB接続文字列、フィーチャーフラグなど環境依存の設定値をコードに埋め込まずに外部から注入する標準的な手法。12ファクターアプリの原則の一つ。",
+        "domain": "backend",
+        "keywords": [
+          "12ファクター",
+          "設定",
+          "セキュリティ",
+          "デプロイ",
+          "process.env"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "cronジョブ",
+    "reading": "くろんじょぶ",
+    "aliases": [
+      "Cron Job",
+      "スケジュールジョブ",
+      "node-cron"
+    ],
+    "senses": [
+      {
+        "definition": "cron形式の時刻表現（例: 0 9 * * 1-5）でスケジュール実行するバックグラウンドジョブ。定期的なデータ集計、バッチ処理、キャッシュ更新などに使われる。Node.jsではnode-cronやBullMQのrepeat機能で実装する。",
+        "domain": "backend",
+        "keywords": [
+          "スケジュール",
+          "バッチ",
+          "定期実行",
+          "node-cron",
+          "BullMQ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "バックプレッシャー制御",
+    "reading": "ばっくぷれっしゃーせいぎょ",
+    "aliases": [
+      "Backpressure Control",
+      "flow control"
+    ],
+    "senses": [
+      {
+        "definition": "ストリームやキューでデータの生産速度が消費速度を超えるときに生産側を制御する仕組み。Node.js Streamではwriteが`false`を返した場合に`drain`イベントを待って送信を再開することでメモリ溢れを防ぐ。",
+        "domain": "backend",
+        "keywords": [
+          "Node.js",
+          "Stream",
+          "フロー制御",
+          "メモリ",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Webhook",
+    "reading": "うぇぶふっく",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "特定のイベント発生時に登録されたURLへHTTP POSTリクエストを送信するコールバック機構。GitHubやStripeなど外部サービスが自サービスにイベントをプッシュ通知するために広く使われる。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "イベント",
+          "コールバック",
+          "外部連携",
+          "Push"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "カーソルページネーション",
+    "reading": "かーそるぺーじねーしょん",
+    "aliases": [
+      "Cursor-based Pagination",
+      "Cursor Pagination"
+    ],
+    "senses": [
+      {
+        "definition": "前ページの最後のアイテムを示すカーソル（opaque token）を使って次ページを取得するページネーション方式。行のオフセット計算をしないため、データ挿入があってもページ飛びが発生せず大規模データに適する。",
+        "domain": "backend",
+        "keywords": [
+          "ページネーション",
+          "API",
+          "パフォーマンス",
+          "GraphQL",
+          "REST"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OpenAPI仕様",
+    "reading": "おーぷんえーぴーあいしよう",
+    "aliases": [
+      "OpenAPI Specification",
+      "OAS"
+    ],
+    "senses": [
+      {
+        "definition": "REST APIの仕様を機械可読なYAML/JSON形式で記述する標準仕様。エンドポイント、パラメータ、レスポンススキーマを定義し、Swagger UIによるドキュメント生成やコード生成ツールと連携できる。",
+        "domain": "backend",
+        "keywords": [
+          "REST",
+          "ドキュメント",
+          "Swagger",
+          "スキーマ",
+          "コード生成"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Swagger UI",
+    "reading": "すわっがーゆーあい",
+    "aliases": [
+      "swagger-ui",
+      "swagger editor"
+    ],
+    "senses": [
+      {
+        "definition": "OpenAPI仕様を視覚的にレンダリングし、ブラウザ上でAPIエンドポイントを試せるインタラクティブドキュメントツール。NestJSでは@nestjs/swaggerモジュールで自動生成できる。",
+        "domain": "backend",
+        "keywords": [
+          "API",
+          "ドキュメント",
+          "OpenAPI",
+          "NestJS",
+          "インタラクティブ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プロキシサーバー",
+    "reading": "ぷろきしさーば",
+    "aliases": [
+      "Proxy Server",
+      "reverse proxy"
+    ],
+    "senses": [
+      {
+        "definition": "クライアントとバックエンドサービスの間に位置するサーバー。リバースプロキシはSSL終端、ロードバランシング、静的ファイル配信、キャッシュを担う。NginxやCaddyが代表的な実装。",
+        "domain": "backend",
+        "keywords": [
+          "Nginx",
+          "SSL",
+          "ロードバランシング",
+          "キャッシュ",
+          "アーキテクチャ"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "スティッキーセッション",
+    "reading": "すてぃっきーせっしょん",
+    "aliases": [
+      "Sticky Session"
+    ],
+    "senses": [
+      {
+        "definition": "ロードバランサーが同一クライアントのリクエストを常に同じサーバーインスタンスへ送る機能。インメモリセッションを使うアプリのスケールアウトを可能にするが、特定インスタンスへの集中リスクがある。",
+        "domain": "backend",
+        "keywords": [
+          "ロードバランサー",
+          "セッション",
+          "スケーリング",
+          "可用性",
+          "障害"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Prismaスキーマ",
+    "reading": "ぷりずますきーま",
+    "aliases": [
+      "Prisma Schema",
+      "schema.prisma"
+    ],
+    "senses": [
+      {
+        "definition": "Prisma ORMのデータモデル定義ファイル。モデル、フィールド、リレーション、データソース接続を1つのschema.prismaに記述し、prisma generateでクライアントを、prisma migrateでマイグレーションを生成する。",
+        "domain": "backend",
+        "keywords": [
+          "Prisma",
+          "ORM",
+          "スキーマ",
+          "型安全",
+          "マイグレーション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "GraphQL Federation",
+    "reading": "ぐらふきゅーえるふぇでれーしょん",
+    "aliases": [
+      "Apollo Federation",
+      "スキーマフェデレーション"
+    ],
+    "senses": [
+      {
+        "definition": "複数のGraphQLサービスのスキーマを単一のスーパーグラフとして統合するアーキテクチャ。各サービスが独自のスキーマを所有しつつ、Apolloゲートウェイが統合されたAPIを公開する。マイクロサービスとGraphQLを組み合わせる際の標準アプローチ。",
+        "domain": "backend",
+        "keywords": [
+          "GraphQL",
+          "マイクロサービス",
+          "Apollo",
+          "スキーマ",
+          "統合"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "tRPC",
+    "reading": "てぃーあーるぴーしー",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "TypeScriptの型推論を活用してAPIクライアントとサーバーの型を共有するRPCフレームワーク。OpenAPIのようなスキーマ定義なしにエンドツーエンドの型安全を実現し、Next.jsと組み合わせて特に普及している。",
+        "domain": "backend",
+        "keywords": [
+          "TypeScript",
+          "RPC",
+          "型安全",
+          "Next.js",
+          "API"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTPキャッシュ制御",
+    "reading": "えいちてぃーてぃーぴーきゃっしゅせいぎょ",
+    "aliases": [
+      "HTTP Cache-Control",
+      "Cache-Control Header"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPレスポンスのCache-Controlヘッダーを使ってキャッシュの動作を制御する仕組み。max-age、no-cache、s-maxage、stale-while-revalidateなどのディレクティブでクライアントとCDNのキャッシュ戦略を細かく制御する。",
+        "domain": "backend",
+        "keywords": [
+          "HTTP",
+          "キャッシュ",
+          "CDN",
+          "パフォーマンス",
+          "ヘッダー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "OWASP Top 10",
+    "reading": "おわすぷとっぷてん",
+    "aliases": [
+      "OWASP",
+      "OWASPトップ10"
+    ],
+    "senses": [
+      {
+        "definition": "Webアプリケーションに対する最も重大な10種のセキュリティリスクをまとめたOWASPが公表するリスト。インジェクション、認証の不備、XSS、IDOR、セキュリティの設定ミスなどが含まれ、セキュリティ対策の標準的な参照先となる。",
+        "domain": "backend",
+        "keywords": [
+          "セキュリティ",
+          "XSS",
+          "SQLインジェクション",
+          "脆弱性",
+          "OWASP"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "プリペアドステートメント",
+    "reading": "ぷりぺあどすてーとめんと",
+    "aliases": [
+      "Prepared Statement",
+      "パラメータ化クエリ"
+    ],
+    "senses": [
+      {
+        "definition": "SQLクエリのテンプレートを事前にDBにコンパイルし、実行時にパラメータを別チャネルで渡す仕組み。ユーザー入力がSQLとして解釈されずSQLインジェクションを根本的に防げる。",
+        "domain": "backend",
+        "keywords": [
+          "SQL",
+          "セキュリティ",
+          "SQLインジェクション",
+          "データベース",
+          "安全"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CSRFトークン",
+    "reading": "しーえすあーるえふとーくん",
+    "aliases": [
+      "CSRF Token",
+      "Cross-Site Request Forgery Token"
+    ],
+    "senses": [
+      {
+        "definition": "クロスサイトリクエストフォージェリ（CSRF）攻撃を防ぐためにフォームやAPIリクエストに含める秘密トークン。サーバーが発行し、リクエストに同じ値が含まれるかを検証することで、悪意あるサイトからの偽リクエストを排除する。",
+        "domain": "backend",
+        "keywords": [
+          "セキュリティ",
+          "CSRF",
+          "トークン",
+          "フォーム",
+          "認証"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HMAC",
+    "reading": "えいちまっく",
+    "aliases": [
+      "Hash-based Message Authentication Code"
+    ],
+    "senses": [
+      {
+        "definition": "秘密鍵を使ったハッシュ関数によりメッセージの完全性と真正性を検証する認証コード。Webhookの署名検証（GitHub WebhookのX-Hub-Signature）やJWTのHS256署名などに使われる。",
+        "domain": "backend",
+        "keywords": [
+          "セキュリティ",
+          "署名",
+          "ハッシュ",
+          "Webhook",
+          "JWT"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Pino",
+    "reading": "ぴの",
+    "aliases": [
+      "pino logger"
+    ],
+    "senses": [
+      {
+        "definition": "高速なNode.js向け構造化ロガー。JSON形式でログを出力し、最小限のオーバーヘッドで高スループットなロギングを実現する。非同期ログ書き込みとpino-prettyによる開発時の整形表示が特徴。",
+        "domain": "backend",
+        "keywords": [
+          "ロギング",
+          "Node.js",
+          "JSON",
+          "パフォーマンス",
+          "Winston"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Winston",
+    "reading": "うぃんすとん",
+    "aliases": [
+      "winston logger"
+    ],
+    "senses": [
+      {
+        "definition": "Node.js向けの多機能ロギングライブラリ。複数のトランスポート（コンソール、ファイル、HTTP、外部サービス等）へ同時に出力でき、ログレベルとフォーマットを柔軟に設定できる。",
+        "domain": "backend",
+        "keywords": [
+          "ロギング",
+          "Node.js",
+          "トランスポート",
+          "フォーマット",
+          "柔軟"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マルチテナンシー",
+    "reading": "まるちてなんしー",
+    "aliases": [
+      "Multi-tenancy",
+      "マルチテナント"
+    ],
+    "senses": [
+      {
+        "definition": "単一のアプリケーションインスタンスで複数のテナント（顧客・組織）のデータを分離して扱うアーキテクチャ。スキーマ分離、DB分離、行レベル分離など分離レベルのトレードオフを設計する必要がある。",
+        "domain": "backend",
+        "keywords": [
+          "SaaS",
+          "テナント",
+          "データ分離",
+          "アーキテクチャ",
+          "RLS"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "行レベルセキュリティ",
+    "reading": "ぎょうれべるせきゅりてぃ",
+    "aliases": [
+      "Row Level Security",
+      "RLS"
+    ],
+    "senses": [
+      {
+        "definition": "DBテーブルの行単位でアクセス制御を行うPostgreSQLの機能。テナントIDカラムに基づいてSQLに自動でWHERE句を付加し、アプリケーション層でのフィルタリングなしにデータ分離を保証する。",
+        "domain": "backend",
+        "keywords": [
+          "PostgreSQL",
+          "マルチテナント",
+          "セキュリティ",
+          "データ分離",
+          "アクセス制御"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "gRPCストリーミング",
+    "reading": "じーあーるぴーしーすとりーみんぐ",
+    "aliases": [
+      "gRPC Streaming",
+      "双方向ストリーミングRPC"
+    ],
+    "senses": [
+      {
+        "definition": "gRPCが提供するストリーミングRPCモード。サーバーストリーミング、クライアントストリーミング、双方向ストリーミングの3種類があり、HTTP/2の多重化を活かしてリアルタイムデータ配信や大量データ転送を効率化する。",
+        "domain": "backend",
+        "keywords": [
+          "gRPC",
+          "ストリーミング",
+          "HTTP/2",
+          "リアルタイム",
+          "RPC"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Redis",
+    "reading": "れでぃす",
+    "aliases": [],
+    "senses": [
+      {
+        "definition": "インメモリのKey-Valueストア。文字列、リスト、セット、ソート済みセット、ハッシュなど多様なデータ構造をサポートし、セッションストア、キャッシュ、ジョブキュー（BullMQ）、Pub/Subブローカーとしてバックエンドで広く利用される。",
+        "domain": "backend",
+        "keywords": [
+          "インメモリ",
+          "キャッシュ",
+          "Key-Value",
+          "BullMQ",
+          "セッション"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "シャーディング",
+    "reading": "しゃーでぃんぐ",
+    "aliases": [
+      "Sharding",
+      "水平分割"
+    ],
+    "senses": [
+      {
+        "definition": "データベースのデータを複数のノード（シャード）に水平分割して分散させるスケーリング手法。各シャードがデータの一部を担当することでI/Oを分散し、単一ノードに収まらない大規模データを扱える。",
+        "domain": "backend",
+        "keywords": [
+          "データベース",
+          "スケーリング",
+          "分散",
+          "水平分割",
+          "パフォーマンス"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "レプリケーション",
+    "reading": "れぷりけーしょん",
+    "aliases": [
+      "Replication",
+      "DB Replication"
+    ],
+    "senses": [
+      {
+        "definition": "データベースのデータを複数のノード間で同期コピーする仕組み。プライマリからレプリカへの変更伝播により読み取りスケールアウトと高可用性を実現する。同期レプリケーションは一貫性、非同期は可用性を優先する。",
+        "domain": "backend",
+        "keywords": [
+          "データベース",
+          "可用性",
+          "読み取りスケール",
+          "プライマリ",
+          "フェイルオーバー"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "CI/CDパイプライン",
+    "reading": "しーあいしーでぃーぱいぷらいん",
+    "aliases": [
+      "CI/CD Pipeline"
+    ],
+    "senses": [
+      {
+        "definition": "コードのプッシュからビルド・テスト・デプロイまでを自動化したパイプライン。GitHub Actions、GitLab CI、CircleCIなどで構成し、品質ゲートをパスしたコードのみを自動的に本番環境へ届ける。",
+        "domain": "backend",
+        "keywords": [
+          "自動化",
+          "デプロイ",
+          "テスト",
+          "GitHub Actions",
+          "DevOps"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "DDDアグリゲート",
+    "reading": "でぃーでぃーでぃーあぐりげーと",
+    "aliases": [
+      "DDD Aggregate"
+    ],
+    "senses": [
+      {
+        "definition": "DDDにおいて一貫性の境界を形成するオブジェクトの集まり。アグリゲートルートを通じてのみ内部オブジェクトにアクセス・変更でき、アグリゲート全体の不変条件を保証する。",
+        "domain": "backend",
+        "keywords": [
+          "DDD",
+          "集約",
+          "不変条件",
+          "ルート",
+          "整合性"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "マイクロサービスアーキテクチャ",
+    "reading": "まいくろさーびすあーきてくちゃ",
+    "aliases": [
+      "Microservices Architecture",
+      "MSA"
+    ],
+    "senses": [
+      {
+        "definition": "アプリケーションを独立してデプロイ可能な小さなサービス群に分割するアーキテクチャスタイル。各サービスが単一の責務を持ち、APIを通じて協調する。独立したデプロイと技術選択の自由度が高い反面、分散システムの複雑さが増す。",
+        "domain": "backend",
+        "keywords": [
+          "アーキテクチャ",
+          "分散",
+          "デプロイ",
+          "API",
+          "スケーリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "REST成熟度モデル",
+    "reading": "れすとせいじゅくどもでる",
+    "aliases": [
+      "Richardson Maturity Model",
+      "REST Maturity Model"
+    ],
+    "senses": [
+      {
+        "definition": "RichardsonによるRESTful APIの成熟度を4段階（レベル0-3）で評価するモデル。レベル3はHATEOAS（Hypermedia as the Engine of Application State）を実装した最も成熟したREST。",
+        "domain": "backend",
+        "keywords": [
+          "REST",
+          "HATEOAS",
+          "API設計",
+          "成熟度",
+          "Richardson"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "Gitflow",
+    "aliases": [
+      "Gitflow Workflow"
+    ],
+    "senses": [
+      {
+        "definition": "main/develop/feature/release/hotfixブランチを使う体系的なGitブランチ戦略。リリース管理が明確な一方、ブランチが多く複雑になりやすい。小規模チームやCI/CD重視チームではトランクベース開発が代替として使われる。",
+        "domain": "backend",
+        "keywords": [
+          "Git",
+          "ブランチ",
+          "ワークフロー",
+          "リリース",
+          "チーム開発"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "サーバーサイドレンダリング",
+    "reading": "さーばーさいどれんだりんぐ",
+    "aliases": [
+      "Server-Side Rendering"
+    ],
+    "senses": [
+      {
+        "definition": "HTTPリクエストを受けるたびにサーバー側でHTMLを生成して返すレンダリング方式。SEOとFCPの改善に有効だが、サーバーの計算負荷が高い。Next.jsのgetServerSidePropsが代表的な実装方法。",
+        "domain": "backend",
+        "keywords": [
+          "Next.js",
+          "HTML",
+          "SEO",
+          "パフォーマンス",
+          "レンダリング"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "データベースインデックス",
+    "reading": "でーたべーすいんでっくす",
+    "aliases": [
+      "Database Index",
+      "DBインデックス"
+    ],
+    "senses": [
+      {
+        "definition": "テーブルの特定カラムに作成されクエリ検索を高速化するデータ構造。B-Treeインデックスが最も一般的で、WHERE句やJOIN条件・ORDER BYに使われるカラムに付与する。過剰なインデックスは書き込みパフォーマンスを低下させる。",
+        "domain": "backend",
+        "keywords": [
+          "データベース",
+          "パフォーマンス",
+          "B-Tree",
+          "クエリ",
+          "最適化"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "キャッシュ戦略",
+    "reading": "きゃっしゅせんりゃく",
+    "aliases": [
+      "Cache Strategy",
+      "キャッシング戦略"
+    ],
+    "senses": [
+      {
+        "definition": "データのキャッシュ方針を定める設計。Cache-Aside（アプリが明示的に制御）、Read-Through（キャッシュが透過的にDBを参照）、Write-Through/Write-Behindなどのパターンがあり、一貫性とパフォーマンスのトレードオフを考慮して選択する。",
+        "domain": "backend",
+        "keywords": [
+          "Redis",
+          "キャッシュ",
+          "パフォーマンス",
+          "一貫性",
+          "パターン"
+        ]
+      }
+    ]
+  },
+  {
+    "term": "HTTPキャッシュコントロール",
+    "reading": "えいちてぃーてぃーぴーきゃっしゅこんとろーる",
+    "senses": [
+      {
+        "definition": "HTTPのCache-Controlヘッダーを用いてレスポンスのキャッシュ動作を制御する仕組みです。max-ageやno-cacheなどのディレクティブで挙動を指定します。",
+        "domain": "web",
+        "keywords": [
+          "Cache-Control",
+          "キャッシュ",
+          "HTTP",
+          "パフォーマンス"
+        ]
+      }
+    ],
+    "aliases": [
+      "HTTP Cache Control",
+      "Cache-Control"
+    ]
+  }
+]

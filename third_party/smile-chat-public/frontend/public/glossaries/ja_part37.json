@@ -1,0 +1,2537 @@
+[
+  {
+    "term": "RPM",
+    "senses": [
+      {
+        "definition": "Red Hat系Linuxディストリビューションで使用されるパッケージ形式およびパッケージ管理ツール。.rpmファイルをインストール・削除・照会できる。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "RHEL",
+          "linux",
+          "インストール",
+          "YUM"
+        ]
+      }
+    ],
+    "aliases": [
+      "RPM Package Manager",
+      "Red Hat Package Manager"
+    ]
+  },
+  {
+    "term": "YUM",
+    "senses": [
+      {
+        "definition": "Red Hat系Linuxで使用された依存関係解決機能付きパッケージマネージャ。RHEL 8以降はDNFに置き換えられたが後方互換性のためyumコマンドも使用できる。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "RHEL",
+          "linux",
+          "依存関係",
+          "DNF"
+        ]
+      }
+    ],
+    "aliases": [
+      "Yellowdog Updater Modified"
+    ]
+  },
+  {
+    "term": "DNF",
+    "senses": [
+      {
+        "definition": "RHEL 8以降でYUMの後継として採用されたパッケージマネージャ。依存関係解決の改善、パフォーマンス向上、プラグインAPIの整備が特徴。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "RHEL",
+          "linux",
+          "依存関係",
+          "YUM後継"
+        ]
+      }
+    ],
+    "aliases": [
+      "Dandified YUM"
+    ]
+  },
+  {
+    "term": "APT",
+    "senses": [
+      {
+        "definition": "Debian系Linuxで使用される高機能パッケージ管理システム。依存関係の自動解決、パッケージの検索・インストール・削除をapt/apt-getコマンドで実行する。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "Debian",
+          "Ubuntu",
+          "linux",
+          "依存関係"
+        ]
+      }
+    ],
+    "aliases": [
+      "Advanced Package Tool"
+    ]
+  },
+  {
+    "term": "dpkg",
+    "senses": [
+      {
+        "definition": "Debian系Linuxの低レベルパッケージ管理ツール。.debパッケージファイルを直接インストール・削除・照会できる。APTはdpkgのフロントエンド。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "Debian",
+          "linux",
+          "deb",
+          "APT"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "snap",
+    "senses": [
+      {
+        "definition": "Canonicalが開発したサンドボックス型のLinuxパッケージ形式。依存関係を内包した自己完結型パッケージで、自動更新とロールバックをサポートする。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "Ubuntu",
+          "linux",
+          "サンドボックス",
+          "Canonical"
+        ]
+      }
+    ],
+    "aliases": [
+      "snapd"
+    ]
+  },
+  {
+    "term": "flatpak",
+    "senses": [
+      {
+        "definition": "サンドボックス環境でLinuxデスクトップアプリケーションを配布・実行するパッケージシステム。ディストリビューションに依存せず動作する。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "linux",
+          "サンドボックス",
+          "デスクトップ",
+          "ディストリ非依存"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AppImage",
+    "senses": [
+      {
+        "definition": "単一の実行可能ファイルとしてLinuxアプリケーションを配布する形式。インストール不要でそのまま実行でき、ディストリビューションを選ばない。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "linux",
+          "ポータブル",
+          "インストール不要",
+          "実行ファイル"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "zypper",
+    "senses": [
+      {
+        "definition": "SUSE/openSUSE系Linuxで使用されるコマンドラインパッケージマネージャ。RPMパッケージの依存関係解決やリポジトリ管理を担う。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "SUSE",
+          "openSUSE",
+          "linux",
+          "RPM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "pacman",
+    "senses": [
+      {
+        "definition": "Arch Linuxのデフォルトパッケージマネージャ。シンプルで高速な設計が特徴で、AUR（Arch User Repository）へのアクセスもサポートする。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "Arch Linux",
+          "linux",
+          "AUR",
+          "インストール"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "GPGキー",
+    "senses": [
+      {
+        "definition": "パッケージリポジトリの真正性を検証するために使用するGPG（PGP）公開鍵。パッケージをインストールする前にリポジトリの署名を検証するために使用される。",
+        "domain": "package-management",
+        "keywords": [
+          "GPG",
+          "署名",
+          "パッケージ",
+          "セキュリティ",
+          "リポジトリ"
+        ]
+      }
+    ],
+    "aliases": [
+      "GPG key"
+    ],
+    "reading": "じーぴーじーきー"
+  },
+  {
+    "term": "パッケージ署名",
+    "senses": [
+      {
+        "definition": "RPMやdebパッケージにGPGデジタル署名を付与してパッケージの真正性と完全性を保証する仕組み。改ざんの検出に利用される。",
+        "domain": "package-management",
+        "keywords": [
+          "GPG",
+          "署名",
+          "パッケージ",
+          "セキュリティ",
+          "改ざん検出"
+        ]
+      }
+    ],
+    "aliases": [
+      "package signing"
+    ],
+    "reading": "ぱっけーじしょめい"
+  },
+  {
+    "term": "依存関係解決",
+    "senses": [
+      {
+        "definition": "パッケージのインストール時に必要な依存パッケージを自動的に特定・インストールする仕組み。YUM/DNF/APTが自動で処理する。",
+        "domain": "package-management",
+        "keywords": [
+          "依存関係",
+          "パッケージ",
+          "linux",
+          "DNF",
+          "APT"
+        ]
+      }
+    ],
+    "aliases": [
+      "dependency resolution"
+    ],
+    "reading": "いぞんかんけいかいけつ"
+  },
+  {
+    "term": "SPEC file",
+    "senses": [
+      {
+        "definition": "RPMパッケージをビルドするための仕様ファイル。パッケージのメタ情報、ビルド手順、インストールスクリプトを記述する。",
+        "domain": "package-management",
+        "keywords": [
+          "RPM",
+          "パッケージビルド",
+          "RHEL",
+          "linux",
+          "specファイル"
+        ]
+      }
+    ],
+    "aliases": [
+      "specファイル",
+      ".spec"
+    ]
+  },
+  {
+    "term": "ソースRPM",
+    "senses": [
+      {
+        "definition": "RPMパッケージのソースコードと.specファイルを含む特殊なRPMファイル（.src.rpm）。rpmbuildコマンドでバイナリRPMにビルドできる。",
+        "domain": "package-management",
+        "keywords": [
+          "RPM",
+          "ソースコード",
+          "ビルド",
+          "linux",
+          "SRPM"
+        ]
+      }
+    ],
+    "aliases": [
+      "SRPM",
+      "source RPM",
+      ".src.rpm"
+    ]
+  },
+  {
+    "term": "パッケージグループ",
+    "senses": [
+      {
+        "definition": "関連するパッケージをまとめた論理グループ。dnf groupinstallコマンドでグループ単位でインストールできる。例：「開発ツール」グループ。",
+        "domain": "package-management",
+        "keywords": [
+          "RPM",
+          "DNF",
+          "グループ",
+          "linux",
+          "インストール"
+        ]
+      }
+    ],
+    "aliases": [
+      "package group"
+    ],
+    "reading": "ぱっけーじぐるーぷ"
+  },
+  {
+    "term": "BaseOS",
+    "senses": [
+      {
+        "definition": "RHEL 8以降で導入されたコアOSコンポーネントを提供するリポジトリ。基本的なシステム機能を構成するパッケージが含まれる。",
+        "domain": "package-management",
+        "keywords": [
+          "RHEL",
+          "リポジトリ",
+          "linux",
+          "パッケージ",
+          "AppStream"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AppStream",
+    "senses": [
+      {
+        "definition": "RHEL 8以降で導入されたユーザー空間のアプリケーションを提供するリポジトリ。モジュールストリームで複数バージョンの共存が可能。",
+        "domain": "package-management",
+        "keywords": [
+          "RHEL",
+          "リポジトリ",
+          "linux",
+          "モジュール",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "EPEL",
+    "senses": [
+      {
+        "definition": "Fedoraプロジェクトが管理するRHEL/CentOS向けの追加パッケージリポジトリ。公式リポジトリにないパッケージを提供する。",
+        "domain": "package-management",
+        "keywords": [
+          "リポジトリ",
+          "RHEL",
+          "Fedora",
+          "linux",
+          "追加パッケージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Extra Packages for Enterprise Linux"
+    ]
+  },
+  {
+    "term": "PPAリポジトリ",
+    "senses": [
+      {
+        "definition": "Ubuntu向けの個人パッケージアーカイブ（Personal Package Archive）。Canonicalのlaunchpad.netでホストされ、公式リポジトリにないパッケージを追加できる。",
+        "domain": "package-management",
+        "keywords": [
+          "Ubuntu",
+          "リポジトリ",
+          "linux",
+          "APT",
+          "パッケージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "PPA",
+      "Personal Package Archive"
+    ]
+  },
+  {
+    "term": "apt-get",
+    "senses": [
+      {
+        "definition": "Debian/Ubuntu系のパッケージ管理コマンド。パッケージのインストール・削除・システム更新をコマンドラインから実行する。現在はaptコマンドが推奨される。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "Debian",
+          "Ubuntu",
+          "linux",
+          "APT"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "apt-cache",
+    "senses": [
+      {
+        "definition": "APTのパッケージキャッシュを照会するコマンド。パッケージの検索（apt-cache search）や詳細表示（apt-cache show）に使用する。",
+        "domain": "package-management",
+        "keywords": [
+          "パッケージ",
+          "Debian",
+          "linux",
+          "APT",
+          "検索"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ps",
+    "senses": [
+      {
+        "definition": "現在実行中のプロセスの情報を表示するコマンド。ps auxで全プロセスをユーザー・CPU・メモリ情報付きで一覧表示できる。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "コマンド",
+          "監視",
+          "ps aux"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "top",
+    "senses": [
+      {
+        "definition": "リアルタイムでシステムのCPU・メモリ使用状況とプロセス一覧を表示するインタラクティブなコマンド。システムの負荷監視に広く使用される。",
+        "domain": "monitoring",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "コマンド",
+          "監視",
+          "CPU"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "htop",
+    "senses": [
+      {
+        "definition": "topの高機能版。カラー表示、マウス操作、ツリー表示などに対応したインタラクティブなプロセスビューア。",
+        "domain": "monitoring",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "コマンド",
+          "監視",
+          "top"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "nice",
+    "senses": [
+      {
+        "definition": "プロセスの実行優先度（ナイス値）を指定してコマンドを起動するコマンド。ナイス値は-20（最高優先）〜19（最低優先）の範囲で指定する。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "優先度",
+          "linux",
+          "コマンド",
+          "スケジューラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "renice",
+    "senses": [
+      {
+        "definition": "実行中のプロセスのナイス値（優先度）を変更するコマンド。プロセスID、ユーザー、グループを指定して優先度を動的に変更できる。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "優先度",
+          "linux",
+          "コマンド",
+          "nice"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ionice",
+    "senses": [
+      {
+        "definition": "プロセスのI/Oスケジューリングクラスと優先度を設定するコマンド。アイドルクラスを指定することでバックグラウンド処理のI/O影響を最小化できる。",
+        "domain": "process-management",
+        "keywords": [
+          "I/O",
+          "プロセス",
+          "linux",
+          "コマンド",
+          "スケジューラ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ulimit",
+    "senses": [
+      {
+        "definition": "シェルセッションで利用できるシステムリソース（オープンファイル数、プロセス数、メモリなど）の制限を表示・設定するコマンド。",
+        "domain": "process-management",
+        "keywords": [
+          "リソース制限",
+          "linux",
+          "シェル",
+          "コマンド",
+          "プロセス"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "プロセスツリー",
+    "senses": [
+      {
+        "definition": "親子関係を持つプロセスの階層構造。pstreeコマンドで視覚的に確認でき、init/systemdが根（root）プロセスとなる。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "pstree",
+          "親子関係",
+          "systemd"
+        ]
+      }
+    ],
+    "aliases": [
+      "process tree",
+      "pstree"
+    ],
+    "reading": "ぷろせすつりー"
+  },
+  {
+    "term": "ゾンビプロセス",
+    "senses": [
+      {
+        "definition": "実行終了したが親プロセスが終了コードを回収していないためプロセステーブルに残り続けているプロセス状態（Z状態）。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "ゾンビ",
+          "親プロセス",
+          "wait"
+        ]
+      }
+    ],
+    "aliases": [
+      "zombie process"
+    ],
+    "reading": "ぞんびぷろせす"
+  },
+  {
+    "term": "孤児プロセス",
+    "senses": [
+      {
+        "definition": "親プロセスが終了してしまった子プロセス。init（PID1）またはsubreaper設定のプロセスに引き取られる。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "親プロセス",
+          "init",
+          "systemd"
+        ]
+      }
+    ],
+    "aliases": [
+      "orphan process"
+    ],
+    "reading": "みなしごぷろせす"
+  },
+  {
+    "term": "SIGTERM",
+    "senses": [
+      {
+        "definition": "プロセスに正常終了を要求するシグナル（シグナル番号15）。killコマンドのデフォルトシグナルで、プロセスはハンドリングして終了処理を行える。",
+        "domain": "process-management",
+        "keywords": [
+          "シグナル",
+          "プロセス",
+          "linux",
+          "kill",
+          "終了"
+        ]
+      }
+    ],
+    "aliases": [
+      "signal 15"
+    ]
+  },
+  {
+    "term": "SIGKILL",
+    "senses": [
+      {
+        "definition": "プロセスを強制終了させるシグナル（シグナル番号9）。カーネルが直接プロセスを終了させるためハンドリング不可能で確実に終了できる。",
+        "domain": "process-management",
+        "keywords": [
+          "シグナル",
+          "プロセス",
+          "linux",
+          "kill",
+          "強制終了"
+        ]
+      }
+    ],
+    "aliases": [
+      "signal 9",
+      "kill -9"
+    ]
+  },
+  {
+    "term": "SIGHUP",
+    "senses": [
+      {
+        "definition": "端末切断やプロセスへの設定再読み込み要求を伝えるシグナル（シグナル番号1）。デーモンプロセスは受信時に設定ファイルを再読み込みすることが多い。",
+        "domain": "process-management",
+        "keywords": [
+          "シグナル",
+          "プロセス",
+          "linux",
+          "デーモン",
+          "設定再読み込み"
+        ]
+      }
+    ],
+    "aliases": [
+      "signal 1"
+    ]
+  },
+  {
+    "term": "forkとexec",
+    "senses": [
+      {
+        "definition": "Unix系OSでのプロセス生成方式。forkで現在のプロセスを複製し、execで新しいプログラムをロードして実行する基本的なプロセス生成パターン。",
+        "domain": "process-management",
+        "keywords": [
+          "プロセス",
+          "linux",
+          "fork",
+          "exec",
+          "システムコール"
+        ]
+      }
+    ],
+    "aliases": [
+      "fork/exec",
+      "fork and exec"
+    ]
+  },
+  {
+    "term": "systemctl",
+    "senses": [
+      {
+        "definition": "systemdのサービス管理コマンド。サービスの起動・停止・再起動・有効化・状態確認などをsystemctl start/stop/enable/statusで操作する。",
+        "domain": "process-management",
+        "keywords": [
+          "systemd",
+          "サービス",
+          "linux",
+          "コマンド",
+          "デーモン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "journalctl",
+    "senses": [
+      {
+        "definition": "systemdのジャーナルログを閲覧するコマンド。-u でユニット指定、-fでフォロー、--sinceで時間指定など柔軟なログ検索が可能。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログ",
+          "systemd",
+          "linux",
+          "コマンド",
+          "journald"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "cgroupsv2",
+    "senses": [
+      {
+        "definition": "Linuxカーネルのコントロールグループバージョン2。プロセスのCPU・メモリ・I/Oリソースを階層的に制御する仕組みでコンテナ技術の基盤。",
+        "domain": "process-management",
+        "keywords": [
+          "リソース制御",
+          "linux",
+          "カーネル",
+          "コンテナ",
+          "Docker"
+        ]
+      }
+    ],
+    "aliases": [
+      "cgroups v2",
+      "cgroups2",
+      "control groups v2"
+    ]
+  },
+  {
+    "term": "namespace",
+    "senses": [
+      {
+        "definition": "Linuxカーネルのリソース分離機能。PID、ネットワーク、ファイルシステムなど各種リソースを独立した名前空間に隔離し、コンテナの基盤技術となっている。",
+        "domain": "linux",
+        "keywords": [
+          "コンテナ",
+          "linux",
+          "カーネル",
+          "隔離",
+          "Docker"
+        ]
+      },
+      {
+        "definition": "Object Storageの論理的な名前空間。",
+        "domain": "oci-apex",
+        "keywords": [
+          "OCI",
+          "APEX",
+          "ストレージ",
+          "Namespace"
+        ]
+      }
+    ],
+    "aliases": [
+      "Linux namespace",
+      "名前空間"
+    ]
+  },
+  {
+    "term": "ウォッチドッグ",
+    "senses": [
+      {
+        "definition": "プロセスやシステムの死活監視を行いハングアップを検出した際に自動的に再起動する仕組み。systemdのWatchdog機能やハードウェアウォッチドッグがある。",
+        "domain": "process-management",
+        "keywords": [
+          "監視",
+          "systemd",
+          "linux",
+          "自動復旧",
+          "デーモン"
+        ]
+      }
+    ],
+    "aliases": [
+      "watchdog"
+    ]
+  },
+  {
+    "term": "パーティション",
+    "senses": [
+      {
+        "definition": "物理ストレージデバイスを論理的に分割した領域。fdiskやgdiskで管理し、各パーティションに独立したファイルシステムを作成できる。",
+        "domain": "storage",
+        "keywords": [
+          "ディスク",
+          "ファイルシステム",
+          "linux",
+          "fdisk",
+          "GPT"
+        ]
+      }
+    ],
+    "aliases": [
+      "partition"
+    ],
+    "reading": "ぱーてぃしょん"
+  },
+  {
+    "term": "fdisk",
+    "senses": [
+      {
+        "definition": "MBRパーティションテーブルを操作するLinuxのコマンドラインツール。パーティションの作成・削除・変更に使用するが、2TB超のディスクにはgdiskを使う。",
+        "domain": "storage",
+        "keywords": [
+          "パーティション",
+          "ディスク",
+          "linux",
+          "MBR",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "gdisk",
+    "senses": [
+      {
+        "definition": "GPTパーティションテーブルを操作するコマンドラインツール。fdiskのGPT版で、2TB超のディスクや多数のパーティションに対応する。",
+        "domain": "storage",
+        "keywords": [
+          "パーティション",
+          "ディスク",
+          "linux",
+          "GPT",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "GPT fdisk"
+    ]
+  },
+  {
+    "term": "parted",
+    "senses": [
+      {
+        "definition": "MBR・GPT両方のパーティションテーブルを操作できる高機能パーティション管理ツール。スクリプトモードもあり自動化に適している。",
+        "domain": "storage",
+        "keywords": [
+          "パーティション",
+          "ディスク",
+          "linux",
+          "GPT",
+          "MBR"
+        ]
+      }
+    ],
+    "aliases": [
+      "GNU Parted"
+    ]
+  },
+  {
+    "term": "LVM",
+    "senses": [
+      {
+        "definition": "Linuxの論理ボリュームマネージャ。物理ディスクを抽象化し、柔軟なサイズ変更やスナップショットが可能なボリューム管理を実現する。",
+        "domain": "storage",
+        "keywords": [
+          "ディスク管理",
+          "ボリューム",
+          "スナップショット",
+          "linux",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Logical Volume Manager"
+    ]
+  },
+  {
+    "term": "物理ボリューム",
+    "senses": [
+      {
+        "definition": "LVMで管理される最小単位の物理ストレージ（ディスクやパーティション）。pvcrateコマンドで初期化してボリュームグループに追加する。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "ディスク",
+          "linux",
+          "pvcreate",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "PV",
+      "Physical Volume"
+    ],
+    "reading": "ぶつりぼりゅーむ"
+  },
+  {
+    "term": "ボリュームグループ",
+    "senses": [
+      {
+        "definition": "LVMで複数の物理ボリュームをまとめた論理的なストレージプール。この中から論理ボリュームを切り出して使用する。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "ディスク",
+          "linux",
+          "vgcreate",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "VG",
+      "Volume Group"
+    ],
+    "reading": "ぼりゅーむぐるーぷ"
+  },
+  {
+    "term": "論理ボリューム",
+    "senses": [
+      {
+        "definition": "LVMのボリュームグループから切り出した仮想ディスク領域。サイズの動的変更、スナップショット作成などが可能でファイルシステムを作成して使用する。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "ディスク",
+          "linux",
+          "lvcreate",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": [
+      "LV",
+      "Logical Volume"
+    ],
+    "reading": "ろんりぼりゅーむ"
+  },
+  {
+    "term": "pvs",
+    "senses": [
+      {
+        "definition": "LVMの物理ボリュームの情報（デバイス名、サイズ、使用量など）を一覧表示するコマンド。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "物理ボリューム",
+          "linux",
+          "コマンド",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "vgs",
+    "senses": [
+      {
+        "definition": "LVMのボリュームグループの情報（名前、物理ボリューム数、サイズなど）を一覧表示するコマンド。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "ボリュームグループ",
+          "linux",
+          "コマンド",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "lvs",
+    "senses": [
+      {
+        "definition": "LVMの論理ボリュームの情報（名前、サイズ、属性など）を一覧表示するコマンド。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "論理ボリューム",
+          "linux",
+          "コマンド",
+          "ストレージ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "pvcreate",
+    "senses": [
+      {
+        "definition": "ディスクやパーティションをLVMの物理ボリュームとして初期化するコマンド。LVM管理下に置くための最初のステップ。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "物理ボリューム",
+          "linux",
+          "コマンド",
+          "初期化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "vgcreate",
+    "senses": [
+      {
+        "definition": "LVMの物理ボリュームをまとめてボリュームグループを作成するコマンド。vgcreate vg_name /dev/sda1の形式で使用する。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "ボリュームグループ",
+          "linux",
+          "コマンド",
+          "作成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "lvcreate",
+    "senses": [
+      {
+        "definition": "LVMのボリュームグループから論理ボリュームを切り出して作成するコマンド。サイズ指定、スナップショット作成などのオプションがある。",
+        "domain": "storage",
+        "keywords": [
+          "LVM",
+          "論理ボリューム",
+          "linux",
+          "コマンド",
+          "作成"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "mdadm",
+    "senses": [
+      {
+        "definition": "LinuxでソフトウェアRAIDアレイを管理するコマンドラインツール。RAID0/1/5/6などの作成・監視・修復・管理を行う。",
+        "domain": "storage",
+        "keywords": [
+          "RAID",
+          "linux",
+          "ソフトウェアRAID",
+          "コマンド",
+          "アレイ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Multiple Device Administration"
+    ]
+  },
+  {
+    "term": "RAID0",
+    "senses": [
+      {
+        "definition": "複数ディスクにデータをストライプ分散するRAID構成。高速だが冗長性がなく、1台故障でデータが全損する。",
+        "domain": "storage",
+        "keywords": [
+          "RAID",
+          "ストライプ",
+          "ディスク",
+          "linux",
+          "高速"
+        ]
+      }
+    ],
+    "aliases": [
+      "ストライピング"
+    ]
+  },
+  {
+    "term": "RAID1",
+    "senses": [
+      {
+        "definition": "2台以上のディスクに同一データをミラーリングするRAID構成。1台故障してもデータが失われない高い冗長性を持つ。",
+        "domain": "storage",
+        "keywords": [
+          "RAID",
+          "ミラーリング",
+          "ディスク",
+          "linux",
+          "冗長性"
+        ]
+      }
+    ],
+    "aliases": [
+      "ミラーリング"
+    ]
+  },
+  {
+    "term": "RAID5",
+    "senses": [
+      {
+        "definition": "3台以上のディスクにデータとパリティを分散するRAID構成。1台の故障に耐えられ、ストレージ効率と冗長性のバランスが良い。",
+        "domain": "storage",
+        "keywords": [
+          "RAID",
+          "パリティ",
+          "ディスク",
+          "linux",
+          "冗長性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "RAID6",
+    "senses": [
+      {
+        "definition": "4台以上のディスクに2重パリティを分散するRAID構成。2台同時故障まで耐えられる高い冗長性を持つが書き込みオーバーヘッドが大きい。",
+        "domain": "storage",
+        "keywords": [
+          "RAID",
+          "2重パリティ",
+          "ディスク",
+          "linux",
+          "冗長性"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ext4",
+    "senses": [
+      {
+        "definition": "Linuxで最も広く使われるジャーナリングファイルシステム。ext3の後継でエクステント管理、遅延割り当て、大ファイルサポートを追加している。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "ジャーナリング",
+          "ext3",
+          "mkfs"
+        ]
+      }
+    ],
+    "aliases": [
+      "Fourth Extended Filesystem"
+    ]
+  },
+  {
+    "term": "xfs",
+    "senses": [
+      {
+        "definition": "高性能なジャーナリングファイルシステム。SGIが開発しRHELのデフォルトファイルシステムとして採用。大容量ファイル・大規模環境に適する。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "RHEL",
+          "ジャーナリング",
+          "高性能"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "btrfs",
+    "senses": [
+      {
+        "definition": "Oracleが開発したコピーオンライトベースのLinuxファイルシステム。スナップショット、サブボリューム、組み込みRAIDなど高度な機能を持つ。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "スナップショット",
+          "CoW",
+          "Btrfs"
+        ]
+      }
+    ],
+    "aliases": [
+      "B-tree filesystem",
+      "Butter FS"
+    ]
+  },
+  {
+    "term": "mkfs",
+    "senses": [
+      {
+        "definition": "ブロックデバイスやパーティションにファイルシステムを作成するコマンド。mkfs.ext4やmkfs.xfsのように形式を指定して使用する。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "コマンド",
+          "フォーマット",
+          "パーティション"
+        ]
+      }
+    ],
+    "aliases": [
+      "make filesystem"
+    ]
+  },
+  {
+    "term": "fsck",
+    "senses": [
+      {
+        "definition": "ファイルシステムの整合性チェックと修復を行うコマンド。起動時に自動実行されるほか、アンマウント状態のファイルシステムに手動で実行できる。",
+        "domain": "storage",
+        "keywords": [
+          "ファイルシステム",
+          "linux",
+          "コマンド",
+          "修復",
+          "チェック"
+        ]
+      }
+    ],
+    "aliases": [
+      "filesystem check"
+    ]
+  },
+  {
+    "term": "tune2fs",
+    "senses": [
+      {
+        "definition": "ext2/ext3/ext4ファイルシステムのパラメータ（マウント回数制限、チェック間隔、ラベルなど）を調整するコマンド。",
+        "domain": "storage",
+        "keywords": [
+          "ext4",
+          "ファイルシステム",
+          "linux",
+          "コマンド",
+          "チューニング"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ディスククォータ",
+    "senses": [
+      {
+        "definition": "ユーザーまたはグループごとにディスク使用量の上限を設定するファイルシステム機能。quotaパッケージを使用してソフト/ハードリミットを設定できる。",
+        "domain": "storage",
+        "keywords": [
+          "ディスク",
+          "quota",
+          "linux",
+          "容量制限",
+          "ユーザー管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "disk quota"
+    ],
+    "reading": "でぃすくくおーた"
+  },
+  {
+    "term": "lsblk",
+    "senses": [
+      {
+        "definition": "ブロックデバイス（ディスク、パーティション、LVM等）の情報をツリー形式で表示するコマンド。デバイスの構成把握に便利。",
+        "domain": "storage",
+        "keywords": [
+          "ディスク",
+          "linux",
+          "コマンド",
+          "ブロックデバイス",
+          "パーティション"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "blkid",
+    "senses": [
+      {
+        "definition": "ブロックデバイスのUUID、ファイルシステムタイプ、ラベルなどの属性情報を表示するコマンド。/etc/fstabでのUUID指定確認に使用する。",
+        "domain": "storage",
+        "keywords": [
+          "ディスク",
+          "linux",
+          "コマンド",
+          "UUID",
+          "ファイルシステム"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "LUKS",
+    "senses": [
+      {
+        "definition": "Linuxの標準的なディスク暗号化仕様。dm-cryptの上に構築され、暗号化コンテナのヘッダ管理と複数キースロットをサポートする。",
+        "domain": "security",
+        "keywords": [
+          "暗号化",
+          "linux",
+          "ディスク",
+          "dm-crypt",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Linux Unified Key Setup"
+    ]
+  },
+  {
+    "term": "dm-crypt",
+    "senses": [
+      {
+        "definition": "Linuxカーネルのデバイスマッパー機能を使ったブロックデバイス暗号化サブシステム。LUKSの基盤となる暗号化レイヤー。",
+        "domain": "security",
+        "keywords": [
+          "暗号化",
+          "linux",
+          "デバイスマッパー",
+          "LUKS",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ストレージマルチパス",
+    "senses": [
+      {
+        "definition": "サーバーとストレージを複数の物理パスで接続して冗長性と性能を向上させる技術。Linuxではdevice-mapper-multipathで実現する。",
+        "domain": "storage",
+        "keywords": [
+          "ストレージ",
+          "冗長化",
+          "linux",
+          "SAN",
+          "マルチパス"
+        ]
+      }
+    ],
+    "aliases": [
+      "multipath",
+      "device-mapper-multipath"
+    ],
+    "reading": "すとれーじまるちぱす"
+  },
+  {
+    "term": "nmcli",
+    "senses": [
+      {
+        "definition": "NetworkManagerをコマンドラインから操作するツール。ネットワーク接続の作成・変更・削除をスクリプトからも扱いやすい形式で提供する。",
+        "domain": "network",
+        "keywords": [
+          "NetworkManager",
+          "linux",
+          "ネットワーク",
+          "コマンド",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "nmtui",
+    "senses": [
+      {
+        "definition": "NetworkManagerのTUIベース（テキストUI）設定ツール。コンソール環境でグラフィカルに近い感覚でネットワーク設定を行える。",
+        "domain": "network",
+        "keywords": [
+          "NetworkManager",
+          "linux",
+          "ネットワーク",
+          "TUI",
+          "設定"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "NetworkManager",
+    "senses": [
+      {
+        "definition": "Linuxシステムのネットワーク接続を自動管理するデーモン。有線・無線・VPN・ブリッジなど多様な接続タイプを統合管理する。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "linux",
+          "デーモン",
+          "接続管理",
+          "nmcli"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ボンディング",
+    "senses": [
+      {
+        "definition": "複数のネットワークインターフェースを束ねて帯域幅増加や冗長化を実現するLinuxの機能。アクティブ-バックアップなど複数モードがある。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "linux",
+          "冗長化",
+          "帯域増加",
+          "チーミング"
+        ]
+      }
+    ],
+    "aliases": [
+      "bonding",
+      "NICボンディング",
+      "link aggregation"
+    ],
+    "reading": "ぼんでぃんぐ"
+  },
+  {
+    "term": "チーミング",
+    "senses": [
+      {
+        "definition": "ボンディングのより新しい代替として導入されたLinuxのNIC束ね技術。libteamdを使用してボンディングより柔軟な設定が可能。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "linux",
+          "冗長化",
+          "libteam",
+          "ボンディング"
+        ]
+      }
+    ],
+    "aliases": [
+      "teaming",
+      "NICチーミング"
+    ],
+    "reading": "ちーみんぐ"
+  },
+  {
+    "term": "VLAN設定",
+    "senses": [
+      {
+        "definition": "1つの物理ネットワークインターフェース上に複数の仮想LAN（VLAN）を設定する構成。8021qカーネルモジュールを使用しVLAN IDでトラフィックを分離する。",
+        "domain": "network",
+        "keywords": [
+          "VLAN",
+          "ネットワーク",
+          "linux",
+          "802.1q",
+          "仮想LAN"
+        ]
+      }
+    ],
+    "aliases": [
+      "仮想LAN設定"
+    ],
+    "reading": "ぶいらんせってい"
+  },
+  {
+    "term": "ss",
+    "senses": [
+      {
+        "definition": "ソケット統計情報を表示するコマンド。netstatの後継として設計され高速で詳細なTCP/UDPソケット・UNIXソケットの一覧を表示できる。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "ソケット",
+          "linux",
+          "コマンド",
+          "netstat"
+        ]
+      }
+    ],
+    "aliases": [
+      "socket statistics"
+    ]
+  },
+  {
+    "term": "tcpdump",
+    "senses": [
+      {
+        "definition": "ネットワークパケットをキャプチャして表示するコマンドラインツール。フィルタ条件でパケットを絞り込み、ファイルへの保存もできる。",
+        "domain": "network",
+        "keywords": [
+          "パケットキャプチャ",
+          "ネットワーク",
+          "linux",
+          "コマンド",
+          "デバッグ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "nmap",
+    "senses": [
+      {
+        "definition": "ネットワークのホスト発見とポートスキャンを行うセキュリティツール。開いているポート、OS情報、サービスバージョンなどを調査できる。",
+        "domain": "network",
+        "keywords": [
+          "ポートスキャン",
+          "ネットワーク",
+          "セキュリティ",
+          "linux",
+          "コマンド"
+        ]
+      }
+    ],
+    "aliases": [
+      "Network Mapper"
+    ]
+  },
+  {
+    "term": "traceroute",
+    "senses": [
+      {
+        "definition": "パケットがターゲットホストに到達するまでの経路（ルーター）を表示するネットワーク診断コマンド。各ホップのIPアドレスと遅延時間を確認できる。",
+        "domain": "network",
+        "keywords": [
+          "ネットワーク",
+          "経路確認",
+          "linux",
+          "コマンド",
+          "診断"
+        ]
+      }
+    ],
+    "aliases": [
+      "tracert"
+    ]
+  },
+  {
+    "term": "iptables",
+    "senses": [
+      {
+        "definition": "Linuxカーネルのnetfilterフレームワークを操作するファイアウォール・パケットフィルタリングコマンド。テーブルとチェーンでパケットルールを管理する。",
+        "domain": "network",
+        "keywords": [
+          "ファイアウォール",
+          "linux",
+          "パケットフィルタ",
+          "netfilter",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "nftables",
+    "senses": [
+      {
+        "definition": "iptablesの後継として開発されたLinuxのパケットフィルタリングフレームワーク。より統一された構文と高性能が特徴で、RHEL 8以降で採用。",
+        "domain": "network",
+        "keywords": [
+          "ファイアウォール",
+          "linux",
+          "パケットフィルタ",
+          "iptables後継",
+          "netfilter"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "firewalld",
+    "senses": [
+      {
+        "definition": "RHEL/CentOS系で使用されるゾーンベースのダイナミックファイアウォール管理デーモン。nftablesまたはiptablesのフロントエンドとして動作する。",
+        "domain": "network",
+        "keywords": [
+          "ファイアウォール",
+          "RHEL",
+          "linux",
+          "ゾーン",
+          "デーモン"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ファイアウォールゾーン",
+    "senses": [
+      {
+        "definition": "firewalldにおけるネットワーク信頼レベルの区分。public、trusted、internal、dmzなど定義済みゾーンにインターフェースを割り当ててルールを適用する。",
+        "domain": "network",
+        "keywords": [
+          "ファイアウォール",
+          "firewalld",
+          "linux",
+          "ゾーン",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": [
+      "firewall zone"
+    ],
+    "reading": "ふぁいあうぉーるぞーん"
+  },
+  {
+    "term": "SELinux",
+    "senses": [
+      {
+        "definition": "Linuxカーネルに組み込まれた強制アクセス制御（MAC）の仕組み。ファイルやプロセスへのアクセスをポリシーで細かく制御する。",
+        "domain": "security",
+        "keywords": [
+          "アクセス制御",
+          "セキュリティ",
+          "ポリシー",
+          "linux",
+          "MAC"
+        ]
+      }
+    ],
+    "aliases": [
+      "Security-Enhanced Linux"
+    ]
+  },
+  {
+    "term": "SELinuxコンテキスト",
+    "senses": [
+      {
+        "definition": "SELinuxがファイル・プロセス・ポートなどのリソースに付与するセキュリティラベル。user:role:type:levelの形式で表現され、アクセス制御判断に使用される。",
+        "domain": "security",
+        "keywords": [
+          "SELinux",
+          "セキュリティ",
+          "ラベル",
+          "コンテキスト",
+          "linux"
+        ]
+      }
+    ],
+    "aliases": [
+      "SELinux context",
+      "セキュリティコンテキスト"
+    ]
+  },
+  {
+    "term": "getenforce",
+    "senses": [
+      {
+        "definition": "SELinuxの現在の動作モード（Enforcing/Permissive/Disabled）を確認するコマンド。",
+        "domain": "security",
+        "keywords": [
+          "SELinux",
+          "linux",
+          "コマンド",
+          "モード",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "setenforce",
+    "senses": [
+      {
+        "definition": "SELinuxの動作モードをEnforcingとPermissiveの間で切り替えるコマンド。setenforce 0でPermissive、1でEnforcingモードに設定する。",
+        "domain": "security",
+        "keywords": [
+          "SELinux",
+          "linux",
+          "コマンド",
+          "モード",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "restorecon",
+    "senses": [
+      {
+        "definition": "SELinuxのファイルコンテキストをポリシーで定義されたデフォルト値に復元するコマンド。ファイル移動後のコンテキスト修正に使用する。",
+        "domain": "security",
+        "keywords": [
+          "SELinux",
+          "コンテキスト",
+          "linux",
+          "コマンド",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "audit2allow",
+    "senses": [
+      {
+        "definition": "SELinuxのauditログに記録された拒否ログから、必要なアクセスを許可するSELinuxポリシーモジュールを生成するコマンド。",
+        "domain": "security",
+        "keywords": [
+          "SELinux",
+          "ポリシー",
+          "linux",
+          "コマンド",
+          "監査ログ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "AppArmor",
+    "senses": [
+      {
+        "definition": "Linuxカーネルの強制アクセス制御（MAC）モジュール。SELinuxよりシンプルなプロファイルベースの設計で、Ubuntu系ディストリビューションで採用されている。",
+        "domain": "security",
+        "keywords": [
+          "セキュリティ",
+          "linux",
+          "MAC",
+          "Ubuntu",
+          "アクセス制御"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "useradd",
+    "senses": [
+      {
+        "definition": "Linuxシステムに新規ユーザーアカウントを作成するコマンド。ホームディレクトリ、シェル、グループなどのオプションを指定できる。",
+        "domain": "security",
+        "keywords": [
+          "ユーザー管理",
+          "linux",
+          "コマンド",
+          "アカウント",
+          "adduser"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "usermod",
+    "senses": [
+      {
+        "definition": "既存ユーザーアカウントの属性（グループ、シェル、ホームディレクトリ等）を変更するコマンド。usermod -aG groupname usernameでグループ追加が代表的用途。",
+        "domain": "security",
+        "keywords": [
+          "ユーザー管理",
+          "linux",
+          "コマンド",
+          "グループ",
+          "アカウント"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "userdel",
+    "senses": [
+      {
+        "definition": "Linuxシステムからユーザーアカウントを削除するコマンド。-rオプションでホームディレクトリとメールスプールも同時に削除できる。",
+        "domain": "security",
+        "keywords": [
+          "ユーザー管理",
+          "linux",
+          "コマンド",
+          "アカウント削除",
+          "ホームディレクトリ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "groupadd",
+    "senses": [
+      {
+        "definition": "Linuxシステムに新規グループを作成するコマンド。グループID（GID）を指定したり、システムグループとして作成するオプションがある。",
+        "domain": "security",
+        "keywords": [
+          "グループ管理",
+          "linux",
+          "コマンド",
+          "GID",
+          "ユーザー管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "passwd",
+    "senses": [
+      {
+        "definition": "ユーザーのパスワードを設定・変更するコマンド。root権限で他ユーザーのパスワードも変更でき、/etc/shadowに暗号化して保存される。",
+        "domain": "security",
+        "keywords": [
+          "パスワード",
+          "linux",
+          "コマンド",
+          "ユーザー管理",
+          "/etc/shadow"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "/etc/passwd",
+    "senses": [
+      {
+        "definition": "Linuxのユーザーアカウント情報（ユーザー名、UID、GID、ホームディレクトリ、シェル）を格納するテキストファイル。",
+        "domain": "security",
+        "keywords": [
+          "ユーザー管理",
+          "linux",
+          "設定ファイル",
+          "UID",
+          "アカウント"
+        ]
+      }
+    ],
+    "aliases": [
+      "passwd file"
+    ]
+  },
+  {
+    "term": "/etc/shadow",
+    "senses": [
+      {
+        "definition": "暗号化されたパスワードとパスワードポリシー情報を格納するファイル。rootのみ読み取り可能で、/etc/passwdからパスワード情報を分離したもの。",
+        "domain": "security",
+        "keywords": [
+          "パスワード",
+          "linux",
+          "セキュリティ",
+          "ユーザー管理",
+          "暗号化"
+        ]
+      }
+    ],
+    "aliases": [
+      "shadow file"
+    ]
+  },
+  {
+    "term": "/etc/group",
+    "senses": [
+      {
+        "definition": "システムのグループ定義（グループ名、GID、メンバー一覧）を格納するテキストファイル。",
+        "domain": "security",
+        "keywords": [
+          "グループ管理",
+          "linux",
+          "設定ファイル",
+          "GID",
+          "ユーザー管理"
+        ]
+      }
+    ],
+    "aliases": [
+      "group file"
+    ]
+  },
+  {
+    "term": "visudo",
+    "senses": [
+      {
+        "definition": "sudoの設定ファイル（/etc/sudoers）を安全に編集するコマンド。構文チェックを行いエラーがあれば保存を拒否し設定破損を防ぐ。",
+        "domain": "security",
+        "keywords": [
+          "sudo",
+          "linux",
+          "コマンド",
+          "sudoers",
+          "権限管理"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "PAM",
+    "senses": [
+      {
+        "definition": "Pluggable Authentication Modulesの略。認証・アカウント管理・セッション管理をモジュール化し、アプリケーションを変更せずに認証方式を変更できる仕組み。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "linux",
+          "セキュリティ",
+          "モジュール",
+          "SSSD"
+        ]
+      }
+    ],
+    "aliases": [
+      "Pluggable Authentication Modules"
+    ]
+  },
+  {
+    "term": "NSS",
+    "senses": [
+      {
+        "definition": "Name Service Switchの略。ユーザー名・グループ名・ホスト名などの名前解決をどのソース（files、LDAP、SSSDなど）から行うかを/etc/nsswitch.confで設定する仕組み。",
+        "domain": "security",
+        "keywords": [
+          "名前解決",
+          "linux",
+          "認証",
+          "SSSD",
+          "nsswitch"
+        ]
+      }
+    ],
+    "aliases": [
+      "Name Service Switch"
+    ]
+  },
+  {
+    "term": "SSSD",
+    "senses": [
+      {
+        "definition": "System Security Services Daemonの略。LDAPやActive DirectoryなどのリモートIDプロバイダと連携してLinuxの認証・認可を提供するデーモン。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "linux",
+          "LDAP",
+          "Active Directory",
+          "PAM"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Security Services Daemon"
+    ]
+  },
+  {
+    "term": "Kerberos",
+    "senses": [
+      {
+        "definition": "MITが開発したネットワーク認証プロトコル。チケットベースの認証でパスワードをネットワーク上に流さずシングルサインオンを実現する。",
+        "domain": "security",
+        "keywords": [
+          "認証",
+          "linux",
+          "シングルサインオン",
+          "Active Directory",
+          "チケット"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sshd_config",
+    "senses": [
+      {
+        "definition": "SSHサーバー（sshd）の設定ファイル（/etc/ssh/sshd_config）。ポート番号、root loginの許可、パスワード認証の有効化などを設定する。",
+        "domain": "security",
+        "keywords": [
+          "SSH",
+          "linux",
+          "設定ファイル",
+          "セキュリティ",
+          "サーバー"
+        ]
+      }
+    ],
+    "aliases": [
+      "/etc/ssh/sshd_config"
+    ]
+  },
+  {
+    "term": "authorized_keys",
+    "senses": [
+      {
+        "definition": "SSHの公開鍵認証で使用するファイル（~/.ssh/authorized_keys）。接続を許可するクライアントの公開鍵を1行ずつ記述する。",
+        "domain": "security",
+        "keywords": [
+          "SSH",
+          "公開鍵認証",
+          "linux",
+          "セキュリティ",
+          "認証"
+        ]
+      }
+    ],
+    "aliases": [
+      "~/.ssh/authorized_keys"
+    ]
+  },
+  {
+    "term": "known_hosts",
+    "senses": [
+      {
+        "definition": "SSHクライアントが接続先サーバーの公開鍵を記録するファイル（~/.ssh/known_hosts）。初回接続時にホスト鍵が追加され、次回以降の接続時に検証される。",
+        "domain": "security",
+        "keywords": [
+          "SSH",
+          "ホスト認証",
+          "linux",
+          "セキュリティ",
+          "公開鍵"
+        ]
+      }
+    ],
+    "aliases": [
+      "~/.ssh/known_hosts"
+    ]
+  },
+  {
+    "term": "su",
+    "senses": [
+      {
+        "definition": "別のユーザー（デフォルトはroot）の権限でシェルを起動するコマンド。su - でそのユーザーの完全な環境も引き継ぐ。",
+        "domain": "security",
+        "keywords": [
+          "ユーザー切り替え",
+          "linux",
+          "root",
+          "コマンド",
+          "権限"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "公開鍵認証",
+    "senses": [
+      {
+        "definition": "秘密鍵と公開鍵のペアを使用したSSH認証方式。パスワード認証より安全でブルートフォース攻撃に強く、自動化スクリプトにも利用される。",
+        "domain": "security",
+        "keywords": [
+          "SSH",
+          "認証",
+          "linux",
+          "セキュリティ",
+          "authorized_keys"
+        ]
+      }
+    ],
+    "aliases": [
+      "public key authentication"
+    ],
+    "reading": "こうかいかぎにんしょう"
+  },
+  {
+    "term": "rsyslog",
+    "senses": [
+      {
+        "definition": "Linuxシステムで広く使用される高機能ログデーモン。syslogプロトコルをサポートしフィルタリング、リモート転送、多様な出力形式を提供する。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログ",
+          "linux",
+          "デーモン",
+          "syslog",
+          "journald"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "journald",
+    "senses": [
+      {
+        "definition": "systemdが提供するシステムジャーナルデーモン。バイナリ形式でログを収集・管理し、journalctlコマンドで検索・フィルタリングができる。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログ",
+          "systemd",
+          "linux",
+          "journalctl",
+          "デーモン"
+        ]
+      }
+    ],
+    "aliases": [
+      "systemd-journald"
+    ]
+  },
+  {
+    "term": "/var/log",
+    "senses": [
+      {
+        "definition": "Linuxシステムのログファイルが格納される標準ディレクトリ。/var/log/messages、/var/log/syslog、/var/log/secureなど多数のログファイルが置かれる。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログ",
+          "linux",
+          "ディレクトリ",
+          "syslog",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "logrotate",
+    "senses": [
+      {
+        "definition": "ログファイルの自動ローテーション（定期的な圧縮・保管・削除）を管理するツール。/etc/logrotate.confと/etc/logrotate.d/で設定する。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログ",
+          "linux",
+          "ローテーション",
+          "圧縮",
+          "自動化"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "auditd",
+    "senses": [
+      {
+        "definition": "Linuxのカーネル監査サブシステムのデーモン。ファイルアクセス、システムコール、ユーザー認証などのセキュリティイベントを記録する。",
+        "domain": "monitoring",
+        "keywords": [
+          "監査",
+          "linux",
+          "セキュリティ",
+          "ログ",
+          "auditctl"
+        ]
+      }
+    ],
+    "aliases": [
+      "Linux Audit Daemon"
+    ]
+  },
+  {
+    "term": "auditctl",
+    "senses": [
+      {
+        "definition": "Linux監査システムのルールを管理するコマンド。監視するシステムコールやファイルアクセスのルールを追加・削除・確認できる。",
+        "domain": "monitoring",
+        "keywords": [
+          "監査",
+          "linux",
+          "コマンド",
+          "セキュリティ",
+          "auditd"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "ausearch",
+    "senses": [
+      {
+        "definition": "Linux監査ログ（/var/log/audit/audit.log）を検索・フィルタリングするコマンド。イベントタイプ、ユーザー、時刻などで検索できる。",
+        "domain": "monitoring",
+        "keywords": [
+          "監査",
+          "linux",
+          "コマンド",
+          "ログ検索",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "aureport",
+    "senses": [
+      {
+        "definition": "Linux監査ログから統計レポート（ログイン試行、特権使用、ファイルアクセスなど）を生成するコマンド。",
+        "domain": "monitoring",
+        "keywords": [
+          "監査",
+          "linux",
+          "コマンド",
+          "レポート",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "sar",
+    "senses": [
+      {
+        "definition": "System Activity Reporterの略。CPU、メモリ、I/O、ネットワークなどのシステムリソース使用状況を収集・表示するコマンド。sysstatパッケージに含まれる。",
+        "domain": "monitoring",
+        "keywords": [
+          "パフォーマンス",
+          "linux",
+          "コマンド",
+          "監視",
+          "sysstat"
+        ]
+      }
+    ],
+    "aliases": [
+      "System Activity Reporter"
+    ]
+  },
+  {
+    "term": "vmstat",
+    "senses": [
+      {
+        "definition": "仮想メモリ、プロセス、I/O、CPU統計を表示するコマンド。メモリ不足やI/Oボトルネックの診断に使用する。",
+        "domain": "monitoring",
+        "keywords": [
+          "メモリ",
+          "linux",
+          "コマンド",
+          "パフォーマンス",
+          "I/O"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "iostat",
+    "senses": [
+      {
+        "definition": "CPUとデバイスI/Oの統計情報を表示するコマンド。ディスクのスループット、待機時間、使用率を監視してI/Oボトルネックを特定する。",
+        "domain": "monitoring",
+        "keywords": [
+          "I/O",
+          "linux",
+          "コマンド",
+          "パフォーマンス",
+          "ディスク"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "mpstat",
+    "senses": [
+      {
+        "definition": "マルチプロセッサシステムの各CPUコアの統計情報を表示するコマンド。CPUの使用率、アイドル率、割り込み処理時間などを確認できる。",
+        "domain": "monitoring",
+        "keywords": [
+          "CPU",
+          "linux",
+          "コマンド",
+          "パフォーマンス",
+          "マルチコア"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "uptime",
+    "senses": [
+      {
+        "definition": "システムの稼働時間、ログインユーザー数、ロードアベレージ（1/5/15分）を表示するコマンド。システムの負荷状況の素早い把握に使用する。",
+        "domain": "monitoring",
+        "keywords": [
+          "稼働時間",
+          "linux",
+          "コマンド",
+          "ロードアベレージ",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "w コマンド",
+    "senses": [
+      {
+        "definition": "現在ログイン中のユーザー一覧と各ユーザーが実行中のプロセス、ログイン時刻、アイドル時間を表示するコマンド。",
+        "domain": "monitoring",
+        "keywords": [
+          "ユーザー",
+          "linux",
+          "コマンド",
+          "ログイン",
+          "監視"
+        ]
+      }
+    ],
+    "aliases": [
+      "w"
+    ]
+  },
+  {
+    "term": "last",
+    "senses": [
+      {
+        "definition": "/var/log/wtmpを参照して過去のログイン・ログアウト履歴、システム再起動履歴を表示するコマンド。不正アクセスの調査に有用。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログイン履歴",
+          "linux",
+          "コマンド",
+          "監査",
+          "セキュリティ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "faillog",
+    "senses": [
+      {
+        "definition": "ユーザーのログイン失敗回数と最終失敗情報を表示・管理するコマンド。ブルートフォース攻撃の検出やアカウントロックポリシーの管理に使用する。",
+        "domain": "monitoring",
+        "keywords": [
+          "ログイン失敗",
+          "linux",
+          "コマンド",
+          "セキュリティ",
+          "監査"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "tar",
+    "senses": [
+      {
+        "definition": "複数ファイルをアーカイブ（.tar）にまとめるコマンド。gzip（.tar.gz）やbzip2（.tar.bz2）と組み合わせて圧縮アーカイブも作成できる。",
+        "domain": "storage",
+        "keywords": [
+          "アーカイブ",
+          "linux",
+          "コマンド",
+          "圧縮",
+          "バックアップ"
+        ]
+      }
+    ],
+    "aliases": [
+      "tape archive"
+    ]
+  },
+  {
+    "term": "gzip",
+    "senses": [
+      {
+        "definition": "GNU圧縮ツール。.gzファイルの圧縮・展開を行い、tarと組み合わせてtar.gzアーカイブを作成するのに広く使用される。",
+        "domain": "storage",
+        "keywords": [
+          "圧縮",
+          "linux",
+          "コマンド",
+          "gz",
+          "アーカイブ"
+        ]
+      }
+    ],
+    "aliases": [
+      "GNU zip"
+    ]
+  },
+  {
+    "term": "bzip2",
+    "senses": [
+      {
+        "definition": "ブロックソートアルゴリズムを使用する圧縮ツール。gzipより高い圧縮率を持つが処理速度は遅い。.bz2ファイルを扱う。",
+        "domain": "storage",
+        "keywords": [
+          "圧縮",
+          "linux",
+          "コマンド",
+          "bz2",
+          "アーカイブ"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "xz",
+    "senses": [
+      {
+        "definition": "LZMAアルゴリズムを使用する高圧縮ツール。gzip/bzip2より高い圧縮率を実現し、カーネルソースコードの配布などに使用される。",
+        "domain": "storage",
+        "keywords": [
+          "圧縮",
+          "linux",
+          "コマンド",
+          "xz",
+          "高圧縮"
+        ]
+      }
+    ],
+    "aliases": [
+      "XZ Utils"
+    ]
+  },
+  {
+    "term": "zstd",
+    "senses": [
+      {
+        "definition": "Facebookが開発した高速圧縮アルゴリズムZstandard。gzipに近い圧縮率でzipより数倍高速な圧縮・展開が特徴で、btrfsやRPMでも採用されている。",
+        "domain": "storage",
+        "keywords": [
+          "圧縮",
+          "linux",
+          "高速",
+          "btrfs",
+          "RPM"
+        ]
+      }
+    ],
+    "aliases": [
+      "Zstandard"
+    ]
+  },
+  {
+    "term": "rsync",
+    "senses": [
+      {
+        "definition": "ファイルやディレクトリを効率的に同期・バックアップするコマンド。差分転送アルゴリズムで変更部分のみ転送し、SSH経由のリモート同期も可能。",
+        "domain": "storage",
+        "keywords": [
+          "バックアップ",
+          "linux",
+          "コマンド",
+          "同期",
+          "ファイル転送"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "dd",
+    "senses": [
+      {
+        "definition": "ファイルや標準入出力をブロック単位でコピー・変換するコマンド。ディスクイメージの作成、MBRのバックアップ、デバイスの初期化などに使用する。",
+        "domain": "storage",
+        "keywords": [
+          "コピー",
+          "linux",
+          "コマンド",
+          "ディスクイメージ",
+          "バックアップ"
+        ]
+      }
+    ],
+    "aliases": [
+      "data duplicator"
+    ]
+  },
+  {
+    "term": "cpio",
+    "senses": [
+      {
+        "definition": "ファイルをアーカイブ・展開するコマンド。findコマンドと組み合わせてよく使用される。RPMパッケージの内部形式にも使われている。",
+        "domain": "storage",
+        "keywords": [
+          "アーカイブ",
+          "linux",
+          "コマンド",
+          "バックアップ",
+          "RPM"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Bacula",
+    "senses": [
+      {
+        "definition": "エンタープライズ向けのオープンソースバックアップソフトウェア。クライアント・サーバー型でネットワーク経由の大規模バックアップ管理が可能。",
+        "domain": "storage",
+        "keywords": [
+          "バックアップ",
+          "linux",
+          "エンタープライズ",
+          "ネットワーク",
+          "オープンソース"
+        ]
+      }
+    ],
+    "aliases": []
+  },
+  {
+    "term": "Amanda",
+    "senses": [
+      {
+        "definition": "Advanced Maryland Automatic Network Disk Archiverの略。クライアント・サーバー型のオープンソースバックアップシステム。テープやディスクへのバックアップをサポートする。",
+        "domain": "storage",
+        "keywords": [
+          "バックアップ",
+          "linux",
+          "ネットワーク",
+          "オープンソース",
+          "アーカイブ"
+        ]
+      }
+    ],
+    "aliases": [
+      "Advanced Maryland Automatic Network Disk Archiver"
+    ]
+  },
+  {
+    "term": "スナップショットバックアップ",
+    "senses": [
+      {
+        "definition": "ファイルシステムやボリュームの特定時点の状態を瞬時に記録するバックアップ手法。LVMスナップショットやbtrfsサブボリュームを利用して一貫した状態を保存できる。",
+        "domain": "storage",
+        "keywords": [
+          "バックアップ",
+          "スナップショット",
+          "linux",
+          "LVM",
+          "btrfs"
+        ]
+      }
+    ],
+    "aliases": [
+      "snapshot backup"
+    ],
+    "reading": "すなっぷしょっとばっくあっぷ"
+  }
+]
