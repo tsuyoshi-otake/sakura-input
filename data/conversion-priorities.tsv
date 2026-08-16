@@ -1,6 +1,9 @@
 # license: LicenseRef-Sakura-InHouse
 # This layer calibrates context-free top-1 conversion for common readings.
-# It replaces an existing lattice edge; it does not add a second edge.
+# It replaces an existing lattice edge; it does not add a second copy of that
+# edge. Issue #62 also introduces one missing IT compound (`機能紹介`) that the
+# generated glossary overlay never emitted, then re-prices the compounds that
+# already existed but lost to 昨日 + remainder. It does not retune 昨日 itself.
 #
 # Single-digit rows: upstream prices every Arabic digit in one numeral class
 # (left/right id 2044, BOS cost 2508) far below the words that share its
@@ -20,6 +23,9 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 かんじ	漢字	1851	1851	2500	3700	predict	[calibration] common noun spelling in the Sakura corpus
 きのう	昨日	1841	1841	1100	2300	predict	[calibration] date expression, noun connection
 きのう	昨日	1909	1909	1100	2300	predict	[calibration] date expression, standalone connection
+きのうこんぽーねんと	機能コンポーネント	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうしょうかい	機能紹介	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうようけん	機能要件	1841	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
 きゅう	9	2044	2044	5531	6731	predict	
 ご	5	2044	2044	4809	6009	predict	
 さん	3	2044	2044	4176	5376	predict	

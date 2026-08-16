@@ -1,11 +1,17 @@
-//! Candidate order the shipped system dictionary produces for number readings.
+//! Candidate order the shipped system dictionary produces.
 //!
-//! Upstream Mozc prices every Arabic digit in one numeral class far below the
-//! words that share its reading, so before `data/conversion-priorities.tsv`
-//! carried digit rows a bare digit led seven of the eleven single-digit
-//! readings -- typing `いち` offered `1` ahead of `市`, `位置` and `一`. Sakura
-//! has no number rewriter, so the lattice cost is the whole story and the
-//! calibration overlay is what keeps a digit behind the word it spells.
+//! Number readings: upstream Mozc prices every Arabic digit in one numeral
+//! class far below the words that share its reading, so before
+//! `data/conversion-priorities.tsv` carried digit rows a bare digit led seven
+//! of the eleven single-digit readings -- typing `いち` offered `1` ahead of
+//! `市`, `位置` and `一`. Sakura has no number rewriter, so the lattice cost is
+//! the whole story and the calibration overlay is what keeps a digit behind
+//! the word it spells.
+//!
+//! Issue #62: `きのうしょうかい` must convert as the IT compound `機能紹介`,
+//! not the homophone split `昨日紹介`. The shipped image keeps the cheap
+//! `昨日` edges for bare `きのう` and date phrases; the compound itself is the
+//! evidence that outranks that split.
 //!
 //! These tests read the built dictionary, which is a local build artifact
 //! (`/artifacts/` is not tracked), so they are ignored by default. Run them
@@ -17,6 +23,7 @@
 //! ```
 use std::path::{Path, PathBuf};
 
+use sakura_core::ConversionOptions;
 use sakura_engine::dispatch::{Dispatcher, Reply};
 use sakura_proto::{
     InputScope, KeyCode, KeyInput, Modifiers, OutputBuf, Request, Response, SessionId,
@@ -138,12 +145,36 @@ fn convert(dispatcher: &mut Dispatcher, romaji: &str) -> (String, Vec<String>) {
     (reading, candidates)
 }
 
-fn open_dispatcher() -> Dispatcher {
+fn open_conversion() -> std::sync::Arc<sakura_engine::dictionary::ConversionService> {
     let path = dictionary_path();
     let path = path
         .canonicalize()
         .unwrap_or_else(|error| panic!("build the dictionary first ({}): {error}", path.display()));
-    let conversion = sakura_engine::dictionary::open(&path).expect("open dictionary");
+    sakura_engine::dictionary::open(&path).expect("open dictionary")
+}
+
+fn candidates_for(reading: &str) -> Vec<String> {
+    open_conversion()
+        .with_candidates(reading, ConversionOptions::default(), |candidates| {
+            candidates
+                .iter()
+                .map(|candidate| candidate.text().to_owned())
+                .collect()
+        })
+        .unwrap_or_else(|error| panic!("{reading}: {error}"))
+}
+
+fn top_text(reading: &str) -> String {
+    let candidates = candidates_for(reading);
+    assert!(
+        !candidates.is_empty(),
+        "{reading}: conversion returned no candidates"
+    );
+    candidates[0].clone()
+}
+
+fn open_dispatcher() -> Dispatcher {
+    let conversion = open_conversion();
     Dispatcher::new_with_conversion(conversion).expect("dispatcher")
 }
 
@@ -228,4 +259,65 @@ fn compound_number_words_keep_both_spellings() {
             );
         }
     }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn ranks_function_introduction_above_yesterday_introduction() {
+    let candidates = candidates_for("きのうしょうかい");
+    assert_eq!(
+        candidates.first().map(String::as_str),
+        Some("機能紹介"),
+        "きのうしょうかい: unexpected first candidate ({:?})",
+        &candidates[..candidates.len().min(8)]
+    );
+    assert!(
+        candidates.iter().any(|item| item == "昨日紹介"),
+        "きのうしょうかい: 昨日紹介 disappeared ({:?})",
+        &candidates[..candidates.len().min(8)]
+    );
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn composes_prefix_with_function_introduction() {
+    assert_eq!(top_text("ぜんきのうしょうかい"), "全機能紹介");
+    assert_eq!(top_text("しんきのうしょうかい"), "新機能紹介");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn ranks_function_requirement_above_yesterday_requirement() {
+    assert_eq!(top_text("きのうようけん"), "機能要件");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn ranks_function_component_above_yesterday_component() {
+    assert_eq!(top_text("きのうこんぽーねんと"), "機能コンポーネント");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn preserves_standalone_yesterday() {
+    assert_eq!(top_text("きのう"), "昨日");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn preserves_yesterday_date_compounds() {
+    assert_eq!(top_text("きのういがい"), "昨日以外");
+    assert_eq!(top_text("きのうげんざい"), "昨日現在");
+    assert_eq!(top_text("きのうごご"), "昨日午後");
+    assert_eq!(top_text("きのうあさ"), "昨日朝");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn preserves_existing_function_compounds_and_sibling_dates() {
+    assert_eq!(top_text("きのういちらん"), "機能一覧");
+    assert_eq!(top_text("きのうがいよう"), "機能概要");
+    assert_eq!(top_text("きのうせっけい"), "機能設計");
+    assert_eq!(top_text("きょう"), "今日");
+    assert_eq!(top_text("あした"), "明日");
 }
