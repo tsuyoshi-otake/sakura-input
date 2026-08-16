@@ -1,9 +1,11 @@
 # license: LicenseRef-Sakura-InHouse
 # This layer calibrates context-free top-1 conversion for common readings.
 # It replaces an existing lattice edge; it does not add a second copy of that
-# edge. Issue #62 also introduces one missing IT compound (`機能紹介`) that the
-# generated glossary overlay never emitted, then re-prices the compounds that
-# already existed but lost to 昨日 + remainder. It does not retune 昨日 itself.
+# edge. Issue #62 introduces missing IT/business compounds the generated
+# glossary never emitted, then re-prices compounds that already existed but
+# lost to a cheaper homophone split (昨日, 研修, 決済, 移動, 規定, 配布, 生産,
+# 商標). It does not retune 昨日 itself, and it does not take date compounds
+# such as 昨日以外 away from 昨日.
 #
 # Single-digit rows: upstream prices every Arabic digit in one numeral class
 # (left/right id 2044, BOS cost 2508) far below the words that share its
@@ -19,22 +21,56 @@
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 あさごはん	朝ご飯	1851	1851	4300	5500	predict	[calibration] common spelling preferred over hiragana-only form
 いち	1	2044	2044	3639	4839	predict	
+いどうとどけ	異動届	1851	1851	3600	4800	predict	[calibration] HR compound preferred over 移動 homophone split
 かいぎょう	改行	1841	1841	2500	3700	predict	[calibration] technical reading in the Sakura corpus
 かんじ	漢字	1851	1851	2500	3700	predict	[calibration] common noun spelling in the Sakura corpus
 きのう	昨日	1841	1841	1100	2300	predict	[calibration] date expression, noun connection
 きのう	昨日	1909	1909	1100	2300	predict	[calibration] date expression, standalone connection
+きのうかいぜん	機能改善	1841	1841	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうかいぞう	機能改造	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうかいはつ	機能開発	1841	1841	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうかくちょう	機能拡張	1841	1841	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうきょうか	機能強化	1841	1841	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
 きのうこんぽーねんと	機能コンポーネント	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうさくじょ	機能削除	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうさぶん	機能差分	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうじっそう	機能実装	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
 きのうしょうかい	機能紹介	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうじょう	機能上	1851	1851	2200	3400	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうしよう	機能仕様	1851	1851	2000	3200	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうせいげん	機能制限	1841	1841	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうせつめい	機能説明	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうていし	機能停止	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうてすと	機能テスト	1851	1851	2000	3200	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうついか	機能追加	1841	1841	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうてき	機能的	1841	2032	2200	3400	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうへんこう	機能変更	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうひょうか	機能評価	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうぶんるい	機能分類	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうめい	機能名	1851	1851	2200	3400	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうめん	機能面	1841	1949	2200	3400	it,predict	[calibration] IT compound preferred over 昨日 homophone split
 きのうようけん	機能要件	1841	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
+きのうようぼう	機能要望	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 昨日 homophone split
 きゅう	9	2044	2044	5531	6731	predict	
+けっさいしゃ	決裁者	1841	1986	3600	4800	predict	[calibration] business compound preferred over 決済 homophone split
+けっさいしょ	決裁書	1851	1851	3600	4800	predict	[calibration] business compound preferred over 決済 homophone split
+けんしゅうかんりょう	検収完了	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 研修 homophone split
+けんしゅうしけん	検収試験	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 研修 homophone split
+けんしゅうしょ	検収書	1851	1851	3600	4800	it,predict	[calibration] IT compound preferred over 研修 homophone split
+こうつうひせいさん	交通費精算	1851	1851	3600	4800	predict	[calibration] business compound preferred over 生産 homophone split
 ご	5	2044	2044	4809	6009	predict	
 さん	3	2044	2044	4176	5376	predict	
 してき	指摘	1841	1841	2000	3200	it,predict	[calibration] engineering review vocabulary
+しゃないきてい	社内規程	1851	1841	3600	4800	predict	[calibration] business compound preferred over 規定 homophone split
+しゅうぎょうきてい	就業規程	1851	1851	3600	4800	predict	[calibration] business compound preferred over 規定 homophone split
+しょうひょうしょるい	証憑書類	1851	1851	3600	4800	predict	[calibration] business compound preferred over 商標 homophone split
 しりあらいず	シリアライズ	1920	1920	2000	3200	it,predict	[calibration] engineering terminology
 ぜろ	0	2044	2044	2707	3907	predict	
 なな	7	2044	2044	5211	6411	predict	
 に	2	2044	2044	5725	6925	predict	
+はいふきんじゅん	配賦基準	1851	1851	3600	4800	predict	[calibration] business compound preferred over 配布 homophone split
 はち	8	2044	2044	5310	6510	predict	
+ふくむきてい	服務規程	1851	1851	3600	4800	predict	[calibration] business compound preferred over 含む+規定 split
 よん	4	2044	2044	4462	5662	predict	
 れい	0	2044	2044	3905	5105	predict	
 ろく	6	2044	2044	5157	6357	predict	
