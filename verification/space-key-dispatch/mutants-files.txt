@@ -1,0 +1,22 @@
+[rtk] /!\ No hook installed 窶・run `rtk init -g` for automatic token savings
+crates/sakura-engine/src/bin/prediction_eval.rs
+crates/sakura-engine/src/lib.rs
+crates/sakura-engine/src/main.rs
+crates/sakura-engine/src/ai_text.rs
+crates/sakura-engine/src/configuration.rs
+crates/sakura-engine/src/context_baseline.rs
+crates/sakura-engine/src/context_evaluation.rs
+crates/sakura-engine/src/context_intelligence.rs
+crates/sakura-engine/src/dictionary.rs
+crates/sakura-engine/src/dispatch.rs
+crates/sakura-engine/src/event_log.rs
+crates/sakura-engine/src/input_history.rs
+crates/sakura-engine/src/learning.rs
+crates/sakura-engine/src/long_conversion.rs
+crates/sakura-engine/src/prediction.rs
+crates/sakura-engine/src/prediction_snapshot.rs
+crates/sakura-engine/src/server.rs
+crates/sakura-engine/src/session.rs
+crates/sakura-engine/src/shift_ascii_space.rs
+crates/sakura-engine/src/ui.rs
+crates/sakura-engine/src/user_dictionary.rs

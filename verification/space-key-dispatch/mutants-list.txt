@@ -1,0 +1,29 @@
+[rtk] /!\ No hook installed 窶・run `rtk init -g` for automatic token savings
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:127:5: replace peer_converting -> bool with true
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:127:5: replace peer_converting -> bool with false
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:130:13: replace && with || in peer_converting
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:129:13: replace && with || in peer_converting
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:128:15: replace != with == in peer_converting
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:138:5: replace space_effect -> SpaceEffect with Default::default()
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:138:35: replace || with && in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:138:19: replace >= with < in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:138:38: delete ! in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:143:28: replace match guard peer_converting(state, connection) with true in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:143:28: replace match guard peer_converting(state, connection) with false in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:144:28: replace match guard state.document_spaces >= MAX_DOCUMENT_SPACES with true in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:144:28: replace match guard state.document_spaces >= MAX_DOCUMENT_SPACES with false in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:144:50: replace >= with < in space_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:161:5: replace apply with ()
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:204:24: replace != with == in apply
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:217:5: replace apply_space with ()
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:218:16: replace == with != in apply_space
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:226:37: replace == with != in apply_space
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:226:21: replace & with | in apply_space
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:226:21: replace & with ^ in apply_space
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:226:26: replace << with >> in apply_space
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:246:17: replace && with || in apply_space
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:269:5: replace apply_all -> OracleState with Default::default()
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:277:5: replace no_dual_effect -> bool with true
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:277:5: replace no_dual_effect -> bool with false
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:277:5: delete ! in no_dual_effect
+crates/sakura-engine/src/space_key_dispatch_oracle.rs:277:27: replace && with || in no_dual_effect

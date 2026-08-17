@@ -1,0 +1,1 @@
+first=Err(Os(Error { code: HRESULT(0x800703E4), message: "重複した I/O イベントはシグナルされた状態ではありません。" })) same_client_retry=Err(Protocol(TooLarge)) recovered_commit=Some("\u{3000}")

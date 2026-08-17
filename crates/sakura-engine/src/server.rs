@@ -16,13 +16,11 @@
 //! because a lock held across a blocking pipe read is how one wedged host
 //! application freezes typing in every other one.
 //!
-//! The cost of share-nothing is that cross-session state cannot live here.
-//! That is deliberate: such state arrives as an explicitly synchronized
-//! component with its own lock discipline, rather than as a shared mutable
-//! engine that every connection happens to reach through. [`crate::ui`]'s
-//! board is the first — the renderer has to be told about a mode change
-//! that happened on somebody else's connection — and the input history that
-//! later phases use to bias conversion (DESIGN 5.4) will be the next.
+//! The cost of share-nothing is that cross-session state cannot live here
+//! casually. Explicit process-wide components own their own lock discipline:
+//! [`crate::ui`]'s board, input history, AI text capacity, and the
+//! [`crate::composition_fence::CompositionFence`] that absorbs idle Space
+//! while a peer connection of the same host process is converting.
 //!
 //! # Shutdown
 //!
@@ -50,6 +48,7 @@ use sakura_proto::{
 use sakura_ipc::{security, Accept, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 
 use crate::ai_text::AiTextService;
+use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::input_history::InputHistoryService;
@@ -125,6 +124,8 @@ struct Shared {
     shutdown: Sender<StopReason>,
     /// What the renderer draws. The one thing every connection shares.
     ui: UiBoard,
+    /// Idle Space absorb while another connection of the same host is converting.
+    composition_fence: Arc<CompositionFence>,
     /// Read-only dictionary plus the bounded process-wide conversion pool.
     conversion: Option<Arc<ConversionService>>,
     /// Process-wide synchronized personalization index and durable log.
@@ -484,6 +485,7 @@ impl Server {
                 idle: AtomicU32::new(0),
                 shutdown,
                 ui: UiBoard::with_appearance_theme(preferences.appearance_theme),
+                composition_fence: Arc::new(CompositionFence::new()),
                 conversion,
                 learning,
                 input_history,
@@ -768,6 +770,7 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
         dispatcher.set_input_history(runtime_services.input_history);
     }
     dispatcher.set_ai_text(Arc::clone(&shared.ai_text));
+    dispatcher.set_composition_fence(Arc::clone(&shared.composition_fence));
     if let Some(long_conversion) = shared.long_conversion.as_ref() {
         dispatcher.set_long_conversion(Some(Arc::clone(long_conversion)));
     }
@@ -1165,6 +1168,7 @@ mod tests {
             idle: AtomicU32::new(0),
             shutdown,
             ui: UiBoard::new(),
+            composition_fence: Arc::new(CompositionFence::new()),
             conversion: None,
             learning: Some(learning),
             input_history: None,

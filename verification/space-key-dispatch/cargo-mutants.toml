@@ -1,0 +1,23 @@
+# Scoped mutants for the space-key-dispatch oracle campaign.
+# Production dual-delivery is a known baseline failure; do not score
+# dispatch.rs against the dual-delivery requirement until that blocker is gone.
+
+examine_re = [
+  "space_effect",
+  "peer_converting",
+  "apply_space",
+  "no_dual_effect",
+  "apply",
+]
+
+exclude_re = [
+  "prediction",
+  "ai_text",
+]
+
+additional_cargo_test_args = [
+  "--lib",
+  "space_key_dispatch_oracle",
+]
+
+test_tool = "cargo"
