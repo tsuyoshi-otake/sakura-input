@@ -25,6 +25,7 @@
 #![cfg(windows)]
 
 pub mod ai_text;
+pub mod composition_fence;
 pub mod configuration;
 pub mod context_baseline;
 pub mod context_evaluation;
@@ -56,5 +57,14 @@ mod shift_latin_oracle_tests;
 #[cfg(test)]
 #[path = "shift_latin_order_tests.rs"]
 mod shift_latin_order;
+// Always compiled so cargo-mutants can score the independent oracle.
+// Production dispatch never calls it; release dead-code paths stay unused.
+#[cfg(test)]
+#[path = "space_key_dispatch_tests.rs"]
+mod space_key_dispatch;
+#[allow(dead_code)]
+mod space_key_dispatch_oracle;
+#[cfg(test)]
+mod space_key_dispatch_oracle_tests;
 pub mod ui;
 pub mod user_dictionary;

@@ -31,6 +31,7 @@
 //! never build a composition at all, committing each keystroke immediately
 //! through the width normalizer (see [`apply_alnum_char`]).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,6 +54,7 @@ use sakura_proto::{
 };
 
 use crate::ai_text::{AiTextService, Poll as AiPoll, StartError as AiStartError};
+use crate::composition_fence::CompositionFence;
 use crate::dictionary::{ConversionService, ConvertFailure};
 use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
 use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
@@ -159,6 +161,11 @@ pub struct Dispatcher {
     /// not copy its fixed suggestion buffers through the 128 KiB pipe stack.
     prediction_cache: Box<PredictionCache>,
     sessions: SessionTable,
+    /// Process-wide composing/converting claims shared with sibling pipe
+    /// workers. Absent in isolated unit tests that do not model dual delivery.
+    composition_fence: Option<Arc<CompositionFence>>,
+    /// Local mirror of fence claims for sessions this worker owns.
+    fence_claims: HashMap<SessionId, (Box<str>, bool)>,
     /// Scratch space for building normalized text before it is copied into
     /// an `OutputBuf` segment or commit field. Living here rather than as a
     /// stack-local in the functions that use it is what keeps the `SendKey`
@@ -352,7 +359,77 @@ impl Dispatcher {
             observed_learning_generation: 0,
             prediction_cache: Box::new(PredictionCache::new()),
             sessions: SessionTable::new(),
+            composition_fence: None,
+            fence_claims: HashMap::new(),
             scratch: FixedStr::new(),
+        }
+    }
+
+    /// Attaches the process-wide composition fence used to absorb idle Space
+    /// while a peer connection of the same host process is converting.
+    pub(crate) fn set_composition_fence(&mut self, fence: Arc<CompositionFence>) {
+        self.release_all_composition_fence_claims();
+        self.composition_fence = Some(fence);
+    }
+
+    fn suppress_idle_space_for(&self, process_name: &str) -> bool {
+        self.composition_fence
+            .as_ref()
+            .is_some_and(|fence| fence.any_active(process_name))
+    }
+
+    fn sync_composition_fence(&mut self, id: SessionId) {
+        let Some(fence) = self.composition_fence.clone() else {
+            return;
+        };
+        let Some(session) = self.sessions.get(id) else {
+            self.release_composition_fence(id);
+            return;
+        };
+        let process_name = session.process_name().to_owned();
+        let want = session.is_composing();
+        let entry = self
+            .fence_claims
+            .entry(id)
+            .or_insert_with(|| (Box::from(process_name.as_str()), false));
+        if entry.0.as_ref() != process_name {
+            if entry.1 {
+                fence.release(entry.0.as_ref());
+                entry.1 = false;
+            }
+            entry.0 = Box::from(process_name.as_str());
+        }
+        if entry.1 == want {
+            return;
+        }
+        if want {
+            fence.acquire(process_name.as_str());
+        } else {
+            fence.release(process_name.as_str());
+        }
+        entry.1 = want;
+    }
+
+    fn release_composition_fence(&mut self, id: SessionId) {
+        let Some((name, claimed)) = self.fence_claims.remove(&id) else {
+            return;
+        };
+        if claimed {
+            if let Some(fence) = self.composition_fence.as_ref() {
+                fence.release(name.as_ref());
+            }
+        }
+    }
+
+    fn release_all_composition_fence_claims(&mut self) {
+        if let Some(fence) = self.composition_fence.as_ref() {
+            for (_, (name, claimed)) in self.fence_claims.drain() {
+                if claimed {
+                    fence.release(name.as_ref());
+                }
+            }
+        } else {
+            self.fence_claims.clear();
         }
     }
 
@@ -363,6 +440,7 @@ impl Dispatcher {
     /// `crate::server`'s `worker`, which calls this between connections on
     /// the same pipe instance.
     pub fn reset(&mut self) {
+        self.release_all_composition_fence_claims();
         self.ai_text.cancel_owner(self.ai_text_owner);
         self.ai_text_owner = self.ai_text.allocate_owner();
         self.sessions.clear();
@@ -631,6 +709,7 @@ impl Dispatcher {
             return Reply::Message(Response::Error(ErrorCode::Busy));
         }
         if self.sessions.delete(id) {
+            self.release_composition_fence(id);
             self.ai_text.cancel_session(self.ai_text_owner, id);
             self.prediction_cache.clear_if_session(id);
             Reply::Message(Response::Ok)
@@ -880,165 +959,156 @@ impl Dispatcher {
             }
             return self.probe_session(id, existing.clone(), key, out, false);
         }
-        let Some(session) = self.sessions.get_mut(id) else {
-            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
-        };
-        if session.undo_pending() {
-            // The exact-text undo output is still owned by the TSF journal.
-            // Do not let a re-entrant or later key advance either the live
-            // session or its history while the host-side outcome is unknown.
-            return Reply::Message(Response::Error(ErrorCode::Busy));
-        }
-        let normalizer = session.normalizer;
-        let services = KeyServices {
-            table: &self.table,
-            keymap: &self.keymap,
-            normalizer: &normalizer,
-            conversion: self.conversion.as_deref(),
-            learning: self.learning.as_deref(),
-            input_history: self.input_history.as_deref(),
-            prediction: self.prediction.as_deref(),
-            long_conversion: self.long_conversion.as_deref(),
-            long_conversion_owner: self.long_conversion_owner,
-            neural_reranker_scope: self.neural_reranker_scope,
-            prediction_enabled: session.prediction_enabled,
-            suggest_accept: session.suggest_accept,
-        };
-
-        let state_before = session.state();
-        let action_name = self.keymap.lookup(state_before, key).map_or(
-            if key.ch.is_some() { "char" } else { "unbound" },
-            Action::name,
-        );
-        let mode_before = session.mode();
-        let preedit_before = if services.input_history.is_some() {
-            // The persisted before/after fields describe what the user saw,
-            // not the engine's raw reading. Render a fixed-size clone so a
-            // diagnostic snapshot cannot mutate the live composition or
-            // consume the output that the real key operation will fill.
-            let mut before_session = session.clone();
-            let _ = render_preedit(
-                &mut before_session,
-                services.table,
-                services.normalizer,
-                services.conversion,
-                services.learning.as_deref(),
-                &mut self.scratch,
-                out,
-            );
-            let before_cache = PredictionCacheWork::Probe {
-                cache: &self.prediction_cache,
-                stale: false,
-            };
-            let _ = render_prediction_projection(
-                id,
-                &mut before_session,
-                services.normalizer,
-                &before_cache,
-                &mut self.scratch,
-                out,
-            );
-            let rendered = out.preedit_text().to_owned();
-            out.clear();
-            rendered
-        } else {
-            String::new()
-        };
-        match apply_key(
-            id,
-            session,
-            &services,
-            key,
-            KeyWork {
-                policy: ExecutionPolicy::Apply,
-                prediction_cache: PredictionCacheWork::Apply(&mut self.prediction_cache),
-                scratch: &mut self.scratch,
-                out,
-            },
-        ) {
-            Ok(()) => {
-                // A mode staged by reconversion is put back by whichever
-                // `Session::reset` ends the composition, deep inside the key
-                // handling. The host only learns a mode from `out.mode`, so
-                // publish it here — after the handler, which may have set
-                // `out.mode` itself and whose value then already agrees.
-                if let Some(restored) = session.take_mode_restored() {
-                    out.mode.get_or_insert(restored);
-                }
-                schedule_long_conversion(id, session, &services);
-                if let Some(history) = services.input_history {
-                    history.record_key(
-                        session.history_session_id(),
-                        ScopeClass::from_scope(session.scope, session.scope_classified()),
-                        key.code as u16,
-                        key.ch,
-                        key.modifiers.0,
-                        key.repeat,
-                        key.test_only,
-                        out.consumed,
-                        state_code(state_before),
-                        state_code(session.state()),
-                        mode_before as u8,
-                        session.mode() as u8,
-                        &preedit_before,
-                        out.preedit_text(),
-                        out.commit_text().unwrap_or(""),
-                        out.delete_before_utf16(),
-                        out.beep,
-                        action_name,
-                    );
-                }
-                Reply::Output
-            }
-            Err(Overflow) => {
-                // The composition (or the host's `OutputBuf`) would not
-                // fit. Every function that mutates `Session` fields on the
-                // way here is internally atomic (see feed_character,
-                // flush_pending, commit_suggestion_at, commit_pending,
-                // commit_converted_segments): a failing fallible write
-                // leaves the fields it would have touched exactly as they
-                // were, so there is nothing to reconcile in the general
-                // case -- unlike the old blanket `session.reset()`, which
-                // used to erase a long in-progress sentence just because a
-                // single keystroke could not grow it any further.
-                //
-                // `Action::UndoCommit` is the one exception: `undo_commit()`
-                // unconditionally arms `undo_pending` and overwrites the
-                // composition with the restored prior reading before this
-                // key's rendering can fail, so an overflow afterwards really
-                // does leave a transaction the host was never told about.
-                // No Output reached TSF on that local failure, so the host
-                // document is definitely unchanged; reject the transaction
-                // locally rather than leave it permanently pending.
+        let reply = {
+            let process_name = {
+                let Some(session) = self.sessions.get(id) else {
+                    return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+                };
                 if session.undo_pending() {
-                    let _ = session.reject_undo_commit();
+                    return Reply::Message(Response::Error(ErrorCode::Busy));
                 }
-                out.clear();
-                if let Some(history) = services.input_history {
-                    history.record_key(
-                        session.history_session_id(),
-                        ScopeClass::from_scope(session.scope, session.scope_classified()),
-                        key.code as u16,
-                        key.ch,
-                        key.modifiers.0,
-                        key.repeat,
-                        key.test_only,
-                        false,
-                        state_code(state_before),
-                        state_code(session.state()),
-                        mode_before as u8,
-                        session.mode() as u8,
-                        &preedit_before,
-                        "",
-                        "",
-                        0,
-                        false,
-                        action_name,
-                    );
-                }
-                Reply::Message(Response::Error(ErrorCode::TooLarge))
+                session.process_name().to_owned()
+            };
+            let suppress_idle_space = self.suppress_idle_space_for(&process_name);
+            let Some(session) = self.sessions.get_mut(id) else {
+                return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+            };
+            if session.undo_pending() {
+                // The exact-text undo output is still owned by the TSF journal.
+                // Do not let a re-entrant or later key advance either the live
+                // session or its history while the host-side outcome is unknown.
+                return Reply::Message(Response::Error(ErrorCode::Busy));
             }
-        }
+            let normalizer = session.normalizer;
+            let services = KeyServices {
+                table: &self.table,
+                keymap: &self.keymap,
+                normalizer: &normalizer,
+                conversion: self.conversion.as_deref(),
+                learning: self.learning.as_deref(),
+                input_history: self.input_history.as_deref(),
+                prediction: self.prediction.as_deref(),
+                long_conversion: self.long_conversion.as_deref(),
+                long_conversion_owner: self.long_conversion_owner,
+                neural_reranker_scope: self.neural_reranker_scope,
+                prediction_enabled: session.prediction_enabled,
+                suggest_accept: session.suggest_accept,
+            };
+
+            let state_before = session.state();
+            let action_name = self.keymap.lookup(state_before, key).map_or(
+                if key.ch.is_some() { "char" } else { "unbound" },
+                Action::name,
+            );
+            let mode_before = session.mode();
+            let preedit_before = if services.input_history.is_some() {
+                // The persisted before/after fields describe what the user saw,
+                // not the engine's raw reading. Render a fixed-size clone so a
+                // diagnostic snapshot cannot mutate the live composition or
+                // consume the output that the real key operation will fill.
+                let mut before_session = session.clone();
+                let _ = render_preedit(
+                    &mut before_session,
+                    services.table,
+                    services.normalizer,
+                    services.conversion,
+                    services.learning.as_deref(),
+                    &mut self.scratch,
+                    out,
+                );
+                let before_cache = PredictionCacheWork::Probe {
+                    cache: &self.prediction_cache,
+                    stale: false,
+                };
+                let _ = render_prediction_projection(
+                    id,
+                    &mut before_session,
+                    services.normalizer,
+                    &before_cache,
+                    &mut self.scratch,
+                    out,
+                );
+                let rendered = out.preedit_text().to_owned();
+                out.clear();
+                rendered
+            } else {
+                String::new()
+            };
+            match apply_key(
+                id,
+                session,
+                &services,
+                key,
+                KeyWork {
+                    policy: ExecutionPolicy::Apply,
+                    prediction_cache: PredictionCacheWork::Apply(&mut self.prediction_cache),
+                    scratch: &mut self.scratch,
+                    out,
+                    suppress_idle_space,
+                },
+            ) {
+                Ok(()) => {
+                    if let Some(restored) = session.take_mode_restored() {
+                        out.mode.get_or_insert(restored);
+                    }
+                    schedule_long_conversion(id, session, &services);
+                    if let Some(history) = services.input_history {
+                        history.record_key(
+                            session.history_session_id(),
+                            ScopeClass::from_scope(session.scope, session.scope_classified()),
+                            key.code as u16,
+                            key.ch,
+                            key.modifiers.0,
+                            key.repeat,
+                            key.test_only,
+                            out.consumed,
+                            state_code(state_before),
+                            state_code(session.state()),
+                            mode_before as u8,
+                            session.mode() as u8,
+                            &preedit_before,
+                            out.preedit_text(),
+                            out.commit_text().unwrap_or(""),
+                            out.delete_before_utf16(),
+                            out.beep,
+                            action_name,
+                        );
+                    }
+                    Reply::Output
+                }
+                Err(Overflow) => {
+                    if session.undo_pending() {
+                        let _ = session.reject_undo_commit();
+                    }
+                    out.clear();
+                    if let Some(history) = services.input_history {
+                        history.record_key(
+                            session.history_session_id(),
+                            ScopeClass::from_scope(session.scope, session.scope_classified()),
+                            key.code as u16,
+                            key.ch,
+                            key.modifiers.0,
+                            key.repeat,
+                            key.test_only,
+                            false,
+                            state_code(state_before),
+                            state_code(session.state()),
+                            mode_before as u8,
+                            session.mode() as u8,
+                            &preedit_before,
+                            "",
+                            "",
+                            0,
+                            false,
+                            action_name,
+                        );
+                    }
+                    Reply::Message(Response::Error(ErrorCode::TooLarge))
+                }
+            }
+        };
+        self.sync_composition_fence(id);
+        reply
     }
 
     fn probe_key(
@@ -1125,6 +1195,7 @@ impl Dispatcher {
                     learning.generation() != self.observed_learning_generation
                 }),
         };
+        let suppress_idle_space = self.suppress_idle_space_for(probe.process_name());
         let _ = apply_key(
             id,
             &mut probe,
@@ -1135,51 +1206,56 @@ impl Dispatcher {
                 prediction_cache: probe_cache,
                 scratch: &mut self.scratch,
                 out,
+                suppress_idle_space,
             },
         );
         Reply::Output
     }
 
     fn commit(&mut self, id: SessionId, out: &mut OutputBuf) -> Reply {
-        let Some(session) = self.sessions.get_mut(id) else {
-            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        let reply = {
+            let Some(session) = self.sessions.get_mut(id) else {
+                return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+            };
+            if session.undo_pending() {
+                // Focus finalization is not an undo terminal outcome. Leave the
+                // restored composition and exact record untouched until TSF
+                // reports Applied, Rejected, or Unknown explicitly.
+                return Reply::Message(Response::Error(ErrorCode::Busy));
+            }
+            session.disarm_commit_undo();
+            let normalizer = session.normalizer;
+            match commit_pending(
+                session,
+                &self.table,
+                &normalizer,
+                self.conversion.as_deref(),
+                self.learning.as_deref(),
+                self.input_history.as_deref(),
+                ExecutionPolicy::Apply,
+                &mut self.scratch,
+                out,
+            ) {
+                Ok(()) => {
+                    self.prediction_cache.clear_if_session(id);
+                    Reply::Output
+                }
+                Err(Overflow) => {
+                    // `commit_pending` is internally atomic (see its own docs
+                    // and `commit_converted_segments`'s): a failing fallible
+                    // write inside it leaves every `Session` field untouched.
+                    // `commit()` never reaches `Action::UndoCommit`'s
+                    // undo-pending path (that is a `send_key` action, and
+                    // `commit()` calls `commit_pending` directly), so there is
+                    // no transaction to reconcile here either.
+                    self.prediction_cache.clear_if_session(id);
+                    out.clear();
+                    Reply::Message(Response::Error(ErrorCode::TooLarge))
+                }
+            }
         };
-        if session.undo_pending() {
-            // Focus finalization is not an undo terminal outcome. Leave the
-            // restored composition and exact record untouched until TSF
-            // reports Applied, Rejected, or Unknown explicitly.
-            return Reply::Message(Response::Error(ErrorCode::Busy));
-        }
-        session.disarm_commit_undo();
-        let normalizer = session.normalizer;
-        match commit_pending(
-            session,
-            &self.table,
-            &normalizer,
-            self.conversion.as_deref(),
-            self.learning.as_deref(),
-            self.input_history.as_deref(),
-            ExecutionPolicy::Apply,
-            &mut self.scratch,
-            out,
-        ) {
-            Ok(()) => {
-                self.prediction_cache.clear_if_session(id);
-                Reply::Output
-            }
-            Err(Overflow) => {
-                // `commit_pending` is internally atomic (see its own docs
-                // and `commit_converted_segments`'s): a failing fallible
-                // write inside it leaves every `Session` field untouched.
-                // `commit()` never reaches `Action::UndoCommit`'s
-                // undo-pending path (that is a `send_key` action, and
-                // `commit()` calls `commit_pending` directly), so there is
-                // no transaction to reconcile here either.
-                self.prediction_cache.clear_if_session(id);
-                out.clear();
-                Reply::Message(Response::Error(ErrorCode::TooLarge))
-            }
-        }
+        self.sync_composition_fence(id);
+        reply
     }
 
     /// Builds conversion candidates for text that already exists in the host
@@ -1269,18 +1345,21 @@ impl Dispatcher {
     }
 
     fn revert(&mut self, id: SessionId) -> Reply {
-        let Some(session) = self.sessions.get_mut(id) else {
-            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        let restored = {
+            let Some(session) = self.sessions.get_mut(id) else {
+                return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+            };
+            if session.undo_pending() {
+                // Revert would discard the restored reading without telling the
+                // host whether its exact deletion happened.
+                return Reply::Message(Response::Error(ErrorCode::Busy));
+            }
+            session.disarm_commit_undo();
+            session.reset();
+            session.take_mode_restored()
         };
-        if session.undo_pending() {
-            // Revert would discard the restored reading without telling the
-            // host whether its exact deletion happened.
-            return Reply::Message(Response::Error(ErrorCode::Busy));
-        }
-        session.disarm_commit_undo();
-        session.reset();
-        let restored = session.take_mode_restored();
         self.prediction_cache.clear_if_session(id);
+        self.sync_composition_fence(id);
         // Reverting a reconversion is a terminal path like any other, so the
         // reset above has already put the user's mode back. This reply carries
         // no `Output`, so the mode has to ride out on the message itself or
@@ -1368,6 +1447,8 @@ struct KeyWork<'a> {
     prediction_cache: PredictionCacheWork<'a>,
     scratch: &'a mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &'a mut OutputBuf,
+    /// Absorb idle Space when a peer connection of the same host is converting.
+    suppress_idle_space: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1786,6 +1867,7 @@ fn apply_key(
         mut prediction_cache,
         scratch,
         out,
+        suppress_idle_space,
     } = work;
     if scope_is_sensitive(session.scope) {
         // DESIGN 9: a password field is a full bypass. In particular, do not
@@ -1861,14 +1943,21 @@ fn apply_key(
         )?,
 
         None if idle_space_commit => {
-            let base_is_full = session.space_width.is_full(session.mode);
-            let is_full = if key.modifiers.shift() {
-                session.shift_space_behavior.is_full(base_is_full)
+            if suppress_idle_space {
+                // A peer connection for this host process is composing or
+                // converting. Absorb the idle Space so one physical key
+                // cannot both insert U+3000 and convert (Electron dual delivery).
+                out.consumed = true;
             } else {
-                base_is_full
-            };
-            out.set_commit(if is_full { "　" } else { " " })?;
-            out.consumed = true;
+                let base_is_full = session.space_width.is_full(session.mode);
+                let is_full = if key.modifiers.shift() {
+                    session.shift_space_behavior.is_full(base_is_full)
+                } else {
+                    base_is_full
+                };
+                out.set_commit(if is_full { "　" } else { " " })?;
+                out.consumed = true;
+            }
         }
 
         // A Ctrl or Alt chord the key map did not claim is an application
@@ -5145,7 +5234,15 @@ mod tests {
         history.flush().expect("flush");
 
         let snapshot = crate::input_history::read_snapshot(&path).expect("snapshot");
-        assert_eq!(snapshot.records.len(), 2);
+        let keys: Vec<_> = snapshot
+            .records
+            .iter()
+            .filter_map(|record| match record {
+                InputHistoryRecord::Key(record) => Some(record),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(keys.len(), 2);
         let stats = history.stats().snapshot();
         assert_eq!(stats.excluded_unclassified_events, 1);
         assert_eq!(stats.excluded_sensitive_events, 4);
@@ -5153,15 +5250,11 @@ mod tests {
         // service still exposes a defensive test-only admission counter, but
         // a real Probe never reaches that admission boundary.
         assert_eq!(stats.excluded_test_only_events, 0);
-        let InputHistoryRecord::Key(record) = &snapshot.records[0] else {
-            panic!("expected key history record");
-        };
+        let record = keys[0];
         assert_eq!(record.character, Some('k'));
         assert_eq!(record.scope, ScopeClass::Normal);
         assert_eq!(record.session, 1);
-        let InputHistoryRecord::Key(next) = &snapshot.records[1] else {
-            panic!("expected second key history record");
-        };
+        let next = keys[1];
         assert_eq!(next.character, Some('a'));
         assert_eq!(next.preedit_before, record.preedit_after);
         assert_ne!(next.preedit_before, "ka");
@@ -5239,11 +5332,13 @@ mod tests {
             &mut out,
         );
         history.flush().expect("flush after attach");
+        let attached = crate::input_history::read_snapshot(&path).expect("snapshot");
         assert_eq!(
-            crate::input_history::read_snapshot(&path)
-                .expect("snapshot")
+            attached
                 .records
-                .len(),
+                .iter()
+                .filter(|record| matches!(record, InputHistoryRecord::Key(_)))
+                .count(),
             1
         );
 
@@ -5260,13 +5355,20 @@ mod tests {
             &mut out,
         );
         history.flush().expect("flush after detach");
+        let detached = crate::input_history::read_snapshot(&path).expect("snapshot after detach");
         assert_eq!(
-            crate::input_history::read_snapshot(&path)
-                .expect("snapshot")
+            detached
                 .records
-                .len(),
+                .iter()
+                .filter(|record| matches!(record, InputHistoryRecord::Key(_)))
+                .count(),
             1,
             "detached dispatcher must not append new durable keys"
+        );
+        assert_eq!(
+            detached.records.len(),
+            attached.records.len(),
+            "detach must not grow the history file"
         );
 
         history.stop().expect("stop");

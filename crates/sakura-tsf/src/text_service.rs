@@ -470,6 +470,30 @@ enum RealFenceAction {
 /// Canonical real-key fence priority. The test-only path maps the same
 /// priority to a read-only `ProbeFence`; only the replacement action proceeds
 /// to cleanup and then applies the current key.
+/// Space / 変換 must convert a live reading. Ctrl/Alt chords stay host-owned
+/// (Ctrl+Space is IntelliSense). Shift+Space is still conversion.
+fn is_conversion_trigger_key(key: KeyInput) -> bool {
+    !key.modifiers.ctrl()
+        && !key.modifiers.alt()
+        && matches!(key.code, KeyCode::Space | KeyCode::Henkan)
+}
+
+fn keep_live_composition_for_convert(key: KeyInput, live_composition: bool) -> bool {
+    live_composition && is_conversion_trigger_key(key)
+}
+
+/// Electron/Cursor can deliver Space to a different `ITfContext` than the one
+/// holding the underlined reading. Treating that as replacement disconnects
+/// the composing engine session and then inserts U+3000. Convert keys keep
+/// the live session instead.
+fn journal_replacement_applies(
+    key: KeyInput,
+    live_composition: bool,
+    journal_replacement: bool,
+) -> bool {
+    journal_replacement && !keep_live_composition_for_convert(key, live_composition)
+}
+
 fn decide_real_fence(
     deferred_terminalization: bool,
     undo_write_pending: bool,
@@ -1279,6 +1303,26 @@ impl TextService {
             .try_borrow()
             .map_err(|_| reentrancy())
             .map(|writes| writes.is_context_replacement(context))
+    }
+
+    /// Fail closed: if composition or the journal cannot be inspected, treat
+    /// a reading as live so Space cannot replace it with a document space.
+    fn has_live_composition(&self) -> bool {
+        let composition_live = self
+            .composition
+            .try_borrow()
+            .map(|state| state.handle.is_some() || !state.text.is_empty())
+            .unwrap_or(true);
+        if composition_live {
+            return true;
+        }
+        self.writes
+            .try_borrow()
+            .map(|writes| {
+                let visible = writes.tail_visible();
+                visible.has_composition || !visible.text.is_empty()
+            })
+            .unwrap_or(true)
     }
 
     fn defer_undo_terminalization(&self, requested: Option<UndoCommitOutcome>) {
@@ -3465,6 +3509,14 @@ impl TextService {
     }
 }
 
+fn is_idle_space_commit(output: &Output) -> bool {
+    let preedit_empty = output
+        .preedit
+        .as_ref()
+        .map_or(true, |preedit| visible_text(preedit).is_empty());
+    preedit_empty && matches!(output.commit.as_deref(), Some("\u{3000}" | " "))
+}
+
 /// Computes a document plan without owning a composition handle or changing a
 /// visible-state projection. Keeping this independent from [`TextService`]
 /// makes the planning contract directly testable and lets the write journal
@@ -3484,6 +3536,16 @@ fn plan_from_visible(before: VisibleState, output: &Output) -> Result<WritePlan>
     }
 
     if let Some(text) = output.commit.as_ref().filter(|text| !text.is_empty()) {
+        if is_idle_space_commit(output) && before.has_composition && !before.text.is_empty() {
+            // Engine idle-Space against a still-visible reading would replace
+            // the whole preedit with U+3000. Keep the reading so Space can
+            // convert instead of inserting a document space.
+            return Ok(WritePlan {
+                updates: Vec::new(),
+                before: before.clone(),
+                after: before,
+            });
+        }
         updates.push(Update::Commit(text.clone()));
         after.text.clear();
         after.has_composition = false;
@@ -4471,6 +4533,12 @@ impl TextService_Impl {
             }
         }
         let current_context = context_id(context);
+        let keep_convert = keep_live_composition_for_convert(key, service.has_live_composition());
+        let composition_context = if keep_convert {
+            service.composition_context()
+        } else {
+            None
+        };
         if key.test_only {
             // Probe is deliberately decided before every live settlement,
             // journal, context-admission, and scope-publication path.  A
@@ -4485,7 +4553,15 @@ impl TextService_Impl {
             return match probe_action(fence) {
                 ProbeAction::Busy => Ok(true.into()),
                 ProbeAction::Declined => Ok(false.into()),
-                ProbeAction::Ask { fresh_context } => {
+                ProbeAction::Ask { mut fresh_context } => {
+                    // A convert key against a live reading must probe the
+                    // composing session, not a fresh idle clone. Otherwise
+                    // OnTestKeyDown looks like idle Space while OnKeyDown
+                    // converts — or worse, the real path used to replace
+                    // the context and insert U+3000.
+                    if keep_convert {
+                        fresh_context = false;
+                    }
                     // Read the current host classification, but carry it in a
                     // throwaway Probe request. Publishing it here would mutate
                     // the live engine session before OnKeyDown had arrived. A
@@ -4519,12 +4595,14 @@ impl TextService_Impl {
         } else {
             service.input_blocked()
         };
-        let context_replacement = if deferred_terminalization || undo_write_pending || input_blocked
+        let journal_replacement = if deferred_terminalization || undo_write_pending || input_blocked
         {
             false
         } else {
             service.write_context_is_replacement(current_context)?
         };
+        let context_replacement =
+            journal_replacement_applies(key, service.has_live_composition(), journal_replacement);
 
         match decide_real_fence(
             deferred_terminalization,
@@ -4568,21 +4646,30 @@ impl TextService_Impl {
             }
             RealFenceAction::Apply => {}
         }
-        if !service.can_admit_write_for_context(context)? {
+        let write_context = composition_context.as_ref().unwrap_or(context);
+        if keep_convert && composition_context.is_none() {
+            // A live reading exists, but this callback does not own its
+            // ITfContext. Absorb Space rather than inserting a document space
+            // into the idle peer context.
+            return Ok(true.into());
+        }
+        if !service.can_admit_write_for_context(write_context)? {
             return Ok(false.into());
         }
-        if !service.publish_input_scope(context)? {
+        if !service.publish_input_scope(write_context)? {
             // Scope publication is part of the privacy boundary for a real
             // key. A refused publication leaves the key to the host.
             return Ok(false.into());
         }
 
-        service.observe_write_context(context)?;
+        if !keep_convert || composition_context.is_some() {
+            service.observe_write_context(write_context)?;
+        }
         // Context replacement may have cancelled a full old-context queue.
-        if !service.can_admit_write_for_context(context)? {
+        if !service.can_admit_write_for_context(write_context)? {
             return Ok(false.into());
         }
-        let reservation = match service.reserve_write(context) {
+        let reservation = match service.reserve_write(write_context) {
             Ok(reservation) => reservation,
             // This is an admission failure, not an engine failure: leave the
             // key to the host and never advance the real engine.
@@ -4593,7 +4680,7 @@ impl TextService_Impl {
             Ok(answer) => answer,
             Err(_) => {
                 let disposition = self
-                    .recover_from_engine_unavailable(context)
+                    .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
                 return Ok(matches!(disposition, RecoveryKeyDisposition::Consume).into());
             }
@@ -4621,7 +4708,7 @@ impl TextService_Impl {
             // terminalize the full journal rather than only this reservation.
             Answer::Unavailable => {
                 let disposition = self
-                    .recover_from_engine_unavailable(context)
+                    .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
                 return Ok(matches!(disposition, RecoveryKeyDisposition::Consume).into());
             }
@@ -4630,7 +4717,7 @@ impl TextService_Impl {
         let consumed = output.consumed;
         if self
             .submit_output(
-                context,
+                write_context,
                 reservation,
                 output,
                 OutputSubmission {
@@ -6767,6 +6854,47 @@ mod tests {
     }
 
     #[test]
+    fn converting_space_keeps_a_live_composition_across_context_replacement() {
+        let space = KeyInput {
+            code: KeyCode::Space,
+            ch: None,
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        let henkan = KeyInput {
+            code: KeyCode::Henkan,
+            ch: None,
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        let letter = KeyInput {
+            code: KeyCode::Char,
+            ch: Some('a'),
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        assert!(keep_live_composition_for_convert(space, true));
+        assert!(keep_live_composition_for_convert(henkan, true));
+        assert!(!keep_live_composition_for_convert(letter, true));
+        assert!(!keep_live_composition_for_convert(space, false));
+        assert!(!journal_replacement_applies(space, true, true));
+        assert!(journal_replacement_applies(letter, true, true));
+        assert_eq!(
+            decide_real_fence(false, false, false, false, false),
+            RealFenceAction::Apply,
+            "Space during a live reading must convert, not replace-and-insert"
+        );
+        assert_eq!(
+            decide_real_fence(false, false, false, false, true),
+            RealFenceAction::ReplaceAndApply,
+            "non-convert keys still follow replacement"
+        );
+    }
+
+    #[test]
     fn queued_engine_recovery_consumes_keys_until_the_finalizer_terminates() {
         assert_eq!(
             decide_real_fence(false, false, true, false, false),
@@ -7874,6 +8002,19 @@ mod tests {
         let plan = plan_from_visible(state("か", true), &output(Some("か"), None)).expect("plan");
         assert!(matches!(plan.updates.as_slice(), [Update::Commit(text)] if text == "か"));
         assert_eq!(plan.after, VisibleState::empty());
+    }
+
+    #[test]
+    fn idle_space_commit_does_not_replace_a_live_reading() {
+        let before = state("にほんごにゅうりょくのてすと", true);
+        let plan =
+            plan_from_visible(before.clone(), &output(Some("\u{3000}"), None)).expect("plan");
+        assert!(plan.updates.is_empty());
+        assert_eq!(plan.after, before);
+        let ascii =
+            plan_from_visible(state("にほんご", true), &output(Some(" "), None)).expect("plan");
+        assert!(ascii.updates.is_empty());
+        assert_eq!(ascii.after.text, "にほんご");
     }
 
     #[test]
