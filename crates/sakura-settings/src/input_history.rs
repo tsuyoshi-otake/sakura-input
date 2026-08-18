@@ -259,7 +259,7 @@ mod tests {
         assert_eq!(export(&source, &destination).expect("export"), 0);
         assert!(std::fs::read_to_string(destination)
             .expect("TSV")
-            .contains("kind\tsequence"));
+            .contains("engine-package-version\tengine-release-label"));
         let _ = std::fs::remove_dir_all(directory);
     }
 }

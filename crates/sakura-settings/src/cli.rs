@@ -484,13 +484,18 @@ pub fn run(command: Command) -> Result<(), String> {
             }
         }
         Command::HistoryStats => {
-            let stats =
-                input_history::stats(&paths::input_history().map_err(display)?).map_err(display)?;
+            let path = paths::input_history().map_err(display)?;
+            let stats = input_history::stats(&path).map_err(display)?;
+            let snapshot = input_history::view(&path).map_err(display)?;
+            let (package_version, release_label) =
+                snapshot.last_engine_identity().unwrap_or(("-", "-"));
             println!("live-engine\t{}", if stats.live { "yes" } else { "no" });
             println!(
                 "history-service-active\t{}",
                 if stats.active { "yes" } else { "no" }
             );
+            println!("history-package-version\t{package_version}");
+            println!("history-release-label\t{release_label}");
             println!("dropped-events\t{}", stats.dropped_events);
             println!("persistence-failures\t{}", stats.persistence_failures);
             println!(

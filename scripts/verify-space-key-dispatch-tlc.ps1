@@ -17,6 +17,7 @@ param(
         'SpaceKeyDispatch-actors3.cfg',
         'SpaceKeyDispatch-reach-dual.cfg',
         'SpaceKeyDispatch-reach-convert.cfg',
+        'SpaceKeyDispatch-reach-predict.cfg',
         'SpaceKeyDispatch-reach-insert.cfg'
     )
 )

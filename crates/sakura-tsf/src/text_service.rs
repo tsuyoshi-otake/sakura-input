@@ -482,6 +482,34 @@ fn keep_live_composition_for_convert(key: KeyInput, live_composition: bool) -> b
     live_composition && is_conversion_trigger_key(key)
 }
 
+/// Where a live Space/Henkan document write should land.
+///
+/// Absorbing the key without asking the engine leaves Chromium free to confirm
+/// the underlined reading. A stored live `ITfContext` — composition, candidate
+/// layout, or a still-queued candidate payload — is preferred over the
+/// callback context so an idle peer cannot receive the conversion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConvertWriteSource {
+    LiveStored,
+    Callback,
+    Absorb,
+}
+
+fn resolve_convert_write_source(
+    has_composition_context: bool,
+    has_layout_context: bool,
+    has_pending_candidate_context: bool,
+    journal_is_replacement: bool,
+) -> ConvertWriteSource {
+    if has_composition_context || has_layout_context || has_pending_candidate_context {
+        ConvertWriteSource::LiveStored
+    } else if !journal_is_replacement {
+        ConvertWriteSource::Callback
+    } else {
+        ConvertWriteSource::Absorb
+    }
+}
+
 /// Who owns this physical keystroke for TSF `eaten` routing.
 ///
 /// `Ime` is a live reading plus Space/Henkan. The host must never receive
@@ -2881,6 +2909,41 @@ impl TextService {
             .and_then(|state| state.context.clone())
     }
 
+    /// Live convert keys must write the engine answer onto the reading's
+    /// document. The callback `ITfContext` can be an idle Electron peer;
+    /// candidate layout and a queued suggestion payload still name the live
+    /// one after the popup has been shown.
+    fn live_convert_context(&self, callback: &ITfContext) -> Option<ITfContext> {
+        let composition = self.composition_context();
+        let layout = self.layout.try_borrow().ok().and_then(|layout| {
+            layout
+                .subscription
+                .as_ref()
+                .map(|subscription| subscription.context.clone())
+        });
+        let pending = self.deferred.try_borrow().ok().and_then(|deferred| {
+            deferred
+                .dispatch
+                .work
+                .candidates
+                .as_ref()
+                .map(|pending| pending.context.clone())
+        });
+        let journal_is_replacement = self
+            .write_context_is_replacement(context_id(callback))
+            .unwrap_or(false);
+        match resolve_convert_write_source(
+            composition.is_some(),
+            layout.is_some(),
+            pending.is_some(),
+            journal_is_replacement,
+        ) {
+            ConvertWriteSource::LiveStored => composition.or(layout).or(pending),
+            ConvertWriteSource::Callback => Some(callback.clone()),
+            ConvertWriteSource::Absorb => None,
+        }
+    }
+
     fn client_id(&self) -> Result<u32> {
         let slot = self.activation.try_borrow().map_err(|_| reentrancy())?;
         match slot.as_ref() {
@@ -3393,7 +3456,10 @@ impl TextService {
             state.text = projection.text.clone();
             state.handle = handle;
             state.known = true;
-            state.context = if state.handle.is_some() {
+            // Keep the live document even when the host has not given a
+            // composition handle yet. Space during a visible reading — including
+            // a suggestion popup — must still convert that document.
+            state.context = if state.handle.is_some() || !state.text.is_empty() {
                 Some(context.clone())
             } else {
                 None
@@ -4574,11 +4640,6 @@ impl TextService_Impl {
         // `owner`, so a live Henkan conversion cannot fall through as host-owned.
         let current_context = context_id(context);
         let keep_convert = owner == PhysicalKeyOwner::Ime;
-        let composition_context = if keep_convert {
-            service.composition_context()
-        } else {
-            None
-        };
         if key.test_only {
             // Probe is deliberately decided before every live settlement,
             // journal, context-admission, and scope-publication path.  A
@@ -4679,13 +4740,19 @@ impl TextService_Impl {
             }
             RealFenceAction::Apply => {}
         }
-        let write_context = composition_context.as_ref().unwrap_or(context);
-        if keep_convert && composition_context.is_none() {
-            // A live reading exists, but this callback does not own its
-            // ITfContext. Absorb Space rather than inserting a document space
-            // into the idle peer context.
+        let live_convert_context = if keep_convert {
+            service.live_convert_context(context)
+        } else {
+            None
+        };
+        if keep_convert && live_convert_context.is_none() {
+            // The callback is an idle peer and no stored live document remains
+            // to retarget. Absorb rather than converting into the wrong
+            // ITfContext; the live KeyDown still converts when Chromium
+            // delivers it there.
             return Ok(true.into());
         }
+        let write_context = live_convert_context.as_ref().unwrap_or(context);
         if !service.can_admit_write_for_context(write_context)? {
             return Ok(owner.terminal_eaten(false));
         }
@@ -4696,9 +4763,7 @@ impl TextService_Impl {
             return Ok(owner.terminal_eaten(false));
         }
 
-        if !keep_convert || composition_context.is_some() {
-            service.observe_write_context(write_context)?;
-        }
+        service.observe_write_context(write_context)?;
         // Context replacement may have cancelled a full old-context queue.
         if !service.can_admit_write_for_context(write_context)? {
             return Ok(owner.terminal_eaten(false));
@@ -6992,6 +7057,26 @@ mod tests {
         assert!(
             eaten.as_bool(),
             "a real-path Decline must not return a live conversion Space to the host"
+        );
+
+        assert_eq!(
+            resolve_convert_write_source(false, true, false, true),
+            ConvertWriteSource::LiveStored,
+            "a suggestion layout still names the live document after composition.context is missing"
+        );
+        assert_eq!(
+            resolve_convert_write_source(false, false, true, true),
+            ConvertWriteSource::LiveStored,
+            "a queued suggestion payload is enough to retarget Space onto the reading"
+        );
+        assert_eq!(
+            resolve_convert_write_source(false, false, false, false),
+            ConvertWriteSource::Callback
+        );
+        assert_eq!(
+            resolve_convert_write_source(false, false, false, true),
+            ConvertWriteSource::Absorb,
+            "an idle peer without a stored live document must not receive the conversion"
         );
     }
 

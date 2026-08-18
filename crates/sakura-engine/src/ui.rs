@@ -579,6 +579,14 @@ impl UiBoard {
             return;
         };
 
+        // Electron delivers the same Space to an idle peer context as well as
+        // the live reading. That idle session has no candidates. Clearing the
+        // shared board here hid the live popup, so conversion candidates never
+        // appeared even though the engine had already converted.
+        if !has_candidates && state.candidate_session != Some(session) {
+            return;
+        }
+
         let next_mode = output.mode.or(state.mode);
         let changed = state.mode != next_mode
             || state.has_candidates != has_candidates
@@ -1077,6 +1085,40 @@ mod tests {
         assert_eq!(cleared.candidates, None);
         assert_eq!(cleared.anchor, None);
         assert!(!cleared.renderer_visible);
+    }
+
+    #[test]
+    fn idle_peer_output_does_not_hide_another_session_popup() {
+        let board = UiBoard::new();
+        board.publish_output(7, &history_suggestion_output(), 0);
+        let candidates = look(&board, 1);
+        let anchor = ScreenRect {
+            left: 10,
+            top: 20,
+            right: 30,
+            bottom: 40,
+        };
+        assert!(board.publish_placement(7, Some(anchor), None, true));
+        let placed = look(&board, candidates.revision);
+
+        board.publish_output(8, &OutputBuf::new(), 0);
+        let unchanged = look(&board, 0);
+        assert_eq!(unchanged.revision, placed.revision);
+        assert!(unchanged.candidates.is_some());
+        assert_eq!(unchanged.anchor, Some(anchor));
+        assert!(unchanged.renderer_visible);
+
+        board.publish_output(7, &candidate_output(0), 0);
+        let converted = look(&board, placed.revision);
+        assert_eq!(
+            converted
+                .candidates
+                .as_ref()
+                .map(|list| list.items[0].text.as_str()),
+            Some("候補")
+        );
+        assert_eq!(converted.anchor, Some(anchor));
+        assert!(converted.renderer_visible);
     }
 
     #[test]
