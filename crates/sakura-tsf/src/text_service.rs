@@ -71,6 +71,9 @@ use sakura_reg::{
 
 use crate::candidate_ui::CandidateUi;
 use crate::composition::{self, DocumentEdit, Update};
+use crate::conversion_key::{
+    allocate_instance, process_claims, ClaimToken, ConversionKeyDisposition,
+};
 use crate::diagnostic_ring;
 use crate::display_attributes;
 use crate::edit_session;
@@ -523,15 +526,20 @@ enum PhysicalKeyOwner {
 
 impl PhysicalKeyOwner {
     fn of(key: KeyInput, live_composition: bool) -> Self {
-        if keep_live_composition_for_convert(key, live_composition) {
-            Self::Ime
-        } else {
-            Self::HostEligible
+        match ConversionKeyDisposition::of(key, live_composition, false) {
+            ConversionKeyDisposition::ApplyLocal => Self::Ime,
+            ConversionKeyDisposition::HostEligible | ConversionKeyDisposition::AbsorbPeer => {
+                Self::HostEligible
+            }
         }
     }
 
     fn terminal_eaten(self, engine_consumed: bool) -> BOOL {
-        (engine_consumed || self == Self::Ime).into()
+        let disposition = match self {
+            Self::Ime => ConversionKeyDisposition::ApplyLocal,
+            Self::HostEligible => ConversionKeyDisposition::HostEligible,
+        };
+        disposition.eats(engine_consumed).into()
     }
 }
 
@@ -961,6 +969,9 @@ pub struct TextService {
     /// read session is often refused during OnKeyDown (E_FAIL); the write
     /// callback still has a cookie and refreshes this cache.
     cached_input_scope: Cell<Option<sakura_proto::InputScope>>,
+    /// Process-local identity for Dual TSF conversion-key arbitration.
+    instance_id: u64,
+    claim_generation: Cell<u64>,
 }
 
 impl TextService {
@@ -987,6 +998,8 @@ impl TextService {
             last_ai_error: RefCell::new(None),
             mode_item: mode_item::ModeItemState::default(),
             cached_input_scope: Cell::new(None),
+            instance_id: allocate_instance(),
+            claim_generation: Cell::new(1),
         }
     }
 
@@ -1376,6 +1389,29 @@ impl TextService {
                 visible.has_composition || !visible.text.is_empty()
             })
             .unwrap_or(true)
+    }
+
+    fn claim_token(&self) -> ClaimToken {
+        ClaimToken::new(self.instance_id, self.claim_generation.get())
+    }
+
+    fn sync_live_claim(&self) {
+        process_claims().sync(self.claim_token(), self.has_live_composition());
+    }
+
+    fn retire_live_claim(&self) {
+        process_claims().sync(self.claim_token(), false);
+        let generation = self.claim_generation.get();
+        self.claim_generation.set(generation.saturating_add(1));
+    }
+
+    fn conversion_key_disposition(&self, key: KeyInput) -> ConversionKeyDisposition {
+        self.sync_live_claim();
+        ConversionKeyDisposition::of(
+            key,
+            self.has_live_composition(),
+            process_claims().peer_live(self.instance_id),
+        )
     }
 
     fn defer_undo_terminalization(&self, requested: Option<UndoCommitOutcome>) {
@@ -1899,6 +1935,7 @@ impl TextService {
                 diagnostic_ring::LifecycleEvent::ContextReplaced,
                 incoming_context.0 as u64,
             );
+            self.retire_live_claim();
         }
         // Context replacement is a lifecycle boundary. Revoke any callback's
         // local handle before candidate teardown or engine reset can re-enter.
@@ -2314,6 +2351,7 @@ impl TextService {
 
     fn detach(&self) -> Result<()> {
         self.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::Deactivate, 0);
+        self.retire_live_claim();
         // The focused indicator has a stricter lifetime than the background
         // engine connection: focus loss/deactivation hides it immediately,
         // before any deferred composition settlement can re-enter TSF.
@@ -3677,8 +3715,17 @@ fn plan_from_visible(before: VisibleState, output: &Output) -> Result<WritePlan>
 
 impl Drop for TextService {
     fn drop(&mut self) {
+        self.retire_live_claim();
         let _ = self.destroy_deferred_window();
         on_object_destroyed();
+    }
+}
+
+struct SyncClaimOnExit<'a>(&'a TextService);
+
+impl Drop for SyncClaimOnExit<'_> {
+    fn drop(&mut self) {
+        self.0.sync_live_claim();
     }
 }
 
@@ -4589,26 +4636,31 @@ impl TextService_Impl {
     /// while TSF passes preserved IME keys only by their registration GUID.
     fn handle_key_input(&self, context: Ref<'_, ITfContext>, key: KeyInput) -> Result<BOOL> {
         let service = self.get_impl();
-        let owner = PhysicalKeyOwner::of(key, service.has_live_composition());
+        let _sync_claim = SyncClaimOnExit(service);
+        let owner = service.conversion_key_disposition(key);
         if is_unactionable_key_input(key) {
             // Keep terminal routing uniform even if a future normalization
             // change classifies a live conversion trigger as unactionable.
-            return Ok(owner.terminal_eaten(false));
+            return Ok(owner.eats(false).into());
         }
 
         // A key with no context has nowhere to go. Live conversion triggers
         // still belong to the IME so Chromium cannot insert a document space
         // into a reading whose ITfContext handle was already gone.
         let Ok(context) = context.ok() else {
-            return Ok(owner.terminal_eaten(false));
+            return Ok(owner.eats(false).into());
         };
 
         // Live conversion TestKeyDown must eat before AI capture, fence, or
         // Probe. Henkan can also be the AI trigger; a fallible scope/target
         // read must not turn OnTestKeyDown into a COM error that Chromium
-        // treats as uneaten.
-        if key.test_only && owner == PhysicalKeyOwner::Ime {
+        // treats as uneaten. An idle sibling must absorb the same physical
+        // key without asking the engine.
+        if key.test_only && owner.skip_probe_on_test_keydown() {
             return Ok(true.into());
+        }
+        if !owner.asks_engine() {
+            return Ok(owner.eats(false).into());
         }
 
         if service.ai_trigger_matches(key) {
@@ -4639,7 +4691,7 @@ impl TextService_Impl {
         // its ordinary key behavior. The terminal paths below all route through
         // `owner`, so a live Henkan conversion cannot fall through as host-owned.
         let current_context = context_id(context);
-        let keep_convert = owner == PhysicalKeyOwner::Ime;
+        let keep_convert = owner == ConversionKeyDisposition::ApplyLocal;
         if key.test_only {
             // Probe is deliberately decided before every live settlement,
             // journal, context-admission, and scope-publication path.  A
@@ -4653,7 +4705,7 @@ impl TextService_Impl {
             };
             return match probe_action(fence) {
                 ProbeAction::Busy => Ok(true.into()),
-                ProbeAction::Declined => Ok(owner.terminal_eaten(false)),
+                ProbeAction::Declined => Ok(owner.eats(false).into()),
                 ProbeAction::Ask { fresh_context } => {
                     // Read the current host classification, but carry it in a
                     // throwaway Probe request. Publishing it here would mutate
@@ -4663,12 +4715,12 @@ impl TextService_Impl {
                     // will create after retiring the old context.
                     let scope = service.read_input_scope(context)?;
                     match service.ask_probe(scope, key, fresh_context)? {
-                        Answer::Ready(output) => Ok(owner.terminal_eaten(output.consumed)),
+                        Answer::Ready(output) => Ok(owner.eats(output.consumed).into()),
                         Answer::Busy => Ok(true.into()),
                         // Never left this process; nothing was reserved for
                         // a read-only probe, so there is nothing to release.
-                        Answer::Rejected => Ok(owner.terminal_eaten(false)),
-                        Answer::Unavailable => Ok(owner.terminal_eaten(false)),
+                        Answer::Rejected => Ok(owner.eats(false).into()),
+                        Answer::Unavailable => Ok(owner.eats(false).into()),
                     }
                 }
             };
@@ -4722,7 +4774,7 @@ impl TextService_Impl {
                 // A blocked/lifecycle path has an explicit host-owned
                 // terminal result and cannot fall through to Apply. Live
                 // conversion triggers still stay with the IME.
-                return Ok(owner.terminal_eaten(false));
+                return Ok(owner.eats(false).into());
             }
             RealFenceAction::ReplaceAndApply => {
                 // The Probe path asked against a fresh throwaway context. The
@@ -4754,25 +4806,25 @@ impl TextService_Impl {
         }
         let write_context = live_convert_context.as_ref().unwrap_or(context);
         if !service.can_admit_write_for_context(write_context)? {
-            return Ok(owner.terminal_eaten(false));
+            return Ok(owner.eats(false).into());
         }
         if !service.publish_input_scope(write_context)? {
             // Scope publication is part of the privacy boundary for a real
             // key. A refused publication leaves a host-eligible key to the
             // host; live conversion triggers stay with the IME.
-            return Ok(owner.terminal_eaten(false));
+            return Ok(owner.eats(false).into());
         }
 
         service.observe_write_context(write_context)?;
         // Context replacement may have cancelled a full old-context queue.
         if !service.can_admit_write_for_context(write_context)? {
-            return Ok(owner.terminal_eaten(false));
+            return Ok(owner.eats(false).into());
         }
         let reservation = match service.reserve_write(write_context) {
             Ok(reservation) => reservation,
             // This is an admission failure, not an engine failure: leave a
             // host-eligible key to the host and never advance the real engine.
-            Err(_) => return Ok(owner.terminal_eaten(false)),
+            Err(_) => return Ok(owner.eats(false).into()),
         };
 
         let answer = match service.ask(key) {
@@ -4781,9 +4833,9 @@ impl TextService_Impl {
                 let disposition = self
                     .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
-                return Ok(
-                    owner.terminal_eaten(matches!(disposition, RecoveryKeyDisposition::Consume))
-                );
+                return Ok(owner
+                    .eats(matches!(disposition, RecoveryKeyDisposition::Consume))
+                    .into());
             }
         };
         let output = match answer {
@@ -4801,7 +4853,7 @@ impl TextService_Impl {
             // there is nothing to recover.
             Answer::Rejected => {
                 service.cancel_reservation(reservation, CancelReason::RequestRejected);
-                return Ok(owner.terminal_eaten(false));
+                return Ok(owner.eats(false).into());
             }
             // A host-eligible key can return to the application. Live
             // conversion triggers stay with the IME even when recovery
@@ -4810,9 +4862,9 @@ impl TextService_Impl {
                 let disposition = self
                     .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
-                return Ok(
-                    owner.terminal_eaten(matches!(disposition, RecoveryKeyDisposition::Consume))
-                );
+                return Ok(owner
+                    .eats(matches!(disposition, RecoveryKeyDisposition::Consume))
+                    .into());
             }
         };
 
@@ -4838,7 +4890,7 @@ impl TextService_Impl {
             service.disconnect();
             let _ = service.queue_end_candidates();
         }
-        Ok(owner.terminal_eaten(consumed))
+        Ok(owner.eats(consumed).into())
     }
 
     /// Commits what the document is showing, as ordinary text.

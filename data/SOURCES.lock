@@ -46,3 +46,9 @@ path = "data/curated-terms.tsv"
 license_file = "LICENSE"
 output_license = "MIT"
 purpose = "Canonical casing and Shift+ASCII terms absent from the generated glossary"
+
+[sakura_inflection]
+generator = "crates/dictc/src/inflection.rs"
+pos_ids = "src/data/dictionary_oss/id.def"
+output_license = "LicenseRef-Mozc-Dictionary"
+purpose = "Fused conjugations (て/た/ない/ます/…) missing from the Mozc cost trim"

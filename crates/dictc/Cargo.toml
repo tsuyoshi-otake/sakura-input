@@ -25,6 +25,10 @@ name = "mozc-trim"
 path = "src/bin/mozc_trim.rs"
 
 [[bin]]
+name = "inflection-expand"
+path = "src/bin/inflection_expand.rs"
+
+[[bin]]
 name = "corpus-eval"
 path = "src/bin/corpus_eval.rs"
 

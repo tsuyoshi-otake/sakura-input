@@ -16,6 +16,8 @@ a diff, something has gone wrong.
 | `curated-terms.tsv` | 2 | Project-authored MIT overlay for canonical casing and high-value terms missing from the generated glossary |
 | `conversion-priorities.tsv` | 2 | Project-authored calibration overlay for context-free top-1 conversion; re-prices existing lattice edges and may add missing IT/business compounds such as Issue #62's 機能紹介 |
 
+The dictionary compiler also expands Mozc 基本形 verbs and i-adjectives into fused conjugations (`来て`, `書いて`, `行って`, `高くて`, …) at build time. Sakura stores static lattice edges and does not inflect at runtime, so the Mozc trim can keep `来る` while dropping `来て`. `inflection-expand` reads the trimmed system TSV plus pinned `id.def`, emits only missing `(reading, surface)` pairs, and keeps Mozc connection ids. The generated overlay is `LicenseRef-Mozc-Dictionary` and is not checked in; `scripts/build-dictionary.ps1` rebuilds it every pass.
+
 The Sakura system dictionary is maintained as fourteen canonical category
 dictionaries (grammar/function words, inflections, general vocabulary, fixed
 expressions, numeric/time/unit terms, people, places, organizations/products,
@@ -25,7 +27,11 @@ not a user dictionary or a separate candidate layer. `category-split`
 accepts them with `--system-category`; `--supplement` is retained only as a
 backward-compatible command-line alias. The PowerShell pipeline names the input
 directory `-SystemCategoryDirectory` (the old `-SupplementLexiconDirectory`
-name is accepted only for compatibility).
+name is accepted only for compatibility). Place-name import drops the address
+layer: postal-code readings (`001`, `001-0000`), placeholders such as
+`(そのた)`, and prefecture-qualified municipal surfaces (`北海道厚岸郡浜中町横浜`).
+Short toponyms (`東京`, `渋谷`, `横浜`, `渋谷区`) remain. The source TSV is
+left unchanged; the filter runs at compile time.
 
 Run `scripts/build-dictionary.ps1` to fetch the pinned Mozc tree, read the
 vendored smile-chat MIT glossary under `third_party/smile-chat-public`,

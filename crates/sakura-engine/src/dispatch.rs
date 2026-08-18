@@ -2857,6 +2857,14 @@ fn apply_action(
                 // collapsing it.
                 let expand_from_suggestions =
                     session.suggestions_visible || session.suggestion_focused;
+                if expand_from_suggestions && !session.shifted_ascii {
+                    adopt_history_completion_reading(
+                        session_id,
+                        session,
+                        prediction_cache,
+                        scratch,
+                    );
+                }
                 session.hide_suggestions();
                 begin_conversion(
                     session_id,
@@ -3421,6 +3429,65 @@ fn commit_converted_segments(
     session.record_current_commit(scratch.as_str(), context_right_id, it_words, total_words);
     session.reset();
     Ok(true)
+}
+
+/// When Space converts over a visible suggestion list, a history completion
+/// whose reading is longer than the typed prefix must convert that reading.
+/// Otherwise typing `に` after learning `にほんご`→`日本語` shows `日本語` as
+/// 履歴 and Space converts `に` instead of `にほんご`. An exact history hit
+/// for the typed reading stays on that reading so `にほんご` is not replaced
+/// by a longer completion such as `にほんごにゅうりょく`. Dictionary
+/// predictions stay on the typed prefix: prediction must not block conversion
+/// of what was actually entered.
+#[inline(never)]
+fn adopt_history_completion_reading(
+    session_id: SessionId,
+    session: &mut Session,
+    cache: &PredictionCacheWork<'_>,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+) {
+    let Some(candidates) = cache.candidates(session_id, session.prediction_generation) else {
+        return;
+    };
+    let prefix = session.preedit.as_str();
+    if prefix.is_empty() || !prefix.chars().any(|ch| ('ぁ'..='ゖ').contains(&ch)) {
+        return;
+    }
+    if candidates.iter().any(|candidate| {
+        candidate.source() == PredictionSource::History && candidate.reading() == prefix
+    }) {
+        return;
+    }
+    let index = if session.suggestion_focused {
+        session.selected_suggestion(candidates.len())
+    } else {
+        (!candidates.is_empty()).then_some(0)
+    };
+    let Some(candidate) = index.and_then(|index| candidates.get(index)) else {
+        return;
+    };
+    if candidate.source() != PredictionSource::History {
+        return;
+    }
+    let reading = candidate.reading();
+    if reading == prefix || !reading.starts_with(prefix) {
+        return;
+    }
+    let Ok(cursor) = u16::try_from(reading.chars().count()) else {
+        return;
+    };
+    scratch.clear();
+    if scratch.push_str(reading).is_err() {
+        return;
+    }
+    session.romaji.clear();
+    session.preedit.clear();
+    if session.preedit.push_str(scratch.as_str()).is_err() {
+        scratch.clear();
+        return;
+    }
+    scratch.clear();
+    session.cursor = cursor;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4976,6 +5043,20 @@ mod tests {
             concat!(
                 "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
                 "\u{304b}\u{306a}\t\u{304b}\u{306a}\t0\t0\t100\t100\tpredict\tequal\n",
+            ),
+        )
+    }
+
+    fn nihongo_history_conversion() -> Arc<ConversionService> {
+        prediction_conversion_from_source(
+            "nihongo-history.tsv",
+            concat!(
+                "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+                "\u{306b}\t\u{306b}\t0\t0\t500\t500\t\tkana\n",
+                "\u{306b}\t\u{4e8c}\t0\t0\t400\t400\t\tnum\n",
+                "\u{306b}\u{307b}\u{3093}\u{3054}\t\u{65e5}\u{672c}\u{8a9e}\t0\t0\t100\t100\tpredict\tlang\n",
+                "\u{306b}\u{307b}\u{3093}\u{3054}\t\u{306b}\u{307b}\u{3093}\u{3054}\t0\t0\t800\t800\t\tkana\n",
+                "\u{306b}\u{307b}\u{3093}\u{3054}\u{306b}\u{3085}\u{3046}\u{308a}\u{3087}\u{304f}\t\u{65e5}\u{672c}\u{8a9e}\u{5165}\u{529b}\t0\t0\t90\t90\tpredict\tinput\n",
             ),
         )
     }
@@ -7747,6 +7828,99 @@ mod tests {
         assert!(
             candidates.visible_range().len() > 1,
             "Space on a focused suggestion must keep a conversion page, not a compact row"
+        );
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn history_prefix_space_converts_the_learned_completion_reading() {
+        let learning = Arc::new(LearningService::memory());
+        learning.learn(
+            "\u{306b}\u{307b}\u{3093}\u{3054}",
+            "\u{65e5}\u{672c}\u{8a9e}",
+            0,
+            0,
+        );
+        let (mut dispatcher, runtime) =
+            phase_one_prediction_dispatcher(nihongo_history_conversion(), Arc::clone(&learning));
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, session, "ni", &mut out);
+        assert_eq!(out.preedit_text(), "\u{306b}");
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+        assert_eq!(
+            out.candidate(0).map(|(text, _)| text),
+            Some("\u{65e5}\u{672c}\u{8a9e}")
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Composing
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Converting
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        assert_eq!(out.preedit_text(), "\u{65e5}\u{672c}\u{8a9e}");
+        assert_eq!(
+            out.candidate(0).map(|(text, _)| text),
+            Some("\u{65e5}\u{672c}\u{8a9e}"),
+            "Space on 履歴「日本語」 must convert にほんご, not the typed prefix に"
+        );
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn exact_history_space_still_converts_the_typed_reading() {
+        let learning = Arc::new(LearningService::memory());
+        learning.learn(
+            "\u{306b}\u{307b}\u{3093}\u{3054}\u{306b}\u{3085}\u{3046}\u{308a}\u{3087}\u{304f}",
+            "\u{65e5}\u{672c}\u{8a9e}\u{5165}\u{529b}",
+            0,
+            0,
+        );
+        learning.learn(
+            "\u{306b}\u{307b}\u{3093}\u{3054}",
+            "\u{65e5}\u{672c}\u{8a9e}",
+            0,
+            0,
+        );
+        let (mut dispatcher, runtime) =
+            phase_one_prediction_dispatcher(nihongo_history_conversion(), learning);
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, session, "nihongo", &mut out);
+        assert_eq!(out.preedit_text(), "\u{306b}\u{307b}\u{3093}\u{3054}");
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Converting
+        );
+        assert_eq!(out.preedit_text(), "\u{65e5}\u{672c}\u{8a9e}");
+        assert_eq!(
+            out.candidate(0).map(|(text, _)| text),
+            Some("\u{65e5}\u{672c}\u{8a9e}"),
+            "typing the full にほんご must convert that reading even when a longer 履歴 exists"
         );
         runtime.stop().expect("prediction worker joins");
     }

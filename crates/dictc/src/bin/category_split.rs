@@ -1,11 +1,13 @@
 //! Build the fourteen source-neutral Sakura category dictionaries.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use dictc::category::{classify_existing_entry, parse_mozc_pos_catalog, DictionaryCategory};
+use dictc::category::{
+    classify_existing_entry, is_address_layer_entry, parse_mozc_pos_catalog, DictionaryCategory,
+};
 use dictc::{entries_to_category_tsv, merge_entries, parse_entries, SourceEntry};
 
 enum InputLayer {
@@ -77,33 +79,49 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     // curated layer; concatenating all overlays before `merge_entries` would
     // incorrectly report that intentional replacement as a duplicate.
     let mut overlays: Vec<Vec<CategorizedEntry>> = Vec::new();
+    let mut dropped_address_layer = 0usize;
     for input in config.inputs {
         let source = input.path.display().to_string();
         let entries =
             parse_entries(&source, &read_utf8(&input.path)?).map_err(|error| error.to_string())?;
         match input.layer {
-            InputLayer::SystemCategory(category) => system_categories.extend(
-                entries
-                    .into_iter()
-                    .map(|entry| CategorizedEntry { entry, category }),
-            ),
+            InputLayer::SystemCategory(category) => {
+                for entry in entries {
+                    if is_address_layer_entry(&entry.reading, &entry.surface, category) {
+                        dropped_address_layer += 1;
+                        continue;
+                    }
+                    system_categories.push(CategorizedEntry { entry, category });
+                }
+            }
             InputLayer::System => {
-                system.extend(entries.into_iter().map(|entry| CategorizedEntry {
-                    category: classify_existing_entry(&entry, &pos_catalog),
-                    entry,
-                }))
+                for entry in entries {
+                    let category = classify_existing_entry(&entry, &pos_catalog);
+                    if is_address_layer_entry(&entry.reading, &entry.surface, category) {
+                        dropped_address_layer += 1;
+                        continue;
+                    }
+                    system.push(CategorizedEntry { entry, category });
+                }
             }
             InputLayer::Overlay => overlays.push(
                 entries
                     .into_iter()
-                    .map(|entry| CategorizedEntry {
-                        category: classify_existing_entry(&entry, &pos_catalog),
-                        entry,
+                    .filter_map(|entry| {
+                        let category = classify_existing_entry(&entry, &pos_catalog);
+                        if is_address_layer_entry(&entry.reading, &entry.surface, category) {
+                            dropped_address_layer += 1;
+                            return None;
+                        }
+                        Some(CategorizedEntry { entry, category })
                     })
                     .collect(),
             ),
         }
     }
+
+    let (system_categories, dropped_duplicate_identities) =
+        keep_first_system_category_identities(system_categories);
 
     // Apply normal dictionary precedence before assigning each final entry to a
     // category.  That prevents a lower-priority copy from surviving in a
@@ -143,6 +161,10 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
             categorized[index].len()
         );
     }
+    println!("dropped address-layer: {dropped_address_layer} entries");
+    println!(
+        "dropped duplicate system-category identities: {dropped_duplicate_identities} entries"
+    );
     println!(
         "wrote {} entries into {} category dictionaries in {:.2}s",
         categorized.iter().map(Vec::len).sum::<usize>(),
@@ -150,6 +172,28 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         started.elapsed().as_secs_f64()
     );
     Ok(())
+}
+
+fn keep_first_system_category_identities(
+    entries: Vec<CategorizedEntry>,
+) -> (Vec<CategorizedEntry>, usize) {
+    let mut seen = BTreeSet::new();
+    let mut kept = Vec::with_capacity(entries.len());
+    let mut dropped = 0usize;
+    for entry in entries {
+        let identity = (
+            entry.entry.reading.clone(),
+            entry.entry.surface.clone(),
+            entry.entry.left_id,
+            entry.entry.right_id,
+        );
+        if !seen.insert(identity) {
+            dropped += 1;
+            continue;
+        }
+        kept.push(entry);
+    }
+    (kept, dropped)
 }
 
 fn record_categories(

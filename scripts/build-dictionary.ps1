@@ -370,6 +370,8 @@ function Invoke-BuildPass {
     $trimReport = Join-Path $OutputDirectory "mozc-trim$Suffix.report.json"
     $overlayTsv = Join-Path $OutputDirectory "it-terms$Suffix.tsv"
     $overlayReport = Join-Path $OutputDirectory "it-terms$Suffix.report.json"
+    $inflectionTsv = Join-Path $OutputDirectory "inflection$Suffix.tsv"
+    $inflectionReport = Join-Path $OutputDirectory "inflection$Suffix.report.json"
     $categoryDirectory = Join-Path $OutputDirectory "カテゴリ辞書$Suffix"
     $dictionary = Join-Path $OutputDirectory "system$Suffix.dic"
     $wordNetReport = Join-Path $OutputDirectory "wordnet$Suffix.report.json"
@@ -383,6 +385,15 @@ function Invoke-BuildPass {
     }
     $mozcArguments += @('--output', $systemTsv, '--report', $trimReport)
     Invoke-Rtk -Arguments $mozcArguments
+
+    $inflectionArguments = @(
+        'cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'inflection-expand', '--',
+        '--system', $systemTsv,
+        '--mozc-id-def', $MozcPosPath,
+        '--output', $inflectionTsv,
+        '--report', $inflectionReport
+    )
+    Invoke-Rtk -Arguments $inflectionArguments
 
     $glossaryArguments = @(
         'cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'glossary-import', '--',
@@ -401,6 +412,7 @@ function Invoke-BuildPass {
         '--system', $systemTsv,
         '--overlay', $overlayTsv,
         '--overlay', $CuratedTermsPath,
+        '--overlay', $inflectionTsv,
         '--overlay', $CuratedGeneralDetailsPath,
         '--overlay', $CuratedGeneralTargetEntriesPath,
         '--overlay', $ConversionPrioritiesPath,
@@ -461,6 +473,8 @@ function Invoke-BuildPass {
         trim_report = $trimReport
         overlay_tsv = $overlayTsv
         overlay_report = $overlayReport
+        inflection_tsv = $inflectionTsv
+        inflection_report = $inflectionReport
         category_directory = $categoryDirectory
         category_files = $categoryFiles.ToArray()
         dictionary = $dictionary
@@ -551,7 +565,7 @@ try {
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
 
-    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'detail_coverage')
+    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'inflection_tsv', 'inflection_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'detail_coverage')
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `

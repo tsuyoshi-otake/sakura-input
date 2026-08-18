@@ -231,6 +231,106 @@ pub fn classify_existing_entry(
     DictionaryCategory::GeneralLexicon
 }
 
+/// Japanese prefecture names used to detect full postal-style addresses.
+///
+/// Matching on a bare `県` would also drop city names such as `山県市`.
+const PREFECTURE_NAMES: &[&str] = &[
+    "北海道",
+    "青森県",
+    "岩手県",
+    "宮城県",
+    "秋田県",
+    "山形県",
+    "福島県",
+    "茨城県",
+    "栃木県",
+    "群馬県",
+    "埼玉県",
+    "千葉県",
+    "東京都",
+    "神奈川県",
+    "新潟県",
+    "富山県",
+    "石川県",
+    "福井県",
+    "山梨県",
+    "長野県",
+    "岐阜県",
+    "静岡県",
+    "愛知県",
+    "三重県",
+    "滋賀県",
+    "京都府",
+    "大阪府",
+    "兵庫県",
+    "奈良県",
+    "和歌山県",
+    "鳥取県",
+    "島根県",
+    "岡山県",
+    "広島県",
+    "山口県",
+    "徳島県",
+    "香川県",
+    "愛媛県",
+    "高知県",
+    "福岡県",
+    "佐賀県",
+    "長崎県",
+    "熊本県",
+    "大分県",
+    "宮崎県",
+    "鹿児島県",
+    "沖縄県",
+];
+
+/// Postal-code readings, placeholder readings such as `(そのた)`, and
+/// prefecture-qualified municipal addresses (`北海道…市…`, `兵庫県姫路市…`).
+///
+/// Short toponyms (`東京`, `渋谷`, `横浜`, `渋谷区`, `横浜市`) stay. Digit
+/// readings are dropped only inside the place-name category so IT overlays
+/// such as `404` are not removed.
+pub fn is_address_layer_entry(reading: &str, surface: &str, category: DictionaryCategory) -> bool {
+    is_prefecture_address_surface(surface)
+        || (category == DictionaryCategory::PlaceNames && is_postal_or_placeholder_reading(reading))
+}
+
+fn is_postal_or_placeholder_reading(reading: &str) -> bool {
+    if reading.is_empty() {
+        return false;
+    }
+    if reading.starts_with('(') && reading.ends_with(')') {
+        return true;
+    }
+    let mut saw_digit = false;
+    for byte in reading.bytes() {
+        match byte {
+            b'0'..=b'9' => saw_digit = true,
+            b'-' => {}
+            _ => return false,
+        }
+    }
+    saw_digit
+}
+
+fn is_prefecture_address_surface(surface: &str) -> bool {
+    has_prefecture_name(surface) && has_municipality_unit(surface)
+}
+
+fn has_prefecture_name(surface: &str) -> bool {
+    PREFECTURE_NAMES
+        .iter()
+        .any(|prefecture| surface.contains(prefecture))
+}
+
+fn has_municipality_unit(surface: &str) -> bool {
+    surface.contains('市')
+        || surface.contains('区')
+        || surface.contains('郡')
+        || surface.contains('町')
+        || surface.contains('村')
+}
+
 fn has_label(labels: &[String], wanted: &str) -> bool {
     labels.iter().any(|label| label == wanted)
 }
@@ -296,7 +396,9 @@ fn is_symbol_like(character: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_existing_entry, parse_mozc_pos_catalog, DictionaryCategory};
+    use super::{
+        classify_existing_entry, is_address_layer_entry, parse_mozc_pos_catalog, DictionaryCategory,
+    };
     use crate::{entries_to_category_tsv, parse_category_entries, parse_entries};
 
     fn entry(left_id: u16, surface: &str, flags: &str) -> crate::SourceEntry {
@@ -408,5 +510,52 @@ mod tests {
             "# source: unwanted\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n"
         )
         .is_err());
+    }
+
+    fn drops(reading: &str, surface: &str) -> bool {
+        is_address_layer_entry(reading, surface, DictionaryCategory::PlaceNames)
+    }
+
+    #[test]
+    fn address_layer_drops_postal_codes_and_full_prefecture_addresses() {
+        assert!(drops("001", "北海道札幌市北区"));
+        assert!(drops("001-0000", "北海道札幌市北区北一条西"));
+        assert!(drops("010-01", "秋田県潟上市"));
+        assert!(drops("(そのた)", "北海道苫小牧市晴海町"));
+        assert!(drops("よこはま", "北海道厚岸郡浜中町横浜"));
+        assert!(drops("よこはま", "兵庫県姫路市網干区余子浜"));
+        assert!(drops("あい", "大阪府茨木市安威"));
+        assert!(drops("ちよだく", "東京都千代田区"));
+    }
+
+    #[test]
+    fn address_layer_keeps_short_place_names() {
+        assert!(!drops("とうきょう", "東京"));
+        assert!(!drops("とうきょうと", "東京都"));
+        assert!(!drops("しぶや", "渋谷"));
+        assert!(!drops("しぶやく", "渋谷区"));
+        assert!(!drops("よこはま", "横浜"));
+        assert!(!drops("よこはまし", "横浜市"));
+        assert!(!drops("おおさか", "大阪"));
+        assert!(!drops("おおさかし", "大阪市"));
+        assert!(!drops("きょうとし", "京都市"));
+        assert!(!drops("さっぽろ", "札幌"));
+        assert!(!drops("ほっかいどう", "北海道"));
+        assert!(!drops("あいあいちょう", "相合町"));
+        assert!(!drops("やまがたし", "山県市"));
+    }
+
+    #[test]
+    fn address_layer_does_not_drop_digit_readings_outside_place_names() {
+        assert!(!is_address_layer_entry(
+            "404",
+            "404",
+            DictionaryCategory::ItEngineering
+        ));
+        assert!(is_address_layer_entry(
+            "404",
+            "404",
+            DictionaryCategory::PlaceNames
+        ));
     }
 }
