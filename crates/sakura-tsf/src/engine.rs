@@ -639,6 +639,11 @@ impl Engine {
         self.link.is_some()
     }
 
+    #[cfg(test)]
+    fn is_desynchronized(&self) -> bool {
+        self.link.as_ref().is_some_and(|link| link.desynchronized)
+    }
+
     fn request(&mut self, request: &Request) -> Answer {
         let Some(link) = self.link.as_mut() else {
             return Answer::Unavailable;
@@ -689,7 +694,9 @@ impl Engine {
             // composition the engine may have moved on from.
             Err(Fault::Timeout) => {
                 note_timeout(timeout_operation(request));
-                link.desynchronized = true;
+                if session_effect(request) == SessionEffect::MayMutate {
+                    link.desynchronized = true;
+                }
                 Answer::Unavailable
             }
 
@@ -852,7 +859,14 @@ fn open(name: Option<&str>) -> Option<Link> {
 
 fn timeout_operation(request: &Request) -> TimeoutOperation {
     match request {
-        Request::SendKey { .. } | Request::ProbeKey { .. } => TimeoutOperation::Key,
+        Request::ProbeKey { .. } => TimeoutOperation::ProbeKey,
+        Request::SendKey {
+            key: KeyInput {
+                test_only: true, ..
+            },
+            ..
+        } => TimeoutOperation::ProbeKey,
+        Request::SendKey { .. } => TimeoutOperation::Key,
         Request::Commit { .. } | Request::ApplyAiComposition { .. } => TimeoutOperation::Commit,
         Request::Reconvert { .. } => TimeoutOperation::Reconvert,
         Request::Revert { .. } => TimeoutOperation::Revert,
@@ -873,6 +887,54 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::DeleteSession { .. }
         | Request::Ping
         | Request::Shutdown => TimeoutOperation::Administration,
+    }
+}
+
+/// Whether a timed-out request can have moved the live engine session.
+///
+/// Probe and other read-only calls run against a throwaway clone or do not
+/// touch composition. Marking the link desynchronized would send `Revert`
+/// and discard a live reading the Probe never mutated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionEffect {
+    ReadOnly,
+    MayMutate,
+}
+
+fn session_effect(request: &Request) -> SessionEffect {
+    match request {
+        Request::ProbeKey { .. }
+        | Request::SendKey {
+            key: KeyInput {
+                test_only: true, ..
+            },
+            ..
+        }
+        | Request::Reconvert { preview: true, .. }
+        | Request::WatchUi { .. }
+        | Request::Ping
+        | Request::PollAiText { .. }
+        | Request::InputHistoryStats
+        | Request::Hello { .. } => SessionEffect::ReadOnly,
+        Request::SendKey { .. }
+        | Request::Commit { .. }
+        | Request::Revert { .. }
+        | Request::UndoCommit { .. }
+        | Request::Reconvert { preview: false, .. }
+        | Request::CreateSession { .. }
+        | Request::ClearLearning
+        | Request::ClearInputHistory
+        | Request::FlushInputHistory
+        | Request::DeleteHistoryCandidate { .. }
+        | Request::SetInputScope { .. }
+        | Request::SetMode { .. }
+        | Request::ApplyAiComposition { .. }
+        | Request::RecordAiText { .. }
+        | Request::StartAiText { .. }
+        | Request::CancelAiText { .. }
+        | Request::DeleteSession { .. }
+        | Request::Shutdown
+        | Request::SetUiPlacement { .. } => SessionEffect::MayMutate,
     }
 }
 
@@ -1544,6 +1606,10 @@ mod tests {
             engine.is_connected(),
             "a slow answer must not cost the session"
         );
+        assert!(
+            engine.is_desynchronized(),
+            "a mutating SendKey timeout must mark the live session desynchronized"
+        );
         // Generous, because this asserts the deadline was honoured at all,
         // not scheduler precision on a loaded machine.
         assert!(
@@ -1553,6 +1619,60 @@ mod tests {
 
         drop(engine);
         server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn probe_key_timeout_does_not_desynchronize_the_live_session() {
+        let (name, server) = fake_engine("probe-timeout", |pipe, buffer| {
+            let _ = pipe.read_frame(buffer);
+            std::thread::sleep(Duration::from_millis(400));
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        let key = KeyInput {
+            code: KeyCode::Space,
+            ch: None,
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: true,
+        };
+        let answer = engine.probe_key(InputScope::Normal, key);
+        assert!(matches!(answer, Answer::Unavailable));
+        assert!(
+            engine.is_connected(),
+            "a Probe timeout must keep the connection"
+        );
+        assert!(
+            !engine.is_desynchronized(),
+            "ProbeKey is a throwaway clone; timeout must not Revert the live reading"
+        );
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn session_effect_classifies_probe_as_read_only() {
+        let probe = Request::ProbeKey {
+            session: 1,
+            scope: InputScope::Normal,
+            fresh_context: false,
+            key: KeyInput {
+                code: KeyCode::Space,
+                ch: None,
+                modifiers: Modifiers::NONE,
+                repeat: false,
+                test_only: true,
+            },
+        };
+        assert_eq!(session_effect(&probe), SessionEffect::ReadOnly);
+        assert_eq!(timeout_operation(&probe), TimeoutOperation::ProbeKey);
+        let apply = Request::SendKey {
+            session: 1,
+            key: a_key('k'),
+        };
+        assert_eq!(session_effect(&apply), SessionEffect::MayMutate);
+        assert_eq!(timeout_operation(&apply), TimeoutOperation::Key);
     }
 
     /// The DLL is loaded into applications that may never have an engine

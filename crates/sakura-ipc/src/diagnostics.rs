@@ -33,10 +33,11 @@ pub enum TimeoutOperation {
     UiPlacement = 7,
     Resynchronize = 8,
     Administration = 9,
+    ProbeKey = 10,
 }
 
 impl TimeoutOperation {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Connect,
         Self::Handshake,
         Self::Key,
@@ -46,6 +47,7 @@ impl TimeoutOperation {
         Self::UiPlacement,
         Self::Resynchronize,
         Self::Administration,
+        Self::ProbeKey,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -59,6 +61,7 @@ impl TimeoutOperation {
             Self::UiPlacement => "ui-placement",
             Self::Resynchronize => "resynchronize",
             Self::Administration => "administration",
+            Self::ProbeKey => "probe-key",
         }
     }
 

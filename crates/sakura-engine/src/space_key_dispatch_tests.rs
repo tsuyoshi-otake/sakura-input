@@ -1,10 +1,13 @@
 use std::fs;
 use std::sync::Arc;
 
-use sakura_proto::{KeyCode, KeyInput, Modifiers, OutputBuf, Request, Response, SessionId};
+use sakura_proto::{
+    InputScope, KeyCode, KeyInput, Modifiers, OutputBuf, Request, Response, SessionId,
+};
 
 use crate::composition_fence::CompositionFence;
-use crate::dispatch::{Dispatcher, Reply};
+use crate::dictionary::ConversionService;
+use crate::dispatch::{take_conversion_lookup_count_for_test, Dispatcher, Reply};
 use crate::space_key_dispatch_oracle::{
     apply, apply_all, no_dual_effect, ConnState, DomainEvent, OracleState,
 };
@@ -46,6 +49,47 @@ fn send(dispatcher: &mut Dispatcher, session: SessionId, key: KeyInput, out: &mu
         dispatcher.dispatch(&Request::SendKey { session, key }, out),
         Reply::Output
     );
+}
+
+fn probe_space(dispatcher: &mut Dispatcher, session: SessionId, out: &mut OutputBuf) {
+    assert_eq!(
+        dispatcher.dispatch(
+            &Request::ProbeKey {
+                session,
+                scope: InputScope::Normal,
+                fresh_context: false,
+                key: KeyInput {
+                    test_only: true,
+                    ..space_key()
+                },
+            },
+            out,
+        ),
+        Reply::Output
+    );
+}
+
+fn dispatcher_with_probe_conversion_fixture() -> Dispatcher {
+    let source = concat!(
+        "# license: MIT\n",
+        "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        "\u{304b}\u{306a}\t\u{4eee}\u{540d}\t0\t0\t100\t100\t\tprobe fixture\n",
+    );
+    let entries = dictc::parse_entries("probe-conversion.tsv", source).expect("entries");
+    let matrix = dictc::parse_connection(
+        "probe-conversion-matrix.tsv",
+        "# license: MIT\nclasses\t1\ndefault\t0\n",
+        false,
+    )
+    .expect("matrix");
+    let image = Box::leak(
+        dictc::compile(&entries, &matrix)
+            .expect("dictionary image")
+            .into_boxed_slice(),
+    );
+    let conversion =
+        Arc::new(ConversionService::from_static_bytes(image).expect("conversion service fixture"));
+    Dispatcher::new_with_conversion(conversion).expect("dispatcher")
 }
 
 struct ProductionWorld {
@@ -235,6 +279,126 @@ fn japanese_test_phrase_space_does_not_insert_a_document_space() {
         out.has_candidates() || !out.preedit_text().is_empty() || out.beep,
         "composing Space must convert, keep preedit, or beep"
     );
+}
+
+#[test]
+fn composing_space_probe_consumes_without_converting_or_inserting() {
+    // With no service, an Apply Convert would enter `begin_conversion` and
+    // beep. Keeping the probe beep-free remains a behavior-level entrypoint
+    // guard; the next test also uses a direct conversion-call spy.
+    let mut dispatcher = Dispatcher::new().expect("dispatcher");
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "probe-convert.exe");
+    for character in "nihongonyuuryoku".chars() {
+        send(&mut dispatcher, session, char_key(character), &mut out);
+    }
+    let preedit_before = out.preedit_text().to_owned();
+    assert!(!preedit_before.is_empty());
+    probe_space(&mut dispatcher, session, &mut out);
+    assert!(
+        !out.has_candidates(),
+        "Probe Convert must not build a candidate list"
+    );
+    assert!(out.consumed, "composing Space probe must be eaten");
+    assert!(
+        !out.beep,
+        "Probe must not run dictionary conversion; beep means begin_conversion ran without a table"
+    );
+    assert_eq!(
+        out.commit_text(),
+        None,
+        "Probe Convert must not commit any document text"
+    );
+    assert_eq!(out.preedit_text(), preedit_before);
+}
+
+#[test]
+fn composing_space_probe_with_conversion_service_makes_zero_lookups_and_no_document_commit() {
+    let mut dispatcher = dispatcher_with_probe_conversion_fixture();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "probe-convert-service.exe");
+    for character in "kana".chars() {
+        send(&mut dispatcher, session, char_key(character), &mut out);
+    }
+    let preedit_before = out.preedit_text().to_owned();
+    assert_eq!(preedit_before, "\u{304b}\u{306a}");
+    // Scope the per-thread spy to this Probe request only.
+    take_conversion_lookup_count_for_test();
+
+    probe_space(&mut dispatcher, session, &mut out);
+
+    assert_eq!(
+        take_conversion_lookup_count_for_test(),
+        0,
+        "Probe Convert must not call ConversionService"
+    );
+    assert!(out.consumed, "composing Space probe must be eaten");
+    assert!(
+        !out.beep,
+        "Probe Convert must not take the conversion failure path"
+    );
+    assert!(
+        !out.has_candidates(),
+        "Probe Convert must not publish candidates"
+    );
+    assert_eq!(
+        out.commit_text(),
+        None,
+        "Probe Convert must not commit text"
+    );
+    assert_eq!(out.preedit_text(), preedit_before);
+
+    // The same fixture proves a real Apply still reaches dictionary conversion;
+    // the Probe above must therefore have left the live composition untouched.
+    send(&mut dispatcher, session, space_key(), &mut out);
+    assert!(
+        take_conversion_lookup_count_for_test() > 0,
+        "the real Apply conversion must hit the service"
+    );
+    assert!(out.consumed);
+    assert_eq!(out.commit_text(), None);
+    assert_eq!(
+        out.candidate(0),
+        Some(("\u{4eee}\u{540d}", "probe fixture"))
+    );
+}
+
+#[test]
+fn idle_space_probe_keeps_insert_and_fence_absorption_actions() {
+    let fence = Arc::new(CompositionFence::new());
+    let mut active = Dispatcher::new().expect("active dispatcher");
+    let mut idle = Dispatcher::new().expect("idle dispatcher");
+    active.set_composition_fence(Arc::clone(&fence));
+    idle.set_composition_fence(Arc::clone(&fence));
+
+    let mut active_out = OutputBuf::new();
+    let mut idle_out = OutputBuf::new();
+    let active_session = create_session(&mut active, &mut active_out, "probe-idle.exe");
+    let idle_session = create_session(&mut idle, &mut idle_out, "probe-idle.exe");
+
+    probe_space(&mut idle, idle_session, &mut idle_out);
+    assert!(
+        idle_out.consumed,
+        "idle Probe Space must report the insert as consumed"
+    );
+    assert_eq!(idle_out.commit_text(), Some("\u{3000}"));
+
+    send(&mut active, active_session, char_key('a'), &mut active_out);
+    assert!(fence.any_active("probe-idle.exe"));
+
+    idle_out.clear();
+    probe_space(&mut idle, idle_session, &mut idle_out);
+    assert!(
+        idle_out.consumed,
+        "idle Probe Space must report the fence absorption as consumed"
+    );
+    assert_eq!(
+        idle_out.commit_text(),
+        None,
+        "the absorbed probe must not insert text"
+    );
+    assert!(!idle_out.has_candidates());
+    assert!(!idle_out.beep);
 }
 
 #[test]
