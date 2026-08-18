@@ -482,6 +482,31 @@ fn keep_live_composition_for_convert(key: KeyInput, live_composition: bool) -> b
     live_composition && is_conversion_trigger_key(key)
 }
 
+/// Who owns this physical keystroke for TSF `eaten` routing.
+///
+/// `Ime` is a live reading plus Space/Henkan. The host must never receive
+/// that key: `OnTestKeyDown = FALSE` lets Chromium insert a document space
+/// into the composition, and later `OnKeyDown` work cannot take it back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PhysicalKeyOwner {
+    HostEligible,
+    Ime,
+}
+
+impl PhysicalKeyOwner {
+    fn of(key: KeyInput, live_composition: bool) -> Self {
+        if keep_live_composition_for_convert(key, live_composition) {
+            Self::Ime
+        } else {
+            Self::HostEligible
+        }
+    }
+
+    fn terminal_eaten(self, engine_consumed: bool) -> BOOL {
+        (engine_consumed || self == Self::Ime).into()
+    }
+}
+
 /// Electron/Cursor can deliver Space to a different `ITfContext` than the one
 /// holding the underlined reading. Treating that as replacement disconnects
 /// the composing engine session and then inserts U+3000. Convert keys keep
@@ -4497,17 +4522,29 @@ impl TextService_Impl {
     /// Ordinary keys are translated from a Win32 message by [`Self::handle_key`],
     /// while TSF passes preserved IME keys only by their registration GUID.
     fn handle_key_input(&self, context: Ref<'_, ITfContext>, key: KeyInput) -> Result<BOOL> {
-        // A key with no context has nowhere to go. Declining it leaves the host
-        // to handle it, which is the only correct answer.
-        let Ok(context) = context.ok() else {
-            return Ok(false.into());
-        };
-
+        let service = self.get_impl();
+        let owner = PhysicalKeyOwner::of(key, service.has_live_composition());
         if is_unactionable_key_input(key) {
-            return Ok(false.into());
+            // Keep terminal routing uniform even if a future normalization
+            // change classifies a live conversion trigger as unactionable.
+            return Ok(owner.terminal_eaten(false));
         }
 
-        let service = self.get_impl();
+        // A key with no context has nowhere to go. Live conversion triggers
+        // still belong to the IME so Chromium cannot insert a document space
+        // into a reading whose ITfContext handle was already gone.
+        let Ok(context) = context.ok() else {
+            return Ok(owner.terminal_eaten(false));
+        };
+
+        // Live conversion TestKeyDown must eat before AI capture, fence, or
+        // Probe. Henkan can also be the AI trigger; a fallible scope/target
+        // read must not turn OnTestKeyDown into a COM error that Chromium
+        // treats as uneaten.
+        if key.test_only && owner == PhysicalKeyOwner::Ime {
+            return Ok(true.into());
+        }
+
         if service.ai_trigger_matches(key) {
             let already_owned = service.ai_key_latched.get()
                 || service
@@ -4532,8 +4569,11 @@ impl TextService_Impl {
                 return Ok(true.into());
             }
         }
+        // An AI trigger without an actionable target intentionally preserves
+        // its ordinary key behavior. The terminal paths below all route through
+        // `owner`, so a live Henkan conversion cannot fall through as host-owned.
         let current_context = context_id(context);
-        let keep_convert = keep_live_composition_for_convert(key, service.has_live_composition());
+        let keep_convert = owner == PhysicalKeyOwner::Ime;
         let composition_context = if keep_convert {
             service.composition_context()
         } else {
@@ -4552,16 +4592,8 @@ impl TextService_Impl {
             };
             return match probe_action(fence) {
                 ProbeAction::Busy => Ok(true.into()),
-                ProbeAction::Declined => Ok(false.into()),
-                ProbeAction::Ask { mut fresh_context } => {
-                    // A convert key against a live reading must probe the
-                    // composing session, not a fresh idle clone. Otherwise
-                    // OnTestKeyDown looks like idle Space while OnKeyDown
-                    // converts — or worse, the real path used to replace
-                    // the context and insert U+3000.
-                    if keep_convert {
-                        fresh_context = false;
-                    }
+                ProbeAction::Declined => Ok(owner.terminal_eaten(false)),
+                ProbeAction::Ask { fresh_context } => {
                     // Read the current host classification, but carry it in a
                     // throwaway Probe request. Publishing it here would mutate
                     // the live engine session before OnKeyDown had arrived. A
@@ -4570,12 +4602,12 @@ impl TextService_Impl {
                     // will create after retiring the old context.
                     let scope = service.read_input_scope(context)?;
                     match service.ask_probe(scope, key, fresh_context)? {
-                        Answer::Ready(output) => Ok(output.consumed.into()),
+                        Answer::Ready(output) => Ok(owner.terminal_eaten(output.consumed)),
                         Answer::Busy => Ok(true.into()),
                         // Never left this process; nothing was reserved for
                         // a read-only probe, so there is nothing to release.
-                        Answer::Rejected => Ok(false.into()),
-                        Answer::Unavailable => Ok(false.into()),
+                        Answer::Rejected => Ok(owner.terminal_eaten(false)),
+                        Answer::Unavailable => Ok(owner.terminal_eaten(false)),
                     }
                 }
             };
@@ -4627,8 +4659,9 @@ impl TextService_Impl {
             }
             RealFenceAction::Decline => {
                 // A blocked/lifecycle path has an explicit host-owned
-                // terminal result and cannot fall through to Apply.
-                return Ok(false.into());
+                // terminal result and cannot fall through to Apply. Live
+                // conversion triggers still stay with the IME.
+                return Ok(owner.terminal_eaten(false));
             }
             RealFenceAction::ReplaceAndApply => {
                 // The Probe path asked against a fresh throwaway context. The
@@ -4654,12 +4687,13 @@ impl TextService_Impl {
             return Ok(true.into());
         }
         if !service.can_admit_write_for_context(write_context)? {
-            return Ok(false.into());
+            return Ok(owner.terminal_eaten(false));
         }
         if !service.publish_input_scope(write_context)? {
             // Scope publication is part of the privacy boundary for a real
-            // key. A refused publication leaves the key to the host.
-            return Ok(false.into());
+            // key. A refused publication leaves a host-eligible key to the
+            // host; live conversion triggers stay with the IME.
+            return Ok(owner.terminal_eaten(false));
         }
 
         if !keep_convert || composition_context.is_some() {
@@ -4667,13 +4701,13 @@ impl TextService_Impl {
         }
         // Context replacement may have cancelled a full old-context queue.
         if !service.can_admit_write_for_context(write_context)? {
-            return Ok(false.into());
+            return Ok(owner.terminal_eaten(false));
         }
         let reservation = match service.reserve_write(write_context) {
             Ok(reservation) => reservation,
-            // This is an admission failure, not an engine failure: leave the
-            // key to the host and never advance the real engine.
-            Err(_) => return Ok(false.into()),
+            // This is an admission failure, not an engine failure: leave a
+            // host-eligible key to the host and never advance the real engine.
+            Err(_) => return Ok(owner.terminal_eaten(false)),
         };
 
         let answer = match service.ask(key) {
@@ -4682,7 +4716,9 @@ impl TextService_Impl {
                 let disposition = self
                     .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
-                return Ok(matches!(disposition, RecoveryKeyDisposition::Consume).into());
+                return Ok(
+                    owner.terminal_eaten(matches!(disposition, RecoveryKeyDisposition::Consume))
+                );
             }
         };
         let output = match answer {
@@ -4700,17 +4736,18 @@ impl TextService_Impl {
             // there is nothing to recover.
             Answer::Rejected => {
                 service.cancel_reservation(reservation, CancelReason::RequestRejected);
-                return Ok(false.into());
+                return Ok(owner.terminal_eaten(false));
             }
-            // The key belongs to the application.  Release the pre-reserved
-            // capacity before attempting the document-only rescue path.  A
-            // previous async output may already own the head, so this has to
-            // terminalize the full journal rather than only this reservation.
+            // A host-eligible key can return to the application. Live
+            // conversion triggers stay with the IME even when recovery
+            // would otherwise expose them as Host.
             Answer::Unavailable => {
                 let disposition = self
                     .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
-                return Ok(matches!(disposition, RecoveryKeyDisposition::Consume).into());
+                return Ok(
+                    owner.terminal_eaten(matches!(disposition, RecoveryKeyDisposition::Consume))
+                );
             }
         };
 
@@ -4736,7 +4773,7 @@ impl TextService_Impl {
             service.disconnect();
             let _ = service.queue_end_candidates();
         }
-        Ok(consumed.into())
+        Ok(owner.terminal_eaten(consumed))
     }
 
     /// Commits what the document is showing, as ordinary text.
@@ -6891,6 +6928,70 @@ mod tests {
             decide_real_fence(false, false, false, false, true),
             RealFenceAction::ReplaceAndApply,
             "non-convert keys still follow replacement"
+        );
+
+        assert_eq!(
+            PhysicalKeyOwner::of(space, true),
+            PhysicalKeyOwner::Ime,
+            "OnTestKeyDown of Space against a live reading is IME-owned"
+        );
+        assert_eq!(
+            PhysicalKeyOwner::of(henkan, true),
+            PhysicalKeyOwner::Ime,
+            "Henkan is IME-owned on TestKeyDown even when it is also the AI trigger"
+        );
+        assert_eq!(
+            PhysicalKeyOwner::of(letter, true),
+            PhysicalKeyOwner::HostEligible
+        );
+        assert_eq!(
+            PhysicalKeyOwner::of(space, false),
+            PhysicalKeyOwner::HostEligible,
+            "idle Space stays host-eligible so Japanese fullwidth insert works"
+        );
+        let ctrl_space = KeyInput {
+            code: KeyCode::Space,
+            ch: None,
+            modifiers: Modifiers::CTRL,
+            repeat: false,
+            test_only: true,
+        };
+        let alt_space = KeyInput {
+            modifiers: Modifiers::ALT,
+            ..space
+        };
+        assert_eq!(
+            PhysicalKeyOwner::of(ctrl_space, true),
+            PhysicalKeyOwner::HostEligible,
+            "Ctrl+Space remains IntelliSense"
+        );
+        assert_eq!(
+            PhysicalKeyOwner::of(alt_space, true),
+            PhysicalKeyOwner::HostEligible
+        );
+        assert!(
+            PhysicalKeyOwner::Ime.terminal_eaten(false).as_bool(),
+            "admission/Probe failure must not give a live convert key to the host"
+        );
+        assert!(!PhysicalKeyOwner::HostEligible
+            .terminal_eaten(false)
+            .as_bool());
+        assert!(PhysicalKeyOwner::HostEligible
+            .terminal_eaten(true)
+            .as_bool());
+
+        // Keep the real-key fence regression document-free: a blocked live
+        // conversion path declines its engine work, but must still eat the
+        // physical Space before Electron can insert it into the reading.
+        let action = decide_real_fence(false, false, false, true, false);
+        assert_eq!(action, RealFenceAction::Decline);
+        let eaten = match action {
+            RealFenceAction::Decline => PhysicalKeyOwner::of(space, true).terminal_eaten(false),
+            _ => false.into(),
+        };
+        assert!(
+            eaten.as_bool(),
+            "a real-path Decline must not return a live conversion Space to the host"
         );
     }
 

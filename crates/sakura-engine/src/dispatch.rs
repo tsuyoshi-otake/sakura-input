@@ -1429,6 +1429,12 @@ impl ExecutionPolicy {
     const fn allows_prediction_cache_mutation(self) -> bool {
         matches!(self, Self::Apply)
     }
+
+    /// Probe answers whether the host may see the key. Dictionary conversion
+    /// belongs to Apply so OnTestKeyDown cannot spend the 50 ms budget.
+    const fn allows_dictionary_conversion(self) -> bool {
+        matches!(self, Self::Apply)
+    }
 }
 
 fn state_code(state: State) -> u8 {
@@ -1620,6 +1626,22 @@ fn commit_repair_readings_for(
     })
 }
 
+#[cfg(test)]
+std::thread_local! {
+    static TEST_CONVERSION_LOOKUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn record_conversion_lookup_for_test() {
+    TEST_CONVERSION_LOOKUPS.with(|count| count.set(count.get().saturating_add(1)));
+}
+
+/// Returns and resets the current test thread's calls into `ConversionService`.
+#[cfg(test)]
+pub(crate) fn take_conversion_lookup_count_for_test() -> u64 {
+    TEST_CONVERSION_LOOKUPS.with(|count| count.replace(0))
+}
+
 fn with_session_conversion<R>(
     conversion: &ConversionService,
     learning: Option<&LearningService>,
@@ -1629,6 +1651,8 @@ fn with_session_conversion<R>(
 ) -> Result<R, crate::dictionary::ConvertFailure> {
     let hints = commit_repair_readings_for(reading, conversion, learning, options);
     let hint_refs: Vec<&str> = hints.iter().map(FixedStr::as_str).collect();
+    #[cfg(test)]
+    record_conversion_lookup_for_test();
     conversion.with_conversion_hints(reading, options, &hint_refs, consume)
 }
 
@@ -2826,41 +2850,45 @@ fn apply_action(
             }
         }
         Action::Convert => {
-            session.hide_suggestions();
-            begin_conversion(
-                session_id,
-                session,
-                services.table,
-                services.conversion,
-                services.learning,
-                services.long_conversion,
-                services.long_conversion_owner,
-                scratch,
-                0,
-                ConversionTrigger {
-                    is_space: key.code == KeyCode::Space,
-                    shifted: key.modifiers.shift(),
-                },
-                out,
-            )?;
+            if policy.allows_dictionary_conversion() {
+                session.hide_suggestions();
+                begin_conversion(
+                    session_id,
+                    session,
+                    services.table,
+                    services.conversion,
+                    services.learning,
+                    services.long_conversion,
+                    services.long_conversion_owner,
+                    scratch,
+                    0,
+                    ConversionTrigger {
+                        is_space: key.code == KeyCode::Space,
+                        shifted: key.modifiers.shift(),
+                    },
+                    out,
+                )?;
+            }
         }
         Action::ConvertPrev => {
-            begin_conversion(
-                session_id,
-                session,
-                services.table,
-                services.conversion,
-                services.learning,
-                services.long_conversion,
-                services.long_conversion_owner,
-                scratch,
-                -1,
-                ConversionTrigger {
-                    is_space: key.code == KeyCode::Space,
-                    shifted: key.modifiers.shift(),
-                },
-                out,
-            )?;
+            if policy.allows_dictionary_conversion() {
+                begin_conversion(
+                    session_id,
+                    session,
+                    services.table,
+                    services.conversion,
+                    services.learning,
+                    services.long_conversion,
+                    services.long_conversion_owner,
+                    scratch,
+                    -1,
+                    ConversionTrigger {
+                        is_space: key.code == KeyCode::Space,
+                        shifted: key.modifiers.shift(),
+                    },
+                    out,
+                )?;
+            }
         }
         Action::CandidateNext => {
             let _ = session.expand_conversion();
