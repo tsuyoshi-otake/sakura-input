@@ -17,6 +17,7 @@ pub mod context_corpus;
 pub mod context_dataset;
 pub mod context_rerank_import;
 pub mod glossary;
+pub mod inflection;
 pub mod llm_detail_targets;
 pub mod llm_details;
 pub mod segmenter;
@@ -59,6 +60,33 @@ pub struct SourceEntry {
     pub annotation: String,
     source: Arc<str>,
     line: usize,
+}
+
+impl SourceEntry {
+    pub(crate) fn derived(
+        source: impl Into<Arc<str>>,
+        line: usize,
+        reading: String,
+        surface: String,
+        left_id: u16,
+        right_id: u16,
+        word_cost: i32,
+        prediction_cost: i32,
+        flags: EntryFlags,
+    ) -> Self {
+        Self {
+            reading,
+            surface,
+            left_id,
+            right_id,
+            word_cost,
+            prediction_cost,
+            flags,
+            annotation: String::new(),
+            source: source.into(),
+            line,
+        }
+    }
 }
 
 /// A source-backed relationship for a detail panel.  Only explicit source data
