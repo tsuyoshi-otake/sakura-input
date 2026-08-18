@@ -97,9 +97,9 @@ sakura_settings.exe config set developer-mode off
 
 設定ファイルの値と、すでに起動中のengineで履歴サービスが動いているかは別の状態です。`config set developer-mode`は`active`、`restart-required-to-enable`、`restart-required-to-disable`、または`will-enable-at-next-engine-start`を表示します。設定変更が起動中のengineへ反映されていない場合は、次のengine起動から有効または無効になります。
 
-履歴は `%LOCALAPPDATA%\SakuraInput\history\input.bin` に、現在のWindowsユーザー向けDPAPIで暗号化して保存されます。実際のキーコード、文字、修飾キー、リピート、入力状態・モードの変化、表示前後のpreedit、commit、削除、アクション、変換時のreading・surface・前後の文脈を記録します。`history export` は開発用のTSVへ出力します。
+履歴は `%LOCALAPPDATA%\SakuraInput\history\input.bin` に、現在のWindowsユーザー向けDPAPIで暗号化して保存されます。実際のキーコード、文字、修飾キー、リピート、入力状態・モードの変化、表示前後のpreedit、commit、削除、アクション、変換時のreading・surface・前後の文脈を記録します。履歴サービス起動時に package version と（インストール済みなら）`versions/<version>-<build-id>` の release label も記録するので、`history show` / `history export` / `history stats` でどのビルドのログか分かります。`history export` は開発用のTSVへ出力します。
 
-Password、URL、Email、Digitsの入力スコープ、未分類・未知のスコープ、テスト専用入力は保存しません。履歴は30日または64 MiBを超えないよう整理され、入力処理を止めない有界キューを使用します。`history stats`は、engine接続状態、履歴サービスの実稼働状態、キュー落ち、保存失敗、未分類・機密・テスト専用を理由に除外した件数を表示します。除外件数は内容を含まない実行中engine単位の集計で、engine再起動時にリセットされます。
+Password、URL、Email、Digitsの入力スコープ、未分類・未知のスコープ、テスト専用入力は保存しません。履歴は30日または64 MiBを超えないよう整理され、入力処理を止めない有界キューを使用します。`history stats`は、engine接続状態、履歴サービスの実稼働状態、履歴ファイルに残っている package version / release label、キュー落ち、保存失敗、未分類・機密・テスト専用を理由に除外した件数を表示します。除外件数は内容を含まない実行中engine単位の集計で、engine再起動時にリセットされます。
 
 ## プライバシーと診断
 

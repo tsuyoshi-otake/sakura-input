@@ -2544,7 +2544,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     label(parent, "文節変換", 4, 2, 190, 20)?;
     label(
         parent,
-        "変換単位と Tiny による候補の並べ替えを設定します。",
+        "変換単位と sakura-rerank による候補の並べ替えを設定します。",
         4,
         20,
         358,
@@ -2557,14 +2557,14 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         add_combo(conversion_assist_method, conversion_method_label(method));
     }
     group_box(parent, "AI候補の並べ替え", 0, 144, PANEL_WIDTH, 100)?;
-    label(parent, "Tiny の適用範囲", 12, 172, 110, 20)?;
-    let neural_reranker_scope = combo(parent, 126, 168, 190, 120)?;
+    label(parent, "sakura-rerank の適用範囲", 12, 172, 168, 20)?;
+    let neural_reranker_scope = combo(parent, 184, 168, 168, 120)?;
     for scope in NeuralRerankerScope::ALL {
         add_combo(neural_reranker_scope, neural_reranker_scope_label(scope));
     }
     label(
         parent,
-        "文節変換を基本とし、Tiny は候補の並べ替えだけに使用します。",
+        "文節変換を基本とし、sakura-rerank は候補の並べ替えだけに使用します。",
         12,
         204,
         358,

@@ -726,10 +726,14 @@ While enabled, each real key event records the key code, character when
 available, modifiers, repeat flag, scope classification, action, state and
 mode transition, rendered preedit before and after the action, commit/delete
 output, beep result, and the sequence/session identifiers. Conversion commits
-also record the reading, chosen surface, and neighboring context. Synthetic
-test input is excluded. An unclassified scope is never recorded; only a
-positively classified normal scope can create developer-history records.
-Password, URL, email, and digit scopes are always excluded.
+also record the reading, chosen surface, and neighboring context. The history
+service also appends an engine-identity marker when it starts, carrying the
+package version and — for installed builds — the `versions/<version>-<build-id>`
+release label so `history show` / `history export` can attribute the log to a
+build. Synthetic test input is excluded. An unclassified scope is never
+recorded; only a positively classified normal scope can create
+developer-history records. Password, URL, email, and digit scopes are always
+excluded.
 
 Records are DPAPI-protected for the current Windows user, length- and
 checksum-framed, written through a bounded non-blocking queue, and capped at

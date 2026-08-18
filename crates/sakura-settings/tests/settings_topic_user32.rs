@@ -778,8 +778,8 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
         "only the selected 文節変換 page remains visible"
     );
     assert!(
-        find_direct_child_with_text(segment_panel, "Tiny の適用範囲").is_some(),
-        "Tiny scope belongs to the selected 文節変換 page"
+        find_direct_child_with_text(segment_panel, "sakura-rerank の適用範囲").is_some(),
+        "sakura-rerank scope belongs to the selected 文節変換 page"
     );
 
     click_tree_row_until("文字幅・句読点", &cursor, input_tree, || {
@@ -802,8 +802,8 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
         "only the selected 文字幅・句読点 page remains visible"
     );
     assert!(
-        find_direct_child_with_text(normalizer_panel, "Tiny の適用範囲").is_none(),
-        "normalizer page must not duplicate the Tiny scope control"
+        find_direct_child_with_text(normalizer_panel, "sakura-rerank の適用範囲").is_none(),
+        "normalizer page must not duplicate the sakura-rerank scope control"
     );
     assert!(
         find_direct_child_with_text(normalizer_panel, "初期値に戻す").is_some(),
@@ -863,8 +863,8 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
         "only the selected 連想変換 page remains visible"
     );
     assert!(
-        find_direct_child_with_text(association_panel, "Tiny の適用範囲").is_none(),
-        "association page must not duplicate the Tiny scope control"
+        find_direct_child_with_text(association_panel, "sakura-rerank の適用範囲").is_none(),
+        "association page must not duplicate the sakura-rerank scope control"
     );
     let association_toggle = find_direct_child_with_text(association_panel, "連想変換を使う")
         .expect("association enable checkbox");

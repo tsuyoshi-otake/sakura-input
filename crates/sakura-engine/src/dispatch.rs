@@ -2851,6 +2851,12 @@ fn apply_action(
         }
         Action::Convert => {
             if policy.allows_dictionary_conversion() {
+                // Compact conversion paints one row. A visible or focused
+                // suggestion list is already a candidate popup, so Space must
+                // replace that list with conversion candidates instead of
+                // collapsing it.
+                let expand_from_suggestions =
+                    session.suggestions_visible || session.suggestion_focused;
                 session.hide_suggestions();
                 begin_conversion(
                     session_id,
@@ -2868,6 +2874,9 @@ fn apply_action(
                     },
                     out,
                 )?;
+                if expand_from_suggestions {
+                    let _ = session.expand_conversion();
+                }
             }
         }
         Action::ConvertPrev => {
@@ -5516,7 +5525,9 @@ mod tests {
         );
         let commit = records.iter().find_map(|record| match record {
             InputHistoryRecord::Commit(record) => Some(record),
-            InputHistoryRecord::Key(_) | InputHistoryRecord::AiText(_) => None,
+            InputHistoryRecord::Key(_)
+            | InputHistoryRecord::AiText(_)
+            | InputHistoryRecord::Engine(_) => None,
         });
         assert_eq!(commit.map(|record| record.reading.as_str()), Some(reading));
         assert_eq!(learning.generation(), generation_before + 1);
@@ -7649,6 +7660,94 @@ mod tests {
             State::Converting
         );
         assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn visible_suggestions_space_converts_instead_of_committing_the_reading() {
+        let (mut dispatcher, runtime) = prediction_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        let reading = out.preedit_text().to_owned();
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Composing
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+
+        assert_eq!(
+            out.commit_text(),
+            None,
+            "Space with a visible suggestion list must not commit {reading:?}"
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Converting
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        let candidates = out.to_output().candidates.expect("conversion candidates");
+        assert_eq!(candidates.presentation, CandidatePresentation::Expanded);
+        assert!(
+            candidates.visible_range().len() > 1,
+            "Space on a visible suggestion list must keep a conversion page, not a compact row"
+        );
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn focused_suggestions_space_converts_instead_of_committing_the_reading() {
+        let (mut dispatcher, runtime) = prediction_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        let reading = out.preedit_text().to_owned();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Predicting
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+
+        assert_ne!(
+            out.commit_text(),
+            Some(reading.as_str()),
+            "Space on a focused suggestion must convert, not commit the reading"
+        );
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Converting
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        let candidates = out.to_output().candidates.expect("conversion candidates");
+        assert_eq!(candidates.presentation, CandidatePresentation::Expanded);
+        assert!(
+            candidates.visible_range().len() > 1,
+            "Space on a focused suggestion must keep a conversion page, not a compact row"
+        );
         runtime.stop().expect("prediction worker joins");
     }
 

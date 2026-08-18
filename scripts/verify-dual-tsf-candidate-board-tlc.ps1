@@ -3,22 +3,18 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$JarPath,
 
-    [ValidateRange(5, 900)]
-    [int]$TimeoutSeconds = 180,
+    [ValidateRange(5, 300)]
+    [int]$TimeoutSeconds = 60,
 
-    [ValidateRange(1, 16)]
-    [int]$Workers = 2,
+    [ValidateRange(1, 8)]
+    [int]$Workers = 1,
 
     [string[]]$Configs = @(
-        'SpaceKeyDispatch-small.cfg',
-        'SpaceKeyDispatch-unfenced.cfg',
-        'SpaceKeyDispatch-boundary.cfg',
-        'SpaceKeyDispatch-actors1.cfg',
-        'SpaceKeyDispatch-actors3.cfg',
-        'SpaceKeyDispatch-reach-dual.cfg',
-        'SpaceKeyDispatch-reach-convert.cfg',
-        'SpaceKeyDispatch-reach-predict.cfg',
-        'SpaceKeyDispatch-reach-insert.cfg'
+        'DualTsfCandidateBoard-legacy-bug.cfg',
+        'DualTsfCandidateBoard-shipped-1.0.15.cfg',
+        'DualTsfCandidateBoard-reach-hide.cfg',
+        'DualTsfCandidateBoard-end-guard-only.cfg',
+        'DualTsfCandidateBoard-proposed-fix.cfg'
     )
 )
 
@@ -30,7 +26,7 @@ if (-not [System.IO.File]::Exists($jar)) {
     throw "TLA+ tools jar not found: $jar"
 }
 
-$outputRoot = Join-Path $repoRoot 'verification\space-key-dispatch\tlc'
+$outputRoot = Join-Path $repoRoot 'verification\dual-tsf-candidate-board\tlc'
 [System.IO.Directory]::CreateDirectory($outputRoot) | Out-Null
 $Configs = @($Configs | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
@@ -51,9 +47,9 @@ foreach ($configName in $Configs) {
         '-workers', "$Workers",
         '-coverage', '1',
         '-fp', '0',
-        '-seed', '20260816',
+        '-seed', '20260818',
         '-metadir', (Join-Path $runDir 'states'),
-        (Join-Path $modelDir 'SpaceKeyDispatch.tla')
+        (Join-Path $modelDir 'DualTsfCandidateBoard.tla')
     )
 
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -78,14 +74,21 @@ foreach ($configName in $Configs) {
         $process.WaitForExit()
         [System.IO.File]::WriteAllText($stdout, $stdoutTask.Result)
         [System.IO.File]::WriteAllText($stderr, $stderrTask.Result)
-        [System.IO.File]::WriteAllText((Join-Path $runDir 'timeout.txt'), "timed out after $TimeoutSeconds seconds with $Workers workers`n")
-        Write-Host "TLC $configName TIMED OUT after $TimeoutSeconds seconds"
-        continue
+        throw "TLC timed out after $TimeoutSeconds seconds for $configName"
     }
     $process.WaitForExit()
     [System.IO.File]::WriteAllText($stdout, $stdoutTask.Result)
     [System.IO.File]::WriteAllText($stderr, $stderrTask.Result)
-    Write-Host "TLC $configName exit $($process.ExitCode)"
+    $passSlugs = @(
+        'DualTsfCandidateBoard-end-guard-only',
+        'DualTsfCandidateBoard-proposed-fix',
+        'DualTsfCandidateBoard-fix'
+    )
+    $expected = if ($passSlugs -contains $slug) { 0 } else { 12 }
+    if ($process.ExitCode -ne $expected) {
+        throw "TLC $configName exit $($process.ExitCode), expected $expected"
+    }
+    Write-Host "TLC $configName exit $($process.ExitCode) (expected $expected)"
 }
 
 Write-Host "TLC logs written under $outputRoot"

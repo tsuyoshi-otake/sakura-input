@@ -8,9 +8,9 @@ This is not a transcription of sakura-engine control flow.  It models the
 user-visible contract inferred from developer-mode input history and the
 requirements catalog:
 
-  * Space on a composing or converting connection converts.
+  * Space on a composing, predicting, or converting connection converts.
   * Space on an idle Japanese-mode connection inserts a fullwidth space
-    only when no live peer is composing/converting, or the fence is off.
+    only when no live peer is composing/predicting/converting, or the fence is off.
   * One physical Space key must not both insert a document space and
     convert.
   * Crash/restart forgets that connection's composition.
@@ -30,8 +30,9 @@ Fairness
 
 Unexplored
   * Real COM re-entrancy, dictionary ranking, Shift+Space width, more
-    than three connections, unfair schedules beyond MaxEvents, and
-    Windows named-pipe accept-pool limits.
+    than three connections, unfair schedules beyond MaxEvents,
+    Windows named-pipe accept-pool limits, and Chromium confirming a
+    reading after an eaten Space with no composition update.
 ***************************************************************************)
 
 CONSTANTS C1, C2, C3, FenceIdleSpace, MaxEvents, DualDelivery, ActorCount, MaxSpaces
@@ -47,13 +48,15 @@ Connections ==
     IF ActorCount = 1 THEN {C1}
     ELSE IF ActorCount = 2 THEN {C1, C2}
     ELSE {C1, C2, C3}
-States == {"Idle", "Composing", "Converting"}
+States == {"Idle", "Composing", "Predicting", "Converting"}
 
 VARIABLES state, live, insertedThisKey, convertedThisKey, absorbedThisKey,
-          documentSpaces, orphaned, crashed, timeouts, eventCount
+          convertedFromPredicting, documentSpaces, orphaned, crashed, timeouts,
+          eventCount
 
 vars == <<state, live, insertedThisKey, convertedThisKey, absorbedThisKey,
-          documentSpaces, orphaned, crashed, timeouts, eventCount>>
+          convertedFromPredicting, documentSpaces, orphaned, crashed, timeouts,
+          eventCount>>
 
 TypeOK ==
     /\ state \in [Connections -> States]
@@ -61,6 +64,7 @@ TypeOK ==
     /\ insertedThisKey \in BOOLEAN
     /\ convertedThisKey \in BOOLEAN
     /\ absorbedThisKey \in BOOLEAN
+    /\ convertedFromPredicting \in BOOLEAN
     /\ documentSpaces \in 0..MaxSpaces
     /\ orphaned \in 0..MaxEvents
     /\ crashed \in 0..MaxEvents
@@ -73,6 +77,7 @@ Init ==
     /\ insertedThisKey = FALSE
     /\ convertedThisKey = FALSE
     /\ absorbedThisKey = FALSE
+    /\ convertedFromPredicting = FALSE
     /\ documentSpaces = 0
     /\ orphaned = 0
     /\ crashed = 0
@@ -85,12 +90,12 @@ PeerConverting(c) ==
     \E other \in Connections :
         /\ other # c
         /\ live[other]
-        /\ state[other] \in {"Composing", "Converting"}
+        /\ state[other] \in {"Composing", "Predicting", "Converting"}
 
 SpaceEffect(c) ==
     IF ~live[c]
     THEN "Ignore"
-    ELSE IF state[c] \in {"Composing", "Converting"}
+    ELSE IF state[c] \in {"Composing", "Predicting", "Converting"}
          THEN "Convert"
          ELSE IF (FenceIdleSpace /\ PeerConverting(c))
                  \/ documentSpaces >= MaxSpaces
@@ -111,6 +116,19 @@ Type(c) ==
     /\ insertedThisKey' = FALSE
     /\ convertedThisKey' = FALSE
     /\ absorbedThisKey' = FALSE
+    /\ convertedFromPredicting' = FALSE
+    /\ eventCount' = eventCount + 1
+    /\ UNCHANGED <<live, documentSpaces, orphaned, crashed, timeouts>>
+
+Suggest(c) ==
+    /\ WithinBudget
+    /\ live[c]
+    /\ state[c] = "Composing"
+    /\ state' = [state EXCEPT ![c] = "Predicting"]
+    /\ insertedThisKey' = FALSE
+    /\ convertedThisKey' = FALSE
+    /\ absorbedThisKey' = FALSE
+    /\ convertedFromPredicting' = FALSE
     /\ eventCount' = eventCount + 1
     /\ UNCHANGED <<live, documentSpaces, orphaned, crashed, timeouts>>
 
@@ -122,6 +140,7 @@ Commit(c) ==
     /\ insertedThisKey' = FALSE
     /\ convertedThisKey' = FALSE
     /\ absorbedThisKey' = FALSE
+    /\ convertedFromPredicting' = FALSE
     /\ eventCount' = eventCount + 1
     /\ UNCHANGED <<live, documentSpaces, orphaned, crashed, timeouts>>
 
@@ -134,6 +153,7 @@ ReplaceContext(c) ==
     /\ insertedThisKey' = FALSE
     /\ convertedThisKey' = FALSE
     /\ absorbedThisKey' = FALSE
+    /\ convertedFromPredicting' = FALSE
     /\ orphaned' = orphaned + 1
     /\ eventCount' = eventCount + 1
     /\ UNCHANGED <<live, documentSpaces, crashed, timeouts>>
@@ -146,6 +166,7 @@ CrashRestart(c) ==
     /\ insertedThisKey' = FALSE
     /\ convertedThisKey' = FALSE
     /\ absorbedThisKey' = FALSE
+    /\ convertedFromPredicting' = FALSE
     /\ crashed' = crashed + 1
     /\ eventCount' = eventCount + 1
     /\ UNCHANGED <<documentSpaces, orphaned, timeouts>>
@@ -158,6 +179,7 @@ Disconnect(c) ==
     /\ insertedThisKey' = FALSE
     /\ convertedThisKey' = FALSE
     /\ absorbedThisKey' = FALSE
+    /\ convertedFromPredicting' = FALSE
     /\ eventCount' = eventCount + 1
     /\ UNCHANGED <<documentSpaces, orphaned, crashed, timeouts>>
 
@@ -167,6 +189,7 @@ TimeoutSpace ==
     /\ insertedThisKey' = FALSE
     /\ convertedThisKey' = FALSE
     /\ absorbedThisKey' = TRUE
+    /\ convertedFromPredicting' = FALSE
     /\ timeouts' = timeouts + 1
     /\ eventCount' = eventCount + 1
     /\ UNCHANGED <<state, live, documentSpaces, orphaned, crashed>>
@@ -186,6 +209,8 @@ SpaceOn(targets) ==
            allowInsert == IF FenceIdleSpace THEN rawInsert /\ ~rawConvert ELSE rawInsert
        IN  /\ insertedThisKey' = allowInsert
            /\ convertedThisKey' = rawConvert
+           /\ convertedFromPredicting' =
+                \E c \in targets : state[c] = "Predicting" /\ SpaceEffect(c) = "Convert"
            /\ absorbedThisKey' = (\E c \in targets : SpaceEffect(c) \in {"Absorb", "Ignore"})
                                  \/ (FenceIdleSpace /\ rawInsert /\ rawConvert)
            /\ state' = [c \in Connections |->
@@ -211,7 +236,7 @@ Next ==
     \/ DualSpace
     \/ TimeoutSpace
     \/ \E c \in Connections :
-          Type(c) \/ Commit(c) \/ ReplaceContext(c) \/ FocusedSpace(c)
+          Type(c) \/ Suggest(c) \/ Commit(c) \/ ReplaceContext(c) \/ FocusedSpace(c)
           \/ CrashRestart(c) \/ Disconnect(c)
 
 Spec ==
@@ -221,8 +246,19 @@ Spec ==
 
 PerConnectionSpaceIsConvert ==
     \A c \in Connections :
-        (live[c] /\ state[c] \in {"Composing", "Converting"}) =>
+        (live[c] /\ state[c] \in {"Composing", "Predicting", "Converting"}) =>
             SpaceEffect(c) = "Convert"
+
+PredictingSpaceDoesNotInsert ==
+    \A c \in Connections :
+        (live[c] /\ state[c] = "Predicting") =>
+            SpaceEffect(c) = "Convert"
+
+PredictingSpaceDoesNotCommitReading ==
+    convertedFromPredicting =>
+        /\ convertedThisKey
+        /\ ~insertedThisKey
+        /\ \E c \in Connections : live[c] /\ state[c] = "Converting"
 
 NoDualEffect == ~(insertedThisKey /\ convertedThisKey)
 NeverDualEffect == NoDualEffect
@@ -250,6 +286,9 @@ NeverConvertingAfterBudget ==
 \* Reachability probes.  A dedicated config expects these to be violated.
 NeverConverts ==
     \A c \in Connections : state[c] # "Converting"
+
+NeverConvertedFromPredicting ==
+    ~convertedFromPredicting
 
 NeverInserts ==
     ~insertedThisKey

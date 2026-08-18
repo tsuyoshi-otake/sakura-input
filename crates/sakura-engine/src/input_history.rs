@@ -36,12 +36,16 @@ const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const COMPACTION_INTERVAL: Duration = Duration::from_secs(60);
 const COMPACTION_APPEND_LIMIT: u32 = 256;
 
-pub const INPUT_HISTORY_FORMAT_VERSION: u16 = 1;
+pub const INPUT_HISTORY_FORMAT_VERSION: u16 = 2;
+const INPUT_HISTORY_FORMAT_VERSION_MIN: u16 = 1;
 pub const MAX_INPUT_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
+pub const ENGINE_PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
+const VERSION_BUILD_ID_LENGTH: usize = 16;
 
 const RECORD_KEY: u8 = 1;
 const RECORD_COMMIT: u8 = 2;
 const RECORD_AI_TEXT: u8 = 3;
+const RECORD_ENGINE: u8 = 4;
 
 /// Scope classification attached to every persisted record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,11 +188,27 @@ pub struct AiTextHistoryRecord {
     pub attempts: u32,
 }
 
+/// Marks which engine build wrote the following history records.
+///
+/// Emitted once when the developer-history service starts so `history show`
+/// and exports can attribute a log stream to a package version and, for
+/// installed builds, the `versions/<version>-<build-id>` release label.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineHistoryRecord {
+    pub sequence: u64,
+    pub timestamp_ms: u64,
+    pub session: u64,
+    pub scope: ScopeClass,
+    pub package_version: String,
+    pub release_label: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputHistoryRecord {
     Key(KeyHistoryRecord),
     Commit(CommitHistoryRecord),
     AiText(AiTextHistoryRecord),
+    Engine(EngineHistoryRecord),
 }
 
 impl InputHistoryRecord {
@@ -197,6 +217,7 @@ impl InputHistoryRecord {
             Self::Key(record) => record.sequence,
             Self::Commit(record) => record.sequence,
             Self::AiText(record) => record.sequence,
+            Self::Engine(record) => record.sequence,
         }
     }
 
@@ -205,6 +226,7 @@ impl InputHistoryRecord {
             Self::Key(record) => record.timestamp_ms,
             Self::Commit(record) => record.timestamp_ms,
             Self::AiText(record) => record.timestamp_ms,
+            Self::Engine(record) => record.timestamp_ms,
         }
     }
 
@@ -267,6 +289,15 @@ impl InputHistoryRecord {
                 put_u32(&mut bytes, record.output_tokens);
                 put_u32(&mut bytes, record.cached_tokens);
                 put_u32(&mut bytes, record.attempts);
+            }
+            Self::Engine(record) => {
+                bytes.push(RECORD_ENGINE);
+                put_u64(&mut bytes, record.sequence);
+                put_u64(&mut bytes, record.timestamp_ms);
+                put_u64(&mut bytes, record.session);
+                bytes.push(record.scope as u8);
+                put_string(&mut bytes, &record.package_version)?;
+                put_string(&mut bytes, &record.release_label)?;
             }
         }
         if bytes.len() > MAX_RECORD_BYTES {
@@ -358,6 +389,14 @@ impl InputHistoryRecord {
                 cached_tokens: reader.u32()?,
                 attempts: reader.u32()?,
             }),
+            RECORD_ENGINE => Self::Engine(EngineHistoryRecord {
+                sequence,
+                timestamp_ms,
+                session,
+                scope,
+                package_version: reader.string()?,
+                release_label: reader.string()?,
+            }),
             _ => return Err(invalid_data("unknown input history record")),
         };
         reader.finish()?;
@@ -373,15 +412,31 @@ pub struct InputHistorySnapshot {
 }
 
 impl InputHistorySnapshot {
+    /// Latest engine identity marker in the snapshot, if any.
+    pub fn last_engine_identity(&self) -> Option<(&str, &str)> {
+        self.records.iter().rev().find_map(|record| match record {
+            InputHistoryRecord::Engine(record) => Some((
+                record.package_version.as_str(),
+                record.release_label.as_str(),
+            )),
+            _ => None,
+        })
+    }
+
     pub fn to_tsv(&self) -> String {
-        let mut output = String::from(
-            "# sakura-input-history-format: 1\n# records are DPAPI-protected on disk\n\
+        let (package_version, release_label) = self.last_engine_identity().unwrap_or(("-", "-"));
+        let mut output = format!(
+            "# sakura-input-history-format: {}\n\
+# package-version: {package_version}\n\
+# release-label: {release_label}\n\
+# records are DPAPI-protected on disk\n\
 kind\tsequence\ttimestamp-ms\tsession\tscope\tkey-code\tcharacter\tmodifiers\t\
 repeat\tconsumed\tstate-before\tstate-after\tmode-before\tmode-after\tpreedit-before\t\
 preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsurface\t\
-             left-context\tright-context\tai-operation\tai-status\tai-source\tai-result\tai-model\t\
- ai-provider\tai-style\tai-error-code\tai-latency-ms\tai-input-tokens\tai-output-tokens\t\
- ai-cached-tokens\tai-http-attempts\n",
+left-context\tright-context\tai-operation\tai-status\tai-source\tai-result\tai-model\t\
+ai-provider\tai-style\tai-error-code\tai-latency-ms\tai-input-tokens\tai-output-tokens\t\
+ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label\n",
+            self.format_version
         );
         for record in &self.records {
             match record {
@@ -412,6 +467,8 @@ preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsur
                         record.dropped_before.to_string(),
                     ];
                     fields.extend((0..17).map(|_| String::new()));
+                    fields.push(String::new());
+                    fields.push(String::new());
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -431,6 +488,8 @@ preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsur
                         record.right_context.to_string(),
                     ]);
                     fields.extend((0..13).map(|_| String::new()));
+                    fields.push(String::new());
+                    fields.push(String::new());
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -458,6 +517,22 @@ preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsur
                         record.cached_tokens.to_string(),
                         record.attempts.to_string(),
                     ]);
+                    fields.push(String::new());
+                    fields.push(String::new());
+                    output.push_str(&fields.join("\t"));
+                    output.push('\n');
+                }
+                InputHistoryRecord::Engine(record) => {
+                    let mut fields = vec![
+                        "engine".to_owned(),
+                        record.sequence.to_string(),
+                        record.timestamp_ms.to_string(),
+                        record.session.to_string(),
+                        record.scope.name().to_owned(),
+                    ];
+                    fields.extend((0..33).map(|_| String::new()));
+                    fields.push(escape(&record.package_version));
+                    fields.push(escape(&record.release_label));
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -619,7 +694,7 @@ impl InputHistoryService {
             .spawn(move || writer_loop(writer_path, receiver, writer_stats))
             .map_err(|error| io::Error::other(format!("start input history writer: {error}")))?;
 
-        Ok(Arc::new(Self {
+        let service = Arc::new(Self {
             path: path.to_owned(),
             sender,
             stats,
@@ -627,7 +702,9 @@ impl InputHistoryService {
             next_session_id: AtomicU64::new(next_session_id(path).unwrap_or(0)),
             epoch: AtomicU64::new(0),
             worker: Mutex::new(Some(worker)),
-        }))
+        });
+        service.record_engine_start();
+        Ok(service)
     }
 
     pub fn path(&self) -> Option<PathBuf> {
@@ -643,6 +720,47 @@ impl InputHistoryService {
     /// worker and can otherwise collide in a multi-client history stream.
     pub fn allocate_session_id(&self) -> u64 {
         self.next_session_id.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Records which engine build is about to append developer-history events.
+    ///
+    /// Called once when the service starts. Not subject to scope exclusion:
+    /// this marker contains only package/release identity, never key content.
+    fn record_engine_start(&self) {
+        let (package_version, release_label) = current_engine_identity();
+        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        self.enqueue(InputHistoryRecord::Engine(EngineHistoryRecord {
+            sequence,
+            timestamp_ms: now_ms(),
+            session: 0,
+            scope: ScopeClass::Normal,
+            package_version,
+            release_label,
+        }));
+    }
+
+    fn enqueue(&self, record: InputHistoryRecord) {
+        let Ok(payload) = record.encode() else {
+            self.stats
+                .persistence_failures
+                .fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        let command = Command::Append {
+            epoch: self.epoch.load(Ordering::Acquire),
+            payload,
+        };
+        match self.sender.try_send(command) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                self.stats
+                    .persistence_failures
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+        }
     }
 
     /// Enqueues a key event without performing disk I/O or waiting for the
@@ -702,27 +820,7 @@ impl InputHistoryService {
             action: action.to_owned(),
             dropped_before,
         });
-        let Ok(payload) = record.encode() else {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
-            return;
-        };
-        let command = Command::Append {
-            epoch: self.epoch.load(Ordering::Acquire),
-            payload,
-        };
-        match self.sender.try_send(command) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
-                self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
-            }
-        }
+        self.enqueue(record);
     }
 
     pub fn record_commit(
@@ -748,27 +846,7 @@ impl InputHistoryService {
             left_context,
             right_context,
         });
-        let Ok(payload) = record.encode() else {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
-            return;
-        };
-        let command = Command::Append {
-            epoch: self.epoch.load(Ordering::Acquire),
-            payload,
-        };
-        match self.sender.try_send(command) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
-                self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
-            }
-        }
+        self.enqueue(record);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -827,27 +905,7 @@ impl InputHistoryService {
             cached_tokens,
             attempts,
         });
-        let Ok(payload) = record.encode() else {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
-            return;
-        };
-        let command = Command::Append {
-            epoch: self.epoch.load(Ordering::Acquire),
-            payload,
-        };
-        match self.sender.try_send(command) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
-                self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
-            }
-        }
+        self.enqueue(record);
     }
 
     pub fn flush(&self) -> io::Result<()> {
@@ -1194,7 +1252,7 @@ fn repair_file(path: &Path) -> io::Result<()> {
     }
     // The offset is the whole answer here, so the records are decoded for
     // validation and dropped rather than collected.
-    let valid_end = scan_frames(&bytes, None)?;
+    let (_version, valid_end) = scan_frames(&bytes, None)?;
     if (valid_end as u64) < file_len {
         let file = OpenOptions::new().write(true).open(path)?;
         file.set_len(valid_end as u64)?;
@@ -1203,18 +1261,18 @@ fn repair_file(path: &Path) -> io::Result<()> {
 }
 
 fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
-    let (records, valid_end) = scan_bytes(bytes)?;
+    let (format_version, records, valid_end) = scan_bytes(bytes)?;
     Ok(InputHistorySnapshot {
-        format_version: INPUT_HISTORY_FORMAT_VERSION,
+        format_version,
         records,
         ignored_tail_bytes: bytes.len().saturating_sub(valid_end),
     })
 }
 
-fn scan_bytes(bytes: &[u8]) -> io::Result<(Vec<InputHistoryRecord>, usize)> {
+fn scan_bytes(bytes: &[u8]) -> io::Result<(u16, Vec<InputHistoryRecord>, usize)> {
     let mut records = Vec::new();
-    let valid_end = scan_frames(bytes, Some(&mut records))?;
-    Ok((records, valid_end))
+    let (format_version, valid_end) = scan_frames(bytes, Some(&mut records))?;
+    Ok((format_version, records, valid_end))
 }
 
 /// Walks the frames and returns the offset one past the last valid one.
@@ -1229,12 +1287,12 @@ fn scan_bytes(bytes: &[u8]) -> io::Result<(Vec<InputHistoryRecord>, usize)> {
 fn scan_frames(
     bytes: &[u8],
     mut records: Option<&mut Vec<InputHistoryRecord>>,
-) -> io::Result<usize> {
+) -> io::Result<(u16, usize)> {
     if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
         return Err(invalid_data("invalid input history header"));
     }
     let version = u16::from_le_bytes([bytes[4], bytes[5]]);
-    if version != INPUT_HISTORY_FORMAT_VERSION {
+    if !(INPUT_HISTORY_FORMAT_VERSION_MIN..=INPUT_HISTORY_FORMAT_VERSION).contains(&version) {
         return Err(invalid_data("unsupported input history format"));
     }
     let mut offset = HEADER_LEN;
@@ -1263,7 +1321,7 @@ fn scan_frames(
         }
         offset = payload_end;
     }
-    Ok(offset)
+    Ok((version, offset))
 }
 
 fn compact_file(path: &Path) -> io::Result<()> {
@@ -1329,9 +1387,38 @@ fn next_session_id(path: &Path) -> io::Result<u64> {
             InputHistoryRecord::Key(record) => record.session,
             InputHistoryRecord::Commit(record) => record.session,
             InputHistoryRecord::AiText(record) => record.session,
+            InputHistoryRecord::Engine(record) => record.session,
         })
         .max()
         .unwrap_or(0))
+}
+
+/// Package version and installed release label for the running engine.
+///
+/// Installed builds use the parent directory name
+/// `versions/<version>-<16-hex-build-id>`. Unpackaged local builds fall back
+/// to `<package> (unpackaged)` so history exports still show an identity.
+pub fn current_engine_identity() -> (String, String) {
+    let package_version = ENGINE_PACKAGE_VERSION.to_owned();
+    let release_label = release_label_from_current_exe()
+        .unwrap_or_else(|| format!("{package_version} (unpackaged)"));
+    (package_version, release_label)
+}
+
+fn release_label_from_current_exe() -> Option<String> {
+    let executable = std::env::current_exe().ok()?;
+    let directory = executable.parent()?;
+    let name = directory.file_name()?.to_str()?;
+    is_installed_release_dir(name).then(|| name.to_owned())
+}
+
+fn is_installed_release_dir(name: &str) -> bool {
+    let Some((version, build_id)) = name.rsplit_once('-') else {
+        return false;
+    };
+    !version.is_empty()
+        && build_id.len() == VERSION_BUILD_ID_LENGTH
+        && build_id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn header() -> [u8; HEADER_LEN] {
@@ -1593,13 +1680,19 @@ mod tests {
         service.record_commit(7, ScopeClass::Normal, "かな", "仮名", 3, 4);
         service.flush().expect("flush");
         let snapshot = read_snapshot(&path).expect("snapshot");
-        assert_eq!(snapshot.records.len(), 2);
-        assert!(matches!(snapshot.records[0], InputHistoryRecord::Key(_)));
-        assert!(matches!(snapshot.records[1], InputHistoryRecord::Commit(_)));
-        let InputHistoryRecord::Key(key) = &snapshot.records[0] else {
+        assert_eq!(snapshot.records.len(), 3);
+        assert!(matches!(snapshot.records[0], InputHistoryRecord::Engine(_)));
+        assert!(matches!(snapshot.records[1], InputHistoryRecord::Key(_)));
+        assert!(matches!(snapshot.records[2], InputHistoryRecord::Commit(_)));
+        let InputHistoryRecord::Engine(engine) = &snapshot.records[0] else {
+            panic!("expected engine record");
+        };
+        assert_eq!(engine.package_version, ENGINE_PACKAGE_VERSION);
+        assert!(!engine.release_label.is_empty());
+        let InputHistoryRecord::Key(key) = &snapshot.records[1] else {
             panic!("expected key record");
         };
-        assert_eq!(key.sequence, 1);
+        assert_eq!(key.sequence, 2);
         assert_eq!(key.session, 7);
         assert_eq!(key.scope, ScopeClass::Normal);
         assert_eq!(key.key_code, 1);
@@ -1613,10 +1706,10 @@ mod tests {
         assert!(!key.preedit_after.is_empty());
         assert!(key.commit.is_empty());
         assert_eq!(key.action, "char");
-        let InputHistoryRecord::Commit(commit) = &snapshot.records[1] else {
+        let InputHistoryRecord::Commit(commit) = &snapshot.records[2] else {
             panic!("expected commit record");
         };
-        assert_eq!(commit.sequence, 2);
+        assert_eq!(commit.sequence, 3);
         assert_eq!(commit.session, 7);
         assert_eq!(commit.scope, ScopeClass::Normal);
         assert_eq!(commit.left_context, 3);
@@ -1624,12 +1717,16 @@ mod tests {
         assert!(!commit.reading.is_empty());
         assert!(!commit.surface.is_empty());
         let tsv = snapshot.to_tsv();
+        assert!(tsv.contains(&format!("# package-version: {ENGINE_PACKAGE_VERSION}")));
+        assert!(tsv.contains("# release-label:"));
+        assert!(tsv.contains("engine-package-version\tengine-release-label"));
         let tsv_lines: Vec<_> = tsv.lines().collect();
-        assert_eq!(tsv_lines.len(), 5);
-        assert_eq!(tsv_lines[2].split('\t').count(), 38);
-        assert!(tsv_lines[3].contains("\t\\t\t"));
-        for line in &tsv_lines[3..] {
-            assert_eq!(line.split('\t').count(), 38);
+        // 4 comment lines + header + engine + key + commit
+        assert_eq!(tsv_lines.len(), 8);
+        assert_eq!(tsv_lines[4].split('\t').count(), 40);
+        assert!(tsv_lines[6].contains("\t\\t\t"));
+        for line in &tsv_lines[5..] {
+            assert_eq!(line.split('\t').count(), 40);
         }
         service.stop().expect("stop");
         let _ = fs::remove_file(path);
@@ -1665,13 +1762,18 @@ mod tests {
         assert_eq!(stats.ai_cached_tokens, 3);
         service.flush().expect("flush");
         let snapshot = read_snapshot(&path).expect("read");
-        let [InputHistoryRecord::AiText(record)] = snapshot.records.as_slice() else {
-            panic!("expected one AI record");
-        };
-        assert_eq!(record.operation, AiTextOperation::Proofread);
-        assert_eq!(record.status, AiTextStatus::Applied);
-        assert_eq!(record.model, "gpt-5.6-luna");
-        assert_eq!(record.attempts, 2);
+        let ai = snapshot
+            .records
+            .iter()
+            .find_map(|record| match record {
+                InputHistoryRecord::AiText(record) => Some(record),
+                _ => None,
+            })
+            .expect("AI record");
+        assert_eq!(ai.operation, AiTextOperation::Proofread);
+        assert_eq!(ai.status, AiTextStatus::Applied);
+        assert_eq!(ai.model, "gpt-5.6-luna");
+        assert_eq!(ai.attempts, 2);
         assert_eq!(
             snapshot
                 .to_tsv()
@@ -1680,7 +1782,7 @@ mod tests {
                 .expect("TSV")
                 .split('\t')
                 .count(),
-            38
+            40
         );
         service.stop().expect("stop");
         let _ = fs::remove_file(path);
@@ -1810,7 +1912,8 @@ mod tests {
         assert_eq!(stats.excluded_unclassified_events, 1);
         assert_eq!(stats.excluded_sensitive_events, 1);
         assert_eq!(stats.excluded_test_only_events, 1);
-        assert_eq!(service.clear().expect("clear"), 1);
+        service.flush().expect("flush before clear");
+        assert_eq!(service.clear().expect("clear"), 2);
         service.flush().expect("flush");
         assert!(read_snapshot(&path).expect("snapshot").records.is_empty());
         service.stop().expect("stop");
@@ -1898,5 +2001,32 @@ mod tests {
         );
         assert_eq!(service.stats().persistence_failures(), 1);
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn legacy_format_v1_files_remain_readable() {
+        let path = temporary_path("legacy-v1");
+        append_records(&path, &[key_record(1, now_ms())]);
+        let mut bytes = fs::read(&path).expect("read");
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        fs::write(&path, &bytes).expect("downgrade header");
+
+        let snapshot = read_snapshot(&path).expect("read v1");
+        assert_eq!(snapshot.format_version, 1);
+        assert_eq!(snapshot.records.len(), 1);
+        assert_eq!(snapshot.last_engine_identity(), None);
+        let tsv = snapshot.to_tsv();
+        assert!(tsv.contains("# sakura-input-history-format: 1"));
+        assert!(tsv.contains("# package-version: -"));
+        assert!(tsv.contains("# release-label: -"));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn installed_release_dir_names_require_version_and_hex_build_id() {
+        assert!(is_installed_release_dir("1.0.11-932aee9cf49964eb"));
+        assert!(!is_installed_release_dir("1.0.11"));
+        assert!(!is_installed_release_dir("1.0.11-not-hex-buildid"));
+        assert!(!is_installed_release_dir("target"));
     }
 }
