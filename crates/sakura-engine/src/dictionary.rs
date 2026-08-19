@@ -14,14 +14,15 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock, TryLockError};
 
 use sakura_core::{
-    ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions, Converter,
-    Dictionary, UserDictionary,
+    CivilDate, ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions,
+    Converter, Dictionary, UserDictionary,
 };
 use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Memory::{
     CreateFileMappingW, MapViewOfFile, UnmapViewOfFile, FILE_MAP_READ, PAGE_READONLY,
 };
+use windows::Win32::System::SystemInformation::GetLocalTime;
 
 /// Release gate for the complete Sakura system image, including all fourteen
 /// canonical categories. The image remains a single read-only mapping.
@@ -222,6 +223,7 @@ impl ConversionService {
                 Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
             };
             converter.set_commit_repair_readings(commit_repair_readings);
+            converter.set_civil_date(local_civil_date());
             let result = converter
                 .convert_with_user_dictionary_detailed(
                     &self.dictionary,
@@ -237,6 +239,17 @@ impl ConversionService {
         }
         Err(ConvertFailure::Busy)
     }
+}
+
+fn local_civil_date() -> Option<CivilDate> {
+    // SAFETY: GetLocalTime has no preconditions; it only fills a SYSTEMTIME on
+    // the stack with the calling thread's current local calendar date.
+    let local = unsafe { GetLocalTime() };
+    CivilDate::from_ymd(
+        i32::from(local.wYear),
+        u8::try_from(local.wMonth).ok()?,
+        u8::try_from(local.wDay).ok()?,
+    )
 }
 
 /// Maps and validates a read-only dictionary for the lifetime of this engine
@@ -870,5 +883,60 @@ mod tests {
             )),
             Path::new(r"C:\Program Files\Sakura Input\dict\system.dic")
         );
+    }
+
+    #[test]
+    fn converting_today_offers_local_reiwa_and_gregorian_date_surfaces() {
+        let entries = dictc::parse_entries(
+            "today.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nきょう\t今日\t0\t0\t100\t100\t\tcommon\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("image")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+        let today = local_civil_date().expect("local civil date");
+        let texts = service
+            .with_candidates("きょう", ConversionOptions::default(), |candidates| {
+                assert_eq!(candidates[0].text(), "今日");
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .expect("conversion");
+
+        let mut reiwa = String::new();
+        sakura_core::DateFormat::JapaneseEra
+            .write(today, &mut reiwa)
+            .expect("reiwa");
+        let mut reiwa_weekday = String::new();
+        sakura_core::DateFormat::JapaneseEraWeekday
+            .write(today, &mut reiwa_weekday)
+            .expect("reiwa weekday");
+        let mut gregorian = String::new();
+        sakura_core::DateFormat::Gregorian
+            .write(today, &mut gregorian)
+            .expect("gregorian");
+        let mut gregorian_weekday = String::new();
+        sakura_core::DateFormat::GregorianWeekday
+            .write(today, &mut gregorian_weekday)
+            .expect("gregorian weekday");
+
+        for expected in [reiwa, reiwa_weekday, gregorian, gregorian_weekday] {
+            assert!(
+                texts.iter().any(|text| text == &expected),
+                "missing live date candidate {expected} in {texts:?}"
+            );
+        }
     }
 }

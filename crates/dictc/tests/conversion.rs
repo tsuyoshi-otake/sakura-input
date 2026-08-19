@@ -10,6 +10,9 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 きょう\t今日\t1\t1\t100\t-\t\t\n\
 は\tは\t1\t1\t100\t-\t\t\n\
 きょうは\t今日は\t1\t1\t500\t-\t\t\n\
+あさって\t明後日\t1\t1\t100\t-\t\t\n\
+らいしゅう\t来週\t1\t1\t100\t-\t\t\n\
+せんしゅう\t先週\t1\t1\t100\t-\t\t\n\
 かんすう\t函数\t1\t1\t1000\t-\t\t\n\
 かんすう\t関数\t1\t1\t1100\t600\tit,predict\tprogramming\n\
 じょうたい\t状態\t1\t1\t100\t-\t\t\n\
@@ -681,4 +684,249 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 
     assert_eq!(candidates.len(), 1);
     assert_eq!(candidates[0].text(), "仮名");
+}
+
+#[test]
+fn today_readings_offer_reiwa_gregorian_and_weekday_date_surfaces() {
+    let bytes = fixture();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    converter.set_civil_date(sakura_core::CivilDate::from_ymd(2026, 8, 19));
+    let candidates = converter
+        .convert(&dictionary, "きょう", ConversionOptions::default())
+        .expect("conversion");
+
+    assert_eq!(candidates[0].text(), "今日");
+    for expected in [
+        ("令和8年8月19日", "和暦"),
+        ("令和8年8月19日（水）", "和暦・曜日"),
+        ("2026年8月19日", "西暦"),
+        ("2026年8月19日（水）", "西暦・曜日"),
+        ("2026/8/19", "日付"),
+        ("2026-08-19", "ISO日付"),
+    ] {
+        let candidate = candidates
+            .iter()
+            .find(|candidate| candidate.text() == expected.0)
+            .unwrap_or_else(|| panic!("missing date candidate {}", expected.0));
+        assert_eq!(candidate.annotation(), expected.1);
+        assert!(candidate.cost > candidates[0].cost);
+        assert_eq!(candidate.system_entry_index(), None);
+        assert_eq!(candidate.segments().len(), 1);
+    }
+}
+
+#[test]
+fn phrase_readings_that_only_contain_today_do_not_grow_date_surfaces() {
+    let bytes = fixture();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    converter.set_civil_date(sakura_core::CivilDate::from_ymd(2026, 8, 19));
+    let candidates = converter
+        .convert(&dictionary, "きょうは", ConversionOptions::default())
+        .expect("conversion");
+
+    assert_eq!(candidates[0].text(), "今日は");
+    assert!(candidates
+        .iter()
+        .all(|candidate| !candidate.text().contains("令和")
+            && !candidate.text().contains("2026年")
+            && !candidate.text().contains("2026/")));
+}
+
+#[test]
+fn date_surfaces_are_absent_until_a_civil_date_is_supplied() {
+    let bytes = fixture();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "きょう", ConversionOptions::default())
+        .expect("conversion");
+
+    assert_eq!(candidates[0].text(), "今日");
+    assert!(candidates.iter().all(|candidate| candidate.text() == "今日"
+        || !candidate.text().chars().any(|c| c.is_ascii_digit())));
+}
+
+#[test]
+fn relative_date_readings_offer_offset_reiwa_and_gregorian_surfaces() {
+    let bytes = fixture();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let today = sakura_core::CivilDate::from_ymd(2026, 8, 19);
+    for (reading, lexical, expected) in [
+        (
+            "あさって",
+            "明後日",
+            [
+                "令和8年8月21日",
+                "令和8年8月21日（金）",
+                "2026年8月21日",
+                "2026年8月21日（金）",
+                "2026/8/21",
+                "2026-08-21",
+            ],
+        ),
+        (
+            "らいしゅう",
+            "来週",
+            [
+                "令和8年8月26日",
+                "令和8年8月26日（水）",
+                "2026年8月26日",
+                "2026年8月26日（水）",
+                "2026/8/26",
+                "2026-08-26",
+            ],
+        ),
+        (
+            "せんしゅう",
+            "先週",
+            [
+                "令和8年8月12日",
+                "令和8年8月12日（水）",
+                "2026年8月12日",
+                "2026年8月12日（水）",
+                "2026/8/12",
+                "2026-08-12",
+            ],
+        ),
+    ] {
+        let mut converter = Converter::new();
+        converter.set_civil_date(today);
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("conversion");
+        assert_eq!(
+            candidates[0].text(),
+            lexical,
+            "{reading} stays lexical first"
+        );
+        for surface in expected {
+            assert!(
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.text() == surface),
+                "{reading} missing {surface}"
+            );
+        }
+    }
+}
+
+const NUMBER_JUNK_ENTRIES: &str = "# license: BSD-3-Clause\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+2\t²\t1\t1\t50\t-\t\tsuperscript\n\
+4\t4\t1\t1\t50\t-\t\t\n\
+にち\t日\t1\t1\t50\t-\t\t\n\
+に\tに\t1\t1\t100\t-\t\t\n\
+に\t²\t1\t1\t80\t-\t\tsuperscript\n\
+じゅう\t十\t1\t1\t100\t-\t\t\n\
+じゅう\t重\t1\t1\t90\t-\t\t\n\
+じゅう\t銃\t1\t1\t95\t-\t\t\n\
+よん\t4\t1\t1\t50\t-\t\t\n\
+よん\t四\t1\t1\t100\t-\t\t\n\
+よん\t呼ん\t1\t1\t90\t-\t\t\n\
+よん\t読ん\t1\t1\t91\t-\t\t\n\
+にじゅう\t二重\t1\t1\t80\t-\t\t\n\
+じゅうよん\t十四\t1\t1\t80\t-\t\t\n\
+じゅうよん\t⑭\t1\t1\t70\t-\t\tcircled\n";
+
+fn number_junk_dictionary() -> Vec<u8> {
+    compile_fixture(NUMBER_JUNK_ENTRIES)
+}
+
+#[test]
+fn twenty_four_day_readings_offer_arabic_fullwidth_and_kanji_dates() {
+    let bytes = number_junk_dictionary();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    for reading in ["にじゅうよんにち", "にじゅうよっか", "24にち", "２４にち"]
+    {
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("conversion");
+        let texts: Vec<&str> = candidates
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect();
+        assert_eq!(texts[0], "24日", "{reading} should convert to 24日 first");
+        assert!(
+            texts.contains(&"２４日"),
+            "{reading} missing full-width ２４日: {texts:?}"
+        );
+        assert!(
+            texts.contains(&"二十四日"),
+            "{reading} missing 二十四日: {texts:?}"
+        );
+        assert!(
+            texts
+                .iter()
+                .all(|text| !text.contains('²') && !text.contains('⑭')),
+            "{reading} kept a decorative numeral: {texts:?}"
+        );
+        assert!(
+            !texts.contains(&"二重呼ん") && !texts.iter().any(|text| text.contains("呼ん")),
+            "{reading} kept a homophone splice: {texts:?}"
+        );
+    }
+}
+
+#[test]
+fn ascii_digit_runs_are_not_split_into_superscript_dates() {
+    let bytes = number_junk_dictionary();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "24にち", ConversionOptions::default())
+        .expect("conversion");
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| candidate.text() != "²4日"),
+        "24にち must not become ²4日"
+    );
+}
+
+#[test]
+fn twenty_four_without_a_counter_still_drops_homophone_splices() {
+    let bytes = number_junk_dictionary();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "にじゅうよん", ConversionOptions::default())
+        .expect("conversion");
+    let texts: Vec<&str> = candidates
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect();
+    assert_eq!(texts[0], "24");
+    assert!(texts.contains(&"２４"), "missing ２４: {texts:?}");
+    assert!(texts.contains(&"二十四"), "missing 二十四: {texts:?}");
+    assert!(
+        texts.iter().all(|text| !text.contains("呼ん")
+            && !text.contains("読ん")
+            && !text.contains('⑭')
+            && !text.contains('²')),
+        "にじゅうよん kept a splice or decorative numeral: {texts:?}"
+    );
+}
+
+#[test]
+fn twenty_keeps_its_lexical_word_alongside_numeric_forms() {
+    let bytes = number_junk_dictionary();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "にじゅう", ConversionOptions::default())
+        .expect("conversion");
+    let texts: Vec<&str> = candidates
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect();
+    assert!(
+        texts.contains(&"二重"),
+        "にじゅう should still offer 二重: {texts:?}"
+    );
+    assert!(texts.contains(&"20"), "にじゅう missing 20: {texts:?}");
+    assert!(texts.contains(&"２０"), "にじゅう missing ２０: {texts:?}");
+    assert!(texts.contains(&"二十"), "にじゅう missing 二十: {texts:?}");
 }

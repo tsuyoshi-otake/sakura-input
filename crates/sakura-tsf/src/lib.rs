@@ -18,6 +18,7 @@
 
 #![cfg(windows)]
 
+mod ai_wait_cursor;
 mod candidate_ui;
 mod class_factory;
 mod composition;

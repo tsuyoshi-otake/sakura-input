@@ -69,10 +69,12 @@ use sakura_reg::{
     CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DESCRIPTION,
 };
 
+use crate::ai_wait_cursor;
 use crate::candidate_ui::CandidateUi;
 use crate::composition::{self, DocumentEdit, Update};
 use crate::conversion_key::{
-    allocate_instance, process_claims, ClaimToken, ConversionKeyDisposition,
+    allocate_instance, ends_shared_candidate_ui, process_claims, with_sole, ClaimToken,
+    ConversionKeyDisposition, ImeSeat,
 };
 use crate::diagnostic_ring;
 use crate::display_attributes;
@@ -94,6 +96,36 @@ const DEFERRED_WORK_MESSAGE: u32 = WM_APP + 29;
 const AI_TEXT_TIMER_ID: usize = 2;
 const AI_TEXT_POLL_MS: u32 = 50;
 const DEFERRED_WINDOW_CLASS: windows_core::PCWSTR = windows_core::w!(r##"SakuraInputTsfDeferred"##);
+
+fn debug_trace_tsf(
+    instance: u64,
+    event: &'static str,
+    decision: &'static str,
+    k0: u64,
+    k1: u64,
+    k2: u64,
+    k3: u64,
+) {
+    sakura_ipc::debug_trace::emit("tsf", instance, event, decision, k0, k1, k2, k3);
+}
+
+fn developer_mode_from_config() -> bool {
+    let Some(local) = std::env::var_os("LOCALAPPDATA") else {
+        return false;
+    };
+    let path = std::path::PathBuf::from(local)
+        .join("SakuraInput")
+        .join("config")
+        .join("config.toml");
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    text.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("developer-mode")
+            && (trimmed.contains("true") || trimmed.contains("on"))
+    })
+}
 
 /// What the text service holds while it is attached to a thread manager.
 ///
@@ -654,7 +686,11 @@ impl<T> DeferredWork<T> {
     }
 
     fn retain_candidate_end(&mut self) {
-        self.candidates = None;
+        if self.candidates.is_some() {
+            // A conversion Show is already queued. Ending first would drop that
+            // list (履歴ポップアップ → 変換) and leave the host with no popup.
+            return;
+        }
         self.layout = false;
         self.layout_abandon = false;
         self.end_candidates = true;
@@ -1096,6 +1132,7 @@ impl TextService {
             SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             let _ = DestroyWindow(window);
         }
+        ai_wait_cursor::restore();
         Ok(())
     }
 
@@ -1127,6 +1164,8 @@ impl TextService {
                 let _ = KillTimer(Some(window), AI_TEXT_TIMER_ID);
             }
         }
+        ai_wait_cursor::restore();
+        self.mode_item.notify_tooltip();
     }
 
     fn post_deferred_work(&self) -> Result<()> {
@@ -1208,6 +1247,7 @@ impl TextService {
     }
 
     fn queue_end_candidates(&self) -> Result<()> {
+        debug_trace_tsf(self.instance_id, "candidate_end", "queued", 0, 0, 0, 0);
         {
             let mut state = self.deferred.try_borrow_mut().map_err(|_| reentrancy())?;
             state.dispatch.work.retain_candidate_end();
@@ -1405,13 +1445,36 @@ impl TextService {
         self.claim_generation.set(generation.saturating_add(1));
     }
 
-    fn conversion_key_disposition(&self, key: KeyInput) -> ConversionKeyDisposition {
+    fn conversion_key_disposition(&self, key: KeyInput) -> (ImeSeat, ConversionKeyDisposition) {
         self.sync_live_claim();
-        ConversionKeyDisposition::of(
-            key,
-            self.has_live_composition(),
-            process_claims().peer_live(self.instance_id),
-        )
+        let local_live = self.has_live_composition();
+        let peer_live = process_claims().peer_live(self.instance_id);
+        let seat = with_sole(|sole| sole.seat_for_key(self.instance_id, local_live));
+        let owner = if seat == ImeSeat::Shadow {
+            ConversionKeyDisposition::AbsorbPeer
+        } else {
+            ConversionKeyDisposition::of(key, local_live, peer_live)
+        };
+        if matches!(
+            key.code,
+            sakura_proto::KeyCode::Space | sakura_proto::KeyCode::Henkan
+        ) || seat == ImeSeat::Shadow
+        {
+            debug_trace_tsf(
+                self.instance_id,
+                "conversion_key",
+                if seat == ImeSeat::Shadow {
+                    seat.name()
+                } else {
+                    owner.name()
+                },
+                u64::from(local_live),
+                u64::from(peer_live),
+                key.code as u64,
+                u64::from(key.test_only),
+            );
+        }
+        (seat, owner)
     }
 
     fn defer_undo_terminalization(&self, requested: Option<UndoCommitOutcome>) {
@@ -2352,6 +2415,7 @@ impl TextService {
     fn detach(&self) -> Result<()> {
         self.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::Deactivate, 0);
         self.retire_live_claim();
+        with_sole(|sole| sole.release(self.instance_id));
         // The focused indicator has a stricter lifetime than the background
         // engine connection: focus loss/deactivation hides it immediately,
         // before any deferred composition settlement can re-enter TSF.
@@ -2839,6 +2903,8 @@ impl TextService {
             return Err(error);
         }
         self.set_ai_error(None);
+        ai_wait_cursor::show();
+        self.mode_item.notify_tooltip();
         Ok(true)
     }
 
@@ -3001,11 +3067,21 @@ impl TextService {
     /// subscription that owns future geometry retries.
     fn end_candidates(&self) {
         if !self.begin_candidate_operation() {
+            debug_trace_tsf(
+                self.instance_id,
+                "candidate_end",
+                "busy_requeue",
+                0,
+                0,
+                0,
+                0,
+            );
             if self.queue_end_candidates().is_err() {
                 self.candidate_end_pending.set(true);
             }
             return;
         }
+        debug_trace_tsf(self.instance_id, "candidate_end", "immediate", 0, 0, 0, 0);
         // This operation is now the active owner of every earlier end request.
         // A nested lifecycle callback may set the bit again while one of the
         // host calls below is pumping messages.
@@ -3716,6 +3792,7 @@ fn plan_from_visible(before: VisibleState, output: &Output) -> Result<WritePlan>
 impl Drop for TextService {
     fn drop(&mut self) {
         self.retire_live_claim();
+        with_sole(|sole| sole.release(self.instance_id));
         let _ = self.destroy_deferred_window();
         on_object_destroyed();
     }
@@ -4020,6 +4097,13 @@ fn ai_terminal_result(status: AiTextStatus, error_code: &str) -> AiTextResult {
     }
 }
 
+fn ai_wait_status_label(operation: AiTextOperation) -> &'static str {
+    match operation {
+        AiTextOperation::Proofread => "AI校正中…",
+        AiTextOperation::Transform => "AI変換中…",
+    }
+}
+
 fn ai_error_message(status: AiTextStatus, error_code: &str) -> String {
     let reason = match status {
         AiTextStatus::Timeout => "AIリクエストがタイムアウトしました",
@@ -4177,6 +4261,7 @@ impl TextService_Impl {
             Err(_) => return,
         };
         if poll == AiTextPoll::Pending {
+            ai_wait_cursor::show();
             return;
         }
         let pending = match service.ai_text.try_borrow_mut() {
@@ -4637,10 +4722,17 @@ impl TextService_Impl {
     fn handle_key_input(&self, context: Ref<'_, ITfContext>, key: KeyInput) -> Result<BOOL> {
         let service = self.get_impl();
         let _sync_claim = SyncClaimOnExit(service);
-        let owner = service.conversion_key_disposition(key);
+        let (seat, owner) = service.conversion_key_disposition(key);
+        if !seat.asks_engine() {
+            debug_trace_tsf(service.instance_id, "key_gate", "shadow", 0, 0, 0, 0);
+            return Ok(seat.eats().into());
+        }
         if is_unactionable_key_input(key) {
             // Keep terminal routing uniform even if a future normalization
             // change classifies a live conversion trigger as unactionable.
+            if !matches!(owner, ConversionKeyDisposition::HostEligible) {
+                debug_trace_tsf(service.instance_id, "key_gate", "unactionable", 0, 0, 0, 0);
+            }
             return Ok(owner.eats(false).into());
         }
 
@@ -4648,6 +4740,9 @@ impl TextService_Impl {
         // still belong to the IME so Chromium cannot insert a document space
         // into a reading whose ITfContext handle was already gone.
         let Ok(context) = context.ok() else {
+            if !matches!(owner, ConversionKeyDisposition::HostEligible) {
+                debug_trace_tsf(service.instance_id, "key_gate", "no_context", 0, 0, 0, 0);
+            }
             return Ok(owner.eats(false).into());
         };
 
@@ -4657,9 +4752,11 @@ impl TextService_Impl {
         // treats as uneaten. An idle sibling must absorb the same physical
         // key without asking the engine.
         if key.test_only && owner.skip_probe_on_test_keydown() {
+            debug_trace_tsf(service.instance_id, "key_gate", "skip_probe", 0, 0, 0, 0);
             return Ok(true.into());
         }
         if !owner.asks_engine() {
+            debug_trace_tsf(service.instance_id, "key_gate", "no_engine", 0, 0, 0, 0);
             return Ok(owner.eats(false).into());
         }
 
@@ -5659,6 +5756,15 @@ impl TextService_Impl {
                             .queue_candidates(&payload.context, &candidates, lease)
                             .is_ok()
                 });
+                debug_trace_tsf(
+                    service.instance_id,
+                    "candidate_show",
+                    if shown { "shown" } else { "show_failed_end" },
+                    u64::from(shown),
+                    candidates.items.len() as u64,
+                    candidates.kind as u64,
+                    0,
+                );
                 if shown {
                     let _ = service.queue_layout();
                 } else {
@@ -5669,10 +5775,32 @@ impl TextService_Impl {
                 }
             }
             CandidateEffect::Hide => {
-                if let Ok(mut writes) = service.writes.try_borrow_mut() {
-                    writes.clear_ui_lease();
+                let local_live = service.has_live_composition();
+                let peer_live = process_claims().peer_live(service.instance_id);
+                // A borrowed journal cannot prove lease ownership. Keep the
+                // shared popup rather than End it from a Dual TSF peer.
+                let owns_ui = service
+                    .writes
+                    .try_borrow()
+                    .map(|writes| writes.has_ui_lease())
+                    .unwrap_or(false);
+                let shadow = with_sole(|sole| sole.is_shadow(service.instance_id, local_live));
+                let end = !shadow && ends_shared_candidate_ui(local_live, peer_live, owns_ui);
+                debug_trace_tsf(
+                    service.instance_id,
+                    "candidate_hide",
+                    if end { "end" } else { "keep" },
+                    u64::from(local_live),
+                    u64::from(peer_live),
+                    u64::from(owns_ui),
+                    0,
+                );
+                if end {
+                    if let Ok(mut writes) = service.writes.try_borrow_mut() {
+                        writes.clear_ui_lease();
+                    }
+                    let _ = service.queue_end_candidates();
                 }
-                let _ = service.queue_end_candidates();
             }
         }
         if service.queue_write().is_err() {
@@ -5694,6 +5822,10 @@ impl ITfTextInputProcessor_Impl for TextService_Impl {
 impl ITfTextInputProcessorEx_Impl for TextService_Impl {
     fn ActivateEx(&self, ptim: Ref<'_, ITfThreadMgr>, tid: u32, _dwflags: u32) -> Result<()> {
         diagnostic_ring::initialize_from_environment();
+        sakura_ipc::debug_trace::enable_from_environment();
+        if developer_mode_from_config() {
+            sakura_ipc::debug_trace::set_enabled(true);
+        }
         let thread_mgr = ptim.ok()?;
         let key_sink: ITfKeyEventSink = self.to_interface();
         let function_provider: ITfFunctionProvider = self.to_interface();
@@ -5779,7 +5911,15 @@ impl ITfLangBarItem_Impl for TextService_Impl {
             Some(mode) => format!("Sakura Input — {}", mode_item::description(mode)),
             None => "Sakura Input".to_owned(),
         };
-        if let Ok(error) = service.last_ai_error.try_borrow() {
+        let pending_operation = service
+            .ai_text
+            .try_borrow()
+            .ok()
+            .and_then(|state| state.pending.as_ref().map(|pending| pending.operation));
+        if let Some(operation) = pending_operation {
+            text.push_str(" / ");
+            text.push_str(ai_wait_status_label(operation));
+        } else if let Ok(error) = service.last_ai_error.try_borrow() {
             if let Some(error) = error.as_ref() {
                 text.push_str(" / AIエラー: ");
                 text.push_str(error);
@@ -6074,6 +6214,7 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
     fn OnSetFocus(&self, fforeground: BOOL) -> Result<()> {
         if fforeground.as_bool() {
             let service = self.get_impl();
+            with_sole(|sole| sole.on_focus(service.instance_id, true));
             service.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::FocusChanged, 0);
             service.resume_after_focus_gain();
             service.focus_foreground.set(true);
@@ -6082,6 +6223,7 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         }
 
         let service = self.get_impl();
+        with_sole(|sole| sole.on_focus(service.instance_id, false));
         service.record_diagnostic_lifecycle(diagnostic_ring::LifecycleEvent::FocusChanged, 0);
         // The OS indicator follows the caret, not the engine lifetime. Hide it
         // before scheduling focus-loss finalization, which can run after a
@@ -6236,6 +6378,18 @@ mod tests {
     use sakura_proto::{
         decode_request, encode_response, Modifiers, Request, Response, Segment, UnderlineKind,
     };
+
+    #[test]
+    fn wait_status_labels_name_the_in_flight_ai_operation() {
+        assert_eq!(
+            ai_wait_status_label(AiTextOperation::Transform),
+            "AI変換中…"
+        );
+        assert_eq!(
+            ai_wait_status_label(AiTextOperation::Proofread),
+            "AI校正中…"
+        );
+    }
 
     fn fake_engine_for_unknown_undo(tag: &str) -> (String, std::thread::JoinHandle<()>) {
         let name = format!(
@@ -7005,6 +7159,22 @@ mod tests {
         assert!(journal
             .cancel_reservation(reservation, CancelReason::PredecessorFailed)
             .is_empty());
+    }
+
+    #[test]
+    fn queued_conversion_show_is_not_dropped_by_a_later_candidate_end() {
+        let mut work = super::DeferredWork::<u8>::default();
+        work.candidates = Some(7);
+        work.retain_candidate_end();
+        assert_eq!(
+            work.candidates,
+            Some(7),
+            "履歴ポップアップ中の変換 Show を End が消してはいけない"
+        );
+        assert!(
+            !work.end_candidates,
+            "Show が残っているなら End は起こさない"
+        );
     }
 
     #[test]

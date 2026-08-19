@@ -10,6 +10,8 @@
 //! - [`cpu`] — which vector instructions this machine has, resolved once.
 //! - [`simd`] — kernels selected by that answer; scalar-equivalent by test.
 //! - [`text`] — the sink everything writes through.
+//! - [`calendar`] — civil-date surfaces for readings such as `きょう`.
+//! - [`numerals`] — Arabic/full-width/kanji rewrite of number readings.
 //! - [`config`] — the small TOML subset every shipped data file is written in.
 //! - [`dictionary`] — borrowed fixed-layout views over the mmap dictionary.
 //! - [`romaji`] — the input FSM, compiled from a config document.
@@ -21,6 +23,7 @@
 //! architecture, because a core that could only be tested on the target
 //! would give up the property the rest of this crate exists for.
 
+pub mod calendar;
 pub mod config;
 pub mod conversion;
 pub mod cpu;
@@ -28,6 +31,7 @@ pub mod dictionary;
 pub mod editing;
 pub mod input_repair;
 pub mod keymap;
+pub mod numerals;
 pub mod preferences;
 pub mod romaji;
 pub mod simd;
@@ -35,6 +39,10 @@ pub mod text;
 pub mod user_dictionary;
 pub mod width;
 
+pub use calendar::{
+    date_offset_for_reading, date_surface_specs, is_today_date_reading, CivilDate, DateFormat,
+    DateSurfaceSpec, JapaneseEraYear, Weekday,
+};
 pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
 pub use conversion::{
     ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions,

@@ -1,12 +1,118 @@
 //! COM-free Dual TSF arbitration for physical conversion keys.
 //!
-//! A second idle `TextService` in the same process must not return Space to
-//! the host while a sibling still owns the live reading.
+//! Cursor / Electron still constructs two `TextService` objects. This module
+//! elects one thread-local IME. The other is a shadow: it never talks to the
+//! engine or candidate UI, and it eats keys so Chromium cannot insert a
+//! duplicate while the active instance owns the reading.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use sakura_proto::{KeyCode, KeyInput};
+
+/// Sole IME vs host-constructed extra TIP on this thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImeSeat {
+    Active,
+    Shadow,
+}
+
+impl ImeSeat {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Shadow => "shadow",
+        }
+    }
+
+    /// Only the elected IME may send keys or candidate updates to the engine.
+    pub(crate) fn asks_engine(self) -> bool {
+        matches!(self, Self::Active)
+    }
+
+    /// A shadow always consumes the physical key so Dual-delivery cannot
+    /// insert into a second document.
+    pub(crate) fn eats(self) -> bool {
+        matches!(self, Self::Shadow)
+    }
+}
+
+/// Thread-local sole-IME election. TSF key sinks in Cursor share one UI thread.
+#[derive(Debug)]
+pub(crate) struct ProcessSoleIme {
+    primary: Mutex<Option<u64>>,
+}
+
+impl Default for ProcessSoleIme {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ProcessSoleIme {
+    pub(crate) const fn new() -> Self {
+        Self {
+            primary: Mutex::new(None),
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Option<u64>> {
+        match self.primary.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    /// Focus gain steals the seat. Focus loss releases it only if we hold it.
+    pub(crate) fn on_focus(&self, instance: u64, foreground: bool) {
+        let mut primary = self.lock();
+        if foreground {
+            *primary = Some(instance);
+        } else if *primary == Some(instance) {
+            *primary = None;
+        }
+    }
+
+    pub(crate) fn release(&self, instance: u64) {
+        let mut primary = self.lock();
+        if *primary == Some(instance) {
+            *primary = None;
+        }
+    }
+
+    /// Someone else already holds the seat and this instance has no reading.
+    pub(crate) fn is_shadow(&self, instance: u64, local_live: bool) -> bool {
+        if local_live {
+            return false;
+        }
+        matches!(*self.lock(), Some(id) if id != instance)
+    }
+
+    /// First key on an empty seat claims it. A live reading always takes it.
+    pub(crate) fn seat_for_key(&self, instance: u64, local_live: bool) -> ImeSeat {
+        let mut primary = self.lock();
+        if local_live {
+            *primary = Some(instance);
+            return ImeSeat::Active;
+        }
+        match *primary {
+            Some(id) if id == instance => ImeSeat::Active,
+            Some(_) => ImeSeat::Shadow,
+            None => {
+                *primary = Some(instance);
+                ImeSeat::Active
+            }
+        }
+    }
+}
+
+thread_local! {
+    static THREAD_SOLE: ProcessSoleIme = const { ProcessSoleIme::new() };
+}
+
+pub(crate) fn with_sole<R>(f: impl FnOnce(&ProcessSoleIme) -> R) -> R {
+    THREAD_SOLE.with(f)
+}
 
 /// Who may act on this physical conversion key from one `TextService`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,6 +129,14 @@ fn is_conversion_trigger(key: KeyInput) -> bool {
 }
 
 impl ConversionKeyDisposition {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::HostEligible => "host_eligible",
+            Self::ApplyLocal => "apply_local",
+            Self::AbsorbPeer => "absorb_peer",
+        }
+    }
+
     pub(crate) fn of(key: KeyInput, local_live: bool, peer_live: bool) -> Self {
         if !is_conversion_trigger(key) {
             return Self::HostEligible;
@@ -49,6 +163,20 @@ impl ConversionKeyDisposition {
 
     pub(crate) fn skip_probe_on_test_keydown(self) -> bool {
         matches!(self, Self::ApplyLocal | Self::AbsorbPeer)
+    }
+}
+
+/// Shared candidate UI may End only from the instance that owns the popup.
+///
+/// `peer_live` covers same-process Dual TSF. Cursor / Electron also deliver
+/// Space to a second process, where that table is empty; End authority is
+/// then the local `ITfUIElement` lease. An idle peer with no lease must not
+/// Hide a sibling's 履歴 / conversion list.
+pub(crate) fn ends_shared_candidate_ui(local_live: bool, peer_live: bool, owns_ui: bool) -> bool {
+    if peer_live && !local_live {
+        false
+    } else {
+        owns_ui || local_live
     }
 }
 
@@ -301,6 +429,77 @@ mod tests {
             ConversionKeyDisposition::of(space, false, false),
             ConversionKeyDisposition::HostEligible,
             "without a sibling claim the same Space is still host-owned"
+        );
+    }
+
+    #[test]
+    fn idle_peer_must_not_end_a_live_sibling_candidate_list() {
+        assert!(
+            ends_shared_candidate_ui(true, false, true),
+            "the live owner may still Hide/End its own list"
+        );
+        assert!(
+            ends_shared_candidate_ui(false, false, true),
+            "the lease owner may End after the reading is gone"
+        );
+        assert!(
+            !ends_shared_candidate_ui(false, false, false),
+            "an idle Dual TSF without a lease must not End a sibling popup"
+        );
+        assert_eq!(ConversionKeyDisposition::AbsorbPeer.name(), "absorb_peer");
+        assert!(
+            !ends_shared_candidate_ui(false, true, false),
+            "an idle Dual TSF peer must not Hide a sibling 履歴/conversion list"
+        );
+        assert!(
+            ends_shared_candidate_ui(true, false, false),
+            "a live reading may End even before the lease is adopted"
+        );
+    }
+
+    #[test]
+    fn first_key_elects_one_active_ime_and_the_other_is_shadow() {
+        let sole = ProcessSoleIme::new();
+        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Shadow);
+        assert!(ImeSeat::Shadow.eats());
+        assert!(!ImeSeat::Shadow.asks_engine());
+        assert!(ImeSeat::Active.asks_engine());
+        assert!(!ImeSeat::Active.eats());
+    }
+
+    #[test]
+    fn focus_steals_the_sole_seat_from_an_idle_holder() {
+        let sole = ProcessSoleIme::new();
+        sole.on_focus(1, true);
+        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Active);
+        sole.on_focus(2, true);
+        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Shadow);
+    }
+
+    #[test]
+    fn live_reading_takes_the_seat_even_if_focus_already_moved() {
+        let sole = ProcessSoleIme::new();
+        sole.on_focus(2, true);
+        assert_eq!(sole.seat_for_key(1, true), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Shadow);
+    }
+
+    #[test]
+    fn drop_or_detach_releases_the_seat_for_the_next_instance() {
+        let sole = ProcessSoleIme::new();
+        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Active);
+        sole.release(1);
+        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Active);
+    }
+
+    #[test]
+    fn shadow_without_a_peer_reading_is_still_not_an_engine_client() {
+        assert!(!ImeSeat::Shadow.asks_engine());
+        assert!(
+            !ProcessSoleIme::new().is_shadow(1, true),
+            "a live reading is never a shadow"
         );
     }
 }

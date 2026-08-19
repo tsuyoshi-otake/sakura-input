@@ -12,11 +12,15 @@ use std::collections::BinaryHeap;
 use sakura_proto::MAX_CANDIDATES;
 use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
+use crate::calendar::{date_offset_for_reading, date_surface_specs, CivilDate};
 use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::editing::{identifier_into, IdentifierStyle};
 use crate::input_repair::{
     allows_system_entry, collect_repair_variants, english_spelling_katakana_reading,
     COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, MAX_REPAIR_VARIANTS,
+};
+use crate::numerals::{
+    is_decorative_numeral_char, parse_numeric_prefix, should_emit_numeric_span, NUMERIC_STYLES,
 };
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
@@ -32,12 +36,16 @@ pub const MAX_CONVERSION_CANDIDATES: usize = MAX_CANDIDATES;
 #[cfg(feature = "research-top32")]
 pub const MAX_CONVERSION_CANDIDATES: usize = 32;
 const GENERATED_IDENTIFIER_VARIANTS: usize = 4;
+const GENERATED_DATE_VARIANTS: usize = 6;
+const GENERATED_VARIANT_SLACK: usize = GENERATED_IDENTIFIER_VARIANTS + GENERATED_DATE_VARIANTS;
 const FALLBACK_WORD_COST: i64 = 8_000;
 const RUN_BASE_COST: i64 = 6_000;
 const RUN_COST_PER_CHAR: i64 = 2_500;
 const KATAKANA_BASE_COST: i64 = 7_000;
 const KATAKANA_COST_PER_CHAR: i64 = 2_800;
 const COUNTER_WORD_COST: i64 = 3_500;
+const NUMBER_FORM_COST: i64 = 800;
+const MAX_GENERATED_SURFACES: usize = 64;
 const DEFAULT_NOUN_ID: u16 = 1_851;
 const MIN_COMPLETION_COHERENCE_CHARS: usize = 4;
 const COMPLETION_NODE_BUDGET: usize = 256;
@@ -215,6 +223,7 @@ enum Surface {
     Reading,
     Katakana,
     Literal(&'static str),
+    Generated(u16),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -298,6 +307,15 @@ pub struct Converter {
     /// Cleared on every convert; populated by the engine before convert when
     /// `InputSupport::commit_based` is active.
     commit_repair_readings: Vec<FixedStr<MAX_PREEDIT_BYTES>>,
+    /// Local civil day supplied by the engine for this query only.
+    civil_date: Option<CivilDate>,
+    generated: Vec<GeneratedSurface>,
+}
+
+#[derive(Debug, Clone)]
+struct GeneratedSurface {
+    text: FixedStr<MAX_PREEDIT_BYTES>,
+    annotation: FixedStr<MAX_PREEDIT_BYTES>,
 }
 
 impl Converter {
@@ -309,15 +327,21 @@ impl Converter {
             states: Vec::with_capacity(MAX_SEARCH_STATES),
             queue: BinaryHeap::with_capacity(MAX_SEARCH_STATES),
             path: Vec::with_capacity(MAX_PREEDIT_BYTES),
-            candidates: Vec::with_capacity(
-                MAX_CONVERSION_CANDIDATES + GENERATED_IDENTIFIER_VARIANTS,
-            ),
+            candidates: Vec::with_capacity(MAX_CONVERSION_CANDIDATES + GENERATED_VARIANT_SLACK),
             sequence: 0,
             initial_right_id: 0,
             lattice_node_budget: MAX_LATTICE_NODES,
             search_state_budget: MAX_SEARCH_STATES,
             commit_repair_readings: Vec::new(),
+            civil_date: None,
+            generated: Vec::with_capacity(MAX_GENERATED_SURFACES),
         }
+    }
+
+    /// Supplies the local civil date used to generate 今日-style date surfaces
+    /// for the next conversion. `None` keeps the lexical candidates unchanged.
+    pub fn set_civil_date(&mut self, date: Option<CivilDate>) {
+        self.civil_date = date;
     }
 
     /// Supplies commit-history repair readings for the next conversion only.
@@ -456,6 +480,8 @@ impl Converter {
                         search.terminal = ConversionSearchTerminal::CandidateLimitReached;
                     }
                     self.apply_it_completion_coherence(dictionary, reading, options)?;
+                    self.add_date_candidates(reading)?;
+                    self.prefer_numeric_forms(reading)?;
                     self.add_identifier_variants(reading)?;
                 }
             }
@@ -550,10 +576,178 @@ impl Converter {
         Ok(())
     }
 
+    fn add_numeric_forms(
+        &mut self,
+        dictionary: &Dictionary<'_>,
+        reading: &str,
+        start: usize,
+        synthetic_id: u16,
+    ) -> Result<(), ConversionError> {
+        let Some(span) = parse_numeric_prefix(&reading[start..]) else {
+            return Ok(());
+        };
+        if !should_emit_numeric_span(span) {
+            return Ok(());
+        }
+        let end = start + span.bytes;
+        for (index, style) in NUMERIC_STYLES.into_iter().enumerate() {
+            if self.generated.len() >= MAX_GENERATED_SURFACES {
+                break;
+            }
+            let mut text = FixedStr::new();
+            if style.write(span, &mut text).is_err() {
+                continue;
+            }
+            let mut annotation = FixedStr::new();
+            if annotation.push_str(style.annotation()).is_err() {
+                continue;
+            }
+            let Ok(generated_index) = u16::try_from(self.generated.len()) else {
+                break;
+            };
+            self.generated.push(GeneratedSurface { text, annotation });
+            self.add_node(
+                dictionary,
+                NodeSpec {
+                    start,
+                    end,
+                    left_id: synthetic_id,
+                    right_id: synthetic_id,
+                    local_cost: NUMBER_FORM_COST.saturating_add(i64::try_from(index).unwrap_or(0)),
+                    surface: Surface::Generated(generated_index),
+                },
+            )?;
+        }
+        Ok(())
+    }
+
+    fn prefer_numeric_forms(&mut self, reading: &str) -> Result<(), ConversionError> {
+        let Some(span) = parse_numeric_prefix(reading) else {
+            return Ok(());
+        };
+        if span.bytes != reading.len() || !should_emit_numeric_span(span) {
+            return Ok(());
+        }
+        let mut forms = Vec::new();
+        for style in NUMERIC_STYLES {
+            let mut text = FixedStr::<MAX_PREEDIT_BYTES>::new();
+            if style.write(span, &mut text).is_err() {
+                continue;
+            }
+            forms.push((text, style));
+        }
+        self.candidates.retain(|candidate| {
+            let text = candidate.text();
+            if text.chars().any(is_decorative_numeral_char) {
+                return false;
+            }
+            forms.iter().any(|(form, _)| text == form.as_str())
+                || text == reading
+                || candidate.system_entry_index().is_some()
+        });
+        for (index, (text, style)) in forms.iter().enumerate() {
+            if self
+                .candidates
+                .iter()
+                .any(|candidate| candidate.text() == text.as_str())
+            {
+                continue;
+            }
+            let mut annotation = FixedStr::new();
+            if annotation.push_str(style.annotation()).is_err() {
+                continue;
+            }
+            let mut segments = FixedVec::new();
+            let _ = segments.push(ConversionSegment {
+                reading_start: 0,
+                reading_end: u16::try_from(reading.len())
+                    .map_err(|_| ConversionError::ReadingTooLong)?,
+                text_start: 0,
+                text_end: u16::try_from(text.len()).map_err(|_| ConversionError::OutputTooLong)?,
+                left_id: 0,
+                right_id: 0,
+                flags: EntryFlags::NONE,
+                word_count: 1,
+                it_word_count: 0,
+            });
+            self.candidates.push(ConversionCandidate {
+                text: text.clone(),
+                annotation,
+                segments,
+                system_entry_index: None,
+                cost: NUMBER_FORM_COST.saturating_add(i64::try_from(index).unwrap_or(0)),
+            });
+        }
+        self.candidates.sort_by_key(|candidate| candidate.cost);
+        Ok(())
+    }
+
+    fn add_date_candidates(&mut self, reading: &str) -> Result<(), ConversionError> {
+        let Some(offset) = date_offset_for_reading(reading) else {
+            return Ok(());
+        };
+        let Some(date) = self.civil_date.and_then(|today| today.add_days(offset)) else {
+            return Ok(());
+        };
+        if self.candidates.is_empty() {
+            return Ok(());
+        }
+        let base = self.candidates[0].clone();
+        let reading_end =
+            u16::try_from(reading.len()).map_err(|_| ConversionError::ReadingTooLong)?;
+        for (index, spec) in date_surface_specs(date).enumerate() {
+            if self.candidates.len() >= MAX_CONVERSION_CANDIDATES + GENERATED_VARIANT_SLACK {
+                break;
+            }
+            let mut text = FixedStr::new();
+            if spec.format.write(date, &mut text).is_err() {
+                continue;
+            }
+            if self
+                .candidates
+                .iter()
+                .any(|candidate| candidate.text() == text.as_str())
+            {
+                continue;
+            }
+            let mut annotation = FixedStr::new();
+            if annotation.push_str(spec.annotation).is_err() {
+                continue;
+            }
+            let mut segments = FixedVec::new();
+            let first = base.segments().first().copied().unwrap_or_default();
+            let last = base.segments().last().copied().unwrap_or(first);
+            segments
+                .push(ConversionSegment {
+                    reading_start: 0,
+                    reading_end,
+                    text_start: 0,
+                    text_end: u16::try_from(text.len())
+                        .map_err(|_| ConversionError::OutputTooLong)?,
+                    left_id: first.left_id,
+                    right_id: last.right_id,
+                    flags: EntryFlags::NONE,
+                    word_count: 1,
+                    it_word_count: 0,
+                })
+                .map_err(|_| ConversionError::TooManySegments)?;
+            self.candidates.push(ConversionCandidate {
+                text,
+                annotation,
+                segments,
+                system_entry_index: None,
+                cost: base
+                    .cost
+                    .saturating_add(10 + i64::try_from(index).unwrap_or(0)),
+            });
+        }
+        Ok(())
+    }
+
     fn add_identifier_variants(&mut self, reading: &str) -> Result<(), ConversionError> {
         let base_count = self.candidates.len();
         for base_index in 0..base_count {
-            if self.candidates.len() >= MAX_CONVERSION_CANDIDATES + GENERATED_IDENTIFIER_VARIANTS {
+            if self.candidates.len() >= MAX_CONVERSION_CANDIDATES + GENERATED_VARIANT_SLACK {
                 break;
             }
             let base = self.candidates[base_index].clone();
@@ -635,6 +829,7 @@ impl Converter {
         self.queue.clear();
         self.path.clear();
         self.candidates.clear();
+        self.generated.clear();
         self.starts_at[..=reading_len].fill(NONE);
         self.ends_at[..=reading_len].fill(NONE);
         self.sequence = 0;
@@ -666,23 +861,21 @@ impl Converter {
         for (start, character) in reading.char_indices() {
             let class = char_class(character);
             let run = char_run(reading, start);
-            // A run of Latin letters is one token the user typed, not a phrase
-            // to be segmented. A dictionary entry covering only part of it is
-            // no evidence about the whole token, and joining two such entries
-            // manufactures mixed-case nonsense: `llvm` used to convert to
-            // `lLVM` (`l` + `LVM`) and `goto` to `GoTO` (`go` + `TO`), both
-            // ahead of the reading itself. Entries that start at the token and
-            // reach at least its end -- `gitlab`, `pytorch`, `microsoft365` --
-            // are unaffected.
-            let latin_token = class == CharClass::AsciiLetter;
-            let at_token_start = previous_class != Some(CharClass::AsciiLetter);
+            // A run of Latin letters or ASCII digits is one token the user
+            // typed, not a phrase to be segmented. Splitting `24` into `2` +
+            // `4` lets a superscript `²` steal the first digit and produce
+            // `²4日`. Entries that start at the token and reach at least its
+            // end remain available.
+            let atomic_token = matches!(class, CharClass::AsciiLetter | CharClass::AsciiDigit);
+            let at_token_start = previous_class != Some(class) || !atomic_token;
             previous_class = Some(class);
             let mut last_length = 0usize;
             let mut candidates_for_length = 0usize;
             let mut failure = None;
             dictionary
                 .common_prefix_search(&reading[start..], |matched| {
-                    if latin_token && (!at_token_start || start + matched.matched_bytes < run.end) {
+                    if atomic_token && (!at_token_start || start + matched.matched_bytes < run.end)
+                    {
                         return true;
                     }
                     if !allows_system_entry(
@@ -753,6 +946,9 @@ impl Converter {
                 user_dictionary.common_prefix_search(
                     &reading[start..],
                     |matched_bytes, entry_index| {
+                        if atomic_token && (!at_token_start || start + matched_bytes < run.end) {
+                            return true;
+                        }
                         if matched_bytes != last_user_length {
                             last_user_length = matched_bytes;
                             user_candidates_for_length = 0;
@@ -797,17 +993,21 @@ impl Converter {
             }
 
             let character_end = start + character.len_utf8();
-            self.add_node(
-                dictionary,
-                NodeSpec {
-                    start,
-                    end: character_end,
-                    left_id: synthetic_id,
-                    right_id: synthetic_id,
-                    local_cost: FALLBACK_WORD_COST,
-                    surface: Surface::Reading,
-                },
-            )?;
+            // Keep ASCII letter/digit runs atomic: a per-character fallback
+            // for `2` inside `24` is how a superscript numeral can splice in.
+            if !(atomic_token && run.end > character_end) {
+                self.add_node(
+                    dictionary,
+                    NodeSpec {
+                        start,
+                        end: character_end,
+                        left_id: synthetic_id,
+                        right_id: synthetic_id,
+                        local_cost: FALLBACK_WORD_COST,
+                        surface: Surface::Reading,
+                    },
+                )?;
+            }
 
             if run.end > character_end {
                 self.add_node(
@@ -854,6 +1054,7 @@ impl Converter {
                     )?;
                 }
             }
+            self.add_numeric_forms(dictionary, reading, start, synthetic_id)?;
         }
         // Commit-history repairs are whole-query hints only. Keep them outside
         // the per-character start loop so a full typed match cannot be pasted
@@ -1206,6 +1407,7 @@ impl Converter {
                 )?;
             }
         }
+        self.add_numeric_forms(dictionary, reading, 0, synthetic_id)?;
         Ok(())
     }
 
@@ -1341,6 +1543,7 @@ impl Converter {
             reading,
             &self.nodes,
             &self.path,
+            &self.generated,
             cost,
         )?;
         self.candidates.push(candidate);
@@ -1429,6 +1632,7 @@ impl Converter {
                     reading,
                     &self.nodes,
                     &self.path,
+                    &self.generated,
                     total,
                 ) {
                     Ok(candidate) => candidate,
@@ -1586,7 +1790,7 @@ fn candidate_path_is_coherent(nodes: &[Node], path: &[usize]) -> bool {
                 }
                 fallback = Some(SurfaceKind::Katakana);
             }
-            Surface::Literal(_) => {}
+            Surface::Literal(_) | Surface::Generated(_) => {}
         }
     }
     !(has_lexical_edge && fallback.is_some())
@@ -1604,7 +1808,7 @@ impl PathClass {
             Surface::Dictionary { .. } | Surface::User(_) => Self::Lexical,
             Surface::Reading => Self::Reading,
             Surface::Katakana => Self::Katakana,
-            Surface::Literal(_) => Self::Neutral,
+            Surface::Literal(_) | Surface::Generated(_) => Self::Neutral,
         };
         match (self, next) {
             (current, Self::Neutral) => Some(current),
@@ -1667,6 +1871,7 @@ fn make_candidate(
     reading: &str,
     nodes: &[Node],
     path: &[usize],
+    generated: &[GeneratedSurface],
     cost: i64,
 ) -> Result<ConversionCandidate, ConversionError> {
     let mut text = FixedStr::new();
@@ -1712,6 +1917,18 @@ fn make_candidate(
             Surface::Literal(value) => text
                 .push_str(value)
                 .map_err(|_| ConversionError::OutputTooLong)?,
+            Surface::Generated(index) => {
+                let surface = generated
+                    .get(usize::from(index))
+                    .ok_or(ConversionError::NoPath)?;
+                text.push_str(surface.text.as_str())
+                    .map_err(|_| ConversionError::OutputTooLong)?;
+                if annotation.is_empty() && !surface.annotation.is_empty() {
+                    annotation
+                        .push_str(surface.annotation.as_str())
+                        .map_err(|_| ConversionError::OutputTooLong)?;
+                }
+            }
         }
         // Fuse this word into the previous segment when the dictionary's
         // segmenter table says no bunsetsu boundary separates them (e.g. an
