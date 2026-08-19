@@ -576,6 +576,10 @@ impl<T> WriteCoordinator<T> {
         self.ui_lease = None;
     }
 
+    pub(crate) fn has_ui_lease(&self) -> bool {
+        self.ui_lease.is_some()
+    }
+
     pub(crate) fn tail_visible(&self) -> VisibleState {
         self.tail_visible.clone()
     }

@@ -256,6 +256,96 @@ fn physical_arrows_and_tab_navigate_conversion_and_enter_commits() {
     host.close(host_window);
 }
 
+#[test]
+#[ignore = "moves foreground focus and requires the installed Sakura profile, engine, and renderer"]
+fn physical_history_suggestion_space_converts_the_typed_reading() {
+    let _serial = PHYSICAL_E2E
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    assert!(
+        !candidate_window_visible(),
+        "close any existing Sakura candidate popup before running the physical E2E"
+    );
+
+    let _apartment = ComApartment::new();
+    let _profile = ActiveProfileGuard::activate_sakura();
+    let child = Command::new(env!("CARGO_BIN_EXE_sakura_tsf_test_host"))
+        .spawn()
+        .expect("launch the dedicated Win32 TSF host");
+    let mut host = OwnedHost::new(child);
+    let host_window = wait_for_window(
+        windows::core::w!("SakuraInputTsfTestHost"),
+        windows::core::w!("Sakura Input TSF Test Host"),
+    );
+    host.set_window(host_window);
+    let edit = wait_for_child_edit(host_window);
+    force_foreground(host_window, edit);
+    wait_for_foreground(host_window);
+
+    for key in [b'N', b'I', b'H', b'O', b'N', b'G', b'O'] {
+        press_key(host_window, u16::from(key));
+    }
+    let popup = wait_for_candidate_window();
+    let automation: IUIAutomation = unsafe {
+        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+            .expect("create UI Automation client")
+    };
+    let element = unsafe {
+        automation
+            .ElementFromHandle(popup)
+            .expect("candidate popup UIA element")
+    };
+
+    // First commit deliberately creates the learning entry used by the
+    // second pass. Select 日本語 explicitly so the test does not depend on
+    // the current learned ranking.
+    press_key(host_window, 0x20);
+    let mut current = wait_for_candidate_kind(&element, "conversion candidates");
+    let (_, total) = selection_metadata(&current);
+    for _ in 0..total {
+        let (selected, _) = selection_metadata(&current);
+        if candidate_surface(&current, selected, total) == "日本語" {
+            break;
+        }
+        press_key(host_window, VK_DOWN);
+        current = wait_for_selection(&element, selected % total + 1);
+    }
+    let (selected, _) = selection_metadata(&current);
+    assert_eq!(
+        candidate_surface(&current, selected, total),
+        "日本語",
+        "nihongo conversion fixture must expose 日本語: {current:?}"
+    );
+    press_key(host_window, VK_RETURN);
+    wait_until_hidden(popup);
+    assert_eq!(window_text(edit), "日本語");
+
+    for key in [b'N', b'I', b'H', b'O', b'N', b'G', b'O'] {
+        press_key(host_window, u16::from(key));
+    }
+    let history_name = wait_for_candidate_kind(&element, "suggestion candidates");
+    assert!(
+        history_name.contains("履歴"),
+        "second pass must visibly use the history suggestion: {history_name:?}"
+    );
+
+    press_key(host_window, 0x20);
+    let conversion_name = wait_for_candidate_kind(&element, "conversion candidates");
+    assert!(
+        conversion_name.contains("Candidate"),
+        "Space must replace the history list with conversion candidates: {conversion_name:?}"
+    );
+    press_key(host_window, VK_RETURN);
+    wait_until_hidden(popup);
+    assert_eq!(
+        window_text(edit),
+        "日本語日本語",
+        "history suggestion must not make Space commit the raw reading"
+    );
+
+    host.close(host_window);
+}
+
 fn press_key(host: HWND, virtual_key: u16) {
     send_keyboard(host, &[(virtual_key, false), (virtual_key, true)]);
 }

@@ -25,6 +25,7 @@
 #![cfg(windows)]
 
 pub mod client;
+pub mod debug_trace;
 pub mod diagnostics;
 pub mod security;
 pub mod transport;
