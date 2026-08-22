@@ -6,10 +6,10 @@
 //! one of those contexts is composing or converting, an idle peer must not
 //! insert a document space for that same Space key.
 //!
-//! Counts are keyed by host `process_name` (what CreateSession reports).
-//! Distinct executables do not fence each other. Same-name processes share
-//! a count — a deliberate bound when two Notepad windows both report
-//! `notepad.exe`.
+//! Counts are keyed by host `process_name` (what CreateSession reports),
+//! compared ASCII-case-insensitively. Distinct executables do not fence
+//! each other. Same-name processes share a count — a deliberate bound when
+//! two Notepad windows both report `notepad.exe`.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -29,36 +29,43 @@ impl CompositionFence {
     /// `true` when any connection for `process_name` currently claims an
     /// active composition or conversion.
     pub fn any_active(&self, process_name: &str) -> bool {
+        let key = normalize_process_name(process_name);
         self.counts
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(process_name)
+            .get(key.as_ref())
             .copied()
             .unwrap_or(0)
             > 0
     }
 
     pub fn acquire(&self, process_name: &str) {
+        let key = normalize_process_name(process_name);
         let mut counts = self
             .counts
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *counts.entry(Box::from(process_name)).or_insert(0) += 1;
+        *counts.entry(key).or_insert(0) += 1;
     }
 
     pub fn release(&self, process_name: &str) {
+        let key = normalize_process_name(process_name);
         let mut counts = self
             .counts
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let Some(count) = counts.get_mut(process_name) else {
+        let Some(count) = counts.get_mut(key.as_ref()) else {
             return;
         };
         *count = count.saturating_sub(1);
         if *count == 0 {
-            counts.remove(process_name);
+            counts.remove(key.as_ref());
         }
     }
+}
+
+fn normalize_process_name(process_name: &str) -> Box<str> {
+    Box::from(process_name.to_ascii_lowercase())
 }
 
 #[cfg(test)]
@@ -74,6 +81,15 @@ mod tests {
         assert!(!fence.any_active("notepad.exe"));
         fence.release("cursor.exe");
         assert!(!fence.any_active("cursor.exe"));
+    }
+
+    #[test]
+    fn process_name_matching_is_ascii_case_insensitive() {
+        let fence = CompositionFence::new();
+        fence.acquire("Cursor.exe");
+        assert!(fence.any_active("cursor.exe"));
+        fence.release("CURSOR.EXE");
+        assert!(!fence.any_active("Cursor.exe"));
     }
 
     #[test]

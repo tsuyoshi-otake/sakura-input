@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "type": "string"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["A", "B", "tie", "ungradable"]
+    },
+    "severity": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "certainty": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "semantic_fit",
+          "literal_corruption",
+          "meaning_change",
+          "unnatural_japanese",
+          "candidate_ranking",
+          "overcorrection",
+          "underconversion",
+          "mixed_script_handling",
+          "correction_burden",
+          "equivalent",
+          "insufficient_context"
+        ]
+      }
+    },
+    "short_reason": {
+      "type": "string",
+      "maxLength": 240
+    }
+  },
+  "required": [
+    "case_id",
+    "verdict",
+    "severity",
+    "certainty",
+    "reason_codes",
+    "short_reason"
+  ]
+}

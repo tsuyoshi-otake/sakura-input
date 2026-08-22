@@ -1276,10 +1276,12 @@ anything = "ignored"
             parse_preferences("[meta]\nformat-version = \"4\"\n").expect("missing input-support");
         assert_eq!(missing.preferences.input_support, InputSupport::default());
 
-        let mut support = InputSupport::default();
-        support.enabled = false;
-        support.n_count = false;
-        support.period_after_digit = false;
+        let support = InputSupport {
+            enabled: false,
+            n_count: false,
+            period_after_digit: false,
+            ..InputSupport::default()
+        };
         let preferences = Preferences {
             input_support: support,
             ..Preferences::default()
@@ -1303,9 +1305,11 @@ anything = "ignored"
             (true, false, true, true),
         ];
         for (active, skip, fuzzy, expect_spelling) in cases {
-            let mut support = InputSupport::default();
-            support.enabled = active;
-            support.fuzzy_proper_nouns = fuzzy;
+            let support = InputSupport {
+                enabled: active,
+                fuzzy_proper_nouns: fuzzy,
+                ..InputSupport::default()
+            };
             assert_eq!(
                 support.allows_spelling_correction(skip),
                 expect_spelling,

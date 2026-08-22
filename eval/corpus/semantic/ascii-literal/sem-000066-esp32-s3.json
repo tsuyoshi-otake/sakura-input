@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-esp32-s3",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "開発ボードは",
+    "right": "です"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "ESP32-S3",
+    "typing": "ESP32-S3"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

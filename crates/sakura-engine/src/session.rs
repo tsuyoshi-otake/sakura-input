@@ -28,6 +28,7 @@
 
 use std::mem;
 
+use sakura_core::conversion::{ConversionInputClass, LiteralPolicy};
 use sakura_core::keymap::State;
 use sakura_core::romaji;
 use sakura_core::{
@@ -64,6 +65,30 @@ pub const MAX_PROCESS_NAME_BYTES: usize = 128;
 
 /// Volatile recency window described by DESIGN §5.8.
 pub const COMMIT_CACHE_CAPACITY: usize = 8;
+
+/// Admission state for raw-key provenance.  This is deliberately smaller than
+/// a key log: it records only whether the current composition still proves an
+/// append-only Romaji path.  Any edit or context ambiguity moves it to
+/// `Suppressed` until the next composition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum RawProvenanceState {
+    #[default]
+    Unset,
+    AppendOnly,
+    Suppressed,
+}
+
+/// The selected repair is kept separately from admission state so F6-F8 can
+/// still transform the corrected reading after the raw-repair tier itself has
+/// been invalidated. F9/F10 intentionally continue to use the original raw
+/// keystrokes and do not consult this snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionRawRepairSelection {
+    pub(crate) plan_id: u8,
+    pub(crate) corrected: FixedStr<MAX_PREEDIT_BYTES>,
+    pub(crate) segment_ends: [u16; MAX_SEGMENTS],
+    pub(crate) segment_count: u8,
+}
 
 /// Whether a host scope requires direct pass-through and a cleared personal
 /// context. This predicate is shared by real scope publication, Probe's
@@ -194,6 +219,28 @@ pub struct Session {
     /// This is the narrow signal used to try an English dictionary reading;
     /// ordinary romaji remains on the kana path.
     pub(crate) shifted_ascii: bool,
+    /// Classification fixed at conversion admission.  Rendering, explicit
+    /// candidate selection, cancellation, and commit all reuse this staged
+    /// policy instead of reclassifying a lowercased lookup reading.
+    conversion_input_class: ConversionInputClass,
+    literal_policy: LiteralPolicy,
+    /// Exact surface captured before Shift-Latin lookup normalization.
+    conversion_exact_surface: FixedStr<MAX_PREEDIT_BYTES>,
+    /// Small admission state for raw-key structural completion.
+    raw_provenance: RawProvenanceState,
+    /// A one-bit admission hint set from the already-performed live replay.
+    /// Ordinary append-only Romaji has no raw passthrough and therefore does
+    /// not need the bounded completion planner at conversion time. This is
+    /// only a hint; the planner still validates the full raw/preedit snapshot
+    /// before producing a repair plan.
+    raw_repair_candidate_possible: bool,
+    /// Selected corrected reading retained for F6-F8 after repair admission is
+    /// invalidated by the transform action itself.
+    selected_raw_repair: Option<SessionRawRepairSelection>,
+    /// After an ASCII-letter commit, idle Space stays a half-width word
+    /// separator even in Hiragana. Japanese idle Space remains ideographic
+    /// until such a commit, and a non-ASCII commit turns this back off.
+    ascii_space_latch: bool,
     /// Character cursor in the visible composition. For a Shift-started
     /// English buffer that is `raw_input`; otherwise it is `preedit`, and
     /// pending romaji sits at this point.
@@ -277,6 +324,13 @@ impl Session {
             preedit: FixedStr::new(),
             raw_input: FixedStr::new(),
             shifted_ascii: false,
+            conversion_input_class: ConversionInputClass::Ordinary,
+            literal_policy: LiteralPolicy::Ranked,
+            conversion_exact_surface: FixedStr::new(),
+            raw_provenance: RawProvenanceState::Unset,
+            raw_repair_candidate_possible: false,
+            selected_raw_repair: None,
+            ascii_space_latch: false,
             cursor: 0,
             converting: false,
             conversion_presentation: CandidatePresentation::Compact,
@@ -305,6 +359,25 @@ impl Session {
     /// truncated; see [`Session::new`]).
     pub fn process_name(&self) -> &str {
         self.process_name.as_str()
+    }
+
+    /// Idle Space width, including the ASCII-word latch.
+    ///
+    /// `SpaceWidth::Full` / `Half` stay absolute. `SameAsInput` follows the
+    /// mode, except after an ASCII-letter commit so `Claude` then Space then
+    /// `Code` does not insert U+3000.
+    pub(crate) fn idle_space_is_full(&self, shift: bool) -> bool {
+        let base_is_full =
+            if self.ascii_space_latch && matches!(self.space_width, SpaceWidth::SameAsInput) {
+                false
+            } else {
+                self.space_width.is_full(self.mode)
+            };
+        if shift {
+            self.shift_space_behavior.is_full(base_is_full)
+        } else {
+            base_is_full
+        }
     }
 
     /// Applies a profile only during context creation. Later refocuses never
@@ -479,6 +552,8 @@ impl Session {
         self.preedit.clear();
         self.raw_input.clear();
         self.shifted_ascii = false;
+        self.clear_conversion_input();
+        self.clear_raw_repair_state();
         self.cursor = 0;
         self.converting = false;
         self.conversion_presentation = CandidatePresentation::Compact;
@@ -519,12 +594,183 @@ impl Session {
     }
 
     pub(crate) fn cancel_conversion(&mut self) {
+        // Shift-Latin lookup may have replaced the visible reading with its
+        // lowercase dictionary form.  Cancellation must restore the exact
+        // pre-conversion surface before dropping the staged policy.
+        if !self.conversion_exact_surface.is_empty() {
+            self.preedit = self.conversion_exact_surface.clone();
+            if self.shifted_ascii {
+                self.romaji.clear();
+            }
+        }
         self.converting = false;
         self.conversion_presentation = CandidatePresentation::Compact;
         self.invalidate_prediction();
         self.selected_candidate = 0;
         self.clear_segments();
         self.cursor = u16::try_from(self.preedit.as_str().chars().count()).unwrap_or(u16::MAX);
+        self.clear_conversion_input();
+        self.clear_raw_repair_state();
+    }
+
+    pub(crate) fn raw_provenance(&self) -> RawProvenanceState {
+        self.raw_provenance
+    }
+
+    pub(crate) fn suppress_raw_provenance(&mut self) {
+        self.raw_provenance = RawProvenanceState::Suppressed;
+        self.raw_repair_candidate_possible = false;
+        self.selected_raw_repair = None;
+    }
+
+    /// Suppresses future raw-repair conversion while retaining the already
+    /// selected corrected reading for F6-F8. This is the only invalidation
+    /// path that preserves the selected repair snapshot; all edits and
+    /// context changes use [`Self::suppress_raw_provenance`].
+    pub(crate) fn suppress_raw_provenance_preserve_selected(&mut self) {
+        self.raw_provenance = RawProvenanceState::Suppressed;
+        self.raw_repair_candidate_possible = false;
+    }
+
+    pub(crate) fn mark_append_only_raw_feed(&mut self, fresh_composition: bool) {
+        // `Suppressed` belongs to the previous edit path. The first
+        // successful append of a fresh, empty composition starts a new
+        // admission epoch; subsequent appends must not revive provenance
+        // after an edit has invalidated it.
+        if self.raw_provenance != RawProvenanceState::Suppressed || fresh_composition {
+            self.raw_provenance = RawProvenanceState::AppendOnly;
+        }
+    }
+
+    pub(crate) fn clear_raw_repair_state(&mut self) {
+        self.raw_provenance = RawProvenanceState::Unset;
+        self.raw_repair_candidate_possible = false;
+        self.selected_raw_repair = None;
+    }
+
+    pub(crate) fn raw_repair_candidate_possible(&self) -> bool {
+        self.raw_repair_candidate_possible
+    }
+
+    pub(crate) fn set_raw_repair_candidate_possible(&mut self, possible: bool) {
+        self.raw_repair_candidate_possible = possible;
+    }
+
+    pub(crate) fn stage_selected_raw_repair(
+        &mut self,
+        plan_id: u8,
+        corrected: &str,
+        segment_ends: &[u16],
+    ) -> bool {
+        if corrected.is_empty() || segment_ends.is_empty() || segment_ends.len() > MAX_SEGMENTS {
+            return false;
+        }
+        let mut corrected_text = FixedStr::new();
+        if corrected_text.push_str(corrected).is_err() {
+            return false;
+        }
+        let mut selected = SessionRawRepairSelection {
+            plan_id,
+            corrected: corrected_text,
+            segment_ends: [0; MAX_SEGMENTS],
+            segment_count: 0,
+        };
+        for (index, end) in segment_ends.iter().copied().enumerate() {
+            if end == 0
+                || usize::from(end) > corrected.len()
+                || (index > 0 && end <= selected.segment_ends[index - 1])
+                || !corrected.is_char_boundary(usize::from(end))
+            {
+                return false;
+            }
+            selected.segment_ends[index] = end;
+            selected.segment_count = selected.segment_count.saturating_add(1);
+        }
+        if selected.segment_ends[usize::from(selected.segment_count) - 1]
+            != u16::try_from(corrected.len()).unwrap_or(u16::MAX)
+        {
+            return false;
+        }
+        self.selected_raw_repair = Some(selected);
+        true
+    }
+
+    pub(crate) fn clear_selected_raw_repair(&mut self) {
+        self.selected_raw_repair = None;
+    }
+
+    pub(crate) fn has_selected_raw_repair(&self) -> bool {
+        self.selected_raw_repair.is_some()
+    }
+
+    pub(crate) fn selected_raw_repair_segment(&self, index: usize) -> Option<&str> {
+        let selected = self.selected_raw_repair.as_ref()?;
+        if index >= usize::from(selected.segment_count) {
+            return None;
+        }
+        let start = if index == 0 {
+            0
+        } else {
+            usize::from(selected.segment_ends[index - 1])
+        };
+        let end = usize::from(selected.segment_ends[index]);
+        selected.corrected.as_str().get(start..end)
+    }
+
+    pub(crate) fn selected_raw_repair_full(&self) -> Option<&str> {
+        self.selected_raw_repair
+            .as_ref()
+            .map(|selected| selected.corrected.as_str())
+    }
+
+    pub(crate) fn stage_conversion_input(
+        &mut self,
+        class: ConversionInputClass,
+        policy: LiteralPolicy,
+    ) {
+        self.conversion_input_class = class;
+        self.literal_policy = policy;
+        self.conversion_exact_surface.clear();
+        let source = if self.shifted_ascii {
+            &self.raw_input
+        } else {
+            &self.preedit
+        };
+        let _ = self.conversion_exact_surface.push_str(source.as_str());
+    }
+
+    pub(crate) const fn conversion_input_class(&self) -> ConversionInputClass {
+        self.conversion_input_class
+    }
+
+    pub(crate) const fn literal_policy(&self) -> LiteralPolicy {
+        self.literal_policy
+    }
+
+    pub(crate) fn conversion_exact_surface(&self) -> &str {
+        self.conversion_exact_surface.as_str()
+    }
+
+    pub(crate) fn staged_exact_surface_matches_current(&self) -> bool {
+        if self.conversion_exact_surface.is_empty() {
+            return false;
+        }
+        let current = if self.shifted_ascii {
+            self.raw_input.as_str()
+        } else {
+            self.preedit.as_str()
+        };
+        self.conversion_exact_surface.as_str() == current
+    }
+
+    pub(crate) fn clear_staged_conversion_input(&mut self) {
+        self.clear_conversion_input();
+    }
+
+    fn clear_conversion_input(&mut self) {
+        self.conversion_input_class = ConversionInputClass::Ordinary;
+        self.literal_policy = LiteralPolicy::Ranked;
+        self.conversion_exact_surface.clear();
     }
 
     pub(crate) fn set_segments(&mut self, segments: &[ConversionSegment]) -> bool {
@@ -608,6 +854,19 @@ impl Session {
             self.suggestion_focused = true;
             self.suggestion_selection = if direction < 0 { count - 1 } else { 0 };
         }
+        true
+    }
+
+    pub(crate) fn focus_suggestion_at(&mut self, index: usize, count: usize) -> bool {
+        let (Ok(index), Ok(count)) = (i16::try_from(index), i16::try_from(count)) else {
+            return false;
+        };
+        if count == 0 || index < 0 || index >= count {
+            return false;
+        }
+        self.suggestions_visible = true;
+        self.suggestion_focused = true;
+        self.suggestion_selection = index;
         true
     }
 
@@ -791,14 +1050,42 @@ impl Session {
         it_words: u8,
         total_words: u8,
     ) {
+        self.record_current_commit_with_cache(surface, right_id, it_words, total_words, true);
+    }
+
+    /// Records undo/carry state without adding the surface to the volatile
+    /// commit cache. Repaired and exact-synthetic candidates are intentionally
+    /// excluded from future implicit ranking while retaining normal undo and
+    /// context terminal semantics.
+    pub(crate) fn record_current_commit_without_cache(
+        &mut self,
+        surface: &str,
+        right_id: u16,
+        it_words: u8,
+        total_words: u8,
+    ) {
+        self.record_current_commit_with_cache(surface, right_id, it_words, total_words, false);
+    }
+
+    fn record_current_commit_with_cache(
+        &mut self,
+        surface: &str,
+        right_id: u16,
+        it_words: u8,
+        total_words: u8,
+        add_to_cache: bool,
+    ) {
         if matches!(
             self.scope,
             InputScope::Password | InputScope::Url | InputScope::Email | InputScope::Digits
         ) || surface.is_empty()
         {
             self.clear_personal_context();
+            self.ascii_space_latch = false;
             return;
         }
+
+        self.ascii_space_latch = prefers_ascii_idle_space(surface);
 
         self.undo_record.reading.clear();
         self.undo_record.raw_input.clear();
@@ -824,21 +1111,23 @@ impl Session {
         self.undo_armed = true;
         self.undo_pending = false;
 
-        let entry = CommitCacheEntry {
-            reading_hash: text_hash(self.preedit.as_str()),
-            reading_len: u16::try_from(self.preedit.len()).unwrap_or(u16::MAX),
-            surface_hash: text_hash(surface),
-            surface_len: u16::try_from(surface.len()).unwrap_or(u16::MAX),
-            it_words,
-            total_words,
-        };
-        let index = usize::from(self.commit_cache_next);
-        self.commit_cache[index] = entry;
-        self.commit_cache_next = u8::try_from((index + 1) % COMMIT_CACHE_CAPACITY).unwrap_or(0);
-        self.commit_cache_len = self
-            .commit_cache_len
-            .saturating_add(1)
-            .min(COMMIT_CACHE_CAPACITY as u8);
+        if add_to_cache {
+            let entry = CommitCacheEntry {
+                reading_hash: text_hash(self.preedit.as_str()),
+                reading_len: u16::try_from(self.preedit.len()).unwrap_or(u16::MAX),
+                surface_hash: text_hash(surface),
+                surface_len: u16::try_from(surface.len()).unwrap_or(u16::MAX),
+                it_words,
+                total_words,
+            };
+            let index = usize::from(self.commit_cache_next);
+            self.commit_cache[index] = entry;
+            self.commit_cache_next = u8::try_from((index + 1) % COMMIT_CACHE_CAPACITY).unwrap_or(0);
+            self.commit_cache_len = self
+                .commit_cache_len
+                .saturating_add(1)
+                .min(COMMIT_CACHE_CAPACITY as u8);
+        }
 
         if right_id == 0 || is_sentence_boundary(surface) {
             self.reset_carryover();
@@ -883,6 +1172,7 @@ impl Session {
         self.preedit = reading;
         self.raw_input = raw_input;
         self.shifted_ascii = shifted_ascii;
+        self.suppress_raw_provenance();
         self.cursor = u16::try_from(self.preedit.as_str().chars().count()).unwrap_or(u16::MAX);
         Some(surface)
     }
@@ -1121,6 +1411,18 @@ fn is_sentence_boundary(surface: &str) -> bool {
         || trimmed.ends_with("ました")
 }
 
+fn prefers_ascii_idle_space(surface: &str) -> bool {
+    let mut has_letter = false;
+    for character in surface.chars() {
+        if character.is_ascii_alphabetic() {
+            has_letter = true;
+        } else if !character.is_ascii() || character.is_ascii_control() {
+            return false;
+        }
+    }
+    has_letter
+}
+
 /// The longest prefix of `s` that both fits in `cap` bytes and ends on a
 /// UTF-8 character boundary.
 ///
@@ -1155,7 +1457,7 @@ fn truncate_to_fit(s: &str, cap: usize) -> &str {
 /// The slots live in a boxed slice rather than an inline
 /// `[Option<(SessionId, Session)>; MAX_SESSIONS]`. Sixty-four sessions each
 /// holding a preedit-sized [`FixedStr`] is ~107 KB, and inline that lands
-/// wherever the table is built — including on the 128 KB pipe-worker stack
+/// wherever the table is built — including on the 160 KB pipe-worker stack
 /// `crate::server` deliberately reserves, which it overflowed. Bounded is
 /// the promise; *inline* was never part of it. One allocation happens here,
 /// at connection setup, and never again: `SendKey` still touches nothing but
@@ -1267,6 +1569,17 @@ impl SessionTable {
         false
     }
 
+    /// `true` when another live session of the same host executable currently
+    /// has a reading. Dual TSF on one pipe uses this when the process-wide
+    /// fence is not attached.
+    pub(crate) fn peer_is_composing(&self, id: SessionId, process_name: &str) -> bool {
+        self.slots.iter().flatten().any(|(sid, session)| {
+            *sid != id
+                && session.is_composing()
+                && session.process_name().eq_ignore_ascii_case(process_name)
+        })
+    }
+
     /// Removes every session, without resetting the id counter.
     ///
     /// This is what a new connection starts from (`crate::dispatch`'s
@@ -1301,10 +1614,28 @@ impl SessionTable {
         &mut self,
         preferences: Preferences,
         profiles: &[AppProfile],
+        table_changed: bool,
     ) {
         for slot in self.slots.iter_mut().flatten() {
             let resolved =
                 resolve_context_preferences(preferences, profiles, slot.1.process_name());
+            // The server reapplies the same validated snapshot before every
+            // request. Only an effective policy change may invalidate an
+            // append-only raw admission; an unconditional suppress here would
+            // make the second key of every real composition look edited.
+            let raw_policy_changed = table_changed
+                || slot.1.input_method != resolved.input_method
+                || slot.1.normalizer != resolved.normalizer
+                || slot.1.space_width != resolved.space_width
+                || slot.1.shift_space_behavior != resolved.shift_space_behavior
+                || slot.1.conversion_method != resolved.conversion_method
+                || slot.1.association_enabled != resolved.association_enabled
+                || slot.1.input_support != resolved.input_support
+                || slot.1.prediction_enabled != resolved.prediction_enabled
+                || slot.1.suggest_accept != resolved.suggest_accept;
+            if raw_policy_changed {
+                slot.1.suppress_raw_provenance();
+            }
             slot.1.normalizer = resolved.normalizer;
             slot.1.space_width = resolved.space_width;
             slot.1.shift_space_behavior = resolved.shift_space_behavior;
@@ -1336,12 +1667,26 @@ mod tests {
 
     #[test]
     fn a_new_session_starts_idle_in_hiragana_mode_with_normal_scope() {
-        let session = Session::new("notepad.exe");
+        let mut session = Session::new("notepad.exe");
         assert_eq!(session.process_name(), "notepad.exe");
         assert_eq!(session.mode(), Mode::Hiragana);
         assert_eq!(session.scope(), InputScope::Normal);
         assert_eq!(session.state(), State::Idle);
         assert!(!session.is_composing());
+        assert!(
+            session.idle_space_is_full(false),
+            "Hiragana idle Space starts full-width"
+        );
+        session.record_current_commit("Claude", 0, 0, 1);
+        assert!(
+            !session.idle_space_is_full(false),
+            "an ASCII commit must not be followed by an ideographic Space"
+        );
+        session.record_current_commit("今日", 0, 0, 1);
+        assert!(
+            session.idle_space_is_full(false),
+            "a Japanese commit restores ideographic idle Space"
+        );
     }
 
     #[test]
@@ -1361,7 +1706,7 @@ mod tests {
             suggest_accept: SuggestAccept::ShiftEnter,
             ..Preferences::default()
         };
-        table.apply_runtime_preferences(preferences, &[]);
+        table.apply_runtime_preferences(preferences, &[], false);
 
         let session = table.get(id).expect("live session");
         assert_eq!(session.mode, Mode::Katakana);

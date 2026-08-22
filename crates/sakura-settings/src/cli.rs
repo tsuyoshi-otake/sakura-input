@@ -44,9 +44,11 @@ Usage: sakura_settings <command>\n\
   learning clear\n\
   history show\n\
   history export <file>\n\
+  history mine <file>\n\
   history clear\n\
   history stats\n\
   diagnostics show [text|tsv]\n\
+  diagnostics debug\n\
   diagnostics clear\n\
   update status\n\
   update enable\n\
@@ -109,11 +111,15 @@ pub enum Command {
     HistoryExport {
         path: PathBuf,
     },
+    HistoryMine {
+        path: PathBuf,
+    },
     HistoryClear,
     HistoryStats,
     DiagnosticsShow {
         tsv: bool,
     },
+    DiagnosticsDebug,
     DiagnosticsClear,
     UpdateStatus,
     UpdateEnable,
@@ -205,12 +211,16 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
         ["history", "export", path] => Ok(Command::HistoryExport {
             path: PathBuf::from(path),
         }),
+        ["history", "mine", path] => Ok(Command::HistoryMine {
+            path: PathBuf::from(path),
+        }),
         ["history", "clear"] => Ok(Command::HistoryClear),
         ["history", "stats"] => Ok(Command::HistoryStats),
         ["diagnostics", "show"] | ["diagnostics", "show", "text"] => {
             Ok(Command::DiagnosticsShow { tsv: false })
         }
         ["diagnostics", "show", "tsv"] => Ok(Command::DiagnosticsShow { tsv: true }),
+        ["diagnostics", "debug"] => Ok(Command::DiagnosticsDebug),
         ["diagnostics", "clear"] => Ok(Command::DiagnosticsClear),
         ["update", "status"] => Ok(Command::UpdateStatus),
         ["update", "enable"] => Ok(Command::UpdateEnable),
@@ -469,6 +479,26 @@ pub fn run(command: Command) -> Result<(), String> {
                 path.display()
             );
         }
+        Command::HistoryMine { path } => {
+            let source = paths::input_history().map_err(display)?;
+            let report = input_history::mine(&source, &path).map_err(display)?;
+            println!("mined-candidates\t{}", report.candidates.len());
+            for (family, count) in report.family_counts {
+                println!("family\t{family}\t{count}");
+            }
+            println!("accepted-commits\t{}", report.stats.accepted_commits);
+            println!("excluded-private\t{}", report.stats.excluded_private);
+            println!("excluded-non-normal\t{}", report.stats.excluded_non_normal);
+            println!(
+                "excluded-unreconstructable\t{}",
+                report.stats.excluded_unreconstructable
+            );
+            println!(
+                "ignored-unverified-tail-bytes\t{}",
+                report.stats.ignored_tail_bytes
+            );
+            println!("review-file\t{}", path.display());
+        }
         Command::HistoryClear => {
             let route =
                 input_history::clear(&paths::input_history().map_err(display)?).map_err(display)?;
@@ -524,11 +554,43 @@ pub fn run(command: Command) -> Result<(), String> {
             } else {
                 print!("{}", diagnostics::render_text(&data));
             }
+            let debug_path = paths::debug_trace().map_err(display)?;
+            let debug = sakura_ipc::debug_trace::read_text(&debug_path).map_err(display)?;
+            if debug.is_empty() {
+                println!("debug trace: (empty)");
+            } else {
+                println!("--- debug.tsv ---");
+                print!("{debug}");
+            }
+        }
+        Command::DiagnosticsDebug => {
+            let debug_path = paths::debug_trace().map_err(display)?;
+            println!(
+                "# conversion_key k0=local_live k1=peer_live k2=keycode k3=test_only\n\
+# key_gate skip_probe/no_engine/no_context/unactionable\n\
+# candidate_hide end|keep k0=local_live k1=peer_live k2=owns_ui\n\
+# candidate_show shown|show_failed_end k1=count k2=kind(0=conversion,1=suggestion)\n\
+# candidate_end queued|immediate|busy_requeue\n\
+# ui_publish skip_foreign_empty|show|hide|unchanged|copy_failed k0=board_conn k1=board_session k2=pub_conn k3=pub_session\n\
+# idle_fence absorb|open k0=keycode k1=test_only\n\
+# identity_pref exact|general k0=skipped_identity k1=chosen_index+1\n\
+# key_result apply|probe|commit k0=keycode k1=kind_or_255 k2=count k3=identity_top\n\
+# file {}",
+                debug_path.display()
+            );
+            let debug = sakura_ipc::debug_trace::read_text(&debug_path).map_err(display)?;
+            if debug.is_empty() {
+                println!("debug trace: (empty)");
+            } else {
+                print!("{debug}");
+            }
         }
         Command::DiagnosticsClear => {
             let path = paths::timeout_diagnostics().map_err(display)?;
             diagnostics::clear(&path).map_err(display)?;
-            println!("cleared IPC timeout diagnostics");
+            let debug_path = paths::debug_trace().map_err(display)?;
+            sakura_ipc::debug_trace::clear(&debug_path).map_err(display)?;
+            println!("cleared IPC timeout diagnostics and debug trace");
         }
         Command::UpdateStatus => {
             let preferences_path = paths::update_preferences().map_err(display)?;
@@ -940,6 +1002,10 @@ mod tests {
         assert!(matches!(
             parse_words(&["diagnostics", "clear"]),
             Ok(Command::DiagnosticsClear)
+        ));
+        assert!(matches!(
+            parse_words(&["diagnostics", "debug"]),
+            Ok(Command::DiagnosticsDebug)
         ));
         assert!(matches!(
             parse_words(&["update", "enable"]),

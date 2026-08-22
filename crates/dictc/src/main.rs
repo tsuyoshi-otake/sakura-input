@@ -4,9 +4,10 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use dictc::{
-    compile_with_tables, extract_entry_details, merge_entries, parse_category_entries,
-    parse_connection, parse_entries, parse_mozc_connection, parse_mozc_entries,
-    wordnet::import_lmf_gzip, SourceDetail, SourceEntry, MAX_DICTIONARY_IMAGE_BYTES,
+    attach_entry_details, compile_with_tables, extract_entry_details, merge_entries,
+    parse_category_entries, parse_connection, parse_entries, parse_mozc_connection,
+    parse_mozc_entries, wordnet::import_lmf_gzip, SourceDetail, SourceEntry,
+    MAX_DICTIONARY_IMAGE_BYTES,
 };
 use sakura_core::dictionary::DetailRelationKind;
 
@@ -76,6 +77,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let mut llm_targets_directory = None;
     let mut llm_report_path = None;
     let mut curated_detail_paths = Vec::new();
+    let mut detail_only_paths = Vec::new();
     let mut curated_detail_report_path = None;
     let mut detail_coverage_output = None;
     let mut mozc_id_def_path = None;
@@ -166,6 +168,9 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
             Some("--curated-detail-source") => {
                 curated_detail_paths.push(next_path(&mut args, &argument)?);
             }
+            Some("--detail-only-source") => {
+                detail_only_paths.push(next_path(&mut args, &argument)?);
+            }
             Some("--curated-detail-report") => set_once(
                 &mut curated_detail_report_path,
                 next_path(&mut args, &argument)?,
@@ -191,7 +196,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                     "Usage: dictc (--category FILE | --system FILE | --supplement FILE | --mozc-system FILE)... \
                        (--connection FILE | --mozc-connection FILE) --output FILE \
                        [--wordnet-lmf FILE --wordnet-report FILE] [--glossary-dir DIR] \
-                       [--curated-detail-source FILE... --curated-detail-report FILE] \
+                       [--curated-detail-source FILE...] [--detail-only-source FILE...] \
+                       [--curated-detail-report FILE] \
                        [--llm-detail-release-dir DIR --llm-detail-target-dir DIR --llm-detail-report FILE] \
                        [--detail-coverage-output FILE] [--mozc-id-def FILE --mozc-segmenter FILE]"
                 );
@@ -224,9 +230,11 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 .to_owned(),
         );
     }
-    if curated_detail_paths.is_empty() != curated_detail_report_path.is_none() {
+    let has_curated_detail_sources =
+        !curated_detail_paths.is_empty() || !detail_only_paths.is_empty();
+    if has_curated_detail_sources != curated_detail_report_path.is_some() {
         return Err(
-            "--curated-detail-source and --curated-detail-report must be specified together"
+            "--curated-detail-source/--detail-only-source and --curated-detail-report must be specified together"
                 .to_owned(),
         );
     }
@@ -274,8 +282,12 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         ),
     }
     .map_err(|error| error.to_string())?;
-    let curated_details = curated_entry_details(&curated_detail_paths, &mut entries)?;
-    let curated_input_count = curated_details.len();
+    let mut curated_details = curated_entry_details(&curated_detail_paths, &mut entries)?;
+    let detail_only_details = detail_only_entry_details(&detail_only_paths, &entries)?;
+    let curated_input_count = curated_details.len() + detail_only_details.len();
+    if merge_details(&mut curated_details, detail_only_details) != 0 {
+        return Err("duplicate exact identity across curated detail sources".to_owned());
+    }
     // Reviewed descriptions are now details. Strip leftover list notes so a
     // `[calibration]` overlay comment or a baked category tag cannot ship.
     dictc::clear_candidate_list_annotations(&mut entries);
@@ -412,6 +424,19 @@ fn curated_entry_details(
             .extend(parse_entries(&source, &read_utf8(path)?).map_err(|error| error.to_string())?);
     }
     extract_entry_details(entries, &reviewed).map_err(|error| error.to_string())
+}
+
+fn detail_only_entry_details(
+    paths: &[PathBuf],
+    entries: &[SourceEntry],
+) -> Result<Vec<SourceDetail>, String> {
+    let mut reviewed = Vec::new();
+    for path in paths {
+        let source = path.display().to_string();
+        reviewed
+            .extend(parse_entries(&source, &read_utf8(path)?).map_err(|error| error.to_string())?);
+    }
+    attach_entry_details(entries, &reviewed).map_err(|error| error.to_string())
 }
 
 fn curated_detail_report_json(input_records: usize, suppressed_by_existing: usize) -> String {

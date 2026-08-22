@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-nihongo-nyuuryoku",
+  "task": "conversion",
+  "family": "normal-conversion",
+  "role": "negative_control",
+  "context": {
+    "left": "",
+    "right": "のテスト"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "にほんごにゅうりょく",
+    "typing": "nihongonyuuryoku"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

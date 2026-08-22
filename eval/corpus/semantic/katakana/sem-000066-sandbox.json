@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-sandbox",
+  "task": "conversion",
+  "family": "katakana",
+  "role": "positive",
+  "context": {
+    "left": "安全な",
+    "right": "を用意する"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "さんどぼっくす",
+    "typing": "sanndobokksu"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

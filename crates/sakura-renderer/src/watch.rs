@@ -67,6 +67,8 @@ const RETRY_CEILING: Duration = Duration::from_secs(30);
 const RELAUNCH_GAP: Duration = Duration::from_secs(5);
 const HISTORY_DELETE_BUDGET: Duration = Duration::from_secs(2);
 const HISTORY_DELETE_QUEUE_CAPACITY: usize = 8;
+const CANDIDATE_COMMIT_BUDGET: Duration = Duration::from_secs(2);
+const CANDIDATE_COMMIT_QUEUE_CAPACITY: usize = 4;
 
 /// A deletion request carries only the opaque UI snapshot coordinates. The
 /// engine, not the renderer, resolves those coordinates to learned history.
@@ -84,6 +86,81 @@ pub struct HistoryDeleteRequest {
 pub struct HistoryDeleteCompletion {
     pub request: HistoryDeleteRequest,
     pub removed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CandidateCommitRequest {
+    pub revision: u64,
+    pub candidate_index: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CandidateCommitCompletion {
+    pub request: CandidateCommitRequest,
+    pub queued: bool,
+}
+
+/// Starts the renderer's bounded row-click command worker. It queues only an
+/// opaque revision/index capability; the candidate-owning TSF connection must
+/// still validate focus and obtain a document edit session before commit.
+pub fn spawn_candidate_committer(
+    notify_target: isize,
+    notify_message: u32,
+    test_pipe: Option<String>,
+) -> (
+    SyncSender<CandidateCommitRequest>,
+    Receiver<CandidateCommitCompletion>,
+) {
+    let (sender, receiver) =
+        mpsc::sync_channel::<CandidateCommitRequest>(CANDIDATE_COMMIT_QUEUE_CAPACITY);
+    let (completed_sender, completed_receiver) = mpsc::channel();
+    let binding = match test_pipe {
+        Some(pipe_name) => PipeBinding::Test(pipe_name),
+        None => PipeBinding::Production,
+    };
+    thread::Builder::new()
+        .name("sakura-candidate-commit".to_owned())
+        .spawn(move || {
+            while let Ok(request) = receiver.recv() {
+                let queued = binding.connect().ok().is_some_and(|mut client| {
+                    if !matches!(
+                        client.call(
+                            &Request::Hello {
+                                client_version: PROTOCOL_VERSION,
+                            },
+                            CANDIDATE_COMMIT_BUDGET,
+                        ),
+                        Ok(Response::Hello { server_version, .. })
+                            if server_version == PROTOCOL_VERSION
+                    ) {
+                        return false;
+                    }
+                    matches!(
+                        client.call(
+                            &Request::QueueCandidateCommit {
+                                revision: request.revision,
+                                candidate_index: request.candidate_index,
+                            },
+                            CANDIDATE_COMMIT_BUDGET,
+                        ),
+                        Ok(Response::CandidateCommitQueued { queued: true })
+                    )
+                });
+                let _ = completed_sender.send(CandidateCommitCompletion { request, queued });
+                // SAFETY: this numeric HWND is the main thread's live host
+                // until process teardown; failure means it has already gone.
+                unsafe {
+                    let _ = PostMessageW(
+                        Some(HWND(notify_target as *mut c_void)),
+                        notify_message,
+                        WPARAM(0),
+                        LPARAM(0),
+                    );
+                }
+            }
+        })
+        .expect("the renderer cannot create its bounded candidate-commit worker");
+    (sender, completed_receiver)
 }
 
 /// Starts one bounded command worker separate from the long-poll watcher.

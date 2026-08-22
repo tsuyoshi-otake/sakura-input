@@ -26,7 +26,7 @@
 //! sink the caller owns (DESIGN 5.7). `tests/zero_alloc.rs` asserts this
 //! against a counting allocator rather than trusting the claim.
 
-use sakura_proto::{FixedStr, Overflow};
+use sakura_proto::{FixedStr, FixedVec, Overflow};
 
 use crate::config::{self, Document, ParseError, Value};
 use crate::text::TextSink;
@@ -47,6 +47,34 @@ pub const TABLE_SECTION: &str = "kana";
 /// is always a *proper* prefix of some entry and therefore strictly shorter
 /// than the longest one.
 pub const MAX_SEQUENCE: usize = 8;
+
+/// Maximum raw-key span accepted by the pure provenance replay helper.
+///
+/// The helper is deliberately smaller than the engine's preedit limit.  It
+/// is a local-completion probe, not a second unbounded input log; callers that
+/// need to inspect a larger composition must first split it at a trusted
+/// append-only boundary.
+pub const MAX_REPLAY_RAW_BYTES: usize = 128;
+
+/// Maximum number of trace emissions retained by one replay.
+///
+/// A normal entry retires one source span, while a valid custom carry can
+/// trigger a short chain of additional table entries.  The product is a
+/// conservative fixed cap for that chain plus one terminal step; it keeps a
+/// custom table bounded without pretending every table has the shipped
+/// table's carry shape.
+pub const MAX_REPLAY_EVENTS: usize = MAX_REPLAY_RAW_BYTES * MAX_SEQUENCE + 1;
+
+/// Maximum UTF-8 output retained by one replay.
+pub const MAX_REPLAY_OUTPUT_BYTES: usize = MAX_REPLAY_RAW_BYTES * 4;
+
+/// Maximum table-derived completions returned for one structural anomaly.
+///
+/// Phase 1 normally admits one completion.  A custom table may make more than
+/// one ASCII key produce the same corrected reading, so the result is bounded
+/// as a list rather than silently depending on the first key in enumeration
+/// order.
+pub const MAX_LOCAL_COMPLETIONS: usize = 8;
 
 /// Pending romaji: ASCII, bounded, and on the stack.
 type Sequence = FixedStr<MAX_SEQUENCE>;
@@ -135,6 +163,272 @@ impl Input {
         removed
     }
 }
+
+/// A single emission observed while replaying an append-only raw key span.
+///
+/// The source range is a byte range in the ASCII raw input.  The output range
+/// is a character range in [`ReplayTrace::output`].  A carry can make source
+/// ranges overlap an earlier emission (for example the second `t` in `tt`
+/// is both the source of `っ` and the carried source of the following `つ`),
+/// so consumers must treat these as provenance spans rather than a partition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ReplayEvent {
+    raw_start: u16,
+    raw_end: u16,
+    output_start: u16,
+    output_end: u16,
+    kind: ReplayEventKind,
+}
+
+impl ReplayEvent {
+    /// Raw byte offset at which this emission starts.
+    pub fn raw_start(&self) -> usize {
+        usize::from(self.raw_start)
+    }
+
+    /// Raw byte offset immediately after this emission's source.
+    pub fn raw_end(&self) -> usize {
+        usize::from(self.raw_end)
+    }
+
+    /// Output character offset at which this emission starts.
+    pub fn output_start(&self) -> usize {
+        usize::from(self.output_start)
+    }
+
+    /// Output character offset immediately after this emission.
+    pub fn output_end(&self) -> usize {
+        usize::from(self.output_end)
+    }
+
+    /// Whether this emission was produced by a table entry or passed through
+    /// as an unresolved raw ASCII character.
+    pub fn kind(&self) -> ReplayEventKind {
+        self.kind
+    }
+}
+
+/// The provenance class of a replay emission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReplayEventKind {
+    /// Output produced by a matching entry in the compiled Romaji table.
+    #[default]
+    Kana,
+    /// A leading raw character for which the table had no matching entry.
+    RawPassthrough,
+}
+
+/// A bounded, allocation-free replay of the actual compiled Romaji FSM.
+///
+/// [`Table::replay`] feeds every byte through the same `feed`/`drive` rules as
+/// live input.  The output and source spans are retained only in fixed
+/// buffers, making this suitable for a speculative local-completion probe.
+/// It intentionally models live append-only input: a pending prefix is not
+/// flushed at the end, because flushing would erase the distinction between
+/// an unresolved key and a raw passthrough.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayTrace {
+    output: FixedStr<MAX_REPLAY_OUTPUT_BYTES>,
+    events: FixedVec<ReplayEvent, MAX_REPLAY_EVENTS>,
+    pending: Sequence,
+    carry_overlap: usize,
+}
+
+impl ReplayTrace {
+    fn new() -> Self {
+        Self {
+            output: FixedStr::new(),
+            events: FixedVec::new(),
+            pending: Sequence::new(),
+            carry_overlap: 0,
+        }
+    }
+
+    /// Kana and literal output emitted before the replay's final pending
+    /// prefix.
+    pub fn output(&self) -> &str {
+        self.output.as_str()
+    }
+
+    /// All emitted source spans in deterministic FSM order.
+    pub fn events(&self) -> &[ReplayEvent] {
+        self.events.as_slice()
+    }
+
+    /// Raw passthrough emissions, in source order.
+    pub fn raw_passthrough(&self) -> impl Iterator<Item = &ReplayEvent> {
+        self.events
+            .as_slice()
+            .iter()
+            .filter(|event| event.kind == ReplayEventKind::RawPassthrough)
+    }
+
+    /// Number of raw passthrough emissions.
+    pub fn raw_passthrough_count(&self) -> usize {
+        self.raw_passthrough().count()
+    }
+
+    /// The unresolved prefix left by live append-only replay.
+    pub fn pending(&self) -> &str {
+        self.pending.as_str()
+    }
+
+    /// Carry overlap associated with [`ReplayTrace::pending`].
+    pub fn carry_overlap(&self) -> usize {
+        self.carry_overlap.min(self.pending.len())
+    }
+
+    /// Returns whether the replay has exactly one local structural signal.
+    ///
+    /// A single raw passthrough or a single unresolved pending prefix is the
+    /// only shape that can be considered by a Phase 1 caller.  The public
+    /// completion planner is stricter and currently admits raw passthrough
+    /// only; ordinary `n`/`k` prefixes must not become repairs by themselves.
+    pub fn has_one_local_anomaly(&self) -> bool {
+        (self.raw_passthrough_count() == 1 && self.pending.is_empty())
+            || (self.raw_passthrough_count() == 0 && !self.pending.is_empty())
+    }
+
+    fn push_event(
+        &mut self,
+        output: &str,
+        raw_start: usize,
+        raw_end: usize,
+        kind: ReplayEventKind,
+    ) -> Result<(), ReplayError> {
+        let output_start = self.output.as_str().chars().count();
+        self.output
+            .push_str(output)
+            .map_err(|_| ReplayError::OutputOverflow)?;
+        let output_end = output_start + output.chars().count();
+        let event = ReplayEvent {
+            raw_start: u16::try_from(raw_start).map_err(|_| ReplayError::TraceOverflow)?,
+            raw_end: u16::try_from(raw_end).map_err(|_| ReplayError::TraceOverflow)?,
+            output_start: u16::try_from(output_start).map_err(|_| ReplayError::TraceOverflow)?,
+            output_end: u16::try_from(output_end).map_err(|_| ReplayError::TraceOverflow)?,
+            kind,
+        };
+        self.events
+            .push(event)
+            .map_err(|_| ReplayError::TraceOverflow)
+    }
+}
+
+/// Why a bounded raw replay could not be produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplayError {
+    /// Replay input contained a non-ASCII character.  Physical raw key
+    /// provenance is ASCII by contract; direct Kana must be suppressed.
+    NonAsciiRaw,
+    /// The caller supplied more raw bytes than the local probe can inspect.
+    RawTooLong,
+    /// The fixed event buffer could not retain the trace.
+    TraceOverflow,
+    /// The fixed output buffer could not retain the trace.
+    OutputOverflow,
+}
+
+impl core::fmt::Display for ReplayError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NonAsciiRaw => f.write_str("raw replay requires ASCII input"),
+            Self::RawTooLong => write!(f, "raw replay exceeds {MAX_REPLAY_RAW_BYTES} bytes"),
+            Self::TraceOverflow => f.write_str("raw replay trace buffer overflow"),
+            Self::OutputOverflow => f.write_str("raw replay output buffer overflow"),
+        }
+    }
+}
+
+impl std::error::Error for ReplayError {}
+
+/// One table-derived ASCII key insertion at a verified anomaly boundary.
+///
+/// The corrected reading is retained with the plan so the caller does not
+/// need to guess (or consult a dictionary) which result a key insertion
+/// produced.  It is deliberately owned and bounded; a completion plan is
+/// scratch data, not a wire/history field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalCompletion {
+    /// Byte offset in the original raw input at which `key` is inserted.
+    pub insertion_at: u16,
+    /// The single ASCII key inserted at `insertion_at`.
+    pub key: u8,
+    /// Source span of the raw passthrough or unresolved prefix that licensed
+    /// this completion.
+    pub anomaly_start: u16,
+    pub anomaly_end: u16,
+    /// Corrected reading emitted by replaying the raw input with `key`
+    /// inserted at `insertion_at`.
+    pub corrected_reading: FixedStr<MAX_REPLAY_OUTPUT_BYTES>,
+}
+
+/// Bounded table-derived local completion results.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalCompletionList {
+    completions: [Option<LocalCompletion>; MAX_LOCAL_COMPLETIONS],
+    len: usize,
+}
+
+impl LocalCompletionList {
+    fn new() -> Self {
+        Self {
+            completions: [const { None }; MAX_LOCAL_COMPLETIONS],
+            len: 0,
+        }
+    }
+
+    /// Number of completion keys found.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether no table-derived key completed the observed reading.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Completion plans in deterministic ASCII order.
+    pub fn iter(&self) -> impl Iterator<Item = &LocalCompletion> {
+        self.completions[..self.len]
+            .iter()
+            .filter_map(Option::as_ref)
+    }
+
+    /// Returns the completion at `index`, if one was retained.
+    pub fn get(&self, index: usize) -> Option<&LocalCompletion> {
+        self.completions.get(index).and_then(Option::as_ref)
+    }
+
+    fn push(&mut self, completion: LocalCompletion) -> bool {
+        if self.len >= MAX_LOCAL_COMPLETIONS {
+            return false;
+        }
+        self.completions[self.len] = Some(completion);
+        self.len += 1;
+        true
+    }
+}
+
+/// Why a local-completion plan could not be checked against its observed
+/// reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalCompletionError {
+    /// The raw input could not be replayed under the bounded contract.
+    Replay(ReplayError),
+    /// The caller's preedit snapshot does not match the actual FSM replay.
+    ObservedMismatch,
+}
+
+impl core::fmt::Display for LocalCompletionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Replay(error) => error.fmt(f),
+            Self::ObservedMismatch => f.write_str("raw replay does not match observed preedit"),
+        }
+    }
+}
+
+impl std::error::Error for LocalCompletionError {}
 
 /// Why a table could not be compiled.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -338,6 +632,170 @@ impl Table {
         result
     }
 
+    /// Replays an append-only ASCII raw-key span through this exact compiled
+    /// table and retains bounded provenance events.
+    ///
+    /// Unlike [`Table::flush`], this leaves a final prefix pending.  That is
+    /// important to a caller deciding whether a raw span is a structural
+    /// anomaly: `n`, `k`, and a custom-table prefix are not equivalent to a
+    /// raw passthrough merely because a commit would eventually flush them.
+    pub fn replay(&self, raw: &str) -> Result<ReplayTrace, ReplayError> {
+        if !raw.is_ascii() {
+            return Err(ReplayError::NonAsciiRaw);
+        }
+        if raw.len() > MAX_REPLAY_RAW_BYTES {
+            return Err(ReplayError::RawTooLong);
+        }
+
+        let mut trace = ReplayTrace::new();
+        let mut candidate = Sequence::new();
+        let mut overlap = 0usize;
+        for (cursor, byte) in raw.bytes().enumerate() {
+            let pending_start = cursor.saturating_sub(candidate.len());
+            let key = (byte as char).to_ascii_lowercase();
+            if candidate.push(key).is_err() {
+                // A valid compiled table cannot normally reach this branch:
+                // pending is always a proper prefix of an entry.  Keep the
+                // defensive behavior in lock-step with `feed` for a custom
+                // table or a future change to the sequence bound.
+                let mut source_start = pending_start;
+                self.drive_trace(
+                    &mut candidate,
+                    &mut overlap,
+                    &mut trace,
+                    &mut source_start,
+                    cursor,
+                    false,
+                )?;
+                candidate.clear();
+                overlap = 0;
+                candidate
+                    .push(key)
+                    .map_err(|_| ReplayError::TraceOverflow)?;
+            }
+            let mut source_start = if candidate.len() == 1 {
+                cursor
+            } else {
+                pending_start
+            };
+            self.drive_trace(
+                &mut candidate,
+                &mut overlap,
+                &mut trace,
+                &mut source_start,
+                cursor + 1,
+                true,
+            )?;
+        }
+
+        trace.pending = candidate;
+        trace.carry_overlap = overlap;
+        Ok(trace)
+    }
+
+    /// Replays and commits an append-only ASCII raw-key span.
+    ///
+    /// This convenience method is useful for tests and offline consumers
+    /// that need the same terminal output as a real commit.  For structural
+    /// anomaly admission use [`Table::replay`] so an ordinary unresolved
+    /// `n`/`k` prefix is not mistaken for a raw passthrough.
+    pub fn replay_committed(&self, raw: &str) -> Result<ReplayTrace, ReplayError> {
+        let mut trace = self.replay(raw)?;
+        let mut candidate = trace.pending.clone();
+        if candidate.is_empty() {
+            return Ok(trace);
+        }
+        let mut overlap = trace.carry_overlap;
+        let pending_start = raw.len().saturating_sub(candidate.len());
+        let mut source_start = pending_start;
+        self.drive_trace(
+            &mut candidate,
+            &mut overlap,
+            &mut trace,
+            &mut source_start,
+            raw.len(),
+            false,
+        )?;
+        trace.pending = candidate;
+        trace.carry_overlap = overlap;
+        Ok(trace)
+    }
+
+    /// Validates a raw/preedit snapshot and returns bounded table-derived
+    /// one-key local completion proposals.
+    ///
+    /// `observed` must be the live preedit produced by `raw`; this check is
+    /// the provenance boundary and fails closed on any mismatch.  A Phase 1
+    /// proposal is licensed only by exactly one raw passthrough event.  Every
+    /// canonical ASCII key is then tried at that one boundary and retained
+    /// only when the corrected replay has no raw passthrough and no pending
+    /// prefix.  The corrected reading is carried by each returned plan, so
+    /// this method does not need a dictionary target or a guessed reading.
+    ///
+    /// The replay trace still exposes unresolved pending prefixes to callers,
+    /// but this admission path deliberately does not turn an ordinary
+    /// `n`/`k` prefix into a repair candidate.
+    pub fn plan_local_completions(
+        &self,
+        raw: &str,
+        observed: &str,
+    ) -> Result<LocalCompletionList, LocalCompletionError> {
+        let trace = self.replay(raw).map_err(LocalCompletionError::Replay)?;
+        if trace.output() != observed {
+            return Err(LocalCompletionError::ObservedMismatch);
+        }
+        let mut plans = LocalCompletionList::new();
+        if trace.raw_passthrough_count() != 1 || !trace.pending().is_empty() {
+            return Ok(plans);
+        }
+        let anomaly = match trace.raw_passthrough().next() {
+            Some(event) => *event,
+            None => return Ok(plans),
+        };
+
+        // The local completion is inserted immediately after the raw
+        // passthrough.  This is the only Phase 1 boundary; general insertion
+        // at every position belongs to Issue #77 and is intentionally absent.
+        let insertion_at = anomaly.raw_end();
+        if raw.len() >= MAX_REPLAY_RAW_BYTES {
+            return Ok(plans);
+        }
+        for key in 0x20u8..=0x7eu8 {
+            // `Table::replay` applies the same ASCII case fold as live input;
+            // retain one canonical key per folded value instead of returning
+            // an uppercase duplicate for every lowercase completion.
+            if key.is_ascii_uppercase() {
+                continue;
+            }
+            let mut candidate_raw = FixedStr::<MAX_REPLAY_RAW_BYTES>::new();
+            if candidate_raw.push_str(&raw[..insertion_at]).is_err()
+                || candidate_raw.push(key as char).is_err()
+                || candidate_raw.push_str(&raw[insertion_at..]).is_err()
+            {
+                return Ok(plans);
+            }
+            let candidate_trace = match self.replay(candidate_raw.as_str()) {
+                Ok(candidate_trace) => candidate_trace,
+                Err(_) => continue,
+            };
+            if candidate_trace.raw_passthrough_count() != 0 || !candidate_trace.pending().is_empty()
+            {
+                continue;
+            }
+            let proposal = LocalCompletion {
+                insertion_at: u16::try_from(insertion_at).unwrap_or(u16::MAX),
+                key,
+                anomaly_start: u16::try_from(anomaly.raw_start()).unwrap_or(u16::MAX),
+                anomaly_end: u16::try_from(anomaly.raw_end()).unwrap_or(u16::MAX),
+                corrected_reading: candidate_trace.output.clone(),
+            };
+            if !plans.push(proposal) {
+                break;
+            }
+        }
+        Ok(plans)
+    }
+
     /// The resolution loop shared by [`Table::feed`] and [`Table::flush`].
     ///
     /// Terminates because every iteration either returns or replaces
@@ -402,6 +860,87 @@ impl Table {
             }
             *candidate = next;
             *overlap = carry.len() + overlap.saturating_sub(consumed);
+        }
+    }
+
+    /// Trace-aware twin of [`Table::drive`] used only by the pure bounded
+    /// replay helper.  Keeping the matching, longest-prefix, carry, and wait
+    /// rules in this function tied to the same [`Step`] lookup prevents a
+    /// second approximation of the Romaji FSM from becoming a repair oracle.
+    fn drive_trace(
+        &self,
+        candidate: &mut Sequence,
+        overlap: &mut usize,
+        trace: &mut ReplayTrace,
+        source_start: &mut usize,
+        source_end: usize,
+        may_wait: bool,
+    ) -> Result<(), ReplayError> {
+        loop {
+            if candidate.is_empty() {
+                *overlap = 0;
+                *source_start = source_end;
+                return Ok(());
+            }
+            if may_wait && self.extends(candidate.as_str()) {
+                return Ok(());
+            }
+
+            let (emitted, consumed, carry) = match self.step_for(candidate.as_str()) {
+                Step::Entry { index, consumed } => match self.entries.get(index) {
+                    Some(entry) => (
+                        Emission::Kana(&entry.output),
+                        consumed,
+                        entry.carry.as_str(),
+                    ),
+                    None => return Ok(()),
+                },
+                Step::Raw => match candidate.as_str().chars().next() {
+                    Some(c) => (Emission::Raw(c), c.len_utf8(), ""),
+                    None => return Ok(()),
+                },
+            };
+
+            let mut next = Sequence::new();
+            next.push_str(carry)
+                .map_err(|_| ReplayError::TraceOverflow)?;
+            if let Some(rest) = candidate.as_str().get(consumed..) {
+                next.push_str(rest)
+                    .map_err(|_| ReplayError::TraceOverflow)?;
+            }
+
+            let step_start = *source_start;
+            // `candidate` is ASCII and is built from exactly the source range
+            // tracked here.  Clamp defensively rather than allowing malformed
+            // custom state to produce a backwards provenance span.
+            let step_end = step_start
+                .saturating_add(consumed)
+                .min(source_end)
+                .max(step_start);
+            match emitted {
+                Emission::Kana(kana) => {
+                    trace.push_event(kana, step_start, step_end, ReplayEventKind::Kana)?
+                }
+                Emission::Raw(c) => {
+                    let mut raw = [0u8; 4];
+                    let text = c.encode_utf8(&mut raw);
+                    trace.push_event(
+                        text,
+                        step_start,
+                        step_end,
+                        ReplayEventKind::RawPassthrough,
+                    )?;
+                }
+            }
+            *candidate = next;
+            *overlap = carry.len() + overlap.saturating_sub(consumed);
+            *source_start = if candidate.is_empty() {
+                source_end
+            } else {
+                step_start
+                    .saturating_add(consumed)
+                    .saturating_sub(carry.len())
+            };
         }
     }
 
@@ -533,6 +1072,147 @@ mod tests {
         table.flush(&mut state, &mut out).expect("String sink");
         assert!(state.is_empty(), "flush must leave nothing pending");
         out
+    }
+
+    #[test]
+    fn replay_local_completion_finds_only_table_derived_positive_controls() {
+        let table = builtin();
+
+        let nazka = table.replay("nazka").expect("bounded replay");
+        assert_eq!(nazka.output(), "なzか");
+        assert_eq!(nazka.raw_passthrough_count(), 1);
+        assert_eq!(nazka.events()[0].raw_start(), 0);
+        assert_eq!(nazka.events()[0].raw_end(), 2);
+        assert_eq!(nazka.events()[1].kind(), ReplayEventKind::RawPassthrough);
+        assert_eq!(nazka.events()[1].raw_start(), 2);
+        assert_eq!(nazka.events()[1].raw_end(), 3);
+        assert_eq!(nazka.events()[2].raw_start(), 3);
+        assert_eq!(nazka.events()[2].raw_end(), 5);
+
+        let plans = table
+            .plan_local_completions("nazka", "なzか")
+            .expect("matching observed preedit");
+        assert_eq!(plans.len(), 5);
+        let nazka_target = plans
+            .iter()
+            .find(|plan| plan.key == b'e')
+            .expect("e completion");
+        assert_eq!(nazka_target.corrected_reading.as_str(), "なぜか");
+        assert_eq!(nazka_target.insertion_at, 3);
+        assert_eq!(
+            (nazka_target.anomaly_start, nazka_target.anomaly_end),
+            (2, 3)
+        );
+
+        let naikniiku = table.replay("naikniiku").expect("bounded replay");
+        assert_eq!(naikniiku.output(), "ないkにいく");
+        let plans = table
+            .plan_local_completions("naikniiku", "ないkにいく")
+            .expect("matching observed preedit");
+        assert_eq!(plans.len(), 5);
+        let naikniiku_target = plans
+            .iter()
+            .find(|plan| plan.key == b'a')
+            .expect("a completion");
+        assert_eq!(naikniiku_target.corrected_reading.as_str(), "ないかにいく");
+        assert_eq!(naikniiku_target.insertion_at, 4);
+        assert_eq!(
+            (naikniiku_target.anomaly_start, naikniiku_target.anomaly_end),
+            (3, 4)
+        );
+    }
+
+    #[test]
+    fn replay_local_completion_rejects_normal_or_nonlocal_controls() {
+        let table = builtin();
+
+        for (raw, observed, corrected) in [
+            ("nazeka", "なぜか", "なぜか"),
+            ("naikaniiku", "ないかにいく", "ないかにいく"),
+            ("naeka", "なえか", "なぜか"),
+            ("nazea", "なぜあ", "なぜあ"),
+            ("nazq", "なzq", "なぜか"),
+        ] {
+            let plans = table
+                .plan_local_completions(raw, observed)
+                .expect("observed output must match replay");
+            assert!(
+                plans.is_empty(),
+                "unexpected repair for {raw:?} toward {corrected:?}"
+            );
+        }
+
+        assert_eq!(
+            table.plan_local_completions("なぜか", "なぜか"),
+            Err(LocalCompletionError::Replay(ReplayError::NonAsciiRaw))
+        );
+        assert_eq!(
+            table.plan_local_completions("nazka", "なぜか"),
+            Err(LocalCompletionError::ObservedMismatch)
+        );
+    }
+
+    #[test]
+    fn replay_preserves_n_prefixes_and_carry_source_overlap() {
+        let table = builtin();
+
+        let n = table.replay("n").expect("bounded replay");
+        assert_eq!(n.output(), "");
+        assert_eq!(n.pending(), "n");
+        assert_eq!(n.raw_passthrough_count(), 0);
+        assert_eq!(table.replay_committed("n").unwrap().output(), "ん");
+
+        let nn = table.replay("nn").expect("bounded replay");
+        assert_eq!(nn.output(), "ん");
+        assert!(nn.pending().is_empty());
+        assert_eq!(table.replay_committed("nn").unwrap().output(), "ん");
+        assert_eq!(table.replay_committed("n'").unwrap().output(), "ん");
+
+        let carry = table.replay("ttu").expect("bounded replay");
+        assert_eq!(carry.output(), "っつ");
+        assert!(carry.pending().is_empty());
+        assert_eq!(carry.carry_overlap(), 0);
+        assert_eq!(carry.events().len(), 2);
+        assert_eq!(
+            (
+                carry.events()[0].raw_start(),
+                carry.events()[0].raw_end(),
+                carry.events()[0].kind()
+            ),
+            (0, 2, ReplayEventKind::Kana)
+        );
+        assert_eq!(
+            (carry.events()[1].raw_start(), carry.events()[1].raw_end()),
+            (1, 3)
+        );
+    }
+
+    #[test]
+    fn replay_uses_custom_table_and_is_deterministic() {
+        let table = Table::parse(
+            "[kana]\n\
+             qa = \"α\"\n\
+             x = \"え\"\n",
+        )
+        .expect("custom table");
+        let trace = table.replay("qx").expect("bounded replay");
+        assert_eq!(trace.output(), "qえ");
+        assert_eq!(trace.raw_passthrough_count(), 1);
+        let plans = table
+            .plan_local_completions("qx", "qえ")
+            .expect("matching custom replay");
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans.get(0).unwrap().key, b'a');
+        assert_eq!(plans.get(0).unwrap().insertion_at, 1);
+        assert_eq!(plans.get(0).unwrap().corrected_reading.as_str(), "αえ");
+
+        assert_eq!(table.replay("qx").unwrap(), table.replay("qx").unwrap());
+        assert_eq!(
+            table.replay("t").unwrap().output(),
+            table.replay("t").unwrap().output()
+        );
+        let too_long = "a".repeat(MAX_REPLAY_RAW_BYTES + 1);
+        assert_eq!(table.replay(&too_long), Err(ReplayError::RawTooLong));
     }
 
     #[test]

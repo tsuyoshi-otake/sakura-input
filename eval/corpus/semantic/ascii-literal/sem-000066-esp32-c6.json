@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-esp32-c6",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "無線モジュールは",
+    "right": "を載せた"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "ESP32-C6",
+    "typing": "ESP32-C6"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

@@ -165,8 +165,9 @@ pub(crate) const MIN_VECTOR_BYTES: usize = 16;
 ///
 /// This is the semantic definition, mirroring [`crate::width::normalize_char`]
 /// restricted to ASCII: letters follow the alnum channel, digits the number
-/// channel, space and ASCII punctuation the symbol channel, and control
-/// characters are outside the policy entirely. Japanese punctuation cannot
+/// channel, ASCII punctuation the symbol channel, space always passes
+/// (SpaceWidth owns it), and control characters are outside the policy
+/// entirely. Japanese punctuation cannot
 /// appear here — none of the four code points it owns is ASCII.
 ///
 /// Bytes at or above `0x80` are not single-byte characters at all; callers
@@ -176,9 +177,10 @@ const fn passes_through(b: u8, full_alpha: bool, full_digit: bool, full_symbol: 
     match b {
         b'A'..=b'Z' | b'a'..=b'z' => !full_alpha,
         b'0'..=b'9' => !full_digit,
-        // Space plus every ASCII punctuation range, i.e. all of 0x20..=0x7E
-        // that is not a letter or a digit.
-        0x20..=0x2F | 0x3A..=0x40 | 0x5B..=0x60 | 0x7B..=0x7E => !full_symbol,
+        // ASCII space is owned by SpaceWidth, not the symbol channel, so it
+        // always passes through. Remaining ASCII punctuation follows symbol.
+        b' ' => true,
+        0x21..=0x2F | 0x3A..=0x40 | 0x5B..=0x60 | 0x7B..=0x7E => !full_symbol,
         // 0x00..=0x1F and 0x7F: the width policy has no opinion, so they
         // always pass. So does everything from 0x80 up, but see the note
         // above — those never reach a table lookup.
@@ -2009,7 +2011,10 @@ mod tests {
         assert!(admits(symbol_only, b'a'));
         assert!(admits(symbol_only, b'0'));
         assert!(!admits(symbol_only, b'@'));
-        assert!(!admits(symbol_only, b' '), "space is a symbol");
+        assert!(
+            admits(symbol_only, b' '),
+            "space is owned by SpaceWidth, not the symbol channel"
+        );
 
         // Control characters are outside the policy in every combination.
         let everything = passthrough_lut(true, true, true);

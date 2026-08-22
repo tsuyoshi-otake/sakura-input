@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "case_id": "hist-d2ee216e5c697b3e04b3c80308c7bcd3",
+  "task": "conversion",
+  "family": "history-technical-terms",
+  "role": "history-review-approved",
+  "context": {
+    "left": "",
+    "right": ""
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "5.6",
+    "typing": "5.6"
+  },
+  "constraints": {
+    "literal_token": false,
+    "forbid_unrelated_absorption": false
+  },
+  "privacy_provenance": "local-opt-in-normal-commit-v1"
+}

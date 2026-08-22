@@ -43,6 +43,7 @@ features = [
 
 [dev-dependencies]
 dictc = { path = "../dictc" }
+sakura-ime-eval = { path = "../../tools/ime-eval" }
 
 [lints]
 workspace = true

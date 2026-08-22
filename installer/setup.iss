@@ -18,14 +18,61 @@
 ; practice.
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+ja.WelcomeLabel1=Sakura Input のセットアップ
+ja.WelcomeLabel2=Windows の日本語入力を、軽く、確実に。%n%nセットアップを始める前に、作業中のファイルを保存し、入力中のアプリケーションを終了してください。
+ja.WizardSelectDir=インストール先
+ja.SelectDirDesc=Sakura Input のインストール先を確認してください。
+ja.SelectDirLabel3=標準の保存先を使用するか、任意のフォルダーを指定できます。
+ja.SelectDirBrowseLabel=変更する場合は「参照」を選択してください。
+ja.WizardReady=インストール内容の確認
+ja.ReadyLabel1=次の内容で Sakura Input をインストールします。
+ja.ReadyLabel2a=内容を確認して「インストール」を選択してください。変更する場合は「戻る」を選択します。
+ja.ReadyLabel2b=内容を確認して「インストール」を選択してください。
+ja.FinishedHeadingLabel=Sakura Input の準備ができました
+ja.FinishedLabel=Sakura Input のインストールが完了しました。
+ja.FinishedLabelNoIcons=Sakura Input のインストールが完了しました。
+ja.ClickFinish=「完了」を選択してセットアップを終了してください。
+
+en.WelcomeLabel1=Set up Sakura Input
+en.WelcomeLabel2=Lightweight, reliable Japanese input for Windows.%n%nSave your work and close applications that are currently accepting input before continuing.
+en.WizardSelectDir=Install location
+en.SelectDirDesc=Confirm where Sakura Input will be installed.
+en.SelectDirLabel3=Use the recommended location or choose a custom folder.
+en.SelectDirBrowseLabel=Select Browse to change the location.
+en.WizardReady=Review installation
+en.ReadyLabel1=Sakura Input is ready to install with these settings.
+en.ReadyLabel2a=Select Install to continue, or Back to make changes.
+en.ReadyLabel2b=Select Install to continue.
+en.FinishedHeadingLabel=Sakura Input is ready
+en.FinishedLabel=Sakura Input was installed successfully.
+en.FinishedLabelNoIcons=Sakura Input was installed successfully.
+en.ClickFinish=Select Finish to close Setup.
+
+[CustomMessages]
+ja.AppPublisher=Sakura Input 開発チーム
+ja.StatusRegisterTextService=Sakura Input のテキストサービスを登録しています...
+ja.StatusInstallCleanup=古いペイロードのクリーンアップを設定しています...
+ja.StatusConfigureDiagnostics=ローカルのクラッシュ診断を設定しています...
+ja.StatusEnableProfile=入力方法に Sakura Input を追加しています...
+ja.PostInstallAi=Sakura Input の AI 文章変換を設定する
+
+en.AppPublisher=Sakura Input contributors
+en.StatusRegisterTextService=Registering the Sakura Input text service...
+en.StatusInstallCleanup=Installing payload cleanup maintenance...
+en.StatusConfigureDiagnostics=Configuring bounded local crash diagnostics...
+en.StatusEnableProfile=Adding Sakura Input to your input methods...
+en.PostInstallAi=Configure Sakura Input AI text transformation
 
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "1.0.17"
+#define AppProductVersion "1.0.18"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\1.0.17-dev"
+#define AppVersionedDir "{app}\versions\1.0.18-dev"
 #endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0
@@ -52,8 +99,12 @@ AppName=Sakura Input
 ; Cargo.toml by hand for now; a release pipeline that reads Cargo.toml is
 ; out of scope for this v0 script.
 AppVersion={#AppProductVersion}
-AppPublisher=Sakura Input contributors
+AppPublisher={cm:AppPublisher}
 AppPublisherURL=https://github.com/tsuyoshi-otake/sakura-input
+VersionInfoCompany=Sakura Input contributors
+LanguageDetectionMethod=uilanguage
+ShowLanguageDialog=no
+LicenseFile=..\LICENSE
 DefaultDirName={autopf}\Sakura Input
 ; A resident text service is not something a user launches by hand, so
 ; there is nothing worth putting in the Start Menu; [Icons] is omitted
@@ -79,7 +130,13 @@ OutputDir=out
 OutputBaseFilename=sakura_setup
 Compression=lzma2
 SolidCompression=yes
-UninstallDisplayIcon={app}\sakura_settings.exe
+SetupIconFile=..\assets\sakura-input-icon\sakura-input.ico
+UninstallDisplayIcon={app}\sakura-input.ico
+WizardStyle=modern dark includetitlebar hidebevels
+WizardImageFile=..\assets\sakura-input-icon\sakura-input-installer-image.png
+WizardSmallImageFile=..\assets\sakura-input-icon\sakura-input.png
+DisableStartupPrompt=yes
+DisableWelcomePage=no
 ; The TSF DLL is installed into a unique version directory and the registry is
 ; switched to it after the copy. A host process may keep an older version
 ; loaded, but the installer never overwrites that mapped image and therefore
@@ -110,7 +167,9 @@ Source: "..\target\x86_64-pc-windows-msvc\release\sakura_renderer.exe"; DestDir:
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_regtool.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_logon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\assets\sakura-input-icon\sakura-input.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings_payload.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
+Source: "..\assets\sakura-input-icon\sakura-input.ico"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 
 ; The engine maps exactly one shared read-only image from this subdirectory.
 ; Each version owns its dictionary, so an older engine can finish using its
@@ -162,20 +221,20 @@ Source: "..\data\SOURCES.lock"; DestDir: "{#AppVersionedDir}\licenses"; DestName
 ; purpose rather than a fact regtool happened to discover; the practical
 ; effect either way is the same -- 32-bit host applications have no Sakura
 ; Input entry and fall back to MS-IME.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--register --dll ""{#AppVersionedDir}\sakura_tsf.dll"" --no-wow64"; Flags: runhidden waituntilterminated; Check: RegisterActivePayload; StatusMsg: "Registering the Sakura Input text service..."
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--register --dll ""{#AppVersionedDir}\sakura_tsf.dll"" --no-wow64"; Flags: runhidden waituntilterminated; Check: RegisterActivePayload; StatusMsg: "{cm:StatusRegisterTextService}"
 
 ; The resident per-user logon task intentionally runs at LUA so it can talk to
 ; normal-integrity applications. Payload deletion needs administrator rights,
 ; so a separate hidden SYSTEM task retries it for every logon without showing a
 ; UAC prompt or elevating the IME engine itself.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--install-cleanup-task"; Flags: runhidden waituntilterminated; Check: InstallCleanupTaskOrAbort; StatusMsg: "Installing payload cleanup maintenance..."
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--install-cleanup-task"; Flags: runhidden waituntilterminated; Check: InstallCleanupTaskOrAbort; StatusMsg: "{cm:StatusInstallCleanup}"
 
 ; Local crash dumps remain on the machine and are never uploaded. Every Sakura
 ; executable shares the per-user dump directory; WER enforces DumpCount=5 for
 ; each image and the engine's logon maintenance additionally prunes the shared
 ; directory. This command is machine-wide and therefore runs before dropping
 ; back to the original user's token below.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--configure-diagnostics"; Flags: runhidden waituntilterminated; StatusMsg: "Configuring bounded local crash diagnostics..."
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--configure-diagnostics"; Flags: runhidden waituntilterminated; StatusMsg: "{cm:StatusConfigureDiagnostics}"
 
 ; Per-user: adds Sakura Input to this account's input list, ensures the stable
 ; logon task exists, and runs that same stable bootstrap once for the current
@@ -209,7 +268,7 @@ Filename: "{app}\sakura_regtool.exe"; Parameters: "--configure-diagnostics"; Fla
 ; sakura_logon.exe is now that stub: the task launches it first, it reapplies
 ; both the task definition and the input-list entry, then starts the engine and
 ; renderer. Every failed step is reflected in its exit bitmask and status file.
-Filename: "{app}\sakura_regtool.exe"; Parameters: "--enable-profile"; Flags: runhidden waituntilterminated runasoriginaluser; StatusMsg: "Adding Sakura Input to your input methods..."
+Filename: "{app}\sakura_regtool.exe"; Parameters: "--enable-profile"; Flags: runhidden waituntilterminated runasoriginaluser; StatusMsg: "{cm:StatusEnableProfile}"
 
 ; The optional post-install step runs the ordinary settings application under
 ; the original desktop user's token. Provider, endpoint, protected API key,
@@ -217,7 +276,7 @@ Filename: "{app}\sakura_regtool.exe"; Parameters: "--enable-profile"; Flags: run
 ; that user's HKCU/Credential Manager rather than the elevated installer's.
 ; The settings save path performs no network request; an empty key preserves
 ; any credential from an earlier installation.
-Filename: "{app}\sakura_settings.exe"; Description: "Sakura InputのAI文章変換を設定する"; Flags: postinstall skipifsilent nowait runasoriginaluser
+Filename: "{app}\sakura_settings.exe"; Description: "{cm:PostInstallAi}"; Flags: postinstall skipifsilent nowait runasoriginaluser
 
 [UninstallRun]
 ; The safety-critical maintenance-task removal and TSF deregistration run from
@@ -257,6 +316,56 @@ Type: filesandordirs; Name: "{app}\docs"
 Type: filesandordirs; Name: "{app}\licenses"
 
 [Code]
+
+const
+  PBM_SETBARCOLOR = $0409;
+  PBM_SETBKCOLOR = $2001;
+  SakuraProgressColor = $005A1E7B;
+  SakuraProgressTrackColor = $00323232;
+
+function SetWindowTheme(Window: HWND; SubAppName, SubIdList: String): HRESULT;
+  external 'SetWindowTheme@uxtheme.dll stdcall';
+
+procedure PolishWizardPages;
+var
+  ContentLeft, ContentWidth: Integer;
+begin
+  { Match Sakura Editor NEXT: remove legacy folder artwork and use the full
+    content width on the dark modern wizard. }
+  ContentLeft := WizardForm.DirEdit.Left;
+  ContentWidth := WizardForm.DirBrowseButton.Left +
+    WizardForm.DirBrowseButton.Width - ContentLeft;
+  WizardForm.SelectDirBitmapImage.Visible := False;
+  WizardForm.SelectDirLabel.Left := ContentLeft;
+  WizardForm.SelectDirLabel.Width := ContentWidth;
+  WizardForm.SelectDirBrowseLabel.Left := ContentLeft;
+  WizardForm.SelectDirBrowseLabel.Width := ContentWidth;
+  WizardForm.ReadyMemo.ScrollBars := ssVertical;
+end;
+
+procedure ApplySakuraProgressColors;
+begin
+  if not HighContrastActive then
+  begin
+    SetWindowTheme(WizardForm.ProgressGauge.Handle, '', '');
+    SendMessage(WizardForm.ProgressGauge.Handle, PBM_SETBKCOLOR, 0,
+      SakuraProgressTrackColor);
+    SendMessage(WizardForm.ProgressGauge.Handle, PBM_SETBARCOLOR, 0,
+      SakuraProgressColor);
+  end;
+end;
+
+procedure InitializeWizard;
+begin
+  PolishWizardPages;
+  ApplySakuraProgressColors;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpInstalling then
+    ApplySakuraProgressColors;
+end;
 
 // DESIGN 3.2: the whole workspace is compiled with
 // -C target-feature=+avx,+ssse3 (.cargo/config.toml). The 128-bit width

@@ -1,0 +1,163 @@
+# license: LicenseRef-Sakura-InHouse
+# Issue #79: submitted compound homophones; observational unless scope=context_required.
+case_id	scope	reading	expected_surfaces	left_context	right_context	expected_top1
+hc-001	candidate_observation	きのうてすと	機能テスト / 昨日テスト	-	-	-
+hc-002	candidate_observation	しようかくにん	仕様確認 / 使用確認	-	-	-
+hc-003	candidate_observation	せいどひょうか	精度評価 / 制度評価	-	-	-
+hc-004	candidate_observation	せいどこうじょう	精度向上 / 制度向上	-	-	-
+hc-005	candidate_observation	こうせいかくにん	構成確認 / 校正確認	-	-	-
+hc-006	candidate_observation	こうせいさぎょう	構成作業 / 校正作業	-	-	-
+hc-007	candidate_observation	たいしょうはんい	対象範囲 / 対照範囲	-	-	-
+hc-008	candidate_observation	たいしょうぐん	対象群 / 対照群	-	-	-
+hc-009	candidate_observation	けっさいしょり	決済処理 / 決裁処理	-	-	-
+hc-010	candidate_observation	けっさいけっか	決済結果 / 決裁結果	-	-	-
+hc-011	candidate_observation	けっさいじょうたい	決済状態 / 決裁状態	-	-	-
+hc-012	candidate_observation	けっさいふろー	決済フロー / 決裁フロー	-	-	-
+hc-013	candidate_observation	ほしょうたいしょう	保証対象 / 補償対象 / 保障対象	-	-	-
+hc-014	candidate_observation	ほしょうはんい	保証範囲 / 補償範囲 / 保障範囲	-	-	-
+hc-015	candidate_observation	ほしょうないよう	保証内容 / 補償内容 / 保障内容	-	-	-
+hc-016	candidate_observation	ほしょうせいど	保証制度 / 補償制度 / 保障制度	-	-	-
+hc-017	candidate_observation	せいさくかいしゃ	制作会社 / 製作会社	-	-	-
+hc-018	candidate_observation	せいさくたんとう	制作担当 / 製作担当 / 政策担当	-	-	-
+hc-019	candidate_observation	せいさくぶもん	制作部門 / 製作部門 / 政策部門	-	-	-
+hc-020	candidate_observation	せいさくかてい	制作過程 / 製作過程	-	-	-
+hc-021	candidate_observation	せいさくひ	制作費 / 製作費	-	-	-
+hc-022	candidate_observation	せいさくほうしん	制作方針 / 製作方針 / 政策方針	-	-	-
+hc-023	candidate_observation	かいていないよう	改定内容 / 改訂内容	-	-	-
+hc-024	candidate_observation	かいていりれき	改定履歴 / 改訂履歴	-	-	-
+hc-025	candidate_observation	かいていばん	改訂版 / 改定版	-	-	-
+hc-026	candidate_observation	きていないよう	規定内容 / 規程内容 / 既定内容	-	-	-
+hc-027	candidate_observation	きていじこう	規定事項 / 規程事項	-	-	-
+hc-028	candidate_observation	きていち	規定値 / 既定値	-	-	-
+hc-029	candidate_observation	きていろせん	既定路線 / 規定路線	-	-	-
+hc-030	candidate_observation	げんじょうかいふく	原状回復 / 現状回復	-	-	-
+hc-031	candidate_observation	げんじょうはあく	現状把握 / 原状把握	-	-	-
+hc-032	candidate_observation	げんじょういじ	現状維持 / 原状維持	-	-	-
+hc-033	candidate_observation	じりつせいぎょ	自律制御 / 自立制御	-	-	-
+hc-034	candidate_observation	じりつしえん	自立支援 / 自律支援	-	-	-
+hc-035	candidate_observation	じりつうんてん	自律運転 / 自立運転	-	-	-
+hc-036	candidate_observation	じりつしすてむ	自律システム / 自立システム	-	-	-
+hc-037	candidate_observation	ほそくせつめい	補足説明 / 捕捉説明	-	-	-
+hc-038	candidate_observation	ほそくじょうほう	補足情報 / 捕捉情報	-	-	-
+hc-039	candidate_observation	ほそくきのう	捕捉機能 / 補足機能	-	-	-
+hc-040	candidate_observation	ほそくたいしょう	捕捉対象 / 補足対象	-	-	-
+hc-041	candidate_observation	ようけんかくにん	要件確認 / 用件確認	-	-	-
+hc-042	candidate_observation	ようけんせいり	要件整理 / 用件整理	-	-	-
+hc-043	candidate_observation	ようけんていぎ	要件定義 / 用件定義	-	-	-
+hc-044	candidate_observation	ようけんひょう	要件表 / 用件表	-	-	-
+hc-045	candidate_observation	ひょうきほうほう	表記方法 / 標記方法	-	-	-
+hc-046	candidate_observation	ひょうきないよう	表記内容 / 標記内容	-	-	-
+hc-047	candidate_observation	ひょうきけん	標記件 / 表記件	-	-	-
+hc-048	candidate_observation	いどうよてい	移動予定 / 異動予定	-	-	-
+hc-049	candidate_observation	いどうさき	移動先 / 異動先	-	-	-
+hc-050	candidate_observation	いどうじき	移動時期 / 異動時期	-	-	-
+hc-051	candidate_observation	いどうりれき	移動履歴 / 異動履歴	-	-	-
+hc-052	candidate_observation	さいかいよてい	再開予定 / 再会予定	-	-	-
+hc-053	candidate_observation	さいかいじき	再開時期 / 再会時期	-	-	-
+hc-054	candidate_observation	さいかいばしょ	再開場所 / 再会場所	-	-	-
+hc-055	candidate_observation	かいとうないよう	回答内容 / 解答内容	-	-	-
+hc-056	candidate_observation	かいとうけっか	回答結果 / 解答結果	-	-	-
+hc-057	candidate_observation	かいとうようし	回答用紙 / 解答用紙	-	-	-
+hc-058	candidate_observation	かいとうじかん	回答時間 / 解答時間 / 解凍時間	-	-	-
+hc-059	candidate_observation	かいとうほうほう	回答方法 / 解答方法 / 解凍方法	-	-	-
+hc-060	candidate_observation	かいとうしょり	回答処理 / 解凍処理	-	-	-
+hc-061	candidate_observation	かいほうじょうけん	開放条件 / 解放条件	-	-	-
+hc-062	candidate_observation	かいほうじかん	開放時間 / 解放時間	-	-	-
+hc-063	candidate_observation	かいほうせいど	開放制度 / 解放制度	-	-	-
+hc-064	candidate_observation	かいしゅうこうじ	改修工事 / 回収工事	-	-	-
+hc-065	candidate_observation	かいしゅうよてい	改修予定 / 回収予定	-	-	-
+hc-066	candidate_observation	かいしゅうけいかく	改修計画 / 回収計画	-	-	-
+hc-067	candidate_observation	かいしゅうたいしょう	回収対象 / 改修対象	-	-	-
+hc-068	candidate_observation	こうかけんしょう	効果検証 / 硬貨検証	-	-	-
+hc-069	candidate_observation	こうかそくてい	効果測定 / 硬貨測定	-	-	-
+hc-070	candidate_observation	こうかはんてい	効果判定 / 硬貨判定	-	-	-
+hc-071	candidate_observation	こうかこうかん	硬貨交換 / 効果交換	-	-	-
+hc-072	candidate_observation	こうしんしょり	更新処理 / 交信処理	-	-	-
+hc-073	candidate_observation	こうしんじょうたい	更新状態 / 交信状態	-	-	-
+hc-074	candidate_observation	こうしんきろく	更新記録 / 交信記録	-	-	-
+hc-075	candidate_observation	こうしんりれき	更新履歴 / 交信履歴	-	-	-
+hc-076	candidate_observation	こうしんかくにん	更新確認 / 交信確認	-	-	-
+hc-077	candidate_observation	そうさほうほう	操作方法 / 捜査方法	-	-	-
+hc-078	candidate_observation	そうさてじゅん	操作手順 / 捜査手順	-	-	-
+hc-079	candidate_observation	そうさきろく	操作記録 / 捜査記録	-	-	-
+hc-080	candidate_observation	そうさたいしょう	操作対象 / 捜査対象	-	-	-
+hc-081	candidate_observation	そうさけっか	操作結果 / 捜査結果	-	-	-
+hc-082	candidate_observation	せんたくほうほう	選択方法 / 洗濯方法	-	-	-
+hc-083	candidate_observation	せんたくじかん	選択時間 / 洗濯時間	-	-	-
+hc-084	candidate_observation	せんたくけっか	選択結果 / 洗濯結果	-	-	-
+hc-085	candidate_observation	せんたくかいすう	選択回数 / 洗濯回数	-	-	-
+hc-086	candidate_observation	けんしょうけっか	検証結果 / 懸賞結果	-	-	-
+hc-087	candidate_observation	けんしょうたいしょう	検証対象 / 懸賞対象 / 顕彰対象	-	-	-
+hc-088	candidate_observation	けんしょうきかん	検証期間 / 懸賞期間	-	-	-
+hc-089	candidate_observation	けんしょうほうほう	検証方法 / 顕彰方法	-	-	-
+hc-090	candidate_observation	しょうかいないよう	紹介内容 / 照会内容	-	-	-
+hc-091	candidate_observation	しょうかいさき	紹介先 / 照会先	-	-	-
+hc-092	candidate_observation	しょうかいけっか	紹介結果 / 照会結果	-	-	-
+hc-093	candidate_observation	しょうかいばんごう	照会番号 / 紹介番号	-	-	-
+hc-094	candidate_observation	しんせいしょ	申請書 / 新生書	-	-	-
+hc-095	candidate_observation	しんせいないよう	申請内容 / 新生内容	-	-	-
+hc-096	candidate_observation	しんせいじょうたい	申請状態 / 新生状態	-	-	-
+hc-097	candidate_observation	はんえいけっか	反映結果 / 繁栄結果	-	-	-
+hc-098	candidate_observation	はんえいじょうたい	反映状態 / 繁栄状態	-	-	-
+hc-099	candidate_observation	はっせいじょうけん	発生条件 / 発声条件	-	-	-
+hc-100	candidate_observation	はっせいじかん	発生時間 / 発声時間	-	-	-
+hc-101	candidate_observation	はっせいほうほう	発生方法 / 発声方法	-	-	-
+hc-102	candidate_observation	はっせいかいすう	発生回数 / 発声回数	-	-	-
+hc-103	candidate_observation	はいしんじかん	配信時間 / 背信時間	-	-	-
+hc-104	candidate_observation	はいしんきろく	配信記録 / 背信記録	-	-	-
+hc-105	candidate_observation	ふかじょうたい	負荷状態 / 付加状態	-	-	-
+hc-106	candidate_observation	ふかしょり	負荷処理 / 付加処理	-	-	-
+hc-107	candidate_observation	ふかじょうけん	負荷条件 / 付加条件	-	-	-
+hc-108	candidate_observation	ふかきのう	付加機能 / 負荷機能	-	-	-
+hc-109	candidate_observation	ないぞうきのう	内蔵機能 / 内臓機能	-	-	-
+hc-110	candidate_observation	ないぞうようりょう	内蔵容量 / 内臓容量	-	-	-
+hc-111	candidate_observation	どうせんせっけい	動線設計 / 導線設計 / 銅線設計	-	-	-
+hc-112	candidate_observation	どうせんかくにん	動線確認 / 導線確認 / 銅線確認	-	-	-
+hc-113	candidate_observation	どうせんはいち	動線配置 / 導線配置 / 銅線配置	-	-	-
+hc-114	candidate_observation	こうていかくにん	工程確認 / 肯定確認	-	-	-
+hc-115	candidate_observation	こうていひょう	工程表 / 肯定表	-	-	-
+hc-116	candidate_observation	こうていへんこう	工程変更 / 肯定変更	-	-	-
+hc-117	candidate_observation	げんこうかくにん	原稿確認 / 現行確認	-	-	-
+hc-118	candidate_observation	げんこうしよう	現行仕様 / 原稿仕様	-	-	-
+hc-119	candidate_observation	げんこうせいど	現行制度 / 原稿制度	-	-	-
+hc-120	candidate_observation	げんこうばん	現行版 / 原稿版	-	-	-
+hc-121	candidate_observation	げんしょうかくにん	現象確認 / 減少確認	-	-	-
+hc-122	candidate_observation	げんしょうけいこう	減少傾向 / 現象傾向	-	-	-
+hc-123	candidate_observation	げんしょうげんいん	減少原因 / 現象原因	-	-	-
+hc-124	candidate_observation	けいこうぶんせき	傾向分析 / 蛍光分析	-	-	-
+hc-125	candidate_observation	けいこうそくてい	蛍光測定 / 傾向測定	-	-	-
+hc-126	candidate_observation	けいこうけんさ	蛍光検査 / 傾向検査	-	-	-
+hc-127	candidate_observation	きかんへんこう	期間変更 / 機関変更	-	-	-
+hc-128	candidate_observation	きかんせってい	期間設定 / 機関設定	-	-	-
+hc-129	candidate_observation	きかんかくにん	期間確認 / 機関確認	-	-	-
+hc-130	candidate_observation	きかんとうろく	機関登録 / 期間登録	-	-	-
+hc-131	candidate_observation	きげんかくにん	期限確認 / 起源確認	-	-	-
+hc-132	candidate_observation	きげんせってい	期限設定 / 起源設定	-	-	-
+hc-133	candidate_observation	きげんちょうさ	起源調査 / 期限調査	-	-	-
+hc-134	candidate_observation	きたいせっけい	機体設計 / 気体設計	-	-	-
+hc-135	candidate_observation	きたいけんさ	機体検査 / 気体検査	-	-	-
+hc-136	candidate_observation	きたいじょうたい	機体状態 / 気体状態	-	-	-
+hc-137	candidate_observation	きたいとくせい	気体特性 / 機体特性	-	-	-
+hc-138	candidate_observation	きょうせいしょり	強制処理 / 矯正処理	-	-	-
+hc-139	candidate_observation	きょうせいそうち	矯正装置 / 強制装置	-	-	-
+hc-140	candidate_observation	きょうせいしゅうりょう	強制終了 / 矯正終了	-	-	-
+hc-141	candidate_observation	きょうちょうどうさ	協調動作 / 強調動作	-	-	-
+hc-142	candidate_observation	きょうちょうひょうじ	強調表示 / 協調表示	-	-	-
+hc-143	candidate_observation	きょうちょうせいぎょ	協調制御 / 強調制御	-	-	-
+hc-144	candidate_observation	こうこくけいさい	広告掲載 / 公告掲載	-	-	-
+hc-145	candidate_observation	こうこくないよう	広告内容 / 公告内容	-	-	-
+hc-146	candidate_observation	こうこくきかん	広告期間 / 公告期間	-	-	-
+hc-147	candidate_observation	こうふてつづき	交付手続き / 公布手続き	-	-	-
+hc-148	candidate_observation	こうふび	交付日 / 公布日	-	-	-
+hc-149	candidate_observation	ほけんせいど	保険制度 / 保健制度	-	-	-
+hc-150	candidate_observation	ほけんしどう	保健指導 / 保険指導	-	-	-
+hc-151	candidate_observation	ほけんじぎょう	保健事業 / 保険事業	-	-	-
+hc-152	candidate_observation	ほしゅうけいかく	補修計画 / 補習計画	-	-	-
+hc-153	candidate_observation	ほしゅうじかん	補修時間 / 補習時間	-	-	-
+hc-154	candidate_observation	ほしゅうたいしょう	補修対象 / 補習対象	-	-	-
+hc-155	candidate_observation	ようりょうかくにん	容量確認 / 要領確認	-	-	-
+hc-156	candidate_observation	ようりょうへんこう	容量変更 / 要領変更	-	-	-
+hc-157	candidate_observation	ようりょうせってい	容量設定 / 要領設定	-	-	-
+hc-158	candidate_observation	ようりょうせつめい	要領説明 / 容量説明	-	-	-
+hcx-001	context_required	きのうのてすとけっか	機能のテスト結果 / 昨日のテスト結果	新しく追加した	を確認した	機能のテスト結果
+hcx-002	context_required	きのうのてすとけっか	機能のテスト結果 / 昨日のテスト結果	担当者は	を確認した	昨日のテスト結果

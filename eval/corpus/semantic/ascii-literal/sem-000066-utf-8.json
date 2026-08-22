@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-utf-8",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "文字列は",
+    "right": "で扱う"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "UTF-8",
+    "typing": "UTF-8"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

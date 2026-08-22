@@ -19,6 +19,18 @@ const HEADER: &str = "unix_ms\tpid\ttid\tcomp\tinst\tevent\tdecision\tk0\tk1\tk2
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
+#[derive(Debug, Clone, Copy)]
+pub struct TraceEvent {
+    pub component: &'static str,
+    pub instance: u64,
+    pub event: &'static str,
+    pub decision: &'static str,
+    pub k0: u64,
+    pub k1: u64,
+    pub k2: u64,
+    pub k3: u64,
+}
+
 pub fn default_path() -> io::Result<PathBuf> {
     let local = std::env::var_os("LOCALAPPDATA").ok_or_else(|| {
         io::Error::new(
@@ -51,39 +63,23 @@ pub fn enable_from_environment() {
 }
 
 /// Best-effort append. Callers on the key path ignore the result.
-pub fn emit(
-    component: &'static str,
-    instance: u64,
-    event: &'static str,
-    decision: &'static str,
-    k0: u64,
-    k1: u64,
-    k2: u64,
-    k3: u64,
-) {
+pub fn emit(record: TraceEvent) {
     if !is_enabled() {
         return;
     }
     let Ok(path) = default_path() else {
         return;
     };
-    let _ = emit_at(&path, component, instance, event, decision, k0, k1, k2, k3);
+    let _ = emit_at(&path, record);
 }
 
-pub fn emit_at(
-    path: &Path,
-    component: &'static str,
-    instance: u64,
-    event: &'static str,
-    decision: &'static str,
-    k0: u64,
-    k1: u64,
-    k2: u64,
-    k3: u64,
-) -> io::Result<()> {
-    debug_assert!(component.bytes().all(|b| b.is_ascii_graphic()));
-    debug_assert!(event.bytes().all(|b| b.is_ascii_graphic()));
-    debug_assert!(decision.bytes().all(|b| b.is_ascii_graphic() || b == b'_'));
+pub fn emit_at(path: &Path, record: TraceEvent) -> io::Result<()> {
+    debug_assert!(record.component.bytes().all(|b| b.is_ascii_graphic()));
+    debug_assert!(record.event.bytes().all(|b| b.is_ascii_graphic()));
+    debug_assert!(record
+        .decision
+        .bytes()
+        .all(|b| b.is_ascii_graphic() || b == b'_'));
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -96,8 +92,16 @@ pub fn emit_at(
     // SAFETY: GetCurrentThreadId has no preconditions.
     let tid = unsafe { GetCurrentThreadId() };
     let line = format!(
-        "{timestamp}\t{}\t{tid}\t{component}\t{instance}\t{event}\t{decision}\t{k0}\t{k1}\t{k2}\t{k3}\n",
-        std::process::id()
+        "{timestamp}\t{}\t{tid}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+        std::process::id(),
+        record.component,
+        record.instance,
+        record.event,
+        record.decision,
+        record.k0,
+        record.k1,
+        record.k2,
+        record.k3,
     );
 
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
@@ -158,7 +162,20 @@ mod tests {
     fn emit_at_writes_header_and_one_content_free_row() {
         let path = path();
         let _ = fs::remove_file(&path);
-        emit_at(&path, "tsf", 7, "candidate_hide", "keep", 0, 1, 0, 0).expect("write");
+        emit_at(
+            &path,
+            TraceEvent {
+                component: "tsf",
+                instance: 7,
+                event: "candidate_hide",
+                decision: "keep",
+                k0: 0,
+                k1: 1,
+                k2: 0,
+                k3: 0,
+            },
+        )
+        .expect("write");
         let text = fs::read_to_string(&path).expect("read");
         assert!(text.starts_with(HEADER));
         assert!(text.contains("\ttsf\t7\tcandidate_hide\tkeep\t0\t1\t0\t0\n"));
@@ -169,6 +186,15 @@ mod tests {
     #[test]
     fn disabled_emit_is_a_noop() {
         set_enabled(false);
-        emit("tsf", 1, "conversion_key", "absorb_peer", 0, 1, 2, 0);
+        emit(TraceEvent {
+            component: "tsf",
+            instance: 1,
+            event: "conversion_key",
+            decision: "absorb_peer",
+            k0: 0,
+            k1: 1,
+            k2: 2,
+            k3: 0,
+        });
     }
 }

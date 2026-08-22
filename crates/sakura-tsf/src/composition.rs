@@ -72,6 +72,55 @@ where
     )
 }
 
+/// Queries the current selection (usually the caret) in screen coordinates.
+///
+/// Idle 半角/全角 has no composition, so the mode bar cannot use
+/// [`candidate_rect`]. Electron still answers `GetSelection` plus `GetTextExt`
+/// for a collapsed caret; a zero-width result is inflated so it remains a
+/// usable left-edge anchor.
+pub fn selection_rect<Authority>(
+    context: &ITfContext,
+    ec: u32,
+    authority: &mut Authority,
+) -> GeometryResult
+where
+    Authority: FnMut() -> Result<()>,
+{
+    let range = match current_selection_range(context, ec, authority) {
+        Ok(range) => range,
+        Err(_) => return GeometryResult::Unavailable,
+    };
+    // `geometry_from` rejects a collapsed caret as invalid. The idle mode bar
+    // needs that left edge, so this path inflates before the validity check.
+    query_caret_rect_host_calls(
+        authority,
+        move || Ok(range),
+        // SAFETY: `context` belongs to the active edit session and `ec` is
+        // valid for the duration of this host-call callback.
+        || unsafe { context.GetActiveView() },
+        // SAFETY: `view` and `range` are borrowed from the active context and
+        // the callback executes before the host edit session ends.
+        |view, range| unsafe {
+            let mut rect = RECT::default();
+            let mut clipped = false.into();
+            view.GetTextExt(ec, range, &mut rect, &mut clipped)?;
+            Ok(rect)
+        },
+    )
+}
+
+/// A collapsed caret is a valid place to put the mode bar. [`ScreenRect::is_valid`]
+/// rejects zero width, so a 1px column is enough for left-edge alignment.
+fn inflate_caret_anchor(mut rect: ScreenRect) -> Option<ScreenRect> {
+    if rect.right <= rect.left {
+        rect.right = rect.left.saturating_add(1);
+    }
+    if rect.bottom <= rect.top {
+        rect.bottom = rect.top.saturating_add(1);
+    }
+    rect.is_valid().then_some(rect)
+}
+
 /// Queries the screen rectangle the host draws this document into.
 ///
 /// This is the editable area itself, not the composition inside it. The
@@ -288,6 +337,27 @@ where
     })())
 }
 
+/// Same host-call sequence as [`query_candidate_rect_host_calls`], but a
+/// collapsed caret becomes a 1px column instead of `Unavailable`.
+fn query_caret_rect_host_calls<Range, View, Authority, GetRange, GetActiveView, GetTextExt>(
+    authority: &mut Authority,
+    get_range: GetRange,
+    get_active_view: GetActiveView,
+    get_text_ext: GetTextExt,
+) -> GeometryResult
+where
+    Authority: FnMut() -> Result<()>,
+    GetRange: FnOnce() -> Result<Range>,
+    GetActiveView: FnOnce() -> Result<View>,
+    GetTextExt: FnOnce(&View, &Range) -> Result<RECT>,
+{
+    geometry_from_caret((|| {
+        let range = checked_host_call(authority, get_range)?;
+        let view = checked_host_call(authority, get_active_view)?;
+        checked_host_call(authority, || get_text_ext(&view, &range))
+    })())
+}
+
 /// The two host calls behind [`document_rect`], gated the same way as the
 /// candidate-geometry sequence so an invalidation during `GetActiveView`
 /// cannot continue into `GetScreenExt`.
@@ -327,6 +397,25 @@ fn geometry_from(queried: Result<RECT>) -> GeometryResult {
         // This includes a failed authority gate. A caller that supplied a
         // lease authority rechecks it before completing the query and abandons
         // the claimed geometry state when the lease went stale.
+        Err(_) => GeometryResult::Unavailable,
+    }
+}
+
+fn geometry_from_caret(queried: Result<RECT>) -> GeometryResult {
+    match queried {
+        Ok(rect) => {
+            let rect = ScreenRect {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+            };
+            match inflate_caret_anchor(rect) {
+                Some(rect) => GeometryResult::Ready(rect),
+                None => GeometryResult::Unavailable,
+            }
+        }
+        Err(error) if error.code() == TS_E_NOLAYOUT => GeometryResult::NoLayout,
         Err(_) => GeometryResult::Unavailable,
     }
 }
@@ -860,6 +949,8 @@ mod shift_latin_hwnd_projection_tests {
     use super::checked_host_call;
 
     fn create_projection_edit() -> Result<HWND> {
+        // SAFETY: the class name and all handles are valid for this process-local
+        // test window creation call.
         unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
@@ -880,13 +971,19 @@ mod shift_latin_hwnd_projection_tests {
 
     fn set_edit_text(window: HWND, text: &str) -> Result<()> {
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `window` is the live EDIT control created by this test and
+        // `wide` is NUL-terminated for the duration of the call.
         unsafe { SetWindowTextW(window, windows::core::PCWSTR(wide.as_ptr())) }
     }
 
     fn read_edit_text(window: HWND) -> Result<String> {
         let mut text = [0u16; 64];
+        // SAFETY: `window` is the live EDIT control and `text` is writable
+        // storage whose length is supplied to the Win32 call.
         let copied = unsafe { GetWindowTextW(window, &mut text) } as usize;
-        Ok(String::from_utf16_lossy(&text[..copied]))
+        Ok(String::from_utf16_lossy(
+            text.get(..copied).unwrap_or(&text),
+        ))
     }
 
     /// Process-local stand-in for `ITfRange::SetText`: a real EDIT HWND plus
@@ -930,6 +1027,7 @@ mod shift_latin_hwnd_projection_tests {
         );
         assert_ne!(document.borrow().as_str(), "AIUOEO");
 
+        // SAFETY: `window` is the live test HWND and is destroyed exactly once.
         let _ = unsafe { DestroyWindow(window) };
     }
 }
@@ -1020,6 +1118,38 @@ mod candidate_geometry_authority_tests {
         assert_eq!(
             &*trace.borrow(),
             &[GeometryCall::Range, GeometryCall::ActiveView]
+        );
+    }
+
+    #[test]
+    fn a_collapsed_caret_becomes_a_one_pixel_anchor() {
+        assert_eq!(
+            super::inflate_caret_anchor(sakura_proto::ScreenRect {
+                left: 400,
+                top: 300,
+                right: 400,
+                bottom: 324,
+            }),
+            Some(sakura_proto::ScreenRect {
+                left: 400,
+                top: 300,
+                right: 401,
+                bottom: 324,
+            })
+        );
+        assert_eq!(
+            super::inflate_caret_anchor(sakura_proto::ScreenRect {
+                left: 10,
+                top: 20,
+                right: 12,
+                bottom: 44,
+            }),
+            Some(sakura_proto::ScreenRect {
+                left: 10,
+                top: 20,
+                right: 12,
+                bottom: 44,
+            })
         );
     }
 }

@@ -151,6 +151,13 @@ pub(crate) enum AiTextPoll {
     Unavailable,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CandidateCommitPoll {
+    Pending { revision: u64, candidate_index: u16 },
+    None,
+    Unavailable,
+}
+
 /// One connection to the engine, plus the policy for not having one.
 #[derive(Debug, Default)]
 pub struct Engine {
@@ -518,6 +525,48 @@ impl Engine {
         self.request(&Request::Commit { session })
     }
 
+    /// Reads one passive renderer click without reconnecting or mutating the
+    /// engine session. The candidate UI timer is cosmetic when no link exists.
+    pub(crate) fn poll_candidate_commit(&mut self) -> CandidateCommitPoll {
+        let Some(link) = self.link.as_mut() else {
+            return CandidateCommitPoll::Unavailable;
+        };
+        match link.client.call(
+            &Request::PollCandidateCommit {
+                session: link.session,
+            },
+            UI_BUDGET,
+        ) {
+            Ok(Response::CandidateCommitPending {
+                request: Some((revision, candidate_index)),
+            }) => CandidateCommitPoll::Pending {
+                revision,
+                candidate_index,
+            },
+            Ok(Response::CandidateCommitPending { request: None }) => CandidateCommitPoll::None,
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::UiPlacement);
+                CandidateCommitPoll::Unavailable
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                CandidateCommitPoll::Unavailable
+            }
+        }
+    }
+
+    pub(crate) fn commit_candidate(&mut self, revision: u64, candidate_index: u16) -> Answer {
+        let session = match self.link() {
+            Some(link) => link.session,
+            None => return Answer::Unavailable,
+        };
+        self.request(&Request::CommitCandidate {
+            session,
+            revision,
+            candidate_index,
+        })
+    }
+
     /// Asks the engine to recover the reading and candidates for text that is
     /// already committed in the host document. Preview is observational;
     /// actual reconversion replaces the engine session with the returned
@@ -867,17 +916,22 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
             ..
         } => TimeoutOperation::ProbeKey,
         Request::SendKey { .. } => TimeoutOperation::Key,
-        Request::Commit { .. } | Request::ApplyAiComposition { .. } => TimeoutOperation::Commit,
+        Request::Commit { .. }
+        | Request::CommitCandidate { .. }
+        | Request::ApplyAiComposition { .. } => TimeoutOperation::Commit,
         Request::Reconvert { .. } => TimeoutOperation::Reconvert,
         Request::Revert { .. } => TimeoutOperation::Revert,
         Request::UndoCommit { .. } => TimeoutOperation::Revert,
-        Request::SetUiPlacement { .. } | Request::WatchUi { .. } => TimeoutOperation::UiPlacement,
+        Request::SetUiPlacement { .. }
+        | Request::WatchUi { .. }
+        | Request::PollCandidateCommit { .. } => TimeoutOperation::UiPlacement,
         Request::Hello { .. } | Request::CreateSession { .. } => TimeoutOperation::Handshake,
         Request::ClearLearning
         | Request::ClearInputHistory
         | Request::FlushInputHistory
         | Request::InputHistoryStats
         | Request::DeleteHistoryCandidate { .. }
+        | Request::QueueCandidateCommit { .. }
         | Request::SetInputScope { .. }
         | Request::SetMode { .. }
         | Request::RecordAiText { .. }
@@ -912,6 +966,7 @@ fn session_effect(request: &Request) -> SessionEffect {
         }
         | Request::Reconvert { preview: true, .. }
         | Request::WatchUi { .. }
+        | Request::PollCandidateCommit { .. }
         | Request::Ping
         | Request::PollAiText { .. }
         | Request::InputHistoryStats
@@ -926,6 +981,8 @@ fn session_effect(request: &Request) -> SessionEffect {
         | Request::ClearInputHistory
         | Request::FlushInputHistory
         | Request::DeleteHistoryCandidate { .. }
+        | Request::QueueCandidateCommit { .. }
+        | Request::CommitCandidate { .. }
         | Request::SetInputScope { .. }
         | Request::SetMode { .. }
         | Request::ApplyAiComposition { .. }
@@ -1161,6 +1218,54 @@ mod tests {
             }
             other => panic!("expected an answer, got {other:?}"),
         }
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn candidate_click_poll_and_commit_preserve_revision_and_index() {
+        let (name, server) = fake_engine("candidate-click", |pipe, buffer| {
+            let payload = pipe.read_frame(buffer).expect("candidate poll request");
+            let (id, request) = decode_request(payload).expect("decodable candidate poll");
+            assert_eq!(request, Request::PollCandidateCommit { session: 1 });
+            let mut reply = Vec::new();
+            encode_response(
+                &Response::CandidateCommitPending {
+                    request: Some((41, 7)),
+                },
+                id,
+                &mut reply,
+            )
+            .expect("encode candidate poll");
+            pipe.write_all(&reply).expect("write candidate poll");
+
+            let payload = pipe.read_frame(buffer).expect("candidate commit request");
+            let (id, request) = decode_request(payload).expect("decodable candidate commit");
+            assert_eq!(
+                request,
+                Request::CommitCandidate {
+                    session: 1,
+                    revision: 41,
+                    candidate_index: 7,
+                }
+            );
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(some_output()), id, &mut reply)
+                .expect("encode candidate commit output");
+            pipe.write_all(&reply)
+                .expect("write candidate commit output");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert_eq!(
+            engine.poll_candidate_commit(),
+            CandidateCommitPoll::Pending {
+                revision: 41,
+                candidate_index: 7,
+            }
+        );
+        assert!(matches!(engine.commit_candidate(41, 7), Answer::Ready(_)));
 
         drop(engine);
         server.join().expect("the server thread");

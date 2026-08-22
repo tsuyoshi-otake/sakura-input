@@ -13,6 +13,7 @@ use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock, TryLockError};
 
+use sakura_core::conversion::{ConversionInput, RawRepairPlan};
 use sakura_core::{
     CivilDate, ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions,
     Converter, Dictionary, UserDictionary,
@@ -186,9 +187,35 @@ impl ConversionService {
         options: ConversionOptions,
         consume: impl FnOnce(&[ConversionCandidate]) -> R,
     ) -> Result<R, ConvertFailure> {
-        self.with_conversion_hints(reading, options, &[], |candidates, _diagnostics| {
-            consume(candidates)
-        })
+        self.with_candidates_input(ConversionInput::ordinary(reading), options, consume)
+    }
+
+    /// Input-aware form of [`Self::with_candidates`].  The classified input
+    /// reaches the core converter unchanged, so exact literal policies are
+    /// enforced before any ranking or repair edges are considered.
+    pub fn with_candidates_input<R>(
+        &self,
+        input: ConversionInput<'_>,
+        options: ConversionOptions,
+        consume: impl FnOnce(&[ConversionCandidate]) -> R,
+    ) -> Result<R, ConvertFailure> {
+        self.with_candidates_input_hints(input, options, &[], consume)
+    }
+
+    /// Hint-aware input form of [`Self::with_candidates`].
+    pub fn with_candidates_input_hints<R>(
+        &self,
+        input: ConversionInput<'_>,
+        options: ConversionOptions,
+        commit_repair_readings: &[&str],
+        consume: impl FnOnce(&[ConversionCandidate]) -> R,
+    ) -> Result<R, ConvertFailure> {
+        self.with_conversion_input_hints(
+            input,
+            options,
+            commit_repair_readings,
+            |candidates, _diagnostics| consume(candidates),
+        )
     }
 
     /// Runs one conversion and exposes its text-free bounded-search terminal.
@@ -200,7 +227,17 @@ impl ConversionService {
         options: ConversionOptions,
         consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
     ) -> Result<R, ConvertFailure> {
-        self.with_conversion_hints(reading, options, &[], consume)
+        self.with_conversion_input(ConversionInput::ordinary(reading), options, consume)
+    }
+
+    /// Input-aware form of [`Self::with_conversion`].
+    pub fn with_conversion_input<R>(
+        &self,
+        input: ConversionInput<'_>,
+        options: ConversionOptions,
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
+        self.with_conversion_input_hints(input, options, &[], consume)
     }
 
     /// Like [`Self::with_conversion`], but also installs commit-history repair
@@ -212,7 +249,26 @@ impl ConversionService {
         commit_repair_readings: &[&str],
         consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
     ) -> Result<R, ConvertFailure> {
+        self.with_conversion_input_hints(
+            ConversionInput::ordinary(reading),
+            options,
+            commit_repair_readings,
+            consume,
+        )
+    }
+
+    /// Input-aware form of [`Self::with_conversion_hints`].  The immutable
+    /// user-dictionary snapshot and civil date are captured once per request;
+    /// the selected converter slot remains held until `consume` returns.
+    pub fn with_conversion_input_hints<R>(
+        &self,
+        input: ConversionInput<'_>,
+        options: ConversionOptions,
+        commit_repair_readings: &[&str],
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
         let user_dictionary = self.user_dictionary_snapshot();
+        let civil_date = local_civil_date();
         let mut consume = Some(consume);
         for slot in &self.converters {
             let mut converter = match slot.try_lock() {
@@ -223,12 +279,12 @@ impl ConversionService {
                 Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
             };
             converter.set_commit_repair_readings(commit_repair_readings);
-            converter.set_civil_date(local_civil_date());
+            converter.set_civil_date(civil_date);
             let result = converter
-                .convert_with_user_dictionary_detailed(
+                .convert_with_user_dictionary_input_detailed(
                     &self.dictionary,
                     (!user_dictionary.is_empty()).then_some(user_dictionary.as_ref()),
-                    reading,
+                    input,
                     options,
                 )
                 .map_err(ConvertFailure::Conversion)?;
@@ -236,6 +292,103 @@ impl ConversionService {
                 .take()
                 .expect("closure is consumed by one slot only");
             return Ok(use_candidates(result.candidates(), result.diagnostics()));
+        }
+        Err(ConvertFailure::Busy)
+    }
+
+    /// Runs one original conversion and the bounded raw-repair passes while
+    /// holding exactly one converter slot.  The converter owns the scratch
+    /// used to retain direct candidates, so a corrected pass cannot recurse
+    /// through this service or acquire a second slot.  Candidate slices are
+    /// only valid for the duration of `consume`, just like
+    /// [`Self::with_conversion`].
+    pub fn with_raw_repair_conversion<R>(
+        &self,
+        original_reading: &str,
+        plans: &[RawRepairPlan],
+        options: ConversionOptions,
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
+        self.with_raw_repair_conversion_input(
+            ConversionInput::ordinary(original_reading),
+            plans,
+            options,
+            consume,
+        )
+    }
+
+    /// Input-aware form of [`Self::with_raw_repair_conversion`].  The direct
+    /// pass preserves the classified literal policy while all corrected
+    /// passes remain bounded and system-only inside this same slot.
+    pub fn with_raw_repair_conversion_input<R>(
+        &self,
+        original_input: ConversionInput<'_>,
+        plans: &[RawRepairPlan],
+        options: ConversionOptions,
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
+        self.with_raw_repair_conversion_input_hints(original_input, plans, options, &[], consume)
+    }
+
+    /// Hint-aware form of [`Self::with_raw_repair_conversion`].  Commit
+    /// history is installed once on the selected converter; the core raw
+    /// conversion API consumes that one-shot state in the direct pass and
+    /// never recreates it for corrected readings.
+    pub fn with_raw_repair_conversion_hints<R>(
+        &self,
+        original_reading: &str,
+        plans: &[RawRepairPlan],
+        options: ConversionOptions,
+        commit_repair_readings: &[&str],
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
+        self.with_raw_repair_conversion_input_hints(
+            ConversionInput::ordinary(original_reading),
+            plans,
+            options,
+            commit_repair_readings,
+            consume,
+        )
+    }
+
+    /// Hint-aware input form of [`Self::with_raw_repair_conversion`].
+    pub fn with_raw_repair_conversion_input_hints<R>(
+        &self,
+        original_input: ConversionInput<'_>,
+        plans: &[RawRepairPlan],
+        options: ConversionOptions,
+        commit_repair_readings: &[&str],
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
+        let user_dictionary = self.user_dictionary_snapshot();
+        let civil_date = local_civil_date();
+        let mut consume = Some(consume);
+        for slot in &self.converters {
+            let mut converter = match slot.try_lock() {
+                Ok(converter) => converter,
+                Err(TryLockError::WouldBlock) => continue,
+                // Conversion resets all arenas before use. Recovering a slot
+                // after a test-only unwind cannot expose half-built state.
+                Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            };
+            converter.set_commit_repair_readings(commit_repair_readings);
+            converter.set_civil_date(civil_date);
+            let result = converter
+                .with_raw_repair_input_conversion(
+                    &self.dictionary,
+                    (!user_dictionary.is_empty()).then_some(user_dictionary.as_ref()),
+                    original_input,
+                    plans,
+                    options,
+                    |candidates, diagnostics| {
+                        let use_candidates = consume
+                            .take()
+                            .expect("closure is consumed by one slot only");
+                        use_candidates(candidates, diagnostics)
+                    },
+                )
+                .map_err(ConvertFailure::Conversion)?;
+            return Ok(result);
         }
         Err(ConvertFailure::Busy)
     }
@@ -329,6 +482,23 @@ fn installed_path(executable: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    fn raw_plan(
+        plan_id: u8,
+        original: &str,
+        corrected: &str,
+        runs: &[sakura_core::conversion::CorrectionRun],
+    ) -> RawRepairPlan {
+        let map = sakura_core::conversion::CorrectionMap::new(original, corrected, runs)
+            .expect("correction map");
+        RawRepairPlan::new(
+            plan_id,
+            corrected,
+            map,
+            sakura_core::conversion::RepairTier::LocalCompletion,
+        )
+        .expect("raw repair plan")
+    }
+
     fn image() -> &'static [u8] {
         let entries = dictc::parse_entries(
             "fixture.tsv",
@@ -368,6 +538,387 @@ mod tests {
             .expect("conversion");
         assert_eq!(texts.first().map(String::as_str), Some("仮名"));
         assert!(diagnostics.states_pushed > 0);
+    }
+
+    #[test]
+    fn raw_repair_uses_one_slot_and_third_conversion_is_busy() {
+        use std::sync::{mpsc, Barrier};
+        use std::thread;
+
+        let service = Arc::new(ConversionService::from_static_bytes(image()).expect("service"));
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let release = Arc::new(Barrier::new(CONVERSION_SLOTS + 1));
+        let mut workers = Vec::new();
+        for _ in 0..CONVERSION_SLOTS {
+            let service = Arc::clone(&service);
+            let entered_tx = entered_tx.clone();
+            let release = Arc::clone(&release);
+            workers.push(thread::spawn(move || {
+                service.with_raw_repair_conversion(
+                    "かな",
+                    &[],
+                    ConversionOptions::default(),
+                    |candidates, _diagnostics| {
+                        entered_tx.send(()).expect("entered conversion");
+                        release.wait();
+                        candidates.len()
+                    },
+                )
+            }));
+        }
+        drop(entered_tx);
+
+        for _ in 0..CONVERSION_SLOTS {
+            entered_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .expect("both conversion slots must be held");
+        }
+        let third = service.with_raw_repair_conversion(
+            "かな",
+            &[],
+            ConversionOptions::default(),
+            |_candidates, _diagnostics| (),
+        );
+        let third_is_busy = matches!(third, Err(ConvertFailure::Busy));
+
+        release.wait();
+        for worker in workers {
+            worker
+                .join()
+                .expect("conversion worker")
+                .expect("conversion");
+        }
+        assert!(third_is_busy);
+    }
+
+    #[test]
+    fn raw_repair_reserves_a_slot_when_direct_candidates_fill_budget() {
+        let mut tsv = String::from(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        );
+        for index in 0..12 {
+            tsv.push_str(&format!("あき\t秋{index}\t0\t0\t{index}\t{index}\t\t\n"));
+        }
+        let entries = dictc::parse_entries("fixture.tsv", &tsv).expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+        let plan = raw_plan(
+            1,
+            "あき",
+            "あきい",
+            &[
+                sakura_core::conversion::CorrectionRun::equal(0, 3, 0, 3),
+                sakura_core::conversion::CorrectionRun::replace(3, 9, 3, 6),
+            ],
+        );
+        let (texts, diagnostics) = service
+            .with_raw_repair_conversion(
+                "あき",
+                &[plan],
+                ConversionOptions {
+                    max_candidates: 12,
+                    ..ConversionOptions::default()
+                },
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| candidate.text().to_owned())
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
+            .expect("conversion");
+
+        assert_eq!(texts.len(), 12, "direct candidates must fill the budget");
+        assert!(texts.iter().all(|text| text.starts_with('秋')));
+        assert_eq!(diagnostics.raw_repair_passes, 1);
+        assert_eq!(diagnostics.raw_repair_candidates_added, 0);
+    }
+
+    #[test]
+    fn raw_repair_admits_full_system_only_completion_and_preserves_direct() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nないか\t内科\t0\t0\t1\t1\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+        let plan = raw_plan(
+            7,
+            "ないk",
+            "ないか",
+            &[
+                sakura_core::conversion::CorrectionRun::equal(0, 6, 0, 6),
+                sakura_core::conversion::CorrectionRun::replace(6, 9, 6, 7),
+            ],
+        );
+        let (texts, diagnostics) = service
+            .with_raw_repair_conversion(
+                "ないk",
+                &[plan],
+                ConversionOptions::default(),
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| {
+                                (
+                                    candidate.text().to_owned(),
+                                    candidate.origin(),
+                                    candidate.path_evidence(),
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
+            .expect("conversion");
+
+        let repaired = texts
+            .iter()
+            .find(|(text, _, _)| text == "内科")
+            .expect("system-only corrected candidate");
+        assert_eq!(
+            repaired.1,
+            sakura_core::conversion::CandidateOrigin::RawRepair {
+                plan_id: 7,
+                tier: sakura_core::conversion::RepairTier::LocalCompletion,
+            }
+        );
+        assert!(repaired.2.is_system_only());
+        assert!(texts.iter().any(|(text, origin, _)| {
+            text == "ないk" && *origin == sakura_core::conversion::CandidateOrigin::Direct
+        }));
+        assert_eq!(diagnostics.raw_repair_passes, 1);
+        assert_eq!(diagnostics.raw_repair_candidates_added, 1);
+    }
+
+    #[test]
+    fn raw_repair_keeps_direct_fallback_when_corrected_pass_has_no_system_path() {
+        let service = ConversionService::from_static_bytes(image()).expect("service");
+        let plan = raw_plan(
+            3,
+            "かな",
+            "かに",
+            &[sakura_core::conversion::CorrectionRun::replace(0, 6, 0, 6)],
+        );
+        let (texts, diagnostics) = service
+            .with_raw_repair_conversion(
+                "かな",
+                &[plan],
+                ConversionOptions::default(),
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| (candidate.text().to_owned(), candidate.origin()))
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
+            .expect("direct conversion must survive rejected repair");
+
+        assert_eq!(texts.first().map(|(text, _)| text.as_str()), Some("仮名"));
+        assert!(texts
+            .iter()
+            .all(|(_, origin)| { *origin == sakura_core::conversion::CandidateOrigin::Direct }));
+        assert_eq!(diagnostics.raw_repair_candidates_added, 0);
+        assert_eq!(diagnostics.raw_repair_passes, 1);
+    }
+
+    #[test]
+    fn raw_repair_input_preserves_mixed_exact_only_direct_before_repair() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nないk\tHOSTILE\t0\t0\t0\t0\t\t\nないか\t内科\t0\t0\t1\t1\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+        let input = ConversionInput::new(
+            "ないk",
+            "ないk",
+            sakura_core::conversion::ConversionInputClass::MixedUnresolvedLatin,
+            sakura_core::conversion::LiteralPolicy::ExactOnly,
+        );
+        let plan = raw_plan(
+            8,
+            "ないk",
+            "ないか",
+            &[
+                sakura_core::conversion::CorrectionRun::equal(0, 6, 0, 6),
+                sakura_core::conversion::CorrectionRun::replace(6, 9, 6, 7),
+            ],
+        );
+        let (candidates, diagnostics) = service
+            .with_raw_repair_conversion_input(
+                input,
+                &[plan],
+                ConversionOptions::default(),
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| {
+                                (
+                                    candidate.text().to_owned(),
+                                    candidate.origin(),
+                                    candidate.is_synthetic_exact(),
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
+            .expect("classified raw conversion");
+
+        assert_eq!(candidates[0].0, "ないk");
+        assert_eq!(
+            candidates[0].1,
+            sakura_core::conversion::CandidateOrigin::Direct
+        );
+        assert!(candidates[0].2);
+        assert!(!candidates.iter().any(|(text, _, _)| text == "HOSTILE"));
+        assert!(candidates.iter().any(|(text, origin, _)| {
+            text == "内科"
+                && *origin
+                    == sakura_core::conversion::CandidateOrigin::RawRepair {
+                        plan_id: 8,
+                        tier: sakura_core::conversion::RepairTier::LocalCompletion,
+                    }
+        }));
+        assert_eq!(diagnostics.raw_repair_passes, 1);
+        assert_eq!(diagnostics.raw_repair_candidates_added, 1);
+    }
+
+    #[test]
+    fn classified_exact_top1_keeps_literal_at_candidate_zero() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nesp32\tSystemExact\t0\t0\t1\t1\t\t\nesp32\tSpellingExact\t0\t0\t0\t0\tcorrection\t\nesp\tPartial\t0\t0\t0\t0\t\t\n2\tGeneratedLike\t0\t0\t0\t0\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+        service.replace_user_dictionary(
+            UserDictionary::parse_tsv(
+                "reading\tsurface\tpos\tcomment\nesp32\tUserExact\talphabet\t\n",
+            )
+            .expect("user dictionary"),
+        );
+        let input = ConversionInput::new(
+            "esp32",
+            "ESP32",
+            sakura_core::conversion::ConversionInputClass::OpaqueAsciiIdentifier,
+            sakura_core::conversion::LiteralPolicy::ExactTop1,
+        );
+        let candidates = service
+            .with_candidates_input(
+                input,
+                ConversionOptions {
+                    max_candidates: 4,
+                    ..ConversionOptions::default()
+                },
+                |candidates| {
+                    candidates
+                        .iter()
+                        .map(|candidate| {
+                            (candidate.text().to_owned(), candidate.is_synthetic_exact())
+                        })
+                        .collect::<Vec<_>>()
+                },
+            )
+            .expect("exact-top1 conversion");
+
+        assert_eq!(candidates.first(), Some(&(String::from("ESP32"), true)));
+        assert!(candidates.iter().any(|(text, _)| text == "SystemExact"));
+        assert!(candidates.iter().any(|(text, _)| text == "UserExact"));
+        assert!(!candidates.iter().any(|(text, _)| text == "SpellingExact"));
+        assert!(!candidates.iter().any(|(text, _)| text == "Partial"));
+        assert!(!candidates.iter().any(|(text, _)| text == "GeneratedLike"));
+    }
+
+    #[test]
+    fn ordinary_input_wrapper_matches_ranked_conversion_input() {
+        let service = ConversionService::from_static_bytes(image()).expect("service");
+        let legacy = service
+            .with_conversion(
+                "かな",
+                ConversionOptions::default(),
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| candidate.text().to_owned())
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
+            .expect("ordinary conversion");
+        let classified = service
+            .with_conversion_input(
+                ConversionInput::ordinary("かな"),
+                ConversionOptions::default(),
+                |candidates, diagnostics| {
+                    (
+                        candidates
+                            .iter()
+                            .map(|candidate| candidate.text().to_owned())
+                            .collect::<Vec<_>>(),
+                        diagnostics,
+                    )
+                },
+            )
+            .expect("ordinary input conversion");
+
+        assert_eq!(classified, legacy);
     }
 
     #[test]
@@ -466,6 +1017,53 @@ mod tests {
     }
 
     #[test]
+    fn conversion_rejects_advanced_reading_only_repair_but_keeps_rule_repairs() {
+        let entries = dictc::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nないか\t内科\t0\t0\t1\t1\t\t\nこんにちは\t今日は\t0\t0\t100\t100\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let bytes = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        );
+        let service = ConversionService::from_static_bytes(bytes).expect("service");
+
+        let advanced_surface = service
+            .with_candidates("なぜか", ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .expect("conversion");
+        assert!(
+            !advanced_surface.iter().any(|text| text == "内科"),
+            "reading-only Advanced must not turn なぜか into 内科: {advanced_surface:?}"
+        );
+
+        let rule_surface = service
+            .with_candidates("こにちは", ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .expect("conversion");
+        assert!(
+            rule_surface.iter().any(|text| text == "今日は"),
+            "n-count Rule repair must remain available: {rule_surface:?}"
+        );
+    }
+
+    #[test]
     fn english_spelling_hint_finds_katakana_loanwords() {
         let entries = dictc::parse_entries(
             "fixture.tsv",
@@ -526,8 +1124,10 @@ mod tests {
             .expect("conversion");
         assert!(allowed, "positive control: SPELLING_CORRECTION must appear");
 
-        let mut skip = ConversionOptions::default();
-        skip.skip_input_repair = true;
+        let skip = ConversionOptions {
+            skip_input_repair: true,
+            ..ConversionOptions::default()
+        };
         let skipped = service
             .with_candidates("あい", skip, |candidates| {
                 candidates.iter().any(|candidate| candidate.text() == "藍")
@@ -558,8 +1158,10 @@ mod tests {
 
         // Contract: conversion admission matches the shared InputSupport helper.
         assert!(allows_spelling_for_options(&ConversionOptions::default()));
-        let mut skipped = ConversionOptions::default();
-        skipped.skip_input_repair = true;
+        let skipped = ConversionOptions {
+            skip_input_repair: true,
+            ..ConversionOptions::default()
+        };
         assert!(!allows_spelling_for_options(&skipped));
     }
 
@@ -664,8 +1266,10 @@ mod tests {
         );
         let service = ConversionService::from_static_bytes(bytes).expect("service");
 
-        let mut skip = ConversionOptions::default();
-        skip.skip_input_repair = true;
+        let skip = ConversionOptions {
+            skip_input_repair: true,
+            ..ConversionOptions::default()
+        };
         let texts = service
             .with_candidates("あい", skip, |candidates| {
                 candidates
@@ -707,8 +1311,10 @@ mod tests {
                 .into_boxed_slice(),
         );
         let zero_service = ConversionService::from_static_bytes(zero_bytes).expect("service");
-        let mut single = ConversionOptions::default();
-        single.method = ConversionMethod::SingleSegment;
+        let single = ConversionOptions {
+            method: ConversionMethod::SingleSegment,
+            ..ConversionOptions::default()
+        };
         let repaired = zero_service
             .with_candidates("おはよ", single, |candidates| {
                 candidates
@@ -802,8 +1408,10 @@ mod tests {
         );
         let service = ConversionService::from_static_bytes(bytes).expect("service");
 
-        let mut suppressed = ConversionOptions::default();
-        suppressed.skip_input_repair = true;
+        let suppressed = ConversionOptions {
+            skip_input_repair: true,
+            ..ConversionOptions::default()
+        };
 
         let spelling = service
             .with_candidates("あい", suppressed, |candidates| {

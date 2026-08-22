@@ -58,11 +58,9 @@ pub enum DateFormat {
     JapaneseEraWeekday,
     Gregorian,
     GregorianWeekday,
-    Slash,
-    Iso,
 }
 
-const DATE_SURFACE_SPECS: [DateSurfaceSpec; 6] = [
+const DATE_SURFACE_SPECS: [DateSurfaceSpec; 4] = [
     DateSurfaceSpec {
         format: DateFormat::JapaneseEra,
         annotation: "和暦",
@@ -78,14 +76,6 @@ const DATE_SURFACE_SPECS: [DateSurfaceSpec; 6] = [
     DateSurfaceSpec {
         format: DateFormat::GregorianWeekday,
         annotation: "西暦・曜日",
-    },
-    DateSurfaceSpec {
-        format: DateFormat::Slash,
-        annotation: "日付",
-    },
-    DateSurfaceSpec {
-        format: DateFormat::Iso,
-        annotation: "ISO日付",
     },
 ];
 
@@ -277,7 +267,7 @@ pub fn is_today_date_reading(reading: &str) -> bool {
     date_offset_for_reading(reading).is_some()
 }
 
-/// Specs in display order: 和暦, 和暦+曜日, 西暦, 西暦+曜日, slash, ISO.
+/// Specs in display order: 和暦, 和暦+曜日, 西暦, 西暦+曜日.
 pub fn date_surface_specs(date: CivilDate) -> impl Iterator<Item = DateSurfaceSpec> {
     DATE_SURFACE_SPECS
         .into_iter()
@@ -296,8 +286,6 @@ impl DateFormat {
             Self::JapaneseEraWeekday => write_japanese(date, true, sink),
             Self::Gregorian => write_gregorian(date, false, sink),
             Self::GregorianWeekday => write_gregorian(date, true, sink),
-            Self::Slash => write_numeric(date, '/', false, sink),
-            Self::Iso => write_numeric(date, '-', true, sink),
         }
     }
 }
@@ -347,19 +335,6 @@ fn write_gregorian(
     write_u32(sink, u32::from(date.day))?;
     sink.push_str("日")?;
     write_weekday_suffix(date, weekday, sink)
-}
-
-fn write_numeric(
-    date: CivilDate,
-    separator: char,
-    pad: bool,
-    sink: &mut impl TextSink,
-) -> Result<(), Overflow> {
-    write_u32_width(sink, u32::try_from(date.year).map_err(|_| Overflow)?, 4)?;
-    sink.push(separator)?;
-    write_u32_width(sink, u32::from(date.month), if pad { 2 } else { 1 })?;
-    sink.push(separator)?;
-    write_u32_width(sink, u32::from(date.day), if pad { 2 } else { 1 })
 }
 
 fn write_weekday_suffix(
@@ -457,8 +432,6 @@ mod tests {
                 "令和8年8月19日（水）",
                 "2026年8月19日",
                 "2026年8月19日（水）",
-                "2026/8/19",
-                "2026-08-19",
             ]
         );
     }

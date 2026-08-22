@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use sakura_core::{
     collect_repair_variants, Dictionary, EntryFlags, InputSupport, UserDictionary,
-    MAX_PREDICTION_REPAIR_VARIANTS, REPAIR_PENALTY,
+    MAX_PREDICTION_REPAIR_VARIANTS,
 };
 use sakura_proto::{FixedStr, SessionId};
 
@@ -37,6 +37,18 @@ const RANKED_SCRATCH: usize = MAX_SUGGESTIONS * 4;
 const USER_DICTIONARY_BONUS: i64 = 3_000;
 const BASE_IT_BIAS_PER_MILLE: u16 = 100;
 const MAX_IT_BOOST: i64 = 800;
+/// Once the user has typed a word-sized prefix, extending it is weaker
+/// evidence than an entry whose reading ends exactly at the caret.  Keep the
+/// adjustment bounded so a very long completion cannot overflow or erase the
+/// dictionary's base ordering among similarly sized candidates.
+const MIN_PREFIX_CHARS_FOR_COMPLETION_DISTANCE: usize = 3;
+const COMPLETION_COST_PER_CHAR: i64 = 600;
+const MAX_COMPLETION_COST: i64 = 2_400;
+/// A reading repair may correct the portion already typed, but it must not
+/// also unlock an arbitrarily distant completion. Give short prefixes a small
+/// useful window and scale longer prefixes only up to a fixed hot-path bound.
+const MIN_REPAIR_COMPLETION_CHARS: usize = 2;
+const MAX_REPAIR_COMPLETION_CHARS: usize = 6;
 /// Maximum retained-history candidates copied into one prediction result.
 ///
 /// This output boundary is intentionally independent from learning's 128-slot
@@ -435,6 +447,7 @@ impl PredictionService {
     /// Publishes the newest prefix and waits only for the caller's own result.
     /// A coalesced, stopped, oversized, or timed-out request has the explicit
     /// terminal result `None`; callers keep ordinary composition visible.
+    #[allow(clippy::too_many_arguments)]
     pub fn request(
         &self,
         session: SessionId,
@@ -459,6 +472,7 @@ impl PredictionService {
     /// Allocation-free and small-stack variant used by pipe workers. The
     /// result is copied straight into caller-owned fixed buffers instead of
     /// returning a large array through every frame on the 128 KiB stack.
+    #[allow(clippy::too_many_arguments)]
     pub fn request_into(
         &self,
         session: SessionId,
@@ -663,6 +677,9 @@ impl PredictionIndex {
         result: &mut PredictionResult,
     ) {
         result.reset(query.sequence, query.session, query.generation);
+        let exact_non_predictive_query_known =
+            self.query_has_exact_non_predictive_reading(query.prefix.as_str());
+        let mut exact_history_query_known = false;
         if let Some(history) = history {
             let mut accepted = 0usize;
             history.visit_prediction_history(
@@ -677,6 +694,7 @@ impl PredictionIndex {
                         candidate.source = PredictionSource::History;
                         if result.push(candidate) {
                             accepted += 1;
+                            exact_history_query_known |= reading == query.prefix.as_str();
                         }
                     }
                     accepted < MAX_HISTORY_SUGGESTIONS_PER_RESULT
@@ -684,56 +702,90 @@ impl PredictionIndex {
             );
         }
 
-        let mut ranked = Ranked::new();
-        // Dictionary trie DFS emits readings in scalar-value order, which is
-        // also UTF-8 byte order. Binary-search the first possible match, then
-        // scan only the contiguous prefix range: O(log N + K), not O(N) on
-        // every keystroke as the dictionary grows.
-        let prefix = query.prefix.as_str().as_bytes();
-        let start = self.lower_bound(prefix);
-        for index in start..self.entries.len() {
-            let indexed = self.entries[index];
-            let Some(reading) = self.reading(indexed) else {
-                continue;
-            };
-            if !reading.as_bytes().starts_with(prefix) {
-                break;
+        // History is already in the result. Direct candidates are ranked in a
+        // separate bounded set and materialized before any repair lookup, so a
+        // cheap repaired hit can never evict a candidate matching the typed
+        // prefix. `Ranked` deduplicates surfaces while inserting, rather than
+        // after the 36-entry scratch window has been truncated.
+        let direct_complete = {
+            let mut ranked = Ranked::new();
+            // Dictionary trie DFS emits readings in scalar-value order, which
+            // is also UTF-8 byte order. Binary-search the first possible match,
+            // then scan only the contiguous prefix range: O(log N + K), not
+            // O(N) on every keystroke as the dictionary grows.
+            let prefix = query.prefix.as_str().as_bytes();
+            let start = self.lower_bound(prefix);
+            for index in start..self.entries.len() {
+                let indexed = self.entries[index];
+                let Some(reading) = self.reading(indexed) else {
+                    continue;
+                };
+                if !reading.as_bytes().starts_with(prefix) {
+                    break;
+                }
+                let Ok(entry) = self.dictionary.entry_at(indexed.entry_index as usize) else {
+                    continue;
+                };
+                if entry.flags.contains(EntryFlags::SPELLING_CORRECTION)
+                    && !query.allow_spelling_correction
+                {
+                    continue;
+                }
+                let Some(surface) = self.system_surface(entry) else {
+                    continue;
+                };
+                if result.contains_surface(surface.as_str()) {
+                    continue;
+                }
+                ranked.insert(RankedItem::new(
+                    prediction_score(
+                        entry.prediction_cost,
+                        entry.flags,
+                        query.domain_it_per_mille,
+                    )
+                    .saturating_add(completion_cost(query.prefix.as_str(), reading)),
+                    DictionarySource::System,
+                    u32::try_from(index).unwrap_or(u32::MAX),
+                    surface,
+                ));
             }
-            let Ok(entry) = self.dictionary.entry_at(indexed.entry_index as usize) else {
-                continue;
-            };
-            if entry.flags.contains(EntryFlags::SPELLING_CORRECTION)
-                && !query.allow_spelling_correction
-            {
-                continue;
-            }
-            ranked.insert(Scored {
-                score: prediction_score(
-                    entry.prediction_cost,
-                    entry.flags,
-                    query.domain_it_per_mille,
-                ),
-                source: DictionarySource::System,
-                index: u32::try_from(index).unwrap_or(u32::MAX),
+            user_dictionary.predictive_search(query.prefix.as_str(), |index| {
+                if let Some(entry) = user_dictionary.entry(index) {
+                    if let Some(surface) = user_surface(entry) {
+                        if !result.contains_surface(surface.as_str()) {
+                            ranked.insert(RankedItem::new(
+                                i64::from(entry.word_cost())
+                                    .saturating_sub(USER_DICTIONARY_BONUS)
+                                    .saturating_add(completion_cost(
+                                        query.prefix.as_str(),
+                                        &entry.reading,
+                                    )),
+                                DictionarySource::User,
+                                u32::try_from(index).unwrap_or(u32::MAX),
+                                surface,
+                            ));
+                        }
+                    }
+                }
+                true
             });
-        }
-        user_dictionary.predictive_search(query.prefix.as_str(), |index| {
-            if let Some(entry) = user_dictionary.entry(index) {
-                ranked.insert(Scored {
-                    score: i64::from(entry.word_cost()).saturating_sub(USER_DICTIONARY_BONUS),
-                    source: DictionarySource::User,
-                    index: u32::try_from(index).unwrap_or(u32::MAX),
-                });
-            }
-            true
-        });
 
-        if !query.skip_input_repair && query.input_support.is_active() {
+            self.materialize_ranked(&ranked, user_dictionary, result);
+            result.candidates().len() == MAX_SUGGESTIONS
+        };
+
+        if !direct_complete
+            && !exact_non_predictive_query_known
+            && !exact_history_query_known
+            && !query.skip_input_repair
+            && query.input_support.is_active()
+        {
             let variants = collect_repair_variants(
                 query.prefix.as_str(),
                 query.input_support,
                 MAX_PREDICTION_REPAIR_VARIANTS,
             );
+            let mut ranked = Ranked::new();
             for variant in variants.iter() {
                 let repaired = variant.repaired.as_str().as_bytes();
                 let start = self.lower_bound(repaired);
@@ -745,6 +797,13 @@ impl PredictionIndex {
                     if !reading.as_bytes().starts_with(repaired) {
                         break;
                     }
+                    if !repair_completion_is_local(
+                        query.prefix.as_str(),
+                        variant.repaired.as_str(),
+                        reading,
+                    ) {
+                        continue;
+                    }
                     let Ok(entry) = self.dictionary.entry_at(indexed.entry_index as usize) else {
                         continue;
                     };
@@ -753,32 +812,52 @@ impl PredictionIndex {
                     {
                         continue;
                     }
-                    ranked.insert(Scored {
-                        score: prediction_score(
+                    let Some(surface) = self.system_surface(entry) else {
+                        continue;
+                    };
+                    if result.contains_surface(surface.as_str()) {
+                        continue;
+                    }
+                    ranked.insert(RankedItem::new(
+                        prediction_score(
                             entry.prediction_cost,
                             entry.flags,
                             query.domain_it_per_mille,
                         )
-                        .saturating_add(REPAIR_PENALTY),
-                        source: DictionarySource::System,
-                        index: u32::try_from(index).unwrap_or(u32::MAX),
-                    });
+                        .saturating_add(completion_cost(variant.repaired.as_str(), reading))
+                        .saturating_add(variant.penalty),
+                        DictionarySource::System,
+                        u32::try_from(index).unwrap_or(u32::MAX),
+                        surface,
+                    ));
                 }
             }
+            self.materialize_ranked(&ranked, user_dictionary, result);
         }
+    }
 
-        for scored in ranked.as_slice() {
-            let candidate = match scored.source {
-                DictionarySource::System => self.system_candidate(scored.index as usize),
-                DictionarySource::User => user_candidate(user_dictionary, scored.index as usize),
-            };
-            if let Some(candidate) = candidate {
-                let _ = result.push(candidate);
-                if result.candidates().len() == MAX_SUGGESTIONS {
-                    break;
-                }
+    /// A full-reading entry intentionally excluded from prediction is still
+    /// evidence that the typed text is already a real word. In that state,
+    /// changing the reading (for example `べ` -> `ぺ`) must not manufacture
+    /// unrelated prefix completions. Predictive exact entries retain the
+    /// existing direct-then-repair behavior, which is useful for typo support
+    /// and already protects the direct candidate tier.
+    fn query_has_exact_non_predictive_reading(&self, reading: &str) -> bool {
+        let mut system_exact = false;
+        let _ = self.dictionary.common_prefix_search(reading, |matched| {
+            if matched.matched_bytes == reading.len()
+                && !matched
+                    .entry
+                    .flags
+                    .contains(EntryFlags::SPELLING_CORRECTION)
+                && !matched.entry.flags.contains(EntryFlags::PREDICTION)
+            {
+                system_exact = true;
+                return false;
             }
-        }
+            true
+        });
+        system_exact
     }
 
     fn system_candidate(&self, index: usize) -> Option<PredictionCandidate> {
@@ -802,6 +881,35 @@ impl PredictionIndex {
         candidate.system_entry_index = Some(indexed.entry_index);
         Some(candidate)
     }
+
+    fn system_surface(
+        &self,
+        entry: sakura_core::dictionary::Entry,
+    ) -> Option<FixedStr<MAX_PREDICTION_SURFACE_BYTES>> {
+        let mut surface = FixedStr::new();
+        self.dictionary.write_surface(entry, &mut surface).ok()?;
+        Some(surface)
+    }
+
+    fn materialize_ranked(
+        &self,
+        ranked: &Ranked,
+        user_dictionary: &UserDictionary,
+        result: &mut PredictionResult,
+    ) {
+        for item in ranked.as_slice() {
+            let candidate = match item.source {
+                DictionarySource::System => self.system_candidate(item.index as usize),
+                DictionarySource::User => user_candidate(user_dictionary, item.index as usize),
+            };
+            if let Some(candidate) = candidate {
+                let _ = result.push(candidate);
+                if result.candidates().len() == MAX_SUGGESTIONS {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 fn user_candidate(dictionary: &UserDictionary, index: usize) -> Option<PredictionCandidate> {
@@ -814,6 +922,14 @@ fn user_candidate(dictionary: &UserDictionary, index: usize) -> Option<Predictio
     candidate.flags = entry.flags();
     candidate.source = PredictionSource::User;
     Some(candidate)
+}
+
+fn user_surface(
+    entry: &sakura_core::user_dictionary::UserDictionaryEntry,
+) -> Option<FixedStr<MAX_PREDICTION_SURFACE_BYTES>> {
+    let mut surface = FixedStr::new();
+    surface.push_str(&entry.surface).ok()?;
+    Some(surface)
 }
 
 fn prediction_score(base: i32, flags: EntryFlags, domain_it_per_mille: u16) -> i64 {
@@ -831,6 +947,30 @@ fn prediction_score(base: i32, flags: EntryFlags, domain_it_per_mille: u16) -> i
     base.saturating_sub(boost)
 }
 
+fn completion_cost(prefix: &str, reading: &str) -> i64 {
+    if prefix.chars().count() < MIN_PREFIX_CHARS_FOR_COMPLETION_DISTANCE {
+        return 0;
+    }
+    let Some(completion) = reading.strip_prefix(prefix) else {
+        return MAX_COMPLETION_COST;
+    };
+    i64::try_from(completion.chars().count())
+        .unwrap_or(i64::MAX)
+        .saturating_mul(COMPLETION_COST_PER_CHAR)
+        .min(MAX_COMPLETION_COST)
+}
+
+fn repair_completion_is_local(typed: &str, repaired: &str, reading: &str) -> bool {
+    let Some(completion) = reading.strip_prefix(repaired) else {
+        return false;
+    };
+    let budget = typed
+        .chars()
+        .count()
+        .clamp(MIN_REPAIR_COMPLETION_CHARS, MAX_REPAIR_COMPLETION_CHARS);
+    completion.chars().count() <= budget
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 enum DictionarySource {
     #[default]
@@ -838,48 +978,79 @@ enum DictionarySource {
     System,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct Scored {
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct RankedItem {
     score: i64,
     source: DictionarySource,
     index: u32,
+    surface: FixedStr<MAX_PREDICTION_SURFACE_BYTES>,
 }
 
-impl Scored {
-    fn key(self) -> (i64, DictionarySource, u32) {
+impl RankedItem {
+    fn new(
+        score: i64,
+        source: DictionarySource,
+        index: u32,
+        surface: FixedStr<MAX_PREDICTION_SURFACE_BYTES>,
+    ) -> Self {
+        Self {
+            score,
+            source,
+            index,
+            surface,
+        }
+    }
+
+    fn key(&self) -> (i64, DictionarySource, u32) {
         (self.score, self.source, self.index)
     }
 }
 
 #[derive(Debug)]
 struct Ranked {
-    items: [Scored; RANKED_SCRATCH],
+    items: [RankedItem; RANKED_SCRATCH],
     len: usize,
 }
 
 impl Ranked {
     fn new() -> Self {
         Self {
-            items: [Scored::default(); RANKED_SCRATCH],
+            items: std::array::from_fn(|_| RankedItem::default()),
             len: 0,
         }
     }
 
-    fn insert(&mut self, item: Scored) {
-        let mut at = self.len.min(self.items.len().saturating_sub(1));
+    fn insert(&mut self, item: RankedItem) {
+        if let Some(existing) = self.items[..self.len]
+            .iter()
+            .position(|current| current.surface.as_str() == item.surface.as_str())
+        {
+            if self.items[existing].key() <= item.key() {
+                return;
+            }
+            self.items[existing] = item;
+            self.bubble_up(existing);
+            return;
+        }
+
+        let at = self.len.min(self.items.len().saturating_sub(1));
         if self.len < self.items.len() {
             self.len += 1;
         } else if self.items[at].key() <= item.key() {
             return;
         }
         self.items[at] = item;
+        self.bubble_up(at);
+    }
+
+    fn bubble_up(&mut self, mut at: usize) {
         while at > 0 && self.items[at].key() < self.items[at - 1].key() {
             self.items.swap(at, at - 1);
             at -= 1;
         }
     }
 
-    fn as_slice(&self) -> &[Scored] {
+    fn as_slice(&self) -> &[RankedItem] {
         &self.items[..self.len]
     }
 }
@@ -943,11 +1114,17 @@ mod tests {
     }
 
     fn conversion() -> Arc<ConversionService> {
-        let entries = dictc::parse_entries(
-            "fixture.tsv",
-            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t0\t100\t100\tpredict\tcommon\nかんすう\t関数\t0\t0\t200\t50\tit,predict\ttechnical\nかんじ\t感じ\t0\t0\t50\t-\t\tnot predictive\n",
+        prediction_fixture_conversion(
+            "かな\t仮名\t0\t0\t100\t100\tpredict\tcommon\nかんすう\t関数\t0\t0\t200\t50\tit,predict\ttechnical\nかんじ\t感じ\t0\t0\t50\t-\t\tnot predictive\n",
         )
-        .expect("entries");
+    }
+
+    fn prediction_fixture_conversion(rows: &str) -> Arc<ConversionService> {
+        let mut source = String::from(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+        );
+        source.push_str(rows);
+        let entries = dictc::parse_entries("fixture.tsv", &source).expect("entries");
         let matrix = dictc::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
@@ -960,6 +1137,34 @@ mod tests {
                 .into_boxed_slice(),
         );
         Arc::new(ConversionService::from_static_bytes(bytes).expect("service"))
+    }
+
+    fn prediction_query(prefix: &str) -> Query {
+        let mut fixed_prefix = FixedStr::new();
+        fixed_prefix.push_str(prefix).expect("prediction prefix");
+        Query {
+            sequence: 1,
+            session: 1,
+            generation: 1,
+            prefix: fixed_prefix,
+            domain_it_per_mille: 0,
+            input_support: InputSupport::default(),
+            skip_input_repair: false,
+            allow_spelling_correction: true,
+        }
+    }
+
+    fn predict_fixture(
+        conversion: &Arc<ConversionService>,
+        prefix: &str,
+        history: Option<&LearningService>,
+    ) -> PredictionResult {
+        let index = PredictionIndex::build(conversion.dictionary()).expect("prediction index");
+        let user_dictionary = conversion.user_dictionary_snapshot();
+        let query = prediction_query(prefix);
+        let mut result = PredictionResult::default();
+        index.predict_into(&query, user_dictionary.as_ref(), history, &mut result);
+        result
     }
 
     fn capacity_user_dictionary(prefix: &str) -> UserDictionary {
@@ -1334,6 +1539,419 @@ mod tests {
     }
 
     #[test]
+    fn direct_candidates_are_not_evicted_by_a_cheaper_advanced_repair() {
+        let conversion = prediction_fixture_conversion(
+            "かが\t直接候補\t0\t0\t5000\t5000\tpredict\tdirect\nいが\t高度補正\t0\t0\t1\t1000\tpredict\tadvanced\n",
+        );
+        let result = predict_fixture(&conversion, "かが", None);
+
+        assert_eq!(result.candidates()[0].surface(), "直接候補");
+        assert_eq!(result.candidates()[0].reading(), "かが");
+        assert!(result
+            .candidates()
+            .iter()
+            .any(|candidate| candidate.surface() == "高度補正"));
+    }
+
+    #[test]
+    fn word_sized_exact_reading_outranks_a_cheaper_longer_completion() {
+        let conversion = prediction_fixture_conversion(
+            "おらくる\tオラクル\t0\t0\t5000\t5000\tpredict\texact\n\
+おらくるさぽーと\tOracleサポート\t0\t0\t4000\t4000\tpredict\tcompletion\n",
+        );
+
+        let result = predict_fixture(&conversion, "おらくる", None);
+
+        assert_eq!(result.candidates()[0].surface(), "オラクル");
+        assert!(result
+            .candidates()
+            .iter()
+            .any(|candidate| candidate.surface() == "Oracleサポート"));
+    }
+
+    #[test]
+    fn a_known_non_predictive_word_does_not_trigger_reading_repairs() {
+        let conversion = prediction_fixture_conversion(
+            "すべき\tすべき\t0\t0\t7000\t-\t\tknown word\n\
+すぺきゅれーしょんるーるず\t投機的ルール\t0\t0\t100\t100\tpredict\trepair trap\n",
+        );
+
+        let result = predict_fixture(&conversion, "すべき", None);
+
+        assert!(
+            result.candidates().is_empty(),
+            "known exact word exposed repaired predictions: {:?}",
+            result
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.reading(), candidate.surface()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_repair_only_unlocks_local_completions() {
+        let conversion = prediction_fixture_conversion(
+            "すぺきあ\t近い補正\t0\t0\t200\t200\tpredict\tlocal repair\n\
+すぺきゅれーしょんるーるず\t投機的ルール\t0\t0\t100\t100\tpredict\tdistant repair trap\n",
+        );
+
+        let result = predict_fixture(&conversion, "すべき", None);
+        let surfaces = result
+            .candidates()
+            .iter()
+            .map(PredictionCandidate::surface)
+            .collect::<Vec<_>>();
+
+        assert!(
+            surfaces.contains(&"近い補正"),
+            "local repair was lost: {surfaces:?}"
+        );
+        assert!(
+            !surfaces.contains(&"投機的ルール"),
+            "a repair unlocked a disproportionate completion: {surfaces:?}"
+        );
+    }
+
+    #[test]
+    fn an_exact_history_word_does_not_trigger_reading_repairs() {
+        let conversion = prediction_fixture_conversion(
+            "すぺきあ\t近い補正\t0\t0\t200\t200\tpredict\trepair trap\n",
+        );
+        let learning = LearningService::memory();
+        learning.learn("すべき", "すべき", 0, 1);
+
+        let result = predict_fixture(&conversion, "すべき", Some(&learning));
+        assert_eq!(result.candidates()[0].surface(), "すべき");
+        assert!(
+            result
+                .candidates()
+                .iter()
+                .all(|candidate| candidate.reading().starts_with("すべき")),
+            "an exact history word exposed repaired predictions: {:?}",
+            result
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.reading(), candidate.surface()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn completion_distance_is_inactive_for_one_character_prefixes() {
+        assert_eq!(completion_cost("か", "か"), 0);
+        assert_eq!(completion_cost("か", "かなた"), 0);
+    }
+
+    #[test]
+    fn decimal_counter_predictions_never_lookup_kana_repair_prefixes() {
+        let conversion = prediction_fixture_conversion(
+            "あかい\t赤い\t0\t0\t1\t1\tpredict\trepair trap\n\
+あかい\t赤井\t0\t0\t2\t2\tpredict\trepair trap\n\
+あかい\t紅い\t0\t0\t3\t3\tpredict\trepair trap\n",
+        );
+        let learning = LearningService::memory();
+        learning.learn("2かいひょう", "2回表", 0, 2);
+        learning.learn("5かい", "5回", 0, 5);
+
+        for (prefix, expected_history) in [("2かい", "2回表"), ("5かい", "5回")] {
+            let result = predict_fixture(&conversion, prefix, Some(&learning));
+            let candidates = result.candidates();
+            assert!(
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.surface() == expected_history),
+                "{prefix} lost its history candidate: {:?}",
+                candidates
+                    .iter()
+                    .map(PredictionCandidate::surface)
+                    .collect::<Vec<_>>()
+            );
+            assert!(
+                candidates
+                    .iter()
+                    .all(|candidate| candidate.reading().starts_with(prefix)),
+                "{prefix} looked up an unrelated kana repair: {:?}",
+                candidates
+                    .iter()
+                    .map(|candidate| (candidate.reading(), candidate.surface()))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn repair_ranking_uses_each_variant_penalty() {
+        let conversion = prediction_fixture_conversion(
+            "かが\t直接候補\t0\t0\t5000\t5000\tpredict\tdirect\nかか\t規則補正\t0\t0\t1\t3000\tpredict\trule\nいが\t高度補正\t0\t0\t1\t2500\tpredict\tadvanced\n",
+        );
+        let result = predict_fixture(&conversion, "かが", None);
+        let surfaces: Vec<&str> = result
+            .candidates()
+            .iter()
+            .map(PredictionCandidate::surface)
+            .collect();
+
+        assert_eq!(&surfaces[..3], ["直接候補", "規則補正", "高度補正"]);
+    }
+
+    #[test]
+    fn direct_system_provenance_wins_a_repair_surface_collision() {
+        let conversion = prediction_fixture_conversion(
+            "かが\t共有表面\t0\t0\t5000\t5000\tpredict\tdirect\nいが\t共有表面\t0\t0\t1\t1\tpredict\tadvanced\n",
+        );
+        let result = predict_fixture(&conversion, "かが", None);
+
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.surface() == "共有表面")
+                .count(),
+            1
+        );
+        let shared = result
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.surface() == "共有表面")
+            .expect("shared candidate");
+        assert_eq!(shared.reading(), "かが");
+        assert_eq!(shared.source(), PredictionSource::System);
+    }
+
+    #[test]
+    fn direct_user_provenance_wins_over_a_system_repair() {
+        let conversion =
+            prediction_fixture_conversion("いが\tシステム補正\t0\t0\t1\t1000\tpredict\tadvanced\n");
+        conversion.replace_user_dictionary(
+            UserDictionary::parse_tsv(
+                "reading\tsurface\tpos\tcomment\nかが\tユーザー直接\tnoun\tdirect\n",
+            )
+            .expect("user dictionary"),
+        );
+        let result = predict_fixture(&conversion, "かが", None);
+
+        assert_eq!(result.candidates()[0].surface(), "ユーザー直接");
+        assert_eq!(result.candidates()[0].source(), PredictionSource::User);
+    }
+
+    #[test]
+    fn input_repair_never_looks_up_user_dictionary_entries() {
+        let conversion = prediction_fixture_conversion("");
+        conversion.replace_user_dictionary(
+            UserDictionary::parse_tsv(
+                "reading\tsurface\tpos\tcomment\nいが\tユーザー補正\tnoun\trepair-only\n",
+            )
+            .expect("user dictionary"),
+        );
+
+        let result = predict_fixture(&conversion, "かが", None);
+
+        assert!(result
+            .candidates()
+            .iter()
+            .all(|candidate| candidate.surface() != "ユーザー補正"));
+    }
+
+    #[test]
+    fn direct_unique_surfaces_survive_more_than_the_ranked_scratch_window() {
+        const KANA: [char; 10] = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ'];
+        let mut rows = String::new();
+        let mut reading_index = 0usize;
+        for first in KANA {
+            for second in KANA {
+                if reading_index >= 36 {
+                    break;
+                }
+                rows.push_str(&format!(
+                    "か{first}{second}\t共有表面\t0\t0\t{}\t{}\tpredict\tduplicate\n",
+                    reading_index + 1,
+                    reading_index + 1
+                ));
+                reading_index += 1;
+            }
+            if reading_index >= 36 {
+                break;
+            }
+        }
+        for unique in 0..8 {
+            rows.push_str(&format!(
+                "かさ{unique}\t直接候補{unique}\t0\t0\t{}\t{}\tpredict\tdirect\n",
+                100 + unique,
+                100 + unique
+            ));
+        }
+
+        let conversion = prediction_fixture_conversion(&rows);
+        let result = predict_fixture(&conversion, "か", None);
+
+        assert_eq!(result.candidates().len(), MAX_SUGGESTIONS);
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.surface() == "共有表面")
+                .count(),
+            1
+        );
+        for unique in 0..8 {
+            let surface = format!("直接候補{unique}");
+            assert!(
+                result
+                    .candidates()
+                    .iter()
+                    .any(|candidate| candidate.surface() == surface),
+                "{surface} was lost: {:?}",
+                result
+                    .candidates()
+                    .iter()
+                    .map(PredictionCandidate::surface)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn history_four_plus_direct_five_fills_without_repair_candidates() {
+        let conversion = prediction_fixture_conversion(
+            "かあ\t直接0\t0\t0\t100\t100\tpredict\tdirect\nかい\t直接1\t0\t0\t101\t101\tpredict\tdirect\nかう\t直接2\t0\t0\t102\t102\tpredict\tdirect\nかえ\t直接3\t0\t0\t103\t103\tpredict\tdirect\nかお\t直接4\t0\t0\t104\t104\tpredict\tdirect\n",
+        );
+        let learning = LearningService::memory();
+        for index in 0..4 {
+            learning.learn(
+                &format!("か履歴{index}"),
+                &format!("履歴{index}"),
+                0,
+                100 - index,
+            );
+        }
+
+        let result = predict_fixture(&conversion, "か", Some(&learning));
+
+        assert_eq!(result.candidates().len(), MAX_SUGGESTIONS);
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.source() == PredictionSource::History)
+                .count(),
+            4
+        );
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.surface().starts_with("直接"))
+                .count(),
+            5
+        );
+        assert!(result
+            .candidates()
+            .iter()
+            .all(|candidate| !candidate.surface().contains("補正")));
+    }
+
+    #[test]
+    fn history_four_plus_direct_four_leaves_one_repair_slot() {
+        let conversion = prediction_fixture_conversion(
+            "かが\t直接0\t0\t0\t100\t100\tpredict\tdirect\nかがあ\t直接1\t0\t0\t101\t101\tpredict\tdirect\nかがい\t直接2\t0\t0\t102\t102\tpredict\tdirect\nかがう\t直接3\t0\t0\t103\t103\tpredict\tdirect\nかか\t規則補正\t0\t0\t1000\t1000\tpredict\trule\nいが\t高度補正\t0\t0\t1000\t1000\tpredict\tadvanced\n",
+        );
+        let learning = LearningService::memory();
+        for index in 0..4 {
+            learning.learn(
+                &format!("かが履歴{index}"),
+                &format!("履歴{index}"),
+                0,
+                100 - index,
+            );
+        }
+
+        let result = predict_fixture(&conversion, "かが", Some(&learning));
+
+        assert_eq!(result.candidates().len(), MAX_SUGGESTIONS);
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.source() == PredictionSource::History)
+                .count(),
+            4
+        );
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.surface().starts_with("直接"))
+                .count(),
+            4
+        );
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .filter(|candidate| candidate.surface().contains("補正"))
+                .count(),
+            1
+        );
+    }
+
+    fn ranked_surface(surface: &str) -> FixedStr<MAX_PREDICTION_SURFACE_BYTES> {
+        let mut fixed = FixedStr::new();
+        fixed.push_str(surface).expect("ranked surface");
+        fixed
+    }
+
+    #[test]
+    fn ranked_surface_invariants_hold_for_bounded_exhaustive_sequences() {
+        const SURFACES: [&str; 3] = ["surface-a", "surface-b", "surface-c"];
+        const STEPS: usize = 7;
+        let cases = 3usize.pow(STEPS as u32);
+
+        for mut encoded in 0..cases {
+            let mut ranked = Ranked::new();
+            let mut best: [Option<(i64, DictionarySource, u32)>; SURFACES.len()] =
+                [None; SURFACES.len()];
+            for step in 0..STEPS {
+                let surface_index = encoded % SURFACES.len();
+                encoded /= SURFACES.len();
+                let source = if (step + surface_index).is_multiple_of(2) {
+                    DictionarySource::System
+                } else {
+                    DictionarySource::User
+                };
+                let score = ((step * 7 + surface_index * 3) % 11) as i64;
+                let index = u32::try_from(step).expect("step");
+                let key = (score, source, index);
+                if best[surface_index].is_none_or(|current| key < current) {
+                    best[surface_index] = Some(key);
+                }
+                ranked.insert(RankedItem::new(
+                    score,
+                    source,
+                    index,
+                    ranked_surface(SURFACES[surface_index]),
+                ));
+            }
+
+            assert!(ranked
+                .as_slice()
+                .windows(2)
+                .all(|items| items[0].key() <= items[1].key()));
+            assert!(ranked
+                .as_slice()
+                .windows(2)
+                .all(|items| items[0].surface.as_str() != items[1].surface.as_str()));
+            for item in ranked.as_slice() {
+                let surface_index = SURFACES
+                    .iter()
+                    .position(|surface| *surface == item.surface.as_str())
+                    .expect("known surface");
+                assert_eq!(item.key(), best[surface_index].expect("best item"));
+            }
+        }
+    }
+
+    #[test]
     fn prediction_limits_displayed_history_candidates_without_trimming_retention() {
         let conversion = conversion();
         let learning = Arc::new(LearningService::memory());
@@ -1437,10 +2055,9 @@ mod tests {
         for (label, support, skip, allow) in [
             (
                 "master-off",
-                {
-                    let mut support = InputSupport::default();
-                    support.enabled = false;
-                    support
+                InputSupport {
+                    enabled: false,
+                    ..InputSupport::default()
                 },
                 false,
                 false,
@@ -1448,10 +2065,9 @@ mod tests {
             ("skip", InputSupport::default(), true, false),
             (
                 "fuzzy-off",
-                {
-                    let mut support = InputSupport::default();
-                    support.fuzzy_proper_nouns = false;
-                    support
+                InputSupport {
+                    fuzzy_proper_nouns: false,
+                    ..InputSupport::default()
                 },
                 false,
                 false,

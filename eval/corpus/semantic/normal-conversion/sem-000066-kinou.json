@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-kinou",
+  "task": "conversion",
+  "family": "normal-conversion",
+  "role": "negative_control",
+  "context": {
+    "left": "会議は",
+    "right": "中止になった"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "きのう",
+    "typing": "kinou"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

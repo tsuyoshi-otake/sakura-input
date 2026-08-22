@@ -11,17 +11,19 @@ It models the user-visible display contract after 1.0.14 already converts:
   * One physical Space can reach a live reading and an idle peer.
   * Suggestion and conversion lists share one engine board (owner, kind).
   * TSF candidate UI is a separate writer: output.candidates = None is
-    CandidateEffect::Hide, which clear_ui_lease + queue_end_candidates.
-  * None currently means both "no candidate change" (Keep) and "end the
-    current element" (End). SessionId is too coarse for End authority.
+    CandidateEffect::Hide. End is allowed only when the instance owns the
+    UiLease or still has a live reading (`ends_shared_candidate_ui`).
+  * Protocol SessionId restarts at 1 per pipe worker. Board ownership is
+    (connection, session).
 
 IgnoreForeignEmpty
   Engine UiBoard: empty publish_output from a session that does not own
-  the board is a no-op. This is the 1.0.15 skip.
+    the board is a no-op, including two connections that share session id 1.
 
 GuardForeignCandidateEnd
   TSF Hide/End from a foreign or absorbed peer does not terminate the
-  live CandidateUi / UiLease. Not implemented in 1.0.15.
+  live CandidateUi / UiLease. Implemented by requiring owns_ui or
+  local_live, and refusing End when peer_live && ~local_live.
 
 RestoreCurrentPlacement
   After convert, republish the current live placement when a live

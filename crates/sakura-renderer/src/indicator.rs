@@ -23,10 +23,12 @@
 //! own caret, such as Electron applications — and `GetGUIThreadInfo` covers
 //! classic windows when no composition is active. (`GetCaretPos` only ever
 //! answers for the calling thread and would report nothing useful from this
-//! process.) When nothing reports a caret at all, the bar sits at the
-//! bottom centre of the foreground monitor's work area — a deliberate,
-//! recognisable resting place, where a corner of the foreground window
-//! reads as a misplaced popup. When the candidate popup is up, the bar is
+//! process.) Idle 半角/全角 has no composition, so TSF also stashes the
+//! current selection and the document box. When nothing reports a caret at
+//! all, the bar sits just above the bottom of that document — or of the
+//! foreground window — rather than at the monitor's bottom centre, which is
+//! where a Cursor follow-up field would never look. The monitor centre is
+//! the last resort only. When the candidate popup is up, the bar is
 //! handed the rectangle the popup actually placed itself into and takes
 //! the caret-adjacent spot the popup left free — which is the space above
 //! in the usual popup-below layout, and the space below when the popup
@@ -151,7 +153,19 @@ impl Indicator {
         theme: AppearanceTheme,
         ui: &UiState,
         candidate_popup: Option<RECT>,
-    ) {
+    ) -> bool {
+        // A mode change is a transient notification, not a reason to expose
+        // a guessed window position.  If TSF has not supplied the current
+        // caret yet, the old fallback chain (GUI-thread caret -> document /
+        // foreground window -> monitor) can paint one frame far from the
+        // field and then jump when the authoritative placement arrives.
+        // Keep the popup hidden and let the next placement-bearing UI state
+        // perform the first paint instead.
+        if !has_authoritative_anchor(ui) {
+            self.hide();
+            return false;
+        }
+
         // SAFETY: `window` is live for this type's lifetime. The stored
         // value is read back only by `paint`, which validates it.
         unsafe {
@@ -176,6 +190,21 @@ impl Indicator {
             let _ = ShowWindow(self.window, SW_SHOWNOACTIVATE);
             SetTimer(Some(self.window), HIDE_TIMER, LINGER_MS, None);
         }
+        true
+    }
+
+    /// Hides the notification without changing its remembered mode.
+    ///
+    /// Used when a mode state arrives before its authoritative caret
+    /// placement.  The next placement-bearing state is still allowed to show
+    /// the mode because the caller does not commit that state until `show`
+    /// returns `true`.
+    pub fn hide(&self) {
+        // SAFETY: `window` is live for this type's lifetime.
+        unsafe {
+            let _ = KillTimer(Some(self.window), HIDE_TIMER);
+            let _ = ShowWindow(self.window, SW_HIDE);
+        }
     }
 
     /// Moves an already-visible bar to where it now belongs, without
@@ -195,6 +224,12 @@ impl Indicator {
     pub fn reposition_if_visible(&self, ui: &UiState, candidate_popup: Option<RECT>) {
         // SAFETY: `window` is live for this type's lifetime.
         if !unsafe { IsWindowVisible(self.window) }.as_bool() {
+            return;
+        }
+        // Never move an already visible bar to a fallback rectangle merely
+        // because one intermediate state lost its caret.  Keeping its last
+        // authoritative position avoids the same visible jump on updates.
+        if !has_authoritative_anchor(ui) {
             return;
         }
         let (x, y, width, height) = self.geometry(ui, candidate_popup);
@@ -220,15 +255,11 @@ impl Indicator {
         let height = scaled(self.window, logical_height);
         let gap = scaled(self.window, CARET_GAP_AT_96_DPI);
 
-        let anchor = ui
-            .anchor
-            .filter(|rect| rect.is_valid())
-            .map(rect_of)
-            .or_else(caret_rect);
-        let work = candidate::monitor_work_area(screen_rect_of(
-            anchor.or_else(foreground_rect).unwrap_or_default(),
-        ));
-        let (x, y) = placement_in(anchor, candidate_popup, width, height, gap, work);
+        let anchor = ui.anchor.and_then(usable_anchor).or_else(caret_rect);
+        let rest = ui.document.and_then(usable_anchor).or_else(foreground_rect);
+        let work =
+            candidate::monitor_work_area(screen_rect_of(anchor.or(rest).unwrap_or_default()));
+        let (x, y) = placement_in(anchor, candidate_popup, width, height, gap, work, rest);
         (x, y, width, height)
     }
 }
@@ -242,9 +273,11 @@ impl Indicator {
 /// `candidate_popup` is the popup's placed rectangle, so a popup that
 /// itself flipped above the composition near the bottom of the screen
 /// leaves the bar below, not stacked on top of the popup. Without an
-/// anchor: bottom centre of the work area. Clamped into the work area
-/// either way, because all that ultimately matters is that the whole bar
-/// is readable.
+/// anchor: just above the bottom of `rest` (the document box, or the
+/// foreground window) so idle 半角/全角 appears next to the field the user
+/// is looking at. The monitor's bottom centre is only the last resort.
+/// Clamped into the work area either way, because all that ultimately
+/// matters is that the whole bar is readable.
 fn placement_in(
     anchor: Option<RECT>,
     candidate_popup: Option<RECT>,
@@ -252,6 +285,7 @@ fn placement_in(
     height: i32,
     gap: i32,
     work: RECT,
+    rest: Option<RECT>,
 ) -> (i32, i32) {
     let (x, y) = match anchor {
         Some(anchor) => {
@@ -286,12 +320,23 @@ fn placement_in(
             };
             (x, y)
         }
-        // Bottom centre, which is where a user looks for a mode indicator
-        // when there is no caret to attach it to.
-        None => (
-            work.left + (work.right.saturating_sub(work.left).saturating_sub(width)).max(0) / 2,
-            work.bottom.saturating_sub(height.saturating_mul(3)),
-        ),
+        // Just above the bottom of the document or foreground window, which
+        // is where the input field usually sits when the host draws its own
+        // caret and TSF could not measure it. Bottom centre of the work area
+        // is only the last resort.
+        None => {
+            match rest.filter(|region| region.right > region.left && region.bottom > region.top) {
+                Some(region) => (
+                    region.left.saturating_add(gap),
+                    region.bottom.saturating_sub(gap).saturating_sub(height),
+                ),
+                None => (
+                    work.left
+                        + (work.right.saturating_sub(work.left).saturating_sub(width)).max(0) / 2,
+                    work.bottom.saturating_sub(height.saturating_mul(3)),
+                ),
+            }
+        }
     };
     (
         x.clamp(work.left, (work.right.saturating_sub(width)).max(work.left)),
@@ -306,6 +351,23 @@ fn rect_of(rect: ScreenRect) -> RECT {
         right: rect.right,
         bottom: rect.bottom,
     }
+}
+
+fn has_authoritative_anchor(ui: &UiState) -> bool {
+    ui.anchor.and_then(usable_anchor).is_some()
+}
+
+/// A collapsed caret is still a place. [`ScreenRect::is_valid`] rejects zero
+/// width, so a 1px column keeps the left-edge alignment `placement_in` uses.
+fn usable_anchor(rect: ScreenRect) -> Option<RECT> {
+    let mut rect = rect_of(rect);
+    if rect.right <= rect.left {
+        rect.right = rect.left.saturating_add(1);
+    }
+    if rect.bottom <= rect.top {
+        rect.bottom = rect.top.saturating_add(1);
+    }
+    (rect.right > rect.left && rect.bottom > rect.top).then_some(rect)
 }
 
 fn screen_rect_of(rect: RECT) -> ScreenRect {
@@ -671,7 +733,7 @@ mod tests {
             bottom: 324,
         };
         assert_eq!(
-            placement_in(Some(caret), None, 220, 28, 8, WORK),
+            placement_in(Some(caret), None, 220, 28, 8, WORK, None),
             (400, 332)
         );
     }
@@ -685,7 +747,7 @@ mod tests {
             bottom: 1_024,
         };
         assert_eq!(
-            placement_in(Some(caret), None, 220, 28, 8, WORK),
+            placement_in(Some(caret), None, 220, 28, 8, WORK, None),
             (400, 1_000 - 8 - 28)
         );
     }
@@ -765,7 +827,7 @@ mod tests {
             bottom: 620,
         };
         assert_eq!(
-            placement_in(Some(caret), Some(popup_below), 220, 28, 8, WORK),
+            placement_in(Some(caret), Some(popup_below), 220, 28, 8, WORK, None),
             (400, 300 - 8 - 28)
         );
         // Unless there is no room above, where below is still the answer.
@@ -788,7 +850,8 @@ mod tests {
                 220,
                 28,
                 8,
-                WORK
+                WORK,
+                None
             ),
             (400, 36)
         );
@@ -815,7 +878,7 @@ mod tests {
             bottom: 956 - 8,
         };
         assert_eq!(
-            placement_in(Some(caret), Some(popup_above), 220, 28, 8, WORK),
+            placement_in(Some(caret), Some(popup_above), 220, 28, 8, WORK, None),
             (400, 988)
         );
         // The old presence-only check chose the space above here, which is
@@ -841,7 +904,15 @@ mod tests {
             bottom: 620,
         };
         assert_eq!(
-            placement_in(Some(caret), Some(popup_to_the_right), 220, 28, 8, WORK),
+            placement_in(
+                Some(caret),
+                Some(popup_to_the_right),
+                220,
+                28,
+                8,
+                WORK,
+                None
+            ),
             (100, 332)
         );
     }
@@ -860,16 +931,63 @@ mod tests {
             right: -98,
             bottom: 524,
         };
-        let (x, y) = placement_in(Some(caret), None, 220, 28, 8, work);
+        let (x, y) = placement_in(Some(caret), None, 220, 28, 8, work, None);
         assert_eq!((x, y), (-220, 532));
         assert!(x >= work.left && x + 220 <= work.right);
     }
 
     #[test]
+    fn a_collapsed_caret_is_still_an_anchor() {
+        assert_eq!(
+            usable_anchor(ScreenRect {
+                left: 400,
+                top: 300,
+                right: 400,
+                bottom: 324,
+            }),
+            Some(RECT {
+                left: 400,
+                top: 300,
+                right: 401,
+                bottom: 324,
+            })
+        );
+    }
+
+    #[test]
+    fn the_first_mode_paint_requires_an_authoritative_caret() {
+        let mut ui = ui_state_anchored_at(400, 300);
+        ui.anchor = None;
+        assert!(!has_authoritative_anchor(&ui));
+
+        ui.anchor = Some(ScreenRect {
+            left: 400,
+            top: 300,
+            right: 400,
+            bottom: 324,
+        });
+        assert!(has_authoritative_anchor(&ui));
+    }
+
+    #[test]
     fn no_caret_rests_at_the_bottom_centre_of_the_work_area() {
-        let (x, y) = placement_in(None, None, 220, 28, 8, WORK);
+        let (x, y) = placement_in(None, None, 220, 28, 8, WORK, None);
         assert_eq!(x, (1_920 - 220) / 2);
         assert_eq!(y, 1_040 - 28 * 3);
+    }
+
+    #[test]
+    fn no_caret_rests_just_above_the_document_or_window_bottom() {
+        let field = RECT {
+            left: 240,
+            top: 860,
+            right: 1_200,
+            bottom: 980,
+        };
+        let (x, y) = placement_in(None, None, 220, 28, 8, WORK, Some(field));
+        assert_eq!((x, y), (248, 980 - 8 - 28));
+        assert!(y + 28 <= field.bottom);
+        assert!(x >= field.left);
     }
 
     #[test]
@@ -886,7 +1004,7 @@ mod tests {
             right: 2,
             bottom: 24,
         };
-        let (x, y) = placement_in(Some(caret), None, 220, 28, 8, tiny);
+        let (x, y) = placement_in(Some(caret), None, 220, 28, 8, tiny, None);
         assert_eq!((x, y), (10, 10));
     }
 

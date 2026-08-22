@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "corpus_id": "semantic-v1-issue66-slice",
+  "case_count": 125,
+  "notes": "Issue #66 vertical slice. Expand in place; never rewrite case_id identities.",
+  "history_derived_count": 100,
+  "history_derived_source_sha256": "f8b53ec35bc658c90712850f889b7610909daa7d542ea79f120912916e751073",
+  "history_derived_generation": "history-approval-v1"
+}

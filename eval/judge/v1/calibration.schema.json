@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "split": {
+      "type": "string",
+      "enum": ["train-like", "holdout"]
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "human": {
+            "$ref": "result.schema.json"
+          },
+          "judge": {
+            "$ref": "result.schema.json"
+          },
+          "literal_corruption": {
+            "type": "boolean"
+          }
+        },
+        "required": ["case_id", "human", "judge"]
+      }
+    }
+  },
+  "required": ["schema_version", "split", "observations"]
+}

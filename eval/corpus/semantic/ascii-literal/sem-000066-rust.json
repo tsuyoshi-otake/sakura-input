@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-rust",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "このツールは",
+    "right": "で実装する"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "Rust",
+    "typing": "Rust"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

@@ -81,9 +81,11 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   CI is not to be extended to *require* it — the step above only reports what
   happened to be covered. The standing obligation is therefore to run
   `cargo test -p sakura-core --lib -- simd:: --nocapture` on this machine
-  before releasing anything that touches the kernels, and confirm it prints
-  `["scalar", "avx", "avx2", "avx512"] (tier avx512bw)`. Verified here on
-  2026-07-31: it does.
+  before releasing anything that touches the kernels. Since production now
+  keeps AVX-512 bench-only, confirm the printed `kernels under test` includes
+  the scalar, AVX/SSSE3, AVX2, and all three AVX-512BW+VL threshold variants;
+  `resolved width scan avx2-hybrid` is the intended shipping selection, not a
+  coverage failure. Verified here on 2026-08-22.
 
 - **A `cargo test` filter that ends in `::` makes an unquoted YAML `run:`
   line unparseable, and GitHub reports it as anything but a syntax error.**
@@ -407,3 +409,38 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   constructed in this crate. Verified by
   `shift_latin_settext_payloads_reach_a_process_local_edit_hwnd_and_never_aiuoeo`
   and the recovery-test comment in `text_service.rs`.
+
+- **Process-leak assertions must identify the owned artifact, not only the
+  executable name.** The capture verifier initially counted the user's
+  installed `sakura_engine.exe` as a leak; scoping by the repository debug
+  path plus `--test-pipe` distinguished it from owned children. Verified by
+  the missing-dictionary capture check: exit 2, no output, identical private
+  process sets.
+
+- **Serialize real engine child lifetimes within a Windows integration test
+  binary when parallel startup is load-sensitive.** `space_key_dispatch_pipe`
+  reproduced `STATUS_ACCESS_VIOLATION` under repeated `--test-threads=2` runs
+  while five serial runs passed; a lifetime mutex in the shared harness was
+  followed by ten successful parallel-thread repetitions and a green
+  workspace run. The mutex owns no protected data, so recover its poison after
+  a failed assertion; otherwise one failed child test suppresses the terminal
+  results of every later integration test in the process.
+
+- **Pass a fixed diagnostic payload as a record, not positional scalar
+  arguments.** Converting `debug_trace` to `TraceEvent` preserved its
+  content-free wire row and made the evaluation dependency graph pass strict
+  `cargo clippy -- -D warnings` without an allow-list.
+
+- **A release sparse-checkout must include every pinned input the local builder
+  validates, not only the obvious dictionary directory.** `build-dictionary`
+  consumes Mozc's `src/data/rules/segmenter.def` in addition to
+  `src/data/dictionary_oss`; omitting it made the release workflow fail before
+  compilation. Verified by a complete two-pass 1.0.18 dictionary build after
+  adding that exact file to the workflow checkout.
+
+- **Do not generate a numeric surface already supplied by an exact dictionary
+  edge.** N-best deduplicates by rendered surface, so a cheaper generated `一日`
+  can otherwise hide the lexical entry's cost, ordinal, and detail provenance.
+  Skip only the identical generated surface, then rank the remaining numeric
+  spellings behind the exact lexical form. Verified by the synthetic core test
+  and all 19 shipped-dictionary ranking tests for 1.0.18.

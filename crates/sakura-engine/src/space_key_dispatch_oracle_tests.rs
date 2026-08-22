@@ -181,15 +181,13 @@ fn oracle_source_has_no_production_imports() {
     std::fs::create_dir_all(&dir).expect("dir");
     std::fs::write(
         dir.join("oracle-provenance.md"),
-        format!(
-            "# Oracle provenance\n\n\
+        "# Oracle provenance\n\n\
 source: `crates/sakura-engine/src/space_key_dispatch_oracle.rs`\n\n\
 static production-import scan: pass\n\n\
 forbidden tokens checked: crate::dispatch, crate::session, crate::server, \
 sakura_core::keymap, KeyMap, idle_space_commit, Dispatcher, SessionTable\n\n\
-Expected values come from `verification/space-key-dispatch/requirements.md`, \
-not from observed production OutputBuf commits.\n"
-        ),
+        Expected values come from `verification/space-key-dispatch/requirements.md`, \
+not from observed production OutputBuf commits.\n",
     )
     .expect("provenance");
 }

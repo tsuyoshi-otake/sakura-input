@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-claude-code",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "開発には",
+    "right": "を使う"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "Claude Code",
+    "typing": "Claude Code"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

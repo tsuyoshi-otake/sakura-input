@@ -1,0 +1,897 @@
+{
+  "schema_version": 1,
+  "corpus_id": "conversion-quality-stage1-50-v1",
+  "stage": "stage1",
+  "candidate_limit": 18,
+  "options": {
+    "profile": "quality-stage1-default",
+    "candidate_limit": 18,
+      "options_sha256": "8bacb7b728d414cc3e71a4c9a4829b3b91b5896c0971c76a3f5dd45c9b7012b3",
+      "config_sha256": "9ea95ff88400bc32b3578f4feb7004f1dc982c8d00a86144c063140a872df6c4",
+    "learning": "disabled",
+    "user_dictionary": "disabled",
+    "reranker": "off"
+  },
+  "cases": [
+    {
+      "case_id": "cq-001",
+      "category": "compound_homophone",
+      "reading": "いまりせきちゅうです",
+      "before_surface": "伊万里脊柱です",
+      "before_segments": [
+        "伊万里",
+        "脊柱です"
+      ],
+      "expected_surface": "今離席中です",
+      "expected_segments": [
+        "今",
+        "離席中です"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation",
+      "notes": "The explicit slash boundary is part of the supplied target contract."
+    },
+    {
+      "case_id": "cq-002",
+      "category": "katakana_loanword",
+      "reading": "えもちらかす",
+      "before_surface": "絵も散らかす",
+      "before_segments": [
+        "絵も",
+        "散らかす"
+      ],
+      "expected_surface": "エモ散らかす",
+      "expected_segments": [
+        "エモ散らかす"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation",
+      "notes": "Creative/slang expression; keep as a semantic challenge, not a context-free Top-1 rule."
+    },
+    {
+      "case_id": "cq-003",
+      "category": "katakana_loanword",
+      "reading": "おーすとられーしあ",
+      "before_surface": "オーストラレー市亜",
+      "before_segments": [
+        "オー",
+        "ストラレー",
+        "市",
+        "亜"
+      ],
+      "expected_surface": "オーストラレーシア",
+      "expected_segments": [
+        "オーストラレーシア"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation",
+      "notes": "Variant spelling should be reviewed before any lexical change."
+    },
+    {
+      "case_id": "cq-004",
+      "category": "compound_homophone",
+      "reading": "おくがいすいせん",
+      "before_surface": "屋外推薦",
+      "before_segments": [
+        "屋外",
+        "推薦"
+      ],
+      "expected_surface": "屋外水栓",
+      "expected_segments": [
+        "屋外",
+        "水栓"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-005",
+      "category": "katakana_loanword",
+      "reading": "かわぶーつ",
+      "before_surface": "川ブーツ",
+      "before_segments": [
+        "川",
+        "ブーツ"
+      ],
+      "expected_surface": "革ブーツ",
+      "expected_segments": [
+        "革",
+        "ブーツ"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-006",
+      "category": "lexical_compound",
+      "reading": "かんきつこう",
+      "before_surface": "柑橘孔",
+      "before_segments": [
+        "柑橘",
+        "孔"
+      ],
+      "expected_surface": "柑橘香",
+      "expected_segments": [
+        "柑橘香"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-007",
+      "category": "business_phrase",
+      "reading": "きゅうしょくからふっき",
+      "before_surface": "給食から復帰",
+      "before_segments": [
+        "給食から",
+        "復帰"
+      ],
+      "expected_surface": "休職から復帰",
+      "expected_segments": [
+        "休職から",
+        "復帰"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-008",
+      "category": "lexical_compound",
+      "reading": "きょうふうち",
+      "before_surface": "恐怖うち",
+      "before_segments": [
+        "恐怖",
+        "うち"
+      ],
+      "expected_surface": "強風地",
+      "expected_segments": [
+        "強風地"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-009",
+      "category": "legal_compound",
+      "reading": "ぎせいほうじん",
+      "before_surface": "犠牲法人",
+      "before_segments": [
+        "犠牲",
+        "法人"
+      ],
+      "expected_surface": "擬制法人",
+      "expected_segments": [
+        "擬制",
+        "法人"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-010",
+      "category": "business_compound",
+      "reading": "こしゃたいおう",
+      "before_surface": "古社対応",
+      "before_segments": [
+        "古社",
+        "対応"
+      ],
+      "expected_surface": "個社対応",
+      "expected_segments": [
+        "個社",
+        "対応"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-011",
+      "category": "food_compound",
+      "reading": "こめこめん",
+      "before_surface": "米湖面",
+      "before_segments": [
+        "米",
+        "湖面"
+      ],
+      "expected_surface": "米粉麺",
+      "expected_segments": [
+        "米粉",
+        "麺"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-012",
+      "category": "business_compound",
+      "reading": "さいむかた",
+      "before_surface": "債務方",
+      "before_segments": [
+        "債務",
+        "方"
+      ],
+      "expected_surface": "債務過多",
+      "expected_segments": [
+        "債務",
+        "過多"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-013",
+      "category": "katakana_loanword",
+      "reading": "しゅうじんぼっくす",
+      "before_surface": "囚人ボックス",
+      "before_segments": [
+        "囚人",
+        "ボックス"
+      ],
+      "expected_surface": "集塵ボックス",
+      "expected_segments": [
+        "集塵",
+        "ボックス"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-014",
+      "category": "library_compound",
+      "reading": "しゅうみつしょか",
+      "before_surface": "周密初夏",
+      "before_segments": [
+        "周密",
+        "初夏"
+      ],
+      "expected_surface": "集密書架",
+      "expected_segments": [
+        "集密",
+        "書架"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-015",
+      "category": "business_compound",
+      "reading": "しゅうれいかいぎ",
+      "before_surface": "秀麗会議",
+      "before_segments": [
+        "秀麗",
+        "会議"
+      ],
+      "expected_surface": "週例会議",
+      "expected_segments": [
+        "週例",
+        "会議"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation",
+      "notes": "The explicit slash boundary is part of the supplied target contract."
+    },
+    {
+      "case_id": "cq-016",
+      "category": "lexical_compound",
+      "reading": "しょうすうけつ",
+      "before_surface": "少数血",
+      "before_segments": [
+        "少数",
+        "血"
+      ],
+      "expected_surface": "少数決",
+      "expected_segments": [
+        "少数決"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-017",
+      "category": "weather_compound",
+      "reading": "しょうせつちいき",
+      "before_surface": "小説地域",
+      "before_segments": [
+        "小説",
+        "地域"
+      ],
+      "expected_surface": "少雪地域",
+      "expected_segments": [
+        "少雪",
+        "地域"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-018",
+      "category": "compound_homophone",
+      "reading": "しんちょうのこうてい",
+      "before_surface": "身長の工程",
+      "before_segments": [
+        "身長の",
+        "工程"
+      ],
+      "expected_surface": "身長の高低",
+      "expected_segments": [
+        "身長の",
+        "高低"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-019",
+      "category": "technical_abbreviation",
+      "reading": "じこべこうしん",
+      "before_surface": "事故部更新",
+      "before_segments": [
+        "事故",
+        "部",
+        "更新"
+      ],
+      "expected_surface": "自己ベ更新",
+      "expected_segments": [
+        "自己ベ",
+        "更新"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-020",
+      "category": "fixed_expression",
+      "reading": "じりつじきょう",
+      "before_surface": "自立自供",
+      "before_segments": [
+        "自立",
+        "自供"
+      ],
+      "expected_surface": "自立自強",
+      "expected_segments": [
+        "自立",
+        "自強"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-021",
+      "category": "food_compound",
+      "reading": "すたまねぎ",
+      "before_surface": "巣タマネギ",
+      "before_segments": [
+        "巣",
+        "タマネギ"
+      ],
+      "expected_surface": "酢玉ねぎ",
+      "expected_segments": [
+        "酢",
+        "玉ねぎ"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-022",
+      "category": "katakana_loanword",
+      "reading": "すてーきばる",
+      "before_surface": "ステーキ張る",
+      "before_segments": [
+        "ステーキ",
+        "張る"
+      ],
+      "expected_surface": "ステーキバル",
+      "expected_segments": [
+        "ステーキ",
+        "バル"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-023",
+      "category": "lexical_compound",
+      "reading": "せいこんしゃ",
+      "before_surface": "成婚車",
+      "before_segments": [
+        "成婚",
+        "車"
+      ],
+      "expected_surface": "成婚者",
+      "expected_segments": [
+        "成婚者"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-024",
+      "category": "technical_compound",
+      "reading": "せいすうかい",
+      "before_surface": "整数櫂",
+      "before_segments": [
+        "整数",
+        "櫂"
+      ],
+      "expected_surface": "整数解",
+      "expected_segments": [
+        "整数解"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-025",
+      "category": "business_compound",
+      "reading": "せきにんきょうかい",
+      "before_surface": "責任協会",
+      "before_segments": [
+        "責任",
+        "協会"
+      ],
+      "expected_surface": "責任境界",
+      "expected_segments": [
+        "責任",
+        "境界"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-026",
+      "category": "proper_religious",
+      "reading": "せつまつしゃ",
+      "before_surface": "節待つ社",
+      "before_segments": [
+        "節",
+        "待つ",
+        "社"
+      ],
+      "expected_surface": "摂末社",
+      "expected_segments": [
+        "摂末社"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-027",
+      "category": "medical_compound",
+      "reading": "せんしぶい",
+      "before_surface": "線渋井",
+      "before_segments": [
+        "線",
+        "渋井"
+      ],
+      "expected_surface": "穿刺部位",
+      "expected_segments": [
+        "穿刺",
+        "部位"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-028",
+      "category": "numeric_collision",
+      "reading": "ぜろにちかかった",
+      "before_surface": "ゼロ日かかった",
+      "before_segments": [
+        "ゼロ",
+        "日",
+        "かかった"
+      ],
+      "expected_surface": "ゼロに近かった",
+      "expected_segments": [
+        "ゼロに",
+        "近かった"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation",
+      "notes": "Numeric collision; context is required to distinguish the intended phrase."
+    },
+    {
+      "case_id": "cq-029",
+      "category": "technical_compound",
+      "reading": "ぜんろくがした",
+      "before_surface": "全録がした",
+      "before_segments": [
+        "全録がした"
+      ],
+      "expected_surface": "全録画した",
+      "expected_segments": [
+        "全録画した"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-030",
+      "category": "technical_compound",
+      "reading": "たいかとそう",
+      "before_surface": "耐火と槽",
+      "before_segments": [
+        "耐火と",
+        "槽"
+      ],
+      "expected_surface": "耐火塗装",
+      "expected_segments": [
+        "耐火",
+        "塗装"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-031",
+      "category": "fixed_expression",
+      "reading": "たってはんじょうねていちじょう",
+      "before_surface": "たって繁盛寝て一畳",
+      "before_segments": [
+        "たって",
+        "繁盛",
+        "寝て",
+        "一畳"
+      ],
+      "expected_surface": "立って半畳寝て一畳",
+      "expected_segments": [
+        "立って",
+        "半畳",
+        "寝て",
+        "一畳"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-032",
+      "category": "technical_compound",
+      "reading": "たんじゅんそうかん",
+      "before_surface": "単純創刊",
+      "before_segments": [
+        "単純",
+        "創刊"
+      ],
+      "expected_surface": "単純相関",
+      "expected_segments": [
+        "単純",
+        "相関"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-033",
+      "category": "government_compound",
+      "reading": "ちほうちょう",
+      "before_surface": "地方町",
+      "before_segments": [
+        "地方",
+        "町"
+      ],
+      "expected_surface": "地方庁",
+      "expected_segments": [
+        "地方庁"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-034",
+      "category": "technical_compound",
+      "reading": "ちゅうわのう",
+      "before_surface": "中和脳",
+      "before_segments": [
+        "中和",
+        "脳"
+      ],
+      "expected_surface": "中和能",
+      "expected_segments": [
+        "中和能"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-035",
+      "category": "economics_term",
+      "reading": "つうぜいかん",
+      "before_surface": "通税関",
+      "before_segments": [
+        "通",
+        "税関"
+      ],
+      "expected_surface": "痛税感",
+      "expected_segments": [
+        "痛税感"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-036",
+      "category": "fixed_expression",
+      "reading": "ていたいはいぼく",
+      "before_surface": "停滞敗北",
+      "before_segments": [
+        "停滞",
+        "敗北"
+      ],
+      "expected_surface": "手痛い敗北",
+      "expected_segments": [
+        "手痛い",
+        "敗北"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-037",
+      "category": "proper_name_abbreviation",
+      "reading": "とうだいりさん",
+      "before_surface": "灯台離散",
+      "before_segments": [
+        "灯台",
+        "離散"
+      ],
+      "expected_surface": "東大理三",
+      "expected_segments": [
+        "東大",
+        "理三"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-038",
+      "category": "history_compound",
+      "reading": "とよとみかしん",
+      "before_surface": "豊臣か新",
+      "before_segments": [
+        "豊臣か",
+        "新"
+      ],
+      "expected_surface": "豊臣家臣",
+      "expected_segments": [
+        "豊臣",
+        "家臣"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-039",
+      "category": "grammar_term",
+      "reading": "どうしのかつようけい",
+      "before_surface": "同市の活用形",
+      "before_segments": [
+        "同市の",
+        "活用形"
+      ],
+      "expected_surface": "動詞の活用形",
+      "expected_segments": [
+        "動詞の",
+        "活用形"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-040",
+      "category": "history_compound",
+      "reading": "どうぼてい",
+      "before_surface": "同母亭",
+      "before_segments": [
+        "同母",
+        "亭"
+      ],
+      "expected_surface": "同母弟",
+      "expected_segments": [
+        "同母弟"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-041",
+      "category": "inflection_compound",
+      "reading": "ねそこねました",
+      "before_surface": "値損ねました",
+      "before_segments": [
+        "値",
+        "損ねました"
+      ],
+      "expected_surface": "寝損ねました",
+      "expected_segments": [
+        "寝損ねました"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-042",
+      "category": "food_compound",
+      "reading": "はものふらい",
+      "before_surface": "刃物フライ",
+      "before_segments": [
+        "刃物",
+        "フライ"
+      ],
+      "expected_surface": "ハモのフライ",
+      "expected_segments": [
+        "ハモの",
+        "フライ"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-043",
+      "category": "technical_compound",
+      "reading": "ひさんとくせい",
+      "before_surface": "悲惨特性",
+      "before_segments": [
+        "悲惨",
+        "特性"
+      ],
+      "expected_surface": "飛散特性",
+      "expected_segments": [
+        "飛散",
+        "特性"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-044",
+      "category": "business_phrase",
+      "reading": "ぶんりとわず",
+      "before_surface": "分離問わず",
+      "before_segments": [
+        "分離",
+        "問わず"
+      ],
+      "expected_surface": "文理問わず",
+      "expected_segments": [
+        "文理",
+        "問わず"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-045",
+      "category": "conversation_phrase",
+      "reading": "へんじよこせ",
+      "before_surface": "返事横瀬",
+      "before_segments": [
+        "返事",
+        "横瀬"
+      ],
+      "expected_surface": "返事よこせ",
+      "expected_segments": [
+        "返事",
+        "よこせ"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-046",
+      "category": "katakana_loanword",
+      "reading": "ぽたりーけーす",
+      "before_surface": "ぽたりーケース",
+      "before_segments": [
+        "ぽたり",
+        "ー",
+        "ケース"
+      ],
+      "expected_surface": "ポタリーケース",
+      "expected_segments": [
+        "ポタリー",
+        "ケース"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation",
+      "notes": "Loanword long-vowel and segment boundary require explicit review."
+    },
+    {
+      "case_id": "cq-047",
+      "category": "business_compound",
+      "reading": "めんせつこうざ",
+      "before_surface": "面接口座",
+      "before_segments": [
+        "面接",
+        "口座"
+      ],
+      "expected_surface": "面接講座",
+      "expected_segments": [
+        "面接",
+        "講座"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-048",
+      "category": "schedule_compound",
+      "reading": "よなかはつ",
+      "before_surface": "夜中初",
+      "before_segments": [
+        "夜中",
+        "初"
+      ],
+      "expected_surface": "夜中発",
+      "expected_segments": [
+        "夜中",
+        "発"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-049",
+      "category": "proper_name_loanword",
+      "reading": "りきゅうばっぐ",
+      "before_surface": "離宮バッグ",
+      "before_segments": [
+        "離宮",
+        "バッグ"
+      ],
+      "expected_surface": "利休バッグ",
+      "expected_segments": [
+        "利休",
+        "バッグ"
+      ],
+      "segment_assertion": "explicit",
+      "assertion_scope": "candidate_observation"
+    },
+    {
+      "case_id": "cq-050",
+      "category": "katakana_loanword",
+      "reading": "りじぇねれーしょん",
+      "before_surface": "利ジェネレーション",
+      "before_segments": [
+        "利",
+        "ジェネレーション"
+      ],
+      "expected_surface": "リジェネレーション",
+      "expected_segments": [
+        "リジェネレーション"
+      ],
+      "segment_assertion": "surface_only",
+      "assertion_scope": "candidate_observation"
+    }
+  ],
+  "negative_controls": [
+    {
+      "control_id": "numeric-zero-date",
+      "reading": "ぜろにちかかった",
+      "surface": "0日かかった",
+      "policy": "retain_as_competitor",
+      "note": "Numeric repair/zero-date competitor; do not blanket-suppress."
+    },
+    {
+      "control_id": "numeric-niji",
+      "reading": "にじ",
+      "surface": "二時",
+      "policy": "retain_as_competitor",
+      "note": "Context-dependent time/homophone pair."
+    },
+    {
+      "control_id": "numeric-sanji",
+      "reading": "さんじ",
+      "surface": "三時",
+      "policy": "retain_as_competitor",
+      "note": "Context-dependent time/homophone pair."
+    },
+    {
+      "control_id": "numeric-ichinichi",
+      "reading": "いちにち",
+      "surface": "一日",
+      "policy": "retain_as_competitor",
+      "note": "Date/duration homophone pair."
+    }
+  ]
+}

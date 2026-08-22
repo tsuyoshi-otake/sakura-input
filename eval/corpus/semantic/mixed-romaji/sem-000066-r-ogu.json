@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-r-ogu",
+  "task": "conversion",
+  "family": "mixed-romaji",
+  "role": "positive",
+  "context": {
+    "left": "",
+    "right": ""
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "rおぐ",
+    "typing": "rおぐ"
+  },
+  "constraints": {
+    "literal_token": false,
+    "forbid_unrelated_absorption": true
+  }
+}

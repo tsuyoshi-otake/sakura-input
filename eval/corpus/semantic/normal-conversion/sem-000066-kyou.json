@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-kyou",
+  "task": "conversion",
+  "family": "normal-conversion",
+  "role": "negative_control",
+  "context": {
+    "left": "今日は",
+    "right": "作業する"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "きょう",
+    "typing": "kyou"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-avx2",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "SIMDは",
+    "right": "を使う"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "AVX2",
+    "typing": "AVX2"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

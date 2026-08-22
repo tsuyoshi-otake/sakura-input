@@ -535,6 +535,7 @@ fn verb_endings(ctype: &str) -> Option<VerbEndings> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn literal_endings(
     dict: &str,
     te: &str,

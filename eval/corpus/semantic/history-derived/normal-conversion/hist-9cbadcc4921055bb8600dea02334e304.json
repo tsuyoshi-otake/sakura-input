@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "case_id": "hist-9cbadcc4921055bb8600dea02334e304",
+  "task": "conversion",
+  "family": "history-normal-conversion",
+  "role": "history-review-approved",
+  "context": {
+    "left": "",
+    "right": ""
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "やつ",
+    "typing": "yatu"
+  },
+  "constraints": {
+    "literal_token": false,
+    "forbid_unrelated_absorption": false
+  },
+  "privacy_provenance": "local-opt-in-normal-commit-v1"
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "git_sha": "1af807b000000000000000000000000000000000",
+    "engine_sha256": "14aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dictionary_sha256": "bb9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "candidate": {
+    "git_sha": "a8ce482000000000000000000000000000000000",
+    "engine_sha256": "72ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "dictionary_sha256": "bb9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "pairs": [
+    {
+      "case_id": "sem-000066-esp32",
+      "baseline": {
+        "candidates": ["ESP3㊁", "ESP32"]
+      },
+      "candidate": {
+        "candidates": ["ESP32", "ESP3㊁"]
+      }
+    },
+    {
+      "case_id": "sem-000066-utf-8",
+      "baseline": {
+        "candidates": ["ＵＴＦ−８", "UTF-8"]
+      },
+      "candidate": {
+        "candidates": ["UTF-8", "ＵＴＦ−８"]
+      }
+    }
+  ]
+}

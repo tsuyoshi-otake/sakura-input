@@ -412,7 +412,9 @@ impl fmt::Display for UserDictionaryError {
             }
             UserDictionaryErrorKind::EmptyReading => f.write_str("reading is empty"),
             UserDictionaryErrorKind::InvalidReading => {
-                f.write_str("reading must contain hiragana or the long-vowel mark")
+                f.write_str(
+                    "reading must contain hiragana or the long-vowel mark; alphabet entries may use a lowercase ASCII letter followed by lowercase letters or digits",
+                )
             }
             UserDictionaryErrorKind::EmptySurface => f.write_str("surface is empty"),
             UserDictionaryErrorKind::FieldTooLong => f.write_str("field exceeds the IME bound"),
@@ -492,11 +494,17 @@ fn validate_entry(entry: &UserDictionaryEntry) -> Result<(), UserDictionaryError
     if entry.reading.is_empty() {
         return Err(UserDictionaryErrorKind::EmptyReading);
     }
-    if entry
+    let kana_reading = entry
         .reading
         .chars()
-        .any(|character| !(('\u{3041}'..='\u{309f}').contains(&character) || character == 'ー'))
-    {
+        .all(|character| ('\u{3041}'..='\u{309f}').contains(&character) || character == 'ー');
+    let mut shift_latin_bytes = entry.reading.bytes();
+    let shift_latin_reading = entry.part_of_speech == UserPartOfSpeech::Alphabet
+        && shift_latin_bytes
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
+        && shift_latin_bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit());
+    if !kana_reading && !shift_latin_reading {
         return Err(UserDictionaryErrorKind::InvalidReading);
     }
     if entry.surface.is_empty() {
@@ -700,6 +708,30 @@ mod tests {
             assert_eq!(spec.left_id, spec.right_id, "{}", spec.name);
             assert!(spec.word_cost >= 0, "{}", spec.name);
             assert_eq!(UserPartOfSpeech::from_name(spec.name), Some(part_of_speech));
+        }
+    }
+
+    #[test]
+    fn alphabet_entries_accept_only_canonical_lowercase_alphanumeric_readings() {
+        let dictionary = UserDictionary::parse_tsv(concat!(
+            "reading\tsurface\tpos\tcomment\n",
+            "custom\tCustom\talphabet\tShift-Latin exact entry\n",
+            "ipv6\tIPv6\talphabet\topaque identifier exact entry\n",
+        ))
+        .expect("canonical Shift-Latin and alphanumeric readings");
+        assert_eq!(dictionary.entries()[0].reading, "custom");
+        assert_eq!(dictionary.entries()[1].reading, "ipv6");
+
+        for source in [
+            "reading\tsurface\tpos\tcomment\ncustom\tCustom\tnoun\twrong pos\n",
+            "reading\tsurface\tpos\tcomment\nCustom\tCustom\talphabet\twrong case\n",
+            "reading\tsurface\tpos\tcomment\n1custom\tCustom1\talphabet\tmust start with a letter\n",
+            "reading\tsurface\tpos\tcomment\ncustom-1\tCustom1\talphabet\tpunctuation is not canonical\n",
+            "reading\tsurface\tpos\tcomment\nかcustom\tCustom\talphabet\tmixed script\n",
+        ] {
+            let error = UserDictionary::parse_tsv(source).expect_err("must reject");
+            assert_eq!(error.line, 2);
+            assert_eq!(error.kind, UserDictionaryErrorKind::InvalidReading);
         }
     }
 

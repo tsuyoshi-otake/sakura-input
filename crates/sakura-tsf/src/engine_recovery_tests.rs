@@ -360,7 +360,14 @@ fn recovery_domain_pbt_and_c2_cover_every_atomic_condition() {
         oracle_pending = Some(current.id());
         let should_match = bits & 4 != 0;
         let callback = if should_match { current } else { first };
-        condition_seen[1][usize::from(should_match)] = true;
+        if let Some(seen) = condition_seen
+            .get_mut(1)
+            .and_then(|row| row.get_mut(usize::from(should_match)))
+        {
+            *seen = true;
+        } else {
+            unreachable!("bool-to-index is always 0 or 1");
+        }
         let expected = oracle_disposition(oracle_pending, callback.id());
         assert_eq!(
             fence.disposition_after_request(callback),
@@ -370,7 +377,14 @@ fn recovery_domain_pbt_and_c2_cover_every_atomic_condition() {
             }
         );
 
-        condition_seen[2][usize::from(should_match)] = true;
+        if let Some(seen) = condition_seen
+            .get_mut(2)
+            .and_then(|row| row.get_mut(usize::from(should_match)))
+        {
+            *seen = true;
+        } else {
+            unreachable!("bool-to-index is always 0 or 1");
+        }
         let expected_finished = oracle_finish(&mut oracle_pending, callback.id());
         let outcome = match (bits >> 3) % 3 {
             0 => RecoveryTerminal::Applied,

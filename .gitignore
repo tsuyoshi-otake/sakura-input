@@ -9,3 +9,18 @@
 
 # Native probe/build outputs created during local investigation.
 /*.obj
+
+# Generated quality-measurement reports. Fixtures stay in eval/fixtures/.
+/eval/reports/*
+!/eval/reports/.gitkeep
+
+# Reproducible local verification runs. Canonical summaries, models, configs,
+# fixtures, and curated evidence remain tracked outside these directories.
+/.claude/goal-loop/
+/mutants.out/
+/mutants.out.old/
+/verification/*/tlc/
+/verification/space-key-dispatch/mutants-dry/
+/verification/space-key-dispatch/mutants-out/
+/verification/space-key-dispatch/*.log
+/verification/developer-history/_parse_mutants.py

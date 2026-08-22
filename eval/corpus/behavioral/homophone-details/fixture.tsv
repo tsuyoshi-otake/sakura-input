@@ -1,0 +1,12 @@
+# license: LicenseRef-Sakura-InHouse
+case_id	reading	candidate_surfaces	scope
+hd-001	けっさい	決済 / 決裁	exact_candidate_detail
+hd-002	ほしょう	保証 / 補償 / 保障	exact_candidate_detail
+hd-003	せいさく	制作 / 製作 / 政策	exact_candidate_detail
+hd-004	きてい	規定 / 規程 / 既定	exact_candidate_detail
+hd-005	かいてい	改定 / 改訂	exact_candidate_detail
+hd-006	じりつ	自立 / 自律	exact_candidate_detail
+hd-007	ほそく	補足 / 捕捉	exact_candidate_detail
+hd-008	ようけん	要件 / 用件	exact_candidate_detail
+hd-009	たいしょう	対象 / 対照	exact_candidate_detail
+hd-010	きのう	機能 / 昨日	exact_candidate_detail

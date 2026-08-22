@@ -684,6 +684,55 @@ fn apply_persists_preferences_across_a_user32_relaunch() {
     wait_for_process_exit(&mut relaunched);
 }
 
+/// The stable root launcher can be clicked repeatedly, but all versioned
+/// payloads must converge on the already-visible property sheet. The second
+/// process should activate the first window and exit without publishing a
+/// second top-level settings HWND.
+#[test]
+#[ignore = "requires an interactive User32 desktop"]
+fn second_settings_launch_activates_the_existing_window() {
+    let _desktop = desktop_test_guard();
+    let mut fixture = SettingsFixture::launch();
+    let root = fixture.wait_for_window();
+    let first_pid = fixture.child.id();
+    let _foreground = ForegroundRestore::capture();
+    raise_fixture_for_input(root);
+
+    let mut duplicate = fixture.relaunch();
+    let duplicate_pid = duplicate.id();
+    wait_for_process_exit(&mut duplicate);
+
+    assert!(
+        is_visible(root),
+        "the first settings window remains visible after the duplicate launch"
+    );
+    assert_eq!(
+        window_process_id(root),
+        first_pid,
+        "the original settings process still owns the visible window"
+    );
+    assert!(
+        !top_level_windows().into_iter().any(|window| {
+            class_name(window) == "SakuraInputSettingsWindow"
+                && window_process_id(window) == duplicate_pid
+        }),
+        "the duplicate process must not publish another settings window"
+    );
+    wait_until(
+        "second launch foregrounds the existing settings window",
+        || {
+            // SAFETY: this scalar query has no caller-provided pointers.
+            unsafe { GetForegroundWindow() == root }
+        },
+    );
+
+    // Close only the first process through its normal Escape path. The fixture
+    // owns it; the duplicate has already reached its successful terminal exit.
+    let cursor = CursorRestore::capture();
+    cursor.key_press(VK_ESCAPE);
+    fixture.wait_for_exit();
+}
+
 /// The input rail is a real native TreeView. This scenario uses only physical
 /// User32 mouse input to reach the `連想変換` leaf and proves that its page
 /// replaces the basic/profile pages rather than being painted on top of them.

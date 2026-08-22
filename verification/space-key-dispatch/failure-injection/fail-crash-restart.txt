@@ -1,1 +1,1 @@
-killed_pid=43416 restarted_idle_space=U+3000
+killed_pid=71960 restarted_idle_space=U+3000

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-rp2354",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "評価ボードは",
+    "right": "を搭載する"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "RP2354",
+    "typing": "RP2354"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

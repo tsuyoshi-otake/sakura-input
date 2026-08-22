@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-onegai-shimasu",
+  "task": "conversion",
+  "family": "normal-conversion",
+  "role": "negative_control",
+  "context": {
+    "left": "",
+    "right": ""
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "おねがいします",
+    "typing": "onegaishimasu"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

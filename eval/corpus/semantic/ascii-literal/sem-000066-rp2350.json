@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-rp2350",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "マイコンは",
+    "right": "を使う"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "RP2350",
+    "typing": "RP2350"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

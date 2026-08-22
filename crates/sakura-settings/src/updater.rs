@@ -270,9 +270,15 @@ pub fn encode_hex(bytes: &[u8]) -> String {
     result
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UpdatePreferences {
     pub enabled: bool,
+}
+
+impl Default for UpdatePreferences {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 impl UpdatePreferences {
@@ -1526,9 +1532,10 @@ mod tests {
     }
 
     #[test]
-    fn update_preference_defaults_off_and_roundtrips_strictly() {
+    fn update_preference_defaults_on_and_roundtrips_strictly() {
         let paths = temp_paths("preference");
         let path = paths.installer.with_file_name("settings.txt");
+        assert!(UpdatePreferences::default().enabled);
         assert_eq!(
             UpdatePreferences::load(&path).unwrap(),
             UpdatePreferences::default()

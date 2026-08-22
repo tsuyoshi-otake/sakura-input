@@ -40,7 +40,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::Win32::UI::WindowsAndMessaging::WS_EX_TRANSPARENT;
 
 use crate::accessibility::CandidateAccessibility;
-use crate::watch::HistoryDeleteRequest;
+use crate::watch::{CandidateCommitRequest, HistoryDeleteRequest};
 
 const DISPLAY_CLASS: PCWSTR = windows::core::w!("SakuraInputCandidates");
 const DELETE_OVERLAY_CLASS: PCWSTR = windows::core::w!("SakuraInputCandidateDeleteTargets");
@@ -151,7 +151,9 @@ struct PaintState {
     candidate_layout: Option<Layout>,
     revision: u64,
     delete_history: SyncSender<HistoryDeleteRequest>,
+    commit_candidate: SyncSender<CandidateCommitRequest>,
     pending_history_deletes: Vec<HistoryDeleteRequest>,
+    pending_candidate_commits: Vec<CandidateCommitRequest>,
     visible: bool,
     delete_overlay: HWND,
     accessibility: CandidateAccessibility,
@@ -166,7 +168,10 @@ pub struct CandidateWindow {
 }
 
 impl CandidateWindow {
-    pub fn new(delete_history: SyncSender<HistoryDeleteRequest>) -> Result<Self> {
+    pub fn new(
+        delete_history: SyncSender<HistoryDeleteRequest>,
+        commit_candidate: SyncSender<CandidateCommitRequest>,
+    ) -> Result<Self> {
         // SAFETY: class names and procedures are static. Duplicate class
         // registration is harmless when tests create more than one object.
         unsafe {
@@ -238,7 +243,9 @@ impl CandidateWindow {
             candidate_layout: None,
             revision: 0,
             delete_history,
+            commit_candidate,
             pending_history_deletes: Vec::new(),
+            pending_candidate_commits: Vec::new(),
             visible: false,
             delete_overlay,
             accessibility: CandidateAccessibility::new(window),
@@ -295,6 +302,11 @@ impl CandidateWindow {
             self.state.revision,
             ui.revision,
         );
+        clear_pending_candidate_commits_for_new_revision(
+            &mut self.state.pending_candidate_commits,
+            self.state.revision,
+            ui.revision,
+        );
         self.state.candidates = Some(candidates.clone());
         self.state.appearance_theme = ui.appearance_theme;
         self.state.detail = detail.cloned();
@@ -303,8 +315,8 @@ impl CandidateWindow {
         self.state.revision = ui.revision;
         self.state.visible = true;
         self.state.accessibility.update(candidates, detail);
-        let delete_targets = history_delete_targets(candidates, placed.layout, candidate_layout);
-        let overlay_ready = rebuild_delete_overlay_region(self.delete_overlay, &delete_targets);
+        let row_targets = candidate_row_targets(candidates, placed.layout, candidate_layout);
+        let overlay_ready = rebuild_candidate_overlay_region(self.delete_overlay, &row_targets);
         // SAFETY: the popup is live; `SWP_NOACTIVATE` and
         // `SW_SHOWNOACTIVATE` jointly preserve focus in the host application.
         unsafe {
@@ -341,7 +353,7 @@ impl CandidateWindow {
             if delete_overlay_should_be_visible(
                 self.state.visible,
                 overlay_positioned && overlay_ready,
-                &delete_targets,
+                &row_targets,
             ) {
                 let _ = InvalidateRect(Some(self.delete_overlay), None, false);
                 let _ = ShowWindow(self.delete_overlay, SW_SHOWNOACTIVATE);
@@ -391,6 +403,10 @@ impl CandidateWindow {
     /// exact request so the still-visible row can be retried immediately.
     pub fn history_delete_finished(&mut self, request: HistoryDeleteRequest, removed: bool) {
         finish_pending_history_delete(&mut self.state.pending_history_deletes, request, removed);
+    }
+
+    pub fn candidate_commit_finished(&mut self, request: CandidateCommitRequest, queued: bool) {
+        finish_pending_candidate_commit(&mut self.state.pending_candidate_commits, request, queued);
     }
 }
 
@@ -800,7 +816,7 @@ extern "system" fn delete_overlay_procedure(
         // is allowed to activate the renderer or establish mouse capture.
         WM_LBUTTONDOWN => LRESULT(0),
         WM_LBUTTONUP => {
-            queue_history_delete(window, point_from_lparam(l));
+            queue_candidate_interaction(window, point_from_lparam(l));
             LRESULT(0)
         }
         // Return the same retained candidate provider for the input overlay.
@@ -893,10 +909,10 @@ fn refresh_delete_overlay_for_dpi(state: &mut PaintState) -> bool {
     let layout = layout(candidates, dpi(state.display_window));
     popup.candidates.right = popup.candidates.left.saturating_add(layout.width);
     popup.candidates.bottom = popup.candidates.top.saturating_add(layout.height);
-    let targets = history_delete_targets(candidates, popup, layout);
+    let targets = candidate_row_targets(candidates, popup, layout);
     state.layout = Some(popup);
     state.candidate_layout = Some(layout);
-    let ready = rebuild_delete_overlay_region(state.delete_overlay, &targets);
+    let ready = rebuild_candidate_overlay_region(state.delete_overlay, &targets);
     // SAFETY: both HWNDs remain live for the PaintState lifetime.
     unsafe {
         let _ = InvalidateRect(Some(state.display_window), None, false);
@@ -1026,6 +1042,58 @@ fn history_delete_targets(
         .collect()
 }
 
+fn candidate_row_targets(
+    candidates: &CandidateList,
+    popup: PopupLayout,
+    layout: Layout,
+) -> Vec<RECT> {
+    candidates
+        .visible_range()
+        .enumerate()
+        .map(|(row_index, _)| RECT {
+            left: popup.candidates.left,
+            top: popup
+                .candidates
+                .top
+                .saturating_add(layout.row_height.saturating_mul(row_index as i32)),
+            right: popup.candidates.right,
+            bottom: popup.candidates.top.saturating_add(
+                layout
+                    .row_height
+                    .saturating_mul((row_index as i32).saturating_add(1)),
+            ),
+        })
+        .collect()
+}
+
+fn candidate_commit_at_client_point(
+    state: &PaintState,
+    point: POINT,
+) -> Option<CandidateCommitRequest> {
+    let candidates = state.candidates.as_ref()?;
+    let popup = state.layout?;
+    let layout = state.candidate_layout?;
+    candidate_commit_request_at_client_point(candidates, popup, layout, state.revision, point)
+}
+
+fn candidate_commit_request_at_client_point(
+    candidates: &CandidateList,
+    popup: PopupLayout,
+    layout: Layout,
+    revision: u64,
+    point: POINT,
+) -> Option<CandidateCommitRequest> {
+    candidate_row_targets(candidates, popup, layout)
+        .into_iter()
+        .zip(candidates.visible_range())
+        .find(|(row, _)| point_in_rect(point, *row))
+        .and_then(|(_, index)| u16::try_from(index).ok())
+        .map(|candidate_index| CandidateCommitRequest {
+            revision,
+            candidate_index,
+        })
+}
+
 fn history_delete_request_at_client_point(
     candidates: &CandidateList,
     popup: PopupLayout,
@@ -1045,7 +1113,7 @@ fn history_delete_request_at_client_point(
 
 /// Replaces the overlay shape atomically. Every component region is released
 /// locally; after successful `SetWindowRgn`, Windows owns `aggregate`.
-fn rebuild_delete_overlay_region(window: HWND, targets: &[HistoryDeleteTarget]) -> bool {
+fn rebuild_candidate_overlay_region(window: HWND, targets: &[RECT]) -> bool {
     if targets.is_empty() {
         return clear_delete_overlay_region(window);
     }
@@ -1057,12 +1125,7 @@ fn rebuild_delete_overlay_region(window: HWND, targets: &[HistoryDeleteTarget]) 
             return false;
         }
         for target in targets {
-            let component = CreateRectRgn(
-                target.hit.left,
-                target.hit.top,
-                target.hit.right,
-                target.hit.bottom,
-            );
+            let component = CreateRectRgn(target.left, target.top, target.right, target.bottom);
             if component.is_invalid() {
                 let _ = DeleteObject(aggregate.into());
                 return false;
@@ -1102,13 +1165,23 @@ fn hide_delete_overlay(window: HWND) {
 fn delete_overlay_should_be_visible(
     display_visible: bool,
     region_ready: bool,
-    targets: &[HistoryDeleteTarget],
+    targets: &[RECT],
 ) -> bool {
     display_visible && region_ready && !targets.is_empty()
 }
 
 fn clear_pending_history_deletes_for_new_revision(
     pending: &mut Vec<HistoryDeleteRequest>,
+    previous_revision: u64,
+    next_revision: u64,
+) {
+    if previous_revision != next_revision {
+        pending.clear();
+    }
+}
+
+fn clear_pending_candidate_commits_for_new_revision(
+    pending: &mut Vec<CandidateCommitRequest>,
     previous_revision: u64,
     next_revision: u64,
 ) {
@@ -1134,25 +1207,41 @@ fn finish_pending_history_delete(
     }
 }
 
-fn queue_history_delete(window: HWND, point: POINT) {
+fn finish_pending_candidate_commit(
+    pending: &mut Vec<CandidateCommitRequest>,
+    request: CandidateCommitRequest,
+    queued: bool,
+) {
+    if !queued {
+        pending.retain(|pending_request| *pending_request != request);
+    }
+}
+
+fn queue_candidate_interaction(window: HWND, point: POINT) {
     // SAFETY: CandidateWindow owns this stable box until the HWND is destroyed.
     let state = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut PaintState;
     if state.is_null() {
         return;
     }
-    // SAFETY: candidate window messages run on its owner thread, so this is
-    // the only mutable access to the state during the handler.
+    // SAFETY: overlay messages are serialized on its owning renderer thread.
     let state = unsafe { &mut *state };
-    let Some(request) = history_delete_at_client_point(state, point) else {
-        return;
-    };
-    if is_history_delete_pending(&state.pending_history_deletes, request) {
+    if let Some(request) = history_delete_at_client_point(state, point) {
+        if is_history_delete_pending(&state.pending_history_deletes, request) {
+            return;
+        }
+        if state.delete_history.try_send(request).is_ok() {
+            state.pending_history_deletes.push(request);
+        }
         return;
     }
-    match state.delete_history.try_send(request) {
-        Ok(()) => state.pending_history_deletes.push(request),
-        // A bounded queue must never turn a click storm into unbounded work.
-        // Keep the candidate visible and wait for the next engine UiState.
+    let Some(request) = candidate_commit_at_client_point(state, point) else {
+        return;
+    };
+    if !state.pending_candidate_commits.is_empty() {
+        return;
+    }
+    match state.commit_candidate.try_send(request) {
+        Ok(()) => state.pending_candidate_commits.push(request),
         Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}
     }
 }
@@ -1209,6 +1298,19 @@ fn paint_delete_overlay(window: HWND) {
             state.layout,
             state.candidate_layout,
         ) {
+            let mut client = RECT::default();
+            // SAFETY: the overlay window and output rectangle are live.
+            if unsafe { GetClientRect(window, &mut client) }.is_ok() {
+                draw(
+                    dc,
+                    client,
+                    candidates,
+                    state.detail.as_ref(),
+                    popup,
+                    dpi(window),
+                    palette(state.appearance_theme),
+                );
+            }
             draw_delete_overlay(
                 dc,
                 candidates,
@@ -2544,19 +2646,22 @@ mod tests {
                 None,
                 "annotation alone must never create a deletion capability"
             );
+            let row_text = POINT {
+                x: hit_rect.left.saturating_sub(1),
+                y: hit.y,
+            };
             assert_eq!(
-                history_delete_request_at_client_point(
-                    &list,
-                    popup,
-                    layout,
-                    41,
-                    POINT {
-                        x: hit_rect.left.saturating_sub(1),
-                        y: hit.y,
-                    },
-                ),
+                history_delete_request_at_client_point(&list, popup, layout, 41, row_text),
                 None,
-                "row text remains click-through"
+                "row text is not a deletion control"
+            );
+            assert_eq!(
+                candidate_commit_request_at_client_point(&list, popup, layout, 41, row_text),
+                Some(CandidateCommitRequest {
+                    revision: 41,
+                    candidate_index: 1,
+                }),
+                "a deliberate row click queues that exact visible candidate"
             );
 
             let (surface, annotation) = candidate_columns(second_row, layout);
@@ -2586,20 +2691,11 @@ mod tests {
 
     #[test]
     fn overlay_visibility_requires_a_visible_display_a_valid_region_and_current_page_targets() {
-        let target = HistoryDeleteTarget {
-            candidate_index: 3,
-            row: RECT {
-                left: 0,
-                top: 0,
-                right: 28,
-                bottom: 28,
-            },
-            hit: RECT {
-                left: 2,
-                top: 2,
-                right: 26,
-                bottom: 26,
-            },
+        let target = RECT {
+            left: 0,
+            top: 0,
+            right: 28,
+            bottom: 28,
         };
 
         assert!(delete_overlay_should_be_visible(true, true, &[target]));
