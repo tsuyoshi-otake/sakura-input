@@ -10,5 +10,6 @@ data/conversion-priorities.tsv whitespace=-blank-at-eol
 /corpus/** text eol=lf
 
 # The release reranker is a content-addressed runtime artifact. Never apply
-# newline or encoding conversion to its ONNX bytes.
+# newline or encoding conversion to its ONNX bytes or reviewed manifest.
 /models/**/*.onnx binary
+/models/sakura-rerank-tiny-v1/research-manifest.json text eol=lf

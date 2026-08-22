@@ -444,3 +444,9 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   Skip only the identical generated surface, then rank the remaining numeric
   spellings behind the exact lexical form. Verified by the synthetic core test
   and all 19 shipped-dictionary ranking tests for 1.0.18.
+
+- **Pin line endings for every text file whose raw SHA-256 is a release
+  contract.** The reranker research manifest had the reviewed LF hash locally,
+  but a Windows Actions checkout converted it to CRLF and the installer failed
+  closed after all earlier gates passed. An exact `.gitattributes` `eol=lf`
+  rule keeps the reviewed manifest bytes identical across checkouts.
