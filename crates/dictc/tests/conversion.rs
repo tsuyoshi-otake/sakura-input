@@ -115,7 +115,7 @@ fn single_segment_method_builds_only_whole_reading_candidates() {
 }
 
 #[test]
-fn english_surfaces_offer_identifier_case_candidates() {
+fn english_surfaces_do_not_offer_identifier_case_candidates() {
     let bytes = fixture();
     let dictionary = Dictionary::parse(&bytes).expect("dictionary");
     let mut converter = Converter::new();
@@ -123,8 +123,13 @@ fn english_surfaces_offer_identifier_case_candidates() {
         .convert(&dictionary, "ぷるりくえすと", ConversionOptions::default())
         .expect("conversion");
 
-    for expected in [
-        "Pull request",
+    assert!(
+        candidates
+            .iter()
+            .any(|candidate| candidate.text() == "Pull request"),
+        "the dictionary surface itself must remain"
+    );
+    for unexpected in [
         "pullRequest",
         "pull_request",
         "PULL_REQUEST",
@@ -133,8 +138,8 @@ fn english_surfaces_offer_identifier_case_candidates() {
         assert!(
             candidates
                 .iter()
-                .any(|candidate| candidate.text() == expected),
-            "missing generated candidate {expected}"
+                .all(|candidate| candidate.text() != unexpected),
+            "generated identifier variant {unexpected} must not appear"
         );
     }
 }
@@ -178,13 +183,110 @@ fn bounded_it_prior_can_change_a_close_choice_but_zero_bias_cannot() {
 }
 
 #[test]
-fn an_oversized_identifier_variant_is_skipped_without_discarding_the_conversion() {
-    // A dictc-legal 1536-byte ASCII surface with exactly one camelCase
-    // boundary: snake/kebab/screaming variants need at least one extra
-    // separator byte, overflowing the 1536-byte candidate text buffer.
-    // The oversized cosmetic variants must be skipped; propagating the
-    // overflow used to abort the whole conversion and discard every valid
-    // candidate that search_n_best had already produced.
+fn word_sized_compounds_accumulate_it_evidence_without_changing_standalone_words() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+きのう\t昨日\t1\t1\t1000\t-\t\t\n\
+きのう\t機能\t1\t1\t2056\t-\tit\t\n\
+とうごう\t統合\t1\t1\t1000\t-\t\t\n\
+いがい\t以外\t1\t1\t1000\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let standalone = converter
+        .convert(&dictionary, "きのう", ConversionOptions::default())
+        .expect("standalone conversion");
+    assert_eq!(standalone[0].text(), "昨日");
+
+    let compound = converter
+        .convert(&dictionary, "きのうとうごう", ConversionOptions::default())
+        .expect("word-sized compound");
+    assert_eq!(compound[0].text(), "機能統合");
+    assert!(compound
+        .iter()
+        .any(|candidate| candidate.text() == "昨日統合"));
+
+    let short_phrase = converter
+        .convert(&dictionary, "きのういがい", ConversionOptions::default())
+        .expect("short ordinary phrase");
+    assert_eq!(short_phrase[0].text(), "昨日以外");
+}
+
+#[test]
+fn exact_reading_gate_keeps_close_splits_and_removes_only_the_far_mosaic_tail() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+あじゅーる\tアジュール\t1\t1\t1000\t-\tit\t\n\
+あじゅーる\tAzure\t1\t1\t1500\t-\tit\t\n\
+あ\t亜\t1\t1\t1000\t-\t\t\n\
+あ\t阿\t1\t1\t6500\t-\t\t\n\
+じゅーる\tジュール\t1\t1\t1000\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let candidates = converter
+        .convert(&dictionary, "あじゅーる", ConversionOptions::default())
+        .expect("exact loanword");
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.text() == "アジュール"));
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.text() == "Azure"));
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.text() == "亜ジュール"));
+    assert!(candidates
+        .iter()
+        .all(|candidate| candidate.text() != "阿ジュール"));
+}
+
+#[test]
+fn exact_japanese_compounds_keep_far_but_lexical_split_alternatives() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+ぎせいほうじん\t犠牲法人\t1\t1\t1000\t-\t\t\n\
+ぎせい\t犠牲\t1\t1\t1000\t-\t\t\n\
+ぎせい\t擬制\t1\t1\t6500\t-\t\t\n\
+ほうじん\t法人\t1\t1\t1000\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let candidates = converter
+        .convert(&dictionary, "ぎせいほうじん", ConversionOptions::default())
+        .expect("Japanese compound");
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.text() == "擬制法人"));
+}
+
+#[test]
+fn multiword_conversion_is_unchanged_when_no_whole_reading_entry_exists() {
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+あ\t阿\t1\t1\t6500\t-\t\t\n\
+じゅーる\tジュール\t1\t1\t1000\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let candidates = converter
+        .convert(&dictionary, "あじゅーる", ConversionOptions::default())
+        .expect("multiword conversion");
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.text() == "阿ジュール"));
+}
+
+#[test]
+fn an_oversized_english_surface_does_not_invent_identifier_variants() {
     let surface = format!("{}B{}", "a".repeat(768), "b".repeat(767));
     assert_eq!(surface.len(), 1536);
     let entries = format!(
@@ -197,7 +299,7 @@ fn an_oversized_identifier_variant_is_skipped_without_discarding_the_conversion(
     let mut converter = Converter::new();
     let candidates = converter
         .convert(&dictionary, "てすと", ConversionOptions::default())
-        .expect("an oversized cosmetic variant must not abort the conversion");
+        .expect("a max-length English surface must still convert");
 
     assert!(
         candidates
@@ -209,17 +311,12 @@ fn an_oversized_identifier_variant_is_skipped_without_discarding_the_conversion(
         candidates
             .iter()
             .all(|candidate| !candidate.text().contains('_') && !candidate.text().contains('-')),
-        "no partially built identifier variant may appear"
+        "no identifier-case variant may appear"
     );
 }
 
 #[test]
-fn an_identifier_variant_keeps_the_flags_of_every_word_it_re_spells() {
-    // The variant collapses a multi-word path into one segment, so its flags
-    // have to be the union of the words it covers. Taking only the first
-    // segment's flags lost the IT term sitting in second position, and with
-    // it every downstream decision that reads `EntryFlags::IT` — the IT bias
-    // and the learning statistics among them.
+fn conversion_does_not_re_spell_english_paths_as_identifier_cases() {
     let entries = "# license: BSD-3-Clause\n\
          reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
          てすと\tTest\t1\t1\t100\t-\t\t\n\
@@ -243,15 +340,14 @@ fn an_identifier_variant_keeps_the_flags_of_every_word_it_re_spells() {
     assert!(!base.segments()[0].flags.contains(EntryFlags::IT));
     assert!(base.segments()[1].flags.contains(EntryFlags::IT));
 
-    let variant = candidates
-        .iter()
-        .find(|candidate| candidate.text() == "test_api")
-        .expect("the snake_case variant");
-    assert_eq!(variant.segments().len(), 1);
-    assert!(
-        variant.segments()[0].flags.contains(EntryFlags::IT),
-        "a variant of an IT term is still an IT term"
-    );
+    for unexpected in ["testApi", "test_api", "TEST_API", "test-api"] {
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.text() != unexpected),
+            "generated identifier variant {unexpected} must not appear"
+        );
+    }
 }
 
 #[test]
@@ -702,8 +798,6 @@ fn today_readings_offer_reiwa_gregorian_and_weekday_date_surfaces() {
         ("令和8年8月19日（水）", "和暦・曜日"),
         ("2026年8月19日", "西暦"),
         ("2026年8月19日（水）", "西暦・曜日"),
-        ("2026/8/19", "日付"),
-        ("2026-08-19", "ISO日付"),
     ] {
         let candidate = candidates
             .iter()
@@ -714,6 +808,13 @@ fn today_readings_offer_reiwa_gregorian_and_weekday_date_surfaces() {
         assert_eq!(candidate.system_entry_index(), None);
         assert_eq!(candidate.segments().len(), 1);
     }
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| !candidate.text().contains("2026/")
+                && !candidate.text().contains("2026-")),
+        "slash and ISO date surfaces were not requested"
+    );
 }
 
 #[test]
@@ -762,8 +863,6 @@ fn relative_date_readings_offer_offset_reiwa_and_gregorian_surfaces() {
                 "令和8年8月21日（金）",
                 "2026年8月21日",
                 "2026年8月21日（金）",
-                "2026/8/21",
-                "2026-08-21",
             ],
         ),
         (
@@ -774,8 +873,6 @@ fn relative_date_readings_offer_offset_reiwa_and_gregorian_surfaces() {
                 "令和8年8月26日（水）",
                 "2026年8月26日",
                 "2026年8月26日（水）",
-                "2026/8/26",
-                "2026-08-26",
             ],
         ),
         (
@@ -786,8 +883,6 @@ fn relative_date_readings_offer_offset_reiwa_and_gregorian_surfaces() {
                 "令和8年8月12日（水）",
                 "2026年8月12日",
                 "2026年8月12日（水）",
-                "2026/8/12",
-                "2026-08-12",
             ],
         ),
     ] {
@@ -809,6 +904,13 @@ fn relative_date_readings_offer_offset_reiwa_and_gregorian_surfaces() {
                 "{reading} missing {surface}"
             );
         }
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| !candidate.text().contains('/')
+                    && !candidate.text().contains("2026-")),
+            "{reading} kept a slash or ISO date surface"
+        );
     }
 }
 
@@ -827,6 +929,9 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 よん\t呼ん\t1\t1\t90\t-\t\t\n\
 よん\t読ん\t1\t1\t91\t-\t\t\n\
 にじゅう\t二重\t1\t1\t80\t-\t\t\n\
+せん\t線\t1\t1\t80\t-\t\t\n\
+せん\t戦\t1\t1\t90\t-\t\t\n\
+さんぜん\t産前\t1\t1\t80\t-\t\t\n\
 じゅうよん\t十四\t1\t1\t80\t-\t\t\n\
 じゅうよん\t⑭\t1\t1\t70\t-\t\tcircled\n";
 
@@ -911,6 +1016,44 @@ fn twenty_four_without_a_counter_still_drops_homophone_splices() {
 }
 
 #[test]
+fn senjitsu_does_not_offer_a_thousand_days() {
+    let entries = "# license: BSD-3-Clause\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+せんじつ\t先日\t1\t1\t100\t-\t\t\n\
+ぜんじつ\t全日\t1\t1\t100\t-\t\t\n\
+せん\t千\t1\t1\t80\t-\t\t\n\
+じつ\t日\t1\t1\t50\t-\t\t\n\
+にち\t日\t1\t1\t50\t-\t\t\n";
+    let bytes = compile_fixture(entries);
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    for reading in ["せんじつ", "ぜんじつ"] {
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("conversion");
+        let texts: Vec<&str> = candidates
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect();
+        assert!(
+            !texts
+                .iter()
+                .any(|text| *text == "1000日" || *text == "１０００日" || *text == "千日"),
+            "{reading} must not rewrite a lexical じつ word into a day count: {texts:?}"
+        );
+        assert_eq!(
+            texts[0],
+            if reading == "せんじつ" {
+                "先日"
+            } else {
+                "全日"
+            },
+            "{reading} first candidate: {texts:?}"
+        );
+    }
+}
+
+#[test]
 fn twenty_keeps_its_lexical_word_alongside_numeric_forms() {
     let bytes = number_junk_dictionary();
     let dictionary = Dictionary::parse(&bytes).expect("dictionary");
@@ -929,4 +1072,35 @@ fn twenty_keeps_its_lexical_word_alongside_numeric_forms() {
     assert!(texts.contains(&"20"), "にじゅう missing 20: {texts:?}");
     assert!(texts.contains(&"２０"), "にじゅう missing ２０: {texts:?}");
     assert!(texts.contains(&"二十"), "にじゅう missing 二十: {texts:?}");
+}
+
+#[test]
+fn bare_spoken_numbers_defer_to_lexical_homophones() {
+    let bytes = number_junk_dictionary();
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    for (reading, lexical, numeric_forms) in [
+        ("せん", "線", ["1000", "１０００", "千"]),
+        ("にじゅう", "二重", ["20", "２０", "二十"]),
+        ("さんぜん", "産前", ["3000", "３０００", "三千"]),
+    ] {
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("conversion");
+        let texts: Vec<&str> = candidates
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect();
+        assert_eq!(
+            texts.first().copied(),
+            Some(lexical),
+            "{reading}: {texts:?}"
+        );
+        for numeric in numeric_forms {
+            assert!(
+                texts.contains(&numeric),
+                "{reading} lost numeric form {numeric}: {texts:?}"
+            );
+        }
+    }
 }

@@ -64,8 +64,8 @@ fn restore_host_cursor() {
     if hwnd.is_invalid() {
         return;
     }
-    let hit = HTCLIENT as u32 & 0xffff;
-    let mouse = (WM_MOUSEMOVE as u32) << 16;
+    let hit = HTCLIENT & 0xffff;
+    let mouse = WM_MOUSEMOVE << 16;
     let lparam = LPARAM((mouse | hit) as isize);
     // SAFETY: asking the window under the cursor to apply its own class or
     // client cursor is the documented restore after a temporary `SetCursor`.
@@ -93,9 +93,11 @@ mod tests {
         let loaded = unsafe { LoadCursorW(None, IDC_APPSTARTING) };
         assert!(loaded.is_ok(), "system IDC_APPSTARTING cursor must load");
         if let Ok(wait) = loaded {
+            // SAFETY: GetCursor returns the current thread cursor handle and
+            // does not dereference the handle.
+            let current_cursor = unsafe { GetCursor() };
             assert_eq!(
-                unsafe { GetCursor() },
-                wait,
+                current_cursor, wait,
                 "AI wait should use IDC_APPSTARTING, not a blocking wait cursor"
             );
         }

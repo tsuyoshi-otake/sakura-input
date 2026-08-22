@@ -45,6 +45,7 @@ use sakura_proto::{
     encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
 };
 
+use sakura_ipc::debug_trace;
 use sakura_ipc::{security, Accept, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
 
 use crate::ai_text::AiTextService;
@@ -255,7 +256,10 @@ impl Shared {
             match crate::input_history::default_path()
                 .and_then(|path| InputHistoryService::open(&path))
             {
-                Ok(service) => dynamic.input_history = Some(service),
+                Ok(service) => {
+                    sakura_ipc::debug_trace::set_enabled(true);
+                    dynamic.input_history = Some(service);
+                }
                 Err(error) => {
                     dynamic.input_history_failed = true;
                     report(
@@ -609,7 +613,10 @@ const SHUTDOWN_GRACE: Duration = Duration::from_millis(250);
 /// connection. The table is boxed now, and
 /// `worker_locals_fit_the_reserved_stack` is what keeps the next large local
 /// from rediscovering this at runtime.
-const WORKER_STACK_BYTES: usize = 128 * 1024;
+///
+/// 160 KiB reserves 10 MiB at the [`MAX_INSTANCES`] cap, leaving the rest of
+/// the 15 MiB engine budget for the process and its bounded auxiliary workers.
+const WORKER_STACK_BYTES: usize = 160 * 1024;
 
 /// One instance's claim on the [`MAX_INSTANCES`] cap.
 ///
@@ -881,7 +888,7 @@ impl Buffers {
             frame: vec![0; MAX_FRAME],
             reply: Vec::new(),
             // Candidate buffers are intentionally large and bounded. Keep
-            // them off the 128 KiB pipe-worker stack; this allocation happens
+            // them off the 160 KiB pipe-worker stack; this allocation happens
             // once per worker, never on a keystroke.
             out: OutputBuf::new_boxed(),
         }
@@ -959,9 +966,13 @@ fn serve(
             renderer_visible,
         } = request
         {
-            let _ = shared
-                .ui
-                .publish_placement(session, anchor, document, renderer_visible);
+            let _ = shared.ui.publish_placement_from(
+                dispatcher.ui_owner(),
+                session,
+                anchor,
+                document,
+                renderer_visible,
+            );
             if let Err(fault) = send(instance, &Response::Ok, id, &mut bufs.reply) {
                 return end(fault);
             }
@@ -992,6 +1003,65 @@ fn serve(
             continue;
         }
 
+        if let Request::QueueCandidateCommit {
+            revision,
+            candidate_index,
+        } = request
+        {
+            let queued = shared.ui.queue_candidate_commit(revision, candidate_index);
+            if let Err(fault) = send(
+                instance,
+                &Response::CandidateCommitQueued { queued },
+                id,
+                &mut bufs.reply,
+            ) {
+                return end(fault);
+            }
+            continue;
+        }
+
+        if let Request::PollCandidateCommit { session } = request {
+            let pending = shared
+                .ui
+                .pending_candidate_commit(dispatcher.ui_owner(), session);
+            if let Err(fault) = send(
+                instance,
+                &Response::CandidateCommitPending { request: pending },
+                id,
+                &mut bufs.reply,
+            ) {
+                return end(fault);
+            }
+            continue;
+        }
+
+        let consumed_candidate_commit = if let Request::CommitCandidate {
+            session,
+            revision,
+            candidate_index,
+        } = &request
+        {
+            if !shared.ui.take_candidate_commit(
+                dispatcher.ui_owner(),
+                *session,
+                *revision,
+                *candidate_index,
+            ) {
+                if let Err(fault) = send(
+                    instance,
+                    &Response::Error(ErrorCode::Malformed),
+                    id,
+                    &mut bufs.reply,
+                ) {
+                    return end(fault);
+                }
+                continue;
+            }
+            Some((*session, *revision))
+        } else {
+            None
+        };
+
         let output_session = match &request {
             Request::SendKey { session, key } if !key.test_only => Some(*session),
             Request::Commit { session } => Some(*session),
@@ -1001,6 +1071,7 @@ fn serve(
                 ..
             } => Some(*session),
             Request::ApplyAiComposition { session, .. } => Some(*session),
+            Request::CommitCandidate { session, .. } => Some(*session),
             _ => None,
         };
         let clears_candidates = match &request {
@@ -1033,14 +1104,22 @@ fn serve(
 
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
+                // The diagnostic helper has a non-trivial call frame. Keep it
+                // entirely off the ordinary 160 KiB worker-stack path.
+                if debug_trace::is_enabled() {
+                    trace_key_result(&request, &bufs.out);
+                }
                 if let Some(session) = output_session {
                     let learning_generation = shared
                         .learning
                         .as_ref()
                         .map_or(0, |learning| learning.generation());
-                    shared
-                        .ui
-                        .publish_output(session, &bufs.out, learning_generation);
+                    shared.ui.publish_output_from(
+                        dispatcher.ui_owner(),
+                        session,
+                        &bufs.out,
+                        learning_generation,
+                    );
                 } else if let Some(mode) = bufs.out.mode {
                     shared.ui.publish(mode);
                 }
@@ -1064,6 +1143,11 @@ fn serve(
                 }
             }
             Reply::Message(response) => {
+                if let Some((session, revision)) = consumed_candidate_commit {
+                    shared
+                        .ui
+                        .reject_candidate_commit(dispatcher.ui_owner(), session, revision);
+                }
                 // The TSF input-mode menu changes an idle session without a
                 // document-edit `Output`. Publish its exact mode separately
                 // so the renderer's transient indicator remains in sync with
@@ -1073,7 +1157,7 @@ fn serve(
                 }
                 if matches!(response, Response::Ok) {
                     if let Some(session) = clears_candidates {
-                        shared.ui.clear_session(session);
+                        shared.ui.clear_session_from(dispatcher.ui_owner(), session);
                     }
                 }
                 if let Err(fault) = send(instance, &response, id, &mut bufs.reply) {
@@ -1088,6 +1172,40 @@ fn serve(
             }
         }
     }
+}
+
+fn trace_key_result(request: &Request, output: &OutputBuf) {
+    let Request::SendKey { session, key } = request else {
+        return;
+    };
+    if !debug_trace::is_enabled() {
+        return;
+    }
+    let kind = output
+        .candidate_kind()
+        .map(|kind| kind as u64)
+        .unwrap_or(255);
+    let count = output.candidate_count() as u64;
+    let identity_top = output
+        .candidate(0)
+        .is_some_and(|(text, _)| text == output.preedit_text()) as u64;
+    let decision = if key.test_only {
+        "probe"
+    } else if output.commit_text().is_some() {
+        "commit"
+    } else {
+        "apply"
+    };
+    debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+        component: "engine",
+        instance: *session,
+        event: "key_result",
+        decision,
+        k0: key.code as u64,
+        k1: kind,
+        k2: count,
+        k3: identity_top,
+    });
 }
 
 /// Resolves and removes one renderer-selected history prediction. The first
@@ -1491,7 +1609,7 @@ mod tests {
         );
     }
 
-    /// `Buffers::new` runs on the pipe worker's 128 KiB stack.  Keep this
+    /// `Buffers::new` runs on the pipe worker's 160 KiB stack.  Keep this
     /// runtime guard in addition to the size budget above: `Box::new(T::new())`
     /// first constructs all of `T` on that stack, which can overflow even
     /// when `Buffers` itself contains only a pointer to `T`.

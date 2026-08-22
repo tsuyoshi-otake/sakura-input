@@ -33,6 +33,10 @@ pub fn timeout_diagnostics() -> io::Result<PathBuf> {
     Ok(local_root()?.join("diagnostics").join("ipc-timeouts.bin"))
 }
 
+pub fn debug_trace() -> io::Result<PathBuf> {
+    Ok(local_root()?.join("logs").join("debug.tsv"))
+}
+
 pub fn update_preferences() -> io::Result<PathBuf> {
     Ok(local_root()?.join("update").join("settings.txt"))
 }

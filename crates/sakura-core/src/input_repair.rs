@@ -113,6 +113,15 @@ pub fn collect_repair_variants(
     {
         return out;
     }
+    // A decimal digit is an explicit literal token, not an uncertain kana.
+    // In particular, Advanced substitution must never reinterpret `5かい`
+    // as `あかい` (or any other digit/counter input as an unrelated word).
+    if typed
+        .chars()
+        .any(|character| to_half_ascii(character).is_ascii_digit())
+    {
+        return out;
+    }
     let limit = max_variants.min(MAX_REPAIR_VARIANTS);
 
     push_n_count_variants(typed, support, &mut out, limit);
@@ -174,7 +183,7 @@ pub fn english_spelling_katakana_reading(typed: &str) -> Option<FixedStr<MAX_PRE
         return None;
     }
     let romaji = english_ascii_to_kana_romaji(ascii.as_str())?;
-    Some(romaji_to_katakana(romaji.as_str())?)
+    romaji_to_katakana(romaji.as_str())
 }
 
 /// Turns an English orthographic spelling into a romaji skeleton that
@@ -283,9 +292,7 @@ pub fn contextual_punctuation_swap(
     if !support.is_active() {
         return None;
     }
-    let Some(previous) = previous else {
-        return None;
-    };
+    let previous = previous?;
     let half_prev = to_half_ascii(previous);
     if support.period_after_digit && matches!(typed, '。' | '．') && half_prev.is_ascii_digit() {
         return Some('．');
@@ -622,6 +629,9 @@ fn push_advanced_variants(typed: &str, out: &mut RepairVariantList, limit: usize
     // Single-character substitutions among a small vowel/nasal alphabet.
     const ALPHABET: [char; 8] = ['あ', 'い', 'う', 'え', 'お', 'ん', 'っ', 'ー'];
     for index in 0..chars.len() {
+        if !is_hiragana(chars[index]) && !is_katakana(chars[index]) {
+            continue;
+        }
         for candidate in ALPHABET {
             if candidate == chars[index] {
                 continue;
@@ -1031,8 +1041,10 @@ mod tests {
 
     #[test]
     fn master_off_emits_no_variants() {
-        let mut support = InputSupport::default();
-        support.enabled = false;
+        let support = InputSupport {
+            enabled: false,
+            ..InputSupport::default()
+        };
         let variants = collect_repair_variants("こんんにちは", support, MAX_REPAIR_VARIANTS);
         assert!(variants.is_empty());
     }
@@ -1089,8 +1101,10 @@ mod tests {
             false,
             EntryFlags::IT | EntryFlags::SPELLING_CORRECTION
         ));
-        let mut off = InputSupport::default();
-        off.enabled = false;
+        let off = InputSupport {
+            enabled: false,
+            ..InputSupport::default()
+        };
         assert!(!allows_system_entry(
             off,
             false,
@@ -1113,9 +1127,73 @@ mod tests {
     }
 
     #[test]
+    fn decimal_counter_inputs_never_emit_kana_repairs() {
+        const SUFFIXES: [&str; 24] = [
+            "えん",
+            "かい",
+            "がつ",
+            "けん",
+            "こ",
+            "さい",
+            "じ",
+            "せき",
+            "そく",
+            "だい",
+            "つ",
+            "にち",
+            "にん",
+            "ねん",
+            "はい",
+            "ばん",
+            "ふん",
+            "ぷん",
+            "ほん",
+            "まい",
+            "わり",
+            "ちゃく",
+            "ひき",
+            "かしょ",
+        ];
+        let support = InputSupport::default();
+        for digit in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] {
+            for suffix in SUFFIXES {
+                let typed = format!("{digit}{suffix}");
+                assert!(
+                    collect_repair_variants(&typed, support, MAX_REPAIR_VARIANTS).is_empty(),
+                    "ASCII digit/counter input emitted a repair: {typed}"
+                );
+                let fullwidth = char::from_u32(digit as u32 + 0xFEE0).expect("full-width digit");
+                let typed = format!("{fullwidth}{suffix}");
+                assert!(
+                    collect_repair_variants(&typed, support, MAX_REPAIR_VARIANTS).is_empty(),
+                    "full-width digit/counter input emitted a repair: {typed}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn advanced_substitution_preserves_non_kana_literals() {
+        let mut variants = RepairVariantList::new();
+        push_advanced_variants("Aかい", &mut variants, MAX_REPAIR_VARIANTS);
+        assert!(
+            !variants.is_empty(),
+            "kana positions should remain repairable"
+        );
+        assert!(
+            variants
+                .iter()
+                .all(|variant| variant.repaired.as_str().starts_with('A')),
+            "Advanced substitution replaced a non-kana literal: {variants:?}"
+        );
+    }
+
+    #[test]
     fn individual_flags_can_disable_specific_rules() {
-        let mut support = InputSupport::default();
-        support.n_count = false;
+        let support = InputSupport {
+            n_count: false,
+            ..InputSupport::default()
+        };
         let variants = collect_repair_variants("こにちは", support, MAX_REPAIR_VARIANTS);
         assert!(variants
             .iter()

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-openai",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "API は",
+    "right": "互換である"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "OpenAI",
+    "typing": "OpenAI"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

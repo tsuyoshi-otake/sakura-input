@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-windows-11",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "対象OSは",
+    "right": "である"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "Windows 11",
+    "typing": "Windows 11"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

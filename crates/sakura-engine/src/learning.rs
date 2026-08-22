@@ -18,9 +18,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, TryLockError};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use sakura_ipc::debug_trace;
 use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 
 use crate::session::text_hash;
@@ -321,6 +321,7 @@ impl Index {
                 day,
                 exact: true,
             },
+            reading,
             candidates.clone(),
         );
         let general = self.best_candidate(
@@ -332,6 +333,7 @@ impl Index {
                 day,
                 exact: false,
             },
+            reading,
             candidates,
         );
         LearningPreference { exact, general }
@@ -340,10 +342,16 @@ impl Index {
     fn best_candidate<'a>(
         &self,
         query: PreferenceQuery,
+        reading: &str,
         candidates: impl IntoIterator<Item = (&'a str, u16)>,
     ) -> Option<usize> {
         let mut best = None::<(usize, u64, u64)>;
+        let mut skipped_identity = 0u64;
         for (candidate_index, (surface, right_context)) in candidates.into_iter().enumerate() {
+            if surface == reading {
+                skipped_identity = skipped_identity.saturating_add(1);
+                continue;
+            }
             let Ok(surface_len) = u16::try_from(surface.len()) else {
                 continue;
             };
@@ -391,6 +399,16 @@ impl Index {
                 best = Some(ranked);
             }
         }
+        debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+            component: "engine",
+            instance: 0,
+            event: "identity_pref",
+            decision: if query.exact { "exact" } else { "general" },
+            k0: skipped_identity,
+            k1: best.map(|(index, _, _)| index as u64 + 1).unwrap_or(0),
+            k2: u64::from(query.left_context),
+            k3: u64::from(query.general),
+        });
         best.map(|(index, _, _)| index)
     }
 }
@@ -948,14 +966,14 @@ impl LearningService {
         state.repair_suppress.contains(&text_hash(reading))
     }
 
-    /// Collects dictionary readings suggested by commit history for the typed
-    /// reading. Exact prior typo commits are reconverted through `resolve_surface`
-    /// so the lattice can look up the accepted surface under its true reading.
+    /// Collects dictionary readings suggested by commit history for a typed
+    /// typo. Only an already-known repair variant is used here; reverse
+    /// dictionary lookup is deliberately not performed on the synchronous key
+    /// path.
     pub fn collect_commit_repair_readings(
         &self,
         typed: &str,
         support: sakura_core::InputSupport,
-        mut resolve_surface: impl FnMut(&str, &mut FixedStr<MAX_PREEDIT_BYTES>) -> bool,
     ) -> Vec<FixedStr<MAX_PREEDIT_BYTES>> {
         let mut out = Vec::new();
         if !support.is_active() || !support.commit_based || typed.is_empty() {
@@ -963,24 +981,20 @@ impl LearningService {
         }
         let variants =
             sakura_core::collect_repair_variants(typed, support, sakura_core::MAX_REPAIR_VARIANTS);
+        if variants.is_empty() {
+            // A normal reading has no plausible typo-repair target. In
+            // particular, do not reverse-convert every exact history entry
+            // on the synchronous Space path just to discover that it maps
+            // back to the same reading. That lookup can exceed the TSF
+            // keystroke budget even though ordinary conversion is cheap.
+            return out;
+        }
         let state = self
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.prediction_history.for_each(|reading, surface| {
+        state.prediction_history.for_each(|reading, _surface| {
             if out.len() >= 8 {
-                return;
-            }
-            if reading == typed {
-                let mut repaired = FixedStr::new();
-                if resolve_surface(surface, &mut repaired)
-                    && repaired.as_str() != typed
-                    && !out
-                        .iter()
-                        .any(|existing| existing.as_str() == repaired.as_str())
-                {
-                    out.push(repaired);
-                }
                 return;
             }
             if variants
@@ -2498,6 +2512,42 @@ mod tests {
                 .exact,
             Some(1),
             "the maximum class id must not collide with general learning"
+        );
+    }
+
+    #[test]
+    fn identity_history_does_not_prefer_the_unconverted_reading() {
+        let mut index = Index::new();
+        index.learn(0, 0, "にほんご", "にほんご", 100, 1);
+        index.learn(0, 0, "にほんご", "にほんご", 100, 2);
+        index.learn(0, 0, "にほんご", "にほんご", 100, 3);
+        let candidates = [("日本語", 0), ("にほんご", 0)];
+        let preference = index.preference("にほんご", 0, candidates, 100);
+        assert_eq!(preference.exact, None);
+        assert_eq!(preference.general, None);
+    }
+
+    #[test]
+    fn ordinary_history_does_not_trigger_reverse_repair_lookup() {
+        let service = LearningService::memory();
+        service.learn("にほんご", "日本語", 0, 0);
+        let hints = service
+            .collect_commit_repair_readings("にほんご", sakura_core::InputSupport::default());
+        assert!(
+            hints.is_empty(),
+            "ordinary history unexpectedly produced hints={hints:?}"
+        );
+    }
+
+    #[test]
+    fn known_repair_variant_from_history_is_still_admitted() {
+        let service = LearningService::memory();
+        service.learn("こんにちは", "今日は", 0, 0);
+        let hints = service
+            .collect_commit_repair_readings("こんんにちは", sakura_core::InputSupport::default());
+        assert!(
+            hints.iter().any(|hint| hint.as_str() == "こんにちは"),
+            "known repair variant must remain available: {hints:?}"
         );
     }
 

@@ -97,6 +97,16 @@ fn every_request_variant_roundtrips() {
             revision: u64::MAX,
             candidate_index: u16::MAX,
         },
+        Request::QueueCandidateCommit {
+            revision: u64::MAX - 1,
+            candidate_index: 7,
+        },
+        Request::PollCandidateCommit { session: 1 },
+        Request::CommitCandidate {
+            session: 1,
+            revision: u64::MAX - 2,
+            candidate_index: 8,
+        },
         Request::DeleteSession { session: 1 },
         Request::Ping,
         Request::Shutdown,
@@ -166,6 +176,12 @@ fn every_response_variant_roundtrips() {
         },
         Response::HistoryCandidateDeleted { removed: false },
         Response::HistoryCandidateDeleted { removed: true },
+        Response::CandidateCommitQueued { queued: false },
+        Response::CandidateCommitQueued { queued: true },
+        Response::CandidateCommitPending { request: None },
+        Response::CandidateCommitPending {
+            request: Some((u64::MAX, u16::MAX)),
+        },
         Response::Output(Output {
             consumed: true,
             beep: false,
@@ -504,25 +520,25 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v17_hello_roundtrips_and_v16_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 16;
+fn protocol_v18_hello_roundtrips_and_v17_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 17;
     assert_eq!(
-        PROTOCOL_VERSION, 17,
-        "AI text operations change the wire contract"
+        PROTOCOL_VERSION, 18,
+        "candidate click operations change the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 17, &mut request_frame).expect("encode v17 request");
+    encode_request(&request, 18, &mut request_frame).expect("encode v18 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
     );
     assert_eq!(
         decode_request(&request_frame[FRAME_HEADER_LEN..]),
-        Ok((17, request))
+        Ok((18, request))
     );
     request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2]
         .copy_from_slice(&PREVIOUS_PROTOCOL_VERSION.to_le_bytes());
@@ -536,14 +552,14 @@ fn protocol_v17_hello_roundtrips_and_v16_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 17, &mut response_frame).expect("encode v16 response");
+    encode_response(&response, 18, &mut response_frame).expect("encode v18 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
     );
     assert_eq!(
         decode_response(&response_frame[FRAME_HEADER_LEN..]),
-        Ok((17, response))
+        Ok((18, response))
     );
     response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2]
         .copy_from_slice(&PREVIOUS_PROTOCOL_VERSION.to_le_bytes());

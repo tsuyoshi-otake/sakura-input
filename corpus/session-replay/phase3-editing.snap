@@ -12,7 +12,7 @@ lower: consumed=true beep=false delete=<none> mode=None preedit=[docker:Focused]
 upper: consumed=true beep=false delete=<none> mode=None preedit=[DOCKER:Focused]@6
 title: consumed=true beep=false delete=<none> mode=None preedit=[Docker:Focused]@6
 full-width: consumed=true beep=false delete=<none> mode=None preedit=[ｄｏｃｋｅｒ:Focused]@6
-segments: consumed=true beep=false delete=<none> mode=None preedit=[今日:Focused,です:Converted]@4 candidates=0/4:今日|common
+segments: consumed=true beep=false delete=<none> mode=None preedit=[今日:Focused,です:Converted]@4 candidates=0/8:今日|common
 shrink-focused: consumed=true beep=false delete=<none> mode=None preedit=[きょ:Focused,うです:Converted]@5 candidates=0/2:きょ|
-restore-boundary: consumed=true beep=false delete=<none> mode=None preedit=[今日:Focused,です:Converted]@4 candidates=0/4:今日|common
-focus-next: consumed=true beep=false delete=<none> mode=None preedit=[今日:Converted,です:Focused]@4 candidates=0/4:です|common
+restore-boundary: consumed=true beep=false delete=<none> mode=None preedit=[今日:Focused,です:Converted]@4 candidates=0/8:今日|common
+focus-next: consumed=true beep=false delete=<none> mode=None preedit=[今日:Converted,です:Focused]@4 candidates=0/3:です|common

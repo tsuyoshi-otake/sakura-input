@@ -235,6 +235,7 @@ the text service's `ITfContextView` rects).
 | `sakura_setup.exe`   | Inno Setup      | install/update     | installer (declarative script, §12)      |
 | `sakura_regtool.exe` | Rust (Win32)    | install/update     | TSF/COM (de)registration helper (§12)    |
 | `dictc`              | Rust            | build time         | dictionary compiler (TSV → binary image) |
+| `ime-eval`           | Rust            | eval time          | quality measurement: oracles, blind Judge, gates |
 
 ### 3.1 Dependency policy (the full-scratch rule)
 
@@ -272,7 +273,10 @@ emit source text, and contribute no bytes to any shipped artifact. They
   dependency closures solely to reject malformed, duplicate-key, stale, or
   schema-unknown LLM-detail JSONL release inputs and to make exact target
   identities reproducible; none are linked by a shipping runtime crate.
-  `ci/dep-policy.ps1` encodes both exceptions and verifies the resolved graph
+  The offline `tools/ime-eval` quality-measurement runner uses the same closed
+  `serde`/`serde_json` and SHA-256 closure to load evaluation cases, constrain
+  Judge JSON, and hash Judge/corpus identity; it is not a shipping runtime
+  crate. `ci/dep-policy.ps1` encodes both exceptions and verifies the resolved graph
   of every runtime crate does not contain the offline detail-parser closure.
 The list is closed, not a category — a new name gets added only with a written
 reason, so "it's just a build dependency" cannot become a loophole.
@@ -1062,12 +1066,14 @@ read-only lives once per machine under Program Files.
 ### 8.1 Candidate popup presentation (Issue #27 — automated and normal-light real-screen verification complete)
 
 The renderer owns the top-level Win32 candidate popup. It remains non-activating,
-click-through, caret-following, and per-monitor DPI-aware; it does not become a
-host-owned control or change TSF/engine candidate state. The renderer receives
-the existing candidate snapshot, selected index, kind, and page information and
-only presents them. In particular, compact prediction and expanded conversion
-presentations retain their current engine semantics and keyboard commands: the
-visual layer must not invent hierarchy, definitions, or candidate interactions.
+caret-following, and per-monitor DPI-aware. Deliberate left clicks on visible
+candidate rows are revision-stamped and queued for the candidate-owning TSF
+session; every other point remains click-through. The renderer never edits the
+document or changes candidate state itself. TSF revalidates focus, context,
+ordinary-text scope, and its write journal before an engine commit, then applies
+the resulting output through the normal edit-session path. Compact prediction
+and expanded conversion presentations otherwise retain their engine semantics
+and keyboard commands; the visual layer does not invent hierarchy or definitions.
 
 The Sakura presentation uses low-contrast warm-neutral light and dark palettes,
 Yu Gothic UI, and 28 logical-pixel rows. Candidate number, surface, and
@@ -1100,7 +1106,7 @@ regenerate or alter mode-indicator assets.
 
 The renderer may show a non-interactive dictionary-detail panel only for the
 currently selected candidate, within the same Sakura-owned HWND as the candidate
-popup. It keeps the popup non-activating and click-through, uses the same
+popup. It keeps the popup non-activating; the detail area remains click-through and uses the same
 low-contrast palette and GDI boundary, and must not alter candidate selection,
 ordering, paging, or TSF semantics. Candidate width and annotation-column
 geometry are derived from the complete current page, even in compact presentation,
@@ -1248,6 +1254,13 @@ Memory budgets (steady state, measured in CI on the reference VM):
    *named human-sign-off exception* to the scripted-verification rule,
    shrinking over time as UIA scripts absorb entries.
 5. **Latency tests**: budgets of §10 asserted on reference hardware.
+6. **Quality measurement system** (`eval/`, runner `tools/ime-eval`):
+   mechanical contracts (state, TSF, timeout, literal-token preservation,
+   artifact identity) are deterministic oracles. Japanese meaning quality is
+   a blind A/B Judge (`gpt-5.6-luna`, reasoning `max`) that never sees
+   expected surfaces, issue numbers, or baseline/candidate labels. Luna Max
+   itself is calibrated by a held-out human set and is never evidence for
+   TSF/UI correctness. See `eval/README.md`.
 
 ---
 
@@ -1367,11 +1380,12 @@ uninstall → verify typing still works.
   UAC prompt. Non-admin users get a "new
   version available" notice to hand to their admin instead of a
   silently failing update.
-- Auto-update (M4): the settings app checks GitHub Releases over
-  WinHTTP, verifies Authenticode signature + hash, and runs the
-  installer silently. Strictly opt-in — network code exists *only* in
-  the settings/updater component, so the §9 no-network rule for DLL,
-  engine, and renderer is unaffected.
+- Auto-update (M4): unless explicitly disabled, the settings app checks GitHub
+  Releases over WinHTTP at startup. If a newer release is available, it asks
+  for confirmation before downloading, verifying the Authenticode signature +
+  hash, and running the installer silently. The user can opt out, and network
+  code exists *only* in the settings/updater component, so the §9 no-network
+  rule for DLL, engine, and renderer is unaffected.
 
 ### 12.4 Silent operation & distribution
 

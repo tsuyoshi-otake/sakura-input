@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-henkan",
+  "task": "conversion",
+  "family": "normal-conversion",
+  "role": "negative_control",
+  "context": {
+    "left": "かな漢字",
+    "right": "を試す"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "へんかん",
+    "typing": "henkan"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

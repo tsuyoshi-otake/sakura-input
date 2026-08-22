@@ -16,10 +16,11 @@ members = [
     "crates/sakura-neural-worker",
     "crates/sakura-ai-proto",
     "crates/sakura-ai-worker",
+    "tools/ime-eval",
 ]
 
 [workspace.package]
-version = "1.0.17"
+version = "1.0.18"
 edition = "2021"
 rust-version = "1.96"
 license = "MIT"

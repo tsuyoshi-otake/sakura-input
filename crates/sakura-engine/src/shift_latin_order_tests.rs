@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use sakura_core::keymap::{KeyMap, Preset, State};
 use sakura_proto::{
-    CandidateKind, ErrorCode, KeyCode, KeyInput, Modifiers, OutputBuf, Request, Response,
-    SessionId, MAX_PREEDIT_BYTES,
+    ErrorCode, KeyCode, KeyInput, Modifiers, OutputBuf, Request, Response, SessionId,
+    MAX_PREEDIT_BYTES,
 };
 
 use crate::dictionary::ConversionService;
@@ -345,10 +345,14 @@ fn resync_is_required_for_shifted_ascii_dictionary_conversion() {
     );
     assert_eq!(
         out.preedit_text(),
-        "Claude",
-        "a no-op resync leaves preedit empty and conversion beeps instead of converting"
+        "CLAUDE ",
+        "Space is a half-width word separator, not a conversion trigger"
     );
-    assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+    assert_eq!(out.candidate_kind(), None);
+    assert!(
+        !out.preedit_text().contains('\u{3000}'),
+        "the English word gap must stay U+0020"
+    );
 }
 
 #[test]
@@ -612,7 +616,7 @@ fn production_non_ascii_exits_english_without_reordering_the_latin_prefix() {
         "a non-ASCII key must leave the temporary English composition"
     );
     assert!(
-        after_exit.contains('あ') || after_exit.chars().any(|ch| !ch.is_ascii()),
+        after_exit.contains('あ') || !after_exit.is_ascii(),
         "exit should feed the non-ASCII character, got {after_exit:?}"
     );
 }

@@ -180,9 +180,9 @@ fn next_value(
         .map_err(|_| format!("{name} must be valid Unicode"))
 }
 
-fn collect_words(
-    dictionary: &Dictionary<'_>,
-) -> Result<(Vec<Word>, BTreeMap<String, Group>, BTreeMap<String, usize>), String> {
+type WordCollection = (Vec<Word>, BTreeMap<String, Group>, BTreeMap<String, usize>);
+
+fn collect_words(dictionary: &Dictionary<'_>) -> Result<WordCollection, String> {
     let mut best: BTreeMap<(String, String), Word> = BTreeMap::new();
     let mut exact_counts: BTreeMap<String, usize> = BTreeMap::new();
     dictionary
@@ -518,7 +518,7 @@ fn ranked_suffixes(
         }
         let chars = word.surface.chars().count();
         let reading_chars = word.reading.chars().count();
-        if chars < 2 || chars > 3 || reading_chars < 3 || reading_chars > 6 {
+        if !(2..=3).contains(&chars) || !(3..=6).contains(&reading_chars) {
             continue;
         }
         if groups

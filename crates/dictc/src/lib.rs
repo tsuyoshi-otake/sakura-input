@@ -63,6 +63,7 @@ pub struct SourceEntry {
 }
 
 impl SourceEntry {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn derived(
         source: impl Into<Arc<str>>,
         line: usize,
@@ -1031,6 +1032,31 @@ pub fn extract_entry_details(
     entries: &mut [SourceEntry],
     reviewed: &[SourceEntry],
 ) -> Result<Vec<SourceDetail>, Error> {
+    let (details, clear_annotations) = validate_entry_details(entries, reviewed, true)?;
+    for index in clear_annotations {
+        entries[index].annotation.clear();
+    }
+    Ok(details)
+}
+
+/// Attaches reviewed details to exact final dictionary identities without
+/// placing the reviewed rows in a candidate layer.
+///
+/// Costs, flags, reading, surface, and connection IDs must match the final
+/// lattice edge exactly. The source annotation is used only as detail text, so
+/// this path cannot add a candidate, change its rank, or alter its list note.
+pub fn attach_entry_details(
+    entries: &[SourceEntry],
+    reviewed: &[SourceEntry],
+) -> Result<Vec<SourceDetail>, Error> {
+    validate_entry_details(entries, reviewed, false).map(|(details, _)| details)
+}
+
+fn validate_entry_details(
+    entries: &[SourceEntry],
+    reviewed: &[SourceEntry],
+    require_annotation_match: bool,
+) -> Result<(Vec<SourceDetail>, Vec<usize>), Error> {
     let mut entry_by_identity = BTreeMap::new();
     for (index, entry) in entries.iter().enumerate() {
         let identity = (
@@ -1088,7 +1114,7 @@ pub fn extract_entry_details(
         if entry.word_cost != source.word_cost
             || entry.prediction_cost != source.prediction_cost
             || entry.flags != source.flags
-            || entry.annotation != source.annotation
+            || require_annotation_match && entry.annotation != source.annotation
         {
             return Err(Error::at(
                 &source.source,
@@ -1110,11 +1136,7 @@ pub fn extract_entry_details(
         });
     }
 
-    drop(entry_by_identity);
-    for index in clear_annotations {
-        entries[index].annotation.clear();
-    }
-    Ok(details)
+    Ok((details, clear_annotations))
 }
 
 /// Clears every candidate-list note after reviewed descriptions have moved

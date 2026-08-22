@@ -45,8 +45,9 @@ pub use calendar::{
 };
 pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
 pub use conversion::{
-    ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions,
-    ConversionResult, ConversionSearchTerminal, ConversionSegment, Converter,
+    ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionInput,
+    ConversionInputClass, ConversionOptions, ConversionResult, ConversionSearchTerminal,
+    ConversionSegment, Converter, LiteralPolicy,
 };
 pub use cpu::{CpuFeatures, UnsupportedCpu};
 pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};

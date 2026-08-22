@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.17
+        default: v1.0.18
 
 permissions:
   contents: read
@@ -36,6 +36,7 @@ jobs:
           sparse-checkout: |
             LICENSE
             src/data/dictionary_oss
+            src/data/rules/segmenter.def
 
       # IT glossary input is the MIT snapshot under
       # third_party/smile-chat-public (no private-repo token).

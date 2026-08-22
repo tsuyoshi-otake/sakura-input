@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-usb-pd",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "電源は",
+    "right": "に対応する"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "USB-PD",
+    "typing": "USB-PD"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

@@ -2,8 +2,8 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use dictc::{
-    clear_candidate_list_annotations, compile, compile_with_details, extract_entry_details,
-    parse_category_entries, parse_connection, parse_entries,
+    attach_entry_details, clear_candidate_list_annotations, compile, compile_with_details,
+    extract_entry_details, parse_category_entries, parse_connection, parse_entries,
 };
 use sakura_core::dictionary::Dictionary;
 
@@ -72,6 +72,26 @@ fn reviewed_annotation_becomes_detail_and_leaves_candidate_annotation_empty() {
 }
 
 #[test]
+fn detail_only_source_attaches_without_mutating_or_replacing_the_candidate() {
+    let dictionary = entries("ことば\t言葉\t1\t1\t7600\t-\tpredict\t\n");
+    let reviewed = entries("ことば\t言葉\t1\t1\t7600\t-\tpredict\t簡潔な説明です。\n");
+
+    let details = attach_entry_details(&dictionary, &reviewed).expect("exact detached source");
+
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0].description, "簡潔な説明です。");
+    assert!(dictionary[0].annotation.is_empty());
+    assert_eq!(dictionary[0].word_cost, 7600);
+    assert_eq!(dictionary[0].flags, reviewed[0].flags);
+
+    let changed_cost = entries("ことば\t言葉\t1\t1\t7500\t-\tpredict\t簡潔な説明です。\n");
+    assert!(attach_entry_details(&dictionary, &changed_cost)
+        .unwrap_err()
+        .to_string()
+        .contains("no longer matches"));
+}
+
+#[test]
 fn changed_cost_or_annotation_fails_closed_without_mutating_entries() {
     let mut dictionary = entries("ことば\t言葉\t1\t1\t7600\t-\t\t簡潔な説明です。\n");
     let reviewed = entries("ことば\t言葉\t1\t1\t7500\t-\t\t簡潔な説明です。\n");
@@ -115,20 +135,31 @@ fn empty_description_is_rejected() {
 fn checked_in_curated_sources_have_the_reviewed_release_shape() {
     let phrases = data_entries("curated-phrases.tsv");
     let general = data_entries("curated-general-details.tsv");
+    let homophones = data_entries("curated-homophone-details.tsv");
+    let system_homophones = data_entries("curated-homophone-system-details.tsv");
     let phrase_targets = data_entries("curated-phrase-target-entries.tsv");
     let general_targets = data_entries("curated-general-target-entries.tsv");
     assert_eq!(phrases.len(), 481);
-    assert_eq!(general.len(), 1);
+    assert_eq!(general.len(), 480);
+    assert_eq!(homophones.len(), 1_163);
+    assert_eq!(system_homophones.len(), 319);
     assert_eq!(phrase_targets.len(), 14);
     assert_eq!(general_targets.len(), 3);
 
     let mut identities = BTreeSet::new();
-    for entry in phrases.iter().chain(&general) {
+    for entry in &phrases {
         assert!(
-            identities.insert((entry.reading.as_str(), entry.surface.as_str())),
-            "duplicate curated pair {} -> {}",
+            identities.insert((
+                entry.reading.as_str(),
+                entry.surface.as_str(),
+                entry.left_id,
+                entry.right_id,
+            )),
+            "duplicate curated identity {} -> {} ({}, {})",
             entry.reading,
-            entry.surface
+            entry.surface,
+            entry.left_id,
+            entry.right_id
         );
         assert_eq!(entry.left_id, 1851);
         assert_eq!(entry.right_id, 1851);
@@ -139,12 +170,37 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
         assert!(!entry.annotation.contains(['\r', '\n', '\t', '\0']));
     }
 
+    for entry in general.iter().chain(&homophones).chain(&system_homophones) {
+        assert!(
+            identities.insert((
+                entry.reading.as_str(),
+                entry.surface.as_str(),
+                entry.left_id,
+                entry.right_id,
+            )),
+            "duplicate curated identity {} -> {} ({}, {})",
+            entry.reading,
+            entry.surface,
+            entry.left_id,
+            entry.right_id
+        );
+        assert!(!entry.annotation.trim().is_empty());
+        assert!(!entry.annotation.contains(['\r', '\n', '\t', '\0']));
+    }
+
     for entry in phrase_targets.iter().chain(&general_targets) {
         assert!(
-            identities.insert((entry.reading.as_str(), entry.surface.as_str())),
-            "duplicate entry-only pair {} -> {}",
+            identities.insert((
+                entry.reading.as_str(),
+                entry.surface.as_str(),
+                entry.left_id,
+                entry.right_id,
+            )),
+            "duplicate entry-only identity {} -> {} ({}, {})",
             entry.reading,
-            entry.surface
+            entry.surface,
+            entry.left_id,
+            entry.right_id
         );
         assert_eq!(entry.left_id, 1851);
         assert_eq!(entry.right_id, 1851);
@@ -161,6 +217,51 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
         ("こんきょしりょう", "根拠資料"),
         ("いそがばまわれ", "急がば回れ"),
         ("はいしょう", "拝承"),
+    ] {
+        assert!(
+            identities.contains(&(required.0, required.1, 1851, 1851)),
+            "missing {required:?}"
+        );
+    }
+
+    for required in [
+        ("ついしょう", "追従", 1841, 1841),
+        ("ついじゅう", "追従", 1841, 1841),
+        ("ついずい", "追随", 1841, 1841),
+        ("たいおう", "対応", 1841, 1841),
+        ("いがい", "意外", 1931, 1931),
+        ("いがい", "以外", 2163, 2163),
+        ("きょうつう", "共通", 1931, 1931),
+        ("きょうどう", "共同", 1929, 1929),
+        ("いそんせい", "依存性", 1841, 1970),
+        ("いにん", "委任", 1841, 1841),
+        ("うけおい", "請負", 1841, 1841),
+        ("みこうかい", "未公開", 2624, 1841),
+        ("さいこうせい", "再構成", 2610, 1841),
+        ("ろうしゅつ", "漏出", 1841, 1841),
+        ("かいせき", "解析", 1841, 1841),
+        ("せいど", "精度", 1851, 1851),
+        ("せんこう", "選好", 1841, 1841),
+        ("かいふく", "快復", 1841, 1841),
+        ("かんけつ", "完結", 1841, 1841),
+        ("かんしょう", "鑑賞", 1841, 1841),
+        ("かんしょう", "観賞", 1841, 1841),
+        ("かんれい", "慣例", 1851, 1851),
+        ("きょうそう", "競走", 1841, 1841),
+        ("しょくせき", "職責", 1851, 1851),
+        ("さくそう", "錯綜", 1841, 1841),
+        ("せいさん", "清算", 1841, 1841),
+        ("きやく", "規約", 1841, 1841),
+        ("ろんきょ", "論拠", 1851, 1851),
+        ("かねつ", "過熱", 1841, 1841),
+        ("きてい", "既定", 1841, 1841),
+        ("きのう", "昨日", 1841, 1841),
+        ("きのう", "昨日", 1851, 1851),
+        ("きのう", "昨日", 1909, 1909),
+        ("じりつ", "自立", 1841, 1841),
+        ("せいさく", "政策", 1841, 1841),
+        ("たいせい", "大勢", 1851, 1851),
+        ("ほそく", "捕捉", 1841, 1841),
     ] {
         assert!(identities.contains(&required), "missing {required:?}");
     }

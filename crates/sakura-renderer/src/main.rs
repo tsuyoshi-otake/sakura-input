@@ -49,7 +49,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use candidate::CandidateWindow;
 use indicator::Indicator;
-use watch::{HistoryDeleteCompletion, Signal};
+use watch::{CandidateCommitCompletion, HistoryDeleteCompletion, Signal};
 
 /// The class of the hidden window that receives the watcher's reports.
 ///
@@ -84,6 +84,7 @@ const WM_ENDED: u32 = WM_APP + 3;
 /// outcomes release duplicate-click suppression; successful removal still
 /// waits for the next authoritative UI revision.
 const WM_HISTORY_DELETE_FINISHED: u32 = WM_APP + 4;
+const WM_CANDIDATE_COMMIT_FINISHED: u32 = WM_APP + 5;
 
 /// The windows the main thread owns, reached from the window procedure
 /// through the host window's user data.
@@ -102,6 +103,7 @@ struct App {
     /// engine revisions can coalesce while the UI thread is busy painting.
     mailbox: Arc<Mutex<Option<UiState>>>,
     history_delete_completions: Receiver<HistoryDeleteCompletion>,
+    candidate_commit_completions: Receiver<CandidateCommitCompletion>,
 }
 
 fn main() -> Result<()> {
@@ -129,12 +131,18 @@ fn main() -> Result<()> {
         WM_HISTORY_DELETE_FINISHED,
         options.test_pipe.clone(),
     );
+    let (candidate_commit, candidate_commit_completions) = watch::spawn_candidate_committer(
+        host.0 as isize,
+        WM_CANDIDATE_COMMIT_FINISHED,
+        options.test_pipe.clone(),
+    );
     let mut app = App {
         indicator: Indicator::new()?,
-        candidates: CandidateWindow::new(history_delete)?,
+        candidates: CandidateWindow::new(history_delete, candidate_commit)?,
         shown_indicator: None,
         mailbox: Arc::clone(&mailbox),
         history_delete_completions,
+        candidate_commit_completions,
     };
 
     // Published before the watcher starts, so no message can arrive at a
@@ -365,8 +373,18 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 if let (Some((mode, theme)), true) =
                     (next, indicator_change_shows(app.shown_indicator, next))
                 {
-                    app.indicator
-                        .show(mode, theme, &state, app.candidates.popup_rect());
+                    let shown =
+                        app.indicator
+                            .show(mode, theme, &state, app.candidates.popup_rect());
+                    if shown {
+                        app.shown_indicator = next;
+                    } else {
+                        // Do not consume the mode change until the first
+                        // authoritative caret placement has arrived.  A
+                        // later state with the same mode must still be able
+                        // to perform the initial paint.
+                        app.shown_indicator = None;
+                    }
                 } else {
                     // No new mode to announce, but the caret and the popup
                     // this update just moved are exactly what a bar already
@@ -374,8 +392,8 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                     // placement true; it cannot show or re-linger the bar.
                     app.indicator
                         .reposition_if_visible(&state, app.candidates.popup_rect());
+                    app.shown_indicator = next;
                 }
-                app.shown_indicator = next;
             }
             LRESULT(0)
         }
@@ -387,6 +405,16 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 app.history_delete_completions.try_recv()
             {
                 app.candidates.history_delete_finished(request, removed);
+            }
+            LRESULT(0)
+        }
+        WM_CANDIDATE_COMMIT_FINISHED if !app.is_null() => {
+            // SAFETY: the renderer window procedure is the sole mutable owner.
+            let app = unsafe { &mut *app };
+            while let Ok(CandidateCommitCompletion { request, queued }) =
+                app.candidate_commit_completions.try_recv()
+            {
+                app.candidates.candidate_commit_finished(request, queued);
             }
             LRESULT(0)
         }
@@ -414,7 +442,12 @@ mod tests {
     /// The watcher's application messages must stay distinct.
     #[test]
     fn the_application_messages_do_not_collide() {
-        let all = [WM_UI, WM_ENDED, WM_HISTORY_DELETE_FINISHED];
+        let all = [
+            WM_UI,
+            WM_ENDED,
+            WM_HISTORY_DELETE_FINISHED,
+            WM_CANDIDATE_COMMIT_FINISHED,
+        ];
         for (i, a) in all.iter().enumerate() {
             assert!(
                 *a >= WM_APP,

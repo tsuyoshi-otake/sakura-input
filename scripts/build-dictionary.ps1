@@ -31,6 +31,8 @@ $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $CuratedTerms = Join-Path $RepositoryRoot 'data\curated-terms.tsv'
 $CuratedPhrases = Join-Path $RepositoryRoot 'data\curated-phrases.tsv'
 $CuratedGeneralDetails = Join-Path $RepositoryRoot 'data\curated-general-details.tsv'
+$CuratedHomophoneDetails = Join-Path $RepositoryRoot 'data\curated-homophone-details.tsv'
+$CuratedHomophoneSystemDetails = Join-Path $RepositoryRoot 'data\curated-homophone-system-details.tsv'
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
@@ -76,7 +78,7 @@ if (-not [IO.File]::Exists($CuratedTerms)) {
 if (-not [IO.File]::Exists($ConversionPriorities)) {
     throw "conversion-priority dictionary layer is missing: $ConversionPriorities"
 }
-foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
+foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
     if (-not [IO.File]::Exists($path)) {
         throw "curated dictionary layer is missing: $path"
     }
@@ -345,6 +347,8 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedTermsPath,
         [Parameter(Mandatory)][string]$CuratedPhrasesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
+        [Parameter(Mandatory)][string]$CuratedHomophoneDetailsPath,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$CuratedHomophoneSystemDetailsPath,
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
@@ -459,6 +463,12 @@ function Invoke-BuildPass {
         '--wordnet-report', $wordNetReport,
         '--curated-detail-source', $CuratedPhrasesPath,
         '--curated-detail-source', $CuratedGeneralDetailsPath,
+        '--detail-only-source', $CuratedHomophoneDetailsPath
+    )
+    if (-not [string]::IsNullOrWhiteSpace($CuratedHomophoneSystemDetailsPath)) {
+        $dictionaryArguments += @('--detail-only-source', $CuratedHomophoneSystemDetailsPath)
+    }
+    $dictionaryArguments += @(
         '--curated-detail-report', $curatedDetailReport,
         '--detail-coverage-output', $detailCoverage,
         '--llm-detail-target-dir', $LlmDetailTargetDirectory,
@@ -529,6 +539,12 @@ if ($UpdateCheckedInData -and $null -ne $SystemCategoryDictionary) {
     throw '-UpdateCheckedInData cannot be combined with -SystemCategoryDirectory; canonical category source files remain local only'
 }
 $SystemCategoryPaths = if ($null -eq $SystemCategoryDictionary) { @() } else { [string[]]$SystemCategoryDictionary.paths }
+$CuratedHomophoneSystemDetailsPath = if ($null -eq $SystemCategoryDictionary) {
+    ''
+}
+else {
+    $CuratedHomophoneSystemDetails
+}
 
 $mozcDictionaryDirectory = Join-Path $MozcSource 'src\data\dictionary_oss'
 $glossaryDirectory = Join-Path $GlossarySource 'frontend\public\glossaries'
@@ -561,6 +577,8 @@ try {
         -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath -CuratedTermsPath $CuratedTerms `
         -CuratedPhrasesPath $CuratedPhrases `
         -CuratedGeneralDetailsPath $CuratedGeneralDetails `
+        -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
+        -CuratedHomophoneSystemDetailsPath $CuratedHomophoneSystemDetailsPath `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
@@ -572,6 +590,8 @@ try {
             -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath -CuratedTermsPath $CuratedTerms `
             -CuratedPhrasesPath $CuratedPhrases `
             -CuratedGeneralDetailsPath $CuratedGeneralDetails `
+            -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
+            -CuratedHomophoneSystemDetailsPath $CuratedHomophoneSystemDetailsPath `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
@@ -598,6 +618,14 @@ try {
     $wordNetImport = Get-Content -Raw -LiteralPath $primary.wordnet_report | ConvertFrom-Json
     $curatedDetailImport = Get-Content -Raw -LiteralPath $primary.curated_detail_report | ConvertFrom-Json
     $llmDetailImport = Get-Content -Raw -LiteralPath $primary.llm_detail_report | ConvertFrom-Json
+    $curatedDetailInputs = @(
+        Get-ArtifactRecord $CuratedPhrases
+        Get-ArtifactRecord $CuratedGeneralDetails
+        Get-ArtifactRecord $CuratedHomophoneDetails
+    )
+    if (-not [string]::IsNullOrWhiteSpace($CuratedHomophoneSystemDetailsPath)) {
+        $curatedDetailInputs += Get-ArtifactRecord $CuratedHomophoneSystemDetailsPath
+    }
     $report = [ordered]@{
         schema_version = 2
         mozc_revision = $MozcRevision
@@ -628,10 +656,7 @@ try {
                     input_records = [int64]$curatedDetailImport.input_records
                     emitted_details = [int64]$curatedDetailImport.emitted_details
                     suppressed_by_existing = [int64]$curatedDetailImport.suppressed_by_existing
-                    inputs = @(
-                        Get-ArtifactRecord $CuratedPhrases
-                        Get-ArtifactRecord $CuratedGeneralDetails
-                    )
+                    inputs = $curatedDetailInputs
                 },
                 [ordered]@{
                     source = 'sakura-llm-reviewed-details'
@@ -650,6 +675,13 @@ try {
             curated_terms = Get-ArtifactRecord $CuratedTerms
             curated_phrases = Get-ArtifactRecord $CuratedPhrases
             curated_general_details = Get-ArtifactRecord $CuratedGeneralDetails
+            curated_homophone_details = Get-ArtifactRecord $CuratedHomophoneDetails
+            curated_homophone_system_details = if ([string]::IsNullOrWhiteSpace($CuratedHomophoneSystemDetailsPath)) {
+                $null
+            }
+            else {
+                Get-ArtifactRecord $CuratedHomophoneSystemDetailsPath
+            }
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities

@@ -384,6 +384,13 @@ impl Normalizer {
         if let Some(role) = bracket_role(c) {
             return map_bracket(role, self.brackets);
         }
+        // ASCII space is a word separator, not a `symbol` width citizen.
+        // Idle SpaceWidth is the only path that may emit U+3000. Widening
+        // ' ' here is what turned typed English like "Claude Code" into
+        // "Claude　Code" when a conversion surface was normalized.
+        if c == ' ' {
+            return ' ';
+        }
         match classify(c) {
             CharClass::Alpha => apply_width(c, wants_full(self.width.alnum, mode)),
             CharClass::Digit => apply_width(c, wants_full(self.width.number, mode)),
@@ -636,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    fn space_maps_to_ideographic_space_and_back() {
+    fn ascii_space_is_not_widened_by_the_symbol_channel() {
         let full = Normalizer {
             width: WidthPolicy {
                 alnum: Width::Half,
@@ -647,7 +654,7 @@ mod tests {
             brackets: BracketStyle::default(),
         };
         let half = Normalizer::default();
-        assert_eq!(full.normalize_char(' ', Mode::Direct), '\u{3000}');
+        assert_eq!(full.normalize_char(' ', Mode::Direct), ' ');
         assert_eq!(half.normalize_char('\u{3000}', Mode::Direct), ' ');
     }
 

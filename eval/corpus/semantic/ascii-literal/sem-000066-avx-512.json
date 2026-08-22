@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-avx-512",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "カーネルは",
+    "right": "向けである"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "AVX-512",
+    "typing": "AVX-512"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

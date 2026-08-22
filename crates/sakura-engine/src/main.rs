@@ -212,7 +212,10 @@ fn run(
         match sakura_engine::input_history::default_path()
             .and_then(|path| sakura_engine::input_history::InputHistoryService::open(&path))
         {
-            Ok(history) => Some(history),
+            Ok(history) => {
+                sakura_ipc::debug_trace::set_enabled(true);
+                Some(history)
+            }
             Err(error) => {
                 if verbose {
                     eprintln!(

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-pcie",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "拡張バスは",
+    "right": "である"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "PCIe",
+    "typing": "PCIe"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

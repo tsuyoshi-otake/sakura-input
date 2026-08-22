@@ -11,6 +11,7 @@ use crate::dispatch::{take_conversion_lookup_count_for_test, Dispatcher, Reply};
 use crate::space_key_dispatch_oracle::{
     apply, apply_all, no_dual_effect, ConnState, DomainEvent, OracleState,
 };
+use crate::ui::UiBoard;
 
 fn char_key(character: char) -> KeyInput {
     KeyInput {
@@ -399,6 +400,157 @@ fn idle_space_probe_keeps_insert_and_fence_absorption_actions() {
     );
     assert!(!idle_out.has_candidates());
     assert!(!idle_out.beep);
+}
+
+fn henkan_key() -> KeyInput {
+    KeyInput {
+        code: KeyCode::Henkan,
+        ch: None,
+        modifiers: Modifiers::NONE,
+        repeat: false,
+        test_only: false,
+    }
+}
+
+#[test]
+fn fence_matches_host_process_name_ascii_case_insensitively() {
+    let fence = Arc::new(CompositionFence::new());
+    let mut active = Dispatcher::new().expect("active dispatcher");
+    let mut idle = Dispatcher::new().expect("idle dispatcher");
+    active.set_composition_fence(Arc::clone(&fence));
+    idle.set_composition_fence(Arc::clone(&fence));
+
+    let mut active_out = OutputBuf::new();
+    let mut idle_out = OutputBuf::new();
+    let active_session = create_session(&mut active, &mut active_out, "Cursor.exe");
+    let idle_session = create_session(&mut idle, &mut idle_out, "cursor.exe");
+    send(&mut active, active_session, char_key('a'), &mut active_out);
+    send(&mut idle, idle_session, space_key(), &mut idle_out);
+    assert!(idle_out.consumed);
+    assert_eq!(idle_out.commit_text(), None);
+}
+
+#[test]
+fn idle_henkan_is_absorbed_while_a_peer_is_composing() {
+    let fence = Arc::new(CompositionFence::new());
+    let mut active = Dispatcher::new().expect("active dispatcher");
+    let mut idle = Dispatcher::new().expect("idle dispatcher");
+    active.set_composition_fence(Arc::clone(&fence));
+    idle.set_composition_fence(Arc::clone(&fence));
+
+    let mut active_out = OutputBuf::new();
+    let mut idle_out = OutputBuf::new();
+    let active_session = create_session(&mut active, &mut active_out, "henkan-host.exe");
+    let idle_session = create_session(&mut idle, &mut idle_out, "henkan-host.exe");
+    send(&mut active, active_session, char_key('a'), &mut active_out);
+    send(&mut idle, idle_session, henkan_key(), &mut idle_out);
+    assert!(idle_out.consumed);
+    assert_eq!(idle_out.commit_text(), None);
+    assert!(!idle_out.has_candidates());
+}
+
+#[test]
+fn idle_peer_letter_does_not_start_a_second_composition() {
+    let fence = Arc::new(CompositionFence::new());
+    let mut active = Dispatcher::new().expect("active dispatcher");
+    let mut idle = Dispatcher::new().expect("idle dispatcher");
+    active.set_composition_fence(Arc::clone(&fence));
+    idle.set_composition_fence(Arc::clone(&fence));
+
+    let mut active_out = OutputBuf::new();
+    let mut idle_out = OutputBuf::new();
+    let active_session = create_session(&mut active, &mut active_out, "sole-ime.exe");
+    let idle_session = create_session(&mut idle, &mut idle_out, "sole-ime.exe");
+    send(&mut active, active_session, char_key('n'), &mut active_out);
+    idle_out.clear();
+    send(&mut idle, idle_session, char_key('n'), &mut idle_out);
+    assert!(idle_out.consumed);
+    assert_eq!(idle_out.preedit_text(), "");
+    assert_eq!(idle_out.commit_text(), None);
+    assert!(!idle_out.has_candidates());
+}
+
+#[test]
+fn sibling_session_on_the_same_connection_absorbs_idle_space_without_a_fence() {
+    let mut dispatcher = Dispatcher::new().expect("dispatcher");
+    let mut out = OutputBuf::new();
+    let live = create_session(&mut dispatcher, &mut out, "same-pipe.exe");
+    let idle = create_session(&mut dispatcher, &mut out, "same-pipe.exe");
+    send(&mut dispatcher, live, char_key('a'), &mut out);
+    out.clear();
+    send(&mut dispatcher, idle, space_key(), &mut out);
+    assert!(out.consumed);
+    assert_eq!(out.commit_text(), None);
+}
+
+fn history_suggestion_output() -> OutputBuf {
+    let mut output = OutputBuf::new();
+    output.begin_suggestions(0, 9).expect("suggestion list");
+    output
+        .push_history_candidate("日本語", "履歴", "にほんご", "日本語")
+        .expect("history candidate");
+    output
+}
+
+#[test]
+fn two_pipe_workers_must_not_share_a_candidate_board_owner() {
+    let live = Dispatcher::new().expect("live worker");
+    let idle = Dispatcher::new().expect("idle worker");
+    assert_ne!(
+        live.ui_owner(),
+        idle.ui_owner(),
+        "Electron Dual TSF is two pipe workers that both CreateSession as id 1; \
+         board identity must not come from a private AiTextService that restarts at 1"
+    );
+}
+
+#[test]
+fn board_identity_survives_ai_text_attach_and_connection_reset() {
+    let mut worker = Dispatcher::new().expect("worker");
+    let owner = worker.ui_owner();
+    worker.set_ai_text(std::sync::Arc::new(crate::ai_text::AiTextService::default()));
+    assert_eq!(
+        worker.ui_owner(),
+        owner,
+        "AI-text owner allocation must not retarget the candidate board"
+    );
+    worker.reset();
+    assert_eq!(
+        worker.ui_owner(),
+        owner,
+        "a later client on this pipe still uses monotonic session ids, not a new board owner"
+    );
+}
+
+#[test]
+fn dual_workers_with_session_id_one_must_keep_live_suggestions_after_idle_space() {
+    let mut live = Dispatcher::new().expect("live worker");
+    let mut idle = Dispatcher::new().expect("idle worker");
+    let mut out = OutputBuf::new();
+    let live_session = create_session(&mut live, &mut out, "Cursor.exe");
+    let idle_session = create_session(&mut idle, &mut out, "Cursor.exe");
+    assert_eq!(live_session, 1, "each worker mints protocol session 1");
+    assert_eq!(idle_session, live_session);
+
+    let board = UiBoard::new();
+    board.publish_output_from(
+        live.ui_owner(),
+        live_session,
+        &history_suggestion_output(),
+        0,
+    );
+    let (before, delivery) = board.wait_past(0);
+    drop(delivery);
+    assert!(before.candidates.is_some());
+
+    board.publish_output_from(idle.ui_owner(), idle_session, &OutputBuf::new(), 0);
+    let (after, delivery) = board.wait_past(0);
+    drop(delivery);
+    assert_eq!(after.revision, before.revision);
+    assert!(
+        after.candidates.is_some(),
+        "idle worker session 1 must not Hide the live worker's 履歴 list"
+    );
 }
 
 #[test]

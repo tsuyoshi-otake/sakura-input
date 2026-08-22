@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-esp32",
+  "task": "conversion",
+  "family": "ascii-literal",
+  "role": "positive",
+  "context": {
+    "left": "マイコンは",
+    "right": "を使用する"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "ESP32",
+    "typing": "ESP32"
+  },
+  "constraints": {
+    "literal_token": true
+  }
+}

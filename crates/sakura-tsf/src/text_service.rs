@@ -79,7 +79,7 @@ use crate::conversion_key::{
 use crate::diagnostic_ring;
 use crate::display_attributes;
 use crate::edit_session;
-use crate::engine::{AiTextPoll, AiTextRecord, AiTextResult, Answer, Engine};
+use crate::engine::{AiTextPoll, AiTextRecord, AiTextResult, Answer, CandidateCommitPoll, Engine};
 use crate::engine_recovery::{
     EngineRecoveryFence, RecoveryKeyDisposition, RecoveryStart, RecoveryTerminal, RecoveryToken,
 };
@@ -95,6 +95,8 @@ use crate::write_coordinator::{
 const DEFERRED_WORK_MESSAGE: u32 = WM_APP + 29;
 const AI_TEXT_TIMER_ID: usize = 2;
 const AI_TEXT_POLL_MS: u32 = 50;
+const CANDIDATE_COMMIT_TIMER_ID: usize = 3;
+const CANDIDATE_COMMIT_POLL_MS: u32 = 50;
 const DEFERRED_WINDOW_CLASS: windows_core::PCWSTR = windows_core::w!(r##"SakuraInputTsfDeferred"##);
 
 fn debug_trace_tsf(
@@ -106,7 +108,16 @@ fn debug_trace_tsf(
     k2: u64,
     k3: u64,
 ) {
-    sakura_ipc::debug_trace::emit("tsf", instance, event, decision, k0, k1, k2, k3);
+    sakura_ipc::debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+        component: "tsf",
+        instance,
+        event,
+        decision,
+        k0,
+        k1,
+        k2,
+        k3,
+    });
 }
 
 fn developer_mode_from_config() -> bool {
@@ -551,11 +562,13 @@ fn resolve_convert_write_source(
 /// that key: `OnTestKeyDown = FALSE` lets Chromium insert a document space
 /// into the composition, and later `OnKeyDown` work cannot take it back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 enum PhysicalKeyOwner {
     HostEligible,
     Ime,
 }
 
+#[allow(dead_code)]
 impl PhysicalKeyOwner {
     fn of(key: KeyInput, live_composition: bool) -> Self {
         match ConversionKeyDisposition::of(key, live_composition, false) {
@@ -1129,6 +1142,7 @@ impl TextService {
         // cleared before destruction so no queued callback can use `self`.
         unsafe {
             let _ = KillTimer(Some(window), AI_TEXT_TIMER_ID);
+            let _ = KillTimer(Some(window), CANDIDATE_COMMIT_TIMER_ID);
             SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             let _ = DestroyWindow(window);
         }
@@ -1166,6 +1180,42 @@ impl TextService {
         }
         ai_wait_cursor::restore();
         self.mode_item.notify_tooltip();
+    }
+
+    fn arm_candidate_commit_timer(&self) -> Result<()> {
+        let window = self
+            .deferred
+            .try_borrow()
+            .map_err(|_| reentrancy())?
+            .window
+            .ok_or_else(|| Error::new(E_UNEXPECTED, "candidate poll window is unavailable"))?;
+        // SAFETY: this thread owns the hidden window and its message pump.
+        let timer = unsafe {
+            SetTimer(
+                Some(window),
+                CANDIDATE_COMMIT_TIMER_ID,
+                CANDIDATE_COMMIT_POLL_MS,
+                None,
+            )
+        };
+        if timer == 0 {
+            return Err(Error::from_thread());
+        }
+        Ok(())
+    }
+
+    fn stop_candidate_commit_timer(&self) {
+        let window = self
+            .deferred
+            .try_borrow()
+            .ok()
+            .and_then(|state| state.window);
+        if let Some(window) = window {
+            // SAFETY: this timer belongs to the same hidden window/thread.
+            unsafe {
+                let _ = KillTimer(Some(window), CANDIDATE_COMMIT_TIMER_ID);
+            }
+        }
     }
 
     fn post_deferred_work(&self) -> Result<()> {
@@ -1445,11 +1495,32 @@ impl TextService {
         self.claim_generation.set(generation.saturating_add(1));
     }
 
+    fn cached_input_mode(&self) -> Option<Mode> {
+        self.engine
+            .try_borrow()
+            .ok()
+            .and_then(|engine| engine.input_mode_status())
+            .map(|status| status.mode)
+    }
+
+    fn host_eaten(
+        &self,
+        owner: ConversionKeyDisposition,
+        key: KeyInput,
+        engine_consumed: bool,
+    ) -> BOOL {
+        owner
+            .eats_blocked(engine_consumed, key, self.cached_input_mode())
+            .into()
+    }
+
     fn conversion_key_disposition(&self, key: KeyInput) -> (ImeSeat, ConversionKeyDisposition) {
         self.sync_live_claim();
         let local_live = self.has_live_composition();
         let peer_live = process_claims().peer_live(self.instance_id);
-        let seat = with_sole(|sole| sole.seat_for_key(self.instance_id, local_live));
+        let seat = with_sole(|sole| {
+            sole.seat_for_key(self.instance_id, local_live, self.focus_foreground.get())
+        });
         let owner = if seat == ImeSeat::Shadow {
             ConversionKeyDisposition::AbsorbPeer
         } else {
@@ -3066,6 +3137,7 @@ impl TextService {
     /// Ends both candidate-facing contracts: TSF's UI element and the layout
     /// subscription that owns future geometry retries.
     fn end_candidates(&self) {
+        self.stop_candidate_commit_timer();
         if !self.begin_candidate_operation() {
             debug_trace_tsf(
                 self.instance_id,
@@ -3397,6 +3469,52 @@ impl TextService {
         Ok(())
     }
 
+    /// Stashes the current caret so idle 半角/全角 can show the mode bar next
+    /// to the field instead of at the bottom of the monitor.
+    ///
+    /// Composition geometry already travels through the layout query. This
+    /// path is only for a real 半角/全角 with no candidate popup, and it is
+    /// best-effort: a refused lock or a host that draws no selection still
+    /// lets the key toggle the mode, and the renderer then uses the document
+    /// box or the foreground window.
+    fn publish_idle_mode_anchor(&self, context: &ITfContext, key: KeyInput) {
+        if key.code != KeyCode::HankakuZenkaku {
+            return;
+        }
+        let showing_candidates = self
+            .writes
+            .try_borrow()
+            .map(|writes| writes.has_ui_lease())
+            .unwrap_or(true);
+        if showing_candidates {
+            return;
+        }
+        let Ok(client_id) = self.client_id() else {
+            return;
+        };
+        let owned_context = context.clone();
+        let geometry = edit_session::read_in_document_sync(context, client_id, move |ec| {
+            let mut authority = || Ok(());
+            let anchor = match composition::selection_rect(&owned_context, ec, &mut authority) {
+                composition::GeometryResult::Ready(rect) => Some(rect),
+                composition::GeometryResult::NoLayout
+                | composition::GeometryResult::Unavailable => None,
+            };
+            let document = match composition::document_rect(&owned_context, &mut authority) {
+                composition::GeometryResult::Ready(rect) => Some(rect),
+                composition::GeometryResult::NoLayout
+                | composition::GeometryResult::Unavailable => None,
+            };
+            Ok((anchor, document))
+        });
+        let Ok((anchor, document)) = geometry else {
+            return;
+        };
+        if let Ok(mut engine) = self.engine.try_borrow_mut() {
+            let _ = engine.set_ui_placement(anchor, document, false);
+        }
+    }
+
     /// The category manager, created on first use and cached for the thread.
     ///
     /// Only needed to turn a display-attribute GUID into the atom TSF wants, so
@@ -3718,7 +3836,7 @@ fn is_idle_space_commit(output: &Output) -> bool {
     let preedit_empty = output
         .preedit
         .as_ref()
-        .map_or(true, |preedit| visible_text(preedit).is_empty());
+        .is_none_or(|preedit| visible_text(preedit).is_empty());
     preedit_empty && matches!(output.commit.as_deref(), Some("\u{3000}" | " "))
 }
 
@@ -3837,6 +3955,17 @@ unsafe extern "system" fn deferred_window_procedure(
         }
         return LRESULT(0);
     }
+    if message == WM_TIMER && wparam.0 == CANDIDATE_COMMIT_TIMER_ID {
+        // SAFETY: ownership is identical to the deferred-work message above.
+        let owner = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *const TextService_Impl;
+        if !owner.is_null() {
+            // SAFETY: teardown kills the timer before clearing this pointer.
+            unsafe {
+                (*owner).dispatch_candidate_commit_poll();
+            }
+        }
+        return LRESULT(0);
+    }
     // SAFETY: forwarding the untouched window message to the default procedure
     // is the standard Win32 window-procedure contract.
     unsafe { DefWindowProcW(window, message, wparam, lparam) }
@@ -3917,7 +4046,11 @@ fn cancelled_outputs_require_focus_reconciliation<T>(completions: &[Completion<T
 fn classify_input_scope_with_cookie(context: &ITfContext, ec: u32) -> Result<InputScope> {
     let range = match composition::current_selection_range(context, ec, &mut || Ok(())) {
         Ok(range) => range,
-        Err(_) => unsafe { context.GetStart(ec)? },
+        Err(_) => {
+            // SAFETY: `context` is active for `ec`, and this fallback remains
+            // inside the same edit-session callback.
+            unsafe { context.GetStart(ec)? }
+        }
     };
     // SAFETY: `context` and `range` belong to the active edit session that
     // issued `ec`.
@@ -4328,6 +4461,102 @@ impl TextService_Impl {
         }
     }
 
+    fn dispatch_candidate_commit_poll(&self) {
+        let service = self.get_impl();
+        if !service.focus_foreground.get() {
+            service.stop_candidate_commit_timer();
+            return;
+        }
+        let pending = match service.engine.try_borrow_mut() {
+            Ok(mut engine) => engine.poll_candidate_commit(),
+            Err(_) => return,
+        };
+        let (revision, candidate_index) = match pending {
+            CandidateCommitPoll::Pending {
+                revision,
+                candidate_index,
+            } => (revision, candidate_index),
+            CandidateCommitPoll::None => return,
+            CandidateCommitPoll::Unavailable => {
+                service.stop_candidate_commit_timer();
+                let _ = service.queue_end_candidates();
+                return;
+            }
+        };
+
+        let candidate_context = service.layout.try_borrow().ok().and_then(|layout| {
+            layout
+                .subscription
+                .as_ref()
+                .map(|subscription| (subscription.context.clone(), subscription.lease))
+        });
+        let Some((context, lease)) = candidate_context else {
+            service.stop_candidate_commit_timer();
+            return;
+        };
+        let focus_matches = service
+            .focused_context()
+            .ok()
+            .is_some_and(|focused| context_id(&focused) == context_id(&context));
+        if !focus_matches
+            || !service.ui_lease_is_current(&context, lease)
+            || service.read_input_scope(&context).ok() != Some(InputScope::Normal)
+        {
+            service.stop_candidate_commit_timer();
+            let _ = service.queue_end_candidates();
+            return;
+        }
+        if service.observe_write_context(&context).is_err()
+            || service.can_admit_write_for_context(&context).ok() != Some(true)
+        {
+            return;
+        }
+        let reservation = match service.reserve_write(&context) {
+            Ok(reservation) => reservation,
+            Err(_) => return,
+        };
+        let answer = match service.engine.try_borrow_mut() {
+            Ok(mut engine) => engine.commit_candidate(revision, candidate_index),
+            Err(_) => {
+                service.cancel_reservation(reservation, CancelReason::RequestRejected);
+                return;
+            }
+        };
+        let output = match answer {
+            Answer::Ready(output) => output,
+            Answer::Busy => {
+                service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
+                return;
+            }
+            Answer::Rejected => {
+                service.cancel_reservation(reservation, CancelReason::RequestRejected);
+                return;
+            }
+            Answer::Unavailable => {
+                let _ = self.recover_from_engine_unavailable(&context);
+                return;
+            }
+        };
+        if self
+            .submit_output(
+                &context,
+                reservation,
+                output,
+                OutputSubmission {
+                    target_range: None,
+                    synchronous_first: true,
+                    start_now: true,
+                    ai_record: None,
+                },
+            )
+            .is_err()
+        {
+            service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
+            service.disconnect();
+            let _ = service.queue_end_candidates();
+        }
+    }
+
     fn apply_completed_ai_text(&self, pending: PendingAiText, result: AiTextResult) -> Result<()> {
         let service = self.get_impl();
         match pending.target.clone() {
@@ -4550,6 +4779,12 @@ impl TextService_Impl {
         finish_result?;
         let shown = shown?;
 
+        if shown {
+            service.arm_candidate_commit_timer()?;
+        } else {
+            service.stop_candidate_commit_timer();
+        }
+
         let sink: ITfTextLayoutSink = self.to_interface();
         if !service.ui_lease_is_current(context, lease) {
             return Err(Error::new(E_UNEXPECTED, "candidate UI ownership changed"));
@@ -4743,7 +4978,7 @@ impl TextService_Impl {
             if !matches!(owner, ConversionKeyDisposition::HostEligible) {
                 debug_trace_tsf(service.instance_id, "key_gate", "no_context", 0, 0, 0, 0);
             }
-            return Ok(owner.eats(false).into());
+            return Ok(service.host_eaten(owner, key, false));
         };
 
         // Live conversion TestKeyDown must eat before AI capture, fence, or
@@ -4802,7 +5037,7 @@ impl TextService_Impl {
             };
             return match probe_action(fence) {
                 ProbeAction::Busy => Ok(true.into()),
-                ProbeAction::Declined => Ok(owner.eats(false).into()),
+                ProbeAction::Declined => Ok(service.host_eaten(owner, key, false)),
                 ProbeAction::Ask { fresh_context } => {
                     // Read the current host classification, but carry it in a
                     // throwaway Probe request. Publishing it here would mutate
@@ -4816,8 +5051,8 @@ impl TextService_Impl {
                         Answer::Busy => Ok(true.into()),
                         // Never left this process; nothing was reserved for
                         // a read-only probe, so there is nothing to release.
-                        Answer::Rejected => Ok(owner.eats(false).into()),
-                        Answer::Unavailable => Ok(owner.eats(false).into()),
+                        Answer::Rejected => Ok(service.host_eaten(owner, key, false)),
+                        Answer::Unavailable => Ok(service.host_eaten(owner, key, false)),
                     }
                 }
             };
@@ -4868,10 +5103,10 @@ impl TextService_Impl {
                 return Ok(true.into());
             }
             RealFenceAction::Decline => {
-                // A blocked/lifecycle path has an explicit host-owned
-                // terminal result and cannot fall through to Apply. Live
-                // conversion triggers still stay with the IME.
-                return Ok(owner.eats(false).into());
+                // A blocked/lifecycle path cannot fall through to Apply. Live
+                // conversion triggers stay with the IME; Japanese letters must
+                // too, or OnTestKeyDown FALSE inserts the first char as Latin.
+                return Ok(service.host_eaten(owner, key, false));
             }
             RealFenceAction::ReplaceAndApply => {
                 // The Probe path asked against a fresh throwaway context. The
@@ -4903,26 +5138,28 @@ impl TextService_Impl {
         }
         let write_context = live_convert_context.as_ref().unwrap_or(context);
         if !service.can_admit_write_for_context(write_context)? {
-            return Ok(owner.eats(false).into());
+            return Ok(service.host_eaten(owner, key, false));
         }
         if !service.publish_input_scope(write_context)? {
             // Scope publication is part of the privacy boundary for a real
             // key. A refused publication leaves a host-eligible key to the
-            // host; live conversion triggers stay with the IME.
-            return Ok(owner.eats(false).into());
+            // host unless it is Japanese typing, which must not become WM_CHAR.
+            return Ok(service.host_eaten(owner, key, false));
         }
 
         service.observe_write_context(write_context)?;
         // Context replacement may have cancelled a full old-context queue.
         if !service.can_admit_write_for_context(write_context)? {
-            return Ok(owner.eats(false).into());
+            return Ok(service.host_eaten(owner, key, false));
         }
         let reservation = match service.reserve_write(write_context) {
             Ok(reservation) => reservation,
             // This is an admission failure, not an engine failure: leave a
-            // host-eligible key to the host and never advance the real engine.
-            Err(_) => return Ok(owner.eats(false).into()),
+            // host-eligible key to the host unless it is Japanese typing.
+            Err(_) => return Ok(service.host_eaten(owner, key, false)),
         };
+
+        service.publish_idle_mode_anchor(write_context, key);
 
         let answer = match service.ask(key) {
             Ok(answer) => answer,
@@ -4930,9 +5167,11 @@ impl TextService_Impl {
                 let disposition = self
                     .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
-                return Ok(owner
-                    .eats(matches!(disposition, RecoveryKeyDisposition::Consume))
-                    .into());
+                return Ok(service.host_eaten(
+                    owner,
+                    key,
+                    matches!(disposition, RecoveryKeyDisposition::Consume),
+                ));
             }
         };
         let output = match answer {
@@ -4950,18 +5189,21 @@ impl TextService_Impl {
             // there is nothing to recover.
             Answer::Rejected => {
                 service.cancel_reservation(reservation, CancelReason::RequestRejected);
-                return Ok(owner.eats(false).into());
+                return Ok(service.host_eaten(owner, key, false));
             }
             // A host-eligible key can return to the application. Live
             // conversion triggers stay with the IME even when recovery
-            // would otherwise expose them as Host.
+            // would otherwise expose them as Host. Japanese typing still
+            // must not leak as WM_CHAR while the engine is reconnecting.
             Answer::Unavailable => {
                 let disposition = self
                     .recover_from_engine_unavailable(write_context)
                     .unwrap_or(RecoveryKeyDisposition::Consume);
-                return Ok(owner
-                    .eats(matches!(disposition, RecoveryKeyDisposition::Consume))
-                    .into());
+                return Ok(service.host_eaten(
+                    owner,
+                    key,
+                    matches!(disposition, RecoveryKeyDisposition::Consume),
+                ));
             }
         };
 
@@ -7163,8 +7405,10 @@ mod tests {
 
     #[test]
     fn queued_conversion_show_is_not_dropped_by_a_later_candidate_end() {
-        let mut work = super::DeferredWork::<u8>::default();
-        work.candidates = Some(7);
+        let mut work = super::DeferredWork {
+            candidates: Some(7),
+            ..super::DeferredWork::<u8>::default()
+        };
         work.retain_candidate_end();
         assert_eq!(
             work.candidates,
@@ -7266,6 +7510,18 @@ mod tests {
         assert!(PhysicalKeyOwner::HostEligible
             .terminal_eaten(true)
             .as_bool());
+        assert!(
+            ConversionKeyDisposition::HostEligible.eats_blocked(
+                false,
+                letter,
+                Some(Mode::Hiragana)
+            ),
+            "blocked first letter in Japanese mode must not become WM_CHAR"
+        );
+        assert!(
+            !ConversionKeyDisposition::HostEligible.eats_blocked(false, letter, Some(Mode::Direct)),
+            "Direct mode still belongs to the host"
+        );
 
         // Keep the real-key fence regression document-free: a blocked live
         // conversion path declines its engine work, but must still eat the

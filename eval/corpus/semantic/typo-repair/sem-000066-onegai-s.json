@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-onegai-s",
+  "task": "conversion",
+  "family": "typo-repair",
+  "role": "positive",
+  "context": {
+    "left": "",
+    "right": ""
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "おねがいいsます",
+    "typing": "onegaiismasu"
+  },
+  "constraints": {
+    "literal_token": false,
+    "forbid_unrelated_absorption": true
+  }
+}

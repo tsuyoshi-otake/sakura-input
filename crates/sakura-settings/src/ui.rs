@@ -6,8 +6,11 @@
 
 use std::ffi::c_void;
 use std::mem::size_of;
-use std::path::PathBuf;
+use std::os::windows::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread::sleep;
+use std::time::Duration;
 
 use sakura_core::{
     AppProfile, AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, InputSupport,
@@ -23,7 +26,9 @@ use sakura_settings::formats::DictionaryFormat;
 use sakura_settings::user_dictionary::{self, ImportMode};
 use sakura_settings::{diagnostics, learning, paths, updater};
 use windows::core::{Result as WindowsResult, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows::Win32::Foundation::{
+    CloseHandle, COLORREF, ERROR_ALREADY_EXISTS, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
+};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
     ClientToScreen, CreateSolidBrush, DeleteObject, DrawTextW, FillRect, FrameRect, GetStockObject,
@@ -31,6 +36,7 @@ use windows::Win32::Graphics::Gdi::{
     COLOR_WINDOW, DEFAULT_GUI_FONT, DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBRUSH, HDC, TRANSPARENT,
 };
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::Controls::{
     SetWindowTheme, BST_CHECKED, BST_UNCHECKED, DRAWITEMSTRUCT, HTREEITEM, NMTREEVIEWW,
@@ -45,38 +51,64 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessageW,
-    GetParent, GetWindow, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
-    IsDialogMessageW, LoadCursorW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW,
-    SendMessageW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
+    BringWindowToTop, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyWindow,
+    DispatchMessageW, FindWindowW, GetClientRect, GetMessageW, GetParent, GetWindow,
+    GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW,
+    IsIconic, LoadCursorW, LoadImageW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW,
+    SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
     SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX,
     BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_GROUPBOX, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK,
     CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT,
     ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN,
-    GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, IDC_ARROW, IDYES,
-    LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT,
-    LB_SETCURSEL, MB_ICONERROR, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST,
-    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOW,
+    GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, ICON_BIG, ICON_SMALL,
+    IDC_ARROW, IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING,
+    LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION,
+    MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
     SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
-    WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETTINGCHANGE,
-    WM_THEMECHANGED, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_DISABLED,
-    WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_GROUP, WS_HSCROLL, WS_MINIMIZEBOX, WS_OVERLAPPED,
-    WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETICON,
+    WM_SETTINGCHANGE, WM_THEMECHANGED, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
+    WS_DISABLED, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_GROUP, WS_HSCROLL, WS_MINIMIZEBOX,
+    WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 #[cfg(test)]
 use windows::Win32::UI::WindowsAndMessaging::{
-    IsWindowVisible, LB_GETCOUNT, LB_GETTEXT, LB_GETTEXTLEN,
+    IsWindowVisible, LB_GETCOUNT, LB_GETTEXT, LB_GETTEXTLEN, WM_GETICON,
 };
 
 const WINDOW_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsWindow");
 const PANEL_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsPanel");
+// The stable bootstrap can launch a new versioned payload on every click, so
+// the payload—not the bootstrap—owns the per-session settings singleton.
+// `Local\\` keeps separate interactive sessions independent while making all
+// versions of the settings UI share one slot for the current session.
+const SINGLE_INSTANCE_NAME: PCWSTR = windows::core::w!("Local\\SakuraInputSettings");
 const PANEL_COUNT: usize = 5;
 const WM_UPDATE_COMPLETE: u32 = WM_APP + 17;
 const DARK_SURFACE: COLORREF = rgb(0x35, 0x35, 0x35);
 const DARK_INPUT_SURFACE: COLORREF = rgb(0x25, 0x25, 0x25);
 const DARK_INK: COLORREF = rgb(0xF5, 0xF3, 0xF1);
+
+/// The settings window keeps both icon sizes alive until the window is gone.
+/// `WM_SETICON` does not transfer ownership of either HICON to the window.
+#[derive(Debug)]
+struct WindowIcons {
+    big: windows::Win32::UI::WindowsAndMessaging::HICON,
+    small: windows::Win32::UI::WindowsAndMessaging::HICON,
+}
+
+impl Drop for WindowIcons {
+    fn drop(&mut self) {
+        // SAFETY: both handles came from LoadImageW and are destroyed once
+        // after the settings window and its message pump have ended.
+        unsafe {
+            let _ = DestroyIcon(self.big);
+            let _ = DestroyIcon(self.small);
+        }
+    }
+}
 const DARK_DISABLED_INK: COLORREF = rgb(0xAA, 0xA7, 0xA4);
 const DARK_BUTTON: COLORREF = rgb(0x45, 0x45, 0x45);
 const DARK_BUTTON_HOVER: COLORREF = rgb(0x4C, 0x46, 0x49);
@@ -596,13 +628,83 @@ struct App {
     theme_apply_in_progress: bool,
 }
 
+#[derive(Debug)]
+struct SettingsInstance(HANDLE);
+
+impl SettingsInstance {
+    fn acquire() -> WindowsResult<Option<Self>> {
+        // SAFETY: the mutex name is a static, NUL-terminated string and the
+        // handle remains owned by this guard until the UI pump exits.
+        let handle = unsafe { CreateMutexW(None, false, SINGLE_INSTANCE_NAME)? };
+        // `CreateMutexW` succeeds for both a new and an existing named mutex;
+        // the last-error value is the only supported way to distinguish them.
+        let already_exists = windows::core::Error::from_thread().code()
+            == windows::core::HRESULT::from_win32(ERROR_ALREADY_EXISTS.0);
+        if already_exists {
+            // SAFETY: this process did not acquire the singleton slot, so the
+            // temporary handle must be closed before the activation hand-off.
+            unsafe {
+                let _ = CloseHandle(handle);
+            }
+            Ok(None)
+        } else {
+            Ok(Some(Self(handle)))
+        }
+    }
+}
+
+impl Drop for SettingsInstance {
+    fn drop(&mut self) {
+        // SAFETY: the guard owns this valid mutex handle for its whole drop
+        // lifetime; closing it releases the slot after the message pump ends.
+        unsafe {
+            let _ = CloseHandle(self.0);
+        }
+    }
+}
+
+fn activate_existing_window() -> bool {
+    const ACTIVATION_ATTEMPTS: usize = 50;
+    const ACTIVATION_WAIT: Duration = Duration::from_millis(10);
+
+    for _ in 0..ACTIVATION_ATTEMPTS {
+        // SAFETY: both class and title pointers are static; a successful HWND
+        // remains valid for the synchronous activation calls below.
+        if let Ok(window) = unsafe { FindWindowW(WINDOW_CLASS, PCWSTR::null()) } {
+            // SAFETY: the HWND was returned by User32 and all operations are
+            // scalar window-manager calls on that live top-level window.
+            unsafe {
+                if IsIconic(window).as_bool() {
+                    let _ = ShowWindow(window, SW_RESTORE);
+                } else {
+                    let _ = ShowWindow(window, SW_SHOW);
+                }
+                let _ = BringWindowToTop(window);
+                let _ = SetForegroundWindow(window);
+            }
+            return true;
+        }
+        sleep(ACTIVATION_WAIT);
+    }
+    false
+}
+
 pub fn run() -> Result<(), String> {
+    let Some(_instance) = SettingsInstance::acquire().map_err(display)? else {
+        // A second launch is an activation request, not a second settings
+        // document. The first process may still be between mutex creation and
+        // window creation, so give its UI thread a short bounded hand-off
+        // window before returning.
+        let _ = activate_existing_window();
+        return Ok(());
+    };
     // SAFETY: process DPI awareness is selected before creating any window.
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
     register_window_class().map_err(display)?;
     let window = create_main_window().map_err(display)?;
+    let _window_icons = apply_window_icons(window);
     let app = App::new(window)?;
     let app = Box::into_raw(Box::new(app));
     // SAFETY: the boxed state remains alive until the message pump exits. Only
@@ -1443,25 +1545,24 @@ impl App {
     }
 
     fn save_input_support_controls(&mut self) {
-        let mut support = InputSupport::default();
-        support.enabled = is_checked(self.general.input_support_enabled);
-        support.commit_based = is_checked(self.general.input_support_commit_based);
-        support.advanced = is_checked(self.general.input_support_advanced);
-        support.vowel_count = is_checked(self.general.input_support_vowel_count);
-        support.consonant_extra = is_checked(self.general.input_support_consonant_extra);
-        support.n_count = is_checked(self.general.input_support_n_count);
-        support.dakuten_swap = is_checked(self.general.input_support_dakuten_swap);
-        support.tsu_sokuon = is_checked(self.general.input_support_tsu_sokuon);
-        support.wa_wo = is_checked(self.general.input_support_wa_wo);
-        support.small_u = is_checked(self.general.input_support_small_u);
-        support.fuzzy_proper_nouns = is_checked(self.general.input_support_fuzzy_proper_nouns);
-        support.english_to_katakana = is_checked(self.general.input_support_english_to_katakana);
-        support.period_after_digit = is_checked(self.general.input_support_period_after_digit);
-        support.comma_after_digit = is_checked(self.general.input_support_comma_after_digit);
-        support.middle_dot_after_digit =
-            is_checked(self.general.input_support_middle_dot_after_digit);
-        support.long_vowel_after_alnum =
-            is_checked(self.general.input_support_long_vowel_after_alnum);
+        let support = InputSupport {
+            enabled: is_checked(self.general.input_support_enabled),
+            commit_based: is_checked(self.general.input_support_commit_based),
+            advanced: is_checked(self.general.input_support_advanced),
+            vowel_count: is_checked(self.general.input_support_vowel_count),
+            consonant_extra: is_checked(self.general.input_support_consonant_extra),
+            n_count: is_checked(self.general.input_support_n_count),
+            dakuten_swap: is_checked(self.general.input_support_dakuten_swap),
+            tsu_sokuon: is_checked(self.general.input_support_tsu_sokuon),
+            wa_wo: is_checked(self.general.input_support_wa_wo),
+            small_u: is_checked(self.general.input_support_small_u),
+            fuzzy_proper_nouns: is_checked(self.general.input_support_fuzzy_proper_nouns),
+            english_to_katakana: is_checked(self.general.input_support_english_to_katakana),
+            period_after_digit: is_checked(self.general.input_support_period_after_digit),
+            comma_after_digit: is_checked(self.general.input_support_comma_after_digit),
+            middle_dot_after_digit: is_checked(self.general.input_support_middle_dot_after_digit),
+            long_vowel_after_alnum: is_checked(self.general.input_support_long_vowel_after_alnum),
+        };
         self.configuration.preferences.input_support = support;
     }
 
@@ -2079,6 +2180,12 @@ impl App {
 
     fn finish_update(&mut self, completion: UpdateCompletion) {
         self.update_in_flight = false;
+        let available_version = match &completion {
+            UpdateCompletion::Check(updater::UpdateCheckOutcome::Available(manifest)) => {
+                Some(manifest.version)
+            }
+            _ => None,
+        };
         let (message, failed) = match completion {
             UpdateCompletion::Check(outcome) => {
                 let failed = matches!(outcome, updater::UpdateCheckOutcome::Failed(_));
@@ -2098,6 +2205,29 @@ impl App {
                 "Sakura Input の更新",
                 MB_OK | MB_ICONERROR,
             );
+        }
+        if let Some(version) = available_version {
+            let prompt = Self::update_available_prompt(version);
+            if message_box(
+                Some(self.window),
+                &prompt,
+                "Sakura Input の更新",
+                MB_YESNO | MB_ICONINFORMATION,
+            ) == IDYES
+            {
+                if let Err(error) = self.start_update(UpdateOperation::Apply) {
+                    let message = format!("更新のインストールを開始できませんでした: {error}");
+                    self.set_status(&message);
+                    message_box(
+                        Some(self.window),
+                        &message,
+                        "Sakura Input の更新",
+                        MB_OK | MB_ICONERROR,
+                    );
+                }
+            } else {
+                self.set_status(&format!("Sakura Input {version} の更新を保留しました。"));
+            }
         }
     }
 
@@ -2140,6 +2270,13 @@ impl App {
             }
             updater::UpdateCheckOutcome::Failed(failure) => Self::describe_update_failure(failure),
         }
+    }
+
+    fn update_available_prompt(version: updater::Version) -> String {
+        format!(
+            "Sakura Input {version} の更新が利用できます。\r\n\r\n現在のバージョン: {}\r\n更新後のバージョン: {version}\r\n\r\n今すぐダウンロードして、検証後にインストールしますか？\r\n管理者権限の確認が表示されます。",
+            updater::current_version()
+        )
     }
 
     fn describe_update(outcome: &updater::UpdateOutcome) -> String {
@@ -2360,6 +2497,77 @@ fn register_window_class() -> WindowsResult<()> {
         RegisterClassW(&panel_class);
     }
     Ok(())
+}
+
+fn icon_asset_path() -> Option<PathBuf> {
+    let mut candidates = Vec::with_capacity(2);
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(parent) = executable.parent() {
+            candidates.push(parent.join("sakura-input.ico"));
+        }
+    }
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("assets")
+            .join("sakura-input-icon")
+            .join("sakura-input.ico"),
+    );
+    candidates.into_iter().find(|candidate| candidate.is_file())
+}
+
+fn load_icon(path: &Path, size: i32) -> Option<windows::Win32::UI::WindowsAndMessaging::HICON> {
+    let path = path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    // SAFETY: the path is NUL-terminated and remains alive for this call;
+    // LoadImageW copies the icon resource into a process-owned HICON.
+    let handle = unsafe {
+        LoadImageW(
+            None,
+            PCWSTR(path.as_ptr()),
+            IMAGE_ICON,
+            size,
+            size,
+            LR_LOADFROMFILE,
+        )
+    }
+    .ok()?;
+    Some(windows::Win32::UI::WindowsAndMessaging::HICON(handle.0))
+}
+
+fn apply_window_icons(window: HWND) -> Option<WindowIcons> {
+    let path = icon_asset_path()?;
+    let big = load_icon(&path, 32)?;
+    let Some(small) = load_icon(&path, 16) else {
+        // SAFETY: `big` was returned by LoadImageW and has not been handed
+        // to the window because the small icon could not be loaded.
+        unsafe {
+            let _ = DestroyIcon(big);
+        }
+        return None;
+    };
+    let icons = WindowIcons { big, small };
+    // SAFETY: the window is owned by this UI thread; WM_SETICON only stores
+    // the handles, while `icons` retains ownership until the pump ends.
+    unsafe {
+        let _ = SendMessageW(
+            window,
+            WM_SETICON,
+            Some(WPARAM(ICON_BIG as usize)),
+            Some(LPARAM(icons.big.0 as isize)),
+        );
+        let _ = SendMessageW(
+            window,
+            WM_SETICON,
+            Some(WPARAM(ICON_SMALL as usize)),
+            Some(LPARAM(icons.small.0 as isize)),
+        );
+    }
+    Some(icons)
 }
 
 fn create_main_window() -> WindowsResult<HWND> {
@@ -2995,14 +3203,7 @@ fn create_update_controls(parent: HWND) -> WindowsResult<UpdateControls> {
     )?;
     let parent = settings_panel;
     group_box(parent, "更新の確認", 0, 40, PANEL_WIDTH, 86)?;
-    let enabled = checkbox(
-        parent,
-        "プロパティを開いたときに更新を確認する",
-        12,
-        64,
-        260,
-        24,
-    )?;
+    let enabled = checkbox(parent, "設定画面の起動時に更新を確認する", 12, 64, 260, 24)?;
     let save = button(parent, "設定を保存", 260, 64, 116, 24, false)?;
     let parent = available_panel;
     group_box(parent, "利用可能な更新", 0, 40, PANEL_WIDTH, 92)?;
@@ -4564,6 +4765,18 @@ mod tests {
     }
 
     #[test]
+    fn update_available_prompt_names_current_and_new_versions() {
+        let prompt = App::update_available_prompt(updater::Version {
+            major: 9,
+            minor: 8,
+            patch: 7,
+        });
+        assert!(prompt.contains(&format!("現在のバージョン: {}", updater::current_version())));
+        assert!(prompt.contains("更新後のバージョン: 9.8.7"));
+        assert!(prompt.contains("管理者権限の確認が表示されます。"));
+    }
+
+    #[test]
     fn mode_labels_are_japanese_and_cover_every_mode() {
         let labels: Vec<_> = Mode::ALL.into_iter().map(mode_label).collect();
         assert_eq!(labels.len(), Mode::ALL.len());
@@ -4734,6 +4947,30 @@ mod tests {
             let _ = DestroyWindow(window);
             drop(Box::from_raw(app));
         }
+    }
+
+    #[test]
+    fn settings_window_uses_the_sakura_input_icon() {
+        register_window_class().expect("settings window class registers");
+        let window = create_main_window().expect("settings root window creates");
+        let icons = apply_window_icons(window).expect("Sakura Input icon asset loads");
+        // SAFETY: `window` is the live HWND created immediately above; these
+        // messages only query the icon handles currently associated with it.
+        let (big, small) = unsafe {
+            (
+                SendMessageW(window, WM_GETICON, Some(WPARAM(ICON_BIG as usize)), None).0,
+                SendMessageW(window, WM_GETICON, Some(WPARAM(ICON_SMALL as usize)), None).0,
+            )
+        };
+        // The window must be destroyed before WindowIcons drops its handles;
+        // WM_SETICON borrows them rather than transferring ownership.
+        // SAFETY: this test owns the live top-level window and destroys it once.
+        unsafe {
+            let _ = DestroyWindow(window);
+        }
+        drop(icons);
+        assert_ne!(big, 0, "settings window has no large icon");
+        assert_ne!(small, 0, "settings window has no small icon");
     }
 
     #[test]

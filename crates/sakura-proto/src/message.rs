@@ -58,6 +58,9 @@ pub(crate) const REQ_RECORD_AI_TEXT: u16 = 0x0016;
 pub(crate) const REQ_START_AI_TEXT: u16 = 0x0017;
 pub(crate) const REQ_POLL_AI_TEXT: u16 = 0x0018;
 pub(crate) const REQ_CANCEL_AI_TEXT: u16 = 0x0019;
+pub(crate) const REQ_QUEUE_CANDIDATE_COMMIT: u16 = 0x001A;
+pub(crate) const REQ_POLL_CANDIDATE_COMMIT: u16 = 0x001B;
+pub(crate) const REQ_COMMIT_CANDIDATE: u16 = 0x001C;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -75,6 +78,8 @@ pub(crate) const RES_HISTORY_CANDIDATE_DELETED: u16 = 0x8009;
 pub(crate) const RES_AI_TEXT_STARTED: u16 = 0x800A;
 pub(crate) const RES_AI_TEXT_PENDING: u16 = 0x800B;
 pub(crate) const RES_AI_TEXT_RESULT: u16 = 0x800C;
+pub(crate) const RES_CANDIDATE_COMMIT_QUEUED: u16 = 0x800D;
+pub(crate) const RES_CANDIDATE_COMMIT_PENDING: u16 = 0x800E;
 pub(crate) const RES_ERROR: u16 = 0x80FF;
 
 /// A message sent from a client (the TSF DLL) to the engine.
@@ -200,6 +205,26 @@ pub enum Request {
     /// `candidate_index` are checked against engine-owned state; a surface or
     /// reading never crosses this untrusted boundary.
     DeleteHistoryCandidate {
+        revision: Revision,
+        candidate_index: u16,
+    },
+    /// Queues a passive renderer row click against the exact displayed UI
+    /// revision. The renderer owns no editing session, so this request only
+    /// creates a bounded intent for the candidate-owning TSF connection.
+    QueueCandidateCommit {
+        revision: Revision,
+        candidate_index: u16,
+    },
+    /// Reads a queued renderer click only when this exact session owns the
+    /// current candidate snapshot. This request never mutates session state.
+    PollCandidateCommit {
+        session: SessionId,
+    },
+    /// Commits the exact revision-stamped row previously queued by the
+    /// renderer. The engine rejects stale, foreign, or already-consumed
+    /// intents before advancing the editing session.
+    CommitCandidate {
+        session: SessionId,
         revision: Revision,
         candidate_index: u16,
     },
@@ -369,6 +394,16 @@ pub enum Response {
     /// for a later [`Response::Ui`] before changing what it draws.
     HistoryCandidateDeleted {
         removed: bool,
+    },
+    /// Answers [`Request::QueueCandidateCommit`]. A negative result is a
+    /// terminal stale/invalid no-op; the renderer may accept a later click.
+    CandidateCommitQueued {
+        queued: bool,
+    },
+    /// Answers [`Request::PollCandidateCommit`]. `None` means this session
+    /// owns no current click intent.
+    CandidateCommitPending {
+        request: Option<(Revision, u16)>,
     },
     AiTextStarted {
         job: u64,
@@ -554,6 +589,9 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::PollAiText { .. } => REQ_POLL_AI_TEXT,
         Request::CancelAiText { .. } => REQ_CANCEL_AI_TEXT,
         Request::DeleteHistoryCandidate { .. } => REQ_DELETE_HISTORY_CANDIDATE,
+        Request::QueueCandidateCommit { .. } => REQ_QUEUE_CANDIDATE_COMMIT,
+        Request::PollCandidateCommit { .. } => REQ_POLL_CANDIDATE_COMMIT,
+        Request::CommitCandidate { .. } => REQ_COMMIT_CANDIDATE,
         Request::DeleteSession { .. } => REQ_DELETE_SESSION,
         Request::Ping => REQ_PING,
         Request::Shutdown => REQ_SHUTDOWN,
@@ -662,7 +700,21 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
         Request::DeleteHistoryCandidate {
             revision,
             candidate_index,
+        }
+        | Request::QueueCandidateCommit {
+            revision,
+            candidate_index,
         } => {
+            w.write_u64(*revision)?;
+            w.write_u16(*candidate_index)
+        }
+        Request::PollCandidateCommit { session } => w.write_u64(*session),
+        Request::CommitCandidate {
+            session,
+            revision,
+            candidate_index,
+        } => {
+            w.write_u64(*session)?;
             w.write_u64(*revision)?;
             w.write_u16(*candidate_index)
         }
@@ -698,6 +750,8 @@ fn response_msg_type(res: &Response) -> u16 {
         Response::InputHistoryStats { .. } => RES_INPUT_HISTORY_STATS,
         Response::InputMode { .. } => RES_INPUT_MODE,
         Response::HistoryCandidateDeleted { .. } => RES_HISTORY_CANDIDATE_DELETED,
+        Response::CandidateCommitQueued { .. } => RES_CANDIDATE_COMMIT_QUEUED,
+        Response::CandidateCommitPending { .. } => RES_CANDIDATE_COMMIT_PENDING,
         Response::AiTextStarted { .. } => RES_AI_TEXT_STARTED,
         Response::AiTextPending { .. } => RES_AI_TEXT_PENDING,
         Response::AiTextResult { .. } => RES_AI_TEXT_RESULT,
@@ -726,6 +780,11 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
         Response::Ok => Ok(()),
         Response::InputMode { mode } => mode.encode(w),
         Response::HistoryCandidateDeleted { removed } => w.write_bool(*removed),
+        Response::CandidateCommitQueued { queued } => w.write_bool(*queued),
+        Response::CandidateCommitPending { request } => w.write_option(request, |w, request| {
+            w.write_u64(request.0)?;
+            w.write_u16(request.1)
+        }),
         Response::AiTextStarted { job } | Response::AiTextPending { job } => w.write_u64(*job),
         Response::AiTextResult {
             job,
@@ -911,6 +970,18 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
             revision: r.read_u64()?,
             candidate_index: r.read_u16()?,
         },
+        REQ_QUEUE_CANDIDATE_COMMIT => Request::QueueCandidateCommit {
+            revision: r.read_u64()?,
+            candidate_index: r.read_u16()?,
+        },
+        REQ_POLL_CANDIDATE_COMMIT => Request::PollCandidateCommit {
+            session: r.read_u64()?,
+        },
+        REQ_COMMIT_CANDIDATE => Request::CommitCandidate {
+            session: r.read_u64()?,
+            revision: r.read_u64()?,
+            candidate_index: r.read_u16()?,
+        },
         REQ_DELETE_SESSION => Request::DeleteSession {
             session: r.read_u64()?,
         },
@@ -967,6 +1038,12 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         },
         RES_HISTORY_CANDIDATE_DELETED => Response::HistoryCandidateDeleted {
             removed: r.read_bool()?,
+        },
+        RES_CANDIDATE_COMMIT_QUEUED => Response::CandidateCommitQueued {
+            queued: r.read_bool()?,
+        },
+        RES_CANDIDATE_COMMIT_PENDING => Response::CandidateCommitPending {
+            request: r.read_option(|r| Ok((r.read_u64()?, r.read_u16()?)))?,
         },
         RES_AI_TEXT_STARTED => Response::AiTextStarted { job: r.read_u64()? },
         RES_AI_TEXT_PENDING => Response::AiTextPending { job: r.read_u64()? },

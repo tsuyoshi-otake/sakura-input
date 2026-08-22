@@ -38,10 +38,11 @@
 //! the distinction; the two methods here are what make it reliable rather
 //! than a race the uninstaller loses sometimes.
 
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
+use sakura_ipc::debug_trace;
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
     AppearanceTheme, Candidate, CandidateDetail, CandidateKind, CandidateList, FixedStr, FixedVec,
@@ -60,6 +61,16 @@ use sakura_proto::{
 /// two idle processes against how long a wedged IME can look fine.
 pub const HEARTBEAT: Duration = Duration::from_secs(5);
 
+static NEXT_BOARD_CONNECTION: AtomicU64 = AtomicU64::new(1);
+
+/// Identity of one pipe worker on the shared candidate board.
+///
+/// Protocol [`SessionId`] values restart at 1 on every worker. Dual TSF in
+/// Electron is two connections, so board ownership is `(connection, session)`.
+pub fn allocate_board_connection() -> u64 {
+    NEXT_BOARD_CONNECTION.fetch_add(1, Ordering::Relaxed)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct CandidateSpan {
     text_start: u32,
@@ -70,6 +81,13 @@ struct CandidateSpan {
     history_reading_len: u32,
     history_surface_start: u32,
     history_surface_len: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingCandidateCommit {
+    revision: Revision,
+    candidate_index: u16,
+    owner: (u64, SessionId),
 }
 
 /// Candidate data in the board's allocation-free representation.
@@ -236,6 +254,26 @@ impl CandidateSnapshot {
             span.history_surface_len,
         );
         (!reading.is_empty() && !surface.is_empty()).then_some((reading, surface))
+    }
+
+    fn visible_range(&self) -> core::ops::Range<usize> {
+        let count = self.spans.len();
+        let selected = usize::from(self.selected);
+        if self.kind == CandidateKind::Conversion
+            && self.presentation == CandidatePresentation::Compact
+        {
+            return if selected < count {
+                selected..selected.saturating_add(1)
+            } else {
+                0..0
+            };
+        }
+        let page_size = usize::from(self.page_size);
+        if page_size == 0 || selected >= count {
+            return 0..0;
+        }
+        let start = selected / page_size * page_size;
+        start..start.saturating_add(page_size).min(count)
     }
 
     fn to_owned(&self) -> CandidateList {
@@ -408,7 +446,13 @@ struct UiSnapshot {
     has_candidates: bool,
     candidates: CandidateSnapshot,
     candidate_detail: CandidateDetailSnapshot,
-    candidate_session: Option<SessionId>,
+    /// Pipe-local session ids restart at 1 on every worker. Dual TSF in
+    /// Electron is two connections, so ownership is `(connection, session)`.
+    candidate_owner: Option<(u64, SessionId)>,
+    /// One passive renderer click waiting for the exact candidate-owning TSF
+    /// connection. It is a capability over this revision, never a surface
+    /// supplied by the renderer.
+    pending_candidate_commit: Option<PendingCandidateCommit>,
     /// The process-wide learning generation used for this prediction list.
     /// A successful history deletion advances it only after durable publish;
     /// every older UI list is then stale and must disappear rather than show a
@@ -429,7 +473,8 @@ impl UiSnapshot {
             has_candidates: false,
             candidates: CandidateSnapshot::new(),
             candidate_detail: CandidateDetailSnapshot::new(),
-            candidate_session: None,
+            candidate_owner: None,
+            pending_candidate_commit: None,
             candidate_learning_generation: 0,
             anchor: None,
             document: None,
@@ -573,8 +618,23 @@ impl UiBoard {
     /// different session resets placement; an output without candidates
     /// explicitly terminates the previous popup state.
     pub fn publish_output(&self, session: SessionId, output: &OutputBuf, learning_generation: u64) {
+        self.publish_output_from(0, session, output, learning_generation);
+    }
+
+    /// Publishes candidates owned by one pipe connection's session.
+    ///
+    /// `connection` distinguishes two Dual TSF workers that both created
+    /// protocol session id 1. Tests that model a single connection may keep
+    /// [`Self::publish_output`].
+    pub fn publish_output_from(
+        &self,
+        connection: u64,
+        session: SessionId,
+        output: &OutputBuf,
+        learning_generation: u64,
+    ) {
         let has_candidates = CandidateSnapshot::output_is_valid(output);
-        let candidate_session = has_candidates.then_some(session);
+        let candidate_owner = has_candidates.then_some((connection, session));
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -583,7 +643,31 @@ impl UiBoard {
         // the live reading. That idle session has no candidates. Clearing the
         // shared board here hid the live popup, so conversion candidates never
         // appeared even though the engine had already converted.
-        if !has_candidates && state.candidate_session != Some(session) {
+        //
+        // Idle 半角/全角 is the same empty-output shape, but it must still
+        // announce the new mode. Skipping every empty output left the
+        // floating indicator dark unless this session already owned the
+        // candidate popup.
+        if !has_candidates && state.candidate_owner != Some((connection, session)) {
+            let foreign_popup = state.candidate_owner.is_some();
+            let mode = output.mode;
+            let (board_conn, board_session) = state.candidate_owner.unwrap_or((0, 0));
+            drop(state);
+            debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+                component: "engine",
+                instance: session,
+                event: "ui_publish",
+                decision: "skip_foreign_empty",
+                k0: board_conn,
+                k1: board_session,
+                k2: connection,
+                k3: session,
+            });
+            if !foreign_popup {
+                if let Some(mode) = mode {
+                    self.publish(mode);
+                }
+            }
             return;
         }
 
@@ -592,13 +676,24 @@ impl UiBoard {
             || state.has_candidates != has_candidates
             || (has_candidates && !state.candidates.matches_output(output))
             || (has_candidates && !state.candidate_detail.matches_output(output))
-            || state.candidate_session != candidate_session
+            || state.candidate_owner != candidate_owner
             || (has_candidates && state.candidate_learning_generation != learning_generation);
         if !changed {
+            drop(state);
+            debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+                component: "engine",
+                instance: session,
+                event: "ui_publish",
+                decision: "unchanged",
+                k0: 0,
+                k1: 0,
+                k2: 0,
+                k3: 0,
+            });
             return;
         }
 
-        if state.candidate_session != candidate_session || !has_candidates {
+        if state.candidate_owner != candidate_owner || !has_candidates {
             state.anchor = None;
             state.document = None;
             state.renderer_visible = false;
@@ -609,7 +704,7 @@ impl UiBoard {
                 // so this indicates an internal invariant violation. Publish
                 // a terminal hidden state rather than partial candidate data.
                 state.has_candidates = false;
-                state.candidate_session = None;
+                state.candidate_owner = None;
                 state.candidate_learning_generation = 0;
                 state.anchor = None;
                 state.document = None;
@@ -617,6 +712,16 @@ impl UiBoard {
                 state.revision = state.revision.wrapping_add(1);
                 drop(state);
                 self.changed.notify_all();
+                debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+                    component: "engine",
+                    instance: session,
+                    event: "ui_publish",
+                    decision: "copy_failed",
+                    k0: 0,
+                    k1: 0,
+                    k2: 0,
+                    k3: 0,
+                });
                 return;
             }
             if !state.candidate_detail.copy_from_output(output) {
@@ -633,7 +738,7 @@ impl UiBoard {
         state.revision = state.revision.wrapping_add(1);
         state.mode = next_mode;
         state.has_candidates = has_candidates;
-        state.candidate_session = candidate_session;
+        state.candidate_owner = candidate_owner;
         state.candidate_learning_generation = if has_candidates {
             learning_generation
         } else {
@@ -641,12 +746,34 @@ impl UiBoard {
         };
         drop(state);
         self.changed.notify_all();
+        debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+            component: "engine",
+            instance: session,
+            event: "ui_publish",
+            decision: if has_candidates { "show" } else { "hide" },
+            k0: u64::from(has_candidates),
+            k1: 0,
+            k2: 0,
+            k3: 0,
+        });
     }
 
-    /// Updates the popup geometry for the session that owns the current list.
+    /// Updates popup geometry for the session that owns the current list, or
+    /// stashes caret geometry for an idle mode-bar publish that has no popup.
     /// Stale layout callbacks from a former focus owner are ignored.
     pub fn publish_placement(
         &self,
+        session: SessionId,
+        anchor: Option<ScreenRect>,
+        document: Option<ScreenRect>,
+        renderer_visible: bool,
+    ) -> bool {
+        self.publish_placement_from(0, session, anchor, document, renderer_visible)
+    }
+
+    pub fn publish_placement_from(
+        &self,
+        connection: u64,
         session: SessionId,
         anchor: Option<ScreenRect>,
         document: Option<ScreenRect>,
@@ -657,8 +784,32 @@ impl UiBoard {
         let Ok(mut state) = self.state.lock() else {
             return false;
         };
-        if state.candidate_session != Some(session) {
-            return false;
+        if state.candidate_owner != Some((connection, session)) {
+            // Idle 半角/全角 has no candidate owner. Stash the caret so the
+            // following mode publish can show the bar next to the field
+            // instead of at the monitor's bottom. A foreign popup keeps the
+            // existing exclusive-owner rule.
+            if state.candidate_owner.is_some() || renderer_visible {
+                return false;
+            }
+            if state.anchor == anchor && state.document == document {
+                return true;
+            }
+            let announce_late_idle_placement = state.mode.is_some() && state.anchor.is_none();
+            state.anchor = anchor;
+            state.document = document;
+            // Normally the TSF stashes idle geometry before publishing the
+            // new mode, so the two values arrive in one renderer snapshot.
+            // If the host answers the placement query after the mode reply,
+            // the mode is already visible in the board and this update must
+            // still wake the renderer. Otherwise it would remain on a
+            // fallback-free hidden state until some unrelated UI revision.
+            if announce_late_idle_placement {
+                state.revision = state.revision.wrapping_add(1);
+                drop(state);
+                self.changed.notify_all();
+            }
+            return true;
         }
         if state.anchor == anchor
             && state.document == document
@@ -679,17 +830,21 @@ impl UiBoard {
     /// newer popup untouched. Used by non-`Output` terminal commands such as
     /// revert and session deletion.
     pub fn clear_session(&self, session: SessionId) {
+        self.clear_session_from(0, session);
+    }
+
+    pub fn clear_session_from(&self, connection: u64, session: SessionId) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        if state.candidate_session != Some(session) {
+        if state.candidate_owner != Some((connection, session)) {
             return;
         }
         state.revision = state.revision.wrapping_add(1);
         state.has_candidates = false;
         state.candidates.clear();
         state.candidate_detail.clear();
-        state.candidate_session = None;
+        state.candidate_owner = None;
         state.candidate_learning_generation = 0;
         state.anchor = None;
         state.document = None;
@@ -720,6 +875,112 @@ impl UiBoard {
         Some((reading.to_owned(), surface.to_owned()))
     }
 
+    /// Queues one visible row click from the renderer. The exact revision,
+    /// current visibility and visible-page membership are all required before
+    /// the intent can cross into the candidate-owning TSF connection.
+    pub fn queue_candidate_commit(&self, revision: Revision, candidate_index: u16) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            return false;
+        };
+        let index = usize::from(candidate_index);
+        if state.revision != revision
+            || !state.has_candidates
+            || !state.renderer_visible
+            || state.candidate_owner.is_none()
+            || !state.candidates.visible_range().contains(&index)
+        {
+            return false;
+        }
+        let owner = state.candidate_owner.expect("checked candidate owner");
+        let request = PendingCandidateCommit {
+            revision,
+            candidate_index,
+            owner,
+        };
+        if state
+            .pending_candidate_commit
+            .is_some_and(|pending| pending.revision != revision || pending.owner != owner)
+        {
+            state.pending_candidate_commit = None;
+        }
+        match state.pending_candidate_commit {
+            Some(existing) => existing == request,
+            None => {
+                state.pending_candidate_commit = Some(request);
+                true
+            }
+        }
+    }
+
+    /// Returns a current click only to the pipe/session that owns the popup.
+    /// A stale intent is terminally discarded; a foreign poll leaves the
+    /// rightful owner's intent untouched.
+    pub fn pending_candidate_commit(
+        &self,
+        connection: u64,
+        session: SessionId,
+    ) -> Option<(Revision, u16)> {
+        let mut state = self.state.lock().ok()?;
+        let request = state.pending_candidate_commit?;
+        if state.revision != request.revision
+            || !state.has_candidates
+            || state.candidate_owner != Some(request.owner)
+        {
+            state.pending_candidate_commit = None;
+            return None;
+        }
+        (request.owner == (connection, session))
+            .then_some((request.revision, request.candidate_index))
+    }
+
+    /// Atomically consumes the exact intent immediately before dispatcher
+    /// mutation. Polling alone never consumes it, so a temporarily busy TSF
+    /// callback can try again on its next bounded timer tick.
+    pub fn take_candidate_commit(
+        &self,
+        connection: u64,
+        session: SessionId,
+        revision: Revision,
+        candidate_index: u16,
+    ) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            return false;
+        };
+        let expected = PendingCandidateCommit {
+            revision,
+            candidate_index,
+            owner: (connection, session),
+        };
+        if state.pending_candidate_commit != Some(expected)
+            || state.revision != revision
+            || state.candidate_owner != Some((connection, session))
+            || !state.has_candidates
+        {
+            return false;
+        }
+        state.pending_candidate_commit = None;
+        true
+    }
+
+    /// Releases renderer-side duplicate suppression after an accepted click
+    /// could not produce an engine output. Bumping the revision is deliberate:
+    /// it re-publishes the unchanged authoritative list as retryable UI.
+    pub fn reject_candidate_commit(&self, connection: u64, session: SessionId, revision: Revision) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        if state.revision != revision
+            || state.candidate_owner != Some((connection, session))
+            || !state.has_candidates
+        {
+            return;
+        }
+        state.pending_candidate_commit = None;
+        state.revision = state.revision.wrapping_add(1);
+        drop(state);
+        self.changed.notify_all();
+    }
+
     /// Removes the shared candidate snapshot after a learning operation has
     /// durably advanced `learning_generation`. The generation check is what
     /// keeps a concurrent, already-refreshed list visible while hiding every
@@ -738,7 +999,7 @@ impl UiBoard {
         state.has_candidates = false;
         state.candidates.clear();
         state.candidate_detail.clear();
-        state.candidate_session = None;
+        state.candidate_owner = None;
         state.candidate_learning_generation = 0;
         state.anchor = None;
         state.document = None;
@@ -1122,6 +1383,160 @@ mod tests {
     }
 
     #[test]
+    fn idle_peer_with_the_same_session_id_does_not_hide_another_connection_popup() {
+        let board = UiBoard::new();
+        board.publish_output_from(1, 1, &history_suggestion_output(), 0);
+        let candidates = look(&board, 1);
+        let anchor = ScreenRect {
+            left: 10,
+            top: 20,
+            right: 30,
+            bottom: 40,
+        };
+        assert!(board.publish_placement_from(1, 1, Some(anchor), None, true));
+        let placed = look(&board, candidates.revision);
+
+        board.publish_output_from(2, 1, &OutputBuf::new(), 0);
+        let unchanged = look(&board, 0);
+        assert_eq!(unchanged.revision, placed.revision);
+        assert!(unchanged.candidates.is_some());
+        assert_eq!(unchanged.anchor, Some(anchor));
+        assert!(unchanged.renderer_visible);
+
+        board.clear_session_from(2, 1);
+        let still = look(&board, 0);
+        assert_eq!(still.revision, placed.revision);
+        assert!(still.candidates.is_some());
+    }
+
+    #[test]
+    fn idle_hankaku_zenkaku_publishes_mode_without_candidate_ownership() {
+        let board = UiBoard::new();
+        let mut output = OutputBuf::new();
+        output.mode = Some(Mode::Direct);
+        board.publish_output(7, &output, 0);
+        let state = look(&board, 1);
+        assert_eq!(
+            state.mode,
+            Some(Mode::Direct),
+            "idle 半角/全角 must still show 直接入力します"
+        );
+        assert!(state.candidates.is_none());
+
+        output.mode = Some(Mode::Hiragana);
+        board.publish_output(7, &output, 0);
+        let toggled = look(&board, state.revision);
+        assert_eq!(
+            toggled.mode,
+            Some(Mode::Hiragana),
+            "the next toggle must show ひらがなで入力します"
+        );
+        assert_ne!(toggled.revision, state.revision);
+    }
+
+    #[test]
+    fn idle_mode_placement_is_stashed_without_bumping_then_shown_with_the_mode() {
+        let board = UiBoard::new();
+        let anchor = ScreenRect {
+            left: 120,
+            top: 800,
+            right: 121,
+            bottom: 824,
+        };
+        let document = ScreenRect {
+            left: 80,
+            top: 760,
+            right: 720,
+            bottom: 848,
+        };
+        let before = look(&board, 0);
+        assert!(board.publish_placement(7, Some(anchor), Some(document), false));
+        let stashed = look(&board, 0);
+        assert_eq!(
+            stashed.revision, before.revision,
+            "stashing a caret must not flash the renderer before the mode arrives"
+        );
+        assert_eq!(stashed.anchor, Some(anchor));
+        assert_eq!(stashed.document, Some(document));
+        assert!(!stashed.renderer_visible);
+
+        let mut output = OutputBuf::new();
+        output.mode = Some(Mode::Hiragana);
+        board.publish_output(7, &output, 0);
+        let shown = look(&board, before.revision);
+        assert_eq!(shown.mode, Some(Mode::Hiragana));
+        assert_eq!(shown.anchor, Some(anchor));
+        assert_eq!(shown.document, Some(document));
+        assert!(!shown.renderer_visible);
+        assert!(shown.candidates.is_none());
+    }
+
+    #[test]
+    fn late_idle_mode_placement_wakes_a_mode_already_published() {
+        let board = UiBoard::new();
+        board.publish(Mode::Hiragana);
+        let mode = look(&board, 1);
+        assert_eq!(mode.anchor, None);
+
+        let anchor = ScreenRect {
+            left: 420,
+            top: 300,
+            right: 421,
+            bottom: 324,
+        };
+        assert!(board.publish_placement(7, Some(anchor), None, false));
+        let placed = look(&board, mode.revision);
+        assert_ne!(placed.revision, mode.revision);
+        assert_eq!(placed.mode, Some(Mode::Hiragana));
+        assert_eq!(placed.anchor, Some(anchor));
+        assert!(!placed.renderer_visible);
+    }
+
+    #[test]
+    fn idle_mode_placement_does_not_steal_a_foreign_popup() {
+        let board = UiBoard::new();
+        board.publish_output_from(1, 1, &history_suggestion_output(), 0);
+        let candidates = look(&board, 1);
+        let popup_anchor = ScreenRect {
+            left: 10,
+            top: 20,
+            right: 30,
+            bottom: 40,
+        };
+        assert!(board.publish_placement_from(1, 1, Some(popup_anchor), None, true));
+        let placed = look(&board, candidates.revision);
+
+        let idle_anchor = ScreenRect {
+            left: 400,
+            top: 800,
+            right: 401,
+            bottom: 824,
+        };
+        assert!(!board.publish_placement_from(2, 1, Some(idle_anchor), None, false));
+        let unchanged = look(&board, 0);
+        assert_eq!(unchanged.revision, placed.revision);
+        assert_eq!(unchanged.anchor, Some(popup_anchor));
+        assert!(unchanged.renderer_visible);
+    }
+
+    #[test]
+    fn idle_peer_mode_toggle_does_not_hide_a_foreign_candidate_popup() {
+        let board = UiBoard::new();
+        board.publish_output_from(1, 1, &history_suggestion_output(), 0);
+        let candidates = look(&board, 1);
+        let mut toggle = OutputBuf::new();
+        toggle.mode = Some(Mode::Direct);
+        board.publish_output_from(2, 1, &toggle, 0);
+        let unchanged = look(&board, 0);
+        assert_eq!(unchanged.revision, candidates.revision);
+        assert!(unchanged.candidates.is_some());
+        assert_eq!(
+            unchanged.mode, candidates.mode,
+            "an idle Dual TSF peer must not steal the mode indicator from a live popup"
+        );
+    }
+
+    #[test]
     fn history_delete_capability_is_revision_bound_and_never_inferred_from_annotation() {
         let board = UiBoard::new();
         let output = history_suggestion_output();
@@ -1150,6 +1565,63 @@ mod tests {
             None,
             "a renderer snapshot from another revision is never authority"
         );
+    }
+
+    #[test]
+    fn candidate_commit_intent_is_visible_revision_bound_and_owner_scoped() {
+        let board = UiBoard::new();
+        board.publish_output_from(11, 7, &history_suggestion_output(), 41);
+        assert!(board.publish_placement_from(
+            11,
+            7,
+            Some(ScreenRect {
+                left: 10,
+                top: 10,
+                right: 20,
+                bottom: 30,
+            }),
+            None,
+            true,
+        ));
+        let published = look(&board, 0);
+        assert!(!board.queue_candidate_commit(published.revision.wrapping_add(1), 0));
+        assert!(!board.queue_candidate_commit(published.revision, u16::MAX));
+        assert!(board.queue_candidate_commit(published.revision, 0));
+        assert_eq!(board.pending_candidate_commit(12, 7), None);
+        assert_eq!(
+            board.pending_candidate_commit(11, 7),
+            Some((published.revision, 0))
+        );
+        assert!(!board.take_candidate_commit(12, 7, published.revision, 0));
+        assert!(board.take_candidate_commit(11, 7, published.revision, 0));
+        assert_eq!(board.pending_candidate_commit(11, 7), None);
+        assert!(!board.take_candidate_commit(11, 7, published.revision, 0));
+    }
+
+    #[test]
+    fn rejected_candidate_commit_republishes_the_same_list_for_retry() {
+        let board = UiBoard::new();
+        board.publish_output_from(11, 7, &history_suggestion_output(), 41);
+        assert!(board.publish_placement_from(
+            11,
+            7,
+            Some(ScreenRect {
+                left: 10,
+                top: 10,
+                right: 20,
+                bottom: 30,
+            }),
+            None,
+            true,
+        ));
+        let before = look(&board, 0);
+        assert!(board.queue_candidate_commit(before.revision, 0));
+        assert!(board.take_candidate_commit(11, 7, before.revision, 0));
+        board.reject_candidate_commit(11, 7, before.revision);
+        let after = look(&board, before.revision);
+        assert_ne!(after.revision, before.revision);
+        assert_eq!(after.candidates, before.candidates);
+        assert!(board.queue_candidate_commit(after.revision, 0));
     }
 
     #[test]

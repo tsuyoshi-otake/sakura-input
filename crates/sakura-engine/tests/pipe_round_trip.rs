@@ -23,8 +23,9 @@
 mod common;
 
 use std::fs;
+use std::path::PathBuf;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::Client;
 use sakura_proto::{
@@ -32,6 +33,8 @@ use sakura_proto::{
 };
 
 use common::{char_key, named_key, session_for, shifted_char_key, visible, Engine, PATIENT};
+use sakura_ime_eval::capture_engine::capture_candidates;
+use sakura_ime_eval::types::{Constraints, Context, Input, SemanticCase};
 
 fn publish_test_configuration(engine: &Engine, source: &str) {
     let path = engine
@@ -70,7 +73,7 @@ fn assert_shifted_term(client: &mut Client, session: SessionId, typed: &str, exp
     let converted = match client.call(
         &Request::SendKey {
             session,
-            key: named_key(KeyCode::Space),
+            key: named_key(KeyCode::Henkan),
         },
         PATIENT,
     ) {
@@ -79,11 +82,11 @@ fn assert_shifted_term(client: &mut Client, session: SessionId, typed: &str, exp
             let converted = visible(output.preedit);
             assert!(
                 expected.contains(&converted.as_str()),
-                "Space after Shift+{typed}: expected one of {expected:?}, got {converted:?}"
+                "Henkan after Shift+{typed}: expected one of {expected:?}, got {converted:?}"
             );
             converted
         }
-        other => panic!("Space after Shift+{typed}: expected Output, got {other:?}"),
+        other => panic!("Henkan after Shift+{typed}: expected Output, got {other:?}"),
     };
     match client.call(
         &Request::SendKey {
@@ -568,6 +571,54 @@ brackets = "square"
         cleanup.status.success(),
         "engine exited with {}",
         cleanup.status
+    );
+}
+
+/// The quality runner must exercise the same real engine binary as the
+/// ordinary pipe tests, not a dispatcher double or the user's ambient pipe.
+#[test]
+fn real_engine_candidate_capture_round_trip() {
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("sakura-ime-eval-capture");
+    fs::create_dir_all(&root).expect("create capture fixture root");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock after Unix epoch")
+        .as_nanos();
+    let profile = root.join(format!("fixture-{}-{nonce:x}", std::process::id()));
+    fs::create_dir(&profile).expect("create capture fixture profile");
+    let dictionary = common::test_dictionary(&profile);
+    let temp_root = root.join(format!("runner-{}-{nonce:x}", std::process::id()));
+    let case = SemanticCase {
+        schema_version: 1,
+        case_id: "real-capture-kyou".to_owned(),
+        task: "conversion".to_owned(),
+        family: Some("normal-conversion".to_owned()),
+        role: Some("positive".to_owned()),
+        context: Context {
+            left: "今日は".to_owned(),
+            right: "晴れ".to_owned(),
+        },
+        input: Input {
+            input_mode: Some("romaji".to_owned()),
+            reading: "きょう".to_owned(),
+            typing: Some("kyou".to_owned()),
+        },
+        constraints: Constraints::default(),
+        privacy_provenance: None,
+    };
+    let engine = PathBuf::from(env!("CARGO_BIN_EXE_sakura_engine"));
+    let result = capture_candidates(&engine, &dictionary, &[case], &temp_root, PATIENT);
+    let _ = fs::remove_dir_all(&profile);
+    let _ = fs::remove_dir_all(&temp_root);
+    let outputs = result.expect("real capture must complete");
+    assert_eq!(outputs.len(), 1);
+    assert!(
+        outputs[0]
+            .candidates
+            .iter()
+            .any(|candidate| candidate == "今日"),
+        "fixture candidate missing from real capture: {:?}",
+        outputs[0].candidates
     );
 }
 

@@ -222,13 +222,13 @@ fn apply_space(state: &mut OracleState, targets: u8) {
     let mut converted = false;
     let mut absorbed = false;
     let mut next = state.connections;
-    for index in 0..state.actors {
+    for (index, connection) in next.iter_mut().enumerate().take(state.actors) {
         if (targets & (1 << index)) == 0 {
             continue;
         }
         match space_effect(state, index) {
             SpaceEffect::Convert => {
-                next[index].state = ConnState::Converting;
+                connection.state = ConnState::Converting;
                 converted = true;
             }
             SpaceEffect::Insert => {

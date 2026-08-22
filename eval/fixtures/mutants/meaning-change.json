@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "git_sha": "1af807b000000000000000000000000000000000",
+    "engine_sha256": "14aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dictionary_sha256": "bb9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "candidate": {
+    "git_sha": "deadbeef00000000000000000000000000000000",
+    "engine_sha256": "00cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dictionary_sha256": "bb9bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "pairs": [
+    {
+      "case_id": "sem-000066-nihongo-nyuuryoku",
+      "baseline": {
+        "candidates": ["日本語入力", "日本語乳力"]
+      },
+      "candidate": {
+        "candidates": ["日本語乳力", "日本語入力"]
+      }
+    }
+  ]
+}

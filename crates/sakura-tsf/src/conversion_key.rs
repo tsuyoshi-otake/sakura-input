@@ -3,12 +3,13 @@
 //! Cursor / Electron still constructs two `TextService` objects. This module
 //! elects one thread-local IME. The other is a shadow: it never talks to the
 //! engine or candidate UI, and it eats keys so Chromium cannot insert a
-//! duplicate while the active instance owns the reading.
+//! duplicate while the active instance owns the reading. An unfocused idle TIP
+//! must not claim the first letter of a Japanese composition.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
-use sakura_proto::{KeyCode, KeyInput};
+use sakura_proto::{KeyCode, KeyInput, Mode};
 
 /// Sole IME vs host-constructed extra TIP on this thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,8 +89,15 @@ impl ProcessSoleIme {
         matches!(*self.lock(), Some(id) if id != instance)
     }
 
-    /// First key on an empty seat claims it. A live reading always takes it.
-    pub(crate) fn seat_for_key(&self, instance: u64, local_live: bool) -> ImeSeat {
+    /// A live reading always takes the seat. An empty seat is claimed only by
+    /// the focused instance: Dual TSF otherwise lets an idle extra TIP win the
+    /// first letter, return `consumed = false`, and leak it as WM_CHAR.
+    pub(crate) fn seat_for_key(
+        &self,
+        instance: u64,
+        local_live: bool,
+        foreground: bool,
+    ) -> ImeSeat {
         let mut primary = self.lock();
         if local_live {
             *primary = Some(instance);
@@ -98,10 +106,11 @@ impl ProcessSoleIme {
         match *primary {
             Some(id) if id == instance => ImeSeat::Active,
             Some(_) => ImeSeat::Shadow,
-            None => {
+            None if foreground => {
                 *primary = Some(instance);
                 ImeSeat::Active
             }
+            None => ImeSeat::Shadow,
         }
     }
 }
@@ -164,6 +173,29 @@ impl ConversionKeyDisposition {
     pub(crate) fn skip_probe_on_test_keydown(self) -> bool {
         matches!(self, Self::ApplyLocal | Self::AbsorbPeer)
     }
+
+    /// Host-eligible failure must still eat Japanese typing. `OnTestKeyDown =
+    /// FALSE` lets Chromium insert WM_CHAR, and TSF may skip `OnKeyDown`.
+    pub(crate) fn eats_blocked(
+        self,
+        engine_consumed: bool,
+        key: KeyInput,
+        mode: Option<Mode>,
+    ) -> bool {
+        self.eats(engine_consumed) || typing_key_must_not_reach_host(key, mode)
+    }
+}
+
+/// IME-on letters must not fall through as direct input just because Probe or
+/// admission is temporarily closed. Direct mode still belongs to the host.
+pub(crate) fn typing_key_must_not_reach_host(key: KeyInput, mode: Option<Mode>) -> bool {
+    if matches!(mode, Some(Mode::Direct)) {
+        return false;
+    }
+    if key.modifiers.ctrl() || key.modifiers.alt() {
+        return false;
+    }
+    key.code == KeyCode::Char && key.ch.is_some()
 }
 
 /// Shared candidate UI may End only from the instance that owns the popup.
@@ -460,8 +492,8 @@ mod tests {
     #[test]
     fn first_key_elects_one_active_ime_and_the_other_is_shadow() {
         let sole = ProcessSoleIme::new();
-        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Active);
-        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Shadow);
+        assert_eq!(sole.seat_for_key(1, false, true), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(2, false, false), ImeSeat::Shadow);
         assert!(ImeSeat::Shadow.eats());
         assert!(!ImeSeat::Shadow.asks_engine());
         assert!(ImeSeat::Active.asks_engine());
@@ -469,29 +501,41 @@ mod tests {
     }
 
     #[test]
+    fn unfocused_idle_tip_must_not_claim_an_empty_seat() {
+        let sole = ProcessSoleIme::new();
+        assert_eq!(
+            sole.seat_for_key(1, false, false),
+            ImeSeat::Shadow,
+            "a Dual TSF extra TIP must not win the first letter before focus"
+        );
+        assert_eq!(sole.seat_for_key(2, false, true), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(1, false, false), ImeSeat::Shadow);
+    }
+
+    #[test]
     fn focus_steals_the_sole_seat_from_an_idle_holder() {
         let sole = ProcessSoleIme::new();
         sole.on_focus(1, true);
-        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(1, false, false), ImeSeat::Active);
         sole.on_focus(2, true);
-        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Active);
-        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Shadow);
+        assert_eq!(sole.seat_for_key(2, false, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(1, false, false), ImeSeat::Shadow);
     }
 
     #[test]
     fn live_reading_takes_the_seat_even_if_focus_already_moved() {
         let sole = ProcessSoleIme::new();
         sole.on_focus(2, true);
-        assert_eq!(sole.seat_for_key(1, true), ImeSeat::Active);
-        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Shadow);
+        assert_eq!(sole.seat_for_key(1, true, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(2, false, false), ImeSeat::Shadow);
     }
 
     #[test]
     fn drop_or_detach_releases_the_seat_for_the_next_instance() {
         let sole = ProcessSoleIme::new();
-        assert_eq!(sole.seat_for_key(1, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(1, false, true), ImeSeat::Active);
         sole.release(1);
-        assert_eq!(sole.seat_for_key(2, false), ImeSeat::Active);
+        assert_eq!(sole.seat_for_key(2, false, true), ImeSeat::Active);
     }
 
     #[test]
@@ -501,5 +545,45 @@ mod tests {
             !ProcessSoleIme::new().is_shadow(1, true),
             "a live reading is never a shadow"
         );
+    }
+
+    fn letter(ch: char) -> KeyInput {
+        KeyInput {
+            code: KeyCode::Char,
+            ch: Some(ch),
+            modifiers: sakura_proto::Modifiers::NONE,
+            repeat: false,
+            test_only: true,
+        }
+    }
+
+    #[test]
+    fn blocked_japanese_letter_must_not_fall_through_as_direct_input() {
+        let key = letter('k');
+        assert!(
+            typing_key_must_not_reach_host(key, Some(Mode::Hiragana)),
+            "OnTestKeyDown FALSE would insert a Latin k before composition starts"
+        );
+        assert!(
+            typing_key_must_not_reach_host(key, None),
+            "no cached mode yet: keep the first letter with the IME"
+        );
+        assert!(ConversionKeyDisposition::HostEligible.eats_blocked(
+            false,
+            key,
+            Some(Mode::Hiragana)
+        ));
+        assert!(!ConversionKeyDisposition::HostEligible.eats_blocked(
+            false,
+            key,
+            Some(Mode::Direct)
+        ));
+        assert!(!typing_key_must_not_reach_host(
+            KeyInput {
+                modifiers: sakura_proto::Modifiers::CTRL,
+                ..key
+            },
+            Some(Mode::Hiragana)
+        ));
     }
 }

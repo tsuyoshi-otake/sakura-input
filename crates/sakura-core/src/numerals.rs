@@ -54,9 +54,10 @@ const TRADITIONAL_DAYS: [(&str, u32); 13] = [
     ("ようか", 8),
 ];
 
-const COUNTERS: [(&str, NumericCounter); 4] = [
+const COUNTERS: [(&str, NumericCounter); 3] = [
+    // 日 as a numeric counter is にち (二十四日, 24日). じつ is only a word
+    // ending (先日, 本日, 全日), never "N days".
     ("にち", NumericCounter::Day),
-    ("じつ", NumericCounter::Day),
     ("がつ", NumericCounter::Month),
     ("ねん", NumericCounter::Year),
 ];
@@ -120,6 +121,41 @@ pub fn parse_numeric_prefix(reading: &str) -> Option<NumericSpan> {
 
 pub fn should_emit_numeric_span(span: NumericSpan) -> bool {
     span.counter.is_some() || span.value >= 10
+}
+
+/// Surfaces such as `1000日` / `千日` that come from treating `じつ` as a day
+/// counter, or from splicing `千` + `日`.
+pub fn is_numeric_day_surface(text: &str) -> bool {
+    let Some(stem) = text.strip_suffix('日') else {
+        return false;
+    };
+    if stem.is_empty() {
+        return false;
+    }
+    stem.chars().all(is_numeric_stem_char)
+}
+
+fn is_numeric_stem_char(character: char) -> bool {
+    character.is_ascii_digit()
+        || ('０'..='９').contains(&character)
+        || matches!(
+            character,
+            '零' | '一'
+                | '二'
+                | '三'
+                | '四'
+                | '五'
+                | '六'
+                | '七'
+                | '八'
+                | '九'
+                | '十'
+                | '百'
+                | '千'
+                | '万'
+                | ','
+                | '、'
+        )
 }
 
 pub fn is_decorative_numeral_char(character: char) -> bool {
@@ -256,10 +292,7 @@ fn parse_japanese_number(reading: &str) -> Option<(u32, usize)> {
 }
 
 fn take_place(reading: &str, markers: &[&str], place: u32) -> Option<(u32, usize)> {
-    let (digit, digit_bytes) = match take_ones(reading, true) {
-        Some(parsed) => parsed,
-        None => (1, 0),
-    };
+    let (digit, digit_bytes) = take_ones(reading, true).unwrap_or((1, 0));
     let rest = reading.get(digit_bytes..)?;
     for marker in markers {
         if rest.starts_with(marker) {
@@ -426,5 +459,28 @@ mod tests {
         assert!(parse_numeric_prefix("し").is_none());
         assert_eq!(span("しにち").value, 4);
         assert_eq!(span("しにち").counter, Some(NumericCounter::Day));
+    }
+
+    #[test]
+    fn numeric_day_surfaces_are_the_rewriter_forms() {
+        assert!(is_numeric_day_surface("1000日"));
+        assert!(is_numeric_day_surface("１０００日"));
+        assert!(is_numeric_day_surface("千日"));
+        assert!(!is_numeric_day_surface("先日"));
+        assert!(!is_numeric_day_surface("全日"));
+        assert!(!is_numeric_day_surface("本日"));
+    }
+
+    #[test]
+    fn senjitsu_is_not_a_thousand_days() {
+        // 先日 / 全日 are ordinary words. The day counter is にち, never じつ.
+        for reading in ["せんじつ", "ぜんじつ"] {
+            let parsed = parse_numeric_prefix(reading).expect(reading);
+            assert_eq!(parsed.counter, None, "{reading}");
+            assert!(
+                parsed.bytes < reading.len(),
+                "{reading} must not consume the じつ ending as a day count"
+            );
+        }
     }
 }

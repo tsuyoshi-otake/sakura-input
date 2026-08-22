@@ -4,6 +4,20 @@ Append-only. What was tried, what happened, and what it cost to find out.
 Entries that produced a general rule say so; the rule itself lives in
 `rules.md`.
 
+## 2026-08-19 — real release-artifact Issue #66 capture
+
+Ran `ime-eval capture` against the release `sakura_engine.exe` and the
+release dictionary (`system.dic` SHA-256
+`f09f8bf4ebf6e21d170123672ddbb8c7a5f450571807a3ba938e42497c723b80`) with
+the same artifact on both baseline and candidate sides. The engine SHA-256
+was `b595b55645d51f4c0375feef2fddcd5d52b6c93eb4f500efcac3a9ac4562b045`.
+Across all 25 Issue #66 cases, 16 produced capture files and 9 terminated
+fail-closed with exit code 2 and no capture file. `sem-000066-kyou` and
+`sem-000066-esp32` were confirmed successful; `sem-000066-avx-512` produced
+no candidate list. No release test-engine, `ime_eval`, cargo, or rustc
+process remained afterward. This is an artifact-coverage smoke run, not an
+A/B quality comparison, because baseline and candidate were identical.
+
 ---
 
 ## 2026-07-31 — Phase 1 (M0 plumbing)
@@ -265,3 +279,58 @@ shape, and forward Delete proved the point by having the same leak.
 Three of the four new tests fail with the one-line fix commented out; the
 fourth is the opposite polarity (a partly erased composition stays English)
 and correctly passes either way.
+
+## 2026-08-19 — real-engine capture goal-loop iteration 1
+
+The independent rubric verifier passed C1, C2, C3, C6, and C7. C4 failed
+because its post-check observed `sakura_engine` PID 3608 still running after
+the missing-dictionary command. C5 failed during `cargo test --workspace
+--offline` when `space_key_dispatch_pipe` terminated with
+`0xc0000005 (STATUS_ACCESS_VIOLATION)`. These are verifier observations; the
+cause and ownership of PID 3608 still require confirmation before any fix.
+
+Investigation confirmed two separate issues. PID 3608 was the user's installed
+engine at `C:\Program Files\Sakura Input\versions\1.0.17-f007efdaa1d99083`,
+not a capture child; the verifier's broad process check was invalid. The
+workspace crash left six owned debug `--test-pipe` children with dead parent
+PID 43508; those were stopped by exact executable-path and private-pipe
+filtering, while the installed engine was left untouched.
+
+The access violation is load/order-sensitive in the test harness: the
+`space_key_dispatch_pipe` binary passed in isolation and in five serial
+repetitions (`--test-threads=1`), but failed on iteration 2 of a five-run
+parallel stress (`--test-threads=2`) with the same
+`0xc0000005 (STATUS_ACCESS_VIOLATION)`. The failing run left no private engine
+afterward; this establishes test-process concurrency as the reproducible
+boundary, not a capture protocol failure.
+
+The first C4 process check was corrected to exclude the installed engine and
+compare only the repository debug executable with `--test-pipe`. The
+missing-dictionary command returned exit code 2, wrote no capture file, and
+left the exact private-test-engine set unchanged. After stopping two
+orphaned debug children left by the interrupted workspace attempt, the full
+`cargo test --workspace --offline` run completed with exit code 0 and no
+private test engines or cargo/rustc processes remained.
+
+Iteration 2 used a fresh rubric-verifier context after narrowing C4's process
+identity and adding the real-engine test harness lifetime lock. All seven
+rubric criteria passed: the real capture test spawned the actual engine and
+found `今日`, the invalid-artifact command exited 2 without an output file,
+the workspace test exited 0, source isolation/bounds were observed, and the
+final private test-engine count was zero. The two confirmed reusable rules
+were promoted to `rules.md`.
+
+The follow-up strict clippy check exposed the previously known
+`debug_trace::{emit,emit_at}` argument-count warnings, plus a needless
+`return` in the capture cfg branch. The trace API was changed to a bounded
+`TraceEvent` record, all callers were migrated, and the cfg branch was made
+expression-based. `cargo fmt --all -- --check` and
+`cargo clippy -p sakura-ime-eval --all-targets --offline -- -D warnings` then
+passed.
+
+Iteration 3 added strict clippy as C8 and ran a fresh independent verifier.
+All eight criteria passed: workspace evidence was `405 passed / 0 failed` and
+`181 passed / 0 failed` across the relevant suites, the real capture and
+fail-closed checks passed, clippy emitted no diagnostics, and no private
+test-engine process remained. The fixed-payload API lesson was promoted to
+`rules.md`.

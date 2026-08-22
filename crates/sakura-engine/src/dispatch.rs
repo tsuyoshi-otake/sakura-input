@@ -35,6 +35,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use sakura_core::conversion::{
+    CandidateOrigin, ConversionInput, ConversionInputClass, CorrectionMap, CorrectionRun,
+    LiteralPolicy, RawRepairPlan, RepairTier,
+};
 use sakura_core::dictionary::DetailRelationKind;
 use sakura_core::keymap::{Action, KeyMap, KeyMapError, Preset, State};
 use sakura_core::romaji::{Table, TableError};
@@ -45,6 +49,7 @@ use sakura_core::{
     ConversionSegment, EntryFlags, Input, InputMethod, NeuralRerankerScope, Preferences,
     SegmentTransform, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, TextSink,
 };
+use sakura_ipc::debug_trace;
 use sakura_proto::{
     AiTextOperation, AiTextStatus, CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope,
     KeyCode, KeyInput, Mode, OutputBuf, Overflow, Request, Response, SessionId, UnderlineKind,
@@ -60,11 +65,12 @@ use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeC
 use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
 use crate::long_conversion::LongConversionService;
 use crate::prediction::{PredictionResult, PredictionService, PredictionSource};
-use crate::session::{scope_is_sensitive, text_hash, Session, SessionTable};
+use crate::session::{scope_is_sensitive, text_hash, RawProvenanceState, Session, SessionTable};
 use crate::shift_ascii_space::{
     decide_shift_ascii_convert, ConversionTrigger, ShiftAsciiConvertDecision,
     ShiftAsciiConvertFacts,
 };
+use crate::ui;
 
 /// Reported to a client that asks `Hello`. Not the protocol version (that is
 /// [`PROTOCOL_VERSION`], checked separately by `sakura_proto::decode_request`
@@ -158,7 +164,7 @@ pub struct Dispatcher {
     /// Last process-wide learning epoch observed by this pipe worker.
     observed_learning_generation: u64,
     /// One cache per connection, boxed so nested dispatcher constructors do
-    /// not copy its fixed suggestion buffers through the 128 KiB pipe stack.
+    /// not copy its fixed suggestion buffers through the 160 KiB pipe stack.
     prediction_cache: Box<PredictionCache>,
     sessions: SessionTable,
     /// Process-wide composing/converting claims shared with sibling pipe
@@ -166,6 +172,10 @@ pub struct Dispatcher {
     composition_fence: Option<Arc<CompositionFence>>,
     /// Local mirror of fence claims for sessions this worker owns.
     fence_claims: HashMap<SessionId, (Box<str>, bool)>,
+    /// Process-wide candidate-board identity. Independent of AI-text owners:
+    /// those restart at 1 on a private `AiTextService`, which Dual TSF workers
+    /// would collide on.
+    ui_connection: u64,
     /// Scratch space for building normalized text before it is copied into
     /// an `OutputBuf` segment or commit field. Living here rather than as a
     /// stack-local in the functions that use it is what keeps the `SendKey`
@@ -361,8 +371,15 @@ impl Dispatcher {
             sessions: SessionTable::new(),
             composition_fence: None,
             fence_claims: HashMap::new(),
+            ui_connection: ui::allocate_board_connection(),
             scratch: FixedStr::new(),
         }
+    }
+
+    /// Numeric identity of this pipe worker on the shared candidate board.
+    /// Protocol session ids restart at 1 on every worker; this does not.
+    pub(crate) fn ui_owner(&self) -> u64 {
+        self.ui_connection
     }
 
     /// Attaches the process-wide composition fence used to absorb idle Space
@@ -372,10 +389,11 @@ impl Dispatcher {
         self.composition_fence = Some(fence);
     }
 
-    fn suppress_idle_space_for(&self, process_name: &str) -> bool {
+    fn suppress_idle_space_for(&self, id: SessionId, process_name: &str) -> bool {
         self.composition_fence
             .as_ref()
             .is_some_and(|fence| fence.any_active(process_name))
+            || self.sessions.peer_is_composing(id, process_name)
     }
 
     fn sync_composition_fence(&mut self, id: SessionId) {
@@ -456,6 +474,9 @@ impl Dispatcher {
         preferences: Preferences,
         profiles: Arc<[AppProfile]>,
     ) -> Result<(), NewError> {
+        let keymap_changed = self
+            .keymap_preset
+            .is_some_and(|current| current != preferences.keymap_preset);
         let prediction_policy_changed = self.prediction_enabled != preferences.prediction_enabled
             || self.suggest_accept != preferences.suggest_accept
             || self.app_profiles.as_ref() != profiles.as_ref();
@@ -486,7 +507,7 @@ impl Dispatcher {
             self.prediction_cache.clear();
         }
         self.sessions
-            .apply_runtime_preferences(preferences, &profiles);
+            .apply_runtime_preferences(preferences, &profiles, keymap_changed);
         Ok(())
     }
 
@@ -594,6 +615,14 @@ impl Dispatcher {
             Request::DeleteHistoryCandidate { .. } => {
                 Reply::Message(Response::HistoryCandidateDeleted { removed: false })
             }
+            Request::QueueCandidateCommit { .. } | Request::PollCandidateCommit { .. } => {
+                Reply::Message(Response::Error(ErrorCode::Internal))
+            }
+            Request::CommitCandidate {
+                session,
+                candidate_index,
+                ..
+            } => self.commit_candidate(*session, usize::from(*candidate_index), out),
             Request::DeleteSession { session } => self.delete_session(*session),
             Request::Ping => Reply::Message(Response::Pong),
             Request::Shutdown => Reply::Shutdown(Response::Ok),
@@ -619,6 +648,8 @@ impl Dispatcher {
             | Request::SetInputScope { session, .. }
             | Request::SetMode { session, .. }
             | Request::ApplyAiComposition { session, .. }
+            | Request::PollCandidateCommit { session }
+            | Request::CommitCandidate { session, .. }
             | Request::StartAiText { session, .. }
             | Request::DeleteSession { session } => *session,
             Request::Hello { .. }
@@ -632,6 +663,7 @@ impl Dispatcher {
             | Request::PollAiText { .. }
             | Request::CancelAiText { .. }
             | Request::DeleteHistoryCandidate { .. }
+            | Request::QueueCandidateCommit { .. }
             | Request::Ping
             | Request::Shutdown
             | Request::WatchUi { .. }
@@ -792,6 +824,7 @@ impl Dispatcher {
                 // so neither path can silently disarm the transaction.
                 return Reply::Message(Response::Error(ErrorCode::Busy));
             }
+            session.suppress_raw_provenance();
             session.apply_input_scope(scope)
         };
         if clear_cache {
@@ -819,6 +852,7 @@ impl Dispatcher {
         {
             return Reply::Message(Response::Error(ErrorCode::Busy));
         }
+        session.suppress_raw_provenance();
         session.mode = mode;
         Reply::Message(Response::InputMode { mode })
     }
@@ -960,16 +994,34 @@ impl Dispatcher {
             return self.probe_session(id, existing.clone(), key, out, false);
         }
         let reply = {
-            let process_name = {
+            let suppress_idle_space = {
                 let Some(session) = self.sessions.get(id) else {
                     return Reply::Message(Response::Error(ErrorCode::UnknownSession));
                 };
                 if session.undo_pending() {
                     return Reply::Message(Response::Error(ErrorCode::Busy));
                 }
-                session.process_name().to_owned()
+                self.suppress_idle_space_for(id, session.process_name())
             };
-            let suppress_idle_space = self.suppress_idle_space_for(&process_name);
+            if matches!(key.code, KeyCode::Space | KeyCode::Henkan)
+                && !key.modifiers.ctrl()
+                && !key.modifiers.alt()
+            {
+                debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
+                    component: "engine",
+                    instance: id,
+                    event: "idle_fence",
+                    decision: if suppress_idle_space {
+                        "absorb"
+                    } else {
+                        "open"
+                    },
+                    k0: key.code as u64,
+                    k1: u64::from(key.test_only),
+                    k2: 0,
+                    k3: 0,
+                });
+            }
             let Some(session) = self.sessions.get_mut(id) else {
                 return Reply::Message(Response::Error(ErrorCode::UnknownSession));
             };
@@ -1012,7 +1064,7 @@ impl Dispatcher {
                     services.table,
                     services.normalizer,
                     services.conversion,
-                    services.learning.as_deref(),
+                    services.learning,
                     &mut self.scratch,
                     out,
                 );
@@ -1195,7 +1247,7 @@ impl Dispatcher {
                     learning.generation() != self.observed_learning_generation
                 }),
         };
-        let suppress_idle_space = self.suppress_idle_space_for(probe.process_name());
+        let suppress_idle_space = self.suppress_idle_space_for(id, probe.process_name());
         let _ = apply_key(
             id,
             &mut probe,
@@ -1249,6 +1301,73 @@ impl Dispatcher {
                     // `commit()` calls `commit_pending` directly), so there is
                     // no transaction to reconcile here either.
                     self.prediction_cache.clear_if_session(id);
+                    out.clear();
+                    Reply::Message(Response::Error(ErrorCode::TooLarge))
+                }
+            }
+        };
+        self.sync_composition_fence(id);
+        reply
+    }
+
+    fn commit_candidate(&mut self, id: SessionId, index: usize, out: &mut OutputBuf) -> Reply {
+        let reply = {
+            let Some(session) = self.sessions.get_mut(id) else {
+                return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+            };
+            if session.undo_pending()
+                || !session.scope_classified()
+                || session.scope() != InputScope::Normal
+            {
+                return Reply::Message(Response::Error(ErrorCode::Busy));
+            }
+            out.consumed = true;
+            let normalizer = session.normalizer;
+            let result = if session.suggestions_visible && !session.converting {
+                let cache = PredictionCacheWork::Probe {
+                    cache: &self.prediction_cache,
+                    stale: false,
+                };
+                commit_suggestion_at(
+                    id,
+                    session,
+                    index,
+                    &normalizer,
+                    self.learning.as_deref(),
+                    self.input_history.as_deref(),
+                    ExecutionPolicy::Apply,
+                    &cache,
+                    &mut self.scratch,
+                    out,
+                )
+                .map(|committed| committed.then_some(()))
+            } else if session.converting {
+                commit_numbered_candidate(
+                    session,
+                    &self.table,
+                    &normalizer,
+                    self.conversion.as_deref(),
+                    self.learning.as_deref(),
+                    self.input_history.as_deref(),
+                    ExecutionPolicy::Apply,
+                    &mut self.scratch,
+                    index % CANDIDATE_PAGE_SIZE,
+                    out,
+                )
+                .map(|()| (!out.beep).then_some(()))
+            } else {
+                Ok(None)
+            };
+            match result {
+                Ok(Some(())) => {
+                    self.prediction_cache.clear_if_session(id);
+                    Reply::Output
+                }
+                Ok(None) => {
+                    out.clear();
+                    Reply::Message(Response::Error(ErrorCode::Malformed))
+                }
+                Err(Overflow) => {
                     out.clear();
                     Reply::Message(Response::Error(ErrorCode::TooLarge))
                 }
@@ -1609,7 +1728,6 @@ fn conversion_options(
 
 fn commit_repair_readings_for(
     reading: &str,
-    conversion: &ConversionService,
     learning: Option<&LearningService>,
     options: ConversionOptions,
 ) -> Vec<FixedStr<MAX_PREEDIT_BYTES>> {
@@ -1619,11 +1737,7 @@ fn commit_repair_readings_for(
     let Some(learning) = learning else {
         return Vec::new();
     };
-    learning.collect_commit_repair_readings(reading, options.input_support, |surface, out| {
-        conversion
-            .reconversion_reading(surface, out)
-            .unwrap_or(false)
-    })
+    learning.collect_commit_repair_readings(reading, options.input_support)
 }
 
 #[cfg(test)]
@@ -1642,18 +1756,121 @@ pub(crate) fn take_conversion_lookup_count_for_test() -> u64 {
     TEST_CONVERSION_LOOKUPS.with(|count| count.replace(0))
 }
 
-fn with_session_conversion<R>(
+fn with_session_conversion_input<R>(
     conversion: &ConversionService,
     learning: Option<&LearningService>,
-    reading: &str,
+    input: ConversionInput<'_>,
     options: ConversionOptions,
     consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
-    let hints = commit_repair_readings_for(reading, conversion, learning, options);
+    let hints = if input.literal_policy == LiteralPolicy::Ranked {
+        commit_repair_readings_for(input.lookup_reading, learning, options)
+    } else {
+        Vec::new()
+    };
     let hint_refs: Vec<&str> = hints.iter().map(FixedStr::as_str).collect();
     #[cfg(test)]
     record_conversion_lookup_for_test();
-    conversion.with_conversion_hints(reading, options, &hint_refs, consume)
+    if input.literal_policy == LiteralPolicy::Ranked {
+        conversion.with_conversion_hints(input.lookup_reading, options, &hint_refs, consume)
+    } else {
+        conversion.with_conversion_input_hints(input, options, &hint_refs, consume)
+    }
+}
+
+/// Builds a classified conversion input from the session's staged exact
+/// surface. The caller must pass the reading slice that the selected segment
+/// actually owns; the class/policy remains the composition-level decision.
+fn session_conversion_input<'a>(
+    session: &'a Session,
+    lookup_reading: &'a str,
+) -> ConversionInput<'a> {
+    let exact_surface = if session.conversion_exact_surface().is_empty() {
+        lookup_reading
+    } else {
+        session.conversion_exact_surface()
+    };
+    if session.literal_policy() == LiteralPolicy::ExactOnly
+        && !session.staged_exact_surface_matches_current()
+    {
+        // A caret/edit invalidates the staged raw snapshot. Keep an unresolved
+        // Latin reading exact-only when it is still valid, but do not feed a
+        // stale pre-edit surface into the core validator after the text has
+        // changed.
+        if lookup_reading
+            .bytes()
+            .any(|byte| byte.is_ascii_alphabetic())
+        {
+            return ConversionInput::new(
+                lookup_reading,
+                lookup_reading,
+                ConversionInputClass::MixedUnresolvedLatin,
+                LiteralPolicy::ExactOnly,
+            );
+        }
+        return ConversionInput::ordinary(lookup_reading);
+    }
+    if session.literal_policy() == LiteralPolicy::ExactTop1
+        && !session.staged_exact_surface_matches_current()
+    {
+        if is_opaque_ascii_identifier(lookup_reading) {
+            return ConversionInput::new(
+                lookup_reading,
+                lookup_reading,
+                ConversionInputClass::OpaqueAsciiIdentifier,
+                LiteralPolicy::ExactTop1,
+            );
+        }
+        return ConversionInput::ordinary(lookup_reading);
+    }
+    ConversionInput::new(
+        lookup_reading,
+        exact_surface,
+        session.conversion_input_class(),
+        session.literal_policy(),
+    )
+}
+
+/// Input-aware one-slot conversion. The dictionary service keeps the slot
+/// through both direct and corrected passes; this helper never recursively
+/// calls a second `ConversionService` lookup.
+fn with_session_raw_conversion<R>(
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    input: ConversionInput<'_>,
+    plans: &[RawRepairPlan],
+    options: ConversionOptions,
+    consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+) -> Result<R, crate::dictionary::ConvertFailure> {
+    // A normal conversion has no corrected pass to run.  Keep it on the
+    // ordinary one-slot path instead of entering the raw-repair multipass
+    // frame merely to perform its direct lookup.  Besides avoiding needless
+    // arena copies, this is important for the fixed-size server worker stack:
+    // the raw helper is reserved for requests that actually admitted a plan.
+    if plans.is_empty() {
+        return with_session_conversion_input(conversion, learning, input, options, consume);
+    }
+    let hints = if input.literal_policy == LiteralPolicy::Ranked {
+        commit_repair_readings_for(input.lookup_reading, learning, options)
+    } else {
+        Vec::new()
+    };
+    let hint_refs: Vec<&str> = hints.iter().map(FixedStr::as_str).collect();
+    #[cfg(test)]
+    record_conversion_lookup_for_test();
+    conversion.with_raw_repair_conversion_input_hints(input, plans, options, &hint_refs, consume)
+}
+
+fn with_session_candidates_input<R>(
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    input: ConversionInput<'_>,
+    options: ConversionOptions,
+    consume: impl FnOnce(&[ConversionCandidate]) -> R,
+) -> Result<R, crate::dictionary::ConvertFailure> {
+    with_session_conversion_input(conversion, learning, input, options, |candidates, _| {
+        consume(candidates)
+    })
 }
 
 fn with_session_candidates<R>(
@@ -1663,9 +1880,13 @@ fn with_session_candidates<R>(
     options: ConversionOptions,
     consume: impl FnOnce(&[ConversionCandidate]) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
-    with_session_conversion(conversion, learning, reading, options, |candidates, _| {
-        consume(candidates)
-    })
+    with_session_candidates_input(
+        conversion,
+        learning,
+        ConversionInput::ordinary(reading),
+        options,
+        consume,
+    )
 }
 
 #[cfg(test)]
@@ -1701,11 +1922,7 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
     {
         return;
     }
-    let options = conversion_options(
-        session,
-        session.carry_right_id(),
-        services.learning.as_deref(),
-    );
+    let options = conversion_options(session, session.carry_right_id(), services.learning);
     let _ = long_conversion.schedule(
         services.long_conversion_owner,
         session_id,
@@ -1718,26 +1935,45 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
 
 fn preferred_candidate_index(
     candidates: &[ConversionCandidate],
+    reading: &str,
     requested: i16,
     cached: Option<(u64, u16)>,
     learned: LearningPreference,
+    direct_limit: usize,
 ) -> usize {
     if candidates.is_empty() {
         return 0;
     }
     if requested == 0 {
-        if let Some(index) = learned.exact.filter(|index| *index < candidates.len()) {
+        let direct_limit = direct_limit.min(candidates.len());
+        let direct = &candidates[..direct_limit];
+        if let Some(index) = learned
+            .exact
+            .filter(|index| *index < direct.len())
+            .filter(|index| direct[*index].text() != reading)
+        {
             return index;
         }
         if let Some((surface_hash, surface_len)) = cached {
-            if let Some(index) = candidates.iter().position(|candidate| {
+            if let Some(index) = direct.iter().position(|candidate| {
                 u16::try_from(candidate.text().len()).ok() == Some(surface_len)
                     && text_hash(candidate.text()) == surface_hash
+                    && candidate.text() != reading
             }) {
                 return index;
             }
         }
-        if let Some(index) = learned.general.filter(|index| *index < candidates.len()) {
+        if let Some(index) = learned
+            .general
+            .filter(|index| *index < direct.len())
+            .filter(|index| direct[*index].text() != reading)
+        {
+            return index;
+        }
+        if let Some(index) = direct
+            .iter()
+            .position(|candidate| candidate.text() != reading)
+        {
             return index;
         }
     }
@@ -1746,26 +1982,199 @@ fn preferred_candidate_index(
 
 fn has_authoritative_candidate_preference(
     candidates: &[ConversionCandidate],
+    reading: &str,
     requested: i16,
     cached: Option<(u64, u16)>,
     learned: LearningPreference,
+    direct_limit: usize,
 ) -> bool {
     if requested != 0 {
         return true;
     }
-    if learned.exact.is_some_and(|index| index < candidates.len())
+    let direct_limit = direct_limit.min(candidates.len());
+    let direct = &candidates[..direct_limit];
+    if learned
+        .exact
+        .is_some_and(|index| index < direct.len() && direct[index].text() != reading)
         || learned
             .general
-            .is_some_and(|index| index < candidates.len())
+            .is_some_and(|index| index < direct.len() && direct[index].text() != reading)
     {
         return true;
     }
     cached.is_some_and(|(surface_hash, surface_len)| {
-        candidates.iter().any(|candidate| {
+        direct.iter().any(|candidate| {
             u16::try_from(candidate.text().len()).ok() == Some(surface_len)
                 && text_hash(candidate.text()) == surface_hash
+                && candidate.text() != reading
         })
     })
+}
+
+fn is_opaque_ascii_identifier(raw: &str) -> bool {
+    !raw.is_empty()
+        && raw.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        && raw.bytes().any(|byte| byte.is_ascii_alphabetic())
+        && raw.bytes().any(|byte| byte.is_ascii_digit())
+}
+
+fn classify_conversion_input(session: &Session) -> ConversionInputClass {
+    if session.shifted_ascii && is_opaque_ascii_identifier(session.raw_input.as_str()) {
+        ConversionInputClass::OpaqueAsciiIdentifier
+    } else if !session.shifted_ascii
+        && session
+            .preedit
+            .as_str()
+            .bytes()
+            .any(|byte| byte.is_ascii_alphabetic())
+    {
+        ConversionInputClass::MixedUnresolvedLatin
+    } else {
+        ConversionInputClass::Ordinary
+    }
+}
+
+const fn literal_policy_for(class: ConversionInputClass) -> LiteralPolicy {
+    match class {
+        ConversionInputClass::Ordinary => LiteralPolicy::Ranked,
+        ConversionInputClass::OpaqueAsciiIdentifier => LiteralPolicy::ExactTop1,
+        ConversionInputClass::MixedUnresolvedLatin => LiteralPolicy::ExactOnly,
+    }
+}
+
+/// Converts the table's bounded local completion into a forward-only UTF-8
+/// correction map. Longest common prefix/suffix are exact character
+/// boundaries; a middle insertion/deletion is rejected because Phase 1 maps
+/// only one-to-one replacement runs. The returned vector is transient scratch;
+/// no correction trace is retained in [`Session`].
+fn build_correction_runs(original: &str, corrected: &str) -> Option<Vec<CorrectionRun>> {
+    if original.is_empty() || corrected.is_empty() || original == corrected {
+        return None;
+    }
+    let original_chars: Vec<(usize, char)> = original.char_indices().collect();
+    let corrected_chars: Vec<(usize, char)> = corrected.char_indices().collect();
+    let mut prefix = 0usize;
+    while prefix < original_chars.len()
+        && prefix < corrected_chars.len()
+        && original_chars[prefix].1 == corrected_chars[prefix].1
+    {
+        prefix += 1;
+    }
+    let mut suffix = 0usize;
+    while suffix < original_chars.len().saturating_sub(prefix)
+        && suffix < corrected_chars.len().saturating_sub(prefix)
+        && original_chars[original_chars.len() - 1 - suffix].1
+            == corrected_chars[corrected_chars.len() - 1 - suffix].1
+    {
+        suffix += 1;
+    }
+    let original_prefix_end = original_chars
+        .get(prefix)
+        .map_or(original.len(), |(at, _)| *at);
+    let corrected_prefix_end = corrected_chars
+        .get(prefix)
+        .map_or(corrected.len(), |(at, _)| *at);
+    let original_suffix_start = if suffix == 0 {
+        original.len()
+    } else {
+        original_chars[original_chars.len() - suffix].0
+    };
+    let corrected_suffix_start = if suffix == 0 {
+        corrected.len()
+    } else {
+        corrected_chars[corrected_chars.len() - suffix].0
+    };
+    if original_prefix_end >= original_suffix_start
+        || corrected_prefix_end >= corrected_suffix_start
+    {
+        return None;
+    }
+    let mut runs = Vec::with_capacity(3);
+    if prefix > 0 {
+        runs.push(CorrectionRun::equal(
+            0,
+            u16::try_from(corrected_prefix_end).ok()?,
+            0,
+            u16::try_from(original_prefix_end).ok()?,
+        ));
+    }
+    runs.push(CorrectionRun::replace(
+        u16::try_from(corrected_prefix_end).ok()?,
+        u16::try_from(corrected_suffix_start).ok()?,
+        u16::try_from(original_prefix_end).ok()?,
+        u16::try_from(original_suffix_start).ok()?,
+    ));
+    if suffix > 0 {
+        runs.push(CorrectionRun::equal(
+            u16::try_from(corrected_suffix_start).ok()?,
+            u16::try_from(corrected.len()).ok()?,
+            u16::try_from(original_suffix_start).ok()?,
+            u16::try_from(original.len()).ok()?,
+        ));
+    }
+    Some(runs)
+}
+
+/// Builds the bounded local-completion plans for the exact raw/preedit
+/// snapshot currently in `session`. This is intentionally a pure, transient
+/// operation: conversion/render/commit callers regenerate it from the
+/// admission stamp instead of keeping user text or correction traces in the
+/// long-lived Session clone.
+fn build_local_completion_plans(session: &Session, table: &Table) -> Vec<RawRepairPlan> {
+    let raw = session.raw_input.as_str();
+    let observed = session.preedit.as_str();
+    if session.raw_provenance() != RawProvenanceState::AppendOnly
+        || !session.raw_repair_candidate_possible()
+        || session.scope() != InputScope::Normal
+        || !session.scope_classified()
+        || session.input_method != InputMethod::Romaji
+        || !session.romaji.is_empty()
+        || raw.is_empty()
+        || observed.is_empty()
+    {
+        return Vec::new();
+    }
+    let Ok(completions) = table.plan_local_completions(raw, observed) else {
+        return Vec::new();
+    };
+    let mut plans = Vec::with_capacity(completions.len());
+    for (plan_id, completion) in completions.iter().enumerate() {
+        let corrected = completion.corrected_reading.as_str();
+        let Some(runs) = build_correction_runs(observed, corrected) else {
+            continue;
+        };
+        let Ok(map) = CorrectionMap::new(observed, corrected, &runs) else {
+            continue;
+        };
+        let Ok(plan) = RawRepairPlan::new(
+            u8::try_from(plan_id).unwrap_or(u8::MAX),
+            corrected,
+            map,
+            RepairTier::LocalCompletion,
+        ) else {
+            continue;
+        };
+        plans.push(plan);
+    }
+    plans
+}
+
+fn project_repair_segment(
+    plans: &[RawRepairPlan],
+    original: &str,
+    candidate: &ConversionCandidate,
+    corrected_start: u16,
+    corrected_end: u16,
+) -> Option<(u16, u16)> {
+    let CandidateOrigin::RawRepair { plan_id, .. } = candidate.origin() else {
+        return Some((corrected_start, corrected_end));
+    };
+    let plan = plans.iter().find(|plan| plan.plan_id() == plan_id)?;
+    plan.map()
+        .validate_for_readings(original, plan.corrected_reading())
+        .ok()?;
+    plan.map()
+        .project_corrected_range(corrected_start, corrected_end)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -1773,6 +2182,8 @@ struct CommitSegmentMeta {
     right_id: u16,
     it_words: u8,
     total_words: u8,
+    synthetic_exact: bool,
+    raw_repair: bool,
 }
 
 fn candidate_meta(candidate: &ConversionCandidate) -> CommitSegmentMeta {
@@ -1791,6 +2202,8 @@ fn candidate_meta(candidate: &ConversionCandidate) -> CommitSegmentMeta {
         right_id: segments.last().map_or(0, |segment| segment.right_id),
         it_words,
         total_words,
+        synthetic_exact: candidate.is_synthetic_exact(),
+        raw_repair: candidate.origin() != CandidateOrigin::Direct,
     }
 }
 
@@ -1953,6 +2366,13 @@ fn apply_key(
     if !matches!(action, Some(Action::UndoCommit)) {
         session.disarm_commit_undo();
     }
+    if suppress_idle_space && state == State::Idle && !key.modifiers.ctrl() && !key.modifiers.alt()
+    {
+        // Dual TSF / Electron: the idle peer is not an IME. Eat every key so a
+        // second pipe cannot start a second composition or insert U+3000.
+        out.consumed = true;
+        return Ok(());
+    }
     match action {
         Some(action) => apply_action(
             session_id,
@@ -1967,21 +2387,9 @@ fn apply_key(
         )?,
 
         None if idle_space_commit => {
-            if suppress_idle_space {
-                // A peer connection for this host process is composing or
-                // converting. Absorb the idle Space so one physical key
-                // cannot both insert U+3000 and convert (Electron dual delivery).
-                out.consumed = true;
-            } else {
-                let base_is_full = session.space_width.is_full(session.mode);
-                let is_full = if key.modifiers.shift() {
-                    session.shift_space_behavior.is_full(base_is_full)
-                } else {
-                    base_is_full
-                };
-                out.set_commit(if is_full { "　" } else { " " })?;
-                out.consumed = true;
-            }
+            let is_full = session.idle_space_is_full(key.modifiers.shift());
+            out.set_commit(if is_full { "　" } else { " " })?;
+            out.consumed = true;
         }
 
         // A Ctrl or Alt chord the key map did not claim is an application
@@ -2059,7 +2467,7 @@ fn apply_key(
         services.table,
         services.normalizer,
         services.conversion,
-        services.learning.as_deref(),
+        services.learning,
         scratch,
         out,
     )?;
@@ -2463,6 +2871,15 @@ fn feed_character(
     shifted: bool,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
 ) -> Result<(), Overflow> {
+    let fresh_composition =
+        session.preedit.is_empty() && session.raw_input.is_empty() && session.romaji.is_empty();
+    let append_only_tail = !session.shifted_ascii
+        && session.input_method == InputMethod::Romaji
+        && character.is_ascii()
+        && !shifted
+        && usize::from(session.cursor) == session.preedit.as_str().chars().count()
+        && next_raw_boundary(table, session) == session.raw_input.len()
+        && !(character == '.' && ascii_digit_immediately_before_cursor(session, table));
     let starts_shifted_ascii = session.raw_input.is_empty()
         && session.preedit.is_empty()
         && session.romaji.is_empty()
@@ -2510,6 +2927,7 @@ fn feed_character(
         session.raw_input = raw_input;
         session.cursor = cursor;
         resync_shifted_ascii_from_raw(session, table, scratch)?;
+        session.suppress_raw_provenance();
         return Ok(());
     }
 
@@ -2537,6 +2955,7 @@ fn feed_character(
     }
     let mut preedit = session.preedit.clone();
     let mut cursor = session.cursor;
+    let mut contextual_swap = false;
     if !scratch.is_empty() {
         let previous = if cursor == 0 {
             None
@@ -2551,6 +2970,7 @@ fn feed_character(
             } else {
                 character
             };
+            contextual_swap |= swapped != character;
             emitted.push(swapped)?;
         }
         let at = preedit
@@ -2561,11 +2981,32 @@ fn feed_character(
             .saturating_add(u16::try_from(emitted.as_str().chars().count()).unwrap_or(u16::MAX));
     }
 
+    let (replay_compatible, raw_repair_candidate_possible) = if append_only_tail && !contextual_swap
+    {
+        table
+            .replay(raw_input.as_str())
+            .map_or((false, false), |trace| {
+                let compatible = trace.output() == preedit.as_str()
+                    && trace.pending() == romaji.pending()
+                    && trace.carry_overlap() == romaji.carry_overlap();
+                let repair_candidate_possible =
+                    compatible && trace.raw_passthrough_count() == 1 && trace.pending().is_empty();
+                (compatible, repair_candidate_possible)
+            })
+    } else {
+        (false, false)
+    };
     session.shifted_ascii = shifted_ascii;
     session.raw_input = raw_input;
     session.romaji = romaji;
     session.preedit = preedit;
     session.cursor = cursor;
+    session.set_raw_repair_candidate_possible(raw_repair_candidate_possible);
+    if replay_compatible {
+        session.mark_append_only_raw_feed(fresh_composition);
+    } else {
+        session.suppress_raw_provenance();
+    }
     session.invalidate_prediction();
     Ok(())
 }
@@ -2623,6 +3064,7 @@ fn feed_kana_character(session: &mut Session, character: char) -> Result<(), Ove
     preedit.insert_str(at, mapped.encode_utf8(&mut buf))?;
     session.preedit = preedit;
     session.cursor = session.cursor.saturating_add(1);
+    session.suppress_raw_provenance();
     session.invalidate_prediction();
     Ok(())
 }
@@ -2851,20 +3293,6 @@ fn apply_action(
         }
         Action::Convert => {
             if policy.allows_dictionary_conversion() {
-                // Compact conversion paints one row. A visible or focused
-                // suggestion list is already a candidate popup, so Space must
-                // replace that list with conversion candidates instead of
-                // collapsing it.
-                let expand_from_suggestions =
-                    session.suggestions_visible || session.suggestion_focused;
-                if expand_from_suggestions && !session.shifted_ascii {
-                    adopt_history_completion_reading(
-                        session_id,
-                        session,
-                        prediction_cache,
-                        scratch,
-                    );
-                }
                 session.hide_suggestions();
                 begin_conversion(
                     session_id,
@@ -2878,13 +3306,9 @@ fn apply_action(
                     0,
                     ConversionTrigger {
                         is_space: key.code == KeyCode::Space,
-                        shifted: key.modifiers.shift(),
                     },
                     out,
                 )?;
-                if expand_from_suggestions {
-                    let _ = session.expand_conversion();
-                }
             }
         }
         Action::ConvertPrev => {
@@ -2901,7 +3325,6 @@ fn apply_action(
                     -1,
                     ConversionTrigger {
                         is_space: key.code == KeyCode::Space,
-                        shifted: key.modifiers.shift(),
                     },
                     out,
                 )?;
@@ -2911,6 +3334,7 @@ fn apply_action(
             let _ = session.expand_conversion();
             let index = session.focused_segment();
             session.clear_segment_transform(index);
+            session.clear_selected_raw_repair();
             let next = session.segment_selection(index).saturating_add(1);
             session.set_segment_selection(index, next);
         }
@@ -2918,6 +3342,7 @@ fn apply_action(
             let _ = session.expand_conversion();
             let index = session.focused_segment();
             session.clear_segment_transform(index);
+            session.clear_selected_raw_repair();
             let next = session.segment_selection(index).saturating_sub(1);
             session.set_segment_selection(index, next);
         }
@@ -2925,6 +3350,7 @@ fn apply_action(
             let _ = session.expand_conversion();
             let index = session.focused_segment();
             session.clear_segment_transform(index);
+            session.clear_selected_raw_repair();
             let next = session
                 .segment_selection(index)
                 .saturating_add(CANDIDATE_PAGE_SIZE as i16);
@@ -2934,6 +3360,7 @@ fn apply_action(
             let _ = session.expand_conversion();
             let index = session.focused_segment();
             session.clear_segment_transform(index);
+            session.clear_selected_raw_repair();
             let next = session
                 .segment_selection(index)
                 .saturating_sub(CANDIDATE_PAGE_SIZE as i16);
@@ -2955,11 +3382,12 @@ fn apply_action(
             {
                 out.consumed = false;
             } else {
-                let count = prediction_cache
+                let candidates = prediction_cache
                     .candidates(session_id, session.prediction_generation)
-                    .map_or(0, <[_]>::len);
+                    .unwrap_or_default();
                 let direction = if action == Action::PredictPrev { -1 } else { 1 };
-                if !session.focus_suggestion(direction, count) {
+                let focused = focus_prediction_candidate(session, candidates, direction);
+                if !focused {
                     out.beep = true;
                 }
             }
@@ -2975,21 +3403,35 @@ fn apply_action(
                 out.beep = true;
             }
         }
-        Action::SegmentPrev => session.focus_previous_segment(),
-        Action::SegmentNext => session.focus_next_segment(),
-        Action::SegmentHome => session.focus_first_segment(),
-        Action::SegmentEnd => session.focus_last_segment(),
+        Action::SegmentPrev => {
+            session.suppress_raw_provenance();
+            session.focus_previous_segment();
+        }
+        Action::SegmentNext => {
+            session.suppress_raw_provenance();
+            session.focus_next_segment();
+        }
+        Action::SegmentHome => {
+            session.suppress_raw_provenance();
+            session.focus_first_segment();
+        }
+        Action::SegmentEnd => {
+            session.suppress_raw_provenance();
+            session.focus_last_segment();
+        }
         Action::SegmentShrink => {
+            session.suppress_raw_provenance();
             if !session.resize_focused_segment(false) {
                 out.beep = true;
-            } else if let Some(learning) = services.learning.as_deref() {
+            } else if let Some(learning) = services.learning {
                 learning.suppress_repair_reading(session.preedit.as_str());
             }
         }
         Action::SegmentGrow => {
+            session.suppress_raw_provenance();
             if !session.resize_focused_segment(true) {
                 out.beep = true;
-            } else if let Some(learning) = services.learning.as_deref() {
+            } else if let Some(learning) = services.learning {
                 learning.suppress_repair_reading(session.preedit.as_str());
             }
         }
@@ -3092,15 +3534,33 @@ fn commit_numbered_candidate(
     let selected = session.segment_selection(focused);
     let mut chosen = FixedStr::<MAX_PREEDIT_BYTES>::new();
     let mut chosen_meta = CommitSegmentMeta::default();
+    let mut invalid_mapping = false;
+    let raw_repair_plans = build_local_completion_plans(session, table);
+    let raw_full = !raw_repair_plans.is_empty();
     let options = conversion_options(session, session.carry_right_id(), learning);
     let result = match conversion {
-        Some(service) => with_session_candidates(
-            service,
-            learning,
-            &session.preedit.as_str()[range],
-            options,
-            |candidates| -> Result<Option<i16>, Overflow> {
+        Some(service) => {
+            let reading = if raw_full {
+                session.preedit.as_str()
+            } else {
+                &session.preedit.as_str()[range.clone()]
+            };
+            let full_span = raw_full || (range.start == 0 && range.end == session.preedit.len());
+            let input = if full_span {
+                session_conversion_input(session, reading)
+            } else {
+                ConversionInput::ordinary(reading)
+            };
+            let mut choose = |candidates: &[ConversionCandidate]| -> Result<Option<i16>, Overflow> {
                 if candidates.is_empty() {
+                    return Ok(None);
+                }
+                if raw_full
+                    && candidates.iter().any(|candidate| {
+                        !raw_candidate_mapping_is_valid(&raw_repair_plans, reading, candidate)
+                    })
+                {
+                    invalid_mapping = true;
                     return Ok(None);
                 }
                 let current = selected.rem_euclid(candidates.len() as i16) as usize;
@@ -3112,16 +3572,82 @@ fn commit_numbered_candidate(
                 chosen.push_str(candidate.text())?;
                 chosen_meta = candidate_meta(candidate);
                 Ok(i16::try_from(target).ok())
-            },
-        ),
+            };
+            if full_span {
+                with_session_raw_conversion(
+                    service,
+                    learning,
+                    input,
+                    &raw_repair_plans,
+                    options,
+                    |candidates, _| choose(candidates),
+                )
+            } else {
+                with_session_candidates_input(service, learning, input, options, choose)
+            }
+        }
         None => {
             out.beep = true;
             return Ok(());
         }
     };
 
+    if invalid_mapping {
+        session.suppress_raw_provenance();
+        if commit_converted_segments(
+            session,
+            table,
+            normalizer,
+            conversion,
+            learning,
+            input_history,
+            policy,
+            scratch,
+            out,
+            None,
+        )? {
+            return Ok(());
+        }
+        out.beep = true;
+        return Ok(());
+    }
+
     match result {
         Ok(Ok(Some(_target))) => {
+            if raw_full {
+                let previous_transform = session.segment_transform(focused);
+                session.clear_segment_transform(focused);
+                match commit_candidate_surface(
+                    session,
+                    normalizer,
+                    learning,
+                    input_history,
+                    policy,
+                    scratch,
+                    out,
+                    chosen.as_str(),
+                    chosen_meta,
+                ) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        session.restore_segment_transform(
+                            focused,
+                            previous_transform.0,
+                            previous_transform.1,
+                        );
+                        out.beep = true;
+                    }
+                    Err(overflow) => {
+                        session.restore_segment_transform(
+                            focused,
+                            previous_transform.0,
+                            previous_transform.1,
+                        );
+                        return Err(overflow);
+                    }
+                }
+                return Ok(());
+            }
             // `commit_converted_segments` only honours `candidate_override`
             // once it sees this segment's transform as `None` (a segment
             // transform reading takes priority over a chosen candidate), so
@@ -3294,6 +3820,193 @@ fn append_segment_surface(
     }
 }
 
+/// Exact synthetic candidates preserve the literal surface byte-for-byte.
+/// Raw-repair candidates remain ordinary dictionary surfaces for width policy;
+/// explicit F6-F10 transforms still own their output path.
+fn append_candidate_surface(
+    candidate: &ConversionCandidate,
+    raw_input: &str,
+    transform: SegmentTransform,
+    cycle: u8,
+    normalizer: &Normalizer,
+    mode: Mode,
+    target: &mut FixedStr<MAX_PREEDIT_BYTES>,
+) -> Result<(), Overflow> {
+    if candidate.is_synthetic_exact() && transform == SegmentTransform::None {
+        target.push_str(candidate.text())
+    } else {
+        append_segment_surface(
+            candidate.text(),
+            raw_input,
+            transform,
+            cycle,
+            normalizer,
+            mode,
+            target,
+        )
+    }
+}
+
+fn raw_candidate_mapping_is_valid(
+    plans: &[RawRepairPlan],
+    original: &str,
+    candidate: &ConversionCandidate,
+) -> bool {
+    if candidate.origin() == CandidateOrigin::Direct {
+        return true;
+    }
+    !candidate.segments().is_empty()
+        && candidate.segments().iter().all(|segment| {
+            project_repair_segment(
+                plans,
+                original,
+                candidate,
+                segment.reading_start,
+                segment.reading_end,
+            )
+            .is_some()
+        })
+}
+
+/// Commits one already-selected candidate surface. This is used for a raw
+/// repair candidate whose corrected path may contain several dictionary
+/// segments: candidate text is the authoritative full surface, while the
+/// transient plan set has already validated every corrected segment boundary.
+#[allow(clippy::too_many_arguments)]
+fn commit_candidate_surface(
+    session: &mut Session,
+    normalizer: &Normalizer,
+    learning: Option<&LearningService>,
+    input_history: Option<&InputHistoryService>,
+    policy: ExecutionPolicy,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+    out: &mut OutputBuf,
+    text: &str,
+    meta: CommitSegmentMeta,
+) -> Result<bool, Overflow> {
+    scratch.clear();
+    if meta.synthetic_exact {
+        scratch.push_str(text)?;
+    } else {
+        normalizer.normalize_into(text, session.mode, scratch)?;
+    }
+    out.set_commit(scratch.as_str())?;
+    let learnable = if meta.raw_repair || meta.synthetic_exact {
+        None
+    } else {
+        learning
+    };
+    record_learning(
+        session,
+        learnable,
+        input_history,
+        policy,
+        scratch.as_str(),
+        meta.right_id,
+    );
+    if meta.raw_repair || meta.synthetic_exact {
+        session.record_current_commit_without_cache(
+            scratch.as_str(),
+            meta.right_id,
+            meta.it_words,
+            meta.total_words,
+        );
+    } else {
+        session.record_current_commit(
+            scratch.as_str(),
+            meta.right_id,
+            meta.it_words,
+            meta.total_words,
+        );
+    }
+    session.reset();
+    Ok(true)
+}
+
+/// One-shot raw conversion for Enter/Commit. It keeps direct candidates in
+/// their normal order, validates all repaired segment maps before exposing the
+/// selected surface, and suppresses learning for repaired/exact-literal paths.
+#[allow(clippy::too_many_arguments)]
+fn commit_staged_raw_conversion(
+    session: &mut Session,
+    table: &Table,
+    plans: &[RawRepairPlan],
+    normalizer: &Normalizer,
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    input_history: Option<&InputHistoryService>,
+    policy: ExecutionPolicy,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+    out: &mut OutputBuf,
+) -> Result<bool, Overflow> {
+    let reading = session.preedit.as_str();
+    let input = session_conversion_input(session, reading);
+    let options = conversion_options(session, session.carry_right_id(), learning);
+    let requested = session.segment_selection(session.focused_segment());
+    let mut selected_text = FixedStr::<MAX_PREEDIT_BYTES>::new();
+    let mut selected_meta = CommitSegmentMeta::default();
+    let mut invalid_mapping = false;
+    let result = with_session_raw_conversion(
+        conversion,
+        learning,
+        input,
+        plans,
+        options,
+        |candidates, _| {
+            if candidates.is_empty() {
+                return false;
+            }
+            if candidates
+                .iter()
+                .any(|candidate| !raw_candidate_mapping_is_valid(plans, reading, candidate))
+            {
+                invalid_mapping = true;
+                return false;
+            }
+            let index = requested.rem_euclid(candidates.len() as i16) as usize;
+            let candidate = &candidates[index];
+            if selected_text.push_str(candidate.text()).is_err() {
+                return false;
+            }
+            selected_meta = candidate_meta(candidate);
+            true
+        },
+    )
+    .unwrap_or(false);
+    if invalid_mapping {
+        // A stale or malformed correction map is a repair-only failure. Drop
+        // the repair tier and retry through the ordinary direct conversion
+        // path so the user's original reading remains usable.
+        session.suppress_raw_provenance();
+        return commit_converted_segments(
+            session,
+            table,
+            normalizer,
+            Some(conversion),
+            learning,
+            input_history,
+            policy,
+            scratch,
+            out,
+            None,
+        );
+    }
+    if !result || selected_text.is_empty() {
+        return Ok(false);
+    }
+    commit_candidate_surface(
+        session,
+        normalizer,
+        learning,
+        input_history,
+        policy,
+        scratch,
+        out,
+        selected_text.as_str(),
+        selected_meta,
+    )
+}
+
 /// Materializes and commits every pinned segment. Each unoverridden segment
 /// performs exactly one bounded conversion after the previous slot has been
 /// released, avoiding nested pool locks. Failure is observable as `false` and
@@ -3315,12 +4028,33 @@ fn commit_converted_segments(
         return Ok(false);
     }
 
+    let raw_repair_plans = build_local_completion_plans(session, table);
+    if candidate_override.is_none() && !raw_repair_plans.is_empty() {
+        if let Some(service) = conversion {
+            return commit_staged_raw_conversion(
+                session,
+                table,
+                &raw_repair_plans,
+                normalizer,
+                service,
+                learning,
+                input_history,
+                policy,
+                scratch,
+                out,
+            );
+        }
+    }
+
     scratch.clear();
     let count = session.segment_count();
     let mut context_right_id = session.carry_right_id();
     let mut it_words = 0u8;
     let mut total_words = 0u8;
     let mut transformed = false;
+    let mut synthetic_exact_committed = false;
+    let mut raw_repair_committed = false;
+    let selected_raw_repair_at_start = session.has_selected_raw_repair();
     for index in 0..count {
         let Some(range) = session.segment_range(index) else {
             scratch.clear();
@@ -3334,13 +4068,29 @@ fn commit_converted_segments(
             table,
             session.preedit.as_str(),
             session.raw_input.as_str(),
-            range,
+            range.clone(),
         );
         let (transform, cycle) = session.segment_transform(index);
 
         if transform != SegmentTransform::None {
+            let transform_reading = if matches!(
+                transform,
+                SegmentTransform::Hiragana
+                    | SegmentTransform::Katakana
+                    | SegmentTransform::HalfKatakana
+            ) {
+                if session.segment_count() == 1 {
+                    session.selected_raw_repair_full().unwrap_or(reading)
+                } else {
+                    session
+                        .selected_raw_repair_segment(index)
+                        .unwrap_or(reading)
+                }
+            } else {
+                reading
+            };
             append_segment_surface(
-                reading,
+                transform_reading,
                 raw_segment,
                 transform,
                 cycle,
@@ -3354,18 +4104,24 @@ fn commit_converted_segments(
         }
 
         if let Some(override_candidate) = candidate_override.filter(|item| item.segment == index) {
-            append_segment_surface(
-                override_candidate.text,
-                raw_segment,
-                transform,
-                cycle,
-                normalizer,
-                session.mode,
-                scratch,
-            )?;
+            if override_candidate.meta.synthetic_exact && transform == SegmentTransform::None {
+                scratch.push_str(override_candidate.text)?;
+            } else {
+                append_segment_surface(
+                    override_candidate.text,
+                    raw_segment,
+                    transform,
+                    cycle,
+                    normalizer,
+                    session.mode,
+                    scratch,
+                )?;
+            }
             context_right_id = override_candidate.meta.right_id;
             it_words = it_words.saturating_add(override_candidate.meta.it_words);
             total_words = total_words.saturating_add(override_candidate.meta.total_words);
+            synthetic_exact_committed |= override_candidate.meta.synthetic_exact;
+            raw_repair_committed |= override_candidate.meta.raw_repair;
             continue;
         }
 
@@ -3375,18 +4131,20 @@ fn commit_converted_segments(
         };
         let selection = session.segment_selection(index);
         let options = conversion_options(session, context_right_id, learning);
-        match with_session_candidates(
-            service,
-            learning,
-            reading,
-            options,
-            |candidates| -> Result<Option<CommitSegmentMeta>, Overflow> {
+        let full_span = range.start == 0 && range.end == session.preedit.len();
+        let input = if full_span {
+            session_conversion_input(session, reading)
+        } else {
+            ConversionInput::ordinary(reading)
+        };
+        let mut render_candidate =
+            |candidates: &[ConversionCandidate]| -> Result<Option<CommitSegmentMeta>, Overflow> {
                 if candidates.is_empty() {
                     return Ok(None);
                 }
                 let selected = selection.rem_euclid(candidates.len() as i16) as usize;
-                append_segment_surface(
-                    candidates[selected].text(),
+                append_candidate_surface(
+                    &candidates[selected],
                     raw_segment,
                     transform,
                     cycle,
@@ -3395,12 +4153,28 @@ fn commit_converted_segments(
                     scratch,
                 )?;
                 Ok(Some(candidate_meta(&candidates[selected])))
-            },
-        ) {
+            };
+        let result = if full_span {
+            with_session_raw_conversion(
+                service,
+                learning,
+                input,
+                &raw_repair_plans,
+                options,
+                |candidates, _| render_candidate(candidates),
+            )
+        } else {
+            with_session_conversion_input(service, learning, input, options, |candidates, _| {
+                render_candidate(candidates)
+            })
+        };
+        match result {
             Ok(Ok(Some(meta))) => {
                 context_right_id = meta.right_id;
                 it_words = it_words.saturating_add(meta.it_words);
                 total_words = total_words.saturating_add(meta.total_words);
+                synthetic_exact_committed |= meta.synthetic_exact;
+                raw_repair_committed |= meta.raw_repair;
             }
             Ok(Err(overflow)) => return Err(overflow),
             Ok(Ok(None)) | Err(_) => {
@@ -3417,7 +4191,11 @@ fn commit_converted_segments(
     // real store on this machine had `と` biased towards `ﾄ` after three such
     // commits. The commit still reaches the developer input history, which is a
     // faithful record of what happened, but never the learning store.
-    let learnable = if transformed { None } else { learning };
+    let learnable = if transformed || synthetic_exact_committed {
+        None
+    } else {
+        learning
+    };
     record_learning(
         session,
         learnable,
@@ -3426,68 +4204,21 @@ fn commit_converted_segments(
         scratch.as_str(),
         context_right_id,
     );
-    session.record_current_commit(scratch.as_str(), context_right_id, it_words, total_words);
+    if raw_repair_committed
+        || synthetic_exact_committed
+        || (selected_raw_repair_at_start && transformed)
+    {
+        session.record_current_commit_without_cache(
+            scratch.as_str(),
+            context_right_id,
+            it_words,
+            total_words,
+        );
+    } else {
+        session.record_current_commit(scratch.as_str(), context_right_id, it_words, total_words);
+    }
     session.reset();
     Ok(true)
-}
-
-/// When Space converts over a visible suggestion list, a history completion
-/// whose reading is longer than the typed prefix must convert that reading.
-/// Otherwise typing `に` after learning `にほんご`→`日本語` shows `日本語` as
-/// 履歴 and Space converts `に` instead of `にほんご`. An exact history hit
-/// for the typed reading stays on that reading so `にほんご` is not replaced
-/// by a longer completion such as `にほんごにゅうりょく`. Dictionary
-/// predictions stay on the typed prefix: prediction must not block conversion
-/// of what was actually entered.
-#[inline(never)]
-fn adopt_history_completion_reading(
-    session_id: SessionId,
-    session: &mut Session,
-    cache: &PredictionCacheWork<'_>,
-    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
-) {
-    let Some(candidates) = cache.candidates(session_id, session.prediction_generation) else {
-        return;
-    };
-    let prefix = session.preedit.as_str();
-    if prefix.is_empty() || !prefix.chars().any(|ch| ('ぁ'..='ゖ').contains(&ch)) {
-        return;
-    }
-    if candidates.iter().any(|candidate| {
-        candidate.source() == PredictionSource::History && candidate.reading() == prefix
-    }) {
-        return;
-    }
-    let index = if session.suggestion_focused {
-        session.selected_suggestion(candidates.len())
-    } else {
-        (!candidates.is_empty()).then_some(0)
-    };
-    let Some(candidate) = index.and_then(|index| candidates.get(index)) else {
-        return;
-    };
-    if candidate.source() != PredictionSource::History {
-        return;
-    }
-    let reading = candidate.reading();
-    if reading == prefix || !reading.starts_with(prefix) {
-        return;
-    }
-    let Ok(cursor) = u16::try_from(reading.chars().count()) else {
-        return;
-    };
-    scratch.clear();
-    if scratch.push_str(reading).is_err() {
-        return;
-    }
-    session.romaji.clear();
-    session.preedit.clear();
-    if session.preedit.push_str(scratch.as_str()).is_err() {
-        scratch.clear();
-        return;
-    }
-    scratch.clear();
-    session.cursor = cursor;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3507,39 +4238,55 @@ fn begin_conversion(
     if session.converting {
         let focused = session.focused_segment();
         session.clear_segment_transform(focused);
+        session.clear_selected_raw_repair();
         let next = session
             .segment_selection(focused)
             .saturating_add(initial_selection.signum());
         session.set_segment_selection(focused, next);
         return Ok(());
     }
+    // Capture the raw/preedit pair before flush.  A completion is admissible
+    // only for a proven append-only Romaji snapshot; pending prefixes are
+    // intentionally left without a plan rather than guessed around.
+    let raw_repair_plans = build_local_completion_plans(session, table);
     flush_pending(session, table, scratch)?;
     if session.preedit.is_empty() {
         out.beep = true;
         return Ok(());
     }
-    let skip_dictionary_lookup = session.shifted_ascii && trigger.is_space && trigger.shifted;
+    // Space in a Shift-started English composition is a word separator, never
+    // a conversion trigger. Skip the glossary lookup conversion would need so
+    // the live casing in `raw_input` is not rewritten to a lowercase reading.
+    let input_class = classify_conversion_input(session);
+    let literal_policy = literal_policy_for(input_class);
+    // Capture the exact source before the optional Shift-Latin preparation
+    // lowercases the visible reading. All later render/commit paths reuse this
+    // admission decision and surface snapshot.
+    session.stage_conversion_input(input_class, literal_policy);
+    let skip_dictionary_lookup = session.shifted_ascii && trigger.is_space;
     let shifted_ascii_dictionary_hit = if skip_dictionary_lookup {
         false
     } else {
-        prepare_shifted_ascii_reading(session, conversion, learning)?
+        prepare_shifted_ascii_reading(session, conversion, input_class)?
     };
     match decide_shift_ascii_convert(ShiftAsciiConvertFacts {
         shifted_ascii: session.shifted_ascii,
         trigger_is_space: trigger.is_space,
-        shift_modifier: trigger.shifted,
         dictionary_hit: shifted_ascii_dictionary_hit,
     }) {
         ShiftAsciiConvertDecision::InsertLiteralSpace => {
             // The temporary English composition owns this key, so keep the
             // space in the same preedit/raw-input provenance rather than
             // committing around it or passing it underneath to the host.
+            // Always ASCII U+0020: idle SpaceWidth must not widen a word gap.
+            session.clear_staged_conversion_input();
             feed_character(session, table, ' ', false, scratch)?;
             return Ok(());
         }
         ShiftAsciiConvertDecision::RejectUnknown => {
             // A non-Space conversion request for an unknown Shift-started ASCII
             // sequence must not reinterpret it as kana.
+            session.clear_staged_conversion_input();
             out.beep = true;
             return Ok(());
         }
@@ -3552,46 +4299,90 @@ fn begin_conversion(
     let initial_context = session.carry_right_id();
     let options = conversion_options(session, initial_context, learning);
     let mut chosen_selection = initial_selection;
+    let mut invalid_mapping = false;
     let initialized = conversion.and_then(|service| {
-        match with_session_conversion(
+        match with_session_raw_conversion(
             service,
             learning,
-            session.preedit.as_str(),
+            session_conversion_input(session, session.preedit.as_str()),
+            &raw_repair_plans,
             options,
             |candidates, _diagnostics| {
                 if candidates.is_empty() {
                     return false;
                 }
-                let learned = learning.map_or(
+                if candidates.iter().any(|candidate| {
+                    candidate.origin() != CandidateOrigin::Direct
+                        && !raw_candidate_mapping_is_valid(
+                            &raw_repair_plans,
+                            session.preedit.as_str(),
+                            candidate,
+                        )
+                }) {
+                    // A malformed/stale map must never make the whole
+                    // conversion disappear. Suppress the repair tier and
+                    // retain the direct prefix as the deterministic fallback.
+                    invalid_mapping = true;
+                }
+                let direct_limit = candidates
+                    .iter()
+                    .position(|candidate| candidate.origin() != CandidateOrigin::Direct)
+                    .unwrap_or(candidates.len());
+                if direct_limit == 0 {
+                    return false;
+                }
+                let preserve_exact_initial =
+                    literal_policy != LiteralPolicy::Ranked && initial_selection == 0;
+                let learned = if preserve_exact_initial {
                     LearningPreference {
                         exact: None,
                         general: None,
-                    },
-                    |service| {
-                        service.preference(
-                            session.preedit.as_str(),
-                            initial_context,
-                            candidates.iter().map(candidate_learning_key),
-                        )
-                    },
-                );
+                    }
+                } else {
+                    learning.map_or(
+                        LearningPreference {
+                            exact: None,
+                            general: None,
+                        },
+                        |service| {
+                            service.preference(
+                                session.preedit.as_str(),
+                                initial_context,
+                                candidates[..direct_limit]
+                                    .iter()
+                                    .map(candidate_learning_key),
+                            )
+                        },
+                    )
+                };
                 let authoritative = has_authoritative_candidate_preference(
                     candidates,
+                    session.preedit.as_str(),
                     initial_selection,
                     cached,
                     learned,
+                    direct_limit,
                 );
-                let preferred =
-                    preferred_candidate_index(candidates, initial_selection, cached, learned);
-                let selected = if !authoritative {
+                let preferred = preferred_candidate_index(
+                    candidates,
+                    session.preedit.as_str(),
+                    initial_selection,
+                    cached,
+                    learned,
+                    direct_limit,
+                );
+                let mut selected = if preserve_exact_initial {
+                    0
+                } else if !authoritative {
                     long_conversion
+                        .filter(|_| direct_limit > 0 && literal_policy == LiteralPolicy::Ranked)
                         .and_then(|service| {
                             service.selection(
                                 long_conversion_owner,
                                 session_id,
                                 session.prediction_generation,
                                 session.preedit.as_str(),
-                                candidates,
+                                &candidates[..direct_limit],
                             )
                         })
                         .unwrap_or(preferred)
@@ -3599,9 +4390,27 @@ fn begin_conversion(
                     preferred
                 };
                 chosen_selection = i16::try_from(selected).unwrap_or(i16::MAX);
+                if selected >= direct_limit {
+                    selected = 0;
+                    chosen_selection = 0;
+                }
                 let candidate = &candidates[selected];
                 for segment in candidate.segments() {
-                    if segments.push(*segment).is_err() {
+                    let mut mapped = *segment;
+                    if candidate.origin() != CandidateOrigin::Direct {
+                        let Some((start, end)) = project_repair_segment(
+                            &raw_repair_plans,
+                            session.preedit.as_str(),
+                            candidate,
+                            segment.reading_start,
+                            segment.reading_end,
+                        ) else {
+                            return false;
+                        };
+                        mapped.reading_start = start;
+                        mapped.reading_end = end;
+                    }
+                    if segments.push(mapped).is_err() {
                         return false;
                     }
                 }
@@ -3613,6 +4422,9 @@ fn begin_conversion(
             Err(ConvertFailure::Conversion(_)) => None,
         }
     });
+    if invalid_mapping {
+        session.suppress_raw_provenance();
+    }
     if !matches!(initialized, Some(true)) || !session.set_segments(segments.as_slice()) {
         session.cancel_conversion();
         out.beep = true;
@@ -3633,7 +4445,7 @@ fn begin_conversion(
 fn prepare_shifted_ascii_reading(
     session: &mut Session,
     conversion: Option<&ConversionService>,
-    learning: Option<&LearningService>,
+    input_class: ConversionInputClass,
 ) -> Result<bool, Overflow> {
     if !session.shifted_ascii || session.raw_input.is_empty() {
         return Ok(false);
@@ -3642,22 +4454,27 @@ fn prepare_shifted_ascii_reading(
     for character in session.raw_input.as_str().chars() {
         reading.push(character.to_ascii_lowercase())?;
     }
-    let Some(service) = conversion else {
-        return Ok(false);
-    };
-    let options = conversion_options(session, session.carry_right_id(), learning);
-    let has_dictionary_candidate =
-        with_session_candidates(service, learning, reading.as_str(), options, |candidates| {
-            candidates.iter().any(|candidate| {
-                candidate
-                    .segments()
-                    .iter()
-                    .any(|segment| segment.flags.contains(EntryFlags::IT))
+    let can_convert = input_class == ConversionInputClass::OpaqueAsciiIdentifier
+        || conversion
+            .and_then(|service| {
+                let options = conversion_options(session, session.carry_right_id(), None);
+                with_session_candidates(service, None, reading.as_str(), options, |candidates| {
+                    candidates.iter().any(|candidate| {
+                        candidate
+                            .segments()
+                            .last()
+                            .map(|segment| segment.reading_end)
+                            == u16::try_from(reading.len()).ok()
+                            && candidate
+                                .segments()
+                                .iter()
+                                .all(|segment| segment.flags.contains(EntryFlags::IT))
+                    })
+                })
+                .ok()
             })
-        })
-        .ok()
-        .unwrap_or(false);
-    if !has_dictionary_candidate {
+            .unwrap_or(false);
+    if !can_convert {
         return Ok(false);
     }
 
@@ -3713,6 +4530,10 @@ fn build_reconversion(
         .map_err(|_| ErrorCode::TooLarge)?;
     session.cursor =
         u16::try_from(session.preedit.as_str().chars().count()).map_err(|_| ErrorCode::TooLarge)?;
+    // Reconversion replaces host text rather than replaying an append-only
+    // Romaji tail.  Keep that distinction explicit so later conversion
+    // renders can never admit a local raw-repair plan for the recovered text.
+    session.suppress_raw_provenance();
 
     begin_conversion(
         SessionId::default(),
@@ -3752,6 +4573,15 @@ fn apply_transform(
     transform: SegmentTransform,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
+    let keep_selected_repair = matches!(
+        transform,
+        SegmentTransform::Hiragana | SegmentTransform::Katakana | SegmentTransform::HalfKatakana
+    ) && session.has_selected_raw_repair();
+    if keep_selected_repair {
+        session.suppress_raw_provenance_preserve_selected();
+    } else {
+        session.suppress_raw_provenance();
+    }
     if !session.converting {
         flush_pending(session, table, scratch)?;
         if session.preedit.is_empty() {
@@ -3815,6 +4645,7 @@ fn apply_backspace(
     table: &Table,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
 ) -> Result<(), Overflow> {
+    session.suppress_raw_provenance();
     if session.shifted_ascii {
         let cursor = usize::from(session.cursor);
         if cursor == 0 {
@@ -3894,6 +4725,7 @@ fn apply_delete_forward(
     table: &Table,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
 ) -> Result<(), Overflow> {
+    session.suppress_raw_provenance();
     if session.shifted_ascii {
         let cursor = usize::from(session.cursor);
         if let Some(at) = session.raw_input.byte_index(cursor) {
@@ -3927,6 +4759,7 @@ fn move_caret(
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     movement: CaretMove,
 ) -> Result<(), Overflow> {
+    session.suppress_raw_provenance();
     if session.shifted_ascii {
         let end = u16::try_from(session.raw_input.as_str().chars().count()).unwrap_or(u16::MAX);
         session.cursor = match movement {
@@ -4014,18 +4847,28 @@ fn commit_pending(
     // reading. Fall through to the normalized original text and finish
     // the commit deterministically.
     scratch.clear();
-    normalizer.normalize_into(session.preedit.as_str(), session.mode, scratch)?;
+    let preserve_exact = session.literal_policy() != LiteralPolicy::Ranked
+        && session.staged_exact_surface_matches_current();
+    if preserve_exact {
+        scratch.push_str(session.conversion_exact_surface())?;
+    } else {
+        normalizer.normalize_into(session.preedit.as_str(), session.mode, scratch)?;
+    }
     if !scratch.is_empty() {
         out.set_commit(scratch.as_str())?;
         record_learning(
             session,
-            learning,
+            if preserve_exact { None } else { learning },
             input_history,
             policy,
             scratch.as_str(),
             0,
         );
-        session.record_current_commit(scratch.as_str(), 0, 0, 0);
+        if preserve_exact {
+            session.record_current_commit_without_cache(scratch.as_str(), 0, 0, 0);
+        } else {
+            session.record_current_commit(scratch.as_str(), 0, 0, 0);
+        }
     }
     session.reset();
     Ok(())
@@ -4185,11 +5028,27 @@ fn focus_prediction_after_refresh(
     let Some(candidates) = cache.candidates(session_id, session.prediction_generation) else {
         return;
     };
-    if session.focus_suggestion(direction, candidates.len()) {
+    if focus_prediction_candidate(session, candidates, direction) {
         // The explicit navigation key was initially evaluated before the
         // bounded retry completed. A successful retry makes that same key a
         // real focus transition rather than a misleading beep.
         out.beep = false;
+    }
+}
+
+fn focus_prediction_candidate(
+    session: &mut Session,
+    candidates: &[crate::prediction::PredictionCandidate],
+    direction: i16,
+) -> bool {
+    if direction >= 0 && !session.suggestion_focused {
+        let first_distinct = candidates
+            .iter()
+            .position(|candidate| candidate.surface() != session.preedit.as_str())
+            .unwrap_or(0);
+        session.focus_suggestion_at(first_distinct, candidates.len())
+    } else {
+        session.focus_suggestion(direction, candidates.len())
     }
 }
 
@@ -4565,6 +5424,177 @@ fn render_preedit(
     Ok(())
 }
 
+/// Renders a raw-repair conversion as one authoritative candidate surface.
+/// Corrected candidates may have more than one bunsetsu segment, while the
+/// engine's ordinary per-segment renderer only has the original-reading
+/// boundaries. Re-running the one-slot raw service here preserves the full
+/// candidate list and selected surface without dropping a corrected segment.
+#[allow(clippy::too_many_arguments)]
+fn render_staged_raw_repair(
+    session: &mut Session,
+    table: &Table,
+    plans: &[RawRepairPlan],
+    normalizer: &Normalizer,
+    conversion: &ConversionService,
+    learning: Option<&LearningService>,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+    out: &mut OutputBuf,
+) -> Result<bool, Overflow> {
+    let reading = session.preedit.as_str();
+    let input = session_conversion_input(session, reading);
+    let options = conversion_options(session, session.carry_right_id(), learning);
+    let focused = session.focused_segment();
+    let requested = session.segment_selection(focused);
+    let mut selected = 0usize;
+    let mut rendered_chars = 0usize;
+    let mut invalid_mapping = false;
+    let mut selected_plan_id = None;
+    let mut selected_segment_ends = [0u16; MAX_SEGMENTS];
+    let mut selected_segment_count = 0usize;
+    let result = with_session_raw_conversion(
+        conversion,
+        learning,
+        input,
+        plans,
+        options,
+        |candidates, _| {
+            if candidates.is_empty() {
+                return false;
+            }
+            if candidates
+                .iter()
+                .any(|candidate| !raw_candidate_mapping_is_valid(plans, reading, candidate))
+            {
+                invalid_mapping = true;
+                return false;
+            }
+            selected = requested.rem_euclid(candidates.len() as i16) as usize;
+            scratch.clear();
+            let candidate = &candidates[selected];
+            if append_candidate_surface(
+                candidate,
+                "",
+                SegmentTransform::None,
+                0,
+                normalizer,
+                session.mode,
+                scratch,
+            )
+            .is_err()
+            {
+                return false;
+            }
+            rendered_chars = scratch.as_str().chars().count();
+            selected_plan_id = match candidate.origin() {
+                CandidateOrigin::RawRepair { plan_id, .. } => {
+                    selected_segment_count = candidate.segments().len();
+                    if selected_segment_count > MAX_SEGMENTS {
+                        return false;
+                    }
+                    for (index, segment) in candidate.segments().iter().enumerate() {
+                        selected_segment_ends[index] = segment.reading_end;
+                    }
+                    Some(plan_id)
+                }
+                CandidateOrigin::Direct => {
+                    selected_segment_count = 0;
+                    None
+                }
+            };
+            out.begin_preedit();
+            if out
+                .push_segment(scratch.as_str(), UnderlineKind::Focused)
+                .is_err()
+            {
+                return false;
+            }
+            if out
+                .begin_conversion_candidates(
+                    session.conversion_presentation(),
+                    u16::try_from(selected).unwrap_or(u16::MAX),
+                    CANDIDATE_PAGE_SIZE as u16,
+                )
+                .is_err()
+            {
+                return false;
+            }
+            for candidate in candidates {
+                scratch.clear();
+                if append_candidate_surface(
+                    candidate,
+                    "",
+                    SegmentTransform::None,
+                    0,
+                    normalizer,
+                    session.mode,
+                    scratch,
+                )
+                .is_err()
+                {
+                    return false;
+                }
+                if out
+                    .push_candidate(scratch.as_str(), candidate.annotation())
+                    .is_err()
+                {
+                    return false;
+                }
+            }
+            if let Some(entry_index) = candidate.system_entry_index() {
+                publish_system_candidate_detail(conversion, entry_index, reading, out);
+            }
+            true
+        },
+    )
+    .unwrap_or(false);
+    if invalid_mapping {
+        // The correction map is repair metadata, not a reason to hide the
+        // ordinary direct conversion. Once the repair tier is suppressed,
+        // the regular renderer publishes the direct prefix only.
+        session.suppress_raw_provenance();
+        return render_converted_segments(
+            session,
+            table,
+            normalizer,
+            Some(conversion),
+            learning,
+            scratch,
+            out,
+        );
+    }
+    if !result {
+        return Ok(false);
+    }
+    if let Some(plan_id) = selected_plan_id {
+        let Some(corrected_snapshot) = plans
+            .iter()
+            .find(|plan| plan.plan_id() == plan_id)
+            .map(|plan| plan.corrected_reading())
+        else {
+            session.clear_selected_raw_repair();
+            return Ok(false);
+        };
+        let mut corrected = FixedStr::<MAX_PREEDIT_BYTES>::new();
+        if corrected.push_str(corrected_snapshot).is_err() {
+            session.clear_selected_raw_repair();
+            return Ok(false);
+        }
+        if !session.stage_selected_raw_repair(
+            plan_id,
+            corrected.as_str(),
+            &selected_segment_ends[..selected_segment_count],
+        ) {
+            session.clear_selected_raw_repair();
+            return Ok(false);
+        }
+    } else {
+        session.clear_selected_raw_repair();
+    }
+    session.set_segment_selection(focused, i16::try_from(selected).unwrap_or(i16::MAX));
+    out.set_cursor(u32::try_from(rendered_chars).unwrap_or(u32::MAX));
+    Ok(true)
+}
+
 /// Renders each pinned segment independently. Only the focused segment owns a
 /// candidate table; every other segment keeps its own selection and underline.
 /// Returning `false` is a terminal, recoverable conversion-service failure.
@@ -4579,6 +5609,23 @@ fn render_converted_segments(
 ) -> Result<bool, Overflow> {
     if session.segment_count() == 0 {
         return Ok(false);
+    }
+
+    let raw_repair_plans = build_local_completion_plans(session, table);
+    if !raw_repair_plans.is_empty() {
+        let Some(service) = conversion else {
+            return Ok(false);
+        };
+        return render_staged_raw_repair(
+            session,
+            table,
+            &raw_repair_plans,
+            normalizer,
+            service,
+            learning,
+            scratch,
+            out,
+        );
     }
 
     out.begin_preedit();
@@ -4609,7 +5656,7 @@ fn render_converted_segments(
             table,
             session.preedit.as_str(),
             session.raw_input.as_str(),
-            range,
+            range.clone(),
         );
         let (transform, cycle) = session.segment_transform(index);
         let underline = if index == focused_segment {
@@ -4619,9 +5666,25 @@ fn render_converted_segments(
         };
 
         if transform != SegmentTransform::None {
+            let transform_reading = if matches!(
+                transform,
+                SegmentTransform::Hiragana
+                    | SegmentTransform::Katakana
+                    | SegmentTransform::HalfKatakana
+            ) {
+                if session.segment_count() == 1 {
+                    session.selected_raw_repair_full().unwrap_or(reading)
+                } else {
+                    session
+                        .selected_raw_repair_segment(index)
+                        .unwrap_or(reading)
+                }
+            } else {
+                reading
+            };
             scratch.clear();
             append_segment_surface(
-                reading,
+                transform_reading,
                 raw_segment,
                 transform,
                 cycle,
@@ -4640,60 +5703,77 @@ fn render_converted_segments(
         };
         let requested_selection = session.segment_selection(index);
         let options = conversion_options(session, context_right_id, learning);
-        let rendered = with_session_candidates(
-            service,
-            learning,
-            reading,
-            options,
-            |candidates| -> Result<Option<(i16, usize, CommitSegmentMeta)>, Overflow> {
-                if candidates.is_empty() {
-                    return Ok(None);
-                }
-                let selected = requested_selection.rem_euclid(candidates.len() as i16) as usize;
-                scratch.clear();
-                append_segment_surface(
-                    candidates[selected].text(),
-                    raw_segment,
-                    SegmentTransform::None,
-                    0,
-                    normalizer,
-                    session.mode,
-                    scratch,
+        let full_span = range.start == 0 && range.end == session.preedit.len();
+        let input = if full_span {
+            session_conversion_input(session, reading)
+        } else {
+            ConversionInput::ordinary(reading)
+        };
+        let mut render_candidates = |candidates: &[ConversionCandidate]| -> Result<
+            Option<(i16, usize, CommitSegmentMeta)>,
+            Overflow,
+        > {
+            if candidates.is_empty() {
+                return Ok(None);
+            }
+            let selected = requested_selection.rem_euclid(candidates.len() as i16) as usize;
+            scratch.clear();
+            append_candidate_surface(
+                &candidates[selected],
+                raw_segment,
+                SegmentTransform::None,
+                0,
+                normalizer,
+                session.mode,
+                scratch,
+            )?;
+            let rendered_chars = scratch.as_str().chars().count();
+            out.push_segment(scratch.as_str(), underline)?;
+
+            if index == focused_segment {
+                out.begin_conversion_candidates(
+                    session.conversion_presentation(),
+                    u16::try_from(selected).map_err(|_| Overflow)?,
+                    CANDIDATE_PAGE_SIZE as u16,
                 )?;
-                let rendered_chars = scratch.as_str().chars().count();
-                out.push_segment(scratch.as_str(), underline)?;
-
-                if index == focused_segment {
-                    out.begin_conversion_candidates(
-                        session.conversion_presentation(),
-                        u16::try_from(selected).map_err(|_| Overflow)?,
-                        CANDIDATE_PAGE_SIZE as u16,
+                for candidate in candidates {
+                    scratch.clear();
+                    append_candidate_surface(
+                        candidate,
+                        raw_segment,
+                        SegmentTransform::None,
+                        0,
+                        normalizer,
+                        session.mode,
+                        scratch,
                     )?;
-                    for candidate in candidates {
-                        scratch.clear();
-                        append_segment_surface(
-                            candidate.text(),
-                            raw_segment,
-                            SegmentTransform::None,
-                            0,
-                            normalizer,
-                            session.mode,
-                            scratch,
-                        )?;
-                        out.push_candidate(scratch.as_str(), candidate.annotation())?;
-                    }
-                    if let Some(entry_index) = candidates[selected].system_entry_index() {
-                        publish_system_candidate_detail(service, entry_index, reading, out);
-                    }
+                    out.push_candidate(scratch.as_str(), candidate.annotation())?;
                 }
+                if let Some(entry_index) = candidates[selected].system_entry_index() {
+                    publish_system_candidate_detail(service, entry_index, reading, out);
+                }
+            }
 
-                Ok(Some((
-                    i16::try_from(selected).map_err(|_| Overflow)?,
-                    rendered_chars,
-                    candidate_meta(&candidates[selected]),
-                )))
-            },
-        );
+            Ok(Some((
+                i16::try_from(selected).map_err(|_| Overflow)?,
+                rendered_chars,
+                candidate_meta(&candidates[selected]),
+            )))
+        };
+        let rendered = if full_span {
+            with_session_raw_conversion(
+                service,
+                learning,
+                input,
+                &raw_repair_plans,
+                options,
+                |candidates, _| render_candidates(candidates),
+            )
+        } else {
+            with_session_conversion_input(service, learning, input, options, |candidates, _| {
+                render_candidates(candidates)
+            })
+        };
 
         match rendered {
             Ok(Ok(Some((selected, rendered_chars, meta)))) => {
@@ -4875,6 +5955,927 @@ mod tests {
         Dispatcher::new_with_conversion(conversion_fixture()).expect("shipped defaults")
     }
 
+    fn raw_repair_conversion_dispatcher() -> Dispatcher {
+        let source = concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "なぜか\tなぜか\t0\t0\t100\t100\t\tlocal completion\n",
+            "ないか\t内科\t0\t0\t120\t120\t\tcompound segment\n",
+            "にいく\tに行く\t0\t0\t120\t120\t\tcompound segment\n",
+        );
+        let entries = dictc::parse_entries("raw-repair-dispatch.tsv", source).expect("entries");
+        let matrix = dictc::parse_connection(
+            "raw-repair-dispatch-matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let image = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("image")
+                .into_boxed_slice(),
+        );
+        Dispatcher::new_with_conversion(Arc::new(
+            ConversionService::from_static_bytes(image).expect("conversion fixture"),
+        ))
+        .expect("shipped defaults")
+    }
+
+    #[test]
+    fn phase1_session_and_dispatcher_layout_stay_small_for_worker_stack() {
+        let session_bytes = std::mem::size_of::<Session>();
+        let dispatcher_bytes = std::mem::size_of::<Dispatcher>();
+        println!("Session={session_bytes} Dispatcher={dispatcher_bytes}");
+        assert!(
+            session_bytes <= 16 * 1024,
+            "Session grew to {session_bytes} bytes"
+        );
+        assert!(
+            dispatcher_bytes <= 4 * 1024,
+            "Dispatcher grew to {dispatcher_bytes} bytes"
+        );
+    }
+
+    #[test]
+    fn local_raw_completion_candidates_stay_direct_first_and_commit_repair() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "nazka", &mut out);
+        assert_eq!(out.preedit_text(), "なzか");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        assert_eq!(out.selected_candidate(), Some(0));
+        assert_eq!(out.candidate(0).map(|(text, _)| text), Some("なzか"));
+        let live = dispatcher.sessions.get(session).expect("live conversion");
+        assert_eq!(
+            live.conversion_input_class(),
+            ConversionInputClass::MixedUnresolvedLatin
+        );
+        assert_eq!(live.literal_policy(), LiteralPolicy::ExactOnly);
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .any(|text| text == "なぜか"));
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        assert_eq!(out.selected_candidate(), Some(1));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("なぜか"));
+        assert!(dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .cached_surface_fingerprint("なzか")
+            .is_none());
+
+        type_word(&mut dispatcher, session, "naikniiku", &mut out);
+        assert_eq!(out.preedit_text(), "ないkにいく");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        assert_eq!(out.candidate(0).map(|(text, _)| text), Some("ないkにいく"));
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .any(|text| text.contains("内科")));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("内科に行く"));
+    }
+
+    #[test]
+    fn identical_runtime_snapshot_before_each_key_preserves_raw_admission() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-runtime.exe");
+        let preferences = Preferences::default();
+        let profiles = Arc::<[AppProfile]>::from([]);
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+
+        for character in "nazka".chars() {
+            dispatcher
+                .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+                .expect("identical runtime snapshot");
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("live session")
+                .raw_provenance(),
+            RawProvenanceState::AppendOnly
+        );
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+            .expect("identical runtime snapshot before conversion");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .any(|text| text == "なぜか"));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+
+        for character in "naikniiku".chars() {
+            dispatcher
+                .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+                .expect("identical runtime snapshot");
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::clone(&profiles))
+            .expect("identical runtime snapshot before conversion");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .any(|text| text.contains("内科")));
+    }
+
+    #[test]
+    fn changed_runtime_input_support_suppresses_raw_repair() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-runtime-change.exe");
+        let preferences = Preferences::default();
+        let profiles = Arc::<[AppProfile]>::from([]);
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "nazka", &mut out);
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("live session")
+                .raw_provenance(),
+            RawProvenanceState::AppendOnly
+        );
+
+        let changed = Preferences {
+            input_support: sakura_core::InputSupport {
+                enabled: false,
+                ..preferences.input_support
+            },
+            ..preferences
+        };
+        dispatcher
+            .apply_runtime_configuration(changed, profiles)
+            .expect("changed runtime snapshot");
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("live session")
+                .raw_provenance(),
+            RawProvenanceState::Suppressed
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .all(|text| text != "なぜか"));
+    }
+
+    #[test]
+    fn ranked_commit_repair_hints_survive_alongside_raw_plans() {
+        let dispatcher = raw_repair_conversion_dispatcher();
+        let learning = LearningService::memory();
+        learning.learn("なぜか", "なぜか", 0, 0);
+        let hints =
+            learning.collect_commit_repair_readings("なせか", sakura_core::InputSupport::default());
+        assert!(hints.iter().any(|hint| hint.as_str() == "なぜか"));
+
+        let original = "なせか";
+        let corrected = "なぜか";
+        let runs = build_correction_runs(original, corrected).expect("replacement map runs");
+        let map = CorrectionMap::new(original, corrected, &runs).expect("replacement map");
+        let plan = RawRepairPlan::new(0, corrected, map, RepairTier::LocalCompletion)
+            .expect("raw repair plan");
+        let options = ConversionOptions::default();
+        let result = with_session_raw_conversion(
+            dispatcher
+                .conversion
+                .as_deref()
+                .expect("conversion service"),
+            Some(&learning),
+            ConversionInput::ordinary(original),
+            &[plan],
+            options,
+            |candidates, diagnostics| {
+                assert!(candidates.iter().any(|candidate| {
+                    candidate.origin() == CandidateOrigin::Direct && candidate.text() == "なぜか"
+                }));
+                assert_eq!(diagnostics.raw_repair_passes, 1);
+            },
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn caret_and_backspace_edits_suppress_raw_repair_admission() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let caret_session = create_session(&mut dispatcher, &mut out, "raw-repair-caret.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session: caret_session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, caret_session, "nazka", &mut out);
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(caret_session)
+                .expect("caret session")
+                .raw_provenance(),
+            RawProvenanceState::AppendOnly
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: caret_session,
+                key: named_key(KeyCode::Left),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(caret_session)
+                .expect("caret session")
+                .raw_provenance(),
+            RawProvenanceState::Suppressed
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: caret_session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!(
+            (0..out.candidate_count())
+                .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+                .all(|text| text != "なぜか"),
+            "caret movement must not revive a local completion"
+        );
+
+        let backspace_session =
+            create_session(&mut dispatcher, &mut out, "raw-repair-backspace.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session: backspace_session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, backspace_session, "nazka", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: backspace_session,
+                key: named_key(KeyCode::Backspace),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(backspace_session)
+                .expect("backspace session")
+                .raw_provenance(),
+            RawProvenanceState::Suppressed
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: backspace_session,
+                key: char_key('a'),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: backspace_session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!(
+            (0..out.candidate_count())
+                .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+                .all(|text| text != "なぜか"),
+            "backspace/carry edits must remain direct-only"
+        );
+    }
+
+    #[test]
+    fn reconversion_and_segment_resize_suppress_raw_repair_state() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let reconvert_session =
+            create_session(&mut dispatcher, &mut out, "raw-repair-reconvert.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session: reconvert_session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, reconvert_session, "nazka", &mut out);
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(reconvert_session)
+                .expect("reconversion session")
+                .raw_provenance(),
+            RawProvenanceState::AppendOnly
+        );
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::Reconvert {
+                    session: reconvert_session,
+                    text: "なぜか".to_owned(),
+                    preview: false,
+                },
+                &mut out,
+            ),
+            Reply::Output
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(reconvert_session)
+                .expect("reconversion session")
+                .raw_provenance(),
+            RawProvenanceState::Suppressed
+        );
+
+        let mut segmented = segmented_conversion_dispatcher();
+        let segment_session = create_session(&mut segmented, &mut out, "raw-repair-segment.exe");
+        type_word(&mut segmented, segment_session, "kyoudesu", &mut out);
+        segmented.dispatch(
+            &Request::SendKey {
+                session: segment_session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        let selected = segmented
+            .sessions
+            .get_mut(segment_session)
+            .expect("selected segment");
+        assert!(selected.segment_count() >= 2);
+        assert!(selected.stage_selected_raw_repair(0, "きょうです", &[9, 15]));
+        selected.mark_append_only_raw_feed(false);
+        assert!(selected.has_selected_raw_repair());
+        assert_eq!(selected.raw_provenance(), RawProvenanceState::AppendOnly);
+        segmented.dispatch(
+            &Request::SendKey {
+                session: segment_session,
+                key: modified_named_key(KeyCode::Left, Modifiers::SHIFT),
+            },
+            &mut out,
+        );
+        let live = segmented
+            .sessions
+            .get(segment_session)
+            .expect("segment session");
+        assert_eq!(live.raw_provenance(), RawProvenanceState::Suppressed);
+        assert!(!live.has_selected_raw_repair());
+    }
+
+    #[test]
+    fn probe_planning_is_pure_and_matches_apply_raw_repair_consumption() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-probe.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "nazka", &mut out);
+        let before = dispatcher
+            .sessions
+            .get(session)
+            .expect("probe session")
+            .clone();
+        let expected_plans = build_local_completion_plans(&before, &dispatcher.table);
+        assert!(!expected_plans.is_empty());
+        dispatcher.dispatch(
+            &Request::ProbeKey {
+                session,
+                scope: InputScope::Normal,
+                fresh_context: false,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        let after_probe = dispatcher.sessions.get(session).expect("probe session");
+        assert_eq!(after_probe.raw_input, before.raw_input);
+        assert_eq!(after_probe.preedit, before.preedit);
+        assert_eq!(after_probe.raw_provenance(), RawProvenanceState::AppendOnly);
+        assert_eq!(
+            build_local_completion_plans(after_probe, &dispatcher.table),
+            expected_plans,
+            "Probe must use the same pure plan as Apply"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .any(|text| text == "なぜか"));
+    }
+
+    #[test]
+    fn raw_repair_mapping_failure_rejects_only_the_repair_candidate() {
+        let dispatcher = raw_repair_conversion_dispatcher();
+        let original = "なzか";
+        let corrected = "なぜか";
+        let runs = build_correction_runs(original, corrected).expect("replacement map runs");
+        let map = CorrectionMap::new(original, corrected, &runs).expect("replacement map");
+        let plan = RawRepairPlan::new(0, corrected, map, RepairTier::LocalCompletion)
+            .expect("raw repair plan");
+        let mut direct = None;
+        let mut repaired = None;
+        with_session_raw_conversion(
+            dispatcher
+                .conversion
+                .as_deref()
+                .expect("conversion service"),
+            None,
+            ConversionInput::ordinary(original),
+            std::slice::from_ref(&plan),
+            ConversionOptions::default(),
+            |candidates, _| {
+                direct = candidates
+                    .iter()
+                    .find(|candidate| candidate.origin() == CandidateOrigin::Direct)
+                    .cloned();
+                repaired = candidates
+                    .iter()
+                    .find(|candidate| candidate.origin() != CandidateOrigin::Direct)
+                    .cloned();
+            },
+        )
+        .expect("raw conversion");
+        let direct = direct.expect("direct fallback");
+        let repaired = repaired.expect("repaired candidate");
+        assert!(raw_candidate_mapping_is_valid(&[plan], original, &repaired));
+        assert!(!raw_candidate_mapping_is_valid(&[], original, &repaired));
+        assert!(raw_candidate_mapping_is_valid(&[], original, &direct));
+    }
+
+    #[test]
+    fn selected_raw_repair_uses_original_reading_for_f9_and_f10() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        for (name, key, expected) in [
+            ("raw-repair-f10.exe", KeyCode::F10, "nazka"),
+            ("raw-repair-f9.exe", KeyCode::F9, "ｎａｚｋａ"),
+        ] {
+            let session = create_session(&mut dispatcher, &mut out, name);
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            );
+            type_word(&mut dispatcher, session, "nazka", &mut out);
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Space),
+                },
+                &mut out,
+            );
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Down),
+                },
+                &mut out,
+            );
+            assert!(dispatcher
+                .sessions
+                .get(session)
+                .expect("selected raw repair")
+                .has_selected_raw_repair());
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(key),
+                },
+                &mut out,
+            );
+            assert_eq!(
+                out.preedit_text(),
+                expected,
+                "{name} must use original raw input"
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_raw_repair_commit_does_not_advance_learning_generation() {
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        dispatcher.observed_learning_generation = learning.generation();
+        dispatcher.learning = Some(Arc::clone(&learning));
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-learning.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "nazka", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        let generation_before = learning.generation();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("なぜか"));
+        assert_eq!(learning.generation(), generation_before);
+        assert!(dispatcher
+            .sessions
+            .get(session)
+            .expect("raw repair session")
+            .cached_surface_fingerprint("なzか")
+            .is_none());
+    }
+
+    #[test]
+    fn opaque_shift_ascii_exact_top1_keeps_literal_zero_and_never_learns() {
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher = shifted_ascii_english_conversion_dispatcher();
+        dispatcher.observed_learning_generation = learning.generation();
+        dispatcher.learning = Some(Arc::clone(&learning));
+        let mut out = OutputBuf::new();
+        let commit_session = create_session(&mut dispatcher, &mut out, "exact-top1-commit.exe");
+        for character in "ESP32".chars() {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session: commit_session,
+                    key: shifted_char_key(character),
+                },
+                &mut out,
+            );
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: commit_session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        assert_eq!(out.selected_candidate(), Some(0));
+        assert_eq!(out.candidate(0).map(|(text, _)| text), Some("ESP32"));
+        let generation_before = learning.generation();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: commit_session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("ESP32"));
+        assert_eq!(learning.generation(), generation_before);
+        assert!(dispatcher
+            .sessions
+            .get(commit_session)
+            .expect("exact session")
+            .cached_surface_fingerprint("ESP32")
+            .is_none());
+
+        let cancel_session = create_session(&mut dispatcher, &mut out, "exact-top1-cancel.exe");
+        for character in "ESP32".chars() {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session: cancel_session,
+                    key: shifted_char_key(character),
+                },
+                &mut out,
+            );
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: cancel_session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        assert_eq!(out.candidate(0).map(|(text, _)| text), Some("ESP32"));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: cancel_session,
+                key: named_key(KeyCode::Escape),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "ESP32");
+        assert_eq!(learning.generation(), generation_before);
+    }
+
+    #[test]
+    fn local_raw_completion_rejects_normal_or_edited_inputs() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-negative.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        for typed in ["nazeka", "naikaniiku", "naeka", "nazea"] {
+            type_word(&mut dispatcher, session, typed, &mut out);
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Space),
+                },
+                &mut out,
+            );
+            assert!(
+                (0..out.candidate_count())
+                    .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+                    .all(|text| !text.contains("内科")),
+                "unexpected repair for {typed}"
+            );
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Escape),
+                },
+                &mut out,
+            );
+        }
+
+        let session_state = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(session_state.raw_provenance(), RawProvenanceState::Unset);
+    }
+
+    #[test]
+    fn raw_repair_escape_restores_the_original_observed_reading() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-escape.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "nazka", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!((0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+            .any(|text| text == "なぜか"));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Escape),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "なzか");
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_provenance(), RawProvenanceState::Unset);
+    }
+
+    #[test]
+    fn direct_kana_input_never_enters_raw_repair_admission() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        dispatcher
+            .apply_runtime_configuration(
+                Preferences {
+                    input_method: InputMethod::Kana,
+                    ..Preferences::default()
+                },
+                Arc::from([]),
+            )
+            .expect("kana configuration");
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-kana.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        for character in ['な', 'z', 'か'] {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_provenance(), RawProvenanceState::Suppressed);
+    }
+
+    #[test]
+    fn selected_raw_repair_uses_corrected_reading_for_kana_transform() {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "raw-repair-transform.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "nazka", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::F7),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "ナゼカ");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("ナゼカ"));
+
+        type_word(&mut dispatcher, session, "naikniiku", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::F7),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "ナイカニイク");
+    }
+
     fn detail_conversion_fixture() -> Arc<ConversionService> {
         let source = concat!(
             "# license: MIT\n",
@@ -4937,11 +6938,12 @@ mod tests {
 
         conversion
             .with_candidates("ab", ConversionOptions::default(), |candidates| {
-                let compound = candidates
-                    .iter()
-                    .find(|candidate| candidate.text() == "AB")
-                    .expect("compound candidate");
-                assert_eq!(compound.system_entry_index(), None);
+                assert!(
+                    candidates
+                        .iter()
+                        .all(|candidate| candidate.system_entry_index().is_none()),
+                    "a Latin run with no exact whole-token entry must not claim a system ordinal"
+                );
             })
             .expect("compound conversion");
     }
@@ -5043,6 +7045,7 @@ mod tests {
             concat!(
                 "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
                 "\u{304b}\u{306a}\t\u{304b}\u{306a}\t0\t0\t100\t100\tpredict\tequal\n",
+                "\u{304b}\u{306a}\u{306b}\t\u{4eee}\u{540d}\u{5165}\u{529b}\t0\t0\t200\t200\tpredict\tdistinct\n",
             ),
         )
     }
@@ -5057,6 +7060,18 @@ mod tests {
                 "\u{306b}\u{307b}\u{3093}\u{3054}\t\u{65e5}\u{672c}\u{8a9e}\t0\t0\t100\t100\tpredict\tlang\n",
                 "\u{306b}\u{307b}\u{3093}\u{3054}\t\u{306b}\u{307b}\u{3093}\u{3054}\t0\t0\t800\t800\t\tkana\n",
                 "\u{306b}\u{307b}\u{3093}\u{3054}\u{306b}\u{3085}\u{3046}\u{308a}\u{3087}\u{304f}\t\u{65e5}\u{672c}\u{8a9e}\u{5165}\u{529b}\t0\t0\t90\t90\tpredict\tinput\n",
+            ),
+        )
+    }
+
+    fn identity_first_nihongo_conversion() -> Arc<ConversionService> {
+        prediction_conversion_from_source(
+            "identity-first-nihongo.tsv",
+            concat!(
+                "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+                "\u{306b}\t\u{306b}\t0\t0\t500\t500\t\tkana\n",
+                "\u{306b}\u{307b}\u{3093}\u{304c}\t\u{306b}\u{307b}\u{3093}\u{304c}\t0\t0\t100\t100\t\tidentity\n",
+                "\u{306b}\u{307b}\u{3093}\u{304c}\t\u{65e5}\u{672c}\u{8a9e}\t0\t0\t200\t200\t\tword\n",
             ),
         )
     }
@@ -6771,7 +8786,7 @@ mod tests {
         // while the user is still typing. A number there is text, not a
         // shortcut: taking it as a shortcut made `２` + `2` commit the second
         // suggestion instead of producing `２２`.
-        let typing = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        let typing = create_session(&mut dispatcher, &mut out, "microsoft-typing.exe");
         type_word(&mut dispatcher, typing, "kana", &mut out);
         let composed = out.preedit_text().to_owned();
         let suggestion = out.candidate(1).expect("second suggestion").0.to_owned();
@@ -6804,7 +8819,7 @@ mod tests {
 
         // Tab focuses the list, which is exactly when Microsoft IME starts
         // honouring the numbers it draws beside each suggestion.
-        let focused = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        let focused = create_session(&mut dispatcher, &mut out, "microsoft-focused.exe");
         type_word(&mut dispatcher, focused, "kana", &mut out);
         let expected = out.candidate(1).expect("second suggestion").0.to_owned();
         dispatcher.dispatch(
@@ -6833,7 +8848,7 @@ mod tests {
         );
 
         // A slot the focused list does not have stays a recoverable beep.
-        let invalid = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        let invalid = create_session(&mut dispatcher, &mut out, "microsoft-invalid.exe");
         type_word(&mut dispatcher, invalid, "kana", &mut out);
         dispatcher.dispatch(
             &Request::SendKey {
@@ -7384,7 +9399,7 @@ mod tests {
     }
 
     #[test]
-    fn prediction_focus_succeeds_when_candidate_surface_equals_reading() {
+    fn first_prediction_tab_skips_an_identity_candidate() {
         let learning = Arc::new(LearningService::memory());
         let (mut dispatcher, runtime) =
             phase_one_prediction_dispatcher(equal_reading_prediction_conversion(), learning);
@@ -7404,8 +9419,9 @@ mod tests {
             dispatcher.sessions.get(session).unwrap().state(),
             State::Predicting
         );
-        assert_eq!(out.selected_candidate(), Some(0));
-        assert_eq!(out.preedit_text(), reading);
+        assert_eq!(out.selected_candidate(), Some(1));
+        assert_ne!(out.preedit_text(), reading);
+        let distinct = out.preedit_text().to_owned();
 
         dispatcher.dispatch(
             &Request::SendKey {
@@ -7414,12 +9430,86 @@ mod tests {
             },
             &mut out,
         );
-        assert_eq!(out.commit_text(), Some(reading.as_str()));
+        assert_eq!(out.commit_text(), Some(distinct.as_str()));
         assert_eq!(
             dispatcher.sessions.get(session).unwrap().state(),
             State::Idle
         );
         runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn candidate_click_command_commits_the_exact_prediction_index() {
+        let learning = Arc::new(LearningService::memory());
+        let (mut dispatcher, runtime) =
+            phase_one_prediction_dispatcher(equal_reading_prediction_conversion(), learning);
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "prediction-click.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        let clicked = out.candidate(1).expect("distinct prediction").0.to_owned();
+
+        let reply = dispatcher.dispatch(
+            &Request::CommitCandidate {
+                session,
+                revision: 41,
+                candidate_index: 1,
+            },
+            &mut out,
+        );
+
+        assert_eq!(reply, Reply::Output);
+        assert_eq!(out.commit_text(), Some(clicked.as_str()));
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Idle
+        );
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn candidate_click_command_commits_the_exact_conversion_index() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "conversion-click.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        let clicked = out.candidate(1).expect("second conversion").0.to_owned();
+
+        let reply = dispatcher.dispatch(
+            &Request::CommitCandidate {
+                session,
+                revision: 42,
+                candidate_index: 1,
+            },
+            &mut out,
+        );
+
+        assert_eq!(reply, Reply::Output);
+        assert_eq!(out.commit_text(), Some(clicked.as_str()));
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Idle
+        );
     }
 
     #[test]
@@ -7776,10 +9866,10 @@ mod tests {
         );
         assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
         let candidates = out.to_output().candidates.expect("conversion candidates");
-        assert_eq!(candidates.presentation, CandidatePresentation::Expanded);
-        assert!(
-            candidates.visible_range().len() > 1,
-            "Space on a visible suggestion list must keep a conversion page, not a compact row"
+        assert_eq!(
+            candidates.presentation,
+            CandidatePresentation::Compact,
+            "履歴一覧からの Space は、履歴なしの通常変換と同じ compact 経路"
         );
         runtime.stop().expect("prediction worker joins");
     }
@@ -7824,16 +9914,16 @@ mod tests {
         );
         assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
         let candidates = out.to_output().candidates.expect("conversion candidates");
-        assert_eq!(candidates.presentation, CandidatePresentation::Expanded);
-        assert!(
-            candidates.visible_range().len() > 1,
-            "Space on a focused suggestion must keep a conversion page, not a compact row"
+        assert_eq!(
+            candidates.presentation,
+            CandidatePresentation::Compact,
+            "Tab 選択中の Space も通常変換と同じ compact 経路"
         );
         runtime.stop().expect("prediction worker joins");
     }
 
     #[test]
-    fn history_prefix_space_converts_the_learned_completion_reading() {
+    fn history_prefix_space_converts_the_typed_reading_not_the_longer_history() {
         let learning = Arc::new(LearningService::memory());
         learning.learn(
             "\u{306b}\u{307b}\u{3093}\u{3054}",
@@ -7871,11 +9961,10 @@ mod tests {
             State::Converting
         );
         assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
-        assert_eq!(out.preedit_text(), "\u{65e5}\u{672c}\u{8a9e}");
         assert_eq!(
-            out.candidate(0).map(|(text, _)| text),
-            Some("\u{65e5}\u{672c}\u{8a9e}"),
-            "Space on 履歴「日本語」 must convert にほんご, not the typed prefix に"
+            out.preedit_text(),
+            "\u{4e8c}",
+            "prefix Space must convert the typed に, not adopt 履歴「日本語」"
         );
         runtime.stop().expect("prediction worker joins");
     }
@@ -7921,6 +10010,101 @@ mod tests {
             out.candidate(0).map(|(text, _)| text),
             Some("\u{65e5}\u{672c}\u{8a9e}"),
             "typing the full にほんご must convert that reading even when a longer 履歴 exists"
+        );
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn identity_history_suggestion_space_still_converts_the_dictionary_surface() {
+        let learning = Arc::new(LearningService::memory());
+        for _ in 0..3 {
+            learning.learn(
+                "\u{306b}\u{307b}\u{3093}\u{3054}",
+                "\u{306b}\u{307b}\u{3093}\u{3054}",
+                0,
+                0,
+            );
+        }
+        let (mut dispatcher, runtime) =
+            phase_one_prediction_dispatcher(nihongo_history_conversion(), Arc::clone(&learning));
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, session, "nihongo", &mut out);
+        assert_eq!(out.preedit_text(), "\u{306b}\u{307b}\u{3093}\u{3054}");
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+        assert_eq!(
+            out.candidate(0).map(|(text, _)| text),
+            Some("\u{306b}\u{307b}\u{3093}\u{3054}"),
+            "履歴当性 must still appear as a suggestion"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+
+        assert_eq!(out.commit_text(), None, "Space must not confirm ひらがな");
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Converting
+        );
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        assert_eq!(out.preedit_text(), "\u{65e5}\u{672c}\u{8a9e}");
+        assert_eq!(
+            out.candidate(0).map(|(text, _)| text),
+            Some("\u{65e5}\u{672c}\u{8a9e}"),
+            "Space on a 履歴当性 list must convert with the dictionary, not replay にほんご"
+        );
+        let candidates = out.to_output().candidates.expect("conversion candidates");
+        assert_eq!(
+            candidates.presentation,
+            CandidatePresentation::Compact,
+            "履歴一覧があっても通常変換と同じ compact 経路"
+        );
+        runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn identity_dictionary_candidate_is_not_selected_for_history_space() {
+        let learning = Arc::new(LearningService::memory());
+        for _ in 0..3 {
+            learning.learn(
+                "\u{306b}\u{307b}\u{3093}\u{304c}",
+                "\u{306b}\u{307b}\u{3093}\u{304c}",
+                0,
+                0,
+            );
+        }
+        let (mut dispatcher, runtime) = phase_one_prediction_dispatcher(
+            identity_first_nihongo_conversion(),
+            Arc::clone(&learning),
+        );
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        type_word(&mut dispatcher, session, "nihonga", &mut out);
+        assert_eq!(out.preedit_text(), "\u{306b}\u{307b}\u{3093}\u{304c}");
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Suggestion));
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
+        assert_eq!(out.preedit_text(), "\u{65e5}\u{672c}\u{8a9e}");
+        assert_eq!(out.selected_candidate(), Some(1));
+        assert_eq!(
+            out.candidate(usize::from(out.selected_candidate().unwrap_or(0)))
+                .map(|(text, _)| text),
+            Some("\u{65e5}\u{672c}\u{8a9e}"),
+            "identity dictionary entry must not win initial Space conversion"
         );
         runtime.stop().expect("prediction worker joins");
     }
@@ -8028,7 +10212,7 @@ mod tests {
 
         // The decision follows the character immediately before the caret,
         // not just the last character of the composition.
-        let inserted = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        let inserted = create_session(&mut dispatcher, &mut out, "decimal-inserted.exe");
         type_word(&mut dispatcher, inserted, "12", &mut out);
         dispatcher.dispatch(
             &Request::SendKey {
@@ -8055,7 +10239,7 @@ mod tests {
             "1.2"
         );
 
-        let ordinary = create_session(&mut dispatcher, &mut out, "notepad.exe");
+        let ordinary = create_session(&mut dispatcher, &mut out, "decimal-ordinary.exe");
         type_word(&mut dispatcher, ordinary, "a.", &mut out);
         assert_eq!(
             out.preedit_text(),
@@ -9510,6 +11694,61 @@ mod tests {
         assert_eq!(out.commit_text(), Some("　"));
     }
 
+    #[test]
+    fn idle_space_after_an_ascii_commit_stays_halfwidth() {
+        let mut dispatcher = shifted_ascii_english_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+
+        for (index, character) in "Claude".chars().enumerate() {
+            let key = if index == 0 {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("Claude"));
+        assert_eq!(
+            dispatcher.sessions.get(session).expect("session").state(),
+            State::Idle
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert!(out.consumed);
+        assert_eq!(out.commit_text(), Some(" "));
+
+        for (index, character) in "Code".chars().enumerate() {
+            let key = if index == 0 {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("Code"));
+    }
+
     /// The issue #16 finding E keymap fix bound specific named keys in
     /// `[composing]`, `[converting]` and `[predicting]` -- it must not have
     /// widened into "always consume named keys". `[idle]` never binds
@@ -9791,12 +12030,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v16_version_is_rejected() {
-        assert_eq!(PROTOCOL_VERSION, 17, "AI text operations add v17 wire data");
+    fn hello_with_the_previous_v17_version_is_rejected() {
+        assert_eq!(
+            PROTOCOL_VERSION, 18,
+            "candidate click operations add v18 wire data"
+        );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 16 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 17 }, &mut out);
 
         assert_eq!(
             reply,
@@ -9805,8 +12047,11 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v17_version_is_accepted() {
-        assert_eq!(PROTOCOL_VERSION, 17, "AI text operations add v17 wire data");
+    fn hello_with_v18_version_is_accepted() {
+        assert_eq!(
+            PROTOCOL_VERSION, 18,
+            "candidate click operations add v18 wire data"
+        );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
@@ -10215,13 +12460,32 @@ mod tests {
             &mut out,
         );
         assert!(out.consumed);
-        assert_eq!(out.preedit_text(), "Claude");
-        assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
-        let candidates = (0..CANDIDATE_PAGE_SIZE)
-            .filter_map(|index| out.candidate(index).map(|(surface, _)| surface))
-            .collect::<Vec<_>>();
-        assert!(candidates.contains(&"Claude"));
-        assert!(candidates.contains(&"Claude Code"));
+        assert!(!out.beep);
+        assert_eq!(out.preedit_text(), "Claude ");
+        assert_eq!(out.candidate_kind(), None);
+        assert!(
+            !out.preedit_text().contains('\u{3000}'),
+            "English word gaps must stay ASCII space"
+        );
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert_eq!(live.raw_input.as_str(), "Claude ");
+        assert!(live.shifted_ascii, "Space must not end the temporary mode");
+
+        for character in "Code".chars() {
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                &mut out,
+            );
+        }
+        assert_eq!(out.preedit_text(), "Claude Code");
+        assert_eq!(out.candidate_kind(), None);
+        assert!(
+            !out.preedit_text().contains('\u{3000}'),
+            "typed English must not pick up an ideographic space"
+        );
 
         dispatcher.dispatch(
             &Request::SendKey {
@@ -10230,7 +12494,7 @@ mod tests {
             },
             &mut out,
         );
-        assert_eq!(out.commit_text(), Some("Claude"));
+        assert_eq!(out.commit_text(), Some("Claude Code"));
         let live = dispatcher.sessions.get(session).expect("session");
         assert_eq!(live.mode(), Mode::Hiragana);
         assert!(!live.shifted_ascii, "commit must end the temporary mode");
@@ -10363,11 +12627,11 @@ mod tests {
             dispatcher.dispatch(
                 &Request::SendKey {
                     session,
-                    key: named_key(KeyCode::Space),
+                    key: named_key(KeyCode::Henkan),
                 },
                 &mut out,
             );
-            assert!(out.consumed, "Space after Shift+{typed}");
+            assert!(out.consumed, "Henkan after Shift+{typed}");
             assert_eq!(out.preedit_text(), expected, "conversion for {typed}");
             assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
             let candidates = (0..CANDIDATE_PAGE_SIZE)

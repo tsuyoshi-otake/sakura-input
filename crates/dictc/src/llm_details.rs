@@ -865,6 +865,15 @@ pub fn import_release_jsonl(
             ));
         }
 
+        report.accepted_records = report.accepted_records.saturating_add(1);
+        if existing_pairs.contains(&normalized_pair(&record.reading, &record.surface)) {
+            report.suppressed_by_existing_pair =
+                report.suppressed_by_existing_pair.saturating_add(1);
+            report.exact_identity_fill_candidates = report
+                .exact_identity_fill_candidates
+                .saturating_add(target.dictionary_identity.entries.len());
+            continue;
+        }
         let target_entries = target_entries(target, &entry_identities).ok_or_else(|| {
             report.rejections.dictionary_mismatch =
                 report.rejections.dictionary_mismatch.saturating_add(1);
@@ -874,15 +883,6 @@ pub fn import_release_jsonl(
             )
         })?;
         let relations = source_relations(&record.relations);
-        report.accepted_records = report.accepted_records.saturating_add(1);
-        if existing_pairs.contains(&normalized_pair(&record.reading, &record.surface)) {
-            report.suppressed_by_existing_pair =
-                report.suppressed_by_existing_pair.saturating_add(1);
-            report.exact_identity_fill_candidates = report
-                .exact_identity_fill_candidates
-                .saturating_add(target_entries.len());
-            continue;
-        }
         report.validated_unique_terms = report.validated_unique_terms.saturating_add(1);
         for entry in target_entries {
             let identity = (
@@ -1810,6 +1810,50 @@ mod tests {
         assert_eq!(promoted.report.suppressed_by_existing_pair, 1);
         assert_eq!(promoted.report.exact_identity_fill_candidates, 1);
         assert_eq!(promoted.review_outcomes[0].status, ReviewStatus::Held);
+    }
+
+    #[test]
+    fn existing_pair_suppresses_release_pinned_to_an_older_dictionary_identity() {
+        let target = target();
+        let changed_entries = parse_entries(
+            "changed.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+             ようご\t用語\t1\t1\t101\t-\t\t\n",
+        )
+        .unwrap();
+        let existing = SourceDetail {
+            reading: "ようご".into(),
+            surface: "用語".into(),
+            left_id: 1,
+            right_id: 1,
+            description: "current curated detail".into(),
+            relations: Vec::new(),
+        };
+
+        let suppressed = import_release_jsonl(
+            "records.jsonl",
+            &record(&target),
+            std::slice::from_ref(&target),
+            &changed_entries,
+            std::slice::from_ref(&existing),
+        )
+        .expect("the trusted current pair owns the term before old identity matching");
+        assert!(suppressed.details.is_empty());
+        assert_eq!(suppressed.report.accepted_records, 1);
+        assert_eq!(suppressed.report.validated_unique_terms, 0);
+        assert_eq!(suppressed.report.suppressed_by_existing_pair, 1);
+        assert_eq!(suppressed.report.exact_identity_fill_candidates, 1);
+        assert_eq!(suppressed.report.rejections.dictionary_mismatch, 0);
+
+        let error = import_release_jsonl(
+            "records.jsonl",
+            &record(&target),
+            &[target],
+            &changed_entries,
+            &[],
+        )
+        .expect_err("an unowned stale target must still fail closed");
+        assert_eq!(error.report.rejections.dictionary_mismatch, 1);
     }
 
     #[test]

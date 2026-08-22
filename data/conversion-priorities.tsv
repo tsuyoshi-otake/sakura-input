@@ -20,6 +20,11 @@
 # this column is the candidate note the user sees. Developer reasons stay
 # in these `#` comments. A `[calibration]` or `[company]` tag here ships
 # as a visible candidate tag.
+#
+# Cadence vocabulary: the pinned Mozc source carries 月次 and 日次, but no
+# 週次 entry at all (only the personal name 周次). Keep the missing member of
+# that productive series in the curated layer rather than raising the global
+# trim ceiling and admitting every high-cost tail entry.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 あさごはん	朝ご飯	1851	1851	4300	5500	predict	
 いち	1	2044	2044	3639	4839	predict	
@@ -65,6 +70,7 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 してき	指摘	1841	1841	2000	3200	it,predict	
 しゃないきてい	社内規程	1851	1841	3600	4800	predict	
 しゅうぎょうきてい	就業規程	1851	1851	3600	4800	predict	
+しゅうじ	週次	1851	1851	5700	6900	predict	
 しょうひょうしょるい	証憑書類	1851	1851	3600	4800	predict	
 しりあらいず	シリアライズ	1920	1920	2000	3200	it,predict	
 ぜろ	0	2044	2044	2707	3907	predict	

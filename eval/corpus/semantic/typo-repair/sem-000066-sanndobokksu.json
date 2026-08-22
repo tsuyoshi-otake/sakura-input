@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "case_id": "sem-000066-sanndobokksu",
+  "task": "conversion",
+  "family": "typo-repair",
+  "role": "positive",
+  "context": {
+    "left": "",
+    "right": "環境"
+  },
+  "input": {
+    "input_mode": "romaji",
+    "reading": "sanndobokksu",
+    "typing": "sanndobokksu"
+  },
+  "constraints": {
+    "literal_token": false
+  }
+}

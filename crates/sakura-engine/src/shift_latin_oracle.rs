@@ -37,7 +37,7 @@ pub enum DomainEvent {
     Commit,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OracleState {
     pub committed: String,
     pub composing: String,
@@ -47,19 +47,6 @@ pub struct OracleState {
     pub converting: bool,
 }
 
-impl Default for OracleState {
-    fn default() -> Self {
-        Self {
-            committed: String::new(),
-            composing: String::new(),
-            cursor: 0,
-            shift_held_hint: false,
-            english_latched: false,
-            converting: false,
-        }
-    }
-}
-
 impl OracleState {
     pub fn visible(&self) -> String {
         let mut text = self.committed.clone();
@@ -67,6 +54,7 @@ impl OracleState {
         text
     }
 
+    #[allow(dead_code)]
     pub fn composing_or_empty(&self) -> &str {
         &self.composing
     }

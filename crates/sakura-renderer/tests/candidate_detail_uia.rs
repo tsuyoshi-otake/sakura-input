@@ -942,10 +942,19 @@ impl FixtureEngine {
             PipeInstance::create(&pipe_name, &security, true).expect("create first fixture pipe");
         let delete_pipe =
             PipeInstance::create(&pipe_name, &security, false).expect("create delete fixture pipe");
+        let candidate_pipe = PipeInstance::create(&pipe_name, &security, false)
+            .expect("create candidate commit fixture pipe");
         let deleted = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
         let server_deleted = Arc::clone(&deleted);
-        let thread =
-            thread::spawn(move || serve_fixture(pipe, delete_pipe, server_state, server_deleted));
+        let thread = thread::spawn(move || {
+            serve_fixture(
+                pipe,
+                delete_pipe,
+                candidate_pipe,
+                server_state,
+                server_deleted,
+            )
+        });
         Self {
             pipe_name,
             state,
@@ -1036,6 +1045,7 @@ impl FixtureEngine {
         // time out while the notified WatchUi request completes normally.
         let _ = Client::connect_to(&self.pipe_name, Duration::from_millis(100));
         let _ = Client::connect_to(&self.pipe_name, Duration::from_millis(100));
+        let _ = Client::connect_to(&self.pipe_name, Duration::from_millis(100));
         self.thread
             .take()
             .expect("fixture server thread remains owned")
@@ -1055,13 +1065,20 @@ impl Drop for FixtureEngine {
 fn serve_fixture(
     pipe: PipeInstance,
     delete_pipe: PipeInstance,
+    candidate_pipe: PipeInstance,
     state: Arc<(Mutex<UiState>, Condvar)>,
     deleted: DeletedRequests,
 ) {
     let watch_state = Arc::clone(&state);
     let watch_deleted = Arc::clone(&deleted);
     let watch = thread::spawn(move || serve_fixture_connection(pipe, watch_state, watch_deleted));
-    serve_fixture_connection(delete_pipe, state, deleted);
+    let command_state = Arc::clone(&state);
+    let command_deleted = Arc::clone(&deleted);
+    let command = thread::spawn(move || {
+        serve_fixture_connection(delete_pipe, command_state, command_deleted)
+    });
+    serve_fixture_connection(candidate_pipe, state, deleted);
+    command.join().expect("first command fixture must finish");
     watch.join().expect("watch fixture connection must finish");
 }
 
@@ -1102,6 +1119,9 @@ fn serve_fixture_connection(
                     .push((revision, candidate_index));
                 changed.notify_all();
                 Response::HistoryCandidateDeleted { removed: true }
+            }
+            Request::QueueCandidateCommit { .. } => {
+                Response::CandidateCommitQueued { queued: true }
             }
             other => panic!("fixture renderer sent unexpected request: {other:?}"),
         };
@@ -1596,6 +1616,14 @@ fn wait_for_surface_color(window: HWND, expected: COLORREF) -> COLORREF {
         if observed == expected {
             return observed;
         }
+        if observed == COLORREF(CLR_INVALID) {
+            assert!(
+                Instant::now() < deadline,
+                "candidate popup paint was never available"
+            );
+            sleep(Duration::from_millis(20));
+            continue;
+        }
         assert!(
             Instant::now() < deadline,
             "candidate surface never repainted to {expected:?}; last color was {observed:?}"
@@ -1614,11 +1642,6 @@ fn candidate_surface_color(window: HWND) -> COLORREF {
     // SAFETY: balances the successful GetDC above for this exact HWND/DC pair.
     let released = unsafe { ReleaseDC(Some(window), dc) };
     assert_ne!(released, 0, "release candidate popup paint DC");
-    assert_ne!(
-        color,
-        COLORREF(CLR_INVALID),
-        "sample candidate popup surface color"
-    );
     color
 }
 

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "judge_version": "v1",
+  "aggregation_version": 1,
+  "model": "gpt-5.6-luna",
+  "reasoning": "max",
+  "codex_cli_version": "0.147.0",
+  "fail_closed_on_effort_mismatch": true,
+  "no_effort_downgrade": true,
+  "fresh_exec_only": true,
+  "blind_ab": true,
+  "swap_decisive_cases": true,
+  "developer_instructions_file": "developer-instructions.md",
+  "rubric_file": "rubric.md",
+  "schema_file": "result.schema.json",
+  "calibration_schema_file": "calibration.schema.json"
+}

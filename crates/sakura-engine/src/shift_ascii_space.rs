@@ -1,14 +1,16 @@
-//! Domain decision for Space while a Shift-started ASCII composition is live.
+//! Domain decision for conversion while a Shift-started ASCII composition is live.
 //!
-//! The dictionary lookup is an input fact, not part of this decision. Keeping
-//! the rule pure makes the key semantics testable independently from the
-//! conversion implementation and its glossary fixtures.
+//! Space — with or without Shift — is a half-width word separator in that
+//! composition, even when the typed term is in the glossary. Conversion of
+//! the term is the Henkan key, not Space. The dictionary lookup is an input
+//! fact for non-Space triggers only. Keeping the rule pure makes the key
+//! semantics testable independently from the conversion implementation and
+//! its glossary fixtures.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ShiftAsciiConvertFacts {
     pub(crate) shifted_ascii: bool,
     pub(crate) trigger_is_space: bool,
-    pub(crate) shift_modifier: bool,
     pub(crate) dictionary_hit: bool,
 }
 
@@ -25,7 +27,7 @@ pub(crate) fn decide_shift_ascii_convert(
     if !facts.shifted_ascii {
         return ShiftAsciiConvertDecision::Convert;
     }
-    if facts.trigger_is_space && (facts.shift_modifier || !facts.dictionary_hit) {
+    if facts.trigger_is_space {
         return ShiftAsciiConvertDecision::InsertLiteralSpace;
     }
     if facts.dictionary_hit {
@@ -38,5 +40,4 @@ pub(crate) fn decide_shift_ascii_convert(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct ConversionTrigger {
     pub(crate) is_space: bool,
-    pub(crate) shifted: bool,
 }

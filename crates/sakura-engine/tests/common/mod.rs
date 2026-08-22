@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -22,10 +23,26 @@ pub const PATIENT: Duration = Duration::from_secs(5);
 
 const TEST_PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputEngineTest-";
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+static ENGINE_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Windows occasionally aborts this test binary while several owned engine
+/// children start and stop concurrently, even though every pipe and profile
+/// is unique. Serialize real child lifetimes within one integration binary;
+/// separate test binaries still retain their own process-level isolation.
+fn acquire_engine_test_lock() -> MutexGuard<'static, ()> {
+    ENGINE_TEST_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        // The mutex protects no data; it only serializes child lifetimes. A
+        // prior assertion can poison the guard without leaving shared state,
+        // so later tests must still acquire it and report their own result.
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// A process and profile that this test created and therefore may clean up.
 #[derive(Debug)]
 pub struct Engine {
+    _test_lock: MutexGuard<'static, ()>,
     child: Option<Child>,
     pipe_name: String,
     local_app_data: Option<PathBuf>,
@@ -44,8 +61,9 @@ impl Engine {
     /// Unlike the old `running` helper, this never calls `Client::connect()`;
     /// it cannot see or reuse a user's well-known engine.
     pub fn spawn_isolated() -> Engine {
+        let test_lock = acquire_engine_test_lock();
         let identity = TestIdentity::new("ordinary");
-        Self::spawn(identity, PipeBinding::PrivateTest)
+        Self::spawn(identity, PipeBinding::PrivateTest, test_lock)
     }
 
     /// Starts the sole intentional well-known-pipe test owner.
@@ -54,14 +72,19 @@ impl Engine {
     /// normal production name independently. It refuses to proceed if that
     /// pipe has an owner, and sends no protocol request during the check.
     pub fn spawn_well_known_for_appcontainer() -> Engine {
+        let test_lock = acquire_engine_test_lock();
         ensure_well_known_pipe_is_unoccupied();
         let identity = TestIdentity::new("appcontainer");
         let pipe_name = sakura_ipc::pipe_name()
             .expect("the AppContainer test parent can resolve the production pipe name");
-        Self::spawn(identity, PipeBinding::WellKnown(pipe_name))
+        Self::spawn(identity, PipeBinding::WellKnown(pipe_name), test_lock)
     }
 
-    fn spawn(identity: TestIdentity, binding: PipeBinding) -> Engine {
+    fn spawn(
+        identity: TestIdentity,
+        binding: PipeBinding,
+        test_lock: MutexGuard<'static, ()>,
+    ) -> Engine {
         let dictionary = test_dictionary(&identity.local_app_data);
         let pipe_name = binding.name(&identity.pipe_name);
         let mut command = Command::new(env!("CARGO_BIN_EXE_sakura_engine"));
@@ -81,6 +104,7 @@ impl Engine {
             identity.local_app_data.display()
         );
         Engine {
+            _test_lock: test_lock,
             child: Some(child),
             pipe_name,
             local_app_data: Some(identity.local_app_data),
@@ -322,7 +346,7 @@ fn ensure_well_known_pipe_is_unoccupied() {
     }
 }
 
-fn test_dictionary(local_app_data: &Path) -> PathBuf {
+pub fn test_dictionary(local_app_data: &Path) -> PathBuf {
     let directory = local_app_data.join("engine-fixture");
     std::fs::create_dir(&directory).expect("create owned fixture directory");
     let path = directory.join("system.dic");
