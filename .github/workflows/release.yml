@@ -148,7 +148,7 @@ jobs:
             -ExpectedSubject $env:SAKURA_SIGNING_CERT_SUBJECT `
             -Files $files
 
-      - name: Compile installer from signed payload
+      - name: Compile installer from release payload
         shell: pwsh
         run: ./scripts/build-installer.ps1
 
@@ -164,7 +164,7 @@ jobs:
           -ExpectedSubject $env:SAKURA_SIGNING_CERT_SUBJECT
           -Files installer/out/sakura_setup.exe
 
-      - name: Write updater manifest from the signed installer
+      - name: Write updater manifest from the installer
         shell: pwsh
         run: >-
           ./scripts/write-release-manifest.ps1
