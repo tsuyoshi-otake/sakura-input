@@ -31,6 +31,17 @@ const NONE_STATE: u32 = u32::MAX;
 const MAX_LATTICE_NODES: usize = 32_768;
 const MAX_SEARCH_STATES: usize = 65_536;
 const MAX_DICTIONARY_EDGES_PER_READING: usize = 12;
+/// Cross-commit context is deliberately word-sized. It exists to recover a
+/// lexical edge split by an explicit commit, not to replay an unbounded
+/// document prefix on every Space press.
+pub const MAX_CROSS_COMMIT_TAIL_BYTES: usize = 48;
+pub const MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES: usize = 96;
+pub const MAX_CROSS_COMMIT_CURRENT_BYTES: usize = 96;
+/// A one-character tail is usually a particle and supplies too little
+/// lexical evidence to justify replaying text across an explicit commit.
+pub const MIN_CROSS_COMMIT_TAIL_CHARS: usize = 2;
+const MAX_CROSS_COMMIT_LATTICE_NODES: usize = 4_096;
+const MAX_CROSS_COMMIT_SEARCH_STATES: usize = 8_192;
 #[cfg(not(feature = "research-top32"))]
 pub const MAX_CONVERSION_CANDIDATES: usize = MAX_CANDIDATES;
 #[cfg(feature = "research-top32")]
@@ -142,6 +153,99 @@ pub struct ConversionOptions {
     /// Independent aggregate budgets for the optional sequential raw-repair
     /// passes. Ordinary direct conversion does not consume these budgets.
     pub raw_repair_budget: RawRepairBudget,
+}
+
+/// Typed sides of one connection-matrix lookup. Keeping them distinct at the
+/// bridge boundary prevents a previous terminal right ID from being mistaken
+/// for the left ID of a word that actually starts before the commit boundary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LeftContextId(u16);
+
+impl LeftContextId {
+    pub const fn new(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u16 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RightContextId(u16);
+
+impl RightContextId {
+    pub const fn new(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u16 {
+        self.0
+    }
+}
+
+/// A bounded, volatile tail of the immediately preceding committed
+/// conversion. `prefix_cost` is the selected tail path from
+/// `prefix_right_id` through its final lexical edge, excluding its old EOS
+/// connection. A combined tail+current path can therefore be normalized back
+/// into the same cost domain as an ordinary current-only candidate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CrossCommitBridge<'a> {
+    pub tail_reading: &'a str,
+    pub tail_surface: &'a str,
+    pub prefix_right_id: RightContextId,
+    pub prefix_cost: i64,
+}
+
+/// Exact final system edge retained from the selected raw lattice path.
+/// Ranges end at the selected candidate's reading/surface end, so only their
+/// starts need to be carried. The engine slices them while it still owns the
+/// exact commit strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommitBridgeTail {
+    pub reading_start: u16,
+    pub text_start: u16,
+    pub prefix_right_id: RightContextId,
+    pub prefix_cost: i64,
+}
+
+const NO_COMMIT_BRIDGE_ENTRY: u32 = u32::MAX;
+const NO_SYSTEM_ENTRY_INDEX: u32 = u32::MAX;
+
+/// Compact identity for the final raw system edge. Keeping only eight bytes
+/// in each candidate preserves the 128 KiB conversion-worker stack contract;
+/// the mapped dictionary materializes its surface and cost on commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CommitBridgeTailStorage {
+    entry_index: u32,
+    reading_start: u16,
+    prefix_right_id: u16,
+}
+
+impl CommitBridgeTailStorage {
+    const fn new(entry_index: u32, reading_start: u16, prefix_right_id: u16) -> Self {
+        Self {
+            entry_index,
+            reading_start,
+            prefix_right_id,
+        }
+    }
+}
+
+impl Default for CommitBridgeTailStorage {
+    fn default() -> Self {
+        Self {
+            entry_index: NO_COMMIT_BRIDGE_ENTRY,
+            reading_start: 0,
+            prefix_right_id: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BridgeBoundaryKind {
+    SpanningEdge,
+    TypedFrontier,
 }
 
 /// Aggregate limits across all corrected readings in one raw-repair request.
@@ -732,6 +836,21 @@ pub struct ConversionDiagnostics {
     /// Aggregate lattice/search consumption across corrected passes only.
     pub raw_repair_lattice_nodes: usize,
     pub raw_repair_search_states: usize,
+    /// Whether a validated bounded tail was replayed with the current reading.
+    pub cross_commit_bridge_attempted: bool,
+    /// Combined candidates inspected before exact surface/right-ID matching.
+    pub cross_commit_bridge_candidates_examined: usize,
+    /// Ordinary current-only candidates whose cost was improved by the
+    /// combined lexical evidence.
+    pub cross_commit_bridge_candidates_rescored: usize,
+    /// Combined paths backed by a raw dictionary edge spanning the commit.
+    pub cross_commit_bridge_spanning_paths: usize,
+    /// Combined paths whose raw edges end exactly at the commit, carrying an
+    /// alternative typed terminal state together with its retained cost delta.
+    pub cross_commit_bridge_frontier_paths: usize,
+    pub cross_commit_bridge_lattice_nodes: usize,
+    pub cross_commit_bridge_search_states: usize,
+    pub cross_commit_bridge_terminal: Option<ConversionSearchTerminal>,
 }
 
 /// Candidates and their bounded-search terminal condition.
@@ -758,13 +877,23 @@ pub struct ConversionCandidate {
     segments: FixedVec<ConversionSegment, MAX_SEGMENTS>,
     /// Exact system-dictionary provenance, present only for a one-edge system
     /// candidate. Composite and generated candidates deliberately have none.
-    system_entry_index: Option<u32>,
+    system_entry_index: u32,
     /// Set only for a literal candidate injected by an exact literal policy.
     /// It is distinct from the ordinary lossless fallback so callers can
     /// prevent an emergency/raw-preservation result from entering learning.
     synthetic_exact: bool,
     origin: CandidateOrigin,
     path_evidence: PathEvidence,
+    /// Folded from raw path edges while the optional combined pass knows its
+    /// exact reading boundary. Display bunsetsu fusion cannot forge it.
+    bridge_boundary_kind: Option<BridgeBoundaryKind>,
+    /// Exact identity of the final raw system edge, kept separately from the
+    /// fused display segments and materialized only if this candidate commits.
+    commit_bridge_tail: CommitBridgeTailStorage,
+    /// A contextual result is never reused as cost evidence for a later
+    /// bridge. This one-bit terminal marker avoids retaining another i64 cost
+    /// in every candidate.
+    cross_commit_rescored: bool,
     pub cost: i64,
 }
 
@@ -803,7 +932,11 @@ impl ConversionCandidate {
     }
 
     pub const fn system_entry_index(&self) -> Option<u32> {
-        self.system_entry_index
+        if self.system_entry_index == NO_SYSTEM_ENTRY_INDEX {
+            None
+        } else {
+            Some(self.system_entry_index)
+        }
     }
 
     /// Whether this candidate was injected from
@@ -822,6 +955,53 @@ impl ConversionCandidate {
 
     pub const fn path_evidence(&self) -> PathEvidence {
         self.path_evidence
+    }
+
+    pub const fn was_cross_commit_rescored(&self) -> bool {
+        self.cross_commit_rescored
+    }
+
+    /// Materializes bounded bridge evidence from the exact final raw edge.
+    /// Surface text is verified against the selected candidate; no later
+    /// surface lookup is used to guess dictionary provenance.
+    pub fn commit_bridge_tail(&self, dictionary: &Dictionary<'_>) -> Option<CommitBridgeTail> {
+        if self.origin != CandidateOrigin::Direct
+            || self.synthetic_exact
+            || !self.path_evidence.is_system_only()
+            || self.commit_bridge_tail.entry_index == NO_COMMIT_BRIDGE_ENTRY
+        {
+            return None;
+        }
+        let entry = dictionary
+            .entry_at(self.commit_bridge_tail.entry_index as usize)
+            .ok()?;
+        if self.segments.last()?.right_id != entry.right_id {
+            return None;
+        }
+        let mut final_surface = FixedStr::<MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES>::new();
+        dictionary.write_surface(entry, &mut final_surface).ok()?;
+        let prefix = self.text().strip_suffix(final_surface.as_str())?;
+        let text_start = u16::try_from(prefix.len()).ok()?;
+        let connection = connection_cost(
+            dictionary,
+            RightContextId::new(self.commit_bridge_tail.prefix_right_id),
+            LeftContextId::new(entry.left_id),
+        );
+        let prefix_cost = connection + i64::from(entry.word_cost);
+        Some(CommitBridgeTail {
+            reading_start: self.commit_bridge_tail.reading_start,
+            text_start,
+            prefix_right_id: RightContextId::new(self.commit_bridge_tail.prefix_right_id),
+            prefix_cost,
+        })
+    }
+
+    fn bridge_boundary_kind(&self) -> Option<BridgeBoundaryKind> {
+        if self.path_evidence.is_system_only() {
+            self.bridge_boundary_kind
+        } else {
+            None
+        }
     }
 
     /// A corrected pass is admitted only when its segments cover the complete
@@ -958,10 +1138,17 @@ pub struct Converter {
     /// sequential passes never acquire another converter slot or recurse.
     raw_direct_scratch: Vec<ConversionCandidate>,
     raw_repair_scratch: Vec<ConversionCandidate>,
+    /// Current-only candidates retained while one bounded combined pass
+    /// reuses the normal lattice in the same converter slot.
+    cross_commit_scratch: Vec<ConversionCandidate>,
     sequence: u64,
     initial_right_id: u16,
+    /// Present only while materializing the bounded tail+current pass.
+    cross_commit_reading_boundary: Option<usize>,
     lattice_node_budget: usize,
     search_state_budget: usize,
+    cross_commit_lattice_node_budget: usize,
+    cross_commit_search_state_budget: usize,
     /// Alternate readings taken from commit history for the current query.
     /// Cleared on every convert; populated by the engine before convert when
     /// `InputSupport::commit_based` is active.
@@ -991,10 +1178,16 @@ impl Converter {
             // raw-repair scratch it never uses.
             raw_direct_scratch: Vec::new(),
             raw_repair_scratch: Vec::new(),
+            cross_commit_scratch: Vec::with_capacity(
+                MAX_CONVERSION_CANDIDATES + GENERATED_VARIANT_SLACK,
+            ),
             sequence: 0,
             initial_right_id: 0,
+            cross_commit_reading_boundary: None,
             lattice_node_budget: MAX_LATTICE_NODES,
             search_state_budget: MAX_SEARCH_STATES,
+            cross_commit_lattice_node_budget: MAX_CROSS_COMMIT_LATTICE_NODES,
+            cross_commit_search_state_budget: MAX_CROSS_COMMIT_SEARCH_STATES,
             commit_repair_readings: Vec::new(),
             civil_date: None,
             generated: Vec::with_capacity(MAX_GENERATED_SURFACES),
@@ -1036,6 +1229,19 @@ impl Converter {
     #[cfg(any(test, feature = "conversion-test-support"))]
     pub fn set_search_state_budget_for_test(&mut self, budget: usize) {
         self.search_state_budget = budget.min(MAX_SEARCH_STATES);
+    }
+
+    /// Reduces only the optional cross-commit pass. The ordinary conversion
+    /// still has its production arena, allowing fail-closed budget tests to
+    /// prove that current-only reachability is preserved.
+    #[cfg(any(test, feature = "conversion-test-support"))]
+    pub fn set_cross_commit_budgets_for_test(
+        &mut self,
+        lattice_nodes: usize,
+        search_states: usize,
+    ) {
+        self.cross_commit_lattice_node_budget = lattice_nodes.min(MAX_CROSS_COMMIT_LATTICE_NODES);
+        self.cross_commit_search_state_budget = search_states.min(MAX_CROSS_COMMIT_SEARCH_STATES);
     }
 
     #[cfg(any(test, feature = "conversion-test-support"))]
@@ -1221,6 +1427,14 @@ impl Converter {
                 raw_repair_candidates_rejected: 0,
                 raw_repair_lattice_nodes: 0,
                 raw_repair_search_states: 0,
+                cross_commit_bridge_attempted: false,
+                cross_commit_bridge_candidates_examined: 0,
+                cross_commit_bridge_candidates_rescored: 0,
+                cross_commit_bridge_spanning_paths: 0,
+                cross_commit_bridge_frontier_paths: 0,
+                cross_commit_bridge_lattice_nodes: 0,
+                cross_commit_bridge_search_states: 0,
+                cross_commit_bridge_terminal: None,
             },
         })
     }
@@ -1272,6 +1486,284 @@ impl Converter {
         }
     }
 
+    /// Converts the current reading normally, then optionally replays one
+    /// bounded lexical tail in the same slot. The combined pass never emits a
+    /// candidate of its own: it can only lower the cost of an already
+    /// reachable current-only system candidate with the same surface and
+    /// terminal right ID. This preserves current segmentation, provenance,
+    /// learning keys, and lossless fallback semantics.
+    pub fn convert_with_user_dictionary_input_bridge_detailed<'a>(
+        &'a mut self,
+        dictionary: &Dictionary<'_>,
+        user_dictionary: Option<&UserDictionary>,
+        input: ConversionInput<'_>,
+        options: ConversionOptions,
+        bridge: Option<CrossCommitBridge<'_>>,
+    ) -> Result<ConversionResult<'a>, ConversionError> {
+        let direct_diagnostics = {
+            let direct = self.convert_with_user_dictionary_input_detailed(
+                dictionary,
+                user_dictionary,
+                input,
+                options,
+            )?;
+            direct.diagnostics()
+        };
+
+        // An exact user-dictionary entry is an explicit user instruction,
+        // while the bridge is only implicit contextual evidence. Keep the
+        // entire current-only list (including costs and order) unchanged.
+        if self
+            .candidates
+            .iter()
+            .any(|candidate| is_exact_user_candidate(candidate, input.lookup_reading.len()))
+        {
+            return Ok(ConversionResult {
+                candidates: &self.candidates,
+                diagnostics: direct_diagnostics,
+            });
+        }
+
+        let Some(bridge) = bridge.filter(|bridge| {
+            input.class == ConversionInputClass::Ordinary
+                && input.literal_policy == LiteralPolicy::Ranked
+                && !bridge.tail_reading.is_empty()
+                && !bridge.tail_surface.is_empty()
+                && bridge.tail_reading.chars().count() >= MIN_CROSS_COMMIT_TAIL_CHARS
+                && bridge.tail_reading.len() <= MAX_CROSS_COMMIT_TAIL_BYTES
+                && bridge.tail_surface.len() <= MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES
+                && input.lookup_reading.len() <= MAX_CROSS_COMMIT_CURRENT_BYTES
+                && bridge
+                    .tail_reading
+                    .len()
+                    .checked_add(input.lookup_reading.len())
+                    .is_some_and(|len| len <= MAX_PREEDIT_BYTES)
+                && bridge.prefix_cost >= 0
+                && bridge.prefix_cost < i64::MAX
+                && usize::from(bridge.prefix_right_id.raw()) < dictionary.class_count()
+        }) else {
+            return Ok(ConversionResult {
+                candidates: &self.candidates,
+                diagnostics: direct_diagnostics,
+            });
+        };
+
+        let mut combined = FixedStr::<MAX_PREEDIT_BYTES>::new();
+        if combined.push_str(bridge.tail_reading).is_err()
+            || combined.push_str(input.lookup_reading).is_err()
+        {
+            return Ok(ConversionResult {
+                candidates: &self.candidates,
+                diagnostics: direct_diagnostics,
+            });
+        }
+
+        self.cross_commit_scratch.clear();
+        self.cross_commit_scratch
+            .extend(self.candidates.iter().cloned());
+
+        let saved_lattice_budget = self.lattice_node_budget;
+        let saved_search_budget = self.search_state_budget;
+        self.lattice_node_budget = self
+            .lattice_node_budget
+            .min(self.cross_commit_lattice_node_budget);
+        self.search_state_budget = self
+            .search_state_budget
+            .min(self.cross_commit_search_state_budget);
+        let bridge_options = ConversionOptions {
+            initial_right_id: bridge.prefix_right_id.raw(),
+            // Cross-boundary evidence is lexical only. Repair, spelling, and
+            // history hints belong to the current-only pass and are rejected
+            // from this score source even if a future caller installs them.
+            skip_input_repair: true,
+            ..options
+        };
+        let saved_bridge_boundary = self.cross_commit_reading_boundary;
+        self.cross_commit_reading_boundary = Some(bridge.tail_reading.len());
+        let combined_diagnostics = self
+            .convert_with_user_dictionary_detailed(
+                dictionary,
+                None,
+                combined.as_str(),
+                bridge_options,
+            )
+            .map(|result| result.diagnostics());
+        self.cross_commit_reading_boundary = saved_bridge_boundary;
+        self.lattice_node_budget = saved_lattice_budget;
+        self.search_state_budget = saved_search_budget;
+
+        let mut diagnostics = direct_diagnostics;
+        diagnostics.cross_commit_bridge_attempted = true;
+        if let Ok(combined_diagnostics) = combined_diagnostics {
+            diagnostics.cross_commit_bridge_candidates_examined = self.candidates.len();
+            diagnostics.cross_commit_bridge_lattice_nodes = combined_diagnostics.lattice_nodes;
+            diagnostics.cross_commit_bridge_search_states = combined_diagnostics.states_pushed;
+            diagnostics.cross_commit_bridge_terminal = Some(combined_diagnostics.terminal);
+
+            let complete_search = matches!(
+                combined_diagnostics.terminal,
+                ConversionSearchTerminal::SearchExhausted
+                    | ConversionSearchTerminal::CandidateLimitReached
+            );
+            if complete_search {
+                const BRIDGE_CANDIDATE_CAPACITY: usize =
+                    MAX_CONVERSION_CANDIDATES + GENERATED_VARIANT_SLACK;
+                let mut bridge_costs = [i64::MAX; BRIDGE_CANDIDATE_CAPACITY];
+                let mut proposed_costs = [i64::MAX; BRIDGE_CANDIDATE_CAPACITY];
+                for (index, candidate) in self.cross_commit_scratch.iter().enumerate() {
+                    proposed_costs[index] = candidate.cost;
+                }
+
+                // Fold every admissible combined path once into the cheapest
+                // normalized evidence for each current-only candidate. This
+                // is O(K²), with K independently bounded by the candidate
+                // limit, and avoids nested scans during sibling transfer.
+                for combined_candidate in &self.candidates {
+                    if combined_candidate.origin() != CandidateOrigin::Direct
+                        || !combined_candidate.path_evidence().is_system_only()
+                    {
+                        continue;
+                    }
+                    let Some(boundary_kind) = combined_candidate.bridge_boundary_kind() else {
+                        continue;
+                    };
+                    let Some(current_surface) =
+                        combined_candidate.text().strip_prefix(bridge.tail_surface)
+                    else {
+                        continue;
+                    };
+                    if current_surface.is_empty() {
+                        continue;
+                    }
+                    match boundary_kind {
+                        BridgeBoundaryKind::SpanningEdge => {
+                            diagnostics.cross_commit_bridge_spanning_paths = diagnostics
+                                .cross_commit_bridge_spanning_paths
+                                .saturating_add(1);
+                        }
+                        BridgeBoundaryKind::TypedFrontier => {
+                            diagnostics.cross_commit_bridge_frontier_paths = diagnostics
+                                .cross_commit_bridge_frontier_paths
+                                .saturating_add(1);
+                        }
+                    }
+                    let Some(bridge_cost) = combined_candidate.cost.checked_sub(bridge.prefix_cost)
+                    else {
+                        continue;
+                    };
+                    // A negative delta means the combined pass reanalysed the
+                    // retained tail into a cheaper path than the one the user
+                    // actually committed. That is not a calibrated score in
+                    // the current-only domain, so it fails closed.
+                    if bridge_cost < 0 {
+                        continue;
+                    }
+                    let combined_right_id = combined_candidate
+                        .segments()
+                        .last()
+                        .map_or(0, |segment| segment.right_id);
+                    let Some(anchor_index) = self.cross_commit_scratch.iter().position(|current| {
+                        let current_right_id = current
+                            .segments()
+                            .last()
+                            .map_or(0, |segment| segment.right_id);
+                        current.origin() == CandidateOrigin::Direct
+                            && !current.is_synthetic_exact()
+                            && current.path_evidence().is_system_only()
+                            && current.text() == current_surface
+                            && current_right_id == combined_right_id
+                    }) else {
+                        continue;
+                    };
+                    bridge_costs[anchor_index] = bridge_costs[anchor_index].min(bridge_cost);
+                }
+
+                for anchor_index in 0..self.cross_commit_scratch.len() {
+                    let bridge_cost = bridge_costs[anchor_index];
+                    let anchor_cost = self.cross_commit_scratch[anchor_index].cost;
+                    if bridge_cost >= anchor_cost {
+                        continue;
+                    }
+                    proposed_costs[anchor_index] = proposed_costs[anchor_index].min(bridge_cost);
+                    let contextual_gain = anchor_cost - bridge_cost;
+                    let anchor = &self.cross_commit_scratch[anchor_index];
+                    let combined_right_id = anchor
+                        .segments()
+                        .last()
+                        .map_or(0, |segment| segment.right_id);
+                    let current_surface = anchor.text();
+
+                    // Orthographic transfer starts only from the exact kana
+                    // reading the user entered. A contextually helped kanji
+                    // lexeme must not become an anchor that promotes other
+                    // same-ending lexemes merely because their spelling looks
+                    // similar.
+                    if current_surface != input.lookup_reading {
+                        continue;
+                    }
+
+                    // A reviewed lexical edge commonly uses hiragana for an
+                    // inflected ending while the dictionary also carries a
+                    // kanji spelling (ないか / 無いか). Transfer the measured
+                    // contextual gain only to a system candidate that keeps
+                    // the same terminal class, preserves a majority kana
+                    // suffix, and has its own exact full-context path. This
+                    // does not turn unrelated homophones such as 内科 or the
+                    // one-kana overlap 内か into members of the family.
+                    for index in 0..self.cross_commit_scratch.len() {
+                        if index == anchor_index {
+                            continue;
+                        }
+                        let variant = &self.cross_commit_scratch[index];
+                        let variant_right_id = variant
+                            .segments()
+                            .last()
+                            .map_or(0, |segment| segment.right_id);
+                        if variant.origin() != CandidateOrigin::Direct
+                            || variant.is_synthetic_exact()
+                            || !variant.path_evidence().is_system_only()
+                            || variant_right_id != combined_right_id
+                            || !is_contextual_orthographic_sibling(current_surface, variant.text())
+                        {
+                            continue;
+                        }
+                        let full_context_cost = bridge_costs[index];
+                        if full_context_cost == i64::MAX {
+                            continue;
+                        }
+                        let Some(full_context_cost) =
+                            full_context_cost.checked_sub(contextual_gain)
+                        else {
+                            continue;
+                        };
+                        let transferred_cost = full_context_cost.max(bridge_cost.saturating_add(1));
+                        proposed_costs[index] = proposed_costs[index].min(transferred_cost);
+                    }
+                }
+                for (index, candidate) in self.cross_commit_scratch.iter_mut().enumerate() {
+                    if proposed_costs[index] < candidate.cost {
+                        candidate.cost = proposed_costs[index];
+                        candidate.cross_commit_rescored = true;
+                        diagnostics.cross_commit_bridge_candidates_rescored = diagnostics
+                            .cross_commit_bridge_candidates_rescored
+                            .saturating_add(1);
+                    }
+                }
+                self.cross_commit_scratch
+                    .sort_by_key(|candidate| candidate.cost);
+            }
+        }
+
+        // Whether the optional pass succeeded, exhausted a budget, or failed
+        // validation internally, the externally visible list is always the
+        // complete current-only list retained before the replay.
+        std::mem::swap(&mut self.candidates, &mut self.cross_commit_scratch);
+        Ok(ConversionResult {
+            candidates: &self.candidates,
+            diagnostics,
+        })
+    }
+
     fn convert_exact_only_detailed<'a>(
         &'a mut self,
         dictionary: &Dictionary<'_>,
@@ -1300,6 +1792,14 @@ impl Converter {
                 raw_repair_candidates_rejected: 0,
                 raw_repair_lattice_nodes: 0,
                 raw_repair_search_states: 0,
+                cross_commit_bridge_attempted: false,
+                cross_commit_bridge_candidates_examined: 0,
+                cross_commit_bridge_candidates_rescored: 0,
+                cross_commit_bridge_spanning_paths: 0,
+                cross_commit_bridge_frontier_paths: 0,
+                cross_commit_bridge_lattice_nodes: 0,
+                cross_commit_bridge_search_states: 0,
+                cross_commit_bridge_terminal: None,
             },
         })
     }
@@ -1389,6 +1889,14 @@ impl Converter {
                 raw_repair_candidates_rejected: 0,
                 raw_repair_lattice_nodes: 0,
                 raw_repair_search_states: 0,
+                cross_commit_bridge_attempted: false,
+                cross_commit_bridge_candidates_examined: 0,
+                cross_commit_bridge_candidates_rescored: 0,
+                cross_commit_bridge_spanning_paths: 0,
+                cross_commit_bridge_frontier_paths: 0,
+                cross_commit_bridge_lattice_nodes: 0,
+                cross_commit_bridge_search_states: 0,
+                cross_commit_bridge_terminal: None,
             },
         })
     }
@@ -2122,13 +2630,16 @@ impl Converter {
                 text: text.clone(),
                 annotation,
                 segments,
-                system_entry_index: None,
+                system_entry_index: NO_SYSTEM_ENTRY_INDEX,
                 synthetic_exact: false,
                 origin: CandidateOrigin::Direct,
                 path_evidence: PathEvidence {
                     generated_edges: 1,
                     ..PathEvidence::default()
                 },
+                bridge_boundary_kind: None,
+                commit_bridge_tail: CommitBridgeTailStorage::default(),
+                cross_commit_rescored: false,
                 cost: lexical_form_cost.map_or_else(
                     || form_cost.saturating_add(i64::try_from(index).unwrap_or(0)),
                     |lexical_cost| {
@@ -2200,13 +2711,16 @@ impl Converter {
                 text,
                 annotation,
                 segments,
-                system_entry_index: None,
+                system_entry_index: NO_SYSTEM_ENTRY_INDEX,
                 synthetic_exact: false,
                 origin: CandidateOrigin::Direct,
                 path_evidence: PathEvidence {
                     generated_edges: 1,
                     ..PathEvidence::default()
                 },
+                bridge_boundary_kind: None,
+                commit_bridge_tail: CommitBridgeTailStorage::default(),
+                cross_commit_rescored: false,
                 cost: base
                     .cost
                     .saturating_add(10 + i64::try_from(index).unwrap_or(0)),
@@ -2819,8 +3333,12 @@ impl Converter {
         }
         let (best_cost, best_previous) = if spec.start == 0 {
             (
-                connection_cost(dictionary, self.initial_right_id, spec.left_id)
-                    .saturating_add(spec.local_cost),
+                connection_cost(
+                    dictionary,
+                    RightContextId::new(self.initial_right_id),
+                    LeftContextId::new(spec.left_id),
+                )
+                .saturating_add(spec.local_cost),
                 NONE,
             )
         } else {
@@ -2831,7 +3349,11 @@ impl Converter {
                 let prior = self.nodes[previous];
                 let cost = prior
                     .best_cost
-                    .saturating_add(connection_cost(dictionary, prior.right_id, spec.left_id))
+                    .saturating_add(connection_cost(
+                        dictionary,
+                        RightContextId::new(prior.right_id),
+                        LeftContextId::new(spec.left_id),
+                    ))
                     .saturating_add(spec.local_cost);
                 if cost < best_cost {
                     best_cost = cost;
@@ -2867,16 +3389,24 @@ impl Converter {
         for index in (0..self.nodes.len()).rev() {
             let node = self.nodes[index];
             self.nodes[index].suffix_cost = if node.end == reading_len {
-                connection_cost(dictionary, node.right_id, 0)
+                connection_cost(
+                    dictionary,
+                    RightContextId::new(node.right_id),
+                    LeftContextId::new(0),
+                )
             } else {
                 let mut next = self.starts_at[node.end];
                 let mut best = i64::MAX;
                 while next != NONE {
                     let following = self.nodes[next];
                     if following.suffix_cost != i64::MAX {
-                        let cost = connection_cost(dictionary, node.right_id, following.left_id)
-                            .saturating_add(following.local_cost)
-                            .saturating_add(following.suffix_cost);
+                        let cost = connection_cost(
+                            dictionary,
+                            RightContextId::new(node.right_id),
+                            LeftContextId::new(following.left_id),
+                        )
+                        .saturating_add(following.local_cost)
+                        .saturating_add(following.suffix_cost);
                         best = best.min(cost);
                     }
                     next = following.next_from_start;
@@ -2896,9 +3426,11 @@ impl Converter {
         let mut best_cost = i64::MAX;
         while current != NONE {
             let node = self.nodes[current];
-            let cost = node
-                .best_cost
-                .saturating_add(connection_cost(dictionary, node.right_id, 0));
+            let cost = node.best_cost.saturating_add(connection_cost(
+                dictionary,
+                RightContextId::new(node.right_id),
+                LeftContextId::new(0),
+            ));
             if cost < best_cost {
                 best = current;
                 best_cost = cost;
@@ -2932,16 +3464,20 @@ impl Converter {
             .best_cost
             .saturating_add(connection_cost(
                 dictionary,
-                self.nodes[final_node].right_id,
-                0,
+                RightContextId::new(self.nodes[final_node].right_id),
+                LeftContextId::new(0),
             ));
         let candidate = make_candidate(
-            dictionary,
-            user_dictionary,
-            reading,
-            &self.nodes,
-            &self.path,
-            &self.generated,
+            CandidateMaterialization {
+                dictionary,
+                user_dictionary,
+                reading,
+                initial_right_id: self.initial_right_id,
+                bridge_reading_boundary: self.cross_commit_reading_boundary,
+                nodes: &self.nodes,
+                path: &self.path,
+                generated: &self.generated,
+            },
             cost,
         )?;
         self.candidates.push(candidate);
@@ -2977,8 +3513,12 @@ impl Converter {
         while node != NONE {
             let lattice_node = self.nodes[node];
             if lattice_node.suffix_cost != i64::MAX {
-                let cost = connection_cost(dictionary, self.initial_right_id, lattice_node.left_id)
-                    .saturating_add(lattice_node.local_cost);
+                let cost = connection_cost(
+                    dictionary,
+                    RightContextId::new(self.initial_right_id),
+                    LeftContextId::new(lattice_node.left_id),
+                )
+                .saturating_add(lattice_node.local_cost);
                 if !self.push_state(
                     node,
                     cost,
@@ -3015,8 +3555,8 @@ impl Converter {
                 }
                 let total = state.cost.saturating_add(connection_cost(
                     dictionary,
-                    lattice_node.right_id,
-                    0,
+                    RightContextId::new(lattice_node.right_id),
+                    LeftContextId::new(0),
                 ));
                 // A later (costlier) path stitching together to more than
                 // `MAX_PREEDIT_BYTES` is an unremarkable, expected outcome
@@ -3025,12 +3565,16 @@ impl Converter {
                 // "degrade gracefully" family as the lattice-node and
                 // search-state budgets below.
                 let candidate = match make_candidate(
-                    dictionary,
-                    user_dictionary,
-                    reading,
-                    &self.nodes,
-                    &self.path,
-                    &self.generated,
+                    CandidateMaterialization {
+                        dictionary,
+                        user_dictionary,
+                        reading,
+                        initial_right_id: self.initial_right_id,
+                        bridge_reading_boundary: self.cross_commit_reading_boundary,
+                        nodes: &self.nodes,
+                        path: &self.path,
+                        generated: &self.generated,
+                    },
                     total,
                 ) {
                     Ok(candidate) => candidate,
@@ -3073,8 +3617,8 @@ impl Converter {
                         .cost
                         .saturating_add(connection_cost(
                             dictionary,
-                            lattice_node.right_id,
-                            following.left_id,
+                            RightContextId::new(lattice_node.right_id),
+                            LeftContextId::new(following.left_id),
                         ))
                         .saturating_add(following.local_cost);
                     let estimate = cost.saturating_add(following.suffix_cost);
@@ -3154,12 +3698,47 @@ struct NodeSpec {
     surface: Surface,
 }
 
-fn connection_cost(dictionary: &Dictionary<'_>, right_id: u16, left_id: u16) -> i64 {
+fn connection_cost(
+    dictionary: &Dictionary<'_>,
+    right_id: RightContextId,
+    left_id: LeftContextId,
+) -> i64 {
     i64::from(
         dictionary
-            .connection_cost(right_id, left_id)
+            .connection_cost(right_id.raw(), left_id.raw())
             .unwrap_or(u16::MAX),
     )
+}
+
+fn is_contextual_orthographic_sibling(anchor: &str, candidate: &str) -> bool {
+    let anchor_chars = anchor.chars().count();
+    let candidate_chars = candidate.chars().count();
+    if anchor_chars == 0 || candidate_chars == 0 || anchor == candidate {
+        return false;
+    }
+    let shared = anchor
+        .chars()
+        .rev()
+        .zip(candidate.chars().rev())
+        .take_while(|(left, right)| left == right && matches!(*left, '\u{3041}'..='\u{3096}'))
+        .count();
+    shared >= 2
+        && shared.saturating_mul(2) >= anchor_chars
+        && shared.saturating_mul(2) >= candidate_chars
+}
+
+fn is_exact_user_candidate(candidate: &ConversionCandidate, reading_len: usize) -> bool {
+    let evidence = candidate.path_evidence();
+    candidate.origin() == CandidateOrigin::Direct
+        && !candidate.is_synthetic_exact()
+        && evidence.system_edges == 0
+        && evidence.user_edges == 1
+        && evidence.fallback_edges == 0
+        && evidence.generated_edges == 0
+        && evidence.spelling_edges == 0
+        && candidate.segments().len() == 1
+        && candidate.segments()[0].reading_start == 0
+        && usize::from(candidate.segments()[0].reading_end) == reading_len
 }
 
 /// Reject a path that splices a fallback spelling into lexical dictionary
@@ -3264,9 +3843,17 @@ fn make_lossless_fallback(
     } else {
         synthetic_run_cost(RUN_BASE_COST, RUN_COST_PER_CHAR, characters)
     };
-    let cost = connection_cost(dictionary, initial_right_id, synthetic_id)
-        .saturating_add(local_cost)
-        .saturating_add(connection_cost(dictionary, synthetic_id, 0));
+    let cost = connection_cost(
+        dictionary,
+        RightContextId::new(initial_right_id),
+        LeftContextId::new(synthetic_id),
+    )
+    .saturating_add(local_cost)
+    .saturating_add(connection_cost(
+        dictionary,
+        RightContextId::new(synthetic_id),
+        LeftContextId::new(0),
+    ));
     let mut text = FixedStr::new();
     text.push_str(reading)
         .map_err(|_| ConversionError::OutputTooLong)?;
@@ -3289,13 +3876,16 @@ fn make_lossless_fallback(
         text,
         annotation: FixedStr::new(),
         segments,
-        system_entry_index: None,
+        system_entry_index: NO_SYSTEM_ENTRY_INDEX,
         synthetic_exact: false,
         origin: CandidateOrigin::Direct,
         path_evidence: PathEvidence {
             fallback_edges: 1,
             ..PathEvidence::default()
         },
+        bridge_boundary_kind: None,
+        commit_bridge_tail: CommitBridgeTailStorage::default(),
+        cross_commit_rescored: false,
         cost,
     })
 }
@@ -3320,9 +3910,17 @@ fn make_synthetic_exact(
     } else {
         synthetic_run_cost(RUN_BASE_COST, RUN_COST_PER_CHAR, characters)
     };
-    let cost = connection_cost(dictionary, initial_right_id, synthetic_id)
-        .saturating_add(local_cost)
-        .saturating_add(connection_cost(dictionary, synthetic_id, 0));
+    let cost = connection_cost(
+        dictionary,
+        RightContextId::new(initial_right_id),
+        LeftContextId::new(synthetic_id),
+    )
+    .saturating_add(local_cost)
+    .saturating_add(connection_cost(
+        dictionary,
+        RightContextId::new(synthetic_id),
+        LeftContextId::new(0),
+    ));
     let mut text = FixedStr::new();
     text.push_str(exact_surface)
         .map_err(|_| ConversionError::OutputTooLong)?;
@@ -3345,30 +3943,52 @@ fn make_synthetic_exact(
         text,
         annotation: FixedStr::new(),
         segments,
-        system_entry_index: None,
+        system_entry_index: NO_SYSTEM_ENTRY_INDEX,
         synthetic_exact: true,
         origin: CandidateOrigin::Direct,
         path_evidence: PathEvidence {
             fallback_edges: 1,
             ..PathEvidence::default()
         },
+        bridge_boundary_kind: None,
+        commit_bridge_tail: CommitBridgeTailStorage::default(),
+        cross_commit_rescored: false,
         cost,
     })
 }
 
+struct CandidateMaterialization<'a, 'dictionary> {
+    dictionary: &'a Dictionary<'dictionary>,
+    user_dictionary: Option<&'a UserDictionary>,
+    reading: &'a str,
+    initial_right_id: u16,
+    bridge_reading_boundary: Option<usize>,
+    nodes: &'a [Node],
+    path: &'a [usize],
+    generated: &'a [GeneratedSurface],
+}
+
 fn make_candidate(
-    dictionary: &Dictionary<'_>,
-    user_dictionary: Option<&UserDictionary>,
-    reading: &str,
-    nodes: &[Node],
-    path: &[usize],
-    generated: &[GeneratedSurface],
+    source: CandidateMaterialization<'_, '_>,
     cost: i64,
 ) -> Result<ConversionCandidate, ConversionError> {
+    let CandidateMaterialization {
+        dictionary,
+        user_dictionary,
+        reading,
+        initial_right_id,
+        bridge_reading_boundary,
+        nodes,
+        path,
+        generated,
+    } = source;
     let mut text = FixedStr::new();
     let mut annotation = FixedStr::new();
     let mut segments = FixedVec::new();
     let mut path_evidence = PathEvidence::default();
+    let mut bridge_boundary_kind = None;
+    let mut commit_bridge_tail = CommitBridgeTailStorage::default();
+    let mut previous_right_id = initial_right_id;
     for index in path {
         let node = nodes[*index];
         let text_start = text.len();
@@ -3426,6 +4046,23 @@ fn make_candidate(
                 }
             }
         }
+        let reading_start =
+            u16::try_from(node.start).map_err(|_| ConversionError::ReadingTooLong)?;
+        let reading_end = u16::try_from(node.end).map_err(|_| ConversionError::ReadingTooLong)?;
+        if let Some(boundary) = bridge_reading_boundary {
+            if node.start < boundary && node.end > boundary {
+                bridge_boundary_kind = Some(BridgeBoundaryKind::SpanningEdge);
+            } else if node.end == boundary && bridge_boundary_kind.is_none() {
+                bridge_boundary_kind = Some(BridgeBoundaryKind::TypedFrontier);
+            }
+        }
+        commit_bridge_tail = match node.surface {
+            Surface::Dictionary { entry_index, .. } => {
+                CommitBridgeTailStorage::new(entry_index, reading_start, previous_right_id)
+            }
+            _ => CommitBridgeTailStorage::default(),
+        };
+        previous_right_id = node.right_id;
         // Fuse this word into the previous segment when the dictionary's
         // segmenter table says no bunsetsu boundary separates them (e.g. an
         // ancillary 助動詞 after a verb).  Images without the table keep
@@ -3448,10 +4085,8 @@ fn make_candidate(
         } else {
             segments
                 .push(ConversionSegment {
-                    reading_start: u16::try_from(node.start)
-                        .map_err(|_| ConversionError::ReadingTooLong)?,
-                    reading_end: u16::try_from(node.end)
-                        .map_err(|_| ConversionError::ReadingTooLong)?,
+                    reading_start,
+                    reading_end,
                     text_start: u16::try_from(text_start)
                         .map_err(|_| ConversionError::OutputTooLong)?,
                     text_end: u16::try_from(text.len())
@@ -3467,12 +4102,15 @@ fn make_candidate(
     }
     let system_entry_index = if path.len() == 1 {
         match nodes[path[0]].surface {
-            Surface::Dictionary { entry_index, .. } => Some(entry_index),
-            _ => None,
+            Surface::Dictionary { entry_index, .. } => entry_index,
+            _ => NO_SYSTEM_ENTRY_INDEX,
         }
     } else {
-        None
+        NO_SYSTEM_ENTRY_INDEX
     };
+    if !path_evidence.is_system_only() {
+        commit_bridge_tail = CommitBridgeTailStorage::default();
+    }
     Ok(ConversionCandidate {
         text,
         annotation,
@@ -3481,6 +4119,9 @@ fn make_candidate(
         synthetic_exact: false,
         origin: CandidateOrigin::Direct,
         path_evidence,
+        bridge_boundary_kind,
+        commit_bridge_tail,
+        cross_commit_rescored: false,
         cost,
     })
 }
@@ -3579,7 +4220,8 @@ mod tests {
     use super::{
         CandidateAuthority, CandidateOrigin, ConversionInput, ConversionInputClass,
         ConversionOptions, Converter, CorrectionMap, CorrectionMapError, CorrectionRun,
-        LiteralPolicy, RawRepairBudget, RawRepairPlan, RepairTier,
+        CrossCommitBridge, LiteralPolicy, RawRepairBudget, RawRepairPlan, RepairTier,
+        RightContextId,
     };
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
     use crate::user_dictionary::UserDictionary;
@@ -3871,6 +4513,386 @@ mod tests {
             .authority(),
             CandidateAuthority::LocalRawCompletion
         );
+    }
+
+    fn cross_commit_fixture() -> Vec<u8> {
+        synthetic_dictionary(&[
+            fixture_entry("もれ", "漏れ", 0, EntryFlags::NONE),
+            fixture_entry("ないか", "内科", 50, EntryFlags::NONE),
+            fixture_entry("ないか", "内か", 70, EntryFlags::NONE),
+            fixture_entry("ないか", "ないか", 100, EntryFlags::NONE),
+            fixture_entry("ないか", "無いか", 110, EntryFlags::NONE),
+            // These whole-reading entries are the evidence that cannot exist
+            // in a lattice beginning at the current reading's byte zero.
+            fixture_entry("もれないか", "漏れないか", 10, EntryFlags::NONE),
+        ])
+    }
+
+    fn issue_83_bridge<'a>() -> CrossCommitBridge<'a> {
+        CrossCommitBridge {
+            tail_reading: "もれ",
+            tail_surface: "漏れ",
+            prefix_right_id: RightContextId::new(0),
+            prefix_cost: 0,
+        }
+    }
+
+    #[test]
+    fn cross_commit_bridge_rescores_only_reachable_current_candidates() {
+        let bytes = cross_commit_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+
+        let baseline = converter
+            .convert(&dictionary, "ないか", ConversionOptions::default())
+            .expect("baseline conversion");
+        assert_eq!(baseline[0].text(), "内科");
+
+        let result = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::ordinary("ないか"),
+                ConversionOptions::default(),
+                Some(issue_83_bridge()),
+            )
+            .expect("bridged conversion");
+        let surfaces: Vec<&str> = result
+            .candidates()
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect();
+        let plain = surfaces
+            .iter()
+            .position(|surface| *surface == "ないか")
+            .unwrap();
+        let negative = surfaces
+            .iter()
+            .position(|surface| *surface == "無いか")
+            .unwrap();
+        let clinic = surfaces
+            .iter()
+            .position(|surface| *surface == "内科")
+            .unwrap();
+        let mixed = surfaces
+            .iter()
+            .position(|surface| *surface == "内か")
+            .unwrap();
+        assert!(plain < clinic && negative < clinic, "{surfaces:?}");
+        assert!(
+            clinic < mixed,
+            "one-kana overlap must not inherit the bridge: {surfaces:?}"
+        );
+        assert_eq!(result.candidates()[plain].segments()[0].reading_start, 0);
+        assert_eq!(
+            usize::from(
+                result.candidates()[plain]
+                    .segments()
+                    .last()
+                    .unwrap()
+                    .reading_end
+            ),
+            "ないか".len()
+        );
+        let diagnostics = result.diagnostics();
+        assert!(diagnostics.cross_commit_bridge_attempted);
+        assert_eq!(diagnostics.cross_commit_bridge_candidates_rescored, 2);
+    }
+
+    #[test]
+    fn cross_commit_bridge_is_lexeme_agnostic() {
+        let bytes = synthetic_dictionary(&[
+            fixture_entry("けんとう", "検討", 0, EntryFlags::NONE),
+            fixture_entry("しますか", "シマスカ", 50, EntryFlags::NONE),
+            fixture_entry("しますか", "しますか", 100, EntryFlags::NONE),
+            fixture_entry("けんとうしますか", "検討しますか", 10, EntryFlags::NONE),
+        ]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+
+        let baseline = converter
+            .convert(&dictionary, "しますか", ConversionOptions::default())
+            .expect("baseline conversion");
+        assert_eq!(baseline[0].text(), "シマスカ");
+
+        let result = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::ordinary("しますか"),
+                ConversionOptions::default(),
+                Some(CrossCommitBridge {
+                    tail_reading: "けんとう",
+                    tail_surface: "検討",
+                    prefix_right_id: RightContextId::new(0),
+                    prefix_cost: 0,
+                }),
+            )
+            .expect("bridged conversion");
+        assert_eq!(result.candidates()[0].text(), "しますか");
+        assert!(result.diagnostics().cross_commit_bridge_spanning_paths > 0);
+        assert!(result.diagnostics().cross_commit_bridge_candidates_rescored > 0);
+    }
+
+    #[test]
+    fn commit_bridge_tail_preserves_the_exact_final_raw_edge() {
+        let bytes = synthetic_dictionary(&[
+            fixture_entry("まえ", "前", 3, EntryFlags::NONE),
+            fixture_entry("あと", "後", 7, EntryFlags::NONE),
+        ]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "まえあと", ConversionOptions::default())
+            .expect("conversion");
+        let candidate = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "前後")
+            .expect("composite system candidate");
+        assert_eq!(candidate.system_entry_index(), None, "path has two edges");
+        let tail = candidate
+            .commit_bridge_tail(&dictionary)
+            .expect("exact final edge evidence");
+        assert_eq!(usize::from(tail.reading_start), "まえ".len());
+        assert_eq!(usize::from(tail.text_start), "前".len());
+        assert_eq!(tail.prefix_right_id, RightContextId::new(0));
+        assert_eq!(tail.prefix_cost, 7);
+    }
+
+    #[test]
+    fn cross_commit_bridge_fits_128_kib_thread_stack() {
+        let bytes = cross_commit_fixture();
+        let handle = std::thread::Builder::new()
+            .name("conversion-bridge-128k".to_owned())
+            .stack_size(128 * 1024)
+            .spawn(move || {
+                let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+                let mut converter = Converter::new();
+                let result = converter
+                    .convert_with_user_dictionary_input_bridge_detailed(
+                        &dictionary,
+                        None,
+                        ConversionInput::ordinary("ないか"),
+                        ConversionOptions::default(),
+                        Some(issue_83_bridge()),
+                    )
+                    .expect("128 KiB bridge conversion");
+                assert!(result.diagnostics().cross_commit_bridge_attempted);
+            })
+            .expect("128 KiB bridge thread");
+        handle.join().expect("128 KiB bridge conversion thread");
+    }
+
+    #[test]
+    fn cross_commit_bridge_mismatch_and_budget_exhaustion_fail_closed() {
+        let bytes = cross_commit_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let baseline = converter
+            .convert(&dictionary, "ないか", ConversionOptions::default())
+            .expect("baseline conversion")
+            .to_vec();
+
+        let mismatched = CrossCommitBridge {
+            tail_surface: "洩れ",
+            ..issue_83_bridge()
+        };
+        let result = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::ordinary("ないか"),
+                ConversionOptions::default(),
+                Some(mismatched),
+            )
+            .expect("mismatched bridge conversion");
+        assert_eq!(result.candidates(), baseline.as_slice());
+        assert_eq!(
+            result.diagnostics().cross_commit_bridge_candidates_rescored,
+            0
+        );
+
+        converter.set_cross_commit_budgets_for_test(0, 0);
+        let exhausted = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::ordinary("ないか"),
+                ConversionOptions::default(),
+                Some(issue_83_bridge()),
+            )
+            .expect("budget-exhausted bridge conversion");
+        assert_eq!(exhausted.candidates(), baseline.as_slice());
+        assert!(exhausted.diagnostics().cross_commit_bridge_attempted);
+        assert_eq!(
+            exhausted.diagnostics().cross_commit_bridge_terminal,
+            Some(super::ConversionSearchTerminal::LatticeBudgetReached)
+        );
+        assert_eq!(
+            exhausted
+                .diagnostics()
+                .cross_commit_bridge_candidates_rescored,
+            0
+        );
+
+        converter.set_cross_commit_budgets_for_test(super::MAX_CROSS_COMMIT_LATTICE_NODES, 0);
+        let state_exhausted = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::ordinary("ないか"),
+                ConversionOptions::default(),
+                Some(issue_83_bridge()),
+            )
+            .expect("state-budget-exhausted bridge conversion");
+        assert_eq!(state_exhausted.candidates(), baseline.as_slice());
+        assert_eq!(
+            state_exhausted.diagnostics().cross_commit_bridge_terminal,
+            Some(super::ConversionSearchTerminal::StateBudgetReached)
+        );
+        assert_eq!(
+            state_exhausted
+                .diagnostics()
+                .cross_commit_bridge_candidates_rescored,
+            0
+        );
+    }
+
+    #[test]
+    fn invalid_or_oversized_cross_commit_evidence_is_not_replayed() {
+        let bytes = cross_commit_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let tail = "あ".repeat(super::MAX_CROSS_COMMIT_TAIL_BYTES / 3 + 1);
+        let surface = "あ".repeat(super::MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES / 3 + 1);
+        let current = "あ".repeat(super::MAX_CROSS_COMMIT_CURRENT_BYTES / 3 + 1);
+        let mut converter = Converter::new();
+        let baseline = converter
+            .convert(&dictionary, "ないか", ConversionOptions::default())
+            .expect("baseline conversion")
+            .to_vec();
+        {
+            let mut assert_rejected = |bridge: CrossCommitBridge<'_>| {
+                let result = converter
+                    .convert_with_user_dictionary_input_bridge_detailed(
+                        &dictionary,
+                        None,
+                        ConversionInput::ordinary("ないか"),
+                        ConversionOptions::default(),
+                        Some(bridge),
+                    )
+                    .expect("invalid bridge conversion");
+                assert_eq!(result.candidates(), baseline.as_slice());
+                assert!(!result.diagnostics().cross_commit_bridge_attempted);
+            };
+            assert_rejected(CrossCommitBridge {
+                tail_reading: &tail,
+                ..issue_83_bridge()
+            });
+            assert_rejected(CrossCommitBridge {
+                tail_surface: &surface,
+                ..issue_83_bridge()
+            });
+            assert_rejected(CrossCommitBridge {
+                tail_reading: "の",
+                tail_surface: "の",
+                ..issue_83_bridge()
+            });
+            assert_rejected(CrossCommitBridge {
+                prefix_right_id: RightContextId::new(1),
+                ..issue_83_bridge()
+            });
+            assert_rejected(CrossCommitBridge {
+                prefix_cost: -1,
+                ..issue_83_bridge()
+            });
+            assert_rejected(CrossCommitBridge {
+                prefix_cost: i64::MAX,
+                ..issue_83_bridge()
+            });
+        }
+
+        let oversized_baseline = converter
+            .convert(&dictionary, &current, ConversionOptions::default())
+            .expect("oversized-current baseline")
+            .to_vec();
+        let result = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::ordinary(&current),
+                ConversionOptions::default(),
+                Some(issue_83_bridge()),
+            )
+            .expect("oversized-current bridge conversion");
+        assert_eq!(result.candidates(), oversized_baseline.as_slice());
+        assert!(!result.diagnostics().cross_commit_bridge_attempted);
+    }
+
+    #[test]
+    fn absent_bridge_and_user_or_exact_candidates_keep_their_authority() {
+        let bytes = cross_commit_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let user_dictionary = UserDictionary::parse_tsv(
+            "# format-version: 1\nreading\tsurface\tpos\tcomment\nないか\t利用者語\tnoun\t\n",
+        )
+        .expect("user dictionary");
+        let mut converter = Converter::new();
+        let baseline = converter
+            .convert_with_user_dictionary(
+                &dictionary,
+                Some(&user_dictionary),
+                "ないか",
+                ConversionOptions::default(),
+            )
+            .expect("baseline user conversion")
+            .to_vec();
+        let absent = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                Some(&user_dictionary),
+                ConversionInput::ordinary("ないか"),
+                ConversionOptions::default(),
+                None,
+            )
+            .expect("absent bridge conversion");
+        assert_eq!(absent.candidates(), baseline.as_slice());
+
+        let bridged = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                Some(&user_dictionary),
+                ConversionInput::ordinary("ないか"),
+                ConversionOptions::default(),
+                Some(issue_83_bridge()),
+            )
+            .expect("bridged user conversion");
+        assert_eq!(bridged.candidates(), baseline.as_slice());
+        assert!(!bridged.diagnostics().cross_commit_bridge_attempted);
+        let user = bridged
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.text() == "利用者語")
+            .expect("user candidate remains reachable");
+        assert_eq!(user.path_evidence().user_edges, 1);
+        assert!(!user.was_cross_commit_rescored());
+
+        let exact = converter
+            .convert_with_user_dictionary_input_bridge_detailed(
+                &dictionary,
+                None,
+                ConversionInput::new(
+                    "esp32",
+                    "ESP32",
+                    ConversionInputClass::OpaqueAsciiIdentifier,
+                    LiteralPolicy::ExactTop1,
+                ),
+                ConversionOptions::default(),
+                Some(issue_83_bridge()),
+            )
+            .expect("exact policy conversion");
+        assert_eq!(exact.candidates()[0].text(), "ESP32");
+        assert!(exact.candidates()[0].is_synthetic_exact());
+        assert!(!exact.diagnostics().cross_commit_bridge_attempted);
     }
 
     #[test]

@@ -28,7 +28,10 @@
 
 use std::mem;
 
-use sakura_core::conversion::{ConversionInputClass, LiteralPolicy};
+use sakura_core::conversion::{
+    ConversionInputClass, CrossCommitBridge, LiteralPolicy, RightContextId,
+    MAX_CROSS_COMMIT_TAIL_BYTES, MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS,
+};
 use sakura_core::keymap::State;
 use sakura_core::romaji;
 use sakura_core::{
@@ -65,7 +68,6 @@ pub const MAX_PROCESS_NAME_BYTES: usize = 128;
 
 /// Volatile recency window described by DESIGN §5.8.
 pub const COMMIT_CACHE_CAPACITY: usize = 8;
-
 /// Admission state for raw-key provenance.  This is deliberately smaller than
 /// a key log: it records only whether the current composition still proves an
 /// append-only Romaji path.  Any edit or context ambiguity moves it to
@@ -138,6 +140,54 @@ impl Default for UndoRecord {
             previous_had_carry: false,
             post_commit_right_id: 0,
             post_commit_had_carry: false,
+        }
+    }
+}
+
+/// Volatile lexical tail retained only until the next document-context
+/// boundary. It is fixed-size so Probe can clone a session without allocating
+/// or sharing mutable history with the live Apply path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionCrossCommitBridge {
+    tail_reading: FixedStr<MAX_CROSS_COMMIT_TAIL_BYTES>,
+    tail_surface: FixedStr<MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES>,
+    prefix_right_id: u16,
+    prefix_cost: i64,
+}
+
+impl SessionCrossCommitBridge {
+    pub(crate) fn new(
+        tail_reading: &str,
+        tail_surface: &str,
+        prefix_right_id: u16,
+        prefix_cost: i64,
+    ) -> Option<Self> {
+        if tail_reading.is_empty()
+            || tail_surface.is_empty()
+            || tail_reading.chars().count() < MIN_CROSS_COMMIT_TAIL_CHARS
+            || prefix_cost < 0
+            || prefix_cost == i64::MAX
+        {
+            return None;
+        }
+        let mut reading = FixedStr::new();
+        let mut surface = FixedStr::new();
+        reading.push_str(tail_reading).ok()?;
+        surface.push_str(tail_surface).ok()?;
+        Some(Self {
+            tail_reading: reading,
+            tail_surface: surface,
+            prefix_right_id,
+            prefix_cost,
+        })
+    }
+
+    pub(crate) fn as_core(&self) -> CrossCommitBridge<'_> {
+        CrossCommitBridge {
+            tail_reading: self.tail_reading.as_str(),
+            tail_surface: self.tail_surface.as_str(),
+            prefix_right_id: RightContextId::new(self.prefix_right_id),
+            prefix_cost: self.prefix_cost,
         }
     }
 }
@@ -272,6 +322,7 @@ pub struct Session {
     /// Grammatical right context carried across commit boundaries.
     carry_right_id: u16,
     has_carry: bool,
+    cross_commit_bridge: Option<SessionCrossCommitBridge>,
     /// Compact, volatile hashes avoid retaining another eight copies of user
     /// text while still giving exact candidate matching with length guards.
     commit_cache: [CommitCacheEntry; COMMIT_CACHE_CAPACITY],
@@ -346,6 +397,7 @@ impl Session {
             focused_segment: 0,
             carry_right_id: 0,
             has_carry: false,
+            cross_commit_bridge: None,
             commit_cache: [CommitCacheEntry::default(); COMMIT_CACHE_CAPACITY],
             commit_cache_len: 0,
             commit_cache_next: 0,
@@ -419,6 +471,7 @@ impl Session {
             let was_sensitive = scope_is_sensitive(self.scope);
             self.scope = InputScope::Normal;
             self.scope_classified = false;
+            self.clear_cross_commit_bridge();
             if was_sensitive {
                 self.reset();
                 self.clear_personal_context();
@@ -1001,6 +1054,21 @@ impl Session {
     pub(crate) fn reset_carryover(&mut self) {
         self.carry_right_id = 0;
         self.has_carry = false;
+        self.clear_cross_commit_bridge();
+    }
+
+    pub(crate) fn cross_commit_bridge(&self) -> Option<CrossCommitBridge<'_>> {
+        if self.association_enabled && self.scope_classified && self.scope == InputScope::Normal {
+            self.cross_commit_bridge
+                .as_ref()
+                .map(SessionCrossCommitBridge::as_core)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn clear_cross_commit_bridge(&mut self) {
+        self.cross_commit_bridge = None;
     }
 
     /// Returns the most recently committed surface fingerprint for `reading`.
@@ -1050,7 +1118,25 @@ impl Session {
         it_words: u8,
         total_words: u8,
     ) {
-        self.record_current_commit_with_cache(surface, right_id, it_words, total_words, true);
+        self.record_current_commit_with_cache(surface, right_id, it_words, total_words, true, None);
+    }
+
+    pub(crate) fn record_current_commit_with_bridge(
+        &mut self,
+        surface: &str,
+        right_id: u16,
+        it_words: u8,
+        total_words: u8,
+        bridge: Option<SessionCrossCommitBridge>,
+    ) {
+        self.record_current_commit_with_cache(
+            surface,
+            right_id,
+            it_words,
+            total_words,
+            true,
+            bridge,
+        );
     }
 
     /// Records undo/carry state without adding the surface to the volatile
@@ -1064,7 +1150,14 @@ impl Session {
         it_words: u8,
         total_words: u8,
     ) {
-        self.record_current_commit_with_cache(surface, right_id, it_words, total_words, false);
+        self.record_current_commit_with_cache(
+            surface,
+            right_id,
+            it_words,
+            total_words,
+            false,
+            None,
+        );
     }
 
     fn record_current_commit_with_cache(
@@ -1074,7 +1167,9 @@ impl Session {
         it_words: u8,
         total_words: u8,
         add_to_cache: bool,
+        bridge: Option<SessionCrossCommitBridge>,
     ) {
+        self.clear_cross_commit_bridge();
         if matches!(
             self.scope,
             InputScope::Password | InputScope::Url | InputScope::Email | InputScope::Digits
@@ -1137,6 +1232,14 @@ impl Session {
         }
         self.undo_record.post_commit_right_id = self.carry_right_id;
         self.undo_record.post_commit_had_carry = self.has_carry;
+        if self.association_enabled
+            && self.scope_classified
+            && self.scope == InputScope::Normal
+            && !is_cross_commit_boundary(surface)
+        {
+            self.cross_commit_bridge =
+                bridge.filter(|bridge| surface.ends_with(bridge.tail_surface.as_str()));
+        }
     }
 
     /// Begins a depth-one commit undo transaction.
@@ -1166,6 +1269,7 @@ impl Session {
         }
 
         self.undo_pending = true;
+        self.clear_cross_commit_bridge();
         self.carry_right_id = previous_right_id;
         self.has_carry = previous_had_carry;
         self.reset();
@@ -1256,6 +1360,14 @@ impl Session {
         self.commit_cache_len = 0;
         self.commit_cache_next = 0;
         self.disarm_commit_undo();
+    }
+
+    /// Retires every assumption whose meaning depends on the host caret still
+    /// following the last Sakura commit. Explicit mode/profile choices survive
+    /// because they belong to the session rather than one document position.
+    pub(crate) fn reset_document_context(&mut self) {
+        self.suppress_raw_provenance();
+        self.clear_personal_context();
     }
 
     /// Moves only the focused segment's right boundary. Every other boundary
@@ -1404,11 +1516,19 @@ pub(crate) fn text_hash(text: &str) -> u64 {
 
 fn is_sentence_boundary(surface: &str) -> bool {
     let trimmed = surface.trim_end();
-    trimmed.ends_with(['。', '！', '？'])
+    trimmed.ends_with(['。', '！', '？', '!', '?'])
         || trimmed.ends_with("です")
         || trimmed.ends_with("ます")
         || trimmed.ends_with("でした")
         || trimmed.ends_with("ました")
+}
+
+fn is_cross_commit_boundary(surface: &str) -> bool {
+    if surface.trim_end().len() != surface.len() {
+        return true;
+    }
+    let trimmed = surface.trim_end();
+    is_sentence_boundary(trimmed) || trimmed.ends_with(['、', '，', ',', '；', ';', '：', ':'])
 }
 
 fn prefers_ascii_idle_space(surface: &str) -> bool {
@@ -1943,6 +2063,198 @@ mod tests {
         assert!(session.acknowledge_undo_commit());
         assert_eq!(session.cached_surface_fingerprint("かな"), None);
         assert_eq!(session.undo_commit(), None, "undo depth is exactly one");
+    }
+
+    fn test_cross_commit_bridge() -> SessionCrossCommitBridge {
+        SessionCrossCommitBridge::new("もれ", "漏れ", 1841, 4_000).expect("bounded bridge")
+    }
+
+    #[test]
+    fn cross_commit_bridge_is_volatile_normal_scope_state() {
+        let mut session = Session::new("editor.exe");
+        session.apply_input_scope(InputScope::Normal);
+        session.preedit.push_str("こうりょもれ").expect("fits");
+        session.record_current_commit_with_bridge(
+            "考慮漏れ",
+            1949,
+            0,
+            2,
+            Some(test_cross_commit_bridge()),
+        );
+        let bridge = session.cross_commit_bridge().expect("stored bridge");
+        assert_eq!(bridge.tail_reading, "もれ");
+        assert_eq!(bridge.tail_surface, "漏れ");
+        assert_eq!(bridge.prefix_right_id.raw(), 1841);
+        assert_eq!(bridge.prefix_cost, 4_000);
+
+        // Ending the composition preserves immediate adjacency in the same
+        // positively classified context.
+        session.reset();
+        assert!(session.cross_commit_bridge().is_some());
+
+        // Classification uncertainty can later become Normal again; clearing
+        // now prevents the old text from reviving across that gap.
+        session.apply_input_scope(InputScope::Unclassified);
+        assert!(session.cross_commit_bridge().is_none());
+        session.apply_input_scope(InputScope::Normal);
+        assert!(session.cross_commit_bridge().is_none());
+    }
+
+    #[test]
+    fn bridge_rejects_nonadjacent_or_unsupported_commit_boundaries() {
+        let mut session = Session::new("editor.exe");
+        session.apply_input_scope(InputScope::Normal);
+
+        session.record_current_commit_with_bridge(
+            "考慮漏れ、",
+            1949,
+            0,
+            2,
+            Some(test_cross_commit_bridge()),
+        );
+        assert!(session.cross_commit_bridge().is_none(), "clause boundary");
+
+        session.record_current_commit_with_bridge(
+            "different",
+            1949,
+            0,
+            1,
+            Some(test_cross_commit_bridge()),
+        );
+        assert!(session.cross_commit_bridge().is_none(), "surface mismatch");
+
+        session.association_enabled = false;
+        session.record_current_commit_with_bridge(
+            "考慮漏れ",
+            1949,
+            0,
+            2,
+            Some(test_cross_commit_bridge()),
+        );
+        assert!(session.cross_commit_bridge().is_none(), "association off");
+
+        for scope in [
+            InputScope::Password,
+            InputScope::Url,
+            InputScope::Email,
+            InputScope::Digits,
+        ] {
+            let mut sensitive = Session::new("editor.exe");
+            sensitive.apply_input_scope(InputScope::Normal);
+            sensitive.record_current_commit_with_bridge(
+                "考慮漏れ",
+                1949,
+                0,
+                2,
+                Some(test_cross_commit_bridge()),
+            );
+            assert!(sensitive.cross_commit_bridge().is_some());
+            sensitive.apply_input_scope(scope);
+            sensitive.record_current_commit_with_bridge(
+                "考慮漏れ",
+                1949,
+                0,
+                2,
+                Some(test_cross_commit_bridge()),
+            );
+            assert!(
+                sensitive.cross_commit_bridge().is_none(),
+                "{scope:?} must neither retain nor expose bridge text"
+            );
+        }
+
+        let mut unknown = Session::new("editor.exe");
+        unknown.apply_input_scope(InputScope::Normal);
+        unknown.record_current_commit_with_bridge(
+            "考慮漏れ",
+            1949,
+            0,
+            2,
+            Some(test_cross_commit_bridge()),
+        );
+        unknown.apply_input_scope(InputScope::Unclassified);
+        assert!(unknown.cross_commit_bridge().is_none(), "unknown scope");
+
+        assert!(SessionCrossCommitBridge::new("の", "の", 1841, 4_000).is_none());
+        assert!(is_cross_commit_boundary("考慮漏れ "));
+        assert!(is_cross_commit_boundary("考慮漏れ\n"));
+        assert!(is_cross_commit_boundary("考慮漏れ!"));
+        assert!(is_cross_commit_boundary("考慮漏れ?"));
+        assert!(!is_cross_commit_boundary("考慮漏れ"));
+    }
+
+    #[test]
+    fn cross_commit_bridge_is_isolated_per_session() {
+        let mut table = SessionTable::new();
+        let first = table.create("editor.exe").expect("first session");
+        let second = table.create("editor.exe").expect("second session");
+
+        let first_session = table.get_mut(first).expect("first live session");
+        first_session.apply_input_scope(InputScope::Normal);
+        first_session.record_current_commit_with_bridge(
+            "考慮漏れ",
+            1949,
+            0,
+            2,
+            Some(test_cross_commit_bridge()),
+        );
+
+        assert!(table
+            .get(first)
+            .expect("first live session")
+            .cross_commit_bridge()
+            .is_some());
+        assert!(table
+            .get(second)
+            .expect("second live session")
+            .cross_commit_bridge()
+            .is_none());
+
+        table
+            .get_mut(second)
+            .expect("second live session")
+            .reset_carryover();
+        assert!(table
+            .get(first)
+            .expect("first live session")
+            .cross_commit_bridge()
+            .is_some());
+    }
+
+    #[test]
+    fn undo_and_carry_reset_clear_cross_commit_bridge() {
+        let mut session = Session::new("editor.exe");
+        session.apply_input_scope(InputScope::Normal);
+        session.preedit.push_str("もれ").expect("fits");
+        session.record_current_commit_with_bridge(
+            "漏れ",
+            1949,
+            0,
+            1,
+            Some(test_cross_commit_bridge()),
+        );
+        session.reset();
+        assert!(session.cross_commit_bridge().is_some());
+        assert!(session.undo_commit().is_some());
+        assert!(session.cross_commit_bridge().is_none());
+        assert!(session.reject_undo_commit());
+        assert!(
+            session.cross_commit_bridge().is_none(),
+            "a rejected host deletion must not revive implicit text context"
+        );
+
+        session.reset();
+        session.preedit.push_str("もれ").expect("fits");
+        session.record_current_commit_with_bridge(
+            "漏れ",
+            1949,
+            0,
+            1,
+            Some(test_cross_commit_bridge()),
+        );
+        assert!(session.cross_commit_bridge().is_some());
+        session.reset_carryover();
+        assert!(session.cross_commit_bridge().is_none());
     }
 
     #[test]

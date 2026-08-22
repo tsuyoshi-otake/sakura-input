@@ -64,6 +64,7 @@ fn every_request_variant_roundtrips() {
         },
         Request::Commit { session: 1 },
         Request::Revert { session: 1 },
+        Request::ResetDocumentContext { session: 1 },
         Request::UndoCommit {
             session: 1,
             outcome: UndoCommitOutcome::Applied,
@@ -520,25 +521,25 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v18_hello_roundtrips_and_v17_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 17;
+fn protocol_v19_hello_roundtrips_and_v18_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 18;
     assert_eq!(
-        PROTOCOL_VERSION, 18,
-        "candidate click operations change the wire contract"
+        PROTOCOL_VERSION, 19,
+        "document-context reset changes the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 18, &mut request_frame).expect("encode v18 request");
+    encode_request(&request, 19, &mut request_frame).expect("encode v19 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
     );
     assert_eq!(
         decode_request(&request_frame[FRAME_HEADER_LEN..]),
-        Ok((18, request))
+        Ok((19, request))
     );
     request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2]
         .copy_from_slice(&PREVIOUS_PROTOCOL_VERSION.to_le_bytes());
@@ -552,14 +553,14 @@ fn protocol_v18_hello_roundtrips_and_v17_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 18, &mut response_frame).expect("encode v18 response");
+    encode_response(&response, 19, &mut response_frame).expect("encode v19 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
     );
     assert_eq!(
         decode_response(&response_frame[FRAME_HEADER_LEN..]),
-        Ok((18, response))
+        Ok((19, response))
     );
     response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2]
         .copy_from_slice(&PREVIOUS_PROTOCOL_VERSION.to_le_bytes());

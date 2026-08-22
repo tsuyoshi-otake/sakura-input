@@ -19,7 +19,9 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use dictc::{compile, parse_connection, parse_entries};
-use sakura_core::Preferences;
+use sakura_core::{
+    ConversionInput, ConversionOptions, CrossCommitBridge, Preferences, RightContextId,
+};
 use sakura_engine::dictionary::ConversionService;
 use sakura_engine::dispatch::{Dispatcher, Reply};
 use sakura_engine::learning::LearningService;
@@ -298,7 +300,12 @@ fn conversion_service() -> Arc<ConversionService> {
         "# license: MIT\n\
          reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
          かんすう\t函数\t1\t1\t1000\t-\t\t\n\
-         かんすう\t関数\t1\t1\t1100\t600\tit,predict\tprogramming\n",
+         かんすう\t関数\t1\t1\t1100\t600\tit,predict\tprogramming\n\
+         もれ\t漏れ\t1\t1\t0\t-\t\t\n\
+         ないか\t内科\t1\t1\t50\t-\t\t\n\
+         ないか\tないか\t1\t1\t100\t-\t\t\n\
+         ないか\t無いか\t1\t1\t110\t-\t\t\n\
+         もれないか\t漏れないか\t1\t1\t10\t-\t\t\n",
     )
     .expect("entries");
     let matrix = parse_connection(
@@ -364,6 +371,84 @@ fn conversion_into_reused_candidate_buffers_allocates_nothing() {
     assert_eq!(observed, 0, "conversion dispatch allocated");
     assert!(out.has_candidates());
     assert_eq!(out.candidate(0).map(|candidate| candidate.0), Some("関数"));
+}
+
+#[test]
+fn cross_commit_bridge_conversion_allocates_nothing() {
+    // The ordinary input-repair subsystem owns separate per-query allocations
+    // today. Disable it here so this test isolates the optional bridge and
+    // proves that its second lattice pass, scratch copy, and rescore add none.
+    let conversion = conversion_service();
+    let mut options = ConversionOptions::default();
+    options.input_support.enabled = false;
+    let (prefix_right_id, prefix_cost) = conversion
+        .with_conversion_input_bridge_hints(
+            ConversionInput::ordinary("もれ"),
+            options,
+            &[],
+            None,
+            |candidates, _| {
+                let tail = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "漏れ")
+                    .expect("lexical tail");
+                (
+                    RightContextId::new(tail.segments().last().expect("tail segment").right_id),
+                    conversion
+                        .cross_commit_prefix_cost(tail)
+                        .expect("system-only tail prefix cost"),
+                )
+            },
+        )
+        .expect("tail conversion");
+    let bridge = CrossCommitBridge {
+        tail_reading: "もれ",
+        tail_surface: "漏れ",
+        prefix_right_id,
+        prefix_cost,
+    };
+
+    // Warm both the direct and combined paths in the same converter slot.
+    conversion
+        .with_conversion_input_bridge_hints(
+            ConversionInput::ordinary("ないか"),
+            options,
+            &[],
+            Some(bridge),
+            |_, _| (),
+        )
+        .expect("bridge warm-up");
+
+    let mut plain_is_first = false;
+    let mut negative_before_clinic = false;
+    let observed = allocations(|| {
+        conversion
+            .with_conversion_input_bridge_hints(
+                ConversionInput::ordinary("ないか"),
+                options,
+                &[],
+                Some(bridge),
+                |candidates, _| {
+                    plain_is_first = candidates
+                        .first()
+                        .is_some_and(|candidate| candidate.text() == "ないか");
+                    let negative = candidates
+                        .iter()
+                        .position(|candidate| candidate.text() == "無いか");
+                    let clinic = candidates
+                        .iter()
+                        .position(|candidate| candidate.text() == "内科");
+                    negative_before_clinic = negative
+                        .zip(clinic)
+                        .is_some_and(|(negative, clinic)| negative < clinic);
+                },
+            )
+            .expect("measured bridge conversion");
+    });
+
+    assert_eq!(observed, 0, "cross-commit conversion allocated");
+    assert!(plain_is_first);
+    assert!(negative_before_clinic);
 }
 
 /// Prediction crosses the single-slot mailbox and copies the worker result
