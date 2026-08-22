@@ -15,7 +15,7 @@
 
 ## 検証
 
-リリースworkflowはformat、strict clippy、workspace test、残存test process、version整合性、辞書再現ビルド、release binary、installer warningsを検査します。配布物はGitHub Actionsの保護されたrelease environmentで署名し、署名済みinstallerからupdater manifestを生成します。
+リリースworkflowはformat、strict clippy、workspace test、残存test process、version整合性、辞書再現ビルド、release binary、installer warningsを検査します。installerからupdater manifestを生成し、サイズとSHA-256が一致することを確認します。署名secretが完全に設定されている場合はAuthenticode署名も検証しますが、1.0.18はowner承認により未署名で公開します。
 
 ## 対応環境
 
@@ -23,6 +23,6 @@ Windows 11 build 22000以降、x64、AVX対応CPU。32 bitホスト用DLLとARM6
 
 ## インストール前の確認
 
-このリリースの `sakura_setup.exe` は GitHub Actions でビルドし、Authenticode 署名と SHA-256 を検証したものです。Release ページに表示される SHA-256 と一致することを確認してから実行してください。
+このリリースの `sakura_setup.exe` はAuthenticode未署名です。GitHubのReleaseページから取得し、公開されているSHA-256と一致することを確認してから手動で実行してください。未署名installerは自動更新の署名検証を通らないため、1.0.18への更新にはReleaseページからの手動インストールが必要です。
 
 アップグレードは versioned payload の side-by-side 切替で行われます。新しい payload の検証に失敗した場合は、TSF 登録を新しい版へ切り替えずに中止します。

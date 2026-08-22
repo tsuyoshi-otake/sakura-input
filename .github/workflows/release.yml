@@ -1,4 +1,4 @@
-name: Signed release candidate
+name: Release candidate
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   release-candidate:
-    name: Build signed v1 release candidate
+    name: Build v1 release candidate
     runs-on: windows-latest
     timeout-minutes: 90
     environment: release
@@ -98,20 +98,32 @@ jobs:
       - name: Build release binaries
         run: cargo build --workspace --release --locked
 
-      - name: Materialize the protected signing certificate
+      - name: Determine Authenticode signing mode
         id: certificate
         shell: pwsh
         env:
           SIGNING_PFX_BASE64: ${{ secrets.SIGNING_CERTIFICATE_PFX_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          SIGNING_SUBJECT: ${{ secrets.SIGNING_CERTIFICATE_SUBJECT }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)) {
-            throw 'release environment has no SIGNING_CERTIFICATE_PFX_BASE64 secret'
+          $values = @($env:SIGNING_PFX_BASE64, $env:SIGNING_PASSWORD, $env:SIGNING_SUBJECT)
+          $presentCount = @($values | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+          if ($presentCount -eq 0) {
+            'enabled=false' >> $env:GITHUB_OUTPUT
+            'status=unsigned-owner-approved' >> $env:GITHUB_OUTPUT
+            Write-Warning 'building the owner-approved unsigned release candidate'
+          } elseif ($presentCount -ne $values.Count) {
+            throw 'release signing secrets must be either all present or all absent'
+          } else {
+            $path = Join-Path $env:RUNNER_TEMP 'sakura-input-release-signing.pfx'
+            [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            'enabled=true' >> $env:GITHUB_OUTPUT
+            'status=authenticode-signed' >> $env:GITHUB_OUTPUT
+            "path=$path" >> $env:GITHUB_OUTPUT
           }
-          $path = Join-Path $env:RUNNER_TEMP 'sakura-input-release-signing.pfx'
-          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
-          "path=$path" >> $env:GITHUB_OUTPUT
 
       - name: Sign and verify every shipped binary
+        if: steps.certificate.outputs.enabled == 'true'
         shell: pwsh
         env:
           SAKURA_SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -141,6 +153,7 @@ jobs:
         run: ./scripts/build-installer.ps1
 
       - name: Sign and verify installer
+        if: steps.certificate.outputs.enabled == 'true'
         shell: pwsh
         env:
           SAKURA_SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -161,9 +174,12 @@ jobs:
 
       - name: Assemble immutable release bundle
         shell: pwsh
+        env:
+          SIGNING_STATUS: ${{ steps.certificate.outputs.status }}
         run: |
           [IO.Directory]::CreateDirectory('release-bundle') | Out-Null
           [IO.Directory]::CreateDirectory('release-bundle/payload') | Out-Null
+          [IO.File]::WriteAllText('release-bundle/signing-status.txt', "$env:SIGNING_STATUS`n", [Text.UTF8Encoding]::new($false))
           [IO.File]::Copy('installer/out/sakura_setup.exe', 'release-bundle/sakura_setup.exe', $true)
           [IO.File]::Copy('installer/out/release-manifest.txt', 'release-bundle/release-manifest.txt', $true)
           [IO.File]::Copy("docs/release-notes-v$env:RELEASE_VERSION.md", 'release-bundle/release-notes.md', $true)
@@ -191,10 +207,10 @@ jobs:
             [IO.File]::Copy((Join-Path 'artifacts/release/neural-payload/licenses' $name), (Join-Path 'release-bundle/payload/licenses' $name), $true)
           }
 
-      - name: Upload signed release candidate
+      - name: Upload release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: sakura-input-${{ env.RELEASE_VERSION }}-signed
+          name: sakura-input-${{ env.RELEASE_VERSION }}-release-candidate
           path: release-bundle
           if-no-files-found: error
           retention-days: 30

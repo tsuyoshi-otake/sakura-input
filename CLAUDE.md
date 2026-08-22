@@ -1,5 +1,12 @@
 # Sakura Input 引き継ぎ指示書
 
+## リリース署名に関するowner判断（2026-08-22）
+
+- ownerは、コード署名証明書が未設定でもSakura Inputの正式リリースを公開してよいと明示承認した。GitHub Actionsの`release` environmentに署名secretがないことを、リリースのblockerにしない。
+- 未署名のinstallerを署名済みと表現してはいけない。リリースノートと導入案内にはAuthenticode未署名であること、GitHub ReleaseのSHA-256を照合して手動インストールすることを明記する。
+- updater側の`WinVerifyTrust` fail-closed検証は弱めない。未署名リリースの自動取得・実行は拒否される設計を維持し、未署名版は手動インストール対象として扱う。
+- 署名secretが3点すべて揃っている場合は従来どおり署名・検証してよい。部分設定は曖昧な成果物を作らずCIを失敗させる。
+
 ## Issue #58 GPT-5.6 Luna文章変換・選択文字列校正
 
 - AI文章変換は明示操作だけで起動する。共通トリガーは既定のJIS `変換`、設定可能な`Caps Lock`、無効の3択で、preeditを優先し、次にホストの非空選択範囲を対象とする。対象がない場合は既存キー動作へ戻す。校正はlanguage-barメニューから選択文字列に対してだけ起動し、composition中は拒否する。
