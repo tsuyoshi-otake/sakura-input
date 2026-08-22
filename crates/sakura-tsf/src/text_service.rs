@@ -47,7 +47,7 @@ use windows::Win32::UI::TextServices::{
     ITfSource_Impl, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
     ITfTextInputProcessor_Impl, ITfTextLayoutSink, ITfTextLayoutSink_Impl, ITfThreadMgr,
     InputScope as TfInputScope, TfLBIClick, TfLayoutCode, GUID_LBI_INPUTMODE, GUID_PROP_INPUTSCOPE,
-    TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_BUTTON, TF_LBI_STYLE_BTN_MENU,
+    TF_ANCHOR_END, TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_BUTTON, TF_LBI_STYLE_BTN_MENU,
     TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -374,6 +374,26 @@ struct PendingWrite {
     /// Developer-history data is terminalized only after the host write has a
     /// journal outcome, never merely when the provider returned a result.
     ai_record: Option<PendingAiRecord>,
+}
+
+/// Exact host-document proof for the one composition immediately following a
+/// commit. The range spans the committed text and is retained only until the
+/// next real key; its end must still equal the collapsed host selection and its
+/// text must still match before the engine may consume cross-commit context.
+#[derive(Debug, Clone)]
+struct VerifiedDocumentAdjacency {
+    context: ITfContext,
+    committed_range: ITfRange,
+    expected: String,
+}
+
+#[derive(Debug, Clone)]
+enum DocumentAdjacency {
+    /// The host accepted the commit, but it refused one of the bounded range
+    /// checks needed to prove the exact caret/text relation. The next real key
+    /// must reset document-relative engine state before it is sent.
+    Unverified,
+    Verified(VerifiedDocumentAdjacency),
 }
 
 #[derive(Debug, Clone)]
@@ -1006,6 +1026,14 @@ pub struct TextService {
     engine_recovery: Cell<EngineRecoveryFence>,
     writes: RefCell<WriteCoordinator<PendingWrite>>,
     engine: RefCell<Engine>,
+    /// Memory-only proof that the next composition is still immediately after
+    /// the last applied Sakura commit. It is never persisted or sent across
+    /// process boundaries and is consumed by the next real key.
+    document_adjacency: RefCell<Option<DocumentAdjacency>>,
+    /// Explicit fail-closed owner when a lifecycle callback cannot borrow the
+    /// range slot re-entrantly. The next real key resets engine context even if
+    /// an older verified range is still present.
+    document_adjacency_must_reset: Cell<bool>,
     /// The TSF input-mode item is deliberately visible only while a document
     /// caret belongs to this service. `Cell` keeps focus loss authoritative
     /// even if the shell re-enters a language-bar callback.
@@ -1041,6 +1069,8 @@ impl TextService {
             engine_recovery: Cell::new(EngineRecoveryFence::default()),
             writes: RefCell::new(WriteCoordinator::new(DEFAULT_WRITE_CAPACITY)),
             engine: RefCell::new(Engine::new()),
+            document_adjacency: RefCell::new(None),
+            document_adjacency_must_reset: Cell::new(false),
             focus_foreground: Cell::new(false),
             ai_text: RefCell::new(AiTextState::default()),
             ai_key_latched: Cell::new(false),
@@ -1922,6 +1952,10 @@ impl TextService {
     }
 
     fn invalidate_for_focus_change(&self) {
+        // Focus is a semantic document boundary even when the host later
+        // returns the same ITfContext pointer. Defer the bounded engine reset
+        // until the next real key so this lifecycle callback never blocks.
+        self.invalidate_document_adjacency();
         if !self.try_settle_deferred_undo_terminalization() {
             self.defer_undo_terminalization(Some(UndoCommitOutcome::Unknown));
             return;
@@ -2065,6 +2099,7 @@ impl TextService {
             return Ok(());
         }
         if composition_context_changed || context_replaced {
+            self.invalidate_document_adjacency();
             self.record_diagnostic_lifecycle(
                 diagnostic_ring::LifecycleEvent::ContextReplaced,
                 incoming_context.0 as u64,
@@ -2638,15 +2673,16 @@ impl TextService {
             return;
         }
 
+        let mut document_context_reset = false;
         if let Ok(mut engine) = self.engine.try_borrow_mut() {
             let status = engine.input_mode_status();
             let can_change = status.is_some_and(|status| status.can_change);
             match command {
                 MenuCommand::RestoreMode if status.is_some_and(|status| status.can_restore) => {
-                    let _ = engine.restore_input_mode();
+                    document_context_reset = engine.restore_input_mode();
                 }
                 MenuCommand::SetMode(mode) if can_change => {
-                    let _ = engine.set_input_mode(mode);
+                    document_context_reset = engine.set_input_mode(mode);
                 }
                 MenuCommand::ToggleIme if can_change => {
                     let target = if status.is_some_and(|status| status.mode == Mode::Direct) {
@@ -2654,7 +2690,7 @@ impl TextService {
                     } else {
                         Mode::Direct
                     };
-                    let _ = engine.set_input_mode(target);
+                    document_context_reset = engine.set_input_mode(target);
                 }
                 // Settings is handled before this document-scoped command
                 // path. Keep the defensive terminal arm explicit in case a
@@ -2664,7 +2700,111 @@ impl TextService {
                 _ => {}
             }
         }
+        if document_context_reset {
+            // SetMode performs the matching engine-side carry/context reset.
+            self.clear_document_adjacency();
+        }
         self.sync_mode_item();
+    }
+
+    fn clear_document_adjacency(&self) {
+        match self.document_adjacency.try_borrow_mut() {
+            Ok(mut slot) => {
+                slot.take();
+                self.document_adjacency_must_reset.set(false);
+            }
+            Err(_) => {
+                // A re-entrant lifecycle event is authoritative even when the
+                // range slot is temporarily owned by an outer callback.
+                self.document_adjacency_must_reset.set(true);
+            }
+        }
+    }
+
+    fn invalidate_document_adjacency(&self) {
+        if let Ok(mut slot) = self.document_adjacency.try_borrow_mut() {
+            slot.take();
+        }
+        // Set this after the borrow attempt so a re-entrant outer publication
+        // cannot accidentally make a stale range authoritative again.
+        self.document_adjacency_must_reset.set(true);
+    }
+
+    fn publish_document_adjacency(&self, proof: DocumentAdjacency) {
+        if self.document_adjacency_must_reset.get() {
+            // A focus/context callback that ran during the committing edit is
+            // newer authority than this callback-local proof. Never let late
+            // publication erase its pending engine reset.
+            if let Ok(mut slot) = self.document_adjacency.try_borrow_mut() {
+                slot.take();
+            }
+            return;
+        }
+        if !self.focus_foreground.get()
+            || self.cached_input_scope.get() != Some(sakura_proto::InputScope::Normal)
+        {
+            self.invalidate_document_adjacency();
+            return;
+        }
+        match self.document_adjacency.try_borrow_mut() {
+            Ok(mut slot) => {
+                *slot = Some(proof);
+            }
+            Err(_) => self.document_adjacency_must_reset.set(true),
+        }
+    }
+
+    /// Resets the engine's document-relative context without changing the
+    /// user's explicit input mode. A refused or uncertain reset retires the
+    /// link so the next scope publication creates a fresh session.
+    fn reset_engine_document_context(&self) {
+        let reset = self
+            .engine
+            .try_borrow_mut()
+            .map(|mut engine| engine.reset_document_context())
+            .unwrap_or(false);
+        if !reset {
+            self.disconnect();
+        }
+    }
+
+    /// Consumes the one-shot host proof before a real key can read bridge/carry
+    /// state. A refused read, changed caret, changed text, or re-entrant slot
+    /// conflict all reset the document context first.
+    fn consume_document_adjacency(&self, context: &ITfContext) {
+        let forced_reset = self.document_adjacency_must_reset.replace(false);
+        let proof = match self.document_adjacency.try_borrow_mut() {
+            Ok(mut slot) => slot.take(),
+            Err(_) => {
+                self.document_adjacency_must_reset.set(true);
+                self.reset_engine_document_context();
+                return;
+            }
+        };
+        if forced_reset {
+            self.reset_engine_document_context();
+            return;
+        }
+        let Some(proof) = proof else {
+            return;
+        };
+        let valid = match proof {
+            DocumentAdjacency::Unverified => false,
+            DocumentAdjacency::Verified(proof) => self
+                .client_id()
+                .ok()
+                .and_then(|client_id| {
+                    let callback_context = context.clone();
+                    edit_session::read_in_document_sync(context, client_id, move |ec| {
+                        document_adjacency_matches(&proof, &callback_context, ec)
+                    })
+                    .ok()
+                })
+                .unwrap_or(false),
+        };
+        if !valid {
+            self.reset_engine_document_context();
+        }
     }
 
     /// Closes the connection, which is also what tells the engine to forget
@@ -2672,6 +2812,7 @@ impl TextService {
     /// so there is no `DeleteSession` to send and no way to leak one by
     /// failing to send it.
     fn disconnect(&self) {
+        self.clear_document_adjacency();
         if let Ok(mut engine) = self.engine.try_borrow_mut() {
             *engine = Engine::new();
         }
@@ -4279,6 +4420,136 @@ fn read_range_text(range: &ITfRange, ec: u32) -> Result<String> {
     Ok(text)
 }
 
+/// Only a complete composition commit can seed the next document-relative
+/// continuation. Direct-mode character commits, partial segment commits,
+/// reconversion selection, and commit-undo plans never arm a range proof.
+fn adjacency_commit_text(plan: &WritePlan) -> Option<&str> {
+    if !plan.before.has_composition
+        || plan.before.text.is_empty()
+        || plan.after.has_composition
+        || !plan.after.text.is_empty()
+        || plan.updates.len() != 1
+    {
+        return None;
+    }
+    match plan.updates.first()? {
+        Update::Commit(text) if !text.is_empty() => Some(text.as_str()),
+        Update::Show(_) | Update::Commit(_) | Update::Discard | Update::DeleteBefore(_) => None,
+    }
+}
+
+fn checked_adjacency_host_call<T>(
+    authority: &mut impl FnMut() -> Result<()>,
+    call: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    authority()?;
+    let result = call();
+    let post = authority();
+    match (result, post) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+    }
+}
+
+/// Captures the exact committed run and collapsed caret after a successful
+/// document mutation. A host that cannot expose the bounded proof produces an
+/// `Unverified` state at the caller; it never weakens the engine-side gate.
+fn capture_document_adjacency(
+    context: &ITfContext,
+    ec: u32,
+    expected: &str,
+    authority: &mut impl FnMut() -> Result<()>,
+) -> Result<VerifiedDocumentAdjacency> {
+    if expected.is_empty() {
+        return Err(Error::from_hresult(E_INVALIDARG));
+    }
+    let selection = composition::current_selection_range(context, ec, authority)?;
+    // SAFETY: `selection` belongs to `context` under the active edit cookie.
+    let empty = checked_adjacency_host_call(authority, || unsafe { selection.IsEmpty(ec) })?;
+    if !empty.as_bool() {
+        return Err(Error::new(
+            E_UNEXPECTED,
+            "committed continuation requires a collapsed selection",
+        ));
+    }
+    // SAFETY: cloning a range does not mutate the document and the selection
+    // remains valid under this edit cookie.
+    let committed_range = checked_adjacency_host_call(authority, || unsafe { selection.Clone() })?;
+    let units = i32::try_from(expected.encode_utf16().count())
+        .map_err(|_| Error::from_hresult(E_INVALIDARG))?;
+    if units <= 0 {
+        return Err(Error::from_hresult(E_INVALIDARG));
+    }
+    let mut shifted = 0i32;
+    // SAFETY: `committed_range` is writable under `ec`; a null halt condition
+    // requests the normal context boundary and `shifted` is a live out pointer.
+    checked_adjacency_host_call(authority, || unsafe {
+        committed_range.ShiftStart(ec, -units, &mut shifted, core::ptr::null())
+    })?;
+    if shifted != -units {
+        return Err(Error::new(
+            E_UNEXPECTED,
+            "committed continuation range could not cover the exact text",
+        ));
+    }
+    let actual = checked_adjacency_host_call(authority, || read_range_text(&committed_range, ec))?;
+    if actual != expected {
+        return Err(Error::new(
+            E_UNEXPECTED,
+            "committed continuation range text differs from the engine commit",
+        ));
+    }
+    Ok(VerifiedDocumentAdjacency {
+        context: context.clone(),
+        committed_range,
+        expected: expected.to_owned(),
+    })
+}
+
+fn adjacency_observations_match(
+    selection_empty: bool,
+    selection_at_committed_end: bool,
+    actual: Option<&str>,
+    expected: &str,
+) -> bool {
+    selection_empty && selection_at_committed_end && actual.is_some_and(|actual| actual == expected)
+}
+
+/// Re-proves the exact semantic invariant at the next real key rather than
+/// trusting that every host reports every intermediate caret/edit event. Moving
+/// away and back is safe when both the caret and text are again exact; edits to
+/// the retained run, paste, undo, selection, and an unavailable read all fail
+/// closed.
+fn document_adjacency_matches(
+    proof: &VerifiedDocumentAdjacency,
+    context: &ITfContext,
+    ec: u32,
+) -> Result<bool> {
+    if proof.context.as_raw() != context.as_raw() {
+        return Ok(false);
+    }
+    let selection = composition::current_selection_range(context, ec, &mut || Ok(()))?;
+    // SAFETY: both ranges belong to this context and `ec` is the active read
+    // cookie. These calls observe positions/text without mutating the host.
+    let selection_empty = unsafe { selection.IsEmpty(ec)? }.as_bool();
+    // SAFETY: both ranges belong to this context and `ec` is the active read
+    // cookie; comparing anchors does not mutate either range or the host.
+    let same_start =
+        unsafe { selection.IsEqualStart(ec, &proof.committed_range, TF_ANCHOR_END)? }.as_bool();
+    // SAFETY: both ranges belong to this context and `ec` is the active read
+    // cookie; comparing anchors does not mutate either range or the host.
+    let same_end =
+        unsafe { selection.IsEqualEnd(ec, &proof.committed_range, TF_ANCHOR_END)? }.as_bool();
+    let actual = read_range_text(&proof.committed_range, ec).ok();
+    Ok(adjacency_observations_match(
+        selection_empty,
+        same_start && same_end,
+        actual.as_deref(),
+        &proof.expected,
+    ))
+}
+
 impl TextService_Impl {
     fn validate_pending_write(&self, ticket: Ticket) -> core::result::Result<(), CancelReason> {
         self.get_impl()
@@ -5140,6 +5411,12 @@ impl TextService_Impl {
         if !service.can_admit_write_for_context(write_context)? {
             return Ok(service.host_eaten(owner, key, false));
         }
+        // The preceding commit's range proof is intentionally absent from
+        // OnTestKeyDown. Consume and revalidate it only on the real callback;
+        // a mismatch resets bridge/carry/recency before this key reaches the
+        // engine, while a valid proof remains available throughout the new
+        // composition after this one-shot check.
+        service.consume_document_adjacency(write_context);
         if !service.publish_input_scope(write_context)? {
             // Scope publication is part of the privacy boundary for a real
             // key. A refused publication leaves a host-eligible key to the
@@ -5678,6 +5955,7 @@ impl TextService_Impl {
             }
         }
 
+        let adjacency_expected = adjacency_commit_text(&payload.plan).map(str::to_owned);
         let mut failed_update = None;
         for update in &payload.plan.updates {
             if let Update::DeleteBefore(expected) = update {
@@ -5736,6 +6014,13 @@ impl TextService_Impl {
             self.fail_after_document_access(ticket, flight, handle, &payload.context, reason);
             return Ok(());
         }
+
+        let adjacency_proof = adjacency_expected.map(|expected| {
+            match capture_document_adjacency(&payload.context, ec, &expected, &mut authority) {
+                Ok(proof) => DocumentAdjacency::Verified(proof),
+                Err(_) => DocumentAdjacency::Unverified,
+            }
+        });
 
         // COM calls above may re-enter and invalidate this operation.  Once a
         // document mutation happened, fail closed rather than publishing a
@@ -5797,6 +6082,15 @@ impl TextService_Impl {
             }
         };
         let applied = if let Some(completion) = completion {
+            if completion.outcome == TerminalOutcome::Applied {
+                if let Some(proof) = adjacency_proof {
+                    service.publish_document_adjacency(proof);
+                } else {
+                    service.clear_document_adjacency();
+                }
+            } else {
+                service.clear_document_adjacency();
+            }
             service.record_diagnostic_write(
                 ticket,
                 diagnostic_ring::RequestPath::None,
@@ -6355,6 +6649,10 @@ impl ITfFnReconversion_Impl for TextService_Impl {
         if !service.composition_is_idle()? {
             return Err(Error::from_hresult(E_FAIL));
         }
+        // A real reconversion selects an explicit host range and therefore
+        // cannot inherit the immediately-preceding commit's adjacency. Keep
+        // the reset pending until the engine confirms it accepted the request.
+        service.invalidate_document_adjacency();
 
         // SAFETY: the callback range is live and the clone is retained until
         // the write edit session selects it.
@@ -6383,7 +6681,12 @@ impl ITfFnReconversion_Impl for TextService_Impl {
             }
         };
         let output = match answer {
-            Answer::Ready(output) => output,
+            Answer::Ready(output) => {
+                // The engine's real reconversion path reset document-relative
+                // context before staging its new composition.
+                service.clear_document_adjacency();
+                output
+            }
             Answer::Busy => {
                 service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
                 return Err(Error::from_hresult(E_FAIL));
@@ -7091,6 +7394,88 @@ mod tests {
             text: text.to_owned(),
             has_composition,
         }
+    }
+
+    #[test]
+    fn adjacency_observation_gate_requires_exact_collapsed_caret_and_text() {
+        assert!(adjacency_observations_match(
+            true,
+            true,
+            Some("考慮漏れ"),
+            "考慮漏れ"
+        ));
+        assert!(!adjacency_observations_match(
+            false,
+            true,
+            Some("考慮漏れ"),
+            "考慮漏れ"
+        ));
+        assert!(!adjacency_observations_match(
+            true,
+            false,
+            Some("考慮漏れ"),
+            "考慮漏れ"
+        ));
+        assert!(!adjacency_observations_match(true, true, None, "考慮漏れ"));
+        assert!(!adjacency_observations_match(
+            true,
+            true,
+            Some("検討漏れ"),
+            "考慮漏れ"
+        ));
+    }
+
+    #[test]
+    fn only_a_complete_nonempty_composition_commit_arms_adjacency() {
+        let complete = WritePlan {
+            updates: vec![Update::Commit("考慮漏れ".to_owned())],
+            before: state("考慮漏れ", true),
+            after: state("", false),
+        };
+        assert_eq!(adjacency_commit_text(&complete), Some("考慮漏れ"));
+
+        for plan in [
+            WritePlan {
+                updates: vec![Update::Commit("a".to_owned())],
+                before: state("", false),
+                after: state("", false),
+            },
+            WritePlan {
+                updates: vec![Update::Commit("一部".to_owned())],
+                before: state("一部残り", true),
+                after: state("残り", true),
+            },
+            WritePlan {
+                updates: vec![Update::Commit(String::new())],
+                before: state("考慮漏れ", true),
+                after: state("", false),
+            },
+            WritePlan {
+                updates: vec![Update::Discard],
+                before: state("考慮漏れ", true),
+                after: state("", false),
+            },
+        ] {
+            assert_eq!(adjacency_commit_text(&plan), None);
+        }
+    }
+
+    #[test]
+    fn authoritative_adjacency_invalidation_cannot_be_overwritten_by_late_publication() {
+        let service = TextService::new();
+        service.focus_foreground.set(true);
+        service
+            .cached_input_scope
+            .set(Some(sakura_proto::InputScope::Normal));
+
+        service.invalidate_document_adjacency();
+        service.publish_document_adjacency(DocumentAdjacency::Unverified);
+
+        assert!(service.document_adjacency.borrow().is_none());
+        assert!(
+            service.document_adjacency_must_reset.get(),
+            "the next real key must still retire engine-side context"
+        );
     }
 
     #[test]

@@ -847,7 +847,7 @@ Specialization is a distinct cost layer, exactly like personalization
 ### 5.8 Recent-context conversion
 
 "Consider what I just typed": conversion of the current preedit is biased
-by the last few committed inputs. Three mechanisms, all cheap:
+by the last few committed inputs. Four bounded mechanisms cooperate:
 
 - **Left-context carryover.** A new conversion does not start from a
   generic beginning-of-sentence state. The engine remembers the right
@@ -859,6 +859,55 @@ by the last few committed inputs. Three mechanisms, all cheap:
   (。！？) and sentence-final polite forms, on explicit mode switches,
   and on focus change — grammatical context must not leak across true
   sentence boundaries, where it is usually wrong.
+- **Cross-commit lexical bridge.** Carrying only the final right ID cannot
+  recover a dictionary path whose useful analysis begins before an explicit
+  commit. For one complete system-dictionary commit, the engine therefore
+  retains the exact final raw edge captured before bunsetsu display fusion:
+  its bounded reading/surface tail, the typed right context before that edge,
+  and the selected edge's connection-plus-word cost. The next classified
+  `Normal` conversion first produces the ordinary current-only list, then may
+  replay `tail + current` system-dictionary-only in the same converter slot.
+  A replay can only lower an already-reachable direct system candidate with
+  the same current surface and terminal right ID; it never manufactures a
+  candidate, changes segmentation/provenance, or feeds another bridge. The
+  combined surface must contain the exact committed surface prefix and its raw
+  path must either span the commit boundary or expose a typed frontier there.
+  Its score is normalized by subtracting the selected tail cost; negative or
+  overflowing deltas, incomplete search, mismatched evidence, and all budget
+  failures retain the complete current-only ordering.
+
+  The retained tail is at least two characters and at most 48 UTF-8 bytes
+  (surface 96 bytes); the current reading is at most 96 bytes. Replay is capped
+  at 4,096 lattice nodes and 8,192 search states, and candidate projection is
+  `O(K²)` for the already bounded candidate count. Scratch is converter-owned,
+  so the warmed hot path allocates nothing and never acquires a second worker
+  slot. A 2026-08-22 release-build run on an AMD Ryzen 7 9700X (500 warmups,
+  5,000 samples) measured target full-conversion p99 at 0.238 ms, paired bridge
+  increment p99 at 0.176 ms, and the maximum 48-byte-tail + 96-byte-current
+  case at 1.053 ms p99, all within the 20 ms conversion budget. A conservative
+  orthographic transfer may copy a measured contextual
+  gain from the exact kana reading to another existing system candidate only
+  when both have exact full-context paths, the same terminal class, and a
+  shared majority suffix of at least two hiragana characters. This rule is
+  lexical-string agnostic: `検討 + しますか` exercises the same path as
+  `考慮漏れ + ないか`; unrelated `内科`/`内か` forms do not inherit it.
+
+  The bridge is one-session, memory-only state. Exact user-dictionary entries
+  bypass replay, explicit learning remains authoritative, and repaired,
+  generated, fallback, user, exact-synthetic, or already bridge-rescored paths
+  cannot seed it. It is never sent to the neural/long-text worker, history,
+  learning, logs, or disk. TSF captures the exact committed `ITfRange` after
+  the applied write and, before the next real key, synchronously re-proves that
+  the range text is unchanged and its end equals the collapsed caret. Focus or
+  context replacement, selection/caret movement, host edits, undo,
+  reconversion, mode changes, punctuation/whitespace boundaries, sensitive or
+  unclassified scopes, and an unavailable read fail closed. The protocol-v19
+  `ResetDocumentContext` request then clears carry, bridge, commit recency,
+  exact commit-undo, raw provenance, and prediction cache while preserving the
+  user's explicit input mode; a refused or uncertain reset retires the link.
+  The bridge is evidence, not a fixed bonus: for example, an atomic
+  `記載漏れ` analysis improves the grammatical candidates but can still leave
+  `内科` first when its retained reanalysis cost does not justify promotion.
 - **Commit cache (recency bonus).** A per-session ring buffer holds the
   last N commits (default 8, ≈500 chars, in-memory only). Words whose
   surface appears in the buffer get a decaying cost bonus: once you have

@@ -61,6 +61,9 @@ pub(crate) const REQ_CANCEL_AI_TEXT: u16 = 0x0019;
 pub(crate) const REQ_QUEUE_CANDIDATE_COMMIT: u16 = 0x001A;
 pub(crate) const REQ_POLL_CANDIDATE_COMMIT: u16 = 0x001B;
 pub(crate) const REQ_COMMIT_CANDIDATE: u16 = 0x001C;
+/// Invalidates document-relative, memory-only context while preserving the
+/// session's explicit input mode and profile configuration.
+pub(crate) const REQ_RESET_DOCUMENT_CONTEXT: u16 = 0x001D;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -117,6 +120,12 @@ pub enum Request {
     },
     /// Reverts the current composition (cancels it).
     Revert {
+        session: SessionId,
+    },
+    /// Clears context that is meaningful only while the caret remains directly
+    /// after the last committed run. The frontend sends this before the next
+    /// real key when exact TSF range validation can no longer prove adjacency.
+    ResetDocumentContext {
         session: SessionId,
     },
     /// Completes the two-phase exact-text commit undo transaction. The TSF
@@ -580,6 +589,7 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::ProbeKey { .. } => REQ_PROBE_KEY,
         Request::Commit { .. } => REQ_COMMIT,
         Request::Revert { .. } => REQ_REVERT,
+        Request::ResetDocumentContext { .. } => REQ_RESET_DOCUMENT_CONTEXT,
         Request::UndoCommit { .. } => REQ_UNDO_COMMIT,
         Request::SetInputScope { .. } => REQ_SET_INPUT_SCOPE,
         Request::SetMode { .. } => REQ_SET_MODE,
@@ -626,6 +636,7 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
         }
         Request::Commit { session } => w.write_u64(*session),
         Request::Revert { session } => w.write_u64(*session),
+        Request::ResetDocumentContext { session } => w.write_u64(*session),
         Request::UndoCommit { session, outcome } => {
             w.write_u64(*session)?;
             outcome.encode(w)
@@ -912,6 +923,9 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
             session: r.read_u64()?,
         },
         REQ_REVERT => Request::Revert {
+            session: r.read_u64()?,
+        },
+        REQ_RESET_DOCUMENT_CONTEXT => Request::ResetDocumentContext {
             session: r.read_u64()?,
         },
         REQ_UNDO_COMMIT => Request::UndoCommit {

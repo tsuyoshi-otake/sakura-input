@@ -512,6 +512,33 @@ impl Engine {
         }
     }
 
+    /// Retires document-relative context while preserving the explicit input
+    /// mode. The caller uses this only after exact TSF range validation fails;
+    /// an uncertain outcome desynchronizes or drops the link before reuse.
+    pub(crate) fn reset_document_context(&mut self) -> bool {
+        let Some(link) = self.link() else {
+            return false;
+        };
+        let request = Request::ResetDocumentContext {
+            session: link.session,
+        };
+        match link.client.call(&request, KEY_BUDGET) {
+            Ok(Response::Ok) => {
+                link.menu_mode_restore = None;
+                true
+            }
+            Err(Fault::Timeout) => {
+                note_timeout(TimeoutOperation::Administration);
+                link.desynchronized = true;
+                false
+            }
+            Ok(_) | Err(_) => {
+                self.drop_link();
+                false
+            }
+        }
+    }
+
     /// Asks the engine to finalize whatever it is composing.
     ///
     /// Used when the document is about to stop being ours — focus loss —
@@ -921,6 +948,7 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::ApplyAiComposition { .. } => TimeoutOperation::Commit,
         Request::Reconvert { .. } => TimeoutOperation::Reconvert,
         Request::Revert { .. } => TimeoutOperation::Revert,
+        Request::ResetDocumentContext { .. } => TimeoutOperation::Administration,
         Request::UndoCommit { .. } => TimeoutOperation::Revert,
         Request::SetUiPlacement { .. }
         | Request::WatchUi { .. }
@@ -974,6 +1002,7 @@ fn session_effect(request: &Request) -> SessionEffect {
         Request::SendKey { .. }
         | Request::Commit { .. }
         | Request::Revert { .. }
+        | Request::ResetDocumentContext { .. }
         | Request::UndoCommit { .. }
         | Request::Reconvert { preview: false, .. }
         | Request::CreateSession { .. }
@@ -1266,6 +1295,64 @@ mod tests {
             }
         );
         assert!(matches!(engine.commit_candidate(41, 7), Answer::Ready(_)));
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn document_context_reset_preserves_mode_and_clears_menu_restore() {
+        let (name, server) = fake_engine("document-context-reset", |pipe, buffer| {
+            let payload = pipe
+                .read_frame(buffer)
+                .expect("ResetDocumentContext request");
+            let (id, request) =
+                decode_request(payload).expect("decodable ResetDocumentContext request");
+            assert_eq!(request, Request::ResetDocumentContext { session: 1 });
+            let mut reply = Vec::new();
+            encode_response(&Response::Ok, id, &mut reply)
+                .expect("encode ResetDocumentContext response");
+            pipe.write_all(&reply)
+                .expect("write ResetDocumentContext response");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        let link = engine.link.as_mut().expect("connected link");
+        link.mode = Mode::Katakana;
+        link.menu_mode_restore = Some(Mode::Hiragana);
+
+        assert!(engine.reset_document_context());
+        let link = engine.link.as_ref().expect("reset keeps healthy link");
+        assert_eq!(link.mode, Mode::Katakana);
+        assert_eq!(link.menu_mode_restore, None);
+
+        drop(engine);
+        server.join().expect("the server thread");
+    }
+
+    #[test]
+    fn refused_document_context_reset_retires_the_link() {
+        let (name, server) = fake_engine("document-context-reset-refused", |pipe, buffer| {
+            let payload = pipe
+                .read_frame(buffer)
+                .expect("ResetDocumentContext request");
+            let (id, request) =
+                decode_request(payload).expect("decodable ResetDocumentContext request");
+            assert_eq!(request, Request::ResetDocumentContext { session: 1 });
+            let mut reply = Vec::new();
+            encode_response(&Response::Error(ErrorCode::Busy), id, &mut reply)
+                .expect("encode refused reset response");
+            pipe.write_all(&reply)
+                .expect("write refused reset response");
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert!(engine.is_connected());
+        assert!(!engine.reset_document_context());
+        assert!(
+            !engine.is_connected(),
+            "an unconfirmed reset cannot leave document-relative state reusable"
+        );
 
         drop(engine);
         server.join().expect("the server thread");

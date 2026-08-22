@@ -23,9 +23,12 @@
 //! ```
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use sakura_core::{ConversionOptions, InputMethod, InputSupport, Preferences};
+use sakura_core::{
+    ConversionInput, ConversionOptions, CrossCommitBridge, InputMethod, InputSupport, Preferences,
+    RightContextId, MAX_CROSS_COMMIT_CURRENT_BYTES, MAX_CROSS_COMMIT_TAIL_BYTES,
+};
 use sakura_engine::dispatch::{Dispatcher, Reply};
 use sakura_engine::learning::LearningService;
 use sakura_engine::prediction::PredictionRuntime;
@@ -82,6 +85,121 @@ fn space_key() -> KeyInput {
         repeat: false,
         test_only: false,
     }
+}
+
+fn enter_key() -> KeyInput {
+    KeyInput {
+        code: KeyCode::Enter,
+        ch: None,
+        modifiers: Modifiers::NONE,
+        repeat: false,
+        test_only: false,
+    }
+}
+
+fn create_normal_session(dispatcher: &mut Dispatcher, process_name: &str) -> SessionId {
+    let mut out = OutputBuf::new();
+    let session = match dispatcher.dispatch(
+        &Request::CreateSession {
+            process_name: process_name.to_owned(),
+        },
+        &mut out,
+    ) {
+        Reply::Message(Response::SessionCreated { session, .. }) => session,
+        other => panic!("unexpected session response: {other:?}"),
+    };
+    assert!(matches!(
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut OutputBuf::new(),
+        ),
+        Reply::Message(Response::Ok)
+    ));
+    session
+}
+
+fn send_key(dispatcher: &mut Dispatcher, session: SessionId, key: KeyInput) -> OutputBuf {
+    let mut out = OutputBuf::new();
+    let reply = dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+    assert!(
+        matches!(reply, Reply::Output),
+        "unexpected key reply: {reply:?}"
+    );
+    out
+}
+
+fn type_romaji(dispatcher: &mut Dispatcher, session: SessionId, romaji: &str) -> OutputBuf {
+    let mut out = OutputBuf::new();
+    for ch in romaji.chars() {
+        out = send_key(dispatcher, session, char_key(ch));
+    }
+    out
+}
+
+fn commit_converted_romaji(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    romaji: &str,
+) -> String {
+    type_romaji(dispatcher, session, romaji);
+    send_key(dispatcher, session, space_key());
+    send_key(dispatcher, session, enter_key())
+        .to_output()
+        .commit
+        .unwrap_or_default()
+}
+
+fn commit_named_converted_romaji(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    romaji: &str,
+    selected_segment: &str,
+) -> String {
+    type_romaji(dispatcher, session, romaji);
+    let converted = send_key(dispatcher, session, space_key());
+    let candidates = candidate_surfaces(&converted);
+    let index = candidates
+        .iter()
+        .position(|candidate| candidate == selected_segment)
+        .unwrap_or_else(|| panic!("missing {selected_segment} for {romaji}: {candidates:?}"));
+    let mut out = OutputBuf::new();
+    let reply = dispatcher.dispatch(
+        &Request::CommitCandidate {
+            session,
+            revision: 0,
+            candidate_index: u16::try_from(index).expect("bounded candidate index"),
+        },
+        &mut out,
+    );
+    assert!(
+        matches!(reply, Reply::Output),
+        "unexpected commit reply: {reply:?}"
+    );
+    out.to_output().commit.unwrap_or_default()
+}
+
+fn convert_romaji_in_session(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    romaji: &str,
+) -> Vec<String> {
+    type_romaji(dispatcher, session, romaji);
+    candidate_surfaces(&send_key(dispatcher, session, space_key()))
+}
+
+fn candidate_surfaces(out: &OutputBuf) -> Vec<String> {
+    out.to_output()
+        .candidates
+        .map(|list| {
+            list.items
+                .iter()
+                .map(|item| item.text.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
 }
 
 /// Types `romaji`, converts once, and returns the reading it composed together
@@ -191,6 +309,604 @@ fn open_dispatcher_with_input_method(input_method: InputMethod) -> Dispatcher {
     };
     Dispatcher::new_with_configuration(conversion, learning, preferences)
         .expect("configured dispatcher")
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_83_shipped_path_uses_a_costed_typed_frontier() {
+    let conversion = open_conversion();
+    let prefix_right = conversion
+        .with_candidates("こうりょ", ConversionOptions::default(), |candidates| {
+            candidates
+                .iter()
+                .find(|candidate| candidate.text() == "考慮")
+                .and_then(|candidate| candidate.segments().last())
+                .map(|segment| segment.right_id)
+                .expect("考慮 terminal right ID")
+        })
+        .expect("prefix conversion");
+    let (tail_right, tail_prefix_cost) = conversion
+        .with_candidates(
+            "もれ",
+            ConversionOptions {
+                initial_right_id: prefix_right,
+                ..ConversionOptions::default()
+            },
+            |candidates| {
+                let tail = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "漏れ")
+                    .expect("tail");
+                (
+                    tail.segments().last().expect("tail segment").right_id,
+                    conversion
+                        .cross_commit_prefix_cost(tail)
+                        .expect("one-edge system tail"),
+                )
+            },
+        )
+        .expect("tail conversion");
+    assert!(tail_prefix_cost > 0);
+    conversion
+        .with_conversion_input_bridge_hints(
+            ConversionInput::ordinary("ないか"),
+            ConversionOptions {
+                initial_right_id: tail_right,
+                ..ConversionOptions::default()
+            },
+            &[],
+            Some(CrossCommitBridge {
+                tail_reading: "もれ",
+                tail_surface: "漏れ",
+                prefix_right_id: RightContextId::new(prefix_right),
+                prefix_cost: tail_prefix_cost,
+            }),
+            |candidates, diagnostics| {
+                let surfaces = candidates
+                    .iter()
+                    .map(|candidate| candidate.text())
+                    .collect::<Vec<_>>();
+                let plain = surfaces
+                    .iter()
+                    .position(|surface| *surface == "ないか")
+                    .unwrap();
+                let negative = surfaces
+                    .iter()
+                    .position(|surface| *surface == "無いか")
+                    .unwrap();
+                let clinic = surfaces
+                    .iter()
+                    .position(|surface| *surface == "内科")
+                    .unwrap();
+                assert!(plain < negative && negative < clinic, "{surfaces:?}");
+                assert_eq!(diagnostics.cross_commit_bridge_spanning_paths, 0);
+                assert!(diagnostics.cross_commit_bridge_frontier_paths > 0);
+                assert!(diagnostics.cross_commit_bridge_candidates_rescored >= 2);
+            },
+        )
+        .expect("bridged conversion");
+}
+
+#[test]
+#[ignore = "release-only Issue #83 full-conversion percentile benchmark"]
+fn issue_83_cross_commit_bridge_release_percentiles() {
+    if cfg!(debug_assertions) {
+        panic!("timing evidence must be collected with --release");
+    }
+    const WARMUP: usize = 500;
+    const SAMPLES: usize = 5_000;
+    const BUDGET: Duration = Duration::from_millis(20);
+
+    let conversion = open_conversion();
+    let prefix_right = conversion
+        .with_candidates("こうりょ", ConversionOptions::default(), |candidates| {
+            candidates
+                .iter()
+                .find(|candidate| candidate.text() == "考慮")
+                .and_then(|candidate| candidate.segments().last())
+                .map(|segment| segment.right_id)
+                .expect("考慮 terminal right ID")
+        })
+        .expect("prefix conversion");
+    let (tail_right, tail_prefix_cost) = conversion
+        .with_candidates(
+            "もれ",
+            ConversionOptions {
+                initial_right_id: prefix_right,
+                ..ConversionOptions::default()
+            },
+            |candidates| {
+                let tail = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "漏れ")
+                    .expect("tail");
+                (
+                    tail.segments().last().expect("tail segment").right_id,
+                    conversion
+                        .cross_commit_prefix_cost(tail)
+                        .expect("one-edge system tail"),
+                )
+            },
+        )
+        .expect("tail conversion");
+    let target_options = ConversionOptions {
+        initial_right_id: tail_right,
+        ..ConversionOptions::default()
+    };
+    let target_bridge = CrossCommitBridge {
+        tail_reading: "もれ",
+        tail_surface: "漏れ",
+        prefix_right_id: RightContextId::new(prefix_right),
+        prefix_cost: tail_prefix_cost,
+    };
+
+    let max_tail = "あ".repeat(MAX_CROSS_COMMIT_TAIL_BYTES / "あ".len());
+    let max_current = "あ".repeat(MAX_CROSS_COMMIT_CURRENT_BYTES / "あ".len());
+    assert_eq!(max_tail.len(), MAX_CROSS_COMMIT_TAIL_BYTES);
+    assert_eq!(max_current.len(), MAX_CROSS_COMMIT_CURRENT_BYTES);
+    let max_bridge = CrossCommitBridge {
+        tail_reading: &max_tail,
+        tail_surface: &max_tail,
+        prefix_right_id: RightContextId::new(0),
+        prefix_cost: 0,
+    };
+
+    for _ in 0..WARMUP {
+        run_timed_conversion(&conversion, "ないか", target_options, None);
+        run_timed_conversion(&conversion, "ないか", target_options, Some(target_bridge));
+        run_timed_conversion(
+            &conversion,
+            &max_current,
+            ConversionOptions::default(),
+            Some(max_bridge),
+        );
+    }
+
+    let mut absent = Vec::with_capacity(SAMPLES);
+    let mut present = Vec::with_capacity(SAMPLES);
+    let mut incremental = Vec::with_capacity(SAMPLES);
+    let mut maximum = Vec::with_capacity(SAMPLES);
+    for index in 0..SAMPLES {
+        let (without, with) = if index % 2 == 0 {
+            (
+                run_timed_conversion(&conversion, "ないか", target_options, None),
+                run_timed_conversion(&conversion, "ないか", target_options, Some(target_bridge)),
+            )
+        } else {
+            let with =
+                run_timed_conversion(&conversion, "ないか", target_options, Some(target_bridge));
+            let without = run_timed_conversion(&conversion, "ないか", target_options, None);
+            (without, with)
+        };
+        absent.push(without);
+        present.push(with);
+        incremental.push(with.saturating_sub(without));
+        maximum.push(run_timed_conversion(
+            &conversion,
+            &max_current,
+            ConversionOptions::default(),
+            Some(max_bridge),
+        ));
+    }
+
+    let absent_report = percentiles(&mut absent);
+    let present_report = percentiles(&mut present);
+    let incremental_report = percentiles(&mut incremental);
+    let maximum_report = percentiles(&mut maximum);
+    println!(
+        "Issue #83 release benchmark ({SAMPLES} samples after {WARMUP} warmups):\n\
+         current-only full conversion: {absent_report}\n\
+         target bridge full conversion: {present_report}\n\
+         paired bridge increment proxy: {incremental_report}\n\
+         max 48-byte tail + 96-byte current full conversion: {maximum_report}"
+    );
+    assert!(
+        present_report.p99 < BUDGET,
+        "target bridge p99 {:?} exceeds {BUDGET:?}",
+        present_report.p99
+    );
+    assert!(
+        maximum_report.p99 < BUDGET,
+        "maximum-bound bridge p99 {:?} exceeds {BUDGET:?}",
+        maximum_report.p99
+    );
+}
+
+fn run_timed_conversion(
+    conversion: &sakura_engine::dictionary::ConversionService,
+    reading: &str,
+    options: ConversionOptions,
+    bridge: Option<CrossCommitBridge<'_>>,
+) -> Duration {
+    let start = Instant::now();
+    conversion
+        .with_conversion_input_bridge_hints(
+            ConversionInput::ordinary(reading),
+            options,
+            &[],
+            bridge,
+            |candidates, diagnostics| {
+                std::hint::black_box((
+                    candidates.first().map(|candidate| candidate.cost),
+                    diagnostics.cross_commit_bridge_candidates_examined,
+                ));
+            },
+        )
+        .expect("benchmark conversion");
+    start.elapsed()
+}
+
+#[derive(Clone, Copy)]
+struct PercentileReport {
+    p50: Duration,
+    p99: Duration,
+    max: Duration,
+}
+
+impl std::fmt::Display for PercentileReport {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            out,
+            "p50={:.3}ms p99={:.3}ms max={:.3}ms",
+            self.p50.as_secs_f64() * 1_000.0,
+            self.p99.as_secs_f64() * 1_000.0,
+            self.max.as_secs_f64() * 1_000.0
+        )
+    }
+}
+
+fn percentiles(samples: &mut [Duration]) -> PercentileReport {
+    samples.sort_unstable();
+    PercentileReport {
+        p50: samples[samples.len() / 2],
+        p99: samples[samples.len() * 99 / 100],
+        max: samples[samples.len() - 1],
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn committed_kouryo_more_makes_naika_continue_as_a_grammar_phrase() {
+    let mut dispatcher = open_dispatcher();
+    let session = create_normal_session(&mut dispatcher, "issue-83-cross-commit.exe");
+
+    let composed = type_romaji(&mut dispatcher, session, "kouryomore");
+    let reading = composed
+        .to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| segment.text.clone())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+    assert_eq!(reading, "こうりょもれ");
+
+    let first_conversion = send_key(&mut dispatcher, session, space_key());
+    let rendered = first_conversion
+        .to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| segment.text.clone())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+    assert_eq!(
+        rendered, "考慮漏れ",
+        "the setup must commit the exact reported left context"
+    );
+    let committed = send_key(&mut dispatcher, session, enter_key());
+    assert_eq!(committed.to_output().commit.as_deref(), Some("考慮漏れ"));
+
+    let second_composed = type_romaji(&mut dispatcher, session, "naika");
+    let second_reading = second_composed
+        .to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| segment.text.clone())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+    assert_eq!(second_reading, "ないか");
+
+    let second_conversion = send_key(&mut dispatcher, session, space_key());
+    let candidates = candidate_surfaces(&second_conversion);
+    let plain = candidates
+        .iter()
+        .position(|surface| surface == "ないか")
+        .unwrap_or_else(|| panic!("ないか disappeared: {candidates:?}"));
+    let negative = candidates
+        .iter()
+        .position(|surface| surface == "無いか")
+        .unwrap_or_else(|| panic!("無いか disappeared: {candidates:?}"));
+    let clinic = candidates
+        .iter()
+        .position(|surface| surface == "内科")
+        .unwrap_or_else(|| panic!("内科 disappeared: {candidates:?}"));
+    assert!(
+        plain < clinic && negative < clinic,
+        "考慮漏れ + ないか must prefer grammatical continuations over 内科: {candidates:?}"
+    );
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_83_shipped_japanese_bridge_controls() {
+    let conversion = open_conversion();
+    let (tail_right, tail) = conversion
+        .with_candidates(
+            "きさいもれ",
+            ConversionOptions::default(),
+            |candidates| {
+                let candidate = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "記載漏れ")
+                    .expect("記載漏れ candidate");
+                assert!(candidate.system_entry_index().is_some());
+                (
+                    candidate.segments().last().expect("tail segment").right_id,
+                    conversion
+                        .cross_commit_tail(candidate)
+                        .expect("tail evidence"),
+                )
+            },
+        )
+        .expect("記載漏れ evidence");
+    assert_eq!(tail.reading_start, 0, "記載漏れ is one selected raw edge");
+    let options = ConversionOptions {
+        initial_right_id: tail_right,
+        ..ConversionOptions::default()
+    };
+    let direct = conversion
+        .with_candidates("ないか", options, relevant_naika_costs)
+        .expect("記載漏れ current-only costs");
+    let (bridged, diagnostics) = conversion
+        .with_conversion_input_bridge_hints(
+            ConversionInput::ordinary("ないか"),
+            options,
+            &[],
+            Some(CrossCommitBridge {
+                tail_reading: "きさいもれ",
+                tail_surface: "記載漏れ",
+                prefix_right_id: tail.prefix_right_id,
+                prefix_cost: tail.prefix_cost,
+            }),
+            |candidates, diagnostics| (relevant_naika_costs(candidates), diagnostics),
+        )
+        .expect("記載漏れ bridge");
+    assert!(bridged[0] < direct[0], "ないか receives lexical evidence");
+    assert!(bridged[1] < direct[1], "無いか receives lexical evidence");
+    assert_eq!(bridged[2], direct[2], "内科 is not context-boosted");
+    assert!(
+        bridged[2] < bridged[0],
+        "the selected atomic 記載漏れ path's retained reanalysis cost must not be erased"
+    );
+    assert!(diagnostics.cross_commit_bridge_frontier_paths > 0);
+
+    for (romaji, expected_commit) in [("jouhoumore", "情報漏れ"), ("jouhougamore", "情報が漏れ")]
+    {
+        let mut dispatcher = open_dispatcher();
+        let session = create_normal_session(&mut dispatcher, "issue-83-japanese-controls.exe");
+        let committed = commit_converted_romaji(&mut dispatcher, session, romaji);
+        assert_eq!(committed, expected_commit, "control setup for {romaji}");
+        let candidates = convert_romaji_in_session(&mut dispatcher, session, "naika");
+        let plain = candidates.iter().position(|item| item == "ないか").unwrap();
+        let negative = candidates.iter().position(|item| item == "無いか").unwrap();
+        let clinic = candidates.iter().position(|item| item == "内科").unwrap();
+        assert!(
+            plain < negative && negative < clinic,
+            "{expected_commit} must use the generic grammatical bridge: {candidates:?}"
+        );
+    }
+}
+
+fn relevant_naika_costs(candidates: &[sakura_core::ConversionCandidate]) -> [i64; 3] {
+    ["ないか", "無いか", "内科"].map(|surface| {
+        candidates
+            .iter()
+            .find(|candidate| candidate.text() == surface)
+            .unwrap_or_else(|| panic!("missing {surface}"))
+            .cost
+    })
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_83_bridge_respects_no_context_association_off_and_explicit_learning() {
+    let mut baseline_dispatcher = open_dispatcher();
+    let (_, baseline) = convert(&mut baseline_dispatcher, "naika");
+    assert!(!baseline.is_empty(), "fresh current-only conversion");
+    assert_eq!(baseline.first().map(String::as_str), Some("ないか"));
+
+    let conversion = open_conversion();
+    let association_off_it_bias = conversion
+        .with_candidates(
+            "こうりょもれ",
+            ConversionOptions::default(),
+            |candidates| {
+                let committed = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "考慮漏れ")
+                    .expect("考慮漏れ candidate");
+                let (it_words, total_words) =
+                    committed
+                        .segments()
+                        .iter()
+                        .fold((0u16, 0u16), |(it, total), segment| {
+                            (
+                                it.saturating_add(u16::from(segment.it_word_count)),
+                                total.saturating_add(u16::from(segment.word_count)),
+                            )
+                        });
+                let ratio = it_words
+                    .saturating_mul(1_000)
+                    .checked_div(total_words)
+                    .unwrap_or(0);
+                100u16.saturating_add((ratio / 5).min(150))
+            },
+        )
+        .expect("association-off domain ratio");
+    let expected_disabled = conversion
+        .with_candidates(
+            "ないか",
+            ConversionOptions {
+                initial_right_id: 0,
+                it_bias_per_mille: association_off_it_bias,
+                ..ConversionOptions::default()
+            },
+            |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            },
+        )
+        .expect("association-off current-only conversion");
+    let association_off = Preferences {
+        association_enabled: false,
+        ..Preferences::default()
+    };
+    let mut disabled = Dispatcher::new_with_configuration(
+        Arc::clone(&conversion),
+        Arc::new(LearningService::memory()),
+        association_off,
+    )
+    .expect("association-off dispatcher");
+    let disabled_session = create_normal_session(&mut disabled, "issue-83-disabled.exe");
+    assert_eq!(
+        commit_converted_romaji(&mut disabled, disabled_session, "kouryomore"),
+        "考慮漏れ"
+    );
+    let disabled_candidates = convert_romaji_in_session(&mut disabled, disabled_session, "naika");
+    assert_eq!(
+        disabled_candidates, expected_disabled,
+        "association off must retain the complete current-only order at the existing domain bias"
+    );
+
+    let left_context = conversion
+        .with_candidates(
+            "こうりょもれ",
+            ConversionOptions::default(),
+            |candidates| {
+                let committed = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == "考慮漏れ")
+                    .expect("考慮漏れ candidate");
+                committed
+                    .segments()
+                    .last()
+                    .expect("committed tail")
+                    .right_id
+            },
+        )
+        .expect("context conversion");
+    let clinic_right = conversion
+        .with_candidates(
+            "ないか",
+            ConversionOptions {
+                initial_right_id: left_context,
+                ..ConversionOptions::default()
+            },
+            |current| {
+                current
+                    .iter()
+                    .find(|candidate| candidate.text() == "内科")
+                    .and_then(|candidate| candidate.segments().last())
+                    .map(|segment| segment.right_id)
+                    .expect("内科 right ID")
+            },
+        )
+        .expect("current conversion");
+    let learning = Arc::new(LearningService::memory());
+    for _ in 0..2 {
+        learning.learn("ないか", "内科", left_context, clinic_right);
+    }
+    let mut learned =
+        Dispatcher::new_with_configuration(conversion, learning, Preferences::default())
+            .expect("learned dispatcher");
+    let learned_session = create_normal_session(&mut learned, "issue-83-learned.exe");
+    assert_eq!(
+        commit_converted_romaji(&mut learned, learned_session, "kouryomore"),
+        "考慮漏れ"
+    );
+    type_romaji(&mut learned, learned_session, "naika");
+    let learned_output = send_key(&mut learned, learned_session, space_key());
+    let learned_surface = learned_output
+        .to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| segment.text.clone())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+    assert_eq!(
+        learned_surface, "内科",
+        "an explicit exact learned preference remains authoritative"
+    );
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_83_medical_particle_contexts_keep_the_current_only_naika_order() {
+    for (romaji, reading, selected_segment, expected) in [
+        ("shinnryoukaha", "しんりょうかは", "診療科は", "診療科は"),
+        (
+            "jushinnsakihasougoubyouinnno",
+            "じゅしんさきはそうごうびょういんの",
+            "受診",
+            "受診先は総合病院の",
+        ),
+    ] {
+        let conversion = open_conversion();
+        let prior_right = conversion
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == expected)
+                    .and_then(|candidate| candidate.segments().last())
+                    .map(|segment| segment.right_id)
+                    .expect("medical control right ID")
+            })
+            .expect("medical control conversion");
+        let current_only = conversion
+            .with_candidates(
+                "ないか",
+                ConversionOptions {
+                    initial_right_id: prior_right,
+                    ..ConversionOptions::default()
+                },
+                |candidates| {
+                    candidates
+                        .iter()
+                        .map(|candidate| candidate.text().to_owned())
+                        .collect::<Vec<_>>()
+                },
+            )
+            .expect("current-only medical conversion");
+
+        let mut dispatcher =
+            Dispatcher::new_with_conversion(conversion).expect("medical dispatcher");
+        let session = create_normal_session(&mut dispatcher, "issue-83-medical.exe");
+        let committed =
+            commit_named_converted_romaji(&mut dispatcher, session, romaji, selected_segment);
+        assert_eq!(committed, expected, "medical control setup: {romaji}");
+        let candidates = convert_romaji_in_session(&mut dispatcher, session, "naika");
+        assert_eq!(
+            candidates, current_only,
+            "a particle-ending medical context must retain its current-only order: {expected}"
+        );
+    }
 }
 
 fn predictions_for(prefix: &str) -> Vec<(String, String)> {

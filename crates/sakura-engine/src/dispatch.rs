@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use sakura_core::conversion::{
     CandidateOrigin, ConversionInput, ConversionInputClass, CorrectionMap, CorrectionRun,
-    LiteralPolicy, RawRepairPlan, RepairTier,
+    CrossCommitBridge, LiteralPolicy, RawRepairPlan, RepairTier,
 };
 use sakura_core::dictionary::DetailRelationKind;
 use sakura_core::keymap::{Action, KeyMap, KeyMapError, Preset, State};
@@ -45,9 +45,9 @@ use sakura_core::romaji::{Table, TableError};
 use sakura_core::width::Normalizer;
 use sakura_core::{
     contextual_punctuation_swap, default_app_profiles, resolve_context_preferences, transform_into,
-    AppProfile, ConversionCandidate, ConversionDiagnostics, ConversionMethod, ConversionOptions,
-    ConversionSegment, EntryFlags, Input, InputMethod, NeuralRerankerScope, Preferences,
-    SegmentTransform, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, TextSink,
+    AppProfile, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics, ConversionMethod,
+    ConversionOptions, ConversionSegment, EntryFlags, Input, InputMethod, NeuralRerankerScope,
+    Preferences, SegmentTransform, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, TextSink,
 };
 use sakura_ipc::debug_trace;
 use sakura_proto::{
@@ -65,7 +65,10 @@ use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeC
 use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
 use crate::long_conversion::LongConversionService;
 use crate::prediction::{PredictionResult, PredictionService, PredictionSource};
-use crate::session::{scope_is_sensitive, text_hash, RawProvenanceState, Session, SessionTable};
+use crate::session::{
+    scope_is_sensitive, text_hash, RawProvenanceState, Session, SessionCrossCommitBridge,
+    SessionTable,
+};
 use crate::shift_ascii_space::{
     decide_shift_ascii_convert, ConversionTrigger, ShiftAsciiConvertDecision,
     ShiftAsciiConvertFacts,
@@ -160,6 +163,7 @@ pub struct Dispatcher {
     neural_reranker_scope: NeuralRerankerScope,
     prediction_enabled: bool,
     suggest_accept: SuggestAccept,
+    association_enabled: bool,
     app_profiles: Arc<[AppProfile]>,
     /// Last process-wide learning epoch observed by this pipe worker.
     observed_learning_generation: u64,
@@ -247,6 +251,7 @@ impl Dispatcher {
         dispatcher.neural_reranker_scope = preferences.neural_reranker_scope;
         dispatcher.prediction_enabled = preferences.prediction_enabled;
         dispatcher.suggest_accept = preferences.suggest_accept;
+        dispatcher.association_enabled = preferences.association_enabled;
         dispatcher.app_profiles = profiles;
         Ok(dispatcher)
     }
@@ -365,6 +370,7 @@ impl Dispatcher {
             neural_reranker_scope: NeuralRerankerScope::Off,
             prediction_enabled: false,
             suggest_accept: SuggestAccept::Disabled,
+            association_enabled: true,
             app_profiles: Arc::from([]),
             observed_learning_generation: 0,
             prediction_cache: Box::new(PredictionCache::new()),
@@ -496,6 +502,7 @@ impl Dispatcher {
         self.neural_reranker_scope = preferences.neural_reranker_scope;
         self.prediction_enabled = preferences.prediction_enabled;
         self.suggest_accept = preferences.suggest_accept;
+        self.association_enabled = preferences.association_enabled;
         self.app_profiles = profiles.clone();
         // The server applies its immutable snapshot before every request,
         // including OnTestKeyDown's ProbeKey and the following real SendKey.
@@ -556,6 +563,7 @@ impl Dispatcher {
                 preview,
             } => self.reconvert(*session, text, *preview, out),
             Request::Revert { session } => self.revert(*session),
+            Request::ResetDocumentContext { session } => self.reset_document_context(*session),
             Request::UndoCommit { session, outcome } => {
                 self.undo_commit_outcome(*session, *outcome)
             }
@@ -645,6 +653,7 @@ impl Dispatcher {
             | Request::Commit { session }
             | Request::Reconvert { session, .. }
             | Request::Revert { session }
+            | Request::ResetDocumentContext { session }
             | Request::SetInputScope { session, .. }
             | Request::SetMode { session, .. }
             | Request::ApplyAiComposition { session, .. }
@@ -709,6 +718,7 @@ impl Dispatcher {
                     shift_space_behavior: self.shift_space_behavior,
                     prediction_enabled: self.prediction_enabled,
                     suggest_accept: self.suggest_accept,
+                    association_enabled: self.association_enabled,
                     developer_mode: self.input_history.is_some(),
                     ..Preferences::default()
                 };
@@ -833,6 +843,21 @@ impl Dispatcher {
         Reply::Message(Response::Ok)
     }
 
+    /// Clears document-relative state after the frontend can no longer prove
+    /// exact adjacency to the last committed run. The user's explicit input
+    /// mode remains unchanged.
+    fn reset_document_context(&mut self, id: SessionId) -> Reply {
+        let Some(session) = self.sessions.get_mut(id) else {
+            return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if session.undo_pending() || session.is_composing() {
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
+        session.reset_document_context();
+        self.prediction_cache.clear_if_session(id);
+        Reply::Message(Response::Ok)
+    }
+
     /// Applies an explicit input-mode choice from the focused TSF input-mode
     /// item. Unlike a keyboard mode action, this path never commits or edits a
     /// document: a menu callback has no edit-session transaction to settle.
@@ -853,6 +878,7 @@ impl Dispatcher {
             return Reply::Message(Response::Error(ErrorCode::Busy));
         }
         session.suppress_raw_provenance();
+        session.reset_carryover();
         session.mode = mode;
         Reply::Message(Response::InputMode { mode })
     }
@@ -1761,6 +1787,7 @@ fn with_session_conversion_input<R>(
     learning: Option<&LearningService>,
     input: ConversionInput<'_>,
     options: ConversionOptions,
+    bridge: Option<CrossCommitBridge<'_>>,
     consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
     let hints = if input.literal_policy == LiteralPolicy::Ranked {
@@ -1772,9 +1799,9 @@ fn with_session_conversion_input<R>(
     #[cfg(test)]
     record_conversion_lookup_for_test();
     if input.literal_policy == LiteralPolicy::Ranked {
-        conversion.with_conversion_hints(input.lookup_reading, options, &hint_refs, consume)
+        conversion.with_conversion_input_bridge_hints(input, options, &hint_refs, bridge, consume)
     } else {
-        conversion.with_conversion_input_hints(input, options, &hint_refs, consume)
+        conversion.with_conversion_input_bridge_hints(input, options, &hint_refs, None, consume)
     }
 }
 
@@ -1840,6 +1867,7 @@ fn with_session_raw_conversion<R>(
     input: ConversionInput<'_>,
     plans: &[RawRepairPlan],
     options: ConversionOptions,
+    bridge: Option<CrossCommitBridge<'_>>,
     consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
     // A normal conversion has no corrected pass to run.  Keep it on the
@@ -1848,7 +1876,9 @@ fn with_session_raw_conversion<R>(
     // arena copies, this is important for the fixed-size server worker stack:
     // the raw helper is reserved for requests that actually admitted a plan.
     if plans.is_empty() {
-        return with_session_conversion_input(conversion, learning, input, options, consume);
+        return with_session_conversion_input(
+            conversion, learning, input, options, bridge, consume,
+        );
     }
     let hints = if input.literal_policy == LiteralPolicy::Ranked {
         commit_repair_readings_for(input.lookup_reading, learning, options)
@@ -1868,9 +1898,14 @@ fn with_session_candidates_input<R>(
     options: ConversionOptions,
     consume: impl FnOnce(&[ConversionCandidate]) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
-    with_session_conversion_input(conversion, learning, input, options, |candidates, _| {
-        consume(candidates)
-    })
+    with_session_conversion_input(
+        conversion,
+        learning,
+        input,
+        options,
+        None,
+        |candidates, _| consume(candidates),
+    )
 }
 
 fn with_session_candidates<R>(
@@ -1918,6 +1953,7 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
         || session.converting
         || session.shifted_ascii
         || session.preedit.is_empty()
+        || session.cross_commit_bridge().is_some()
         || usize::from(session.cursor) != session.preedit.as_str().chars().count()
     {
         return;
@@ -2184,9 +2220,13 @@ struct CommitSegmentMeta {
     total_words: u8,
     synthetic_exact: bool,
     raw_repair: bool,
+    bridge_tail: Option<CommitBridgeTail>,
 }
 
-fn candidate_meta(candidate: &ConversionCandidate) -> CommitSegmentMeta {
+fn candidate_meta(
+    conversion: &ConversionService,
+    candidate: &ConversionCandidate,
+) -> CommitSegmentMeta {
     let segments = candidate.segments();
     // Per-word counters, not segment counts: bunsetsu fusion merges an IT
     // content word and its non-IT ancillary into one OR-flagged segment,
@@ -2204,7 +2244,23 @@ fn candidate_meta(candidate: &ConversionCandidate) -> CommitSegmentMeta {
         total_words,
         synthetic_exact: candidate.is_synthetic_exact(),
         raw_repair: candidate.origin() != CandidateOrigin::Direct,
+        bridge_tail: conversion.cross_commit_tail(candidate),
     }
+}
+
+fn session_cross_commit_bridge(
+    reading: &str,
+    surface: &str,
+    tail: CommitBridgeTail,
+) -> Option<SessionCrossCommitBridge> {
+    let tail_reading = reading.get(usize::from(tail.reading_start)..)?;
+    let tail_surface = surface.get(usize::from(tail.text_start)..)?;
+    SessionCrossCommitBridge::new(
+        tail_reading,
+        tail_surface,
+        tail.prefix_right_id.raw(),
+        tail.prefix_cost,
+    )
 }
 
 /// Persists a commit while its reading and left context are still present in
@@ -2343,6 +2399,20 @@ fn apply_key(
             .keymap
             .lookup(State::Predicting, key)
             .filter(|action| *action == Action::DeletePredictionHistory);
+    }
+    // The bridge describes text immediately to the left of the host caret.
+    // An unclaimed idle named key or application shortcut can move that caret
+    // or edit the document outside the engine, while idle Space inserts a
+    // hard phrase boundary. Character input is the one unclaimed idle path
+    // that deliberately starts the adjacent next composition.
+    if state == State::Idle
+        && action.is_none()
+        && (key.ch.is_none()
+            || key.code == KeyCode::Space
+            || key.modifiers.ctrl()
+            || key.modifiers.alt())
+    {
+        session.clear_cross_commit_bridge();
     }
     if session.mode == Mode::Direct && !is_mode_switch(action) {
         // Direct mode passes normal typing and all non-mode bindings through
@@ -3570,8 +3640,13 @@ fn commit_numbered_candidate(
                     return Ok(None);
                 };
                 chosen.push_str(candidate.text())?;
-                chosen_meta = candidate_meta(candidate);
+                chosen_meta = candidate_meta(service, candidate);
                 Ok(i16::try_from(target).ok())
+            };
+            let bridge = if focused == 0 {
+                session.cross_commit_bridge()
+            } else {
+                None
             };
             if full_span {
                 with_session_raw_conversion(
@@ -3580,10 +3655,18 @@ fn commit_numbered_candidate(
                     input,
                     &raw_repair_plans,
                     options,
+                    bridge,
                     |candidates, _| choose(candidates),
                 )
             } else {
-                with_session_candidates_input(service, learning, input, options, choose)
+                with_session_conversion_input(
+                    service,
+                    learning,
+                    input,
+                    options,
+                    bridge,
+                    |candidates, _| choose(candidates),
+                )
             }
         }
         None => {
@@ -3952,6 +4035,7 @@ fn commit_staged_raw_conversion(
         input,
         plans,
         options,
+        None,
         |candidates, _| {
             if candidates.is_empty() {
                 return false;
@@ -3968,7 +4052,7 @@ fn commit_staged_raw_conversion(
             if selected_text.push_str(candidate.text()).is_err() {
                 return false;
             }
-            selected_meta = candidate_meta(candidate);
+            selected_meta = candidate_meta(conversion, candidate);
             true
         },
     )
@@ -4054,6 +4138,7 @@ fn commit_converted_segments(
     let mut transformed = false;
     let mut synthetic_exact_committed = false;
     let mut raw_repair_committed = false;
+    let mut next_cross_commit_bridge = None;
     let selected_raw_repair_at_start = session.has_selected_raw_repair();
     for index in 0..count {
         let Some(range) = session.segment_range(index) else {
@@ -4061,6 +4146,7 @@ fn commit_converted_segments(
             return Ok(false);
         };
         let reading = &session.preedit.as_str()[range.clone()];
+        let segment_output_start = scratch.len();
         // Each segment commits only its own share of `raw_input`, not the
         // whole composition's keystrokes -- see the identical note in
         // `render_converted_segments` (#16 finding D).
@@ -4122,6 +4208,13 @@ fn commit_converted_segments(
             total_words = total_words.saturating_add(override_candidate.meta.total_words);
             synthetic_exact_committed |= override_candidate.meta.synthetic_exact;
             raw_repair_committed |= override_candidate.meta.raw_repair;
+            if index + 1 == count
+                && scratch.as_str()[segment_output_start..] == *override_candidate.text
+            {
+                next_cross_commit_bridge = override_candidate.meta.bridge_tail.and_then(|tail| {
+                    session_cross_commit_bridge(reading, override_candidate.text, tail)
+                });
+            }
             continue;
         }
 
@@ -4137,6 +4230,7 @@ fn commit_converted_segments(
         } else {
             ConversionInput::ordinary(reading)
         };
+        let mut selected_surface = FixedStr::<MAX_PREEDIT_BYTES>::new();
         let mut render_candidate =
             |candidates: &[ConversionCandidate]| -> Result<Option<CommitSegmentMeta>, Overflow> {
                 if candidates.is_empty() {
@@ -4152,8 +4246,15 @@ fn commit_converted_segments(
                     session.mode,
                     scratch,
                 )?;
-                Ok(Some(candidate_meta(&candidates[selected])))
+                selected_surface.clear();
+                selected_surface.push_str(candidates[selected].text())?;
+                Ok(Some(candidate_meta(service, &candidates[selected])))
             };
+        let bridge = if index == 0 {
+            session.cross_commit_bridge()
+        } else {
+            None
+        };
         let result = if full_span {
             with_session_raw_conversion(
                 service,
@@ -4161,12 +4262,18 @@ fn commit_converted_segments(
                 input,
                 &raw_repair_plans,
                 options,
+                bridge,
                 |candidates, _| render_candidate(candidates),
             )
         } else {
-            with_session_conversion_input(service, learning, input, options, |candidates, _| {
-                render_candidate(candidates)
-            })
+            with_session_conversion_input(
+                service,
+                learning,
+                input,
+                options,
+                bridge,
+                |candidates, _| render_candidate(candidates),
+            )
         };
         match result {
             Ok(Ok(Some(meta))) => {
@@ -4175,6 +4282,13 @@ fn commit_converted_segments(
                 total_words = total_words.saturating_add(meta.total_words);
                 synthetic_exact_committed |= meta.synthetic_exact;
                 raw_repair_committed |= meta.raw_repair;
+                if index + 1 == count
+                    && scratch.as_str()[segment_output_start..] == *selected_surface.as_str()
+                {
+                    next_cross_commit_bridge = meta.bridge_tail.and_then(|tail| {
+                        session_cross_commit_bridge(reading, selected_surface.as_str(), tail)
+                    });
+                }
             }
             Ok(Err(overflow)) => return Err(overflow),
             Ok(Ok(None)) | Err(_) => {
@@ -4215,7 +4329,19 @@ fn commit_converted_segments(
             total_words,
         );
     } else {
-        session.record_current_commit(scratch.as_str(), context_right_id, it_words, total_words);
+        let bridge = (!transformed
+            && !synthetic_exact_committed
+            && !raw_repair_committed
+            && !selected_raw_repair_at_start)
+            .then_some(next_cross_commit_bridge)
+            .flatten();
+        session.record_current_commit_with_bridge(
+            scratch.as_str(),
+            context_right_id,
+            it_words,
+            total_words,
+            bridge,
+        );
     }
     session.reset();
     Ok(true)
@@ -4307,6 +4433,7 @@ fn begin_conversion(
             session_conversion_input(session, session.preedit.as_str()),
             &raw_repair_plans,
             options,
+            session.cross_commit_bridge(),
             |candidates, _diagnostics| {
                 if candidates.is_empty() {
                     return false;
@@ -4375,7 +4502,11 @@ fn begin_conversion(
                     0
                 } else if !authoritative {
                     long_conversion
-                        .filter(|_| direct_limit > 0 && literal_policy == LiteralPolicy::Ranked)
+                        .filter(|_| {
+                            direct_limit > 0
+                                && literal_policy == LiteralPolicy::Ranked
+                                && session.cross_commit_bridge().is_none()
+                        })
                         .and_then(|service| {
                             service.selection(
                                 long_conversion_owner,
@@ -4518,6 +4649,7 @@ fn build_reconversion(
     // `session.mode`, and a Katakana session would katakana-ise the okurigana
     // this reading just recovered — so what is staged is the way back out.
     session.reset();
+    session.reset_carryover();
     session.take_mode_restored();
     session.stage_reconversion_mode(session.mode);
     session.mode = Mode::Hiragana;
@@ -5457,6 +5589,7 @@ fn render_staged_raw_repair(
         input,
         plans,
         options,
+        None,
         |candidates, _| {
             if candidates.is_empty() {
                 return false;
@@ -5757,8 +5890,13 @@ fn render_converted_segments(
             Ok(Some((
                 i16::try_from(selected).map_err(|_| Overflow)?,
                 rendered_chars,
-                candidate_meta(&candidates[selected]),
+                candidate_meta(service, &candidates[selected]),
             )))
+        };
+        let bridge = if index == 0 {
+            session.cross_commit_bridge()
+        } else {
+            None
         };
         let rendered = if full_span {
             with_session_raw_conversion(
@@ -5767,12 +5905,18 @@ fn render_converted_segments(
                 input,
                 &raw_repair_plans,
                 options,
+                bridge,
                 |candidates, _| render_candidates(candidates),
             )
         } else {
-            with_session_conversion_input(service, learning, input, options, |candidates, _| {
-                render_candidates(candidates)
-            })
+            with_session_conversion_input(
+                service,
+                learning,
+                input,
+                options,
+                bridge,
+                |candidates, _| render_candidates(candidates),
+            )
         };
 
         match rendered {
@@ -6254,6 +6398,7 @@ mod tests {
             ConversionInput::ordinary(original),
             &[plan],
             options,
+            None,
             |candidates, diagnostics| {
                 assert!(candidates.iter().any(|candidate| {
                     candidate.origin() == CandidateOrigin::Direct && candidate.text() == "なぜか"
@@ -6508,6 +6653,7 @@ mod tests {
             ConversionInput::ordinary(original),
             std::slice::from_ref(&plan),
             ConversionOptions::default(),
+            None,
             |candidates, _| {
                 direct = candidates
                     .iter()
@@ -8424,6 +8570,58 @@ mod tests {
             State::Idle,
             "GetReconversion must be observational"
         );
+    }
+
+    #[test]
+    fn actual_reconversion_clears_cross_commit_bridge_but_preview_does_not() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        {
+            let state = dispatcher.sessions.get_mut(session).expect("session");
+            state.apply_input_scope(InputScope::Normal);
+            state.preedit.push_str("こうりょもれ").expect("fits");
+            state.record_current_commit_with_bridge(
+                "考慮漏れ",
+                1949,
+                0,
+                2,
+                SessionCrossCommitBridge::new("もれ", "漏れ", 1841, 4_000),
+            );
+            state.reset();
+        }
+
+        let preview = dispatcher.dispatch(
+            &Request::Reconvert {
+                session,
+                text: "仮名".to_owned(),
+                preview: true,
+            },
+            &mut out,
+        );
+        assert_eq!(preview, Reply::Output);
+        assert!(dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .cross_commit_bridge()
+            .is_some());
+
+        let actual = dispatcher.dispatch(
+            &Request::Reconvert {
+                session,
+                text: "仮名".to_owned(),
+                preview: false,
+            },
+            &mut out,
+        );
+        assert_eq!(actual, Reply::Output);
+        assert!(dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .cross_commit_bridge()
+            .is_none());
     }
 
     #[test]
@@ -11813,6 +12011,66 @@ mod tests {
     }
 
     #[test]
+    fn test_only_document_navigation_cannot_clear_the_live_cross_commit_bridge() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "bridge-probe.exe");
+        {
+            let state = dispatcher.sessions.get_mut(session).expect("session");
+            state.apply_input_scope(InputScope::Normal);
+            state.preedit.push_str("もれ").expect("fits");
+            state.record_current_commit_with_bridge(
+                "漏れ",
+                1949,
+                0,
+                1,
+                SessionCrossCommitBridge::new("もれ", "漏れ", 1841, 4_000),
+            );
+            state.reset();
+            assert!(state.cross_commit_bridge().is_some());
+        }
+
+        let mut probe = named_key(KeyCode::PageUp);
+        probe.test_only = true;
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session,
+                    key: probe
+                },
+                &mut out
+            ),
+            Reply::Output
+        );
+        assert!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("live session")
+                .cross_commit_bridge()
+                .is_some(),
+            "Probe must discard its cloned invalidation"
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::PageUp),
+            },
+            &mut out,
+        );
+        assert!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("live session")
+                .cross_commit_bridge()
+                .is_none(),
+            "real host navigation invalidates adjacency"
+        );
+    }
+
+    #[test]
     fn test_only_stale_learning_cache_is_invalidated_ephemerally_for_probe_parity() {
         let (mut dispatcher, runtime) = prediction_dispatcher();
         let mut out = OutputBuf::new();
@@ -12012,6 +12270,89 @@ mod tests {
     }
 
     #[test]
+    fn reset_document_context_preserves_mode_but_clears_document_relative_state() {
+        let mut dispatcher = builtin_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetMode {
+                    session,
+                    mode: Mode::Katakana,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::InputMode {
+                mode: Mode::Katakana
+            })
+        );
+
+        {
+            let state = dispatcher.sessions.get_mut(session).expect("live session");
+            state
+                .preedit
+                .push_str("こうりょもれ")
+                .expect("bounded reading");
+            state.record_current_commit_with_bridge(
+                "考慮漏れ",
+                1949,
+                0,
+                2,
+                SessionCrossCommitBridge::new("もれ", "漏れ", 1841, 4_000),
+            );
+            state.reset();
+            assert_eq!(state.mode(), Mode::Katakana);
+            assert_eq!(state.carry_right_id(), 1949);
+            assert!(state.cross_commit_bridge().is_some());
+            assert!(state.cached_surface_fingerprint("こうりょもれ").is_some());
+        }
+        dispatcher.prediction_cache.attempted = true;
+        dispatcher.prediction_cache.session = session;
+        dispatcher.prediction_cache.generation = 7;
+
+        assert_eq!(
+            dispatcher.dispatch(&Request::ResetDocumentContext { session }, &mut out),
+            Reply::Message(Response::Ok)
+        );
+
+        {
+            let state = dispatcher.sessions.get_mut(session).expect("live session");
+            assert_eq!(state.mode(), Mode::Katakana);
+            assert_eq!(state.carry_right_id(), 0);
+            assert!(state.cross_commit_bridge().is_none());
+            assert_eq!(state.cached_surface_fingerprint("こうりょもれ"), None);
+            assert_eq!(state.undo_commit(), None);
+            state.preedit.push_str("か").expect("bounded composition");
+        }
+        assert!(!dispatcher.prediction_cache.attempted);
+
+        assert_eq!(
+            dispatcher.dispatch(&Request::ResetDocumentContext { session }, &mut out),
+            Reply::Message(Response::Error(ErrorCode::Busy)),
+            "a lifecycle reset must not erase a live composition"
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("live session")
+                .preedit
+                .as_str(),
+            "か"
+        );
+    }
+
+    #[test]
     fn the_session_table_reports_busy_once_full() {
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
@@ -12030,15 +12371,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v17_version_is_rejected() {
+    fn hello_with_the_previous_v18_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 18,
-            "candidate click operations add v18 wire data"
+            PROTOCOL_VERSION, 19,
+            "document-context reset adds v19 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 17 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 18 }, &mut out);
 
         assert_eq!(
             reply,
@@ -12047,10 +12388,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v18_version_is_accepted() {
+    fn hello_with_v19_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 18,
-            "candidate click operations add v18 wire data"
+            PROTOCOL_VERSION, 19,
+            "document-context reset adds v19 wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();

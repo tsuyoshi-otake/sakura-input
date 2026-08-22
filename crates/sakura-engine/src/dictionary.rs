@@ -13,10 +13,10 @@ use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock, TryLockError};
 
-use sakura_core::conversion::{ConversionInput, RawRepairPlan};
+use sakura_core::conversion::{CandidateOrigin, ConversionInput, RawRepairPlan};
 use sakura_core::{
-    CivilDate, ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionOptions,
-    Converter, Dictionary, UserDictionary,
+    CivilDate, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics, ConversionError,
+    ConversionOptions, Converter, CrossCommitBridge, Dictionary, UserDictionary,
 };
 use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
@@ -267,6 +267,26 @@ impl ConversionService {
         commit_repair_readings: &[&str],
         consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
     ) -> Result<R, ConvertFailure> {
+        self.with_conversion_input_bridge_hints(
+            input,
+            options,
+            commit_repair_readings,
+            None,
+            consume,
+        )
+    }
+
+    /// Like [`Self::with_conversion_input_hints`], with one optional bounded
+    /// system-lexical tail from the immediately preceding commit. Both passes
+    /// reuse this same slot; the bridge cannot recursively acquire the pool.
+    pub fn with_conversion_input_bridge_hints<R>(
+        &self,
+        input: ConversionInput<'_>,
+        options: ConversionOptions,
+        commit_repair_readings: &[&str],
+        bridge: Option<CrossCommitBridge<'_>>,
+        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+    ) -> Result<R, ConvertFailure> {
         let user_dictionary = self.user_dictionary_snapshot();
         let civil_date = local_civil_date();
         let mut consume = Some(consume);
@@ -281,11 +301,12 @@ impl ConversionService {
             converter.set_commit_repair_readings(commit_repair_readings);
             converter.set_civil_date(civil_date);
             let result = converter
-                .convert_with_user_dictionary_input_detailed(
+                .convert_with_user_dictionary_input_bridge_detailed(
                     &self.dictionary,
                     (!user_dictionary.is_empty()).then_some(user_dictionary.as_ref()),
                     input,
                     options,
+                    bridge,
                 )
                 .map_err(ConvertFailure::Conversion)?;
             let use_candidates = consume
@@ -294,6 +315,29 @@ impl ConversionService {
             return Ok(use_candidates(result.candidates(), result.diagnostics()));
         }
         Err(ConvertFailure::Busy)
+    }
+
+    /// Returns the exact final system-edge cost without its old EOS edge.
+    pub fn cross_commit_prefix_cost(&self, candidate: &ConversionCandidate) -> Option<i64> {
+        self.cross_commit_tail(candidate)
+            .map(|tail| tail.prefix_cost)
+    }
+
+    /// Materializes the exact final raw system edge captured before display
+    /// bunsetsu fusion. Repaired, generated, fallback, spelling, user,
+    /// exact-synthetic, and already context-rescored candidates cannot seed a
+    /// later implicit bridge.
+    pub fn cross_commit_tail(&self, candidate: &ConversionCandidate) -> Option<CommitBridgeTail> {
+        if candidate.origin() != CandidateOrigin::Direct
+            || candidate.is_synthetic_exact()
+            || !candidate.path_evidence().is_system_only()
+            || candidate.was_cross_commit_rescored()
+        {
+            return None;
+        }
+        candidate
+            .commit_bridge_tail(&self.dictionary)
+            .filter(|tail| tail.prefix_cost >= 0 && tail.prefix_cost < i64::MAX)
     }
 
     /// Runs one original conversion and the bounded raw-repair passes while
