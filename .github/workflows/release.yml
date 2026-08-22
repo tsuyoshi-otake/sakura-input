@@ -61,7 +61,8 @@ jobs:
           if ($env:RELEASE_TAG -cne "v$version") {
             throw "tag '$env:RELEASE_TAG' does not match workspace version '$version'"
           }
-          if ($setup -notmatch "(?m)^#define AppProductVersion \"$([regex]::Escape($version))\"\r?$") {
+          $installerVersionPattern = '(?m)^#define AppProductVersion "{0}"\r?$' -f [regex]::Escape($version)
+          if ($setup -notmatch $installerVersionPattern) {
             throw 'installer AppProductVersion does not match workspace version'
           }
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
