@@ -431,12 +431,12 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   content-free wire row and made the evaluation dependency graph pass strict
   `cargo clippy -- -D warnings` without an allow-list.
 
-- **A release sparse-checkout must include every pinned input the local builder
-  validates, not only the obvious dictionary directory.** `build-dictionary`
+- **Every workflow sparse-checkout that runs the dictionary builder must include
+  every pinned input it validates, not only the obvious dictionary directory.** `build-dictionary`
   consumes Mozc's `src/data/rules/segmenter.def` in addition to
-  `src/data/dictionary_oss`; omitting it made the release workflow fail before
-  compilation. Verified by a complete two-pass 1.0.18 dictionary build after
-  adding that exact file to the workflow checkout.
+  `src/data/dictionary_oss`; omitting it made both release and ordinary
+  installer workflows fail before compilation. Verified by complete two-pass
+  dictionary builds after adding that exact file to each workflow checkout.
 
 - **Do not generate a numeric surface already supplied by an exact dictionary
   edge.** N-best deduplicates by rendered surface, so a cheaper generated `一日`
