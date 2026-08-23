@@ -170,10 +170,14 @@ pub fn parse_mozc_pos_catalog(source: &str, text: &str) -> Result<MozcPosCatalog
 /// every bounded N-best path. Preserve the entries for compound paths, but
 /// make their left-boundary contract explicit in the compiled flag.
 ///
-/// The allomorph rule is intentionally identity based: a voiced reading is
-/// marked only when the same surface and connection classes also have an
-/// unvoiced sibling. This avoids a word list and does not reinterpret ordinary
-/// standalone nouns that merely begin with a voiced kana.
+/// The allomorph rule is intentionally POS-aware: a voiced suffix is marked
+/// only when the same surface has an unvoiced reading with a retained
+/// independent base entry. Suffix, prefix, and non-independent siblings are not
+/// enough evidence because users may enter productive bound forms in a separate
+/// composition (for example, 「運用」 followed by 「び」 for 「運用日」), and
+/// Mozc's connection classes alone do not express that input boundary.
+/// This avoids a word list and does not reinterpret ordinary standalone nouns
+/// that merely begin with a voiced kana.
 pub fn mark_non_initial_allomorphs(
     entries: &mut [SourceEntry],
     pos_catalog: &MozcPosCatalog,
@@ -189,8 +193,13 @@ pub fn mark_non_initial_allomorphs(
             )
         })
         .collect::<BTreeSet<_>>();
-    let surface_readings = entries
+    let independent_base_surface_readings = entries
         .iter()
+        .filter(|entry| {
+            pos_catalog
+                .labels_for(entry.left_id)
+                .is_some_and(is_independent_base_pos)
+        })
         .map(|entry| (entry.surface.clone(), entry.reading.clone()))
         .collect::<BTreeSet<_>>();
     let mut marked = 0usize;
@@ -199,8 +208,9 @@ pub fn mark_non_initial_allomorphs(
             continue;
         };
         let voiced_suffix = has_label(labels, "接尾")
-            && unvoiced_initial_readings(&entry.reading)
-                .any(|reading| surface_readings.contains(&(entry.surface.clone(), reading)));
+            && unvoiced_initial_readings(&entry.reading).any(|reading| {
+                independent_base_surface_readings.contains(&(entry.surface.clone(), reading))
+            });
         let voiced_continuative = has_label(labels, "連用形")
             && unvoiced_initial_readings(&entry.reading).any(|reading| {
                 identities.contains(&(
@@ -217,6 +227,10 @@ pub fn mark_non_initial_allomorphs(
         }
     }
     marked
+}
+
+fn is_independent_base_pos(labels: &[String]) -> bool {
+    !has_label(labels, "接尾") && !has_label(labels, "接頭詞") && !has_label(labels, "非自立")
 }
 
 fn unvoiced_initial_readings(reading: &str) -> impl Iterator<Item = String> + '_ {
@@ -601,6 +615,77 @@ mod tests {
         assert!(entries
             .iter()
             .all(|entry| entry.flags.contains(EntryFlags::PREDICTION)));
+    }
+
+    #[test]
+    fn suffix_marking_requires_an_independent_unvoiced_base_entry() {
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "1949 名詞,接尾,一般,*,*,*,*\n829 動詞,自立,*,*,*,連用形,*\n1197 動詞,非自立,*,*,一段,未然形,替える\n1851 名詞,一般,*,*,*,*,*\n2011 名詞,接尾,助数詞,*,*,*,*\n2115 名詞,非自立,一般,*,*,*,方\n2116 名詞,非自立,一般,*,*,*,日\n3000 接頭詞,名詞接続,*,*,*,*,*\n",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            // Both readings use the generic suffix POS, so 版 remains an
+            // independently usable lexical homograph.
+            lexical_entry("ばん", "版", 1949),
+            lexical_entry("はん", "版", 1949),
+            // The unvoiced readings have independent base identities, so the
+            // voiced suffix allomorphs remain compound-only.
+            lexical_entry("ずかい", "使い", 1949),
+            lexical_entry("つかい", "使い", 829),
+            lexical_entry("つかい", "使い", 1851),
+            lexical_entry("ずかい", "遣い", 1949),
+            lexical_entry("つかい", "遣い", 829),
+            // A suffix-only pair is another standalone-homograph guard.
+            lexical_entry("ぐち", "口", 1949),
+            lexical_entry("くち", "口", 1949),
+            // Non-independent and prefix readings do not prove that the
+            // voiced form is merely an invalid word-initial fragment.
+            lexical_entry("び", "日", 1949),
+            lexical_entry("ぴ", "日", 2011),
+            lexical_entry("ひ", "日", 2116),
+            lexical_entry("どき", "時", 1949),
+            lexical_entry("とき", "時", 2115),
+            lexical_entry("がえ", "替え", 1949),
+            lexical_entry("かえ", "替え", 1197),
+            lexical_entry("ぜん", "前", 1949),
+            lexical_entry("せん", "前", 3000),
+        ];
+
+        assert_eq!(mark_non_initial_allomorphs(&mut entries, &catalog), 2);
+        assert!(entries.iter().any(|entry| {
+            entry.reading == "ばん"
+                && entry.surface == "版"
+                && !entry.flags.contains(EntryFlags::NON_INITIAL)
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry.reading == "ずかい"
+                && entry.surface == "使い"
+                && entry.flags.contains(EntryFlags::NON_INITIAL)
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry.reading == "ずかい"
+                && entry.surface == "遣い"
+                && entry.flags.contains(EntryFlags::NON_INITIAL)
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry.reading == "ぐち"
+                && entry.surface == "口"
+                && !entry.flags.contains(EntryFlags::NON_INITIAL)
+        }));
+        for (reading, surface) in [
+            ("び", "日"),
+            ("ぴ", "日"),
+            ("どき", "時"),
+            ("がえ", "替え"),
+            ("ぜん", "前"),
+        ] {
+            assert!(entries.iter().any(|entry| {
+                entry.reading == reading
+                    && entry.surface == surface
+                    && !entry.flags.contains(EntryFlags::NON_INITIAL)
+            }));
+        }
     }
 
     #[test]

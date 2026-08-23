@@ -451,12 +451,18 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   closed after all earlier gates passed. An exact `.gitattributes` `eol=lf`
   rule keeps the reviewed manifest bytes identical across checkouts.
 
-- **A non-initial dictionary flag needs both a morphological POS and an
-  attested base reading; a suffix POS alone is not enough.** Mozc uses suffix
-  connection classes for some valid standalone homophones such as `いし` →
-  `石`. Requiring the same surface's unvoiced base form marked the intended
-  initial-voicing allomorphs while the full detail build proved independent
-  entries remained identity-compatible.
+- **A voiced suffix needs an attested independent unvoiced base before it may
+  be marked non-initial.** Same-surface suffix, prefix, or non-independent
+  evidence is insufficient: Mozc assigns both `ばん` and `はん` → `版` its
+  generic suffix class, while `び` → `日` was incorrectly hidden because
+  `ひ` → `日` existed only as suffix and non-independent nouns. The fixed-source
+  rule first reduced 532 to 500 marked entries by rejecting suffix-only evidence,
+  then to 494 by rejecting prefix/non-independent evidence; the second step
+  changed only six entries across five readings and made `日` top-ranked for
+  `び` and `ぴ`, while all four `ずかい` → `使い` / `遣い` identities stayed
+  non-initial. Do not substitute a word-cost dominance rule: the measured
+  version restored 325 entries and changed 229 readings, including obvious
+  lexical fragments.
 
 - **Keep per-candidate provenance bit-packed inside the fixed conversion
   arena.** Four repair counters pushed the Windows test harness over its stack

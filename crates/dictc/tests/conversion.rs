@@ -1107,7 +1107,7 @@ fn bare_spoken_numbers_defer_to_lexical_homophones() {
 
 #[test]
 #[ignore = "real built dictionary; set SAKURA_PHASE2_DICTIONARY"]
-fn real_dictionary_keeps_non_initial_allomorphs_out_of_independent_conversion() {
+fn real_dictionary_balances_non_initial_fragments_and_productive_bound_forms() {
     let path = std::env::var_os("SAKURA_PHASE2_DICTIONARY")
         .expect("SAKURA_PHASE2_DICTIONARY must name a freshly built system.dic");
     let bytes = std::fs::read(&path).expect("read real dictionary");
@@ -1135,6 +1135,54 @@ fn real_dictionary_keeps_non_initial_allomorphs_out_of_independent_conversion() 
     assert!(ordinary.iter().any(|candidate| candidate.text() == "使い"));
     assert!(ordinary.iter().any(|candidate| candidate.text() == "遣い"));
 
+    let edition = converter
+        .convert(&dictionary, "ばん", ConversionOptions::default())
+        .expect("ばん conversion");
+    let edition_ranking = edition
+        .iter()
+        .map(|candidate| (candidate.text(), candidate.cost))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        edition_ranking.get(1).map(|candidate| candidate.0),
+        Some("版"),
+        "ばん did not rank the independently usable 版 second: {edition_ranking:?}"
+    );
+
+    for (reading, expected) in [
+        ("うんようび", "運用日"),
+        ("てんけんび", "点検日"),
+        ("さぎょうび", "作業日"),
+        ("こうかいび", "公開日"),
+        ("こうしんび", "更新日"),
+    ] {
+        let compound = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("productive 日 compound conversion");
+        let ranking = compound
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ranking.first().copied(),
+            Some(expected),
+            "{reading} did not rank productive {expected} first: {ranking:?}"
+        );
+    }
+
+    let ambiguous_day = converter
+        .convert(&dictionary, "けんしゅうび", ConversionOptions::default())
+        .expect("ambiguous productive 日 compound conversion");
+    assert!(
+        ambiguous_day
+            .iter()
+            .any(|candidate| candidate.text() == "研修日"),
+        "けんしゅうび lost 研修日 beside its homophones: {:?}",
+        ambiguous_day
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect::<Vec<_>>()
+    );
+
     for (reading, expected) in [
         ("きづかい", "気遣い"),
         ("こづかい", "小遣い"),
@@ -1149,6 +1197,28 @@ fn real_dictionary_keeps_non_initial_allomorphs_out_of_independent_conversion() 
                 .any(|candidate| candidate.text() == expected),
             "{reading} lost {expected}: {:?}",
             compound
+                .iter()
+                .map(|candidate| candidate.text())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    for (reading, expected) in [
+        ("び", "日"),
+        ("ぴ", "日"),
+        ("どき", "時"),
+        ("がた", "方"),
+        ("がえ", "替え"),
+    ] {
+        let standalone = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("standalone conversion");
+        assert!(
+            standalone
+                .iter()
+                .any(|candidate| candidate.text() == expected),
+            "{reading} lost independently entered {expected}: {:?}",
+            standalone
                 .iter()
                 .map(|candidate| candidate.text())
                 .collect::<Vec<_>>()
