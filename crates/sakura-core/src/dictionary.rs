@@ -100,6 +100,9 @@ impl EntryFlags {
     pub const IT: Self = Self(1 << 0);
     pub const PREDICTION: Self = Self(1 << 1);
     pub const SPELLING_CORRECTION: Self = Self(1 << 2);
+    /// A lexical fragment that is valid after preceding text but must not be
+    /// offered at the beginning of an independent conversion query.
+    pub const NON_INITIAL: Self = Self(1 << 3);
 
     pub const fn from_bits(bits: u16) -> Self {
         Self(bits)

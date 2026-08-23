@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dictc::{
+    category::{mark_non_initial_allomorphs, parse_mozc_pos_catalog},
     entries_to_tsv, parse_mozc_entries, MozcTrimmer, TrimPolicy, TrimReport, MOZC_UPSTREAM_COMMIT,
 };
 
@@ -16,6 +17,7 @@ const DEFAULT_MAX_CANDIDATES: usize = 12;
 
 struct Config {
     shards: Vec<PathBuf>,
+    pos_catalog: PathBuf,
     output: PathBuf,
     report: PathBuf,
     policy: TrimPolicy,
@@ -44,7 +46,10 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         let shard = parse_mozc_entries(&source, &text).map_err(|error| error.to_string())?;
         trimmer.push_shard(shard);
     }
-    let (entries, trim_report) = trimmer.finish();
+    let (mut entries, mut trim_report) = trimmer.finish();
+    let pos_source = config.pos_catalog.display().to_string();
+    let pos_catalog = parse_mozc_pos_catalog(&pos_source, &read_utf8(&config.pos_catalog)?)?;
+    trim_report.non_initial_entries = mark_non_initial_allomorphs(&mut entries, &pos_catalog);
     let tsv = entries_to_tsv(&entries, OUTPUT_LICENSE).map_err(|error| error.to_string())?;
     let report = report_json(&config, trim_report)?;
     replacing_write(&config.output, tsv.as_bytes())?;
@@ -65,12 +70,18 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     let mut shards = Vec::new();
     let mut output = None;
     let mut report = None;
+    let mut pos_catalog = None;
     let mut max_word_cost = DEFAULT_MAX_WORD_COST;
     let mut max_candidates_per_reading = DEFAULT_MAX_CANDIDATES;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         match argument.to_str() {
             Some("--mozc-system") => shards.push(next_path(&mut args, &argument)?),
+            Some("--mozc-id-def") => set_once(
+                &mut pos_catalog,
+                next_path(&mut args, &argument)?,
+                "Mozc POS taxonomy",
+            )?,
             Some("--output") => set_once(&mut output, next_path(&mut args, &argument)?, "output")?,
             Some("--report") => set_once(&mut report, next_path(&mut args, &argument)?, "report")?,
             Some("--max-word-cost") => {
@@ -81,7 +92,9 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
             }
             Some("--help" | "-h") => {
                 println!(
-                    "Usage: mozc-trim --mozc-system FILE... --output FILE --report FILE \\\n+                     [--max-word-cost N] [--max-candidates-per-reading N]"
+                    "Usage: mozc-trim --mozc-system FILE... --mozc-id-def FILE \
+                     --output FILE --report FILE \
+                     [--max-word-cost N] [--max-candidates-per-reading N]"
                 );
                 std::process::exit(0);
             }
@@ -91,6 +104,7 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     }
     Ok(Config {
         shards,
+        pos_catalog: pos_catalog.ok_or("--mozc-id-def is required")?,
         output: output.ok_or("--output is required")?,
         report: report.ok_or("--report is required")?,
         policy: TrimPolicy {
@@ -112,7 +126,7 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
     .map_err(|error| error.to_string())?;
     writeln!(
         &mut output,
-        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_candidates_per_reading\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"capped_entries\": {},\n  \"output_entries\": {}\n}}",
+        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_candidates_per_reading\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"capped_entries\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
         config.shards.len(),
         config.policy.max_word_cost,
         config.policy.max_candidates_per_reading,
@@ -120,6 +134,7 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
         report.cost_eligible,
         report.duplicate_entries,
         report.capped_entries,
+        report.non_initial_entries,
         report.output_entries
     )
     .map_err(|error| error.to_string())?;

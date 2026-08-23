@@ -15,7 +15,7 @@ use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 use crate::calendar::{date_offset_for_reading, date_surface_specs, CivilDate};
 use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::input_repair::{
-    allows_system_entry, collect_repair_variants, english_spelling_katakana_reading,
+    allows_system_entry, collect_repair_variants, english_spelling_katakana_reading, RepairKind,
     COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, MAX_REPAIR_VARIANTS,
 };
 use crate::numerals::{
@@ -72,12 +72,12 @@ const COMPLETION_ENTRY_BUDGET: usize = 64;
 const MIN_IT_COMPOUND_READING_CHARS: usize = 7;
 const IT_COMPOUND_WORD_BONUS: i64 = 1_200;
 const MAX_IT_COMPOUND_BOOST: i64 = 2_400;
-/// Once an atomic whole-reading entry exists, a much more expensive all-system
-/// segmentation is usually a mosaic of individually valid short words. The
-/// atomic gate is deliberately narrower than "any exact phrase": long Japanese
-/// compounds still need legitimate split alternatives. Whole-reading, user,
-/// generated, and lossless candidates are protected.
+/// Once a trustworthy whole-reading entry exists, a much more expensive
+/// all-system segmentation is usually a mosaic of individually valid short
+/// words. Word-sized Japanese readings and atomic loanwords use this gate;
+/// long Japanese compounds still retain legitimate split alternatives.
 const EXACT_LEXICAL_COMPOSITE_COST_WINDOW: i64 = 4_000;
+const MAX_EXACT_WORD_READING_CHARS: usize = 6;
 /// The conversion-side repair metadata is deliberately bounded.  These are
 /// heap-backed scratch limits (rather than stack arrays) because the engine
 /// worker may run with a small stack.
@@ -131,6 +131,23 @@ fn is_atomic_whole_reading_surface(surface: &str) -> bool {
             || character.is_ascii_alphanumeric()
             || matches!(character, ' ' | '-' | '_' | '.' | '+' | '#' | '/')
     })
+}
+
+fn is_trustworthy_exact_surface(surface: &str) -> bool {
+    let mut characters = surface.chars();
+    if characters.next().is_none() || characters.next().is_none() {
+        return false;
+    }
+    is_atomic_whole_reading_surface(surface)
+        || surface.chars().all(|character| {
+            matches!(
+                character,
+                '\u{3400}'..='\u{4dbf}'
+                    | '\u{4e00}'..='\u{9fff}'
+                    | '\u{f900}'..='\u{faff}'
+                    | '\u{20000}'..='\u{2ffff}'
+            )
+        })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -330,6 +347,7 @@ pub struct PathEvidence {
     pub fallback_edges: u8,
     pub generated_edges: u8,
     pub spelling_edges: u8,
+    repair_kinds: u8,
 }
 
 impl PathEvidence {
@@ -339,6 +357,7 @@ impl PathEvidence {
             && self.fallback_edges == 0
             && self.generated_edges == 0
             && self.spelling_edges == 0
+            && self.repair_kinds == 0
     }
 
     fn add_system(&mut self, spelling: bool) {
@@ -349,9 +368,24 @@ impl PathEvidence {
         }
     }
 
+    pub const fn has_unconfirmed_repair(self) -> bool {
+        self.repair_kinds
+            & (repair_kind_bit(RepairKind::Rule)
+                | repair_kind_bit(RepairKind::Advanced)
+                | repair_kind_bit(RepairKind::EnglishSpelling))
+            != 0
+    }
+
+    pub const fn has_repair_kind(self, kind: RepairKind) -> bool {
+        self.repair_kinds & repair_kind_bit(kind) != 0
+    }
+
     fn add_surface(&mut self, surface: Surface, spelling: bool) {
         match surface {
-            Surface::Dictionary { .. } => self.add_system(spelling),
+            Surface::Dictionary {
+                repair: Some(kind), ..
+            } => self.repair_kinds |= repair_kind_bit(kind),
+            Surface::Dictionary { repair: None, .. } => self.add_system(spelling),
             Surface::User(_) => self.user_edges = self.user_edges.saturating_add(1),
             Surface::Reading | Surface::Katakana => {
                 self.fallback_edges = self.fallback_edges.saturating_add(1)
@@ -360,6 +394,15 @@ impl PathEvidence {
                 self.generated_edges = self.generated_edges.saturating_add(1)
             }
         }
+    }
+}
+
+const fn repair_kind_bit(kind: RepairKind) -> u8 {
+    match kind {
+        RepairKind::Rule => 1 << 0,
+        RepairKind::Advanced => 1 << 1,
+        RepairKind::EnglishSpelling => 1 << 2,
+        RepairKind::CommitHistory => 1 << 3,
     }
 }
 
@@ -1052,7 +1095,11 @@ impl std::error::Error for ConversionError {}
 
 #[derive(Debug, Clone, Copy)]
 enum Surface {
-    Dictionary { entry: Entry, entry_index: u32 },
+    Dictionary {
+        entry: Entry,
+        entry_index: u32,
+        repair: Option<RepairKind>,
+    },
     User(usize),
     Reading,
     Katakana,
@@ -1399,7 +1446,7 @@ impl Converter {
                     self.add_date_candidates(reading, civil_date)?;
                     self.prefer_numeric_forms(reading)?;
                     self.drop_jitsu_day_counts(reading);
-                    self.apply_exact_lexical_quality_gate();
+                    self.apply_exact_lexical_quality_gate(reading);
                 }
             }
             Err(ConversionError::LatticeFull) => {
@@ -1922,6 +1969,7 @@ impl Converter {
                         .entry
                         .flags
                         .contains(EntryFlags::SPELLING_CORRECTION)
+                    || matched.entry.flags.contains(EntryFlags::NON_INITIAL)
                     || exact_edges_added >= exact_edge_limit
                 {
                     return true;
@@ -1949,6 +1997,7 @@ impl Converter {
                         surface: Surface::Dictionary {
                             entry: matched.entry,
                             entry_index,
+                            repair: None,
                         },
                     },
                 ) {
@@ -2444,17 +2493,24 @@ impl Converter {
         }
     }
 
-    /// Protects whole-reading lexical evidence from the low-information tail
-    /// of a fully lexical N-best search. Without this gate an exact loanword
-    /// can be followed by arbitrary one-character + unit-name mosaics, even
-    /// though each edge is independently present in the dictionary.
-    fn apply_exact_lexical_quality_gate(&mut self) {
+    /// Protects trustworthy whole-reading lexical evidence from speculative
+    /// repair paths and the low-information tail of a fully lexical N-best
+    /// search. A repair remains available when no direct exact entry exists;
+    /// it is only suppressed when the dictionary already answers the query.
+    fn apply_exact_lexical_quality_gate(&mut self, reading: &str) {
+        let is_word_sized = reading.chars().count() <= MAX_EXACT_WORD_READING_CHARS;
+        let suppress_unconfirmed_repairs = self.candidates.iter().any(|candidate| {
+            candidate.system_entry_index().is_some()
+                && !candidate.path_evidence().has_unconfirmed_repair()
+                && is_trustworthy_exact_surface(candidate.text())
+        });
         let Some(best_exact_cost) = self
             .candidates
             .iter()
             .filter(|candidate| {
                 candidate.system_entry_index().is_some()
-                    && is_atomic_whole_reading_surface(candidate.text())
+                    && !candidate.path_evidence().has_unconfirmed_repair()
+                    && (is_word_sized || is_atomic_whole_reading_surface(candidate.text()))
             })
             .map(|candidate| candidate.cost)
             .min()
@@ -2465,13 +2521,13 @@ impl Converter {
             best_exact_cost.saturating_add(EXACT_LEXICAL_COMPOSITE_COST_WINDOW);
         self.candidates.retain(|candidate| {
             let evidence = candidate.path_evidence();
-            candidate.system_entry_index().is_some()
-                || evidence.user_edges != 0
-                || evidence.system_edges < 2
-                || evidence.fallback_edges != 0
-                || evidence.generated_edges != 0
-                || evidence.spelling_edges != 0
-                || candidate.cost <= maximum_composite_cost
+            !(suppress_unconfirmed_repairs && evidence.has_unconfirmed_repair())
+                && (candidate.system_entry_index().is_some()
+                    || evidence.user_edges != 0
+                    || evidence.system_edges < 2
+                    || evidence.fallback_edges != 0
+                    || evidence.generated_edges != 0
+                    || candidate.cost <= maximum_composite_cost)
         });
     }
 
@@ -2788,7 +2844,8 @@ impl Converter {
                         options.input_support,
                         options.skip_input_repair,
                         matched.entry.flags,
-                    ) {
+                    ) || (start == 0 && matched.entry.flags.contains(EntryFlags::NON_INITIAL))
+                    {
                         return true;
                     }
                     if matched.matched_bytes != last_length {
@@ -2822,6 +2879,7 @@ impl Converter {
                             surface: Surface::Dictionary {
                                 entry: matched.entry,
                                 entry_index,
+                                repair: None,
                             },
                         },
                     ) {
@@ -3015,6 +3073,7 @@ impl Converter {
                 variant.penalty,
                 remaining_slots,
                 options,
+                variant.kind,
             )?;
             remaining_slots = remaining_slots.saturating_sub(added);
         }
@@ -3029,6 +3088,7 @@ impl Converter {
                     ENGLISH_KATAKANA_PENALTY,
                     remaining_slots,
                     options,
+                    RepairKind::EnglishSpelling,
                 )?;
             }
         }
@@ -3071,6 +3131,7 @@ impl Converter {
                 COMMIT_HISTORY_PENALTY,
                 remaining_slots,
                 options,
+                RepairKind::CommitHistory,
             )?;
             remaining_slots = remaining_slots.saturating_sub(added);
         }
@@ -3087,6 +3148,7 @@ impl Converter {
         penalty: i64,
         remaining_slots: usize,
         options: ConversionOptions,
+        repair: RepairKind,
     ) -> Result<usize, ConversionError> {
         if remaining_slots == 0 || repaired.is_empty() {
             return Ok(0);
@@ -3101,7 +3163,8 @@ impl Converter {
                 options.input_support,
                 options.skip_input_repair,
                 matched.entry.flags,
-            ) {
+            ) || (start == 0 && matched.entry.flags.contains(EntryFlags::NON_INITIAL))
+            {
                 return true;
             }
             if added >= remaining_slots {
@@ -3132,6 +3195,7 @@ impl Converter {
                     surface: Surface::Dictionary {
                         entry: matched.entry,
                         entry_index,
+                        repair: Some(repair),
                     },
                 },
             ) {
@@ -3182,7 +3246,8 @@ impl Converter {
                     options.input_support,
                     options.skip_input_repair,
                     matched.entry.flags,
-                ) {
+                ) || matched.entry.flags.contains(EntryFlags::NON_INITIAL)
+                {
                     return true;
                 }
                 if exact_edges_added >= MAX_DICTIONARY_EDGES_PER_READING {
@@ -3211,6 +3276,7 @@ impl Converter {
                         surface: Surface::Dictionary {
                             entry: matched.entry,
                             entry_index,
+                            repair: None,
                         },
                     },
                 ) {
@@ -4225,6 +4291,7 @@ mod tests {
     };
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
     use crate::user_dictionary::UserDictionary;
+    use crate::RepairKind;
 
     #[derive(Clone)]
     struct FixtureEntry {
@@ -5048,6 +5115,100 @@ mod tests {
             surfaces.iter().filter(|surface| **surface == "1日").count(),
             1
         );
+    }
+
+    #[test]
+    fn bos_filters_non_initial_fragments_but_compound_paths_can_use_them() {
+        let bytes = synthetic_dictionary(&[
+            fixture_entry("ずかい", "図解", 1_000, EntryFlags::NONE),
+            fixture_entry("ずかい", "使い", 100, EntryFlags::NON_INITIAL),
+            fixture_entry("つかい", "使い", 100, EntryFlags::NONE),
+            fixture_entry("き", "気", 100, EntryFlags::NONE),
+            fixture_entry("づかい", "遣い", 100, EntryFlags::NON_INITIAL),
+        ]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+
+        let independent = converter
+            .convert(&dictionary, "ずかい", ConversionOptions::default())
+            .expect("independent conversion");
+        assert!(independent
+            .iter()
+            .any(|candidate| candidate.text() == "図解"));
+        assert!(independent
+            .iter()
+            .all(|candidate| candidate.text() != "使い"));
+
+        let ordinary = converter
+            .convert(&dictionary, "つかい", ConversionOptions::default())
+            .expect("ordinary unvoiced conversion");
+        assert!(ordinary.iter().any(|candidate| candidate.text() == "使い"));
+
+        let compound = converter
+            .convert(&dictionary, "きづかい", ConversionOptions::default())
+            .expect("compound conversion");
+        assert!(
+            compound
+                .iter()
+                .any(|candidate| candidate.text() == "気遣い"),
+            "non-initial fragment was lost inside a compound: {:?}",
+            compound
+                .iter()
+                .map(|candidate| candidate.text())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn trustworthy_exact_word_suppresses_unconfirmed_repairs_and_costly_mosaics() {
+        let bytes = synthetic_dictionary(&[
+            fixture_entry("ずかい", "図解", 1_000, EntryFlags::NONE),
+            fixture_entry("ずがい", "頭蓋", 100, EntryFlags::NONE),
+            fixture_entry("ず", "図", 3_000, EntryFlags::NONE),
+            fixture_entry("か", "書", 3_000, EntryFlags::NONE),
+            fixture_entry("い", "い", 3_000, EntryFlags::NONE),
+        ]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "ずかい", ConversionOptions::default())
+            .expect("exact conversion");
+        let ranking = candidates
+            .iter()
+            .map(|candidate| (candidate.text(), candidate.cost, candidate.path_evidence()))
+            .collect::<Vec<_>>();
+
+        assert!(candidates
+            .iter()
+            .any(|candidate| candidate.text() == "図解"));
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.text() != "頭蓋"),
+            "dakuten repair polluted an exact query: {ranking:?}"
+        );
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.text() != "図書い"),
+            "costly split mosaic survived an exact word: {ranking:?}"
+        );
+    }
+
+    #[test]
+    fn repair_candidate_remains_available_when_no_trustworthy_exact_word_exists() {
+        let bytes = synthetic_dictionary(&[fixture_entry("ずがい", "頭蓋", 100, EntryFlags::NONE)]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "ずかい", ConversionOptions::default())
+            .expect("repair-only conversion");
+        let repaired = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "頭蓋")
+            .expect("dakuten repair remains available");
+        assert!(repaired.path_evidence().has_repair_kind(RepairKind::Rule));
+        assert!(repaired.path_evidence().has_unconfirmed_repair());
     }
 
     #[test]

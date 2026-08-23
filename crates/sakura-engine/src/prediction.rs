@@ -731,6 +731,9 @@ impl PredictionIndex {
                 {
                     continue;
                 }
+                if entry.flags.contains(EntryFlags::NON_INITIAL) {
+                    continue;
+                }
                 let Some(surface) = self.system_surface(entry) else {
                     continue;
                 };
@@ -812,6 +815,9 @@ impl PredictionIndex {
                     {
                         continue;
                     }
+                    if entry.flags.contains(EntryFlags::NON_INITIAL) {
+                        continue;
+                    }
                     let Some(surface) = self.system_surface(entry) else {
                         continue;
                     };
@@ -850,6 +856,7 @@ impl PredictionIndex {
                     .entry
                     .flags
                     .contains(EntryFlags::SPELLING_CORRECTION)
+                && !matched.entry.flags.contains(EntryFlags::NON_INITIAL)
                 && !matched.entry.flags.contains(EntryFlags::PREDICTION)
             {
                 system_exact = true;
@@ -1717,6 +1724,29 @@ mod tests {
             .expect("shared candidate");
         assert_eq!(shared.reading(), "かが");
         assert_eq!(shared.source(), PredictionSource::System);
+    }
+
+    #[test]
+    fn independent_prediction_omits_non_initial_dictionary_fragments() {
+        let conversion = prediction_fixture_conversion(
+            "ずかい\t使い\t0\t0\t100\t100\tpredict,non-initial\tfragment\nずかい\t図解\t0\t0\t1000\t1000\tpredict\tword\nつかい\t使い\t0\t0\t100\t100\tpredict\tword\n",
+        );
+
+        let voiced = predict_fixture(&conversion, "ず", None);
+        assert!(voiced
+            .candidates()
+            .iter()
+            .any(|candidate| candidate.surface() == "図解"));
+        assert!(voiced
+            .candidates()
+            .iter()
+            .all(|candidate| candidate.surface() != "使い"));
+
+        let ordinary = predict_fixture(&conversion, "つ", None);
+        assert!(ordinary
+            .candidates()
+            .iter()
+            .any(|candidate| candidate.surface() == "使い"));
     }
 
     #[test]

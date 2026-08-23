@@ -130,6 +130,7 @@ pub struct TrimReport {
     pub cost_eligible: usize,
     pub duplicate_entries: usize,
     pub capped_entries: usize,
+    pub non_initial_entries: usize,
     pub output_entries: usize,
 }
 
@@ -939,7 +940,8 @@ fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Er
         }
         let known_flags = EntryFlags::IT.bits()
             | EntryFlags::PREDICTION.bits()
-            | EntryFlags::SPELLING_CORRECTION.bits();
+            | EntryFlags::SPELLING_CORRECTION.bits()
+            | EntryFlags::NON_INITIAL.bits();
         if entry.flags.bits() & !known_flags != 0 {
             return Err(Error::at(
                 &entry.source,
@@ -947,7 +949,7 @@ fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Er
                 "entry has flags the TSV schema cannot represent",
             ));
         }
-        let mut flags = Vec::with_capacity(3);
+        let mut flags = Vec::with_capacity(4);
         if entry.flags.contains(EntryFlags::IT) {
             flags.push("it");
         }
@@ -956,6 +958,9 @@ fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Er
         }
         if entry.flags.contains(EntryFlags::SPELLING_CORRECTION) {
             flags.push("correction");
+        }
+        if entry.flags.contains(EntryFlags::NON_INITIAL) {
+            flags.push("non-initial");
         }
         let flags = flags.join(",");
         let prediction = if entry.prediction_cost == i32::MAX {
@@ -1726,6 +1731,7 @@ fn parse_flags(source: &str, line: usize, value: &str) -> Result<EntryFlags, Err
             "it" => EntryFlags::IT,
             "predict" => EntryFlags::PREDICTION,
             "correction" => EntryFlags::SPELLING_CORRECTION,
+            "non-initial" => EntryFlags::NON_INITIAL,
             _ => return Err(Error::at(source, line, format!("unknown flag '{flag}'"))),
         };
         if flags.contains(parsed) {

@@ -3,7 +3,7 @@
 //! Category files are deliberately named for what they contain.  They do not
 //! encode an upstream source, acquisition method, or build layer.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use sakura_core::dictionary::EntryFlags;
 
@@ -160,6 +160,135 @@ pub fn parse_mozc_pos_catalog(source: &str, text: &str) -> Result<MozcPosCatalog
         return Err(format!("{source}: no POS definitions found"));
     }
     Ok(catalog)
+}
+
+/// Marks lexical fragments that are meaningful only after preceding text.
+///
+/// Mozc deliberately carries initial-voicing allomorphs in the same shards as
+/// standalone words. Its full converter has enough context to keep those
+/// fragments out of an independent BOS conversion, while Sakura materializes
+/// every bounded N-best path. Preserve the entries for compound paths, but
+/// make their left-boundary contract explicit in the compiled flag.
+///
+/// The allomorph rule is intentionally identity based: a voiced reading is
+/// marked only when the same surface and connection classes also have an
+/// unvoiced sibling. This avoids a word list and does not reinterpret ordinary
+/// standalone nouns that merely begin with a voiced kana.
+pub fn mark_non_initial_allomorphs(
+    entries: &mut [SourceEntry],
+    pos_catalog: &MozcPosCatalog,
+) -> usize {
+    let identities = entries
+        .iter()
+        .map(|entry| {
+            (
+                entry.surface.clone(),
+                entry.left_id,
+                entry.right_id,
+                entry.reading.clone(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    let surface_readings = entries
+        .iter()
+        .map(|entry| (entry.surface.clone(), entry.reading.clone()))
+        .collect::<BTreeSet<_>>();
+    let mut marked = 0usize;
+    for entry in entries {
+        let Some(labels) = pos_catalog.labels_for(entry.left_id) else {
+            continue;
+        };
+        let voiced_suffix = has_label(labels, "接尾")
+            && unvoiced_initial_readings(&entry.reading)
+                .any(|reading| surface_readings.contains(&(entry.surface.clone(), reading)));
+        let voiced_continuative = has_label(labels, "連用形")
+            && unvoiced_initial_readings(&entry.reading).any(|reading| {
+                identities.contains(&(
+                    entry.surface.clone(),
+                    entry.left_id,
+                    entry.right_id,
+                    reading,
+                ))
+            });
+        if (voiced_suffix || voiced_continuative) && !entry.flags.contains(EntryFlags::NON_INITIAL)
+        {
+            entry.flags = entry.flags | EntryFlags::NON_INITIAL;
+            marked = marked.saturating_add(1);
+        }
+    }
+    marked
+}
+
+fn unvoiced_initial_readings(reading: &str) -> impl Iterator<Item = String> + '_ {
+    let mut characters = reading.chars();
+    let first = characters.next();
+    let suffix = characters.as_str();
+    unvoiced_initials(first)
+        .into_iter()
+        .flatten()
+        .map(move |initial| {
+            let mut value = String::with_capacity(reading.len());
+            value.push(initial);
+            value.push_str(suffix);
+            value
+        })
+}
+
+fn unvoiced_initials(character: Option<char>) -> [Option<char>; 2] {
+    let Some(character) = character else {
+        return [None, None];
+    };
+    let primary = match character {
+        'が' => 'か',
+        'ぎ' => 'き',
+        'ぐ' => 'く',
+        'げ' => 'け',
+        'ご' => 'こ',
+        'ざ' => 'さ',
+        'ぜ' => 'せ',
+        'ぞ' => 'そ',
+        'だ' => 'た',
+        'で' => 'て',
+        'ど' => 'と',
+        'ば' | 'ぱ' => 'は',
+        'び' | 'ぴ' => 'ひ',
+        'ぶ' | 'ぷ' => 'ふ',
+        'べ' | 'ぺ' => 'へ',
+        'ぼ' | 'ぽ' => 'ほ',
+        'ガ' => 'カ',
+        'ギ' => 'キ',
+        'グ' => 'ク',
+        'ゲ' => 'ケ',
+        'ゴ' => 'コ',
+        'ザ' => 'サ',
+        'ゼ' => 'セ',
+        'ゾ' => 'ソ',
+        'ダ' => 'タ',
+        'デ' => 'テ',
+        'ド' => 'ト',
+        'バ' | 'パ' => 'ハ',
+        'ビ' | 'ピ' => 'ヒ',
+        'ブ' | 'プ' => 'フ',
+        'ベ' | 'ペ' => 'ヘ',
+        'ボ' | 'ポ' => 'ホ',
+        'じ' => 'し',
+        'ず' => 'す',
+        'ぢ' => 'ち',
+        'づ' => 'つ',
+        'ジ' => 'シ',
+        'ズ' => 'ス',
+        'ヂ' => 'チ',
+        'ヅ' => 'ツ',
+        _ => return [None, None],
+    };
+    let secondary = match character {
+        'じ' | 'ぢ' => Some('ち'),
+        'ず' | 'づ' => Some('つ'),
+        'ジ' | 'ヂ' => Some('チ'),
+        'ズ' | 'ヅ' => Some('ツ'),
+        _ => None,
+    };
+    [Some(primary), secondary]
 }
 
 /// Categorizes an entry from Sakura's existing system or overlay sources.
@@ -396,8 +525,11 @@ fn is_symbol_like(character: char) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use sakura_core::dictionary::EntryFlags;
+
     use super::{
-        classify_existing_entry, is_address_layer_entry, parse_mozc_pos_catalog, DictionaryCategory,
+        classify_existing_entry, is_address_layer_entry, mark_non_initial_allomorphs,
+        parse_mozc_pos_catalog, DictionaryCategory,
     };
     use crate::{entries_to_category_tsv, parse_category_entries, parse_entries};
 
@@ -416,6 +548,59 @@ mod tests {
             "10 名詞,固有名詞,人名,姓\n11 名詞,固有名詞,地名,一般\n12 名詞,固有名詞,組織,*\n13 名詞,数,*,*\n14 記号,一般,*,*\n15 動詞,自立,*,*\n16 助詞,係助詞,*,*\n",
         )
         .expect("fixture POS catalog parses")
+    }
+
+    fn lexical_entry(reading: &str, surface: &str, id: u16) -> crate::SourceEntry {
+        let tsv = format!(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n{reading}\t{surface}\t{id}\t{id}\t100\t1300\tpredict\t\n"
+        );
+        parse_entries("fixture.tsv", &tsv)
+            .expect("fixture parses")
+            .remove(0)
+    }
+
+    #[test]
+    fn non_initial_marking_uses_pos_and_identity_instead_of_surface_blacklists() {
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "829 動詞,自立,*,*,五段・ワ行促音便,連用形,*\n1949 名詞,接尾,一般,*,*,*,*\n1851 名詞,一般,*,*,*,*,*\n",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            lexical_entry("つかい", "使い", 829),
+            lexical_entry("ずかい", "使い", 829),
+            lexical_entry("つかい", "遣い", 829),
+            lexical_entry("づかい", "遣い", 829),
+            lexical_entry("ずかい", "遣い", 1949),
+            lexical_entry("いし", "石", 1949),
+            lexical_entry("から", "柄", 1851),
+            lexical_entry("がら", "柄", 1851),
+            lexical_entry("きづかい", "気遣い", 1851),
+        ];
+
+        assert_eq!(mark_non_initial_allomorphs(&mut entries, &catalog), 3);
+        let marked = entries
+            .iter()
+            .filter(|entry| entry.flags.contains(EntryFlags::NON_INITIAL))
+            .map(|entry| {
+                (
+                    entry.reading.as_str(),
+                    entry.surface.as_str(),
+                    entry.left_id,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            marked,
+            vec![
+                ("ずかい", "使い", 829),
+                ("づかい", "遣い", 829),
+                ("ずかい", "遣い", 1949),
+            ]
+        );
+        assert!(entries
+            .iter()
+            .all(|entry| entry.flags.contains(EntryFlags::PREDICTION)));
     }
 
     #[test]
