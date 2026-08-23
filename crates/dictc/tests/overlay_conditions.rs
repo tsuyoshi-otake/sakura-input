@@ -102,6 +102,7 @@ fn render(entry: &SourceEntry) -> String {
         (EntryFlags::IT, "it"),
         (EntryFlags::PREDICTION, "predict"),
         (EntryFlags::SPELLING_CORRECTION, "correction"),
+        (EntryFlags::NON_INITIAL, "non-initial"),
     ] {
         if entry.flags.contains(flag) {
             if !flags.is_empty() {

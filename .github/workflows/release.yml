@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.20
+        default: v1.0.21
 
 permissions:
   contents: read
@@ -94,6 +94,12 @@ jobs:
       # artifact and verifies its pinned byte length and SHA-256 itself.
       # Keep this ownership here: an unchecked workflow download must not
       # bypass the dictionary builder's source validation.
+
+      - name: Gate independent conversion of non-initial allomorphs
+        shell: pwsh
+        run: |
+          $env:SAKURA_PHASE2_DICTIONARY = Join-Path $env:GITHUB_WORKSPACE 'artifacts/release/system.dic'
+          cargo test -p dictc --test conversion real_dictionary_keeps_non_initial_allomorphs_out_of_independent_conversion -- --ignored --nocapture
 
       - name: Gate learned homophones against cross-commit context
         run: cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture

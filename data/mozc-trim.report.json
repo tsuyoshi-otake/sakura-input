@@ -10,5 +10,6 @@
   "cost_eligible": 467976,
   "duplicate_entries": 8247,
   "capped_entries": 18014,
+  "non_initial_entries": 532,
   "output_entries": 441715
 }

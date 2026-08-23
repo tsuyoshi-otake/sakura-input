@@ -387,7 +387,7 @@ function Invoke-BuildPass {
     foreach ($shard in $shards) {
         $mozcArguments += @('--mozc-system', $shard)
     }
-    $mozcArguments += @('--output', $systemTsv, '--report', $trimReport)
+    $mozcArguments += @('--mozc-id-def', $MozcPosPath, '--output', $systemTsv, '--report', $trimReport)
     Invoke-Rtk -Arguments $mozcArguments
 
     $inflectionArguments = @(

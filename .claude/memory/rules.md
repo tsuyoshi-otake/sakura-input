@@ -450,3 +450,16 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   but a Windows Actions checkout converted it to CRLF and the installer failed
   closed after all earlier gates passed. An exact `.gitattributes` `eol=lf`
   rule keeps the reviewed manifest bytes identical across checkouts.
+
+- **A non-initial dictionary flag needs both a morphological POS and an
+  attested base reading; a suffix POS alone is not enough.** Mozc uses suffix
+  connection classes for some valid standalone homophones such as `いし` →
+  `石`. Requiring the same surface's unvoiced base form marked the intended
+  initial-voicing allomorphs while the full detail build proved independent
+  entries remained identity-compatible.
+
+- **Keep per-candidate provenance bit-packed inside the fixed conversion
+  arena.** Four repair counters pushed the Windows test harness over its stack
+  boundary at 32-way parallelism even though serial tests passed. A one-byte
+  repair-kind mask preserved the required evidence and restored the 32-thread
+  test plus the 128 KiB worker-stack checks.

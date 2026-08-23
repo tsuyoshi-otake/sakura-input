@@ -1104,3 +1104,54 @@ fn bare_spoken_numbers_defer_to_lexical_homophones() {
         }
     }
 }
+
+#[test]
+#[ignore = "real built dictionary; set SAKURA_PHASE2_DICTIONARY"]
+fn real_dictionary_keeps_non_initial_allomorphs_out_of_independent_conversion() {
+    let path = std::env::var_os("SAKURA_PHASE2_DICTIONARY")
+        .expect("SAKURA_PHASE2_DICTIONARY must name a freshly built system.dic");
+    let bytes = std::fs::read(&path).expect("read real dictionary");
+    let dictionary = Dictionary::parse(&bytes).expect("parse real dictionary");
+    let mut converter = Converter::new();
+
+    let candidates = converter
+        .convert(&dictionary, "ずかい", ConversionOptions::default())
+        .expect("ずかい conversion");
+    let ranking = candidates
+        .iter()
+        .map(|candidate| (candidate.text(), candidate.cost))
+        .collect::<Vec<_>>();
+    assert_eq!(ranking.first().map(|candidate| candidate.0), Some("図解"));
+    for unexpected in ["使い", "遣い", "頭蓋", "図書い"] {
+        assert!(
+            ranking.iter().all(|candidate| candidate.0 != unexpected),
+            "ずかい retained {unexpected}: {ranking:?}"
+        );
+    }
+
+    let ordinary = converter
+        .convert(&dictionary, "つかい", ConversionOptions::default())
+        .expect("つかい conversion");
+    assert!(ordinary.iter().any(|candidate| candidate.text() == "使い"));
+    assert!(ordinary.iter().any(|candidate| candidate.text() == "遣い"));
+
+    for (reading, expected) in [
+        ("きづかい", "気遣い"),
+        ("こづかい", "小遣い"),
+        ("ことばづかい", "言葉遣い"),
+    ] {
+        let compound = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("compound conversion");
+        assert!(
+            compound
+                .iter()
+                .any(|candidate| candidate.text() == expected),
+            "{reading} lost {expected}: {:?}",
+            compound
+                .iter()
+                .map(|candidate| candidate.text())
+                .collect::<Vec<_>>()
+        );
+    }
+}
