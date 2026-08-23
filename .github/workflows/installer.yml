@@ -30,6 +30,7 @@ jobs:
           sparse-checkout: |
             LICENSE
             src/data/dictionary_oss
+            src/data/rules/segmenter.def
 
       # IT glossary input is the MIT snapshot under
       # third_party/smile-chat-public (no private-repo token).
