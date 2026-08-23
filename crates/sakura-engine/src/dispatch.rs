@@ -1986,15 +1986,17 @@ fn preferred_candidate_index(
         if let Some(index) = learned
             .exact
             .filter(|index| *index < direct.len())
+            .filter(|index| candidate_preference_matches_context(direct, *index))
             .filter(|index| direct[*index].text() != reading)
         {
             return index;
         }
         if let Some((surface_hash, surface_len)) = cached {
-            if let Some(index) = direct.iter().position(|candidate| {
+            if let Some(index) = direct.iter().enumerate().position(|(index, candidate)| {
                 u16::try_from(candidate.text().len()).ok() == Some(surface_len)
                     && text_hash(candidate.text()) == surface_hash
                     && candidate.text() != reading
+                    && candidate_preference_matches_context(direct, index)
             }) {
                 return index;
             }
@@ -2002,6 +2004,7 @@ fn preferred_candidate_index(
         if let Some(index) = learned
             .general
             .filter(|index| *index < direct.len())
+            .filter(|index| candidate_preference_matches_context(direct, *index))
             .filter(|index| direct[*index].text() != reading)
         {
             return index;
@@ -2029,22 +2032,42 @@ fn has_authoritative_candidate_preference(
     }
     let direct_limit = direct_limit.min(candidates.len());
     let direct = &candidates[..direct_limit];
-    if learned
-        .exact
-        .is_some_and(|index| index < direct.len() && direct[index].text() != reading)
-        || learned
-            .general
-            .is_some_and(|index| index < direct.len() && direct[index].text() != reading)
-    {
+    if learned.exact.is_some_and(|index| {
+        index < direct.len()
+            && candidate_preference_matches_context(direct, index)
+            && direct[index].text() != reading
+    }) || learned.general.is_some_and(|index| {
+        index < direct.len()
+            && candidate_preference_matches_context(direct, index)
+            && direct[index].text() != reading
+    }) {
         return true;
     }
     cached.is_some_and(|(surface_hash, surface_len)| {
-        direct.iter().any(|candidate| {
+        direct.iter().enumerate().any(|(index, candidate)| {
             u16::try_from(candidate.text().len()).ok() == Some(surface_len)
                 && text_hash(candidate.text()) == surface_hash
                 && candidate.text() != reading
+                && candidate_preference_matches_context(direct, index)
         })
     })
+}
+
+/// A preference learned or cached without the retained lexical tail must not
+/// jump from outside a successfully reanalysed cross-commit continuation into
+/// the selected position. This is intentionally evidence-based rather than a
+/// surface exception: when no direct candidate received bridge evidence, all
+/// ordinary preference behavior remains unchanged.
+fn candidate_preference_matches_context(
+    direct: &[ConversionCandidate],
+    candidate_index: usize,
+) -> bool {
+    !direct
+        .iter()
+        .any(ConversionCandidate::was_cross_commit_rescored)
+        || direct
+            .get(candidate_index)
+            .is_some_and(ConversionCandidate::was_cross_commit_rescored)
 }
 
 fn is_opaque_ascii_identifier(raw: &str) -> bool {

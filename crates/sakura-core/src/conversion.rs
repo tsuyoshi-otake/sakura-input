@@ -4662,12 +4662,17 @@ mod tests {
     #[test]
     fn cross_commit_bridge_fits_128_kib_thread_stack() {
         let bytes = cross_commit_fixture();
+        // Production keeps converter arenas in ConversionService's boxed slot
+        // pool; the worker stack only borrows a slot for the conversion call.
+        // Mirror that ownership so this boundary measures the hot path rather
+        // than constructing the reusable arena on the constrained stack.
+        let converter = Box::new(Converter::new());
         let handle = std::thread::Builder::new()
             .name("conversion-bridge-128k".to_owned())
             .stack_size(128 * 1024)
             .spawn(move || {
                 let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
-                let mut converter = Converter::new();
+                let mut converter = converter;
                 let result = converter
                     .convert_with_user_dictionary_input_bridge_detailed(
                         &dictionary,
@@ -5356,13 +5361,17 @@ mod tests {
             fixture_entry("あき", "DIRECT", 1, EntryFlags::NONE),
             fixture_entry("あか", "CORRECTED", 1, EntryFlags::NONE),
         ]);
+        // ConversionService owns each Converter in a boxed reusable slot. Do
+        // not charge construction of that process-lifetime arena to the worker
+        // stack whose conversion call this test is intended to bound.
+        let converter = Box::new(Converter::new());
         let handle = std::thread::Builder::new()
             .name("conversion-raw-128k".to_owned())
             .stack_size(128 * 1024)
             .spawn(move || {
                 let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
                 let plan = local_plan(12, "あき", "あか", RepairTier::LocalCompletion);
-                let mut converter = Converter::new();
+                let mut converter = converter;
                 let result = converter
                     .convert_with_raw_repair_plans(
                         &dictionary,

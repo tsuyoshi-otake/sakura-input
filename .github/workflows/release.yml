@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.19
+        default: v1.0.20
 
 permissions:
   contents: read
@@ -94,6 +94,19 @@ jobs:
       # artifact and verifies its pinned byte length and SHA-256 itself.
       # Keep this ownership here: an unchecked workflow download must not
       # bypass the dictionary builder's source validation.
+
+      - name: Gate learned homophones against cross-commit context
+        run: cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture
+
+      - name: Prove dictionary integration test runners exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a dictionary integration test process survived its invocation'
+          }
 
       - name: Build release binaries
         run: cargo build --workspace --release --locked
