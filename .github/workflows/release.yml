@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.21
+        default: v1.0.22
 
 permissions:
   contents: read
@@ -71,6 +71,12 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # cargo-audit 0.22.2 was published 2026-06-05, well beyond the
+      # repository's seven-day release-age quarantine.
+      - name: Install dependency auditor
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit dependencies
+        run: cargo audit --file Cargo.lock
       - name: Test
         run: cargo test --workspace
       - name: Prove test runners exited
@@ -99,7 +105,7 @@ jobs:
         shell: pwsh
         run: |
           $env:SAKURA_PHASE2_DICTIONARY = Join-Path $env:GITHUB_WORKSPACE 'artifacts/release/system.dic'
-          cargo test -p dictc --test conversion real_dictionary_keeps_non_initial_allomorphs_out_of_independent_conversion -- --ignored --nocapture
+          cargo test -p dictc --test conversion real_dictionary_balances_non_initial_fragments_and_productive_bound_forms -- --ignored --nocapture
 
       - name: Gate learned homophones against cross-commit context
         run: cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture

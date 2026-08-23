@@ -133,15 +133,20 @@ pub fn validate(dir: &Path) -> Result<ValidatedManifest, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
     fn directory() -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "sakura-worker-manifest-{}",
+            "sakura-worker-manifest-{}-{}-{}",
+            std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir_all(&path).unwrap();
         fs::write(path.join("model.onnx"), b"a").unwrap();
