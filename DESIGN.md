@@ -893,10 +893,15 @@ by the last few committed inputs. Four bounded mechanisms cooperate:
   `考慮漏れ + ないか`; unrelated `内科`/`内か` forms do not inherit it.
 
   The bridge is one-session, memory-only state. Exact user-dictionary entries
-  bypass replay, explicit learning remains authoritative, and repaired,
-  generated, fallback, user, exact-synthetic, or already bridge-rescored paths
-  cannot seed it. It is never sent to the neural/long-text worker, history,
-  learning, logs, or disk. TSF captures the exact committed `ITfRange` after
+  bypass replay. Learned and cached selections remain authoritative when replay
+  yields no improved direct candidate; once replay does yield such evidence,
+  those preferences may select only another bridge-supported direct candidate
+  and cannot transplant an unrelated homophone across the proven boundary.
+  This authority rule depends only on candidate provenance, not on particular
+  readings or surfaces. Repaired, generated, fallback, user, exact-synthetic,
+  or already bridge-rescored paths cannot seed a later bridge. The retained
+  tail is never sent to the neural/long-text worker, history, learning, logs,
+  or disk. TSF captures the exact committed `ITfRange` after
   the applied write and, before the next real key, synchronously re-proves that
   the range text is unchanged and its end equals the collapsed caret. Focus or
   context replacement, selection/caret movement, host edits, undo,

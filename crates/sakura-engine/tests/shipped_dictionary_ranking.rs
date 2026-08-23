@@ -23,7 +23,7 @@
 //! ```
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_core::{
     ConversionInput, ConversionOptions, CrossCommitBridge, InputMethod, InputSupport, Preferences,
@@ -639,6 +639,56 @@ fn committed_kouryo_more_makes_naika_continue_as_a_grammar_phrase() {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_84_recent_cached_naika_selection_cannot_override_kouryo_more_context() {
+    let mut dispatcher = open_dispatcher();
+    let session = create_normal_session(&mut dispatcher, "issue-84-reproduction.exe");
+
+    assert_eq!(
+        commit_converted_romaji(&mut dispatcher, session, "kyouha"),
+        "今日は"
+    );
+    assert_eq!(
+        commit_named_converted_romaji(&mut dispatcher, session, "naika", "内科"),
+        "内科",
+        "setup must reproduce the user's explicit homophone selection"
+    );
+    assert_eq!(
+        commit_converted_romaji(&mut dispatcher, session, "kouryomore"),
+        "考慮漏れ"
+    );
+
+    type_romaji(&mut dispatcher, session, "naika");
+    let converted = send_key(&mut dispatcher, session, space_key());
+    let selected = converted
+        .to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+    let candidates = candidate_surfaces(&converted);
+    let clinic = candidates
+        .iter()
+        .position(|surface| surface == "内科")
+        .expect("内科 control candidate");
+    let grammatical = candidates
+        .iter()
+        .position(|surface| surface == "ないか" || surface == "無いか")
+        .expect("grammatical continuation");
+
+    assert_ne!(selected, "内科", "cached selection leaked across context");
+    assert!(
+        grammatical < clinic,
+        "bridge-supported continuation must outrank cached 内科: {candidates:?}"
+    );
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_83_shipped_japanese_bridge_controls() {
     let conversion = open_conversion();
     let (tail_right, tail) = conversion
@@ -720,7 +770,7 @@ fn relevant_naika_costs(candidates: &[sakura_core::ConversionCandidate]) -> [i64
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
-fn issue_83_bridge_respects_no_context_association_off_and_explicit_learning() {
+fn issue_84_bridge_bounds_conflicting_learning_but_preserves_other_authorities() {
     let mut baseline_dispatcher = open_dispatcher();
     let (_, baseline) = convert(&mut baseline_dispatcher, "naika");
     assert!(!baseline.is_empty(), "fresh current-only conversion");
@@ -825,10 +875,26 @@ fn issue_83_bridge_respects_no_context_association_off_and_explicit_learning() {
             },
         )
         .expect("current conversion");
-    let learning = Arc::new(LearningService::memory());
-    for _ in 0..2 {
-        learning.learn("ないか", "内科", left_context, clinic_right);
+    let learning_root = std::env::temp_dir().join(format!(
+        "sakura-issue-84-learning-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&learning_root).expect("create durable learning root");
+    let learning_path = learning_root.join("learning.log");
+    {
+        let durable = LearningService::open(&learning_path).expect("open durable learning");
+        for _ in 0..2 {
+            durable.learn("ないか", "内科", left_context, clinic_right);
+        }
+        durable.maintain().expect("flush durable learning");
     }
+    let learning = Arc::new(
+        LearningService::open(&learning_path).expect("reopen persisted learned homophone"),
+    );
     let mut learned =
         Dispatcher::new_with_configuration(conversion, learning, Preferences::default())
             .expect("learned dispatcher");
@@ -851,9 +917,11 @@ fn issue_83_bridge_respects_no_context_association_off_and_explicit_learning() {
         })
         .unwrap_or_default();
     assert_eq!(
-        learned_surface, "内科",
-        "an explicit exact learned preference remains authoritative"
+        learned_surface, "無いか",
+        "even strong learned homophones must stay inside the bridge-supported continuation set"
     );
+    drop(learned);
+    std::fs::remove_dir_all(learning_root).expect("remove durable learning root");
 }
 
 #[test]
