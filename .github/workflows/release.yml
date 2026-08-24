@@ -217,7 +217,7 @@ jobs:
             }
             foreach ($item in $items) {
               if (-not $item.Exists) { throw "build artifact is missing: $relative" }
-              $path = $item.FullName.Substring($root.Length).TrimStart('\', '/') -replace '\', '/'
+              $path = $item.FullName.Substring($root.Length).TrimStart('\', '/') -replace '\\', '/'
               $null = $records.Add([ordered]@{
                 path = $path
                 bytes = [long]$item.Length
@@ -230,7 +230,7 @@ jobs:
             $candidate = [IO.Path]::GetFullPath((Join-Path $root ($relative -replace '/', '\')))
             $item = [IO.FileInfo]::new($candidate)
             if (-not $item.Exists) { throw "verified source file is missing: $relative" }
-            $path = $item.FullName.Substring($root.Length).TrimStart('\', '/') -replace '\', '/'
+            $path = $item.FullName.Substring($root.Length).TrimStart('\', '/') -replace '\\', '/'
             $null = $sourceRecords.Add([ordered]@{
               path = $path
               bytes = [long]$item.Length
