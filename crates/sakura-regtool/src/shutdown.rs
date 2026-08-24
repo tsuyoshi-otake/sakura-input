@@ -16,8 +16,10 @@
 
 use std::time::{Duration, Instant};
 
-use sakura_ipc::{pipe_name, Client, Fault, PATIENT_CONNECT};
-use sakura_proto::{Request, Response};
+#[cfg(test)]
+use sakura_ipc::pipe_name_for;
+use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy, PATIENT_CONNECT};
+use sakura_proto::{Request, Response, PROTOCOL_VERSION};
 use windows::core::HRESULT;
 use windows::Win32::Foundation::ERROR_FILE_NOT_FOUND;
 
@@ -35,13 +37,41 @@ pub enum Outcome {
 
 pub fn stop(budget: Duration) -> Result<Outcome, String> {
     let deadline = Instant::now() + budget;
-    let name = pipe_name().map_err(|error| format!("cannot name the engine's pipe: {error}"))?;
+    let policy = stable_root_policy()?;
 
-    let mut client = match Client::connect_to(&name, cap_connect_budget(remaining(deadline))) {
+    let mut client = match Client::connect_endpoint_verified(
+        Endpoint::Control,
+        &policy,
+        cap_connect_budget(remaining(deadline)),
+    ) {
         Ok(client) => client,
         Err(error) if is_absent(&error) => return Ok(Outcome::NotRunning),
         Err(error) => return Err(format!("cannot reach the engine: {error}")),
     };
+
+    match client.call(
+        &Request::Hello {
+            client_version: PROTOCOL_VERSION,
+        },
+        remaining(deadline),
+    ) {
+        Ok(Response::Hello { server_version, .. }) if server_version == PROTOCOL_VERSION => {}
+        Ok(Response::Error(code)) => {
+            return Err(format!(
+                "the engine refused the control handshake: {code:?}"
+            ))
+        }
+        Ok(response) => {
+            return Err(format!(
+                "unexpected response to the control handshake: {response:?}"
+            ))
+        }
+        Err(error) => {
+            return Err(format!(
+                "the engine did not accept the control handshake: {error}"
+            ))
+        }
+    }
 
     match client.call(&Request::Shutdown, remaining(deadline)) {
         Ok(Response::Error(code)) => return Err(format!("the engine refused to stop: {code:?}")),
@@ -59,7 +89,11 @@ pub fn stop(budget: Duration) -> Result<Outcome, String> {
     drop(client);
 
     while Instant::now() < deadline {
-        match Client::connect_to(&name, cap_connect_budget(remaining(deadline))) {
+        match Client::connect_endpoint_verified(
+            Endpoint::Control,
+            &policy,
+            cap_connect_budget(remaining(deadline)),
+        ) {
             Err(error) if is_absent(&error) => return Ok(Outcome::Stopped),
             // Still there — either the process is winding down, or another
             // instance is still accepting. Either way, not gone yet.
@@ -85,6 +119,15 @@ fn remaining(deadline: Instant) -> Duration {
 
 fn cap_connect_budget(remaining: Duration) -> Duration {
     remaining.min(PATIENT_CONNECT)
+}
+
+fn stable_root_policy() -> Result<ServerTrustPolicy, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("cannot locate sakura_regtool.exe: {error}"))?;
+    let root = executable
+        .parent()
+        .ok_or_else(|| "sakura_regtool.exe has no stable install root".to_owned())?;
+    Ok(ServerTrustPolicy::InstalledRoot(root.to_path_buf()))
 }
 
 /// Distinguishes "no engine" from "an engine that will not talk to us".
@@ -119,7 +162,7 @@ mod tests {
     fn stopping_an_engine_that_is_not_running_is_not_a_failure() {
         // Guard: if something on this machine is serving the pipe, the
         // assertion below would be testing the opposite case.
-        let name = pipe_name().expect("a pipe name");
+        let name = pipe_name_for(Endpoint::Control).expect("a control pipe name");
         if Client::connect_to(&name, PATIENT_CONNECT).is_ok() {
             return;
         }

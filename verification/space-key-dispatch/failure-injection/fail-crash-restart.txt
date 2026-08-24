@@ -1,1 +1,1 @@
-killed_pid=71960 restarted_idle_space=U+3000
+owned_engine_killed=true restarted_idle_space=U+3000

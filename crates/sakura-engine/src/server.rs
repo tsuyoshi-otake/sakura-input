@@ -35,18 +35,23 @@
 //! rather than at exit, precisely so that a crash loses no more than a
 //! clean exit would.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 use sakura_core::{default_app_profiles, AppProfile, AppearanceTheme, Preferences};
 use sakura_proto::{
     encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
 };
+#[cfg(test)]
+use sakura_proto::{AiTextOperation, AiTextStatus, SessionId};
 
 use sakura_ipc::debug_trace;
-use sakura_ipc::{security, Accept, Descriptor, Fault, PipeInstance, MAX_INSTANCES};
+use sakura_ipc::{
+    security, Accept, ClientTrust, Descriptor, Endpoint, Fault, PipeInstance, MAX_INSTANCES,
+};
 
 use crate::ai_text::AiTextService;
 use crate::composition_fence::CompositionFence;
@@ -103,11 +108,78 @@ enum StopReason {
     LastInstanceGone,
 }
 
+/// Per-process admission accounting for accepted pipe connections.
+///
+/// A single AppContainer process can otherwise open every data instance and
+/// leave legitimate TSF hosts waiting. The PID comes from the kernel pipe
+/// handle; it is never read from the protocol. Endpoint separation still
+/// provides the stronger renderer/control boundary, while this quota bounds a
+/// single host's data-plane footprint.
+#[derive(Debug, Default)]
+struct Admission {
+    counts: Mutex<HashMap<(Endpoint, u32), u32>>,
+}
+
+const MAX_CONNECTIONS_PER_PID: u32 = 8;
+
+struct AdmissionPermit {
+    admission: Arc<Admission>,
+    key: (Endpoint, u32),
+}
+
+impl Admission {
+    fn try_acquire(
+        self: &Arc<Self>,
+        endpoint: Endpoint,
+        process_id: u32,
+    ) -> Option<AdmissionPermit> {
+        let key = (endpoint, process_id);
+        let mut counts = match self.counts.lock() {
+            Ok(counts) => counts,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let count = counts.entry(key).or_default();
+        if *count >= MAX_CONNECTIONS_PER_PID {
+            return None;
+        }
+        *count += 1;
+        Some(AdmissionPermit {
+            admission: Arc::clone(self),
+            key,
+        })
+    }
+}
+
+impl Drop for AdmissionPermit {
+    fn drop(&mut self) {
+        let mut counts = match self.admission.counts.lock() {
+            Ok(counts) => counts,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let Some(count) = counts.get_mut(&self.key) else {
+            return;
+        };
+        *count -= 1;
+        if *count == 0 {
+            counts.remove(&self.key);
+        }
+    }
+}
+
 /// Everything a worker thread needs that is not its own pipe instance.
 #[derive(Debug)]
 struct Shared {
+    /// The data-plane name/descriptor are kept under their historic field
+    /// names because test fixtures and diagnostics inspect them directly.
     name: String,
     sddl: String,
+    renderer_name: String,
+    renderer_sddl: String,
+    control_name: String,
+    control_sddl: String,
+    /// Explicit `--test-pipe` fixtures intentionally collapse all roles onto
+    /// one private object. Production always uses the three names above.
+    test_pipe: bool,
     /// Instances that exist right now, capped at [`MAX_INSTANCES`].
     ///
     /// This is a live count, not a total: [`InstanceSlot`] gives the slot
@@ -120,6 +192,12 @@ struct Shared {
     created: AtomicU32,
     /// Acceptors currently blocked waiting for a client.
     idle: AtomicU32,
+    renderer_created: AtomicU32,
+    renderer_idle: AtomicU32,
+    control_created: AtomicU32,
+    control_idle: AtomicU32,
+    total_created: AtomicU32,
+    admission: Arc<Admission>,
     /// Ends [`Server::run`]. Sent when a client asks the engine to stop, and
     /// when the last instance is released — see [`StopReason`].
     shutdown: Sender<StopReason>,
@@ -481,12 +559,25 @@ impl Server {
         profiles: Arc<[AppProfile]>,
     ) -> windows::core::Result<Self> {
         let (shutdown, stopped) = mpsc::channel();
+        let name = security::pipe_name()?;
+        let sddl = security::sddl()?;
         Ok(Server {
             shared: Arc::new(Shared {
-                name: security::pipe_name()?,
-                sddl: security::sddl()?,
+                renderer_name: security::pipe_name_for(Endpoint::Renderer)?,
+                renderer_sddl: security::sddl_for(Endpoint::Renderer)?,
+                control_name: security::pipe_name_for(Endpoint::Control)?,
+                control_sddl: security::sddl_for(Endpoint::Control)?,
+                name,
+                sddl,
+                test_pipe: false,
                 created: AtomicU32::new(0),
                 idle: AtomicU32::new(0),
+                renderer_created: AtomicU32::new(0),
+                renderer_idle: AtomicU32::new(0),
+                control_created: AtomicU32::new(0),
+                control_idle: AtomicU32::new(0),
+                total_created: AtomicU32::new(0),
+                admission: Arc::new(Admission::default()),
                 shutdown,
                 ui: UiBoard::with_appearance_theme(preferences.appearance_theme),
                 composition_fence: Arc::new(CompositionFence::new()),
@@ -538,9 +629,12 @@ impl Server {
     /// command-line option. Production constructors still resolve their normal
     /// name through [`security::pipe_name`] during construction.
     pub fn with_explicit_test_pipe(mut self, pipe_name: String) -> Self {
-        Arc::get_mut(&mut self.shared)
-            .expect("a newly constructed server has no worker thread or shared clone")
-            .name = pipe_name;
+        let shared = Arc::get_mut(&mut self.shared)
+            .expect("a newly constructed server has no worker thread or shared clone");
+        shared.name = pipe_name.clone();
+        shared.renderer_name = pipe_name.clone();
+        shared.control_name = pipe_name;
+        shared.test_pipe = true;
         self
     }
 
@@ -559,7 +653,14 @@ impl Server {
     /// by a stale copy of the engine, or by something trying to collect
     /// our clients' keystrokes.
     pub fn run(self) -> windows::core::Result<()> {
-        spawn_worker(&self.shared, true)?;
+        // Each production endpoint owns its own named-pipe object and
+        // admission pool. A data-plane flood therefore cannot starve the
+        // renderer watchdog or the control channel used by the installer.
+        if self.shared.test_pipe {
+            spawn_worker(&self.shared, Endpoint::Data, true)?;
+        } else {
+            spawn_initial_workers(&self.shared)?;
+        }
         // `recv` returns when a client asks for shutdown, or when the last
         // pipe instance is released — see [`InstanceSlot::drop`], which is
         // what makes the second case an explicit send. It cannot come from
@@ -600,6 +701,17 @@ impl Server {
 /// watcher and there is often none — the wait ends immediately.
 const SHUTDOWN_GRACE: Duration = Duration::from_millis(250);
 
+/// A client must identify the protocol endpoint within this bound. The
+/// timeout is enforced before any request is dispatched, so a connection that
+/// only occupies a pipe instance cannot hold admission indefinitely.
+const FIRST_HANDSHAKE_BUDGET: Duration = Duration::from_millis(750);
+
+/// Renderer/control are not host-count pools. They need only a small number
+/// of independent clients and deliberately have caps separate from the data
+/// endpoint's 64 host connections.
+const RENDERER_MAX_INSTANCES: u32 = 4;
+const CONTROL_MAX_INSTANCES: u32 = 4;
+
 /// How much stack each pipe-instance thread reserves.
 ///
 /// A thread parked in `ReadFile` needs almost no stack, and the engine's
@@ -628,15 +740,23 @@ const WORKER_STACK_BYTES: usize = 160 * 1024;
 /// attribute after the fact.
 struct InstanceSlot {
     shared: Arc<Shared>,
+    endpoint: Endpoint,
 }
 
 impl InstanceSlot {
     /// Claims a slot. Paired with the instance the caller just created, so
     /// the count and the live instances move together.
+    #[cfg(test)]
     fn claim(shared: &Arc<Shared>) -> Self {
-        shared.created.fetch_add(1, Ordering::Relaxed);
+        Self::claim_for(shared, Endpoint::Data)
+    }
+
+    fn claim_for(shared: &Arc<Shared>, endpoint: Endpoint) -> Self {
+        endpoint_created(shared, endpoint).fetch_add(1, Ordering::Relaxed);
+        shared.total_created.fetch_add(1, Ordering::Relaxed);
         InstanceSlot {
             shared: Arc::clone(shared),
+            endpoint,
         }
     }
 }
@@ -666,32 +786,194 @@ impl Drop for InstanceSlot {
         // `fetch_sub` returns the value from before this release, so `1`
         // means this was the last instance. `AcqRel` pairs the releases so
         // exactly one dropped slot can observe that.
-        if self.shared.created.fetch_sub(1, Ordering::AcqRel) == 1 {
+        endpoint_created(&self.shared, self.endpoint).fetch_sub(1, Ordering::AcqRel);
+        if self.shared.total_created.fetch_sub(1, Ordering::AcqRel) == 1 {
             let _ = self.shared.shutdown.send(StopReason::LastInstanceGone);
         }
     }
 }
 
+fn endpoint_name(shared: &Shared, endpoint: Endpoint) -> &str {
+    match endpoint {
+        Endpoint::Data => &shared.name,
+        Endpoint::Renderer => &shared.renderer_name,
+        Endpoint::Control => &shared.control_name,
+    }
+}
+
+fn endpoint_sddl(shared: &Shared, endpoint: Endpoint) -> &str {
+    match endpoint {
+        Endpoint::Data => &shared.sddl,
+        Endpoint::Renderer => &shared.renderer_sddl,
+        Endpoint::Control => &shared.control_sddl,
+    }
+}
+
+fn endpoint_created(shared: &Shared, endpoint: Endpoint) -> &AtomicU32 {
+    match endpoint {
+        Endpoint::Data => &shared.created,
+        Endpoint::Renderer => &shared.renderer_created,
+        Endpoint::Control => &shared.control_created,
+    }
+}
+
+fn endpoint_idle(shared: &Shared, endpoint: Endpoint) -> &AtomicU32 {
+    match endpoint {
+        Endpoint::Data => &shared.idle,
+        Endpoint::Renderer => &shared.renderer_idle,
+        Endpoint::Control => &shared.control_idle,
+    }
+}
+
+const fn endpoint_capacity(endpoint: Endpoint) -> u32 {
+    match endpoint {
+        Endpoint::Data => MAX_INSTANCES,
+        Endpoint::Renderer => RENDERER_MAX_INSTANCES,
+        Endpoint::Control => CONTROL_MAX_INSTANCES,
+    }
+}
+
 /// Creates one pipe instance and the thread that serves it.
-fn spawn_worker(shared: &Arc<Shared>, first: bool) -> windows::core::Result<()> {
-    let descriptor = Descriptor::from_sddl(&shared.sddl)?;
-    let instance = PipeInstance::create(&shared.name, &descriptor, first)?;
+fn spawn_worker(
+    shared: &Arc<Shared>,
+    endpoint: Endpoint,
+    first: bool,
+) -> windows::core::Result<()> {
+    let instance = create_instance(shared, endpoint, first)?;
+    spawn_worker_with_instance(shared, endpoint, instance, None).map(|_| ())
+}
+
+fn create_instance(
+    shared: &Arc<Shared>,
+    endpoint: Endpoint,
+    first: bool,
+) -> windows::core::Result<PipeInstance> {
+    let descriptor = Descriptor::from_sddl(endpoint_sddl(shared, endpoint))?;
+    PipeInstance::create_with_capacity(
+        endpoint_name(shared, endpoint),
+        &descriptor,
+        first,
+        endpoint_capacity(endpoint),
+    )
+}
+
+/// Creates all three first instances before starting any worker thread. This
+/// prevents a partial startup from leaving a data acceptor alive when the
+/// renderer/control security descriptor or pipe creation fails. Workers also
+/// wait behind a startup gate until all three thread spawns have succeeded;
+/// if a later spawn fails, the gate aborts and the already-created threads are
+/// joined before the error escapes. That makes startup a transaction rather
+/// than relying on process exit to clean up detached acceptors.
+fn spawn_initial_workers(shared: &Arc<Shared>) -> windows::core::Result<()> {
+    let mut instances = Vec::with_capacity(3);
+    for endpoint in [Endpoint::Data, Endpoint::Renderer, Endpoint::Control] {
+        instances.push((endpoint, create_instance(shared, endpoint, true)?));
+    }
+
+    let gate = Arc::new(StartupGate::new());
+    let mut workers = Vec::with_capacity(instances.len());
+    while let Some((endpoint, instance)) = instances.pop() {
+        match spawn_worker_with_instance(shared, endpoint, instance, Some(Arc::clone(&gate))) {
+            Ok(worker) => workers.push(worker),
+            Err(error) => {
+                // Workers that did start are still parked before their first
+                // accept. Abort wakes them, and joining them proves that no
+                // pipe handle or slot survives this failed transaction.
+                gate.abort();
+                drop(instances);
+                for worker in workers {
+                    let _ = worker.join();
+                }
+                return Err(error);
+            }
+        }
+    }
+
+    // All handles are intentionally detached only after the gate opens. The
+    // workers now own their instances for the remainder of the server run.
+    gate.open();
+    drop(workers);
+    Ok(())
+}
+
+fn spawn_worker_with_instance(
+    shared: &Arc<Shared>,
+    endpoint: Endpoint,
+    instance: PipeInstance,
+    startup_gate: Option<Arc<StartupGate>>,
+) -> windows::core::Result<std::thread::JoinHandle<()>> {
     // Claimed before the thread exists so the cap can never be exceeded by
     // a spawn that is still in flight; released by `Drop` on either path
     // below — the failed spawn here, or the worker ending later.
-    let slot = InstanceSlot::claim(shared);
+    let slot = InstanceSlot::claim_for(shared, endpoint);
     let owned = Arc::clone(shared);
     let spawned = std::thread::Builder::new()
         .name("sakura-pipe".to_owned())
         .stack_size(WORKER_STACK_BYTES)
-        .spawn(move || worker(owned, instance, slot));
+        .spawn(move || worker_with_gate(owned, instance, slot, endpoint, startup_gate));
 
     match spawned {
-        Ok(_) => Ok(()),
+        Ok(worker) => Ok(worker),
         // The instance has no thread to accept on it, so it must not count
         // towards the cap. Both it and the slot are already released: the
         // closure that owned them was dropped when the spawn failed.
         Err(error) => Err(thread_failure(&error)),
+    }
+}
+
+/// Coordinates the all-or-nothing production endpoint startup. A worker that
+/// has been spawned but not yet admitted to this gate owns its slot and pipe
+/// handle, so aborting and joining it is sufficient cleanup on every failure
+/// path.
+struct StartupGate {
+    state: Mutex<StartupState>,
+    wake: Condvar,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartupState {
+    Pending,
+    Open,
+    Aborted,
+}
+
+impl StartupGate {
+    fn new() -> Self {
+        Self {
+            state: Mutex::new(StartupState::Pending),
+            wake: Condvar::new(),
+        }
+    }
+
+    fn open(&self) {
+        self.set(StartupState::Open);
+    }
+
+    fn abort(&self) {
+        self.set(StartupState::Aborted);
+    }
+
+    fn wait(&self) -> bool {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while *state == StartupState::Pending {
+            state = self
+                .wake
+                .wait(state)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        *state == StartupState::Open
+    }
+
+    fn set(&self, next: StartupState) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *state = next;
+        self.wake.notify_all();
     }
 }
 
@@ -735,8 +1017,24 @@ const fn empty_accept_is_fatal(consecutive: u32) -> bool {
 /// `slot` is this instance's claim on the [`MAX_INSTANCES`] cap. It is
 /// owned here and nowhere else, so every way out of this function — a
 /// return below, a panic, the loop ending — gives the slot back.
-fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
+#[cfg(test)]
+fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot, endpoint: Endpoint) {
+    worker_with_gate(shared, instance, slot, endpoint, None);
+}
+
+fn worker_with_gate(
+    shared: Arc<Shared>,
+    instance: PipeInstance,
+    slot: InstanceSlot,
+    endpoint: Endpoint,
+    startup_gate: Option<Arc<StartupGate>>,
+) {
     let _slot = slot;
+    if let Some(gate) = startup_gate {
+        if !gate.wait() {
+            return;
+        }
+    }
     let configuration = shared.configuration_snapshot();
     let dispatcher = match (
         shared.conversion.as_ref(),
@@ -785,9 +1083,9 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
 
     let mut empty_accepts = 0u32;
     loop {
-        shared.idle.fetch_add(1, Ordering::Relaxed);
+        endpoint_idle(&shared, endpoint).fetch_add(1, Ordering::Relaxed);
         let accepted = instance.wait_for_client();
-        shared.idle.fetch_sub(1, Ordering::Relaxed);
+        endpoint_idle(&shared, endpoint).fetch_sub(1, Ordering::Relaxed);
         match accepted {
             Ok(Accept::Connected) => empty_accepts = 0,
             // The client was gone before it could be served. The instance
@@ -814,9 +1112,56 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
             }
         }
 
-        ensure_spare_instance(&shared);
+        let process_id = match instance.client_process_id() {
+            Ok(process_id) => process_id,
+            Err(error) => {
+                report(
+                    &shared,
+                    format_args!("could not identify the connected client: {error}"),
+                );
+                instance.disconnect();
+                continue;
+            }
+        };
+        let Some(_permit) = shared.admission.try_acquire(endpoint, process_id) else {
+            report(
+                &shared,
+                format_args!(
+                    "client pid {process_id} exceeded the {MAX_CONNECTIONS_PER_PID}-connection {} quota",
+                    endpoint_name(&shared, endpoint)
+                ),
+            );
+            instance.disconnect();
+            continue;
+        };
 
-        match serve(&shared, &instance, &mut dispatcher, &mut connection) {
+        // The PID is kernel-reported from this accepted handle. A malformed
+        // or inaccessible token is deliberately `Unknown`: ordinary data
+        // requests remain available for a degraded host, while AI requests
+        // are denied by the request matrix below.
+        let client_trust = match security::classify_client_process(process_id) {
+            Ok(trust) => trust,
+            Err(error) => {
+                report(
+                    &shared,
+                    format_args!(
+                        "could not classify client pid {process_id}; sensitive requests are denied: {error}"
+                    ),
+                );
+                ClientTrust::Unknown
+            }
+        };
+
+        ensure_spare_instance_for(&shared, endpoint);
+
+        match serve(
+            &shared,
+            &instance,
+            endpoint,
+            client_trust,
+            &mut dispatcher,
+            &mut connection,
+        ) {
             Outcome::Closed => {}
             Outcome::Failed(fault) => report(&shared, format_args!("{fault}")),
             Outcome::Shutdown => {
@@ -845,14 +1190,19 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot) {
 /// too many or too few, and neither loses a connection: a client that finds
 /// no free instance blocks in `CreateFileW` until one frees, which is what
 /// a named pipe does by design.
+#[cfg(test)]
 fn ensure_spare_instance(shared: &Arc<Shared>) {
-    if shared.idle.load(Ordering::Relaxed) > 0 {
+    ensure_spare_instance_for(shared, Endpoint::Data);
+}
+
+fn ensure_spare_instance_for(shared: &Arc<Shared>, endpoint: Endpoint) {
+    if endpoint_idle(shared, endpoint).load(Ordering::Relaxed) > 0 {
         return;
     }
-    if shared.created.load(Ordering::Relaxed) >= MAX_INSTANCES {
+    if endpoint_created(shared, endpoint).load(Ordering::Relaxed) >= endpoint_capacity(endpoint) {
         return;
     }
-    if let Err(error) = spawn_worker(shared, false) {
+    if let Err(error) = spawn_worker(shared, endpoint, false) {
         report(shared, format_args!("could not add an instance: {error}"));
     }
 }
@@ -895,49 +1245,232 @@ impl Buffers {
     }
 }
 
+/// Reads and validates the first frame before a connection can reach the
+/// ordinary request loop. Production clients must begin with `Hello`; a
+/// private test pipe retains the historical ability to send a request first
+/// because a number of fixture cleanup paths intentionally do so.
+fn first_request(
+    shared: &Shared,
+    instance: &PipeInstance,
+    endpoint: Endpoint,
+    dispatcher: &mut Dispatcher,
+    bufs: &mut Buffers,
+) -> Result<Option<(RequestId, Request)>, Outcome> {
+    let payload = match read_first_frame_with_deadline(instance) {
+        Ok(payload) => payload,
+        Err(Fault::Disconnected) => return Err(Outcome::Closed),
+        Err(fault) => return Err(Outcome::Failed(fault)),
+    };
+    let (id, request) = match sakura_proto::decode_request(&payload) {
+        Ok(decoded) => decoded,
+        Err(error) => {
+            let code = match error {
+                sakura_proto::Error::UnsupportedVersion(_) => ErrorCode::UnsupportedVersion,
+                sakura_proto::Error::TooLarge => ErrorCode::TooLarge,
+                _ => ErrorCode::Malformed,
+            };
+            if let Ok(header) = peek_header(&payload) {
+                let _ = send(
+                    instance,
+                    &Response::Error(code),
+                    header.request_id,
+                    &mut bufs.reply,
+                );
+            }
+            return Err(Outcome::Failed(Fault::Protocol(error)));
+        }
+    };
+
+    if !matches!(request, Request::Hello { .. }) {
+        if shared.test_pipe {
+            // Explicitly private test fixtures may exercise the server with a
+            // single request and omit protocol negotiation.
+            return Ok(Some((id, request)));
+        }
+        let _ = send(
+            instance,
+            &Response::Error(ErrorCode::Malformed),
+            id,
+            &mut bufs.reply,
+        );
+        return Err(Outcome::Failed(Fault::Protocol(
+            sakura_proto::Error::BadEnum,
+        )));
+    }
+
+    let reply = dispatcher.dispatch(&request, &mut bufs.out);
+    let response = match reply {
+        Reply::Message(response @ Response::Hello { .. }) => response,
+        Reply::Message(response) => {
+            // A version-mismatched Hello is answered once so the peer can
+            // diagnose the mixed install, but it is not a successful
+            // admission. Do not let that connection continue into the
+            // ordinary request loop without a negotiated protocol.
+            let _ = send(instance, &response, id, &mut bufs.reply);
+            return Err(Outcome::Failed(Fault::Protocol(
+                sakura_proto::Error::BadEnum,
+            )));
+        }
+        // `Hello` is a pure negotiation request. Any other branch would mean
+        // the dispatcher contract changed without updating this boundary.
+        Reply::Output | Reply::Shutdown(_) => {
+            let _ = send(
+                instance,
+                &Response::Error(ErrorCode::Internal),
+                id,
+                &mut bufs.reply,
+            );
+            return Err(Outcome::Failed(Fault::Protocol(
+                sakura_proto::Error::BadEnum,
+            )));
+        }
+    };
+    if let Err(fault) = send(instance, &response, id, &mut bufs.reply) {
+        return Err(end(fault));
+    }
+
+    // The endpoint is checked again here so this invariant remains explicit
+    // at the handshake boundary even if a future dispatcher starts handling a
+    // second handshake message itself.
+    debug_assert!(matches!(
+        endpoint,
+        Endpoint::Data | Endpoint::Renderer | Endpoint::Control
+    ));
+    Ok(None)
+}
+
+/// Performs one bounded read for the initial frame. The named pipe is
+/// intentionally byte-mode and the steady-state path uses blocking reads;
+/// the transport's byte-availability polling is used only here so a client
+/// that connects and then goes idle cannot hold an acceptor indefinitely.
+fn read_first_frame_with_deadline(instance: &PipeInstance) -> Result<Vec<u8>, Fault> {
+    let mut buffer = Vec::new();
+    instance
+        .read_frame_with_deadline(&mut buffer, FIRST_HANDSHAKE_BUDGET)
+        .map(|payload| payload.to_vec())
+}
+
+/// Server-owned request matrix. This is deliberately exhaustive over the
+/// protocol enum so a newly added request cannot silently inherit access to a
+/// privileged endpoint.
+fn request_allowed(endpoint: Endpoint, request: &Request, client_trust: ClientTrust) -> bool {
+    let endpoint_allowed = match endpoint {
+        Endpoint::Data => matches!(
+            request,
+            Request::CreateSession { .. }
+                | Request::SendKey { .. }
+                | Request::ProbeKey { .. }
+                | Request::Commit { .. }
+                | Request::Revert { .. }
+                | Request::ResetDocumentContext { .. }
+                | Request::UndoCommit { .. }
+                | Request::Reconvert { .. }
+                | Request::SetInputScope { .. }
+                | Request::SetMode { .. }
+                | Request::ApplyAiComposition { .. }
+                | Request::RecordAiText { .. }
+                | Request::StartAiText { .. }
+                | Request::PollAiText { .. }
+                | Request::CancelAiText { .. }
+                | Request::PollCandidateCommit { .. }
+                | Request::CommitCandidate { .. }
+                | Request::DeleteSession { .. }
+                | Request::SetUiPlacement { .. }
+                | Request::Ping
+        ),
+        Endpoint::Renderer => matches!(
+            request,
+            Request::WatchUi { .. }
+                | Request::DeleteHistoryCandidate { .. }
+                | Request::QueueCandidateCommit { .. }
+        ),
+        Endpoint::Control => matches!(
+            request,
+            Request::ClearLearning
+                | Request::ClearInputHistory
+                | Request::FlushInputHistory
+                | Request::InputHistoryStats
+                | Request::Shutdown
+                | Request::Ping
+        ),
+    };
+    endpoint_allowed && (!is_ai_request(request) || client_trust == ClientTrust::MediumOrHigher)
+}
+
+fn is_ai_request(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::StartAiText { .. }
+            | Request::PollAiText { .. }
+            | Request::CancelAiText { .. }
+            | Request::ApplyAiComposition { .. }
+            | Request::RecordAiText { .. }
+    )
+}
+
 /// Serves one connected client until it disconnects or misbehaves.
 fn serve(
     shared: &Shared,
     instance: &PipeInstance,
+    endpoint: Endpoint,
+    client_trust: ClientTrust,
     dispatcher: &mut Dispatcher,
     bufs: &mut Buffers,
 ) -> Outcome {
+    let mut initial = match first_request(shared, instance, endpoint, dispatcher, bufs) {
+        Ok(initial) => initial,
+        Err(outcome) => return outcome,
+    };
     loop {
-        let payload = match instance.read_frame(&mut bufs.read) {
-            Ok(payload) => payload,
-            Err(Fault::Disconnected) => return Outcome::Closed,
-            Err(fault) => return Outcome::Failed(fault),
-        };
+        let (id, request) = if let Some(initial) = initial.take() {
+            initial
+        } else {
+            let payload = match instance.read_frame(&mut bufs.read) {
+                Ok(payload) => payload,
+                Err(Fault::Disconnected) => return Outcome::Closed,
+                Err(fault) => return Outcome::Failed(fault),
+            };
 
-        let (id, request) = match sakura_proto::decode_request(payload) {
-            Ok(decoded) => decoded,
-            Err(error) => {
-                let code = match error {
-                    sakura_proto::Error::UnsupportedVersion(_) => ErrorCode::UnsupportedVersion,
-                    sakura_proto::Error::TooLarge => ErrorCode::TooLarge,
-                    _ => ErrorCode::Malformed,
-                };
-                // `peek_header` reads the id without validating the version
-                // or the body, so a frame the decoder rejected can still be
-                // answered by id. A client waiting on a request needs to be
-                // told *which* one failed; an uncorrelated error reads as a
-                // reply to whatever it sends next, which is the stale-reply
-                // confusion the request id exists to prevent (DESIGN 7).
-                if let Ok(header) = peek_header(payload) {
-                    let _ = send(
-                        instance,
-                        &Response::Error(code),
-                        header.request_id,
-                        &mut bufs.reply,
-                    );
+            match sakura_proto::decode_request(payload) {
+                Ok(decoded) => decoded,
+                Err(error) => {
+                    let code = match error {
+                        sakura_proto::Error::UnsupportedVersion(_) => ErrorCode::UnsupportedVersion,
+                        sakura_proto::Error::TooLarge => ErrorCode::TooLarge,
+                        _ => ErrorCode::Malformed,
+                    };
+                    // `peek_header` reads the id without validating the
+                    // version or the body, so a frame the decoder rejected
+                    // can still be answered by id. A client waiting on a
+                    // request needs to be told which one failed.
+                    if let Ok(header) = peek_header(payload) {
+                        let _ = send(
+                            instance,
+                            &Response::Error(code),
+                            header.request_id,
+                            &mut bufs.reply,
+                        );
+                    }
+                    // A byte stream that has lost frame alignment cannot be
+                    // resynchronized safely.
+                    return Outcome::Failed(Fault::Protocol(error));
                 }
-                // Then drop the connection: a byte stream that has lost
-                // frame alignment cannot be resynchronized, and guessing
-                // where the next frame starts is how one bad frame becomes
-                // an endless stream of them.
-                return Outcome::Failed(Fault::Protocol(error));
             }
         };
+
+        // The pipe name selected by the server is the authority for this
+        // allowlist. No client-supplied role or Hello field can widen it.
+        // Test fixtures use one private pipe for all protocol roles and are
+        // deliberately outside the production boundary.
+        if !shared.test_pipe && !request_allowed(endpoint, &request, client_trust) {
+            let _ = send(
+                instance,
+                &Response::Error(ErrorCode::Malformed),
+                id,
+                &mut bufs.reply,
+            );
+            return Outcome::Failed(Fault::Protocol(sakura_proto::Error::BadEnum));
+        }
 
         // `WatchUi` never reaches the dispatcher. It is answered from state
         // shared by every connection, and it *blocks* — two things the
@@ -1275,15 +1808,26 @@ mod tests {
     use sakura_ipc::Client;
     use std::fs;
     use std::sync::mpsc::TryRecvError;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     fn test_shared(learning: Arc<LearningService>) -> Shared {
         let (shutdown, _stopped) = mpsc::channel();
         Shared {
             name: "sakura-engine-history-delete-test".to_owned(),
             sddl: String::new(),
+            renderer_name: String::new(),
+            renderer_sddl: String::new(),
+            control_name: String::new(),
+            control_sddl: String::new(),
+            test_pipe: true,
             created: AtomicU32::new(0),
             idle: AtomicU32::new(0),
+            renderer_created: AtomicU32::new(0),
+            renderer_idle: AtomicU32::new(0),
+            control_created: AtomicU32::new(0),
+            control_idle: AtomicU32::new(0),
+            total_created: AtomicU32::new(0),
+            admission: Arc::new(Admission::default()),
             shutdown,
             ui: UiBoard::new(),
             composition_fence: Arc::new(CompositionFence::new()),
@@ -1649,6 +2193,204 @@ mod tests {
             .starts_with(r"\\.\pipe\sakura_input_"));
     }
 
+    #[test]
+    fn startup_gate_aborts_waiting_workers_and_opens_only_after_commit() {
+        let gate = Arc::new(StartupGate::new());
+        let waiting = Arc::clone(&gate);
+        let worker = std::thread::spawn(move || waiting.wait());
+
+        // A pending gate cannot let a worker enter the accept loop. The
+        // abort path must wake it so startup failures have a terminal state.
+        gate.abort();
+        assert!(!worker.join().expect("startup worker joined"));
+
+        let gate = StartupGate::new();
+        gate.abort();
+        assert!(!gate.wait(), "an aborted gate must not become open");
+    }
+
+    #[test]
+    fn startup_gate_opens_waiting_workers() {
+        let gate = Arc::new(StartupGate::new());
+        let waiting = Arc::clone(&gate);
+        let worker = std::thread::spawn(move || waiting.wait());
+        gate.open();
+        assert!(worker.join().expect("startup worker joined"));
+    }
+
+    #[test]
+    fn endpoint_request_allowlist_keeps_privileged_operations_off_data() {
+        let data_only = Request::CreateSession {
+            process_name: "tsf.exe".to_owned(),
+        };
+        let renderer_only = Request::WatchUi { since: 0 };
+        let control_only = Request::Shutdown;
+        let history_delete = Request::DeleteHistoryCandidate {
+            revision: 1,
+            candidate_index: 0,
+        };
+
+        assert!(request_allowed(
+            Endpoint::Data,
+            &data_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Data,
+            &renderer_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Data,
+            &control_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Data,
+            &history_delete,
+            ClientTrust::MediumOrHigher
+        ));
+
+        assert!(request_allowed(
+            Endpoint::Renderer,
+            &renderer_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Renderer,
+            &data_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Renderer,
+            &control_only,
+            ClientTrust::MediumOrHigher
+        ));
+
+        assert!(request_allowed(
+            Endpoint::Control,
+            &control_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Control,
+            &data_only,
+            ClientTrust::MediumOrHigher
+        ));
+        assert!(!request_allowed(
+            Endpoint::Control,
+            &renderer_only,
+            ClientTrust::MediumOrHigher
+        ));
+    }
+
+    #[test]
+    fn low_and_sandbox_clients_cannot_use_ai_requests() {
+        let requests = [
+            Request::StartAiText {
+                session: 1 as SessionId,
+                operation: AiTextOperation::Transform,
+                text: "hello".to_owned(),
+            },
+            Request::PollAiText {
+                session: 1 as SessionId,
+                job: 1,
+            },
+            Request::CancelAiText {
+                session: 1 as SessionId,
+                job: 1,
+            },
+            Request::ApplyAiComposition {
+                session: 1 as SessionId,
+                result: "hello".to_owned(),
+            },
+            Request::RecordAiText {
+                session: 1 as SessionId,
+                operation: AiTextOperation::Transform,
+                status: AiTextStatus::Applied,
+                source: "hello".to_owned(),
+                result: "hello".to_owned(),
+                model: "model".to_owned(),
+                provider: "provider".to_owned(),
+                style: "style".to_owned(),
+                error_code: String::new(),
+                latency_ms: 1,
+                attempts: 1,
+                input_tokens: 1,
+                output_tokens: 1,
+                cached_tokens: 0,
+                test_only: false,
+            },
+        ];
+        for request in &requests {
+            assert!(!request_allowed(
+                Endpoint::Data,
+                request,
+                ClientTrust::LowIntegrity
+            ));
+            assert!(!request_allowed(
+                Endpoint::Data,
+                request,
+                ClientTrust::AppContainer
+            ));
+            assert!(!request_allowed(
+                Endpoint::Data,
+                request,
+                ClientTrust::Unknown
+            ));
+            assert!(request_allowed(
+                Endpoint::Data,
+                request,
+                ClientTrust::MediumOrHigher
+            ));
+        }
+    }
+
+    #[test]
+    fn admission_is_raii_bounded_per_endpoint_and_process() {
+        let admission = Arc::new(Admission::default());
+        let mut data = Vec::new();
+        for _ in 0..MAX_CONNECTIONS_PER_PID {
+            data.push(
+                admission
+                    .try_acquire(Endpoint::Data, 4242)
+                    .expect("the quota admits a normal process's connections"),
+            );
+        }
+        assert!(
+            admission.try_acquire(Endpoint::Data, 4242).is_none(),
+            "one process must not pin every data endpoint instance"
+        );
+        assert!(
+            admission.try_acquire(Endpoint::Renderer, 4242).is_some(),
+            "the quota is scoped to the server-owned endpoint"
+        );
+
+        data.pop();
+        assert!(
+            admission.try_acquire(Endpoint::Data, 4242).is_some(),
+            "dropping a connection permit must release its slot"
+        );
+    }
+
+    #[test]
+    fn first_handshake_deadline_closes_an_idle_connection() {
+        let name = unique_test_pipe("handshake-timeout");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let instance = PipeInstance::create(&name, &security, true).expect("create");
+        let client = Client::connect_to(&name, Duration::from_secs(5)).expect("connect");
+        instance.wait_for_client().expect("accept");
+
+        let started = Instant::now();
+        let result = read_first_frame_with_deadline(&instance);
+        assert!(matches!(result, Err(Fault::Timeout)));
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "the handshake deadline must not turn into an unbounded read"
+        );
+        drop(client);
+    }
+
     /// The pool must not be able to outgrow the instance limit the pipe
     /// was created with. Past it `CreateNamedPipeW` fails, and the failure
     /// would land on a user opening one more application — the worst
@@ -1756,7 +2498,7 @@ mod tests {
         assert_eq!(shared.created.load(Ordering::Relaxed), 1);
 
         let owned = Arc::clone(&shared);
-        let serving = std::thread::spawn(move || worker(owned, instance, slot));
+        let serving = std::thread::spawn(move || worker(owned, instance, slot, Endpoint::Data));
 
         let mut client = Client::connect_to(&name, Duration::from_secs(5)).expect("a connection");
         let reply = client

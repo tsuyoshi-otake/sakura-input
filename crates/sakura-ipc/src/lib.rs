@@ -31,5 +31,8 @@ pub mod security;
 pub mod transport;
 
 pub use client::{Client, PATIENT_CONNECT};
-pub use security::{pipe_name, sddl, Descriptor, CLIENT_ACCESS};
+pub use security::{
+    classify_client_process, pipe_name, pipe_name_for, sddl, sddl_for, verify_server_process,
+    ClientTrust, Descriptor, Endpoint, ServerTrustPolicy, CLIENT_ACCESS,
+};
 pub use transport::{Accept, Fault, PipeInstance, MAX_INSTANCES};

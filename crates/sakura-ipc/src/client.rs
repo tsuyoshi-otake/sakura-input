@@ -56,7 +56,9 @@ use windows::Win32::System::IO::{
     CancelIoEx, GetOverlappedResult, GetOverlappedResultEx, OVERLAPPED,
 };
 
-use crate::security::{pipe_name, CLIENT_ACCESS};
+use crate::security::{
+    pipe_name_for, verify_server_process, Endpoint, ServerTrustPolicy, CLIENT_ACCESS,
+};
 use crate::transport::Fault;
 
 /// What an installer or a command-line tool can afford to wait for a free
@@ -96,7 +98,46 @@ impl Client {
     /// thread pass something they can afford to lose; tools that are
     /// allowed to wait pass [`PATIENT_CONNECT`].
     pub fn connect(budget: Duration) -> Result<Self, Fault> {
-        Self::connect_to(&pipe_name()?, budget)
+        Self::connect_endpoint(Endpoint::Data, budget)
+    }
+
+    /// Connects to a server-owned endpoint in this logon session.
+    ///
+    /// Production callers use the typed endpoint rather than constructing a
+    /// suffix themselves. This keeps role selection out of the wire protocol
+    /// and makes it impossible for a renderer/control caller to accidentally
+    /// fall back to the low-integrity data plane.
+    pub fn connect_endpoint(endpoint: Endpoint, budget: Duration) -> Result<Self, Fault> {
+        Self::connect_to(&pipe_name_for(endpoint)?, budget)
+    }
+
+    /// Connects to an endpoint and verifies the exact server process before
+    /// returning a usable client. The check runs on the kernel-reported server
+    /// PID for this handle, queries its image path and token integrity, and
+    /// happens before any Hello or other protocol frame is sent.
+    pub fn connect_endpoint_verified(
+        endpoint: Endpoint,
+        policy: &ServerTrustPolicy,
+        budget: Duration,
+    ) -> Result<Self, Fault> {
+        let name = pipe_name_for(endpoint)?;
+        Self::connect_verified_to(&name, policy, budget)
+    }
+
+    /// Test/diagnostic form of [`connect_endpoint_verified`](Self::connect_endpoint_verified)
+    /// for an explicitly named pipe.
+    pub fn connect_verified_to(
+        name: &str,
+        policy: &ServerTrustPolicy,
+        budget: Duration,
+    ) -> Result<Self, Fault> {
+        let client = Self::connect_to(name, budget)?;
+        let process_id = client.server_process_id().unwrap_or(0);
+        if process_id == 0 || verify_server_process(process_id, policy).is_err() {
+            drop(client);
+            return Err(Fault::UntrustedServer { process_id });
+        }
+        Ok(client)
     }
 
     /// Connects to a pipe by name. Exposed for tests that stand up their

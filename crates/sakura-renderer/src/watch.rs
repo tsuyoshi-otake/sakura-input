@@ -32,7 +32,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant};
 
-use sakura_ipc::{Client, Fault, PATIENT_CONNECT};
+use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy, PATIENT_CONNECT};
 use sakura_proto::{Request, Response, UiState, PROTOCOL_VERSION};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
@@ -276,7 +276,17 @@ enum PipeBinding {
 impl PipeBinding {
     fn connect(&self) -> Result<Client, Fault> {
         match self {
-            Self::Production => Client::connect(PATIENT_CONNECT),
+            Self::Production => {
+                let executable = std::env::current_exe()
+                    .map_err(|_| Fault::UntrustedServer { process_id: 0 })?;
+                let root = executable
+                    .parent()
+                    .and_then(|release| release.parent())
+                    .and_then(|versions| versions.parent())
+                    .ok_or(Fault::UntrustedServer { process_id: 0 })?;
+                let policy = ServerTrustPolicy::InstalledRoot(root.to_path_buf());
+                Client::connect_endpoint_verified(Endpoint::Renderer, &policy, PATIENT_CONNECT)
+            }
             Self::Test(pipe_name) => Client::connect_to(pipe_name, PATIENT_CONNECT),
         }
     }

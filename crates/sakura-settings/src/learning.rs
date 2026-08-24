@@ -8,7 +8,7 @@ use sakura_engine::learning::{
     read_snapshot, LearningService, LearningSnapshot, LEARNING_FORMAT_VERSION,
 };
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
-use sakura_ipc::{Client, Fault};
+use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy};
 use sakura_proto::{Request, Response, PROTOCOL_VERSION};
 use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND};
 
@@ -44,11 +44,13 @@ pub fn export(source: &Path, destination: &Path) -> io::Result<usize> {
 /// access is used only when Windows proves there is no pipe, avoiding a race
 /// with a live writer or its maintenance thread.
 pub fn clear(path: &Path) -> io::Result<ClearRoute> {
-    let mut client = match Client::connect(ADMIN_CALL_BUDGET) {
-        Ok(client) => client,
-        Err(error) if engine_is_definitely_absent(&error) => return clear_offline(path),
-        Err(error) => return Err(fault("connect to engine", error)),
-    };
+    let policy = installed_root_policy()?;
+    let mut client =
+        match Client::connect_endpoint_verified(Endpoint::Control, &policy, ADMIN_CALL_BUDGET) {
+            Ok(client) => client,
+            Err(error) if engine_is_definitely_absent(&error) => return clear_offline(path),
+            Err(error) => return Err(fault("connect to engine", error)),
+        };
     match client.call(
         &Request::Hello {
             client_version: PROTOCOL_VERSION,
@@ -104,9 +106,25 @@ fn fault(action: &str, error: Fault) -> io::Error {
         Fault::Disconnected => io::ErrorKind::BrokenPipe,
         Fault::Protocol(_) | Fault::Desynchronized => io::ErrorKind::InvalidData,
         Fault::Encode(_) => io::ErrorKind::InvalidInput,
+        Fault::UntrustedServer { .. } => io::ErrorKind::PermissionDenied,
         Fault::Os(_) => io::ErrorKind::Other,
     };
     io::Error::new(kind, format!("{action}: {error}"))
+}
+
+fn installed_root_policy() -> io::Result<ServerTrustPolicy> {
+    let executable = std::env::current_exe()?;
+    let root = executable
+        .parent()
+        .and_then(|release| release.parent())
+        .and_then(|versions| versions.parent())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "settings executable is not versioned",
+            )
+        })?;
+    Ok(ServerTrustPolicy::InstalledRoot(root.to_path_buf()))
 }
 
 fn engine_is_definitely_absent(error: &Fault) -> bool {

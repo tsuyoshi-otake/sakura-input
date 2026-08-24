@@ -13,7 +13,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint, ServerTrustPolicy};
 use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, SessionId};
 
 /// Long enough to cover a cold process start on a loaded machine. Nothing
@@ -45,6 +45,7 @@ pub struct Engine {
     _test_lock: MutexGuard<'static, ()>,
     child: Option<Child>,
     pipe_name: String,
+    control_pipe_name: String,
     local_app_data: Option<PathBuf>,
 }
 
@@ -87,6 +88,11 @@ impl Engine {
     ) -> Engine {
         let dictionary = test_dictionary(&identity.local_app_data);
         let pipe_name = binding.name(&identity.pipe_name);
+        let control_pipe_name = match &binding {
+            PipeBinding::PrivateTest => pipe_name.clone(),
+            PipeBinding::WellKnown(_) => sakura_ipc::pipe_name_for(Endpoint::Control)
+                .expect("the AppContainer test parent can resolve the control pipe name"),
+        };
         let mut command = Command::new(env!("CARGO_BIN_EXE_sakura_engine"));
         command
             .env("SAKURA_DICTIONARY", &dictionary)
@@ -107,6 +113,7 @@ impl Engine {
             _test_lock: test_lock,
             child: Some(child),
             pipe_name,
+            control_pipe_name,
             local_app_data: Some(identity.local_app_data),
         }
     }
@@ -117,7 +124,10 @@ impl Engine {
         loop {
             self.owned_child_pid_while_running("waiting for named-pipe readiness")
                 .unwrap_or_else(|detail| panic!("{detail}"));
-            match Client::connect_to(&self.pipe_name, Duration::from_millis(100)) {
+            let policy =
+                ServerTrustPolicy::Exact(PathBuf::from(env!("CARGO_BIN_EXE_sakura_engine")));
+            match Client::connect_verified_to(&self.pipe_name, &policy, Duration::from_millis(100))
+            {
                 Ok(client) => {
                     return self
                         .require_owned_server(client, "opening a test client")
@@ -160,9 +170,25 @@ impl Engine {
     /// PID, then removes only the profile directory this guard created.
     pub fn cleanup(&mut self) -> Result<Cleanup, String> {
         let pid = self.child_pid();
-        let shutdown = match Client::connect_to(&self.pipe_name, PATIENT) {
+        let shutdown = match Client::connect_to(&self.control_pipe_name, PATIENT) {
             Ok(client) => match self.require_owned_server(client, "opening the cleanup client") {
-                Ok(mut client) => client.call(&Request::Shutdown, PATIENT),
+                Ok(mut client) => {
+                    let handshake = client.call(
+                        &Request::Hello {
+                            client_version: sakura_proto::PROTOCOL_VERSION,
+                        },
+                        PATIENT,
+                    );
+                    match handshake {
+                        Ok(Response::Hello { server_version, .. })
+                            if server_version == sakura_proto::PROTOCOL_VERSION =>
+                        {
+                            client.call(&Request::Shutdown, PATIENT)
+                        }
+                        Ok(_) => Err(sakura_ipc::Fault::Protocol(sakura_proto::Error::BadEnum)),
+                        Err(error) => Err(error),
+                    }
+                }
                 Err(detail) => {
                     self.kill_and_wait_after_failure();
                     return Err(detail);

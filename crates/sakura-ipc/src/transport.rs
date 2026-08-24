@@ -25,6 +25,7 @@
 //! open, not a server's client count.
 
 use sakura_proto::{payload_len, FRAME_HEADER_LEN, MAX_PAYLOAD};
+use std::time::{Duration, Instant};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED,
@@ -34,8 +35,8 @@ use windows::Win32::Storage::FileSystem::{
     FlushFileBuffers, ReadFile, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX,
 };
 use windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
-    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
+    PeekNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
 };
 
 use crate::security::Descriptor;
@@ -119,6 +120,10 @@ pub enum Fault {
     /// reply — which is expected and dropped — this one cannot be
     /// explained away.
     Desynchronized,
+    /// The kernel-reported peer on a verified connection did not satisfy the
+    /// caller's image/integrity policy. The handle is dropped before Hello,
+    /// so no untrusted process receives protocol traffic.
+    UntrustedServer { process_id: u32 },
     /// The operating system refused the operation.
     Os(windows::core::Error),
 }
@@ -131,6 +136,9 @@ impl core::fmt::Display for Fault {
             Fault::Encode(error) => write!(f, "failed to encode outgoing request: {error:?}"),
             Fault::Timeout => write!(f, "the engine did not answer in time"),
             Fault::Desynchronized => write!(f, "reply to a request that was never sent"),
+            Fault::UntrustedServer { process_id } => {
+                write!(f, "untrusted server process {process_id}")
+            }
             Fault::Os(error) => write!(f, "{error}"),
         }
     }
@@ -171,6 +179,22 @@ impl PipeInstance {
     /// the name. Without it, `CreateNamedPipeW` would happily add an
     /// instance to somebody else's pipe.
     pub fn create(name: &str, security: &Descriptor, first: bool) -> windows::core::Result<Self> {
+        Self::create_with_capacity(name, security, first, MAX_INSTANCES)
+    }
+
+    /// Creates one instance with an endpoint-specific admission cap.
+    ///
+    /// The data endpoint keeps [`MAX_INSTANCES`] for host applications, while
+    /// renderer/control endpoints use smaller independent caps. Keeping the
+    /// cap in the kernel object means a stalled data-plane client cannot
+    /// consume the renderer or control admission budget.
+    pub fn create_with_capacity(
+        name: &str,
+        security: &Descriptor,
+        first: bool,
+        max_instances: u32,
+    ) -> windows::core::Result<Self> {
+        assert!(max_instances > 0, "a pipe must admit at least one instance");
         let wide = to_wide_nul(name);
         let mut flags = PIPE_ACCESS_DUPLEX;
         if first {
@@ -190,7 +214,7 @@ impl PipeInstance {
                 // client authenticates as the same user and would pass
                 // every ACE.
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                MAX_INSTANCES,
+                max_instances,
                 PIPE_BUFFER_BYTES,
                 PIPE_BUFFER_BYTES,
                 0,
@@ -245,6 +269,19 @@ impl PipeInstance {
             let _ = FlushFileBuffers(self.handle);
             let _ = DisconnectNamedPipe(self.handle);
         }
+    }
+
+    /// Returns the PID attached to this exact server-side connection.
+    ///
+    /// The engine uses this before the first handshake for a bounded
+    /// per-process admission quota. It is a kernel query on the accepted
+    /// handle, not a client-supplied protocol field.
+    pub fn client_process_id(&self) -> windows::core::Result<u32> {
+        let mut process_id = 0;
+        // SAFETY: this is a live server-side pipe handle and the output is
+        // valid for the duration of the call.
+        unsafe { GetNamedPipeClientProcessId(self.handle, &mut process_id)? };
+        Ok(process_id)
     }
 
     /// Fills `buf` completely, looping over partial reads.
@@ -308,6 +345,56 @@ impl PipeInstance {
         buf.resize(len, 0);
         self.read_exact(buf)?;
         Ok(buf.as_slice())
+    }
+
+    /// Reads one frame while bounding the time spent waiting for its first
+    /// bytes and body. The regular connection path remains blocking; only the
+    /// initial handshake uses this polling form, because a client can connect
+    /// successfully and then never send a frame.
+    pub fn read_frame_with_deadline<'a>(
+        &self,
+        buf: &'a mut Vec<u8>,
+        budget: Duration,
+    ) -> Result<&'a [u8], Fault> {
+        let deadline = Instant::now() + budget;
+        let mut header = [0u8; FRAME_HEADER_LEN];
+        self.wait_for_bytes(FRAME_HEADER_LEN as u32, deadline)?;
+        self.read_exact(&mut header)?;
+        let len = payload_len(&header).map_err(Fault::Protocol)?;
+        debug_assert!(len <= MAX_PAYLOAD);
+        buf.clear();
+        buf.resize(len, 0);
+        self.wait_for_bytes(len as u32, deadline)?;
+        self.read_exact(buf)?;
+        Ok(buf.as_slice())
+    }
+
+    fn wait_for_bytes(&self, needed: u32, deadline: Instant) -> Result<(), Fault> {
+        while self.available_bytes()? < needed {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(Fault::Timeout);
+            }
+            std::thread::sleep(remaining.min(Duration::from_millis(1)));
+        }
+        Ok(())
+    }
+
+    fn available_bytes(&self) -> Result<u32, Fault> {
+        let mut total = 0u32;
+        // SAFETY: this is a live byte-mode named-pipe handle; the remaining
+        // output pointer is valid for the duration of the call and no data is
+        // copied because the buffer arguments are null/zero.
+        unsafe {
+            PeekNamedPipe(self.handle, None, 0, None, Some(&mut total), None).map_err(|error| {
+                if is_disconnect(&error) {
+                    Fault::Disconnected
+                } else {
+                    Fault::Os(error)
+                }
+            })?;
+        }
+        Ok(total)
     }
 }
 
