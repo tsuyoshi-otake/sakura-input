@@ -13455,26 +13455,32 @@ mod tests {
         // fallible step had already succeeded, a non-ASCII keystroke
         // landing exactly at the preedit capacity boundary would vanish
         // for good -- not merely get rejected.
-        // Same minimal table as the sibling overflow tests: "k" has no
-        // entry, so it passes through raw, one byte per keystroke, with no
-        // sokuon/consonant-doubling complexity to reason about while
-        // filling `preedit` to an exact byte boundary.
-        let huge = "あ".repeat(600); // 1800 bytes > MAX_PREEDIT_BYTES (1536)
-        let table = Table::parse(&format!("[kana]\na = \"{huge}\"\n")).expect("table compiles");
+        // Use a single table entry to produce the exact boundary. This still
+        // goes through the production `feed_character`/`table.feed` path, but
+        // avoids dispatching one key for every byte while constructing the
+        // fixture (which would make this test quadratic in the boundary
+        // size). The output is deliberately the same plain ASCII `k` that
+        // the old passthrough filler produced.
+        let boundary = "k".repeat(MAX_PREEDIT_BYTES);
+        let table = Table::parse(&format!("[kana]\na = \"{boundary}\"\n")).expect("table compiles");
         let keymap = KeyMap::preset(Preset::MsIme).expect("preset compiles");
         let mut dispatcher = Dispatcher::with_parts(table, keymap, Normalizer::default());
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "app.exe");
 
-        // Fill preedit to exactly MAX_PREEDIT_BYTES with a plain ASCII
-        // passthrough character, leaving zero bytes of room. Any further
-        // character -- ASCII or not -- must now be rejected. Read the fill
-        // back from the session itself, not from `out`: if the very last
-        // fill keystroke happened to be the one that overflowed, Apply's
+        // Fill preedit to exactly MAX_PREEDIT_BYTES with one key, leaving
+        // zero bytes of room. Any further character -- ASCII or not -- must
+        // now be rejected. Read the fill back from the session itself, not
+        // from `out`: if the boundary dispatch happened to overflow, Apply's
         // catch site would have cleared `out` already, which would say
         // nothing about how much actually landed in `session.preedit`.
-        let filler = "k".repeat(MAX_PREEDIT_BYTES);
-        type_word(&mut dispatcher, session, &filler, &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('a'),
+            },
+            &mut out,
+        );
         assert_eq!(
             dispatcher
                 .sessions

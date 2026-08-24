@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Only superseded pull-request runs share a concurrency group. Every non-PR
+# run uses its unique run id, so GitHub cannot replace even a pending main,
+# manual, or future tag-triggered run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   # A dependency that resolves differently in CI than on a developer's machine
@@ -16,6 +23,9 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +43,23 @@ jobs:
           cargo --version
           (Get-CimInstance Win32_Processor).Name
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2 (reviewed 2026-08-24; upstream 2026-08-06; quarantine satisfied)
+        with:
+          # Keep the cargo-audit executable cache address stable between the
+          # main CI job and the release tag job. The version is part of the
+          # key so changing the reviewed tool cannot reuse an old binary.
+          shared-key: cargo-audit-0.22.2
+
+      - name: Self-test dependency auditor gate
+        shell: pwsh
+        run: ./ci/ensure-cargo-audit.ps1 -SelfTest
+
+      - name: Ensure reviewed dependency auditor
+        shell: pwsh
+        run: ./ci/ensure-cargo-audit.ps1
+
+      - name: Audit dependencies
+        run: cargo audit --file Cargo.lock
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -113,6 +139,14 @@ jobs:
       - name: Build release
         run: cargo build --workspace --release
 
+      - name: Summarize step timings
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./ci/write-step-timings.ps1 -JobName 'Build and test'
+
   dependency-policy:
     name: Dependency policy
     runs-on: windows-latest
@@ -128,19 +162,21 @@ jobs:
         shell: pwsh
         run: ./ci/dep-policy.ps1
 
-  # These are bounded smoke slices for all three Phase 5 fuzz surfaces. The
-  # resumable, evidence-producing 72-hour run lives in fuzz-campaign.yml; this
-  # job keeps its exact ignored entry points from silently becoming no-ops.
+  # This is a bounded main-push smoke slice for all three Phase 5 fuzz
+  # surfaces. The four-shard, resumable, evidence-producing 72-hour run lives
+  # in fuzz-campaign.yml; this job keeps its exact ignored entry points from
+  # silently becoming no-ops without spending four runners on every push.
   fuzz:
     name: Fuzz (shard ${{ matrix.shard }})
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        shard: [0]
     env:
-      SAKURA_FUZZ_ITERS: "2000000"
+      SAKURA_FUZZ_ITERS: "200000"
       SAKURA_FUZZ_SHARD: ${{ matrix.shard }}
       SAKURA_FUZZ_SEED: "0"
     steps:
