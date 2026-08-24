@@ -18,6 +18,9 @@ jobs:
     name: Build v1 release candidate
     runs-on: windows-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
     environment: release
     env:
       CARGO_TERM_COLOR: always
@@ -41,7 +44,12 @@ jobs:
       # IT glossary input is the MIT snapshot under
       # third_party/smile-chat-public (no private-repo token).
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2 (reviewed 2026-08-24; upstream 2026-08-06; quarantine satisfied)
+        with:
+          # Keep the cargo-audit executable cache address stable between the
+          # main CI job and the release tag job. The version is part of the
+          # key so changing the reviewed tool cannot reuse an old binary.
+          shared-key: cargo-audit-0.22.2
 
       - name: Require one canonical version across tag, Cargo, and installer
         shell: pwsh
@@ -71,10 +79,12 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      # cargo-audit 0.22.2 was published 2026-06-05, well beyond the
-      # repository's seven-day release-age quarantine.
-      - name: Install dependency auditor
-        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Self-test dependency auditor gate
+        shell: pwsh
+        run: ./ci/ensure-cargo-audit.ps1 -SelfTest
+      - name: Ensure reviewed dependency auditor
+        shell: pwsh
+        run: ./ci/ensure-cargo-audit.ps1
       - name: Audit dependencies
         run: cargo audit --file Cargo.lock
       - name: Test
@@ -251,3 +261,11 @@ jobs:
           if (-not [string]::IsNullOrWhiteSpace($path) -and [IO.File]::Exists($path)) {
             [IO.File]::Delete($path)
           }
+
+      - name: Summarize step timings
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./ci/write-step-timings.ps1 -JobName 'Build v1 release candidate'
