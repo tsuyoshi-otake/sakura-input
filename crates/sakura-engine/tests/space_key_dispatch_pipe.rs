@@ -87,10 +87,7 @@ fn api_idle_space_inserts_fullwidth_on_a_live_process() {
     assert_eq!(commit_text(&response), Some("\u{3000}"));
     let cleanup = engine.cleanup().expect("cleanup");
     assert!(cleanup.status.success() || cleanup.status.code().is_some());
-    write_failure_log(
-        "api-idle-space.txt",
-        &format!("pid={} commit=U+3000\n", cleanup.pid),
-    );
+    write_failure_log("api-idle-space.txt", "owned_engine=true commit=U+3000\n");
 }
 
 #[test]
@@ -188,7 +185,6 @@ fn fail_crash_restart_reopens_idle() {
     handshake(&mut client);
     let session = session_for(&mut client, "space-crash.exe");
     let _ = send_char(&mut client, session, 'a');
-    let pid = engine.child_pid();
     drop(client);
     drop(engine);
     let mut restarted = Engine::spawn_isolated();
@@ -199,7 +195,7 @@ fn fail_crash_restart_reopens_idle() {
     assert_eq!(commit_text(&response), Some("\u{3000}"));
     write_failure_log(
         "fail-crash-restart.txt",
-        &format!("killed_pid={pid} restarted_idle_space=U+3000\n"),
+        "owned_engine_killed=true restarted_idle_space=U+3000\n",
     );
     let _ = restarted.cleanup();
 }

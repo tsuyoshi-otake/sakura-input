@@ -11,7 +11,7 @@ use sakura_engine::input_history::{
     ScopeClass, INPUT_HISTORY_FORMAT_VERSION,
 };
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
-use sakura_ipc::{Client, Fault};
+use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy};
 use sakura_proto::{Request, Response, PROTOCOL_VERSION};
 use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND};
 #[cfg(windows)]
@@ -569,11 +569,13 @@ pub fn mine(source: &Path, destination: &Path) -> io::Result<MineReport> {
 }
 
 pub fn flush(_path: &Path) -> io::Result<FlushRoute> {
-    let mut client = match Client::connect(ADMIN_CALL_BUDGET) {
-        Ok(client) => client,
-        Err(error) if engine_is_definitely_absent(&error) => return Ok(FlushRoute::Offline),
-        Err(error) => return Err(fault("connect to engine", error)),
-    };
+    let policy = installed_root_policy()?;
+    let mut client =
+        match Client::connect_endpoint_verified(Endpoint::Control, &policy, ADMIN_CALL_BUDGET) {
+            Ok(client) => client,
+            Err(error) if engine_is_definitely_absent(&error) => return Ok(FlushRoute::Offline),
+            Err(error) => return Err(fault("connect to engine", error)),
+        };
     handshake(&mut client)?;
     match client.call(&Request::FlushInputHistory, ADMIN_CALL_BUDGET) {
         Ok(Response::Ok) => Ok(FlushRoute::LiveEngine),
@@ -593,26 +595,28 @@ pub fn flush(_path: &Path) -> io::Result<FlushRoute> {
 }
 
 pub fn stats(_path: &Path) -> io::Result<HistoryStats> {
-    let mut client = match Client::connect(ADMIN_CALL_BUDGET) {
-        Ok(client) => client,
-        Err(error) if engine_is_definitely_absent(&error) => {
-            return Ok(HistoryStats {
-                active: false,
-                dropped_events: 0,
-                persistence_failures: 0,
-                excluded_unclassified_events: 0,
-                excluded_sensitive_events: 0,
-                excluded_test_only_events: 0,
-                ai_requests: 0,
-                ai_attempts: 0,
-                ai_input_tokens: 0,
-                ai_output_tokens: 0,
-                ai_cached_tokens: 0,
-                live: false,
-            })
-        }
-        Err(error) => return Err(fault("connect to engine", error)),
-    };
+    let policy = installed_root_policy()?;
+    let mut client =
+        match Client::connect_endpoint_verified(Endpoint::Control, &policy, ADMIN_CALL_BUDGET) {
+            Ok(client) => client,
+            Err(error) if engine_is_definitely_absent(&error) => {
+                return Ok(HistoryStats {
+                    active: false,
+                    dropped_events: 0,
+                    persistence_failures: 0,
+                    excluded_unclassified_events: 0,
+                    excluded_sensitive_events: 0,
+                    excluded_test_only_events: 0,
+                    ai_requests: 0,
+                    ai_attempts: 0,
+                    ai_input_tokens: 0,
+                    ai_output_tokens: 0,
+                    ai_cached_tokens: 0,
+                    live: false,
+                })
+            }
+            Err(error) => return Err(fault("connect to engine", error)),
+        };
     handshake(&mut client)?;
     match client.call(&Request::InputHistoryStats, ADMIN_CALL_BUDGET) {
         Ok(Response::InputHistoryStats {
@@ -660,11 +664,13 @@ pub fn stats(_path: &Path) -> io::Result<HistoryStats> {
 }
 
 pub fn clear(path: &Path) -> io::Result<ClearRoute> {
-    let mut client = match Client::connect(ADMIN_CALL_BUDGET) {
-        Ok(client) => client,
-        Err(error) if engine_is_definitely_absent(&error) => return clear_offline(path),
-        Err(error) => return Err(fault("connect to engine", error)),
-    };
+    let policy = installed_root_policy()?;
+    let mut client =
+        match Client::connect_endpoint_verified(Endpoint::Control, &policy, ADMIN_CALL_BUDGET) {
+            Ok(client) => client,
+            Err(error) if engine_is_definitely_absent(&error) => return clear_offline(path),
+            Err(error) => return Err(fault("connect to engine", error)),
+        };
     handshake(&mut client)?;
     match client.call(&Request::ClearInputHistory, ADMIN_CALL_BUDGET) {
         Ok(Response::Ok) => Ok(ClearRoute::LiveEngine),
@@ -719,9 +725,25 @@ fn fault(action: &str, error: Fault) -> io::Error {
         Fault::Disconnected => io::ErrorKind::BrokenPipe,
         Fault::Protocol(_) | Fault::Desynchronized => io::ErrorKind::InvalidData,
         Fault::Encode(_) => io::ErrorKind::InvalidInput,
+        Fault::UntrustedServer { .. } => io::ErrorKind::PermissionDenied,
         Fault::Os(_) => io::ErrorKind::Other,
     };
     io::Error::new(kind, format!("{action}: {error}"))
+}
+
+fn installed_root_policy() -> io::Result<ServerTrustPolicy> {
+    let executable = std::env::current_exe()?;
+    let root = executable
+        .parent()
+        .and_then(|release| release.parent())
+        .and_then(|versions| versions.parent())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "settings executable is not versioned",
+            )
+        })?;
+    Ok(ServerTrustPolicy::InstalledRoot(root.to_path_buf()))
 }
 
 fn engine_is_definitely_absent(error: &Fault) -> bool {

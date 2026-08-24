@@ -39,7 +39,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use sakura_ipc::diagnostics::{self, TimeoutOperation};
-use sakura_ipc::{Client, Fault};
+use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy};
 use sakura_proto::{
     AiTextOperation, AiTextStatus, ErrorCode, InputScope, KeyInput, Mode, Output, Request,
     Response, ScreenRect, SessionId, UndoCommitOutcome, PROTOCOL_VERSION,
@@ -881,7 +881,12 @@ fn open(name: Option<&str>) -> Option<Link> {
     let deadline = Instant::now() + RECONNECT_BUDGET;
     let connected = match name {
         Some(name) => Client::connect_to(name, left(deadline)),
-        None => Client::connect(left(deadline)),
+        None => {
+            let module = sakura_reg::module_file_name(crate::exports::module_handle()).ok()?;
+            let root = module.parent()?.parent()?.parent()?.to_path_buf();
+            let policy = ServerTrustPolicy::InstalledRoot(root);
+            Client::connect_endpoint_verified(Endpoint::Data, &policy, left(deadline))
+        }
     };
     let mut client = match connected {
         Ok(client) => client,

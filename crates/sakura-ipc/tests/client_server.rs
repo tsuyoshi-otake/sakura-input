@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use sakura_ipc::{Client, Descriptor, Fault, PipeInstance, PATIENT_CONNECT};
+use sakura_ipc::{Client, Descriptor, Fault, PipeInstance, ServerTrustPolicy, PATIENT_CONNECT};
 use sakura_proto::{decode_request, encode_response, peek_header, Request, Response};
 
 /// A pipe name nobody else is using, derived from this process so two test
@@ -80,6 +80,27 @@ fn a_client_reports_the_process_serving_its_exact_pipe_connection() {
     );
 
     drop(client);
+    server.join().expect("the server thread");
+}
+
+#[test]
+fn verified_connect_rejects_a_wrong_image_without_sending_hello() {
+    let (name, server) = with_server("verified-wrong-image", |pipe| {
+        let mut buffer = Vec::new();
+        assert!(
+            pipe.read_frame(&mut buffer).is_err(),
+            "no protocol frame was sent"
+        );
+    });
+    let policy = ServerTrustPolicy::Exact(
+        std::env::current_exe()
+            .expect("test image path")
+            .with_file_name("not-the-engine.exe"),
+    );
+    assert!(matches!(
+        Client::connect_verified_to(&name, &policy, PATIENT_CONNECT),
+        Err(Fault::UntrustedServer { .. })
+    ));
     server.join().expect("the server thread");
 }
 

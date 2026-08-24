@@ -8,30 +8,54 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.23
+        default: v1.0.24
 
 permissions:
   contents: read
 
 jobs:
-  release-candidate:
-    name: Build v1 release candidate
+  build-release:
+    name: Build v1 release candidate (secretless)
     runs-on: windows-latest
     timeout-minutes: 90
     permissions:
       contents: read
       actions: read
-    environment: release
     env:
       CARGO_TERM_COLOR: always
       CARGO_NET_LOCKED: "true"
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+    outputs:
+      release-version: ${{ steps.version.outputs.version }}
+      source-commit: ${{ steps.source.outputs.commit }}
+      build-artifact-name: sakura-input-${{ steps.version.outputs.version }}-build-input
+      build-artifact-digest: ${{ steps.upload-build.outputs.artifact-digest }}
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (reviewed 2026-08-24; upstream 2024-10-23; quarantine satisfied)
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      - name: Record the immutable source commit
+        id: source
+        shell: pwsh
+        run: |
+          $commit = (git rev-parse HEAD).Trim()
+          if ($commit -notmatch '^[0-9a-f]{40}$') {
+            throw "checked out source commit is not a full SHA: $commit"
+          }
+          "commit=$commit" >> $env:GITHUB_OUTPUT
+          "SOURCE_COMMIT=$commit" >> $env:GITHUB_ENV
+
+      - name: Enforce release workflow policy
+        shell: pwsh
+        run: |
+          ./ci/release-workflow-policy.ps1 -SelfTest
+          ./ci/release-workflow-policy.ps1
+
       - name: Check out pinned Mozc dictionary data
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (reviewed 2026-08-24; upstream 2024-10-23; quarantine satisfied)
         with:
           repository: google/mozc
           ref: 3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732
@@ -46,15 +70,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2 (reviewed 2026-08-24; upstream 2026-08-06; quarantine satisfied)
         with:
-          # Keep the cargo-audit executable cache address stable between the
-          # main CI job and the release tag job. The version is part of the
-          # key so changing the reviewed tool cannot reuse an old binary.
+          # This shared key is also used by main CI. The reviewed cargo-audit
+          # version is part of the key so a version change cannot reuse an old
+          # executable.
           shared-key: cargo-audit-0.22.2
 
       - name: Require one canonical version across tag, Cargo, and installer
+        id: version
         shell: pwsh
-        env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           $cargo = [IO.File]::ReadAllText('Cargo.toml')
           $setup = [IO.File]::ReadAllText('installer/setup.iss')
@@ -74,6 +97,7 @@ jobs:
             throw 'installer AppProductVersion does not match workspace version'
           }
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -136,6 +160,276 @@ jobs:
       - name: Build release binaries
         run: cargo build --workspace --release --locked
 
+      # This unsigned installer is a build-input validation artifact. The
+      # protected job signs the binaries first and recompiles the installer so
+      # its embedded payload is the signed payload.
+      - name: Compile unsigned installer build input
+        shell: pwsh
+        run: ./scripts/build-installer.ps1
+
+      - name: Prove source checkout remained clean
+        shell: pwsh
+        run: |
+          $modified = @(git diff --name-only)
+          if ($modified.Count -ne 0) {
+            throw "build steps modified tracked source files: $($modified -join ', ')"
+          }
+
+      - name: Write build artifact provenance
+        shell: pwsh
+        run: |
+          $root = [IO.Path]::GetFullPath((Get-Location).Path)
+          $paths = @(
+            'target/x86_64-pc-windows-msvc/release/sakura_tsf.dll',
+            'target/x86_64-pc-windows-msvc/release/sakura_engine.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_ai_worker.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_renderer.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_regtool.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_logon.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_settings.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_settings_payload.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_neural_worker.exe',
+            'installer/out/sakura_setup.exe',
+            'installer/out/installer-build.report.json',
+            'artifacts/release/dictionary-build.report.json',
+            'artifacts/release/system.dic',
+            'artifacts/release/neural-payload',
+            "docs/release-notes-v$env:RELEASE_VERSION.md",
+            'data/SOURCES.lock',
+            'THIRD_PARTY_NOTICES.md',
+            'THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt'
+          )
+          $sourcePaths = @(
+            'installer/setup.iss',
+            'scripts/build-installer.ps1',
+            'scripts/build-sakura-reranker.ps1',
+            'scripts/stage-sakura-rerank.ps1',
+            'scripts/sign-release.ps1',
+            'scripts/write-release-manifest.ps1'
+          )
+          $records = [Collections.Generic.List[object]]::new()
+          foreach ($relative in $paths) {
+            $candidate = [IO.Path]::GetFullPath((Join-Path $root ($relative -replace '/', '\')))
+            if ([IO.Directory]::Exists($candidate)) {
+              $items = @(Get-ChildItem -LiteralPath $candidate -File -Recurse | Sort-Object FullName)
+            } else {
+              $items = @([IO.FileInfo]::new($candidate))
+            }
+            foreach ($item in $items) {
+              if (-not $item.Exists) { throw "build artifact is missing: $relative" }
+              $path = $item.FullName.Substring($root.Length).TrimStart('\', '/') -replace '\', '/'
+              $null = $records.Add([ordered]@{
+                path = $path
+                bytes = [long]$item.Length
+                sha256 = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              })
+            }
+          }
+          $sourceRecords = [Collections.Generic.List[object]]::new()
+          foreach ($relative in $sourcePaths) {
+            $candidate = [IO.Path]::GetFullPath((Join-Path $root ($relative -replace '/', '\')))
+            $item = [IO.FileInfo]::new($candidate)
+            if (-not $item.Exists) { throw "verified source file is missing: $relative" }
+            $path = $item.FullName.Substring($root.Length).TrimStart('\', '/') -replace '\', '/'
+            $null = $sourceRecords.Add([ordered]@{
+              path = $path
+              bytes = [long]$item.Length
+              sha256 = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            })
+          }
+          $provenance = [ordered]@{
+            schema_version = 1
+            kind = 'sakura.release.build-input'
+            source_commit = $env:SOURCE_COMMIT
+            tag = $env:RELEASE_TAG
+            version = $env:RELEASE_VERSION
+            files = @($records | Sort-Object path)
+            source_files = @($sourceRecords | Sort-Object path)
+          }
+          [IO.File]::WriteAllText(
+            'build-provenance.json',
+            (($provenance | ConvertTo-Json -Depth 8) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+          )
+
+      - name: Upload secretless build input
+        id: upload-build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (reviewed 2026-08-24; upstream 2025-03-19; quarantine satisfied)
+        with:
+          name: sakura-input-${{ steps.version.outputs.version }}-build-input
+          path: |
+            target/x86_64-pc-windows-msvc/release/sakura_tsf.dll
+            target/x86_64-pc-windows-msvc/release/sakura_engine.exe
+            target/x86_64-pc-windows-msvc/release/sakura_ai_worker.exe
+            target/x86_64-pc-windows-msvc/release/sakura_renderer.exe
+            target/x86_64-pc-windows-msvc/release/sakura_regtool.exe
+            target/x86_64-pc-windows-msvc/release/sakura_logon.exe
+            target/x86_64-pc-windows-msvc/release/sakura_settings.exe
+            target/x86_64-pc-windows-msvc/release/sakura_settings_payload.exe
+            target/x86_64-pc-windows-msvc/release/sakura_neural_worker.exe
+            installer/out/sakura_setup.exe
+            installer/out/installer-build.report.json
+            artifacts/release/dictionary-build.report.json
+            artifacts/release/system.dic
+            artifacts/release/neural-payload
+            docs/release-notes-v${{ steps.version.outputs.version }}.md
+            data/SOURCES.lock
+            THIRD_PARTY_NOTICES.md
+            THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt
+            build-provenance.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize step timings
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./ci/write-step-timings.ps1 -JobName 'Build v1 release candidate (secretless)'
+
+  sign-and-package:
+    name: Sign and package release candidate
+    needs: build-release
+    if: needs.build-release.result == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_NET_LOCKED: "true"
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_VERSION: ${{ needs.build-release.outputs.release-version }}
+      BUILD_ARTIFACT_NAME: ${{ needs.build-release.outputs.build-artifact-name }}
+      EXPECTED_BUILD_ARTIFACT_DIGEST: ${{ needs.build-release.outputs.build-artifact-digest }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (reviewed 2026-08-24; upstream 2024-10-23; quarantine satisfied)
+        with:
+          ref: ${{ needs.build-release.outputs.source-commit }}
+
+      - name: Download secretless build input
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (reviewed 2026-08-24; upstream 2025-04-24; quarantine satisfied)
+        with:
+          name: ${{ needs.build-release.outputs.build-artifact-name }}
+          path: .
+
+      - name: Reverify build artifact digest and provenance
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          function Normalize-Digest {
+            param([Parameter(Mandatory)][string]$Value)
+            $normalized = $Value.Trim().ToLowerInvariant()
+            if ($normalized.StartsWith('sha256:')) { $normalized = $normalized.Substring(7) }
+            if ($normalized -notmatch '^[0-9a-f]{64}$') {
+              throw "invalid SHA-256 digest: $Value"
+            }
+            return $normalized
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_BUILD_ARTIFACT_DIGEST)) {
+            throw 'build job did not publish an artifact digest'
+          }
+          $expectedDigest = Normalize-Digest $env:EXPECTED_BUILD_ARTIFACT_DIGEST
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100"
+          $records = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
+          $matches = @($records.artifacts | Where-Object { $_.name -ceq $env:BUILD_ARTIFACT_NAME })
+          if ($matches.Count -ne 1) {
+            throw "expected exactly one build artifact named '$env:BUILD_ARTIFACT_NAME', found $($matches.Count)"
+          }
+          $remoteDigest = Normalize-Digest ([string]$matches[0].digest)
+          if ($remoteDigest -cne $expectedDigest) {
+            throw "build artifact digest changed between jobs: expected $expectedDigest, got $remoteDigest"
+          }
+
+          $root = [IO.Path]::GetFullPath((Get-Location).Path)
+          $provenancePath = Join-Path $root 'build-provenance.json'
+          if (-not [IO.File]::Exists($provenancePath)) {
+            throw 'build-provenance.json is missing from the downloaded artifact'
+          }
+          $provenance = Get-Content -Raw -LiteralPath $provenancePath | ConvertFrom-Json
+          if ($provenance.schema_version -ne 1 -or $provenance.kind -cne 'sakura.release.build-input') {
+            throw 'build provenance schema or kind is invalid'
+          }
+          $checkedOutCommit = (git rev-parse HEAD).Trim()
+          if ([string]$provenance.source_commit -cne $checkedOutCommit -or
+              [string]$provenance.source_commit -cne '${{ needs.build-release.outputs.source-commit }}') {
+            throw 'build provenance source commit does not match the protected checkout'
+          }
+          if ([string]$provenance.tag -cne $env:RELEASE_TAG -or
+              [string]$provenance.version -cne $env:RELEASE_VERSION) {
+            throw 'build provenance release identity does not match the requested release'
+          }
+          $records = @($provenance.files)
+          if ($records.Count -eq 0) { throw 'build provenance contains no file records' }
+          foreach ($record in $records) {
+            $relative = ([string]$record.path).Replace('/', '\')
+            if ([IO.Path]::IsPathRooted($relative) -or $relative -match '(^|\\)\.\.(\\|$)') {
+              throw "build provenance contains an unsafe path: $($record.path)"
+            }
+            $path = [IO.Path]::GetFullPath((Join-Path $root $relative))
+            if (-not $path.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+              throw "build provenance escapes the workspace: $($record.path)"
+            }
+            $item = [IO.FileInfo]::new($path)
+            if (-not $item.Exists -or [long]$item.Length -ne [long]$record.bytes) {
+              throw "build artifact size mismatch: $($record.path)"
+            }
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -cne ([string]$record.sha256).ToLowerInvariant()) {
+              throw "build artifact hash mismatch: $($record.path)"
+            }
+          }
+          $sourceRecords = @($provenance.source_files)
+          if ($sourceRecords.Count -eq 0) { throw 'build provenance contains no source file records' }
+          $requiredSourceFiles = @(
+            'installer/setup.iss',
+            'scripts/build-installer.ps1',
+            'scripts/build-sakura-reranker.ps1',
+            'scripts/stage-sakura-rerank.ps1',
+            'scripts/sign-release.ps1',
+            'scripts/write-release-manifest.ps1'
+          )
+          foreach ($required in $requiredSourceFiles) {
+            if (@($sourceRecords | Where-Object { [string]$_.path -ceq $required }).Count -ne 1) {
+              throw "required source file is absent from provenance: $required"
+            }
+          }
+          foreach ($record in $sourceRecords) {
+            $relative = ([string]$record.path).Replace('/', '\')
+            if ([IO.Path]::IsPathRooted($relative) -or $relative -match '(^|\\)\.\.(\\|$)') {
+              throw "source provenance contains an unsafe path: $($record.path)"
+            }
+            $path = [IO.Path]::GetFullPath((Join-Path $root $relative))
+            if (-not $path.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+              throw "source provenance escapes the workspace: $($record.path)"
+            }
+            $item = [IO.FileInfo]::new($path)
+            if (-not $item.Exists -or [long]$item.Length -ne [long]$record.bytes) {
+              throw "source file size mismatch: $($record.path)"
+            }
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -cne ([string]$record.sha256).ToLowerInvariant()) {
+              throw "source file hash mismatch: $($record.path)"
+            }
+          }
+          [IO.File]::WriteAllText(
+            'build-artifact-digest.txt',
+            "sha256:$expectedDigest`n",
+            [Text.UTF8Encoding]::new($false)
+          )
+          Write-Host "reverified $($records.Count) build files and artifact digest $expectedDigest"
+
       - name: Determine Authenticode signing mode
         id: certificate
         shell: pwsh
@@ -174,6 +468,7 @@ jobs:
           $files = @(
             "$root/sakura_tsf.dll",
             "$root/sakura_engine.exe",
+            "$root/sakura_ai_worker.exe",
             "$root/sakura_renderer.exe",
             "$root/sakura_regtool.exe",
             "$root/sakura_logon.exe",
@@ -186,7 +481,10 @@ jobs:
             -ExpectedSubject $env:SAKURA_SIGNING_CERT_SUBJECT `
             -Files $files
 
-      - name: Compile installer from release payload
+      # Rebuild after binary signing so the installer contains the exact
+      # signed payload. The source checkout is the commit authenticated by the
+      # build provenance gate above.
+      - name: Compile installer from signed release payload
         shell: pwsh
         run: ./scripts/build-installer.ps1
 
@@ -225,6 +523,8 @@ jobs:
           [IO.File]::Copy('installer/out/installer-build.report.json', 'release-bundle/installer-build.report.json', $true)
           [IO.Directory]::CreateDirectory('release-bundle/provenance/data') | Out-Null
           [IO.Directory]::CreateDirectory('release-bundle/provenance/THIRD_PARTY_LICENSES') | Out-Null
+          [IO.File]::Copy('build-artifact-digest.txt', 'release-bundle/provenance/build-artifact-digest.txt', $true)
+          [IO.File]::Copy('build-provenance.json', 'release-bundle/provenance/build-provenance.json', $true)
           [IO.File]::Copy('data/SOURCES.lock', 'release-bundle/provenance/data/SOURCES.lock', $true)
           [IO.File]::Copy('THIRD_PARTY_NOTICES.md', 'release-bundle/provenance/THIRD_PARTY_NOTICES.md', $true)
           [IO.File]::Copy(
@@ -233,7 +533,7 @@ jobs:
             $true
           )
           $release = 'target/x86_64-pc-windows-msvc/release'
-          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe', 'sakura_neural_worker.exe')) {
+          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_ai_worker.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe', 'sakura_neural_worker.exe')) {
             [IO.File]::Copy((Join-Path $release $name), (Join-Path 'release-bundle/payload' $name), $true)
           }
           [IO.Directory]::CreateDirectory('release-bundle/payload/neural/sakura-rerank-tiny-v1') | Out-Null
@@ -245,22 +545,34 @@ jobs:
             [IO.File]::Copy((Join-Path 'artifacts/release/neural-payload/licenses' $name), (Join-Path 'release-bundle/payload/licenses' $name), $true)
           }
 
+      # This must remain before the external artifact upload. The upload step
+      # is intentionally not allowed to run while the protected PFX exists.
+      - name: Remove signing material before external artifact upload
+        if: always()
+        shell: pwsh
+        run: |
+          $paths = @(
+            '${{ steps.certificate.outputs.path }}',
+            (Join-Path $env:RUNNER_TEMP 'sakura-input-release-signing.pfx')
+          ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+          foreach ($path in $paths) {
+            if ([IO.File]::Exists($path)) {
+              [IO.File]::Delete($path)
+            }
+          }
+          foreach ($path in $paths) {
+            if ([IO.File]::Exists($path)) {
+              throw "signing material remained after cleanup: $path"
+            }
+          }
+
       - name: Upload release candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (reviewed 2026-08-24; upstream 2025-03-19; quarantine satisfied)
         with:
           name: sakura-input-${{ env.RELEASE_VERSION }}-release-candidate
           path: release-bundle
           if-no-files-found: error
           retention-days: 30
-
-      - name: Remove signing material
-        if: always()
-        shell: pwsh
-        run: |
-          $path = '${{ steps.certificate.outputs.path }}'
-          if (-not [string]::IsNullOrWhiteSpace($path) -and [IO.File]::Exists($path)) {
-            [IO.File]::Delete($path)
-          }
 
       - name: Summarize step timings
         if: always()
@@ -268,4 +580,4 @@ jobs:
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: ./ci/write-step-timings.ps1 -JobName 'Build v1 release candidate'
+        run: ./ci/write-step-timings.ps1 -JobName 'Sign and package release candidate'

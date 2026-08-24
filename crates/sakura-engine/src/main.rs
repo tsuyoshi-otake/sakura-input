@@ -129,6 +129,14 @@ fn run(
 
     use windows::Win32::Foundation::E_FAIL;
 
+    // AppContainer TSF clients authenticate the kernel-reported server PID
+    // before sending Hello. Restricted tokens cannot use the ordinary
+    // current-user ACE on process/token objects, so expose only the two
+    // read-only identity queries they need. This must succeed before any pipe
+    // is created; otherwise sandboxed hosts would connect and then fail closed
+    // into pass-through input.
+    sakura_ipc::security::allow_sandbox_identity_queries()?;
+
     let dictionary_path = sakura_engine::dictionary::default_path()
         .map_err(|error| windows::core::Error::new(E_FAIL, format!("dictionary path: {error}")))?;
     let conversion = sakura_engine::dictionary::open(&dictionary_path)

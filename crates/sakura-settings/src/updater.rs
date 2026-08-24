@@ -8,8 +8,10 @@
 use std::ffi::c_void;
 use std::fmt;
 use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -37,6 +39,7 @@ use windows::Win32::Security::WinTrust::{
     WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT, WTD_REVOKE_WHOLECHAIN, WTD_STATEACTION_CLOSE,
     WTD_STATEACTION_VERIFY, WTD_UICONTEXT_INSTALL, WTD_UI_NONE,
 };
+use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
 use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
 use windows::Win32::UI::Shell::{
     ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
@@ -617,18 +620,47 @@ where
             ),
         );
     }
+    // Keep a read handle with write/delete sharing disabled from the point at
+    // which the downloaded bytes are re-opened until ShellExecuteExW has
+    // crossed its launch boundary. The receipt above describes the transport
+    // stream; this handle verification binds the checks to the exact file
+    // object that the path-based Authenticode and launch APIs will use.
+    let mut installer_guard = match InstallerFileGuard::open(&paths.installer) {
+        Ok(guard) => guard,
+        Err(message) => {
+            cleanup_staged(&paths.installer);
+            return failed(version, UpdateStage::InstallerPreparation, message);
+        }
+    };
+    if let Err(failure) = installer_guard.verify(manifest.size, manifest.sha256) {
+        drop(installer_guard);
+        cleanup_staged(&paths.installer);
+        return failed(version, failure.stage, failure.message);
+    }
     if let Err(message) = verifier.verify(&paths.installer) {
+        drop(installer_guard);
         cleanup_staged(&paths.installer);
         return failed(version, UpdateStage::SignatureVerification, message);
+    }
+    if let Err(message) = installer_guard.verify_path_identity() {
+        drop(installer_guard);
+        cleanup_staged(&paths.installer);
+        return failed(version, UpdateStage::InstallerLaunch, message);
     }
 
     let terminal = match runner.run(&paths.installer, &paths.log) {
         Ok(terminal) => terminal,
         Err(message) => {
+            drop(installer_guard);
             cleanup_staged(&paths.installer);
             return failed(version, UpdateStage::InstallerLaunch, message);
         }
     };
+    // `InstallerRunner::run` returns only after ShellExecuteExW has returned,
+    // and in the real runner this includes the bounded installer wait. Drop
+    // the guard only after that launch boundary so the path cannot be
+    // replaced between verification and process creation.
+    drop(installer_guard);
     match terminal {
         InstallerTerminal::Installed => {
             cleanup_staged(&paths.installer);
@@ -675,6 +707,218 @@ fn cleanup_staged(path: &Path) {
     let _ = fs::remove_file(path);
 }
 
+/// A verification/launch guard for the staged installer.
+///
+/// The handle permits other readers (including WinVerifyTrust and the process
+/// loader), but deliberately does not share write or delete access. Windows
+/// therefore cannot replace, rename, or remove the path while this guard is
+/// alive. All byte and identity checks below are made through this same handle;
+/// the guard is dropped only after the runner has returned from
+/// `ShellExecuteExW` (and its bounded wait in the real runner).
+struct InstallerFileGuard {
+    file: fs::File,
+    identity: InstallerFileIdentity,
+    path: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InstallerFileIdentity {
+    volume_serial_number: u32,
+    file_index: u64,
+}
+
+#[derive(Debug)]
+struct InstallerVerificationFailure {
+    stage: UpdateStage,
+    message: String,
+}
+
+// FILE_SHARE_READ lets signature verification and the image loader read the
+// file while withholding FILE_SHARE_WRITE and FILE_SHARE_DELETE.
+const INSTALLER_SHARE_READ_ONLY: u32 = 0x0000_0001;
+
+impl InstallerFileGuard {
+    fn open(path: &Path) -> Result<Self, String> {
+        let file = OpenOptions::new()
+            .read(true)
+            .share_mode(INSTALLER_SHARE_READ_ONLY)
+            .open(path)
+            .map_err(|error| {
+                format!("could not open staged installer for verification: {error}")
+            })?;
+        let identity = installer_file_identity(&file)?;
+        Ok(Self {
+            file,
+            identity,
+            path: path.to_owned(),
+        })
+    }
+
+    fn verify(
+        &mut self,
+        expected_size: u64,
+        expected_sha256: [u8; 32],
+    ) -> Result<(), InstallerVerificationFailure> {
+        self.verify_identity()
+            .map_err(|message| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerPreparation,
+                message,
+            })?;
+        self.verify_path_identity()
+            .map_err(|message| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerPreparation,
+                message,
+            })?;
+
+        let actual_size = self
+            .file
+            .metadata()
+            .map_err(|error| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerSize,
+                message: format!("could not read staged installer metadata: {error}"),
+            })?
+            .len();
+        if actual_size != expected_size {
+            return Err(InstallerVerificationFailure {
+                stage: UpdateStage::InstallerSize,
+                message: format!(
+                    "expected {expected_size} bytes in the verified handle, found {actual_size}"
+                ),
+            });
+        }
+
+        self.file
+            .seek(SeekFrom::Start(0))
+            .map_err(|error| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerHash,
+                message: format!("could not seek staged installer for hashing: {error}"),
+            })?;
+        let mut hasher = Sha256::new().map_err(|message| InstallerVerificationFailure {
+            stage: UpdateStage::InstallerHash,
+            message,
+        })?;
+        let mut total = 0u64;
+        let mut buffer = [0u8; HTTP_BUFFER_BYTES];
+        loop {
+            let read =
+                self.file
+                    .read(&mut buffer)
+                    .map_err(|error| InstallerVerificationFailure {
+                        stage: UpdateStage::InstallerHash,
+                        message: format!("could not read staged installer for hashing: {error}"),
+                    })?;
+            if read == 0 {
+                break;
+            }
+            total = total
+                .checked_add(read as u64)
+                .ok_or_else(|| InstallerVerificationFailure {
+                    stage: UpdateStage::InstallerSize,
+                    message: "staged installer byte count overflowed".to_owned(),
+                })?;
+            if total > expected_size {
+                return Err(InstallerVerificationFailure {
+                    stage: UpdateStage::InstallerSize,
+                    message: format!(
+                        "staged installer grew beyond the expected {expected_size} bytes"
+                    ),
+                });
+            }
+            hasher
+                .update(&buffer[..read])
+                .map_err(|message| InstallerVerificationFailure {
+                    stage: UpdateStage::InstallerHash,
+                    message,
+                })?;
+        }
+        if total != expected_size {
+            return Err(InstallerVerificationFailure {
+                stage: UpdateStage::InstallerSize,
+                message: format!(
+                    "expected {expected_size} bytes from the verified handle, read {total}"
+                ),
+            });
+        }
+        let actual_sha256 = hasher
+            .finish()
+            .map_err(|message| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerHash,
+                message,
+            })?;
+        if actual_sha256 != expected_sha256 {
+            return Err(InstallerVerificationFailure {
+                stage: UpdateStage::InstallerHash,
+                message: format!(
+                    "expected {}, read {} from the verified handle",
+                    encode_hex(&expected_sha256),
+                    encode_hex(&actual_sha256)
+                ),
+            });
+        }
+        self.verify_identity()
+            .map_err(|message| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerHash,
+                message,
+            })?;
+        self.verify_path_identity()
+            .map_err(|message| InstallerVerificationFailure {
+                stage: UpdateStage::InstallerHash,
+                message,
+            })?;
+        Ok(())
+    }
+
+    fn verify_identity(&self) -> Result<(), String> {
+        let current = installer_file_identity(&self.file)?;
+        if current != self.identity {
+            return Err(format!(
+                "staged installer file identity changed from volume {}/index {} to volume {} / index {}",
+                self.identity.volume_serial_number,
+                self.identity.file_index,
+                current.volume_serial_number,
+                current.file_index
+            ));
+        }
+        Ok(())
+    }
+
+    fn verify_path_identity(&self) -> Result<(), String> {
+        let path_file = OpenOptions::new()
+            .read(true)
+            .share_mode(INSTALLER_SHARE_READ_ONLY)
+            .open(&self.path)
+            .map_err(|error| {
+                format!("could not reopen staged installer to verify its path identity: {error}")
+            })?;
+        let path_identity = installer_file_identity(&path_file)?;
+        if path_identity != self.identity {
+            return Err(format!(
+                "staged installer path resolves to volume {} / index {}, expected volume {} / index {}",
+                path_identity.volume_serial_number,
+                path_identity.file_index,
+                self.identity.volume_serial_number,
+                self.identity.file_index
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn installer_file_identity(file: &fs::File) -> Result<InstallerFileIdentity, String> {
+    let handle = HANDLE(file.as_raw_handle());
+    let mut information = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: `handle` is a live file handle borrowed from `file`, and
+    // `information` is a valid writable output structure for the synchronous
+    // Win32 call.
+    unsafe { GetFileInformationByHandle(handle, &mut information) }
+        .map_err(|error| format!("could not read staged installer file identity: {error}"))?;
+    Ok(InstallerFileIdentity {
+        volume_serial_number: information.dwVolumeSerialNumber,
+        file_index: (u64::from(information.nFileIndexHigh) << 32)
+            | u64::from(information.nFileIndexLow),
+    })
+}
+
 pub fn check_real(enabled: bool) -> UpdateCheckOutcome {
     check_for_update(enabled, current_version(), &mut WinHttpTransport)
 }
@@ -717,6 +961,10 @@ impl UpdateTransport for WinHttpTransport {
         let mut file = OpenOptions::new()
             .create_new(true)
             .write(true)
+            // Do not let another process acquire a writable or delete-capable
+            // handle while the download is being staged. The verification
+            // guard applies the same boundary after this handle is closed.
+            .share_mode(INSTALLER_SHARE_READ_ONLY)
             .open(path)
             .map_err(|error| format!("could not create staged installer: {error}"))?;
         let mut hasher = Sha256::new()?;
@@ -1366,16 +1614,26 @@ fn wide_os(value: &std::ffi::OsStr) -> Vec<u16> {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+    use windows::Win32::Foundation::ERROR_SHARING_VIOLATION;
+    use windows::Win32::Storage::FileSystem::{ReplaceFileW, REPLACE_FILE_FLAGS};
 
     static NEXT_PATH: AtomicU64 = AtomicU64::new(1);
-    const DIGEST: [u8; 32] = [0x5a; 32];
+    // SHA-256("fake installer"), the bounded payload written by
+    // `FakeTransport`. Keeping the fake payload self-consistent exercises the
+    // same handle-backed size/hash checks as the real download path.
+    const FAKE_INSTALLER: &[u8] = b"fake installer";
+    const DIGEST: [u8; 32] = [
+        0x94, 0x1e, 0xf2, 0xfd, 0x24, 0x9e, 0x8e, 0x35, 0x35, 0x90, 0x8e, 0x36, 0x63, 0x51, 0x5a,
+        0x85, 0xa2, 0x91, 0xc5, 0x38, 0x01, 0x6f, 0x75, 0xbe, 0x86, 0x03, 0x2d, 0xa4, 0x73, 0x02,
+        0x9b, 0x3e,
+    ];
 
     fn manifest(version: Version) -> ReleaseManifest {
         ReleaseManifest {
             version,
             installer_url: installer_url_for(version),
             sha256: DIGEST,
-            size: 123,
+            size: FAKE_INSTALLER.len() as u64,
         }
     }
 
@@ -1393,6 +1651,7 @@ mod tests {
     struct FakeTransport {
         manifest: Result<Vec<u8>, String>,
         receipt: Result<DownloadReceipt, String>,
+        payload: Vec<u8>,
         manifest_calls: usize,
         download_calls: usize,
     }
@@ -1405,6 +1664,7 @@ mod tests {
                     size: release.size,
                     sha256: release.sha256,
                 }),
+                payload: FAKE_INSTALLER.to_vec(),
                 manifest_calls: 0,
                 download_calls: 0,
             }
@@ -1427,7 +1687,7 @@ mod tests {
         ) -> Result<DownloadReceipt, String> {
             assert_eq!(limit, MAX_INSTALLER_BYTES);
             self.download_calls += 1;
-            fs::write(path, b"fake installer").map_err(|error| error.to_string())?;
+            fs::write(path, &self.payload).map_err(|error| error.to_string())?;
             self.receipt.clone()
         }
     }
@@ -1455,6 +1715,46 @@ mod tests {
         fn run(&mut self, _installer: &Path, _log: &Path) -> Result<InstallerTerminal, String> {
             self.calls += 1;
             self.result.clone()
+        }
+    }
+
+    #[derive(Debug)]
+    struct GuardProbeRunner {
+        result: InstallerTerminal,
+        write_rejected: bool,
+        rename_rejected: bool,
+        rename_error_code: Option<i32>,
+        delete_rejected: bool,
+    }
+
+    impl InstallerRunner for GuardProbeRunner {
+        fn run(&mut self, installer: &Path, _log: &Path) -> Result<InstallerTerminal, String> {
+            let mut write_options = OpenOptions::new();
+            write_options.write(true);
+            self.write_rejected = write_options.open(installer).is_err();
+
+            let replacement = installer.with_file_name("replacement.exe");
+            fs::write(&replacement, b"replacement")
+                .map_err(|error| format!("could not stage replacement test file: {error}"))?;
+            let replacement_wide = wide_os(replacement.as_os_str());
+            let installer_wide = wide_os(installer.as_os_str());
+            // SAFETY: both paths are live NUL-terminated UTF-16 buffers for
+            // the duration of the call; the test owns both files.
+            let replace_result = unsafe {
+                ReplaceFileW(
+                    PCWSTR(installer_wide.as_ptr()),
+                    PCWSTR(replacement_wide.as_ptr()),
+                    PCWSTR::null(),
+                    REPLACE_FILE_FLAGS(0),
+                    None,
+                    None,
+                )
+            };
+            self.rename_rejected = replace_result.is_err();
+            self.rename_error_code = replace_result.err().map(|error| error.code().0);
+            self.delete_rejected = fs::remove_file(installer).is_err();
+            let _ = fs::remove_file(replacement);
+            Ok(self.result)
         }
     }
 
@@ -1525,9 +1825,11 @@ mod tests {
         assert!(ReleaseManifest::parse(wrong_url.as_bytes()).is_err());
         let duplicate = format!("{}schema=1\n", release.canonical_text());
         assert!(ReleaseManifest::parse(duplicate.as_bytes()).is_err());
-        let uppercase = release.canonical_text().replace("5a5a", "5A5A");
+        let uppercase = release.canonical_text().replace("941e", "941E");
         assert!(ReleaseManifest::parse(uppercase.as_bytes()).is_err());
-        let unknown = release.canonical_text().replace("size=123", "bytes=123");
+        let unknown = release
+            .canonical_text()
+            .replace(&format!("size={}", FAKE_INSTALLER.len()), "bytes=123");
         assert!(ReleaseManifest::parse(unknown.as_bytes()).is_err());
     }
 
@@ -1674,6 +1976,130 @@ mod tests {
             }
             let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
         }
+    }
+
+    #[test]
+    fn installer_guard_blocks_write_rename_and_delete_until_runner_returns() {
+        let release = manifest(Version {
+            major: 2,
+            minor: 0,
+            patch: 0,
+        });
+        let paths = temp_paths("share-guard");
+        let mut transport = FakeTransport::success(&release);
+        let mut verifier = FakeVerifier {
+            result: Ok(()),
+            calls: 0,
+        };
+        let mut runner = GuardProbeRunner {
+            result: InstallerTerminal::Installed,
+            write_rejected: false,
+            rename_rejected: false,
+            rename_error_code: None,
+            delete_rejected: false,
+        };
+
+        let outcome = apply_update(
+            true,
+            Version {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+            &paths,
+            &mut transport,
+            &mut verifier,
+            &mut runner,
+        );
+
+        assert!(matches!(outcome, UpdateOutcome::Installed { .. }));
+        assert!(runner.write_rejected, "guard must deny a writer handle");
+        assert!(runner.rename_rejected, "guard must deny replacement/rename");
+        assert_eq!(
+            runner.rename_error_code,
+            Some(windows::core::HRESULT::from_win32(ERROR_SHARING_VIOLATION.0).0),
+            "replacement must fail at the file-sharing boundary"
+        );
+        assert!(runner.delete_rejected, "guard must deny delete");
+        assert!(
+            !paths.installer.exists(),
+            "cleanup runs after guard release"
+        );
+
+        // The equivalent replacement succeeds after the guard is released;
+        // this distinguishes the protection from MoveFileExW's normal
+        // replace-existing behavior.
+        let control_replacement = paths.installer.with_file_name("control.exe");
+        fs::write(&paths.installer, b"original").unwrap();
+        fs::write(&control_replacement, b"replacement").unwrap();
+        let control_replacement_wide = wide_os(control_replacement.as_os_str());
+        let installer_wide = wide_os(paths.installer.as_os_str());
+        // SAFETY: both paths are live NUL-terminated UTF-16 buffers and the
+        // test owns the two files being atomically replaced.
+        unsafe {
+            ReplaceFileW(
+                PCWSTR(installer_wide.as_ptr()),
+                PCWSTR(control_replacement_wide.as_ptr()),
+                PCWSTR::null(),
+                REPLACE_FILE_FLAGS(0),
+                None,
+                None,
+            )
+            .expect("replacement succeeds once the guard is released");
+        }
+        assert_eq!(fs::read(&paths.installer).unwrap(), b"replacement");
+        let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
+    }
+
+    #[test]
+    fn handle_backed_hash_failure_stops_verifier_and_runner() {
+        let release = manifest(Version {
+            major: 2,
+            minor: 0,
+            patch: 0,
+        });
+        let paths = temp_paths("handle-hash-failure");
+        let mut transport = FakeTransport::success(&release);
+        // Keep the transport receipt honest to the manifest while changing
+        // the bytes written at the staged path. This exercises the check that
+        // cannot be satisfied by receipt metadata alone.
+        transport.payload = b"fake installER".to_vec();
+        let mut verifier = FakeVerifier {
+            result: Ok(()),
+            calls: 0,
+        };
+        let mut runner = FakeRunner {
+            result: Ok(InstallerTerminal::Installed),
+            calls: 0,
+        };
+
+        let outcome = apply_update(
+            true,
+            Version {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+            &paths,
+            &mut transport,
+            &mut verifier,
+            &mut runner,
+        );
+
+        assert!(matches!(
+            outcome,
+            UpdateOutcome::Failed {
+                failure: UpdateFailure {
+                    stage: UpdateStage::InstallerHash,
+                    ..
+                },
+                ..
+            }
+        ));
+        assert_eq!(verifier.calls, 0);
+        assert_eq!(runner.calls, 0);
+        assert!(!paths.installer.exists());
+        let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
     }
 
     #[test]

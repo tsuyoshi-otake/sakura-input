@@ -114,7 +114,7 @@ use windows::Win32::System::Threading::{
 };
 
 use common::{session_for, test_char_key, visible, Engine, PATIENT};
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint, ServerTrustPolicy};
 use sakura_proto::{Request, Response, PROTOCOL_VERSION};
 
 /// Namespaced so it cannot collide with anything a developer's own machine
@@ -140,6 +140,16 @@ const PARENT_PIPE_NAME_ENV: &str = "SAKURA_APPCONTAINER_PARENT_PIPE_NAME";
 /// well-known-pipe engine. The sandboxed child must bind its exact pipe handle
 /// to this PID before it sends any protocol request.
 const PARENT_ENGINE_PID_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PID";
+
+/// The exact image path of the engine child owned by the parent test. The
+/// sandboxed probe uses this policy before Hello, exercising the same kernel
+/// path/integrity binding as the production TSF client.
+const PARENT_ENGINE_PATH_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PATH";
+
+/// Whether the child should independently derive the production Data name.
+/// Private-pipe verification uses the explicit name while retaining the same
+/// production Data descriptor and verified server-process checks.
+const PARENT_PRODUCTION_PIPE_ENV: &str = "SAKURA_APPCONTAINER_PRODUCTION_PIPE";
 
 /// The exact libtest name of the child-side probe. Passed to `--exact` so
 /// the re-executed copy runs only that test. Kept next to the function it
@@ -174,7 +184,23 @@ fn the_pipe_is_reachable_from_a_real_appcontainer_token() {
     // a pipe that has not been created yet.
     let _ready = engine.client();
 
-    let mut child = SandboxedChild::launch(engine.child_pid());
+    run_sandboxed_probe(&mut engine, true);
+}
+
+/// Exercises the same AppContainer token against an explicitly owned private
+/// Data pipe. This is safe to run while an installed engine owns the
+/// well-known name and is the preferred evidence for verified process queries
+/// in local/CI environments.
+#[test]
+#[ignore = "creates an AppContainer profile and spawns a sandboxed child against an owned private pipe; run alone with --exact and --ignored"]
+fn verified_private_pipe_is_reachable_from_a_real_appcontainer_token() {
+    let mut engine = Engine::spawn_isolated();
+    let _ready = engine.client();
+    run_sandboxed_probe(&mut engine, false);
+}
+
+fn run_sandboxed_probe(engine: &mut Engine, production_pipe: bool) {
+    let mut child = SandboxedChild::launch(engine.child_pid(), engine.pipe_name(), production_pipe);
     let outcome = child.wait(CHILD_TIMEOUT);
 
     let stdout = read_log(&child.stdout_path);
@@ -262,7 +288,7 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     // reported as the latter.
     let parent_pipe_name = env::var(PARENT_PIPE_NAME_ENV)
         .expect("SandboxedChild::launch always sets this alongside the marker");
-    let child_pipe_name = match sakura_ipc::pipe_name() {
+    let resolved_production_name = match sakura_ipc::pipe_name() {
         Ok(name) => name,
         Err(fault) => panic!(
             "this AppContainer token could not even compute a pipe name \
@@ -274,27 +300,42 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
              naming-scheme finding, not a DACL one."
         ),
     };
-    println!("parent resolved pipe name: {parent_pipe_name}");
-    println!("child  resolved pipe name: {child_pipe_name}");
-    assert_eq!(
-        child_pipe_name, parent_pipe_name,
-        "the AppContainer child computed a DIFFERENT pipe name than the \
-         parent did. This is a naming-scheme finding, not a security- \
-         descriptor one: sakura_ipc::pipe_name() (security.rs) derives the \
-         name from the token's logon-session SID, falling back to the user \
-         SID, and that derivation is not producing the same answer under \
-         an AppContainer token as it does under the parent's own token. A \
-         connect failure downstream of this mismatch would surface as \
-         ERROR_FILE_NOT_FOUND, not ERROR_ACCESS_DENIED, and must not be \
-         reported as a DACL/mandatory-label bug."
-    );
+    let production_pipe = env::var(PARENT_PRODUCTION_PIPE_ENV).as_deref() == Ok("1");
+    println!("parent selected pipe name: {parent_pipe_name}");
+    println!("child production pipe name: {resolved_production_name}");
+    if production_pipe {
+        assert_eq!(
+            resolved_production_name, parent_pipe_name,
+            "the AppContainer child computed a DIFFERENT pipe name than the \
+             parent did. This is a naming-scheme finding, not a security- \
+             descriptor one: sakura_ipc::pipe_name() (security.rs) derives the \
+             name from the token's logon-session SID, falling back to the user \
+             SID, and that derivation is not producing the same answer under \
+             an AppContainer token as it does under the parent's own token. A \
+             connect failure downstream of this mismatch would surface as \
+             ERROR_FILE_NOT_FOUND, not ERROR_ACCESS_DENIED, and must not be \
+             reported as a DACL/mandatory-label bug."
+        );
+    }
 
     let expected_server_pid = child_contract_engine_pid();
+    let expected_server_path = env::var(PARENT_ENGINE_PATH_ENV)
+        .expect("SandboxedChild::launch always sets the engine image path");
+    let policy = ServerTrustPolicy::Exact(expected_server_path.into());
+    println!(
+        "sandbox classification of engine pid {expected_server_pid}: {:?}",
+        sakura_ipc::classify_client_process(expected_server_pid)
+    );
 
-    let mut client = match Client::connect(PATIENT) {
+    let connected = if production_pipe {
+        Client::connect_endpoint_verified(Endpoint::Data, &policy, PATIENT)
+    } else {
+        Client::connect_verified_to(&parent_pipe_name, &policy, PATIENT)
+    };
+    let mut client = match connected {
         Ok(client) => client,
         Err(sakura_ipc::Fault::Os(error)) if is_win32(&error, ERROR_ACCESS_DENIED) => panic!(
-            "connect to {child_pipe_name:?} failed with ERROR_ACCESS_DENIED \
+            "connect to {parent_pipe_name:?} failed with ERROR_ACCESS_DENIED \
              (5): this is the real finding this file exists to catch. The \
              pipe's DACL or its low-integrity mandatory-label SACL \
              (security.rs's `sddl`) is not actually granting this \
@@ -303,15 +344,20 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
              what the server grants. Raw error: {error:?}"
         ),
         Err(sakura_ipc::Fault::Os(error)) if is_win32(&error, ERROR_FILE_NOT_FOUND) => panic!(
-            "connect to {child_pipe_name:?} failed with \
+            "connect to {parent_pipe_name:?} failed with \
              ERROR_FILE_NOT_FOUND (2): despite the parent/child pipe names \
              matching above, no pipe by that name exists right now. This \
              is NOT a security-descriptor problem — check that the engine \
              `the_pipe_is_reachable_from_a_real_appcontainer_token` \
              started is still alive. Raw error: {error:?}"
         ),
+        Err(sakura_ipc::Fault::UntrustedServer { process_id }) => panic!(
+            "verified connect rejected the parent-owned engine process {process_id}; \
+             the AppContainer could open the data pipe but failed the exact path/token \
+             policy before Hello"
+        ),
         Err(other) => panic!(
-            "connect to {child_pipe_name:?} failed with an unexpected \
+            "connect to {parent_pipe_name:?} failed with an unexpected \
              fault (neither ACCESS_DENIED nor FILE_NOT_FOUND): {other:?}"
         ),
     };
@@ -463,7 +509,11 @@ impl SandboxedChild {
     /// copy with `--exact PROBE_TEST_NAME --ignored --nocapture
     /// --test-threads=1` so it runs only
     /// [`the_probe_confirms_it_is_sandboxed_then_uses_the_pipe`].
-    fn launch(owned_engine_pid: u32) -> SandboxedChild {
+    fn launch(
+        owned_engine_pid: u32,
+        parent_pipe_name: &str,
+        production_pipe: bool,
+    ) -> SandboxedChild {
         let profile_wide = to_wide_nul(APPCONTAINER_PROFILE_NAME);
         let display_wide = to_wide_nul("Sakura Input test AppContainer");
         let desc_wide = to_wide_nul(
@@ -522,9 +572,6 @@ impl SandboxedChild {
         let stdout_handle = inheritable_log_handle(&stdout_path);
         let stderr_handle = inheritable_log_handle(&stderr_path);
 
-        let parent_pipe_name = sakura_ipc::pipe_name()
-            .expect("this process can resolve its own logon-session pipe name");
-
         let mut security_capabilities = SECURITY_CAPABILITIES {
             AppContainerSid: sid,
             Capabilities: core::ptr::null_mut(),
@@ -539,8 +586,16 @@ impl SandboxedChild {
         };
 
         let mut environment_block = build_environment_block(&[
-            (PARENT_PIPE_NAME_ENV, parent_pipe_name),
+            (PARENT_PIPE_NAME_ENV, parent_pipe_name.to_owned()),
             (PARENT_ENGINE_PID_ENV, owned_engine_pid.to_string()),
+            (
+                PARENT_ENGINE_PATH_ENV,
+                env!("CARGO_BIN_EXE_sakura_engine").to_owned(),
+            ),
+            (
+                PARENT_PRODUCTION_PIPE_ENV,
+                if production_pipe { "1" } else { "0" }.to_owned(),
+            ),
         ]);
 
         let command_line = format!(
