@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.22
+        default: v1.0.23
 
 permissions:
   contents: read
@@ -106,6 +106,9 @@ jobs:
         run: |
           $env:SAKURA_PHASE2_DICTIONARY = Join-Path $env:GITHUB_WORKSPACE 'artifacts/release/system.dic'
           cargo test -p dictc --test conversion real_dictionary_balances_non_initial_fragments_and_productive_bound_forms -- --ignored --nocapture
+
+      - name: Gate general Japanese surface coverage
+        run: cargo test -p sakura-engine --test shipped_dictionary_ranking general_quality_floor_keeps_tate_vertical_in_the_candidate_page -- --ignored --exact --nocapture
 
       - name: Gate learned homophones against cross-commit context
         run: cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture

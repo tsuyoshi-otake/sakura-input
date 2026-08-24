@@ -172,15 +172,47 @@ pub fn parse_mozc_pos_catalog(source: &str, text: &str) -> Result<MozcPosCatalog
 ///
 /// The allomorph rule is intentionally POS-aware: a voiced suffix is marked
 /// only when the same surface has an unvoiced reading with a retained
-/// independent base entry. Suffix, prefix, and non-independent siblings are not
-/// enough evidence because users may enter productive bound forms in a separate
-/// composition (for example, 「運用」 followed by 「び」 for 「運用日」), and
-/// Mozc's connection classes alone do not express that input boundary.
+/// independent base entry and the voiced reading itself has no independent
+/// entry. Suffix, prefix, and non-independent siblings are not enough evidence
+/// because users may enter productive bound forms in a separate composition
+/// (for example, 「運用」 followed by 「び」 for 「運用日」), and Mozc's
+/// connection classes alone do not express that input boundary.
 /// This avoids a word list and does not reinterpret ordinary standalone nouns
 /// that merely begin with a voiced kana.
 pub fn mark_non_initial_allomorphs(
     entries: &mut [SourceEntry],
     pos_catalog: &MozcPosCatalog,
+) -> usize {
+    mark_non_initial_allomorphs_by(entries, pos_catalog, |_| true)
+}
+
+/// Applies the allomorph policy using only rows that survived the former
+/// row-based cap as lexical evidence. Candidate rows still come from the full
+/// surface-preserving trim, but newly rescued POS siblings cannot turn an
+/// existing independently usable reading into a compound-only fragment.
+pub fn mark_non_initial_allomorphs_with_legacy_evidence(
+    entries: &mut [SourceEntry],
+    legacy_evidence: &[bool],
+    pos_catalog: &MozcPosCatalog,
+) -> Result<usize, String> {
+    if entries.len() != legacy_evidence.len() {
+        return Err(format!(
+            "legacy evidence length {} does not match entry length {}",
+            legacy_evidence.len(),
+            entries.len()
+        ));
+    }
+    Ok(mark_non_initial_allomorphs_by(
+        entries,
+        pos_catalog,
+        |index| legacy_evidence[index],
+    ))
+}
+
+fn mark_non_initial_allomorphs_by(
+    entries: &mut [SourceEntry],
+    pos_catalog: &MozcPosCatalog,
+    is_legacy_evidence: impl Fn(usize) -> bool,
 ) -> usize {
     let identities = entries
         .iter()
@@ -193,14 +225,17 @@ pub fn mark_non_initial_allomorphs(
             )
         })
         .collect::<BTreeSet<_>>();
-    let independent_base_surface_readings = entries
+    let standalone_surface_readings = entries
         .iter()
-        .filter(|entry| {
-            pos_catalog
-                .labels_for(entry.left_id)
-                .is_some_and(is_independent_base_pos)
+        .enumerate()
+        .filter(|(index, entry)| {
+            is_legacy_evidence(*index)
+                && pos_catalog.labels_for(entry.left_id).is_some_and(|labels| {
+                    is_independent_base_pos(labels)
+                        && !is_voiced_continuative_allomorph(entry, labels, &identities)
+                })
         })
-        .map(|entry| (entry.surface.clone(), entry.reading.clone()))
+        .map(|(_, entry)| (entry.surface.clone(), entry.reading.clone()))
         .collect::<BTreeSet<_>>();
     let mut marked = 0usize;
     for entry in entries {
@@ -208,18 +243,12 @@ pub fn mark_non_initial_allomorphs(
             continue;
         };
         let voiced_suffix = has_label(labels, "接尾")
+            && !standalone_surface_readings
+                .contains(&(entry.surface.clone(), entry.reading.clone()))
             && unvoiced_initial_readings(&entry.reading).any(|reading| {
-                independent_base_surface_readings.contains(&(entry.surface.clone(), reading))
+                standalone_surface_readings.contains(&(entry.surface.clone(), reading))
             });
-        let voiced_continuative = has_label(labels, "連用形")
-            && unvoiced_initial_readings(&entry.reading).any(|reading| {
-                identities.contains(&(
-                    entry.surface.clone(),
-                    entry.left_id,
-                    entry.right_id,
-                    reading,
-                ))
-            });
+        let voiced_continuative = is_voiced_continuative_allomorph(entry, labels, &identities);
         if (voiced_suffix || voiced_continuative) && !entry.flags.contains(EntryFlags::NON_INITIAL)
         {
             entry.flags = entry.flags | EntryFlags::NON_INITIAL;
@@ -227,6 +256,22 @@ pub fn mark_non_initial_allomorphs(
         }
     }
     marked
+}
+
+fn is_voiced_continuative_allomorph(
+    entry: &SourceEntry,
+    labels: &[String],
+    identities: &BTreeSet<(String, u16, u16, String)>,
+) -> bool {
+    has_label(labels, "連用形")
+        && unvoiced_initial_readings(&entry.reading).any(|reading| {
+            identities.contains(&(
+                entry.surface.clone(),
+                entry.left_id,
+                entry.right_id,
+                reading,
+            ))
+        })
 }
 
 fn is_independent_base_pos(labels: &[String]) -> bool {
@@ -543,7 +588,8 @@ mod tests {
 
     use super::{
         classify_existing_entry, is_address_layer_entry, mark_non_initial_allomorphs,
-        parse_mozc_pos_catalog, DictionaryCategory,
+        mark_non_initial_allomorphs_with_legacy_evidence, parse_mozc_pos_catalog,
+        DictionaryCategory,
     };
     use crate::{entries_to_category_tsv, parse_category_entries, parse_entries};
 
@@ -625,10 +671,12 @@ mod tests {
         )
         .expect("fixture POS catalog parses");
         let mut entries = vec![
-            // Both readings use the generic suffix POS, so 版 remains an
-            // independently usable lexical homograph.
+            // An independent entry for the voiced reading proves that the
+            // surface is usable at BOS even though suffix identities coexist.
             lexical_entry("ばん", "版", 1949),
+            lexical_entry("ばん", "版", 1851),
             lexical_entry("はん", "版", 1949),
+            lexical_entry("はん", "版", 1851),
             // The unvoiced readings have independent base identities, so the
             // voiced suffix allomorphs remain compound-only.
             lexical_entry("ずかい", "使い", 1949),
@@ -656,6 +704,7 @@ mod tests {
         assert!(entries.iter().any(|entry| {
             entry.reading == "ばん"
                 && entry.surface == "版"
+                && entry.left_id == 1949
                 && !entry.flags.contains(EntryFlags::NON_INITIAL)
         }));
         assert!(entries.iter().any(|entry| {
@@ -686,6 +735,36 @@ mod tests {
                     && !entry.flags.contains(EntryFlags::NON_INITIAL)
             }));
         }
+    }
+
+    #[test]
+    fn surface_rescued_pos_rows_do_not_reclassify_existing_bound_forms() {
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "1851 名詞,一般,*,*,*,*,*\n1949 名詞,接尾,一般,*,*,*,*\n2116 名詞,非自立,一般,*,*,*,日\n",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            lexical_entry("び", "日", 1949),
+            lexical_entry("ひ", "日", 2116),
+            lexical_entry("ひ", "日", 1851),
+        ];
+
+        let marked = mark_non_initial_allomorphs_with_legacy_evidence(
+            &mut entries,
+            &[true, true, false],
+            &catalog,
+        )
+        .expect("aligned evidence");
+
+        assert_eq!(marked, 0);
+        assert!(entries
+            .iter()
+            .all(|entry| !entry.flags.contains(EntryFlags::NON_INITIAL)));
+        assert!(
+            mark_non_initial_allomorphs_with_legacy_evidence(&mut entries, &[true], &catalog,)
+                .is_err()
+        );
     }
 
     #[test]

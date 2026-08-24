@@ -286,6 +286,16 @@ fn candidates_for(reading: &str) -> Vec<String> {
         .unwrap_or_else(|error| panic!("{reading}: {error}"))
 }
 
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn general_quality_floor_keeps_tate_vertical_in_the_candidate_page() {
+    let candidates = candidates_for("たて");
+    assert!(
+        candidates.iter().any(|candidate| candidate == "縦"),
+        "たて: 縦 is missing from the shipped candidate page: {candidates:?}"
+    );
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(
