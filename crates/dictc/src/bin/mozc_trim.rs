@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dictc::{
-    category::{mark_non_initial_allomorphs, parse_mozc_pos_catalog},
+    category::{mark_non_initial_allomorphs_with_legacy_evidence, parse_mozc_pos_catalog},
     entries_to_tsv, parse_mozc_entries, MozcTrimmer, TrimPolicy, TrimReport, MOZC_UPSTREAM_COMMIT,
 };
 
@@ -46,21 +46,28 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         let shard = parse_mozc_entries(&source, &text).map_err(|error| error.to_string())?;
         trimmer.push_shard(shard);
     }
-    let (mut entries, mut trim_report) = trimmer.finish();
+    let (mut entries, legacy_evidence, mut trim_report) = trimmer.finish_with_legacy_evidence();
     let pos_source = config.pos_catalog.display().to_string();
     let pos_catalog = parse_mozc_pos_catalog(&pos_source, &read_utf8(&config.pos_catalog)?)?;
-    trim_report.non_initial_entries = mark_non_initial_allomorphs(&mut entries, &pos_catalog);
+    trim_report.non_initial_entries = mark_non_initial_allomorphs_with_legacy_evidence(
+        &mut entries,
+        &legacy_evidence,
+        &pos_catalog,
+    )?;
     let tsv = entries_to_tsv(&entries, OUTPUT_LICENSE).map_err(|error| error.to_string())?;
     let report = report_json(&config, trim_report)?;
     replacing_write(&config.output, tsv.as_bytes())?;
     replacing_write(&config.report, report.as_bytes())?;
     println!(
-        "trimmed {} input rows to {} entries ({} cost-filtered, {} deduplicated, {} capped) in {:.2}s",
+        "trimmed {} input rows to {} entries ({} cost-filtered, {} deduplicated, {} rows / {} surfaces capped, {} rows / {} surfaces rescued from the legacy row cap) in {:.2}s",
         trim_report.input_entries,
         trim_report.output_entries,
         trim_report.input_entries.saturating_sub(trim_report.cost_eligible),
         trim_report.duplicate_entries,
         trim_report.capped_entries,
+        trim_report.capped_surfaces,
+        trim_report.surface_cap_rescued_entries,
+        trim_report.surface_cap_rescued_surfaces,
         started.elapsed().as_secs_f64()
     );
     Ok(())
@@ -118,7 +125,7 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
     let mut output = String::new();
     writeln!(
         &mut output,
-        "{{\n  \"schema_version\": 1,\n  \"mozc_repository\": {},\n  \"mozc_revision\": {},\n  \"output_license\": {},",
+        "{{\n  \"schema_version\": 2,\n  \"mozc_repository\": {},\n  \"mozc_revision\": {},\n  \"output_license\": {},",
         json_string(MOZC_REPOSITORY),
         json_string(MOZC_UPSTREAM_COMMIT),
         json_string(OUTPUT_LICENSE)
@@ -126,14 +133,18 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
     .map_err(|error| error.to_string())?;
     writeln!(
         &mut output,
-        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_candidates_per_reading\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"capped_entries\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
+        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_candidates_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
         config.shards.len(),
         config.policy.max_word_cost,
         config.policy.max_candidates_per_reading,
         report.input_entries,
         report.cost_eligible,
         report.duplicate_entries,
+        report.legacy_row_capped_entries,
         report.capped_entries,
+        report.capped_surfaces,
+        report.surface_cap_rescued_entries,
+        report.surface_cap_rescued_surfaces,
         report.non_initial_entries,
         report.output_entries
     )

@@ -129,7 +129,11 @@ pub struct TrimReport {
     pub input_entries: usize,
     pub cost_eligible: usize,
     pub duplicate_entries: usize,
+    pub legacy_row_capped_entries: usize,
     pub capped_entries: usize,
+    pub capped_surfaces: usize,
+    pub surface_cap_rescued_entries: usize,
+    pub surface_cap_rescued_surfaces: usize,
     pub non_initial_entries: usize,
     pub output_entries: usize,
 }
@@ -173,7 +177,16 @@ impl MozcTrimmer {
         }
     }
 
-    pub fn finish(mut self) -> (Vec<SourceEntry>, TrimReport) {
+    pub fn finish(self) -> (Vec<SourceEntry>, TrimReport) {
+        let (entries, _, report) = self.finish_with_legacy_evidence();
+        (entries, report)
+    }
+
+    /// Finalizes the trim while preserving which selected entries belonged to
+    /// the former row-based cap. Downstream classification uses this bounded
+    /// evidence set so newly rescued POS rows cannot retroactively change the
+    /// lexical meaning of rows that were already shipped.
+    pub fn finish_with_legacy_evidence(mut self) -> (Vec<SourceEntry>, Vec<bool>, TrimReport) {
         self.eligible.sort_by(|a, b| {
             (
                 &a.reading,
@@ -228,23 +241,55 @@ impl MozcTrimmer {
         });
 
         let mut selected: Vec<SourceEntry> = Vec::with_capacity(deduplicated.len());
-        let mut candidates_for_reading = 0usize;
+        let mut legacy_evidence = Vec::with_capacity(deduplicated.len());
+        let mut current_reading = String::new();
+        let mut legacy_rows_for_reading = 0usize;
+        let mut selected_surfaces = BTreeSet::new();
+        let mut capped_surfaces = BTreeSet::new();
         for entry in deduplicated {
-            if selected
-                .last()
-                .is_none_or(|previous| previous.reading != entry.reading)
-            {
-                candidates_for_reading = 0;
+            if current_reading != entry.reading {
+                current_reading.clone_from(&entry.reading);
+                legacy_rows_for_reading = 0;
+                selected_surfaces.clear();
+                capped_surfaces.clear();
             }
-            if candidates_for_reading < self.policy.max_candidates_per_reading {
-                candidates_for_reading += 1;
+
+            let survived_legacy_row_cap =
+                legacy_rows_for_reading < self.policy.max_candidates_per_reading;
+            legacy_rows_for_reading = legacy_rows_for_reading.saturating_add(1);
+            if !survived_legacy_row_cap {
+                self.report.legacy_row_capped_entries =
+                    self.report.legacy_row_capped_entries.saturating_add(1);
+            }
+
+            let known_surface = selected_surfaces.contains(&entry.surface);
+            if known_surface {
+                if !survived_legacy_row_cap {
+                    self.report.surface_cap_rescued_entries =
+                        self.report.surface_cap_rescued_entries.saturating_add(1);
+                }
                 selected.push(entry);
+                legacy_evidence.push(survived_legacy_row_cap);
+            } else if selected_surfaces.len() < self.policy.max_candidates_per_reading {
+                if !survived_legacy_row_cap {
+                    self.report.surface_cap_rescued_entries =
+                        self.report.surface_cap_rescued_entries.saturating_add(1);
+                    self.report.surface_cap_rescued_surfaces =
+                        self.report.surface_cap_rescued_surfaces.saturating_add(1);
+                }
+                selected_surfaces.insert(entry.surface.clone());
+                selected.push(entry);
+                legacy_evidence.push(survived_legacy_row_cap);
+            } else if capped_surfaces.insert(entry.surface.clone()) {
+                self.report.capped_surfaces = self.report.capped_surfaces.saturating_add(1);
+                self.report.capped_entries = self.report.capped_entries.saturating_add(1);
             } else {
                 self.report.capped_entries = self.report.capped_entries.saturating_add(1);
             }
         }
         self.report.output_entries = selected.len();
-        (selected, self.report)
+        debug_assert_eq!(selected.len(), legacy_evidence.len());
+        (selected, legacy_evidence, self.report)
     }
 }
 

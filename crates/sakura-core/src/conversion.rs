@@ -30,7 +30,12 @@ const NONE: usize = usize::MAX;
 const NONE_STATE: u32 = u32::MAX;
 const MAX_LATTICE_NODES: usize = 32_768;
 const MAX_SEARCH_STATES: usize = 65_536;
-const MAX_DICTIONARY_EDGES_PER_READING: usize = 12;
+/// Preserve the historical twelve cheapest system edges for each exact
+/// reading span. Additional edges may only add a surface those baseline rows
+/// did not expose, so POS variants keep their old paths without consuming the
+/// whole candidate vocabulary.
+const BASE_DICTIONARY_EDGES_PER_READING: usize = 12;
+const MAX_DICTIONARY_SURFACES_PER_READING: usize = 12;
 /// Cross-commit context is deliberately word-sized. It exists to recover a
 /// lexical edge split by an explicit commit, not to replay an unbounded
 /// document prefix on every Space press.
@@ -105,6 +110,46 @@ const COUNTER_FORMS: [(&str, &str); 15] = [
     ("いっかい", "1回"),
     ("さんかい", "3回"),
 ];
+
+#[derive(Debug, Clone, Copy)]
+struct DictionaryEdgeBudget {
+    baseline_edges: usize,
+    surface_count: usize,
+    surface_ids: [u32; MAX_DICTIONARY_SURFACES_PER_READING],
+}
+
+impl DictionaryEdgeBudget {
+    const fn new() -> Self {
+        Self {
+            baseline_edges: 0,
+            surface_count: 0,
+            surface_ids: [u32::MAX; MAX_DICTIONARY_SURFACES_PER_READING],
+        }
+    }
+
+    fn reset(&mut self) {
+        self.baseline_edges = 0;
+        self.surface_count = 0;
+    }
+
+    fn admit(&mut self, surface_id: u32) -> bool {
+        let known_surface = self.surface_ids[..self.surface_count].contains(&surface_id);
+        if self.baseline_edges < BASE_DICTIONARY_EDGES_PER_READING {
+            self.baseline_edges += 1;
+            if !known_surface && self.surface_count < MAX_DICTIONARY_SURFACES_PER_READING {
+                self.surface_ids[self.surface_count] = surface_id;
+                self.surface_count += 1;
+            }
+            return true;
+        }
+        if known_surface || self.surface_count >= MAX_DICTIONARY_SURFACES_PER_READING {
+            return false;
+        }
+        self.surface_ids[self.surface_count] = surface_id;
+        self.surface_count += 1;
+        true
+    }
+}
 
 fn numeric_form_cost(source: &str, span: NumericSpan) -> i64 {
     let has_explicit_digit = source
@@ -2833,6 +2878,7 @@ impl Converter {
             previous_class = Some(class);
             let mut last_length = 0usize;
             let mut candidates_for_length = 0usize;
+            let mut edge_budget = DictionaryEdgeBudget::new();
             let mut failure = None;
             dictionary
                 .common_prefix_search(&reading[start..], |matched| {
@@ -2851,8 +2897,9 @@ impl Converter {
                     if matched.matched_bytes != last_length {
                         last_length = matched.matched_bytes;
                         candidates_for_length = 0;
+                        edge_budget.reset();
                     }
-                    if candidates_for_length >= MAX_DICTIONARY_EDGES_PER_READING {
+                    if !edge_budget.admit(matched.entry.surface_id) {
                         return true;
                     }
                     candidates_for_length += 1;
@@ -2917,7 +2964,7 @@ impl Converter {
                             last_user_length = matched_bytes;
                             user_candidates_for_length = 0;
                         }
-                        if user_candidates_for_length >= MAX_DICTIONARY_EDGES_PER_READING {
+                        if user_candidates_for_length >= BASE_DICTIONARY_EDGES_PER_READING {
                             return true;
                         }
                         user_candidates_for_length += 1;
@@ -3050,7 +3097,7 @@ impl Converter {
             return Ok(());
         }
         let mut remaining_slots =
-            MAX_DICTIONARY_EDGES_PER_READING.saturating_sub(exact_edges_for_length);
+            BASE_DICTIONARY_EDGES_PER_READING.saturating_sub(exact_edges_for_length);
         if remaining_slots == 0 {
             return Ok(());
         }
@@ -3115,7 +3162,7 @@ impl Converter {
         {
             return Ok(());
         }
-        let mut remaining_slots = MAX_DICTIONARY_EDGES_PER_READING;
+        let mut remaining_slots = BASE_DICTIONARY_EDGES_PER_READING;
         for repaired in commit_repairs {
             if remaining_slots == 0 {
                 break;
@@ -3237,6 +3284,7 @@ impl Converter {
         };
         let mut failure = None;
         let mut exact_edges_added = 0usize;
+        let mut edge_budget = DictionaryEdgeBudget::new();
         dictionary
             .common_prefix_search(reading, |matched| {
                 if matched.matched_bytes != reading_len {
@@ -3250,7 +3298,7 @@ impl Converter {
                 {
                     return true;
                 }
-                if exact_edges_added >= MAX_DICTIONARY_EDGES_PER_READING {
+                if !edge_budget.admit(matched.entry.surface_id) {
                     return true;
                 }
                 let boost = if matched.entry.flags.contains(EntryFlags::IT) {
@@ -4286,10 +4334,11 @@ mod tests {
     use super::{
         CandidateAuthority, CandidateOrigin, ConversionInput, ConversionInputClass,
         ConversionOptions, Converter, CorrectionMap, CorrectionMapError, CorrectionRun,
-        CrossCommitBridge, LiteralPolicy, RawRepairBudget, RawRepairPlan, RepairTier,
-        RightContextId,
+        CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy, RawRepairBudget, RawRepairPlan,
+        RepairTier, RightContextId,
     };
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
+    use crate::preferences::ConversionMethod;
     use crate::user_dictionary::UserDictionary;
     use crate::RepairKind;
 
@@ -4314,6 +4363,56 @@ mod tests {
             surface: surface.to_owned(),
             cost,
             flags,
+        }
+    }
+
+    #[test]
+    fn dictionary_edge_budget_preserves_baseline_rows_then_adds_surface_diversity() {
+        let mut budget = DictionaryEdgeBudget::new();
+        for _ in 0..12 {
+            assert!(budget.admit(1), "the historical baseline rows must survive");
+        }
+        assert!(
+            !budget.admit(1),
+            "later POS rows must not consume diversity slots"
+        );
+        for surface_id in 2..=12 {
+            assert!(budget.admit(surface_id), "surface {surface_id}");
+        }
+        assert!(
+            !budget.admit(13),
+            "the distinct-surface bound must remain finite"
+        );
+
+        budget.reset();
+        assert!(budget.admit(13), "a new reading gets a fresh budget");
+    }
+
+    #[test]
+    fn repeated_pos_rows_cannot_hide_a_distinct_surface_from_conversion() {
+        let mut rows = (0..12)
+            .map(|cost| fixture_entry("たて", "同じ", cost, EntryFlags::NONE))
+            .collect::<Vec<_>>();
+        rows.push(fixture_entry("たて", "縦", 100, EntryFlags::NONE));
+        let bytes = synthetic_dictionary(&rows);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+
+        for method in ConversionMethod::ALL {
+            let mut converter = Converter::new();
+            let candidates = converter
+                .convert(
+                    &dictionary,
+                    "たて",
+                    ConversionOptions {
+                        method,
+                        ..ConversionOptions::default()
+                    },
+                )
+                .expect("conversion");
+            assert!(
+                candidates.iter().any(|candidate| candidate.text() == "縦"),
+                "{method:?}: {candidates:?}"
+            );
         }
     }
 

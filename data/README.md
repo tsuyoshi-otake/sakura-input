@@ -16,6 +16,13 @@ a diff, something has gone wrong.
 | `curated-terms.tsv` | 2 | Project-authored MIT overlay for canonical casing and high-value terms missing from the generated glossary |
 | `conversion-priorities.tsv` | 2 | Project-authored calibration overlay for context-free top-1 conversion; re-prices existing lattice edges and may add missing IT/business compounds such as Issue #62's 機能紹介 |
 
+`max_candidates_per_reading` in the Mozc trim is a bound on distinct display
+surfaces, not on POS/connection-ID rows. The selected surfaces retain their
+exact rows so contextual connection costs remain available. The schema-2 trim
+report records both the remaining surface cap and the entries/surfaces rescued
+from the legacy row-based cap; this keeps general-Japanese coverage loss
+auditable without hiding it behind a small curated overlay.
+
 The dictionary compiler also expands Mozc 基本形 verbs and i-adjectives into fused conjugations (`来て`, `書いて`, `行って`, `高くて`, …) at build time. Sakura stores static lattice edges and does not inflect at runtime, so the Mozc trim can keep `来る` while dropping `来て`. `inflection-expand` reads the trimmed system TSV plus pinned `id.def`, emits only missing `(reading, surface)` pairs, and keeps Mozc connection ids. The generated overlay is `LicenseRef-Mozc-Dictionary` and is not checked in; `scripts/build-dictionary.ps1` rebuilds it every pass.
 
 The Sakura system dictionary is maintained as fourteen canonical category
