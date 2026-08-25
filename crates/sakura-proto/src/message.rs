@@ -20,7 +20,7 @@
 
 use crate::types::{
     AppearanceTheme, CandidateDetail, CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output,
-    ScreenRect,
+    PadShortcut, ScreenRect,
 };
 use crate::wire::{Reader, Sink, VecSink};
 use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
@@ -462,6 +462,10 @@ pub struct UiState {
     /// present even while the popup is hidden so a later candidate state
     /// cannot be drawn with an assumed palette.
     pub appearance_theme: AppearanceTheme,
+    /// The user-wide Sakura Pad shortcut. It is carried even while the pad
+    /// is hidden so the renderer can apply a changed preference before the
+    /// next visible interaction.
+    pub pad_shortcut: PadShortcut,
     /// The mode to show, or `None` when no field is composing and the
     /// indicator should be hidden.
     pub mode: Option<Mode>,
@@ -855,6 +859,7 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
             }
             w.write_u64(ui.revision)?;
             ui.appearance_theme.encode(w)?;
+            ui.pad_shortcut.encode(w)?;
             w.write_option(&ui.mode, |w, mode| mode.encode(w))?;
             w.write_option(&ui.candidates, |w, candidates| candidates.encode(w))?;
             w.write_option(&ui.candidate_detail, |w, detail| detail.encode(w))?;
@@ -1091,6 +1096,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
         RES_UI => {
             let revision = r.read_u64()?;
             let appearance_theme = AppearanceTheme::decode(&mut r)?;
+            let pad_shortcut = PadShortcut::decode(&mut r)?;
             let mode = r.read_option(Mode::decode)?;
             let candidates = r.read_option(CandidateList::decode)?;
             let candidate_detail = r.read_option(CandidateDetail::decode)?;
@@ -1104,6 +1110,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
             Response::Ui(UiState {
                 revision,
                 appearance_theme,
+                pad_shortcut,
                 mode,
                 candidates,
                 candidate_detail,
@@ -1141,6 +1148,7 @@ mod tests {
         let response = Response::Ui(UiState {
             revision: 1,
             appearance_theme: AppearanceTheme::Auto,
+            pad_shortcut: PadShortcut::Disabled,
             mode: None,
             candidates: None,
             candidate_detail: Some(detail()),

@@ -887,6 +887,12 @@ impl Dispatcher {
         let Some(session) = self.sessions.get_mut(id) else {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
         };
+        if !session.host_policy().allows_ai_text() {
+            // Sakura Pad text is local-only.  Do not let a renderer-owned
+            // session turn an externally supplied AI result into a document
+            // edit, even when its current InputScope is Normal.
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
         if session.undo_pending()
             || !session.is_composing()
             || !session.scope_classified()
@@ -931,6 +937,12 @@ impl Dispatcher {
         let Some(session) = self.sessions.get(id) else {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
         };
+        if !session.host_policy().allows_ai_text() {
+            // Recording an AI terminal result is itself a durable history
+            // sink.  Reject before constructing a ScopeClass or touching the
+            // history service so Normal scope cannot bypass the host policy.
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
         if let Some(history) = self.input_history.as_deref() {
             history.record_ai_text(
                 session.history_session_id(),
@@ -958,6 +970,12 @@ impl Dispatcher {
         let Some(session) = self.sessions.get(id) else {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
         };
+        if !session.host_policy().allows_ai_text() {
+            // Never pass Pad text to the AI worker.  This is an explicit
+            // terminal response rather than a silent no-op, so callers can
+            // observe that the privacy policy—not worker capacity—rejected it.
+            return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
         if session.undo_pending()
             || !session.scope_classified()
             || session.scope() != InputScope::Normal
@@ -975,8 +993,13 @@ impl Dispatcher {
     }
 
     fn poll_ai_text(&self, id: SessionId, job: u64) -> Reply {
-        if self.sessions.get(id).is_none() {
+        let Some(session) = self.sessions.get(id) else {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if !session.host_policy().allows_ai_text() {
+            // A private session cannot own an AI job.  Refuse a stale or
+            // forged poll rather than exposing any result to the renderer.
+            return Reply::Message(Response::Error(ErrorCode::Busy));
         }
         match self.ai_text.poll(self.ai_text_owner, id, job) {
             AiPoll::Pending => Reply::Message(Response::AiTextPending { job }),
@@ -999,8 +1022,14 @@ impl Dispatcher {
     }
 
     fn cancel_ai_text(&self, id: SessionId, job: u64) -> Reply {
-        if self.sessions.get(id).is_none() {
+        let Some(session) = self.sessions.get(id) else {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
+        };
+        if !session.host_policy().allows_ai_text() {
+            // No private-session job may be started. Keep this terminal and
+            // observable instead of allowing a renderer request to mutate
+            // the shared AI service's job state.
+            return Reply::Message(Response::Error(ErrorCode::Busy));
         }
         if self.ai_text.cancel(self.ai_text_owner, id, job) {
             Reply::Message(Response::Ok)
@@ -1130,7 +1159,10 @@ impl Dispatcher {
                         out.mode.get_or_insert(restored);
                     }
                     schedule_long_conversion(id, session, &services);
-                    if let Some(history) = services.input_history {
+                    if let Some(history) = services
+                        .input_history
+                        .filter(|_| session.host_policy().allows_persistence())
+                    {
                         history.record_key(
                             session.history_session_id(),
                             ScopeClass::from_scope(session.scope, session.scope_classified()),
@@ -1159,7 +1191,10 @@ impl Dispatcher {
                         let _ = session.reject_undo_commit();
                     }
                     out.clear();
-                    if let Some(history) = services.input_history {
+                    if let Some(history) = services
+                        .input_history
+                        .filter(|_| session.host_policy().allows_persistence())
+                    {
                         history.record_key(
                             session.history_session_id(),
                             ScopeClass::from_scope(session.scope, session.scope_classified()),
@@ -1943,6 +1978,12 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
     let Some(long_conversion) = services.long_conversion else {
         return;
     };
+    if !session.host_policy().allows_local_worker() {
+        // Keep this admission check separate from AI/network policy. The
+        // shipped local worker receives only its bounded candidate snapshot;
+        // a future host policy may still choose to disable that local path.
+        return;
+    }
     let allow_short_reading = match services.neural_reranker_scope {
         NeuralRerankerScope::Off => return,
         NeuralRerankerScope::LongTextOnly => false,
@@ -2298,6 +2339,13 @@ fn record_learning(
     chosen_right_id: u16,
 ) {
     if !policy.allows_persistence() {
+        return;
+    }
+    if !session.host_policy().allows_persistence() {
+        // Host policy is independent of InputScope. A renderer-owned Pad is
+        // normally classified as Normal so Japanese conversion remains
+        // usable, but neither its commit history nor learning record may be
+        // admitted to a durable sink.
         return;
     }
     let scope = ScopeClass::from_scope(session.scope, session.scope_classified());
@@ -3516,16 +3564,26 @@ fn apply_action(
             session.suppress_raw_provenance();
             if !session.resize_focused_segment(false) {
                 out.beep = true;
-            } else if let Some(learning) = services.learning {
-                learning.suppress_repair_reading(session.preedit.as_str());
+            } else if session.host_policy().allows_persistence() {
+                if let Some(learning) = services.learning {
+                    learning.suppress_repair_reading(session.preedit.as_str());
+                }
+            } else {
+                // Segment editing remains local, but its repair-suppression
+                // write is explicitly rejected for renderer-owned Pad text.
             }
         }
         Action::SegmentGrow => {
             session.suppress_raw_provenance();
             if !session.resize_focused_segment(true) {
                 out.beep = true;
-            } else if let Some(learning) = services.learning {
-                learning.suppress_repair_reading(session.preedit.as_str());
+            } else if session.host_policy().allows_persistence() {
+                if let Some(learning) = services.learning {
+                    learning.suppress_repair_reading(session.preedit.as_str());
+                }
+            } else {
+                // See SegmentShrink: local segmentation is retained while the
+                // durable learning sink has an explicit rejected outcome.
             }
         }
         Action::CaretLeft => move_caret(session, services.table, scratch, CaretMove::Left)?,
@@ -3860,6 +3918,12 @@ fn delete_focused_prediction_history(
     policy: ExecutionPolicy,
     cache: &mut PredictionCacheWork<'_>,
 ) -> bool {
+    if !session.host_policy().allows_persistence() {
+        // The focused suggestion may be stale or forged. Consume the policy
+        // decision here before reading any candidate identity or mutating the
+        // learning store; private Pad text never reaches this sink.
+        return false;
+    }
     if !session.suggestion_focused {
         return false;
     }
@@ -4384,6 +4448,13 @@ fn begin_conversion(
     trigger: ConversionTrigger,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
+    let long_conversion = if session.host_policy().allows_local_worker() {
+        long_conversion
+    } else {
+        // Renderer-owned Pad conversion still has the local dictionary
+        // fallback if a future host policy disables this bounded worker.
+        None
+    };
     if session.converting {
         let focused = session.focused_segment();
         session.clear_segment_transform(focused);
@@ -5081,7 +5152,8 @@ fn apply_alnum_char(
 }
 
 fn prediction_is_eligible(session: &Session, services: &KeyServices<'_>) -> bool {
-    services.prediction_enabled
+    session.host_policy().allows_local_worker()
+        && services.prediction_enabled
         && services.suggest_accept != SuggestAccept::Disabled
         && services.prediction.is_some()
         && !scope_is_sensitive(session.scope)
@@ -5308,6 +5380,10 @@ fn render_suggestions(
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
+    if !session.host_policy().allows_local_worker() {
+        session.hide_suggestions();
+        return Ok(());
+    }
     if !session.suggestions_visible || session.converting || !session.is_composing() {
         return Ok(());
     }
@@ -5450,6 +5526,10 @@ fn render_prediction_projection(
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
+    if !session.host_policy().allows_local_worker() {
+        session.hide_suggestions();
+        return Ok(());
+    }
     if !session.suggestion_focused {
         return Ok(());
     }
@@ -7562,6 +7642,224 @@ mod tests {
         assert_ne!(next.preedit_before, "ka");
         history.stop().expect("stop");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn renderer_host_policy_keeps_normal_conversion_but_rejects_history_and_learning() {
+        let learning = Arc::new(LearningService::memory());
+        let generation_before = learning.generation();
+        let history_seed = phase_one_learning_path("renderer-private-policy");
+        let history_path = history_seed.with_file_name("input-history.bin");
+        let history_root = history_seed
+            .parent()
+            .expect("history test directory")
+            .to_owned();
+        let history = InputHistoryService::open(&history_path).expect("history");
+        history.clear().expect("clear setup history");
+        history.flush().expect("flush setup history");
+
+        let mut dispatcher =
+            Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+                .expect("dispatcher");
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
+        let mut out = OutputBuf::new();
+        let session = create_session(
+            &mut dispatcher,
+            &mut out,
+            crate::session::SAKURA_RENDERER_PROCESS_NAME,
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .host_policy(),
+            crate::session::HostPolicy::PrivateRendererUi
+        );
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session,
+                    scope: InputScope::Unclassified,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .host_policy(),
+            crate::session::HostPolicy::PrivateRendererUi,
+            "Normal scope must not relax the host policy"
+        );
+
+        // The local dictionary path remains usable for ordinary Japanese
+        // conversion; only durable and external sinks are denied.
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        assert_eq!(out.preedit_text(), "かな");
+        assert_eq!(
+            dispatcher.dispatch(&Request::Commit { session }, &mut out),
+            Reply::Output
+        );
+        assert!(out.commit_text().is_some(), "local conversion must commit");
+        assert_eq!(
+            learning.generation(),
+            generation_before,
+            "Pad commits must not write learning"
+        );
+
+        history.flush().expect("flush renderer history");
+        let records = crate::input_history::read_snapshot(&history_path)
+            .expect("renderer history snapshot")
+            .records;
+        assert!(
+            records.is_empty(),
+            "Pad key and commit records must never reach developer history"
+        );
+        history.stop().expect("stop history");
+        std::fs::remove_dir_all(history_root).expect("remove history test directory");
+    }
+
+    #[test]
+    fn renderer_host_policy_rejects_ai_start_apply_poll_cancel_and_record() {
+        let history_seed = phase_one_learning_path("renderer-private-ai");
+        let history_path = history_seed.with_file_name("input-history.bin");
+        let history_root = history_seed
+            .parent()
+            .expect("history test directory")
+            .to_owned();
+        let history = InputHistoryService::open(&history_path).expect("history");
+        history.clear().expect("clear setup history");
+        history.flush().expect("flush setup history");
+
+        let mut dispatcher = builtin_dispatcher();
+        // A nonexistent worker makes an accidental start observable during
+        // development, while the private policy must reject before spawn.
+        dispatcher.set_ai_text(Arc::new(AiTextService::new(PathBuf::from(
+            "sakura-private-policy-worker-do-not-start.exe",
+        ))));
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
+        let mut out = OutputBuf::new();
+        let session = create_session(
+            &mut dispatcher,
+            &mut out,
+            crate::session::SAKURA_RENDERER_PROCESS_NAME,
+        );
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        assert_eq!(out.preedit_text(), "かな");
+
+        let busy = |reply| Reply::Message(Response::Error(ErrorCode::Busy)) == reply;
+        assert!(busy(dispatcher.dispatch(
+            &Request::StartAiText {
+                session,
+                operation: AiTextOperation::Transform,
+                text: "Pad本文".to_owned(),
+            },
+            &mut out,
+        )));
+        assert!(busy(dispatcher.dispatch(
+            &Request::ApplyAiComposition {
+                session,
+                result: "外部結果".to_owned(),
+            },
+            &mut out,
+        )));
+        assert!(busy(
+            dispatcher.dispatch(&Request::PollAiText { session, job: 1 }, &mut out,)
+        ));
+        assert!(busy(
+            dispatcher.dispatch(&Request::CancelAiText { session, job: 1 }, &mut out,)
+        ));
+        assert!(busy(dispatcher.dispatch(
+            &Request::RecordAiText {
+                session,
+                operation: AiTextOperation::Transform,
+                status: AiTextStatus::Rejected,
+                source: "Pad本文".to_owned(),
+                result: "外部結果".to_owned(),
+                model: "gpt-5.6-luna".to_owned(),
+                provider: "custom".to_owned(),
+                style: "plain".to_owned(),
+                error_code: "private-renderer".to_owned(),
+                latency_ms: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_tokens: 0,
+                attempts: 0,
+                test_only: false,
+            },
+            &mut out,
+        )));
+
+        let live = dispatcher.sessions.get(session).expect("session");
+        assert!(
+            live.is_composing(),
+            "AI rejection must not clear composition"
+        );
+        history.flush().expect("flush renderer AI history");
+        let snapshot = crate::input_history::read_snapshot(&history_path)
+            .expect("renderer AI history snapshot");
+        assert!(
+            snapshot.records.is_empty(),
+            "AI source/result must not reach developer history"
+        );
+        assert_eq!(history.stats().snapshot().ai_requests, 0);
+        history.stop().expect("stop history");
+        std::fs::remove_dir_all(history_root).expect("remove history test directory");
+    }
+
+    #[test]
+    fn renderer_host_policy_keeps_local_prediction_worker_requests() {
+        let learning = Arc::new(LearningService::memory());
+        let (mut dispatcher, runtime) =
+            phase_one_prediction_dispatcher(phase_one_prediction_conversion(), learning);
+        let prediction = runtime.service();
+        let mut out = OutputBuf::new();
+        let session = create_session(
+            &mut dispatcher,
+            &mut out,
+            crate::session::SAKURA_RENDERER_PROCESS_NAME,
+        );
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        let before = prediction.request_count();
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        assert_eq!(out.preedit_text(), "かな");
+        assert_eq!(
+            out.candidate_kind(),
+            Some(CandidateKind::Suggestion),
+            "Pad keeps local prediction UI"
+        );
+        assert!(
+            prediction.request_count() > before,
+            "Pad may use the local bounded prediction worker"
+        );
+        runtime.stop().expect("prediction worker joins");
     }
 
     #[test]
@@ -12394,15 +12692,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v18_version_is_rejected() {
+    fn hello_with_the_previous_v19_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 19,
-            "document-context reset adds v19 wire data"
+            PROTOCOL_VERSION, 20,
+            "the Pad shortcut adds v20 UI-state wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 18 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 19 }, &mut out);
 
         assert_eq!(
             reply,
@@ -12411,10 +12709,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v19_version_is_accepted() {
+    fn hello_with_v20_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 19,
-            "document-context reset adds v19 wire data"
+            PROTOCOL_VERSION, 20,
+            "the Pad shortcut adds v20 UI-state wire data"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();

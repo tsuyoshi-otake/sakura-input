@@ -4,42 +4,42 @@
 //! from 96-DPI tokens, while painting uses a restrained Sakura palette unless
 //! Windows high-contrast mode requests system colors instead.
 
-use std::ffi::c_void;
-use std::mem::size_of;
 use std::sync::mpsc::{SyncSender, TrySendError};
 
 use sakura_proto::{
     AppearanceTheme, CandidateDetail, CandidateKind, CandidateList, ScreenRect, UiState,
     CANDIDATE_PAGE_SIZE,
 };
-use windows::core::{w, Result, PCWSTR};
+use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, CombineRgn, CreateFontW, CreateRectRgn, CreateSolidBrush, DeleteObject, DrawTextW,
-    EndPaint, FillRect, GetMonitorInfoW, GetSysColor, InvalidateRect, MonitorFromRect,
-    SelectObject, SetBkMode, SetTextColor, SetWindowRgn, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS,
-    COLOR_3DSHADOW, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT, COLOR_WINDOW,
-    COLOR_WINDOWTEXT, DEFAULT_CHARSET, DEFAULT_PITCH, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX,
-    DT_RIGHT, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_NORMAL, HBRUSH, HGDIOBJ, MONITORINFO,
-    MONITOR_DEFAULTTONEAREST, OUT_TT_PRECIS, PAINTSTRUCT, RGN_ERROR, RGN_OR, TRANSPARENT,
+    BeginPaint, CombineRgn, CreateRectRgn, DeleteObject, EndPaint, GetMonitorInfoW, InvalidateRect,
+    MonitorFromRect, SelectObject, SetBkMode, SetWindowRgn, DT_END_ELLIPSIS, DT_LEFT, DT_RIGHT,
+    MONITORINFO, MONITOR_DEFAULTTONEAREST, PAINTSTRUCT, RGN_ERROR, RGN_OR, TRANSPARENT,
 };
-use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
-use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetWindowLongPtrW,
-    GetWindowRect, RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    SystemParametersInfoW, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HTCLIENT, HWND_TOPMOST,
-    MA_NOACTIVATE, SPI_GETHIGHCONTRAST, SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE,
-    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED,
+    GetWindowRect, RegisterClassW, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW,
+    CS_VREDRAW, GWLP_USERDATA, HTCLIENT, HWND_TOPMOST, MA_NOACTIVATE, SWP_NOACTIVATE, SWP_NOZORDER,
+    SW_HIDE, SW_SHOWNOACTIVATE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED,
     WM_ERASEBKGND, WM_GETOBJECT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST,
     WM_PAINT, WNDCLASSW, WS_DISABLED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 #[cfg(test)]
+use windows::Win32::Graphics::Gdi::{COLOR_HIGHLIGHT, COLOR_WINDOW, COLOR_WINDOWTEXT};
+#[cfg(test)]
 use windows::Win32::UI::WindowsAndMessaging::WS_EX_TRANSPARENT;
 
+#[cfg(test)]
+use crate::theme::{drawable_utf16, high_contrast_palette, system_color};
+
 use crate::accessibility::CandidateAccessibility;
+use crate::theme::{
+    fill_color, font, palette, scaled, select_font, text, Palette, BODY_FONT_96, GAP_96,
+    PADDING_96, RAIL_WIDTH_96, SUPPORT_FONT_96,
+};
 use crate::watch::{CandidateCommitRequest, HistoryDeleteRequest};
 
 const DISPLAY_CLASS: PCWSTR = windows::core::w!("SakuraInputCandidates");
@@ -48,20 +48,15 @@ const DELETE_OVERLAY_CLASS: PCWSTR = windows::core::w!("SakuraInputCandidateDele
 // All measurements are logical pixels at 96 DPI.
 pub(crate) const ROW_HEIGHT_96: i32 = 28;
 const FOOTER_HEIGHT_96: i32 = 22;
-pub(crate) const PADDING_96: i32 = 8;
-pub(crate) const GAP_96: i32 = 8;
 /// How far the popup may be moved away from the caret to keep the host's
 /// editable area readable. Roughly five candidate rows: past that the list
 /// stops reading as attached to what is being typed, and a list that is hard
 /// to find costs the user more than the covered text it bought.
 const MAX_CARET_DETOUR_96: i32 = 160;
 pub(crate) const NUMBER_WIDTH_96: i32 = 28;
-pub(crate) const RAIL_WIDTH_96: i32 = 2;
 const RAIL_MARGIN_96: i32 = 4;
 const MIN_WIDTH_96: i32 = 260;
 const MAX_WIDTH_96: i32 = 480;
-pub(crate) const BODY_FONT_96: i32 = 16;
-pub(crate) const SUPPORT_FONT_96: i32 = 13;
 const DETAIL_WIDTH_96: i32 = 360;
 const DETAIL_PADDING_96: i32 = 12;
 const DETAIL_TITLE_HEIGHT_96: i32 = 22;
@@ -86,18 +81,6 @@ fn delete_overlay_ex_style() -> WINDOW_EX_STYLE {
 
 fn delete_overlay_style() -> WINDOW_STYLE {
     WS_POPUP
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Palette {
-    pub(crate) surface: COLORREF,
-    pub(crate) ink: COLORREF,
-    pub(crate) annotation: COLORREF,
-    pub(crate) selected: COLORREF,
-    pub(crate) selected_ink: COLORREF,
-    pub(crate) rail: COLORREF,
-    pub(crate) border: COLORREF,
-    pub(crate) action: COLORREF,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -433,10 +416,6 @@ fn dpi(window: HWND) -> u32 {
     } else {
         value
     }
-}
-
-fn scaled(value: i32, dpi: u32) -> i32 {
-    value.saturating_mul(dpi as i32).saturating_add(48) / 96
 }
 
 /// Whether a proposed popup rectangle overlaps the composition rectangle.
@@ -2076,201 +2055,6 @@ fn page_rail(footer: RECT, candidates: &CandidateList, layout: Layout) -> PageRa
     }
 }
 
-pub(crate) fn palette(theme: AppearanceTheme) -> Palette {
-    if high_contrast_enabled() {
-        high_contrast_palette()
-    } else {
-        resolve_palette(theme, false, windows_apps_use_light_theme())
-    }
-}
-
-/// Resolves the palette from inputs that can be tested without reading global
-/// Windows state. High contrast deliberately precedes an explicit preference:
-/// accessibility system roles must remain authoritative for every Sakura-owned
-/// candidate surface.
-fn resolve_palette(
-    theme: AppearanceTheme,
-    high_contrast: bool,
-    apps_use_light_theme: bool,
-) -> Palette {
-    if high_contrast {
-        high_contrast_palette()
-    } else {
-        match theme {
-            AppearanceTheme::Auto if apps_use_light_theme => light_palette(),
-            AppearanceTheme::Auto | AppearanceTheme::Dark => dark_palette(),
-            AppearanceTheme::Light => light_palette(),
-        }
-    }
-}
-
-fn windows_apps_use_light_theme() -> bool {
-    let mut value = 1_u32;
-    let mut bytes = size_of::<u32>() as u32;
-    // SAFETY: the registry names are static NUL-terminated strings, and the
-    // value buffer has the exact REG_DWORD size supplied through `bytes`.
-    let status = unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"),
-            w!("AppsUseLightTheme"),
-            RRF_RT_REG_DWORD,
-            None,
-            Some((&mut value as *mut u32).cast::<c_void>()),
-            Some(&mut bytes),
-        )
-    };
-    // Missing, malformed, or unreadable values must preserve a legible
-    // candidate window. Windows applications conventionally default to light.
-    if status == windows::Win32::Foundation::ERROR_SUCCESS && bytes == size_of::<u32>() as u32 {
-        value != 0
-    } else {
-        true
-    }
-}
-
-fn high_contrast_palette() -> Palette {
-    Palette {
-        surface: system_color(COLOR_WINDOW),
-        ink: system_color(COLOR_WINDOWTEXT),
-        annotation: system_color(COLOR_GRAYTEXT),
-        selected: system_color(COLOR_HIGHLIGHT),
-        selected_ink: system_color(COLOR_HIGHLIGHTTEXT),
-        rail: system_color(COLOR_HIGHLIGHT),
-        border: system_color(COLOR_3DSHADOW),
-        action: system_color(COLOR_WINDOWTEXT),
-    }
-}
-
-fn high_contrast_enabled() -> bool {
-    let mut high_contrast = HIGHCONTRASTW {
-        cbSize: core::mem::size_of::<HIGHCONTRASTW>() as u32,
-        ..Default::default()
-    };
-    // SAFETY: Windows fills the supplied initialized HIGHCONTRASTW structure.
-    unsafe {
-        SystemParametersInfoW(
-            SPI_GETHIGHCONTRAST,
-            high_contrast.cbSize,
-            Some((&mut high_contrast as *mut HIGHCONTRASTW).cast()),
-            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
-        )
-        .is_ok()
-            && (high_contrast.dwFlags.0 & HCF_HIGHCONTRASTON.0) != 0
-    }
-}
-
-fn light_palette() -> Palette {
-    Palette {
-        surface: rgb(0xF7, 0xF6, 0xF4),
-        ink: rgb(0x2F, 0x2F, 0x2F),
-        annotation: rgb(0x70, 0x70, 0x70),
-        selected: rgb(0xE8, 0xE5, 0xE2),
-        selected_ink: rgb(0x2F, 0x2F, 0x2F),
-        rail: rgb(0xB2, 0x8D, 0x96),
-        border: rgb(0xBD, 0xB9, 0xB5),
-        action: rgb(0x89, 0x72, 0x77),
-    }
-}
-
-fn dark_palette() -> Palette {
-    Palette {
-        surface: rgb(0x35, 0x35, 0x35),
-        ink: rgb(0xF2, 0xF0, 0xEE),
-        annotation: rgb(0xC9, 0xC4, 0xC0),
-        selected: rgb(0x25, 0x25, 0x25),
-        selected_ink: rgb(0xFF, 0xFD, 0xFB),
-        rail: rgb(0xD7, 0xA6, 0xB1),
-        border: rgb(0x72, 0x6E, 0x6B),
-        action: rgb(0xE7, 0xC1, 0xC8),
-    }
-}
-
-const fn rgb(red: u8, green: u8, blue: u8) -> COLORREF {
-    COLORREF(u32::from_le_bytes([red, green, blue, 0]))
-}
-
-fn system_color(role: windows::Win32::Graphics::Gdi::SYS_COLOR_INDEX) -> COLORREF {
-    // SAFETY: callers pass documented system color roles.
-    COLORREF(unsafe { GetSysColor(role) })
-}
-
-fn fill_color(dc: windows::Win32::Graphics::Gdi::HDC, rect: &RECT, color: COLORREF) {
-    // SAFETY: the brush is owned by this call, remains live for `FillRect`, and
-    // is deleted on the same path before returning.
-    unsafe {
-        let brush: HBRUSH = CreateSolidBrush(color);
-        if !brush.is_invalid() {
-            let _ = FillRect(dc, rect, brush);
-            let _ = DeleteObject(brush.into());
-        }
-    }
-}
-
-fn select_font(
-    dc: windows::Win32::Graphics::Gdi::HDC,
-    font: windows::Win32::Graphics::Gdi::HFONT,
-) -> Option<HGDIOBJ> {
-    if font.is_invalid() {
-        return None;
-    }
-    // SAFETY: the font is a live object owned by this paint frame. A NULL or
-    // HGDI_ERROR result means the DC keeps its previously selected valid font.
-    let previous = unsafe { SelectObject(dc, font.into()) };
-    (!previous.0.is_null() && (previous.0 as isize) != -1).then_some(previous)
-}
-
-fn text(
-    dc: windows::Win32::Graphics::Gdi::HDC,
-    value: &str,
-    mut rect: RECT,
-    color: COLORREF,
-    alignment: windows::Win32::Graphics::Gdi::DRAW_TEXT_FORMAT,
-) {
-    let Some(mut wide) = drawable_utf16(value) else {
-        return;
-    };
-    // SAFETY: the non-empty UTF-16 buffer and rectangle outlive the call.
-    unsafe {
-        SetTextColor(dc, color);
-        DrawTextW(
-            dc,
-            &mut wide,
-            &mut rect,
-            alignment | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-        );
-    }
-}
-
-/// `DrawTextW` may still inspect its buffer pointer when its length is zero.
-/// Rust's empty `Vec` uses a dangling non-null sentinel, so empty strings never
-/// cross this FFI boundary.
-fn drawable_utf16(value: &str) -> Option<Vec<u16>> {
-    (!value.is_empty()).then(|| value.encode_utf16().collect())
-}
-
-fn font(height: i32) -> windows::Win32::Graphics::Gdi::HFONT {
-    // SAFETY: all arguments are plain values and the face name is static.
-    unsafe {
-        CreateFontW(
-            -height,
-            0,
-            0,
-            0,
-            FW_NORMAL.0 as i32,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_TT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY,
-            (DEFAULT_PITCH.0 | FF_DONTCARE.0).into(),
-            windows::core::w!("Yu Gothic UI"),
-        )
-    }
-}
-
 fn number_label(index: usize) -> &'static str {
     const LABELS: [&str; CANDIDATE_PAGE_SIZE] =
         ["1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9."];
@@ -2424,68 +2208,6 @@ mod tests {
             drawable_utf16("候補"),
             Some("候補".encode_utf16().collect())
         );
-    }
-
-    #[test]
-    fn settled_palettes_are_exact_and_distinct() {
-        assert_eq!(light_palette().surface, rgb(0xF7, 0xF6, 0xF4));
-        assert_eq!(light_palette().ink, rgb(0x2F, 0x2F, 0x2F));
-        assert_eq!(light_palette().annotation, rgb(0x70, 0x70, 0x70));
-        assert_eq!(light_palette().selected, rgb(0xE8, 0xE5, 0xE2));
-        assert_eq!(light_palette().selected_ink, rgb(0x2F, 0x2F, 0x2F));
-        assert_eq!(light_palette().rail, rgb(0xB2, 0x8D, 0x96));
-        assert_eq!(light_palette().border, rgb(0xBD, 0xB9, 0xB5));
-        assert_eq!(light_palette().action, rgb(0x89, 0x72, 0x77));
-        assert_eq!(dark_palette().surface, rgb(0x35, 0x35, 0x35));
-        assert_eq!(dark_palette().ink, rgb(0xF2, 0xF0, 0xEE));
-        assert_eq!(dark_palette().annotation, rgb(0xC9, 0xC4, 0xC0));
-        assert_eq!(dark_palette().selected, rgb(0x25, 0x25, 0x25));
-        assert_eq!(dark_palette().rail, rgb(0xD7, 0xA6, 0xB1));
-        assert_eq!(dark_palette().border, rgb(0x72, 0x6E, 0x6B));
-        assert_eq!(dark_palette().action, rgb(0xE7, 0xC1, 0xC8));
-        assert_ne!(light_palette(), dark_palette());
-    }
-
-    #[test]
-    fn explicit_themes_ignore_the_windows_auto_preference() {
-        for apps_use_light_theme in [false, true] {
-            assert_eq!(
-                resolve_palette(AppearanceTheme::Light, false, apps_use_light_theme),
-                light_palette()
-            );
-            assert_eq!(
-                resolve_palette(AppearanceTheme::Dark, false, apps_use_light_theme),
-                dark_palette()
-            );
-        }
-    }
-
-    #[test]
-    fn auto_theme_follows_the_injected_apps_use_light_theme_preference() {
-        assert_eq!(
-            resolve_palette(AppearanceTheme::Auto, false, true),
-            light_palette()
-        );
-        assert_eq!(
-            resolve_palette(AppearanceTheme::Auto, false, false),
-            dark_palette()
-        );
-    }
-
-    #[test]
-    fn high_contrast_has_priority_over_all_appearance_choices() {
-        for theme in [
-            AppearanceTheme::Auto,
-            AppearanceTheme::Light,
-            AppearanceTheme::Dark,
-        ] {
-            for apps_use_light_theme in [false, true] {
-                assert_eq!(
-                    resolve_palette(theme, true, apps_use_light_theme),
-                    high_contrast_palette()
-                );
-            }
-        }
     }
 
     #[test]

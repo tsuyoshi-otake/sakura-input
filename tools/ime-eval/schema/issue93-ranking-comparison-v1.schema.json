@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sakura-input.invalid/ime-eval/issue93-ranking-comparison-v1.schema.json",
+  "title": "Sakura Input Issue #93 ranking comparison report",
+  "description": "The deterministic before/after report emitted by ime-eval ranking-compare. The candidate-snapshot input is adapted into this boundary; candidate evidence is retained without being interpreted by the comparator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_type",
+    "corpus_id",
+    "capture_lane",
+    "candidate_limit",
+    "before",
+    "after",
+    "summary",
+    "cases",
+    "determinism_fingerprint"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "report_type": { "const": "issue93_ranking_comparison" },
+    "corpus_id": { "type": "string", "minLength": 1 },
+    "capture_lane": { "const": "issue93_ranking_comparison" },
+    "candidate_limit": { "type": "integer", "const": 18 },
+    "before": { "$ref": "#/$defs/identity" },
+    "after": { "$ref": "#/$defs/identity" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" }
+    },
+    "determinism_fingerprint": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_sha", "evaluator_sha256", "dictionary_sha256"],
+      "properties": {
+        "git_sha": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+        "evaluator_sha256": { "$ref": "#/$defs/sha256" },
+        "dictionary_sha256": { "$ref": "#/$defs/sha256" },
+        "fixture_sha256": { "$ref": "#/$defs/sha256" },
+        "source_diff_sha256": {
+          "anyOf": [
+            { "const": "clean" },
+            { "$ref": "#/$defs/sha256" }
+          ]
+        },
+        "variant": { "type": "string", "minLength": 1 },
+        "evaluator_name": { "type": "string", "minLength": 1 },
+        "evaluator_version": { "type": "string", "minLength": 1 },
+        "evaluator_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "evaluator_build_feature": { "type": "string", "minLength": 1 },
+        "engine_package": { "type": "string", "minLength": 1 },
+        "engine_api": { "type": "string", "minLength": 1 },
+        "origin_metadata": { "type": "string", "minLength": 1 },
+        "path_evidence_metadata": { "type": "string", "minLength": 1 },
+        "input_support_metadata": { "type": "string", "minLength": 1 }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "candidate_limit",
+        "recall_k",
+        "learning",
+        "user_dictionary",
+        "reranker",
+        "input_repair",
+        "context",
+        "locale"
+      ],
+      "properties": {
+        "profile": { "type": "string", "minLength": 1 },
+        "candidate_limit": { "type": "integer", "const": 18 },
+        "recall_k": { "type": "integer", "minimum": 1, "maximum": 18 },
+        "learning": { "type": "string", "minLength": 1 },
+        "user_dictionary": { "type": "string", "minLength": 1 },
+        "reranker": { "type": "string", "minLength": 1 },
+        "input_repair": { "type": "string", "minLength": 1 },
+        "context": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "method": { "type": "string" },
+        "it_bias": { "type": "string" },
+        "it_bias_per_mille": { "type": "integer", "minimum": 0 },
+        "max_it_boost": { "type": "integer" },
+        "initial_right_id": { "type": "integer", "minimum": 0 },
+        "material": { "type": "string" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terminal", "truncated"],
+      "properties": {
+        "terminal": { "type": "string", "minLength": 1 },
+        "truncated": { "type": "boolean" },
+        "elapsed_us": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "corpus_sha256",
+        "options_sha256",
+        "options",
+        "runtime",
+        "report_determinism_fingerprint"
+      ],
+      "properties": {
+        "artifact": { "$ref": "#/$defs/artifact" },
+        "corpus_sha256": { "$ref": "#/$defs/sha256" },
+        "options_sha256": { "$ref": "#/$defs/sha256" },
+        "config_sha256": { "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "options": { "$ref": "#/$defs/options" },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "report_determinism_fingerprint": {
+          "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "delta", "direction"],
+      "properties": {
+        "before": { "type": "boolean" },
+        "after": { "type": "boolean" },
+        "delta": { "type": "integer" },
+        "direction": { "enum": ["improved", "regressed", "unchanged"] }
+      }
+    },
+    "rank_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "delta", "entered_top18", "exited_top18", "direction"],
+      "properties": {
+        "before": { "type": ["integer", "null"], "minimum": 1 },
+        "after": { "type": ["integer", "null"], "minimum": 1 },
+        "delta": { "type": ["integer", "null"] },
+        "entered_top18": { "type": "boolean" },
+        "exited_top18": { "type": "boolean" },
+        "direction": { "enum": ["improved", "regressed", "unchanged"] }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_surfaces",
+        "candidates",
+        "candidate_metadata_status",
+        "surface_top1",
+        "surface_rank",
+        "surface_in_candidate_limit",
+        "surface_in_recall_k",
+        "terminal",
+        "truncated"
+      ],
+      "properties": {
+        "candidate_surfaces": { "type": "array", "items": { "type": "string" } },
+        "candidates": { "type": "array", "items": {} },
+        "candidate_metadata_status": { "enum": ["observed", "unsupported"] },
+        "surface_top1": { "type": "boolean" },
+        "surface_rank": { "type": ["integer", "null"], "minimum": 1 },
+        "surface_in_candidate_limit": { "type": "boolean" },
+        "surface_in_recall_k": { "type": "boolean" },
+        "terminal": { "type": ["string", "null"] },
+        "truncated": { "type": ["boolean", "null"] }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "reading",
+        "role",
+        "contrast_group",
+        "assertion_kind",
+        "assertion_k",
+        "expected_surface",
+        "before",
+        "after",
+        "top1",
+        "recall",
+        "rank",
+        "changed"
+      ],
+      "properties": {
+        "case_id": { "type": "string", "minLength": 1 },
+        "reading": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "contrast_group": { "type": "string", "minLength": 1 },
+        "assertion_kind": { "enum": ["top1", "recall_at_k"] },
+        "assertion_k": { "type": "integer", "minimum": 1, "maximum": 18 },
+        "expected_surface": { "type": "string", "minLength": 1 },
+        "before": { "$ref": "#/$defs/observation" },
+        "after": { "$ref": "#/$defs/observation" },
+        "top1": { "$ref": "#/$defs/change" },
+        "recall": { "$ref": "#/$defs/change" },
+        "rank": { "$ref": "#/$defs/rank_change" },
+        "changed": { "type": "boolean" }
+      }
+    },
+    "role_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "total", "top1_before", "top1_after", "top1_delta", "recall_before", "recall_after", "recall_delta", "rank_improved", "rank_regressed", "rank_unchanged"],
+      "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "total": { "type": "integer", "minimum": 0 },
+        "top1_before": { "type": "integer", "minimum": 0 },
+        "top1_after": { "type": "integer", "minimum": 0 },
+        "top1_delta": { "type": "integer" },
+        "recall_before": { "type": "integer", "minimum": 0 },
+        "recall_after": { "type": "integer", "minimum": 0 },
+        "recall_delta": { "type": "integer" },
+        "rank_improved": { "type": "integer", "minimum": 0 },
+        "rank_regressed": { "type": "integer", "minimum": 0 },
+        "rank_unchanged": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "changed_cases",
+        "top1_before",
+        "top1_after",
+        "top1_delta",
+        "top1_improved",
+        "top1_regressed",
+        "top1_unchanged",
+        "recall_before",
+        "recall_after",
+        "recall_delta",
+        "recall_improved",
+        "recall_regressed",
+        "recall_unchanged",
+        "mrr_at_candidate_limit_before",
+        "mrr_at_candidate_limit_after",
+        "mrr_at_candidate_limit_delta",
+        "rank_improved",
+        "rank_regressed",
+        "rank_unchanged",
+        "rank_entered_candidate_limit",
+        "rank_exited_candidate_limit",
+        "roles"
+      ],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "changed_cases": { "type": "integer", "minimum": 0 },
+        "top1_before": { "type": "integer", "minimum": 0 },
+        "top1_after": { "type": "integer", "minimum": 0 },
+        "top1_delta": { "type": "integer" },
+        "top1_improved": { "type": "integer", "minimum": 0 },
+        "top1_regressed": { "type": "integer", "minimum": 0 },
+        "top1_unchanged": { "type": "integer", "minimum": 0 },
+        "recall_before": { "type": "integer", "minimum": 0 },
+        "recall_after": { "type": "integer", "minimum": 0 },
+        "recall_delta": { "type": "integer" },
+        "recall_improved": { "type": "integer", "minimum": 0 },
+        "recall_regressed": { "type": "integer", "minimum": 0 },
+        "recall_unchanged": { "type": "integer", "minimum": 0 },
+        "mrr_at_candidate_limit_before": { "type": "number" },
+        "mrr_at_candidate_limit_after": { "type": "number" },
+        "mrr_at_candidate_limit_delta": { "type": "number" },
+        "rank_improved": { "type": "integer", "minimum": 0 },
+        "rank_regressed": { "type": "integer", "minimum": 0 },
+        "rank_unchanged": { "type": "integer", "minimum": 0 },
+        "rank_entered_candidate_limit": { "type": "integer", "minimum": 0 },
+        "rank_exited_candidate_limit": { "type": "integer", "minimum": 0 },
+        "roles": { "type": "array", "items": { "$ref": "#/$defs/role_summary" } }
+      }
+    }
+  }
+}

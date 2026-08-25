@@ -539,7 +539,7 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
 
 /// Paints the same warm neutral Sakura surface as the candidate popup.
 /// High contrast and automatic Windows theme resolution remain centralized in
-/// `candidate::palette`, so the two renderer-owned surfaces cannot disagree.
+/// `theme::palette`, so the two renderer-owned surfaces cannot disagree.
 fn paint(window: HWND) {
     let mut ps = PAINTSTRUCT::default();
     // SAFETY: `window` is live; `EndPaint` is called with the same struct
@@ -558,11 +558,11 @@ fn paint(window: HWND) {
         // anything else, including an indicator that has never been shown.
         let stored = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) };
         if let Some((mode, theme)) = decode_state(stored) {
-            let palette = candidate::palette(theme);
+            let palette = crate::theme::palette(theme);
             fill(dc, &rect, palette.surface);
 
             let accent = RECT {
-                right: rect.left + scaled(window, candidate::RAIL_WIDTH_96),
+                right: rect.left + scaled(window, crate::theme::RAIL_WIDTH_96),
                 ..rect
             };
             fill(dc, &accent, palette.rail);
@@ -577,8 +577,8 @@ fn paint(window: HWND) {
             glyph::draw_centered(dc, &glyph_rect, glyph::label(mode), palette.ink);
 
             let label_rect = RECT {
-                left: glyph_rect.right + scaled(window, candidate::GAP_96),
-                right: rect.right - scaled(window, candidate::PADDING_96),
+                left: glyph_rect.right + scaled(window, crate::theme::GAP_96),
+                right: rect.right - scaled(window, crate::theme::PADDING_96),
                 ..rect
             };
             draw_description(
@@ -644,7 +644,7 @@ fn draw_description(
     // attributes are fixed UI values scaled for the current monitor.
     let font = unsafe {
         CreateFontW(
-            -scaled(window, candidate::SUPPORT_FONT_96),
+            -scaled(window, crate::theme::SUPPORT_FONT_96),
             0,
             0,
             0,
@@ -684,6 +684,7 @@ fn draw_description(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sakura_proto::PadShortcut;
 
     #[test]
     fn every_mode_and_theme_survives_the_window_word() {
@@ -756,6 +757,7 @@ mod tests {
         UiState {
             revision: 1,
             appearance_theme: AppearanceTheme::Light,
+            pad_shortcut: PadShortcut::Disabled,
             mode: Some(Mode::Hiragana),
             candidates: None,
             candidate_detail: None,
@@ -1010,8 +1012,8 @@ mod tests {
 
     #[test]
     fn candidate_palette_is_the_indicator_palette_for_light_and_dark() {
-        let light = candidate::palette(AppearanceTheme::Light);
-        let dark = candidate::palette(AppearanceTheme::Dark);
+        let light = crate::theme::palette(AppearanceTheme::Light);
+        let dark = crate::theme::palette(AppearanceTheme::Dark);
         assert_ne!(light.surface, dark.surface);
         assert_ne!(light.ink, dark.ink);
         assert_ne!(light.annotation, dark.annotation);

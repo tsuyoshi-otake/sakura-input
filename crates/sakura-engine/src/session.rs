@@ -66,6 +66,63 @@ pub const MAX_SESSIONS: usize = 64;
 /// create.
 pub const MAX_PROCESS_NAME_BYTES: usize = 128;
 
+/// The renderer owns a UI-only Pad surface.  Its process name is a host
+/// identity, not an input scope, so the privacy boundary is fixed when the
+/// session is created and cannot be relaxed by a later scope publication.
+pub const SAKURA_RENDERER_PROCESS_NAME: &str = "sakura_renderer.exe";
+
+/// Host-level privacy policy fixed at session creation.
+///
+/// `InputScope` describes the focused field and may legitimately transition
+/// back to `Normal`.  This policy describes who owns the session instead and
+/// therefore must not be recomputed from, or cleared by, scope transitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostPolicy {
+    /// Ordinary application host. Existing scope-based privacy rules apply.
+    Ordinary,
+    /// Sakura renderer-owned UI, including Sakura Pad. Text may be converted
+    /// locally but must not enter durable history/learning or an AI/network
+    /// text path.
+    PrivateRendererUi,
+}
+
+impl HostPolicy {
+    /// Classifies an exact host executable basename. Windows process names are
+    /// case-insensitive, while path components and suffixes are not accepted.
+    pub fn from_process_name(process_name: &str) -> Self {
+        if process_name.eq_ignore_ascii_case(SAKURA_RENDERER_PROCESS_NAME) {
+            Self::PrivateRendererUi
+        } else {
+            Self::Ordinary
+        }
+    }
+
+    pub const fn is_private_renderer_ui(self) -> bool {
+        matches!(self, Self::PrivateRendererUi)
+    }
+
+    /// Whether a session may reach a durable personal-data sink.
+    pub const fn allows_persistence(self) -> bool {
+        matches!(self, Self::Ordinary)
+    }
+
+    /// Whether a session may use bounded local conversion/ranking workers.
+    ///
+    /// Prediction and long-conversion workers stay inside the local engine
+    /// contract: the former ranks local dictionary data, and the latter sends
+    /// only a bounded candidate snapshot to the local neural child. Neither
+    /// is an AI/network text path, so Pad keeps these workers for normal IME
+    /// quality.
+    pub const fn allows_local_worker(self) -> bool {
+        true
+    }
+
+    /// Whether a session may start, apply, or record AI text.
+    pub const fn allows_ai_text(self) -> bool {
+        matches!(self, Self::Ordinary)
+    }
+}
+
 /// Volatile recency window described by DESIGN §5.8.
 pub const COMMIT_CACHE_CAPACITY: usize = 8;
 /// Admission state for raw-key provenance.  This is deliberately smaller than
@@ -204,6 +261,9 @@ impl SessionCrossCommitBridge {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     process_name: FixedStr<MAX_PROCESS_NAME_BYTES>,
+    /// Fixed at creation from the exact host basename. Unlike `scope`, this
+    /// value is never changed by `SetInputScope` or runtime preferences.
+    host_policy: HostPolicy,
     /// The IME mode new keystrokes are interpreted under.
     pub(crate) mode: Mode,
     /// Width and punctuation policy resolved once from the host profile.
@@ -355,6 +415,7 @@ impl Session {
         let _ = name.push_str(truncate_to_fit(process_name, name.capacity()));
         Session {
             process_name: name,
+            host_policy: HostPolicy::from_process_name(process_name),
             mode: Mode::Hiragana,
             normalizer: Normalizer::default(),
             space_width: SpaceWidth::SameAsInput,
@@ -411,6 +472,11 @@ impl Session {
     /// truncated; see [`Session::new`]).
     pub fn process_name(&self) -> &str {
         self.process_name.as_str()
+    }
+
+    /// Host-level privacy policy fixed when this session was created.
+    pub fn host_policy(&self) -> HostPolicy {
+        self.host_policy
     }
 
     /// Idle Space width, including the ASCII-word latch.
@@ -1789,6 +1855,7 @@ mod tests {
     fn a_new_session_starts_idle_in_hiragana_mode_with_normal_scope() {
         let mut session = Session::new("notepad.exe");
         assert_eq!(session.process_name(), "notepad.exe");
+        assert_eq!(session.host_policy(), HostPolicy::Ordinary);
         assert_eq!(session.mode(), Mode::Hiragana);
         assert_eq!(session.scope(), InputScope::Normal);
         assert_eq!(session.state(), State::Idle);
@@ -1807,6 +1874,47 @@ mod tests {
             session.idle_space_is_full(false),
             "a Japanese commit restores ideographic idle Space"
         );
+    }
+
+    #[test]
+    fn renderer_basename_fixes_private_policy_independent_of_normal_scope() {
+        let mut session = Session::new(SAKURA_RENDERER_PROCESS_NAME);
+        assert_eq!(session.host_policy(), HostPolicy::PrivateRendererUi);
+        assert!(session.host_policy().is_private_renderer_ui());
+
+        // A renderer-owned Pad is normally classified as ordinary text for
+        // conversion. Even after a classification gap, re-publishing Normal
+        // must not relax the host policy.
+        session.apply_input_scope(InputScope::Unclassified);
+        session.apply_input_scope(InputScope::Normal);
+        assert_eq!(session.scope(), InputScope::Normal);
+        assert_eq!(session.host_policy(), HostPolicy::PrivateRendererUi);
+        assert!(!session.host_policy().allows_persistence());
+        assert!(session.host_policy().allows_local_worker());
+        assert!(!session.host_policy().allows_ai_text());
+    }
+
+    #[test]
+    fn only_the_exact_renderer_basename_is_private() {
+        for name in ["SAKURA_RENDERER.EXE", "sakura_renderer.exe"] {
+            assert_eq!(
+                HostPolicy::from_process_name(name),
+                HostPolicy::PrivateRendererUi,
+                "Windows basename matching is case-insensitive for {name}"
+            );
+        }
+        for name in [
+            "sakura_renderer.exe.bak",
+            "C:\\Program Files\\Sakura Input\\sakura_renderer.exe",
+            "not_sakura_renderer.exe",
+            "sakura_renderer",
+        ] {
+            assert_eq!(
+                HostPolicy::from_process_name(name),
+                HostPolicy::Ordinary,
+                "non-basename {name:?} must not gain the renderer policy"
+            );
+        }
     }
 
     #[test]

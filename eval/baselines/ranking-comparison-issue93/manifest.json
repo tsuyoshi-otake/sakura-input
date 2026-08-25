@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "corpus_id": "issue93-ranking-comparison-v1",
+  "fixture_sha256": "c81d3e78215f122d06f396daa8301946609298da0b0e6d900189b7f82a9ee29b",
+  "options_sha256": "61c6b8b2e57d83e658822436c4100d0b8a5233744ff99e9c5f8444baa98d3990",
+  "candidate_limit": 18,
+  "capture_repetitions": 2,
+  "capture_repetitions_byte_identical": true,
+  "snapshots": [
+    {
+      "variant": "v1.0.5",
+      "file": "v1.0.5.candidate-snapshot.json",
+      "bytes": 527106,
+      "sha256": "4b8d35e97af103e7aded84de946c18ce514dc6a6c4ce3a5ebf57d57c8d697dd7",
+      "git_sha": "e15c7b647c3af0c4c63ef4a7665b7e6d774cc530",
+      "dictionary_sha256": "b7d08643395181f6d214866f9bb98646de366dc71caa15320effe774bc4c1d90",
+      "evaluator_sha256": "139e81ebec56a214b10e5c82f4c38a44414c164087210ed641c3a4be9d5e2a21",
+      "source_diff_sha256": "clean",
+      "score": {
+        "top1": 14,
+        "declared_assertion_passes": 18,
+        "mrr_at_candidate_limit": 0.7818181818181819,
+        "determinism_fingerprint": "7dcbc126d87de944a140cc737b96f73824dfb2d3526817355cb6de6851f0f994",
+        "roles": [
+          {
+            "role": "coverage_sentinel",
+            "total": 10,
+            "top1": 6,
+            "declared_assertion_passes": 9
+          },
+          {
+            "role": "general_negative_control",
+            "total": 6,
+            "top1": 6,
+            "declared_assertion_passes": 6
+          },
+          {
+            "role": "it_positive",
+            "total": 6,
+            "top1": 2,
+            "declared_assertion_passes": 3
+          }
+        ]
+      }
+    },
+    {
+      "variant": "v1.0.23",
+      "file": "v1.0.23.candidate-snapshot.json",
+      "bytes": 405296,
+      "sha256": "749668d4a358350a395014ebabe310f3fdcf8bba298951e18980020725729c6c",
+      "git_sha": "46d649282fff2dfebc09be9e0e8d8915031fb8b0",
+      "dictionary_sha256": "ec296b7f68d6d5e55d7faed458473101675e29440dc1e8456998473e60c7632d",
+      "evaluator_sha256": "cd8b05a2d51349bbcbcbe72d7d7ccfce29daf801f360ba4bf305bf2881c8818d",
+      "source_diff_sha256": "clean",
+      "score": {
+        "top1": 12,
+        "declared_assertion_passes": 16,
+        "mrr_at_candidate_limit": 0.7727272727272727,
+        "determinism_fingerprint": "0ef02ca55ab62364f0bda5bca6e436c5a47dc10259b60cb25c37f5794177ef6b",
+        "roles": [
+          {
+            "role": "coverage_sentinel",
+            "total": 10,
+            "top1": 6,
+            "declared_assertion_passes": 10
+          },
+          {
+            "role": "general_negative_control",
+            "total": 6,
+            "top1": 0,
+            "declared_assertion_passes": 0
+          },
+          {
+            "role": "it_positive",
+            "total": 6,
+            "top1": 6,
+            "declared_assertion_passes": 6
+          }
+        ]
+      }
+    },
+    {
+      "variant": "v1.0.23-it-compound-coherence-off",
+      "file": "v1.0.23-it-compound-coherence-off.candidate-snapshot.json",
+      "bytes": 412594,
+      "sha256": "b3a83591d990a5023d46f699e4a7952becf9ae9ac4b382b5c985dc4afbd64948",
+      "git_sha": "46d649282fff2dfebc09be9e0e8d8915031fb8b0",
+      "dictionary_sha256": "ec296b7f68d6d5e55d7faed458473101675e29440dc1e8456998473e60c7632d",
+      "evaluator_sha256": "83511512837e9e696c2686bd60e8a8364c29d88c1321d46718dfec51a8994fd7",
+      "source_diff_sha256": "c4d659d440b0c6fd0f18767e561dfb7e13a6c324c5987a0732a54845222cf3da",
+      "score": {
+        "top1": 17,
+        "declared_assertion_passes": 22,
+        "mrr_at_candidate_limit": 0.8863636363636364,
+        "determinism_fingerprint": "d94539b71c3863c40e742a441eda7e18b83cdc1e2fb0e991a28f0a812b0e9a6e",
+        "roles": [
+          {
+            "role": "coverage_sentinel",
+            "total": 10,
+            "top1": 6,
+            "declared_assertion_passes": 10
+          },
+          {
+            "role": "general_negative_control",
+            "total": 6,
+            "top1": 6,
+            "declared_assertion_passes": 6
+          },
+          {
+            "role": "it_positive",
+            "total": 6,
+            "top1": 5,
+            "declared_assertion_passes": 6
+          }
+        ]
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "before": "v1.0.5",
+      "after": "v1.0.23",
+      "changed_cases": 11,
+      "top1_before": 14,
+      "top1_after": 12,
+      "declared_assertion_passes_before": 18,
+      "declared_assertion_passes_after": 16,
+      "rank_improved": 5,
+      "rank_regressed": 6,
+      "determinism_fingerprint": "590d9a96dfda7f9f83408b72d7b36e4ae4bcd61524bab81f0ba8519c36d6e2e6"
+    },
+    {
+      "before": "v1.0.23",
+      "after": "v1.0.23-it-compound-coherence-off",
+      "changed_cases": 7,
+      "top1_before": 12,
+      "top1_after": 17,
+      "declared_assertion_passes_before": 16,
+      "declared_assertion_passes_after": 22,
+      "rank_improved": 6,
+      "rank_regressed": 1,
+      "determinism_fingerprint": "57cb1404f173b9df602ee48fe048fe7968b9f1193ccec45211c3c5848188c5b2"
+    },
+    {
+      "before": "v1.0.5",
+      "after": "v1.0.23-it-compound-coherence-off",
+      "changed_cases": 4,
+      "top1_before": 14,
+      "top1_after": 17,
+      "declared_assertion_passes_before": 18,
+      "declared_assertion_passes_after": 22,
+      "rank_improved": 4,
+      "rank_regressed": 0,
+      "determinism_fingerprint": "4611528bceaf8b5f76ebc62b79d1312e8ad394e4b591b762bc6c279d7903474b"
+    }
+  ]
+}

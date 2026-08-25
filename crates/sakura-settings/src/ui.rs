@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use sakura_core::{
     AppProfile, AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, InputSupport,
-    NeuralRerankerScope, Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
-    UserDictionary, UserDictionaryEntry, UserPartOfSpeech, Width,
+    NeuralRerankerScope, PadShortcut, Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth,
+    SuggestAccept, UserDictionary, UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
 use sakura_reg::user_preferences::{
@@ -60,17 +60,17 @@ use windows::Win32::UI::WindowsAndMessaging::{
     BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_GROUPBOX, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK,
     CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT,
     ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN,
-    GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, ICON_BIG, ICON_SMALL,
-    IDC_ARROW, IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING,
-    LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION,
-    MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
-    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
+    GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG,
+    ICON_SMALL, IDC_ARROW, IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY,
+    LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR,
+    MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE,
+    SW_SHOW, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
     WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETICON,
     WM_SETTINGCHANGE, WM_THEMECHANGED, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
     WS_DISABLED, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_GROUP, WS_HSCROLL, WS_MINIMIZEBOX,
-    WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    WS_OVERLAPPED, WS_POPUP, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 #[cfg(test)]
@@ -79,6 +79,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 const WINDOW_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsWindow");
+/// The class of the hidden window that owns the settings window.
+///
+/// It exists for one reason: an unowned top-level window gets a taskbar
+/// button, and the settings sheet is a dialog reached from the language bar,
+/// not a program the owner started. Giving it an owner takes the button away
+/// and leaves its caption, its size and its behaviour exactly as they were.
+/// It is a class of its own so that the single-instance `FindWindowW` search
+/// still finds the settings window and never this one.
+const OWNER_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsOwner");
 const PANEL_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsPanel");
 // The stable bootstrap can launch a new versioned payload on every click, so
 // the payload—not the bootstrap—owns the per-session settings singleton.
@@ -215,6 +224,7 @@ struct GeneralControls {
     input_method_romaji: HWND,
     input_method_kana: HWND,
     default_mode: HWND,
+    pad_shortcut: HWND,
     input_assist_space_width: HWND,
     input_assist_shift_space: HWND,
     ai_text_key: HWND,
@@ -704,6 +714,13 @@ pub fn run() -> Result<(), String> {
     }
     register_window_class().map_err(display)?;
     let window = create_main_window().map_err(display)?;
+    // Read now, while the settings window is alive: after the pump it is gone
+    // and the hidden owner would have nothing left to be found through.
+    // Destroying an owner destroys what it owns, so this cannot be done from
+    // the settings window's own `WM_DESTROY`.
+    //
+    // SAFETY: a live top-level window; the call only reads a relationship.
+    let owner = unsafe { GetWindow(window, GW_OWNER) }.ok();
     let _window_icons = apply_window_icons(window);
     let app = App::new(window)?;
     let app = Box::into_raw(Box::new(app));
@@ -725,6 +742,13 @@ pub fn run() -> Result<(), String> {
     unsafe {
         SetWindowLongPtrW(window, GWLP_USERDATA, 0);
         drop(Box::from_raw(app));
+    }
+    if let Some(owner) = owner {
+        // SAFETY: the hidden owner created alongside the settings window;
+        // nothing it owns is left by the time the pump has returned.
+        unsafe {
+            let _ = DestroyWindow(owner);
+        }
     }
     Ok(())
 }
@@ -1295,6 +1319,10 @@ impl App {
             mode_index(self.configuration.preferences.default_mode),
         );
         select_combo(
+            self.general.pad_shortcut,
+            pad_shortcut_index(self.configuration.preferences.pad_shortcut),
+        );
+        select_combo(
             self.general.conversion_assist_method,
             conversion_method_index(self.configuration.preferences.conversion_method),
         );
@@ -1410,6 +1438,8 @@ impl App {
         )?;
         self.configuration.preferences.default_mode =
             mode_from_index(combo_index(self.general.default_mode))?;
+        self.configuration.preferences.pad_shortcut =
+            pad_shortcut_from_index(combo_index(self.general.pad_shortcut))?;
         self.configuration.preferences.conversion_method =
             conversion_method_from_index(combo_index(self.general.conversion_assist_method))?;
         self.configuration.preferences.prediction_enabled = is_checked(self.general.prediction);
@@ -2474,6 +2504,21 @@ const fn button_type_style(owner_draw: bool, default: bool) -> u32 {
     }
 }
 
+/// The hidden owner's procedure: it has nothing of its own to do.
+///
+/// It exists because a window class needs a procedure and the `windows` crate
+/// exposes `DefWindowProcW` as a Rust function rather than a `"system"` one.
+unsafe extern "system" fn owner_window_procedure(
+    window: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    // SAFETY: every message is delegated to the system exactly once, with the
+    // original scalar payloads.
+    unsafe { DefWindowProcW(window, message, wparam, lparam) }
+}
+
 fn register_window_class() -> WindowsResult<()> {
     // SAFETY: the class name and procedure are static; stock objects are
     // process-owned and remain valid for the window class lifetime.
@@ -2495,6 +2540,12 @@ fn register_window_class() -> WindowsResult<()> {
             ..Default::default()
         };
         RegisterClassW(&panel_class);
+        let owner_class = WNDCLASSW {
+            lpfnWndProc: Some(owner_window_procedure),
+            lpszClassName: OWNER_CLASS,
+            ..Default::default()
+        };
+        RegisterClassW(&owner_class);
     }
     Ok(())
 }
@@ -2571,6 +2622,28 @@ fn apply_window_icons(window: HWND) -> Option<WindowIcons> {
 }
 
 fn create_main_window() -> WindowsResult<HWND> {
+    // Never shown, never sized, never painted: the whole job of this window is
+    // to be an owner, which is what keeps the settings sheet out of the
+    // taskbar. `WS_EX_TOOLWINDOW` would have done it too, but it would also
+    // have shrunk the caption of a window the owner reads labels in.
+    //
+    // SAFETY: the class is registered above and the call is synchronous.
+    let owner = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            OWNER_CLASS,
+            PCWSTR::null(),
+            WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            None,
+            None,
+        )?
+    };
     // SAFETY: the class has just been registered and all text pointers outlive
     // this synchronous call.
     unsafe {
@@ -2586,7 +2659,7 @@ fn create_main_window() -> WindowsResult<HWND> {
             CW_USEDEFAULT,
             WINDOW_WIDTH,
             WINDOW_HEIGHT,
-            None,
+            Some(owner),
             None,
             None,
             None,
@@ -2628,7 +2701,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     let parent = basic_panel;
     label(parent, "基本設定", 4, 2, 190, 20)?;
     label(parent, "入力方法の基本設定を行います。", 4, 20, 358, 18)?;
-    group_box(parent, "既定の入力", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 138)?;
+    group_box(parent, "既定の入力", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 166)?;
     label(parent, "キー設定", 12, 72, 92, 22)?;
     let keymap = combo(parent, 104, 68, 126, 150)?;
     add_combo(keymap, "Microsoft IME 互換");
@@ -2656,6 +2729,11 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     let default_mode = combo(parent, 104, 126, 155, 150)?;
     for mode in Mode::ALL {
         add_combo(default_mode, mode_label(mode));
+    }
+    label(parent, "Sakura Pad", 12, 160, 92, 22)?;
+    let pad_shortcut = combo(parent, 104, 156, 180, 120)?;
+    for shortcut in PadShortcut::ALL {
+        add_combo(pad_shortcut, pad_shortcut_label(shortcut));
     }
     let parent = input_assist_panel;
     label(parent, "入力補助", 4, 2, 190, 20)?;
@@ -2986,6 +3064,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         input_method_romaji,
         input_method_kana,
         default_mode,
+        pad_shortcut,
         input_assist_space_width,
         input_assist_shift_space,
         ai_text_key,
@@ -4124,6 +4203,26 @@ const fn appearance_label(value: AppearanceTheme) -> &'static str {
     }
 }
 
+fn pad_shortcut_index(value: PadShortcut) -> usize {
+    PadShortcut::ALL
+        .iter()
+        .position(|candidate| *candidate == value)
+        .unwrap_or(0)
+}
+
+fn pad_shortcut_from_index(index: Option<usize>) -> Result<PadShortcut, String> {
+    index
+        .and_then(|index| PadShortcut::ALL.get(index).copied())
+        .ok_or_else(|| "Sakura Padのショートカットを選択してください。".to_owned())
+}
+
+const fn pad_shortcut_label(value: PadShortcut) -> &'static str {
+    match value {
+        PadShortcut::Disabled => "使わない",
+        PadShortcut::DoubleCtrl => "Ctrlを2回",
+    }
+}
+
 fn windows_apps_use_light_theme() -> bool {
     let mut value = 1u32;
     let mut bytes = size_of::<u32>() as u32;
@@ -4738,6 +4837,23 @@ mod tests {
             .map(appearance_label)
             .collect();
         assert_eq!(labels, ["自動（Windows に合わせる）", "ライト", "ダーク"]);
+    }
+
+    #[test]
+    fn pad_shortcut_mapping_is_bounded_and_japanese() {
+        for shortcut in PadShortcut::ALL {
+            assert_eq!(
+                pad_shortcut_from_index(Some(pad_shortcut_index(shortcut))),
+                Ok(shortcut)
+            );
+        }
+        assert!(pad_shortcut_from_index(None).is_err());
+        assert!(pad_shortcut_from_index(Some(PadShortcut::ALL.len())).is_err());
+        let labels: Vec<_> = PadShortcut::ALL
+            .into_iter()
+            .map(pad_shortcut_label)
+            .collect();
+        assert_eq!(labels, ["使わない", "Ctrlを2回"]);
     }
 
     #[test]

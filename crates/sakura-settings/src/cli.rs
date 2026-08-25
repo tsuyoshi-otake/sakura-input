@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use sakura_core::{
     AppProfile, AppearanceTheme, ConversionMethod, InputMethod, InputSupport, NeuralRerankerScope,
-    Preset, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionaryEntry, UserPartOfSpeech,
+    PadShortcut, Preset, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionaryEntry,
+    UserPartOfSpeech,
 };
 use sakura_proto::Mode;
 use sakura_settings::user_dictionary::{self, ImportMode};
@@ -25,6 +26,7 @@ Usage: sakura_settings <command>\n\
   config set suggest <tab|shift-enter|disabled>\n\
   config set neural-reranker-scope <off|long-text-only|all-normal-conversions>\n\
   config set appearance <auto|light|dark>\n\
+  config set pad-shortcut <disabled|double-ctrl>\n\
   config set space-width <same-as-input|full|half>\n\
   config set shift-space <opposite|full|half>\n\
   config set developer-mode <on|off>\n\
@@ -137,6 +139,7 @@ pub enum ConfigSetting {
     Suggest,
     NeuralRerankerScope,
     Appearance,
+    PadShortcut,
     SpaceWidth,
     ShiftSpace,
     DeveloperMode,
@@ -305,6 +308,9 @@ pub fn run(command: Command) -> Result<(), String> {
                 }
                 ConfigSetting::Appearance => {
                     document.preferences.appearance_theme = parse_appearance(&value)?;
+                }
+                ConfigSetting::PadShortcut => {
+                    document.preferences.pad_shortcut = parse_pad_shortcut(&value)?;
                 }
                 ConfigSetting::SpaceWidth => {
                     document.preferences.space_width = parse_space_width(&value)?;
@@ -667,6 +673,7 @@ fn print_configuration(document: &ConfigurationDocument) {
         "appearance\t{}",
         document.preferences.appearance_theme.name()
     );
+    println!("pad-shortcut\t{}", document.preferences.pad_shortcut.name());
     println!("space-width\t{}", document.preferences.space_width.name());
     println!(
         "shift-space\t{}",
@@ -721,6 +728,7 @@ fn parse_config_setting(setting: &str) -> Result<ConfigSetting, String> {
         "suggest" => Ok(ConfigSetting::Suggest),
         "neural-reranker-scope" => Ok(ConfigSetting::NeuralRerankerScope),
         "appearance" => Ok(ConfigSetting::Appearance),
+        "pad-shortcut" => Ok(ConfigSetting::PadShortcut),
         "space-width" => Ok(ConfigSetting::SpaceWidth),
         "shift-space" => Ok(ConfigSetting::ShiftSpace),
         "developer-mode" => Ok(ConfigSetting::DeveloperMode),
@@ -805,6 +813,11 @@ fn parse_neural_reranker_scope(value: &str) -> Result<NeuralRerankerScope, Strin
 fn parse_appearance(value: &str) -> Result<AppearanceTheme, String> {
     AppearanceTheme::from_name(value)
         .ok_or_else(|| format!("expected auto, light, or dark, got {value:?}"))
+}
+
+fn parse_pad_shortcut(value: &str) -> Result<PadShortcut, String> {
+    PadShortcut::from_name(value)
+        .ok_or_else(|| format!("expected disabled or double-ctrl, got {value:?}"))
 }
 
 fn parse_space_width(value: &str) -> Result<SpaceWidth, String> {
@@ -944,6 +957,13 @@ mod tests {
                 setting: ConfigSetting::Appearance,
                 value,
             }) if value == "dark"
+        ));
+        assert!(matches!(
+            parse_words(&["config", "set", "pad-shortcut", "double-ctrl"]),
+            Ok(Command::ConfigSet {
+                setting: ConfigSetting::PadShortcut,
+                value,
+            }) if value == "double-ctrl"
         ));
         assert!(matches!(
             parse_words(&["config", "set", "space-width", "half"]),
@@ -1138,6 +1158,17 @@ mod tests {
         assert_eq!(parse_appearance("dark"), Ok(AppearanceTheme::Dark));
         assert!(parse_appearance("system").is_err());
         assert!(parse_appearance("Dark").is_err());
+    }
+
+    #[test]
+    fn pad_shortcut_uses_only_the_canonical_names() {
+        assert_eq!(parse_pad_shortcut("disabled"), Ok(PadShortcut::Disabled));
+        assert_eq!(
+            parse_pad_shortcut("double-ctrl"),
+            Ok(PadShortcut::DoubleCtrl)
+        );
+        assert!(parse_pad_shortcut("ctrl").is_err());
+        assert!(parse_pad_shortcut("DoubleCtrl").is_err());
     }
 
     #[test]

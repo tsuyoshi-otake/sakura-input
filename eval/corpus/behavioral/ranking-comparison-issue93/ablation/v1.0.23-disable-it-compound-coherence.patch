@@ -1,0 +1,12 @@
+diff --git a/crates/sakura-core/src/conversion.rs b/crates/sakura-core/src/conversion.rs
+index 96cbae8..5b65562 100644
+--- a/crates/sakura-core/src/conversion.rs
++++ b/crates/sakura-core/src/conversion.rs
+@@ -1487,7 +1487,6 @@ impl Converter {
+                         search.terminal = ConversionSearchTerminal::CandidateLimitReached;
+                     }
+                     self.apply_it_completion_coherence(dictionary, reading, options)?;
+-                    self.apply_it_compound_coherence(reading, options);
+                     self.add_date_candidates(reading, civil_date)?;
+                     self.prefer_numeric_forms(reading)?;
+                     self.drop_jitsu_day_counts(reading);

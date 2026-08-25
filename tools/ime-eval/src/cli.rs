@@ -45,6 +45,9 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<u8, Error> {
         "quality-capture" => cmd_quality_capture(&flags),
         "quality-core-capture" => cmd_quality_core_capture(&flags),
         "quality-score" => cmd_quality_score(&flags),
+        "quality-compare" => cmd_quality_compare(&flags),
+        "quality-rank-score" => cmd_quality_rank_score(&flags),
+        "ranking-compare" => cmd_ranking_compare(&flags),
         "approve-history" => cmd_approve_history(&eval_root, &flags),
         "judge" => cmd_judge(&eval_root, &flags),
         "calibrate" => cmd_calibrate(&flags),
@@ -67,6 +70,10 @@ Commands:
   quality-capture  Diagnostic active-segment real-engine replay (not scoreable)
   quality-core-capture  Capture whole-reading candidates through sakura-core
   quality-score  Score only a whole-reading core quality capture (never a Judge input)
+  quality-compare  Compare two independent quality-score reports by stable case ID
+                   (pass --fixture for the Issue #93 corpus adapter)
+  quality-rank-score  Score one Issue #93 candidate snapshot against its fixture
+  ranking-compare  Compare two Issue #93 candidate snapshots by stable case ID
   approve-history  Publish an explicit opaque-ID history approval list
   judge      Blind A/B (+ swap) using prefer-literal, always-a, or codex
   calibrate  Calculate Judge-vs-human calibration metrics
@@ -457,6 +464,67 @@ fn cmd_quality_score(flags: &Flags) -> Result<u8, Error> {
         scoreboard.candidate.summary.surface_in_top18,
         scoreboard.determinism_fingerprint,
     );
+    println!("{}", out.display());
+    Ok(0)
+}
+
+fn cmd_quality_compare(flags: &Flags) -> Result<u8, Error> {
+    if flags.get("fixture").is_some() {
+        return cmd_ranking_compare(flags);
+    }
+    let before = Path::new(flags.require("before")?);
+    let after = Path::new(flags.require("after")?);
+    let side = crate::comparison::ComparisonSide::parse(flags.get("side").unwrap_or("candidate"))?;
+    let out = PathBuf::from(flags.require("out")?);
+    let comparison = crate::comparison::compare_files(before, after, side)?;
+    let bytes = serde_json::to_vec_pretty(&comparison)
+        .map_err(|error| err(format!("serialize quality comparison: {error}")))?;
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .map_err(|error| err(format!("create {}: {error}", parent.display())))?;
+    }
+    fs::write(&out, bytes).map_err(|error| err(format!("write {}: {error}", out.display())))?;
+    println!("{}", comparison.human_summary());
+    println!("{}", out.display());
+    Ok(0)
+}
+
+fn cmd_quality_rank_score(flags: &Flags) -> Result<u8, Error> {
+    let fixture = Path::new(flags.require("fixture")?);
+    let snapshot = Path::new(
+        flags
+            .get("snapshot")
+            .or_else(|| flags.get("input"))
+            .ok_or_else(|| err("missing --snapshot"))?,
+    );
+    let out = PathBuf::from(flags.require("out")?);
+    let report = crate::ranking_comparison::score_ranking_file(fixture, snapshot)?;
+    let bytes = serde_json::to_vec_pretty(&report)
+        .map_err(|error| err(format!("serialize Issue #93 ranking score: {error}")))?;
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .map_err(|error| err(format!("create {}: {error}", parent.display())))?;
+    }
+    fs::write(&out, bytes).map_err(|error| err(format!("write {}: {error}", out.display())))?;
+    println!("{}", report.human_summary());
+    println!("{}", out.display());
+    Ok(0)
+}
+
+fn cmd_ranking_compare(flags: &Flags) -> Result<u8, Error> {
+    let fixture = Path::new(flags.require("fixture")?);
+    let before = Path::new(flags.require("before")?);
+    let after = Path::new(flags.require("after")?);
+    let out = PathBuf::from(flags.require("out")?);
+    let report = crate::ranking_comparison::compare_ranking_files(fixture, before, after)?;
+    let bytes = serde_json::to_vec_pretty(&report)
+        .map_err(|error| err(format!("serialize Issue #93 ranking comparison: {error}")))?;
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .map_err(|error| err(format!("create {}: {error}", parent.display())))?;
+    }
+    fs::write(&out, bytes).map_err(|error| err(format!("write {}: {error}", out.display())))?;
+    println!("{}", report.human_summary());
     println!("{}", out.display());
     Ok(0)
 }

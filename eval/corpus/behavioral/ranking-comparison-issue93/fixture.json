@@ -1,0 +1,451 @@
+{
+  "schema_version": 1,
+  "corpus_id": "issue93-ranking-comparison-v1",
+  "stage": "phase0",
+  "candidate_limit": 18,
+  "options": {
+    "profile": "issue93-ranking-comparison-v1",
+    "candidate_limit": 18,
+    "recall_k": 5,
+    "learning": "disabled",
+    "user_dictionary": "disabled",
+    "reranker": "off",
+    "input_repair": "disabled",
+    "context": "empty",
+    "locale": "ja-JP"
+  },
+  "reference_comparison": {
+    "baseline_label": "v1.0.5",
+    "after_label": "v1.0.23",
+    "ablation_label": "v1.0.23-it-compound-coherence-off",
+    "source": "issue93-confirmed-cross-version-comparison"
+  },
+  "cases": [
+    {
+      "case_id": "rc93-g-001",
+      "role": "general_negative_control",
+      "contrast_group": "confirmation",
+      "category": "general_homophone_phrase",
+      "reading": "しようをかくにん",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "使用を確認",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "仕様を確認 is a legitimate homophone phrase in a different context; this fixed empty-context case checks the confirmed general-language regression only.",
+      "rationale": "The confirmed comparison changed this row from 使用を確認 to 仕様を確認 only when the global IT compound bonus was active.",
+      "reference_observation": {
+        "baseline": "使用を確認",
+        "after": "仕様を確認",
+        "ablation": "使用を確認"
+      },
+      "provenance": {
+        "kind": "issue93_confirmed_observation",
+        "references": ["GitHub Issue #93: confirmed cross-version comparison"],
+        "summary": "Directly reproduced in the v1.0.5 / v1.0.23 / IT-bonus-off comparison table."
+      }
+    },
+    {
+      "case_id": "rc93-g-002",
+      "role": "general_negative_control",
+      "contrast_group": "continuation",
+      "category": "general_homophone_phrase",
+      "reading": "しようをつづける",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "使用を続ける",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "仕様を続ける can be meaningful in a requirements context; this is a fixed regression control, not a universal sentence-level gold label.",
+      "rationale": "A uniform IT preference for 仕様 must not cross the boundary into the ordinary 使用を続ける phrase.",
+      "reference_observation": {
+        "baseline": "使用を続ける",
+        "after": "仕様を続ける",
+        "ablation": "使用を続ける"
+      },
+      "provenance": {
+        "kind": "issue93_confirmed_observation",
+        "references": ["GitHub Issue #93: confirmed cross-version comparison"],
+        "summary": "Directly reproduced as one of the six general-language controls."
+      }
+    },
+    {
+      "case_id": "rc93-g-003",
+      "role": "general_negative_control",
+      "contrast_group": "usage-caution",
+      "category": "general_homophone_phrase",
+      "reading": "しようじょうのちゅうい",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "使用上の注意",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "仕様上の注意 is possible when discussing specifications; the assertion is limited to the fixed regression corpus.",
+      "rationale": "The general phrase must remain available and first under the fixed empty-context options when no specification context is supplied.",
+      "reference_observation": {
+        "baseline": "使用上の注意",
+        "after": "仕様上の注意",
+        "ablation": "使用上の注意"
+      },
+      "provenance": {
+        "kind": "issue93_confirmed_observation",
+        "references": ["GitHub Issue #93: confirmed cross-version comparison"],
+        "summary": "Directly reproduced as one of the six general-language controls."
+      }
+    },
+    {
+      "case_id": "rc93-g-004",
+      "role": "general_negative_control",
+      "contrast_group": "yesterday-weather",
+      "category": "general_date_phrase",
+      "reading": "きのうのてんき",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "昨日の天気",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "機能の天気 is not a normal phrase, but the reading is deliberately retained as a direct homophone-boundary control.",
+      "rationale": "An IT reading of 機能 must not outrank the ordinary date noun 昨日 when the suffix is 天気.",
+      "reference_observation": {
+        "baseline": "昨日の天気",
+        "after": "機能の天気",
+        "ablation": "昨日の天気"
+      },
+      "provenance": {
+        "kind": "issue93_confirmed_observation",
+        "references": ["GitHub Issue #93: confirmed cross-version comparison"],
+        "summary": "Directly reproduced as one of the six general-language controls."
+      }
+    },
+    {
+      "case_id": "rc93-g-005",
+      "role": "general_negative_control",
+      "contrast_group": "yesterday-event",
+      "category": "general_date_phrase",
+      "reading": "きのうのできごと",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "昨日の出来事",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "機能の出来事 is retained as the observed bad output, not as an intended alternative.",
+      "rationale": "The date reading 昨日 must remain the lexical winner in an ordinary report of a past event.",
+      "reference_observation": {
+        "baseline": "昨日の出来事",
+        "after": "機能の出来事",
+        "ablation": "昨日の出来事"
+      },
+      "provenance": {
+        "kind": "issue93_confirmed_observation",
+        "references": ["GitHub Issue #93: confirmed cross-version comparison"],
+        "summary": "Directly reproduced as one of the six general-language controls."
+      }
+    },
+    {
+      "case_id": "rc93-g-006",
+      "role": "general_negative_control",
+      "contrast_group": "fair-judgment",
+      "category": "general_homophone_phrase",
+      "reading": "こうせいなはんだん",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "公正な判断",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "構成 and 公正 are homophonic only at the first word boundary; the phrase is still kept as a fixed regression control rather than broad semantic gold.",
+      "rationale": "IT-oriented scoring must not turn 構成 into the first candidate in the ordinary 公正な判断 phrase.",
+      "reference_observation": {
+        "baseline": "公正な判断",
+        "after": "構成な判断",
+        "ablation": "公正な判断"
+      },
+      "provenance": {
+        "kind": "issue93_confirmed_observation",
+        "references": ["GitHub Issue #93: confirmed cross-version comparison"],
+        "summary": "Directly reproduced as one of the six general-language controls."
+      }
+    },
+    {
+      "case_id": "rc93-i-001",
+      "role": "it_positive",
+      "contrast_group": "confirmation",
+      "category": "it_compound",
+      "reading": "きのうかくにん",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "機能確認",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "機能確認 is a clear engineering compound, but the fixture does not claim it should be Top-1 in every application context.",
+      "rationale": "Keep the positive counterpart to 使用を確認 in the same run and make the useful IT compound reachable without a global bonus.",
+      "provenance": {
+        "kind": "dictionary_contract",
+        "references": ["GitHub Issue #93: IT-positive corpus requirement", "Issue #62 function-compound family"],
+        "summary": "A compact positive target for candidate coverage; use Recall@5 until its exact dictionary identity and calibrated cost are fixed."
+      }
+    },
+    {
+      "case_id": "rc93-i-002",
+      "role": "it_positive",
+      "contrast_group": "usage-caution",
+      "category": "it_compound",
+      "reading": "きのうしょうかい",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "機能紹介",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "機能紹介 is a technical compound target; other suffixes may still be valid in a broader sentence context.",
+      "rationale": "This is an existing calibrated IT compound and should remain a strong positive while the general 使用上の注意 control stays intact.",
+      "provenance": {
+        "kind": "dictionary_contract",
+        "references": ["data/conversion-priorities.tsv: 機能紹介", "crates/dictc/tests/conversion_priorities.rs: function_compounds_outrank_the_yesterday_split"],
+        "summary": "Existing project-authored IT overlay and source-level ranking contract."
+      }
+    },
+    {
+      "case_id": "rc93-i-003",
+      "role": "it_positive",
+      "contrast_group": "requirement",
+      "category": "it_compound",
+      "reading": "きのうようけん",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "機能要件",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "機能要件 is an unambiguous engineering compound for this fixed corpus, while other requirement-related surfaces may be valid in longer context.",
+      "rationale": "The positive IT compound must remain available and correctly ranked without allowing IT evidence to dominate unrelated general phrases.",
+      "provenance": {
+        "kind": "dictionary_contract",
+        "references": ["data/conversion-priorities.tsv: 機能要件", "crates/dictc/tests/conversion_priorities.rs: function_compounds_outrank_the_yesterday_split"],
+        "summary": "Existing project-authored IT overlay and source-level ranking contract."
+      }
+    },
+    {
+      "case_id": "rc93-i-004",
+      "role": "it_positive",
+      "contrast_group": "requirement",
+      "category": "it_lexical",
+      "reading": "ようけん",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "要件",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "要件 and 用件 share the reading; no Top-1 semantic claim is made without context.",
+      "rationale": "The common standalone IT term must survive candidate trimming and remain selectable even when 用件 is also a valid lexical candidate.",
+      "provenance": {
+        "kind": "dictionary_contract",
+        "references": ["data/it-terms.tsv: 要件", "GitHub Issue #93: IT candidate-recall requirement"],
+        "summary": "Standalone IT coverage check; presence within Recall@5 is the intended assertion."
+      }
+    },
+    {
+      "case_id": "rc93-i-005",
+      "role": "it_positive",
+      "contrast_group": "introduction",
+      "category": "it_lexical",
+      "reading": "しょうかい",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "紹介",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "紹介 and 照会 are homophones; the fixture checks reachability, not which meaning a context-free reading should select.",
+      "rationale": "Retain the ordinary and engineering-useful noun 紹介 without forcing it over the valid homophone 照会.",
+      "provenance": {
+        "kind": "dictionary_contract",
+        "references": ["data/curated-homophone-details.tsv: 紹介", "data/it-terms.tsv: introduction-related entries"],
+        "summary": "Standalone lexical coverage check with an explicit homophone ambiguity note."
+      }
+    },
+    {
+      "case_id": "rc93-i-006",
+      "role": "it_positive",
+      "contrast_group": "usage-caution",
+      "category": "it_compound",
+      "reading": "きのうしよう",
+      "assertion_kind": "top1",
+      "assertion_k": 1,
+      "expected_surface": "機能仕様",
+      "semantic_scope": "bounded_issue93_regression",
+      "ambiguity": "機能仕様 is the fixed engineering compound target; specification language outside this compound may require context.",
+      "rationale": "Keep an explicit IT compound positive beside the general 使用上の注意 control so the comparison detects one-sided fixes.",
+      "provenance": {
+        "kind": "dictionary_contract",
+        "references": ["data/conversion-priorities.tsv: 機能仕様", "GitHub Issue #93: IT-positive corpus requirement"],
+        "summary": "Existing project-authored IT compound used as a compact positive ranking check."
+      }
+    },
+    {
+      "case_id": "rc93-c-001",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "たて",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "縦",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "たて also legitimately yields 建て and 立て; the sentinel must not require 縦 to be Top-1.",
+      "rationale": "Detect loss of the useful surface when internal POS/connection rows consume a surface-aware candidate budget.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/trim.rs: surface-aware cap regression"],
+        "summary": "Coverage-only sentinel for a surface that can be lost while other rows for the same reading remain."
+      }
+    },
+    {
+      "case_id": "rc93-c-002",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "ばん",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "版",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "ばん has valid alternatives such as 番 and 晩; only candidate presence is asserted.",
+      "rationale": "Verify that an independently usable 版 survives trimming and remains selectable beside homophonic forms.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: real_dictionary_balances_non_initial_fragments_and_productive_bound_forms"],
+        "summary": "Coverage-only sentinel for the restored 版 surface."
+      }
+    },
+    {
+      "case_id": "rc93-c-003",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "にち",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "日",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "The reading participates in date, counter, and compound forms; the standalone surface is a recall sentinel, not a Top-1 claim.",
+      "rationale": "Keep 日 reachable after trim and candidate deduplication, including when other date or numeric candidates are present.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: date and 日 candidate coverage"],
+        "summary": "Coverage-only sentinel for the にち reading."
+      }
+    },
+    {
+      "case_id": "rc93-c-004",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "ひ",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "日",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "ひ is also a productive reading for other lexical items; no unconditional ranking is implied.",
+      "rationale": "Exercise the short reading that commonly competes with numeric and date candidates while preserving 日 coverage.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: 日 reading coverage"],
+        "summary": "Coverage-only sentinel for the ひ reading."
+      }
+    },
+    {
+      "case_id": "rc93-c-005",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "び",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "日",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "び is primarily observed inside compounds; this case checks recoverability, not a standalone semantic preference.",
+      "rationale": "Cover the voiced 日 boundary called out by the Issue #93 acceptance criteria.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: 日 compound readings"],
+        "summary": "Coverage-only sentinel for the voiced compound reading."
+      }
+    },
+    {
+      "case_id": "rc93-c-006",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "ぴ",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "日",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "ぴ is a compound boundary reading and is not a context-free Top-1 assertion.",
+      "rationale": "Cover the semi-voiced 日 boundary called out by the Issue #93 acceptance criteria.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: 日 compound readings"],
+        "summary": "Coverage-only sentinel for the semi-voiced compound reading."
+      }
+    },
+    {
+      "case_id": "rc93-c-007",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "どき",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "時",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "どき is normally seen at a compound boundary and may compete with other lexical readings; this is a reachability check only.",
+      "rationale": "Keep 時 reachable when a compound's correct rendaku changes the surface reading from とき to どき.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: 日・時・方・替え coverage"],
+        "summary": "Coverage-only sentinel for the voiced compound reading of 時."
+      }
+    },
+    {
+      "case_id": "rc93-c-008",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "がた",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "方",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "がた is a compound or honorific boundary reading and is not a context-free Top-1 assertion.",
+      "rationale": "Preserve the useful 方 surface when a compound's correct rendaku changes the reading from かた to がた.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: 日・時・方・替え coverage"],
+        "summary": "Coverage-only sentinel for the voiced compound reading of 方."
+      }
+    },
+    {
+      "case_id": "rc93-c-009",
+      "role": "coverage_sentinel",
+      "contrast_group": "surface-coverage",
+      "category": "surface_coverage",
+      "reading": "がえ",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "替え",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "がえ is a compound boundary reading with multiple possible lexical continuations; only candidate presence is asserted.",
+      "rationale": "Preserve 替え after rendaku, including in useful compounds such as 気遣い and 小遣い.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: dictionary coverage acceptance", "crates/dictc/tests/conversion.rs: 日・時・方・替え coverage"],
+        "summary": "Coverage-only sentinel for the voiced compound reading of 替え."
+      }
+    },
+    {
+      "case_id": "rc93-c-010",
+      "role": "coverage_sentinel",
+      "contrast_group": "rendaku-compound",
+      "category": "rendaku_compound_coverage",
+      "reading": "きづかい",
+      "assertion_kind": "recall_at_k",
+      "assertion_k": 5,
+      "expected_surface": "気遣い",
+      "semantic_scope": "candidate_presence_only",
+      "ambiguity": "気遣い is one representative compound; the sentinel does not claim that every compound containing づかい should be Top-1.",
+      "rationale": "Check that a useful compound remains reachable when the non-initial 遣い entry is read with the voiced づかい boundary.",
+      "provenance": {
+        "kind": "coverage_sentinel",
+        "references": ["GitHub Issue #93: compound rendaku coverage acceptance", "crates/dictc/tests/conversion.rs: compound conversion (気遣い・小遣い・言葉遣い)"],
+        "summary": "Representative compound sentinel for preserving correct internal rendaku."
+      }
+    }
+  ]
+}
