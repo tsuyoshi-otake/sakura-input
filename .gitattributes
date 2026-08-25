@@ -13,3 +13,8 @@ data/conversion-priorities.tsv whitespace=-blank-at-eol
 # newline or encoding conversion to its ONNX bytes or reviewed manifest.
 /models/**/*.onnx binary
 /models/sakura-rerank-tiny-v1/research-manifest.json text eol=lf
+
+# The Issue #93 ranking comparison fixtures and baselines are pinned by
+# SHA-256 inside their manifests, so a CRLF checkout would change their bytes.
+/eval/corpus/** text eol=lf
+/eval/baselines/** text eol=lf
