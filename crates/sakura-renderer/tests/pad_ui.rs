@@ -35,9 +35,9 @@ use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, GetClientRect, GetDlgItem, GetSystemMetrics, GetWindow, GetWindowLongPtrW,
     GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW,
-    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER, SM_CXVSCROLL,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, WM_APP, WM_COMMAND, WM_GETFONT, WM_GETTEXT,
-    WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER, LB_GETCOUNT,
+    SM_CXVSCROLL, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, WM_APP, WM_COMMAND, WM_GETFONT,
+    WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -383,6 +383,65 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
     renderer.wait_for_exit();
 }
 
+/// The first memo of a fresh pad is made by typing, not by pressing 新規メモ.
+///
+/// A pad opened for the first time has an empty list and an open editor, so
+/// the writing itself is what creates the memo. If the rows are not rebuilt
+/// when that happens, the list stays empty while the text is on screen and
+/// already on disk, which reads as "this did not save".
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn typing_into_a_fresh_pad_puts_the_memo_in_the_list() {
+    let app_data = IsolatedAppData::new("pad-first-memo");
+    let mut engine = FixtureEngine::new(initial_state());
+    let renderer = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")))
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn test-owned renderer");
+    let mut renderer = OwnedChild::new(renderer, "renderer");
+
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: `host` belongs to the child this test owns and is live until
+    // that child exits, which happens below.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("post the pad trigger");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    resize_client(pad, WIDE_LOGICAL, TALL_LOGICAL);
+    let list = list_of(pad);
+    assert_eq!(row_count(list), 0, "a fresh pad starts with no memos");
+
+    // No 新規メモ click: this is the empty pad exactly as it opens.
+    set_text(pad, BODY_ID, "最初のメモ");
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+
+    let deadline = Instant::now() + PATIENT;
+    while row_count(list) == 0 {
+        assert!(
+            Instant::now() < deadline,
+            "the memo the editor is holding never appeared in the list"
+        );
+        sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        row_count(list),
+        1,
+        "one memo was written, so there is one row"
+    );
+
+    let heading = text_of(control(pad, HEADER_TITLE_ID));
+    assert!(
+        heading.contains('1'),
+        "the heading counts the memos it lists, and it reads {heading:?}"
+    );
+
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
 /// Opens a real pad, seeds it, and leaves it on screen to be looked at.
 ///
 /// Not an assertion — a way to review the design against the wireframe by
@@ -683,6 +742,23 @@ fn text_of(control: HWND) -> String {
     }
     .0;
     String::from_utf16_lossy(&buffer[..copied.max(0) as usize])
+}
+
+/// One of the pad's controls, by the identifier the window publishes.
+fn control(pad: HWND, id: i32) -> HWND {
+    // SAFETY: `pad` is live and the identifier is a plain integer.
+    unsafe { GetDlgItem(Some(pad), id) }.expect("the control exists")
+}
+
+fn list_of(pad: HWND) -> HWND {
+    control(pad, LIST_ID)
+}
+
+/// How many rows the list is showing.
+fn row_count(list: HWND) -> isize {
+    // SAFETY: `list` is a live control of the child this test owns, and the
+    // count query takes no buffer.
+    unsafe { SendMessageW(list, LB_GETCOUNT, None, None) }.0
 }
 
 /// Waits for `control`'s text to satisfy `settled`, and returns it.
