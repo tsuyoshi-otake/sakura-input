@@ -832,3 +832,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 検証: `cargo fmt --all -- --check` 成功、`cargo clippy -p sakura-renderer --all-targets -- -D warnings` 成功、`cargo test --workspace` 失敗 0、`pad_ui` の対話デスクトップ用 ignored テスト成功、`git diff --check` 成功、残存プロセス 0。実プロセスでの実測は、本文 40 行に対し先頭表示行 0 →（3 ノッチ下）9 →（1 ノッチ上）6、一覧は 6 行すべてが収まるため 0 のまま（正しい）。画面キャプチャで、先頭に改行 3 つを挿入した直後と行途中への挿入直後のいずれにも残像・罫線の二重描画がないことを確認した。
 - 学び: スクロールバーを外すことは、見た目だけの変更ではなく、そのコントロールのホイール処理を外すことでもある。そして、背景を `TRANSPARENT` で描くコントロールでは「スクロールした」だけを再描画の合図にすると、内容が動く編集を取りこぼす。
 - commit: 未コミット（#92 のフェーズ 2 として作業ツリーに保持）。
+
+## 2026-08-25 — 1.0.25 リリース（Sakura Pad、GitHub 同期は未実装）（#91、#92、#93）
+
+- 作業: owner 指示により、GitHub 同期が未実装のまま Sakura Pad を 1.0.25 として切り出した。対象は「作業ツリー全部」、公開範囲は「コミット＋タグ push まで」で、`scripts/publish-release.ps1` は実行していない。
+- 設計判断: 作業ツリーには #91／#92 の Pad と #93 の ranking 比較ツールという独立した2系統が入っていたが、owner が全部を1コミットにする選択をしたため分割せず、CI を止めていた `tools/ime-eval/src/ranking_comparison.rs` の clippy 2 件（elidable lifetimes、引数 8 個）を除外ではなく修正で通した。`ranking_view` は 8 引数から `&RankingSnapshotObservation` + 4 引数へまとめ、`metadata_status()?` を関数内へ移して `Result` を返す形にした。
+- 版の面: `Cargo.toml`、`Cargo.lock`（`cargo check` で再生成）、`installer/setup.iss` の `AppProductVersion` と `AppVersionedDir`、`.github/workflows/release.yml` の workflow_dispatch 既定値の4か所。`docs/release-notes-v1.0.25.md` を 1.0.24 と同じ構成で新規作成し、`README.md` に `## Sakura Pad（ローカルメモ）` を追加して「GitHub 同期はこのリリースには含みません」を明記した。
+- 検証: `cargo fmt --all -- --check` 成功、`cargo clippy --workspace --all-targets -- -D warnings` 成功、`cargo test --workspace` 失敗 0、`git diff --check` 成功、`ci/dep-policy.ps1 -SelfTest` と本体（73 packages、違反 0）成功、`ci/release-workflow-policy.ps1 -SelfTest` と本体（reviewed action 7 件）成功、`ci/check-process-clean.ps1` で残存プロセス 0。
+- commit: d8db8d4e482d4232220b566164dbf236cb312350 / tag `v1.0.25` を origin へ push 済み。push により Release candidate、CI、Installer の3ワークフローが起動した。
+- 学び: リリース単位を owner が「作業ツリー全部」と決めた場合、CI ゲートは同梱される全ツールへ及ぶ。無関係に見える調査用ツールの lint も、リリース作業の一部として先に片づける必要がある。
