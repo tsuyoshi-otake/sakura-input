@@ -841,3 +841,13 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 検証: `cargo fmt --all -- --check` 成功、`cargo clippy --workspace --all-targets -- -D warnings` 成功、`cargo test --workspace` 失敗 0、`git diff --check` 成功、`ci/dep-policy.ps1 -SelfTest` と本体（73 packages、違反 0）成功、`ci/release-workflow-policy.ps1 -SelfTest` と本体（reviewed action 7 件）成功、`ci/check-process-clean.ps1` で残存プロセス 0。
 - commit: d8db8d4e482d4232220b566164dbf236cb312350 / tag `v1.0.25` を origin へ push 済み。push により Release candidate、CI、Installer の3ワークフローが起動した。
 - 学び: リリース単位を owner が「作業ツリー全部」と決めた場合、CI ゲートは同梱される全ツールへ及ぶ。無関係に見える調査用ツールの lint も、リリース作業の一部として先に片づける必要がある。
+
+## 2026-08-25 — v1.0.25 が CI で落ちた原因と 1.0.26 としての公開（#92、#93）
+
+- 症状: ローカルでは全ゲート green だった v1.0.25 が、`Release candidate` ワークフローの Test 段階で `checked_in_issue93_snapshots_match_manifest_and_report_fingerprints` だけ失敗した。manifest が pin する `c81d3e78…` に対し、runner 上の計算値は `8bc2ed95…`。
+- 根本原因: `core.autocrlf` の下で、#93 の `eval/corpus/behavioral/ranking-comparison-issue93/fixture.json` と `eval/baselines/ranking-comparison-issue93/*` が CRLF で checkout され、manifest が pin している SHA-256 と一致しなくなった。ローカルの作業ツリーは LF なので通っていた。手元で LF/CRLF 両方の hash を計算し、CRLF 版が runner の値と一致することで確定した。
+- 修正: `.gitattributes` に `/eval/corpus/** text eol=lf` と `/eval/baselines/** text eol=lf` を追加した。`/data/llm-detail-targets/**` などの manifest 拘束ディレクトリに元からある扱いと同じで、`git ls-files --eol` で index／worktree／attr がすべて lf になることを確認した（commit 0b11095）。
+- 版の扱い: owner 判断により、公開済みタグ v1.0.25 は動かさず、同じ内容を 1.0.26 として切り直した。`Cargo.toml`、`Cargo.lock`、`installer/setup.iss`、`release.yml` の既定値を更新し、`docs/release-notes-v1.0.25.md` を `-v1.0.26.md` へ rename した（workflow が版に一致するノートを要求するため）。v1.0.25 は失敗タグとして残る（commit d0d52c9、tag v1.0.26）。
+- 検証: v1.0.26 の `Release candidate`、`CI`、`Installer` の3ワークフローが success。artifact の installer は 24,670,077 bytes、SHA-256 `dadc729ed5c8b6622ecc2105556b117a6647ca44519e9251a73799a59e6114fb`、`Get-AuthenticodeSignature` は `NotSigned`（owner 承認済みの未署名リリース）。`release-manifest.txt` の sha256／size が実体と一致することを確認した。
+- 公開: owner の明示承認を得て、`gh release create --draft` → 添付2件を再ダウンロードして hash 一致を確認 → `--draft=false` の順で公開した。読み戻しは `isDraft=false`、`isPrerelease=false`、`publishedAt=2026-08-25T10:35:50Z`、assets は `sakura_setup.exe` と `release-manifest.txt` の2件のみ。`scripts/publish-release.ps1` は署名検証を必須にするため、未署名リリースでは使えず、同じ検査手順を `gh` で手動実行した。
+- 学び: manifest が生バイトの SHA-256 を pin するデータを追加したら、その時点で `.gitattributes` の eol 指定も一緒に入れる。Windows の `autocrlf=true` では、ローカルの緑と CI の緑は同じ意味ではない。
