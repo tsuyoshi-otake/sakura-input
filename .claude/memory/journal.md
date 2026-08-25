@@ -861,3 +861,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 補足: 検索はタイトルと本文の両方に対する部分一致で、`fold` は `to_lowercase` のみ。全角半角・ひらがなカタカナの正規化はしていない。
 - commit: ac65c90（未リリース。1.0.26 のインストール済みビルドにはこの修正は入っていない）。
 - 学び: 「作成は明示操作」という前提で書いた UI に、暗黙の作成経路（打鍵で生まれる最初の1件）が1つでもあると、その経路にだけ再描画が抜ける。空状態はテストの seed で隠れやすいので、seed しない初回状態のテストを別に持つ。
+
+## 2026-08-25 — 1.0.27 リリース（Pad 初回メモ修正）（#92）
+
+- 内容: ac65c90（初回起動の Pad で最初のメモが一覧に出ない修正）をリリース化した。版は `Cargo.toml`、`Cargo.lock`、`installer/setup.iss`、`release.yml` 既定値の4か所、ノートは `docs/release-notes-v1.0.27.md`。
+- 検証: fmt、`clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`（失敗 0）、`git diff --check`、dep-policy、release-workflow-policy すべて成功。`Release candidate`／`CI`／`Installer` の3ワークフローも success。
+- artifact: `sakura_setup.exe` 24,681,776 bytes、SHA-256 `ad7624aba2cd9aa52cd6dff380de412ae91fb760b2d88421e0ede231bd37c4ab`、`NotSigned`（owner 承認済みの未署名リリース）。manifest の sha256／size と一致。
+- 公開: draft 作成 → 添付2件を再ダウンロードして hash 一致を確認 → `--draft=false`。読み戻しは `isDraft=false`、`isPrerelease=false`、`publishedAt=2026-08-25T11:54:08Z`、assets 2件。
+- commit: 50659ae / tag `v1.0.27`。
