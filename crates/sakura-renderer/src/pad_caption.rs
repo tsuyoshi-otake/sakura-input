@@ -1,4 +1,4 @@
-//! The pad's own title bar: the icon in it, and the color of it.
+//! The pad's own title bar: what is in it, and the color of it.
 //!
 //! The design draws a title bar of its own — thirty-eight logical pixels of
 //! custom chrome carrying its own minimize, maximize and close. The pad keeps
@@ -8,94 +8,71 @@
 //! or quietly loses them.
 //!
 //! What is left is to stop the real bar looking like it belongs to some other
-//! program. Two things do that, and neither costs any of the above: a real
-//! icon, because a window class with none is given a placeholder; and DWM's
-//! caption attributes, which paint the system's own bar in the palette's
-//! colors so the window reads as one surface from its top edge down.
+//! program. Two things do that, and neither costs any of the above: no icon
+//! in the corner, because the pad is summoned by a gesture rather than picked
+//! out of a row of windows and has nothing to identify itself against; and
+//! DWM's caption attributes, which paint the system's own bar in the
+//! palette's colors so the window reads as one surface from its top edge
+//! down.
 //!
-//! Under Windows high contrast both are handed straight back to the system.
-//! A program tinting its own caption is exactly what that setting exists to
-//! stop.
+//! Under Windows high contrast the color is handed straight back to the
+//! system. A program tinting its own caption is exactly what that setting
+//! exists to stop.
 
 use std::mem::size_of;
-use std::os::windows::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
 
 use sakura_proto::AppearanceTheme;
-use windows::core::PCWSTR;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, WPARAM};
 use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_CLOAK,
     DWMWA_COLOR_DEFAULT, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWINDOWATTRIBUTE,
 };
-use windows::Win32::UI::HiDpi::GetSystemMetricsForDpi;
 use windows::Win32::UI::WindowsAndMessaging::{
-    DestroyIcon, LoadImageW, SendMessageW, HICON, ICON_BIG, ICON_SMALL, IMAGE_ICON,
-    LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SYSTEM_METRICS_INDEX, WM_SETICON,
+    GetWindowLongPtrW, SendMessageW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, ICON_BIG,
+    ICON_SMALL, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WM_SETICON,
+    WS_EX_DLGMODALFRAME,
 };
 
-use crate::theme::{high_contrast_enabled, palette, resolves_dark, scaled};
+use crate::theme::{high_contrast_enabled, palette, resolves_dark};
 
-/// The two icons the window is showing.
+/// Takes the icon out of the left end of the title bar.
 ///
-/// `WM_SETICON` borrows rather than takes ownership, so these have to outlive
-/// the window showing them — which is why they are owned by the pad's state
-/// and not by the function that loaded them.
-#[derive(Debug)]
-pub(crate) struct CaptionIcons {
-    big: HICON,
-    small: HICON,
-}
-
-impl Drop for CaptionIcons {
-    fn drop(&mut self) {
-        for icon in [self.big, self.small] {
-            if !icon.is_invalid() {
-                // SAFETY: both came from `LoadImageW` below, and by the time
-                // this runs the window has either been destroyed or been
-                // handed replacements.
-                unsafe {
-                    let _ = DestroyIcon(icon);
-                }
-            }
-        }
-    }
-}
-
-/// Gives `window` the product's icon at the sizes this display asks for.
-///
-/// The caller keeps the result for as long as the window lives. Dropping it
-/// while the window is still showing the icons would leave the caption
-/// drawing from freed handles.
-pub(crate) fn icons(window: HWND, dpi: u32) -> Option<CaptionIcons> {
-    let path = asset_path()?;
-    let big = load(&path, metric(SM_CXICON, dpi, 32))?;
-    let Some(small) = load(&path, metric(SM_CXSMICON, dpi, 16)) else {
-        // SAFETY: `big` was loaded a moment ago and was never handed to the
-        // window, because a window with one of the two is worse than a window
-        // with neither: the missing one falls back to the placeholder.
-        unsafe {
-            let _ = DestroyIcon(big);
-        }
-        return None;
-    };
-    // SAFETY: the window belongs to this thread and `WM_SETICON` only stores
-    // the handles; `CaptionIcons` keeps ownership.
+/// A window class with no icon of its own is drawn with Windows' placeholder,
+/// which is the one part of the window that says it belongs to some other
+/// program, and giving the window the product's icon only trades a wrong
+/// picture for a redundant one. `WS_EX_DLGMODALFRAME` is what removes the
+/// corner altogether; the two null icons are what stop Windows filling it
+/// back in. The system menu is untouched — it is still on Alt+Space and on a
+/// right-click of the bar.
+pub(crate) fn hide_icon(window: HWND) {
+    // SAFETY: the window belongs to this thread, and a null handle is the
+    // documented way to say the window has no icon of its own.
     unsafe {
-        let _ = SendMessageW(
+        for which in [ICON_BIG, ICON_SMALL] {
+            let _ = SendMessageW(
+                window,
+                WM_SETICON,
+                Some(WPARAM(which as usize)),
+                Some(LPARAM(0)),
+            );
+        }
+    }
+    // SAFETY: reads and writes the window's own extended style, then asks for
+    // the frame to be recalculated with it. The window is not on screen yet
+    // when this runs, so nothing flickers.
+    unsafe {
+        let style = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        SetWindowLongPtrW(window, GWL_EXSTYLE, style | WS_EX_DLGMODALFRAME.0 as isize);
+        let _ = SetWindowPos(
             window,
-            WM_SETICON,
-            Some(WPARAM(ICON_BIG as usize)),
-            Some(LPARAM(big.0 as isize)),
-        );
-        let _ = SendMessageW(
-            window,
-            WM_SETICON,
-            Some(WPARAM(ICON_SMALL as usize)),
-            Some(LPARAM(small.0 as isize)),
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
         );
     }
-    Some(CaptionIcons { big, small })
 }
 
 /// Paints the system title bar in the palette `theme` resolves to.
@@ -172,84 +149,14 @@ fn set_color(window: HWND, attribute: DWMWINDOWATTRIBUTE, color: COLORREF) {
     }
 }
 
-/// The size Windows wants an icon to be on this display, or the scaled
-/// 96-DPI size where the metric is unavailable.
-fn metric(index: SYSTEM_METRICS_INDEX, dpi: u32, fallback_96: i32) -> i32 {
-    // SAFETY: reads one documented system metric for a DPI value.
-    let reported = unsafe { GetSystemMetricsForDpi(index, dpi) };
-    if reported > 0 {
-        reported
-    } else {
-        scaled(fallback_96, dpi).max(1)
-    }
-}
-
-/// Where the shipped icon is: beside the executable in an installed layout,
-/// and in the repository's assets when running from a build tree.
-fn asset_path() -> Option<PathBuf> {
-    let mut candidates = Vec::with_capacity(2);
-    if let Ok(executable) = std::env::current_exe() {
-        if let Some(parent) = executable.parent() {
-            candidates.push(parent.join("sakura-input.ico"));
-        }
-    }
-    candidates.push(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("..")
-            .join("assets")
-            .join("sakura-input-icon")
-            .join("sakura-input.ico"),
-    );
-    candidates.into_iter().find(|candidate| candidate.is_file())
-}
-
-fn load(path: &Path, size: i32) -> Option<HICON> {
-    let path = path
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
-    // SAFETY: the path is NUL-terminated and stays alive for the call;
-    // `LoadImageW` copies the resource into a process-owned handle.
-    let handle = unsafe {
-        LoadImageW(
-            None,
-            PCWSTR(path.as_ptr()),
-            IMAGE_ICON,
-            size,
-            size,
-            LR_LOADFROMFILE,
-        )
-    }
-    .ok()?;
-    Some(HICON(handle.0))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The icon has to be findable from wherever the renderer runs, or the
-    /// caption falls back to the placeholder that started all this.
+    /// The corner is emptied by an extended style, so the style has to be the
+    /// one Windows reads for it.
     #[test]
-    fn the_product_icon_is_on_disk() {
-        let path = asset_path().expect("the shipped icon was not found from this build");
-        assert!(path.is_file(), "{} is not a file", path.display());
-    }
-
-    /// A metric that a display cannot answer still has to produce a size an
-    /// icon can be loaded at.
-    #[test]
-    fn an_unavailable_metric_still_yields_a_scaled_size() {
-        for dpi in [96, 120, 144, 192, 240] {
-            // 0 is not a metric index Windows answers, so this exercises the
-            // fallback without depending on the session having a display.
-            assert_eq!(
-                metric(SYSTEM_METRICS_INDEX(i32::MAX), dpi, 16),
-                scaled(16, dpi).max(1)
-            );
-            assert!(metric(SM_CXSMICON, dpi, 16) > 0);
-        }
+    fn the_frame_style_that_empties_the_corner_is_the_documented_one() {
+        assert_eq!(WS_EX_DLGMODALFRAME.0, 0x0000_0001);
     }
 }

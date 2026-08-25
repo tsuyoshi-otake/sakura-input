@@ -35,9 +35,10 @@ use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, GetClientRect, GetDlgItem, GetSystemMetrics, GetWindow, GetWindowLongPtrW,
     GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW,
-    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER, LB_GETCOUNT,
-    SM_CXVSCROLL, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, WM_APP, WM_COMMAND, WM_GETFONT,
-    WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER, ICON_BIG,
+    ICON_SMALL, LB_GETCOUNT, SM_CXVSCROLL, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, WM_APP,
+    WM_COMMAND, WM_GETFONT, WM_GETICON, WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW,
+    WS_EX_DLGMODALFRAME, WS_EX_TOOLWINDOW,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -414,6 +415,36 @@ fn typing_into_a_fresh_pad_puts_the_memo_in_the_list() {
     let list = list_of(pad);
     assert_eq!(row_count(list), 0, "a fresh pad starts with no memos");
 
+    // The title bar carries no icon: the corner is removed by the frame
+    // style, and neither icon slot is filled for Windows to draw there.
+    // SAFETY: the pad belongs to the child this test owns and is live.
+    let extended = unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32;
+    assert_eq!(
+        extended & WS_EX_DLGMODALFRAME.0,
+        WS_EX_DLGMODALFRAME.0,
+        "the frame style that empties the caption corner is missing"
+    );
+    for which in [ICON_BIG, ICON_SMALL] {
+        // SAFETY: as above; `WM_GETICON` only reads.
+        let icon = unsafe {
+            SendMessageW(
+                pad,
+                WM_GETICON,
+                Some(WPARAM(which as usize)),
+                Some(LPARAM(0)),
+            )
+        };
+        assert_eq!(icon.0, 0, "the caption is still holding an icon");
+    }
+
+    // The untitled hint is painted, never typed: a memo left unnamed has to
+    // save with an empty title, or every one of them would be called 無題.
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "",
+        "the title hint leaked into the field's text"
+    );
+
     // No 新規メモ click: this is the empty pad exactly as it opens.
     set_text(pad, BODY_ID, "最初のメモ");
     notify(pad, BODY_ID, EN_CHANGE as u16);
@@ -479,7 +510,11 @@ fn the_pad_stays_open_for_a_look() {
     unsafe {
         let _ = SetForegroundWindow(pad);
     }
-    seed_memos(pad);
+    // An empty pad is worth looking at too: it is what a first run shows,
+    // and the hints it paints are only on screen while it has nothing.
+    if std::env::var_os("SAKURA_PAD_PREVIEW_EMPTY").is_none() {
+        seed_memos(pad);
+    }
     // SAFETY: as above.
     unsafe {
         let _ = SetForegroundWindow(pad);
