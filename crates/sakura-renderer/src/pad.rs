@@ -35,30 +35,33 @@ use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenC
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::UI::Controls::{
     DRAWITEMSTRUCT, EM_GETFIRSTVISIBLELINE, EM_GETLINECOUNT, EM_GETMARGINS, EM_SETLIMITTEXT,
-    MEASUREITEMSTRUCT, ODS_FOCUS, ODS_SELECTED, ODT_BUTTON, ODT_LISTBOX,
+    EM_SETSEL, MEASUREITEMSTRUCT, ODS_FOCUS, ODS_SELECTED, ODT_BUTTON, ODT_LISTBOX,
 };
 use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetFocus, GetKeyState, SetFocus, VK_LBUTTON};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetFocus, GetKeyState, SetFocus, VK_A, VK_CONTROL, VK_LBUTTON, VK_MENU,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CallWindowProcW, CreateWindowExW, DefWindowProcW, DeferWindowPos,
     DestroyWindow, EndDeferWindowPos, FlashWindowEx, GetAncestor, GetClassNameW, GetClientRect,
-    GetParent, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW, IsIconic,
-    IsWindowVisible, KillTimer, LoadCursorW, PostMessageW, RegisterClassW, SendMessageW,
-    SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    BN_CLICKED, BS_OWNERDRAW, CREATESTRUCTW, EN_CHANGE, ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_LEFT,
-    ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN, FLASHWINFO, GA_ROOT, GWLP_USERDATA, GWLP_WNDPROC,
-    HMENU, HWND_TOP, IDC_ARROW, LBN_DBLCLK, LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT,
-    LBS_NOTIFY, LBS_OWNERDRAWFIXED, LB_ADDSTRING, LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT,
-    MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE,
-    SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN,
-    WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM,
-    WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO, WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS,
-    WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT,
-    WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WNDCLASSW,
-    WNDPROC, WS_CHILD, WS_CLIPCHILDREN, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
+    GetDlgCtrlID, GetParent, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
+    IsDialogMessageW, IsIconic, IsWindowVisible, KillTimer, LoadCursorW, PostMessageW,
+    RegisterClassW, SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos,
+    SetWindowTextW, ShowWindow, BN_CLICKED, BS_OWNERDRAW, CREATESTRUCTW, EN_CHANGE, ES_AUTOHSCROLL,
+    ES_AUTOVSCROLL, ES_LEFT, ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN, FLASHWINFO, GA_ROOT,
+    GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, IDC_ARROW, LBN_DBLCLK, LBN_SELCHANGE,
+    LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWFIXED, LB_ADDSTRING,
+    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE,
+    WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
+    WM_CTLCOLORSTATIC, WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT,
+    WM_GETMINMAXINFO, WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE,
+    WM_NCDESTROY, WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE,
+    WM_SYSCHAR, WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WNDCLASSW, WNDPROC, WS_CHILD,
+    WS_CLIPCHILDREN, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
 };
 
-use crate::pad_caption::{self, CaptionIcons};
+use crate::pad_caption;
 use crate::pad_icon::{self, PadIcon};
 use crate::pad_list::{self, CalendarTime};
 use crate::pad_rail;
@@ -740,9 +743,6 @@ struct PadState {
     delete: HWND,
     fonts: PadFonts,
     brushes: PadBrushes,
-    /// The icons the title bar is showing. `WM_SETICON` borrows rather than
-    /// takes, so they are owned here for as long as the window is.
-    caption: Option<CaptionIcons>,
     /// The hover text for the drawn faces. Optional because losing it costs
     /// the pad an explanation and nothing else.
     tooltips: Option<Tooltips>,
@@ -836,7 +836,6 @@ impl PadWindow {
             delete: HWND::default(),
             fonts: PadFonts::new(96),
             brushes: PadBrushes::default(),
-            caption: None,
             tooltips: None,
             worker: StorageWorker::spawn(store).map_err(storage_error)?,
             document,
@@ -1217,9 +1216,57 @@ pub fn dialog_navigation(message: &MSG) -> bool {
     if root.is_invalid() || !is_pad_class(root) {
         return false;
     }
+    if select_all(message) {
+        return true;
+    }
     // SAFETY: `root` is a live top-level window and the message outlives the
     // call.
     unsafe { IsDialogMessageW(root, message).as_bool() }
+}
+
+/// Selects everything in the pad's field under the caret, for Ctrl+A.
+///
+/// A plain EDIT does not implement the shortcut, and neither does
+/// `IsDialogMessageW`: without this, Ctrl+A over the body does nothing at
+/// all. Swallowing the key press is what keeps the control character it
+/// would otherwise translate to out of the text.
+fn select_all(message: &MSG) -> bool {
+    // SAFETY: both read one key's state and take no pointer; the message
+    // carries a window handle Windows just validated.
+    let (control, alt, id) = unsafe {
+        (
+            GetKeyState(VK_CONTROL.0 as i32) < 0,
+            GetKeyState(VK_MENU.0 as i32) < 0,
+            GetDlgCtrlID(message.hwnd),
+        )
+    };
+    if !selects_all(message.message, message.wParam.0, control, alt, id) {
+        return false;
+    }
+    // SAFETY: the field is live and `EM_SETSEL` takes two plain values; -1 as
+    // the end of the range means "to the end of the text".
+    unsafe {
+        let _ = SendMessageW(message.hwnd, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1)));
+    }
+    true
+}
+
+/// Whether this key press is Ctrl+A over a field of the pad's that has text
+/// to select.
+///
+/// Ctrl+Alt+A is left alone: that is AltGr+A on the keyboards which have one,
+/// and it is a character rather than a command. The list is left alone too —
+/// selecting every memo means nothing there, because the pad edits one memo
+/// at a time.
+fn selects_all(message: u32, key: usize, control: bool, alt: bool, id: i32) -> bool {
+    message == WM_KEYDOWN
+        && key == VK_A.0 as usize
+        && control
+        && !alt
+        && matches!(
+            u16::try_from(id),
+            Ok(SEARCH_ID) | Ok(TITLE_ID) | Ok(BODY_ID)
+        )
 }
 
 fn is_pad_class(window: HWND) -> bool {
@@ -1343,7 +1390,7 @@ fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
         parent,
         SEARCH_ID,
     )?;
-    install_search_placeholder(state.search);
+    install_placeholder(state.search);
     state.list = create_child(
         windows::core::w!("LISTBOX"),
         windows::core::w!(""),
@@ -1369,6 +1416,7 @@ fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
         parent,
         TITLE_ID,
     )?;
+    install_placeholder(state.title);
     state.body = create_child(
         windows::core::w!("EDIT"),
         windows::core::w!(""),
@@ -1711,32 +1759,65 @@ fn paint(window: HWND, state: &PadState) {
 /// which leaves the text genuinely empty.
 const SEARCH_PLACEHOLDER: &str = "検索";
 
-/// The EDIT class procedure, captured once. Every pad's search field is an
-/// instance of the same class, so there is exactly one to remember.
-static SEARCH_PROC: AtomicIsize = AtomicIsize::new(0);
+/// What the empty title field says the memo is called.
+///
+/// The same word the list writes on a memo with no title of its own, so a
+/// fresh pad reads the same in both panes and a memo that is never named
+/// never changes what it is called. Text here would be worse for a second
+/// reason on top of the search field's: it would save as a real title, and
+/// every untitled memo would be called `無題` for good.
+const TITLE_PLACEHOLDER: &str = "無題";
 
-fn install_search_placeholder(search: HWND) {
-    if search.is_invalid() {
+/// The hint `control` shows when it is empty, or `None` where it has none.
+fn placeholder_for(control: HWND) -> Option<&'static str> {
+    // SAFETY: the control is live and this only reads its id.
+    placeholder_text(unsafe { GetDlgCtrlID(control) })
+}
+
+/// The hint the control with this id shows when it is empty.
+///
+/// The body has none on purpose: it is the one field whose emptiness is the
+/// point, and a hint on ruled paper would read as a first line of text.
+fn placeholder_text(id: i32) -> Option<&'static str> {
+    match u16::try_from(id) {
+        Ok(SEARCH_ID) => Some(SEARCH_PLACEHOLDER),
+        Ok(TITLE_ID) => Some(TITLE_PLACEHOLDER),
+        _ => None,
+    }
+}
+
+/// The EDIT class procedure, captured once. The search and title fields are
+/// instances of the same class, so there is exactly one to remember.
+static PLACEHOLDER_PROC: AtomicIsize = AtomicIsize::new(0);
+
+fn install_placeholder(field: HWND) {
+    if field.is_invalid() {
         return;
     }
-    let ours = search_proc as *const () as isize;
-    // SAFETY: `search` is a live child created on this thread a moment ago.
-    let previous = unsafe { SetWindowLongPtrW(search, GWLP_WNDPROC, ours) };
+    let ours = placeholder_proc as *const () as isize;
+    // SAFETY: `field` is a live child created on this thread a moment ago.
+    let previous = unsafe { SetWindowLongPtrW(field, GWLP_WNDPROC, ours) };
     // Never remember our own procedure: that would make `CallWindowProcW`
     // below recurse until the stack ends.
     if previous != 0 && previous != ours {
-        let _ = SEARCH_PROC.compare_exchange(0, previous, Ordering::Relaxed, Ordering::Relaxed);
+        let _ =
+            PLACEHOLDER_PROC.compare_exchange(0, previous, Ordering::Relaxed, Ordering::Relaxed);
     }
 }
 
 /// The hint shows only in the field's resting state: nothing typed, and the
 /// caret somewhere else.
-fn shows_search_placeholder(text_units: i32, focused: bool) -> bool {
+fn shows_placeholder(text_units: i32, focused: bool) -> bool {
     text_units <= 0 && !focused
 }
 
-unsafe extern "system" fn search_proc(window: HWND, message: u32, w: WPARAM, l: LPARAM) -> LRESULT {
-    let captured = SEARCH_PROC.load(Ordering::Relaxed);
+unsafe extern "system" fn placeholder_proc(
+    window: HWND,
+    message: u32,
+    w: WPARAM,
+    l: LPARAM,
+) -> LRESULT {
+    let captured = PLACEHOLDER_PROC.load(Ordering::Relaxed);
     let result = if captured == 0 {
         // SAFETY: the class procedure was never captured, so the default
         // handler is the only correct destination.
@@ -1764,16 +1845,19 @@ unsafe extern "system" fn search_proc(window: HWND, message: u32, w: WPARAM, l: 
         }
         // After the class procedure has painted, not instead of it: the hint
         // belongs on top of the field's own background.
-        WM_PAINT => paint_search_placeholder(window),
+        WM_PAINT => paint_placeholder(window),
         _ => {}
     }
     result
 }
 
-fn paint_search_placeholder(search: HWND) {
+fn paint_placeholder(search: HWND) {
+    let Some(hint) = placeholder_for(search) else {
+        return;
+    };
     // SAFETY: the field is live; both calls only read window state.
     let (units, focused) = unsafe { (GetWindowTextLengthW(search), GetFocus() == search) };
-    if !shows_search_placeholder(units, focused) {
+    if !shows_placeholder(units, focused) {
         return;
     }
     // SAFETY: as above.
@@ -1817,13 +1901,7 @@ fn paint_search_placeholder(search: HWND) {
     unsafe {
         SetBkMode(dc, TRANSPARENT);
     }
-    text(
-        dc,
-        SEARCH_PLACEHOLDER,
-        rect,
-        colors.annotation,
-        DT_LEFT | DT_END_ELLIPSIS,
-    );
+    text(dc, hint, rect, colors.annotation, DT_LEFT | DT_END_ELLIPSIS);
     if let Some(restore) = restore {
         // SAFETY: `restore` is the object the DC held before `select_font`.
         unsafe {
@@ -1833,6 +1911,52 @@ fn paint_search_placeholder(search: HWND) {
     // SAFETY: pairs with the `GetDC` above.
     unsafe {
         ReleaseDC(Some(search), dc);
+    }
+}
+
+#[cfg(test)]
+mod placeholder_tests {
+    use windows::Win32::UI::WindowsAndMessaging::WM_KEYUP;
+
+    use super::*;
+
+    /// A memo with no title is called the same thing in both panes. If these
+    /// ever parted, naming a memo `無題` would look like doing nothing while
+    /// leaving it alone would look like naming it.
+    #[test]
+    fn the_title_hint_is_what_the_list_calls_an_untitled_memo() {
+        assert_eq!(TITLE_PLACEHOLDER, pad_list::UNTITLED);
+    }
+
+    /// Ctrl+A reaches the three fields that hold text, and nothing else.
+    #[test]
+    fn ctrl_a_selects_all_in_the_pads_fields_only() {
+        let a = VK_A.0 as usize;
+        for id in [SEARCH_ID as i32, TITLE_ID as i32, BODY_ID as i32] {
+            assert!(selects_all(WM_KEYDOWN, a, true, false, id), "id {id}");
+            assert!(
+                !selects_all(WM_KEYDOWN, a, false, false, id),
+                "Ctrl was not held"
+            );
+            assert!(
+                !selects_all(WM_KEYDOWN, a, true, true, id),
+                "AltGr+A is a character"
+            );
+            assert!(
+                !selects_all(WM_KEYUP, a, true, false, id),
+                "the release repeats the press"
+            );
+            assert!(
+                !selects_all(WM_KEYDOWN, VK_A.0 as usize + 1, true, false, id),
+                "another key entirely"
+            );
+        }
+        for other in [LIST_ID as i32, NEW_ID as i32, STATUS_ID as i32, -1, 0] {
+            assert!(
+                !selects_all(WM_KEYDOWN, a, true, false, other),
+                "id {other}"
+            );
+        }
     }
 }
 
@@ -2257,20 +2381,6 @@ impl PadState {
         }
         // The ruled squares are a physical size too.
         self.refresh_brushes();
-    }
-
-    /// Gives the title bar the product's icon at this DPI.
-    ///
-    /// A window class with no icon is drawn with Windows' placeholder, which
-    /// is the one part of the window that says it belongs to some other
-    /// program. A failed load keeps the pair already on screen: an icon a
-    /// version behind beats the placeholder.
-    fn apply_caption_icons(&mut self, window: HWND) {
-        if let Some(icons) = pad_caption::icons(window, self.fonts.dpi) {
-            // Assigned, and so the old pair dropped, only after the window has
-            // been handed the new one.
-            self.caption = Some(icons);
-        }
     }
 
     /// Brings the control backgrounds up to the current palette and DPI.
@@ -2738,7 +2848,7 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
         WM_CREATE if !state_ptr.is_null() => {
             // SAFETY: the state is the live Box retained by PadWindow.
             let state = unsafe { &mut *state_ptr };
-            state.apply_caption_icons(window);
+            pad_caption::hide_icon(window);
             pad_caption::dress(window, state.theme);
             if create_controls(state, window).is_err() {
                 // SAFETY: posting to the window being created is legal and the
@@ -2942,9 +3052,6 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             // SAFETY: as above.
             let state = unsafe { &mut *state_ptr };
             state.apply_dpi(dpi_of(window));
-            // The caption is drawn at the new scale too, and it is drawn from
-            // whichever of the icon's ten sizes fits it.
-            state.apply_caption_icons(window);
             update_layout(state, window);
             // SAFETY: the window is live.
             unsafe {
@@ -3556,10 +3663,15 @@ mod tests {
 
     #[test]
     fn the_search_hint_shows_only_while_the_field_is_empty_and_unfocused() {
-        assert!(shows_search_placeholder(0, false));
-        assert!(!shows_search_placeholder(0, true), "the caret is there");
-        assert!(!shows_search_placeholder(1, false), "a query is there");
-        assert!(!shows_search_placeholder(1, true));
+        assert_eq!(placeholder_text(SEARCH_ID as i32), Some(SEARCH_PLACEHOLDER));
+        assert_eq!(placeholder_text(TITLE_ID as i32), Some(TITLE_PLACEHOLDER));
+        for quiet in [BODY_ID as i32, LIST_ID as i32, STATUS_ID as i32, -1, 0] {
+            assert_eq!(placeholder_text(quiet), None, "id {quiet}");
+        }
+        assert!(shows_placeholder(0, false));
+        assert!(!shows_placeholder(0, true), "the caret is there");
+        assert!(!shows_placeholder(1, false), "a query is there");
+        assert!(!shows_placeholder(1, true));
     }
 
     /// A minimised or degenerate client must produce empty rectangles, never
