@@ -2508,6 +2508,19 @@ impl PadState {
         terminal
     }
 
+    /// Rebuilds the rows when an edit changed which memos the list shows, or
+    /// the order it shows them in.
+    ///
+    /// The first memo of a fresh pad is the case this exists for: it has no
+    /// row until it has text, because typing is what creates it. Until the
+    /// rows are rebuilt the list stays empty while the editor holds the
+    /// writing, which reads as "this did not save" even though it did.
+    fn sync_rows(&mut self) {
+        if pad_list::rows(&self.document, &self.query) != self.rows {
+            self.refresh_list();
+        }
+    }
+
     fn mark_dirty(&mut self, window: HWND) {
         if self.save_blocked {
             self.set_status("既存データを保護するため保存を停止しています".to_owned());
@@ -2859,6 +2872,7 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             // SAFETY: as above.
             let state = unsafe { &mut *state_ptr };
             if state.capture_controls() {
+                state.sync_rows();
                 state.publish(window);
             } else {
                 state.update_status();
