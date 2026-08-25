@@ -851,3 +851,13 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 検証: v1.0.26 の `Release candidate`、`CI`、`Installer` の3ワークフローが success。artifact の installer は 24,670,077 bytes、SHA-256 `dadc729ed5c8b6622ecc2105556b117a6647ca44519e9251a73799a59e6114fb`、`Get-AuthenticodeSignature` は `NotSigned`（owner 承認済みの未署名リリース）。`release-manifest.txt` の sha256／size が実体と一致することを確認した。
 - 公開: owner の明示承認を得て、`gh release create --draft` → 添付2件を再ダウンロードして hash 一致を確認 → `--draft=false` の順で公開した。読み戻しは `isDraft=false`、`isPrerelease=false`、`publishedAt=2026-08-25T10:35:50Z`、assets は `sakura_setup.exe` と `release-manifest.txt` の2件のみ。`scripts/publish-release.ps1` は署名検証を必須にするため、未署名リリースでは使えず、同じ検査手順を `gh` で手動実行した。
 - 学び: manifest が生バイトの SHA-256 を pin するデータを追加したら、その時点で `.gitattributes` の eol 指定も一緒に入れる。Windows の `autocrlf=true` では、ローカルの緑と CI の緑は同じ意味ではない。
+
+## 2026-08-25 — Pad: 初回起動のメモが一覧に出ない（#92）
+
+- 症状: 初回起動時、Pad は空の一覧と開いた編集面で出る。そこへ直接入力すると本文は残るが一覧に行が現れず、見出しも「メモ帳（0）」のままで、保存できていないように見える。実際は保存されており、後から「新規メモ」を押すと先に書いたメモが一覧に現れた（ownerの実機報告）。
+- 根本原因: `crates/sakura-renderer/src/pad.rs` の `PAD_EDIT_TIMER` は `capture_controls()`（必要なら `document.entry()` でメモを新規作成する）と `publish()` を呼ぶが、`refresh_list()` を呼んでいなかった。初回のメモは「新規メモ」ではなく打鍵で生まれるため、行の再構築が起きる契機が他になく、並べ替え・検索・新規作成など別操作までずっと一覧が空のままになる。
+- 修正: `sync_rows()` を追加し、capture が document を変えたときだけ `pad_list::rows()` を再計算して、行集合または順序が実際に変わった場合に `refresh_list()` する。毎回の全再構築を避けるのは、`LB_RESETCONTENT` が一覧のスクロール位置を戻すため。行のラベルは owner-draw が document から直接描くので、タイトル打ち直しの見た目は既存の再描画で足りる。
+- 検証: `crates/sakura-renderer/tests/pad_ui.rs` に `typing_into_a_fresh_pad_puts_the_memo_in_the_list` を追加。隔離した `LOCALAPPDATA` で実 renderer を起動し、「新規メモ」を押さずに本文へ入力して行数と見出しの件数を待つ。修正を一時的に外すと FAILED、戻すと ok になることを確認した（テスト単体 3 件成功、`cargo test --workspace` 失敗 0、fmt・clippy 成功、残存プロセス 0）。
+- 補足: 検索はタイトルと本文の両方に対する部分一致で、`fold` は `to_lowercase` のみ。全角半角・ひらがなカタカナの正規化はしていない。
+- commit: ac65c90（未リリース。1.0.26 のインストール済みビルドにはこの修正は入っていない）。
+- 学び: 「作成は明示操作」という前提で書いた UI に、暗黙の作成経路（打鍵で生まれる最初の1件）が1つでもあると、その経路にだけ再描画が抜ける。空状態はテストの seed で隠れやすいので、seed しない初回状態のテストを別に持つ。
