@@ -8,7 +8,7 @@
 use crate::config::{self, Document, ParseError};
 use crate::keymap::Preset;
 use crate::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
-use sakura_proto::{AppearanceTheme, Mode};
+use sakura_proto::{AppearanceTheme, Mode, PadShortcut};
 
 // The appearance section is optional, so adding its theme key remains
 // compatible with v4 readers and does not require a format-version bump.
@@ -364,6 +364,9 @@ pub struct Preferences {
     pub neural_reranker_scope: NeuralRerankerScope,
     /// Appearance selection shared by Sakura-owned settings and renderer UI.
     pub appearance_theme: AppearanceTheme,
+    /// Keyboard shortcut used to show or focus Sakura Pad. This is a global
+    /// renderer preference and is intentionally not part of an app profile.
+    pub pad_shortcut: PadShortcut,
     /// Enables the explicitly opt-in developer interaction history. The
     /// engine keeps this separate from ordinary learning so a normal install
     /// never records raw key events.
@@ -386,6 +389,7 @@ impl Default for Preferences {
             input_support: InputSupport::default(),
             neural_reranker_scope: NeuralRerankerScope::LongTextOnly,
             appearance_theme: AppearanceTheme::Auto,
+            pad_shortcut: PadShortcut::Disabled,
             developer_mode: false,
         }
     }
@@ -588,6 +592,20 @@ pub fn parse_preferences(source: &str) -> Result<ParsedPreferences, ParseError> 
     {
         preferences.appearance_theme = theme;
     }
+    if let Some(value) = document
+        .section(input_section)
+        .and_then(|entries| entries.iter().find(|entry| entry.key == "pad-shortcut"))
+    {
+        // Missing and unknown shortcut values are deliberately bounded to
+        // Disabled. A structurally malformed document still returns the
+        // parser error above, allowing the watcher to retain its last-good
+        // complete configuration snapshot.
+        preferences.pad_shortcut = value
+            .value
+            .as_text()
+            .and_then(PadShortcut::from_name)
+            .unwrap_or(PadShortcut::Disabled);
+    }
 
     let mut width = WidthPolicy::default();
     if let Some(value) = text(&document, "width", "alnum").and_then(parse_width) {
@@ -669,6 +687,16 @@ pub fn serialize_preferences_with_profiles(
         width_name(preferences.normalizer.width.symbol),
         punctuation_name(preferences.normalizer.punctuation),
         brackets_name(preferences.normalizer.brackets),
+    );
+    // Keep the optional Pad setting in the v4 input section without changing
+    // the existing format version or making older readers depend on it.
+    output = output.replacen(
+        "\n\n[input-support]",
+        &format!(
+            "\npad-shortcut = \"{}\"\n\n[input-support]",
+            preferences.pad_shortcut.name()
+        ),
+        1,
     );
     for profile in profiles {
         if !is_valid_profile_process_name(&profile.process_name) {
@@ -912,12 +940,49 @@ mod tests {
             },
             neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
             appearance_theme: AppearanceTheme::Dark,
+            pad_shortcut: PadShortcut::DoubleCtrl,
             developer_mode: true,
         };
         let parsed = parse_preferences(&serialize_preferences(preferences)).expect("parse");
         assert_eq!(parsed.source_version, CONFIG_FORMAT_VERSION);
         assert_eq!(parsed.preferences, preferences);
         assert!(!parsed.needs_upgrade());
+    }
+
+    #[test]
+    fn pad_shortcut_is_optional_and_unknown_values_fail_closed() {
+        let defaults = Preferences::default();
+        assert_eq!(defaults.pad_shortcut, PadShortcut::Disabled);
+        let missing = parse_preferences("[meta]\nformat-version = \"4\"\n")
+            .expect("missing optional pad shortcut");
+        assert_eq!(missing.preferences.pad_shortcut, PadShortcut::Disabled);
+
+        let enabled = parse_preferences("[input]\npad-shortcut = \"double-ctrl\"\n")
+            .expect("known pad shortcut");
+        assert_eq!(enabled.preferences.pad_shortcut, PadShortcut::DoubleCtrl);
+
+        let unknown = parse_preferences("[input]\npad-shortcut = \"future\"\n")
+            .expect("unknown enum is still structurally valid");
+        assert_eq!(unknown.preferences.pad_shortcut, PadShortcut::Disabled);
+        let malformed_value = parse_preferences("[input]\npad-shortcut = [\"double-ctrl\"]\n")
+            .expect("known key with wrong value shape");
+        assert_eq!(
+            malformed_value.preferences.pad_shortcut,
+            PadShortcut::Disabled
+        );
+
+        let serialized = serialize_preferences(Preferences {
+            pad_shortcut: PadShortcut::DoubleCtrl,
+            ..defaults
+        });
+        assert!(serialized.contains("pad-shortcut = \"double-ctrl\""));
+        assert_eq!(
+            parse_preferences(&serialized)
+                .expect("serialized pad shortcut")
+                .preferences
+                .pad_shortcut,
+            PadShortcut::DoubleCtrl
+        );
     }
 
     #[test]

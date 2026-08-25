@@ -334,3 +334,501 @@ All eight criteria passed: workspace evidence was `405 passed / 0 failed` and
 fail-closed checks passed, clippy emitted no diagnostics, and no private
 test-engine process remained. The fixed-payload API lesson was promoted to
 `rules.md`.
+
+## 2026-08-25 Sakura Pad wireframe rebuild, phases 1-2 (Issue #92, follows #91)
+
+Owner supplied a wireframe and asked for Sakura Pad to be rebuilt to it:
+a memo list with a count in the title, a search box, a sort control, a
+responsive 520-logical-px breakpoint (1a folded / 1b split), a bottom bar,
+and a GitHub sync flow. Header colour must come from the existing
+sakura-input palette, not the wireframe's pink. Sync is to be implemented
+including real network traffic. Six phases were approved; this entry covers
+phases 1 and 2.
+
+Phase 1 extracted `crates/sakura-renderer/src/theme.rs` from `candidate.rs`
+so the pad and the candidate popup resolve every colour, font and scale
+through one module, and moved pad storage to `SKRLPAD2` with a v1 migration
+that keeps the old single memo as the first entry.
+
+Phase 2 rebuilt `pad.rs` around `layout()`, a pure function of the client
+rectangle, the DPI and which pane is showing. Controls are native
+(owner-drawn LISTBOX and BUTTONs) so UI Automation comes free, and a control
+that is not part of a shape is hidden rather than moved offscreen.
+
+Three defects were found only by looking at the running window, and each one
+is now covered by a test:
+
+1. Symptom: the header's bottom rule appeared as two short segments with a
+   gap in the middle. Root cause: `paint()` draws the rule across the whole
+   header, but `layout()` gave the header-title STATIC `bottom:
+   header.bottom`, so the child's own background repainted exactly its own
+   span of the rule. Fix: the title now stops one border above the header's
+   bottom edge. Verification: `no_control_covers_the_rule_the_header_paints`
+   checks every header child against the rule at four DPIs and five widths,
+   and a pixel probe of the captured window now reports one run `0-515`
+   across the full client width instead of `0-55, 420-507`.
+
+2. Symptom: the folded list pane showed the open memo's status line
+   (`10:17 - 48 文字 - 保存済み`) above its search box, describing an editor
+   the user could not see. Root cause: the meta band was cut from the top of
+   the content unconditionally, though it belongs to the editor. Fix:
+   `status` became `Option<RECT>` — the file's existing convention for a
+   control that is absent rather than misplaced — and the meta band collapses
+   when the editor is not showing, so the list takes the room. Verification:
+   `every_band_contains_the_controls_it_owns` now asserts the status line
+   exists exactly when the editor does.
+
+3. Symptom: the search box was a blank rectangle with no affordance; the
+   wireframe shows 「検索」 in it. `EM_SETCUEBANNER` was not usable because it
+   needs comctl32 version 6, which would mean shipping a visual-styles
+   manifest that restyles every control in the pad. Putting the word in the
+   field's text would have been worse: the filter reads that text, so a
+   resting pad would have matched no memo and shown an empty list. Fix: the
+   search field keeps its own window procedure and the hint is painted after
+   the class procedure's `WM_PAINT`, using the field's own `EM_GETMARGINS` so
+   the hint starts exactly where typing will. Verification:
+   `the_search_hint_shows_only_while_the_field_is_empty_and_unfocused` for the
+   predicate, plus a real-process assertion that the field's text is empty
+   while the hint is on screen.
+
+Learning, and the reason all three existed at once: a layout function that is
+graded only by its own unit tests grades the arrangement, not the window. The
+unit tests were green while the rule was broken, the status line was in the
+wrong pane, and the field had no hint, because none of those are properties
+of the returned rectangles. `crates/sakura-renderer/tests/pad_ui.rs` was
+written to close that gap — it drives a real renderer process over a private
+`--test-pipe`, resizes across the breakpoint, and reads back the actual
+control rectangles.
+
+Two Win32 facts cost a test run each and are worth keeping:
+`SetWindowTextW` and `GetWindowTextW` do not cross a process boundary for a
+control. `SetWindowTextW` reports success and does nothing, which is how an
+early version of the fixture seeded five memos that were all empty;
+`GetWindowTextW` returns an empty string. `WM_SETTEXT` / `WM_GETTEXT` /
+`WM_GETTEXTLENGTH` through `SendMessageW` are marshalled and do work.
+Separately, a renderer started with `--test-pipe` exits with code 0 as soon
+as its connection fails, because `watch::run` treats `binding.is_test()` as a
+terminal `Signal::Ended` — so a fixture must claim and serve the pipe before
+spawning the renderer, not after.
+
+Verification of the pair of phases: `cargo fmt --all -- --check` clean,
+`cargo clippy -p sakura-renderer --all-targets` clean,
+`cargo test --workspace` 91 suites all ok with 0 failures (123 of them in the
+renderer binary), `cargo test -p sakura-renderer --test pad_ui -- --ignored`
+passing against a real renderer process, `git diff --check` clean,
+`ci/dep-policy.ps1 -SelfTest` and `ci/dep-policy.ps1` both passing over 73
+locked packages, and no leftover cargo, rustc, renderer or engine processes.
+Both shapes were confirmed on screen from the captured window: 1b shows the
+resident list, the search hint, the editor meta row with 共/削, and a bottom
+bar confined to the list column; 1a shows ≡, one pane at a time, and 共/削 in
+the bottom bar with 削 at the far end.
+
+Not committed at the time of writing, so there is no SHA to record. The
+working tree carries the owner's own uncommitted Issue #91 work across 18
+tracked files — engine dispatch/session/server/ui, proto, core preferences,
+settings, and the renderer's main/watch/candidate/Cargo.toml — and phases 1
+and 2 edit several of those same files, so no per-phase commit can be made
+without either sweeping that work in or splitting it hunk by hunk. Left for
+the owner to decide.
+
+## 2026-08-25 — Issue #92 phase 2: reconciled the pad against the authoritative design
+
+The wireframe the phase was planned from turned out not to be the design. The
+owner supplied the real one — a Claude Design page, `Sakura Pad Mockup.dc.html`
+— after phase 2 was already green, so the phase closed with a reconciliation
+pass rather than a rewrite. Eight differences were real and were changed; six
+more are deliberate and are recorded here so the next session does not "fix"
+them back.
+
+One of the eight was a genuine rendering defect rather than a taste
+difference. `Arc` draws the sync icon's ring as a dotted, broken circle at 18
+logical pixels: GDI fits a curve to a pixel grid the figure barely spans, and
+what survives is a scatter of pixels with a blob where the arrowhead is. It
+was replaced with a ten-segment polyline ring on the same 32-unit grid plus a
+filled triangle head. Ten honest straight lines read as a circle at that size;
+one dishonest curve does not. The magnifier added for the search chip is drawn
+the same way for the same reason. `Ink::arc` and the `Arc` import are gone —
+nothing in the pad should reach for it again at icon sizes.
+
+The other seven: the selected row's rail is the pad's own `ROW_RAIL_96` = 3
+rather than the candidate popup's `RAIL_WIDTH_96` = 2, because it marks which
+memo the whole right pane is showing, not which line of a glanced-at list is
+current; unselected rows are separated by a hairline in `selected`; the filled
+control rests at `rail` and darkens to `action` when pressed (it had them the
+other way round, so pressing it lightened it); pressable things get 6-logical-
+pixel corners via a new `rounded_box`; `destructive` and `button_shape` now
+take `wide`, so the trash is danger-colored only in the folded bar and the
+folded bar's controls are borderless; and the search field is a filled rounded
+chip with a magnifier rather than the window's one outlined box.
+
+`RoundRect` leaves the four corners outside its figure, so every owner-drawn
+button paints its ground first and then its face. Skipping that shows whatever
+the DC was holding in the corners. `rounded_box` also has to create a pen even
+when the caller wants no outline, because `RoundRect` outlines with whatever
+pen the DC holds; the fill color is used as its own edge.
+
+Deliberate divergences, all of them either an owner decision or a Windows
+constraint: the design's custom 38-pixel title bar stays a standard Windows
+caption (plan item 5 — snap, maximize, high contrast and UIA all stay
+standard); Zen Kaku Gothic New and Klee One do not ship with Windows, so the
+pad stays on Yu Gothic UI; the unsynced dot and the S1/S3/S4/S5 sync sheets
+belong to phases 3-5; and the ruled background was implemented **against**
+plan item 3, which had said it would be skipped — the plan was written from
+the wireframe, where the ruling looked like drawing texture, and the design
+specifies a 24-pixel grid outright. The colors needed no reconciliation at
+all: the design's `#B28D96`, `#F7F6F4`, `#E8E5E2` and `#FFFDFB` are already
+`rail`, `surface`, `selected` and `paper`, and the grid's `#F9F6F4` /
+`#2F2D2D` are exactly what the design's translucent rules blend to over paper.
+
+Verification: `cargo fmt --all -- --check` clean, `cargo clippy -p
+sakura-renderer --all-targets -- -D warnings` clean, `cargo test --workspace`
+all suites ok with 0 failures, `git diff --check` clean, no leftover cargo,
+rustc, renderer or engine processes. Confirmed on screen at 96 DPI in the
+light theme from captured windows of a real renderer: the two-pane shape shows
+the chip, the ruled paper, the 3-pixel rail, the hairlines, the filled pill
+and the two framed controls in the editor's head row; the folded shape shows
+the borderless bar with the trash alone in danger red at its end. Dark and
+Windows high contrast are still unconfirmed on screen.
+
+A false alarm along the way is worth remembering: `PrintWindow` with
+`PW_RENDERFULLCONTENT` re-renders through `WM_PRINT`, so it can capture a
+half-painted control. One capture showed an empty editor body and a
+preview-less row, which looked exactly like memo content being destroyed on
+resize. It was not — re-capturing showed both intact, and
+`SendMessageW(WM_GETTEXTLENGTH)` reported the same 6 and 48 units at every
+step of wide → narrow → toggle → toggle → wide. A screenshot cannot prove the
+absence of a paint artifact; ask the control.
+
+Still not committed, for the reason recorded in the previous entry.
+
+## 2026-08-25 — Issue #92 phase 2: the pad's title bar
+
+Symptom: the owner said the window title's level of finish was low. Zooming a
+screen capture of the caption showed what that meant — Windows' generic
+placeholder icon beside "Sakura Pad", on a caption in the system's own color,
+sitting above a window whose first band is `surface`. The top thirty pixels
+read as belonging to a different program than the twenty-five hundred below
+them.
+
+Root cause: `register_class()` in `pad.rs` built `WNDCLASSW` with a window
+procedure, a cursor and a class name and nothing else, so `hIcon` was null.
+Windows draws its placeholder for a class with no icon — there is no fallback
+to the executable's resource for a class-registered window. The caption color
+was never asked about at all.
+
+Fix: a new `crates/sakura-renderer/src/pad_caption.rs`. `icons()` loads
+`assets/sakura-input-icon/sakura-input.ico` — ten sizes from 16 to 256 —
+at `GetSystemMetricsForDpi(SM_CXICON/SM_CXSMICON)` and hands both to the
+window with `WM_SETICON`; `dress()` sets `DWMWA_USE_IMMERSIVE_DARK_MODE`,
+`DWMWA_CAPTION_COLOR` = `surface`, `DWMWA_TEXT_COLOR` = `ink` and
+`DWMWA_BORDER_COLOR` = `border`. `PadState` owns the pair, because `WM_SETICON`
+borrows rather than takes: the handles have to outlive the window and be
+destroyed after it, which the field ordering and `PadWindow::drop` already give.
+Icons are applied at `WM_CREATE` and re-applied at `WM_DPICHANGED`; colors are
+re-applied at `WM_CREATE`, `set_theme` and `WM_THEMECHANGED`/`WM_SETTINGCHANGE`.
+`theme.rs` gained `resolves_dark` / `resolve_dark`, asked of the same inputs
+`resolve_palette` uses so the caption cannot end up light over a dark window.
+`Win32_Graphics_Dwm` was added to the renderer's feature list.
+
+Under Windows high contrast all four attributes are handed back: the dark flag
+goes false and the three colors go `DWMWA_COLOR_DEFAULT`. A program tinting its
+own caption is precisely what that setting exists to stop.
+
+The design's custom 38-pixel title bar was **not** built, which is plan item 5
+and was already the owner-approved shape. A redrawn caption has to
+re-implement `WM_NCCALCSIZE`, `WM_NCHITTEST` with `HTMAXBUTTON` for the snap
+flyout, the resize borders, the system menu, and the whole of high contrast —
+and loses UIA's idea of what a window is if any of it is missed. The real
+caption plus an icon and four DWM attributes reaches the same visual intent at
+none of that risk.
+
+Verification: `cargo fmt --all -- --check` clean, `cargo clippy -p
+sakura-renderer --all-targets -- -D warnings` clean, `cargo test --workspace`
+all suites ok with 0 failures (the renderer binary went 126 → 129: two in
+`pad_caption`, one in `theme`), `git diff --check` clean, 0 residual cargo,
+rustc, renderer or engine processes. Confirmed on screen at 96 DPI in the light
+theme: the product icon is in the caption and the caption is `#F7F6F4`,
+continuous with the header band under it. Dark and high contrast are still
+unconfirmed on screen, as they were before this change.
+
+Two things learned. `PrintWindow` is the wrong instrument for a caption: DWM
+composes the frame, so a `WM_PRINT` re-render shows the legacy non-client
+painting rather than the color the window actually has. The capture for this
+had to be `CopyFromScreen` over `GetWindowRect`. And the installed layout needs
+no change — `installer/setup.iss` already copies `sakura-input.ico` into
+`{#AppVersionedDir}`, the same directory as `sakura_renderer.exe`, so
+`current_exe().parent()` resolves it there exactly as it does in a build tree.
+
+Still not committed, for the reason recorded in the previous entries.
+
+## 2026-08-25 — Issue #92 phase 2: the pad's drawn faces, first frame, and scroll bars
+
+Four things the owner reported after looking at the pad, and one they did not
+have to: the opening frame, the icons, the icon contrast, and the scroll bars.
+
+### The drawn faces were badly drawn
+
+Symptom: 「全体的にアイコンの質がわるい」, and 「Markdown でのコピーボタンが
+わかりにくい」.
+
+Root cause: two separate ones. GDI does not antialias — `LineTo`, `Polyline`
+and `Polygon` snap to whole pixels — so the search ring at 18 px was a lumpy
+polygon and every diagonal was a staircase. And the copy control's face was an
+outbound arrow, which says the memo leaves for somewhere; it does not, it goes
+to the clipboard as Markdown.
+
+Fix: `pad_icon.rs` rewritten. Each glyph is drawn at `SUPERSAMPLE = 4` into a
+32bpp top-down `CreateDIBSection` — white ground, black ink, `ExtCreatePen` with
+`PS_ENDCAP_ROUND | PS_JOIN_ROUND` — then each 4×4 block is averaged into
+coverage (`255 - (pixel & 0xFF)`), written as premultiplied BGRA into a second
+DIB, and `AlphaBlend`ed. GDI+ was considered and rejected: it is a second
+drawing model in a process that has a 10 MiB private-working-set gate.
+`PadIcon::Share` became `PadIcon::Copy`, drawn as two sheets; the control's
+window text — which is its accessible name — became `Markdown としてコピー`,
+and `pad_tooltip.rs` gives every icon-only control a sentence for the pointer
+(`このメモを Markdown としてコピー`). Tooltips use `TTF_IDISHWND | TTF_SUBCLASS`,
+so nothing in the pad's own procedure relays mouse messages, and `Tooltips` owns
+the UTF-16 buffers because `TTTOOLINFOW` keeps the pointer rather than the text.
+
+Then: 「アイコンだけコントラスト高いな」. An icon is a continuous stroke where a
+word is a row of thin ones, so `ink` reads darker on a face than on the text
+beside it — and antialiased strokes read heavier than the aliased ones did at
+the same width, because every pixel is covered rather than snapped. Icon-only
+unpressed faces moved to `colors.annotation` and `STROKE` went 2.2 → 2.0 grid
+units; pressing one still brings it to full ink.
+
+### The first frame was not a finished frame
+
+Symptom: 「起動時の描画が美しくなかったな」.
+
+Root cause: the class has a null `hbrBackground` and `WM_ERASEBKGND` returns 1,
+so between `ShowWindow` and the first `WM_PAINT` the window's surface held
+whatever the compositor last had for it — and a window of child controls paints
+in pieces as each child takes its turn. Separately, `CreateWindowExW` had to ask
+for the pad's size in 96-DPI pixels, because a window has no monitor, and so no
+scale, until it exists.
+
+Fix: `pad_caption::cloak()` (`DWMWA_CLOAK`) around the first show — cloak,
+`ShowWindow`, `RedrawWindow(RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN |
+RDW_UPDATENOW)`, uncloak — so the first visible frame is a painted one.
+`RDW_UPDATENOW` is what makes it synchronous. And `resize_to_logical()` runs
+`AdjustWindowRectExForDpi` at the window's real DPI right after creation, so the
+pad opens at its logical size rather than at 96-DPI pixels on a scaled display.
+
+### The two panes disagreed about scroll bars
+
+Symptom: 「スクロールバーのデザインがサイドバーとエディター上で統一されてないね」.
+
+Root cause: two, and only the first was the obvious one. A `LISTBOX` and an
+`EDIT` are drawn by different scroll bar theme classes by default. And once that
+was settled, the panes still disagreed in the resting state: a multi-line `EDIT`
+keeps its bar on screen whether or not there is anything to scroll, while a
+`LISTBOX` takes its away — so a screenshot with a short memo showed a thin dark
+thumb on the left and a wide light track with an arrow on the right, which is
+exactly the picture the owner was looking at.
+
+Fix: `SetWindowTheme(control, "Explorer", null)` on both `state.list` and
+`state.body`, plus `LBS_DISABLENOSCROLL` on the list so it keeps its gutter too.
+A side effect worth having: the list's rows no longer change width the moment a
+fourth memo arrives.
+
+Verified by measurement rather than by style: `pad_ui.rs` now reads
+`window width − client width` on both controls in the two-pane shape — the
+controls carry no border styles, so that difference is the bar and nothing else
+— and asserts the two are equal and non-zero. Commenting out
+`LBS_DISABLENOSCROLL` was run once to confirm the assertion fails without it,
+then restored.
+
+### Verification
+
+`cargo fmt --all -- --check` clean. `cargo clippy` clean for every workspace
+member; the only failures anywhere are `elidable_lifetime_names` and
+`too_many_arguments` in `tools/ime-eval/src/ranking_comparison.rs`, which is the
+owner's own untracked work and was not touched (it reaches `sakura-engine`
+through a dev-dependency, which is why `-p sakura-engine` reports them).
+`cargo test --workspace` all suites ok, 0 failures, renderer binary 129 → 134.
+`cargo test -p sakura-renderer --test pad_ui -- --ignored
+the_pad_splits_above_the_breakpoint_and_folds_below_it` ok. `git diff --check`
+clean. 0 residual cargo, rustc, renderer, engine or test-runner processes.
+
+Confirmed on screen at 96 DPI in the light theme, from `CopyFromScreen` captures
+zoomed 6–8×: curves read as curves, the trash ribs are legible, the copy control
+reads as two sheets, the faces sit at the weight of the `0字` / `保存済み` text
+beside them, and both panes now show the same track, the same width, the same
+arrow and the same thumb. Dark, Windows high contrast, and 144/192 DPI are still
+unconfirmed on screen.
+
+Learned: a scroll bar comparison is only valid between two controls in the same
+state. The first three screenshots compared a list that had something to scroll
+against an editor that did not, and the difference they showed — thumb versus
+arrow — was mostly the disabled state, not the theme. Filling the editor until
+it overflowed is what separated the two causes, and both turned out to be real.
+
+Still not committed, for the reason recorded in the previous entries.
+
+## 2026-08-25 — Sakura Pad: taskbar buttons, a clipped notice, a bold heading riding high, and a dead band under the list (#92, #91)
+
+Symptom, four reports from the owner while using the installed build:
+
+1. 「タスクバーに出さないことできないの？これは設定画面にも言えることだけど。」 — both
+   the Pad and the settings sheet had their own taskbar buttons.
+2. 「これわかりにくいよ」, over a red circle around 「Markdown をコピ」 — a notice cut
+   off partway.
+3. 「上に配置しすぎだし、ここだけ太文字だよ。保存済みもいらんでしょ」 — the memo title
+   sat above the readings beside it, was the only bold thing in the row, and the
+   row said 保存済み almost all of the time.
+4. 「何この無駄な空白」 over an empty band between the last memo and the bottom bar,
+   with 「レスポンシブデザインなのわすれないでね修正漏れしないように」.
+
+Root causes, each a different one:
+
+- Taskbar: Windows gives a top-level window a button when it asks with
+  `WS_EX_APPWINDOW` **or** when it is unowned. Both windows were unowned.
+  `WS_EX_TOOLWINDOW` is the other way out and was rejected: it shrinks the
+  caption of a window that shows a title.
+- Clipped notice: the status slot was a fixed `STATUS_WIDTH_96 = 108` logical
+  px, sized for `10:27 同期済`, and `SS_ENDELLIPSIS` cut anything longer — even
+  with a wide empty gap beside a short title. Separately, `status_message` was
+  never cleared, so a one-off notice sat where the memo's own time belongs for
+  the rest of the session.
+- Heading: an `EDIT` draws its one line along the top of whatever rectangle it
+  is given, while a `STATIC` with `SS_CENTERIMAGE` centres in one. The row was
+  handed out whole, so only the title rode high. The bold came from
+  `fonts.heading` (weight 600), which belongs to the band's own name, not to a
+  field the writer types into.
+- Dead band: a `LISTBOX` rounds its own height down to a whole number of rows
+  unless it is told not to, and hands the remainder back as bare surface.
+
+Fixes:
+
+- `PadWindow::new` now takes an owner (the renderer's hidden host window) and
+  drops `WS_EX_APPWINDOW`; `resize_to_logical` passes the matching ex-style to
+  `AdjustWindowRectExForDpi`. The settings exe grows a hidden `WS_POPUP` owner
+  of its own class `SakuraInputSettingsOwner` — a class of its own so the
+  single-instance `FindWindowW` still finds the sheet and never the owner —
+  destroyed in `run()` **after** the pump, never from the sheet's `WM_DESTROY`
+  (destroying an owner destroys what it owns).
+- `layout` takes `status_want`; the slot is measured against its actual text and
+  grows leftward into the gap the title is not using, bounded by `TITLE_MIN_96`,
+  with the character count keeping its place. `update_status` splits into
+  `set_status` (a state, sticky) and `notify` (news, expiring after
+  `NOTICE_MS = 4000` via `PAD_NOTICE_TIMER`). Notices were also shortened from
+  sentences to phrases — 「コピーしました」, 「GitHub 未設定」 — because no window
+  width makes a 20-character sentence fit beside a 120 px heading minimum.
+- The meta row and the folded band both centre a `TEXT_LINE_96 = 22` band inside
+  the row; the title takes `fonts.body`. Both shapes, because the same `EDIT`
+  serves either side of the breakpoint — that was the 修正漏れ the owner warned
+  about, and it was real: only the wide row had been fixed.
+- `LBS_NOINTEGRALHEIGHT` on the list.
+- `保存済み` becomes an empty status, so the row falls back to the memo's time.
+  The save *failure* still speaks.
+
+Verification: `cargo fmt --all -- --check` clean; `cargo clippy -p
+sakura-renderer -p sakura-settings --all-targets -- -D warnings` clean;
+`cargo test --workspace` 1,617 passed / 0 failed; the ignored
+`the_pad_splits_above_the_breakpoint_and_folds_below_it` passes on the
+interactive desktop with new assertions for the taskbar rule
+(`WS_EX_APPWINDOW` clear, `WS_EX_TOOLWINDOW` clear, `GW_OWNER` present), for the
+notice fitting its slot and expiring, and for the list reaching the bar;
+`git diff --check` clean; 0 residual cargo/rustc/renderer/engine/test-runner
+processes. Confirmed on screen at 96 DPI light in both shapes: the title is
+centred and unbolded, the row shows the time instead of 保存済み, and the list
+runs to the bar.
+
+Learned: three different Win32 controls were vertically centring three different
+ways in one row, and the row looked broken in exactly one place. When a single
+element in a row looks misaligned, suspect the control class before the
+arithmetic — the placement was correct the whole time. And a responsive layout
+has two branches: fixing the one in the screenshot is half the fix.
+
+Still not committed, for the reason recorded in the previous entries.
+Dark, Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
+
+## 2026-08-25 — Sakura Pad: two scroll bars borrowed from Explorer, two grounds in one row, and a row reporting the resting state (#92, #91)
+
+Symptom, three reports from the owner over screenshots:
+
+1. 「スクロールバーなんだけど、それぞれに色をあわせて、もっと細くしてよ」 over both
+   panes' scroll bars.
+2. 「この部分のデザインが統一されてないね」 over the header rows of the two shapes,
+   clarified as 「色だよ色」.
+3. 「時刻のも表示しなくていいよ」.
+
+Root causes:
+
+- Scroll bars: a window's scroll bar is drawn by the theme and sized by
+  `SM_CXVSCROLL`. `SetWindowTheme(hwnd, "Explorer", NULL)` — which is what the
+  pad was doing — only picks which theme class draws it; there is no per-window
+  colour or width. So the two panes carried a control the pad had no say over,
+  in a grey that belonged to neither pane's ground.
+- Two grounds: `layout` gave the whole wide editor column, head row included,
+  to `paper`, and `WM_CTLCOLOR*` painted the head row's three controls on
+  `paper` while the folded shape put the same two readings on the header band,
+  which is `surface`. Sampled from my own captures: `#FFFDFB` wide against
+  `#F7F6F4` folded.
+- The time: `status_line` fell back to the memo's own last-changed time, which
+  the memo's list row already carries, and to 「新しいメモ」 for a memo that is
+  visibly new.
+
+Fixes:
+
+- New `crates/sakura-renderer/src/pad_rail.rs`: a `SakuraInputPadRail` child
+  per pane, 10 logical px wide with a 4 px rounded thumb, track painted in the
+  pane's own ground (`surface` for the list, `paper` for the body), thumb
+  `border` at rest and `annotation` under the pointer. `WS_VSCROLL` and
+  `LBS_DISABLENOSCROLL` are gone from both panes, and the strip is carved out
+  of the pane rather than added beside it, so a document that grows past the
+  view does not move the words.
+- The rail keeps no scroll position: it reads `LB_GETTOPINDEX`/`LB_GETCOUNT`/
+  `LB_GETITEMHEIGHT` or `EM_GETFIRSTVISIBLELINE`/`EM_GETLINECOUNT` plus the
+  pane's own font metrics every time it paints, so the wheel, a key, a caret
+  leaving the view and a memo being added all move the thumb with no second
+  copy of the state to disagree.
+- The head row stands on `surface` in both shapes: `paper` now starts below
+  `meta`, the `WM_CTLCOLOR*` special case is gone, and the two owner-drawn
+  buttons in the row lost their `paper` ground too.
+- `status_line` returns only what there is to report. A `status_want` of zero
+  now means no slot at all, so the memo's name takes the width instead of
+  standing beside a reserved blank.
+
+One real bug on the way: the pane subclass probes the pane to see whether it
+scrolled, and `line_height` asks a text pane for its font — `WM_GETFONT` came
+straight back into the subclass, which probed again, and the renderer overflowed
+its stack before the window appeared. Listing the probe's messages is a list to
+keep in step with the probe; a thread-local `PROBING` flag covers whatever it
+asks. One thread owns every pad window, so that is the whole of the exclusion
+needed.
+
+Verification: `cargo fmt --all -- --check` clean; `cargo clippy -p
+sakura-renderer --all-targets -- -D warnings` clean; `cargo test --workspace`
+92 test binaries, 0 failed; the ignored
+`the_pad_splits_above_the_breakpoint_and_folds_below_it` passes on the
+interactive desktop with new assertions that neither pane has a system scroll
+bar left (`scroll_gutter == 0` for both), that each rail stands against its
+pane at the pad's own width and thinner than `SM_CXVSCROLL`, and that the
+notice's slot is given back entirely when it expires; `git diff --check` clean;
+0 residual renderer/cargo/test-runner processes. Confirmed on screen at 96 DPI
+light: the head row samples `#F7F6F4` in both shapes, each rail samples its own
+pane's ground, and a short window shows the list's thumb at the right length
+while the body — which fits — shows none.
+
+Learned: `SetWindowTheme` reads like a way to restyle a control and is not one;
+it selects a theme class, and anything the theme does not expose is not
+settable. When the design calls for a control the platform draws its own way,
+the choice is to accept the platform's or to own the drawing — there is no
+third setting to find.
+
+Still not committed, for the reason recorded in the previous entries. Dark,
+Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
+
+## 2026-08-25 — Pad: ホイールが効かない／エディタの残像（#92、#91）
+
+- 症状1: 独自スクロールレールへ置き換えた後、一覧・本文のどちらもマウスホイールでスクロールしなくなった。
+- 根本原因1: `LISTBOX` と `EDIT` のホイール処理は、スクロールバーを持っている場合の実装に含まれる。レール導入時に `WS_VSCROLL` を外したため、コントロール自身のホイール処理も一緒に失われた。レール側は自分の 10 px の帯の上にポインタがあるときだけ `WM_MOUSEWHEEL` を転送していたので、ペイン本体の上では誰も受け取らなかった。
+- 修正1: `crates/sakura-renderer/src/pad_rail.rs` のペイン subclass (`watched`) で `WM_MOUSEWHEEL` を自分で処理する。`SPI_GETWHEELSCROLLLINES`（`WHEEL_PAGESCROLL` は表示行数、0 はスクロールなし）を読み、`WHEEL_DELTA` 未満の端数はスレッドローカル `CARRY` に持ち越して高分解能ホイールでも取りこぼさない。純関数 `notches(turned, carried)` に切り出し、1 ノッチと 1/3 ノッチ×3 の 2 テストで固定した。
+- 症状2: 本文で改行して文字が下へずれると、しばらく残像が残る。
+- 根本原因2: 本文は罫線のパターンブラシの上に `TRANSPARENT` で描かれる。`EDIT` は挿入位置より下を `ScrollWindow` 相当でずらすため、罫線ごと動いた画素と新しく描かれた行が二重になる。既存の再描画フックは「先頭表示行が変わったとき」だけ全体を再描画していたので、先頭行が動かない編集（改行・挿入・削除）では発火しなかった。
+- 修正2: `crates/sakura-renderer/src/pad.rs` の `body_proc` の監視対象を、先頭表示行だけから (`EM_GETFIRSTVISIBLELINE`, `EM_GETLINECOUNT`, `WM_GETTEXTLENGTH`) の 3 値へ広げた。編集は必ずこのどれかを変えるのに対し、キャレット移動だけでは変わらないので、打鍵ごとの無駄な全体再描画にはならない。プローブ自身が同じ subclass へ戻る再帰は、レールと同じスレッドローカル `PROBING` フラグで止める（メッセージ ID の列挙は取りこぼす）。
+- 検証: `cargo fmt --all -- --check` 成功、`cargo clippy -p sakura-renderer --all-targets -- -D warnings` 成功、`cargo test --workspace` 失敗 0、`pad_ui` の対話デスクトップ用 ignored テスト成功、`git diff --check` 成功、残存プロセス 0。実プロセスでの実測は、本文 40 行に対し先頭表示行 0 →（3 ノッチ下）9 →（1 ノッチ上）6、一覧は 6 行すべてが収まるため 0 のまま（正しい）。画面キャプチャで、先頭に改行 3 つを挿入した直後と行途中への挿入直後のいずれにも残像・罫線の二重描画がないことを確認した。
+- 学び: スクロールバーを外すことは、見た目だけの変更ではなく、そのコントロールのホイール処理を外すことでもある。そして、背景を `TRANSPARENT` で描くコントロールでは「スクロールした」だけを再描画の合図にすると、内容が動く編集を取りこぼす。
+- commit: 未コミット（#92 のフェーズ 2 として作業ツリーに保持）。

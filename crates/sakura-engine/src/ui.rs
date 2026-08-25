@@ -46,8 +46,8 @@ use sakura_ipc::debug_trace;
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
     AppearanceTheme, Candidate, CandidateDetail, CandidateKind, CandidateList, FixedStr, FixedVec,
-    Mode, OutputBuf, Revision, ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES,
-    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
+    Mode, OutputBuf, PadShortcut, Revision, ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE,
+    MAX_CANDIDATES, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
     MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_CANDIDATE_TEXT_BYTES,
 };
 
@@ -442,6 +442,7 @@ impl CandidateDetailSnapshot {
 struct UiSnapshot {
     revision: Revision,
     appearance_theme: AppearanceTheme,
+    pad_shortcut: PadShortcut,
     mode: Option<Mode>,
     has_candidates: bool,
     candidates: CandidateSnapshot,
@@ -465,10 +466,11 @@ struct UiSnapshot {
 }
 
 impl UiSnapshot {
-    fn initial(appearance_theme: AppearanceTheme) -> Self {
+    fn initial(appearance_theme: AppearanceTheme, pad_shortcut: PadShortcut) -> Self {
         Self {
             revision: 1,
             appearance_theme,
+            pad_shortcut,
             mode: None,
             has_candidates: false,
             candidates: CandidateSnapshot::new(),
@@ -487,6 +489,7 @@ impl UiSnapshot {
         UiState {
             revision: self.revision,
             appearance_theme: self.appearance_theme,
+            pad_shortcut: self.pad_shortcut,
             mode: self.mode,
             candidates: self.has_candidates.then(|| self.candidates.to_owned()),
             candidate_detail: self
@@ -508,6 +511,10 @@ pub struct UiBoard {
     /// from `state` only so the poisoned-lock fallback can still describe the
     /// last known-good palette without guessing from the Windows theme.
     appearance_theme: AtomicU8,
+    /// Last successfully published process-wide Sakura Pad shortcut. The
+    /// atomic is only used for the poisoned-lock recovery state; normal
+    /// snapshots are always read under `state`.
+    pad_shortcut: AtomicU8,
     state: Mutex<UiSnapshot>,
     changed: Condvar,
     /// Watchers that have been handed a state but have not finished
@@ -544,9 +551,19 @@ impl UiBoard {
     /// App profiles deliberately do not participate: popup appearance is a
     /// process-wide renderer setting, not per-document input behavior.
     pub fn with_appearance_theme(appearance_theme: AppearanceTheme) -> Self {
+        Self::with_appearance_theme_and_pad_shortcut(appearance_theme, PadShortcut::Disabled)
+    }
+
+    /// A board whose initial global appearance and Sakura Pad shortcut have
+    /// both been validated by the configuration owner.
+    pub fn with_appearance_theme_and_pad_shortcut(
+        appearance_theme: AppearanceTheme,
+        pad_shortcut: PadShortcut,
+    ) -> Self {
         UiBoard {
             appearance_theme: AtomicU8::new(appearance_theme as u8),
-            state: Mutex::new(UiSnapshot::initial(appearance_theme)),
+            pad_shortcut: AtomicU8::new(pad_shortcut as u8),
+            state: Mutex::new(UiSnapshot::initial(appearance_theme, pad_shortcut)),
             changed: Condvar::new(),
             delivering: Mutex::new(0),
             quiet: Condvar::new(),
@@ -562,18 +579,74 @@ impl UiBoard {
     /// lock is retained unchanged: configuration reload must not turn a UI
     /// recovery path into a guessed theme change.
     pub fn set_appearance_theme(&self, appearance_theme: AppearanceTheme) -> bool {
-        let Ok(mut state) = self.state.lock() else {
-            return false;
+        let changed = match self.state.lock() {
+            Ok(mut state) => {
+                let pad_shortcut = state.pad_shortcut;
+                self.apply_global_preferences(&mut state, appearance_theme, pad_shortcut)
+            }
+            Err(_) => false,
         };
-        if state.appearance_theme == appearance_theme {
+        if changed {
+            self.changed.notify_all();
+        }
+        changed
+    }
+
+    /// Replaces the process-wide Sakura Pad shortcut after a validated
+    /// configuration reload. Like appearance, a no-op does not advance the
+    /// revision, while a real change is published even when the pad is not
+    /// visible.
+    pub fn set_pad_shortcut(&self, pad_shortcut: PadShortcut) -> bool {
+        let changed = match self.state.lock() {
+            Ok(mut state) => {
+                let appearance_theme = state.appearance_theme;
+                self.apply_global_preferences(&mut state, appearance_theme, pad_shortcut)
+            }
+            Err(_) => false,
+        };
+        if changed {
+            self.changed.notify_all();
+        }
+        changed
+    }
+
+    /// Publishes appearance and Pad shortcut as one UI snapshot. The
+    /// configuration watcher uses this combined edge so a renderer never
+    /// observes a half-applied preference pair and both fields share one
+    /// revision increment.
+    pub fn set_appearance_theme_and_pad_shortcut(
+        &self,
+        appearance_theme: AppearanceTheme,
+        pad_shortcut: PadShortcut,
+    ) -> bool {
+        let changed = match self.state.lock() {
+            Ok(mut state) => {
+                self.apply_global_preferences(&mut state, appearance_theme, pad_shortcut)
+            }
+            Err(_) => false,
+        };
+        if changed {
+            self.changed.notify_all();
+        }
+        changed
+    }
+
+    fn apply_global_preferences(
+        &self,
+        state: &mut UiSnapshot,
+        appearance_theme: AppearanceTheme,
+        pad_shortcut: PadShortcut,
+    ) -> bool {
+        if state.appearance_theme == appearance_theme && state.pad_shortcut == pad_shortcut {
             return false;
         }
         state.revision = state.revision.wrapping_add(1);
         state.appearance_theme = appearance_theme;
+        state.pad_shortcut = pad_shortcut;
         self.appearance_theme
             .store(appearance_theme as u8, Ordering::Release);
-        drop(state);
-        self.changed.notify_all();
+        self.pad_shortcut
+            .store(pad_shortcut as u8, Ordering::Release);
         true
     }
 
@@ -1080,6 +1153,7 @@ impl UiBoard {
                     appearance_theme: appearance_theme_from_u8(
                         self.appearance_theme.load(Ordering::Acquire),
                     ),
+                    pad_shortcut: pad_shortcut_from_u8(self.pad_shortcut.load(Ordering::Acquire)),
                     mode: None,
                     candidates: None,
                     candidate_detail: None,
@@ -1105,6 +1179,14 @@ fn appearance_theme_from_u8(value: u8) -> AppearanceTheme {
         1 => AppearanceTheme::Light,
         2 => AppearanceTheme::Dark,
         _ => AppearanceTheme::Auto,
+    }
+}
+
+fn pad_shortcut_from_u8(value: u8) -> PadShortcut {
+    match value {
+        0 => PadShortcut::Disabled,
+        1 => PadShortcut::DoubleCtrl,
+        _ => PadShortcut::Disabled,
     }
 }
 
@@ -1214,6 +1296,44 @@ mod tests {
         assert_eq!(updated.appearance_theme, AppearanceTheme::Light);
         assert_ne!(updated.revision, initial.revision);
         assert!(!board.set_appearance_theme(AppearanceTheme::Light));
+    }
+
+    #[test]
+    fn reloaded_pad_shortcut_publishes_only_a_real_change() {
+        let board = UiBoard::with_appearance_theme_and_pad_shortcut(
+            AppearanceTheme::Dark,
+            PadShortcut::Disabled,
+        );
+        let initial = look(&board, 0);
+        assert_eq!(initial.pad_shortcut, PadShortcut::Disabled);
+
+        assert!(!board.set_pad_shortcut(PadShortcut::Disabled));
+        assert!(board.set_pad_shortcut(PadShortcut::DoubleCtrl));
+
+        let updated = look(&board, initial.revision);
+        assert_eq!(updated.pad_shortcut, PadShortcut::DoubleCtrl);
+        assert_eq!(updated.appearance_theme, AppearanceTheme::Dark);
+        assert_ne!(updated.revision, initial.revision);
+        assert!(!board.set_pad_shortcut(PadShortcut::DoubleCtrl));
+    }
+
+    #[test]
+    fn appearance_and_pad_reload_share_one_snapshot_revision() {
+        let board = UiBoard::with_appearance_theme_and_pad_shortcut(
+            AppearanceTheme::Auto,
+            PadShortcut::Disabled,
+        );
+        let initial = look(&board, 0);
+        assert!(
+            board.set_appearance_theme_and_pad_shortcut(
+                AppearanceTheme::Dark,
+                PadShortcut::DoubleCtrl,
+            )
+        );
+        let updated = look(&board, initial.revision);
+        assert_eq!(updated.appearance_theme, AppearanceTheme::Dark);
+        assert_eq!(updated.pad_shortcut, PadShortcut::DoubleCtrl);
+        assert_eq!(updated.revision, initial.revision.wrapping_add(1));
     }
 
     #[test]

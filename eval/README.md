@@ -260,3 +260,26 @@ expected targets must never enter a blinded prompt. The checked-in
 `quality-observation.schema.json` scoreboard for an observational
 `whole_reading_core` baseline; it is explicitly not a release gate or a
 context-free Top-1 gold set.
+
+## Issue #93 Phase 0 ranking comparison
+
+The compact before/after fixture for the single-ranker work lives in
+`corpus/behavioral/ranking-comparison-issue93/fixture.json`. It has its own
+versioned comparison schema/adaptor and is intentionally not parsed as the
+Stage 1 50-case fixture. It reuses the #73 quality-observation identity and
+provenance boundary; the same 22 cases and canonical options must be used for
+both reports, while engine and dictionary identities may differ and are
+recorded as per-report provenance.
+
+The fixture separates six fixed general-language regression controls from IT
+positive cases and surface-coverage sentinels. Explicit Top-1 checks are
+bounded to this empty-context regression corpus. Homophone-prone terms and
+`縦`／`版`／`日` sentinels use Recall@5 so candidate reachability is measured
+without turning a context-free reading into unconditional semantic gold. The
+same Recall@5 rule covers `時`／`方`／`替え` and the representative `気遣い`
+compound-rendaku sentinel. The
+comparison contract and identity rules are documented in
+`docs/research/conversion-ranking-issue93-comparison.md`.
+The pinned v1.0.5, v1.0.23, and exact-ablation observations are under
+`baselines/ranking-comparison-issue93/`; score and compare them with the
+commands in `tools/ime-eval/README.md`.

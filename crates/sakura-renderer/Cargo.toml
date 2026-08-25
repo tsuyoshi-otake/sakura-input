@@ -21,7 +21,14 @@ windows-core.workspace = true
 workspace = true
 features = [
     "Win32_Foundation",
+    # The title bar, for the Pad: a caption painted in the palette rather
+    # than in whatever the system last chose for an unknown program.
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    # The clipboard, for the Pad's share action. `Win32_System_Memory`
+    # comes with it: clipboard text is handed over in a moveable block.
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
     # Process enumeration, for tests/watchdog_recovery.rs: a leftover renderer
     # is another watchdog, and it holds no pipe, so nothing but the process
     # list can find it.
@@ -35,6 +42,10 @@ features = [
     "Win32_System_Pipes",
     "Win32_System_Registry",
     "Win32_Storage_FileSystem",
+    "Win32_Security_Cryptography",
+    "Win32_UI_Input",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Controls",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Accessibility",
     "Win32_UI_Shell",

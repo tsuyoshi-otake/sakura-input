@@ -371,6 +371,59 @@ impl AppearanceTheme {
     }
 }
 
+/// Selects the explicit shortcut used to show or focus Sakura Pad.
+///
+/// The renderer receives this value as part of [`crate::UiState`].  Keeping
+/// the enum in the protocol crate makes the configuration authority and the
+/// renderer share one bounded, strict representation instead of parsing the
+/// user configuration at the UI boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum PadShortcut {
+    /// Sakura Pad has no keyboard shortcut.
+    #[default]
+    Disabled = 0,
+    /// Press either Control key twice in succession.
+    DoubleCtrl = 1,
+}
+
+impl PadShortcut {
+    /// All supported shortcuts, in the canonical settings order.
+    pub const ALL: [Self; 2] = [Self::Disabled, Self::DoubleCtrl];
+
+    /// The canonical name used in preference files and settings surfaces.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::DoubleCtrl => "double-ctrl",
+        }
+    }
+
+    /// Parses the canonical preference-file name.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "disabled" => Some(Self::Disabled),
+            "double-ctrl" => Some(Self::DoubleCtrl),
+            _ => None,
+        }
+    }
+
+    /// Encodes as one byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly. Protocol version negotiation, rather than
+    /// an implicit fallback, handles future wire values.
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(Self::Disabled),
+            1 => Ok(Self::DoubleCtrl),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
 /// The input scope of the focused text field (DESIGN.md §9): password and
 /// similar sensitive scopes disable learning and the commit-cache history
 /// layer.
@@ -1021,6 +1074,31 @@ mod tests {
         VecSink::new(&mut buf).write_u8(3).expect("write");
         let mut reader = Reader::new(&buf);
         assert_eq!(AppearanceTheme::decode(&mut reader), Err(Error::BadEnum));
+    }
+
+    #[test]
+    fn pad_shortcut_is_bounded_and_strict_on_the_wire() {
+        assert_eq!(
+            PadShortcut::from_name("disabled"),
+            Some(PadShortcut::Disabled)
+        );
+        assert_eq!(
+            PadShortcut::from_name("double-ctrl"),
+            Some(PadShortcut::DoubleCtrl)
+        );
+        assert_eq!(PadShortcut::from_name("ctrl"), None);
+        for expected in PadShortcut::ALL {
+            let mut buf = Vec::new();
+            expected
+                .encode(&mut VecSink::new(&mut buf))
+                .expect("encode");
+            let mut reader = Reader::new(&buf);
+            assert_eq!(PadShortcut::decode(&mut reader), Ok(expected));
+        }
+        let mut buf = Vec::new();
+        VecSink::new(&mut buf).write_u8(2).expect("write");
+        let mut reader = Reader::new(&buf);
+        assert_eq!(PadShortcut::decode(&mut reader), Err(Error::BadEnum));
     }
 
     #[test]

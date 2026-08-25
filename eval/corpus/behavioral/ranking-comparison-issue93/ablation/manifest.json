@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "variant": "v1.0.23-it-compound-coherence-off",
+  "base_git_sha": "46d649282fff2dfebc09be9e0e8d8915031fb8b0",
+  "patch": "v1.0.23-disable-it-compound-coherence.patch",
+  "patch_sha256": "c4d659d440b0c6fd0f18767e561dfb7e13a6c324c5987a0732a54845222cf3da",
+  "scope": "Remove only the apply_it_compound_coherence ranking pass call; preserve entry IT bias, completion coherence, dictionary, and all other conversion passes.",
+  "expected_dirty_paths": [
+    "crates/sakura-core/src/conversion.rs"
+  ]
+}

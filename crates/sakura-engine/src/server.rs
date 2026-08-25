@@ -248,7 +248,10 @@ impl Shared {
         // Appearance is carried in the same atomic snapshot, but the renderer
         // board still gets its narrow notification so an open popup repaints
         // without waiting for a key request.
-        self.ui.set_appearance_theme(preferences.appearance_theme);
+        self.ui.set_appearance_theme_and_pad_shortcut(
+            preferences.appearance_theme,
+            preferences.pad_shortcut,
+        );
     }
 
     fn runtime_services(
@@ -579,7 +582,10 @@ impl Server {
                 total_created: AtomicU32::new(0),
                 admission: Arc::new(Admission::default()),
                 shutdown,
-                ui: UiBoard::with_appearance_theme(preferences.appearance_theme),
+                ui: UiBoard::with_appearance_theme_and_pad_shortcut(
+                    preferences.appearance_theme,
+                    preferences.pad_shortcut,
+                ),
                 composition_fence: Arc::new(CompositionFence::new()),
                 conversion,
                 learning,
@@ -1876,6 +1882,7 @@ mod tests {
         let publish = server.configuration_publisher();
         let preferences = Preferences {
             appearance_theme: sakura_core::AppearanceTheme::Dark,
+            pad_shortcut: sakura_core::PadShortcut::DoubleCtrl,
             association_enabled: false,
             prediction_enabled: false,
             ..Preferences::default()
@@ -1888,6 +1895,10 @@ mod tests {
         assert_eq!(
             look(&server.shared.ui, 0).appearance_theme,
             preferences.appearance_theme
+        );
+        assert_eq!(
+            look(&server.shared.ui, 0).pad_shortcut,
+            preferences.pad_shortcut
         );
     }
 
@@ -2582,6 +2593,7 @@ mod tests {
         Response::Ui(UiState {
             revision: 1,
             appearance_theme: sakura_proto::AppearanceTheme::Auto,
+            pad_shortcut: sakura_proto::PadShortcut::Disabled,
             mode: None,
             candidates: Some(CandidateList {
                 kind: CandidateKind::Conversion,

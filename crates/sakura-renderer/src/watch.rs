@@ -279,12 +279,17 @@ impl PipeBinding {
             Self::Production => {
                 let executable = std::env::current_exe()
                     .map_err(|_| Fault::UntrustedServer { process_id: 0 })?;
-                let root = executable
-                    .parent()
-                    .and_then(|release| release.parent())
-                    .and_then(|versions| versions.parent())
-                    .ok_or(Fault::UntrustedServer { process_id: 0 })?;
-                let policy = ServerTrustPolicy::InstalledRoot(root.to_path_buf());
+                #[cfg(debug_assertions)]
+                let policy = ServerTrustPolicy::Exact(executable.with_file_name(ENGINE_EXE));
+                #[cfg(not(debug_assertions))]
+                let policy = {
+                    let root = executable
+                        .parent()
+                        .and_then(|release| release.parent())
+                        .and_then(|versions| versions.parent())
+                        .ok_or(Fault::UntrustedServer { process_id: 0 })?;
+                    ServerTrustPolicy::InstalledRoot(root.to_path_buf())
+                };
                 Client::connect_endpoint_verified(Endpoint::Renderer, &policy, PATIENT_CONNECT)
             }
             Self::Test(pipe_name) => Client::connect_to(pipe_name, PATIENT_CONNECT),

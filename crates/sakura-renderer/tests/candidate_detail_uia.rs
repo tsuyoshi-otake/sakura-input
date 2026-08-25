@@ -20,7 +20,7 @@ use sakura_ipc::{security::Descriptor, Client, PipeInstance};
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
     decode_request, encode_response, AppearanceTheme, Candidate, CandidateDetail, CandidateKind,
-    CandidateList, Mode, Request, Response, ScreenRect, UiState, PROTOCOL_VERSION,
+    CandidateList, Mode, PadShortcut, Request, Response, ScreenRect, UiState, PROTOCOL_VERSION,
 };
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
@@ -520,6 +520,7 @@ fn history_delete_uses_typed_index_keeps_popup_until_next_ui_state_and_never_act
     engine.publish(UiState {
         revision: 42,
         appearance_theme: AppearanceTheme::Auto,
+        pad_shortcut: PadShortcut::Disabled,
         mode: None,
         candidates: None,
         candidate_detail: None,
@@ -841,6 +842,7 @@ fn state_with_theme(
     UiState {
         revision,
         appearance_theme,
+        pad_shortcut: PadShortcut::Disabled,
         mode: None,
         candidates: Some(CandidateList {
             kind: CandidateKind::Suggestion,
@@ -867,6 +869,7 @@ fn history_state(revision: u64, anchor: ScreenRect) -> UiState {
     UiState {
         revision,
         appearance_theme: AppearanceTheme::Dark,
+        pad_shortcut: PadShortcut::Disabled,
         mode: None,
         candidates: Some(CandidateList {
             kind: CandidateKind::Suggestion,

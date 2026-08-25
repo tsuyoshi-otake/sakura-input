@@ -53,14 +53,14 @@ pub use output::{
 };
 pub use types::{
     AppearanceTheme, Candidate, CandidateDetail, CandidateKind, CandidateList, ErrorCode,
-    InputScope, KeyCode, KeyInput, Mode, Modifiers, Output, Preedit, ScreenRect, Segment,
-    UnderlineKind,
+    InputScope, KeyCode, KeyInput, Mode, Modifiers, Output, PadShortcut, Preedit, ScreenRect,
+    Segment, UnderlineKind,
 };
 pub use wire::Error;
 
 /// The protocol version this crate implements. Carried in every payload;
 /// a decoder rejects any other value with `Error::UnsupportedVersion`.
-pub const PROTOCOL_VERSION: u16 = 19;
+pub const PROTOCOL_VERSION: u16 = 20;
 
 /// The largest payload (the bytes after the 4-byte frame length prefix)
 /// this protocol allows. A frame whose declared length exceeds this is
