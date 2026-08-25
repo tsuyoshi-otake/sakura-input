@@ -869,3 +869,13 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - artifact: `sakura_setup.exe` 24,681,776 bytes、SHA-256 `ad7624aba2cd9aa52cd6dff380de412ae91fb760b2d88421e0ede231bd37c4ab`、`NotSigned`（owner 承認済みの未署名リリース）。manifest の sha256／size と一致。
 - 公開: draft 作成 → 添付2件を再ダウンロードして hash 一致を確認 → `--draft=false`。読み戻しは `isDraft=false`、`isPrerelease=false`、`publishedAt=2026-08-25T11:54:08Z`、assets 2件。
 - commit: 50659ae / tag `v1.0.27`。
+
+## 2026-08-25 — Pad: 無題プレースホルダ、Ctrl+A、キャプションのアイコン除去（#92）
+
+- 症状: owner の実機報告3点。(1) 初回起動の Pad はタイトルが空欄のままで、そのメモが何と呼ばれるのか画面に出ない。(2) Ctrl+A が効かず全選択できない。(3) タイトルバー左端のアイコンが不要。
+- 根本原因: (1) 空欄のヒントは検索欄だけに実装されていた（`search_proc` / `SEARCH_PROC`）。(2) 素の `EDIT` は Ctrl+A を実装せず、`IsDialogMessageW` も処理しない。誰も処理しないため打鍵が何も起こさなかった。(3) 自前アイコンを持たないウィンドウクラスは Windows の既定プレースホルダで描かれる。ジェスチャで呼ぶ Pad には並んだウィンドウ列から見分けられる必要がなく、製品アイコンを入れても冗長になるだけ。
+- 修正: (1) ヒント機構を control id 引きへ一般化（`PLACEHOLDER_PROC` / `placeholder_proc` / `install_placeholder` / `placeholder_text`）し、タイトル欄へ `無題` を **描画**する。テキストにすると実タイトルとして保存され、無題メモが恒久的に `無題` という名前になるため採らない。同じ理由で検索欄もテキストにしない（フィルタが読むため）。本文欄は意図的にヒントなし。`TITLE_PLACEHOLDER == pad_list::UNTITLED` をテストで固定。(2) `dialog_navigation()` が `IsDialogMessageW` より前に `select_all()` を試し、`EM_SETSEL(0, -1)` を送って打鍵を飲み込む（0x01 制御文字がテキストへ入るのを防ぐ）。判定は純関数 `selects_all()` に分離。Ctrl+Alt+A は AltGr+A なので除外、一覧も除外（1件編集の Pad で全メモ選択は無意味）。(3) `pad_caption::hide_icon()` が `WS_EX_DLGMODALFRAME` + `SWP_FRAMECHANGED` と `ICON_BIG`／`ICON_SMALL` の null `WM_SETICON` を行う。システムメニューは Alt+Space と右クリックで従来どおり。`CaptionIcons`／`icons()`／DPI 変更時の再適用は削除。
+- 検証: 純関数の unit test、実 renderer を使う `pad_ui` テスト（拡張スタイル、両アイコンが null、タイトル欄の text が空のまま）、空の Pad の実画面スクリーンショットで `無題`／`検索` 表示とアイコン無しを目視、実行中の Pad への実 Ctrl+A 打鍵で `selection 0..251`。fmt、`clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`（失敗 0）、`git diff --check` 成功。
+- 落とし穴（記録）: `GetWindowDC` + `BitBlt` は DWM が描くキャプションを正しく取れず、アイコン除去後も古いプレースホルダや黒帯を返した。キャプションの見た目確認は `CopyFromScreen` による実デスクトップ撮影で行うこと。また別プロセスから合成キーを送る前に `AttachThreadInput` + 合成 Alt で foreground lock を外し、対象が実際に前面かを確認してから送らないと、キーは前面の別アプリ（Chrome）へ入る。
+- commit: 6d07794（未リリース。1.0.27 のインストール済みビルドにはこの3点は入っていない）。
+- 学び: 「ヒント＝プレースホルダ」を実装するとき、テキストとして入れてよいかは欄ごとに違う。検索欄は読み取り側が壊れ、タイトル欄は保存側が壊れる。どちらも描画で解決するのが正しく、同じ機構を id 引きで共有できる。
