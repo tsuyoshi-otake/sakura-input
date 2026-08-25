@@ -1,4 +1,4 @@
-# Sakura Input 1.0.25
+# Sakura Input 1.0.26
 
 Sakura Input に内蔵のローカルメモ「Sakura Pad」を追加するリリースです。IME 本体の変換品質、キー操作、辞書は変更していません。Pad は既定では無効で、設定で明示的に有効化した場合だけ `Ctrl` の2回叩きで開きます。
 

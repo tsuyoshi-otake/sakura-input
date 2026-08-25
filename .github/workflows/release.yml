@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v1.0.25
+        default: v1.0.26
 
 permissions:
   contents: read
