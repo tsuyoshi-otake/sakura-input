@@ -879,3 +879,18 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 落とし穴（記録）: `GetWindowDC` + `BitBlt` は DWM が描くキャプションを正しく取れず、アイコン除去後も古いプレースホルダや黒帯を返した。キャプションの見た目確認は `CopyFromScreen` による実デスクトップ撮影で行うこと。また別プロセスから合成キーを送る前に `AttachThreadInput` + 合成 Alt で foreground lock を外し、対象が実際に前面かを確認してから送らないと、キーは前面の別アプリ（Chrome）へ入る。
 - commit: 6d07794（未リリース。1.0.27 のインストール済みビルドにはこの3点は入っていない）。
 - 学び: 「ヒント＝プレースホルダ」を実装するとき、テキストとして入れてよいかは欄ごとに違う。検索欄は読み取り側が壊れ、タイトル欄は保存側が壊れる。どちらも描画で解決するのが正しく、同じ機構を id 引きで共有できる。
+
+## 2026-08-25 — 1.0.28 リリース（Pad の無題・Ctrl+A・キャプション）（#92）
+
+- 内容: 6d07794 をリリース化した。版は `Cargo.toml`、`Cargo.lock`、`installer/setup.iss`、`release.yml` 既定値の4か所、ノートは `docs/release-notes-v1.0.28.md`（1.0.27 のノートを rename）。
+- 検証: fmt、`clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`（失敗 0）、`git diff --check`、dep-policy（73 packages）、release-workflow-policy（7 action 参照）すべて成功。commit 361a330 / tag `v1.0.28`。
+- CI のフレーク2件（重要）: `Release candidate` と `Installer` は1回目で success。`CI` の `Build and test` だけが2回続けて、しかも**別々のテスト**で落ちた。
+  - 試行1: `sakura-core` の `raw_multi_pass_core_path_fits_128_kib_thread_stack` が `STATUS_STACK_OVERFLOW`（0xc00000fd）。本番の worker stack は 160 KiB で、このテストは変換ホットパスを 128 KiB に収まるか検査する境界テスト。debug ビルドのマージンが薄い。
+  - 試行2: 試行1では前段で止まって実行されていなかった `Sandbox access (AppContainer)` の `the_pipe_is_reachable_from_a_real_appcontainer_token` が `UntrustedServer` で失敗。AppContainer 側はパイプを開けたが、verified connect が親 engine を path/token ポリシーで拒否した（fail-closed 側）。
+  - 試行3: 全 step success。
+  - いずれも今回の差分が触っていない領域。前回 green だった 1.0.27 の CI（fb626d6）と比べ `sakura-core`／`sakura-engine` は1バイトも差がなく、toolchain も同一（1.96.0 ac68faa20）。つまりコード差分ではなく runner 環境依存。
+  - ローカルでは AppContainer テストは「本番の well-known パイプを既存の engine が持っている」ため実行拒否になり、インストール済み engine を止めない限り再現確認できない。
+- artifact: `sakura_setup.exe` 24,682,898 bytes、SHA-256 `959fc5db53c73bfd3bc648991465ff6604af2a2bcc13e2bed1ed6519055f888d`、`Get-AuthenticodeSignature` は `NotSigned`（owner 承認済みの未署名リリース）。`signing-status.txt` は `unsigned-owner-approved`。manifest の sha256／size と一致。
+- 公開: draft 作成 → 添付2件を再ダウンロードして hash と manifest の一致を確認 → `--draft=false`。読み戻しは `isDraft=false`、`isPrerelease=false`、`publishedAt=2026-08-25T13:11:15Z`、assets 2件。
+- 未処理: 上記フレーク2件は別 Issue にして原因調査する。128 KiB テストは debug ビルドでの実 headroom を測ってから閾値か対象を決める。AppContainer は `UntrustedServer` に至った path/token 判定の環境依存要因を特定する。
+- 学び: 段階的に止まる CI job では「1回目に落ちなかった step は、通ったのではなく実行されていない」ことがある。再実行で別のテストが落ちたときに新しい回帰と誤認しないため、step 単位の conclusion を見る。
