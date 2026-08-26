@@ -16,12 +16,19 @@ a diff, something has gone wrong.
 | `curated-terms.tsv` | 2 | Project-authored MIT overlay for canonical casing and high-value terms missing from the generated glossary |
 | `conversion-priorities.tsv` | 2 | Project-authored calibration overlay for context-free top-1 conversion; re-prices existing lattice edges and may add missing IT/business compounds such as Issue #62's 機能紹介 |
 
-`max_candidates_per_reading` in the Mozc trim is a bound on distinct display
-surfaces, not on POS/connection-ID rows. The selected surfaces retain their
-exact rows so contextual connection costs remain available. The schema-2 trim
-report records both the remaining surface cap and the entries/surfaces rescued
-from the legacy row-based cap; this keeps general-Japanese coverage loss
-auditable without hiding it behind a small curated overlay.
+The Mozc trim admits a row on `max_word_cost` alone. `max_surfaces_per_reading`
+is `none` by default, so a reading keeps every affordable homophone instead of
+losing its more expensive ones to a positional cap; the former default of twelve
+surfaces per reading dropped 10,781 surfaces across 963 readings, including
+ordinary words such as `気管`, `旗艦`, `季刊`, `関`, `光`, and `行` (Issue #94).
+Selected surfaces retain their exact rows so contextual connection costs remain
+available. `legacy_row_evidence_cap` is a frozen provenance boundary and not an
+admission rule: it records which rows the former row-based cap had already
+shipped so allomorph classification cannot change retroactively as coverage
+grows, which is why it has no command-line flag. The schema-3 trim report
+records the surface cap (`null` when absent), the frozen evidence cap, and the
+entries/surfaces rescued from the legacy row cap; this keeps general-Japanese
+coverage auditable without hiding it behind a small curated overlay.
 
 The dictionary compiler also expands Mozc 基本形 verbs and i-adjectives into fused conjugations (`来て`, `書いて`, `行って`, `高くて`, …) at build time. Sakura stores static lattice edges and does not inflect at runtime, so the Mozc trim can keep `来る` while dropping `来て`. `inflection-expand` reads the trimmed system TSV plus pinned `id.def`, emits only missing `(reading, surface)` pairs, and keeps Mozc connection ids. The generated overlay is `LicenseRef-Mozc-Dictionary` and is not checked in; `scripts/build-dictionary.ps1` rebuilds it every pass.
 

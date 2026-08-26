@@ -12,7 +12,8 @@ output_license = "LicenseRef-Mozc-Dictionary"
 
 [mozc.trim]
 max_word_cost = 6900
-max_candidates_per_reading = 12
+max_surfaces_per_reading = "none"
+legacy_row_evidence_cap = 12
 
 [smile_chat]
 repository = "https://github.com/systemexe-research-and-development/smile-chat"

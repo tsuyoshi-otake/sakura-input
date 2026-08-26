@@ -17,6 +17,9 @@ use sakura_core::dictionary::EntryFlags;
 const NUMERAL_CLASS: u16 = 2044;
 /// Upstream's offset between a word's conversion cost and its prediction cost.
 const PREDICTION_OFFSET: i32 = 1_200;
+/// The conversion cost above which the Mozc importer stops offering a word to
+/// prediction at all. Mirrors `parse_mozc_entries`.
+const PREDICTION_COST_LIMIT: i32 = 6_000;
 
 fn overlay_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/conversion-priorities.tsv")
@@ -51,22 +54,38 @@ fn the_overlay_parses_and_carries_no_duplicate_edge() {
 }
 
 #[test]
-fn every_row_stays_reachable_from_prediction() {
+fn every_row_keeps_the_prediction_status_its_own_cost_earns() {
     for entry in overlay() {
         let context = format!("{}\t{}", entry.reading, entry.surface);
-        // The overlay replaces an edge rather than adding one. Dropping the
-        // prediction flag would remove the original edge from prediction
-        // entirely instead of re-pricing it.
-        assert!(
-            entry.flags.contains(EntryFlags::PREDICTION),
-            "row is not offered to prediction: {context}"
-        );
-        assert_eq!(
-            entry.prediction_cost,
-            entry.word_cost + PREDICTION_OFFSET,
-            "row does not keep upstream's prediction offset: {context}"
-        );
         assert!(entry.word_cost >= 0, "negative word_cost: {context}");
+        // The overlay replaces an edge rather than adding one, so a row that
+        // dropped the prediction flag would remove the original edge from
+        // prediction entirely instead of re-pricing it. The importer already
+        // withholds prediction above `PREDICTION_COST_LIMIT`, so only a row
+        // priced above that line can be non-predictive without hiding a loss:
+        // Issue #94 re-prices 対案 and 禁則 to 6078 and 6776, still above the
+        // line their upstream edges were already on.
+        if entry.word_cost <= PREDICTION_COST_LIMIT {
+            assert!(
+                entry.flags.contains(EntryFlags::PREDICTION),
+                "row is not offered to prediction: {context}"
+            );
+            assert_eq!(
+                entry.prediction_cost,
+                entry.word_cost + PREDICTION_OFFSET,
+                "row does not keep upstream's prediction offset: {context}"
+            );
+        } else {
+            assert!(
+                !entry.flags.contains(EntryFlags::PREDICTION),
+                "row is priced out of prediction yet claims it: {context}"
+            );
+            assert_eq!(
+                entry.prediction_cost,
+                i32::MAX,
+                "a non-predictive row must carry no prediction cost: {context}"
+            );
+        }
     }
 }
 
