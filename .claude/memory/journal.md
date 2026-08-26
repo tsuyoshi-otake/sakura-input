@@ -1056,3 +1056,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び4（実画面検証の手法）: 候補ポップアップは非activate・click-through で、通常のスクリーンショットでは前面ウィンドウに隠れる。`SakuraInputCandidates` クラスの HWND を `EnumWindows` で探し、`PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で**ウィンドウ自身を描かせる**と遮蔽に関係なく確実に撮れる。ポップアップは既定で compact（選択行＋footer だけ、高さ50 px）で、MS-IME キーマップでは Tab（`candidate_expand`）で全行に開く。`VK_CONVERT` は `keybd_event` では届かないので Space を使う。合成入力の到達確認は host の `KeyDown` が `ProcessKey (229)` を出すかで見る。
 - 学び5（環境）: このリポジトリの PowerShell スクリプトは **pwsh 7 必須**。Windows PowerShell 5.1 は `[IO.EnumerationOptions]`（.NET Core 専用型）を解決できず `build-dictionary.ps1` が落ちる。CI も `shell: pwsh`。また `tail` にパイプすると非0終了が飲まれるので、成否は終了コードではなく**ログ本文**で確認する。
 - 未決: #98（和欧・和数境界の半角スペース自動挿入、URL・ファイル名・`CI/CD`・`GPT-5.6`・`config.toml`・バージョン番号・`client-server`・`KEY=value` の除外リスト付き）は未着手。#99 は実画面確認まで完了。
+
+## 2026-08-26 — #98（和欧境界の自動スペース挿入）を実装前に取りやめ
+
+- 経緯: owner 選択により #99 の実画面確認後 #98 へ着手。実装前の入力経路調査で前提が崩れ、owner 判断で機能ごと取りやめ、Issue #98 を `not planned` でクローズした（コメント: issues/98#issuecomment-5426413585）。コード変更なし。
+- 私の誤り 1: 「除外リストは全て純 ASCII なので規則が到達しない」と結論し、和欧境界は 1 確定内の走査で扱えると考えた。owner から「それらは Shift 押しながら入力できないでしょ」と指摘され、`dispatch.rs:3028` の `starts_shifted_ascii` を読んで確認した。一時英字入力は **composition の 1 文字目が Shift+英字のときだけ**始まるので先頭は必ず大文字になり、`config.toml`／`3.14.1`／`git push` はこの経路で打てない。さらに shifted_ascii 中は ASCII が全て英字として溜まる（3055 行）ため `AWS` + `wo` は `を` にならず、`AWSを利用する` という composition は存在しない。
+- 私の誤り 2: 上を受けて今度は「ASCII は必ず別コミット。だから cross-commit 専用機能だ」と結論した。これも誤り。owner が `git push` は打てる、`IT` は打てないと実機で示したので `data/it-terms.tsv` を直接引いたところ、**かな読み → 純 ASCII 表記のエントリが 7,365 件**あった（`えーだぶりゅーえす`→`AWS`、`ぱいそん`→`Python`、`ぎっとはぶ`→`GitHub`）。ASCII は通常のひらがな composition のセグメントとしても出る。
+- 取りやめの理由: 規則が実際に到達する境界は「確定と確定の間」「1 確定内のセグメント間」「1 エントリ表記の内部（`X線` 型）」の 3 種に分かれ、正しい振る舞いが各々異なる。確定文字列の走査だけでは区別できず、左文脈保持（§5.8 carryover は明示的モード切替でリセットされる）と辞書引きの両方が要る。誤爆の損失に対し確実に自動化できる範囲が狭い。
+- 学び: **入力経路を先に確定させてから機能を設計する。** 2 回続けて、コードを読む前の「たぶんこう打つはず」で設計の重心を置き、2 回とも owner の実機知識に否定された。IME は「どの文字列が出力されうるか」ではなく「利用者がどの順でキーを押すか」で決まる。同種の機能では最初に (a) その文字列を打つ実際のキー列、(b) それが 1 composition か複数確定か、(c) 辞書変換で出るのか直接入力かを、実装コードと同梱辞書で確認してから仕様を書く。
+- 副産物（次の作業へ）: 実カバレッジの穴を確認した。読み `it` は `IT Control`／`IT Governance`／`IT Phase` だけで**単体の `IT` が無い**。`あいてぃー`・`ipv6`・`sha256` は該当なし、`config` は `Config Rule` のみ。`IPv6`・`SHA-256`・`config.toml` は同梱辞書から出せない。owner 指示により辞書欠落の修正へ着手する。
