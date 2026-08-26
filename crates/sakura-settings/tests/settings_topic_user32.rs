@@ -17,7 +17,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_core::{
-    AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, PunctuationStyle,
+    AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, NotationStyle, PunctuationStyle,
     ShiftSpaceBehavior, SpaceWidth, Width,
 };
 use sakura_proto::Mode;
@@ -1235,14 +1235,26 @@ fn normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer() {
     });
     assert_eq!(
         combos.len(),
-        6,
-        "normalizer page exposes its six owned ComboBoxes"
+        7,
+        "normalizer page exposes the notation preset plus its six owned ComboBoxes"
     );
-    select_combo_item_with_mouse(&cursor, combos[0], 1);
+    let preset = combo_beside_label(normalizer_panel, &combos, "表記スタイル");
+    let alnum = combo_beside_label(normalizer_panel, &combos, "英字");
     assert_eq!(
-        combo_selection(combos[0]),
+        combo_selection(preset),
+        0,
+        "a freshly launched settings window starts on the standard style"
+    );
+    select_combo_item_with_mouse(&cursor, alnum, 1);
+    assert_eq!(
+        combo_selection(alnum),
         1,
         "physical width change is visible before reset"
+    );
+    assert_eq!(
+        combo_selection(preset),
+        NOTATION_STYLE_CUSTOM_INDEX,
+        "hand-editing one of the seven controls moves the preset to カスタム"
     );
     let reset_point = POINT {
         x: (reset_rect.left + reset_rect.right) / 2,
@@ -1255,8 +1267,13 @@ fn normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer() {
         y: reset_point.y,
     });
     wait_until("normalizer reset restores the alnum default", || {
-        combo_selection(combos[0]) == 0
+        combo_selection(alnum) == 0
     });
+    assert_eq!(
+        combo_selection(preset),
+        0,
+        "reset re-derives the preset from the restored controls"
+    );
 
     let (_, apply) = bottom_status_and_apply(root);
     let apply_rect = window_rect(apply);
@@ -1321,56 +1338,66 @@ fn normalizer_controls_are_discoverable_clickable_and_apply_persists_values() {
     });
     assert_eq!(
         combos.len(),
-        6,
-        "the selected normalizer page exposes width, punctuation, and bracket ComboBox controls"
+        7,
+        "the selected normalizer page exposes the notation preset plus width, punctuation, and bracket ComboBox controls"
     );
     let (status, _) = bottom_status_and_apply(root);
+    let preset = combo_beside_label(normalizer_panel, &combos, "表記スタイル");
+    let alnum = combo_beside_label(normalizer_panel, &combos, "英字");
+    let period = combo_beside_label(normalizer_panel, &combos, "句点");
+    let comma = combo_beside_label(normalizer_panel, &combos, "読点");
+    let brackets = combo_beside_label(normalizer_panel, &combos, "括弧");
 
     for (index, combo) in combos.iter().enumerate() {
         assert!(is_visible(*combo), "ComboBox {index} remains visible");
         assert_eq!(class_name(*combo), "ComboBox");
-        if index == 0 || index == 2 {
-            // Select the second item with a physical popup-row click.  Leave
-            // the comma at its Japanese default so this first Apply proves
-            // the two punctuation controls are independent.
-            if combos
-                .iter()
-                .any(|candidate| combo_popup(*candidate).is_some())
-            {
-                cursor.key_press(VK_ESCAPE);
-                wait_until("previous ComboBox popup closes", || {
-                    combos
-                        .iter()
-                        .all(|candidate| combo_popup(*candidate).is_none())
-                });
-            }
-            let status_rect = window_rect(status);
-            cursor.left_click(POINT {
-                x: (status_rect.left + status_rect.right) / 2,
-                y: (status_rect.top + status_rect.bottom) / 2,
+    }
+    // Select the second item with a physical popup-row click.  Leave the comma
+    // at its Japanese default so this first Apply proves the two punctuation
+    // controls are independent.
+    for combo in [alnum, period] {
+        if combos
+            .iter()
+            .any(|candidate| combo_popup(*candidate).is_some())
+        {
+            cursor.key_press(VK_ESCAPE);
+            wait_until("previous ComboBox popup closes", || {
+                combos
+                    .iter()
+                    .all(|candidate| combo_popup(*candidate).is_none())
             });
-            select_combo_item_with_mouse(&cursor, *combo, 1);
         }
+        let status_rect = window_rect(status);
+        cursor.left_click(POINT {
+            x: (status_rect.left + status_rect.right) / 2,
+            y: (status_rect.top + status_rect.bottom) / 2,
+        });
+        select_combo_item_with_mouse(&cursor, combo, 1);
     }
     assert_eq!(
-        combo_selection(combos[0]),
+        combo_selection(alnum),
         1,
         "physical ComboLBox row selection changes the alnum ComboBox"
     );
     assert_eq!(
-        combo_selection(combos[2]),
+        combo_selection(period),
         1,
         "physical ComboBox row selection changes the period ComboBox"
     );
     assert_eq!(
-        combo_selection(combos[3]),
+        combo_selection(comma),
         0,
         "period selection leaves the comma ComboBox at its Japanese default"
     );
     assert_eq!(
-        combo_selection(combos[5]),
+        combo_selection(brackets),
         0,
         "the bracket ComboBox starts at Sakura's corner-bracket default"
+    );
+    assert_eq!(
+        combo_selection(preset),
+        NOTATION_STYLE_CUSTOM_INDEX,
+        "、 with a full-width ． is a mix no shipped style produces"
     );
 
     let (_, apply) = bottom_status_and_apply(root);
@@ -1392,19 +1419,19 @@ fn normalizer_controls_are_discoverable_clickable_and_apply_persists_values() {
         ConfigurationDocument::load(&config_path)
             .map(|document| {
                 document.preferences.normalizer.width.alnum == Width::Full
-                    && document.preferences.normalizer.punctuation == PunctuationStyle::Mixed
+                    && document.preferences.normalizer.punctuation == PunctuationStyle::MIXED
             })
             .unwrap_or(false)
     });
-    select_combo_item_with_mouse(&cursor, combos[3], 1);
+    select_combo_item_with_mouse(&cursor, comma, 1);
     assert_eq!(
-        combo_selection(combos[3]),
+        combo_selection(comma),
         1,
         "physical ComboBox row selection changes the comma ComboBox"
     );
-    select_combo_item_with_mouse(&cursor, combos[5], 1);
+    select_combo_item_with_mouse(&cursor, brackets, 1);
     assert_eq!(
-        combo_selection(combos[5]),
+        combo_selection(brackets),
         1,
         "physical ComboBox row selection changes the bracket style"
     );
@@ -1414,7 +1441,7 @@ fn normalizer_controls_are_discoverable_clickable_and_apply_persists_values() {
         || {
             ConfigurationDocument::load(&config_path)
                 .map(|document| {
-                    document.preferences.normalizer.punctuation == PunctuationStyle::CommaPeriod
+                    document.preferences.normalizer.punctuation == PunctuationStyle::COMMA_PERIOD
                         && document.preferences.normalizer.brackets == BracketStyle::Square
                 })
                 .unwrap_or(false)
@@ -1428,13 +1455,128 @@ fn normalizer_controls_are_discoverable_clickable_and_apply_persists_values() {
     );
     assert_eq!(
         saved.preferences.normalizer.punctuation,
-        PunctuationStyle::CommaPeriod,
+        PunctuationStyle::COMMA_PERIOD,
         "physical independent punctuation selections reach the saved setting"
     );
     assert_eq!(
         saved.preferences.normalizer.brackets,
         BracketStyle::Square,
         "physical bracket selection reaches the saved setting"
+    );
+}
+
+/// Issue #97.  The 表記スタイル preset is a shortcut for seven controls spread
+/// across two pages and stores nothing under a name of its own.  This drives
+/// it the way a reader does — one physical popup-row click — and then reads
+/// the isolated TOML for every value it claimed to set, including the space
+/// width that lives on a page this test never opens.  A preset that only
+/// repainted the page it is on would pass a screenshot and fail here.
+#[test]
+#[ignore = "requires an interactive User32 desktop"]
+fn notation_style_preset_writes_both_pages_and_persists() {
+    let _desktop = desktop_test_guard();
+    let fixture = SettingsFixture::launch();
+    let root = fixture.wait_for_window();
+    let _foreground = ForegroundRestore::capture();
+    let cursor = CursorRestore::capture();
+    let input_tree = find_direct_child(root, "SysTreeView32").expect("input topic TreeView");
+    let outer = input_topic_outer(root);
+    let normalizer_panel = input_topic_panel_with_heading_from_outer(outer, "文字幅・句読点");
+    let input_assist_panel = input_topic_panel_with_heading_from_outer(outer, "入力補助");
+    raise_fixture_for_input(root);
+
+    click_tree_row_until("文字幅・句読点", &cursor, input_tree, || {
+        is_visible(normalizer_panel) && !is_visible(input_assist_panel)
+    });
+    let mut combos: Vec<_> = direct_children(normalizer_panel)
+        .into_iter()
+        .filter(|window| class_name(*window) == "ComboBox" && is_visible(*window))
+        .collect();
+    combos.sort_by_key(|window| {
+        let rect = window_rect(*window);
+        (rect.top, rect.left)
+    });
+    let preset = combo_beside_label(normalizer_panel, &combos, "表記スタイル");
+    let alnum = combo_beside_label(normalizer_panel, &combos, "英字");
+    let period = combo_beside_label(normalizer_panel, &combos, "句点");
+    let comma = combo_beside_label(normalizer_panel, &combos, "読点");
+
+    // Row 1 of `NotationStyle::ALL` is the technical-paper style: ASCII
+    // punctuation and a half-width space.
+    select_combo_item_with_mouse(&cursor, preset, 1);
+    wait_until("the preset fills the period control in", || {
+        combo_selection(period) == 2
+    });
+    assert_eq!(
+        combo_selection(comma),
+        2,
+        "the preset sets both punctuation roles, not just the period"
+    );
+    assert_eq!(
+        combo_selection(alnum),
+        0,
+        "the technical-paper style keeps alphanumerics half-width"
+    );
+
+    let (_, apply) = bottom_status_and_apply(root);
+    let apply_rect = window_rect(apply);
+    cursor.left_click(POINT {
+        x: (apply_rect.left + apply_rect.right) / 2,
+        y: (apply_rect.top + apply_rect.bottom) / 2,
+    });
+    let config_path = fixture
+        .sandbox
+        .join("SakuraInput")
+        .join("config")
+        .join("config.toml");
+    wait_until(
+        "the preset persists punctuation and space width together",
+        || {
+            ConfigurationDocument::load(&config_path)
+                .map(|document| {
+                    document.preferences.normalizer.punctuation == PunctuationStyle::ASCII
+                        && document.preferences.space_width == SpaceWidth::Half
+                })
+                .unwrap_or(false)
+        },
+    );
+    assert_eq!(
+        combo_selection(preset),
+        1,
+        "the saved combination reads back as the same style"
+    );
+
+    // The seventh control lives on 入力補助.  Opening that page now proves the
+    // preset really moved it, rather than writing the file behind a control
+    // that still shows the old value.
+    click_tree_row_until("入力補助", &cursor, input_tree, || {
+        is_visible(input_assist_panel) && !is_visible(normalizer_panel)
+    });
+    let mut assist_combos: Vec<_> = direct_children(input_assist_panel)
+        .into_iter()
+        .filter(|window| class_name(*window) == "ComboBox" && is_visible(*window))
+        .collect();
+    assist_combos.sort_by_key(|window| {
+        let rect = window_rect(*window);
+        (rect.top, rect.left)
+    });
+    let space_width = combo_beside_label(input_assist_panel, &assist_combos, "スペースキー");
+    assert_eq!(
+        combo_selection(space_width),
+        2,
+        "the preset moved the space-width control on the page it does not live on"
+    );
+
+    // Editing that seventh control from its own page has to move the preset
+    // back to カスタム, or the two pages would disagree about what is set.
+    select_combo_item_with_mouse(&cursor, space_width, 0);
+    click_tree_row_until("文字幅・句読点", &cursor, input_tree, || {
+        is_visible(normalizer_panel) && !is_visible(input_assist_panel)
+    });
+    assert_eq!(
+        combo_selection(preset),
+        NOTATION_STYLE_CUSTOM_INDEX,
+        "a space width no style pairs with these marks reads back as カスタム"
     );
 }
 
@@ -1498,12 +1640,13 @@ fn input_method_radio_controls_are_physical_and_persist_to_the_engine_config() {
     });
     assert_eq!(
         basic_combos.len(),
-        2,
-        "basic page exposes only keymap and character-type ComboBoxes"
+        3,
+        "basic page exposes the keymap, character-type and Sakura Pad ComboBoxes"
     );
-    select_combo_item_with_mouse(&cursor, basic_combos[1], 2);
+    let character_type = combo_beside_label(basic_panel, &basic_combos, "文字種");
+    select_combo_item_with_mouse(&cursor, character_type, 2);
     assert_eq!(
-        combo_selection(basic_combos[1]),
+        combo_selection(character_type),
         2,
         "physical character-type selection changes the native ComboBox"
     );
@@ -1520,7 +1663,7 @@ fn input_method_radio_controls_are_physical_and_persist_to_the_engine_config() {
         },
     );
 
-    select_combo_item_with_mouse(&cursor, basic_combos[1], 1);
+    select_combo_item_with_mouse(&cursor, character_type, 1);
     cursor.left_click(POINT {
         x: (apply_rect.left + apply_rect.right) / 2,
         y: (apply_rect.top + apply_rect.bottom) / 2,
@@ -2644,6 +2787,35 @@ fn find_direct_child(parent: HWND, expected_class: &str) -> Option<HWND> {
         .into_iter()
         .find(|window| class_name(*window) == expected_class)
 }
+
+/// The ComboBox on the same row as `label_text`, to its right.
+///
+/// Positional indexing into a sorted ComboBox list is how the basic page's
+/// `len() == 2` assertion outlived the Sakura Pad row being added: the count
+/// went stale and `[1]` silently kept pointing at a control that happened to
+/// still be the intended one. Naming the row removes both failure modes.
+fn combo_beside_label(panel: HWND, combos: &[HWND], label_text: &str) -> HWND {
+    let label = find_direct_child_with_text(panel, label_text)
+        .unwrap_or_else(|| panic!("`{label_text}` label"));
+    let label_rect = window_rect(label);
+    // Match on how close the top edges are rather than on vertical
+    // containment: a closed `CBS_DROPDOWNLIST` keeps the tall window rect it
+    // was created with — the dropped-down extent — so several rows' rectangles
+    // overlap the same label.  Row pitch dwarfs the few pixels a combo sits
+    // above its label at any DPI, so the nearest top is unambiguous.  Ties are
+    // the two controls sharing one row; `combos` arrives sorted by
+    // `(top, left)`, so the first match is the one this label introduces.
+    combos
+        .iter()
+        .filter(|combo| window_rect(**combo).left >= label_rect.right)
+        .min_by_key(|combo| (window_rect(**combo).top - label_rect.top).abs())
+        .copied()
+        .unwrap_or_else(|| panic!("ComboBox beside `{label_text}`"))
+}
+
+/// Trailing readout row of a 表記スタイル combo; `NotationStyle::ALL` fills
+/// every row before it.
+const NOTATION_STYLE_CUSTOM_INDEX: isize = NotationStyle::ALL.len() as isize;
 
 fn find_direct_child_with_text(parent: HWND, expected: &str) -> Option<HWND> {
     direct_children(parent)

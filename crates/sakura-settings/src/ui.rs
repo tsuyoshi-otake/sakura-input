@@ -13,9 +13,10 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use sakura_core::{
-    AppProfile, AppearanceTheme, BracketStyle, ConversionMethod, InputMethod, InputSupport,
-    NeuralRerankerScope, PadShortcut, Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth,
-    SuggestAccept, UserDictionary, UserDictionaryEntry, UserPartOfSpeech, Width,
+    AppProfile, AppearanceTheme, BracketStyle, CommaMark, ConversionMethod, InputMethod,
+    InputSupport, NeuralRerankerScope, Normalizer, NotationStyle, PadShortcut, PeriodMark, Preset,
+    PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionary,
+    UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
 use sakura_reg::user_preferences::{
@@ -152,6 +153,11 @@ const TOPIC_GROUP_TOP: i32 = 48;
 const NORMALIZER_GROUP_HEIGHT: i32 = 192;
 const NORMALIZER_RESET_Y: i32 = 264;
 const NORMALIZER_RESET_HEIGHT: i32 = 24;
+// The profile group frames a list, five rows and its two action buttons. It
+// grew by one row when the notation preset landed; the assert below is what
+// stops the next row from silently overflowing the panel instead.
+const PROFILE_GROUP_HEIGHT: i32 = 216;
+const PROFILE_CONTENT_BOTTOM: i32 = 254;
 // TreeView does not use the parent WM_CTLCOLOR brush for its item labels. Set
 // its documented colors explicitly so dark-mode rows do not retain the native
 // white item background behind otherwise dark panels.
@@ -183,6 +189,10 @@ const INPUT_TOPIC_AI_TEXT: usize = 8;
 const INPUT_TOPIC_INPUT_REPAIR: usize = 9;
 const INPUT_TOPIC_INPUT_SYMBOL: usize = 10;
 const TREE_GROUP: usize = usize::MAX;
+// Shown after `NotationStyle::ALL`. It is a readout, never a value: choosing
+// it writes nothing, and it is what the preset falls back to whenever the
+// underlying controls spell a combination no shipped style produces.
+const NOTATION_STYLE_CUSTOM_LABEL: &str = "カスタム（個別に設定）";
 // Keep the familiar property-sheet hierarchy through 連想変換, but do not
 // invent ATOK-only pages or map a label to an unrelated Sakura setting. Each
 // leaf owns the panel the user sees on the right; category rows normalize to
@@ -206,6 +216,8 @@ const INPUT_TREE_LABELS: [&str; 13] = [
 const _: () = assert!(PANEL_TOP + DICTIONARY_CONTENT_BOTTOM < BOTTOM_ACTION_Y);
 const _: () = assert!(NORMALIZER_RESET_Y >= TOPIC_GROUP_TOP + NORMALIZER_GROUP_HEIGHT + 8);
 const _: () = assert!(NORMALIZER_RESET_Y + NORMALIZER_RESET_HEIGHT <= PANEL_HEIGHT - 8);
+const _: () = assert!(TOPIC_GROUP_TOP + PROFILE_GROUP_HEIGHT <= PANEL_HEIGHT - 8);
+const _: () = assert!(PROFILE_CONTENT_BOTTOM <= TOPIC_GROUP_TOP + PROFILE_GROUP_HEIGHT);
 
 #[derive(Debug)]
 struct GeneralControls {
@@ -244,6 +256,7 @@ struct GeneralControls {
     association: HWND,
     appearance: HWND,
     neural_reranker_scope: HWND,
+    notation_style: HWND,
     normalizer_alnum: HWND,
     normalizer_number: HWND,
     normalizer_symbol: HWND,
@@ -273,6 +286,7 @@ struct GeneralControls {
     profile_mode: HWND,
     profile_prediction: HWND,
     profile_suggest: HWND,
+    profile_notation: HWND,
     profile_save: HWND,
     profile_delete: HWND,
 }
@@ -923,6 +937,16 @@ impl App {
             }
             return Ok(());
         }
+        if source == self.general.notation_style && notification == CBN_SELCHANGE as u16 {
+            self.apply_notation_style()?;
+            return Ok(());
+        }
+        if notification == CBN_SELCHANGE as u16
+            && notation_style_inputs(&self.general).contains(&source)
+        {
+            self.sync_notation_style();
+            return Ok(());
+        }
         if source == self.general.normalizer_reset {
             self.reset_normalizer_controls();
             return Ok(());
@@ -1404,6 +1428,7 @@ impl App {
             self.general.punctuation_brackets,
             bracket_style_index(self.configuration.preferences.normalizer.brackets),
         );
+        self.sync_notation_style();
         self.populate_profile_list();
     }
 
@@ -1483,17 +1508,7 @@ impl App {
                 "Tier",
             )?,
         };
-        let mut normalizer = self.configuration.preferences.normalizer;
-        normalizer.width.alnum = width_from_index(combo_index(self.general.normalizer_alnum))?;
-        normalizer.width.number = width_from_index(combo_index(self.general.normalizer_number))?;
-        normalizer.width.symbol = width_from_index(combo_index(self.general.normalizer_symbol))?;
-        normalizer.punctuation = punctuation_from_indices(
-            combo_index(self.general.punctuation_period),
-            combo_index(self.general.punctuation_comma),
-        )?;
-        normalizer.brackets =
-            bracket_style_from_index(combo_index(self.general.punctuation_brackets))?;
-        self.configuration.preferences.normalizer = normalizer;
+        self.configuration.preferences.normalizer = self.normalizer_from_controls()?;
         self.configuration
             .save(&self.configuration_path)
             .map_err(display)?;
@@ -1656,6 +1671,98 @@ impl App {
         set_text(self.general.ai_api_key_status, status);
     }
 
+    /// Reads the six 文字幅・句読点 controls back into a `Normalizer`.
+    ///
+    /// Shared by save and by the notation preset's readout, so the value that
+    /// gets written and the value the preset reports can never disagree.
+    fn normalizer_from_controls(&self) -> Result<Normalizer, String> {
+        let mut normalizer = self.configuration.preferences.normalizer;
+        normalizer.width.alnum = width_from_index(combo_index(self.general.normalizer_alnum))?;
+        normalizer.width.number = width_from_index(combo_index(self.general.normalizer_number))?;
+        normalizer.width.symbol = width_from_index(combo_index(self.general.normalizer_symbol))?;
+        normalizer.punctuation = punctuation_from_indices(
+            combo_index(self.general.punctuation_period),
+            combo_index(self.general.punctuation_comma),
+        )?;
+        normalizer.brackets =
+            bracket_style_from_index(combo_index(self.general.punctuation_brackets))?;
+        Ok(normalizer)
+    }
+
+    /// The style the seven controls currently spell, or `None` for a mix no
+    /// shipped style produces.
+    fn notation_style_from_controls(&self) -> Option<NotationStyle> {
+        let mut probe = self.configuration.preferences;
+        probe.normalizer = self.normalizer_from_controls().ok()?;
+        probe.space_width =
+            space_width_from_index(combo_index(self.general.input_assist_space_width)).ok()?;
+        NotationStyle::of(&probe)
+    }
+
+    /// Moves the preset combo to match the controls.
+    ///
+    /// Deliberately silent. This runs on every edit of those seven controls,
+    /// so a status line here would keep overwriting whatever the user was
+    /// reading — including the message `apply_notation_style` just set.
+    fn sync_notation_style(&self) {
+        select_combo(
+            self.general.notation_style,
+            notation_style_index(self.notation_style_from_controls()),
+        );
+    }
+
+    /// Writes the picked style into the seven controls it owns.
+    ///
+    /// Nothing is persisted here: like every other control on the page these
+    /// are staged until 適用. One of the seven — space width — lives on the
+    /// 入力補助 page, which the user is not looking at, so the status line
+    /// names it rather than letting the preset change a page out of sight.
+    fn apply_notation_style(&mut self) -> Result<(), String> {
+        let Some(style) = notation_style_from_index(combo_index(self.general.notation_style))?
+        else {
+            // `カスタム` is a readout, not a value. Put the combo back where
+            // the controls say it belongs instead of writing anything.
+            self.sync_notation_style();
+            return Ok(());
+        };
+        let mut staged = self.configuration.preferences;
+        style.apply_to(&mut staged);
+        select_combo(
+            self.general.normalizer_alnum,
+            width_index(staged.normalizer.width.alnum),
+        );
+        select_combo(
+            self.general.normalizer_number,
+            width_index(staged.normalizer.width.number),
+        );
+        select_combo(
+            self.general.normalizer_symbol,
+            width_index(staged.normalizer.width.symbol),
+        );
+        select_combo(
+            self.general.punctuation_period,
+            punctuation_period_index(staged.normalizer.punctuation),
+        );
+        select_combo(
+            self.general.punctuation_comma,
+            punctuation_comma_index(staged.normalizer.punctuation),
+        );
+        select_combo(
+            self.general.punctuation_brackets,
+            bracket_style_index(staged.normalizer.brackets),
+        );
+        select_combo(
+            self.general.input_assist_space_width,
+            space_width_index(staged.space_width),
+        );
+        self.set_status(&format!(
+            "表記スタイルを「{}」にしました。入力補助のスペース幅も「{}」になります。保存するには適用を押してください。",
+            style.label(),
+            space_width_label(staged.space_width),
+        ));
+        Ok(())
+    }
+
     fn reset_normalizer_controls(&mut self) {
         let defaults = sakura_core::Preferences::default();
         select_combo(
@@ -1682,6 +1789,10 @@ impl App {
             self.general.punctuation_brackets,
             bracket_style_index(defaults.normalizer.brackets),
         );
+        // Reset owns this page only. Space width lives on 入力補助 and is left
+        // alone, so the preset may well land on `カスタム` here — which is the
+        // truthful answer, not a bug.
+        self.sync_notation_style();
         self.set_status(
             "文字幅・句読点の設定を初期値に戻しました。保存するには適用を押してください。",
         );
@@ -1852,11 +1963,18 @@ impl App {
             self.general.profile_suggest,
             suggest_index(profile.suggest_accept),
         );
+        select_combo(
+            self.general.profile_notation,
+            notation_style_index(NotationStyle::of_normalizer(&profile.normalizer)),
+        );
     }
 
     fn save_profile(&mut self) -> Result<(), String> {
         let process_name = required_text(self.general.profile_process, "実行ファイル名")?;
-        let normalizer = self
+        // `カスタム` is a readout, so it cannot be *chosen* as a value here:
+        // it means "leave the stored normalizer as it is", which for a new
+        // profile is the global one. Only a named style overwrites.
+        let inherited = self
             .configuration
             .profiles
             .iter()
@@ -1864,6 +1982,8 @@ impl App {
             .map_or(self.configuration.preferences.normalizer, |profile| {
                 profile.normalizer
             });
+        let normalizer = notation_style_from_index(combo_index(self.general.profile_notation))?
+            .map_or(inherited, NotationStyle::normalizer);
         self.configuration
             .upsert_profile(AppProfile {
                 process_name: process_name.clone(),
@@ -2748,9 +2868,9 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     group_box(parent, "空白文字", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 96)?;
     label(parent, "スペースキー", 12, 72, 96, 20)?;
     let input_assist_space_width = combo(parent, 116, 68, 160, 120)?;
-    add_combo(input_assist_space_width, "入力文字種と同じ");
-    add_combo(input_assist_space_width, "常に全角");
-    add_combo(input_assist_space_width, "常に半角");
+    for space_width in SpaceWidth::ALL {
+        add_combo(input_assist_space_width, space_width_label(space_width));
+    }
     label(parent, "Shift+スペース", 12, 100, 96, 20)?;
     let input_assist_shift_space = combo(parent, 116, 96, 160, 120)?;
     add_combo(input_assist_shift_space, "スペースの逆");
@@ -2875,31 +2995,43 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         PANEL_WIDTH,
         NORMALIZER_GROUP_HEIGHT,
     )?;
-    label(parent, "英字", 12, 76, 42, 22)?;
-    let normalizer_alnum = combo(parent, 54, 72, 108, 120)?;
+    // The preset sits above the six leaf controls it writes, because it is a
+    // shortcut for them rather than a seventh independent setting: picking a
+    // style fills the rows below in, and editing any row below moves the
+    // preset to `カスタム`. Nothing is stored under the preset's own name.
+    label(parent, "表記スタイル", 12, 76, 76, 22)?;
+    let notation_style = combo(parent, 92, 72, 236, 150)?;
+    for style in NotationStyle::ALL {
+        add_combo(notation_style, style.label());
+    }
+    add_combo(notation_style, NOTATION_STYLE_CUSTOM_LABEL);
+    label(parent, "英字", 12, 104, 42, 22)?;
+    let normalizer_alnum = combo(parent, 54, 100, 108, 120)?;
     for width in [Width::Half, Width::Full, Width::FollowMode] {
         add_combo(normalizer_alnum, width_label(width));
     }
-    label(parent, "数字", 178, 76, 42, 22)?;
-    let normalizer_number = combo(parent, 220, 72, 108, 120)?;
+    label(parent, "数字", 178, 104, 42, 22)?;
+    let normalizer_number = combo(parent, 220, 100, 108, 120)?;
     for width in [Width::Half, Width::Full, Width::FollowMode] {
         add_combo(normalizer_number, width_label(width));
     }
-    label(parent, "句点", 12, 104, 42, 22)?;
-    let punctuation_period = combo(parent, 54, 100, 108, 120)?;
-    add_combo(punctuation_period, "。");
-    add_combo(punctuation_period, "．");
-    label(parent, "読点", 178, 104, 42, 22)?;
-    let punctuation_comma = combo(parent, 220, 100, 108, 120)?;
-    add_combo(punctuation_comma, "、");
-    add_combo(punctuation_comma, "，");
-    label(parent, "記号", 12, 132, 42, 22)?;
-    let normalizer_symbol = combo(parent, 54, 128, 108, 120)?;
+    label(parent, "句点", 12, 132, 42, 22)?;
+    let punctuation_period = combo(parent, 54, 128, 108, 120)?;
+    for mark in PeriodMark::ALL {
+        add_combo(punctuation_period, period_mark_label(mark));
+    }
+    label(parent, "読点", 178, 132, 42, 22)?;
+    let punctuation_comma = combo(parent, 220, 128, 108, 120)?;
+    for mark in CommaMark::ALL {
+        add_combo(punctuation_comma, comma_mark_label(mark));
+    }
+    label(parent, "記号", 12, 160, 42, 22)?;
+    let normalizer_symbol = combo(parent, 54, 156, 108, 120)?;
     for width in [Width::Half, Width::Full, Width::FollowMode] {
         add_combo(normalizer_symbol, width_label(width));
     }
-    label(parent, "括弧", 178, 132, 42, 22)?;
-    let punctuation_brackets = combo(parent, 220, 128, 108, 120)?;
+    label(parent, "括弧", 178, 160, 42, 22)?;
+    let punctuation_brackets = combo(parent, 220, 156, 108, 120)?;
     for bracket in BracketStyle::ALL {
         add_combo(punctuation_brackets, bracket_style_label(bracket));
     }
@@ -3020,9 +3152,9 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         0,
         TOPIC_GROUP_TOP,
         PANEL_WIDTH,
-        190,
+        PROFILE_GROUP_HEIGHT,
     )?;
-    let profile_list = listbox(parent, 12, 68, 150, 128)?;
+    let profile_list = listbox(parent, 12, 68, 150, 154)?;
     label(parent, "実行ファイル名", 170, 68, 86, 20)?;
     let profile_process = edit(parent, "", 260, 64, 117, 24, false)?;
     label(parent, "既定の入力モード", 170, 94, 86, 20)?;
@@ -3036,15 +3168,25 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
     add_combo(profile_suggest, "Tab");
     add_combo(profile_suggest, "Shift+Enter");
     add_combo(profile_suggest, "使わない");
+    // A profile stores a `Normalizer` but no space width, so the per-app form
+    // of the setting is the preset alone — the six leaf controls of the
+    // 文字幅・句読点 page are deliberately not duplicated here.
+    label(parent, "表記スタイル", 170, 166, 86, 20)?;
+    let profile_notation = combo(parent, 260, 162, 117, 150)?;
+    for style in NotationStyle::ALL {
+        add_combo(profile_notation, style.label());
+    }
+    add_combo(profile_notation, NOTATION_STYLE_CUSTOM_LABEL);
     select_combo(profile_mode, mode_index(Mode::Hiragana));
     select_combo(profile_suggest, suggest_index(SuggestAccept::Tab));
-    let profile_save = button(parent, "追加／更新", 170, 166, 100, 22, false)?;
-    let profile_delete = button(parent, "削除", 278, 166, 99, 22, false)?;
+    select_combo(profile_notation, notation_style_index(None));
+    let profile_save = button(parent, "追加／更新", 170, 192, 100, 22, false)?;
+    let profile_delete = button(parent, "削除", 278, 192, 99, 22, false)?;
     label(
         parent,
         "例: code.exe　設定はアプリが入力コンテキストを作成したときに適用されます。",
         12,
-        214,
+        240,
         358,
         14,
     )?;
@@ -3084,6 +3226,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         association,
         appearance,
         neural_reranker_scope,
+        notation_style,
         normalizer_alnum,
         normalizer_number,
         normalizer_symbol,
@@ -3113,6 +3256,7 @@ fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
         profile_mode,
         profile_prediction,
         profile_suggest,
+        profile_notation,
         profile_save,
         profile_delete,
     })
@@ -3909,6 +4053,16 @@ fn width_from_index(index: Option<usize>) -> Result<Width, String> {
         .ok_or_else(|| "英字・数字・記号の幅が不正です。".to_owned())
 }
 
+// The notation preset names this value in its status line, so the label has
+// to come from one place or the message and the combo can drift apart.
+fn space_width_label(value: SpaceWidth) -> &'static str {
+    match value {
+        SpaceWidth::SameAsInput => "入力文字種と同じ",
+        SpaceWidth::Full => "常に全角",
+        SpaceWidth::Half => "常に半角",
+    }
+}
+
 fn space_width_index(value: SpaceWidth) -> usize {
     SpaceWidth::ALL
         .iter()
@@ -4097,28 +4251,90 @@ const fn width_label(value: Width) -> &'static str {
 }
 
 fn punctuation_period_index(value: PunctuationStyle) -> usize {
-    usize::from(value.parts().1)
+    PeriodMark::ALL
+        .iter()
+        .position(|candidate| *candidate == value.period)
+        .unwrap_or(0)
 }
 
 fn punctuation_comma_index(value: PunctuationStyle) -> usize {
-    usize::from(value.parts().0)
+    CommaMark::ALL
+        .iter()
+        .position(|candidate| *candidate == value.comma)
+        .unwrap_or(0)
 }
 
-fn punctuation_mark_from_index(index: Option<usize>, label: &str) -> Result<bool, String> {
-    match index {
-        Some(0) => Ok(false),
-        Some(1) => Ok(true),
-        _ => Err(format!("{label}の形式を選択してください。")),
-    }
+fn period_mark_from_index(index: Option<usize>) -> Result<PeriodMark, String> {
+    index
+        .and_then(|index| PeriodMark::ALL.get(index).copied())
+        .ok_or_else(|| "句点の形式を選択してください。".to_owned())
+}
+
+fn comma_mark_from_index(index: Option<usize>) -> Result<CommaMark, String> {
+    index
+        .and_then(|index| CommaMark::ALL.get(index).copied())
+        .ok_or_else(|| "読点の形式を選択してください。".to_owned())
 }
 
 fn punctuation_from_indices(
     period_index: Option<usize>,
     comma_index: Option<usize>,
 ) -> Result<PunctuationStyle, String> {
-    let period_full = punctuation_mark_from_index(period_index, "句点")?;
-    let comma_full = punctuation_mark_from_index(comma_index, "読点")?;
-    Ok(PunctuationStyle::from_parts(comma_full, period_full))
+    let period = period_mark_from_index(period_index)?;
+    let comma = comma_mark_from_index(comma_index)?;
+    Ok(PunctuationStyle::new(comma, period))
+}
+
+const fn period_mark_label(value: PeriodMark) -> &'static str {
+    match value {
+        PeriodMark::Kuten => "。",
+        PeriodMark::FullWidth => "．（全角）",
+        PeriodMark::HalfWidth => ".（半角）",
+    }
+}
+
+const fn comma_mark_label(value: CommaMark) -> &'static str {
+    match value {
+        CommaMark::Touten => "、",
+        CommaMark::FullWidth => "，（全角）",
+        CommaMark::HalfWidth => ",（半角）",
+    }
+}
+
+/// The seven controls the notation preset reads and writes.
+///
+/// Six live on the 文字幅・句読点 page next to the preset; the seventh, space
+/// width, lives on 入力補助. These are what actually get saved — the preset
+/// itself has no config key and is derived from them on every edit.
+fn notation_style_inputs(general: &GeneralControls) -> [HWND; 7] {
+    [
+        general.normalizer_alnum,
+        general.normalizer_number,
+        general.normalizer_symbol,
+        general.punctuation_period,
+        general.punctuation_comma,
+        general.punctuation_brackets,
+        general.input_assist_space_width,
+    ]
+}
+
+/// `None` selects the trailing `カスタム` row, which is why this cannot reuse
+/// `enum_index`: the combo has one more item than `NotationStyle::ALL`.
+fn notation_style_index(value: Option<NotationStyle>) -> usize {
+    value.map_or(NotationStyle::ALL.len(), |style| {
+        enum_index(&NotationStyle::ALL, style)
+    })
+}
+
+/// `Ok(None)` is the `カスタム` row — a legitimate selection to *read back*,
+/// but not a value to write. Anything past it is a malformed index.
+fn notation_style_from_index(index: Option<usize>) -> Result<Option<NotationStyle>, String> {
+    let index = index.ok_or_else(|| "表記スタイルを選択してください。".to_owned())?;
+    match NotationStyle::ALL.get(index) {
+        Some(style) => Ok(Some(*style)),
+        None if index == NotationStyle::ALL.len() => Ok(None),
+        None => Err("表記スタイルが不正です。".to_owned()),
+    }
 }
 
 fn bracket_style_index(value: BracketStyle) -> usize {
@@ -4802,10 +5018,80 @@ mod tests {
         assert!(width_from_index(None).is_err());
         assert!(punctuation_from_indices(Some(0), None).is_err());
         assert_eq!(width_label(Width::FollowMode), "入力モードに合わせる");
+        // period index 1 = ．, comma index 0 = 、
         assert_eq!(
             punctuation_from_indices(Some(1), Some(0)),
-            Ok(PunctuationStyle::Mixed)
+            Ok(PunctuationStyle::MIXED)
         );
+        // period index 2 = ., comma index 2 = ,
+        assert_eq!(
+            punctuation_from_indices(Some(2), Some(2)),
+            Ok(PunctuationStyle::ASCII)
+        );
+        assert!(punctuation_from_indices(Some(3), Some(0)).is_err());
+        assert!(punctuation_from_indices(Some(0), Some(3)).is_err());
+    }
+
+    #[test]
+    fn notation_style_indices_round_trip_and_reserve_the_custom_row() {
+        // The combo carries one more row than `NotationStyle::ALL`, so the
+        // two directions have to agree about which row that extra one is.
+        for style in NotationStyle::ALL {
+            assert_eq!(
+                notation_style_from_index(Some(notation_style_index(Some(style)))),
+                Ok(Some(style)),
+                "{style:?}"
+            );
+        }
+        assert_eq!(notation_style_index(None), NotationStyle::ALL.len());
+        assert_eq!(
+            notation_style_from_index(Some(NotationStyle::ALL.len())),
+            Ok(None),
+            "the trailing row reads back as `no style`, not as an error"
+        );
+        assert!(notation_style_from_index(Some(NotationStyle::ALL.len() + 1)).is_err());
+        assert!(notation_style_from_index(None).is_err());
+    }
+
+    #[test]
+    fn space_width_labels_are_shared_between_the_combo_and_the_preset_status() {
+        // `apply_notation_style` names the space width it changed on a page
+        // the reader is not looking at. That sentence and the combo row it
+        // refers to have to be the same string.
+        for space_width in SpaceWidth::ALL {
+            assert_eq!(
+                space_width_from_index(Some(space_width_index(space_width))),
+                Ok(space_width)
+            );
+        }
+        assert_eq!(
+            space_width_label(SpaceWidth::SameAsInput),
+            "入力文字種と同じ"
+        );
+        assert_eq!(space_width_label(SpaceWidth::Full), "常に全角");
+        assert_eq!(space_width_label(SpaceWidth::Half), "常に半角");
+    }
+
+    #[test]
+    fn notation_style_labels_are_distinct_and_never_collide_with_the_custom_row() {
+        // The combo is keyed by row order, but a reader picks by label. Two
+        // styles reading the same, or one reading `カスタム`, would make the
+        // control unusable without failing anything else.
+        for (index, style) in NotationStyle::ALL.into_iter().enumerate() {
+            assert!(!style.label().is_empty(), "{style:?}");
+            assert_ne!(style.label(), NOTATION_STYLE_CUSTOM_LABEL, "{style:?}");
+            for other in NotationStyle::ALL.into_iter().skip(index + 1) {
+                assert_ne!(style.label(), other.label(), "{style:?} vs {other:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn punctuation_combo_labels_are_japanese_in_canonical_order() {
+        let period_labels: Vec<_> = PeriodMark::ALL.into_iter().map(period_mark_label).collect();
+        assert_eq!(period_labels, ["。", "．（全角）", ".（半角）"]);
+        let comma_labels: Vec<_> = CommaMark::ALL.into_iter().map(comma_mark_label).collect();
+        assert_eq!(comma_labels, ["、", "，（全角）", ",（半角）"]);
     }
 
     #[test]

@@ -95,10 +95,20 @@ Input:
   explicit F9/F10 keypress is direct user intent and still overrides it
   for that segment. Enforced at a single choke point in the engine
   (§5.6), so no code path can leak the wrong width.
-- **Punctuation style.** `punctuation_style = kuten_touten (、。) |
-  comma_period (，．) | mixed (、．)` — a first-class, frequently-toggled
-  setting for engineers writing mixed EN/JP docs; enforced at the same
-  §5.6 choke point as width.
+- **Punctuation style.** Two independent choices, one per role:
+  `comma = touten (、) | full_comma (，) | half_comma (,)` and
+  `period = kuten (。) | full_period (．) | half_period (.)`. All nine
+  combinations are reachable because real conventions mix them — `、。`
+  for ordinary prose, `，．` for a JIS-style paper, `，。` for 公用文,
+  and `,.` for a manuscript that will be typeset from plain text
+  (LaTeX, Markdown), where a full-width `．` is the wrong character. A
+  first-class, frequently-toggled setting for engineers writing mixed
+  EN/JP docs; enforced at the same §5.6 choke point as width. The choke
+  point owns exactly four code points — `、` `，` `。` `．` — and that
+  does not change when a half-width mark is selected: it *emits* ASCII
+  `,`/`.` without *claiming* them, so an ASCII comma arriving as input
+  stays an ordinary symbol governed by `symbol_width` and the `,` in
+  `foo(a, b)` is never reinterpreted as a 読点.
 - **Per-app profiles.** Match by process name (e.g. `WindowsTerminal.exe`,
   `Code.exe`, `devenv.exe`) → default input mode (e.g. direct/half-alnum
   in terminals), width-policy overrides, and **suggest on/off** —
@@ -1207,6 +1217,36 @@ an independent model, because the user requested no delegated agent. Entries
 without an unambiguous meaning remain detail-free; these counts are not a claim
 that every dictionary entry has a definition. The measured default build contains
 29,229 details in 472,825 entries; it is distinct from the full-source build above.
+
+### 8.3 Notation-style presets (Issue #97)
+
+The width and punctuation settings are individually correct and collectively
+hard to aim. A reader who has been told "half-width comma and period, half
+space at the Japanese/Latin boundary" has to translate that house rule into
+seven controls spread over two settings pages, and has no way to check the
+result afterwards. The preset is that translation, written down once.
+
+- A `NotationStyle` names a whole combination: the three width channels, the
+  two punctuation roles, the bracket style, and the space width. Four ship —
+  標準（日本語）, 日本語技術論文（半角句読点）, 学術（全角コンマ・ピリオド）,
+  公用文 — and they are pairwise distinct on those seven values.
+- It is a **shortcut, not a setting**. There is no config key for it and
+  nothing in `Preferences` records which style was picked: the seven leaf
+  values remain the single source of truth, and the config file of someone
+  who has never opened the control is byte-identical to before. Choosing a
+  style writes the seven controls; editing any of the seven re-derives the
+  preset, falling back to `カスタム` for a combination no style produces.
+  Round-tripping through `apply_to`/`of` is what makes those two directions
+  agree.
+- Adding a style is adding a row to `NotationStyle::ALL`. It cannot change an
+  existing style's meaning, because each style writes its seven values out in
+  full rather than inheriting them.
+- One of the seven, space width, lives on a different settings page than the
+  preset. Applying a style says so in the status line rather than changing a
+  page the reader is not looking at without a word.
+- An `AppProfile` stores a `Normalizer` but no space width, so the per-app
+  form of the control pins five of the seven values. The four normalizers are
+  distinct on their own, which is what lets a profile read its style back.
 
 ---
 

@@ -63,57 +63,112 @@ impl Default for WidthPolicy {
     }
 }
 
+/// Which glyph the punctuation choke point emits for the comma role
+/// (読点), independently of the period role.
+///
+/// Three choices, not two: `、` and `，` are the two conventions Japanese
+/// prose picks between, and ASCII `,` is what a manuscript typeset from
+/// plain text — LaTeX, Markdown, a paper written in an editor — wants in
+/// running text next to full-width kana.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CommaMark {
+    /// `、` — the Japanese reading comma.
+    #[default]
+    Touten,
+    /// `，` — full-width Western comma, the JIS / 学術論文 convention.
+    FullWidth,
+    /// `,` — ASCII comma.
+    HalfWidth,
+}
+
+impl CommaMark {
+    /// Stable order used by settings controls and persistence tests.
+    pub const ALL: [Self; 3] = [Self::Touten, Self::FullWidth, Self::HalfWidth];
+
+    /// The character this mark puts in the document.
+    pub const fn glyph(self) -> char {
+        match self {
+            Self::Touten => '\u{3001}',    // 、
+            Self::FullWidth => '\u{FF0C}', // ，
+            Self::HalfWidth => ',',
+        }
+    }
+}
+
+/// Which glyph the punctuation choke point emits for the period role
+/// (句点), independently of the comma role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PeriodMark {
+    /// `。` — the Japanese full stop.
+    #[default]
+    Kuten,
+    /// `．` — full-width Western period, the JIS / 学術論文 convention.
+    FullWidth,
+    /// `.` — ASCII period.
+    HalfWidth,
+}
+
+impl PeriodMark {
+    /// Stable order used by settings controls and persistence tests.
+    pub const ALL: [Self; 3] = [Self::Kuten, Self::FullWidth, Self::HalfWidth];
+
+    /// The character this mark puts in the document.
+    pub const fn glyph(self) -> char {
+        match self {
+            Self::Kuten => '\u{3002}',     // 。
+            Self::FullWidth => '\u{FF0E}', // ．
+            Self::HalfWidth => '.',
+        }
+    }
+}
+
 /// Which pair of comma-role/period-role characters the punctuation choke
 /// point emits (DESIGN §2 "Punctuation style").
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PunctuationStyle {
-    /// `、` and `。` — traditional Japanese prose punctuation.
-    KutenTouten,
-    /// `，` and `．` — full-width Western-style punctuation, common in
-    /// mixed EN/JP technical writing.
-    CommaPeriod,
-    /// `、` and `．` — the mixed convention some engineers prefer: Japanese
-    /// comma, Western period.
-    Mixed,
-    /// `，` and `。` — Western comma with Japanese period.
-    CommaKuten,
+///
+/// The two roles are held separately because they are chosen separately:
+/// the settings screen offers one control per role, and each of the nine
+/// combinations names a convention somebody writes in — `、。` for ordinary
+/// prose, `，．` for a JIS-style paper, `，。` for 公用文, `,.` for a
+/// manuscript that will be typeset from plain text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PunctuationStyle {
+    pub comma: CommaMark,
+    pub period: PeriodMark,
 }
 
 impl PunctuationStyle {
-    /// Stable order used by settings controls and persistence tests.
-    pub const ALL: [Self; 4] = [
-        Self::KutenTouten,
-        Self::CommaPeriod,
-        Self::Mixed,
-        Self::CommaKuten,
+    /// `、` + `。` — traditional Japanese prose, and the default: it is the
+    /// unsurprising choice, and every other combination is opt-in.
+    pub const KUTEN_TOUTEN: Self = Self::new(CommaMark::Touten, PeriodMark::Kuten);
+    /// `，` + `．` — full-width Western punctuation, common in mixed EN/JP
+    /// technical writing and required by many 学術論文 templates.
+    pub const COMMA_PERIOD: Self = Self::new(CommaMark::FullWidth, PeriodMark::FullWidth);
+    /// `、` + `．` — the mixed convention some engineers prefer: Japanese
+    /// comma, Western period.
+    pub const MIXED: Self = Self::new(CommaMark::Touten, PeriodMark::FullWidth);
+    /// `，` + `。` — Western comma with Japanese period (公用文).
+    pub const COMMA_KUTEN: Self = Self::new(CommaMark::FullWidth, PeriodMark::Kuten);
+    /// `,` + `.` — ASCII throughout, for prose that will be typeset from
+    /// plain text.
+    pub const ASCII: Self = Self::new(CommaMark::HalfWidth, PeriodMark::HalfWidth);
+
+    /// Stable order used by settings controls and persistence tests: comma
+    /// major, period minor, each role in its own `ALL` order.
+    pub const ALL: [Self; 9] = [
+        Self::new(CommaMark::Touten, PeriodMark::Kuten),
+        Self::new(CommaMark::Touten, PeriodMark::FullWidth),
+        Self::new(CommaMark::Touten, PeriodMark::HalfWidth),
+        Self::new(CommaMark::FullWidth, PeriodMark::Kuten),
+        Self::new(CommaMark::FullWidth, PeriodMark::FullWidth),
+        Self::new(CommaMark::FullWidth, PeriodMark::HalfWidth),
+        Self::new(CommaMark::HalfWidth, PeriodMark::Kuten),
+        Self::new(CommaMark::HalfWidth, PeriodMark::FullWidth),
+        Self::new(CommaMark::HalfWidth, PeriodMark::HalfWidth),
     ];
 
-    /// Returns `(comma_is_full_width, period_is_full_width)`.
-    pub const fn parts(self) -> (bool, bool) {
-        match self {
-            Self::KutenTouten => (false, false),
-            Self::CommaPeriod => (true, true),
-            Self::Mixed => (false, true),
-            Self::CommaKuten => (true, false),
-        }
-    }
-
     /// Builds a style from the independent comma and period choices.
-    pub const fn from_parts(comma_is_full_width: bool, period_is_full_width: bool) -> Self {
-        match (comma_is_full_width, period_is_full_width) {
-            (false, false) => Self::KutenTouten,
-            (true, true) => Self::CommaPeriod,
-            (false, true) => Self::Mixed,
-            (true, false) => Self::CommaKuten,
-        }
-    }
-}
-
-impl Default for PunctuationStyle {
-    /// `KutenTouten`: traditional Japanese prose is the unsurprising
-    /// default; `CommaPeriod`/`Mixed` are opt-in for mixed EN/JP writing.
-    fn default() -> Self {
-        PunctuationStyle::KutenTouten
+    pub const fn new(comma: CommaMark, period: PeriodMark) -> Self {
+        Self { comma, period }
     }
 }
 
@@ -518,6 +573,12 @@ fn map_bracket(role: BracketRole, style: BracketStyle) -> char {
 /// Identifies the four code points the punctuation choke point owns
 /// (DESIGN §2). Returns `None` for every other character, including ASCII
 /// `,`/`.`, which are ordinary symbols governed by `width.symbol` instead.
+///
+/// This stays a four-code-point set even though [`CommaMark::HalfWidth`] and
+/// [`PeriodMark::HalfWidth`] *emit* ASCII `,`/`.`: the channel writes half-
+/// width marks without claiming them back. Claiming them would mean a `.`
+/// typed in direct input turned into `。` under the default style, which is
+/// the opposite of what a `,` in `foo(a, b)` is asking for.
 fn punct_role(c: char) -> Option<PunctRole> {
     match c {
         '\u{3001}' | '\u{FF0C}' => Some(PunctRole::Comma), // 、 ，
@@ -528,15 +589,9 @@ fn punct_role(c: char) -> Option<PunctRole> {
 
 /// Picks the configured glyph for `role` under `style`.
 fn map_punct(role: PunctRole, style: PunctuationStyle) -> char {
-    match (style, role) {
-        (PunctuationStyle::KutenTouten, PunctRole::Comma) => '\u{3001}', // 、
-        (PunctuationStyle::KutenTouten, PunctRole::Period) => '\u{3002}', // 。
-        (PunctuationStyle::CommaPeriod, PunctRole::Comma) => '\u{FF0C}', // ，
-        (PunctuationStyle::CommaPeriod, PunctRole::Period) => '\u{FF0E}', // ．
-        (PunctuationStyle::Mixed, PunctRole::Comma) => '\u{3001}',       // 、
-        (PunctuationStyle::Mixed, PunctRole::Period) => '\u{FF0E}',      // ．
-        (PunctuationStyle::CommaKuten, PunctRole::Comma) => '\u{FF0C}',  // ，
-        (PunctuationStyle::CommaKuten, PunctRole::Period) => '\u{3002}', // 。
+    match role {
+        PunctRole::Comma => style.comma.glyph(),
+        PunctRole::Period => style.period.glyph(),
     }
 }
 
@@ -717,27 +772,17 @@ mod tests {
         // Every style must produce its configured pair no matter which of
         // the four source code points (、 。 ， ．) the caller hands in —
         // covering the "backward" direction too, e.g. ，-> 、 under
-        // KutenTouten, not just the forward 、-> 、 identity.
+        // KUTEN_TOUTEN, not just the forward 、-> 、 identity. Driven off
+        // `ALL` rather than a hand-written table so a tenth combination
+        // cannot be added without being covered here.
         let sources = ['\u{3001}', '\u{3002}', '\u{FF0C}', '\u{FF0E}'];
-        let cases: [(PunctuationStyle, [char; 4]); 4] = [
-            (
-                PunctuationStyle::KutenTouten,
-                ['\u{3001}', '\u{3002}', '\u{3001}', '\u{3002}'],
-            ),
-            (
-                PunctuationStyle::CommaPeriod,
-                ['\u{FF0C}', '\u{FF0E}', '\u{FF0C}', '\u{FF0E}'],
-            ),
-            (
-                PunctuationStyle::Mixed,
-                ['\u{3001}', '\u{FF0E}', '\u{3001}', '\u{FF0E}'],
-            ),
-            (
-                PunctuationStyle::CommaKuten,
-                ['\u{FF0C}', '\u{3002}', '\u{FF0C}', '\u{3002}'],
-            ),
-        ];
-        for (style, expected) in cases {
+        for style in PunctuationStyle::ALL {
+            let expected = [
+                style.comma.glyph(),
+                style.period.glyph(),
+                style.comma.glyph(),
+                style.period.glyph(),
+            ];
             let normalizer = Normalizer {
                 width: WidthPolicy::default(),
                 punctuation: style,
@@ -751,6 +796,102 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn half_width_punctuation_survives_every_symbol_width_and_mode() {
+        // The whole point of the half-width marks is that they reach the
+        // document as ASCII. `symbol = Full` widens every other ASCII
+        // symbol, so if it ever got a say here it would widen `,` back to
+        // ， and undo the setting — the same fight rule 4 already settles
+        // for the full-width marks, now coming from the other side.
+        for symbol in [Width::Half, Width::Full, Width::FollowMode] {
+            let normalizer = Normalizer {
+                width: WidthPolicy {
+                    alnum: Width::Half,
+                    number: Width::Half,
+                    symbol,
+                },
+                punctuation: PunctuationStyle::ASCII,
+                brackets: BracketStyle::default(),
+            };
+            for mode in Mode::ALL {
+                for src in ['\u{3001}', '\u{FF0C}'] {
+                    assert_eq!(
+                        normalizer.normalize_char(src, mode),
+                        ',',
+                        "symbol {symbol:?} mode {mode:?} src {src:?}"
+                    );
+                }
+                for src in ['\u{3002}', '\u{FF0E}'] {
+                    assert_eq!(
+                        normalizer.normalize_char(src, mode),
+                        '.',
+                        "symbol {symbol:?} mode {mode:?} src {src:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn half_width_punctuation_is_emitted_but_never_reclaimed() {
+        // Deliberately one-way. The punctuation channel writes ASCII `,`/`.`
+        // when asked to, but `punct_role` still owns exactly four code
+        // points, so ASCII `,`/`.` arriving as *input* stay ordinary symbols
+        // governed by `width.symbol`. Were they claimed instead, a `.` typed
+        // in direct input would come back as 。 under the default style, and
+        // the `,` in `foo(a, b)` would stop being a comma.
+        let ascii = Normalizer {
+            width: WidthPolicy::default(),
+            punctuation: PunctuationStyle::ASCII,
+            brackets: BracketStyle::default(),
+        };
+        assert_eq!(ascii.normalize_char(',', Mode::Direct), ',');
+        assert_eq!(ascii.normalize_char('.', Mode::Direct), '.');
+
+        // Under the default style the same ASCII input is still untouched by
+        // punctuation: `width.symbol` alone decides its width.
+        let default_half = Normalizer::default();
+        assert_eq!(default_half.normalize_char(',', Mode::Direct), ',');
+        assert_eq!(default_half.normalize_char('.', Mode::Direct), '.');
+        let default_full = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::Half,
+                number: Width::Half,
+                symbol: Width::Full,
+            },
+            ..Normalizer::default()
+        };
+        assert_eq!(default_full.normalize_char(',', Mode::Direct), '\u{FF0C}');
+        assert_eq!(default_full.normalize_char('.', Mode::Direct), '\u{FF0E}');
+    }
+
+    #[test]
+    fn half_width_punctuation_flows_through_normalize_into() {
+        // `normalize_into` copies unchanged runs wholesale and only falls to
+        // `normalize_char` for the rest. All four owned marks are
+        // three-byte, so none of them can hide inside a single-byte
+        // passthrough run — this pins that the run scanner really does hand
+        // them over, and that a 3-byte -> 1-byte replacement lands intact
+        // in the middle of ASCII that the scanner did copy wholesale.
+        let normalizer = Normalizer {
+            width: WidthPolicy::default(),
+            punctuation: PunctuationStyle::ASCII,
+            brackets: BracketStyle::default(),
+        };
+        let mut out = String::new();
+        normalizer
+            .normalize_into(
+                "docker compose up、これで起動する。ログは journalctl で読む。",
+                Mode::Hiragana,
+                &mut out,
+            )
+            .expect("fits in a growable String");
+        assert_eq!(
+            out,
+            "docker compose up,これで起動する.ログは journalctl で読む."
+        );
     }
 
     #[test]
@@ -800,7 +941,7 @@ mod tests {
                 number: Width::Half,
                 symbol: Width::Half,
             },
-            punctuation: PunctuationStyle::CommaPeriod,
+            punctuation: PunctuationStyle::COMMA_PERIOD,
             brackets: BracketStyle::default(),
         };
         assert_eq!(
@@ -834,7 +975,7 @@ mod tests {
                 number: Width::Full,
                 symbol: Width::Full,
             },
-            punctuation: PunctuationStyle::CommaPeriod,
+            punctuation: PunctuationStyle::COMMA_PERIOD,
             brackets: BracketStyle::default(),
         };
         for c in ['あ', 'ア', '漢', '𠮷', '🍣'] {
@@ -951,7 +1092,7 @@ mod tests {
                     number: Width::Full,
                     symbol: Width::Full,
                 },
-                punctuation: PunctuationStyle::CommaPeriod,
+                punctuation: PunctuationStyle::COMMA_PERIOD,
                 brackets: BracketStyle::default(),
             },
         ];
@@ -997,7 +1138,7 @@ mod tests {
                 number: Width::Half,
                 symbol: Width::Half,
             },
-            punctuation: PunctuationStyle::KutenTouten,
+            punctuation: PunctuationStyle::KUTEN_TOUTEN,
             brackets: BracketStyle::default(),
         };
         // "abc" is a run; 、is three bytes and does not fit in the last one.
@@ -1039,7 +1180,7 @@ mod tests {
                 symbol: Width::Half,
             }
         );
-        assert_eq!(PunctuationStyle::default(), PunctuationStyle::KutenTouten);
+        assert_eq!(PunctuationStyle::default(), PunctuationStyle::KUTEN_TOUTEN);
         assert_eq!(BracketStyle::default(), BracketStyle::Corner);
         assert_eq!(
             Normalizer::default(),
@@ -1053,14 +1194,43 @@ mod tests {
 
     #[test]
     fn punctuation_parts_cover_all_independent_combinations() {
-        assert_eq!(PunctuationStyle::ALL.len(), 4);
-        for style in PunctuationStyle::ALL {
-            let (comma_full, period_full) = style.parts();
-            assert_eq!(PunctuationStyle::from_parts(comma_full, period_full), style);
+        // `ALL` is what the settings combos and the persistence round-trips
+        // iterate, so it has to be the exact cross product of the two roles
+        // — no combination missing, none listed twice.
+        assert_eq!(PunctuationStyle::ALL.len(), 9);
+        let mut seen = Vec::new();
+        for comma in CommaMark::ALL {
+            for period in PeriodMark::ALL {
+                let style = PunctuationStyle::new(comma, period);
+                assert!(
+                    PunctuationStyle::ALL.contains(&style),
+                    "ALL is missing {style:?}"
+                );
+                assert_eq!(style.comma, comma);
+                assert_eq!(style.period, period);
+                seen.push(style);
+            }
         }
-        assert_eq!(
-            PunctuationStyle::from_parts(true, false),
-            PunctuationStyle::CommaKuten
-        );
+        for style in PunctuationStyle::ALL {
+            assert_eq!(
+                seen.iter().filter(|candidate| **candidate == style).count(),
+                1,
+                "{style:?} is not listed exactly once"
+            );
+        }
+
+        // The named conventions the settings screen and the config format
+        // talk about, spelled out so reordering either role enum cannot
+        // quietly repoint one of them.
+        assert_eq!(PunctuationStyle::KUTEN_TOUTEN.comma.glyph(), '\u{3001}');
+        assert_eq!(PunctuationStyle::KUTEN_TOUTEN.period.glyph(), '\u{3002}');
+        assert_eq!(PunctuationStyle::COMMA_PERIOD.comma.glyph(), '\u{FF0C}');
+        assert_eq!(PunctuationStyle::COMMA_PERIOD.period.glyph(), '\u{FF0E}');
+        assert_eq!(PunctuationStyle::MIXED.comma.glyph(), '\u{3001}');
+        assert_eq!(PunctuationStyle::MIXED.period.glyph(), '\u{FF0E}');
+        assert_eq!(PunctuationStyle::COMMA_KUTEN.comma.glyph(), '\u{FF0C}');
+        assert_eq!(PunctuationStyle::COMMA_KUTEN.period.glyph(), '\u{3002}');
+        assert_eq!(PunctuationStyle::ASCII.comma.glyph(), ',');
+        assert_eq!(PunctuationStyle::ASCII.period.glyph(), '.');
     }
 }

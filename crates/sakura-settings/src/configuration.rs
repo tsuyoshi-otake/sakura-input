@@ -168,7 +168,7 @@ mod tests {
         document.preferences.normalizer.width.alnum = Width::Full;
         document.preferences.normalizer.width.number = Width::FollowMode;
         document.preferences.normalizer.width.symbol = Width::Half;
-        document.preferences.normalizer.punctuation = PunctuationStyle::Mixed;
+        document.preferences.normalizer.punctuation = PunctuationStyle::MIXED;
         let mut profile = document.profiles[0].clone();
         profile.process_name = "notes.exe".to_owned();
         profile.prediction_enabled = true;

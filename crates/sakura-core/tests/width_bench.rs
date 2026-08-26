@@ -106,7 +106,7 @@ fn what_the_run_scanner_costs_and_saves() {
             number: Width::Full,
             symbol: Width::Full,
         },
-        punctuation: PunctuationStyle::KutenTouten,
+        punctuation: PunctuationStyle::KUTEN_TOUTEN,
         brackets: BracketStyle::default(),
     };
     // `Width::Full` ignores the mode, so one mode covers both policies and

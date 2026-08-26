@@ -1895,7 +1895,7 @@ mod tests {
                 number: Width::Full,
                 symbol: Width::Full,
             },
-            punctuation: PunctuationStyle::KutenTouten,
+            punctuation: PunctuationStyle::KUTEN_TOUTEN,
             brackets: crate::width::BracketStyle::default(),
         };
         let baseline = scan_avx2 as ScanStrategy;
