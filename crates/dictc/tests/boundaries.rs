@@ -7,7 +7,7 @@
 //! from the candidate window.
 
 use dictc::segmenter::{build_boundaries, parse_mozc_pos_features, parse_mozc_segmenter_rules};
-use dictc::{compile, compile_with_tables, parse_connection, parse_entries};
+use dictc::{compile, compile_with_tables, parse_connection, parse_entries, OptionalTables};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 
@@ -39,8 +39,15 @@ fn fixture_boundaries() -> dictc::segmenter::BunsetsuBoundaries {
 fn image_with_boundaries() -> Vec<u8> {
     let entries = parse_entries("fixture.tsv", ENTRIES).expect("entries");
     let connection = parse_connection("connection.tsv", CONNECTION, false).expect("matrix");
-    compile_with_tables(&entries, &connection, &[], Some(&fixture_boundaries()))
-        .expect("compile with boundaries")
+    compile_with_tables(
+        &entries,
+        &connection,
+        OptionalTables {
+            boundaries: Some(&fixture_boundaries()),
+            ..OptionalTables::default()
+        },
+    )
+    .expect("compile with boundaries")
 }
 
 fn image_without_boundaries() -> Vec<u8> {
@@ -140,7 +147,15 @@ fn compile_rejects_a_class_count_mismatch() {
         false,
     )
     .expect("matrix");
-    assert!(compile_with_tables(&entries, &wider, &[], Some(&fixture_boundaries())).is_err());
+    assert!(compile_with_tables(
+        &entries,
+        &wider,
+        OptionalTables {
+            boundaries: Some(&fixture_boundaries()),
+            ..OptionalTables::default()
+        },
+    )
+    .is_err());
 }
 
 #[test]

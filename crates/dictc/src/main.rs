@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use dictc::{
     attach_entry_details, compile_with_tables, extract_entry_details, merge_entries,
     parse_category_entries, parse_connection, parse_entries, parse_mozc_connection,
-    parse_mozc_entries, wordnet::import_lmf_gzip, SourceDetail, SourceEntry,
+    parse_mozc_entries, wordnet::import_lmf_gzip, OptionalTables, SourceDetail, SourceEntry,
     MAX_DICTIONARY_IMAGE_BYTES,
 };
 use sakura_core::dictionary::DetailRelationKind;
@@ -82,6 +82,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let mut detail_coverage_output = None;
     let mut mozc_id_def_path = None;
     let mut mozc_segmenter_path = None;
+    let mut mozc_single_kanji_path = None;
+    let mut mozc_variant_rule_path = None;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         match argument.to_str() {
@@ -191,6 +193,16 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 next_path(&mut args, &argument)?,
                 "Mozc segmenter rules",
             )?,
+            Some("--mozc-single-kanji") => set_once(
+                &mut mozc_single_kanji_path,
+                next_path(&mut args, &argument)?,
+                "Mozc single-kanji table",
+            )?,
+            Some("--mozc-variant-rule") => set_once(
+                &mut mozc_variant_rule_path,
+                next_path(&mut args, &argument)?,
+                "Mozc single-kanji variant rules",
+            )?,
             Some("--help" | "-h") => {
                 println!(
                     "Usage: dictc (--category FILE | --system FILE | --supplement FILE | --mozc-system FILE)... \
@@ -199,7 +211,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                        [--curated-detail-source FILE...] [--detail-only-source FILE...] \
                        [--curated-detail-report FILE] \
                        [--llm-detail-release-dir DIR --llm-detail-target-dir DIR --llm-detail-report FILE] \
-                       [--detail-coverage-output FILE] [--mozc-id-def FILE --mozc-segmenter FILE]"
+                       [--detail-coverage-output FILE] [--mozc-id-def FILE --mozc-segmenter FILE] \
+                       [--mozc-single-kanji FILE --mozc-variant-rule FILE]"
                 );
                 return Ok(());
             }
@@ -240,6 +253,11 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     }
     if mozc_id_def_path.is_some() != mozc_segmenter_path.is_some() {
         return Err("--mozc-id-def and --mozc-segmenter must be specified together".to_owned());
+    }
+    if mozc_single_kanji_path.is_some() != mozc_variant_rule_path.is_some() {
+        return Err(
+            "--mozc-single-kanji and --mozc-variant-rule must be specified together".to_owned(),
+        );
     }
 
     let mut supplement_entries = Vec::<SourceEntry>::new();
@@ -387,8 +405,31 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         }
         _ => None,
     };
-    let image = compile_with_tables(&entries, &connection, &details, boundaries.as_ref())
-        .map_err(|error| error.to_string())?;
+    let single_kanji = match (
+        mozc_single_kanji_path.as_deref(),
+        mozc_variant_rule_path.as_deref(),
+    ) {
+        (Some(single_kanji_path), Some(variant_path)) => Some(
+            dictc::single_kanji::SingleKanjiTable::build(
+                &single_kanji_path.display().to_string(),
+                &read_utf8(single_kanji_path)?,
+                &variant_path.display().to_string(),
+                &read_utf8(variant_path)?,
+            )
+            .map_err(|error| error.to_string())?,
+        ),
+        _ => None,
+    };
+    let image = compile_with_tables(
+        &entries,
+        &connection,
+        OptionalTables {
+            details: &details,
+            boundaries: boundaries.as_ref(),
+            single_kanji: single_kanji.as_ref(),
+        },
+    )
+    .map_err(|error| error.to_string())?;
     if image.len() > MAX_DICTIONARY_IMAGE_BYTES {
         return Err(format!(
             "compiled image is {} bytes, exceeding the {}-byte release gate",
@@ -397,8 +438,25 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         ));
     }
     atomic_write(&output_path, &image)?;
+    let single_kanji_summary = match single_kanji.as_ref().map(|table| table.report()) {
+        Some(report) => format!(
+            "{} single-kanji readings, {} characters, {} variant notes{}",
+            report.readings,
+            report.characters,
+            report.variants,
+            if report.rejected_readings.is_empty() {
+                String::new()
+            } else {
+                // Naming them keeps a source bump visible in the build log
+                // rather than only in a shrinking count.
+                format!(" (rejected: {})", report.rejected_readings.join(", "))
+            }
+        ),
+        None => "no single-kanji table".to_owned(),
+    };
     println!(
-        "wrote {} entries, {} detail records, {} classes, {} bytes to {} ({} bunsetsu boundary table)",
+        "wrote {} entries, {} detail records, {} classes, {} bytes to {} \
+         ({} bunsetsu boundary table, {single_kanji_summary})",
         entries.len(),
         details.len(),
         connection.class_count(),

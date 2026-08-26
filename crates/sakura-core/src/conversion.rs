@@ -13,7 +13,7 @@ use sakura_proto::MAX_CANDIDATES;
 use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
 use crate::calendar::{date_offset_for_reading, date_surface_specs, CivilDate};
-use crate::dictionary::{Dictionary, Entry, EntryFlags};
+use crate::dictionary::{Dictionary, Entry, EntryFlags, SingleKanjiVariant};
 use crate::input_repair::{
     allows_system_entry, collect_repair_variants, english_spelling_katakana_reading, RepairKind,
     COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, MAX_REPAIR_VARIANTS,
@@ -80,6 +80,10 @@ const NUMBER_FORM_COST: i64 = 800;
 const BARE_KANA_NUMBER_FORM_COST: i64 = 5_000;
 const MAX_GENERATED_SURFACES: usize = 64;
 const DEFAULT_NOUN_ID: u16 = 1_851;
+/// Annotation for an appended character the pinned variant rules do not
+/// relate to another. It exists so the tail reads as a character list
+/// rather than as more ranked conversions.
+const SINGLE_KANJI_ANNOTATION: &str = "単漢字";
 const MIN_COMPLETION_COHERENCE_CHARS: usize = 4;
 const COMPLETION_NODE_BUDGET: usize = 256;
 const COMPLETION_ENTRY_BUDGET: usize = 64;
@@ -1568,6 +1572,7 @@ impl Converter {
         let lossless_fallback_inserted =
             self.ensure_lossless_fallback(fallback, options.max_candidates);
         self.candidates.sort_by_key(|candidate| candidate.cost);
+        self.append_single_kanji(dictionary, reading, options.max_candidates)?;
         debug_assert!(!self.candidates.is_empty());
         Ok(ConversionResult {
             candidates: &self.candidates,
@@ -2498,6 +2503,99 @@ impl Converter {
         )?;
         let diagnostics = result.diagnostics();
         Ok(consume(result.candidates(), diagnostics))
+    }
+
+    /// Appends the pinned single-kanji table to a finished candidate list.
+    ///
+    /// Single kanji are deliberately not lattice edges. こう alone names 315
+    /// characters in the pinned source, so admitting them as edges would spend
+    /// a one-mora reading's whole `MAX_LATTICE_NODES` budget on them and would
+    /// change the cost of every path that crosses them. Mozc reaches the same
+    /// conclusion and runs its single-kanji rewriter after conversion; this is
+    /// the same position in the pipeline. The tail therefore cannot move TOP-1
+    /// or reorder anything the search produced. It only fills slots the ranked
+    /// list left empty, and every appended cost sits above the whole ranked
+    /// list so a later re-sort keeps it at the end.
+    fn append_single_kanji(
+        &mut self,
+        dictionary: &Dictionary<'_>,
+        reading: &str,
+        wanted: usize,
+    ) -> Result<(), ConversionError> {
+        if self.candidates.len() >= wanted || !dictionary.has_single_kanji() {
+            return Ok(());
+        }
+        let reading_end =
+            u16::try_from(reading.len()).map_err(|_| ConversionError::ReadingTooLong)?;
+        let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
+            DEFAULT_NOUN_ID
+        } else {
+            0
+        };
+        // Measured against the ranked ceiling rather than the previous tail
+        // row: a cheap ranked list must not let its tail overtake anything.
+        let ranked_ceiling = self
+            .candidates
+            .iter()
+            .map(|candidate| candidate.cost)
+            .max()
+            .unwrap_or(0);
+        for (index, character) in dictionary.single_kanji(reading).enumerate() {
+            if self.candidates.len() >= wanted {
+                break;
+            }
+            let mut text = FixedStr::new();
+            if text.push(character).is_err() {
+                continue;
+            }
+            // A character the search already ranked keeps its ranked position
+            // and its own annotation.
+            if self
+                .candidates
+                .iter()
+                .any(|candidate| candidate.text() == text.as_str())
+            {
+                continue;
+            }
+            let Some(annotation) = single_kanji_annotation(dictionary, character) else {
+                continue;
+            };
+            let mut segments = FixedVec::new();
+            segments
+                .push(ConversionSegment {
+                    reading_start: 0,
+                    reading_end,
+                    text_start: 0,
+                    text_end: u16::try_from(text.len())
+                        .map_err(|_| ConversionError::OutputTooLong)?,
+                    left_id: synthetic_id,
+                    right_id: synthetic_id,
+                    flags: EntryFlags::NONE,
+                    word_count: 1,
+                    it_word_count: 0,
+                })
+                .map_err(|_| ConversionError::TooManySegments)?;
+            self.candidates.push(ConversionCandidate {
+                text,
+                annotation,
+                segments,
+                system_entry_index: NO_SYSTEM_ENTRY_INDEX,
+                synthetic_exact: false,
+                origin: CandidateOrigin::Direct,
+                // Not system-only, so the cross-commit bridge can neither
+                // anchor on an appended character nor transfer a contextual
+                // gain to one.
+                path_evidence: PathEvidence {
+                    generated_edges: 1,
+                    ..PathEvidence::default()
+                },
+                bridge_boundary_kind: None,
+                commit_bridge_tail: CommitBridgeTailStorage::default(),
+                cross_commit_rescored: false,
+                cost: ranked_ceiling.saturating_add(1 + i64::try_from(index).unwrap_or(0)),
+            });
+        }
+        Ok(())
     }
 
     fn ensure_lossless_fallback(&mut self, fallback: ConversionCandidate, wanted: usize) -> bool {
@@ -4025,6 +4123,28 @@ fn dictionary_has_exact_surface(
     Ok(found)
 }
 
+/// Renders one appended character's annotation: 異体字（高） for a character
+/// the pinned rules relate to another, and a plain marker otherwise.
+///
+/// A note is built whole or not at all, so a bounded buffer that cannot hold
+/// the full relation never leaves a half-written label on a candidate.
+fn single_kanji_annotation(
+    dictionary: &Dictionary<'_>,
+    character: char,
+) -> Option<FixedStr<MAX_PREEDIT_BYTES>> {
+    let mut annotation = FixedStr::new();
+    let Some(SingleKanjiVariant { original, kind }) = dictionary.single_kanji_variant(character)
+    else {
+        annotation.push_str(SINGLE_KANJI_ANNOTATION).ok()?;
+        return Some(annotation);
+    };
+    annotation.push_str(kind.label()).ok()?;
+    annotation.push('（').ok()?;
+    annotation.push(original).ok()?;
+    annotation.push('）').ok()?;
+    Some(annotation)
+}
+
 fn make_lossless_fallback(
     dictionary: &Dictionary<'_>,
     reading: &str,
@@ -4416,11 +4536,11 @@ mod tests {
     use std::collections::{BTreeMap, VecDeque};
 
     use super::{
-        CandidateAuthority, CandidateOrigin, ConversionInput, ConversionInputClass,
-        ConversionOptions, Converter, CorrectionMap, CorrectionMapError, CorrectionRun,
-        CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy, RawRepairBudget, RawRepairPlan,
-        RepairTier, RightContextId, BASE_DICTIONARY_EDGES_PER_READING,
-        MAX_DICTIONARY_SURFACES_PER_READING,
+        CandidateAuthority, CandidateOrigin, ConversionCandidate, ConversionInput,
+        ConversionInputClass, ConversionOptions, Converter, CorrectionMap, CorrectionMapError,
+        CorrectionRun, CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy, RawRepairBudget,
+        RawRepairPlan, RepairTier, RightContextId, BASE_DICTIONARY_EDGES_PER_READING,
+        MAX_DICTIONARY_SURFACES_PER_READING, SINGLE_KANJI_ANNOTATION,
     };
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
     use crate::preferences::ConversionMethod;
@@ -4594,10 +4714,242 @@ mod tests {
         }
     }
 
+    /// A one-mora reading is where the gap against a commercial IME is widest
+    /// and where the ranked list runs out first. The fixture therefore uses
+    /// one ranked entry and a character list that overlaps it.
+    fn single_kanji_fixture() -> Vec<u8> {
+        synthetic_dictionary_with_single_kanji(
+            &[
+                fixture_entry("ひ", "日", 100, EntryFlags::NONE),
+                fixture_entry("ひかり", "光", 100, EntryFlags::NONE),
+            ],
+            // Byte-ascending readings, each listing characters in the source's
+            // own preference order. 日 is deliberately also a ranked entry.
+            &[("ひ", "日火比髙"), ("ひかり", "灯")],
+            &[('髙', '高', 1)],
+        )
+    }
+
+    fn converted(bytes: &[u8], reading: &str, wanted: usize) -> Vec<(String, String)> {
+        let dictionary = Dictionary::parse(bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        converter
+            .convert(
+                &dictionary,
+                reading,
+                ConversionOptions {
+                    max_candidates: wanted,
+                    ..ConversionOptions::default()
+                },
+            )
+            .expect("conversion")
+            .iter()
+            .map(|candidate| {
+                (
+                    candidate.text().to_string(),
+                    candidate.annotation().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn single_kanji_fill_the_slots_the_ranked_list_left_empty() {
+        let listed = converted(&single_kanji_fixture(), "ひ", 8);
+        let surfaces = listed
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<Vec<_>>();
+        // 日 is ranked, so it keeps its ranked position and is not repeated in
+        // the tail; the rest follow in the source's preference order.
+        assert_eq!(surfaces.first(), Some(&"日"));
+        assert_eq!(&surfaces[surfaces.len() - 3..], &["火", "比", "髙"]);
+        assert_eq!(surfaces.iter().filter(|text| **text == "日").count(), 1);
+    }
+
+    #[test]
+    fn the_appended_tail_never_changes_the_ranked_list() {
+        let rows = [
+            fixture_entry("ひ", "日", 100, EntryFlags::NONE),
+            fixture_entry("ひかり", "光", 100, EntryFlags::NONE),
+        ];
+        let without = converted(&synthetic_dictionary(&rows), "ひ", 8);
+        let with = converted(&single_kanji_fixture(), "ひ", 8);
+        assert!(with.len() > without.len(), "the tail must add rows");
+        assert_eq!(
+            &with[..without.len()],
+            &without[..],
+            "every ranked row must keep its text, annotation, and position"
+        );
+    }
+
+    #[test]
+    fn the_tail_stops_at_the_candidate_limit() {
+        for wanted in 1..=8 {
+            let listed = converted(&single_kanji_fixture(), "ひ", wanted);
+            assert!(
+                listed.len() <= wanted,
+                "limit {wanted} produced {} candidates",
+                listed.len()
+            );
+        }
+        // The limit, not the character list, is what stops the tail: one slot
+        // leaves room for the ranked entry alone.
+        assert_eq!(converted(&single_kanji_fixture(), "ひ", 1).len(), 1);
+    }
+
+    #[test]
+    fn an_appended_character_carries_its_relation_or_a_plain_marker() {
+        let listed = converted(&single_kanji_fixture(), "ひ", 8);
+        let note = |surface: &str| {
+            listed
+                .iter()
+                .find(|(text, _)| text == surface)
+                .map(|(_, annotation)| annotation.clone())
+                .unwrap_or_else(|| panic!("{surface} is missing"))
+        };
+        assert_eq!(note("髙"), "異体字（高）");
+        assert_eq!(note("火"), "単漢字");
+        assert_eq!(note("比"), "単漢字");
+    }
+
+    #[test]
+    fn a_reading_the_table_does_not_list_gets_no_tail() {
+        // ひか sits between ひ and ひかり, so a lookup that stopped at the
+        // shorter length would hand it one of their character lists.
+        for reading in ["ひか", "ひかりの"] {
+            let listed = converted(&single_kanji_fixture(), reading, 8);
+            assert!(
+                listed.iter().all(|(_, annotation)| annotation != "単漢字"),
+                "{reading} borrowed a character list: {listed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn appended_costs_stay_above_every_ranked_cost() {
+        let bytes = single_kanji_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let result = converter
+            .convert_detailed(
+                &dictionary,
+                "ひ",
+                ConversionOptions {
+                    max_candidates: 8,
+                    ..ConversionOptions::default()
+                },
+            )
+            .expect("conversion");
+        let candidates = result.candidates();
+        let appended = |candidate: &ConversionCandidate| {
+            candidate.annotation() == SINGLE_KANJI_ANNOTATION
+                || candidate.annotation().starts_with("異体字")
+        };
+        let ranked_ceiling = candidates
+            .iter()
+            .filter(|candidate| !appended(candidate))
+            .map(|candidate| candidate.cost)
+            .max()
+            .expect("a ranked row exists");
+        let tail = candidates
+            .iter()
+            .filter(|candidate| appended(candidate))
+            .collect::<Vec<_>>();
+        assert!(!tail.is_empty(), "the fixture must produce a tail");
+        // A later re-sort by cost must not be able to lift the tail into the
+        // ranked list.
+        for candidate in tail {
+            assert!(
+                candidate.cost > ranked_ceiling,
+                "{} costs {} at or below the ranked ceiling {ranked_ceiling}",
+                candidate.text(),
+                candidate.cost
+            );
+        }
+    }
+
+    #[test]
+    fn an_image_without_the_tables_converts_exactly_as_before() {
+        let rows = [fixture_entry("ひ", "日", 100, EntryFlags::NONE)];
+        let listed = converted(&synthetic_dictionary(&rows), "ひ", 8);
+        assert!(
+            listed.iter().all(|(_, annotation)| annotation != "単漢字"),
+            "{listed:?}"
+        );
+    }
+
     /// Small in-test image writer.  Keeping it here avoids adding the
     /// allocating `dictc` crate as a sakura-core dependency while still
     /// exercising the borrowed production dictionary parser and lattice.
     fn synthetic_dictionary(rows: &[FixtureEntry]) -> Vec<u8> {
+        synthetic_image(rows, Vec::new())
+    }
+
+    /// Same image writer, plus the optional single-kanji tables.
+    ///
+    /// `single_kanji` pairs a reading with the characters it lists, and
+    /// `variants` relates a character to another with a rule code. Both must
+    /// already be in the ascending order the reader binary-searches, exactly
+    /// as `dictc` emits them.
+    fn synthetic_dictionary_with_single_kanji(
+        rows: &[FixtureEntry],
+        single_kanji: &[(&str, &str)],
+        variants: &[(char, char, u8)],
+    ) -> Vec<u8> {
+        let mut index = Vec::new();
+        let mut reading_data: Vec<u8> = Vec::new();
+        let mut characters: Vec<u8> = Vec::new();
+        let mut character_total = 0usize;
+        for (reading, listed) in single_kanji {
+            put_u32(&mut index, reading_data.len() as u32);
+            put_u32(&mut index, character_total as u32);
+            put_u16(&mut index, reading.len() as u16);
+            put_u16(&mut index, listed.chars().count() as u16);
+            reading_data.extend_from_slice(reading.as_bytes());
+            for character in listed.chars() {
+                put_u32(&mut characters, character as u32);
+                character_total += 1;
+            }
+        }
+        let mut variant_data = Vec::new();
+        for (variant, original, kind) in variants {
+            put_u32(&mut variant_data, *variant as u32);
+            put_u32(&mut variant_data, *original as u32);
+            variant_data.push(*kind);
+            variant_data.extend_from_slice(&[0, 0, 0]);
+        }
+        let reading_bytes = reading_data.len();
+        synthetic_image(
+            rows,
+            vec![
+                (
+                    image_format::TAG_SINGLE_KANJI_INDEX,
+                    index,
+                    single_kanji.len(),
+                ),
+                (
+                    image_format::TAG_SINGLE_KANJI_READINGS,
+                    reading_data,
+                    reading_bytes,
+                ),
+                (
+                    image_format::TAG_SINGLE_KANJI_CHARS,
+                    characters,
+                    character_total,
+                ),
+                (
+                    image_format::TAG_SINGLE_KANJI_VARIANTS,
+                    variant_data,
+                    variants.len(),
+                ),
+            ],
+        )
+    }
+
+    /// `extra` holds already-encoded optional tables, appended to the
+    /// directory in the order the caller lists them.
+    fn synthetic_image(rows: &[FixtureEntry], extra: Vec<([u8; 4], Vec<u8>, usize)>) -> Vec<u8> {
         let mut rows = rows.to_vec();
         rows.sort_by(|left, right| {
             (&left.reading, &left.surface, left.cost).cmp(&(
@@ -4713,7 +5065,7 @@ mod tests {
         put_u32(&mut matrix, 0);
         put_u32(&mut matrix, 0);
 
-        let tables = [
+        let mut tables = vec![
             (image_format::TAG_LOUDS, louds, louds_bits),
             (image_format::TAG_NODES, nodes, node_count),
             (image_format::TAG_LABELS, labels, node_count),
@@ -4728,6 +5080,7 @@ mod tests {
             (image_format::TAG_ANNOTATIONS, Vec::new(), 0),
             (image_format::TAG_MATRIX, matrix, 1),
         ];
+        tables.extend(extra);
         let prefix = image_format::HEADER_LEN + tables.len() * image_format::DIRECTORY_ENTRY_LEN;
         let mut image = vec![0u8; prefix];
         let mut directory = Vec::with_capacity(tables.len());
