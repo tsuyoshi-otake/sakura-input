@@ -296,6 +296,82 @@ fn general_quality_floor_keeps_tate_vertical_in_the_candidate_page() {
     );
 }
 
+/// Issue #94: typing たいあん offered 大安, a lucky-day label from the
+/// traditional calendar, ahead of 対案. The overlay re-prices the more common
+/// spelling of each pair; these are the readings that decision covers.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_94_repriced_homophones_lead_with_the_common_spelling() {
+    for (reading, expected) in [
+        ("たいあん", "対案"),
+        ("がいちゅう", "外注"),
+        ("きんそく", "禁則"),
+        ("どうてん", "同点"),
+        ("たいせき", "体積"),
+        ("とうばん", "当番"),
+        ("しれい", "指令"),
+        ("こうねつ", "高熱"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
+/// Issue #94: two independent caps stopped a reading at twelve distinct
+/// surfaces. The build-time trim dropped 10,781 surfaces across 963 readings
+/// outright -- 旗艦 and 気管 never reached the shipped dictionary at all -- and
+/// the converter then spent its own twelve runtime slots before it could reach
+/// forms it did hold, so きゅう offered the rare name kanji 邱 but not the digit
+/// spelling. Both caps are gone; the affordable homophones must be on the page.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_94_affordable_homophones_reach_the_candidate_page() {
+    for (reading, expected) in [
+        ("きかん", "旗艦"),
+        ("きかん", "気管"),
+        ("きゅう", "9"),
+        ("きゅう", "窮"),
+        ("こう", "光"),
+        ("かん", "環"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert!(
+            candidates.iter().any(|candidate| candidate == expected),
+            "{reading}: {expected} is missing from the shipped candidate page: {candidates:?}"
+        );
+    }
+}
+
+/// Issue #94: a path that opens with a bare one-mora hiragana fragment and then
+/// spends a whole kanji word to finish the reading is a splice, not a parse.
+/// Those were burying real homophones -- た慰安 sat above 対案, き澗 above 旗艦
+/// and 気管. The gate is a cost window rather than a ban, so a cheap splice
+/// that happens to spell a real word survives: と場 stays on the とじょう page.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_94_kana_fragment_splices_leave_the_candidate_page() {
+    for (reading, rejected) in [
+        ("たいあん", "た慰安"),
+        ("きかん", "き澗"),
+        ("がいちゅう", "が意中"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert!(
+            !candidates.iter().any(|candidate| candidate == rejected),
+            "{reading}: {rejected} must not reach the shipped candidate page: {candidates:?}"
+        );
+    }
+    let candidates = candidates_for("とじょう");
+    assert!(
+        candidates.iter().any(|candidate| candidate == "と場"),
+        "とじょう: と場 is a real 交ぜ書き and must survive the gate: {candidates:?}"
+    );
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(

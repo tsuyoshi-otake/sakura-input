@@ -25,12 +25,37 @@
 # 週次 entry at all (only the personal name 周次). Keep the missing member of
 # that productive series in the curated layer rather than raising the global
 # trim ceiling and admitting every high-cost tail entry.
+#
+# Homophone top-1 re-pricing (Issue #94): where a reading's two spellings sit
+# within a few hundred cost of each other, the rarer word led the list.
+# たいあん offered 大安, a lucky-day label from the traditional calendar,
+# ahead of 対案; きんそく offered 禁足 (confinement) ahead of 禁則, the
+# line-breaking rule every editor and typesetter uses; たいせき offered the
+# geological 堆積 ahead of 体積. Each row re-prices only the more common
+# spelling so its lattice total lands 60 below the incumbent -- the same
+# margin the digit rows use -- which flips the top-1 and leaves the rest of
+# the page in its existing order. Each row keeps the upstream edge's own
+# prediction cost and flags, so a row that was not a prediction entry
+# (たいあん, きんそく) does not become one.
+#
+# The frequency verdict is a linguistic judgment, not a corpus measurement:
+# no external frequency corpus is consulted here, exactly as for the rows
+# above. がいちゅう (外注 over 害虫) and しれい (指令 over 司令) are the
+# closest calls and are recorded as such; the other six are clear.
+#
+# しれい (指令) and たいせき (体積) are re-priced the same way, but in
+# `curated-general-details.tsv` instead of here: a reviewed description
+# already owns those exact edges, and dictc requires a reviewed detail
+# source and the final entry to agree on cost and flags. Pricing them here
+# would replace the edge that file describes and break that check, so the
+# edge keeps one owner and the numbers live next to the description.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 あさごはん	朝ご飯	1851	1851	4300	5500	predict	
 いち	1	2044	2044	3639	4839	predict	
 いどうとどけ	異動届	1851	1851	3600	4800	predict	
 かいぎょう	改行	1841	1841	2500	3700	predict	
 かんじ	漢字	1851	1851	2500	3700	predict	
+がいちゅう	外注	1841	1841	4780	5980	predict	
 きのう	昨日	1841	1841	1100	2300	predict	
 きのう	昨日	1909	1909	1100	2300	predict	
 きのうかいぜん	機能改善	1841	1841	3600	4800	it,predict	
@@ -59,12 +84,14 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 きのうようけん	機能要件	1841	1851	3600	4800	it,predict	
 きのうようぼう	機能要望	1851	1851	3600	4800	it,predict	
 きゅう	9	2044	2044	5531	6731	predict	
+きんそく	禁則	1851	1851	6776	-		
 けっさいしゃ	決裁者	1841	1986	3600	4800	predict	
 けっさいしょ	決裁書	1851	1851	3600	4800	predict	
 けんしゅうかんりょう	検収完了	1851	1851	3600	4800	it,predict	
 けんしゅうしけん	検収試験	1851	1851	3600	4800	it,predict	
 けんしゅうしょ	検収書	1851	1851	3600	4800	it,predict	
 こうつうひせいさん	交通費精算	1851	1851	3600	4800	predict	
+こうねつ	高熱	1851	1851	5332	6532	predict	
 ご	5	2044	2044	4809	6009	predict	
 さん	3	2044	2044	4176	5376	predict	
 してき	指摘	1841	1841	2000	3200	it,predict	
@@ -74,6 +101,9 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 しょうひょうしょるい	証憑書類	1851	1851	3600	4800	predict	
 しりあらいず	シリアライズ	1920	1920	2000	3200	it,predict	
 ぜろ	0	2044	2044	2707	3907	predict	
+たいあん	対案	1851	1851	6078	-		
+とうばん	当番	1841	1841	5103	6303	predict	
+どうてん	同点	1851	1851	5272	6472	predict	
 なな	7	2044	2044	5211	6411	predict	
 に	2	2044	2044	5725	6925	predict	
 はいふきんじゅん	配賦基準	1851	1851	3600	4800	predict	

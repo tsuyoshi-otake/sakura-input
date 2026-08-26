@@ -14,7 +14,8 @@ fn trimmer_filters_deduplicates_and_caps_each_reading_deterministically() {
     .expect("second shard");
     let mut trimmer = MozcTrimmer::new(TrimPolicy {
         max_word_cost: 9_000,
-        max_candidates_per_reading: 2,
+        legacy_row_evidence_cap: 2,
+        max_surfaces_per_reading: Some(2),
     })
     .expect("policy");
     trimmer.push_shard(first);
@@ -62,7 +63,8 @@ fn candidate_cap_counts_distinct_surfaces_without_discarding_selected_pos_rows()
     .expect("source");
     let mut trimmer = MozcTrimmer::new(TrimPolicy {
         max_word_cost: 9_000,
-        max_candidates_per_reading: 2,
+        legacy_row_evidence_cap: 2,
+        max_surfaces_per_reading: Some(2),
     })
     .expect("policy");
     trimmer.push_shard(entries);
@@ -89,16 +91,87 @@ fn candidate_cap_counts_distinct_surfaces_without_discarding_selected_pos_rows()
     );
 }
 
+/// The shipped policy drops the per-reading surface cap, so `max_word_cost`
+/// alone decides admission and a reading keeps every affordable homophone.
+/// The legacy evidence boundary must stay where the former row cap was, or
+/// growing coverage would retroactively reclassify already-shipped rows.
+#[test]
+fn uncapped_policy_keeps_affordable_surfaces_and_freezes_legacy_evidence() {
+    let source = concat!(
+        "きかん\t1\t1\t3000\t期間\n",
+        "きかん\t1\t1\t4000\t機関\n",
+        "きかん\t1\t1\t5655\t旗艦\n",
+        "きかん\t1\t1\t5662\t気管\n",
+        "きかん\t1\t1\t9500\t汽缶\n",
+    );
+    let mut trimmer = MozcTrimmer::new(TrimPolicy {
+        max_word_cost: 6_900,
+        legacy_row_evidence_cap: 2,
+        max_surfaces_per_reading: None,
+    })
+    .expect("policy");
+    trimmer.push_shard(parse_mozc_entries("dictionary00.txt", source).expect("source"));
+    let (entries, legacy_evidence, report) = trimmer.finish_with_legacy_evidence();
+
+    assert_eq!(report.cost_eligible, 4);
+    assert_eq!(report.capped_entries, 0);
+    assert_eq!(report.capped_surfaces, 0);
+    assert_eq!(report.legacy_row_capped_entries, 2);
+    assert_eq!(report.surface_cap_rescued_entries, 2);
+    assert_eq!(report.surface_cap_rescued_surfaces, 2);
+    assert_eq!(report.output_entries, 4);
+    assert_eq!(legacy_evidence, [true, true, false, false]);
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.surface.as_str())
+            .collect::<Vec<_>>(),
+        ["期間", "機関", "旗艦", "気管"]
+    );
+
+    let mut capped = MozcTrimmer::new(TrimPolicy {
+        max_word_cost: 6_900,
+        legacy_row_evidence_cap: 2,
+        max_surfaces_per_reading: Some(2),
+    })
+    .expect("policy");
+    capped.push_shard(parse_mozc_entries("dictionary00.txt", source).expect("source"));
+    let (capped_entries, capped_report) = capped.finish();
+
+    assert_eq!(capped_report.capped_surfaces, 2);
+    assert_eq!(
+        capped_entries
+            .iter()
+            .map(|entry| entry.surface.as_str())
+            .collect::<Vec<_>>(),
+        ["期間", "機関"]
+    );
+}
+
 #[test]
 fn trimmer_rejects_unbounded_policies() {
     assert!(MozcTrimmer::new(TrimPolicy {
         max_word_cost: -1,
-        max_candidates_per_reading: 1,
+        legacy_row_evidence_cap: 1,
+        max_surfaces_per_reading: Some(1),
     })
     .is_err());
     assert!(MozcTrimmer::new(TrimPolicy {
         max_word_cost: 9_000,
-        max_candidates_per_reading: 0,
+        legacy_row_evidence_cap: 0,
+        max_surfaces_per_reading: Some(1),
     })
     .is_err());
+    assert!(MozcTrimmer::new(TrimPolicy {
+        max_word_cost: 9_000,
+        legacy_row_evidence_cap: 1,
+        max_surfaces_per_reading: Some(0),
+    })
+    .is_err());
+    assert!(MozcTrimmer::new(TrimPolicy {
+        max_word_cost: 9_000,
+        legacy_row_evidence_cap: 12,
+        max_surfaces_per_reading: None,
+    })
+    .is_ok());
 }

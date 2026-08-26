@@ -13,7 +13,14 @@ use dictc::{
 const MOZC_REPOSITORY: &str = "https://github.com/google/mozc";
 const OUTPUT_LICENSE: &str = "LicenseRef-Mozc-Dictionary";
 const DEFAULT_MAX_WORD_COST: i32 = 6_900;
-const DEFAULT_MAX_CANDIDATES: usize = 12;
+/// Frozen provenance boundary for allomorph classification, not an admission
+/// rule. It is deliberately absent from the command line: moving it would
+/// retroactively reclassify rows that already shipped under the former
+/// row-based cap.
+const LEGACY_ROW_EVIDENCE_CAP: usize = 12;
+/// No per-reading surface cap by default, so `--max-word-cost` stays the single
+/// admission rule and a reading keeps every affordable homophone.
+const DEFAULT_MAX_SURFACES_PER_READING: Option<usize> = None;
 
 struct Config {
     shards: Vec<PathBuf>,
@@ -79,7 +86,7 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     let mut report = None;
     let mut pos_catalog = None;
     let mut max_word_cost = DEFAULT_MAX_WORD_COST;
-    let mut max_candidates_per_reading = DEFAULT_MAX_CANDIDATES;
+    let mut max_surfaces_per_reading = DEFAULT_MAX_SURFACES_PER_READING;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         match argument.to_str() {
@@ -94,14 +101,14 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
             Some("--max-word-cost") => {
                 max_word_cost = next_number(&mut args, &argument)?;
             }
-            Some("--max-candidates-per-reading") => {
-                max_candidates_per_reading = next_number(&mut args, &argument)?;
+            Some("--max-surfaces-per-reading") => {
+                max_surfaces_per_reading = next_optional_number(&mut args, &argument)?;
             }
             Some("--help" | "-h") => {
                 println!(
                     "Usage: mozc-trim --mozc-system FILE... --mozc-id-def FILE \
                      --output FILE --report FILE \
-                     [--max-word-cost N] [--max-candidates-per-reading N]"
+                     [--max-word-cost N] [--max-surfaces-per-reading N|none]"
                 );
                 std::process::exit(0);
             }
@@ -116,7 +123,8 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
         report: report.ok_or("--report is required")?,
         policy: TrimPolicy {
             max_word_cost,
-            max_candidates_per_reading,
+            legacy_row_evidence_cap: LEGACY_ROW_EVIDENCE_CAP,
+            max_surfaces_per_reading,
         },
     })
 }
@@ -125,7 +133,7 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
     let mut output = String::new();
     writeln!(
         &mut output,
-        "{{\n  \"schema_version\": 2,\n  \"mozc_repository\": {},\n  \"mozc_revision\": {},\n  \"output_license\": {},",
+        "{{\n  \"schema_version\": 3,\n  \"mozc_repository\": {},\n  \"mozc_revision\": {},\n  \"output_license\": {},",
         json_string(MOZC_REPOSITORY),
         json_string(MOZC_UPSTREAM_COMMIT),
         json_string(OUTPUT_LICENSE)
@@ -133,10 +141,14 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
     .map_err(|error| error.to_string())?;
     writeln!(
         &mut output,
-        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_candidates_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
+        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_surfaces_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"legacy_row_evidence_cap\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
         config.shards.len(),
         config.policy.max_word_cost,
-        config.policy.max_candidates_per_reading,
+        config
+            .policy
+            .max_surfaces_per_reading
+            .map_or_else(|| "null".to_string(), |cap| cap.to_string()),
+        config.policy.legacy_row_evidence_cap,
         report.input_entries,
         report.cost_eligible,
         report.duplicate_entries,
@@ -220,6 +232,30 @@ fn next_path(
     args.next()
         .map(PathBuf::from)
         .ok_or_else(|| format!("{} requires a path", option.to_string_lossy()))
+}
+
+fn next_optional_number(
+    args: &mut impl Iterator<Item = OsString>,
+    option: &OsString,
+) -> Result<Option<usize>, String> {
+    let value = args
+        .next()
+        .and_then(|value| value.into_string().ok())
+        .ok_or_else(|| {
+            format!(
+                "{} requires a Unicode number or 'none'",
+                option.to_string_lossy()
+            )
+        })?;
+    if value.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    value.parse::<usize>().map(Some).map_err(|_| {
+        format!(
+            "{} requires a valid number or 'none', found '{value}'",
+            option.to_string_lossy()
+        )
+    })
 }
 
 fn next_number<T>(args: &mut impl Iterator<Item = OsString>, option: &OsString) -> Result<T, String>

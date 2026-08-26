@@ -35,7 +35,12 @@ const MAX_SEARCH_STATES: usize = 65_536;
 /// did not expose, so POS variants keep their old paths without consuming the
 /// whole candidate vocabulary.
 const BASE_DICTIONARY_EDGES_PER_READING: usize = 12;
-const MAX_DICTIONARY_SURFACES_PER_READING: usize = 12;
+/// A whole-reading span may expose as many distinct surfaces as the protocol
+/// can carry. The former twelve mirrored the build-time trim cap and hid
+/// affordable homophones the shipped dictionary already held: きかん stopped at
+/// き澗 without ever reaching 気管 or 旗艦, and きゅう spent its twelfth surface
+/// on the rare name kanji 邱 and dropped the digit spelling 9 (Issue #94).
+const MAX_DICTIONARY_SURFACES_PER_READING: usize = MAX_CANDIDATES;
 /// Cross-commit context is deliberately word-sized. It exists to recover a
 /// lexical edge split by an explicit commit, not to replay an unbounded
 /// document prefix on every Space press.
@@ -82,6 +87,20 @@ const MAX_IT_COMPOUND_BOOST: i64 = 2_400;
 /// words. Word-sized Japanese readings and atomic loanwords use this gate;
 /// long Japanese compounds still retain legitimate split alternatives.
 const EXACT_LEXICAL_COMPOSITE_COST_WINDOW: i64 = 4_000;
+/// A one-character hiragana lead segment carries no lexical evidence of its
+/// own: nothing in it says the user meant a phrase to start there. A path that
+/// opens with one and then needs a whole kanji word to finish the reading is a
+/// splice, not a parse, and those splices were burying real homophones on the
+/// first candidate page -- たいあん offered た慰安 above 対案, and きかん put
+/// き澗 ahead of 気管 and 旗艦 (Issue #94). This is the same rule as
+/// `EXACT_LEXICAL_COMPOSITE_COST_WINDOW`, held much tighter for the one path
+/// shape that is almost never a real segmentation. It stays a window rather
+/// than a ban so a cheap splice that happens to spell a real word survives:
+/// とじょう keeps と場 at +1190 over 途上.
+const KANA_FRAGMENT_SPLIT_COST_WINDOW: i64 = 1_500;
+/// Prefixes that genuinely attach to a following noun, so a path opening with
+/// one is a parse after all: ご意見, お名前, み仏.
+const KANA_PREFIX_MORPHEMES: [char; 3] = ['お', 'ご', 'み'];
 const MAX_EXACT_WORD_READING_CHARS: usize = 6;
 /// The conversion-side repair metadata is deliberately bounded.  These are
 /// heap-backed scratch limits (rather than stack arrays) because the engine
@@ -175,6 +194,41 @@ fn is_atomic_whole_reading_surface(surface: &str) -> bool {
             || ('\u{ff65}'..='\u{ff9f}').contains(&character)
             || character.is_ascii_alphanumeric()
             || matches!(character, ' ' | '-' | '_' | '.' | '+' | '#' | '/')
+    })
+}
+
+/// Whether `candidate` opens with a bare one-character hiragana fragment and
+/// then spends a whole kanji or katakana word to finish the reading.
+fn is_kana_fragment_prefix_split(candidate: &ConversionCandidate) -> bool {
+    let segments = candidate.segments();
+    let (Some(first), Some(second)) = (segments.first(), segments.get(1)) else {
+        return false;
+    };
+    let text = candidate.text();
+    let Some(lead) = text.get(usize::from(first.text_start)..usize::from(first.text_end)) else {
+        return false;
+    };
+    let mut lead_characters = lead.chars();
+    let (Some(lead_character), None) = (lead_characters.next(), lead_characters.next()) else {
+        return false;
+    };
+    if !('\u{3041}'..='\u{3096}').contains(&lead_character)
+        || KANA_PREFIX_MORPHEMES.contains(&lead_character)
+    {
+        return false;
+    }
+    let Some(rest) = text.get(usize::from(second.text_start)..usize::from(second.text_end)) else {
+        return false;
+    };
+    rest.chars().next().is_some_and(|character| {
+        matches!(char_class(character), CharClass::Katakana)
+            || matches!(
+                character,
+                '\u{3400}'..='\u{4dbf}'
+                    | '\u{4e00}'..='\u{9fff}'
+                    | '\u{f900}'..='\u{faff}'
+                    | '\u{20000}'..='\u{2ffff}'
+            )
     })
 }
 
@@ -1492,6 +1546,7 @@ impl Converter {
                     self.prefer_numeric_forms(reading)?;
                     self.drop_jitsu_day_counts(reading);
                     self.apply_exact_lexical_quality_gate(reading);
+                    self.drop_kana_fragment_prefix_splits();
                 }
             }
             Err(ConversionError::LatticeFull) => {
@@ -2573,6 +2628,26 @@ impl Converter {
                     || evidence.fallback_edges != 0
                     || evidence.generated_edges != 0
                     || candidate.cost <= maximum_composite_cost)
+        });
+    }
+
+    /// Drops the kana-fragment splices described on
+    /// [`KANA_FRAGMENT_SPLIT_COST_WINDOW`]. The window is measured from the
+    /// cheapest whole-reading path, so a reading that produced no whole-reading
+    /// candidate at all keeps everything it found.
+    fn drop_kana_fragment_prefix_splits(&mut self) {
+        let Some(best_whole_reading_cost) = self
+            .candidates
+            .iter()
+            .filter(|candidate| candidate.segments().len() == 1)
+            .map(|candidate| candidate.cost)
+            .min()
+        else {
+            return;
+        };
+        let ceiling = best_whole_reading_cost.saturating_add(KANA_FRAGMENT_SPLIT_COST_WINDOW);
+        self.candidates.retain(|candidate| {
+            candidate.cost <= ceiling || !is_kana_fragment_prefix_split(candidate)
         });
     }
 
@@ -4335,7 +4410,8 @@ mod tests {
         CandidateAuthority, CandidateOrigin, ConversionInput, ConversionInputClass,
         ConversionOptions, Converter, CorrectionMap, CorrectionMapError, CorrectionRun,
         CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy, RawRepairBudget, RawRepairPlan,
-        RepairTier, RightContextId,
+        RepairTier, RightContextId, BASE_DICTIONARY_EDGES_PER_READING,
+        MAX_DICTIONARY_SURFACES_PER_READING,
     };
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
     use crate::preferences::ConversionMethod;
@@ -4368,24 +4444,117 @@ mod tests {
 
     #[test]
     fn dictionary_edge_budget_preserves_baseline_rows_then_adds_surface_diversity() {
+        let surface_bound = MAX_DICTIONARY_SURFACES_PER_READING as u32;
         let mut budget = DictionaryEdgeBudget::new();
-        for _ in 0..12 {
+        for _ in 0..BASE_DICTIONARY_EDGES_PER_READING {
             assert!(budget.admit(1), "the historical baseline rows must survive");
         }
         assert!(
             !budget.admit(1),
             "later POS rows must not consume diversity slots"
         );
-        for surface_id in 2..=12 {
+        for surface_id in 2..=surface_bound {
             assert!(budget.admit(surface_id), "surface {surface_id}");
         }
         assert!(
-            !budget.admit(13),
+            !budget.admit(surface_bound + 1),
             "the distinct-surface bound must remain finite"
         );
 
         budget.reset();
-        assert!(budget.admit(13), "a new reading gets a fresh budget");
+        assert!(
+            budget.admit(surface_bound + 1),
+            "a new reading gets a fresh budget"
+        );
+    }
+
+    /// Issue #94: a path that opens with a bare one-character hiragana fragment
+    /// and then spends a whole kanji word is a splice of the reading, not a
+    /// parse of it, and those splices were sitting on the first candidate page.
+    /// The honorific prefixes stay, and so does a splice cheap enough to be a
+    /// real reading of the input.
+    #[test]
+    fn kana_fragment_prefix_splits_leave_the_candidate_page() {
+        let rows = [
+            fixture_entry("たいあん", "対案", 1000, EntryFlags::NONE),
+            fixture_entry("た", "た", 100, EntryFlags::NONE),
+            fixture_entry("いあん", "慰安", 2600, EntryFlags::NONE),
+            fixture_entry("ごいけん", "御意見", 1000, EntryFlags::NONE),
+            fixture_entry("ご", "ご", 100, EntryFlags::NONE),
+            fixture_entry("いけん", "意見", 2600, EntryFlags::NONE),
+            fixture_entry("とじょう", "途上", 1000, EntryFlags::NONE),
+            fixture_entry("と", "と", 100, EntryFlags::NONE),
+            fixture_entry("じょう", "場", 900, EntryFlags::NONE),
+        ];
+        let bytes = synthetic_dictionary(&rows);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let surfaces = |reading: &str| {
+            let mut converter = Converter::new();
+            converter
+                .convert(&dictionary, reading, ConversionOptions::default())
+                .expect("conversion")
+                .iter()
+                .map(|candidate| candidate.text().to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        let taian = surfaces("たいあん");
+        assert!(taian.contains(&"対案".to_owned()), "{taian:?}");
+        assert!(!taian.contains(&"た慰安".to_owned()), "{taian:?}");
+
+        let goiken = surfaces("ごいけん");
+        assert!(
+            goiken.contains(&"ご意見".to_owned()),
+            "an honorific prefix is a parse, not a splice: {goiken:?}"
+        );
+
+        let tojou = surfaces("とじょう");
+        assert!(
+            tojou.contains(&"と場".to_owned()),
+            "a splice inside the window still spells a real word: {tojou:?}"
+        );
+    }
+
+    /// Issue #94: the surface bound used to sit at the twelve baseline edges, so
+    /// the thirteenth distinct surface of a reading never entered the lattice at
+    /// all. Shipped きゅう spent its last slot on the rare name kanji 邱 and lost
+    /// the digit spelling 9 even though 9 had the cheaper whole-path cost. A
+    /// reading must expose as many distinct surfaces as the output frame carries.
+    #[test]
+    fn distinct_surfaces_beyond_the_baseline_edges_still_reach_conversion() {
+        const BASELINE_SURFACES: [&str; 12] = [
+            "旧", "級", "急", "給", "球", "究", "求", "九", "久", "休", "吸", "宮",
+        ];
+        assert_eq!(BASELINE_SURFACES.len(), BASE_DICTIONARY_EDGES_PER_READING);
+
+        let mut rows = BASELINE_SURFACES
+            .iter()
+            .enumerate()
+            .map(|(index, surface)| {
+                fixture_entry("きゅう", surface, 100 + index as i32, EntryFlags::NONE)
+            })
+            .collect::<Vec<_>>();
+        rows.push(fixture_entry("きゅう", "9", 200, EntryFlags::NONE));
+        let bytes = synthetic_dictionary(&rows);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+
+        for method in ConversionMethod::ALL {
+            let mut converter = Converter::new();
+            let candidates = converter
+                .convert(
+                    &dictionary,
+                    "きゅう",
+                    ConversionOptions {
+                        method,
+                        ..ConversionOptions::default()
+                    },
+                )
+                .expect("conversion");
+            assert!(
+                candidates.iter().any(|candidate| candidate.text() == "9"),
+                "{method:?}: the thirteenth surface must survive the edge budget: {candidates:?}"
+            );
+        }
     }
 
     #[test]

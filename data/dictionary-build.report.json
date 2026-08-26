@@ -17,17 +17,17 @@
     "schema_version": 1,
     "source": "japanese-wordnet",
     "full_definition_max_bytes": null,
-    "count": 30846,
+    "count": 30906,
     "sources": [
       {
         "smile-chat": {
-          "detail_count": 14088,
+          "detail_count": 14089,
           "aliases": 10586,
           "related": 26465
         },
         "japanese-wordnet": {
-          "detail_count": 14706,
-          "similar": 24075,
+          "detail_count": 14765,
+          "similar": 24185,
           "antonyms": 0,
           "suppressed_by_smile_chat": 235
         }
@@ -46,7 +46,7 @@
           {
             "file": "curated-general-details.tsv",
             "bytes": 50076,
-            "sha256": "b537e631a58df7c63819759048cb76822bd217b0456146fee75b7be4227d78ba"
+            "sha256": "0e93f7b938fcd6b2d9fb9ab98298ce352152b0f5ef198a560ea576fa806b68a9"
           },
           {
             "file": "curated-homophone-details.tsv",
@@ -74,26 +74,26 @@
   },
   "wordnet_import": {
     "schema_version": 2,
-    "detail_count": 14706,
+    "detail_count": 14765,
     "unresolved": {
-      "surface_ambiguous": 7994,
-      "sense_ambiguous": 14248,
-      "missing_definition": 551,
+      "surface_ambiguous": 8163,
+      "sense_ambiguous": 14271,
+      "missing_definition": 552,
       "relation_ambiguous": 0,
       "relation_unsupported": 286250,
-      "relation_truncated": 57314
+      "relation_truncated": 57695
     },
     "details": {
-      "merged_count": 28559,
+      "merged_count": 28619,
       "sources": {
         "smile-chat": {
-          "detail_count": 14088,
+          "detail_count": 14089,
           "aliases": 10586,
           "related": 26465
         },
         "japanese-wordnet": {
-          "detail_count": 14706,
-          "similar": 24075,
+          "detail_count": 14765,
+          "similar": 24185,
           "antonyms": 0,
           "suppressed_by_smile_chat": 235
         }
@@ -145,7 +145,7 @@
     "curated_general_details": {
       "file": "curated-general-details.tsv",
       "bytes": 50076,
-      "sha256": "b537e631a58df7c63819759048cb76822bd217b0456146fee75b7be4227d78ba"
+      "sha256": "0e93f7b938fcd6b2d9fb9ab98298ce352152b0f5ef198a560ea576fa806b68a9"
     },
     "curated_homophone_details": {
       "file": "curated-homophone-details.tsv",
@@ -165,21 +165,21 @@
     },
     "conversion_priorities": {
       "file": "conversion-priorities.tsv",
-      "bytes": 5152,
-      "sha256": "96904efc80155a7d4e192b9e8daaa869367b1e96cb1739fd2072c11fcb8db535"
+      "bytes": 6997,
+      "sha256": "f5cc2326d1a1460a6723933a63a4d6622f4d33e11e39281533a82e7b8442e2c4"
     },
     "system_category_dictionary": null
   },
   "artifacts": {
     "system_tsv": {
       "file": "mozc-system.tsv",
-      "bytes": 23119799,
-      "sha256": "d177402b9927f80c0e166adb9ffc143cc11e01c2b5e706ee10b284bae4a6c746"
+      "bytes": 23562688,
+      "sha256": "c36d22711d9641f926e3dadce138e3dd8eef9fdf71a795f99328d8461217c3df"
     },
     "trim_report": {
       "file": "mozc-trim.report.json",
-      "bytes": 627,
-      "sha256": "6c54035a83327337ed30b1805a6aceb68f2682c380400bd992854493e4766a1a"
+      "bytes": 654,
+      "sha256": "e467cc980dc581465a1db82bce636c9b88d552d46b9535a2406ededfd15dbcf7"
     },
     "overlay_tsv": {
       "file": "it-terms.tsv",
@@ -193,23 +193,23 @@
     },
     "inflection_tsv": {
       "file": "inflection.tsv",
-      "bytes": 8115564,
-      "sha256": "f48f0025bbd4e1376727264a4b4e6aca69d5256275aba491d718b5bf48b085b6"
+      "bytes": 8136507,
+      "sha256": "71e439fed7d8f00f42dbf10386307ae75c7ad78f36556a7ecb75790db266e5ec"
     },
     "inflection_report": {
       "file": "inflection.report.json",
-      "bytes": 141,
-      "sha256": "97a1d883ecce37a49e73907c269f7b617953a9065f5df82cdffc3958f090b86c"
+      "bytes": 142,
+      "sha256": "03db815cdd2cf52b547db4d03880ecebae6d94eff02835e387e6a3e0ce6b56b9"
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 46920168,
-      "sha256": "ec296b7f68d6d5e55d7faed458473101675e29440dc1e8456998473e60c7632d"
+      "bytes": 47292360,
+      "sha256": "95e98dfffed1b10518015eb20ea337e61daaf1df12ab6f693ce7c942a0c177ff"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
       "bytes": 530,
-      "sha256": "d1fa9fecaa9b8d3262b0d9f652590a146c4faaec38724e3e86c98e009aaaeca6"
+      "sha256": "08f06d95d1016fe52dfdbf6dd73bd98603dbb87d3d509ad87734f4ce61efc2bd"
     },
     "curated_detail_report": {
       "file": "curated-details.report.json",
@@ -223,24 +223,24 @@
     },
     "detail_coverage": {
       "file": "detail-coverage.tsv",
-      "bytes": 1303845,
-      "sha256": "c0c8b12c0f716a65bedbb389e9f340fb45f09967c29ffc9ffd7312d18942e6ca"
+      "bytes": 1305420,
+      "sha256": "562a96452a5045a00caf12f44efe4b6f0a58230d9a4434be5402771b41342b76"
     },
     "category_dictionaries": [
       {
         "file": "01_文法・機能語.tsv",
-        "bytes": 1860177,
-        "sha256": "ef751efeb869eb6e24c1c36bb2b27d52e472b77b87b0a275062ca8e2d38a81df"
+        "bytes": 1862058,
+        "sha256": "bc2ec304748c92432a425a40dbc3452d0d7218fd868796251d24ec2a9e9fa617"
       },
       {
         "file": "02_活用語.tsv",
-        "bytes": 15032183,
-        "sha256": "de20e29d568d1895ac223fe574286b00cc69f28d4eb6895501eda518807ea071"
+        "bytes": 15068536,
+        "sha256": "9dd2d7a23188314808c0ef969cac9da7c660e8313e6a53c0d98d0d10caaea636"
       },
       {
         "file": "03_一般語.tsv",
-        "bytes": 6165649,
-        "sha256": "d8e1fcbf1fc975154bfe96e4ef754c93b0846b8382d22bcafd2df44c6dc3a850"
+        "bytes": 6199766,
+        "sha256": "78fac22ad0368ca7ccdff2d12e1ccc9a43f492e4463b315453f0e48132464d8a"
       },
       {
         "file": "04_慣用句・定型表現.tsv",
@@ -249,13 +249,13 @@
       },
       {
         "file": "05_数値・日付・単位.tsv",
-        "bytes": 326610,
-        "sha256": "f6e4bf96aa012710c7f3748ee6d52b22bd6411725c9c7f65d7230caad0541ae3"
+        "bytes": 327763,
+        "sha256": "eb645bed013003287ec8b7caffc8a0203b37b9581ce0bb1e0a0633e47a6ab640"
       },
       {
         "file": "06_人名.tsv",
-        "bytes": 3963346,
-        "sha256": "3a0b54c7c6a79b2c9d77cb63785919e7fcd162575db7cb0d9317349515734c04"
+        "bytes": 4350109,
+        "sha256": "3b16a1d172e5d9182c43990875f95fb51d4110d15e3ccd1c34511497ad7c95d6"
       },
       {
         "file": "07_地名.tsv",
@@ -264,13 +264,13 @@
       },
       {
         "file": "08_組織名・製品名.tsv",
-        "bytes": 1327663,
-        "sha256": "28c4876d484d9cd05538dc3a8da719cedeb777ea4192e01368870b06b3a83ac8"
+        "bytes": 1328944,
+        "sha256": "b96723f6719f9822ad3117f7807b390865ea97b8e5932c242a87307a5c2be076"
       },
       {
         "file": "09_外来語・カタカナ語.tsv",
-        "bytes": 2475654,
-        "sha256": "082d006dfb3414978d23d9ac461e737ca52ad3461afc621ea6ccfca895f3b150"
+        "bytes": 2477938,
+        "sha256": "3ef6561bd47408f18b9bcb2b0ab9945c64a73ed4511f054580056dfb6357ee0b"
       },
       {
         "file": "10_略語・英数字.tsv",

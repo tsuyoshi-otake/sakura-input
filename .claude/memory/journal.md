@@ -894,3 +894,31 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 公開: draft 作成 → 添付2件を再ダウンロードして hash と manifest の一致を確認 → `--draft=false`。読み戻しは `isDraft=false`、`isPrerelease=false`、`publishedAt=2026-08-25T13:11:15Z`、assets 2件。
 - 未処理: 上記フレーク2件は別 Issue にして原因調査する。128 KiB テストは debug ビルドでの実 headroom を測ってから閾値か対象を決める。AppContainer は `UntrustedServer` に至った path/token 判定の環境依存要因を特定する。
 - 学び: 段階的に止まる CI job では「1回目に落ちなかった step は、通ったのではなく実行されていない」ことがある。再実行で別のテストが落ちたときに新しい回帰と誤認しないため、step 単位の conclusion を見る。
+
+## 2026-08-26 — 同音異義語のカバレッジ欠落と TOP-1 順位（#94）
+
+- 症状: owner 報告「対案って入力して大安が TOP-1 ってどうなのよ、使用頻度低いでしょ。他にもありそうだよね」。たいあん の第1候補が 大安 になる。実際に調べると同種の問題は他にもあり、しかも原因が3層に分かれていた。
+- 根本原因（3つ、独立）:
+  - (1) ビルド時 trim の欠落。`mozc_trim` の `TrimPolicy.max_surfaces_per_reading = 12` が、1読みあたり distinct surface を12で打ち切っていた。`mozc-system.tsv` から独立に数え直すと、**963読みで12を超え、13番目以降の 10,781 surface** が同梱辞書へ入っていなかった（旧 trim report の `capped_surfaces` と一致）。きかん の 気管（コスト順15位）・旗艦（13位）・季刊（20位）、かん の 関（16位）・環（17位）、こう の 光（14位）・行（17位）は、辞書に載る前に消えていた。
+  - (2) 実行時 surface 予算の欠落。`conversion.rs` の `MAX_DICTIONARY_SURFACES_PER_READING` も別に12で、辞書が持っている語にも到達しきれなかった。きゅう は12枠を使い切って稀な人名漢字 邱 を出し、数字表記 9 を落としていた（9 はコスト順5位で、ビルド時 trim では**残っていた**。落としたのは実行時側）。つまり同じ「12」が2か所にあり、症状が似ているので一方だけ直すと不完全になる。
+  - (3) 同音異義語の価格。上流 Mozc の `word_cost` が、8読みで使用頻度の低い表記を先頭に置いていた（たいあん、がいちゅう、きんそく、こうねつ、とうばん、どうてん、しれい、たいせき）。
+  - 付随: 平仮名1字を先頭に切り出す分割候補（た慰安、き澗、が意中）が上位に混ざる。
+- 修正:
+  - `TrimPolicy.max_surfaces_per_reading` を `Option<usize>` にし、同梱 policy を `None` にした。同時に **`legacy_row_evidence_cap: 12` を別概念として凍結**した。legacy evidence は「出荷済み行がどの経路で入ったか」の来歴であり、カバレッジが増えたからといって過去の分類が変わってはいけない。CLI フラグは足さない。report は schema 2→3。
+  - `conversion.rs` の12を2定数へ分離した。`BASE_DICTIONARY_EDGES_PER_READING = 12`（従来どおりの baseline edge 数、POS 変種の経路を保つ）と `MAX_DICTIONARY_SURFACES_PER_READING = MAX_CANDIDATES`（=18、protocol が運べる上限）。baseline を動かさずに surface 多様性だけ増やす。
+  - `drop_kana_fragment_prefix_splits`（コスト窓 1,500、お／ご／み は接頭辞として除外）を後段フィルタへ追加した。
+  - `data/conversion-priorities.tsv` に6行を追加。価格は同ファイル既存の数字行と同じ規約（対象の lattice total を現行首位のちょうど60下に置く）。頻度判定は**言語的判断であって corpus 計測ではない**ことを `#` コメントに明記した（外部頻度 corpus は既存の手当て層と同様に参照しない）。がいちゅう（外注＞害虫）と しれい（指令＞司令）が最も際どく、その旨も記録した。
+  - しれい／たいせき だけは `data/curated-general-details.tsv` 側で価格を直した（下記の落とし穴）。
+- 検証:
+  - 辞書再ビルド: `deterministic_repeat: true`、623,291 entries、30,906 detail records、`system.dic` 47,292,360 bytes、SHA-256 `95e98dfffed1b10518015eb20ea337e61daaf1df12ab6f693ce7c942a0c177ff`。trim report は `capped_entries` 11,451→0、`capped_surfaces` 10,781→0、`surface_cap_rescued_entries` 6,563→18,014、`output_entries` 448,278→459,729。
+  - 実辞書に対する csnap（`--it-bias on`）で8読みすべて TOP-1 を確認し、設計どおり差が60（たいあん: 対案 7,144 / 大安 7,204、たいせき: 体積 6,343 / 堆積 6,403）。
+  - カバレッジ: きかん が 旗艦(6)・気管(7) を出し、きゅう は18候補で 9(15)・窮(13)・久(17)・亀(18)、かん は18候補で 関(16)・環(18)。
+  - `shipped_dictionary_ranking.rs` へ `#[ignore]` 回帰テスト3件（再価格8読みの TOP-1、到達可能同音異義語のページ内存在、かな断片分割の不在）。
+  - `phase3-editing.snap` の候補数 14→16。実行時 surface 予算が広がり、かな が仮名・カタカナの literal も出せるようになったため。プローブで中身（仮名／加奈／候補03..14／かな／カナ）を確認してから更新した。
+  - fmt、`clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`（1,630 passed / 0 failed / 77 ignored）、ignored の shipped-dictionary スイート、`git diff --check` すべて成功。
+- 落とし穴1（overlay の所有権）: `dictc` が exit 2 で `reviewed detail source no longer matches the final entry for reading 'しれい' and surface '指令'`。`conversion-priorities.tsv` は overlay 列の**最後**にあり、同じ lattice edge を後勝ちで**置換**する。一方 `curated-general-details.tsv` の審査済み説明は `(reading, surface, left_id, right_id)` で `word_cost`／`prediction_cost`／`flags` の一致を fail-closed で要求する。つまり説明を持つ edge を priorities 側で再価格すると必ず壊れる。対処は「1 edge に owner は1つ」。該当2行を priorities から外し、説明ファイル側のコスト列を直し、理由を `#` コメントへ残した。
+- 落とし穴2（prediction 不変条件の書き方）: `every_row_stays_reachable_from_prediction` が 禁則 で落ちた。テストが全行に `predict` を無条件要求していたが、Mozc importer はもともと `word_cost > 6,000` の語を prediction へ出さない。対案(6,078)・禁則(6,776) は再価格後もその線の上にあり、上流でも非 predictive だった。テストをコスト基準の規則へ広げて `every_row_keeps_the_prediction_status_its_own_cost_earns` に改名し、62行すべてで違反0を確認した。
+- 128 KiB stack テストの実測（2026-08-25 の未処理項目への回答）: `cargo test --workspace` 1回目で `raw_multi_pass_core_path_fits_128_kib_thread_stack` が `STATUS_STACK_OVERFLOW`。今回の変更が `DictionaryEdgeBudget` の配列を `[u32; 12]`→`[u32; 18]`（+24 bytes／frame、live な frame は2つ）にしているため疑ったが、**単体では 32 KiB でも通り**（32/48/56/64/72/80/96/112/120/128/144/160 KiB すべて exit 0）、`-p sakura-core --lib` 全体も3回連続で overflow 0、`--workspace` 再実行も 0。したがって overflow は frame 深さでは説明できず、この差分が原因でもない。debug ビルドの headroom は薄いどころか実測で4倍以上あり、閾値を下げる話ではない。原因は別（環境／タイミング依存）として残る。
+- 既知の残渣（許容）: た遺跡 は 1,500 窓の内側に残り たいあん の4位（体積／堆積／退席の下）。ごせん の 五線 は辞書には入っているが実行時 n-best 窓で落ちる。どちらも別問題。
+- commit: 1c8d232（branch `fix/94-homophone-coverage-and-ranking`、未リリース。1.0.28 のインストール済みビルドにはこの変更は入っていない）。
+- 学び: 同じ数値定数が「ビルド時」と「実行時」の両方にあると、症状が同一に見えて片方だけ直しても半分しか治らない。カバレッジの数字は report を信じず原本（`mozc-system.tsv`）から数え直すこと。今回それで「きゅう の 9 は実行時側の損失」と判明し、テストの doc コメントの誤りを直せた。

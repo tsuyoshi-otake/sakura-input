@@ -118,10 +118,24 @@ pub struct ConnectionMatrix {
     costs: Vec<u16>,
 }
 
+/// Admission policy for the pinned Mozc trim.
+///
+/// `max_word_cost` is the admission rule. `max_surfaces_per_reading` is an
+/// optional extra bound on distinct display surfaces per reading; `None`
+/// leaves the upstream word cost as the single admission rule, so a reading
+/// keeps every affordable homophone instead of losing the more expensive ones
+/// to an arbitrary positional cap.
+///
+/// `legacy_row_evidence_cap` is deliberately *not* an admission rule. It
+/// reproduces the former row-based cap so downstream classification can still
+/// tell which rows a row-capped build had already shipped. Keeping it frozen
+/// means growing coverage cannot retroactively change how an already-shipped
+/// row is classified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrimPolicy {
     pub max_word_cost: i32,
-    pub max_candidates_per_reading: usize,
+    pub legacy_row_evidence_cap: usize,
+    pub max_surfaces_per_reading: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -155,9 +169,14 @@ impl MozcTrimmer {
         if policy.max_word_cost < 0 {
             return Err(Error::build("trim max_word_cost must be non-negative"));
         }
-        if policy.max_candidates_per_reading == 0 {
+        if policy.legacy_row_evidence_cap == 0 {
             return Err(Error::build(
-                "trim max_candidates_per_reading must be greater than zero",
+                "trim legacy_row_evidence_cap must be greater than zero",
+            ));
+        }
+        if policy.max_surfaces_per_reading == Some(0) {
+            return Err(Error::build(
+                "trim max_surfaces_per_reading must be greater than zero when present",
             ));
         }
         Ok(Self {
@@ -255,7 +274,7 @@ impl MozcTrimmer {
             }
 
             let survived_legacy_row_cap =
-                legacy_rows_for_reading < self.policy.max_candidates_per_reading;
+                legacy_rows_for_reading < self.policy.legacy_row_evidence_cap;
             legacy_rows_for_reading = legacy_rows_for_reading.saturating_add(1);
             if !survived_legacy_row_cap {
                 self.report.legacy_row_capped_entries =
@@ -263,6 +282,10 @@ impl MozcTrimmer {
             }
 
             let known_surface = selected_surfaces.contains(&entry.surface);
+            let surface_budget_available = self
+                .policy
+                .max_surfaces_per_reading
+                .is_none_or(|cap| selected_surfaces.len() < cap);
             if known_surface {
                 if !survived_legacy_row_cap {
                     self.report.surface_cap_rescued_entries =
@@ -270,7 +293,7 @@ impl MozcTrimmer {
                 }
                 selected.push(entry);
                 legacy_evidence.push(survived_legacy_row_cap);
-            } else if selected_surfaces.len() < self.policy.max_candidates_per_reading {
+            } else if surface_budget_available {
                 if !survived_legacy_row_cap {
                     self.report.surface_cap_rescued_entries =
                         self.report.surface_cap_rescued_entries.saturating_add(1);

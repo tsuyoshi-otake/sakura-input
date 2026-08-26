@@ -1,9 +1,9 @@
 raw-kana: consumed=true beep=false delete=<none> mode=None preedit=[かな:Raw]@2
-convert: consumed=true beep=false delete=<none> mode=None preedit=[仮名:Focused]@2 candidates=0/14:仮名|IT用語
-choose-second: consumed=true beep=false delete=<none> mode=None preedit=[加奈:Focused]@2 candidates=1/14:加奈|人名
+convert: consumed=true beep=false delete=<none> mode=None preedit=[仮名:Focused]@2 candidates=0/16:仮名|IT用語
+choose-second: consumed=true beep=false delete=<none> mode=None preedit=[加奈:Focused]@2 candidates=1/16:加奈|人名
 commit-choice: consumed=true beep=false delete=<none> mode=None commit=加奈
 raw-kana-again: consumed=true beep=false delete=<none> mode=None preedit=[かな:Raw]@2
-cache-reselect: consumed=true beep=false delete=<none> mode=None preedit=[加奈:Focused]@2 candidates=1/14:加奈|人名
+cache-reselect: consumed=true beep=false delete=<none> mode=None preedit=[加奈:Focused]@2 candidates=1/16:加奈|人名
 commit-cached: consumed=true beep=false delete=<none> mode=None commit=加奈
 undo-commit: consumed=true beep=false delete="加奈" mode=None preedit=[かな:Raw]@2
 cancel-restored-reading: consumed=true beep=false delete=<none> mode=None
