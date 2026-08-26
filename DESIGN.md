@@ -1277,6 +1277,18 @@ stays exhaustive.
   one quotation must not train the ranker to override the configured
   mark on every later comma. The setting stays the only durable
   preference.
+- The configured glyph is also **selected**, not merely listed first.
+  Two ranking rules would otherwise move off it, and both bite hardest
+  under the shipped `、`/`。` style, where the configured mark *is* the
+  reading: `preferred_candidate_index` refuses any row whose text equals
+  the reading, and a surface learned while a different mark was
+  configured outranks the top row outright. A reader whose settings
+  window said `、` got `､` on a clean profile and `，` on one with
+  history. The dispatcher therefore pins the initial selection the way
+  an exact literal is pinned, which also keeps the optional reranker off
+  a four-row list it has no context for. `PunctuationStyle::family_reading`
+  is the single admission test shared by the appender and this pin, so
+  the two cannot drift apart.
 - Replacing TOP-1 is safe precisely because the reading is a single
   mark: the top row already *rendered* as the configured glyph, so the
   substitution is byte-identical on screen. Every other post-conversion

@@ -4556,8 +4556,26 @@ fn begin_conversion(
                 if direct_limit == 0 {
                     return false;
                 }
-                let preserve_exact_initial =
-                    literal_policy != LiteralPolicy::Ranked && initial_selection == 0;
+                // A reading that is itself one punctuation mark converts into
+                // its whole family with the configured glyph on top, and that
+                // glyph is also the reading. Both rules below would move the
+                // selection off it: `preferred_candidate_index` refuses a row
+                // whose text equals the reading, and a surface learned while a
+                // different mark was configured outranks the top row outright.
+                // Either way the settings window says 、 and the document gets
+                // ､ or ，. These rows are kept out of learning and the exact
+                // cache on the way in, so the setting is their only durable
+                // preference on the way out too -- pin them the way an exact
+                // literal is pinned, which also keeps the optional reranker off
+                // a four-row list it has no context for (Issue #99).
+                let punctuation_family = session
+                    .normalizer
+                    .punctuation
+                    .family_reading(session.preedit.as_str())
+                    .is_some();
+                let preserve_exact_initial = (literal_policy != LiteralPolicy::Ranked
+                    || punctuation_family)
+                    && initial_selection == 0;
                 let learned = if preserve_exact_initial {
                     LearningPreference {
                         exact: None,
@@ -7043,6 +7061,141 @@ mod tests {
             ],
             "the period role must order its own family, not the comma one"
         );
+    }
+
+    /// Issue #99.  The shipped style is the one where the configured mark is
+    /// also the reading, and that is exactly the case the ranker moves off:
+    /// `preferred_candidate_index` refuses a row whose text equals the reading,
+    /// so a reader on 、 lands on ､ instead.  Verified on the installed 1.0.28
+    /// build before this test existed -- typing one comma and converting
+    /// selected the third row.  The setting has to win, or the feature reads as
+    /// the bug it was meant to fix.
+    #[test]
+    fn the_shipped_punctuation_style_stays_selected_when_it_equals_the_reading() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "punctuation-default.exe");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key(','),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        let offered = (0..4)
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text.to_owned()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            offered,
+            vec![
+                "\u{3001}".to_owned(),
+                "\u{FF64}".to_owned(),
+                "\u{FF0C}".to_owned(),
+                ",".to_owned(),
+            ],
+            "the shipped style orders the comma family touten first"
+        );
+        assert_eq!(
+            out.selected_candidate(),
+            Some(0),
+            "the configured mark must be the default even though it is the reading"
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("\u{3001}"));
+    }
+
+    /// A style the reader changed leaves learned surfaces behind: every commit
+    /// made while ，． was configured taught the ranker that the touten reading
+    /// resolves to ，.  The installed build had 150 such rows and converted one
+    /// comma straight to ，, with the settings window still saying 、.  These
+    /// candidates are kept out of learning on the way in, so a stale entry must
+    /// not steer them on the way out either.
+    #[test]
+    fn a_stale_learned_mark_cannot_override_the_configured_punctuation() {
+        let learning = Arc::new(LearningService::memory());
+        // Four commits, because one is only weak evidence and weak evidence
+        // cannot reach past the second row.  The installed build had 150.
+        for _ in 0..4 {
+            learning.learn("\u{3001}", "\u{FF0C}", 0, 0);
+            learning.learn("\u{3002}", "\u{FF0E}", 0, 0);
+        }
+        let mut dispatcher = conversion_dispatcher();
+        dispatcher.observed_learning_generation = learning.generation();
+        dispatcher.learning = Some(Arc::clone(&learning));
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "punctuation-stale.exe");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key(','),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.selected_candidate(),
+            Some(0),
+            "a learned surface must not outrank the configured mark"
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("\u{3001}"));
+        // The other three rows stay reachable: this pins the default, not the
+        // list.
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key(','),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        assert_eq!(out.selected_candidate(), Some(1));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("\u{FF64}"));
     }
 
     #[test]
