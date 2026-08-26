@@ -17,17 +17,17 @@
     "schema_version": 1,
     "source": "japanese-wordnet",
     "full_definition_max_bytes": null,
-    "count": 30906,
+    "count": 31288,
     "sources": [
       {
         "smile-chat": {
-          "detail_count": 14089,
-          "aliases": 10586,
-          "related": 26465
+          "detail_count": 14471,
+          "aliases": 10904,
+          "related": 27302
         },
         "japanese-wordnet": {
           "detail_count": 14765,
-          "similar": 24185,
+          "similar": 24184,
           "antonyms": 0,
           "suppressed_by_smile_chat": 235
         }
@@ -76,7 +76,7 @@
     "schema_version": 2,
     "detail_count": 14765,
     "unresolved": {
-      "surface_ambiguous": 8163,
+      "surface_ambiguous": 8167,
       "sense_ambiguous": 14271,
       "missing_definition": 552,
       "relation_ambiguous": 0,
@@ -84,16 +84,16 @@
       "relation_truncated": 57695
     },
     "details": {
-      "merged_count": 28619,
+      "merged_count": 29001,
       "sources": {
         "smile-chat": {
-          "detail_count": 14089,
-          "aliases": 10586,
-          "related": 26465
+          "detail_count": 14471,
+          "aliases": 10904,
+          "related": 27302
         },
         "japanese-wordnet": {
           "detail_count": 14765,
-          "similar": 24185,
+          "similar": 24184,
           "antonyms": 0,
           "suppressed_by_smile_chat": 235
         }
@@ -134,8 +134,8 @@
   "inputs": {
     "curated_terms": {
       "file": "curated-terms.tsv",
-      "bytes": 4673,
-      "sha256": "63c7082e7594438d983f93e283ac5a517a5e0e7e530f46550e8e955142e08c1a"
+      "bytes": 50858,
+      "sha256": "97ec989478ea7ad858d89d5a1859ef9eb2eb1da8bb1026a24a5c4986d606b008"
     },
     "curated_phrases": {
       "file": "curated-phrases.tsv",
@@ -203,13 +203,13 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 47292360,
-      "sha256": "95e98dfffed1b10518015eb20ea337e61daaf1df12ab6f693ce7c942a0c177ff"
+      "bytes": 47561532,
+      "sha256": "85d94aecd966a10f43aeb87b5109c3d0b92c6eade798cf7b553d4d5cb476d1eb"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
       "bytes": 530,
-      "sha256": "08f06d95d1016fe52dfdbf6dd73bd98603dbb87d3d509ad87734f4ce61efc2bd"
+      "sha256": "34754ffa772a698267628e5ad382e911e9e2db307f90ce19c5d7d8167a3a7deb"
     },
     "curated_detail_report": {
       "file": "curated-details.report.json",
@@ -223,8 +223,8 @@
     },
     "detail_coverage": {
       "file": "detail-coverage.tsv",
-      "bytes": 1305420,
-      "sha256": "562a96452a5045a00caf12f44efe4b6f0a58230d9a4434be5402771b41342b76"
+      "bytes": 1321012,
+      "sha256": "c25a9d1713abfedef8927975a0a55080703ebf994191e9eb00180e120bcacf36"
     },
     "category_dictionaries": [
       {
@@ -279,8 +279,8 @@
       },
       {
         "file": "11_IT・技術用語.tsv",
-        "bytes": 2238023,
-        "sha256": "16fe12fe2d1be47feea0236ef4a08406d241052251057ec705c9a268ec109add"
+        "bytes": 2282236,
+        "sha256": "fcc44a38a2c3a6059084725577802a9c95a31b4c808f093d392cf03515728067"
       },
       {
         "file": "12_専門用語.tsv",

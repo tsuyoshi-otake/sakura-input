@@ -117,25 +117,46 @@ fn curated_terms_cover_canonical_shift_input_without_shadow_duplicates() {
     let generated = parse_entries("data/it-terms.tsv", &generated_text).expect("generated terms");
 
     let mut identities = BTreeSet::new();
+    let mut shift_readings = 0usize;
+    let mut kana_readings = 0usize;
     for entry in &curated {
-        assert!(
-            entry
-                .reading
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit()),
-            "{} must be typeable as a continuous Shift+ASCII run",
-            entry.reading
-        );
+        let shape = match reading_shape(&entry.reading) {
+            Some(ReadingShape::ShiftAscii) => {
+                shift_readings += 1;
+                ReadingShape::ShiftAscii
+            }
+            Some(ReadingShape::Hiragana) => {
+                kana_readings += 1;
+                ReadingShape::Hiragana
+            }
+            None => panic!(
+                "{} is neither a continuous Shift+ASCII run nor a hiragana reading",
+                entry.reading
+            ),
+        };
         assert!(
             entry.flags.contains(EntryFlags::IT),
             "{} is not IT",
             entry.surface
         );
-        assert!(
-            entry.flags.contains(EntryFlags::PREDICTION),
-            "{} is not predictive",
-            entry.surface
-        );
+        // A Shift+ASCII reading only ever competes with other Latin runs, so
+        // predicting from it costs general Japanese nothing. A kana reading
+        // shares its prefixes with ordinary words: `えすえすえいち` is reachable
+        // from `え`, and hundreds of acronyms crowding that prefix would be a
+        // general-Japanese regression traded for an IT gain. These rows stay
+        // conversion-only until prediction has its own evaluation.
+        match shape {
+            ReadingShape::ShiftAscii => assert!(
+                entry.flags.contains(EntryFlags::PREDICTION) && entry.prediction_cost != i32::MAX,
+                "{} is not predictive",
+                entry.surface
+            ),
+            ReadingShape::Hiragana => assert!(
+                !entry.flags.contains(EntryFlags::PREDICTION) && entry.prediction_cost == i32::MAX,
+                "kana reading {} must stay out of prediction",
+                entry.reading
+            ),
+        }
         assert!(
             entry.annotation.is_empty(),
             "{} carries a user-visible candidate note",
@@ -148,6 +169,11 @@ fn curated_terms_cover_canonical_shift_input_without_shadow_duplicates() {
             entry.surface
         );
     }
+
+    assert!(
+        shift_readings > 0 && kana_readings > 0,
+        "the overlay must serve both input paths, saw {shift_readings} Shift+ASCII and {kana_readings} kana readings"
+    );
 
     for &(reading, surface) in REQUIRED_TERMS {
         assert!(
@@ -170,4 +196,35 @@ fn curated_terms_cover_canonical_shift_input_without_shadow_duplicates() {
     }
 
     merge_entries(generated, curated).expect("generated and curated overlays must merge cleanly");
+}
+
+/// The overlay serves two input paths, and a reading belongs to exactly one of
+/// them. `abcd1234` is typed as a continuous Shift+ASCII run; `あいうえー` is
+/// typed as ordinary kana composition, and is the only way an ASCII surface can
+/// be reached from inside a Japanese sentence. A reading that mixes the two
+/// scripts is reachable from neither path, so it is a typo rather than a third
+/// case.
+fn reading_shape(reading: &str) -> Option<ReadingShape> {
+    if reading.is_empty() {
+        return None;
+    }
+    if reading
+        .bytes()
+        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+    {
+        return Some(ReadingShape::ShiftAscii);
+    }
+    if reading
+        .chars()
+        .all(|c| matches!(c, '\u{3041}'..='\u{3096}' | 'ー'))
+    {
+        return Some(ReadingShape::Hiragana);
+    }
+    None
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ReadingShape {
+    ShiftAscii,
+    Hiragana,
 }
