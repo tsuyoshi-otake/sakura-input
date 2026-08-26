@@ -941,3 +941,28 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 検証: fmt、`clippy --workspace --all-targets -- -D warnings`、sweep 側 fmt/clippy（`--features wide` あり・なし両方）、`cargo test --workspace`（476 passed / 0 failed / 28 ignored、exit 0）、`git diff --check`。cargo／rustc の残存プロセスなし（残っていたのは実環境で稼働中の `sakura_engine` 等）。
 - commit: a8e5a4e（branch `feat/95-single-kanji-and-candidate-cap`、出荷挙動の変更なし）。
 - 学び: 「上限」と名前がついた定数を、表示上限だと決めつけて設計を進めない。この case では探索上限だったので、ページングで見せる案は最初から成立しなかった。そして探索終端を計測項目に入れておくと、「足りないのは予算か在庫か」を推測せずに分離できる。ATOK との差が単漢字辞書由来だと確定したのは、上限を 512 まで振っても `exhausted` が動かなかったからである。
+
+## 2026-08-26 — 単漢字辞書の取り込みと変換後追加（#95、commit 8983139）
+
+- 症状/課題: a8e5a4e の実測で「候補数上限を上げても `ひ` は 19 件で `exhausted`」と確定した。足りないのは探索予算ではなく在庫であり、その在庫は Mozc が別ソース（`src/data/single_kanji/single_kanji.tsv`／`variant_rule.txt`）に持ち、`rewriter/single_kanji_rewriter` で**変換後に追加**している単漢字だった。
+- 設計判断（重要）: 単漢字を lattice edge にしない。`こう` だけで 315 文字あるため、edge 化すると1モーラの読みで `MAX_LATTICE_NODES = 32_768` を食い潰し、さらに単漢字を跨ぐ全経路のコストを動かす。Mozc と同じ「ランキング済みリストの末尾に追加する」位置に置いた。この判断により、TOP-1 も既存の並びも構造的に動かない。
+- 実装:
+  - `crates/dictc/src/single_kanji.rs`（新規）— 2ソースを sorted lookup へコンパイル。解釈できない行は skip ではなく error。
+  - `crates/sakura-core/src/dictionary.rs` — optional table 4本（`SKIX`／`SKRD`／`SKCH`／`SKVR`）。reader は未知タグを読み飛ばすので **version bump 不要**（`BNDR` と同じ経路）。昇順厳密・span 範囲・UTF-8・scalar 妥当性・padding ゼロ・関係コード復号を fail-closed 検証。
+  - `Converter::append_single_kanji` — 最終 sort の後段。空いた枠だけを埋め、既にランクインしている文字は重複追加しない。コストは**ランキング全体の上限より上**に置くので、後段で再 sort されても末尾から上がってこない。cross-commit bridge は anchor／transfer の両方で `path_evidence().is_system_only()` を要求するため、追加行は最初から対象外。literal-policy 経路には付けない。
+  - 注記: 異体字規則がある文字は `異体字（高）` のように関係名＋元字、他は `単漢字`。
+- 上流ソースの既知欠陥2件: `はｎ`（`はん` の誤字。判は正しい読みにも載っているので損失なし）と `びん(表外)`（表外マーカーが読みに混入し入力不能）。`MAX_REJECTED_READINGS = 2` で許容し、**拒否した読みを報告に名前で出す**。3件目が増えたらビルドが止まる。1文字が複数規則に載る場合はソース先着優先（Mozc の generator と同じ）で、衝突数を報告。
+- 実データ検証: 実ビルドで 3724 readings / 23688 characters / 787 variant notes、拒否2件を報告。sweep 実測で `ひ` 19→**121**、`こう`→330、`し`→220、`き`→205、`か`→199。
+- 実測（新 sweep、読み長クラス別 p95 最大 / 候補最大 / うち単漢字最大）:
+  - 1文字: 18→16 µs、108→70 µs/108件、256→202 µs/220件（辞書が先に尽きる）
+  - 2文字: 108→347 µs/108件、256→797 µs/256件
+  - 3-4文字: 108→369 µs、256→1,638 µs
+  - 5-8文字: 108→1,045 µs、256→3,002 µs、**単漢字 0 件**
+  - 9文字以上: 108→3,454 µs、256→14,556 µs、**単漢字 0 件**
+- 結論: 上限引き上げで得をするクラス（1-4文字）が最も安く、高いクラス（5文字以上）は上限を上げても単漢字を1件も得ない。読み長に応じた可変上限という前回の推奨が、今回のデータで独立に裏付けられた。
+- 自分が作った不具合と修正: 衝突処理を最初 `if variants.insert(..).is_some() { variants.insert(variant, variants[&variant]); }` と書いたが、`insert` は既に値を置換済みなので再挿入は no-op で「後着優先」になっていた。`Entry::Vacant`／`Entry::Occupied` に置換。
+- 検証: `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`（exit 0。sakura-core lib 242→249、dictc に `single_kanji` unit 13 + integration 10）、`git diff --check`。cargo／rustc の残存プロセスなし。
+- 学び1: optional table を足す変更は、既存の `BNDR` と同じ「version bump 不要」経路に必ず乗せる。reader が未知タグを読み飛ばす設計が既にあるのに version を上げると、古いイメージを不必要に失効させる。
+- 学び2: 上流データの欠陥は「件数で許容」ではなく「**内容を名前で固定して件数で許容**」する。`MAX_REJECTED_READINGS = 2` だけなら別の2件と入れ替わっても気づけない。報告に読みを出しているので、ソース bump 時に差分が見える。
+- 学び3: ランキング済みリストへ後段追加するときは、追加行のコストを「直前の追加行」ではなく「**ランキング全体の上限**」を基準に置く。安いリストの末尾が高いリストの本体を追い越す事故を、後段の再 sort に依存せず構造で防げる。
+- 未決: 候補数上限そのものの数値は owner 判断待ち（推奨は読み長可変: 1-2文字 256／3-4文字 108／5文字以上 36）。上限を 18 から動かすと `MAX_CANDIDATES`（= `CANDIDATE_PAGE_SIZE * 2`）と `MAX_CANDIDATE_TEXT_BYTES`（= `MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE`）という wire 側の定数に波及する。
