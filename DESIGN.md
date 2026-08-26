@@ -108,7 +108,10 @@ Input:
   does not change when a half-width mark is selected: it *emits* ASCII
   `,`/`.` without *claiming* them, so an ASCII comma arriving as input
   stays an ordinary symbol governed by `symbol_width` and the `,` in
-  `foo(a, b)` is never reinterpreted as a 読点.
+  `foo(a, b)` is never reinterpreted as a 読点. The setting decides which
+  mark is offered **first**, not which marks exist: converting a lone
+  punctuation mark lists the whole family of four, configured glyph at
+  the top (§8.4).
 - **Per-app profiles.** Match by process name (e.g. `WindowsTerminal.exe`,
   `Code.exe`, `devenv.exe`) → default input mode (e.g. direct/half-alnum
   in terminals), width-policy overrides, and **suggest on/off** —
@@ -1247,6 +1250,40 @@ result afterwards. The preset is that translation, written down once.
 - An `AppProfile` stores a `Normalizer` but no space width, so the per-app
   form of the control pins five of the seven values. The four normalizers are
   distinct on their own, which is what lets a profile read its style back.
+
+### 8.4 The punctuation family in the candidate list (Issue #99)
+
+A punctuation setting that also removed the other marks from the
+candidate list made one quoted sentence a trip to the settings window.
+ATOK is the reference here: the setting picks the default, the list
+stays exhaustive.
+
+- Converting a reading that is **itself a single punctuation mark**
+  offers all four members of that role's family — `、` `､` `，` `,` for
+  the comma role, `。` `｡` `．` `.` for the period role — ordered with
+  the configured glyph first and the rest in a fixed table order. Any
+  longer reading, and any reading that merely contains a mark, is
+  untouched.
+- The four rows differ only in a character the §5.6 choke point claims,
+  so a correct list still renders as one glyph four times unless the
+  rows bypass normalization. Each carries `synthetic_exact`, which the
+  display path and both commit-only surface paths already honour ahead
+  of `normalize_into`. This is a candidate-level fact, not a normalizer
+  change: Rule 4 still owns exactly four code points, ASCII `,`/`.` are
+  still emitted without being claimed, and the two half-width kana marks
+  are offerable without being claimed either.
+- `synthetic_exact` also suppresses learning and the exact cache for
+  these rows, which is what the feature wants: reaching for `、` inside
+  one quotation must not train the ranker to override the configured
+  mark on every later comma. The setting stays the only durable
+  preference.
+- Replacing TOP-1 is safe precisely because the reading is a single
+  mark: the top row already *rendered* as the configured glyph, so the
+  substitution is byte-identical on screen. Every other post-conversion
+  appender still sits above the ranked ceiling.
+- The style is read off the session, not the dispatcher, so a per-app
+  notation profile (§8.3) reaches the converter the same way its width
+  policy already reaches the choke point.
 
 ---
 

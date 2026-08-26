@@ -24,6 +24,7 @@ use crate::numerals::{
 };
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
+use crate::width::PunctuationStyle;
 use crate::TextSink;
 
 const NONE: usize = usize::MAX;
@@ -332,6 +333,11 @@ pub struct ConversionOptions {
     /// Independent aggregate budgets for the optional sequential raw-repair
     /// passes. Ordinary direct conversion does not consume these budgets.
     pub raw_repair_budget: RawRepairBudget,
+    /// The reader's configured punctuation marks. The converter uses this
+    /// only to decide which member of a punctuation family it offers first
+    /// (Issue #99); it never rewrites a surface to match, which stays the
+    /// width choke point's job.
+    pub punctuation: PunctuationStyle,
 }
 
 /// Typed sides of one connection-matrix lookup. Keeping them distinct at the
@@ -906,6 +912,7 @@ impl Default for ConversionOptions {
             input_support: crate::preferences::InputSupport::default(),
             skip_input_repair: false,
             raw_repair_budget: RawRepairBudget::default(),
+            punctuation: PunctuationStyle::default(),
         }
     }
 }
@@ -1634,6 +1641,7 @@ impl Converter {
             self.ensure_lossless_fallback(fallback, options.max_candidates);
         self.candidates.sort_by_key(|candidate| candidate.cost);
         self.append_single_kanji(dictionary, reading, options.max_candidates)?;
+        self.append_punctuation_family(reading, options.punctuation, options.max_candidates)?;
         debug_assert!(!self.candidates.is_empty());
         Ok(ConversionResult {
             candidates: &self.candidates,
@@ -2668,6 +2676,117 @@ impl Converter {
                 cost: ranked_ceiling.saturating_add(1 + i64::try_from(index).unwrap_or(0)),
             });
         }
+        Ok(())
+    }
+
+    /// Offers the whole punctuation family for a reading that is a single
+    /// punctuation mark, configured glyph first.
+    ///
+    /// The setting picks the default, not the vocabulary. Before this, a
+    /// reader who had chosen the full-width comma could not reach the touten
+    /// for one quoted sentence without opening the settings window: the width
+    /// choke point re-emits the configured glyph for whichever family member a
+    /// candidate carries, so four distinct candidates would all have rendered
+    /// as the same character. That collapse happens at display time, which is
+    /// why the fix is a candidate bit rather than a normalizer change -- each
+    /// appended row carries `synthetic_exact`, which `append_candidate_surface`
+    /// and both commit-only surface paths honour ahead of `normalize_into`.
+    ///
+    /// Rule 4's owned set stays four code points wide. The two half-width kana
+    /// marks are offerable without being claimed, and the ASCII pair keeps its
+    /// emit-but-never-reclaim direction: nothing here rewrites a character the
+    /// reader typed.
+    ///
+    /// Carrying `synthetic_exact` also suppresses learning and the exact cache
+    /// for these rows, which is what this feature wants: one quoted sentence's
+    /// touten must not train the ranker to override the reader's configured
+    /// mark on every later comma.
+    fn append_punctuation_family(
+        &mut self,
+        reading: &str,
+        style: PunctuationStyle,
+        wanted: usize,
+    ) -> Result<(), ConversionError> {
+        let mut characters = reading.chars();
+        let (Some(mark), None) = (characters.next(), characters.next()) else {
+            return Ok(());
+        };
+        let Some(family) = style.family_for(mark) else {
+            return Ok(());
+        };
+        let reading_end =
+            u16::try_from(reading.len()).map_err(|_| ConversionError::ReadingTooLong)?;
+        // Every family member the search already produced has to go: it would
+        // otherwise sit in the list without `synthetic_exact` and render as the
+        // configured glyph, putting a second copy of one row on the page. The
+        // appended set is a superset of what is dropped, so nothing the reader
+        // could reach before becomes unreachable.
+        self.candidates.retain(|candidate| {
+            let mut text = candidate.text().chars();
+            !matches!(
+                (text.next(), text.next()),
+                (Some(existing), None) if family.iter().any(|variant| variant.glyph == existing)
+            )
+        });
+        // Below every surviving candidate, so the configured glyph is TOP-1 and
+        // a later re-sort cannot interleave the family with anything else. This
+        // is the one appender allowed to take TOP-1, and only for a reading that
+        // is itself a single punctuation mark: the character it puts there is
+        // the one the page already showed.
+        let base = self
+            .candidates
+            .iter()
+            .map(|candidate| candidate.cost)
+            .min()
+            .unwrap_or(0)
+            .saturating_sub(i64::try_from(family.len()).unwrap_or(0));
+        for (index, variant) in family.into_iter().enumerate() {
+            let mut text = FixedStr::new();
+            text.push(variant.glyph)
+                .map_err(|_| ConversionError::OutputTooLong)?;
+            let mut annotation = FixedStr::new();
+            annotation
+                .push_str(variant.annotation)
+                .map_err(|_| ConversionError::OutputTooLong)?;
+            let mut segments = FixedVec::new();
+            segments
+                .push(ConversionSegment {
+                    reading_start: 0,
+                    reading_end,
+                    text_start: 0,
+                    text_end: u16::try_from(text.len())
+                        .map_err(|_| ConversionError::OutputTooLong)?,
+                    // Neutral connection class in both directions: a
+                    // punctuation mark must not hand the next conversion a
+                    // noun's right ID.
+                    left_id: 0,
+                    right_id: 0,
+                    flags: EntryFlags::NONE,
+                    word_count: 1,
+                    it_word_count: 0,
+                })
+                .map_err(|_| ConversionError::TooManySegments)?;
+            self.candidates.insert(
+                index,
+                ConversionCandidate {
+                    text,
+                    annotation,
+                    segments,
+                    system_entry_index: NO_SYSTEM_ENTRY_INDEX,
+                    synthetic_exact: true,
+                    origin: CandidateOrigin::Direct,
+                    path_evidence: PathEvidence {
+                        generated_edges: 1,
+                        ..PathEvidence::default()
+                    },
+                    bridge_boundary_kind: None,
+                    commit_bridge_tail: CommitBridgeTailStorage::default(),
+                    cross_commit_rescored: false,
+                    cost: base.saturating_add(i64::try_from(index).unwrap_or(0)),
+                },
+            );
+        }
+        self.candidates.truncate(wanted.max(family.len()));
         Ok(())
     }
 
@@ -4619,6 +4738,7 @@ mod tests {
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
     use crate::preferences::ConversionMethod;
     use crate::user_dictionary::UserDictionary;
+    use crate::width::{CommaMark, PeriodMark, PunctuationStyle};
     use crate::RepairKind;
 
     #[derive(Clone)]
@@ -5038,6 +5158,146 @@ mod tests {
                 "{} costs {} at or below the ranked ceiling {ranked_ceiling}",
                 candidate.text(),
                 candidate.cost
+            );
+        }
+    }
+
+    /// Issue #99.  The setting picks which mark comes first; it never picks
+    /// which marks exist.  Every one of the nine combinations has to reach all
+    /// four members of the family it is asked for, in an order it decides.
+    #[test]
+    fn every_punctuation_style_offers_its_whole_family_configured_glyph_first() {
+        let bytes = synthetic_dictionary(&[fixture_entry("ひ", "日", 100, EntryFlags::NONE)]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        for comma in CommaMark::ALL {
+            for period in PeriodMark::ALL {
+                let style = PunctuationStyle::new(comma, period);
+                let roles = [('\u{3001}', comma.glyph()), ('\u{3002}', period.glyph())];
+                for (reading, configured) in roles {
+                    let mut source = String::new();
+                    source.push(reading);
+                    let expected = style
+                        .family_for(reading)
+                        .expect("a punctuation reading belongs to a family");
+                    let result = converter
+                        .convert_detailed(
+                            &dictionary,
+                            &source,
+                            ConversionOptions {
+                                punctuation: style,
+                                ..ConversionOptions::default()
+                            },
+                        )
+                        .expect("conversion");
+                    let candidates = result.candidates();
+                    assert!(
+                        candidates.len() >= expected.len(),
+                        "{style:?} on {reading:?} produced only {} candidates",
+                        candidates.len()
+                    );
+                    for (offset, variant) in expected.into_iter().enumerate() {
+                        let candidate = &candidates[offset];
+                        assert_eq!(
+                            candidate.text(),
+                            variant.glyph.to_string(),
+                            "{style:?} on {reading:?} at slot {offset}"
+                        );
+                        assert_eq!(candidate.annotation(), variant.annotation);
+                        // Without this bit the choke point rewrites all four
+                        // rows to the configured glyph and the page shows one
+                        // character four times.
+                        assert!(
+                            candidate.is_synthetic_exact(),
+                            "{style:?} on {reading:?}: slot {offset} would be re-styled"
+                        );
+                    }
+                    assert_eq!(
+                        candidates[0].text(),
+                        configured.to_string(),
+                        "{style:?} must still default to the mark the reader set"
+                    );
+                    // A family member appearing twice -- once appended, once
+                    // left over from the search -- is the failure this guards.
+                    let members = candidates
+                        .iter()
+                        .filter(|candidate| {
+                            expected
+                                .iter()
+                                .any(|variant| candidate.text() == variant.glyph.to_string())
+                        })
+                        .count();
+                    assert_eq!(
+                        members,
+                        expected.len(),
+                        "{style:?} on {reading:?} listed a family member more than once"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The family rewrites one reading list, not the ranking.  A reading that
+    /// is not a punctuation mark has to convert identically under every
+    /// setting, or the feature has moved ordinary candidates around.
+    #[test]
+    fn an_ordinary_reading_converts_identically_under_every_punctuation_style() {
+        let bytes = single_kanji_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let listed = |converter: &mut Converter, style: PunctuationStyle| {
+            converter
+                .convert_detailed(
+                    &dictionary,
+                    "ひ",
+                    ConversionOptions {
+                        punctuation: style,
+                        max_candidates: 8,
+                        ..ConversionOptions::default()
+                    },
+                )
+                .expect("conversion")
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.text().to_owned(), candidate.cost))
+                .collect::<Vec<_>>()
+        };
+        let baseline = listed(&mut converter, PunctuationStyle::default());
+        assert!(!baseline.is_empty(), "the fixture must convert");
+        for comma in CommaMark::ALL {
+            for period in PeriodMark::ALL {
+                let style = PunctuationStyle::new(comma, period);
+                assert_eq!(listed(&mut converter, style), baseline, "{style:?}");
+            }
+        }
+    }
+
+    /// A reading that merely contains a punctuation mark is an ordinary
+    /// sentence, not a request for the family.
+    #[test]
+    fn only_a_reading_that_is_itself_one_mark_opens_the_family() {
+        let bytes = synthetic_dictionary(&[fixture_entry("ひ", "日", 100, EntryFlags::NONE)]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let style = PunctuationStyle::new(CommaMark::HalfWidth, PeriodMark::HalfWidth);
+        for reading in ["\u{3001}ひ", "ひ\u{3001}", "\u{3001}\u{3001}", "ひ"] {
+            let candidates = converter
+                .convert_detailed(
+                    &dictionary,
+                    reading,
+                    ConversionOptions {
+                        punctuation: style,
+                        ..ConversionOptions::default()
+                    },
+                )
+                .expect("conversion")
+                .candidates()
+                .iter()
+                .map(|candidate| candidate.text().to_owned())
+                .collect::<Vec<_>>();
+            assert!(
+                !candidates.iter().any(|text| text == ","),
+                "{reading:?} must not be offered the comma family: {candidates:?}"
             );
         }
     }
