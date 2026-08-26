@@ -21,6 +21,7 @@ pub mod inflection;
 pub mod llm_detail_targets;
 pub mod llm_details;
 pub mod segmenter;
+pub mod single_kanji;
 pub mod wordnet;
 
 /// Connection taxonomy from the pinned Mozc dictionary revision. The source
@@ -782,18 +783,45 @@ pub fn compile_with_details(
     connection: &ConnectionMatrix,
     details: &[SourceDetail],
 ) -> Result<Vec<u8>, Error> {
-    compile_with_tables(entries, connection, details, None)
+    compile_with_tables(
+        entries,
+        connection,
+        OptionalTables {
+            details,
+            ..OptionalTables::default()
+        },
+    )
 }
 
-/// Compiles entries, details, and the optional frozen bunsetsu-boundary
-/// table.  The boundary table lets conversion fuse morphemes into bunsetsu
-/// segments; omitting it keeps the historical morpheme-granularity image.
+/// The optional image tables, each independently omittable.
+///
+/// These are grouped rather than passed positionally because the format is
+/// explicitly designed to grow by adding tables: readers skip tags they do not
+/// know, so every new table would otherwise widen this signature again.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OptionalTables<'a> {
+    /// Source-backed candidate descriptions, keyed by final entry ordinal.
+    pub details: &'a [SourceDetail],
+    /// The frozen bunsetsu-boundary matrix.  It lets conversion fuse morphemes
+    /// into bunsetsu segments; omitting it keeps the historical
+    /// morpheme-granularity image.
+    pub boundaries: Option<&'a segmenter::BunsetsuBoundaries>,
+    /// Characters appended to a finished candidate list by reading, with the
+    /// variant relations that annotate them.
+    pub single_kanji: Option<&'a single_kanji::SingleKanjiTable>,
+}
+
+/// Compiles entries plus whichever optional tables are supplied.
 pub fn compile_with_tables(
     entries: &[SourceEntry],
     connection: &ConnectionMatrix,
-    details: &[SourceDetail],
-    boundaries: Option<&segmenter::BunsetsuBoundaries>,
+    optional: OptionalTables<'_>,
 ) -> Result<Vec<u8>, Error> {
+    let OptionalTables {
+        details,
+        boundaries,
+        single_kanji,
+    } = optional;
     let class_count = connection.class_count;
     let mut sorted = entries.to_vec();
     sorted.sort_by(|a, b| {
@@ -935,7 +963,71 @@ pub fn compile_with_tables(
             usize::from(class_count),
         ));
     }
+    if let Some(single_kanji) = single_kanji {
+        tables.extend(encode_single_kanji(single_kanji)?);
+    }
     assemble_image(class_count, sorted.len(), built.node_count, tables)
+}
+
+/// Encodes the single-kanji lookup as the optional `SKIX`/`SKRD`/`SKCH`/`SKVR`
+/// tables.
+///
+/// The index is written in `BTreeMap` order, which is byte order over UTF-8
+/// readings, because the reader binary searches it with a byte comparison.
+fn encode_single_kanji(table: &single_kanji::SingleKanjiTable) -> Result<Vec<TableData>, Error> {
+    let readings = table.readings();
+    let variants = table.variants();
+    let character_total: usize = readings.values().map(Vec::len).sum();
+
+    let mut index = Vec::with_capacity(readings.len() * format::SINGLE_KANJI_INDEX_LEN);
+    let mut reading_data: Vec<u8> = Vec::new();
+    let mut characters = Vec::with_capacity(character_total * format::SINGLE_KANJI_CHAR_LEN);
+    for (reading, listed) in readings {
+        let reading_offset = u32::try_from(reading_data.len())
+            .map_err(|_| Error::build("single-kanji reading table exceeds 4 GiB"))?;
+        let reading_len = u16::try_from(reading.len())
+            .map_err(|_| Error::build(format!("single-kanji reading '{reading}' is too long")))?;
+        let char_start = u32::try_from(characters.len() / format::SINGLE_KANJI_CHAR_LEN)
+            .map_err(|_| Error::build("single-kanji character table exceeds 4 Gi entries"))?;
+        let char_count = u16::try_from(listed.len()).map_err(|_| {
+            Error::build(format!(
+                "reading '{reading}' lists {} characters, more than a u16 can count",
+                listed.len()
+            ))
+        })?;
+        index.extend_from_slice(&reading_offset.to_le_bytes());
+        index.extend_from_slice(&char_start.to_le_bytes());
+        index.extend_from_slice(&reading_len.to_le_bytes());
+        index.extend_from_slice(&char_count.to_le_bytes());
+        reading_data.extend_from_slice(reading.as_bytes());
+        for character in listed {
+            characters.extend_from_slice(&u32::from(*character).to_le_bytes());
+        }
+    }
+
+    let mut variant_data = Vec::with_capacity(variants.len() * format::SINGLE_KANJI_VARIANT_LEN);
+    for (variant, (original, kind)) in variants {
+        variant_data.extend_from_slice(&u32::from(*variant).to_le_bytes());
+        variant_data.extend_from_slice(&u32::from(*original).to_le_bytes());
+        variant_data.push(kind.code());
+        variant_data.extend_from_slice(&[0, 0, 0]);
+    }
+
+    let reading_bytes = reading_data.len();
+    Ok(vec![
+        TableData::new(format::TAG_SINGLE_KANJI_INDEX, index, readings.len()),
+        TableData::new(
+            format::TAG_SINGLE_KANJI_READINGS,
+            reading_data,
+            reading_bytes,
+        ),
+        TableData::new(format::TAG_SINGLE_KANJI_CHARS, characters, character_total),
+        TableData::new(
+            format::TAG_SINGLE_KANJI_VARIANTS,
+            variant_data,
+            variants.len(),
+        ),
+    ])
 }
 
 /// Encodes the frozen boundary matrix as the optional `BNDR` image table.

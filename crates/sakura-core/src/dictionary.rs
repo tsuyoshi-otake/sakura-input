@@ -50,6 +50,28 @@ pub mod image_format {
     // without this table keep morpheme-granularity segments.
     pub const TAG_BOUNDARIES: [u8; 4] = *b"BNDR";
 
+    // Optional single-kanji table compiled from the pinned Mozc single-kanji
+    // data.  Single kanji are appended after conversion rather than searched:
+    // one short reading can name hundreds of characters, so giving each its own
+    // lattice edge would spend the whole node budget on a reading the n-best
+    // search has already answered.  The table is therefore keyed by its own
+    // sorted reading list rather than by the entry trie, which also keeps it
+    // independent of how the shipped dictionary happens to be trimmed.
+    pub const TAG_SINGLE_KANJI_INDEX: [u8; 4] = *b"SKIX";
+    pub const TAG_SINGLE_KANJI_READINGS: [u8; 4] = *b"SKRD";
+    pub const TAG_SINGLE_KANJI_CHARS: [u8; 4] = *b"SKCH";
+    pub const TAG_SINGLE_KANJI_VARIANTS: [u8; 4] = *b"SKVR";
+
+    /// `reading_offset: u32`, `char_start: u32`, `reading_len: u16`,
+    /// `char_count: u16`, sorted by reading bytes for binary search.
+    pub const SINGLE_KANJI_INDEX_LEN: usize = 12;
+    /// One `u32` scalar value per character; a fixed stride removes the need
+    /// for a second offsets table.
+    pub const SINGLE_KANJI_CHAR_LEN: usize = 4;
+    /// `variant: u32`, `original: u32`, `kind: u8`, three zero pad bytes,
+    /// sorted by variant scalar value for binary search.
+    pub const SINGLE_KANJI_VARIANT_LEN: usize = 12;
+
     pub const NODE_LEN: usize = 16;
     pub const ENTRY_LEN: usize = 24;
     pub const SURFACE_RESTART_INTERVAL: usize = 16;
@@ -235,6 +257,96 @@ pub struct DictionaryDetail<'a> {
     record_index: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct SingleKanji<'a> {
+    index: &'a [u8],
+    index_count: usize,
+    readings: &'a [u8],
+    chars: &'a [u8],
+    char_count: usize,
+    variants: &'a [u8],
+    variant_count: usize,
+}
+
+/// How a single kanji relates to the character it is a variant of.
+///
+/// These are the rule groups of the pinned Mozc `variant_rule.txt`, kept as
+/// distinct values rather than one "variant" flag because the distinction is
+/// exactly what makes the note useful: a reader choosing between 噓 and 嘘
+/// needs to know which one is the 印刷標準字体.  The discriminants are an
+/// on-disk encoding and must stay stable; zero is reserved so a zeroed record
+/// can never decode as a real kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum SingleKanjiVariantKind {
+    /// 異体字 — a variant form of the same character.
+    Itaiji = 1,
+    /// 印刷標準字体 — the form the printing standard prescribes.
+    PrintStandard = 2,
+    /// 簡易慣用字体 — the simplified form conventional in print.
+    SimplifiedConventional = 3,
+    /// 旧字体 — the pre-reform form.
+    OldForm = 4,
+    /// 略字 — an abbreviated form.
+    Abbreviated = 5,
+    /// 正字 — the orthodox form.
+    OrthodoxForm = 6,
+    /// 俗字 — a popular non-standard form.
+    PopularForm = 7,
+    /// 別字 — a distinct character used interchangeably.
+    DistinctCharacter = 8,
+    /// 本字 — the original form.
+    OriginalForm = 9,
+}
+
+impl SingleKanjiVariantKind {
+    /// The on-disk discriminant.
+    pub const fn code(self) -> u8 {
+        self as u8
+    }
+
+    /// Decodes a stored discriminant, rejecting zero and unknown values so a
+    /// corrupt or future record drops the note instead of inventing one.
+    pub const fn from_code(code: u8) -> Option<Self> {
+        Some(match code {
+            1 => Self::Itaiji,
+            2 => Self::PrintStandard,
+            3 => Self::SimplifiedConventional,
+            4 => Self::OldForm,
+            5 => Self::Abbreviated,
+            6 => Self::OrthodoxForm,
+            7 => Self::PopularForm,
+            8 => Self::DistinctCharacter,
+            9 => Self::OriginalForm,
+            _ => return None,
+        })
+    }
+
+    /// The Japanese term shown to the reader, matching the rule group name in
+    /// the pinned source.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Itaiji => "異体字",
+            Self::PrintStandard => "印刷標準字体",
+            Self::SimplifiedConventional => "簡易慣用字体",
+            Self::OldForm => "旧字体",
+            Self::Abbreviated => "略字",
+            Self::OrthodoxForm => "正字",
+            Self::PopularForm => "俗字",
+            Self::DistinctCharacter => "別字",
+            Self::OriginalForm => "本字",
+        }
+    }
+}
+
+/// A single kanji's relation to the character it varies from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SingleKanjiVariant {
+    /// The character the variant rule points at, for example 高 for 髙.
+    pub original: char,
+    pub kind: SingleKanjiVariantKind,
+}
+
 /// A validated set of borrowed fixed-layout views over one image.
 #[derive(Clone, Copy)]
 pub struct Dictionary<'a> {
@@ -257,6 +369,7 @@ pub struct Dictionary<'a> {
     /// `None` for images compiled before the segmenter table existed.
     boundaries: Option<&'a [u8]>,
     details: Option<Details<'a>>,
+    single_kanji: Option<SingleKanji<'a>>,
 }
 
 impl fmt::Debug for Dictionary<'_> {
@@ -355,6 +468,26 @@ impl<'a> Dictionary<'a> {
             return Err(Error::BadTable(format::TAG_DETAIL_INDEX));
         }
 
+        let single_kanji_index =
+            optional_table(bytes, table_count, format::TAG_SINGLE_KANJI_INDEX)?;
+        let single_kanji_readings =
+            optional_table(bytes, table_count, format::TAG_SINGLE_KANJI_READINGS)?;
+        let single_kanji_chars =
+            optional_table(bytes, table_count, format::TAG_SINGLE_KANJI_CHARS)?;
+        let single_kanji_variants =
+            optional_table(bytes, table_count, format::TAG_SINGLE_KANJI_VARIANTS)?;
+        let single_kanji_present = [
+            single_kanji_index.is_some(),
+            single_kanji_readings.is_some(),
+            single_kanji_chars.is_some(),
+            single_kanji_variants.is_some(),
+        ];
+        if single_kanji_present.iter().any(|present| *present)
+            && single_kanji_present.iter().any(|present| !*present)
+        {
+            return Err(Error::BadTable(format::TAG_SINGLE_KANJI_INDEX));
+        }
+
         expect_fixed_count(nodes, node_count, format::NODE_LEN)?;
         expect_fixed_count(labels, node_count, 4)?;
         expect_fixed_count(entries, entry_count, format::ENTRY_LEN)?;
@@ -392,6 +525,35 @@ impl<'a> Dictionary<'a> {
         } else {
             None
         };
+        let single_kanji = if single_kanji_present[0] {
+            let index =
+                single_kanji_index.ok_or(Error::BadTable(format::TAG_SINGLE_KANJI_INDEX))?;
+            let readings =
+                single_kanji_readings.ok_or(Error::BadTable(format::TAG_SINGLE_KANJI_READINGS))?;
+            let chars =
+                single_kanji_chars.ok_or(Error::BadTable(format::TAG_SINGLE_KANJI_CHARS))?;
+            let variants =
+                single_kanji_variants.ok_or(Error::BadTable(format::TAG_SINGLE_KANJI_VARIANTS))?;
+            expect_fixed_count(index, index.count, format::SINGLE_KANJI_INDEX_LEN)?;
+            expect_fixed_count(chars, chars.count, format::SINGLE_KANJI_CHAR_LEN)?;
+            expect_fixed_count(variants, variants.count, format::SINGLE_KANJI_VARIANT_LEN)?;
+            if readings.count != readings.bytes.len() {
+                return Err(Error::BadTable(format::TAG_SINGLE_KANJI_READINGS));
+            }
+            let table = SingleKanji {
+                index: index.bytes,
+                index_count: index.count,
+                readings: readings.bytes,
+                chars: chars.bytes,
+                char_count: chars.count,
+                variants: variants.bytes,
+                variant_count: variants.count,
+            };
+            validate_single_kanji_table(&table)?;
+            Some(table)
+        } else {
+            None
+        };
         let louds_bits =
             to_usize(read_u32(louds_table.bytes, 0).ok_or(Error::BadTable(format::TAG_LOUDS))?)?;
         let louds_bytes = louds_bits
@@ -420,6 +582,7 @@ impl<'a> Dictionary<'a> {
             matrix: matrix.bytes,
             boundaries,
             details,
+            single_kanji,
         };
         dictionary.validate_tables()?;
         Ok(dictionary)
@@ -460,6 +623,92 @@ impl<'a> Dictionary<'a> {
             rows.get(rid * row_bytes + lid / 8)
                 .is_none_or(|byte| byte & (1u8 << (lid % 8)) != 0),
         )
+    }
+
+    /// Whether this image carries the optional single-kanji table.
+    pub const fn has_single_kanji(&self) -> bool {
+        self.single_kanji.is_some()
+    }
+
+    /// The single kanji the pinned source lists for `reading`, in its
+    /// preference order, or an empty iterator when the reading names none.
+    ///
+    /// This is deliberately not part of conversion search.  One short reading
+    /// can name hundreds of characters, so these are appended to a finished
+    /// candidate list rather than given lattice edges.
+    pub fn single_kanji(&self, reading: &str) -> impl Iterator<Item = char> + '_ {
+        let span = self.single_kanji_span(reading);
+        let chars = self.single_kanji.map(|table| table.chars).unwrap_or(&[]);
+        span.map(move |scalar| {
+            let at = scalar * image_format::SINGLE_KANJI_CHAR_LEN;
+            // Validated at parse time: every scalar in range decodes.
+            read_u32(chars, at)
+                .and_then(char::from_u32)
+                .unwrap_or('\u{fffd}')
+        })
+    }
+
+    /// How many single kanji `reading` names, without decoding any of them.
+    pub fn single_kanji_count(&self, reading: &str) -> usize {
+        self.single_kanji_span(reading).len()
+    }
+
+    fn single_kanji_span(&self, reading: &str) -> core::ops::Range<usize> {
+        let Some(table) = self.single_kanji else {
+            return 0..0;
+        };
+        let needle = reading.as_bytes();
+        let record_at = |record: usize| -> (&[u8], usize, usize) {
+            let at = record * image_format::SINGLE_KANJI_INDEX_LEN;
+            // Validated at parse time: every record is in range.
+            let offset = read_u32(table.index, at).unwrap_or(0) as usize;
+            let start = read_u32(table.index, at + 4).unwrap_or(0) as usize;
+            let len = usize::from(read_u16(table.index, at + 8).unwrap_or(0));
+            let count = usize::from(read_u16(table.index, at + 10).unwrap_or(0));
+            (
+                table.readings.get(offset..offset + len).unwrap_or(&[]),
+                start,
+                count,
+            )
+        };
+        let (mut low, mut high) = (0usize, table.index_count);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let (candidate, start, count) = record_at(middle);
+            match candidate.cmp(needle) {
+                core::cmp::Ordering::Less => low = middle + 1,
+                core::cmp::Ordering::Greater => high = middle,
+                core::cmp::Ordering::Equal => return start..start + count,
+            }
+        }
+        0..0
+    }
+
+    /// The variant relation recorded for `kanji`, if the pinned rules name one.
+    ///
+    /// A character can appear under more than one rule in the source; the
+    /// compiler keeps exactly one relation per character so a candidate can
+    /// never show two contradictory notes.
+    pub fn single_kanji_variant(&self, kanji: char) -> Option<SingleKanjiVariant> {
+        let table = self.single_kanji?;
+        let needle = u32::from(kanji);
+        let (mut low, mut high) = (0usize, table.variant_count);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let at = middle * image_format::SINGLE_KANJI_VARIANT_LEN;
+            let variant = read_u32(table.variants, at)?;
+            match variant.cmp(&needle) {
+                core::cmp::Ordering::Less => low = middle + 1,
+                core::cmp::Ordering::Greater => high = middle,
+                core::cmp::Ordering::Equal => {
+                    return Some(SingleKanjiVariant {
+                        original: char::from_u32(read_u32(table.variants, at + 4)?)?,
+                        kind: SingleKanjiVariantKind::from_code(*table.variants.get(at + 8)?)?,
+                    });
+                }
+            }
+        }
+        None
     }
 
     /// Encoded connection-table bytes, exposed for the release size gate.
@@ -1383,6 +1632,85 @@ fn validate_boundary_table<'a>(table: Table<'a>, class_count: usize) -> Result<&
         }
     }
     Ok(rows)
+}
+
+/// Validates the optional single-kanji tables.
+///
+/// Everything the lookups depend on is established once here so they can index
+/// without re-deriving bounds: index records ascend strictly by reading bytes,
+/// every reading slice is in range and valid UTF-8, every character span is in
+/// range, every stored scalar is a real `char`, and every variant record
+/// ascends strictly by variant scalar with a decodable kind.  A table that
+/// fails any of these is rejected rather than degraded, because a half-trusted
+/// index would surface silently wrong characters.
+fn validate_single_kanji_table(table: &SingleKanji<'_>) -> Result<(), Error> {
+    use image_format as format;
+
+    let bad_index = || Error::BadTable(format::TAG_SINGLE_KANJI_INDEX);
+    let bad_readings = || Error::BadTable(format::TAG_SINGLE_KANJI_READINGS);
+    let bad_chars = || Error::BadTable(format::TAG_SINGLE_KANJI_CHARS);
+    let bad_variants = || Error::BadTable(format::TAG_SINGLE_KANJI_VARIANTS);
+
+    if table.index_count == 0 || table.char_count == 0 {
+        return Err(bad_index());
+    }
+    let mut previous: Option<&[u8]> = None;
+    for record in 0..table.index_count {
+        let at = record * format::SINGLE_KANJI_INDEX_LEN;
+        let reading_offset = to_usize(read_u32(table.index, at).ok_or_else(bad_index)?)?;
+        let char_start = to_usize(read_u32(table.index, at + 4).ok_or_else(bad_index)?)?;
+        let reading_len = usize::from(read_u16(table.index, at + 8).ok_or_else(bad_index)?);
+        let chars = usize::from(read_u16(table.index, at + 10).ok_or_else(bad_index)?);
+        if reading_len == 0 || chars == 0 {
+            return Err(bad_index());
+        }
+        let reading_end = reading_offset
+            .checked_add(reading_len)
+            .ok_or_else(bad_index)?;
+        let reading = table
+            .readings
+            .get(reading_offset..reading_end)
+            .ok_or_else(bad_readings)?;
+        if core::str::from_utf8(reading).is_err() {
+            return Err(bad_readings());
+        }
+        if previous.is_some_and(|earlier| earlier >= reading) {
+            return Err(bad_index());
+        }
+        previous = Some(reading);
+        let char_end = char_start.checked_add(chars).ok_or_else(bad_index)?;
+        if char_end > table.char_count {
+            return Err(bad_index());
+        }
+    }
+    for scalar in 0..table.char_count {
+        let at = scalar * format::SINGLE_KANJI_CHAR_LEN;
+        let value = read_u32(table.chars, at).ok_or_else(bad_chars)?;
+        if char::from_u32(value).is_none() {
+            return Err(bad_chars());
+        }
+    }
+    let mut previous_variant = None;
+    for record in 0..table.variant_count {
+        let at = record * format::SINGLE_KANJI_VARIANT_LEN;
+        let variant = read_u32(table.variants, at).ok_or_else(bad_variants)?;
+        let original = read_u32(table.variants, at + 4).ok_or_else(bad_variants)?;
+        let kind = *table.variants.get(at + 8).ok_or_else(bad_variants)?;
+        let padding = table
+            .variants
+            .get(at + 9..at + 12)
+            .ok_or_else(bad_variants)?;
+        if char::from_u32(variant).is_none()
+            || char::from_u32(original).is_none()
+            || SingleKanjiVariantKind::from_code(kind).is_none()
+            || padding != [0, 0, 0]
+            || previous_variant.is_some_and(|earlier| earlier >= variant)
+        {
+            return Err(bad_variants());
+        }
+        previous_variant = Some(variant);
+    }
+    Ok(())
 }
 
 fn validate_matrix_table(table: Table<'_>, class_count: usize) -> Result<(), Error> {

@@ -344,6 +344,8 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$ConnectionPath,
         [Parameter(Mandatory)][string]$MozcPosPath,
         [Parameter(Mandatory)][string]$MozcSegmenterPath,
+        [Parameter(Mandatory)][string]$MozcSingleKanjiPath,
+        [Parameter(Mandatory)][string]$MozcVariantRulePath,
         [Parameter(Mandatory)][string]$CuratedTermsPath,
         [Parameter(Mandatory)][string]$CuratedPhrasesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
@@ -458,6 +460,8 @@ function Invoke-BuildPass {
         '--mozc-connection', $ConnectionPath,
         '--mozc-id-def', $MozcPosPath,
         '--mozc-segmenter', $MozcSegmenterPath,
+        '--mozc-single-kanji', $MozcSingleKanjiPath,
+        '--mozc-variant-rule', $MozcVariantRulePath,
         '--glossary-dir', $GlossaryDirectory,
         '--wordnet-lmf', $WordNetLmfPath,
         '--wordnet-report', $wordNetReport,
@@ -522,7 +526,7 @@ function Remove-BuildDirectory {
 $stopwatch = [Diagnostics.Stopwatch]::StartNew()
 $MozcSource = Resolve-PinnedSource -ProvidedPath $MozcSource -Repository $MozcRepository `
     -Revision $MozcRevision -ManagedName 'mozc' `
-    -SparsePaths @('src/data/dictionary_oss', 'src/data/rules')
+    -SparsePaths @('src/data/dictionary_oss', 'src/data/rules', 'src/data/single_kanji')
 if ([string]::IsNullOrWhiteSpace($GlossarySource)) {
     # Prefer the MIT glossary snapshot vendored in-tree so CI and local builds
     # do not need a private-repository token for smile-chat.
@@ -551,6 +555,9 @@ $glossaryDirectory = Join-Path $GlossarySource 'frontend\public\glossaries'
 $connectionPath = Join-Path $mozcDictionaryDirectory 'connection_single_column.txt'
 $mozcPosPath = Join-Path $mozcDictionaryDirectory 'id.def'
 $mozcSegmenterPath = Join-Path $MozcSource 'src\data\rules\segmenter.def'
+$mozcSingleKanjiDirectory = Join-Path $MozcSource 'src\data\single_kanji'
+$mozcSingleKanjiPath = Join-Path $mozcSingleKanjiDirectory 'single_kanji.tsv'
+$mozcVariantRulePath = Join-Path $mozcSingleKanjiDirectory 'variant_rule.txt'
 $requiredLicenseFiles = @(
     (Join-Path $MozcSource 'LICENSE'),
     (Join-Path $mozcDictionaryDirectory 'README.txt'),
@@ -568,13 +575,21 @@ if (-not [IO.File]::Exists($mozcPosPath)) {
 if (-not [IO.File]::Exists($mozcSegmenterPath)) {
     throw "Mozc segmenter rules are missing: $mozcSegmenterPath"
 }
+if (-not [IO.File]::Exists($mozcSingleKanjiPath)) {
+    throw "Mozc single-kanji table is missing: $mozcSingleKanjiPath"
+}
+if (-not [IO.File]::Exists($mozcVariantRulePath)) {
+    throw "Mozc single-kanji variant rules are missing: $mozcVariantRulePath"
+}
 
 $env:CARGO_HTTP_CHECK_REVOKE = 'false'
 Push-Location $RepositoryRoot
 try {
     $primary = Invoke-BuildPass -Suffix '' -MozcDictionaryDirectory $mozcDictionaryDirectory `
         -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-        -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath -CuratedTermsPath $CuratedTerms `
+        -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath `
+        -MozcSingleKanjiPath $mozcSingleKanjiPath -MozcVariantRulePath $mozcVariantRulePath `
+        -CuratedTermsPath $CuratedTerms `
         -CuratedPhrasesPath $CuratedPhrases `
         -CuratedGeneralDetailsPath $CuratedGeneralDetails `
         -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
@@ -587,7 +602,9 @@ try {
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
-            -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath -CuratedTermsPath $CuratedTerms `
+            -MozcPosPath $mozcPosPath -MozcSegmenterPath $mozcSegmenterPath `
+            -MozcSingleKanjiPath $mozcSingleKanjiPath -MozcVariantRulePath $mozcVariantRulePath `
+            -CuratedTermsPath $CuratedTerms `
             -CuratedPhrasesPath $CuratedPhrases `
             -CuratedGeneralDetailsPath $CuratedGeneralDetails `
             -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
