@@ -512,3 +512,47 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   boundary at 32-way parallelism even though serial tests passed. A one-byte
   repair-kind mask preserved the required evidence and restored the 32-thread
   test plus the 128 KiB worker-stack checks.
+
+- **A glossary supplies each term's meaning, not the reading a user types.**
+  `data/it-terms.tsv` is generated from a term glossary, so `ACM` arrived with
+  the reading `えーだぶりゅーえすさーてぃふぃけーとまねーじゃー` and nothing
+  else, and 2,315 of 9,687 ASCII IT surfaces (23%) had no kana reading at all.
+  Coverage counted from the source therefore overstates reachability: the row
+  exists and the term is still untypeable. Audit a generated dictionary by the
+  reading a user would actually press, not by the entry count. The same
+  mismatch produces compound-only heads -- the glossary lists `RFC 7807` and
+  `PR Review` but never `RFC` or `PR` -- so check every multi-token surface's
+  head for a standalone entry.
+
+- **An IT reading may take rank two, never rank one, from a word that already
+  owned that reading.** Dump the pre-overlay dictionary and intersect it with
+  the readings being added: of the overlay's 754 kana readings 32 landed on a
+  reading that already had a dictionary entry, and eleven of those led the
+  existing word until they were re-priced to yield (cost 9000, or 16000 where
+  9000 was not enough -- `IA` and `ACID` both needed the higher price). The
+  measurement is cheap and it is the only way to keep the project's "no
+  general-Japanese regression for an IT gain" rule honest. Do not try to
+  express this as a blanket assertion over candidate lists -- most "Japanese
+  candidates" are the reading's own hiragana echo or lattice-assembled
+  fragments, so an absolute guard fails on 500 harmless rows. Pin the measured
+  collisions instead.
+
+- **Comparing rank one is not enough: an exact entry prunes the whole fuzzy
+  expansion beneath it.** Adding one row collapses the reading's candidate list
+  -- `じーぴーゆー` went from 108 candidates to two -- because the engine stops
+  expanding a reading fuzzily once it matches exactly. Words the fuzzy list used
+  to carry disappear from ranks well below the leader, where a leader-only diff
+  never looks. That is how `ぐろっく`/Grok silently removed `クロック` *and*
+  `黒く`, and `ぴんぐ`/ping removed `ピンク` while the leader check stayed
+  green. Diff the **whole** candidate list against a dictionary built from HEAD,
+  and widen the probe window first: at 8 candidates the window truncated 718 of
+  754 lists and the audit saw almost nothing. The invariant to hold is that
+  every pruned word is still reachable from the reading that is actually its
+  own (`炙ろう` from `あぶろう`, not from `あぶろ`); where it is not, drop the
+  row rather than re-price it, and leave the term to its ASCII reading.
+
+- **Give a kana reading prediction only when it cannot crowd a prefix.** A
+  Shift+ASCII reading competes only with other Latin runs, so it stays
+  predictive; a kana reading shares its prefixes with ordinary words, and 470
+  acronyms reachable from `え` would trade a general-Japanese regression for an
+  IT gain. Curated kana rows are conversion-only (`prediction_cost = -`).
