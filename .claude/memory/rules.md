@@ -126,6 +126,29 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   message. Without that run, "it passed" would have been indistinguishable
   from "it cannot fail".
 
+- **A test that configures a setting to a non-default value has not tested
+  the default.** Issue #99's two dispatch tests for the punctuation family
+  each set the role they exercised to a non-default mark (`FullWidth` comma,
+  `HalfWidth` period). Both passed. Under the shipped `Touten`/`Kuten` style
+  the configured mark *is* the reading, and that is the one case where the
+  ranker moved the selection off the configured row — so every test was green
+  and every real installation was wrong. Pick fixture values because they hit
+  the interesting case, not because they are visibly different from the
+  default, and cover `PunctuationStyle::ALL`-style enums by iterating.
+
+- **Candidate *order* and candidate *selection* are separate contracts owned
+  by separate code.** The converter builds the list; `preferred_candidate_index`
+  and `preserve_exact_initial` in `dispatch.rs` decide what is highlighted.
+  Fixing one leaves the other free to produce "the list is right but the wrong
+  character lands in the document", which is the hardest failure for a user to
+  describe. Assert both.
+
+- **Suppressing learning on the way *in* is not the same as ignoring it on the
+  way *out*.** `synthetic_exact` kept the punctuation rows out of the learning
+  store, but surfaces learned under an *earlier* setting still outranked the
+  configured mark on every later conversion. A feature that declares one
+  durable preference has to close both directions.
+
 ## Windows specifics
 
 - **Real-process tests must isolate `LOCALAPPDATA` unless they explicitly test
@@ -228,6 +251,26 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   live under `target/x86_64-pc-windows-msvc/release/`, not `target/release/`.
   Anything that hard-codes the old path (installer sources, size checks) is
   silently looking at a stale or absent file.
+
+- **This repository's PowerShell scripts require pwsh 7, not Windows
+  PowerShell 5.1.** `build-dictionary.ps1` uses `[IO.EnumerationOptions]`,
+  a .NET Core-only type that 5.1 cannot resolve (`型 [IO.EnumerationOptions]
+  が見つかりません`). CI already runs them under `shell: pwsh`; locally use
+  `"/c/Program Files/PowerShell/7/pwsh" -NoProfile -ExecutionPolicy Bypass
+  -File <script>`. Piping such a script to `tail` also swallows its nonzero
+  exit, so read the log text for a thrown error rather than trusting the
+  exit status.
+
+- **The candidate popup can be screenshotted reliably only by asking the
+  window to draw itself.** It is non-activating and click-through, so it sits
+  under whatever is foreground and a desktop capture gets the occluding
+  window. Find the `SakuraInputCandidates` HWND with `EnumWindows` and call
+  `PrintWindow(hwnd, hdc, 2 /* PW_RENDERFULLCONTENT */)`. Two more facts that
+  cost time: the popup opens *compact* (selected row plus footer, 50 px tall)
+  and needs Tab — `candidate_expand` under the MS-IME keymap — to show every
+  row, and `VK_CONVERT` is not delivered by `keybd_event`, so drive conversion
+  with Space. Confirm a synthetic key actually reached the IME by logging
+  `KeyDown` in the host: consumed keys arrive as `ProcessKey (229)`.
 
 ## TSF re-entrancy safety
 
