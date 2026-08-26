@@ -2707,11 +2707,7 @@ impl Converter {
         style: PunctuationStyle,
         wanted: usize,
     ) -> Result<(), ConversionError> {
-        let mut characters = reading.chars();
-        let (Some(mark), None) = (characters.next(), characters.next()) else {
-            return Ok(());
-        };
-        let Some(family) = style.family_for(mark) else {
+        let Some(family) = style.family_reading(reading) else {
             return Ok(());
         };
         let reading_end =

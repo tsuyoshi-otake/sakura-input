@@ -209,6 +209,25 @@ impl PunctuationStyle {
         debug_assert_eq!(placed, PUNCTUATION_FAMILY_LEN);
         Some(ordered)
     }
+
+    /// The family for a whole reading, when that reading is *itself* one
+    /// punctuation mark.
+    ///
+    /// This is the single admission test for the family behaviour, shared by
+    /// the converter that appends the four rows and by the dispatcher that
+    /// pins the configured one as the default selection. A reading of two or
+    /// more characters, or one that merely contains a mark, is an ordinary
+    /// sentence and gets neither (Issue #99).
+    pub fn family_reading(
+        self,
+        reading: &str,
+    ) -> Option<[PunctuationVariant; PUNCTUATION_FAMILY_LEN]> {
+        let mut characters = reading.chars();
+        let (Some(mark), None) = (characters.next(), characters.next()) else {
+            return None;
+        };
+        self.family_for(mark)
+    }
 }
 
 /// How many glyphs one punctuation family holds.
@@ -1405,6 +1424,36 @@ mod tests {
             assert!(
                 PunctuationStyle::default().family_for(outsider).is_none(),
                 "{outsider:?}"
+            );
+        }
+    }
+
+    /// The dispatcher pins the configured mark as the default selection on the
+    /// same admission test the converter appends the family on, so a
+    /// disagreement between the two would put the family on the page with the
+    /// ranker still free to move off its top row.
+    #[test]
+    fn only_a_whole_reading_of_one_mark_opens_the_family() {
+        let style = PunctuationStyle::default();
+        for reading in ["\u{3001}", "\u{FF64}", "\u{FF0C}", ",", "\u{3002}", "."] {
+            assert_eq!(
+                style.family_reading(reading).map(|family| family.to_vec()),
+                style
+                    .family_for(reading.chars().next().expect("one mark"))
+                    .map(|family| family.to_vec()),
+                "{reading:?} has to answer exactly like its single character"
+            );
+        }
+        for reading in [
+            "",
+            "\u{3001}\u{3001}",
+            "\u{3001}\u{3072}",
+            "\u{3072}\u{3001}",
+            "\u{3072}",
+        ] {
+            assert!(
+                style.family_reading(reading).is_none(),
+                "{reading:?} is an ordinary reading, not a request for the family"
             );
         }
     }
