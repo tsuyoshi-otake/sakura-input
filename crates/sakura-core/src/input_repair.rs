@@ -1003,6 +1003,8 @@ fn romaji_to_katakana(romaji: &str) -> Option<FixedStr<MAX_PREEDIT_BYTES>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::width::{BracketStyle, Normalizer, PunctuationStyle, WidthPolicy};
+    use sakura_proto::Mode;
 
     #[test]
     fn duplicated_n_and_missing_n_are_repaired() {
@@ -1071,6 +1073,36 @@ mod tests {
             Some('－')
         );
         assert_eq!(contextual_punctuation_swap(Some('あ'), '。', support), None);
+    }
+
+    #[test]
+    fn contextual_punctuation_swap_defers_the_final_glyph_to_the_punctuation_style() {
+        // The digit rule decides the *role* — after `1`, a 。 is a decimal
+        // point, not a full stop — and deliberately stops there. It returns
+        // one of the four code points the punctuation choke point owns, so
+        // the configured style still picks the glyph. A reader who set the
+        // period to half-width for a manuscript typeset from plain text gets
+        // `1.5`, not a full-width `1．5` the setting could not reach.
+        let support = InputSupport::default();
+        let ascii = Normalizer {
+            width: WidthPolicy::default(),
+            punctuation: PunctuationStyle::ASCII,
+            brackets: BracketStyle::default(),
+        };
+        let period = contextual_punctuation_swap(Some('1'), '。', support).expect("digit period");
+        assert_eq!(ascii.normalize_char(period, Mode::Hiragana), '.');
+        let comma = contextual_punctuation_swap(Some('1'), '、', support).expect("digit comma");
+        assert_eq!(ascii.normalize_char(comma, Mode::Hiragana), ',');
+
+        // Same rule, the full-width styles: nothing about the swap is
+        // hard-wired to one width.
+        let full = Normalizer {
+            width: WidthPolicy::default(),
+            punctuation: PunctuationStyle::COMMA_PERIOD,
+            brackets: BracketStyle::default(),
+        };
+        assert_eq!(full.normalize_char(period, Mode::Hiragana), '\u{FF0E}');
+        assert_eq!(full.normalize_char(comma, Mode::Hiragana), '\u{FF0C}');
     }
 
     #[test]

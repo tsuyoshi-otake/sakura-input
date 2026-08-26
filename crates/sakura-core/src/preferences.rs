@@ -7,7 +7,9 @@
 
 use crate::config::{self, Document, ParseError};
 use crate::keymap::Preset;
-use crate::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
+use crate::width::{
+    BracketStyle, CommaMark, Normalizer, PeriodMark, PunctuationStyle, Width, WidthPolicy,
+};
 use sakura_proto::{AppearanceTheme, Mode, PadShortcut};
 
 // The appearance section is optional, so adding its theme key remains
@@ -165,6 +167,175 @@ impl ShiftSpaceBehavior {
             Self::Full => true,
             Self::Half => false,
         }
+    }
+}
+
+/// A named preset over [`Preferences`]'s notation-related fields:
+/// alphanumeric/number/symbol width, punctuation, brackets, and space width.
+///
+/// This is a pure derived/applied grouping, not a stored preference: it adds
+/// no config-file key of its own and is never read or written by the parser
+/// or serializer. The settings UI uses [`NotationStyle::apply_to`] to set
+/// several scattered fields in one step, and [`NotationStyle::of`] to report
+/// which preset (if any) the current combination still matches, so it can
+/// fall back to showing "custom" once a user edits one of the underlying
+/// fields directly.
+///
+/// Every style spells out all seven values it pins, even the three width
+/// channels and the bracket style that happen to be identical across all
+/// four styles today. That repetition is deliberate: a style is a complete,
+/// self-contained declaration of what it requires, so a later change to
+/// `WidthPolicy`'s or [`Preferences`]'s own defaults cannot silently change
+/// what an existing style means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NotationStyle {
+    /// 標準（日本語） — ordinary Japanese prose: half-width alnum/number/
+    /// symbol, the traditional `、。` punctuation, corner brackets, and a
+    /// space that follows the current input width. Equal to
+    /// [`Preferences::default`] on these seven fields.
+    #[default]
+    Standard,
+    /// 日本語技術論文（半角句読点） — half-width `,.` punctuation for prose
+    /// that will be typeset from plain text (Markdown, LaTeX, code
+    /// comments), with half-width spaces to keep monospaced alignment
+    /// predictable.
+    TechnicalPaper,
+    /// 学術（全角コンマ・ピリオド） — the JIS / 学術論文 convention of
+    /// full-width `，．` punctuation.
+    Academic,
+    /// 公用文 — the 公用文 convention of full-width comma with a Japanese
+    /// period, `，。`.
+    Official,
+}
+
+impl NotationStyle {
+    /// All styles, in declaration order.
+    pub const ALL: [Self; 4] = [
+        Self::Standard,
+        Self::TechnicalPaper,
+        Self::Academic,
+        Self::Official,
+    ];
+
+    /// The seven leaf values this style pins, grouped the way [`Preferences`]
+    /// itself groups them: the three [`WidthPolicy`] channels plus
+    /// punctuation and brackets live inside [`Normalizer`], and
+    /// [`SpaceWidth`] sits alongside it.
+    ///
+    /// Each arm below is written out in full rather than sharing one
+    /// `WidthPolicy`/`BracketStyle` value across styles, for the same reason
+    /// the type doc comment gives: nothing here should be able to change two
+    /// styles at once by accident.
+    const fn payload(self) -> (Normalizer, SpaceWidth) {
+        match self {
+            Self::Standard => (
+                Normalizer {
+                    width: WidthPolicy {
+                        alnum: Width::Half,
+                        number: Width::Half,
+                        symbol: Width::Half,
+                    },
+                    punctuation: PunctuationStyle::KUTEN_TOUTEN,
+                    brackets: BracketStyle::Corner,
+                },
+                SpaceWidth::SameAsInput,
+            ),
+            Self::TechnicalPaper => (
+                Normalizer {
+                    width: WidthPolicy {
+                        alnum: Width::Half,
+                        number: Width::Half,
+                        symbol: Width::Half,
+                    },
+                    punctuation: PunctuationStyle::ASCII,
+                    brackets: BracketStyle::Corner,
+                },
+                SpaceWidth::Half,
+            ),
+            Self::Academic => (
+                Normalizer {
+                    width: WidthPolicy {
+                        alnum: Width::Half,
+                        number: Width::Half,
+                        symbol: Width::Half,
+                    },
+                    punctuation: PunctuationStyle::COMMA_PERIOD,
+                    brackets: BracketStyle::Corner,
+                },
+                SpaceWidth::Half,
+            ),
+            Self::Official => (
+                Normalizer {
+                    width: WidthPolicy {
+                        alnum: Width::Half,
+                        number: Width::Half,
+                        symbol: Width::Half,
+                    },
+                    punctuation: PunctuationStyle::COMMA_KUTEN,
+                    brackets: BracketStyle::Corner,
+                },
+                SpaceWidth::SameAsInput,
+            ),
+        }
+    }
+
+    /// The Japanese label shown in the settings UI.
+    ///
+    /// Styles have no config-file token of their own — see the type doc
+    /// comment — so unlike this file's other small enums there is no paired
+    /// `name`/`from_name`: `label` is deliberately the only string accessor.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "標準（日本語）",
+            Self::TechnicalPaper => "日本語技術論文（半角句読点）",
+            Self::Academic => "学術（全角コンマ・ピリオド）",
+            Self::Official => "公用文",
+        }
+    }
+
+    /// Writes this style's seven pinned values into `preferences`. Every
+    /// other field is left exactly as the caller passed it in.
+    pub fn apply_to(self, preferences: &mut Preferences) {
+        let (normalizer, space_width) = self.payload();
+        preferences.normalizer = normalizer;
+        preferences.space_width = space_width;
+    }
+
+    /// The style whose seven values all match `preferences`, or `None` if
+    /// the current combination is a custom mix no shipped style produces.
+    ///
+    /// The four styles are constructed to be pairwise distinct on these
+    /// seven fields (`notation_style_payloads_are_pairwise_distinct` below
+    /// checks this), so at most one `ALL` entry can ever match.
+    pub fn of(preferences: &Preferences) -> Option<Self> {
+        let current = (preferences.normalizer, preferences.space_width);
+        Self::ALL
+            .into_iter()
+            .find(|style| style.payload() == current)
+    }
+
+    /// Just the [`Normalizer`] half of the payload.
+    ///
+    /// An [`AppProfile`] carries a normalizer but no space width, so the
+    /// per-application form of this setting can only pin five of the seven
+    /// values. Splitting the accessor keeps that honest: the profile path
+    /// cannot silently reach a field the profile does not store.
+    pub const fn normalizer(self) -> Normalizer {
+        self.payload().0
+    }
+
+    /// The style whose [`Normalizer`] matches, for the per-application form
+    /// that has no space width to compare.
+    ///
+    /// Dropping space width from the comparison is only sound while the four
+    /// normalizers stay pairwise distinct on their own —
+    /// `notation_style_normalizers_are_pairwise_distinct` below checks that,
+    /// because two styles differing *only* in space width would make this
+    /// return an arbitrary one of them.
+    pub fn of_normalizer(normalizer: &Normalizer) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|style| style.normalizer() == *normalizer)
     }
 }
 
@@ -871,22 +1042,76 @@ const fn width_name(value: Width) -> &'static str {
     }
 }
 
+// The comma and period roles are independent settings (`width::CommaMark`,
+// `width::PeriodMark`), so the nine names below are the full cross product,
+// not four hand-picked combinations. Four of the nine predate that split and
+// keep their original irregular names — "kuten-touten", "comma-period",
+// "mixed", "comma-kuten" — so config files written before the split still
+// parse, and `punctuation_name` still emits exactly what it always did. The
+// other five are new and get the regular "<comma>-<period>" scheme. The four
+// legacy combinations also accept that regular form as an alias on read
+// ("touten-kuten", "full-comma-full-period", "touten-full-period",
+// "full-comma-kuten"), so a reader learning the vocabulary only has to learn
+// one scheme, even though the writer still prefers the old spelling for
+// those four. Unknown values return `None`: the caller falls back to the
+// default rather than guessing at a convention this build does not know.
 fn parse_punctuation(value: &str) -> Option<PunctuationStyle> {
     match value {
-        "kuten-touten" => Some(PunctuationStyle::KutenTouten),
-        "comma-period" => Some(PunctuationStyle::CommaPeriod),
-        "mixed" => Some(PunctuationStyle::Mixed),
-        "comma-kuten" => Some(PunctuationStyle::CommaKuten),
+        "kuten-touten" | "touten-kuten" => {
+            Some(PunctuationStyle::new(CommaMark::Touten, PeriodMark::Kuten))
+        }
+        "comma-period" | "full-comma-full-period" => Some(PunctuationStyle::new(
+            CommaMark::FullWidth,
+            PeriodMark::FullWidth,
+        )),
+        "mixed" | "touten-full-period" => Some(PunctuationStyle::new(
+            CommaMark::Touten,
+            PeriodMark::FullWidth,
+        )),
+        "comma-kuten" | "full-comma-kuten" => Some(PunctuationStyle::new(
+            CommaMark::FullWidth,
+            PeriodMark::Kuten,
+        )),
+        "touten-half-period" => Some(PunctuationStyle::new(
+            CommaMark::Touten,
+            PeriodMark::HalfWidth,
+        )),
+        "full-comma-half-period" => Some(PunctuationStyle::new(
+            CommaMark::FullWidth,
+            PeriodMark::HalfWidth,
+        )),
+        "half-comma-kuten" => Some(PunctuationStyle::new(
+            CommaMark::HalfWidth,
+            PeriodMark::Kuten,
+        )),
+        "half-comma-full-period" => Some(PunctuationStyle::new(
+            CommaMark::HalfWidth,
+            PeriodMark::FullWidth,
+        )),
+        "half-comma-half-period" => Some(PunctuationStyle::new(
+            CommaMark::HalfWidth,
+            PeriodMark::HalfWidth,
+        )),
         _ => None,
     }
 }
 
+// Always writes one of the nine canonical names, never one of
+// `parse_punctuation`'s regular-scheme aliases — in particular the four
+// legacy combinations keep emitting their original irregular name so
+// existing config files, and the round-trip tests below, see the exact same
+// bytes come back out.
 const fn punctuation_name(value: PunctuationStyle) -> &'static str {
-    match value {
-        PunctuationStyle::KutenTouten => "kuten-touten",
-        PunctuationStyle::CommaPeriod => "comma-period",
-        PunctuationStyle::Mixed => "mixed",
-        PunctuationStyle::CommaKuten => "comma-kuten",
+    match (value.comma, value.period) {
+        (CommaMark::Touten, PeriodMark::Kuten) => "kuten-touten",
+        (CommaMark::FullWidth, PeriodMark::FullWidth) => "comma-period",
+        (CommaMark::Touten, PeriodMark::FullWidth) => "mixed",
+        (CommaMark::FullWidth, PeriodMark::Kuten) => "comma-kuten",
+        (CommaMark::Touten, PeriodMark::HalfWidth) => "touten-half-period",
+        (CommaMark::FullWidth, PeriodMark::HalfWidth) => "full-comma-half-period",
+        (CommaMark::HalfWidth, PeriodMark::Kuten) => "half-comma-kuten",
+        (CommaMark::HalfWidth, PeriodMark::FullWidth) => "half-comma-full-period",
+        (CommaMark::HalfWidth, PeriodMark::HalfWidth) => "half-comma-half-period",
     }
 }
 
@@ -912,7 +1137,7 @@ mod tests {
                     number: Width::FollowMode,
                     symbol: Width::Half,
                 },
-                punctuation: PunctuationStyle::CommaPeriod,
+                punctuation: PunctuationStyle::COMMA_PERIOD,
                 brackets: BracketStyle::Square,
             },
             space_width: SpaceWidth::Full,
@@ -998,7 +1223,7 @@ punctuation = "comma-kuten"
         .expect("parse independent punctuation");
         assert_eq!(
             parsed.preferences.normalizer.punctuation,
-            PunctuationStyle::CommaKuten
+            PunctuationStyle::COMMA_KUTEN
         );
         let serialized = serialize_preferences(parsed.preferences);
         assert!(serialized.contains("punctuation = \"comma-kuten\""));
@@ -1076,7 +1301,7 @@ suggest-enabled = "false"
         assert_eq!(terminal.normalizer.width.alnum, Width::Full);
         assert_eq!(
             terminal.normalizer.punctuation,
-            PunctuationStyle::CommaPeriod
+            PunctuationStyle::COMMA_PERIOD
         );
         let custom =
             resolve_context_preferences(parsed.preferences, &parsed.profiles, "CUSTOM.EXE");
@@ -1114,7 +1339,7 @@ punctuation = "mixed"
         );
         assert_eq!(
             parsed.preferences.normalizer.punctuation,
-            PunctuationStyle::Mixed
+            PunctuationStyle::MIXED
         );
 
         let upgraded =
@@ -1386,5 +1611,279 @@ anything = "ignored"
             );
             assert!(crate::allows_system_entry(support, skip, EntryFlags::IT));
         }
+    }
+
+    #[test]
+    fn punctuation_style_names_round_trip_all_nine_combinations() {
+        // Every point in the comma x period cross product must survive a
+        // name -> style -> name trip, independent of which nine strings the
+        // config format happens to spell each combination with.
+        for style in PunctuationStyle::ALL {
+            let name = punctuation_name(style);
+            assert_eq!(
+                parse_punctuation(name),
+                Some(style),
+                "name {name:?} did not parse back to {style:?}"
+            );
+        }
+        // The four combinations that predate the comma/period split must
+        // keep serializing to exactly their original names: that is what
+        // lets a config file written years ago still round-trip today.
+        assert_eq!(
+            punctuation_name(PunctuationStyle::KUTEN_TOUTEN),
+            "kuten-touten"
+        );
+        assert_eq!(
+            punctuation_name(PunctuationStyle::COMMA_PERIOD),
+            "comma-period"
+        );
+        assert_eq!(punctuation_name(PunctuationStyle::MIXED), "mixed");
+        assert_eq!(
+            punctuation_name(PunctuationStyle::COMMA_KUTEN),
+            "comma-kuten"
+        );
+    }
+
+    #[test]
+    fn punctuation_regular_scheme_aliases_match_their_legacy_names() {
+        // The four legacy combinations also accept the same regular
+        // "<comma>-<period>" scheme the five newer combinations use, so a
+        // reader only has to learn one naming rule even though the writer
+        // still prefers the old spelling for these four.
+        let aliases = [
+            ("touten-kuten", "kuten-touten"),
+            ("full-comma-full-period", "comma-period"),
+            ("touten-full-period", "mixed"),
+            ("full-comma-kuten", "comma-kuten"),
+        ];
+        for (alias, legacy) in aliases {
+            let parsed_alias = parse_punctuation(alias);
+            assert_eq!(
+                parsed_alias,
+                parse_punctuation(legacy),
+                "alias {alias:?} should parse the same as {legacy:?}"
+            );
+            // But the alias is never what gets written back out: the writer
+            // always prefers the legacy irregular name for these four.
+            let style = parsed_alias.expect("alias is one of the nine canonical styles");
+            assert_eq!(punctuation_name(style), legacy);
+        }
+    }
+
+    #[test]
+    fn punctuation_config_accepts_the_all_ascii_variant() {
+        let parsed = parse_preferences(
+            r#"
+[meta]
+format-version = "4"
+[width]
+punctuation = "half-comma-half-period"
+"#,
+        )
+        .expect("parse all-ASCII punctuation");
+        assert_eq!(
+            parsed.preferences.normalizer.punctuation,
+            PunctuationStyle::ASCII
+        );
+        let serialized = serialize_preferences(parsed.preferences);
+        assert!(serialized.contains("punctuation = \"half-comma-half-period\""));
+    }
+
+    #[test]
+    fn notation_style_standard_matches_preferences_default() {
+        // `Preferences` derives `PartialEq`/`Eq` (see its struct definition
+        // above), so every field can be checked in one assertion instead of
+        // listing the seven `Standard` touches by hand.
+        let mut preferences = Preferences::default();
+        NotationStyle::Standard.apply_to(&mut preferences);
+        assert_eq!(preferences, Preferences::default());
+    }
+
+    #[test]
+    fn notation_style_round_trips_through_apply_and_of() {
+        for style in NotationStyle::ALL {
+            let mut preferences = Preferences::default();
+            style.apply_to(&mut preferences);
+            assert_eq!(NotationStyle::of(&preferences), Some(style), "{style:?}");
+        }
+    }
+
+    #[test]
+    fn notation_style_of_returns_none_when_any_field_is_perturbed() {
+        for style in NotationStyle::ALL {
+            let mut baseline = Preferences::default();
+            style.apply_to(&mut baseline);
+            assert_eq!(NotationStyle::of(&baseline), Some(style));
+
+            // Every style pins these four channels to the same value (`Half`
+            // width, `Corner` brackets), so nudging any one of them away
+            // from that value cannot land on a different style either: the
+            // replacement is safe regardless of which style is under test.
+            let mut alnum = baseline;
+            alnum.normalizer.width.alnum = Width::Full;
+            assert_eq!(NotationStyle::of(&alnum), None, "{style:?} alnum");
+
+            let mut number = baseline;
+            number.normalizer.width.number = Width::Full;
+            assert_eq!(NotationStyle::of(&number), None, "{style:?} number");
+
+            let mut symbol = baseline;
+            symbol.normalizer.width.symbol = Width::Full;
+            assert_eq!(NotationStyle::of(&symbol), None, "{style:?} symbol");
+
+            let mut brackets = baseline;
+            brackets.normalizer.brackets = BracketStyle::Square;
+            assert_eq!(NotationStyle::of(&brackets), None, "{style:?} brackets");
+
+            // `Full` space width is likewise never used by any style (only
+            // `SameAsInput` and `Half` are), so it too is a safe replacement
+            // no matter which style's baseline this perturbs.
+            let mut space_width = baseline;
+            space_width.space_width = SpaceWidth::Full;
+            assert_eq!(
+                NotationStyle::of(&space_width),
+                None,
+                "{style:?} space_width"
+            );
+
+            // Comma and period are the two leaves that actually vary between
+            // styles, so a careless replacement could reconstruct a
+            // different style's exact combination by accident. Each pair
+            // below is chosen so the resulting (comma, period) combination
+            // is not the punctuation any style requires, independent of what
+            // the other six fields happen to be.
+            let (comma_replacement, period_replacement) = match style {
+                NotationStyle::Standard => (CommaMark::HalfWidth, PeriodMark::FullWidth),
+                NotationStyle::TechnicalPaper => (CommaMark::Touten, PeriodMark::Kuten),
+                NotationStyle::Academic => (CommaMark::Touten, PeriodMark::HalfWidth),
+                NotationStyle::Official => (CommaMark::HalfWidth, PeriodMark::HalfWidth),
+            };
+            let baseline_punctuation = baseline.normalizer.punctuation;
+
+            let mut comma = baseline;
+            comma.normalizer.punctuation =
+                PunctuationStyle::new(comma_replacement, baseline_punctuation.period);
+            assert_eq!(NotationStyle::of(&comma), None, "{style:?} comma");
+
+            let mut period = baseline;
+            period.normalizer.punctuation =
+                PunctuationStyle::new(baseline_punctuation.comma, period_replacement);
+            assert_eq!(NotationStyle::of(&period), None, "{style:?} period");
+        }
+    }
+
+    #[test]
+    fn notation_style_apply_to_only_touches_its_seven_fields() {
+        // Every field below is deliberately non-default, including
+        // `normalizer`/`space_width` (which `apply_to` is expected to
+        // overwrite): the point is to prove the other thirteen survive.
+        let custom = Preferences {
+            keymap_preset: Preset::Atok,
+            input_method: InputMethod::Kana,
+            default_mode: Mode::Katakana,
+            conversion_method: ConversionMethod::SingleSegment,
+            normalizer: Normalizer::default(),
+            space_width: SpaceWidth::Full,
+            shift_space_behavior: ShiftSpaceBehavior::Half,
+            prediction_enabled: false,
+            suggest_accept: SuggestAccept::ShiftEnter,
+            association_enabled: false,
+            input_support: InputSupport {
+                enabled: false,
+                ..InputSupport::default()
+            },
+            neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
+            appearance_theme: AppearanceTheme::Dark,
+            pad_shortcut: PadShortcut::DoubleCtrl,
+            developer_mode: true,
+        };
+
+        for style in NotationStyle::ALL {
+            let mut preferences = custom;
+            style.apply_to(&mut preferences);
+
+            assert_eq!(preferences.keymap_preset, custom.keymap_preset, "{style:?}");
+            assert_eq!(preferences.input_method, custom.input_method, "{style:?}");
+            assert_eq!(
+                preferences.conversion_method, custom.conversion_method,
+                "{style:?}"
+            );
+            assert_eq!(preferences.default_mode, custom.default_mode, "{style:?}");
+            assert_eq!(
+                preferences.shift_space_behavior, custom.shift_space_behavior,
+                "{style:?}"
+            );
+            assert_eq!(
+                preferences.prediction_enabled, custom.prediction_enabled,
+                "{style:?}"
+            );
+            assert_eq!(
+                preferences.suggest_accept, custom.suggest_accept,
+                "{style:?}"
+            );
+            assert_eq!(
+                preferences.association_enabled, custom.association_enabled,
+                "{style:?}"
+            );
+            assert_eq!(preferences.input_support, custom.input_support, "{style:?}");
+            assert_eq!(
+                preferences.neural_reranker_scope, custom.neural_reranker_scope,
+                "{style:?}"
+            );
+            assert_eq!(
+                preferences.appearance_theme, custom.appearance_theme,
+                "{style:?}"
+            );
+            assert_eq!(preferences.pad_shortcut, custom.pad_shortcut, "{style:?}");
+            assert_eq!(
+                preferences.developer_mode, custom.developer_mode,
+                "{style:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn notation_style_technical_paper_pins_ascii_punctuation_and_half_space() {
+        let mut preferences = Preferences::default();
+        NotationStyle::TechnicalPaper.apply_to(&mut preferences);
+        assert_eq!(preferences.normalizer.punctuation, PunctuationStyle::ASCII);
+        assert_eq!(preferences.space_width, SpaceWidth::Half);
+    }
+
+    #[test]
+    fn notation_style_payloads_are_pairwise_distinct() {
+        for (index, style) in NotationStyle::ALL.into_iter().enumerate() {
+            for other in NotationStyle::ALL.into_iter().skip(index + 1) {
+                assert_ne!(style.payload(), other.payload(), "duplicate payload");
+            }
+        }
+    }
+
+    #[test]
+    fn notation_style_normalizers_are_pairwise_distinct() {
+        // `of_normalizer` compares five of the seven values because an
+        // `AppProfile` stores no space width. That is only unambiguous while
+        // no two styles are separated by space width alone; if a fifth style
+        // ever were, this fails here rather than silently resolving to
+        // whichever one `ALL` happens to list first.
+        for (index, style) in NotationStyle::ALL.into_iter().enumerate() {
+            assert_eq!(
+                NotationStyle::of_normalizer(&style.normalizer()),
+                Some(style),
+                "{style:?}"
+            );
+            for other in NotationStyle::ALL.into_iter().skip(index + 1) {
+                assert_ne!(
+                    style.normalizer(),
+                    other.normalizer(),
+                    "{style:?} and {other:?} share a normalizer"
+                );
+            }
+        }
+
+        // A mix no style produces stays a custom mix.
+        let mut custom = NotationStyle::TechnicalPaper.normalizer();
+        custom.brackets = BracketStyle::Square;
+        assert_eq!(NotationStyle::of_normalizer(&custom), None);
     }
 }

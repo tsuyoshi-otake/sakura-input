@@ -130,7 +130,7 @@ fn normalizing_width_allocates_nothing() {
             number: Width::FollowMode,
             symbol: Width::Half,
         },
-        punctuation: PunctuationStyle::CommaPeriod,
+        punctuation: PunctuationStyle::COMMA_PERIOD,
         brackets: BracketStyle::default(),
     };
     let mut out = FixedStr::<512>::new();

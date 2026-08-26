@@ -94,7 +94,7 @@ Remove-Item Env:SAKURA_SETTINGS_E2E_EXE
 | SET-U32-009 | 文字幅・句読点の初期値復元 | `文字幅・句読点` → `初期値に戻す` の矩形中央へ `SendInput(LBUTTONDOWN/UP)` | 文字幅・句読点トピックのステータスに初期値復元が表示され、連想変換などの兄弟設定へ作用しない | 実装済み |
 | SET-U32-010 | 辞書トピックの実クリック | `辞書` → `辞書ファイルの入出力` → `登録単語` を物理クリック | 選択した項目のネスト済みパネルだけが可視 | 実装済み |
 | SET-U32-011 | 連想変換への実クリック | Sakuraの入力階層TreeViewの行をUser32で走査し、`連想変換` を選択 | 連想変換のチェックボックスと説明だけが可視で、基本・文節変換・アプリ別パネルは非表示。Tinyの適用範囲は文節変換ページで設定する | 実装済み |
-| SET-U32-012 | 文字幅・句読点のコントロール認識 | 選択ページの6つのComboBox（英字・数字・句点・読点・記号・括弧）をHWND・クラス・可視矩形で列挙し、幅／句点／読点／括弧の選択項目をComboLBoxへ物理クリック | 別ページのコントロールを触らず、`Width::Full`、独立した句点・読点選択（`PunctuationStyle::CommaPeriod`）、括弧スタイル（`BracketStyle::Square`）がApply後の隔離configへ保存される | 実装済み |
+| SET-U32-012 | 文字幅・句読点のコントロール認識 | 選択ページの7つのComboBox（表記スタイル・英字・数字・句点・読点・記号・括弧）をHWND・クラス・可視矩形で列挙し、対象コントロールは並び順ではなく隣接ラベルで特定したうえで、幅／句点／読点／括弧の選択項目をComboLBoxへ物理クリック | 別ページのコントロールを触らず、`Width::Full`、独立した句点・読点選択（`PunctuationStyle::COMMA_PERIOD`）、括弧スタイル（`BracketStyle::Square`）がApply後の隔離configへ保存される。個別編集後の表記スタイルは`カスタム`を表示する | 実装済み |
 | SET-U32-013 | インストール済み payload の同一経路 | `SAKURA_SETTINGS_E2E_EXE` で Program Files 配下の payload を指定し、SET-U32-003/010/011/012 を実行 | debug payload と同じ HWND認識・物理クリック・隔離保存の結果になる | payload再インストール・debugとのSHA-256一致を確認済み。installed payloadの実画面クリックは未実行 |
 | SET-U32-014 | 入力方法の実クリック | `ローマ字入力`／`カナ入力`を物理クリックしてApply | ラジオ選択が排他的に切り替わり、`input-method = "kana"`が保存される。初期値復元は当該ページだけに作用する | 実装済み |
 | SET-U32-015 | 文字種の実クリック | 基本設定の`文字種`コンボを物理クリックして全角カタカナをApply | `default-mode = "katakana"`が保存され、別ページの初期値復元によって変更されない | 実装済み |
@@ -127,6 +127,7 @@ Remove-Item Env:SAKURA_SETTINGS_E2E_EXE
 | SET-U32-118 | 枠とリセット操作の視覚的分離 | `文字幅・句読点`を物理選択し、`入力・変換`グループ枠と`初期値に戻す`の`GetWindowRect`を確認してからボタン中央を `SendInput` でクリック | リセットの上端がグループ枠の下端より8 px以上下にあり、ボタン中央の`WindowFromPoint`はリセットボタン。リセットは文字幅・句読点だけを既定値へ戻す | 実装済み（`normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer`） |
 | SET-U32-119 | 説明と推測候補枠の視覚的分離 | `推測変換`を物理選択し、説明Staticと`推測候補`グループ枠の`GetWindowRect`を確認 | グループ枠の上端が説明の下端より8 px以上下にあり、タイトルや説明と重ならない | 実装済み（`input_tree_click_shows_only_selected_conversion_controls`） |
 | SET-U32-120 | カテゴリ選択の葉への正規化 | `変換補助`／`入力支援`のカテゴリ行をそれぞれ物理クリックし、TreeViewの`TVGN_CARET`と先頭の子Itemを照合 | カテゴリの空ページを表示せず、TreeViewの選択はそれぞれ`文節変換`／`入力誤りの自動修復`の葉へ移り、右ペインはその葉だけを表示する | 実装済み（`conversion_category_click_normalizes_to_segment_controls`、`input_support_topic_click_shows_prediction_assistance_controls`） |
+| SET-U32-121 | 表記スタイルの2ページ横断適用 | `文字幅・句読点`の`表記スタイル`で「日本語技術論文（半角句読点）」をComboLBoxへ物理クリックし、Apply後に`入力補助`へ切り替えてスペース幅コンボを読む | 句点・読点が半角になり、隔離configへ`PunctuationStyle::ASCII`と`SpaceWidth::Half`が同時に保存される。開いていない`入力補助`ページのコンボも「常に半角」へ移動し、そこを個別に戻すと表記スタイルは`カスタム`へ戻る | 実装済み（`notation_style_preset_writes_both_pages_and_persists`、実画面未実行） |
 
 ## 判定の原則
 

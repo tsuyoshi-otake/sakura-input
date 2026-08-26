@@ -8863,7 +8863,7 @@ mod tests {
                     number: Width::Half,
                     symbol: Width::FollowMode,
                 },
-                punctuation: PunctuationStyle::CommaPeriod,
+                punctuation: PunctuationStyle::COMMA_PERIOD,
                 brackets: BracketStyle::default(),
             },
             prediction_enabled: false,
