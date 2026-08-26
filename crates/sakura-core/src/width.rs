@@ -170,7 +170,108 @@ impl PunctuationStyle {
     pub const fn new(comma: CommaMark, period: PeriodMark) -> Self {
         Self { comma, period }
     }
+
+    /// The whole punctuation family `c` belongs to, ordered with this style's
+    /// own glyph first, or `None` when `c` is in neither family.
+    ///
+    /// The setting decides which mark is offered *first*; it does not decide
+    /// which marks exist. Somebody who set `，` still needs to reach `、` for
+    /// one quoted sentence without opening the settings window, which is what
+    /// this ordering gives the converter (Issue #99).
+    ///
+    /// The returned order always holds all four members exactly once.
+    pub fn family_for(self, c: char) -> Option<[PunctuationVariant; PUNCTUATION_FAMILY_LEN]> {
+        let (family, preferred) = if COMMA_FAMILY.iter().any(|variant| variant.glyph == c) {
+            (COMMA_FAMILY, self.comma.glyph())
+        } else if PERIOD_FAMILY.iter().any(|variant| variant.glyph == c) {
+            (PERIOD_FAMILY, self.period.glyph())
+        } else {
+            return None;
+        };
+        // Two passes rather than search-and-swap, so the result holds all four
+        // members in every case -- including a `preferred` outside the family,
+        // which `CommaMark`/`PeriodMark` cannot produce today but which must
+        // not silently drop a member if that ever changes.
+        let mut ordered = [family[0]; PUNCTUATION_FAMILY_LEN];
+        let mut placed = 0;
+        for variant in family {
+            if variant.glyph == preferred {
+                ordered[placed] = variant;
+                placed += 1;
+            }
+        }
+        for variant in family {
+            if variant.glyph != preferred {
+                ordered[placed] = variant;
+                placed += 1;
+            }
+        }
+        debug_assert_eq!(placed, PUNCTUATION_FAMILY_LEN);
+        Some(ordered)
+    }
 }
+
+/// How many glyphs one punctuation family holds.
+pub const PUNCTUATION_FAMILY_LEN: usize = 4;
+
+/// One offerable punctuation glyph and the annotation naming it.
+///
+/// The annotation follows the same bare-noun shape as
+/// [`crate::numerals::NumericStyle::annotation`] (算用数字 / 全角数字 /
+/// 漢数字) rather than a bracketed width tag, so a candidate list reads
+/// consistently whichever rewriter produced the row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PunctuationVariant {
+    pub glyph: char,
+    pub annotation: &'static str,
+}
+
+/// The comma role's four offerable glyphs, in the order they follow the
+/// configured one.
+///
+/// `､` (U+FF64) is here but deliberately absent from [`punct_role`]: it is
+/// offerable as a candidate without being a glyph the choke point rewrites
+/// into or out of. It also sits outside `to_half`/`to_full`'s U+FF01..=U+FF5E
+/// arithmetic range, so the width policy leaves it alone as well.
+pub const COMMA_FAMILY: [PunctuationVariant; PUNCTUATION_FAMILY_LEN] = [
+    PunctuationVariant {
+        glyph: '\u{3001}', // 、
+        annotation: "全角読点",
+    },
+    PunctuationVariant {
+        glyph: '\u{FF64}', // ､
+        annotation: "半角読点",
+    },
+    PunctuationVariant {
+        glyph: '\u{FF0C}', // ，
+        annotation: "全角コンマ",
+    },
+    PunctuationVariant {
+        glyph: ',',
+        annotation: "半角コンマ",
+    },
+];
+
+/// The period role's four offerable glyphs. See [`COMMA_FAMILY`] for why
+/// `｡` (U+FF61) appears here but not in [`punct_role`].
+pub const PERIOD_FAMILY: [PunctuationVariant; PUNCTUATION_FAMILY_LEN] = [
+    PunctuationVariant {
+        glyph: '\u{3002}', // 。
+        annotation: "全角句点",
+    },
+    PunctuationVariant {
+        glyph: '\u{FF61}', // ｡
+        annotation: "半角句点",
+    },
+    PunctuationVariant {
+        glyph: '\u{FF0E}', // ．
+        annotation: "全角ピリオド",
+    },
+    PunctuationVariant {
+        glyph: '.',
+        annotation: "半角ピリオド",
+    },
+];
 
 /// Which bracket pair the width-policy choke point emits.
 ///
@@ -1232,5 +1333,108 @@ mod tests {
         assert_eq!(PunctuationStyle::COMMA_KUTEN.period.glyph(), '\u{3002}');
         assert_eq!(PunctuationStyle::ASCII.comma.glyph(), ',');
         assert_eq!(PunctuationStyle::ASCII.period.glyph(), '.');
+    }
+
+    #[test]
+    fn every_style_orders_its_own_glyph_first_and_keeps_the_whole_family() {
+        // The setting decides the first row, not which rows exist. Both
+        // halves are exhaustive over the nine styles because a single style
+        // getting this wrong is invisible in any other test.
+        for style in PunctuationStyle::ALL {
+            for (family, preferred) in [
+                (COMMA_FAMILY, style.comma.glyph()),
+                (PERIOD_FAMILY, style.period.glyph()),
+            ] {
+                for member in family {
+                    let ordered = style
+                        .family_for(member.glyph)
+                        .unwrap_or_else(|| panic!("{:?} has no family", member.glyph));
+                    assert_eq!(
+                        ordered[0].glyph, preferred,
+                        "{style:?} must offer its own glyph first for {:?}",
+                        member.glyph
+                    );
+                    for expected in family {
+                        assert_eq!(
+                            ordered
+                                .iter()
+                                .filter(|variant| variant.glyph == expected.glyph)
+                                .count(),
+                            1,
+                            "{style:?}: {:?} is not offered exactly once",
+                            expected.glyph
+                        );
+                    }
+                    // Everything after the first row keeps the table's own
+                    // order, so the list a reader learns does not reshuffle
+                    // when they change the setting.
+                    let tail: Vec<char> = ordered[1..].iter().map(|v| v.glyph).collect();
+                    let expected_tail: Vec<char> = family
+                        .iter()
+                        .map(|v| v.glyph)
+                        .filter(|glyph| *glyph != preferred)
+                        .collect();
+                    assert_eq!(tail, expected_tail, "{style:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn punctuation_families_are_disjoint_and_carry_distinct_annotations() {
+        let mut glyphs = Vec::new();
+        let mut annotations = Vec::new();
+        for variant in COMMA_FAMILY.into_iter().chain(PERIOD_FAMILY) {
+            assert!(
+                !glyphs.contains(&variant.glyph),
+                "{:?} appears in both families",
+                variant.glyph
+            );
+            assert!(
+                !annotations.contains(&variant.annotation),
+                "`{}` annotates two glyphs",
+                variant.annotation
+            );
+            glyphs.push(variant.glyph);
+            annotations.push(variant.annotation);
+        }
+        assert_eq!(glyphs.len(), PUNCTUATION_FAMILY_LEN * 2);
+        // A character in neither family has no family, however punctuation-
+        // like it looks. `・` and `！` are the near misses worth pinning.
+        for outsider in ['a', 'あ', '・', '！', '!', '｢'] {
+            assert!(
+                PunctuationStyle::default().family_for(outsider).is_none(),
+                "{outsider:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn half_width_kana_marks_are_offerable_without_being_claimed() {
+        // `､` and `｡` are candidates the converter can offer but glyphs the
+        // choke point does not own: `punct_role` ignores them and they sit
+        // outside the U+FF01..=U+FF5E width arithmetic. That is what lets a
+        // reader pick one and keep it under any setting, and it is why the
+        // family table can list them without widening rule 4's four-code-
+        // point set.
+        assert!(punct_role('\u{FF64}').is_none());
+        assert!(punct_role('\u{FF61}').is_none());
+        for style in PunctuationStyle::ALL {
+            for symbol in [Width::Half, Width::Full] {
+                let normalizer = Normalizer {
+                    width: WidthPolicy {
+                        alnum: symbol,
+                        number: symbol,
+                        symbol,
+                    },
+                    punctuation: style,
+                    brackets: BracketStyle::default(),
+                };
+                for mode in [Mode::Direct, Mode::Hiragana] {
+                    assert_eq!(normalizer.normalize_char('\u{FF64}', mode), '\u{FF64}');
+                    assert_eq!(normalizer.normalize_char('\u{FF61}', mode), '\u{FF61}');
+                }
+            }
+        }
     }
 }

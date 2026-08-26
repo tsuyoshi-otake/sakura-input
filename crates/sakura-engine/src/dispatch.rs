@@ -1772,6 +1772,10 @@ fn conversion_options(
             0
         },
         input_support: session.input_support,
+        // Read off the session rather than the dispatcher, so a per-app
+        // profile's notation style reaches the converter the same way its
+        // width policy already reaches the choke point (Issue #99).
+        punctuation: session.normalizer.punctuation,
         skip_input_repair: scope_is_sensitive(session.scope)
             || !session.scope_classified
             || learning
@@ -6084,7 +6088,9 @@ mod tests {
 
     use crate::input_history::{InputHistoryRecord, InputHistoryService, ScopeClass};
     use sakura_core::keymap::{KeyMap, State};
-    use sakura_core::width::{BracketStyle, PunctuationStyle, Width, WidthPolicy};
+    use sakura_core::width::{
+        BracketStyle, CommaMark, PeriodMark, PunctuationStyle, Width, WidthPolicy,
+    };
     use sakura_core::UserDictionary;
     use sakura_proto::types::CandidatePresentation;
     use sakura_proto::{CandidateKind, KeyCode, Modifiers, CANDIDATE_PAGE_SIZE};
@@ -6907,6 +6913,136 @@ mod tests {
             .expect("raw repair session")
             .cached_surface_fingerprint("なzか")
             .is_none());
+    }
+
+    /// Issue #99.  Typing one comma and converting has to offer all four marks
+    /// as four visibly different rows, with the configured one first.
+    ///
+    /// This has to be an end-to-end test rather than a converter-level one.
+    /// The four candidates differ only in a character the width choke point
+    /// claims, so a list that is correct inside the converter still renders as
+    /// the same glyph four times unless `append_candidate_surface` lets the
+    /// `synthetic_exact` rows past `normalize_into`.  Only a dispatch-level
+    /// test sees the strings the reader sees.
+    #[test]
+    fn a_converted_comma_offers_every_mark_and_commits_the_chosen_one_verbatim() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut normalizer = Normalizer::default();
+        normalizer.punctuation = PunctuationStyle::new(CommaMark::FullWidth, PeriodMark::FullWidth);
+        dispatcher
+            .apply_runtime_configuration(
+                Preferences {
+                    normalizer,
+                    ..Preferences::default()
+                },
+                Arc::from([]),
+            )
+            .expect("valid runtime configuration");
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "punctuation-family.exe");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key(','),
+            },
+            &mut out,
+        );
+        // The configured mark is what the preedit already showed, so replacing
+        // TOP-1 with it changes nothing on screen.
+        assert_eq!(out.preedit_text(), "\u{FF0C}");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        let offered = (0..4)
+            .map(|index| {
+                out.candidate(index)
+                    .map(|(text, annotation)| (text.to_owned(), annotation.to_owned()))
+                    .unwrap_or_else(|| panic!("candidate {index} is missing"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            offered,
+            vec![
+                ("\u{FF0C}".to_owned(), "全角コンマ".to_owned()),
+                ("\u{3001}".to_owned(), "全角読点".to_owned()),
+                ("\u{FF64}".to_owned(), "半角読点".to_owned()),
+                (",".to_owned(), "半角コンマ".to_owned()),
+            ],
+            "the four marks have to reach the page as four different characters"
+        );
+        assert_eq!(out.selected_candidate(), Some(0));
+
+        // Committing the second row must put a touten in the document even
+        // though the reader configured the full-width comma.  Re-styling here
+        // is exactly the bug: it would make the extra rows unreachable.
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        assert_eq!(out.selected_candidate(), Some(1));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("\u{3001}"));
+    }
+
+    /// The period role is configured separately, so it has to be reachable
+    /// separately.  A reader on the technical-paper style gets ASCII first and
+    /// still reaches the kuten.
+    #[test]
+    fn a_converted_period_follows_its_own_role_setting() {
+        let mut dispatcher = conversion_dispatcher();
+        let mut normalizer = Normalizer::default();
+        normalizer.punctuation = PunctuationStyle::new(CommaMark::Touten, PeriodMark::HalfWidth);
+        dispatcher
+            .apply_runtime_configuration(
+                Preferences {
+                    normalizer,
+                    ..Preferences::default()
+                },
+                Arc::from([]),
+            )
+            .expect("valid runtime configuration");
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "punctuation-period.exe");
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('.'),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Henkan),
+            },
+            &mut out,
+        );
+        let offered = (0..4)
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text.to_owned()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            offered,
+            vec![
+                ".".to_owned(),
+                "\u{3002}".to_owned(),
+                "\u{FF61}".to_owned(),
+                "\u{FF0E}".to_owned(),
+            ],
+            "the period role must order its own family, not the comma one"
+        );
     }
 
     #[test]
