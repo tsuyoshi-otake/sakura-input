@@ -967,6 +967,26 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び3: ランキング済みリストへ後段追加するときは、追加行のコストを「直前の追加行」ではなく「**ランキング全体の上限**」を基準に置く。安いリストの末尾が高いリストの本体を追い越す事故を、後段の再 sort に依存せず構造で防げる。
 - 未決: 候補数上限そのものの数値は owner 判断待ち（推奨は読み長可変: 1-2文字 256／3-4文字 108／5文字以上 36）。上限を 18 から動かすと `MAX_CANDIDATES`（= `CANDIDATE_PAGE_SIZE * 2`）と `MAX_CANDIDATE_TEXT_BYTES`（= `MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE`）という wire 側の定数に波及する。
 
+
+## 2026-08-26 — 句読点を「2つの独立した役割」へ作り替え、半角 `,` `.` を追加（#96、commit 5261ab8）
+
+- 症状/課題: owner から「設定画面の句点と読点だと論文が書きにくい」。当てずっぽうで直さず何が足りないかを訊いたところ、答えは**半角の `,` `.` が選べない**だった。既存の4種（`、。` `，．` `、．` `，。`）は全部到達可能だったので、欠けていたのは組み合わせではなく**半角という選択肢そのもの**。LaTeX や Markdown から組版する日本語論文では全角 `．` は誤りで、ASCII の `.` でなければならない。
+- 根本原因: `PunctuationStyle` が4 variant の enum で、内部表現も `parts() -> (bool, bool)` / `from_parts(bool, bool)` という**役割あたり2択の bool**だった。3択目を足す余地が型に無かった。設定画面は既に句点・読点を独立した2つのコンボで見せているのに、型だけが4通りの直積を bool で表していた。
+- 修正: `PunctuationStyle` を「2つの役割 enum を持つ struct」へ。`CommaMark { Touten, FullWidth, HalfWidth }` と `PeriodMark { Kuten, FullWidth, HalfWidth }`、`PunctuationStyle { comma, period }` で 3×3=9通り。`parts()`／`from_parts()` は削除し、`ALL`（9件）と名前付き const（`KUTEN_TOUTEN`／`COMMA_PERIOD`／`MIXED`／`COMMA_KUTEN`／`ASCII`）に置換。
+- 設計判断（重要）: 半角は**出すが取らない**（emit but never reclaim）片方向にした。`punct_role()` が所有するコードポイントは従来どおり `、` `，` `。` `．` の4点だけで、ASCII `,` `.` は所有しない。所有してしまうと、直接入力で打った `.` が既定スタイルの下で `。` に化け、`foo(a, b)` の `,` が読点として再解釈される。規則4（句読点は幅分類より先に解決する）はそのまま維持され、`width.symbol = Full` でも半角 `,` `.` は広げられない。
+- 波及して確認したこと:
+  - SIMD passthrough LUT（`simd.rs`）は変更不要。所有する4文字はすべて3バイト UTF-8 で、1バイト LUT に現れない。3バイト→1バイト置換が ASCII の連続コピー区間の途中に落ちることを `normalize_into` のテストで固定した。
+  - ATOK 由来の数字直後スワップ（`input_repair::contextual_punctuation_swap`）は `．`／`，` を返すだけで、最終字形はチョークポイントに委ねている。つまり半角設定なら自動的に `1.5` になる。テストで固定。
+- 設定ファイル互換: 既存4名（`kuten-touten`／`comma-period`／`mixed`／`comma-kuten`）を正規名のまま維持し、新5組に規則的な名前（`touten-half-period`／`full-comma-half-period`／`half-comma-kuten`／`half-comma-full-period`／`half-comma-half-period`）を追加。旧4名にも規則形の別名を読み取り専用で受ける。
+- 設定画面: 句点 `。`／`．（全角）`／`.（半角）`、読点 `、`／`，（全角）`／`,（半角）`。コンボ幅は据え置き（隣の `入力モードに合わせる` の方が長いので広げる必要がない）。
+- 分担: `preferences.rs`（parse/serialize）と `ui.rs`（コンボ）を並行 agent へ、型本体・テスト・DESIGN.md・機械的リネーム6ファイルは本体で実施。
+- 検証: `cargo fmt --all -- --check` clean、`cargo check --workspace --all-targets` clean、`cargo test -p sakura-core -p sakura-settings` すべて ok、`git diff --check` clean。cargo／rustc の残存プロセスなし。
+- `--workspace` で見えた失敗2種は**どちらも本変更由来ではない**:
+  1. `dispatch::tests::history_*` 2件 — 単体でも `-p sakura-engine --lib` 3回連続でも通る。複数テストバイナリ同時実行時だけ落ちる負荷依存フレークで、journal 2026-08-13 の TSF ハンドシェイクと同種。
+  2. `quality_limit_matches_production_protocol_without_narrowing_generic_capture_loading` — `sakura_proto::MAX_CANDIDATES` が 256、`QUALITY_CANDIDATE_LIMIT` が 18 で不一致。同一 worktree で並行している別セッションの #95（`MAX_CANDIDATES` 引き上げ）の途中状態であり、こちらの担当外なので触らない。
+- commit: その後 #95 が先に commit して `dispatch.rs` などの共有ファイルを解放したため、残る差分は #96 の const リネームだけになった。#97（表記スタイルのプリセット）と**同一 commit 5261ab8** に入っている。分けなかった理由は下の #97 エントリに書いた。ブランチ作成（`feat/96-half-width-punctuation`）は権限で拒否されたので `feat/95-single-kanji-and-candidate-cap` 上に置いてある。
+- 学び: 「4通りある」を「2つの bool」で表すと、片方の軸に3つ目が来た瞬間に型ごと作り直しになる。UI が最初から2つの独立したコンボで見せていたのだから、型もその日から2つの役割 enum であるべきだった。直積を bool 対で潰さない。
+
 ## 2026-08-26 — 候補数上限を256へ引き上げ、読み長で配分（#95、commit 8183f0e、相談 Issue #100）
 
 - 症状/課題: 8983139 で単漢字の在庫を入れた結果、律速が在庫から**上限そのもの**へ移った。`MAX_CANDIDATES` は wire を書いた当時から `CANDIDATE_PAGE_SIZE * 2 = 18`（2ページ分）で、変換器が2ページ分しか出せなかった頃の値のままだった。
@@ -984,3 +1004,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び2: 天井（wire が運べる最大）と予算（この入力が使ってよい額）は別概念であり、1つの定数に兼任させると片方だけを動かせない。分離して初めて「短い読みだけ豊かにする」が書けた。
 - 学び3: 並行セッションと worktree を共有しているときは、ファイル単位の `git add` では切り分けられない。`git apply --cached` でハンクを選び、`commit-tree` した索引ツリーを別 worktree で実際にビルドして自己完結性を確認する。相手の作業ツリー内容には一切触れずに済む。
 - 未決: 学習コストの lattice 注入と「履歴に出てくる候補は通常候補から外す」（#95 の残りスコープ）。上限設計そのもの（読み長clampで足りるか、遅延N-best展開まで作るか）は #100 で相談中。
+
+## 2026-08-26 — 表記スタイルのプリセットを設定画面へ（#97、commit 5261ab8）
+
+- 症状/課題: owner から「このあたりを補助して UX を上げるための設定画面なのよ。スタイルに併せて事前設定できるのが良いのよ」＋日本語技術論文の表記・スペーシングルール（29節）。#96 で半角 `,` `.` は**選べる**ようになったが、「半角句読点・和欧境界は半角スペース」という社内規則を実現するには**2ページに散った7つのコントロール**を人間が翻訳して1つずつ合わせる必要があり、合わせ終わったあとに正しいか確認する手段も無かった。
+- 修正: `NotationStyle`（`preferences.rs`）が7値の組み合わせ全体に名前を与える。英字幅・数字幅・記号幅・句点・読点・括弧・スペース幅。同梱4種は 標準（日本語）／日本語技術論文（半角句読点）／学術（全角コンマ・ピリオド）／公用文 で、7値上で**相互に相異**であることをテストで固定した。
+- 設計判断1（最重要）: プリセットは**設定ではなく近道**。config key を持たず、`Preferences` はどのスタイルが選ばれたかを一切記録しない。7つの葉が唯一の真実源のままなので、**このコントロールを一度も開かない人の config ファイルは1バイトも変わらない**。選ぶと7つへ書き込み、7つのどれかを手で触ると再導出して、どのスタイルも作らない組み合わせなら `カスタム` へ落ちる。`apply_to` / `of` の往復がこの2方向を一致させている。
+- 設計判断2: 双方向同期が再帰しない根拠は `CB_SETCURSEL` が `CBN_SELCHANGE` を**発火しない**こと。つまり「プリセット→7コンボ」の書き込みが「7コンボ→プリセット」を呼び返さない。フラグやガード変数を持たずに済んでいるのはこの Win32 の仕様に乗っているからで、ここを `SendMessage` 以外の経路へ替えるなら再帰対策が必要になる。
+- 設計判断3: 7つ目のスペース幅だけ `入力補助` ページにある。読者が見ていないページのコントロールを黙って動かさないよう、適用時のステータス行でどのスペース幅にしたかを**名指し**する。文言とコンボ行が食い違わないようラベルは `space_width_label` 1か所から供給し、ユニットテストで固定した。
+- 発見（テスト基盤のバグ）: 閉じた `CBS_DROPDOWNLIST` は**作成時の背の高いウィンドウ矩形をそのまま保持する**（ドロップダウンの伸び代を含む）。最初に書いた `combo_beside_label` はラベル中心の垂直包含で行を特定していたが、これだと `表記スタイル`（top=72、height=150）が下の全行を飲み込み、`英字` を探しても常にプリセットが返る。**最も近い上端**で照合する方式へ書き換えた。行ピッチ28px はコンボとラベルの4px オフセットに対して十分大きいので、どの DPI でも一意に決まる。
+- 副産物: 位置インデックスをラベル照合へ替えた過程で、基本ページの `basic_combos.len() == 2` が **d8db8d4（Sakura Pad 行の追加）以降ずっと陳腐化していた**ことが判明。件数は古いまま、`[1]` はたまたま意図した コントロールを指し続けていたので誰も気づけなかった。件数と位置の両方を名前へ置き換えて両方の失敗モードを消した。
+- commit 判断: #96 と #97 を**同一 commit 5261ab8** にした。6ファイルが両方の変更を持つうえ、`ui.rs` の `sakura_core` import 行、`punctuation_from_indices` 周辺、`preferences.rs` のテストモジュール、`docs/settings-user32-e2e.md` の SET-U32-012 行は**同じ数行の中で両方が混ざる**。#95 が使ったハンク単位分割（`git apply --cached` → `commit-tree` → 別 worktree でビルド実証）も検討したが、この4か所は行単位で混ざっているため、**誰もビルドしていない中間状態を手で捏造する**ことになる。捏造した中間 commit より、両 Issue を名指しした1 commit のほうが履歴として正直だと判断した。
+- 検証: `cargo fmt --all -- --check` clean、`git diff --check` clean、`cargo check --workspace --all-targets` clean、`cargo test -p sakura-core -p sakura-settings` で 340 passed / 0 failed / 21 ignored。cargo・rustc・`sakura_settings` の残存プロセスなし。実画面での目視確認は未実施で、`notation_style_preset_writes_both_pages_and_persists` は対話デスクトップ必須の `#[ignore]` のまま（`docs/settings-user32-e2e.md` の SET-U32-121 に「実画面未実行」と明記済み）。
+- 学び1: 「散らばった設定をまとめるプリセット」を**保存する設定**として足すと、プリセットと個別値のどちらが正なのかという同期問題を新規に作り込む。保存せず**導出する読み取り専用の表示**にすれば、真実源は増えず、既存 config も不変のまま済む。まとめる価値と保存する必要は別物。
+- 学び2: Win32 のコントロールを矩形で特定するときは、**見えている大きさと `GetWindowRect` が一致しない種類がある**ことを先に疑う。閉じた `CBS_DROPDOWNLIST` はその代表。垂直包含は直感的だが、この一族には使えない。
+- 学び3: `len() == N` を書いたテストは、N が増えたときに**壊れずに嘘をつく**ことがある。今回は位置インデックスがたまたま当たり続けたので誰も気づかなかった。並び順ではなく**画面上の意味（隣のラベル）**で対象を掴む。
+- 未決: #99（句読点設定は既定を選ぶだけで候補一覧は網羅的にする＝ATOK 挙動、`conversion.rs` の `append_punctuation_family` + `synthetic_exact`）と #98（和欧・和数境界の半角スペース自動挿入、URL・ファイル名・`CI/CD`・`GPT-5.6` 等の除外リスト付き）は未着手。
