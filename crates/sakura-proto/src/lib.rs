@@ -92,9 +92,16 @@ pub const CANDIDATE_PAGE_SIZE: usize = 9;
 
 /// Maximum candidates carried in one output frame.
 ///
-/// Two bounded pages make page navigation observable while keeping the
-/// allocation-free engine hand-off compact.
-pub const MAX_CANDIDATES: usize = CANDIDATE_PAGE_SIZE * 2;
+/// Two bounded pages were enough while the converter could only offer
+/// two pages' worth. They are not enough for a one-mora reading: the
+/// pinned single-kanji table alone names 315 characters under こう, and a
+/// commercial IME lists 210 under ひ (Issue #95). The frame therefore
+/// carries a paging-sized list rather than a two-page one.
+///
+/// This is the ceiling, not the working limit. What a given reading may
+/// actually spend is `sakura_core::conversion::candidate_budget`, which
+/// keeps a long reading at its former bound.
+pub const MAX_CANDIDATES: usize = 256;
 
 /// Fixed storage for all candidate surfaces or annotations in an `OutputBuf`.
 pub const MAX_CANDIDATE_TEXT_BYTES: usize = MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE;

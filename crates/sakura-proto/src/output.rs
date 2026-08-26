@@ -1348,6 +1348,54 @@ mod tests {
     }
 
     #[test]
+    fn candidate_list_exceeding_the_arena_truncates_after_the_selection_but_stays_valid() {
+        // Issue #95 raised `MAX_CANDIDATES` from 18 to 256 but deliberately
+        // left the shared `MAX_CANDIDATE_TEXT_BYTES` arena unchanged, so a
+        // wide list of long-ish candidates can now exhaust the arena long
+        // before it exhausts the count. A caller that stops pushing as soon
+        // as the arena is full (rather than propagating the error) must
+        // still hand back a list whose selected index remains valid -- this
+        // mirrors the loop shape now used by every `sakura-engine` emit site.
+        let mut buf = OutputBuf::new();
+        let selected = 3u16;
+        buf.begin_candidates(selected, CANDIDATE_PAGE_SIZE as u16)
+            .expect("begin candidates");
+        let annotation = "a".repeat(300);
+        let mut pushed = 0usize;
+        for index in 0..MAX_CANDIDATES {
+            match buf.push_candidate("x", &annotation) {
+                Ok(()) => pushed += 1,
+                Err(Overflow) => {
+                    assert!(
+                        index > usize::from(selected),
+                        "the arena overflowed at index {index}, before the \
+                         selected candidate {selected} could be pushed"
+                    );
+                    break;
+                }
+            }
+        }
+        assert!(
+            pushed < MAX_CANDIDATES,
+            "fixture must actually exhaust the arena, not the count ceiling"
+        );
+        assert!(usize::from(selected) < pushed);
+
+        let mut frame = vec![0u8; crate::MAX_FRAME];
+        let n = buf
+            .encode_frame(1, &mut frame)
+            .expect("a truncated-but-nonempty list still encodes");
+        let (_, response) = decode_response(&frame[FRAME_HEADER_LEN..n]).expect("decode");
+        let Response::Output(output) = response else {
+            panic!("expected output response");
+        };
+        let candidates = output.candidates.expect("candidate list");
+        assert_eq!(candidates.items.len(), pushed);
+        assert_eq!(candidates.selected, selected);
+        assert!(usize::from(candidates.selected) < candidates.items.len());
+    }
+
+    #[test]
     fn encode_frame_reports_overflow_for_small_dst() {
         let buf = OutputBuf::new();
         let mut tiny = [0u8; 2];
@@ -1366,5 +1414,23 @@ mod tests {
         let buf = OutputBuf::new();
         let s = format!("{buf:?}");
         assert!(s.contains("OutputBuf"));
+    }
+
+    /// `OutputBuf` is heap-allocated once per pipe worker (`Buffers::new` in
+    /// `sakura-engine`'s `server.rs` boxes it precisely so its size never
+    /// lands on the 160 KiB worker stack), but its footprint still multiplies
+    /// by up to `sakura_ipc::MAX_INSTANCES` (64) concurrent workers, so
+    /// unbounded regrowth here would still show up in the process's overall
+    /// memory budget. Issue #95 raised `MAX_CANDIDATES` from 18 to 256,
+    /// growing the `candidates: FixedVec<CandidateSpan, MAX_CANDIDATES>`
+    /// field by (256 - 18) * 32 = 7,616 bytes; the four
+    /// `MAX_CANDIDATE_TEXT_BYTES` arenas are unchanged and continue to
+    /// dominate the total. This stays a guard against unbounded future
+    /// regrowth, not a claim that the current size is optimal.
+    #[test]
+    fn output_buf_layout_stays_within_the_worker_heap_budget() {
+        let bytes = std::mem::size_of::<OutputBuf>();
+        println!("OutputBuf={bytes}");
+        assert!(bytes <= 128 * 1024, "OutputBuf grew to {bytes} bytes");
     }
 }

@@ -1153,10 +1153,17 @@ mod tests {
 
     #[test]
     fn candidate_pages_share_one_bounded_definition() {
+        // This test wants exactly two full pages of items -- it used to
+        // reuse `MAX_CANDIDATES` for that count because the wire ceiling
+        // and "two pages" happened to be the same number. Issue #95 raised
+        // `MAX_CANDIDATES` to 256 for a one-mora reading's candidate tail,
+        // so the two-page scenario is now spelled out explicitly instead
+        // of silently becoming a 29-page list.
+        let item_count = crate::CANDIDATE_PAGE_SIZE * 2;
         let candidates = CandidateList {
             kind: CandidateKind::Conversion,
             presentation: CandidatePresentation::Compact,
-            items: (0..crate::MAX_CANDIDATES)
+            items: (0..item_count)
                 .map(|index| Candidate {
                     text: format!("candidate-{index}"),
                     annotation: String::new(),
@@ -1171,7 +1178,7 @@ mod tests {
         assert_eq!(candidates.current_page(), 1);
         assert_eq!(
             candidates.current_page_range(),
-            crate::CANDIDATE_PAGE_SIZE..crate::MAX_CANDIDATES
+            crate::CANDIDATE_PAGE_SIZE..item_count
         );
         assert_eq!(candidates.page_start(0), Some(0));
         assert_eq!(candidates.page_start(1), Some(crate::CANDIDATE_PAGE_SIZE));
@@ -1200,6 +1207,37 @@ mod tests {
             suggestions.visible_range(),
             suggestions.current_page_range()
         );
+    }
+
+    #[test]
+    fn candidate_list_pages_correctly_at_the_full_candidate_ceiling() {
+        // Issue #95 raised `MAX_CANDIDATES` to 256 so a one-mora reading (a
+        // pinned single-kanji table entry, a common homophone run) can be
+        // carried in full; at `CANDIDATE_PAGE_SIZE` 9 that is ceil(256/9)
+        // = 29 pages, not the 2 pages the wire format used to top out at.
+        // Paging arithmetic must hold at the new ceiling, not just at the
+        // old one.
+        let items: Vec<Candidate> = (0..crate::MAX_CANDIDATES)
+            .map(|index| Candidate {
+                text: format!("c{index}"),
+                annotation: String::new(),
+                deletable_history: false,
+            })
+            .collect();
+        let last_index = crate::MAX_CANDIDATES - 1;
+        let candidates = CandidateList {
+            kind: CandidateKind::Conversion,
+            presentation: CandidatePresentation::Expanded,
+            items,
+            selected: last_index as u16,
+            page_size: crate::CANDIDATE_PAGE_SIZE as u16,
+        };
+
+        assert_eq!(candidates.page_count(), 29);
+        assert_eq!(candidates.current_page(), 28);
+        assert_eq!(candidates.page_start(28), Some(252));
+        assert_eq!(candidates.page_start(29), None);
+        assert_eq!(candidates.current_page_range(), 252..256);
     }
 
     #[test]
