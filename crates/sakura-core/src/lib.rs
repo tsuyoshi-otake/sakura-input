@@ -48,7 +48,7 @@ pub use conversion::{
     CommitBridgeTail, ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionInput,
     ConversionInputClass, ConversionOptions, ConversionResult, ConversionSearchTerminal,
     ConversionSegment, Converter, CrossCommitBridge, LeftContextId, LiteralPolicy, RightContextId,
-    MAX_CROSS_COMMIT_CURRENT_BYTES, MAX_CROSS_COMMIT_TAIL_BYTES,
+    MAX_CONVERSION_CANDIDATES, MAX_CROSS_COMMIT_CURRENT_BYTES, MAX_CROSS_COMMIT_TAIL_BYTES,
     MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS,
 };
 pub use cpu::{CpuFeatures, UnsupportedCpu};

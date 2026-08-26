@@ -1,0 +1,58 @@
+# Issue #95 candidate-limit sweep corpus.
+#
+# The limit bounds the n-best search, so cost scales with how much lattice a
+# reading opens, not with the limit alone. The classes below span that range:
+# a one-mora reading has almost no lattice but the most homophones, while a
+# sentence reading has the most lattice and almost no useful alternatives.
+#
+# One reading per line. Blank lines and lines starting with a hash are ignored.
+
+# -- one mora: maximum homophone branching, minimum lattice --
+ひ
+き
+し
+こ
+か
+て
+
+# -- two or three mora: the readings the shipped 18-cap actually truncates --
+こう
+かん
+しょう
+せい
+たい
+きかん
+たいあん
+こうねつ
+とうばん
+どうてん
+がいちゅう
+きんそく
+
+# -- given names: the longest surface lists in the shipped dictionary --
+ゆうき
+こうじ
+ひろし
+たかし
+まさき
+
+# -- ordinary words and Issue #93 ranking cases --
+ようけん
+しょうかい
+きづかい
+きのうしよう
+きのうかくにん
+きのうようけん
+きのうしょうかい
+きのうのてんき
+きのうのできごと
+しようをかくにん
+しようをつづける
+こうせいなはんだん
+しようじょうのちゅうい
+
+# -- sentence-length readings: maximum lattice, minimum branching --
+きょうはいいてんきですね
+このもんだいはあとでかいけつします
+にほんごにゅうりょくのへんかんそくどをそくていする
+あたらしいきのうについてのしようしょをかくにんしてください

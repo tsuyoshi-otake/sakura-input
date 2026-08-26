@@ -1,5 +1,6 @@
 /target/
 /tools/candidate-snapshot/target/
+/tools/candidate-sweep/target/
 **/*.rs.bk
 *.pdb
 /installer/out/

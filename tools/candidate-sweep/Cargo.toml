@@ -1,0 +1,24 @@
+[package]
+name = "sakura-candidate-sweep"
+description = "Offline sweep of the conversion candidate limit against latency and homophone coverage"
+version = "1.0.28"
+edition = "2021"
+rust-version = "1.96"
+license = "MIT"
+publish = false
+
+[workspace]
+resolver = "2"
+members = ["."]
+
+[features]
+default = []
+# Raises the core candidate bound to 512 so the sweep can pass limits past the
+# shipping wire constant. Without it the tool refuses any limit above 18.
+wide = ["sakura-core/research-wide-candidates"]
+
+[dependencies]
+sakura-core = { path = "../../crates/sakura-core" }
+
+[profile.release]
+debug = false
