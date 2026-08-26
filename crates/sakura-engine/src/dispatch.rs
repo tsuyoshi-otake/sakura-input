@@ -5399,18 +5399,32 @@ fn render_suggestions(
         u16::try_from(selected).map_err(|_| Overflow)?,
         CANDIDATE_PAGE_SIZE as u16,
     )?;
-    for candidate in candidates {
+    for (index, candidate) in candidates.iter().enumerate() {
         scratch.clear();
         normalizer.normalize_into(candidate.surface(), session.mode, scratch)?;
-        if candidate.source() == PredictionSource::History {
+        let pushed = if candidate.source() == PredictionSource::History {
             out.push_history_candidate(
                 scratch.as_str(),
                 candidate.annotation(),
                 candidate.reading(),
                 candidate.surface(),
-            )?;
+            )
         } else {
-            out.push_candidate(scratch.as_str(), candidate.annotation())?;
+            out.push_candidate(scratch.as_str(), candidate.annotation())
+        };
+        if let Err(overflow) = pushed {
+            // The shared candidate-text arena is sized for `MAX_CANDIDATES`
+            // short entries, not `MAX_CANDIDATES` worst-case-length ones, so
+            // a long tail can still exhaust it (Issue #95). Once the selected
+            // candidate is already in the builder, running out of arena
+            // space just ends the list early -- the renderer only shows one
+            // page at a time anyway. Losing the selected candidate itself
+            // would show the wrong selection, so that case still fails
+            // closed instead of silently truncating past it.
+            if index <= selected {
+                return Err(overflow);
+            }
+            break;
         }
     }
     if let (Some(service), Some(entry_index)) = (
@@ -5754,7 +5768,7 @@ fn render_staged_raw_repair(
             {
                 return false;
             }
-            for candidate in candidates {
+            for (candidate_index, candidate) in candidates.iter().enumerate() {
                 scratch.clear();
                 if append_candidate_surface(
                     candidate,
@@ -5773,7 +5787,14 @@ fn render_staged_raw_repair(
                     .push_candidate(scratch.as_str(), candidate.annotation())
                     .is_err()
                 {
-                    return false;
+                    // As below in `render_candidates`: an arena overflow past
+                    // the already-pushed selection just truncates the list;
+                    // one at or before it would show the wrong selection, so
+                    // that case is still treated as a full render failure.
+                    if candidate_index <= selected {
+                        return false;
+                    }
+                    break;
                 }
             }
             if let Some(entry_index) = candidate.system_entry_index() {
@@ -5972,7 +5993,7 @@ fn render_converted_segments(
                     u16::try_from(selected).map_err(|_| Overflow)?,
                     CANDIDATE_PAGE_SIZE as u16,
                 )?;
-                for candidate in candidates {
+                for (candidate_index, candidate) in candidates.iter().enumerate() {
                     scratch.clear();
                     append_candidate_surface(
                         candidate,
@@ -5983,7 +6004,20 @@ fn render_converted_segments(
                         session.mode,
                         scratch,
                     )?;
-                    out.push_candidate(scratch.as_str(), candidate.annotation())?;
+                    if let Err(overflow) =
+                        out.push_candidate(scratch.as_str(), candidate.annotation())
+                    {
+                        // Mirrors `render_suggestions`: the shared arena can
+                        // still run dry over a long candidate tail (Issue
+                        // #95). Truncating after the selection is already in
+                        // the builder is safe; truncating at or before it
+                        // would show the wrong selection, so that still
+                        // fails the render instead of guessing.
+                        if candidate_index <= selected {
+                            return Err(overflow);
+                        }
+                        break;
+                    }
                 }
                 if let Some(entry_index) = candidates[selected].system_entry_index() {
                     publish_system_candidate_detail(service, entry_index, reading, out);

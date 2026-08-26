@@ -58,8 +58,22 @@ fn stage1_options_identity_matches_capture_profile() {
 }
 
 #[test]
-fn quality_limit_matches_production_protocol_without_narrowing_generic_capture_loading() {
-    assert_eq!(sakura_proto::MAX_CANDIDATES, QUALITY_CANDIDATE_LIMIT);
+fn quality_limit_stays_within_production_protocol_without_narrowing_generic_capture_loading() {
+    // Issue #95 split the wire ceiling into three reading-length tiers
+    // (256/108/18; see `sakura_core::conversion::candidate_budget`) instead
+    // of one flat number, so the quality harness's own fixed contract can no
+    // longer equal `MAX_CANDIDATES` outright. Stage 1 exercises ordinary
+    // multi-character readings, which stay on the long-reading tier the
+    // pre-#95 ceiling already represented, so `QUALITY_CANDIDATE_LIMIT` keeps
+    // its historical value. What still must hold is that the harness never
+    // asks the wire protocol for more candidates than it can carry.
+    // Both sides are constants, so this holds when the test crate is
+    // compiled rather than when the test is run.
+    const _: () = assert!(
+        QUALITY_CANDIDATE_LIMIT <= sakura_proto::MAX_CANDIDATES,
+        "the quality harness must not ask the wire protocol for more \
+         candidates than one frame can carry"
+    );
     assert_eq!(MAX_CANDIDATES_PER_SYSTEM, 64);
 }
 

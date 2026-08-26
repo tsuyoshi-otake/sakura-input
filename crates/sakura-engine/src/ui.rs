@@ -1915,4 +1915,23 @@ mod tests {
             "settle blocked with no watcher outstanding"
         );
     }
+
+    /// Unlike `OutputBuf` (heap-allocated per pipe worker and boxed off the
+    /// worker stack), `CandidateSnapshot` lives inline in the single
+    /// process-wide `UiBoard`, itself embedded in `Shared` and built once via
+    /// `Arc::new` in `server.rs`'s `Server::build`. Its growth is therefore a
+    /// one-time cost rather than one that multiplies per connection. Issue
+    /// #95 raised `MAX_CANDIDATES` from 18 to 256, growing the
+    /// `spans: FixedVec<CandidateSpan, MAX_CANDIDATES>` field by
+    /// (256 - 18) * 32 = 7,616 bytes; this stays a guard against unbounded
+    /// future regrowth, not a claim that the current size is optimal.
+    #[test]
+    fn candidate_snapshot_layout_stays_within_the_shared_board_budget() {
+        let bytes = std::mem::size_of::<CandidateSnapshot>();
+        println!("CandidateSnapshot={bytes}");
+        assert!(
+            bytes <= 128 * 1024,
+            "CandidateSnapshot grew to {bytes} bytes"
+        );
+    }
 }

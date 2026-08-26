@@ -65,6 +65,17 @@ pub const MAX_CONVERSION_CANDIDATES: usize = 32;
 /// shipping bound moves. Shipping targets never enable this feature.
 #[cfg(feature = "research-wide-candidates")]
 pub const MAX_CONVERSION_CANDIDATES: usize = 512;
+/// Reading lengths, in characters, that split [`candidate_budget`] into its
+/// three tiers. Kana readings only, so counted with `chars()`, not bytes.
+const CANDIDATE_BUDGET_SHORT_READING_CHARS: usize = 4;
+const CANDIDATE_BUDGET_MEDIUM_READING_CHARS: usize = 8;
+/// Tier ceilings for [`candidate_budget`]. Deliberately independent of
+/// [`MAX_CONVERSION_CANDIDATES`]: a research build may move that ceiling to
+/// measure a wider limit, but the per-tier numbers below are measurements
+/// against the shipping value of 256 and do not move with it.
+const CANDIDATE_BUDGET_SHORT: usize = 256;
+const CANDIDATE_BUDGET_MEDIUM: usize = 108;
+const CANDIDATE_BUDGET_LONG: usize = 18;
 const GENERATED_DATE_VARIANTS: usize = 4;
 const GENERATED_VARIANT_SLACK: usize = GENERATED_DATE_VARIANTS;
 const FALLBACK_WORD_COST: i64 = 8_000;
@@ -260,6 +271,45 @@ fn is_trustworthy_exact_surface(surface: &str) -> bool {
                     | '\u{20000}'..='\u{2ffff}'
             )
         })
+}
+
+/// How many candidates a request for `reading` may actually receive, no
+/// matter how high the caller's `max_candidates` or
+/// [`MAX_CONVERSION_CANDIDATES`] itself goes.
+///
+/// Issue #95 raised [`MAX_CONVERSION_CANDIDATES`] from 18 to 256 so a short
+/// reading could reach the single-kanji and homophone surfaces the old
+/// ceiling trimmed away. Benchmarking that change on the shipped dictionary
+/// (`tools/candidate-sweep`) showed the benefit is confined to short
+/// readings, while the p95 latency cost of a wide list is not (p95 per
+/// reading, shipped dictionary):
+///
+/// | reading length | limit 18  | limit 256 | single kanji / homophone gained |
+/// |-----------------|----------:|----------:|-----------------------------------|
+/// | 1-4 chars       |    162 us |  1,638 us | yes -- all of it                  |
+/// | 5-8 chars       |    595 us |  3,002 us | none                               |
+/// | 29 chars        |  1,674 us | 11,458 us | none                               |
+/// | 93 chars        |  5,412 us | 36,379 us | none                               |
+/// | 221 chars       | 59,984 us | 50,832 us | none (`MAX_SEARCH_STATES` saturates; only 3 candidates come out at any limit) |
+/// | 477 chars       | 62,024 us | 62,286 us | none                               |
+///
+/// A wide list only ever pays for itself on a short reading. Beyond a
+/// handful of characters the extra candidates are alternate whole-sentence
+/// parses nobody pages through, bought with tens of milliseconds of added
+/// Space-key latency -- conversion has no time budget in code, so this is
+/// purely about what a user perceives while typing. Hence three tiers
+/// instead of one global ceiling: short readings keep the full budget, long
+/// readings keep the original pre-#95 bound, and medium readings sit at a
+/// compromise between the two.
+pub fn candidate_budget(reading: &str) -> usize {
+    let chars = reading.chars().count();
+    if chars <= CANDIDATE_BUDGET_SHORT_READING_CHARS {
+        CANDIDATE_BUDGET_SHORT
+    } else if chars <= CANDIDATE_BUDGET_MEDIUM_READING_CHARS {
+        CANDIDATE_BUDGET_MEDIUM
+    } else {
+        CANDIDATE_BUDGET_LONG
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1511,6 +1561,17 @@ impl Converter {
         {
             return Err(ConversionError::InvalidOptions);
         }
+        // Only a short reading's candidate list pays for a wide ceiling
+        // (Issue #95; see `candidate_budget`'s doc comment for the p95
+        // numbers). Clamp down, never up, so a caller that already asked
+        // for fewer keeps its own smaller number. The research feature
+        // disables this so `tools/candidate-sweep` can still see the raw
+        // requested limit; clamping there would hide what it measures.
+        #[cfg(not(feature = "research-wide-candidates"))]
+        let options = ConversionOptions {
+            max_candidates: options.max_candidates.min(candidate_budget(reading)),
+            ..options
+        };
 
         self.reset(reading.len());
         self.initial_right_id = options.initial_right_id;
@@ -1621,6 +1682,18 @@ impl Converter {
         {
             return Err(ConversionError::InvalidOptions);
         }
+        // Same reading-length clamp as `convert_with_user_dictionary_detailed`
+        // (see its comment and `candidate_budget`'s doc comment). The
+        // `LiteralPolicy::Ranked` arm below delegates to that function, which
+        // clamps again on the same reading -- harmless, since the clamp only
+        // narrows and is idempotent, so do not "fix" the apparent duplicate.
+        #[cfg(not(feature = "research-wide-candidates"))]
+        let options = ConversionOptions {
+            max_candidates: options
+                .max_candidates
+                .min(candidate_budget(input.lookup_reading)),
+            ..options
+        };
         match input.literal_policy {
             LiteralPolicy::Ranked => {
                 // Keep the legacy implementation in one place. Restore the
@@ -4536,10 +4609,11 @@ mod tests {
     use std::collections::{BTreeMap, VecDeque};
 
     use super::{
-        CandidateAuthority, CandidateOrigin, ConversionCandidate, ConversionInput,
-        ConversionInputClass, ConversionOptions, Converter, CorrectionMap, CorrectionMapError,
-        CorrectionRun, CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy, RawRepairBudget,
-        RawRepairPlan, RepairTier, RightContextId, BASE_DICTIONARY_EDGES_PER_READING,
+        candidate_budget, CandidateAuthority, CandidateOrigin, ConversionCandidate,
+        ConversionInput, ConversionInputClass, ConversionOptions, Converter, CorrectionMap,
+        CorrectionMapError, CorrectionRun, CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy,
+        RawRepairBudget, RawRepairPlan, RepairTier, RightContextId,
+        BASE_DICTIONARY_EDGES_PER_READING, MAX_CONVERSION_CANDIDATES,
         MAX_DICTIONARY_SURFACES_PER_READING, SINGLE_KANJI_ANNOTATION,
     };
     use crate::dictionary::{image_format, Dictionary, EntryFlags};
@@ -4796,6 +4870,105 @@ mod tests {
         // The limit, not the character list, is what stops the tail: one slot
         // leaves room for the ranked entry alone.
         assert_eq!(converted(&single_kanji_fixture(), "ひ", 1).len(), 1);
+    }
+
+    /// Issue #95: far more single-kanji characters than the pre-#95 ceiling
+    /// of 18, so a test can tell whether a wide request actually reached the
+    /// tail or was silently narrowed by `candidate_budget`. The ranked row's
+    /// surface is deliberately also the first listed character, the same
+    /// overlap `single_kanji_fixture` exercises above, so the count reflects
+    /// distinct surfaces rather than a duplicate.
+    fn dictionary_with_many_single_kanji(reading: &str) -> Vec<u8> {
+        const LISTED: &str = "日月火水木金土人子女男大小上下中左右前後内外一二三四五六七八九十";
+        debug_assert_eq!(LISTED.chars().count(), 32);
+        synthetic_dictionary_with_single_kanji(
+            &[fixture_entry(reading, "日", 100, EntryFlags::NONE)],
+            &[(reading, LISTED)],
+            &[],
+        )
+    }
+
+    /// Issue #95: readings are kana, so a byte count must not stand in for a
+    /// character count. Every reading below is multi-byte UTF-8, so a byte
+    /// count would already have crossed a boundary a character count has
+    /// not, and this would catch that mistake as a wrong tier rather than a
+    /// panic.
+    #[test]
+    fn candidate_budget_switches_tiers_at_four_and_eight_characters() {
+        assert_eq!(candidate_budget(&"あ".repeat(4)), 256);
+        assert_eq!(candidate_budget(&"あ".repeat(5)), 108);
+        assert_eq!(candidate_budget(&"あ".repeat(8)), 108);
+        assert_eq!(candidate_budget(&"あ".repeat(9)), 18);
+    }
+
+    /// Issue #95 raised `MAX_CONVERSION_CANDIDATES` from 18 to 256
+    /// specifically so a short reading could reach single-kanji surfaces the
+    /// old ceiling trimmed away; `candidate_budget` must actually let them
+    /// through instead of silently keeping the old limit.
+    #[test]
+    fn a_short_reading_can_receive_more_than_eighteen_candidates_now() {
+        let bytes = dictionary_with_many_single_kanji("ひ");
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "ひ", ConversionOptions::default())
+            .expect("conversion");
+        assert!(
+            candidates.len() > 18,
+            "a one-character reading's own budget is the full ceiling: {} candidates",
+            candidates.len()
+        );
+    }
+
+    /// A long reading's candidate list is whole-sentence parses nobody pages
+    /// through -- Issue #95 measured no single-kanji or homophone benefit
+    /// past eight characters -- so it keeps the pre-#95 ceiling even when
+    /// the caller explicitly asks for the full 256.
+    #[test]
+    fn a_long_reading_still_holds_at_eighteen_even_at_the_full_ceiling() {
+        let long_reading = "ひ".repeat(9);
+        let bytes = dictionary_with_many_single_kanji(&long_reading);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(
+                &dictionary,
+                &long_reading,
+                ConversionOptions {
+                    max_candidates: MAX_CONVERSION_CANDIDATES,
+                    ..ConversionOptions::default()
+                },
+            )
+            .expect("conversion");
+        assert_eq!(
+            candidates.len(),
+            18,
+            "a long reading must not see past the pre-#95 ceiling: {candidates:?}"
+        );
+    }
+
+    /// The clamp only ever narrows a request; it must never raise a
+    /// caller's own smaller number back up to the short-reading ceiling.
+    #[test]
+    fn a_smaller_request_than_the_budget_keeps_its_own_number() {
+        let bytes = dictionary_with_many_single_kanji("ひ");
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(
+                &dictionary,
+                "ひ",
+                ConversionOptions {
+                    max_candidates: 5,
+                    ..ConversionOptions::default()
+                },
+            )
+            .expect("conversion");
+        assert_eq!(
+            candidates.len(),
+            5,
+            "the short-reading budget of 256 must not override a smaller request: {candidates:?}"
+        );
     }
 
     #[test]
