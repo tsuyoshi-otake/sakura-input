@@ -1038,3 +1038,21 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び3: スタックのような資源制約を疑ったら、**まず余裕を測る**。padding probe（`black_box([0u8; N])` を増やす）で16 KiB 通ることが分かった時点で仮説は死に、次の一手（HEAD での baseline 測定）が決まった。測らずに `#[inline(never)]` へ逃げていたら、根拠のないコメント付きの構造をコードベースに残していた。
 - 学び4（ツール）: このセッションの bash ツールは、quoted heredoc の中でも `'` を数える。所有格アポストロフィを含む長い Rust／散文を `<<'EOF'` で流すと `unexpected EOF while looking for matching '` で**ターン全体が落ちる**。長文ファイルは Write ツールで作り、Bash は splice だけに使う。
 - 未決: #98（和欧・和数境界の半角スペース自動挿入、URL・ファイル名・`CI/CD`・`GPT-5.6`・`config.toml`・バージョン番号・`client-server`・`KEY=value` の除外リスト付き）は未着手。#99 の実画面確認（インストール後に実際の候補ポップアップで4件を目視）も未実施。
+
+## 2026-08-26 — 実画面確認で見つけた「既定候補が選ばれない」欠陥（#99、commit 4580fcf）
+
+- 症状: 前エントリ（4d265e7）の #99 は unit／dispatch テスト全緑で完了扱いだったが、インストール済み 1.0.28-f117469c43d401dd の**実画面**で `,` を打って変換すると、一覧は `1. 、 2. ､ 3. ， 4. ,` と設定どおりなのに**選択が3行目**にあり、そのまま Enter すると `，` が入った。設定画面は `、` と表示している。#99 の主張「設定は既定順位を決める」が、**順序では守られ選択では破られていた**。
+- 根本原因（2つ、どちらも同梱既定スタイル `、`／`。` で最も効く。この場合だけ**設定字＝reading** になるため）:
+  1. `preferred_candidate_index`（`dispatch.rs`）は `requested == 0` のとき **text が reading と一致する候補を全経路で除外**する。通常語では正しい（読みそのままの行は既に preedit として見えている）が、句読点 family では「読者が打った記号を返す」ことが目的なので、TOP-1 の設定字が必ず弾かれる。学習が空でも `､`（index 1）が選ばれる。
+  2. 学習ストアが**過去の設定で学んだ surface** を持っている。検証機には `、`→`，` 150件、`。`→`．` 74件があり、`，．` を使っていた時期の commit で貯まったもの。exact context の strength が Strong になるため index 2 まで届き、実機の「3行目」を正確に説明する。
+- なぜ #99 以前は見えなかったか: 以前は4候補すべてが choke point で設定字へ書き戻されていたため、**どの行を選んでも画面と文書は同じ字**だった。行を別字にした #99 が、既存の誤選択を初めて可視化した。つまりこれは #99 が作った欠陥ではなく、#99 が露出させた欠陥だが、**#99 の契約を破る**ので #99 で直す。
+- 修正: `width.rs` に `PunctuationStyle::family_reading(&str)` を追加し、「読み全体が句読点1文字」という**唯一の受理判定**にした。`append_punctuation_family` の入口をこれに差し替え、`dispatch.rs` の `preserve_exact_initial` を `literal_policy != Ranked || punctuation_family` へ広げた。これで exact literal と同じ扱いになり、learning／exact cache／任意 reranker のすべてが初期選択に触れなくなる。appender と pin が同じ述語を共有するので、片方だけ条件が動く事故を構造的に防ぐ。
+- 学習データは**消していない**。所有者の資産であり、この修正は「これらの行では参照しない」だけで足りる。`learning clear` は提案も実行もしていない。
+- 検証: 失敗するテストを**先に**書いた。`the_shipped_punctuation_style_stays_selected_when_it_equals_the_reading` は修正前 `Some(1)`、`a_stale_learned_mark_cannot_override_the_configured_punctuation` は `、`→`，` を4回学習させて修正前 `Some(2)` と、実機の症状を数値まで再現した（1回の learn は Weak で index 1 までしか届かず再現しない。4回で Strong）。修正後は両方 `Some(0)`。後者は続けて2行目へ移動して `､` を確定し、**既定を固定しても一覧は固定していない**ことを押さえる。`width.rs` に `family_reading` の直接テスト（単一記号では `family_for` と一致、空・2文字・記号を含むだけの読みでは `None`）。`cargo fmt --all -- --check`、`git diff --check`、`cargo test --workspace` すべて成功（`sakura-core` 274、`sakura-engine` 476、0 failed）。残存 cargo／rustc なし。
+- 実画面での最終確認: release ビルド → `scripts/build-installer.ps1` → silent install で `1.0.28-afd34a06422849de` を導入。展開ポップアップは `1. 、 全角読点 / 2. ､ 半角読点 / 3. ， 全角コンマ / 4. , 半角コンマ`、footer `変換 1–4 / 4`、**1行目が選択**。句点側も `1. 。 全角句点 / 2. ｡ 半角句点 / 3. ． 全角ピリオド / 4. . 半角ピリオド`。1〜4行目を順に確定させると文書に `、､，,` と `。｡．.` が入ることを host の TextChanged ログで確認した（画素ではなく**文字列**で確認）。
+- 学び1: **テストが緑でも実画面で確認する理由がこれ**。自分で書いた dispatch テストは9スタイルのうち `FullWidth`／`HalfWidth` を使い、既定の `Touten`／`Kuten` を**避けていた**。設定字と reading が一致するのは既定スタイルだけで、そこにだけ欠陥があった。網羅したつもりのテーブル駆動テストでも、**既定値を明示的に含めたか**は別に確認する。
+- 学び2: 候補の「順序」と「選択」は別の契約で、別の場所が決める。順序は converter、選択は dispatcher の `preferred_candidate_index`／`preserve_exact_initial`。片方だけ直すと「一覧は正しいのに入る字が違う」という、ユーザーから見て最も分かりにくい壊れ方になる。
+- 学び3: 「学習に書かない」と「学習を読まない」は別。`synthetic_exact` は書き込みだけを抑止していたので、**過去の設定で貯まった学習**が新機能の既定を上書きし続けていた。durable な preference を1つに決めた機能では、入口と出口の両方を塞ぐ。
+- 学び4（実画面検証の手法）: 候補ポップアップは非activate・click-through で、通常のスクリーンショットでは前面ウィンドウに隠れる。`SakuraInputCandidates` クラスの HWND を `EnumWindows` で探し、`PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で**ウィンドウ自身を描かせる**と遮蔽に関係なく確実に撮れる。ポップアップは既定で compact（選択行＋footer だけ、高さ50 px）で、MS-IME キーマップでは Tab（`candidate_expand`）で全行に開く。`VK_CONVERT` は `keybd_event` では届かないので Space を使う。合成入力の到達確認は host の `KeyDown` が `ProcessKey (229)` を出すかで見る。
+- 学び5（環境）: このリポジトリの PowerShell スクリプトは **pwsh 7 必須**。Windows PowerShell 5.1 は `[IO.EnumerationOptions]`（.NET Core 専用型）を解決できず `build-dictionary.ps1` が落ちる。CI も `shell: pwsh`。また `tail` にパイプすると非0終了が飲まれるので、成否は終了コードではなく**ログ本文**で確認する。
+- 未決: #98（和欧・和数境界の半角スペース自動挿入、URL・ファイル名・`CI/CD`・`GPT-5.6`・`config.toml`・バージョン番号・`client-server`・`KEY=value` の除外リスト付き）は未着手。#99 は実画面確認まで完了。
