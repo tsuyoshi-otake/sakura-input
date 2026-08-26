@@ -21,6 +21,7 @@
 //! cargo test -p sakura-engine --test shipped_dictionary_ranking -- --ignored
 //! SAKURA_SYSTEM_DIC=<path>\system.dic cargo test ... -- --ignored
 //! ```
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -1658,5 +1659,280 @@ fn conversion_candidates_do_not_show_bracket_tags() {
                 }
             })
             .unwrap_or_else(|error| panic!("{reading}: {error}"));
+    }
+}
+
+/// Issue #101: the glossary the IT overlay is generated from is a *glossary*,
+/// so it supplies each term's Japanese expansion, not the reading a user types.
+/// `ACM` was reachable only from `えーだぶりゅーえすさーてぃふぃけーとまねーじゃー`;
+/// `XML`, `TLS` and `UDP` carried nothing but their Latin spelling; and the
+/// glossary's compound-only headwords left `IT Phase`, `SSH Key` and
+/// `GPU Shape` in the image with no bare `IT`, `SSH` or `GPU` behind them. Of
+/// the 687 acronyms in the shipped sources only 207 could be reached by
+/// spelling their letters, and `じーぴーゆー` answered `CPU`.
+const ISSUE_101_SPOKEN_READINGS: &[(&str, &str)] = &[
+    // Absent from the image entirely until the overlay carried them.
+    ("あいてぃー", "IT"),
+    ("えすえすえいち", "SSH"),
+    ("えすえすえる", "SSL"),
+    ("じーぴーゆー", "GPU"),
+    ("じーゆーあい", "GUI"),
+    ("おーおーす", "OAuth"),
+    ("あいぴーぶいふぉー", "IPv4"),
+    ("あいぴーぶいろく", "IPv6"),
+    ("しゃーにごーろく", "SHA-256"),
+    ("えむでぃーふぁいぶ", "MD5"),
+    ("べーすろくじゅうよん", "Base64"),
+    ("あすきー", "ASCII"),
+    ("ゆにこーど", "Unicode"),
+    ("じーしーぴー", "GCP"),
+    ("いーしーつー", "EC2"),
+    ("ぴーえいちぴー", "PHP"),
+    ("えすえむてぃーぴー", "SMTP"),
+    // In the image, but reachable only by typing Latin letters.
+    ("えっくすえむえる", "XML"),
+    ("てぃーえるえす", "TLS"),
+    ("ゆーでぃーぴー", "UDP"),
+    ("てぃーしーぴー", "TCP"),
+    // In the image, but reachable only through the Japanese expansion.
+    ("えーしーえむ", "ACM"),
+    ("えーしーえす", "ACS"),
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_101_it_terms_are_reachable_from_their_spoken_reading() {
+    let conversion = open_conversion();
+    let mut unreachable = Vec::new();
+    for &(reading, surface) in ISSUE_101_SPOKEN_READINGS {
+        let found = conversion
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.text() == surface)
+            })
+            .unwrap_or_else(|error| panic!("{reading}: {error}"));
+        if !found {
+            unreachable.push(format!("{reading} -> {surface}"));
+        }
+    }
+    assert!(
+        unreachable.is_empty(),
+        "readings that still cannot reach their IT term: {unreachable:?}"
+    );
+}
+
+/// Letter-spelled readings that answered the *wrong* acronym before the
+/// overlay, with the acronym each one has to answer now.
+///
+/// Measured, not guessed: the same 754 readings were converted against a
+/// dictionary built from HEAD and against one built with the overlay, and
+/// the two leaders were compared. These sixteen changed leader while the
+/// displaced string was itself a real dictionary entry -- reached from this
+/// reading only by a fuzzy edge, because the right acronym was absent.
+///
+/// A wrong first candidate is worse than a missing one: it is the answer a
+/// user accepts without looking. `じーぴーゆー` answering `CPU` is the
+/// report this issue opened with.
+const ISSUE_101_LETTER_READING_CORRECTIONS: &[(&str, &str, &str)] = &[
+    ("あいてぃー", "ID", "IT"),
+    ("あーるえーじー", "RAC", "RAG"),
+    ("いーえすぴー", "ESB", "ESP"),
+    ("えいちぴーしー", "HBC", "HPC"),
+    ("えすえすでぃー", "SST", "SSD"),
+    ("しーぴーえす", "CBS", "CPS"),
+    ("じーでぃー", "CD", "GD"),
+    ("じーぴーゆー", "CPU", "GPU"),
+    ("てぃーえいちてぃー", "DHT", "THT"),
+    ("でぃーあい", "TI", "DI"),
+    ("びーえむ", "PM", "BM"),
+    ("びーじーぴー", "BCP", "BGP"),
+    ("びーびーあーる", "PBR", "BBR"),
+    ("ぴーえいちぴー", "BHP", "PHP"),
+    ("ぴーぴーあーる", "PBR", "PPR"),
+    ("ぴーぴーてぃー", "PBT", "PPT"),
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_101_letter_readings_answer_their_own_acronym() {
+    let mut wrong = Vec::new();
+    for &(reading, displaced, expected) in ISSUE_101_LETTER_READING_CORRECTIONS {
+        let candidates = candidates_for(reading);
+        if candidates.first().map(String::as_str) != Some(expected) {
+            wrong.push(format!(
+                "{reading}: expected {expected} to lead (it used to answer \"{displaced}\"), got {candidates:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+
+    // The displaced acronyms must still own the readings that are actually
+    // theirs -- the fix is a correction, not a swap.
+    assert_eq!(top_text("しーぴーゆー"), "CPU");
+    assert_eq!(top_text("ぴーえむ"), "PM");
+}
+
+/// The 32 readings where an added IT row landed on a reading the shipped
+/// image already answered with a dictionary entry of its own, and the word
+/// that has to keep leading it.
+///
+/// Derived, not guessed: every (reading, surface) pair of a dictionary built
+/// from HEAD was dumped and intersected with the overlay's 754 kana readings.
+/// Where the IT term outranked the existing word it is re-priced in
+/// `data/curated-terms.tsv` to yield -- to cost 9000, or 16000 where 9000 was
+/// not enough. Yielding rank one is not the same as disappearing, so the test
+/// also holds the IT term reachable; it lands between rank two and rank seven.
+///
+/// Eight further readings were dropped from the overlay outright rather than
+/// re-priced, because adding an exact entry took a common word out of the
+/// candidate list entirely instead of merely reordering it: `しすく`/CISC
+/// (雫), `ぞっど`/Zod (ゾッと), `ぴんぐ`/ping (ピンク), `ふぁいど`/FIDO
+/// (ファイト), `ぶりん`/BRIN (プリン), `ぐろっく`/Grok (クロック, 黒く),
+/// `へろく`/Heroku (平六), and `での`/Deno -- the last because `での` is an
+/// ordinary particle sequence, not a typo neighbour. All eight stay reachable
+/// through their ASCII reading.
+///
+/// This is the boundary the project's own rule draws: an IT gain may not be
+/// paid for with a general-Japanese regression. A future re-pricing that
+/// hands one of these readings back to the IT term fails here.
+const ISSUE_101_CONTESTED_READINGS: &[(&str, &str, &str)] = &[
+    ("あいえー", "アイエー", "IA"),
+    ("あしっど", "アシッド", "ACID"),
+    ("あすきー", "アスキー", "ASCII"),
+    ("あっぷすとりーむ", "アップストリーム", "AppStream"),
+    ("あんどろいど", "アンドロイド", "Android"),
+    ("いんてる", "インテル", "Intel"),
+    ("いーさねっと", "イーサネット", "Ethernet"),
+    ("うの", "宇野", "UNO"),
+    ("えくせる", "エクセル", "Excel"),
+    ("えりくさー", "エリクサー", "Elixir"),
+    ("かふか", "カフカ", "Kafka"),
+    ("くろんじょぶ", "cronジョブ", "CronJob"),
+    ("ぐらぶ", "グラブ", "GRUB"),
+    ("ぐーぐる", "グーグル", "Google"),
+    ("さいだー", "サイダー", "CIDR"),
+    ("さむ", "寒", "SAM"),
+    ("ぜふぁー", "ゼファー", "Zephyr"),
+    ("だっくす", "ダックス", "DAX"),
+    ("とむる", "止むる", "TOML"),
+    ("どら", "ドラ", "DORA"),
+    ("はすける", "は透ける", "Haskell"),
+    ("ばーと", "バーと", "BERT"),
+    ("ぱむ", "パム", "PAM"),
+    ("ぴーしーえー", "ピー・シー・エー", "PCA"),
+    ("やっぷ", "ヤップ", "Yup"),
+    ("ゆにこーど", "ユニコード", "Unicode"),
+    ("ゆーちゅーぶ", "ユーチューブ", "YouTube"),
+    ("らすと", "ラスト", "Rust"),
+    ("りすく", "リスク", "RISC"),
+    ("りぽじとり", "リポジトリ", "repository"),
+    ("れすと", "レスト", "REST"),
+    ("わっつあっぷ", "ワッツアップ", "WhatsApp"),
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_101_contested_readings_keep_their_existing_leader() {
+    let conversion = open_conversion();
+    let mut wrong = Vec::new();
+    for &(reading, existing, it_term) in ISSUE_101_CONTESTED_READINGS {
+        let candidates = conversion
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .map(|candidate| candidate.text().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|error| panic!("{reading}: {error}"));
+        if candidates.first().map(String::as_str) != Some(existing) {
+            wrong.push(format!(
+                "{reading}: expected {existing} to lead, got {candidates:?}"
+            ));
+        }
+        // Yielding rank one is not the same as disappearing: the IT term still
+        // has to be reachable, or the row bought nothing.
+        if !candidates.iter().any(|candidate| candidate == it_term) {
+            wrong.push(format!(
+                "{reading}: {it_term} is unreachable, {candidates:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Adding an exact entry for a reading stops the engine expanding that reading
+/// fuzzily, so words the fuzzy list used to carry drop out of it. Thirty-four
+/// such drops were measured across the 754 overlay readings -- `じーぴーゆー`
+/// alone went from 108 candidates to two.
+///
+/// That is the intended shape of the fix, but only while every dropped word is
+/// still reachable from the reading that is actually its own. These are the
+/// dropped words a Japanese user would really type, paired with that reading.
+const ISSUE_101_PRUNED_FUZZY_PATHS: &[(&str, &str)] = &[
+    ("あぶろう", "炙ろう"),
+    ("あぶろう", "焙ろう"),
+    ("おかん", "悪寒"),
+    ("めんたい", "明太"),
+    ("しゅんた", "春太"),
+    ("うめお", "梅雄"),
+    ("あいびー", "アイビー"),
+    ("あんぶろ", "アンブロ"),
+    ("ぶりんく", "ブリンク"),
+    ("しーでぃー", "シーディー"),
+    ("しーぴーゆー", "プロセッサ"),
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_101_pruned_fuzzy_paths_stay_reachable_from_their_own_reading() {
+    let mut lost = Vec::new();
+    for &(reading, surface) in ISSUE_101_PRUNED_FUZZY_PATHS {
+        let candidates = candidates_for(reading);
+        if !candidates.iter().any(|candidate| candidate == surface) {
+            lost.push(format!("{reading}: {surface} is gone, got {candidates:?}"));
+        }
+    }
+    assert!(
+        lost.is_empty(),
+        "the overlay may prune a fuzzy path, never a word: {lost:#?}"
+    );
+}
+
+/// Every kana reading the overlay adds must be spelled in kana. A reading that
+/// mixes scripts is reachable from no input path at all, and would be a typo
+/// that silently ships as a dead row.
+#[test]
+fn issue_101_curated_kana_readings_are_well_formed() {
+    let curated = dictc::parse_entries(
+        "data/curated-terms.tsv",
+        include_str!("../../../data/curated-terms.tsv"),
+    )
+    .expect("curated terms");
+    let mut kana = BTreeMap::new();
+    for entry in &curated {
+        if entry.reading.is_ascii() {
+            continue;
+        }
+        assert!(
+            entry
+                .reading
+                .chars()
+                .all(|c| matches!(c, '\u{3041}'..='\u{3096}' | 'ー')),
+            "{} is neither ASCII nor hiragana",
+            entry.reading
+        );
+        kana.insert(entry.reading.as_str(), entry.surface.as_str());
+    }
+    assert!(
+        kana.len() > 400,
+        "the overlay carries only {} kana readings",
+        kana.len()
+    );
+    for &(reading, _, it_term) in ISSUE_101_CONTESTED_READINGS {
+        assert!(
+            kana.contains_key(reading),
+            "{reading} is pinned as contested but {it_term} no longer claims it"
+        );
     }
 }
