@@ -24,6 +24,10 @@ conversion-test-support = []
 # Raises only the isolated evaluation candidate bound. Shipping targets never
 # enable this feature; search diagnostics are shared with production.
 research-top32 = []
+# Raises the isolated evaluation candidate bound far past the wire limit
+# so Issue #95 can sweep conversion latency and homophone coverage against
+# the candidate limit. Shipping targets never enable this feature.
+research-wide-candidates = []
 
 [lints]
 workspace = true

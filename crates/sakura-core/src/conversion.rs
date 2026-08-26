@@ -8,7 +8,7 @@
 use core::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-#[cfg(not(feature = "research-top32"))]
+#[cfg(not(any(feature = "research-top32", feature = "research-wide-candidates")))]
 use sakura_proto::MAX_CANDIDATES;
 use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
@@ -40,7 +40,11 @@ const BASE_DICTIONARY_EDGES_PER_READING: usize = 12;
 /// affordable homophones the shipped dictionary already held: きかん stopped at
 /// き澗 without ever reaching 気管 or 旗艦, and きゅう spent its twelfth surface
 /// on the rare name kanji 邱 and dropped the digit spelling 9 (Issue #94).
-const MAX_DICTIONARY_SURFACES_PER_READING: usize = MAX_CANDIDATES;
+/// The budget tracks the conversion candidate limit rather than the wire
+/// constant: a research build that raises the limit must widen the dictionary
+/// span with it, or the extra slots fill with multi-morpheme paths instead of
+/// the homophones the sweep is measuring (Issue #95).
+const MAX_DICTIONARY_SURFACES_PER_READING: usize = MAX_CONVERSION_CANDIDATES;
 /// Cross-commit context is deliberately word-sized. It exists to recover a
 /// lexical edge split by an explicit commit, not to replay an unbounded
 /// document prefix on every Space press.
@@ -52,10 +56,15 @@ pub const MAX_CROSS_COMMIT_CURRENT_BYTES: usize = 96;
 pub const MIN_CROSS_COMMIT_TAIL_CHARS: usize = 2;
 const MAX_CROSS_COMMIT_LATTICE_NODES: usize = 4_096;
 const MAX_CROSS_COMMIT_SEARCH_STATES: usize = 8_192;
-#[cfg(not(feature = "research-top32"))]
+#[cfg(not(any(feature = "research-top32", feature = "research-wide-candidates")))]
 pub const MAX_CONVERSION_CANDIDATES: usize = MAX_CANDIDATES;
-#[cfg(feature = "research-top32")]
+#[cfg(all(feature = "research-top32", not(feature = "research-wide-candidates")))]
 pub const MAX_CONVERSION_CANDIDATES: usize = 32;
+/// Isolated sweep bound for Issue #95. It exists to measure how conversion
+/// latency and homophone coverage scale with the candidate limit before the
+/// shipping bound moves. Shipping targets never enable this feature.
+#[cfg(feature = "research-wide-candidates")]
+pub const MAX_CONVERSION_CANDIDATES: usize = 512;
 const GENERATED_DATE_VARIANTS: usize = 4;
 const GENERATED_VARIANT_SLACK: usize = GENERATED_DATE_VARIANTS;
 const FALLBACK_WORD_COST: i64 = 8_000;
