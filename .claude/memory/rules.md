@@ -513,6 +513,62 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   repair-kind mask preserved the required evidence and restored the 32-thread
   test plus the 128 KiB worker-stack checks.
 
+- **Measure stack *usage*, never stack *headroom*, and read it out of the
+  object file.** Three journal entries recorded the raw-repair overflow as
+  "falsified by measurement" and one session withdrew the correct
+  `#[inline(never)]` fix on the strength of a padding probe: `black_box([0u8;
+  16384])` still passed, so the frame looked to have 16 KiB spare. A padding
+  probe only reports that N more bytes fit wherever the compiler put them; it
+  cannot say which frame is live at peak depth. Disassembly answered it in one
+  pass. `ConversionCandidate` is 4,152 bytes, an unoptimised build gives every
+  by-value move and temporary its own slot, and
+  `convert_input_with_raw_repair_plans` carried ten of them in a 41,456-byte
+  frame that stayed live across the corrected pass's whole conversion subtree
+  -- 136 KiB required against 128 KiB reserved. Extracting the two
+  candidate-moving blocks into `admit_repair_pass` and `merge_repair_scratch`
+  moved those slots into siblings that are dead while anything deep runs,
+  taking the orchestrating frame to 7,576 bytes and the requirement under
+  68 KiB. Total bytes did not shrink; their lifetime did. Procedure:
+  `cargo rustc -p <crate> --lib --profile dev -- --emit=obj=<path> -C
+  codegen-units=1`, then `llvm-objdump -d -C` from the toolchain's
+  `lib/rustlib/<target>/bin/`. The linked `.exe` has no COFF symbol table, so
+  it must be the object file. Match **both** prologue forms: `subq $0xN, %rsp`
+  and the MSVC big-frame `movl $0xN, %eax` ... `callq` ... `subq %rax, %rsp`.
+  The second has no `__chkstk` string in the disassembly because the call goes
+  through a relocation, and skipping it hides exactly the largest frames.
+
+- **A sweep that passes in every condition is a claim about the harness before
+  it is a claim about the code.** `cargo test ... -- --exact <filter>` with a
+  filter that is not the full test path runs zero tests and exits 0. The
+  earlier "48 of 48 stack/limit combinations passed, 256 candidates fit in
+  64 KiB" has that shape, and the same false green appeared again today.
+  Read the `running N tests` line, not the exit code. Near a resource
+  boundary a single run is probabilistic -- this overflow reproduced about 30%
+  of the time -- so run several trials per point (20 here) before calling a
+  size passing or failing.
+
+- **Raising a ceiling constant changes space as well as time, so audit inline
+  array dimensions for it.** #94 and #95 tied
+  `MAX_DICTIONARY_SURFACES_PER_READING` to `MAX_CONVERSION_CANDIDATES`, which
+  read as a candidate-count change but grew `DictionaryEdgeBudget`'s inline
+  `[u32; N]` from 64 to 1,040 bytes while it stayed `Copy` and while
+  `build_lattice` constructed a fresh one per reading start. The conversion
+  path has two invariants at once and satisfying either alone is wrong: a
+  per-call `Vec::with_capacity` fits the stack guard but breaks
+  `conversion_into_reused_candidate_buffers_allocates_nothing` and
+  `cross_commit_bridge_conversion_allocates_nothing`. Scratch that must be
+  both large and allocation-free belongs in the `Converter` arena, reset per
+  use.
+
+- **A branch with no upstream has no CI.** `feat/95-single-kanji-and-candidate-cap`
+  accumulated nine code commits that never ran `.github/workflows/ci.yml`, and
+  all three of its gates were red: `cargo test --workspace` (the stack
+  overflow), `cargo clippy --workspace --all-targets -- -D warnings`
+  (`field_reassign_with_default` in two committed #99 tests), and
+  `cargo fmt --all -- --check`. Run those three locally before any push that
+  lands accumulated work, and treat a green local suite on a branch CI has
+  never seen as unverified.
+
 - **A glossary supplies each term's meaning, not the reading a user types.**
   `data/it-terms.tsv` is generated from a term glossary, so `ACM` arrived with
   the reading `えーだぶりゅーえすさーてぃふぃけーとまねーじゃー` and nothing
