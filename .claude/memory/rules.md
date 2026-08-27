@@ -149,6 +149,28 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   configured mark on every later conversion. A feature that declares one
   durable preference has to close both directions.
 
+- **本番コードが per-user の永続ファイルへ書くなら、その writer にテスト用の
+  差し替え経路を用意する。** `sakura-tsf` の `note_timeout` / `note_disconnect`
+  は `#[cfg(test)]` でシステム temp へ向き先を変える。これを忘れた writer が
+  1つでもあると、`cargo test --workspace`（現在 1,721 テスト）が実ユーザーの
+  `%LOCALAPPDATA%` 診断プロファイルへ追記する。テストが汚れるのではなく**本番
+  の観測データが汚れる**問題で、被害はテスト終了後に残り、しかもその数値を
+  根拠に次の判断をしてしまう。新しい diagnostics writer を足すときは、既存
+  writer の `#[cfg(test)]` 版を必ず一緒に写す。
+
+- **同じ終了処理を複数の理由で呼ぶ関数は、理由を必須引数にする。** #102 では
+  `TextService::disconnect()` が引数なしで、engine セッションを捨てる 21 の
+  production 経路が区別できなかった。optional な注釈にすると必ず「あとで
+  埋める」経路が残る。必須引数にすれば、新しい経路の追加が名前を決めるまで
+  コンパイルエラーになる。
+
+- **同じ形式の bounded log を2本持つときは、種別を分けているものが何かを明示
+  してテストで固定する。** IPC diagnostics では timeout と disconnect の wire
+  code 1..10 が**両方で有効**であり、分けているのは 4 byte の magic だけ
+  である。誤って相手のリーダに読ませると、別の意味のカウンタが黙って増える。
+  「片方のログをもう片方として読んでも 1 件も計上されない」を両方向で固定
+  する。
+
 ## Windows specifics
 
 - **Real-process tests must isolate `LOCALAPPDATA` unless they explicitly test

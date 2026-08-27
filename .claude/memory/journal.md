@@ -1269,3 +1269,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - **#104（AppContainer フレーク）の発生が4回目になった。今回いちばん重要な観測**: 直前の `63b77ea` は **journal の .md 1ファイルしか触っていない commit** なのに、同じ step 14 `Sandbox access (AppContainer)` で落ちた。コード差分ゼロで再現したので、「差分が該当領域に触れていない」どころか「差分が Rust コードを1バイトも含まない」条件での再現であり、環境依存であることのこれまでで最も強い証拠になる。2026-08-27 の前エントリで作った matched-pair 表（n=2）よりこの1件のほうが情報量が多い。
 - ノートに書かなかったことも記録する: 50 ms のキー予算を超える原因そのものは未解明で、#102 は超えたときに全角スペースが入る被害を止めるだけである。候補数上限の設計（読み長 clamp か遅延 N-best 展開か）は #100 / #103 で未決のままで、このリリースは読み長 clamp を採っている。いずれもリリースノートの「含まれないもの」に明記した。
 - 学び: **リリース前の版の書き換え漏れは、grep 対象をリポジトリ全体にすれば機械的に見つかる。** 今回 `1.0.28` を全ファイル grep して初めて入れ子 workspace の1件が出た。「4か所」という手順の記憶ではなく、毎回 grep する。
+
+## 2026-08-27 — #102 の engine セッション破棄経路を全件命名し、計器を追加（#102）
+
+- 背景と root: `TextService::disconnect()` は**引数なし**で、production 21 経路とテスト fixture 2 経路が同じ呼び出しを共有していた。#102 は「変換直後に engine セッションが消え、次の Space が全角になる」問題だが、実際にどの経路が走ったのかを製品側で区別する材料が1バイトも残っていなかった。1.0.29 の teardown latch は被害を止めるだけで、原因特定の材料は増えていない。
+- 対処: `fn disconnect(&self, reason: DisconnectReason)` へ変更し、23 か所すべてを周辺コードから命名した。**任意注釈ではなく必須引数にしたのが要点**で、新しい reset 経路を足すときに名前を決めないとコンパイルが通らない。
+- 記録先: 既存 timeout log の隣に2本目の bounded log（`ipc-disconnects.bin`、1 MiB 上限、32 byte 固定長）。両者で record codec を共有したので、record 形式の変更が片方だけに入って気付かれない事態がなくなった。
+- **設計上の落とし穴（テストで固定した）**: wire code 1..10 は timeout / disconnect の**両方で有効**な値である。分けているのは magic（`SKTO` / `SKDC`）だけで、誤って相手のリーダに読ませると「別の意味のカウンタが黙って増える」。両方向を固定するテストを入れた。
+- 表示: `sakura_settings.exe diagnostics show` と設定 GUI が2表を**別々に**出す。合算しない — reset の大半はホストのライフサイクルに対する正しい応答なので、timeout に足すと fault 件数として読まれて誤りになる。件数 0 の理由も全部印字する（「一度も走っていない」と「計測していない」は別の答えである）。
+- テスト隔離: `note_disconnect` に `#[cfg(test)]` 版を付け、`%LOCALAPPDATA%` ではなくシステム temp へ書かせた。これを忘れると `cargo test --workspace` の 1,721 テストが実ユーザーの診断プロファイルへ追記し、**これから測ろうとしている当の数値を汚す**。既存の `note_timeout` が同じ形をしていたことだけが手掛かりだった。
+- 命名変更: settings 側の `diagnostics::load` / `clear` は2種類を扱うようになったため `load_timeouts` / `clear_timeouts` へ改名。同じ関数を GUI (`ui.rs`) も使っていたので同時に更新した。CLI だけ直して GUI を見落とすと、片方だけ reset が見えないビルドになる。
+- `cargo fmt --all` を意図的に dirty な作業ツリーで走らせた。直後に `git diff --stat` で**触れたファイルが自分の7件だけであること**を確認している。この確認をしないと fmt が owner の既存 WIP を巻き込んで整形しうる。
+- 検証: `cargo fmt --all -- --check` 0、`cargo clippy --workspace --all-targets -- -D warnings` 0、`cargo test --workspace` **1,721 passed / 0 failed / 82 ignored**、`git diff --check` 0。実行後の cargo/rustc/テストランナー残存 0（残っていたのは実機稼働中の `sakura_engine` pid 34596 と `sakura_renderer` pid 44148 のみ）。commit `58bb70c`。
+- 未解決（このコミットは前進させていない）: 50 ms の `KEY_BUDGET` を**なぜ**超えるのかは依然不明で、key timeout は累計 44 件のまま。今回入れたのは原因を絞るための計器であって、発生頻度を下げる変更ではない。実データは次版を実機へ入れて初めて集まる。
+- 未解決: `crates/sakura-ipc/src/client.rs:138` が `verify_server_process` の理由を捨てている件（#104 の最短経路）は今回も未着手。
+- 学び: **同じ終了処理を複数の理由で呼ぶ関数は、理由を必須引数にすると計測が「後付け」でなくなる。** optional な注釈にしていたら 23 か所のうち何か所かは必ず「あとで埋める」まま残った。型で強制すると埋め忘れが commit 前にコンパイルエラーとして出る。
+- 学び: **本番コードが per-user の永続ファイルへ書くなら、その writer にテスト用の差し替え経路が要る。** これは「テストが汚れる」問題ではなく「本番の観測データが汚れる」問題であり、被害はテスト実行が終わったあとに残る。
