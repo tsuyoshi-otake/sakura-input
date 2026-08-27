@@ -155,42 +155,60 @@ const COUNTER_FORMS: [(&str, &str); 15] = [
     ("さんかい", "3回"),
 ];
 
-#[derive(Debug, Clone, Copy)]
+/// The per-reading-length cap on dictionary edges: the historical baseline
+/// rows first, then one edge per distinct surface up to
+/// [`MAX_DICTIONARY_SURFACES_PER_READING`].
+///
+/// The seen-surface set is converter-owned scratch, not a stack local. It used
+/// to be an inline `[u32; MAX_DICTIONARY_SURFACES_PER_READING]`, which was 64
+/// bytes while that bound was 12 and became 1,040 bytes when #94/#95 tied it
+/// to `MAX_CONVERSION_CANDIDATES`. A `Copy` struct that large is materialised
+/// once per `new` and once per move in an unoptimised build, and `build_lattice`
+/// constructed one for every reading start. The reservation this spends is the
+/// conversion worker's stack, which `worker_locals_fit_the_reserved_stack` in
+/// `sakura-engine` bounds and which multiplies by `MAX_INSTANCES` threads.
+///
+/// Both constraints have to hold at once: keep this struct a few words wide so
+/// the lattice frame stays small, and keep the capacity in the converter's
+/// process-lifetime arena so the conversion path itself never allocates —
+/// `conversion_into_reused_candidate_buffers_allocates_nothing` in
+/// `sakura-engine` fails the moment a reading start reserves a fresh one.
+#[derive(Debug)]
 struct DictionaryEdgeBudget {
     baseline_edges: usize,
-    surface_count: usize,
-    surface_ids: [u32; MAX_DICTIONARY_SURFACES_PER_READING],
+    surfaces: Vec<u32>,
 }
 
 impl DictionaryEdgeBudget {
-    const fn new() -> Self {
+    /// Called once per converter slot, off the conversion path.
+    fn new() -> Self {
         Self {
             baseline_edges: 0,
-            surface_count: 0,
-            surface_ids: [u32::MAX; MAX_DICTIONARY_SURFACES_PER_READING],
+            surfaces: Vec::with_capacity(MAX_DICTIONARY_SURFACES_PER_READING),
         }
     }
 
     fn reset(&mut self) {
         self.baseline_edges = 0;
-        self.surface_count = 0;
+        // `clear` keeps the capacity reserved in `new`, and `admit` only ever
+        // pushes below `MAX_DICTIONARY_SURFACES_PER_READING`, so no reading
+        // start can force a reallocation.
+        self.surfaces.clear();
     }
 
     fn admit(&mut self, surface_id: u32) -> bool {
-        let known_surface = self.surface_ids[..self.surface_count].contains(&surface_id);
+        let known_surface = self.surfaces.contains(&surface_id);
         if self.baseline_edges < BASE_DICTIONARY_EDGES_PER_READING {
             self.baseline_edges += 1;
-            if !known_surface && self.surface_count < MAX_DICTIONARY_SURFACES_PER_READING {
-                self.surface_ids[self.surface_count] = surface_id;
-                self.surface_count += 1;
+            if !known_surface && self.surfaces.len() < MAX_DICTIONARY_SURFACES_PER_READING {
+                self.surfaces.push(surface_id);
             }
             return true;
         }
-        if known_surface || self.surface_count >= MAX_DICTIONARY_SURFACES_PER_READING {
+        if known_surface || self.surfaces.len() >= MAX_DICTIONARY_SURFACES_PER_READING {
             return false;
         }
-        self.surface_ids[self.surface_count] = surface_id;
-        self.surface_count += 1;
+        self.surfaces.push(surface_id);
         true
     }
 }
@@ -1372,6 +1390,10 @@ pub struct Converter {
     /// Local civil day supplied by the engine for this query only.
     civil_date: Option<CivilDate>,
     generated: Vec<GeneratedSurface>,
+    /// Per-reading-length dictionary edge budget. Slot-owned so a lattice can
+    /// reset it per reading start without allocating and without spending the
+    /// worker's stack; see [`DictionaryEdgeBudget`].
+    edge_budget: DictionaryEdgeBudget,
 }
 
 #[derive(Debug, Clone)]
@@ -1407,6 +1429,7 @@ impl Converter {
             commit_repair_readings: Vec::new(),
             civil_date: None,
             generated: Vec::with_capacity(MAX_GENERATED_SURFACES),
+            edge_budget: DictionaryEdgeBudget::new(),
         }
     }
 
@@ -2428,63 +2451,11 @@ impl Converter {
                 continue;
             }
 
-            let accepted: Vec<ConversionCandidate> = self
-                .candidates
-                .iter()
-                .filter(|candidate| {
-                    candidate.has_full_system_coverage(plan.corrected_reading().len())
-                })
-                .cloned()
-                .collect();
-            if accepted.is_empty() {
-                rejected = rejected.saturating_add(1);
-                continue;
-            }
-            for mut candidate in accepted {
-                candidate.origin = CandidateOrigin::RawRepair {
-                    plan_id: plan.plan_id(),
-                    tier: plan.tier(),
-                };
-                if self
-                    .raw_direct_scratch
-                    .iter()
-                    .any(|direct| direct.text() == candidate.text())
-                {
-                    rejected = rejected.saturating_add(1);
-                    continue;
-                }
-                if let Some(existing) = self
-                    .raw_repair_scratch
-                    .iter_mut()
-                    .find(|existing| existing.text() == candidate.text())
-                {
-                    if candidate.authority().rank() > existing.authority().rank()
-                        || (candidate.authority() == existing.authority()
-                            && candidate.cost < existing.cost)
-                    {
-                        *existing = candidate;
-                    }
-                    continue;
-                }
-                if self.raw_repair_scratch.len() < repair_slot_limit {
-                    self.raw_repair_scratch.push(candidate);
-                } else if direct_fills_cap {
-                    let worst = self
-                        .raw_repair_scratch
-                        .iter()
-                        .enumerate()
-                        .max_by_key(|(_, existing)| existing.cost)
-                        .map(|(index, _)| index)
-                        .expect("a full reservation has a candidate");
-                    if candidate.cost < self.raw_repair_scratch[worst].cost {
-                        self.raw_repair_scratch[worst] = candidate;
-                    } else {
-                        rejected = rejected.saturating_add(1);
-                    }
-                } else {
-                    rejected = rejected.saturating_add(1);
-                }
-            }
+            rejected = rejected.saturating_add(self.admit_repair_pass(
+                plan,
+                repair_slot_limit,
+                direct_fills_cap,
+            ));
         }
 
         self.candidates.clear();
@@ -2495,21 +2466,7 @@ impl Converter {
                 self.candidates.remove(index);
             }
         }
-        let mut repair_candidates_added = 0usize;
-        for candidate in self.raw_repair_scratch.iter().cloned() {
-            if self.candidates.len() >= options.max_candidates {
-                break;
-            }
-            if self
-                .candidates
-                .iter()
-                .any(|existing| existing.text() == candidate.text())
-            {
-                continue;
-            }
-            self.candidates.push(candidate);
-            repair_candidates_added = repair_candidates_added.saturating_add(1);
-        }
+        let repair_candidates_added = self.merge_repair_scratch(options.max_candidates);
         diagnostics.raw_repair_passes = passes;
         diagnostics.raw_repair_candidates_added = repair_candidates_added;
         diagnostics.raw_repair_candidates_examined = aggregate_candidates_examined;
@@ -2520,6 +2477,105 @@ impl Converter {
             candidates: &self.candidates,
             diagnostics,
         })
+    }
+
+    /// Admits one corrected pass's fully-covered candidates into the repair
+    /// scratch and reports how many rows it rejected.
+    ///
+    /// This is a sibling frame on purpose, not an inlined block.
+    /// `ConversionCandidate` is 4,152 bytes, an unoptimised build gives every
+    /// by-value move and every temporary its own stack slot, and ten of them
+    /// sat in `convert_input_with_raw_repair_plans` — a 41,456-byte frame that
+    /// stayed live across the corrected pass's entire conversion subtree. Held
+    /// here they are live only while nothing deep is running.
+    /// `raw_multi_pass_core_path_fits_128_kib_thread_stack` is what fails when
+    /// this moves back inline; keep the orchestrating frame free of candidates.
+    #[inline(never)]
+    fn admit_repair_pass(
+        &mut self,
+        plan: &RawRepairPlan,
+        repair_slot_limit: usize,
+        direct_fills_cap: bool,
+    ) -> usize {
+        let accepted: Vec<ConversionCandidate> = self
+            .candidates
+            .iter()
+            .filter(|candidate| candidate.has_full_system_coverage(plan.corrected_reading().len()))
+            .cloned()
+            .collect();
+        if accepted.is_empty() {
+            return 1;
+        }
+        let mut rejected = 0usize;
+        for mut candidate in accepted {
+            candidate.origin = CandidateOrigin::RawRepair {
+                plan_id: plan.plan_id(),
+                tier: plan.tier(),
+            };
+            if self
+                .raw_direct_scratch
+                .iter()
+                .any(|direct| direct.text() == candidate.text())
+            {
+                rejected = rejected.saturating_add(1);
+                continue;
+            }
+            if let Some(existing) = self
+                .raw_repair_scratch
+                .iter_mut()
+                .find(|existing| existing.text() == candidate.text())
+            {
+                if candidate.authority().rank() > existing.authority().rank()
+                    || (candidate.authority() == existing.authority()
+                        && candidate.cost < existing.cost)
+                {
+                    *existing = candidate;
+                }
+                continue;
+            }
+            if self.raw_repair_scratch.len() < repair_slot_limit {
+                self.raw_repair_scratch.push(candidate);
+            } else if direct_fills_cap {
+                let worst = self
+                    .raw_repair_scratch
+                    .iter()
+                    .enumerate()
+                    .max_by_key(|(_, existing)| existing.cost)
+                    .map(|(index, _)| index)
+                    .expect("a full reservation has a candidate");
+                if candidate.cost < self.raw_repair_scratch[worst].cost {
+                    self.raw_repair_scratch[worst] = candidate;
+                } else {
+                    rejected = rejected.saturating_add(1);
+                }
+            } else {
+                rejected = rejected.saturating_add(1);
+            }
+        }
+        rejected
+    }
+
+    /// Appends the repair scratch to the finished candidate list, skipping
+    /// surfaces the direct pass already produced, and reports how many rows it
+    /// added. Split out for the same stack reason as [`Self::admit_repair_pass`].
+    #[inline(never)]
+    fn merge_repair_scratch(&mut self, max_candidates: usize) -> usize {
+        let mut added = 0usize;
+        for candidate in self.raw_repair_scratch.iter().cloned() {
+            if self.candidates.len() >= max_candidates {
+                break;
+            }
+            if self
+                .candidates
+                .iter()
+                .any(|existing| existing.text() == candidate.text())
+            {
+                continue;
+            }
+            self.candidates.push(candidate);
+            added = added.saturating_add(1);
+        }
+        added
     }
 
     /// Backward-compatible ordinary-input wrapper. Classified production
@@ -3235,6 +3291,9 @@ impl Converter {
             0
         };
         let mut previous_class = None;
+        // One slot-owned budget for the whole lattice, reset per reading
+        // start: a fresh one per start cost a 1,040-byte stack construction
+        // per character before #94/#95, and a heap one would allocate.
         for (start, character) in reading.char_indices() {
             let class = char_class(character);
             let run = char_run(reading, start);
@@ -3248,7 +3307,7 @@ impl Converter {
             previous_class = Some(class);
             let mut last_length = 0usize;
             let mut candidates_for_length = 0usize;
-            let mut edge_budget = DictionaryEdgeBudget::new();
+            self.edge_budget.reset();
             let mut failure = None;
             dictionary
                 .common_prefix_search(&reading[start..], |matched| {
@@ -3267,9 +3326,9 @@ impl Converter {
                     if matched.matched_bytes != last_length {
                         last_length = matched.matched_bytes;
                         candidates_for_length = 0;
-                        edge_budget.reset();
+                        self.edge_budget.reset();
                     }
-                    if !edge_budget.admit(matched.entry.surface_id) {
+                    if !self.edge_budget.admit(matched.entry.surface_id) {
                         return true;
                     }
                     candidates_for_length += 1;
@@ -3654,7 +3713,7 @@ impl Converter {
         };
         let mut failure = None;
         let mut exact_edges_added = 0usize;
-        let mut edge_budget = DictionaryEdgeBudget::new();
+        self.edge_budget.reset();
         dictionary
             .common_prefix_search(reading, |matched| {
                 if matched.matched_bytes != reading_len {
@@ -3668,7 +3727,7 @@ impl Converter {
                 {
                     return true;
                 }
-                if !edge_budget.admit(matched.entry.surface_id) {
+                if !self.edge_budget.admit(matched.entry.surface_id) {
                     return true;
                 }
                 let boost = if matched.entry.flags.contains(EntryFlags::IT) {
