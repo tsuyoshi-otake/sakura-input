@@ -32,7 +32,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant};
 
-use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy, PATIENT_CONNECT};
+use sakura_ipc::{Client, Endpoint, Fault, ServerRejection, ServerTrustPolicy, PATIENT_CONNECT};
 use sakura_proto::{Request, Response, UiState, PROTOCOL_VERSION};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
@@ -277,8 +277,13 @@ impl PipeBinding {
     fn connect(&self) -> Result<Client, Fault> {
         match self {
             Self::Production => {
-                let executable = std::env::current_exe()
-                    .map_err(|_| Fault::UntrustedServer { process_id: 0 })?;
+                // Not an untrusted peer: this is the renderer failing to
+                // locate its own image, so no policy can be built and nothing
+                // about the server was ever asked.
+                let executable = std::env::current_exe().map_err(|_| Fault::UntrustedServer {
+                    process_id: 0,
+                    rejection: ServerRejection::PolicyUnavailable,
+                })?;
                 #[cfg(debug_assertions)]
                 let policy = ServerTrustPolicy::Exact(executable.with_file_name(ENGINE_EXE));
                 #[cfg(not(debug_assertions))]
@@ -287,7 +292,10 @@ impl PipeBinding {
                         .parent()
                         .and_then(|release| release.parent())
                         .and_then(|versions| versions.parent())
-                        .ok_or(Fault::UntrustedServer { process_id: 0 })?;
+                        .ok_or(Fault::UntrustedServer {
+                            process_id: 0,
+                            rejection: ServerRejection::PolicyUnavailable,
+                        })?;
                     ServerTrustPolicy::InstalledRoot(root.to_path_buf())
                 };
                 Client::connect_endpoint_verified(Endpoint::Renderer, &policy, PATIENT_CONNECT)

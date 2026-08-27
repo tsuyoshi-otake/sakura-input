@@ -351,10 +351,17 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
              `the_pipe_is_reachable_from_a_real_appcontainer_token` \
              started is still alive. Raw error: {error:?}"
         ),
-        Err(sakura_ipc::Fault::UntrustedServer { process_id }) => panic!(
-            "verified connect rejected the parent-owned engine process {process_id}; \
-             the AppContainer could open the data pipe but failed the exact path/token \
-             policy before Hello"
+        Err(sakura_ipc::Fault::UntrustedServer {
+            process_id,
+            rejection,
+        }) => panic!(
+            "verified connect rejected the parent-owned engine process {process_id}: \
+             {rejection}. The AppContainer could open the data pipe but did not \
+             complete the exact path/token policy before Hello. Read the reason \
+             literally: `image path is not the one the policy accepts` means a \
+             different program served the pipe, while any `failed (...)` reason \
+             means the sandboxed token could not perform that query at all — the \
+             latter is Issue #104's environment flake, not a security finding."
         ),
         Err(other) => panic!(
             "connect to {parent_pipe_name:?} failed with an unexpected \

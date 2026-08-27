@@ -57,7 +57,8 @@ use windows::Win32::System::IO::{
 };
 
 use crate::security::{
-    pipe_name_for, verify_server_process, Endpoint, ServerTrustPolicy, CLIENT_ACCESS,
+    pipe_name_for, verify_server_process, Endpoint, ServerRejection, ServerTrustPolicy,
+    CLIENT_ACCESS,
 };
 use crate::transport::Fault;
 
@@ -133,9 +134,19 @@ impl Client {
     ) -> Result<Self, Fault> {
         let client = Self::connect_to(name, budget)?;
         let process_id = client.server_process_id().unwrap_or(0);
-        if process_id == 0 || verify_server_process(process_id, policy).is_err() {
+        // Keep the reason. Refusing is the same either way, but the refusal is
+        // frequently the only observable event — see `ServerRejection`.
+        let refused = if process_id == 0 {
+            Some(ServerRejection::NoServerProcessId)
+        } else {
+            verify_server_process(process_id, policy).err()
+        };
+        if let Some(rejection) = refused {
             drop(client);
-            return Err(Fault::UntrustedServer { process_id });
+            return Err(Fault::UntrustedServer {
+                process_id,
+                rejection,
+            });
         }
         Ok(client)
     }
