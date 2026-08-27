@@ -6945,8 +6945,10 @@ mod tests {
     #[test]
     fn a_converted_comma_offers_every_mark_and_commits_the_chosen_one_verbatim() {
         let mut dispatcher = conversion_dispatcher();
-        let mut normalizer = Normalizer::default();
-        normalizer.punctuation = PunctuationStyle::new(CommaMark::FullWidth, PeriodMark::FullWidth);
+        let normalizer = Normalizer {
+            punctuation: PunctuationStyle::new(CommaMark::FullWidth, PeriodMark::FullWidth),
+            ..Normalizer::default()
+        };
         dispatcher
             .apply_runtime_configuration(
                 Preferences {
@@ -7021,8 +7023,10 @@ mod tests {
     #[test]
     fn a_converted_period_follows_its_own_role_setting() {
         let mut dispatcher = conversion_dispatcher();
-        let mut normalizer = Normalizer::default();
-        normalizer.punctuation = PunctuationStyle::new(CommaMark::Touten, PeriodMark::HalfWidth);
+        let normalizer = Normalizer {
+            punctuation: PunctuationStyle::new(CommaMark::Touten, PeriodMark::HalfWidth),
+            ..Normalizer::default()
+        };
         dispatcher
             .apply_runtime_configuration(
                 Preferences {
