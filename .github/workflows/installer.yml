@@ -30,6 +30,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # These sparse paths must stay in sync with the $SparsePaths list in
+      # scripts/build-dictionary.ps1. When -MozcSource is supplied,
+      # Resolve-PinnedSource only checks the revision and returns; it never
+      # re-asserts the sparse profile, so anything missing here reaches the
+      # build as a hard failure. #95 added src/data/single_kanji to the script
+      # and not to this list, which broke both workflows.
       - name: Check out pinned Mozc dictionary data
         uses: actions/checkout@v4
         with:
@@ -39,7 +45,8 @@ jobs:
           sparse-checkout: |
             LICENSE
             src/data/dictionary_oss
-            src/data/rules/segmenter.def
+            src/data/rules
+            src/data/single_kanji
 
       # IT glossary input is the MIT snapshot under
       # third_party/smile-chat-public (no private-repo token).
