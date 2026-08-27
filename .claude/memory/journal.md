@@ -1331,3 +1331,16 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 成果物: #107 起票、#102 へ相互参照コメント。owner が検討する。
 - 学び: **owner の「〜は使えないのか」という提案は、否定するにも実測で答える。** 3案のうち2案は実測で否定できたが、否定の根拠は毎回コードではなく数字だった（既に入っている構造 / 計算のない処理が落ちている事実）。そして3案目は owner が正しく、私はそこを見ていなかった。**提案を評価する順序を「ありそうか」ではなく「機構が実在するか・数字が異常か」にすると、当たりが速く出る。**
 - 学び: **プロファイルを取る前に、プロセスのワーキングセットと page fault 数を見る。** 今回は 2コマンドで peak−current の trim 跡と 57倍の fault 数が出て、それだけで探索範囲が計算系から memory 系へ移った。CPU プロファイラを先に回していたら、0 fault/sec のアイドルと burst 型の停止を見落としていた。
+
+## 2026-08-28 — 1.0.30 を診断専用リリースとして公開（#102, #104, #106, #107）
+
+- 内容: 1.0.29 以降の製品コード変更は `58bb70c`（#102 セッション破棄21経路の命名と2本目の bounded log）と `99f5674`（#104 拒否した検査step の保持）の2件だけ。**入力の挙動は一切変わらず、不具合修正も含まない。** それでも出す理由は、#102 の disconnect カウンタは実機へ入らないとデータが1件も集まらないからである。
+- リリースノートはこの性質を冒頭で明言した（「診断のためのリリースです。入力の挙動は 1.0.29 から変えていません」）。「含まれないもの」に、50 ms 超過の原因が未解明であること、#107 は**候補であって原因ではない**こと（hard fault 比率が未測定）、timeout 記録が超過量を持たないこと、#106 の traceability 判定が現在のコードについて何も述べていないことを列挙した。
+- bump 手順（4箇所＋1）: workspace `Cargo.toml` / `Cargo.lock` / `installer/setup.iss`（product version と versioned payload dir の2行）/ `.github/workflows/release.yml` の default tag、加えて `tools/candidate-sweep`（`Cargo.toml` と `Cargo.lock`。sakura-core と sakura-proto を path で pin しているため置いていくと次回実行時に自分の lockfile を書き換える）。`docs/release-notes-v<version>.md` はワークフローが版一致を要求するので旧版を削除して新版を作る。
+- ロック再生成は `cargo update --workspace` を両ワークスペースで実行。差分は 32 行と 6 行で前回リリースと同一の形、**version 行以外の変更 0**。依存を1つも採用していないので7日ルールに抵触しない。この確認を `git diff -U0 | grep -vc 'version = ...'` で数値として取った。
+- ゲート: fmt 0、clippy `--workspace --all-targets -D warnings` 0、`cargo test --workspace` **1,727 passed / 0 failed**、`git diff --check` clean、cargo/rustc 残存 0。commit `8a91b24`、tag `v1.0.30`。
+- 公開手順の実際: `release.yml` はタグ push で起動するが **GitHub Release を作らない**（`contents: write` を持たず、artifact を upload するだけ）。したがって Release は `gh release create` で手動作成する。成果物 `sakura-input-1.0.30-release-candidate` から `sakura_setup.exe` と `release-manifest.txt` を取り出して添付した。
+- 署名: `signing-status.txt` は `unsigned-owner-approved`。**未署名**であることを確認したうえでノートにその旨とSHA-256照合手順を記載している。manifest の `sha256=fad57ac0…` が実ファイルのハッシュと完全一致、size 24,815,818 も一致することを添付前に検証した。
+- 作業ツリー: owner の WIP 7ファイル（`AiStyle::English` 系）は未ステージのまま保全。`git add` はリリース対象8ファイルを明示列挙し、staged 一覧が前回リリースと同一構成であることを確認してから commit した。
+- 学び: **リリース前の `git add` は `-A` ではなくファイル名の明示列挙にする。** owner が同じツリーで WIP を進めている状況では、`-A` は無関係な未完成コードをリリースコミットへ巻き込む。staged 一覧を前回リリースの `--stat` と見比べる確認が有効だった（8ファイル・同一構成）。
+- 学び: **ロック再生成後は「version 行以外が変わっていない」を数えて確認する。** `cargo update --workspace` は workspace member だけを更新する建前だが、それを目視ではなく `grep -vc` の 0 で確認しておくと、依存の混入と7日ルール違反を同時に排除できる。
