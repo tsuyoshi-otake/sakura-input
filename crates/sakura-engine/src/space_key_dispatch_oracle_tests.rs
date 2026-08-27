@@ -90,8 +90,17 @@ fn cancel_and_replace_drop_composition_without_a_space() {
     assert_eq!(replaced.connections[0].state, ConnState::Idle);
 }
 
+/// REQ-SPACE-09 changed what the Space after a crash/restart may do.
+/// This test used to assert that it reached the document, which is exactly
+/// the #102 defect: the user aimed that Space at a reading they were still
+/// editing, the connection carrying it died on a key-budget timeout, and the
+/// replacement session -- idle, and correct to do so -- committed U+3000
+/// into their text. The dropped reading now absorbs it.
+///
+/// The property this test was originally written for is untouched: a
+/// composition dropped by a restart must never convert afterwards.
 #[test]
-fn crash_restart_forgets_composition_and_does_not_convert_later() {
+fn crash_restart_forgets_composition_and_absorbs_the_space_it_dropped() {
     let state = apply_all(
         2,
         [
@@ -102,8 +111,78 @@ fn crash_restart_forgets_composition_and_does_not_convert_later() {
     );
     assert_eq!(state.crashes, 1);
     assert_eq!(state.connections[0].state, ConnState::Idle);
-    assert!(state.last_inserted);
+    assert!(!state.last_inserted);
     assert!(!state.last_converted);
+    assert!(state.last_absorbed);
+    assert_eq!(state.document_spaces, 0);
+}
+
+/// The absorption is one-shot, so a user who actually wanted a space gets one
+/// by pressing the key again. Without this bound the mitigation would be a
+/// standing veto on idle Space after any dropped link.
+#[test]
+fn only_the_first_space_after_a_crash_restart_is_absorbed() {
+    let state = apply_all(
+        1,
+        [
+            type_on(0),
+            DomainEvent::CrashRestart { connection: 0 },
+            space_on(1 << 0),
+            space_on(1 << 0),
+        ],
+    );
+    assert!(state.last_inserted);
+    assert_eq!(state.document_spaces, 1);
+}
+
+/// A restart that dropped nothing owes nothing: the ordinary idle Space of
+/// REQ-SPACE-02 still reaches the document immediately afterwards.
+#[test]
+fn crash_restart_of_an_idle_connection_absorbs_no_space() {
+    let state = apply_all(
+        1,
+        [
+            DomainEvent::CrashRestart { connection: 0 },
+            space_on(1 << 0),
+        ],
+    );
+    assert!(state.last_inserted);
+    assert_eq!(state.document_spaces, 1);
+}
+
+/// Committing first ends the composition the way it was meant to end, so the
+/// context replacement that follows drops nothing and arms nothing.
+#[test]
+fn replacing_a_context_after_a_commit_absorbs_no_space() {
+    let state = apply_all(
+        1,
+        [
+            type_on(0),
+            DomainEvent::Commit { connection: 0 },
+            DomainEvent::ReplaceContext { connection: 0 },
+            space_on(1 << 0),
+        ],
+    );
+    assert!(state.last_inserted);
+    assert_eq!(state.document_spaces, 1);
+}
+
+/// Typing again proves the input path recovered. A flapping connection must
+/// not bank absorptions and swallow a Space typed much later.
+#[test]
+fn composing_again_disarms_the_teardown_absorption() {
+    let state = apply_all(
+        1,
+        [
+            type_on(0),
+            DomainEvent::CrashRestart { connection: 0 },
+            type_on(0),
+            DomainEvent::Commit { connection: 0 },
+            space_on(1 << 0),
+        ],
+    );
+    assert!(state.last_inserted);
+    assert_eq!(state.document_spaces, 1);
 }
 
 #[test]

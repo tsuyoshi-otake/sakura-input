@@ -15,5 +15,6 @@ This is atomic-condition polarity coverage of the independent oracle, not MC/DC 
 | `ATOM-SPACE-EXHAUSTED` | true | true |
 | `ATOM-TYPE-EVENT` | true | true |
 | `ATOM-CRASH-EVENT` | true | true |
+| `ATOM-PENDING-TEARDOWN` | true | true |
 
-Covered polarities: 20/20 (100%). Seed `0x5350_4143_4520_0816`. Cases: 512.
+Covered polarities: 22/22 (100%). Seed `0x5350_4143_4520_0816`. Cases: 512.
