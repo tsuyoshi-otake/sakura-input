@@ -1154,3 +1154,15 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び4: **upstream の無い branch は CI が存在しないのと同じ。** 9コミット分の赤が溜まっていた。push 前に手元で CI と同じ3コマンドを回す手順を常に踏む。
 - 検証: `cargo fmt --all -- --check` exit 0、`cargo clippy --workspace --all-targets -- -D warnings` exit 0、`cargo test --workspace` **1,698 passed / 0 failed / 82 ignored**、`git diff --check` exit 0、cargo／rustc／テストランナーの残存プロセス 0。
 - 未了: `crates/sakura-ipc/src/diagnostics.rs`（#102 の `DisconnectReason`）は未使用アイテム2件が `-D warnings` で落ちるため**意図的に未コミットのまま**残した。#103 の完了条件（provenance フィールド、5構成の測定行列、admission カウンタ、`admit()` の順序、`copy_from_output` の選択のみ更新、多接続 PWS テスト、`CandidateSpan` u16 化）も未着手。
+
+## 2026-08-27 — 4つ目の赤ゲート: Installer が単漢字表を checkout していなかった（#95、commit 9dd959a）
+
+- 症状: 上のエントリの3ゲートを緑にして push した直後、**Installer workflow が 39 秒で失敗**した。`scripts/build-dictionary.ps1:579`「Mozc single-kanji table is missing: `.sources\mozc\src\data\single_kanji\single_kanji.tsv`」。
+- 根本原因: #95（`8983139`）が単漢字表の依存をスクリプトへ追加したとき、スクリプト自身の `$SparsePaths`（`build-dictionary.ps1:529`）と必須ファイル検査（578-583行）には `src/data/single_kanji` を入れたが、**workflow 側の `sparse-checkout` に入れていなかった**。`installer.yml` / `release.yml` のリストは初回コミット `b3107aa` 以来一度も変わっていない。branch に upstream が無かったため、この2 workflow も #95 を一度も見ていない。
+- 見えにくかった理由（非対称性）: `Resolve-PinnedSource` が sparse プロファイルを張り直すのは**自分が clone した場合だけ**（`else` 分岐、178-180行）。`-MozcSource` でディレクトリを渡された場合はリビジョンを検証して return するだけなので、workflow のリストから漏れたパスは修復されずハードエラーになる。
+- 影響範囲: `release.yml` も同じ古いリストを持つ。**リリースビルドも同じ場所で落ちる**が、tag 起動なので実際にリリースを切るまで表面化しない位置だった。
+- 修正: 両 workflow の sparse-checkout に `src/data/single_kanji` を追加。あわせて `src/data/rules/segmenter.def` → `src/data/rules` に統一し、スクリプト側のリストと**文字列として比較できる**形にした。cone mode ではファイルパス指定が祖先ディレクトリの直下エントリを引き込むため、取得内容は変わらない。非対称性の説明を両ステップの上にコメントとして残した。
+- 検証: pinned revision `3f235b4e` に `single_kanji.tsv`（108,795 B）と `variant_rule.txt`（9,050 B）が両方存在。スクリプトが Mozc ツリーから必要とするのは `LICENSE` / `src/data/dictionary_oss` / `src/data/rules/segmenter.def` / `src/data/single_kanji` の4つだけで漏れなし。`ci/release-workflow-policy.ps1` は self-test 込みで通過（7 reviewed action references）。push 後、**HEAD `9dd959a` で CI・Installer とも success**（CI 13m45s、Installer 7m3s）。
+- 学び1: **`ci.yml` を緑にしても「CI が緑」ではない。** 手元で回せる3コマンドだけを根拠に「green にしてから push」と宣言したが、Installer は赤のままだった。push が起動する workflow を `ls .github/workflows` で列挙してから宣言する。手元で回せるかどうかはゲートの範囲と無関係。
+- 学び2: **tag 起動の workflow は最も遅く壊れが見つかる位置にある。** `release.yml` の同じ欠落は、リリースを切るその瞬間まで出てこなかった。push 起動の workflow が同じコードパスを持っているのは幸運で、設計として頼れるものではない。
+- 学び3: **同じリストが2箇所にあるなら、まず「文字列として比較できる形」に揃える。** `src/data/rules` と `src/data/rules/segmenter.def` は cone mode では等価だが、目でも grep でも一致判定できなかった。等価だが表記の違うリストは、ドリフトを隠す。

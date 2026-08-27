@@ -560,14 +560,32 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   both large and allocation-free belongs in the `Converter` arena, reset per
   use.
 
-- **A branch with no upstream has no CI.** `feat/95-single-kanji-and-candidate-cap`
-  accumulated nine code commits that never ran `.github/workflows/ci.yml`, and
-  all three of its gates were red: `cargo test --workspace` (the stack
-  overflow), `cargo clippy --workspace --all-targets -- -D warnings`
+- **A branch with no upstream has no CI, and `ci.yml` is not all of CI.**
+  `feat/95-single-kanji-and-candidate-cap` accumulated nine code commits that
+  no workflow ever saw, and four gates were red. Three were in `ci.yml` and
+  reproduce locally: `cargo test --workspace` (the raw-repair stack overflow),
+  `cargo clippy --workspace --all-targets -- -D warnings`
   (`field_reassign_with_default` in two committed #99 tests), and
-  `cargo fmt --all -- --check`. Run those three locally before any push that
-  lands accumulated work, and treat a green local suite on a branch CI has
-  never seen as unverified.
+  `cargo fmt --all -- --check`. Running those three and declaring the push
+  green still shipped a red `installer.yml`, because #95 added
+  `src/data/single_kanji` to `build-dictionary.ps1`'s own `$SparsePaths` and
+  its required-file checks but not to the `sparse-checkout` in `installer.yml`
+  or `release.yml` — and `release.yml` runs only on a tag, so that half would
+  have surfaced at release time. Before a push that lands accumulated work,
+  enumerate every workflow the push triggers (`ls .github/workflows`) rather
+  than the subset that is convenient to run locally, and treat a green local
+  suite on a branch CI has never seen as unverified.
+
+- **A path list duplicated between a script and a workflow will drift, so make
+  the two comparable and say which is authoritative.** `Resolve-PinnedSource`
+  re-asserts its sparse profile only for the clone it manages itself; when
+  `-MozcSource` names a directory, as both workflows do, it verifies the
+  revision and returns, so anything missing from the workflow's list reaches
+  the build as a hard failure with no repair path. The lists are now literal
+  matches — `src/data/rules` rather than `src/data/rules/segmenter.def`, which
+  cone mode resolves identically because a listed file pulls in its ancestors'
+  immediate entries — and both steps carry a comment naming the script as the
+  source of truth.
 
 - **A glossary supplies each term's meaning, not the reading a user types.**
   `data/it-terms.tsv` is generated from a term glossary, so `ACM` arrived with
