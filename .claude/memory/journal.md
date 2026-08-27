@@ -1130,3 +1130,27 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び2: **「provenance を書け」という指摘は形式要件ではなく、実質的なバグ検出器である。** 出所を1行ずつ埋める作業が、窓の誤りとビルドの二重計上を同時に暴いた。分析結果を書く前に provenance ブロックを埋める順序にすれば、誤った窓のまま bisect を始めずに済んだ。
 - 学び3: **集計はラベルではなく境界イベントで区切る。** version 文字列で group by すると同名の別ビルドが合算される。開発者履歴には `engine` 起動レコードがあり、これで区切れば n=6 と n=50 に分離できた。08-26 の集計はこれを怠って 56件に混ぜていた。
 - 学び4: 上限定数を上げる変更では、**その定数に比例して重くなる経路を全部数える**。今回 `admit()` の拒否走査と `copy_from_output` の全件複写を見落としており、どちらも外部レビューの側から指摘された。「上限を上げた」だけでなく「上限が掛かる場所」を列挙する手順にする。
+
+## 2026-08-27 — 未 push の9コミットが CI 3ゲートすべて赤だった／raw-repair のスタック超過を実測で確定（#94 / #95 / #99 / #103、commit 2da1261）
+
+- 経緯: owner の「main に反映して全部」「というか main で作業しないとだめよな」を受けて push する前に、CI が実際に回すゲート（`.github/workflows/ci.yml`、windows runner・debug）をローカルで回した。**3つとも赤だった。** branch `feat/95-single-kanji-and-candidate-cap` に upstream が無かったため（08-27 の前エントリで確認済み）、`v1.0.28..HEAD` の9コミットは**一度も CI を通っていない**。push していれば main が赤で着地していた。
+  - `cargo test --workspace` → `raw_multi_pass_core_path_fits_128_kib_thread_stack` が `STATUS_STACK_OVERFLOW`（0xc00000fd）
+  - `cargo clippy --workspace --all-targets -- -D warnings` → `clippy::field_reassign_with_default` 2件（`dispatch.rs:6949` / `:7025`、#99 のテスト）
+  - `cargo fmt --all -- --check` → 修正後の新規呼び出しで不整合（自分の変更由来）
+- 根本原因（推測ではなく逆アセンブルの実測）: `ConversionCandidate` は **4,152 バイト**。debug ビルドは move も一時オブジェクトも別スロットに置くため、`convert_input_with_raw_repair_plans` が約10個を1フレームに抱え、**41,456 バイト**のフレームになっていた。しかもそのフレームは corrected pass の変換サブツリー全体が動いている間ずっと生きている。実測必要量は約 136 KiB、予約は 128 KiB。**8 KiB 足りないだけ**なので、環境ノイズで通ったり落ちたりする（実測フレーク率 約30%）。
+- 測定手法（再利用可能）: リンク済み `.exe` には COFF シンボルが無い（シンボルは PDB 側）ので**オブジェクトファイルを見る**。`cargo rustc -p sakura-core --lib --profile dev -- --emit=obj=<path> -C codegen-units=1` → `llvm-objdump -d -C`（`~/.rustup/toolchains/1.96.0-x86_64-pc-windows-msvc/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-objdump.exe`）でプロローグを読む。**awk は2形を両方拾うこと**: 通常の `subq $0xN, %rsp` と、MSVC の大フレーム形 `movl $0xN, %eax` … `callq <__chkstk 再配置>` … `subq %rax, %rsp`。後者は逆アセンブルテキストに `__chkstk` という文字列が出ない（再配置先なので）。最初これを取りこぼし、**一番大きいフレームだけが見えていなかった**。
+- 修正1（スタック）: 候補を move する2ブロックを `#[inline(never)]` の兄弟関数 `admit_repair_pass`（21,488 B）と `merge_repair_scratch`（12,600 B）へ出した。深い呼び出しが走っている間は生きていない位置へスロットを移すのが要点で、合計サイズを減らしたのではない。オーケストレータのフレームは 41,456 → **7,576 B**、必要量は 136 KiB → **64〜68 KiB の間**（68 KiB で 20/20 成功、64 KiB で 20/20 失敗）。128 KiB のテストに対して約2倍、本番の `WORKER_STACK_BYTES = 160 KiB` に対しても十分な余裕になった。128 KiB ガード2本（`raw_multi_pass_core_path_fits_128_kib_thread_stack` / `cross_commit_bridge_fits_128_kib_thread_stack`）を各20回、計40回すべて成功。
+- 修正2（`DictionaryEdgeBudget`）: #94 191ca67 と #95 a8e5a4e が `MAX_DICTIONARY_SURFACES_PER_READING` を 12 → `MAX_CONVERSION_CANDIDATES`（256）へ結び付けたことで、インライン配列 `[u32; N]` が **64 B → 1,040 B** に膨らんだ。それが `Copy` のまま、`build_lattice` の**読み開始位置ごとに新規構築**されていた。これを `Converter` 所有のスクラッチにして開始位置ごとに `reset()` する形へ変更。
+- ここで自分のミス: 最初 `Vec::with_capacity` をローカルに持たせた。スタックガードは通るが `conversion_into_reused_candidate_buffers_allocates_nothing` と `cross_commit_bridge_conversion_allocates_nothing` が落ちる。変換パスは**アロケーション 0** が不変条件なので、容量はプロセス寿命のアリーナ（`Converter::new()`）側に持たせるしかない。**スタック制約とアロケーション制約は同時に満たす必要があり、片方だけ見た解は2回とも間違いだった。**
+- 挙動不変の確認: `admit_repair_pass` は、インライン時代に加算していた拒否数をそのまま返す（`accepted` が空のときの `rejected += 1; continue;` に対応する 1 を含む）。`reset()` は新規構築時と同じ状態にする。
+- 訂正（過去の journal 3エントリ）: 08-25／08-26 の「スタック説は実測で否定」は**誤り**だった。
+  - 「32/48/…/160 KiB すべて exit 0」「48条件すべて成功」→ 今回の実測（64 KiB で 20/20 失敗）と両立しない。
+  - `aad57d1`「the reported stack overflow ... was falsified — 48 of 48 ... passed and 256 candidates fit in 64 KiB」も同様に成立しない。
+  - 最も高くついたのは 3件目。あるセッションは `#[inline(never)]` への切り出し、つまり**今回と同じ正しい修正**を一度実装し、padding probe（`black_box([0u8; N])` が N=16384 でも通る）を根拠に「誤診」として**撤回**していた。修正が消え、代わりに「既知のフレーク」という誤った結論が残った。
+  - なぜ過去の測定が緑だったかは**再実行して決着させていない**ので断定しない。ただし今回、自分自身が同じ形の偽陽性を出した: `--exact` に**完全パスでないフィルタ**を渡すと 0 件実行で exit 0 になり、「全サイズ成功」に見える。48条件が全部緑という結果は、まさにこの失敗が作る形である。
+- 学び1: **資源制約は「余裕を測る」のではなく「使用量を測る」。** padding probe は「N バイト足しても通る」しか言わない。ピークがどのフレームで起きているかを特定しないと、死んでいるスロットに padding が乗って無意味な緑が出る。逆アセンブルでフレームサイズを直接読むほうが速く、答えが一意だった。
+- 学び2: **全条件が成功したスイープは、まず「本当に実行されたか」を疑う。** 実行件数（`running N tests`）を読まずに exit code だけ見た結果を証拠にしない。境界付近では 1 回の実行が確率的なので、**サイズごとに複数回**（今回は20回）回さないと通過／失敗の境界が出ない。
+- 学び3: **上限定数を上げる変更のレビュー観点に「その定数がインライン配列やスタックスロットの寸法に入っていないか」を入れる。** #94/#95 の 12 → 256 は、候補数の話に見えて実際には 1,040 バイトの構造体を毎文字スタックに積む変更だった。08-27 の前エントリで「上限に比例して重くなる経路を全部数える」と書いたが、**時間**の経路だけを数えて**空間**の経路を数えていなかった。
+- 学び4: **upstream の無い branch は CI が存在しないのと同じ。** 9コミット分の赤が溜まっていた。push 前に手元で CI と同じ3コマンドを回す手順を常に踏む。
+- 検証: `cargo fmt --all -- --check` exit 0、`cargo clippy --workspace --all-targets -- -D warnings` exit 0、`cargo test --workspace` **1,698 passed / 0 failed / 82 ignored**、`git diff --check` exit 0、cargo／rustc／テストランナーの残存プロセス 0。
+- 未了: `crates/sakura-ipc/src/diagnostics.rs`（#102 の `DisconnectReason`）は未使用アイテム2件が `-D warnings` で落ちるため**意図的に未コミットのまま**残した。#103 の完了条件（provenance フィールド、5構成の測定行列、admission カウンタ、`admit()` の順序、`copy_from_output` の選択のみ更新、多接続 PWS テスト、`CandidateSpan` u16 化）も未着手。
