@@ -1238,3 +1238,22 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び1: **「ローカルで CI と同じコマンドを回した」の"同じ"を数えるときは、job の step 全部を見る。** 4ゲートを緑にして安心したが、`Build and test` job は17 step あり、`--ignored` の単独実行という**定義上 `cargo test --workspace` に含まれない** step がその後ろにいた。workflow を読むときは「自分が回した集合」と「job が回す集合」の差を明示的に列挙する。
 - 学び2: **フレークが疑われる対象に対して、n=2 で因果を宣言しない。** 統制（同一 runner image、同一 toolchain、diff が該当領域に触れていないことの確認）をどれだけ積んでも、標本が2つなら既知フレークと区別できない。先に3つ目を取る。
 - 学び3: **失敗の再現性が低いときほど、コードを読んで"失敗しうる箇所"を機械的に差分で絞るほうが速い。** 今回は成功パスと失敗パスが共有する呼び出し（`classify_client_process`）を見つけたことで、5つの候補ステップが2つになった。ログを増やさずに絞れた分がそのまま次回の調査コストを下げる。
+
+## 2026-08-27 — #102 の teardown latch を実機へ導入、新ビルド稼働を確認（#102, #104）
+
+- owner 承認（「ビルドして再インストール」）に基づき、#102 の修正を実機へ入れた。`cargo build --workspace --release` exit 0（41.42s）、`scripts/build-installer.ps1` exit 0。
+- 成果物 identity: version 1.0.28 / build_id `e45b10ede7a589ee` / Inno Setup 6.7.3 warnings 0 / 24,822,311 bytes / SHA-256 `64c091702fb71aab7904bad1197ba45c01e34f84f7dbacc445870c036afe9185`。
+- 再インストール: `installer/out/reinstall-20260827-issue102-teardown-latch.log` に `Installation process succeeded` と `Log closed` の両方あり。wrapper pid 22048 は待たずに自然終了済み（既知の「wrapper が本体より長生きする」パターンには当たらなかった）。`sakura_regtool.exe --configure-diagnostics` と `--enable-profile` はいずれも exit 0、再起動要求なし。
+- **新ビルドが実際に稼働していることの確認方法**: `sakura_settings.exe history stats` の `history-release-label` が `1.0.28-e45b10ede7a589ee`。あわせて `live-engine yes` / `history-service-active yes` / `dropped-events 0` / `persistence-failures 0`。`update status` は `current-version 1.0.28`。
+- 稼働確認で詰まった点（次回のために記録）: 非 elevated shell からは engine の image path が引けない。`Get-Process -Name sakura_engine | Select Path` も CIM の `ExecutablePath` も**空文字**で返る。`C:\Program Files\Sakura Input\versions\` には旧 `1.0.28-afd34a06422849de` と新 `1.0.28-e45b10ede7a589ee` が**両方**残るので、ディレクトリの存在は稼働の証拠にならない。`history stats` の release label が唯一の安価な確証。
+- プロセス構成の観察: 再インストール直後 17:18:30 / 17:18:38 に `sakura_engine.exe` が3個（42188, 39932, 43680）現れ、数十秒で 1 個に収束した。親はいずれも `sakura_renderer.exe`（pid 43476, 17:18:30 起動）。定常状態は engine 1 + renderer 1。
+- IPC timeout counters の前後比較（`diagnostics show text`、再インストール前 16:13 → 後 17:22）: 合計 103 → 105、**key 44 → 44（増分ゼロ）**、ui-placement 53 → 54、administration 5 → 6。administration の増分は下記の自分の `history export` 失敗そのもの。観測窓は数分なので key timeout の頻度低下を主張する根拠にはならない。#102 の修正は被害を限定するものであって発生頻度を下げるものではない、という整理は変わらない。
+- 別件の新規発見（#102 とは無関係、未 Issue 化）: `history export` が `flush input history through engine: the engine did not answer in time` で安定して失敗する。一方 `history stats`（atomics のみ）と `history mine`（read-only snapshot）は成功する。切り分けの結果、engine 不調ではなく**store のサイズによる予算超過**である。
+  - `%LOCALAPPDATA%\SakuraInput\history\input.bin` は 16,395,636 bytes。read-only の `history mine` ですら **8.7 秒**かかる。
+  - `crates/sakura-settings/src/input_history.rs:22` の `ADMIN_CALL_BUDGET` は **2 秒**。`export` だけが `Request::FlushInputHistory` を経由し、engine 側 `input_history.rs:911` の `flush()` は writer thread への `receiver.recv()` を**無期限で**待つ。writer thread の作業が 2 秒に収まらなくなった時点で export だけが落ちる。
+  - 同ファイルの `mine` には「read-only なので live engine を塞がない」という既存コメントがあり、設計上その区別は意図されている。今回はその境界のおかげで切り分けが 3 コマンドで済んだ。
+  - 2026-08-27 16:06 時点では export は成功していた（5,674,299 bytes の TSV を出力）。store 成長 → 予算超過という順序と整合する。
+- AppContainer フレークは Issue #104 として登録した（https://github.com/tsuyoshi-otake/sakura-input/issues/104）。同日の前エントリにある「tracking Issue 未着手」はこれで解消。Issue 本文には `client.rs:138` の診断欠陥と「失敗しうるのは image path 取得か path 突き合わせの2つだけ」という絞り込みを添えた。
+- 直後の push `9d5f0e6`（journal のみの変更）の CI は **1回目で success**、Installer も success。f8a80c7 も最終的に両方 success。
+- 学び: **「新しいバイナリを入れた」と「新しいバイナリが動いている」は別の主張で、後者には専用の確認経路が要る。** この製品では versions ディレクトリもプロセスの image path も答えにならず、engine 自身が申告する release label だけが確証になる。導入作業の完了条件に、その申告値の突き合わせを含める。
+- 学び: **同じ subsystem に read-only 経路と同期経路の両方があるなら、失敗時はまず read-only を叩く。** 「engine が死んでいる」と「同期の予算が足りない」は症状が同じ timeout だが、read-only が通るかどうかで一発で分かれる。
