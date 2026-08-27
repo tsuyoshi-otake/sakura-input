@@ -33,6 +33,15 @@ pub fn timeout_diagnostics() -> io::Result<PathBuf> {
     Ok(local_root()?.join("diagnostics").join("ipc-timeouts.bin"))
 }
 
+/// Must stay in step with `sakura_ipc::diagnostics::default_disconnect_log_path`,
+/// which is what the TSF DLL writes through. A settings build reading a
+/// different file would report zero resets and look like a fixed product.
+pub fn disconnect_diagnostics() -> io::Result<PathBuf> {
+    Ok(local_root()?
+        .join("diagnostics")
+        .join("ipc-disconnects.bin"))
+}
+
 pub fn debug_trace() -> io::Result<PathBuf> {
     Ok(local_root()?.join("logs").join("debug.tsv"))
 }

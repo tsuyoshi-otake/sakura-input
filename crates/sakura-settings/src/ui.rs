@@ -640,6 +640,7 @@ struct App {
     dictionary_path: PathBuf,
     learning_path: PathBuf,
     diagnostics_path: PathBuf,
+    disconnect_path: PathBuf,
     update_preferences_path: PathBuf,
     update_paths: updater::UpdatePaths,
     configuration: ConfigurationDocument,
@@ -777,6 +778,7 @@ impl App {
         let dictionary_path = paths::user_dictionary().map_err(display)?;
         let learning_path = paths::learning().map_err(display)?;
         let diagnostics_path = paths::timeout_diagnostics().map_err(display)?;
+        let disconnect_path = paths::disconnect_diagnostics().map_err(display)?;
         let update_preferences_path = paths::update_preferences().map_err(display)?;
         let update_paths = updater::UpdatePaths {
             installer: paths::update_installer().map_err(display)?,
@@ -867,6 +869,7 @@ impl App {
             dictionary_path,
             learning_path,
             diagnostics_path,
+            disconnect_path,
             update_preferences_path,
             update_paths,
             configuration,
@@ -1007,9 +1010,10 @@ impl App {
             return self.refresh_diagnostics();
         }
         if source == self.diagnostics_controls.clear {
-            diagnostics::clear(&self.diagnostics_path).map_err(display)?;
+            diagnostics::clear_timeouts(&self.diagnostics_path).map_err(display)?;
+            diagnostics::clear_disconnects(&self.disconnect_path).map_err(display)?;
             self.refresh_diagnostics()?;
-            self.set_status("IPC タイムアウトの診断情報を消去しました。");
+            self.set_status("IPC タイムアウトと engine 再接続の診断情報を消去しました。");
         }
         if source == self.update_controls.save {
             return self.save_update_preference();
@@ -2214,12 +2218,24 @@ impl App {
     }
 
     fn refresh_diagnostics(&self) -> Result<(), String> {
-        let data = diagnostics::load(&self.diagnostics_path).map_err(display)?;
+        let timeouts = diagnostics::load_timeouts(&self.diagnostics_path).map_err(display)?;
+        let resets = diagnostics::load_disconnects(&self.disconnect_path).map_err(display)?;
+        // Both reports go in the same box, but as two separate tables. A reset
+        // is usually the correct response to a host lifecycle event, so summing
+        // them with the timeouts would read as a fault count and be wrong.
+        let report = format!(
+            "{}\n{}",
+            diagnostics::render_text(&timeouts),
+            diagnostics::render_disconnects_text(&resets)
+        );
         set_text(
             self.diagnostics_controls.text,
-            &diagnostics::render_text(&data).replace('\n', "\r\n"),
+            &report.replace('\n', "\r\n"),
         );
-        self.set_status(&format!("IPC タイムアウトの記録: {} 件", data.valid_events));
+        self.set_status(&format!(
+            "IPC タイムアウトの記録: {} 件、engine 再接続の記録: {} 件",
+            timeouts.valid_events, resets.valid_events
+        ));
         Ok(())
     }
 

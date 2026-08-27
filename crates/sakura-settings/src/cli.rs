@@ -553,12 +553,18 @@ pub fn run(command: Command) -> Result<(), String> {
             println!("ai-cached-tokens\t{}", stats.ai_cached_tokens);
         }
         Command::DiagnosticsShow { tsv } => {
-            let data = diagnostics::load(&paths::timeout_diagnostics().map_err(display)?)
-                .map_err(display)?;
+            let timeouts =
+                diagnostics::load_timeouts(&paths::timeout_diagnostics().map_err(display)?)
+                    .map_err(display)?;
+            let resets =
+                diagnostics::load_disconnects(&paths::disconnect_diagnostics().map_err(display)?)
+                    .map_err(display)?;
             if tsv {
-                print!("{}", diagnostics::render_tsv(&data));
+                print!("{}", diagnostics::render_tsv(&timeouts));
+                print!("{}", diagnostics::render_disconnects_tsv(&resets));
             } else {
-                print!("{}", diagnostics::render_text(&data));
+                print!("{}", diagnostics::render_text(&timeouts));
+                print!("{}", diagnostics::render_disconnects_text(&resets));
             }
             let debug_path = paths::debug_trace().map_err(display)?;
             let debug = sakura_ipc::debug_trace::read_text(&debug_path).map_err(display)?;
@@ -593,10 +599,12 @@ pub fn run(command: Command) -> Result<(), String> {
         }
         Command::DiagnosticsClear => {
             let path = paths::timeout_diagnostics().map_err(display)?;
-            diagnostics::clear(&path).map_err(display)?;
+            diagnostics::clear_timeouts(&path).map_err(display)?;
+            let disconnect_path = paths::disconnect_diagnostics().map_err(display)?;
+            diagnostics::clear_disconnects(&disconnect_path).map_err(display)?;
             let debug_path = paths::debug_trace().map_err(display)?;
             sakura_ipc::debug_trace::clear(&debug_path).map_err(display)?;
-            println!("cleared IPC timeout diagnostics and debug trace");
+            println!("cleared IPC timeout diagnostics, engine link resets, and debug trace");
         }
         Command::UpdateStatus => {
             let preferences_path = paths::update_preferences().map_err(display)?;
