@@ -1285,3 +1285,16 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 未解決: `crates/sakura-ipc/src/client.rs:138` が `verify_server_process` の理由を捨てている件（#104 の最短経路）は今回も未着手。
 - 学び: **同じ終了処理を複数の理由で呼ぶ関数は、理由を必須引数にすると計測が「後付け」でなくなる。** optional な注釈にしていたら 23 か所のうち何か所かは必ず「あとで埋める」まま残った。型で強制すると埋め忘れが commit 前にコンパイルエラーとして出る。
 - 学び: **本番コードが per-user の永続ファイルへ書くなら、その writer にテスト用の差し替え経路が要る。** これは「テストが汚れる」問題ではなく「本番の観測データが汚れる」問題であり、被害はテスト実行が終わったあとに残る。
+
+## 2026-08-27 — #104 の拒否理由を保持する（4回失敗して証拠ゼロだった件の是正）（#104, #102）
+
+- 症状: AppContainer sandbox test が CI で **4回**落ちているのに、ログに残るのは `UntrustedServer { process_id }` だけで、5つある検査step のどれが拒否したのか分からない。前エントリで「失敗しうるのは image path 取得か path 突き合わせの2つだけ」まで絞ったが、それは失敗ログからではなく `security.rs` を読んで導いたものだった。
+- root cause: `crates/sakura-ipc/src/client.rs:138` が `verify_server_process(...).is_err()` で理由を捨てていた。**さらに悪いことに、理由を捨てなくても足りなかった**: `verify_server_process` の5 step はすべて `ERROR_ACCESS_DENIED` になり得て、うち2つ（path 不一致・integrity 不足）は自分でその HRESULT を**合成**していた。つまり HRESULT を通しても step は区別できない。
+- 対処: `verify_server_process` の戻りを `Result<(), ServerRejection>` に変更。variant は1 call ないし1 policy 判断に対応し、OS error code 以外の情報を持たない（そのまま印字して安全）。`Fault::UntrustedServer` が理由を運び、Display に出す。
+- **この enum が引きたい線**: 「no と答えられた質問」と「質問できなかった質問」を分ける。`ImagePathRejected` は別のプログラムが pipe を提供している証拠であり、`ImagePathUnreadable` は**何が提供しているのか分からなかった**という意味でしかない。security finding なのは前者だけで、#104 が環境フレークだという仮説と整合するのは後者。この区別が付かない状態で4回調査していた。
+- appcontainer test の panic message に理由と**その読み方**を書いた。次の CI 失敗1回で #104 は決着するはずである。
+- 副産物（別の誤用を発見）: `crates/sakura-renderer/src/watch.rs` の2か所が、`current_exe()` の失敗と install root への親辿り失敗に対して `Fault::UntrustedServer { process_id: 0 }` を返していた。**どちらも peer の判定ではない** — policy がまだ作れておらず、server に何も尋ねていない段階の失敗である。`PolicyUnavailable` に変更した。放置すると「untrusted server process 0」というログが出て、実際は自分の install layout が読めなかっただけ、という誤誘導が起きる。
+- 検証: fmt 0、`clippy --workspace --all-targets -- -D warnings` 0、`cargo test --workspace` **1,723 passed / 0 failed / 82 ignored**（新規2件）、`git diff --check` 0、cargo/rustc 残存 0。commit `99f5674`。
+- 注意: appcontainer test 自体は ignored 集合にあり、CI の `--ignored` 単独 step でしか走らない。ローカルの 1,723 件には**含まれていない**。新しい message はここではコンパイルされただけで、実行されるのは CI である。
+- 学び: **理由を捨てているコードを見つけたら、理由を通すだけでは足りないことがある。** 今回は `.is_err()` が最初の容疑だったが、上流が5つの異なる失敗に同じ HRESULT を割り当てていたので、呼び出し側を直しても何も分からないままだった。「情報が失われているのはどこか」を、捨てている行だけでなく**生成している行まで**遡って確認する。
+- 学び: **エラー型を使い回すと、無関係な失敗が security 判定に化ける。** watch.rs の2か所は「他に手近な Fault variant がなかった」だけで untrusted 判定を名乗っていた。variant 名が主張になっている型では、便宜的な流用がそのまま虚偽のログになる。

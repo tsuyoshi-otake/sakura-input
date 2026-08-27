@@ -171,6 +171,20 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   「片方のログをもう片方として読んでも 1 件も計上されない」を両方向で固定
   する。
 
+- **理由を捨てている行を直すだけでは足りないことがある。情報を生成している行
+  まで遡る。** #104 では `client.rs` の `verify_server_process(...).is_err()`
+  が容疑だったが、`verify_server_process` の 5 step はすべて
+  `ERROR_ACCESS_DENIED` になり得て、うち 2 つはその HRESULT を**自分で合成**
+  していた。呼び出し側で理由を通しても step は区別できないままだった。
+  「どこで情報が失われたか」は、捨てている行と生成している行の両方を見る。
+
+- **variant 名が主張になっている error 型を、手近だからという理由で流用しない。**
+  `sakura-renderer` の `PipeBinding::connect` は、自分の `current_exe()` が
+  読めない／install root へ親辿りできないという**接続前**の失敗に対して
+  `Fault::UntrustedServer { process_id: 0 }` を返していた。peer を判定して
+  いないのに untrusted を名乗るので、ログがそのまま虚偽になる。判定していない
+  ことを言う variant（ここでは `ServerRejection::PolicyUnavailable`）を用意する。
+
 ## Windows specifics
 
 - **Real-process tests must isolate `LOCALAPPDATA` unless they explicitly test
