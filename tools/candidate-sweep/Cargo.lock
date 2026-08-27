@@ -4,18 +4,18 @@ version = 4
 
 [[package]]
 name = "sakura-candidate-sweep"
-version = "1.0.30"
+version = "1.0.31"
 dependencies = [
  "sakura-core",
 ]
 
 [[package]]
 name = "sakura-core"
-version = "1.0.30"
+version = "1.0.31"
 dependencies = [
  "sakura-proto",
 ]
 
 [[package]]
 name = "sakura-proto"
-version = "1.0.30"
+version = "1.0.31"

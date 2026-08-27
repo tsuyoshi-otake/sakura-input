@@ -482,6 +482,7 @@ fn map_style(value: AiStyle) -> Style {
         AiStyle::Contract => Style::Contract,
         AiStyle::Novel => Style::Novel,
         AiStyle::Social => Style::Social,
+        AiStyle::English => Style::English,
     }
 }
 
@@ -526,6 +527,7 @@ fn style_name(value: AiStyle) -> &'static str {
         AiStyle::Contract => "contract",
         AiStyle::Novel => "novel",
         AiStyle::Social => "social",
+        AiStyle::English => "english",
     }
 }
 
