@@ -12,6 +12,9 @@
 //! - One physical Space must not both insert a document space and convert.
 //! - Crash/restart of a connection drops its composition and does not replay
 //!   a later convert for that same Space.
+//! - A crash/restart that dropped a *live* composition absorbs exactly one
+//!   following idle Space, so the reading the user was still editing does
+//!   not become a document space on the connection that replaced it (#102).
 //! - Resource exhaustion refuses additional document spaces.
 
 /// Maximum modeled connections (actors).
@@ -84,6 +87,10 @@ pub struct OracleState {
     pub absorbed: u32,
     pub timeouts: u32,
     pub crashes: u32,
+    /// A composition was torn down while live and owes the next idle Space
+    /// an absorption. One-shot and untimed: the model has no wall clock, and
+    /// neither does the implementation it mirrors.
+    pub pending_teardown: bool,
     pub last_inserted: bool,
     pub last_converted: bool,
     pub last_absorbed: bool,
@@ -101,6 +108,7 @@ impl OracleState {
             absorbed: 0,
             timeouts: 0,
             crashes: 0,
+            pending_teardown: false,
             last_inserted: false,
             last_converted: false,
             last_absorbed: false,
@@ -141,9 +149,21 @@ pub fn space_effect(state: &OracleState, connection: usize) -> SpaceEffect {
     match state.connections[connection].state {
         ConnState::Composing | ConnState::Converting => SpaceEffect::Convert,
         ConnState::Idle if peer_converting(state, connection) => SpaceEffect::Absorb,
+        ConnState::Idle if state.pending_teardown => SpaceEffect::Absorb,
         ConnState::Idle if state.document_spaces >= MAX_DOCUMENT_SPACES => SpaceEffect::Absorb,
         ConnState::Idle => SpaceEffect::Insert,
     }
+}
+
+/// `true` when this connection still held a reading the user was editing.
+/// Committing or cancelling reaches `ConnState::Idle` first, so an orderly
+/// ending is already indistinguishable from never having composed.
+fn was_live_reading(state: &OracleState, index: usize) -> bool {
+    state.connections[index].live
+        && matches!(
+            state.connections[index].state,
+            ConnState::Composing | ConnState::Converting
+        )
 }
 
 fn valid_connection(state: &OracleState, connection: u8) -> Option<usize> {
@@ -165,6 +185,11 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
             if let Some(index) = valid_connection(state, connection) {
                 if state.connections[index].live {
                     state.connections[index].state = ConnState::Composing;
+                    // Composing again proves the input path recovered, so the
+                    // teardown has nothing left to protect. Without this a
+                    // flapping connection would bank absorptions and swallow
+                    // a Space the user typed much later.
+                    state.pending_teardown = false;
                 }
             }
         }
@@ -181,6 +206,9 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
             clear_last_key(state);
             if let Some(index) = valid_connection(state, connection) {
                 if state.connections[index].live {
+                    if was_live_reading(state, index) {
+                        state.pending_teardown = true;
+                    }
                     state.connections[index].state = ConnState::Idle;
                 }
             }
@@ -188,6 +216,12 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
         DomainEvent::CrashRestart { connection } => {
             clear_last_key(state);
             if let Some(index) = valid_connection(state, connection) {
+                // Read the outgoing state first: the restart overwrites it,
+                // and whether a reading was live is the whole reason a
+                // teardown owes the next Space an absorption.
+                if was_live_reading(state, index) {
+                    state.pending_teardown = true;
+                }
                 state.connections[index] = Connection::default();
                 state.crashes = state.crashes.saturating_add(1);
             }
@@ -195,6 +229,9 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
         DomainEvent::Disconnect { connection } => {
             clear_last_key(state);
             if let Some(index) = valid_connection(state, connection) {
+                // A disconnected connection stops receiving keys entirely,
+                // so no replacement can mistake its reading for an idle
+                // document space. It arms nothing.
                 state.connections[index].live = false;
                 state.connections[index].state = ConnState::Idle;
             }
@@ -213,6 +250,10 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
     }
 }
 
+fn was_idle_target(state: &OracleState, index: usize) -> bool {
+    state.connections[index].live && state.connections[index].state == ConnState::Idle
+}
+
 fn apply_space(state: &mut OracleState, targets: u8) {
     clear_last_key(state);
     if targets == 0 {
@@ -221,10 +262,16 @@ fn apply_space(state: &mut OracleState, targets: u8) {
     let mut inserted = false;
     let mut converted = false;
     let mut absorbed = false;
+    let mut spent_teardown = false;
     let mut next = state.connections;
     for (index, connection) in next.iter_mut().enumerate().take(state.actors) {
         if (targets & (1 << index)) == 0 {
             continue;
+        }
+        // Only an idle live connection consults the latch, and consulting it
+        // spends it -- one teardown owes one Space, not a standing veto.
+        if state.pending_teardown && was_idle_target(state, index) {
+            spent_teardown = true;
         }
         match space_effect(state, index) {
             SpaceEffect::Convert => {
@@ -246,6 +293,9 @@ fn apply_space(state: &mut OracleState, targets: u8) {
     if inserted && converted {
         inserted = false;
         absorbed = true;
+    }
+    if spent_teardown {
+        state.pending_teardown = false;
     }
     state.connections = next;
     state.last_inserted = inserted;
@@ -284,7 +334,7 @@ pub struct AtomicCondition {
     pub value: bool,
 }
 
-pub const ATOM_COUNT: usize = 10;
+pub const ATOM_COUNT: usize = 11;
 
 pub fn atomic_conditions(state: &OracleState, event: DomainEvent) -> [AtomicCondition; ATOM_COUNT] {
     let connection = match event {
@@ -345,6 +395,10 @@ pub fn atomic_conditions(state: &OracleState, event: DomainEvent) -> [AtomicCond
         AtomicCondition {
             id: "ATOM-CRASH-EVENT",
             value: matches!(event, DomainEvent::CrashRestart { .. }),
+        },
+        AtomicCondition {
+            id: "ATOM-PENDING-TEARDOWN",
+            value: state.pending_teardown,
         },
     ]
 }

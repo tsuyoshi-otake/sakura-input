@@ -402,6 +402,30 @@ impl Dispatcher {
             || self.sessions.peer_is_composing(id, process_name)
     }
 
+    /// Spends the one absorption a torn-down composition is owed, when this
+    /// key is the idle Space that would otherwise commit U+3000 (#102).
+    ///
+    /// A *live* peer claim suppresses every idle key, because that idle
+    /// connection is a duplicate of a composing one. A *torn-down* claim
+    /// cannot: the connection that replaces a link the DLL dropped after its
+    /// 50 ms key budget is the real input path, and eating its letters would
+    /// lose them. So this narrows to exactly the keystroke that produced the
+    /// reported symptom -- an unbound Space on an idle session -- and spends
+    /// the latch so a second one still inserts.
+    fn teardown_absorbs_idle_space(&self, session: &Session, key: &KeyInput) -> bool {
+        if key.code != KeyCode::Space
+            || key.modifiers.ctrl()
+            || key.modifiers.alt()
+            || session.state() != State::Idle
+            || self.keymap.lookup(State::Idle, key).is_some()
+        {
+            return false;
+        }
+        self.composition_fence
+            .as_ref()
+            .is_some_and(|fence| fence.consume_teardown(session.process_name()))
+    }
+
     fn sync_composition_fence(&mut self, id: SessionId) {
         let Some(fence) = self.composition_fence.clone() else {
             return;
@@ -434,13 +458,21 @@ impl Dispatcher {
         entry.1 = want;
     }
 
+    /// Both fence teardowns below release *after a teardown*, because
+    /// reaching them with `claimed` still set means the reading was live
+    /// when the session went away — a deleted session or a reset connection,
+    /// not a committed or cancelled composition. Those end through
+    /// `sync_composition_fence` with `want == false`, which releases the
+    /// claim outright and never reaches here still claimed. Without the
+    /// latch the DLL reconnect after a 50 ms key timeout opens the fence and
+    /// the next Space becomes a document U+3000 (#102).
     fn release_composition_fence(&mut self, id: SessionId) {
         let Some((name, claimed)) = self.fence_claims.remove(&id) else {
             return;
         };
         if claimed {
             if let Some(fence) = self.composition_fence.as_ref() {
-                fence.release(name.as_ref());
+                fence.release_after_teardown(name.as_ref());
             }
         }
     }
@@ -449,7 +481,7 @@ impl Dispatcher {
         if let Some(fence) = self.composition_fence.as_ref() {
             for (_, (name, claimed)) in self.fence_claims.drain() {
                 if claimed {
-                    fence.release(name.as_ref());
+                    fence.release_after_teardown(name.as_ref());
                 }
             }
         } else {
@@ -1049,14 +1081,18 @@ impl Dispatcher {
             return self.probe_session(id, existing.clone(), key, out, false);
         }
         let reply = {
-            let suppress_idle_space = {
+            let (suppress_idle_space, absorb_teardown_space) = {
                 let Some(session) = self.sessions.get(id) else {
                     return Reply::Message(Response::Error(ErrorCode::UnknownSession));
                 };
                 if session.undo_pending() {
                     return Reply::Message(Response::Error(ErrorCode::Busy));
                 }
-                self.suppress_idle_space_for(id, session.process_name())
+                let suppress = self.suppress_idle_space_for(id, session.process_name());
+                // Already suppressed by a live claim: leave the latch armed
+                // for the teardown it was armed for.
+                let absorb = !suppress && self.teardown_absorbs_idle_space(session, key);
+                (suppress, absorb)
             };
             if matches!(key.code, KeyCode::Space | KeyCode::Henkan)
                 && !key.modifiers.ctrl()
@@ -1068,12 +1104,14 @@ impl Dispatcher {
                     event: "idle_fence",
                     decision: if suppress_idle_space {
                         "absorb"
+                    } else if absorb_teardown_space {
+                        "absorb_teardown"
                     } else {
                         "open"
                     },
                     k0: key.code as u64,
                     k1: u64::from(key.test_only),
-                    k2: 0,
+                    k2: u64::from(absorb_teardown_space),
                     k3: 0,
                 });
             }
@@ -1152,6 +1190,7 @@ impl Dispatcher {
                     scratch: &mut self.scratch,
                     out,
                     suppress_idle_space,
+                    absorb_teardown_space,
                 },
             ) {
                 Ok(()) => {
@@ -1320,6 +1359,9 @@ impl Dispatcher {
                 scratch: &mut self.scratch,
                 out,
                 suppress_idle_space,
+                // Probe answers what a key *would* do without applying it, so
+                // it must not spend the one absorption a teardown is owed.
+                absorb_teardown_space: false,
             },
         );
         Reply::Output
@@ -1635,6 +1677,9 @@ struct KeyWork<'a> {
     out: &'a mut OutputBuf,
     /// Absorb idle Space when a peer connection of the same host is converting.
     suppress_idle_space: bool,
+    /// Absorb this one idle Space because a live composition was torn down
+    /// and its reading must not become a document space (#102).
+    absorb_teardown_space: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2436,6 +2481,7 @@ fn apply_key(
         scratch,
         out,
         suppress_idle_space,
+        absorb_teardown_space,
     } = work;
     if scope_is_sensitive(session.scope) {
         // DESIGN 9: a password field is a full bypass. In particular, do not
@@ -2515,6 +2561,15 @@ fn apply_key(
     {
         // Dual TSF / Electron: the idle peer is not an IME. Eat every key so a
         // second pipe cannot start a second composition or insert U+3000.
+        out.consumed = true;
+        return Ok(());
+    }
+    if idle_space_commit && absorb_teardown_space {
+        // The composition this session replaced was torn down with its
+        // reading still live, so this Space is the one the user aimed at that
+        // reading. Eat it rather than commit U+3000 into the document (#102).
+        // Only this keystroke: the latch is already spent, so the next Space
+        // inserts normally.
         out.consumed = true;
         return Ok(());
     }

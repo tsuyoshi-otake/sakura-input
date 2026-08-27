@@ -1184,3 +1184,36 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び1: **「同じ症状が出なくなった」を「直った」と読まない。** バイナリ同一・標本31・誘発条件（session churn）が7.7倍低い、の3つが揃っている以上、今日のログは「トリガを引かなかった」以上のことを言っていない。復旧の主張には、壊れていた run と**同等の使い方**（アプリ切り替えを含む）での標本が要る。
 - 学び2: **症状の定義を緩くすると、無関係な事象を回帰に混ぜる。** `commit=　` だけで数えると 1.0.27 に12件付いてしまい、回帰の窓がぼやける。「直前が別sessionのconvert」まで含めて初めて 1.0.27 = 0 / 1.0.28 = 14 という分離が出た。カウンタは症状の**機構**で定義する。
 - 学び3: Windows の console 経由で日本語を含む TSV を取ると、リダイレクト前に code page 変換で壊れる。`[Console]::OutputEncoding` を UTF-8 にして `Out-File -Encoding utf8` で取り、読む側も `PYTHONIOENCODING=utf-8` を立てる。最初の dump は全文字が置換文字になっていた。
+
+## 2026-08-27 — #102 の再発を同一 run 内で捕捉し、機構を2つのログの突き合わせで確定・修正（#102）
+
+- 経緯: owner の「あー現象が再発したかもしれない?」を受けて確認したところ、**再発は事実**であり、しかも**同じ engine run の中**で起きていた。engine 起動は 08-27 12:06:36.378（`1.0.28-afd34a06422849de`）の1回だけで、再発は 16:03:03–16:03:05。前エントリの「再起動で自然復旧したように見える」は、これで完全に否定された（再起動していないのに再発している）。
+- 症状の生データ（開発者履歴、16:03:03–16:03:07）:
+  - `16:03:03.064` seq 622 sess=**1** `にt`→`にち`（composing）
+  - `16:03:03.171` **`key` IPC timeout**（`ipc-timeouts.bin`、pid 36336 / tid 37696）
+  - `16:03:03.329` seq 623 sess=**7** — 158 ms 後に別 session へ切り替わっている
+  - `16:03:03.589` seq 625 sess=**1** `にち`→`日` convert（session 1 はまだ生きている）
+  - `16:03:05.161` **2回目の `key` IPC timeout**（同一 pid / tid）
+  - `16:03:05.195` seq 633 sess=**8** key=2(Space) st=0→0 `act=unbound` **commit 空** ← 既存 fence が吸収できた
+  - `16:03:05.235` seq 634 sess=**7** `にt`→`にち`（session 7 はまだ composing）
+  - `16:03:05.658` seq 635 sess=**8** key=2(Space) st=0→0 `act=unbound` **commit=`　`** ← **これが症状**
+  - `16:03:06.121`–`16:03:07.202` seq 636–645 Backspace 10連打（owner が手で消している）
+- 根本原因: **50 ms の `KEY_BUDGET`（`crates/sakura-tsf/src/engine.rs:51`）を超えた SendKey で DLL が pipe を落とし、reconnect が新しい空 session を作る。このとき composing 中の session は「読みが生きたまま」破棄され、`CompositionFence` の claim が解放される。** 次の Space は idle な新 session に着地し、そこでは「かな入力中の idle Space は全角スペースを確定する」という**正しい**規則が走って `　` になる。engine の1キー単位の判定はどれも正しく、壊れているのは**経路の切り替えと fence の解放の組み合わせ**だった。
+- 決定的だったのは**2つの独立したログの突き合わせ**である。開発者履歴だけでは「session 番号が飛ぶ」しか見えず、`ipc-timeouts.bin` だけでは「timeout があった」しか見えない。両方を時刻で並べて初めて、timeout → 158 ms 後の session 切り替え → 破棄 → `　` という因果が1本につながった。
+- 既存 fence が半分は効いていたことも同時に分かった: `05.195` の1発目は session 7 が生きていたので吸収され、`05.658` の2発目は session 7 が消えた後なので素通りした。つまり**重なり期間は元から守られており、守られていなかったのは破棄そのものの瞬間**だった。
+- 修正: `CompositionFence` に**一発限りのラッチ**を足した。読みが生きたまま claim が壊れた場合（`release_after_teardown`）だけ、その host に「次の idle Space を1回だけ吸収する権利」を立てる。commit / cancel / replace のような正常終了は従来どおり `release` で即座に解放し、何も立てない。
+  - **壁時計を使わない。** 最初は 1,000 ms の grace で実装したが、独立オラクル（`space_key_dispatch_oracle.rs`）は logical time しか持たないため、実装とモデルが「2イベント間に1秒以上空いたとき」だけ食い違う。PBT がその形の flake を出す。回数で切ると壁時計が消え、モデルと実装が**厳密に**一致する。
+  - **境界**: 1 teardown につき 1 Space。2発目は普通に入る。文字は絶対に食わない。再び composing すれば（`acquire`）ラッチは解除される。
+- 途中で自分が入れたバグ（新テストが検出した）: ラッチを `any_active` から見えるようにしてしまった。`any_active` の呼び出し側は **idle の全キーを吸収する**（Electron 二重配送用）ので、reconnect 後の session が打った文字まで消えた。`production_typing_after_a_crash_restart_still_composes` と `production_only_absorbs_the_first_space_after_a_crash_restart` が落ちて発覚。**2つの fence は読み取り口を分ける**のが正しい設計だった。
+  - `any_active` = 生きた claim のみ。全キー抑止に使う。
+  - `consume_teardown` = 壊れた claim。**聞いた時点で消費する**。Space が全角スペースになる、その1打鍵にだけ使う。
+  - probe 経路（`dispatch.rs` の `probe_session`）は「適用しないキーが何をするか」を答えるだけなので、`absorb_teardown_space: false` を明示で渡し、ラッチを消費させない。
+  - 実キー側の述語は `Space` かつ ctrl/alt なし・`State::Idle`・`keymap.lookup(State::Idle, key).is_none()` で、生データの `key=2 / st=0→0 / act=unbound` と**完全に一致**する。既定・MS-IME 双方の keymap で idle の Space は未束縛（`henkan` だけが `reconvert` に束縛）なので、この述語は出荷 profile 全部で成立する。
+- 仕様変更を明示した（テストの assertion を黙って書き換えていない）: `crash_restart_forgets_composition_and_does_not_convert_later` は「crash/restart 後の Space は**文書に入る**」を要求していた。これは #102 の症状そのものなので、要求のほうを変えて `REQ-SPACE-09` として `verification/space-key-dispatch/requirements.md` に追記し、テスト名と doc comment に反転の理由を書いた。元の安全性（「破棄された composition は後から convert しない」）は無傷。
+- 検証: `cargo fmt --all -- --check` exit 0、`cargo test --workspace` **1,715 passed / 0 failed / 82 ignored**、`git diff --check` exit 0、cargo／rustc／テストランナーの残存プロセス 0。オラクル側 C2 は atom を 11 に増やし（`ATOM-PENDING-TEARDOWN`）、固定 seed の PBT walk が両極性を自力で踏んだ（補助シーケンス不要、`coverage/c2-report.md` 再生成済み）。`oracle_and_production_agree_on_single_connection_sequences` も緑。
+- 学び1: **モデルに載らない機構は選ばない。** 壁時計の grace は production 単体では正しく書けるが、独立オラクルが表現できない。表現できない差分は「PBT がたまに落ちる」という形でしか現れず、原因を追う側からは flake に見える。**モデル化可能性を実装方式の選択基準に入れる**と、この種の負債を最初から作らない。
+- 学び2: **緩い fence と厳しい fence を1つの述語に相乗りさせない。** 「composing 中は全キー抑止」と「破棄直後は Space 1発だけ抑止」は、抑止する対象の広さがまったく違う。同じ `any_active` から読ませた瞬間、後者が前者の広さを継承して文字を食った。**読み取り口の分離がそのまま被害範囲の分離**になる。
+- 学び3: **仕様と衝突したテストは、まず「どちらが正しいか」を言語化する。** `production_crash_restart_does_not_keep_the_old_composition` が落ちたとき、assertion を反転すれば緑にはなった。だがその assertion は #102 の症状を要求していたので、**要求カタログに新しい ID を起こして反転理由を残す**のが正しい。緑にする手段としては同じでも、記録が残るかどうかで次の人の判断が変わる。
+- 学び4: **単独のログで因果を主張しない。** 開発者履歴の「session 番号が飛ぶ」は結果であって原因ではなく、`ipc-timeouts.bin` の「timeout があった」も同じ。**別々の機構が別々のファイルに書いた記録を時刻で突き合わせる**と、片方だけでは推測でしかなかった経路が1本に決まる。今回はこれで仮説検証を1周で終えられた。
+- 副次対応: `%LOCALAPPDATA%\SakuraInput\logs\debug.tsv` が上限 2 MiB（2,097,110 B）に達して **2026-08-19 12:41 から fail-closed** で書き込みを止めていた。そのため今回の再発時刻に `idle_fence` trace が1件も無く、機構の特定を履歴と timeout ログだけでやる羽目になった。`debug-full-20260819-124100.tsv` へ改名して退避（**削除していない**）し、次回の発生では trace が残るようにした。あわせて trace の decision に `absorb_teardown` を追加したので、再発時にどちらの fence が効いたかがログから直接読める。
+- 未了: (1) **なぜ 50 ms `KEY_BUDGET` を超えるのか**は未調査。累計 `key` timeout は 44 件で、今回の修正は**超過したときの被害を止めるだけ**であり、超過そのものは減らない。(2) `crates/sakura-ipc/src/diagnostics.rs` の `DisconnectReason` WIP は未使用アイテム2件が `-D warnings` で落ちるため**引き続き未コミット**。今回の実測で原因が「原因不明の disconnect」ではなく「key IPC timeout」と判明したので、この診断が今も最適な次の一手かは要再検討。(3) `verification/space-key-dispatch/` の TLA+ spec・TLC 構成・cargo-mutants・`traceability.json` の hash は **#102 以前のオラクル**を指したままで、別途回し直しが要る（`requirements.md` の冒頭に明記した）。
