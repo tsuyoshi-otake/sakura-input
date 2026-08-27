@@ -38,7 +38,7 @@
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use sakura_ipc::diagnostics::{self, TimeoutOperation};
+use sakura_ipc::diagnostics::{self, DisconnectReason, TimeoutOperation};
 use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy};
 use sakura_proto::{
     AiTextOperation, AiTextStatus, ErrorCode, InputScope, KeyInput, Mode, Output, Request,
@@ -1073,6 +1073,32 @@ fn test_timeout_log_path() -> std::path::PathBuf {
         .join("sakura-input-tests")
         .join(format!("sakura-tsf-{}", std::process::id()))
         .join("ipc-timeouts.bin")
+}
+
+/// Records which reset path discarded the engine session.
+///
+/// A reset is already the recovery path, so this follows `note_timeout`: the
+/// result is discarded, because a diagnostics failure must never turn a
+/// recoverable reset into a host-application failure.
+#[cfg(not(test))]
+pub(crate) fn note_disconnect(reason: DisconnectReason) {
+    let _ = diagnostics::record_disconnect(reason);
+}
+
+#[cfg(test)]
+pub(crate) fn note_disconnect(reason: DisconnectReason) {
+    // Unit tests drive reset paths on purpose. Keep that evidence under the
+    // system temporary directory so `cargo test` can never append to the
+    // installed user's durable diagnostics profile.
+    let _ = diagnostics::record_disconnect_at(&test_disconnect_log_path(), reason);
+}
+
+#[cfg(test)]
+fn test_disconnect_log_path() -> std::path::PathBuf {
+    std::env::temp_dir()
+        .join("sakura-input-tests")
+        .join(format!("sakura-tsf-{}", std::process::id()))
+        .join("ipc-disconnects.bin")
 }
 
 fn left(deadline: Instant) -> Duration {

@@ -59,6 +59,7 @@ use windows_core::{
     implement, Error, IUnknown, IUnknownImpl, Interface, OutRef, Ref, Result, BOOL, BSTR, GUID,
 };
 
+use sakura_ipc::diagnostics::DisconnectReason;
 use sakura_proto::{
     AiTextOperation, AiTextStatus, CandidateKind, CandidateList as EngineCandidateList, InputScope,
     KeyCode, KeyInput, Mode, Modifiers, Output, Preedit, ScreenRect, UndoCommitOutcome,
@@ -79,7 +80,9 @@ use crate::conversion_key::{
 use crate::diagnostic_ring;
 use crate::display_attributes;
 use crate::edit_session;
-use crate::engine::{AiTextPoll, AiTextRecord, AiTextResult, Answer, CandidateCommitPoll, Engine};
+use crate::engine::{
+    self, AiTextPoll, AiTextRecord, AiTextResult, Answer, CandidateCommitPoll, Engine,
+};
 use crate::engine_recovery::{
     EngineRecoveryFence, RecoveryKeyDisposition, RecoveryStart, RecoveryTerminal, RecoveryToken,
 };
@@ -1595,7 +1598,7 @@ impl TextService {
             // the engine-side transaction can be paired with confidence. Cut
             // the engine link now; the marker still fences host keys until the
             // journal owner can drain the local payload.
-            self.disconnect();
+            self.disconnect(DisconnectReason::UndoTerminalizationDeferred);
         }
     }
 
@@ -1629,7 +1632,7 @@ impl TextService {
         self.undo_terminalization.set(None);
         self.settle_cancelled_writes_after_undo_terminalization(terminal.completions, true);
         if terminal.disconnect_required {
-            self.disconnect();
+            self.disconnect(DisconnectReason::UndoTerminalizationSettled);
         }
         true
     }
@@ -2124,7 +2127,7 @@ impl TextService {
             if self.queue_end_candidates().is_err() {
                 self.end_candidates();
             }
-            self.disconnect();
+            self.disconnect(DisconnectReason::WriteContextObservationFailed);
         }
         Ok(())
     }
@@ -2243,7 +2246,7 @@ impl TextService {
             self.end_candidates();
         }
         if reset_engine {
-            self.disconnect();
+            self.disconnect(DisconnectReason::CancelledStateTerminalized);
         }
     }
 
@@ -2334,7 +2337,7 @@ impl TextService {
                 // payload remains to identify the undo, so the connection
                 // teardown is the explicit terminal boundary for any engine
                 // state that could still be pending.
-                self.disconnect();
+                self.disconnect(DisconnectReason::CancelledWritesSettled);
             }
             return;
         }
@@ -2545,7 +2548,7 @@ impl TextService {
         let deferred_window_result = self.destroy_deferred_window();
         self.end_candidates();
         let composition_result = self.forget_composition();
-        self.disconnect();
+        self.disconnect(DisconnectReason::ServiceDetached);
 
         // The borrow ends before the TSF call: unadvising re-enters TSF, and a
         // callback arriving while the cell is still borrowed would be a double
@@ -2764,7 +2767,7 @@ impl TextService {
             .map(|mut engine| engine.reset_document_context())
             .unwrap_or(false);
         if !reset {
-            self.disconnect();
+            self.disconnect(DisconnectReason::DocumentContextReset);
         }
     }
 
@@ -2811,7 +2814,14 @@ impl TextService {
     /// this thread's session: the session table is keyed to the connection,
     /// so there is no `DeleteSession` to send and no way to leak one by
     /// failing to send it.
-    fn disconnect(&self) {
+    ///
+    /// The reason is a required argument rather than something a call site may
+    /// supply: Issue #102 needs to know which of these paths runs after a
+    /// conversion, and a reset recorded as "somewhere" answers nothing. Making
+    /// it mandatory means a new reset path cannot be added without deciding
+    /// what it is called.
+    fn disconnect(&self, reason: DisconnectReason) {
+        engine::note_disconnect(reason);
         self.clear_document_adjacency();
         if let Ok(mut engine) = self.engine.try_borrow_mut() {
             *engine = Engine::new();
@@ -3145,7 +3155,7 @@ impl TextService {
             // still connected. No journal completion remains to own a later
             // retry in this helper's early terminal branches, so retire the
             // link explicitly.
-            self.disconnect();
+            self.disconnect(DisconnectReason::UndoCommitSettleFailed);
         }
         settled
     }
@@ -3911,13 +3921,13 @@ impl TextService {
                             true,
                             Some(UndoCommitOutcome::Unknown),
                         );
-                        self.disconnect();
+                        self.disconnect(DisconnectReason::DocumentAccessRevisionMismatch);
                         return;
                     }
                 };
                 self.settle_cancelled_writes_after_undo_terminalization(terminal.completions, true);
                 if terminal.disconnect_required {
-                    self.disconnect();
+                    self.disconnect(DisconnectReason::DocumentAccessUndoTerminalized);
                 }
             }
             Err(_) => self.cancel_all_writes_with_undo_outcome(
@@ -3926,7 +3936,7 @@ impl TextService {
                 Some(UndoCommitOutcome::Unknown),
             ),
         }
-        self.disconnect();
+        self.disconnect(DisconnectReason::DocumentAccessReconciled);
     }
 
     /// Finishes a composition flight whose exact-text undo validation failed
@@ -4823,7 +4833,7 @@ impl TextService_Impl {
             .is_err()
         {
             service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
-            service.disconnect();
+            service.disconnect(DisconnectReason::CandidateCommitPollFailed);
             let _ = service.queue_end_candidates();
         }
     }
@@ -5386,7 +5396,7 @@ impl TextService_Impl {
                 // physical key is applied to the fresh engine session in this
                 // same callback.
                 if service.observe_write_context(context).is_err() {
-                    service.disconnect();
+                    service.disconnect(DisconnectReason::KeyContextAuthorityLost);
                     // Cleanup could not establish a fresh context authority.
                     // Do not hand the key to the host around an unknown old
                     // write; this consumed return is the explicit terminal.
@@ -5503,7 +5513,7 @@ impl TextService_Impl {
             // the host could type it twice.  Terminalize the reservation and
             // reset our engine-side session instead.
             service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
-            service.disconnect();
+            service.disconnect(DisconnectReason::KeyPredecessorFailed);
             let _ = service.queue_end_candidates();
         }
         Ok(owner.eats(consumed).into())
@@ -5536,7 +5546,7 @@ impl TextService_Impl {
         // `cancel_all_writes` only resets when it terminalized an entry. The
         // engine failure itself is still authoritative when the queue was
         // empty, so reset it unconditionally.
-        service.disconnect();
+        service.disconnect(DisconnectReason::EngineUnavailableRecovery);
 
         let visible = match service.composition_projection() {
             Ok(visible) => visible,
@@ -5918,7 +5928,7 @@ impl TextService_Impl {
                 .is_err()
             {
                 service.cancel_all_writes(CancelReason::RevisionMismatch, true);
-                service.disconnect();
+                service.disconnect(DisconnectReason::CompositionProjectionAbandoned);
             }
             return Ok(());
         };
@@ -6048,7 +6058,7 @@ impl TextService_Impl {
                     CancelReason::StaleCallback,
                     Some(UndoCommitOutcome::Unknown),
                 );
-                service.disconnect();
+                service.disconnect(DisconnectReason::StaleQueuedWrite);
                 return Ok(());
             }
             Err(_) => {
@@ -6134,7 +6144,7 @@ impl TextService_Impl {
                     );
                 }
             }
-            service.disconnect();
+            service.disconnect(DisconnectReason::QueuedWriteTerminalFailure);
             if service.queue_end_candidates().is_err() {
                 service.end_candidates();
             }
@@ -6273,7 +6283,7 @@ impl TextService_Impl {
             // than allowing a new session to write over a possibly live host
             // composition.
             let _ = service.abandon_composition_projection(CancelReason::RevisionMismatch);
-            service.disconnect();
+            service.disconnect(DisconnectReason::AppliedWriteUnacknowledged);
             return;
         }
         if let Some(record) = payload.ai_record.clone() {
@@ -6675,7 +6685,7 @@ impl ITfFnReconversion_Impl for TextService_Impl {
             Ok(answer) => answer,
             Err(_) => {
                 if self.recover_from_engine_unavailable(&context).is_err() {
-                    service.disconnect();
+                    service.disconnect(DisconnectReason::ReconversionUnavailable);
                 }
                 return Err(Error::from_hresult(E_FAIL));
             }
@@ -6702,7 +6712,7 @@ impl ITfFnReconversion_Impl for TextService_Impl {
             }
             Answer::Unavailable => {
                 if self.recover_from_engine_unavailable(&context).is_err() {
-                    service.disconnect();
+                    service.disconnect(DisconnectReason::ReconversionFailed);
                 }
                 return Err(Error::from_hresult(E_FAIL));
             }
@@ -7166,7 +7176,7 @@ mod tests {
         // order, verbatim from `text_service.rs`.
         service.invalidate_inflight_composition_write_as_unknown();
         service.cancel_all_writes(CancelReason::EngineUnavailable, true);
-        service.disconnect();
+        service.disconnect(DisconnectReason::EngineUnavailableRecovery);
 
         assert_eq!(
             service.writes.borrow().pending_len(),
@@ -7521,7 +7531,7 @@ mod tests {
         // intentionally not fabricated here; the real PendingWrite invariant
         // remains `context: ITfContext` in production.
         if terminal.disconnect_required {
-            service.disconnect();
+            service.disconnect(DisconnectReason::DocumentAccessUndoTerminalized);
         }
         assert!(!service.engine.borrow().is_connected());
         peer.join().expect("fake engine terminal outcome");
