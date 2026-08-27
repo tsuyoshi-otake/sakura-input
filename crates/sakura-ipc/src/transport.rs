@@ -39,7 +39,7 @@ use windows::Win32::System::Pipes::{
     PeekNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
 };
 
-use crate::security::Descriptor;
+use crate::security::{Descriptor, ServerRejection};
 
 /// How many instances of the pipe may exist at once, which is the ceiling
 /// on simultaneously connected host processes.
@@ -123,7 +123,15 @@ pub enum Fault {
     /// The kernel-reported peer on a verified connection did not satisfy the
     /// caller's image/integrity policy. The handle is dropped before Hello,
     /// so no untrusted process receives protocol traffic.
-    UntrustedServer { process_id: u32 },
+    ///
+    /// `rejection` names which step refused. It is carried rather than
+    /// discarded because the refusal is often the only thing observable — in
+    /// CI there is no debugger, and "rejected" alone has now cost four
+    /// investigations (Issue #104).
+    UntrustedServer {
+        process_id: u32,
+        rejection: ServerRejection,
+    },
     /// The operating system refused the operation.
     Os(windows::core::Error),
 }
@@ -136,8 +144,11 @@ impl core::fmt::Display for Fault {
             Fault::Encode(error) => write!(f, "failed to encode outgoing request: {error:?}"),
             Fault::Timeout => write!(f, "the engine did not answer in time"),
             Fault::Desynchronized => write!(f, "reply to a request that was never sent"),
-            Fault::UntrustedServer { process_id } => {
-                write!(f, "untrusted server process {process_id}")
+            Fault::UntrustedServer {
+                process_id,
+                rejection,
+            } => {
+                write!(f, "untrusted server process {process_id}: {rejection}")
             }
             Fault::Os(error) => write!(f, "{error}"),
         }

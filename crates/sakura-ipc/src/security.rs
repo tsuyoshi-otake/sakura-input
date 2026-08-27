@@ -214,24 +214,85 @@ impl ServerTrustPolicy {
     }
 }
 
+/// Why a verified connection refused its server.
+///
+/// The caller used to reduce this to `.is_err()`, which is how Issue #104 — a
+/// CI rejection that has now happened four times — produced no evidence at all
+/// beyond "rejected". Every variant names exactly one call or one policy
+/// decision and carries nothing but an OS error code, so it is safe to print
+/// wherever the fault itself is printed.
+///
+/// The distinction that matters is between a question answered "no" and a
+/// question that could not be asked: `ImagePathRejected` means a different
+/// program is serving this pipe, while `ImagePathUnreadable` means we never
+/// found out what is. Only the first is evidence of anything untrusted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerRejection {
+    /// The trust policy itself could not be built, so nothing was verified.
+    /// The connection is refused because the question could not be put, not
+    /// because the peer failed it.
+    PolicyUnavailable,
+    /// The kernel reported no usable server process for this pipe handle.
+    NoServerProcessId,
+    /// `OpenProcess` failed for the kernel-reported server PID.
+    ProcessUnopenable(HRESULT),
+    /// `QueryFullProcessImageNameW` failed for that process.
+    ImagePathUnreadable(HRESULT),
+    /// The image path was read, and it is not one this policy accepts.
+    ImagePathRejected,
+    /// `OpenProcessToken` failed for that process.
+    TokenUnopenable(HRESULT),
+    /// The token was opened but could not be classified.
+    TokenUnclassifiable(HRESULT),
+    /// The token classified below medium integrity.
+    IntegrityRejected,
+}
+
+impl core::fmt::Display for ServerRejection {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::PolicyUnavailable => write!(f, "trust policy unavailable"),
+            Self::NoServerProcessId => write!(f, "no server process id"),
+            Self::ProcessUnopenable(code) => write!(f, "OpenProcess failed ({code:?})"),
+            Self::ImagePathUnreadable(code) => {
+                write!(f, "QueryFullProcessImageNameW failed ({code:?})")
+            }
+            Self::ImagePathRejected => write!(f, "image path is not the one the policy accepts"),
+            Self::TokenUnopenable(code) => write!(f, "OpenProcessToken failed ({code:?})"),
+            Self::TokenUnclassifiable(code) => write!(f, "token classification failed ({code:?})"),
+            Self::IntegrityRejected => write!(f, "token integrity below medium"),
+        }
+    }
+}
+
 /// Verifies the process attached to one exact client pipe handle.
 ///
 /// The caller must obtain `process_id` from `GetNamedPipeServerProcessId` on
 /// that same handle. The image path and token are then read from the kernel;
 /// a peer cannot satisfy this contract by sending a forged Hello field.
-pub fn verify_server_process(process_id: u32, policy: &ServerTrustPolicy) -> Result<()> {
-    let process = ProcessHandle::open(process_id)?;
-    let image = process.image_path()?;
+///
+/// The refusal is returned as a [`ServerRejection`] rather than an `Error`
+/// because every step below can fail for `ERROR_ACCESS_DENIED`, so an HRESULT
+/// alone cannot say which one did. What the caller does is unchanged: any
+/// `Err` refuses the connection.
+pub fn verify_server_process(
+    process_id: u32,
+    policy: &ServerTrustPolicy,
+) -> core::result::Result<(), ServerRejection> {
+    let process = ProcessHandle::open(process_id)
+        .map_err(|error| ServerRejection::ProcessUnopenable(error.code()))?;
+    let image = process
+        .image_path()
+        .map_err(|error| ServerRejection::ImagePathUnreadable(error.code()))?;
     if !policy.matches_image_path(&image) {
-        return Err(Error::from_hresult(HRESULT::from_win32(
-            windows::Win32::Foundation::ERROR_ACCESS_DENIED.0,
-        )));
+        return Err(ServerRejection::ImagePathRejected);
     }
-    let token = ProcessToken::open_process(&process)?;
-    if classify_token(&token)? != ClientTrust::MediumOrHigher {
-        return Err(Error::from_hresult(HRESULT::from_win32(
-            windows::Win32::Foundation::ERROR_ACCESS_DENIED.0,
-        )));
+    let token = ProcessToken::open_process(&process)
+        .map_err(|error| ServerRejection::TokenUnopenable(error.code()))?;
+    let trust = classify_token(&token)
+        .map_err(|error| ServerRejection::TokenUnclassifiable(error.code()))?;
+    if trust != ClientTrust::MediumOrHigher {
+        return Err(ServerRejection::IntegrityRejected);
     }
     Ok(())
 }
@@ -1217,6 +1278,50 @@ mod tests {
             return Err(error);
         }
         Ok(low)
+    }
+
+    #[test]
+    fn a_refusal_names_the_step_that_refused() {
+        // The current process is openable and its image path is readable, so
+        // a policy naming something else can only fail at the comparison.
+        // Issue #104 turns entirely on telling this apart from a path that
+        // could not be read at all — both were `ERROR_ACCESS_DENIED` before.
+        let elsewhere = std::env::temp_dir().join("not-the-engine.exe");
+        assert_eq!(
+            verify_server_process(std::process::id(), &ServerTrustPolicy::Exact(elsewhere)),
+            Err(ServerRejection::ImagePathRejected)
+        );
+
+        // PID 0 is the idle process and can never be opened, so the refusal
+        // has to be reported before any policy question is reached.
+        match verify_server_process(0, &ServerTrustPolicy::Exact(PathBuf::from("x"))) {
+            Err(ServerRejection::ProcessUnopenable(_)) => {}
+            other => panic!("expected an unopenable process, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn every_refusal_prints_a_distinct_reason() {
+        // A reason that reads like another reason is worth nothing in a CI
+        // log, which is the only place Issue #104 is observable.
+        let code = HRESULT::from_win32(windows::Win32::Foundation::ERROR_ACCESS_DENIED.0);
+        let all = [
+            ServerRejection::PolicyUnavailable,
+            ServerRejection::NoServerProcessId,
+            ServerRejection::ProcessUnopenable(code),
+            ServerRejection::ImagePathUnreadable(code),
+            ServerRejection::ImagePathRejected,
+            ServerRejection::TokenUnopenable(code),
+            ServerRejection::TokenUnclassifiable(code),
+            ServerRejection::IntegrityRejected,
+        ];
+        let mut printed: Vec<String> = all.iter().map(ToString::to_string).collect();
+        printed.sort();
+        printed.dedup();
+        assert_eq!(printed.len(), all.len(), "two reasons print the same text");
+        for reason in all {
+            assert!(!reason.to_string().is_empty());
+        }
     }
 
     struct RevertToSelfGuard;
