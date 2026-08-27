@@ -1257,3 +1257,15 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 直後の push `9d5f0e6`（journal のみの変更）の CI は **1回目で success**、Installer も success。f8a80c7 も最終的に両方 success。
 - 学び: **「新しいバイナリを入れた」と「新しいバイナリが動いている」は別の主張で、後者には専用の確認経路が要る。** この製品では versions ディレクトリもプロセスの image path も答えにならず、engine 自身が申告する release label だけが確証になる。導入作業の完了条件に、その申告値の突き合わせを含める。
 - 学び: **同じ subsystem に read-only 経路と同期経路の両方があるなら、失敗時はまず read-only を叩く。** 「engine が死んでいる」と「同期の予算が足りない」は症状が同じ timeout だが、read-only が通るかどうかで一発で分かれる。
+
+## 2026-08-27 — 1.0.29 リリース（同音語・単漢字・候補数上限・句読点・IT用語の読み）（#94, #95, #96, #97, #99, #101, #102, #103）
+
+- 内容: de20699 をリリース化した。版は `Cargo.toml`、`Cargo.lock`、`installer/setup.iss`、`release.yml` 既定値の4か所に加えて、**`tools/candidate-sweep` の5か所目**。ノートは `docs/release-notes-v1.0.29.md`（1.0.28 のノートを rename）。
+- 5か所目の理由（1.0.28 では不要だった）: `tools/candidate-sweep` は shipping workspace の members に入っていない入れ子 workspace だが、その `Cargo.lock` は `sakura-core` と `sakura-proto` を path で pin している。本体だけ上げると lock が 1.0.28 のまま stale になり、次に sweep を走らせた瞬間に cargo が自分の lock を書き換えて作業ツリーを汚す。**members に入っていない = 版を上げなくてよい、ではない。path 依存を持つ入れ子 lock は release 時に一緒に上げる。**
+- ローカルゲート: 隔離 worktree `C:\Codes\_relgate29` で実行（作業中の `crates/sakura-ipc/src/diagnostics.rs` を除外するため）。fmt exit 0、`clippy --workspace --all-targets -- -D warnings` exit 0、`cargo test --workspace` exit 0 で **1,715 passed / 0 failed / 82 ignored**（93 test binary）、`git diff --check` 0、dep-policy 73 packages（disallowed なし）、release-workflow-policy 7 action 参照。実行後の cargo/rustc 残存 0。
+- artifact: `sakura_setup.exe` 24,820,776 bytes、SHA-256 `fe15e04344b32a507e50d5cc9cca7e0af150e13e2b275424745c2cc06b76b2a4`、build_id `020f3e59d16e8ff6`、`Get-AuthenticodeSignature` は `NotSigned`、`signing-status.txt` は `unsigned-owner-approved`（owner 承認済みの未署名リリース）。`Build v1 release candidate` は 9分50秒、`Sign and package` は 54秒。
+- 公開手順の検証: manifest の sha256／size、ビルド成果物の実測値、**Release へ添付したあと再ダウンロードした実測値**の3者が一致することを確認してから `--draft=false`。bundle の `release-notes.md` がリポジトリの `docs/release-notes-v1.0.29.md` と完全一致することも `diff` で確認した。
+- CI: `Release candidate` と `Installer` は1回目で success。`CI` は1回目が step 14 `Sandbox access (AppContainer)` で失敗（#104 のフレーク）、`gh run rerun --failed` で全 job success。公開は 2026-08-27T09:26:32Z、tag `v1.0.29`、assets 2件（`sakura_setup.exe`／`release-manifest.txt`）。公開後、manifest の `installer_url` が返す実ファイルの SHA-256 が manifest と一致することも確認した（updater が実際に取りに行く URL の確認）。
+- **#104（AppContainer フレーク）の発生が4回目になった。今回いちばん重要な観測**: 直前の `63b77ea` は **journal の .md 1ファイルしか触っていない commit** なのに、同じ step 14 `Sandbox access (AppContainer)` で落ちた。コード差分ゼロで再現したので、「差分が該当領域に触れていない」どころか「差分が Rust コードを1バイトも含まない」条件での再現であり、環境依存であることのこれまでで最も強い証拠になる。2026-08-27 の前エントリで作った matched-pair 表（n=2）よりこの1件のほうが情報量が多い。
+- ノートに書かなかったことも記録する: 50 ms のキー予算を超える原因そのものは未解明で、#102 は超えたときに全角スペースが入る被害を止めるだけである。候補数上限の設計（読み長 clamp か遅延 N-best 展開か）は #100 / #103 で未決のままで、このリリースは読み長 clamp を採っている。いずれもリリースノートの「含まれないもの」に明記した。
+- 学び: **リリース前の版の書き換え漏れは、grep 対象をリポジトリ全体にすれば機械的に見つかる。** 今回 `1.0.28` を全ファイル grep して初めて入れ子 workspace の1件が出た。「4か所」という手順の記憶ではなく、毎回 grep する。
