@@ -118,10 +118,11 @@ pub enum AiStyle {
     Contract = 6,
     Novel = 7,
     Social = 8,
+    English = 9,
 }
 
 impl AiStyle {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Spoken,
         Self::Polite,
         Self::Business,
@@ -131,6 +132,7 @@ impl AiStyle {
         Self::Contract,
         Self::Novel,
         Self::Social,
+        Self::English,
     ];
 
     pub const fn from_dword(value: u32) -> Option<Self> {
@@ -144,6 +146,7 @@ impl AiStyle {
             6 => Some(Self::Contract),
             7 => Some(Self::Novel),
             8 => Some(Self::Social),
+            9 => Some(Self::English),
             _ => None,
         }
     }
@@ -441,5 +444,11 @@ mod tests {
         }
         assert_eq!(AiTextKey::from_dword(3), None);
         assert_eq!(AiTextKey::from_dword(u32::MAX), None);
+
+        for value in AiStyle::ALL {
+            assert_eq!(AiStyle::from_dword(value as u32), Some(value));
+        }
+        assert_eq!(AiStyle::from_dword(10), None);
+        assert_eq!(AiStyle::from_dword(u32::MAX), None);
     }
 }

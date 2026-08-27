@@ -79,7 +79,7 @@ sakura_settings.exe update status
 
 設定画面の「AI文章変換」で、送信先、Endpoint、認証方式、APIキー、変換スタイル、Effort、Tier、文章変換キーを設定できます。使用モデルは`gpt-5.6-luna`固定、API方式はResponsesのみです。文章変換キーの既定値はSpace右側の`変換`で、`Caps Lock`または無効にも変更できます。入力中はSakuraのpreeditを、入力がなければホストアプリの選択文字列を変換します。対象文字列がない場合は、`変換`の再変換や`Caps Lock`の入力モード切替といった従来動作を保ちます。校正はタスクバーのSakura Inputメニューにある「選択中文字列を校正」から明示的に実行します。
 
-変換スタイルは、話し言葉、丁寧語、ビジネス、公文書、技術文書、論文、契約、小説、SNSから選択できます。OpenAI、Azure OpenAI、AWS Bedrock、Cloudflare、Customの各プリセットでは、指定したResponses互換Endpointへ接続します。APIキーは平文設定ではなく、現在のWindowsユーザーのCredential Managerへ保存します。インストール完了時にも設定画面を開けますが、保存時に疎通確認は行わず、APIキー欄が空なら既存のキーを上書きしません。
+変換スタイルは、話し言葉、丁寧語、ビジネス、公文書、技術文書、論文、契約、小説、SNS、英語から選択できます。英語は、日本語などの入力を自然な英語へ翻訳し、すでに英語の入力は意味を保ったまま自然な英語へ整えます。OpenAI、Azure OpenAI、AWS Bedrock、Cloudflare、Customの各プリセットでは、指定したResponses互換Endpointへ接続します。APIキーは平文設定ではなく、現在のWindowsユーザーのCredential Managerへ保存します。インストール完了時にも設定画面を開けますが、保存時に疎通確認は行わず、APIキー欄が空なら既存のキーを上書きしません。
 
 利用可能なCodex CLIが見つかった場合だけ「ChatGPT Subscription（Codex CLI）」も候補に表示します。この方式は別途インストール・ログイン済みのCodex CLIが必要で、APIキーは使いません。対象文字列は標準入力だけで渡し、コマンドライン引数、環境変数、ファイル名には含めません。CLI未検出、未ログイン、モデル利用不可、APIエラー、タイムアウトなどは別モデルへ切り替えず、タスクバーのメニューとツールチップに直近のエラーを表示します。
 

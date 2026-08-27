@@ -64,6 +64,7 @@ wire_enum!(Style {
     Contract = 7,
     Novel = 8,
     Social = 9,
+    English = 10,
 });
 wire_enum!(Effort {
     ProviderDefault = 1,
@@ -462,6 +463,7 @@ mod tests {
             Style::Contract,
             Style::Novel,
             Style::Social,
+            Style::English,
         ];
         let efforts = [
             Effort::ProviderDefault,

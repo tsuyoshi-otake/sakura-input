@@ -4201,6 +4201,7 @@ const fn ai_style_label(value: AiStyle) -> &'static str {
         AiStyle::Contract => "契約",
         AiStyle::Novel => "小説",
         AiStyle::Social => "SNS",
+        AiStyle::English => "英語",
     }
 }
 
@@ -5015,6 +5016,26 @@ mod tests {
         assert_eq!(input_method_from_checks(false, true), Ok(InputMethod::Kana));
         assert!(input_method_from_checks(false, false).is_err());
         assert!(input_method_from_checks(true, true).is_err());
+    }
+
+    #[test]
+    fn ai_style_labels_follow_the_persisted_combo_order() {
+        let labels: Vec<_> = AiStyle::ALL.into_iter().map(ai_style_label).collect();
+        assert_eq!(
+            labels,
+            [
+                "話し言葉",
+                "丁寧語",
+                "ビジネス",
+                "公文書",
+                "技術文書",
+                "論文",
+                "契約",
+                "小説",
+                "SNS",
+                "英語",
+            ]
+        );
     }
 
     #[test]
