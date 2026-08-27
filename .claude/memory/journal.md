@@ -1298,3 +1298,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 注意: appcontainer test 自体は ignored 集合にあり、CI の `--ignored` 単独 step でしか走らない。ローカルの 1,723 件には**含まれていない**。新しい message はここではコンパイルされただけで、実行されるのは CI である。
 - 学び: **理由を捨てているコードを見つけたら、理由を通すだけでは足りないことがある。** 今回は `.is_err()` が最初の容疑だったが、上流が5つの異なる失敗に同じ HRESULT を割り当てていたので、呼び出し側を直しても何も分からないままだった。「情報が失われているのはどこか」を、捨てている行だけでなく**生成している行まで**遡って確認する。
 - 学び: **エラー型を使い回すと、無関係な失敗が security 判定に化ける。** watch.rs の2か所は「他に手近な Fault variant がなかった」だけで untrusted 判定を名乗っていた。variant 名が主張になっている型では、便宜的な流用がそのまま虚偽のログになる。
+
+## 2026-08-27 — key timeout 44件の実データ解析：安易な内部lock仮説を2つ否定（#102, #106）
+
+- 動機: #102 の計器を入れたので、既存の 109 件（6.33日分）を実際に読んだ。集計だけでなく**生レコードを時刻でクラスタリング**した。
+- 内訳: key 44 / ui-placement 54 / administration 10 / handshake 1。件数最多は key ではなく **ui-placement**（budget は 10 ms と小さい）。
+- **決定的だったのは形**（1秒以内のレコードをクラスタ化、83クラスタ）:
+  - `key` の burst は **tids=1** で 139〜**1777 ms** に跨り、同一スレッドが2〜4回連続で 50 ms を超える。→ 単発の 50 ms 超過ではなく**秒級の停止**である。
+  - `ui-placement` の burst は **tids=4 で +0 ms**（4スレッドが同一ミリ秒）。→ engine 内部の lock 待ちの形ではなく、複数接続が同時に待たされている形。
+  - 種別が混在するクラスタは 83 中 **2 件のみ**。→ key と ui-placement は**別現象**であり、まとめて1つの原因を探してはいけない。
+- 否定した仮説1: **learning の mutex**。`LearningService` は `Mutex<State>` を持ち、5秒周期の maintenance thread がそれを保持したまま fsync/compaction する。key path（`dispatch.rs` 1827/2417/4646/5298 の `is_repair_suppressed` / `learn` / `preference`）は blocking `.lock()` を取るので、構造としては競合しうる。しかし実機の `log.bin` は **419 KB** で compaction trigger（16 MiB）に遠く届かず、走るのは 419 KB の `sync_data` だけ。数 ms であり **1777 ms を説明しない**。`maintain()` が `try_lock` なのは取得を譲るだけで保持時間は縛らない、という指摘自体は正しいが、実機では発火していない。
+- 否定した仮説2: **neural reranker の 500 ms**。`WORKER_RESPONSE_TIMEOUT` は 500 ms で KEY_BUDGET の10倍だが、`score()` の呼び出しは `long_conversion.rs:311`、すなわち `worker_loop`（background thread）内である。key path はここで待たない。
+- **判明した計器の限界（これが本題）**: 32 byte レコードは「budget を超えた事実」しか持たず、**超過量を持たない**。51 ms と 1800 ms が同じ 1 件として記録される。今回クラスタ間隔から秒級だと推定できたのは偶然 burst していたからで、単発 68 件については何も言えない。原因候補の絞り込みが推測で止まる直接の理由がこれである。
+- 提案（未実施・owner 判断待ち）: レコードの **bytes 24..28（現在 reserved、コメントは「future request-id discriminator」）に実測 elapsed ms を書く**。現行 reader はこの4バイトを無視して 0 を読むので、**FORMAT_VERSION を上げずに後方互換にできる**。上げると既存 109 件（6.33日分）が invalid 扱いになり、いま解析した実データを失う。
+- 作業ツリーの状況: 解析中に owner が同ツリーで `AiStyle::English` 系の WIP（`sakura-ai-proto` / `sakura-ai-worker` / `ai_text.rs` / `user_preferences.rs` / `ui.rs` / `README.md`）を進行させていた。永続フォーマットを変える変更を並行して勝手に入れない判断をした。
+- 学び: **診断カウンタは「何回」だけでなく「どれだけ」を持たないと、原因候補を1つも消せない。** 今回は生レコードの時刻クラスタリングという副次的な情報で辛うじて秒級と分かったが、それは burst したときだけ効く手であり、単発事象には無力だった。閾値超過を記録する計器を作るときは、閾値と実測値の差を同じレコードに入れる。
+- 学び: **「構造上ありうる競合」と「実機で発火している競合」を混同しない。** learning mutex は設計としては本当に危険な形（保持時間が無制限の critical section をキー経路と共有）だが、実機の log サイズを見た瞬間に今回の原因ではないと確定した。コードだけ読んで直していたら、無関係な箇所を触って「直った」と誤認していた。
