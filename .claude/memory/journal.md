@@ -1217,3 +1217,24 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び4: **単独のログで因果を主張しない。** 開発者履歴の「session 番号が飛ぶ」は結果であって原因ではなく、`ipc-timeouts.bin` の「timeout があった」も同じ。**別々の機構が別々のファイルに書いた記録を時刻で突き合わせる**と、片方だけでは推測でしかなかった経路が1本に決まる。今回はこれで仮説検証を1周で終えられた。
 - 副次対応: `%LOCALAPPDATA%\SakuraInput\logs\debug.tsv` が上限 2 MiB（2,097,110 B）に達して **2026-08-19 12:41 から fail-closed** で書き込みを止めていた。そのため今回の再発時刻に `idle_fence` trace が1件も無く、機構の特定を履歴と timeout ログだけでやる羽目になった。`debug-full-20260819-124100.tsv` へ改名して退避（**削除していない**）し、次回の発生では trace が残るようにした。あわせて trace の decision に `absorb_teardown` を追加したので、再発時にどちらの fence が効いたかがログから直接読める。
 - 未了: (1) **なぜ 50 ms `KEY_BUDGET` を超えるのか**は未調査。累計 `key` timeout は 44 件で、今回の修正は**超過したときの被害を止めるだけ**であり、超過そのものは減らない。(2) `crates/sakura-ipc/src/diagnostics.rs` の `DisconnectReason` WIP は未使用アイテム2件が `-D warnings` で落ちるため**引き続き未コミット**。今回の実測で原因が「原因不明の disconnect」ではなく「key IPC timeout」と判明したので、この診断が今も最適な次の一手かは要再検討。(3) `verification/space-key-dispatch/` の TLA+ spec・TLC 構成・cargo-mutants・`traceability.json` の hash は **#102 以前のオラクル**を指したままで、別途回し直しが要る（`requirements.md` の冒頭に明記した）。
+
+## 2026-08-27 — #102 push 後の CI 赤は AppContainer フレークの再現、原因箇所を1関数まで絞った（#102）
+
+- 経緯: f8a80c7 を main へ push した直後、`CI` の `Build and test` が赤。落ちたのは `Sandbox access (AppContainer)` step で、`the_pipe_is_reachable_from_a_real_appcontainer_token` が `Fault::UntrustedServer { process_id }`。ローカルの隔離 worktree では audit／fmt／clippy／`cargo test --workspace` の4ゲートが全て真の exit 0 だったが、**この step はその4つに含まれない**（`--ignored` 指定で単独実行されるため `cargo test --workspace` では走らない）。
+- 結論: **既知フレークの再現**であり、f8a80c7 の内容が原因ではない。attempt 3 で全 step 緑になり、`Installer` は1回目から緑。最終的に f8a80c7 の CI は success。
+- 2026-08-25（1.0.28 リリース）の記録と**発生パターンが完全に一致**する。あのときも同じ test が `UntrustedServer` で落ち、3回目の再実行で緑になった。今回も attempt 1 失敗 / attempt 2 失敗 / attempt 3 成功。
+- 途中で自分が誤判定した（記録として残す）: attempt 2 まで見た時点で「2連続失敗だから一過性フレークではない」と owner に報告した。**3つ目の標本を取る前に結論を出したのが誤り。** さらに runner image を突き合わせて matched pair を作り、
+  - `20260818.207.1`: control(4eb5d31)=PASS / f8a80c7=FAIL
+  - `20260824.214.3`: control(4eb5d31)=PASS / f8a80c7=FAIL
+  という「image を統制しても差が出る」表を作って因果の傍証にした。この表自体は正しいが、**既知フレークに対して n=2 の matched pair は何も証明しない**。統制変数を増やしても標本数が足りなければ結論は出ない。
+- 収穫（ここが今回の実質的な前進）: 失敗箇所を1関数の**2ステップまで**絞れた。
+  - 子（AppContainer 側）は失敗の直前に `classify_client_process(pid)` を呼んで `Ok(MediumOrHigher)` を**成功**で表示している。これは `ProcessHandle::open` → `ProcessToken::open_process` → `classify_token` の3つ。
+  - `verify_server_process`（`crates/sakura-ipc/src/security.rs:222`）はその3つに `image_path()` と `policy.matches_image_path()` を足しただけ。
+  - つまり **失敗しうるのは `QueryFullProcessImageNameW` による image path 取得か、`matches_image_path` の突き合わせのどちらかだけ**。DACL／mandatory label／token integrity／pipe 名解決は、同じ子プロセスの数ミリ秒前の呼び出しで健全だと実証されている。
+  - 親の `engine.cleanup()` assertion は通っているので、engine プロセスは生きていて正常終了した。「engine が死んでいて image path が引けなかった」線も同時に否定される。
+- 診断上の欠陥（次に直すならここ）: `crates/sakura-ipc/src/client.rs:138` は `verify_server_process(...).is_err()` と**理由を捨てて** `Fault::UntrustedServer { process_id }` にしている。そのため CI で3回失敗しても「拒否された」以上の情報がログに1文字も残らない。上の絞り込みも、失敗ログではなく `security.rs` を読んで2つの呼び出しの差分を取ることでしか得られなかった。**理由を保持した fault を返すようにすれば、次の1回の失敗で原因が確定する。**
+- ローカル再現は不可: この test は本番の well-known パイプが空いていることを要求するため、インストール済み engine が動いているこの機械では実行拒否になる。CI でしか観測できない。
+- 未処理（2026-08-25 から持ち越し、今回も未着手）: このフレークの tracking Issue はまだ存在しない（`gh issue list` で該当なし）。発生は2回目。上の絞り込みと `client.rs:138` の診断欠陥を添えて Issue 化する。
+- 学び1: **「ローカルで CI と同じコマンドを回した」の"同じ"を数えるときは、job の step 全部を見る。** 4ゲートを緑にして安心したが、`Build and test` job は17 step あり、`--ignored` の単独実行という**定義上 `cargo test --workspace` に含まれない** step がその後ろにいた。workflow を読むときは「自分が回した集合」と「job が回す集合」の差を明示的に列挙する。
+- 学び2: **フレークが疑われる対象に対して、n=2 で因果を宣言しない。** 統制（同一 runner image、同一 toolchain、diff が該当領域に触れていないことの確認）をどれだけ積んでも、標本が2つなら既知フレークと区別できない。先に3つ目を取る。
+- 学び3: **失敗の再現性が低いときほど、コードを読んで"失敗しうる箇所"を機械的に差分で絞るほうが速い。** 今回は成功パスと失敗パスが共有する呼び出し（`classify_client_process`）を見つけたことで、5つの候補ステップが2つになった。ログを増やさずに絞れた分がそのまま次回の調査コストを下げる。
