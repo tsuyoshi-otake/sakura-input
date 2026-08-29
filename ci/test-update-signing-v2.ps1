@@ -43,6 +43,10 @@ try {
     $unsortedText = "schema=1`nalgorithm=ecdsa-p256-sha256-p1363`nmanifest_sha256=b90f4862b54c5643fac5f0188d2dbd0fae79feb7975f18620fdd731b33978340`nsignature_count=2`nsignature.0=$standbyId`:$signatureHex`nsignature.1=$activeId`:$signatureHex`n"
     [IO.File]::WriteAllText($unsortedSignature, $unsortedText, [Text.UTF8Encoding]::new($false))
     Assert-Rejected $productionManifest $unsortedSignature $productionKeyring
+    $partlyInvalidSignature = Join-Path $temp 'signature-partly-invalid.txt'
+    $partlyInvalidText = "schema=1`nalgorithm=ecdsa-p256-sha256-p1363`nmanifest_sha256=b90f4862b54c5643fac5f0188d2dbd0fae79feb7975f18620fdd731b33978340`nsignature_count=2`nsignature.0=$activeId`:$signatureHex`nsignature.1=$standbyId`:$signatureHex`n"
+    [IO.File]::WriteAllText($partlyInvalidSignature, $partlyInvalidText, [Text.UTF8Encoding]::new($false))
+    Assert-Rejected $productionManifest $partlyInvalidSignature $productionKeyring
     [IO.File]::Copy((Join-Path $root 'verification/fixtures/update-signing-v2/manifest-positive.txt'), $manifest, $true)
 
     $ecdsa = [Security.Cryptography.ECDsa]::Create([Security.Cryptography.ECCurve+NamedCurves]::nistP256)
