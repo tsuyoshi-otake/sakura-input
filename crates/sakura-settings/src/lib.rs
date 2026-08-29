@@ -21,5 +21,6 @@ pub mod input_history;
 pub mod learning;
 pub mod paths;
 pub mod storage;
+mod update_trust;
 pub mod updater;
 pub mod user_dictionary;
