@@ -28,7 +28,6 @@ use windows::Win32::Storage::FileSystem::{
 
 pub const MAX_INSTALLER_BYTES: u64 = 200 * 1024 * 1024;
 pub const MAX_SIGNATURE_BYTES: u64 = 8 * 1024;
-pub const EMBEDDED_SEQUENCE_FLOOR: u64 = 1;
 const EMBEDDED_TRUST_EPOCH: u64 = 1;
 const MAX_KEY_COUNT: usize = 3;
 const MAX_TRUST_STATE_BYTES: u64 = 4 * 1024;
@@ -39,6 +38,10 @@ static NEXT_TRUST_TEMP: AtomicU64 = AtomicU64::new(1);
 const KEYRING_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../data/update-signing/public-keys-v1.txt"
+));
+const RELEASE_SEQUENCE_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/update-signing/release-sequence.txt"
 ));
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -178,9 +181,10 @@ impl ReleaseManifest {
                 "release manifest trust epoch {trust_epoch} is unsupported"
             ));
         }
-        if release_sequence < EMBEDDED_SEQUENCE_FLOOR {
+        let sequence_floor = embedded_sequence_floor()?;
+        if release_sequence < sequence_floor {
             return Err(format!(
-                "release sequence {release_sequence} is below the embedded floor {EMBEDDED_SEQUENCE_FLOOR}"
+                "release sequence {release_sequence} is below the embedded floor {sequence_floor}"
             ));
         }
         if tag != format!("v{version}") {
@@ -340,6 +344,26 @@ fn parse_decimal(value: &str, name: &str) -> Result<u64, String> {
     value
         .parse::<u64>()
         .map_err(|_| format!("{name} is out of range"))
+}
+
+fn parse_release_sequence_floor(bytes: &[u8]) -> Result<u64, String> {
+    let lines = canonical_lines(bytes, 1, "embedded release sequence", 64)?;
+    let floor = parse_decimal(lines[0], "embedded release sequence")?;
+    if floor == 0 {
+        return Err("embedded release sequence must be greater than zero".to_owned());
+    }
+    if format!("{floor}\n").as_bytes() != bytes {
+        return Err("embedded release sequence is not canonical".to_owned());
+    }
+    Ok(floor)
+}
+
+fn embedded_sequence_floor() -> Result<u64, String> {
+    static FLOOR: OnceLock<Result<u64, String>> = OnceLock::new();
+    match FLOOR.get_or_init(|| parse_release_sequence_floor(RELEASE_SEQUENCE_BYTES)) {
+        Ok(floor) => Ok(*floor),
+        Err(error) => Err(error.clone()),
+    }
 }
 
 fn is_lower_hex(value: &str, length: usize) -> bool {
@@ -796,9 +820,8 @@ impl TrustState {
             highest_version,
             manifest_sha256,
         };
-        if state.trust_epoch != EMBEDDED_TRUST_EPOCH
-            || state.highest_sequence < EMBEDDED_SEQUENCE_FLOOR
-        {
+        let sequence_floor = embedded_sequence_floor()?;
+        if state.trust_epoch != EMBEDDED_TRUST_EPOCH || state.highest_sequence < sequence_floor {
             return Err("update trust state is below the embedded trust floor".to_owned());
         }
         if state.canonical_text().as_bytes() != bytes {
@@ -858,15 +881,16 @@ pub fn authorize_manifest(
     manifest_sha256: [u8; 32],
     timeout: Duration,
 ) -> Result<TrustDecision, String> {
+    let sequence_floor = embedded_sequence_floor()?;
     if manifest.version < current {
         return Err(format!(
             "rollback rejected: release {} is older than running version {current}",
             manifest.version
         ));
     }
-    if manifest.release_sequence < EMBEDDED_SEQUENCE_FLOOR {
+    if manifest.release_sequence < sequence_floor {
         return Err(format!(
-            "rollback rejected: sequence {} is below embedded floor {EMBEDDED_SEQUENCE_FLOOR}",
+            "rollback rejected: sequence {} is below embedded floor {sequence_floor}",
             manifest.release_sequence
         ));
     }
@@ -1129,6 +1153,32 @@ mod tests {
                 std::process::id()
             ))
             .join("sakura_setup.pending.exe")
+    }
+
+    #[test]
+    fn embedded_sequence_floor_is_single_line_canonical_and_nonzero() {
+        let floor = embedded_sequence_floor().unwrap();
+        assert!(floor > 0);
+        assert_eq!(RELEASE_SEQUENCE_BYTES, format!("{floor}\n").as_bytes());
+
+        let malformed: &[&[u8]] = &[
+            b"",
+            b"1",
+            b"\xef\xbb\xbf1\n",
+            b"1\r\n",
+            b"1\n2\n",
+            b"1\n\n",
+            b"01\n",
+            b"0\n",
+            b"+1\n",
+            b" 1\n",
+            b"1 \n",
+            b"18446744073709551616\n",
+            &[0xff, b'\n'],
+        ];
+        for bytes in malformed {
+            assert!(parse_release_sequence_floor(bytes).is_err());
+        }
     }
 
     #[test]
