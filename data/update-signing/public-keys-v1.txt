@@ -1,0 +1,16 @@
+schema=1
+key_count=2
+key.0.id=178bc99d4699cde4b78c0169655d3b165140a62173812867a8a66b1a608b6c47
+key.0.role=active
+key.0.x=94cd29c39488eab86a4beaf0b69042265948268725c9d192e971c4230218cbfc
+key.0.y=470fdccbabb9cc38094ce08478d37cea436ae6c047c2f34035a146fe7c1283a3
+key.0.trust_epoch=1
+key.0.not_before_sequence=1
+key.0.not_after_sequence=18446744073709551615
+key.1.id=44e075680f1155c911119d9e039858a828757e37b901c2afe49fde3c4a0af92f
+key.1.role=standby
+key.1.x=d3a4b25768afc72473abd064aa504c38add4299e425e56a440be2dd059acc714
+key.1.y=86a345818296ea637fe95bae1dc7391e63eabd1e3daeced400f44bbce3136900
+key.1.trust_epoch=1
+key.1.not_before_sequence=1
+key.1.not_after_sequence=18446744073709551615

@@ -1530,10 +1530,17 @@ uninstall → verify typing still works.
   silently failing update.
 - Auto-update (M4): unless explicitly disabled, the settings app checks GitHub
   Releases over WinHTTP at startup. If a newer release is available, it asks
-  for confirmation before downloading, verifying the Authenticode signature +
-  hash, and running the installer silently. The user can opt out, and network
-  code exists *only* in the settings/updater component, so the §9 no-network
-  rule for DLL, engine, and renderer is unaffected.
+  for confirmation before downloading, verifying the Authenticode/application
+  trust policy + hash, and running the installer silently. Authenticode-signed
+  releases require WinVerifyTrust; an explicitly `unsigned` release requires
+  the canonical update-signing v2 manifest and detached Sakura public-key
+  signature, and a valid Authenticode result is rejected for that policy. The
+  exact-file guard remains held through application-signature verification,
+  WinVerifyTrust, and ShellExecuteExW. The v1.0.33 bridge is manual for older
+  schema-1 updaters. The user can opt out, and network code exists *only* in
+  the settings/updater component, so the §9 no-network rule for DLL, engine,
+  and renderer is unaffected. The frozen fields, keyring, sequence, rotation,
+  and recovery rules live in `verification/update-signing-v2.md`.
 
 ### 12.4 Silent operation & distribution
 

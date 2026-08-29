@@ -1,0 +1,17 @@
+schema=2
+product=sakura-input
+repository=https://github.com/tsuyoshi-otake/sakura-input
+channel=stable
+platform=windows-x64
+trust_epoch=1
+release_sequence=1
+version=1.0.33
+tag=v1.0.33
+source_commit=964baf06d0ac451e319a847a2aabe796df7ea95f
+asset_name=sakura_setup.exe
+installer_url=https://github.com/tsuyoshi-otake/sakura-input/releases/download/v1.0.33/sakura_setup.exe
+sha256=3b5eb14b11efbd16920de1e0dd80d161adafb35d858c22bbcff18edf4a0367c5
+size=57
+authenticode=unsigned
+minimum_updater_version=1.0.33
+expires_unix=1893456000
