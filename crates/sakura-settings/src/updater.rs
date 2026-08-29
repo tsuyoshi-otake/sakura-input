@@ -13,10 +13,12 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{
+    CloseHandle, HANDLE, HWND, TRUST_E_NOSIGNATURE, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
 use windows::Win32::Networking::WinHttp::{
     WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders,
     WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption,
@@ -47,230 +49,32 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
 use crate::storage::atomic_write;
+use crate::update_trust::{
+    acquire_apply_lock, authorize_manifest, verify_signed_manifest, TrustDecision,
+    MAX_SIGNATURE_BYTES,
+};
+
+pub use crate::update_trust::{
+    encode_hex, installer_url_for, AuthenticodePolicy, ReleaseManifest, Version,
+    MAX_INSTALLER_BYTES,
+};
 
 pub const MANIFEST_URL: &str =
-    "https://github.com/tsuyoshi-otake/sakura-input/releases/latest/download/release-manifest.txt";
+    "https://github.com/tsuyoshi-otake/sakura-input/releases/latest/download/release-manifest-v2.txt";
+pub const SIGNATURE_URL: &str =
+    "https://github.com/tsuyoshi-otake/sakura-input/releases/latest/download/release-manifest-v2.sig";
 pub const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
-pub const MAX_INSTALLER_BYTES: u64 = 200 * 1024 * 1024;
 pub const MAX_REDIRECTS: usize = 5;
 pub const INSTALL_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 const HTTP_TOTAL_TIMEOUT: Duration = Duration::from_secs(60);
 const INSTALLER_TOTAL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const TRUST_LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 const UPDATE_SETTINGS_SCHEMA: &str = "1";
-const MANIFEST_SCHEMA: &str = "1";
 const HTTP_BUFFER_BYTES: usize = 64 * 1024;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Version {
-    pub major: u32,
-    pub minor: u32,
-    pub patch: u32,
-}
-
-impl Version {
-    pub fn parse(value: &str) -> Result<Self, String> {
-        let mut fields = value.split('.');
-        let major = parse_version_field(fields.next(), "major")?;
-        let minor = parse_version_field(fields.next(), "minor")?;
-        let patch = parse_version_field(fields.next(), "patch")?;
-        if fields.next().is_some() {
-            return Err("version must contain exactly major.minor.patch".to_owned());
-        }
-        Ok(Self {
-            major,
-            minor,
-            patch,
-        })
-    }
-}
-
-impl fmt::Display for Version {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
-    }
-}
-
-fn parse_version_field(value: Option<&str>, name: &str) -> Result<u32, String> {
-    let value = value.ok_or_else(|| format!("version is missing its {name} field"))?;
-    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err(format!(
-            "version {name} field must be an unsigned decimal integer"
-        ));
-    }
-    if value.len() > 1 && value.starts_with('0') {
-        return Err(format!(
-            "version {name} field has an ambiguous leading zero"
-        ));
-    }
-    value
-        .parse::<u32>()
-        .map_err(|_| format!("version {name} field is out of range"))
-}
 
 pub fn current_version() -> Version {
     Version::parse(env!("CARGO_PKG_VERSION")).expect("package version is valid semantic version")
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseManifest {
-    pub version: Version,
-    pub installer_url: String,
-    pub sha256: [u8; 32],
-    pub size: u64,
-}
-
-impl ReleaseManifest {
-    pub fn parse(bytes: &[u8]) -> Result<Self, String> {
-        if bytes.is_empty() {
-            return Err("release manifest is empty".to_owned());
-        }
-        if bytes.len() as u64 > MAX_MANIFEST_BYTES {
-            return Err(format!(
-                "release manifest exceeds the {MAX_MANIFEST_BYTES}-byte limit"
-            ));
-        }
-        let source = std::str::from_utf8(bytes)
-            .map_err(|_| "release manifest is not canonical UTF-8".to_owned())?;
-        if source.contains('\0') {
-            return Err("release manifest contains a NUL character".to_owned());
-        }
-
-        let mut schema = None;
-        let mut version = None;
-        let mut installer_url = None;
-        let mut sha256 = None;
-        let mut size = None;
-        let mut line_count = 0usize;
-        for (index, line) in source.lines().enumerate() {
-            line_count += 1;
-            if line.is_empty() || line.len() > 2_048 || line.trim() != line {
-                return Err(format!(
-                    "release manifest line {} is empty, padded, or too long",
-                    index + 1
-                ));
-            }
-            let (key, value) = line.split_once('=').ok_or_else(|| {
-                format!("release manifest line {} has no '=' separator", index + 1)
-            })?;
-            if value.is_empty() || value.contains('=') {
-                return Err(format!(
-                    "release manifest line {} has an invalid value",
-                    index + 1
-                ));
-            }
-            match key {
-                "schema" => assign_once(&mut schema, value.to_owned(), key)?,
-                "version" => assign_once(&mut version, Version::parse(value)?, key)?,
-                "installer_url" => {
-                    assign_once(&mut installer_url, value.to_owned(), key)?;
-                }
-                "sha256" => assign_once(&mut sha256, decode_sha256(value)?, key)?,
-                "size" => assign_once(&mut size, parse_size(value)?, key)?,
-                _ => return Err(format!("release manifest contains unknown key {key:?}")),
-            }
-        }
-        if line_count != 5 {
-            return Err(format!(
-                "release manifest must contain exactly five fields, found {line_count}"
-            ));
-        }
-        if schema.as_deref() != Some(MANIFEST_SCHEMA) {
-            return Err("release manifest schema is missing or unsupported".to_owned());
-        }
-        let version = version.ok_or_else(|| "release manifest has no version".to_owned())?;
-        let installer_url =
-            installer_url.ok_or_else(|| "release manifest has no installer_url".to_owned())?;
-        let expected_url = installer_url_for(version);
-        if installer_url != expected_url {
-            return Err(format!(
-                "installer URL must be the canonical release asset URL {expected_url:?}"
-            ));
-        }
-        Ok(Self {
-            version,
-            installer_url,
-            sha256: sha256.ok_or_else(|| "release manifest has no sha256".to_owned())?,
-            size: size.ok_or_else(|| "release manifest has no size".to_owned())?,
-        })
-    }
-
-    pub fn canonical_text(&self) -> String {
-        format!(
-            "schema={MANIFEST_SCHEMA}\nversion={}\ninstaller_url={}\nsha256={}\nsize={}\n",
-            self.version,
-            self.installer_url,
-            encode_hex(&self.sha256),
-            self.size
-        )
-    }
-}
-
-pub fn installer_url_for(version: Version) -> String {
-    format!(
-        "https://github.com/tsuyoshi-otake/sakura-input/releases/download/v{version}/sakura_setup.exe"
-    )
-}
-
-fn assign_once<T>(slot: &mut Option<T>, value: T, key: &str) -> Result<(), String> {
-    if slot.replace(value).is_some() {
-        Err(format!("release manifest contains duplicate key {key:?}"))
-    } else {
-        Ok(())
-    }
-}
-
-fn parse_size(value: &str) -> Result<u64, String> {
-    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err("installer size must be an unsigned decimal integer".to_owned());
-    }
-    if value.len() > 1 && value.starts_with('0') {
-        return Err("installer size has an ambiguous leading zero".to_owned());
-    }
-    let size = value
-        .parse::<u64>()
-        .map_err(|_| "installer size is out of range".to_owned())?;
-    if !(1..=MAX_INSTALLER_BYTES).contains(&size) {
-        return Err(format!(
-            "installer size must be between 1 and {MAX_INSTALLER_BYTES} bytes"
-        ));
-    }
-    Ok(size)
-}
-
-fn decode_sha256(value: &str) -> Result<[u8; 32], String> {
-    if value.len() != 64
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err("SHA-256 must be exactly 64 lowercase hexadecimal characters".to_owned());
-    }
-    let mut digest = [0u8; 32];
-    for (index, byte) in digest.iter_mut().enumerate() {
-        let offset = index * 2;
-        *byte =
-            (hex_nibble(value.as_bytes()[offset]) << 4) | hex_nibble(value.as_bytes()[offset + 1]);
-    }
-    Ok(digest)
-}
-
-const fn hex_nibble(value: u8) -> u8 {
-    match value {
-        b'0'..=b'9' => value - b'0',
-        b'a'..=b'f' => value - b'a' + 10,
-        _ => 0,
-    }
-}
-
-pub fn encode_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut result = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        result.push(HEX[(byte >> 4) as usize] as char);
-        result.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    result
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -376,6 +180,7 @@ pub struct DownloadReceipt {
 
 pub trait UpdateTransport {
     fn fetch_manifest(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, String>;
+    fn fetch_signature(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, String>;
     fn download_installer(
         &mut self,
         url: &str,
@@ -384,8 +189,37 @@ pub trait UpdateTransport {
     ) -> Result<DownloadReceipt, String>;
 }
 
+pub trait ManifestVerifier {
+    fn verify(
+        &mut self,
+        manifest_bytes: &[u8],
+        manifest: &ReleaseManifest,
+        signature_bytes: &[u8],
+    ) -> Result<[u8; 32], String>;
+}
+
+#[derive(Debug, Default)]
+pub struct PinnedManifestVerifier;
+
+impl ManifestVerifier for PinnedManifestVerifier {
+    fn verify(
+        &mut self,
+        manifest_bytes: &[u8],
+        manifest: &ReleaseManifest,
+        signature_bytes: &[u8],
+    ) -> Result<[u8; 32], String> {
+        verify_signed_manifest(manifest_bytes, manifest, signature_bytes)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticodeStatus {
+    Trusted,
+    Unsigned,
+}
+
 pub trait SignatureVerifier {
-    fn verify(&mut self, path: &Path) -> Result<(), String>;
+    fn verify(&mut self, path: &Path) -> Result<AuthenticodeStatus, String>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -519,15 +353,44 @@ impl UpdateOutcome {
     }
 }
 
-pub fn check_for_update<T: UpdateTransport>(
+pub fn check_for_update<T, M>(
     enabled: bool,
     current: Version,
+    paths: &UpdatePaths,
     transport: &mut T,
-) -> UpdateCheckOutcome {
+    manifest_verifier: &mut M,
+) -> UpdateCheckOutcome
+where
+    T: UpdateTransport,
+    M: ManifestVerifier,
+{
     if !enabled {
         return UpdateCheckOutcome::Disabled;
     }
-    let bytes = match transport.fetch_manifest(MANIFEST_URL, MAX_MANIFEST_BYTES) {
+    let now_unix = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(elapsed) => elapsed.as_secs(),
+        Err(error) => {
+            return UpdateCheckOutcome::Failed(UpdateFailure {
+                stage: UpdateStage::ManifestValidation,
+                message: format!("system time is before the Unix epoch: {error}"),
+            });
+        }
+    };
+    check_for_update_at(current, paths, transport, manifest_verifier, now_unix)
+}
+
+fn check_for_update_at<T, M>(
+    current: Version,
+    paths: &UpdatePaths,
+    transport: &mut T,
+    manifest_verifier: &mut M,
+    now_unix: u64,
+) -> UpdateCheckOutcome
+where
+    T: UpdateTransport,
+    M: ManifestVerifier,
+{
+    let manifest_bytes = match transport.fetch_manifest(MANIFEST_URL, MAX_MANIFEST_BYTES) {
         Ok(bytes) => bytes,
         Err(message) => {
             return UpdateCheckOutcome::Failed(UpdateFailure {
@@ -536,7 +399,7 @@ pub fn check_for_update<T: UpdateTransport>(
             });
         }
     };
-    let manifest = match ReleaseManifest::parse(&bytes) {
+    let manifest = match ReleaseManifest::parse(&manifest_bytes) {
         Ok(manifest) => manifest,
         Err(message) => {
             return UpdateCheckOutcome::Failed(UpdateFailure {
@@ -545,30 +408,84 @@ pub fn check_for_update<T: UpdateTransport>(
             });
         }
     };
-    if manifest.version <= current {
-        UpdateCheckOutcome::UpToDate {
+    if let Err(message) = manifest.validate_runtime(current, now_unix) {
+        return UpdateCheckOutcome::Failed(UpdateFailure {
+            stage: UpdateStage::ManifestValidation,
+            message,
+        });
+    }
+    let signature_bytes = match transport.fetch_signature(SIGNATURE_URL, MAX_SIGNATURE_BYTES) {
+        Ok(bytes) => bytes,
+        Err(message) => {
+            return UpdateCheckOutcome::Failed(UpdateFailure {
+                stage: UpdateStage::ManifestDownload,
+                message: format!("release manifest signature: {message}"),
+            });
+        }
+    };
+    let manifest_sha256 =
+        match manifest_verifier.verify(&manifest_bytes, &manifest, &signature_bytes) {
+            Ok(digest) => digest,
+            Err(message) => {
+                return UpdateCheckOutcome::Failed(UpdateFailure {
+                    stage: UpdateStage::ManifestValidation,
+                    message: format!("Sakura manifest signature: {message}"),
+                });
+            }
+        };
+    match authorize_manifest(
+        &paths.installer,
+        current,
+        &manifest,
+        manifest_sha256,
+        TRUST_LOCK_TIMEOUT,
+    ) {
+        Ok(TrustDecision::Current) => UpdateCheckOutcome::UpToDate {
             current,
             latest: manifest.version,
-        }
-    } else {
-        UpdateCheckOutcome::Available(manifest)
+        },
+        Ok(TrustDecision::Available) => UpdateCheckOutcome::Available(manifest),
+        Err(message) => UpdateCheckOutcome::Failed(UpdateFailure {
+            stage: UpdateStage::ManifestValidation,
+            message,
+        }),
     }
 }
 
-pub fn apply_update<T, V, R>(
+pub fn apply_update<T, M, V, R>(
     enabled: bool,
     current: Version,
     paths: &UpdatePaths,
     transport: &mut T,
+    manifest_verifier: &mut M,
     verifier: &mut V,
     runner: &mut R,
 ) -> UpdateOutcome
 where
     T: UpdateTransport,
+    M: ManifestVerifier,
     V: SignatureVerifier,
     R: InstallerRunner,
 {
-    let manifest = match check_for_update(enabled, current, transport) {
+    if !enabled {
+        return UpdateOutcome::Disabled;
+    }
+    // A zero-duration acquisition is an atomic try-lock. A second apply is a
+    // distinct terminal failure instead of another network/download/launch
+    // pipeline, while the winning process owns the handle through completion.
+    let _apply_lock = match acquire_apply_lock(&paths.installer, Duration::ZERO) {
+        Ok(lock) => lock,
+        Err(message) => {
+            return UpdateOutcome::Failed {
+                version: None,
+                failure: UpdateFailure {
+                    stage: UpdateStage::InstallerPreparation,
+                    message,
+                },
+            };
+        }
+    };
+    let manifest = match check_for_update(true, current, paths, transport, manifest_verifier) {
         UpdateCheckOutcome::Disabled => return UpdateOutcome::Disabled,
         UpdateCheckOutcome::UpToDate { current, latest } => {
             return UpdateOutcome::UpToDate { current, latest };
@@ -637,10 +554,30 @@ where
         cleanup_staged(&paths.installer);
         return failed(version, failure.stage, failure.message);
     }
-    if let Err(message) = verifier.verify(&paths.installer) {
+    let authenticode_status = match verifier.verify(&paths.installer) {
+        Ok(status) => status,
+        Err(message) => {
+            drop(installer_guard);
+            cleanup_staged(&paths.installer);
+            return failed(version, UpdateStage::SignatureVerification, message);
+        }
+    };
+    let authenticode_matches = matches!(
+        (manifest.authenticode, authenticode_status),
+        (AuthenticodePolicy::Required, AuthenticodeStatus::Trusted)
+            | (AuthenticodePolicy::Unsigned, AuthenticodeStatus::Unsigned)
+    );
+    if !authenticode_matches {
         drop(installer_guard);
         cleanup_staged(&paths.installer);
-        return failed(version, UpdateStage::SignatureVerification, message);
+        return failed(
+            version,
+            UpdateStage::SignatureVerification,
+            format!(
+                "installer Authenticode status {authenticode_status:?} contradicts signed policy {}",
+                manifest.authenticode.as_str()
+            ),
+        );
     }
     if let Err(message) = installer_guard.verify_path_identity() {
         drop(installer_guard);
@@ -920,7 +857,29 @@ fn installer_file_identity(file: &fs::File) -> Result<InstallerFileIdentity, Str
 }
 
 pub fn check_real(enabled: bool) -> UpdateCheckOutcome {
-    check_for_update(enabled, current_version(), &mut WinHttpTransport)
+    if !enabled {
+        return UpdateCheckOutcome::Disabled;
+    }
+    let installer = match crate::paths::update_installer() {
+        Ok(path) => path,
+        Err(error) => {
+            return UpdateCheckOutcome::Failed(UpdateFailure {
+                stage: UpdateStage::InstallerPreparation,
+                message: format!("could not resolve update staging directory: {error}"),
+            });
+        }
+    };
+    let paths = UpdatePaths {
+        log: installer.with_file_name("install.log"),
+        installer,
+    };
+    check_for_update(
+        true,
+        current_version(),
+        &paths,
+        &mut WinHttpTransport,
+        &mut PinnedManifestVerifier,
+    )
 }
 
 pub fn apply_real(enabled: bool, paths: &UpdatePaths) -> UpdateOutcome {
@@ -929,6 +888,7 @@ pub fn apply_real(enabled: bool, paths: &UpdatePaths) -> UpdateOutcome {
         current_version(),
         paths,
         &mut WinHttpTransport,
+        &mut PinnedManifestVerifier,
         &mut AuthenticodeVerifier,
         &mut SilentInstaller,
     )
@@ -941,6 +901,18 @@ impl UpdateTransport for WinHttpTransport {
     fn fetch_manifest(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, String> {
         if url != MANIFEST_URL {
             return Err("manifest request did not use the canonical release URL".to_owned());
+        }
+        let mut bytes = Vec::new();
+        stream_http_get(url, limit, HTTP_TOTAL_TIMEOUT, |chunk| {
+            bytes.extend_from_slice(chunk);
+            Ok(())
+        })?;
+        Ok(bytes)
+    }
+
+    fn fetch_signature(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, String> {
+        if url != SIGNATURE_URL {
+            return Err("signature request did not use the canonical release URL".to_owned());
         }
         let mut bytes = Vec::new();
         stream_http_get(url, limit, HTTP_TOTAL_TIMEOUT, |chunk| {
@@ -1460,8 +1432,28 @@ fn nt_success(status: i32, operation: &str) -> Result<(), String> {
 #[derive(Debug, Default)]
 pub struct AuthenticodeVerifier;
 
+fn classify_authenticode_status(
+    verify_status: i32,
+    close_status: i32,
+) -> Result<AuthenticodeStatus, String> {
+    if close_status != 0 {
+        return Err(format!(
+            "WinVerifyTrust state cleanup failed with status 0x{:08x}",
+            close_status as u32
+        ));
+    }
+    match verify_status {
+        0 => Ok(AuthenticodeStatus::Trusted),
+        status if status == TRUST_E_NOSIGNATURE.0 => Ok(AuthenticodeStatus::Unsigned),
+        status => Err(format!(
+            "WinVerifyTrust rejected the installer with status 0x{:08x}",
+            status as u32
+        )),
+    }
+}
+
 impl SignatureVerifier for AuthenticodeVerifier {
-    fn verify(&mut self, path: &Path) -> Result<(), String> {
+    fn verify(&mut self, path: &Path) -> Result<AuthenticodeStatus, String> {
         let path_wide = wide_os(path.as_os_str());
         let mut file_info = WINTRUST_FILE_INFO {
             cbStruct: std::mem::size_of::<WINTRUST_FILE_INFO>() as u32,
@@ -1501,19 +1493,7 @@ impl SignatureVerifier for AuthenticodeVerifier {
                 (&mut trust_data as *mut WINTRUST_DATA).cast(),
             )
         };
-        if verify_status != 0 {
-            return Err(format!(
-                "WinVerifyTrust rejected the installer with status 0x{:08x}",
-                verify_status as u32
-            ));
-        }
-        if close_status != 0 {
-            return Err(format!(
-                "WinVerifyTrust state cleanup failed with status 0x{:08x}",
-                close_status as u32
-            ));
-        }
-        Ok(())
+        classify_authenticode_status(verify_status, close_status)
     }
 }
 
@@ -1630,10 +1610,20 @@ mod tests {
 
     fn manifest(version: Version) -> ReleaseManifest {
         ReleaseManifest {
+            trust_epoch: 1,
+            release_sequence: 2,
             version,
+            source_commit: "0000000000000000000000000000000000000000".to_owned(),
             installer_url: installer_url_for(version),
             sha256: DIGEST,
             size: FAKE_INSTALLER.len() as u64,
+            authenticode: AuthenticodePolicy::Required,
+            minimum_updater_version: Version {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+            expires_unix: u64::MAX,
         }
     }
 
@@ -1647,12 +1637,23 @@ mod tests {
         }
     }
 
+    fn signing_fixture(name: &str) -> Vec<u8> {
+        fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../verification/fixtures/update-signing-v2")
+                .join(name),
+        )
+        .unwrap()
+    }
+
     #[derive(Debug)]
     struct FakeTransport {
         manifest: Result<Vec<u8>, String>,
+        signature: Result<Vec<u8>, String>,
         receipt: Result<DownloadReceipt, String>,
         payload: Vec<u8>,
         manifest_calls: usize,
+        signature_calls: usize,
         download_calls: usize,
     }
 
@@ -1660,12 +1661,14 @@ mod tests {
         fn success(release: &ReleaseManifest) -> Self {
             Self {
                 manifest: Ok(release.canonical_text().into_bytes()),
+                signature: Ok(b"test signature envelope".to_vec()),
                 receipt: Ok(DownloadReceipt {
                     size: release.size,
                     sha256: release.sha256,
                 }),
                 payload: FAKE_INSTALLER.to_vec(),
                 manifest_calls: 0,
+                signature_calls: 0,
                 download_calls: 0,
             }
         }
@@ -1677,6 +1680,13 @@ mod tests {
             assert_eq!(limit, MAX_MANIFEST_BYTES);
             self.manifest_calls += 1;
             self.manifest.clone()
+        }
+
+        fn fetch_signature(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, String> {
+            assert_eq!(url, SIGNATURE_URL);
+            assert_eq!(limit, MAX_SIGNATURE_BYTES);
+            self.signature_calls += 1;
+            self.signature.clone()
         }
 
         fn download_installer(
@@ -1693,13 +1703,38 @@ mod tests {
     }
 
     #[derive(Debug)]
+    struct FakeManifestVerifier {
+        result: Result<[u8; 32], String>,
+        calls: usize,
+    }
+
+    impl ManifestVerifier for FakeManifestVerifier {
+        fn verify(
+            &mut self,
+            _manifest_bytes: &[u8],
+            _manifest: &ReleaseManifest,
+            _signature_bytes: &[u8],
+        ) -> Result<[u8; 32], String> {
+            self.calls += 1;
+            self.result.clone()
+        }
+    }
+
+    fn fake_manifest_verifier() -> FakeManifestVerifier {
+        FakeManifestVerifier {
+            result: Ok([0x55; 32]),
+            calls: 0,
+        }
+    }
+
+    #[derive(Debug)]
     struct FakeVerifier {
-        result: Result<(), String>,
+        result: Result<AuthenticodeStatus, String>,
         calls: usize,
     }
 
     impl SignatureVerifier for FakeVerifier {
-        fn verify(&mut self, _path: &Path) -> Result<(), String> {
+        fn verify(&mut self, _path: &Path) -> Result<AuthenticodeStatus, String> {
             self.calls += 1;
             self.result.clone()
         }
@@ -1761,11 +1796,12 @@ mod tests {
     fn run_fake(
         release: &ReleaseManifest,
         receipt: DownloadReceipt,
-        signature: Result<(), String>,
+        authenticode: Result<AuthenticodeStatus, String>,
         terminal: InstallerTerminal,
     ) -> (
         UpdateOutcome,
         FakeTransport,
+        FakeManifestVerifier,
         FakeVerifier,
         FakeRunner,
         UpdatePaths,
@@ -1773,8 +1809,9 @@ mod tests {
         let paths = temp_paths("pipeline");
         let mut transport = FakeTransport::success(release);
         transport.receipt = Ok(receipt);
+        let mut manifest_verifier = fake_manifest_verifier();
         let mut verifier = FakeVerifier {
-            result: signature,
+            result: authenticode,
             calls: 0,
         };
         let mut runner = FakeRunner {
@@ -1790,10 +1827,18 @@ mod tests {
             },
             &paths,
             &mut transport,
+            &mut manifest_verifier,
             &mut verifier,
             &mut runner,
         );
-        (outcome, transport, verifier, runner, paths)
+        (
+            outcome,
+            transport,
+            manifest_verifier,
+            verifier,
+            runner,
+            paths,
+        )
     }
 
     #[test]
@@ -1863,12 +1908,48 @@ mod tests {
             patch: 0,
         });
         let mut transport = FakeTransport::success(&release);
+        let paths = temp_paths("disabled-check");
+        let mut manifest_verifier = fake_manifest_verifier();
         assert_eq!(
-            check_for_update(false, Version::default(), &mut transport),
+            check_for_update(
+                false,
+                Version::default(),
+                &paths,
+                &mut transport,
+                &mut manifest_verifier,
+            ),
             UpdateCheckOutcome::Disabled
         );
         assert_eq!(transport.manifest_calls, 0);
+        assert_eq!(transport.signature_calls, 0);
         assert_eq!(transport.download_calls, 0);
+        assert_eq!(manifest_verifier.calls, 0);
+        assert!(!paths.installer.parent().unwrap().exists());
+    }
+
+    #[test]
+    fn check_pipeline_verifies_positive_cng_fixture_at_explicit_bridge_version() {
+        let manifest_bytes = signing_fixture("manifest-positive.txt");
+        let release = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        let paths = temp_paths("positive-fixture");
+        let mut transport = FakeTransport::success(&release);
+        transport.manifest = Ok(manifest_bytes);
+        transport.signature = Ok(signing_fixture("signature-positive.txt"));
+        let mut verifier = PinnedManifestVerifier;
+
+        let outcome = check_for_update_at(
+            Version::parse("1.0.33").unwrap(),
+            &paths,
+            &mut transport,
+            &mut verifier,
+            1_800_000_000,
+        );
+
+        assert!(matches!(outcome, UpdateCheckOutcome::UpToDate { .. }));
+        assert_eq!(transport.manifest_calls, 1);
+        assert_eq!(transport.signature_calls, 1);
+        assert_eq!(transport.download_calls, 0);
+        let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
     }
 
     #[test]
@@ -1878,13 +1959,13 @@ mod tests {
             minor: 0,
             patch: 0,
         });
-        let (hash_outcome, _, hash_verifier, hash_runner, hash_paths) = run_fake(
+        let (hash_outcome, _, _, hash_verifier, hash_runner, hash_paths) = run_fake(
             &release,
             DownloadReceipt {
                 size: release.size,
                 sha256: [0; 32],
             },
-            Ok(()),
+            Ok(AuthenticodeStatus::Trusted),
             InstallerTerminal::Installed,
         );
         assert!(matches!(
@@ -1901,7 +1982,7 @@ mod tests {
         assert_eq!(hash_runner.calls, 0);
         assert!(!hash_paths.installer.exists());
 
-        let (signature_outcome, _, verifier, runner, signature_paths) = run_fake(
+        let (signature_outcome, _, _, verifier, runner, signature_paths) = run_fake(
             &release,
             DownloadReceipt {
                 size: release.size,
@@ -1928,6 +2009,176 @@ mod tests {
     }
 
     #[test]
+    fn manifest_signature_failure_happens_before_installer_download() {
+        let release = manifest(Version {
+            major: 2,
+            minor: 0,
+            patch: 0,
+        });
+        let paths = temp_paths("manifest-signature-failure");
+        let mut transport = FakeTransport::success(&release);
+        let mut manifest_verifier = FakeManifestVerifier {
+            result: Err("tampered manifest".to_owned()),
+            calls: 0,
+        };
+        let mut verifier = FakeVerifier {
+            result: Ok(AuthenticodeStatus::Trusted),
+            calls: 0,
+        };
+        let mut runner = FakeRunner {
+            result: Ok(InstallerTerminal::Installed),
+            calls: 0,
+        };
+
+        let outcome = apply_update(
+            true,
+            Version {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+            &paths,
+            &mut transport,
+            &mut manifest_verifier,
+            &mut verifier,
+            &mut runner,
+        );
+
+        assert!(matches!(
+            outcome,
+            UpdateOutcome::Failed {
+                failure: UpdateFailure {
+                    stage: UpdateStage::ManifestValidation,
+                    ..
+                },
+                ..
+            }
+        ));
+        assert_eq!(transport.manifest_calls, 1);
+        assert_eq!(transport.signature_calls, 1);
+        assert_eq!(transport.download_calls, 0);
+        assert_eq!(manifest_verifier.calls, 1);
+        assert_eq!(verifier.calls, 0);
+        assert_eq!(runner.calls, 0);
+        assert!(!paths.installer.exists());
+        let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
+    }
+
+    #[test]
+    fn authenticode_policy_matrix_rejects_both_reverse_combinations() {
+        for (policy, status, accepted) in [
+            (
+                AuthenticodePolicy::Required,
+                AuthenticodeStatus::Trusted,
+                true,
+            ),
+            (
+                AuthenticodePolicy::Required,
+                AuthenticodeStatus::Unsigned,
+                false,
+            ),
+            (
+                AuthenticodePolicy::Unsigned,
+                AuthenticodeStatus::Unsigned,
+                true,
+            ),
+            (
+                AuthenticodePolicy::Unsigned,
+                AuthenticodeStatus::Trusted,
+                false,
+            ),
+        ] {
+            let mut release = manifest(Version {
+                major: 2,
+                minor: 0,
+                patch: 0,
+            });
+            release.authenticode = policy;
+            let (outcome, _, _, verifier, runner, paths) = run_fake(
+                &release,
+                DownloadReceipt {
+                    size: release.size,
+                    sha256: release.sha256,
+                },
+                Ok(status),
+                InstallerTerminal::Installed,
+            );
+            if accepted {
+                assert!(matches!(outcome, UpdateOutcome::Installed { .. }));
+                assert_eq!(runner.calls, 1);
+            } else {
+                assert!(matches!(
+                    outcome,
+                    UpdateOutcome::Failed {
+                        failure: UpdateFailure {
+                            stage: UpdateStage::SignatureVerification,
+                            ..
+                        },
+                        ..
+                    }
+                ));
+                assert_eq!(runner.calls, 0);
+            }
+            assert_eq!(verifier.calls, 1);
+            let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
+        }
+    }
+
+    #[test]
+    fn concurrent_apply_is_single_flight_and_never_calls_runner() {
+        let release = manifest(Version {
+            major: 2,
+            minor: 0,
+            patch: 0,
+        });
+        let paths = temp_paths("single-flight");
+        let held = acquire_apply_lock(&paths.installer, Duration::ZERO).unwrap();
+        let mut transport = FakeTransport::success(&release);
+        let mut manifest_verifier = fake_manifest_verifier();
+        let mut verifier = FakeVerifier {
+            result: Ok(AuthenticodeStatus::Trusted),
+            calls: 0,
+        };
+        let mut runner = FakeRunner {
+            result: Ok(InstallerTerminal::Installed),
+            calls: 0,
+        };
+
+        let outcome = apply_update(
+            true,
+            Version {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+            &paths,
+            &mut transport,
+            &mut manifest_verifier,
+            &mut verifier,
+            &mut runner,
+        );
+
+        assert!(matches!(
+            outcome,
+            UpdateOutcome::Failed {
+                version: None,
+                failure: UpdateFailure {
+                    stage: UpdateStage::InstallerPreparation,
+                    ..
+                }
+            }
+        ));
+        assert_eq!(transport.manifest_calls, 0);
+        assert_eq!(transport.signature_calls, 0);
+        assert_eq!(transport.download_calls, 0);
+        assert_eq!(manifest_verifier.calls, 0);
+        assert_eq!(verifier.calls, 0);
+        assert_eq!(runner.calls, 0);
+        drop(held);
+        let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
+    }
+
+    #[test]
     fn installer_success_restart_timeout_and_failure_are_distinct_terminals() {
         let release = manifest(Version {
             major: 2,
@@ -1941,13 +2192,13 @@ mod tests {
             (InstallerTerminal::Failed(17), "failure"),
         ];
         for (terminal, expected) in terminals {
-            let (outcome, _, verifier, runner, paths) = run_fake(
+            let (outcome, _, _, verifier, runner, paths) = run_fake(
                 &release,
                 DownloadReceipt {
                     size: release.size,
                     sha256: release.sha256,
                 },
-                Ok(()),
+                Ok(AuthenticodeStatus::Trusted),
                 terminal,
             );
             assert_eq!(verifier.calls, 1);
@@ -1987,8 +2238,9 @@ mod tests {
         });
         let paths = temp_paths("share-guard");
         let mut transport = FakeTransport::success(&release);
+        let mut manifest_verifier = fake_manifest_verifier();
         let mut verifier = FakeVerifier {
-            result: Ok(()),
+            result: Ok(AuthenticodeStatus::Trusted),
             calls: 0,
         };
         let mut runner = GuardProbeRunner {
@@ -2008,6 +2260,7 @@ mod tests {
             },
             &paths,
             &mut transport,
+            &mut manifest_verifier,
             &mut verifier,
             &mut runner,
         );
@@ -2064,8 +2317,9 @@ mod tests {
         // the bytes written at the staged path. This exercises the check that
         // cannot be satisfied by receipt metadata alone.
         transport.payload = b"fake installER".to_vec();
+        let mut manifest_verifier = fake_manifest_verifier();
         let mut verifier = FakeVerifier {
-            result: Ok(()),
+            result: Ok(AuthenticodeStatus::Trusted),
             calls: 0,
         };
         let mut runner = FakeRunner {
@@ -2082,6 +2336,7 @@ mod tests {
             },
             &paths,
             &mut transport,
+            &mut manifest_verifier,
             &mut verifier,
             &mut runner,
         );
@@ -2105,6 +2360,7 @@ mod tests {
     #[test]
     fn url_parser_bounds_redirects_to_https_github_hosts() {
         assert!(parse_allowed_https_url(MANIFEST_URL).is_ok());
+        assert!(parse_allowed_https_url(SIGNATURE_URL).is_ok());
         assert!(parse_allowed_https_url(
             "https://release-assets.githubusercontent.com/github-production-release-asset/x?token=y"
         )
@@ -2130,6 +2386,20 @@ mod tests {
 
         assert!(result.is_err(), "an unsigned file must fail closed");
         let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
+    }
+
+    #[test]
+    fn authenticode_classification_accepts_only_success_or_exact_no_signature() {
+        assert_eq!(
+            classify_authenticode_status(0, 0),
+            Ok(AuthenticodeStatus::Trusted)
+        );
+        assert_eq!(
+            classify_authenticode_status(TRUST_E_NOSIGNATURE.0, 0),
+            Ok(AuthenticodeStatus::Unsigned)
+        );
+        assert!(classify_authenticode_status(TRUST_E_NOSIGNATURE.0 + 1, 0).is_err());
+        assert!(classify_authenticode_status(0, 1).is_err());
     }
 
     #[test]
