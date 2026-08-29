@@ -1928,14 +1928,14 @@ mod tests {
     }
 
     #[test]
-    fn check_pipeline_verifies_positive_cng_fixture_at_explicit_bridge_version() {
+    fn check_pipeline_rejects_signed_fixture_below_embedded_floor_before_signature_download() {
         let manifest_bytes = signing_fixture("manifest-positive.txt");
-        let release = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        let release = manifest(Version::parse("1.0.34").unwrap());
         let paths = temp_paths("positive-fixture");
         let mut transport = FakeTransport::success(&release);
         transport.manifest = Ok(manifest_bytes);
         transport.signature = Ok(signing_fixture("signature-positive.txt"));
-        let mut verifier = PinnedManifestVerifier;
+        let mut verifier = fake_manifest_verifier();
 
         let outcome = check_for_update_at(
             Version::parse("1.0.33").unwrap(),
@@ -1945,10 +1945,17 @@ mod tests {
             1_800_000_000,
         );
 
-        assert!(matches!(outcome, UpdateCheckOutcome::UpToDate { .. }));
+        assert!(matches!(
+            outcome,
+            UpdateCheckOutcome::Failed(UpdateFailure {
+                stage: UpdateStage::ManifestValidation,
+                message,
+            }) if message.contains("below the embedded floor")
+        ));
         assert_eq!(transport.manifest_calls, 1);
-        assert_eq!(transport.signature_calls, 1);
+        assert_eq!(transport.signature_calls, 0);
         assert_eq!(transport.download_calls, 0);
+        assert_eq!(verifier.calls, 0);
         let _ = fs::remove_dir_all(paths.installer.parent().unwrap());
     }
 
