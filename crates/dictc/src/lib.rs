@@ -775,9 +775,9 @@ pub fn compile(entries: &[SourceEntry], connection: &ConnectionMatrix) -> Result
     compile_with_details(entries, connection, &[])
 }
 
-/// Compiles entries plus source-backed sparse detail records.  Detail lookup is
-/// final-entry-ordinal keyed so the fixed 24-byte entry ABI stays unchanged
-/// without attaching a description to a same-surface homograph.
+/// Compiles entries plus source-backed sparse detail records. Detail lookup is
+/// final-entry-ordinal keyed, independently of the packed ENTR record width, so
+/// a description can never attach to a same-surface homograph by accident.
 pub fn compile_with_details(
     entries: &[SourceEntry],
     connection: &ConnectionMatrix,

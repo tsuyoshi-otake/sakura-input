@@ -976,17 +976,22 @@ without polluting long-term state.
     on-disk format the same forward-compat treatment as the IPC
     protocol (§7); adding a table later must never force rework of the
     Phase 2 reader and its fuzzer,
-  - readings: LOUDS trie (or `marisa`-style patricia trie) keyed by kana,
-  - values: packed `(surface_ref, left_id, right_id, cost, flags)`
-    arrays — including the **prediction-worthiness cost §5.3 needs, from
-    day one**, so prediction (Phase 4) does not force a format bump,
-  - surfaces: front-coded string pool,
+  - readings: LOUDS trie keyed by kana. Format v2 stores each incoming Unicode
+    scalar in the existing 16-byte `NODE` record and removes the separate
+    `LABL` table,
+  - values: 16-byte `ENTR` records containing `surface_ref`, connection ids,
+    losslessly range-checked word/prediction costs, and flags. Sparse candidate
+    annotations live in an entry-ordinal-keyed `AIDX` side table rather than
+    reserving an annotation id in every entry,
+  - surfaces: front-coded string pool with one `SOFF` restart offset per 16
+    surfaces; lookup scans at most one bounded restart block,
   - connection matrix: exact row-mode-plus-sorted-exceptions encoding for
     2,672 frozen classes (§5.2),
-  - annotations: side table keyed by entry id.
-- Target size: ≤ 35 MB on disk (trimmed lexicon + IT overlay), mapped
-  lazily; cold-start to first conversion ≤ 150 ms.
-- Update mechanism (v1, deliberately boring): dictionary updates ship
+  - annotations: side tables keyed by exact final ENTR ordinal.
+- The release gate remains ≤ 128 MiB and cold-start to first conversion remains
+  ≤ 150 ms. Issue #109's same-source measurement reduced the default image from
+  47,561,532 to 37,381,940 bytes (21.403%) without changing entry semantics.
+- Update mechanism (deliberately boring): dictionary updates ship
   with releases. The installer runs `regtool --stop` (the engine exits,
   releasing its mmap), replaces `system.dic` atomically, and the
   watchdog restarts the engine — no reboot needed for the dictionary, no

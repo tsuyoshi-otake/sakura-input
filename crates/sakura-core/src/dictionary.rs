@@ -37,9 +37,9 @@ pub mod image_format {
     pub const TAG_ANNOTATION_INDEX: [u8; 4] = *b"AIDX";
     pub const TAG_MATRIX: [u8; 4] = *b"MATR";
 
-    // Optional sparse, entry-ordinal-keyed detail data.  These tags deliberately do
-    // not change the stable 24-byte ENTR record: older images simply have no
-    // details and newer readers continue to ignore unknown future tables.
+    // Optional sparse, entry-ordinal-keyed detail data. These tables retain the
+    // same final ordinal contract across the v1 24-byte and v2 16-byte ENTR
+    // layouts; older images simply have no details.
     pub const TAG_DETAIL_INDEX: [u8; 4] = *b"DIDX";
     pub const TAG_DETAIL_RECORDS: [u8; 4] = *b"DREC";
     pub const TAG_DETAIL_RELATIONS: [u8; 4] = *b"DREL";
@@ -1000,7 +1000,7 @@ impl<'a> Dictionary<'a> {
     ///
     /// The stable numeric index lets process-wide auxiliary indexes retain a
     /// four-byte reference into the mapped image instead of copying the
-    /// 24-byte entry record into private working memory.
+    /// materialized runtime entry into private working memory.
     pub fn visit_indexed_prediction_entries(
         &self,
         mut visit: impl FnMut(&str, usize, Entry) -> bool,
