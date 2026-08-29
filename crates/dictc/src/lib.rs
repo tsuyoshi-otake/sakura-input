@@ -889,8 +889,8 @@ pub fn compile_with_tables(
     let surface_ids = surfaces
         .iter()
         .enumerate()
-        .map(|(index, value)| (value.as_str(), index as u32))
-        .collect::<BTreeMap<_, _>>();
+        .map(|(index, value)| Ok((value.as_str(), as_u32(index, "surface id")?)))
+        .collect::<Result<BTreeMap<_, _>, Error>>()?;
     let annotations = sorted
         .iter()
         .filter(|entry| !entry.annotation.is_empty())
@@ -901,8 +901,8 @@ pub fn compile_with_tables(
     let annotation_ids = annotations
         .iter()
         .enumerate()
-        .map(|(index, value)| (value.as_str(), index as u32))
-        .collect::<BTreeMap<_, _>>();
+        .map(|(index, value)| Ok((value.as_str(), as_u32(index, "annotation id")?)))
+        .collect::<Result<BTreeMap<_, _>, Error>>()?;
 
     let trie = build_trie(&sorted)?;
     let built = flatten_trie(&trie, &sorted, &surface_ids, &annotation_ids)?;
@@ -935,9 +935,17 @@ pub fn compile_with_tables(
     let mut tables = vec![
         TableData::new(format::TAG_LOUDS, built.louds, built.louds_bits),
         TableData::new(format::TAG_NODES, built.nodes, built.node_count),
-        TableData::new(format::TAG_LABELS, built.labels, built.node_count),
         TableData::new(format::TAG_ENTRIES, built.entries, sorted.len()),
-        TableData::new(format::TAG_SURFACE_OFFSETS, surface_offsets, surfaces.len()),
+        TableData::new(
+            format::TAG_ANNOTATION_INDEX,
+            built.annotation_index,
+            built.annotation_index_count,
+        ),
+        TableData::new(
+            format::TAG_SURFACE_OFFSETS,
+            surface_offsets,
+            surfaces.len().div_ceil(format::SURFACE_RESTART_INTERVAL),
+        ),
         TableData::new(format::TAG_SURFACES, surface_data, surfaces.len()),
         TableData::new(
             format::TAG_ANNOTATION_OFFSETS,
@@ -1455,8 +1463,9 @@ struct Flattened {
     louds: Vec<u8>,
     louds_bits: usize,
     nodes: Vec<u8>,
-    labels: Vec<u8>,
     entries: Vec<u8>,
+    annotation_index: Vec<u8>,
+    annotation_index_count: usize,
     node_count: usize,
     source_to_image_entry: Vec<usize>,
 }
@@ -1486,9 +1495,10 @@ fn flatten_trie(
     }
 
     let mut louds_bits_vec = Vec::with_capacity(trie.len() * 2);
-    let mut nodes = Vec::with_capacity(trie.len() * format::NODE_LEN);
-    let mut labels = Vec::with_capacity(trie.len() * 4);
-    let mut entries = Vec::with_capacity(source_entries.len() * format::ENTRY_LEN);
+    let mut nodes = Vec::with_capacity(trie.len() * format::NODE_LEN_V2);
+    let mut entries = Vec::with_capacity(source_entries.len() * format::ENTRY_LEN_V2);
+    let mut annotation_index = Vec::new();
+    let mut annotation_index_count = 0usize;
     let mut emitted_entries = 0usize;
     let mut source_to_image_entry = vec![usize::MAX; source_entries.len()];
 
@@ -1503,12 +1513,20 @@ fn flatten_trie(
             .unwrap_or(0);
         let value_start = emitted_entries;
         for entry_index in &node.entries {
-            write_entry(
-                &mut entries,
-                &source_entries[*entry_index],
-                surface_ids,
-                annotation_ids,
-            )?;
+            let entry = &source_entries[*entry_index];
+            write_entry(&mut entries, entry, surface_ids)?;
+            if !entry.annotation.is_empty() {
+                let annotation_id = annotation_ids
+                    .get(entry.annotation.as_str())
+                    .copied()
+                    .ok_or_else(|| Error::build("annotation id disappeared during compilation"))?;
+                put_u32(
+                    &mut annotation_index,
+                    as_u32(emitted_entries, "annotation entry ordinal")?,
+                );
+                put_u32(&mut annotation_index, annotation_id);
+                annotation_index_count += 1;
+            }
             source_to_image_entry[*entry_index] = emitted_entries;
             emitted_entries += 1;
         }
@@ -1519,8 +1537,7 @@ fn flatten_trie(
             as_u16(node.entries.len(), "terminal value count")?,
         );
         put_u32(&mut nodes, as_u32(value_start, "entry index")?);
-        put_u32(&mut nodes, 0);
-        put_u32(&mut labels, *incoming as u32);
+        put_u32(&mut nodes, u32::from(*incoming));
         louds_bits_vec.extend(std::iter::repeat_n(true, child_count));
         louds_bits_vec.push(false);
     }
@@ -1542,8 +1559,9 @@ fn flatten_trie(
         louds,
         louds_bits,
         nodes,
-        labels,
         entries,
+        annotation_index,
+        annotation_index_count,
         node_count: trie.len(),
         source_to_image_entry,
     })
@@ -1553,28 +1571,50 @@ fn write_entry(
     out: &mut Vec<u8>,
     entry: &SourceEntry,
     surface_ids: &BTreeMap<&str, u32>,
-    annotation_ids: &BTreeMap<&str, u32>,
 ) -> Result<(), Error> {
     let surface_id = surface_ids
         .get(entry.surface.as_str())
         .copied()
         .ok_or_else(|| Error::build("surface id disappeared during compilation"))?;
-    let annotation_id = if entry.annotation.is_empty() {
-        format::NO_ANNOTATION
+    let word_cost = u16::try_from(entry.word_cost).map_err(|_| {
+        Error::at(
+            &entry.source,
+            entry.line,
+            format!(
+                "word_cost {} is outside format v2 range 0..=65535",
+                entry.word_cost
+            ),
+        )
+    })?;
+    let prediction_cost = if entry.prediction_cost == i32::MAX {
+        u16::MAX
     } else {
-        annotation_ids
-            .get(entry.annotation.as_str())
-            .copied()
-            .ok_or_else(|| Error::build("annotation id disappeared during compilation"))?
+        let encoded = u16::try_from(entry.prediction_cost).map_err(|_| {
+            Error::at(
+                &entry.source,
+                entry.line,
+                format!(
+                    "prediction_cost {} is outside format v2 range 0..=65534 or '-'",
+                    entry.prediction_cost
+                ),
+            )
+        })?;
+        if encoded == u16::MAX {
+            return Err(Error::at(
+                &entry.source,
+                entry.line,
+                "prediction_cost 65535 collides with the format v2 unavailable sentinel",
+            ));
+        }
+        encoded
     };
     put_u32(out, surface_id);
     put_u16(out, entry.left_id);
     put_u16(out, entry.right_id);
-    put_i32(out, entry.word_cost);
-    put_i32(out, entry.prediction_cost);
+    put_u16(out, word_cost);
+    put_u16(out, prediction_cost);
     put_u16(out, entry.flags.bits());
     put_u16(out, 0);
-    put_u32(out, annotation_id);
     Ok(())
 }
 
@@ -1583,8 +1623,11 @@ fn front_code(values: &[String]) -> Result<(Vec<u8>, Vec<u8>), Error> {
     let mut data = Vec::new();
     let mut previous = "";
     for (index, value) in values.iter().enumerate() {
-        put_u32(&mut offsets, as_u32(data.len(), "surface offset")?);
-        let prefix = if index % format::SURFACE_RESTART_INTERVAL == 0 {
+        let restart = index % format::SURFACE_RESTART_INTERVAL == 0;
+        if restart {
+            put_u32(&mut offsets, as_u32(data.len(), "surface restart offset")?);
+        }
+        let prefix = if restart {
             0
         } else {
             common_prefix_bytes(previous, value)
@@ -1801,7 +1844,7 @@ fn assemble_image(
     }
 
     image[0..8].copy_from_slice(&format::MAGIC);
-    write_u16_at(&mut image, 8, format::VERSION)?;
+    write_u16_at(&mut image, 8, format::VERSION_V2)?;
     write_u16_at(&mut image, 10, format::HEADER_LEN as u16)?;
     write_u16_at(&mut image, 12, as_u16(directory.len(), "table count")?)?;
     write_u16_at(&mut image, 14, class_count)?;
@@ -1924,10 +1967,6 @@ fn put_u16(out: &mut Vec<u8>, value: u16) {
 }
 
 fn put_u32(out: &mut Vec<u8>, value: u32) {
-    out.extend_from_slice(&value.to_le_bytes());
-}
-
-fn put_i32(out: &mut Vec<u8>, value: i32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
