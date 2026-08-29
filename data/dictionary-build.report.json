@@ -203,8 +203,8 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 47561532,
-      "sha256": "85d94aecd966a10f43aeb87b5109c3d0b92c6eade798cf7b553d4d5cb476d1eb"
+      "bytes": 37381940,
+      "sha256": "b07cb62d9b8820c3dfbff1fc77e92ecfe485ea823e20399b4e992fac34589014"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
