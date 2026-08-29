@@ -72,7 +72,7 @@ function Read-Keyring { param([string]$Path)
         $hash = [Security.Cryptography.SHA256]::Create()
         try { $derived = ([BitConverter]::ToString($hash.ComputeHash($keyIdInput))).Replace('-', '').ToLowerInvariant() }
         finally { $hash.Dispose(); [Array]::Clear($keyIdInput, 0, $keyIdInput.Length); [Array]::Clear($coords, 0, $coords.Length) }
-        if ($derived -cne $record.id) { throw "keyring record $index has an id inconsistent with its coordinates" }
+        if ($derived -cne $record.id) { throw "keyring record $i has an id inconsistent with its coordinates" }
         $records.Add([pscustomobject]$record)
     }
     if ($records.Count -eq 0) { throw 'pinned keyring is empty' }
@@ -107,10 +107,17 @@ for($i=0;$i -lt $count;$i++) {
     $id = $Matches[1]; $sig = [Convert]::FromHexString($Matches[2]); if ([string]::CompareOrdinal($id, $previous) -le 0) { throw 'signature key IDs are not strictly ascending' }; $previous = $id
     $record = @($keys | Where-Object { $_.id -ceq $id }); if ($record.Count -ne 1) { throw 'signature key ID is not pinned' }; $record = $record[0]
     if ($record.role -eq 'revoked' -or [UInt64]$map.trust_epoch -ne [UInt64]$record.trust_epoch -or [UInt64]$map.release_sequence -lt [UInt64]$record.not_before_sequence -or [UInt64]$map.release_sequence -gt [UInt64]$record.not_after_sequence) { throw 'signature key is outside its trust window' }
-    $ecdsa = Get-PublicEcdsa $record; try { if ($ecdsa.VerifyHash($digest,$sig,[Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation)) { $valid++ } } finally { $ecdsa.Dispose(); [Array]::Clear($sig,0,$sig.Length) }
+    $ecdsa = Get-PublicEcdsa $record
+    try {
+        if (-not $ecdsa.VerifyHash($digest,$sig,[Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation)) {
+            throw "signature record $i failed P-256 verification"
+        }
+        $valid++
+    }
+    finally { $ecdsa.Dispose(); [Array]::Clear($sig,0,$sig.Length) }
 }
 [Array]::Clear($digest,0,$digest.Length)
-if ($valid -lt 1) { throw 'no valid signature from the pinned keyring' }
+if ($valid -ne $count) { throw 'not every supplied signature verified with the pinned keyring' }
 if ($VerifyInstaller) {
     if ([string]::IsNullOrWhiteSpace($Installer)) { throw 'installer path is required for installer verification' }
     $item = [IO.FileInfo]::new([IO.Path]::GetFullPath($Installer)); if (-not $item.Exists -or [UInt64]$item.Length -ne [UInt64]$map.size) { throw 'installer size does not match the signed manifest' }

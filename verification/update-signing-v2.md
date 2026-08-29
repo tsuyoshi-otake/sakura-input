@@ -124,10 +124,12 @@ rejected.
 For every record, the updater selects the public P-256 point by key ID and
 verifies ECDSA-SHA256 over the domain-separated digest above. The key must be
 in the pinned keyring, have the manifest's `trust_epoch`, and have a sequence
-window containing the manifest's `release_sequence`. One valid signature is
-enough for normal operation; 2-of-3 threshold policy is not implied by the
-envelope's maximum of three records. During a planned rotation, dual signing
-is recommended and both signatures must independently satisfy all checks.
+window containing the manifest's `release_sequence`. An envelope must contain
+at least one signature, and every supplied signature must independently satisfy
+all checks. The envelope's maximum of three records does not imply a threshold:
+during a planned dual-signing rotation, both supplied signatures must verify.
+Unknown, revoked, out-of-window, malformed, duplicate, unsorted, or
+cryptographically invalid records reject the whole envelope.
 
 ## Public key IDs and sequence state
 
