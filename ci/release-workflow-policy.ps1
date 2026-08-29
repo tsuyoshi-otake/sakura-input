@@ -41,6 +41,7 @@ $ReviewedActionPins = [ordered]@{
     'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' = 'v4.2.2'
     'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' = 'v4.6.2'
     'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' = 'v4.3.0'
+    'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6' = 'v4.2.2'
     'Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6' = 'v2.9.2'
 }
 
@@ -151,6 +152,7 @@ function Assert-WorkflowPolicy {
     Assert-Contains -Text $build -Needle 'artifact-digest' -Description 'upload artifact digest output'
     Assert-Contains -Text $build -Needle 'actions/upload-artifact@' -Description 'secretless build artifact upload'
     Assert-Contains -Text $build -Needle 'git diff --name-only' -Description 'clean source checkout gate'
+    Assert-Contains -Text $build -Needle 'ci/test-update-signing-v2.ps1' -Description 'ephemeral signing test'
 
     Assert-Contains -Text $sign -Needle 'needs: build-release' -Description 'signing job dependency'
     Assert-Contains -Text $sign -Needle 'environment: release' -Description 'protected signing environment'
@@ -162,21 +164,46 @@ function Assert-WorkflowPolicy {
     Assert-Contains -Text $sign -Needle 'build-provenance.json' -Description 'downloaded artifact provenance'
     Assert-Contains -Text $sign -Needle 'source_files' -Description 'verified source file provenance'
     Assert-Contains -Text $sign -Needle 'scripts/sign-release.ps1' -Description 'verified signing script'
+    Assert-Contains -Text $sign -Needle 'scripts/sign-update-manifest.ps1' -Description 'verified offline manifest signer source'
+    Assert-Contains -Text $sign -Needle 'scripts/verify-update-manifest.ps1' -Description 'verified manifest verifier source'
+    Assert-Contains -Text $sign -Needle 'data/update-signing/public-keys-v1.txt' -Description 'verified pinned update keyring'
+    Assert-Contains -Text $sign -Needle 'data/update-signing/release-sequence.txt' -Description 'verified release sequence reservation'
     Assert-Contains -Text $sign -Needle 'installer/setup.iss' -Description 'verified installer manifest'
     Assert-Contains -Text $sign -Needle 'Get-FileHash' -Description 'provenance file hash verification'
     Assert-Contains -Text $sign -Needle 'source_commit' -Description 'source commit binding'
     Assert-Contains -Text $sign -Needle 'unsigned-owner-approved' -Description 'owner-approved unsigned metadata'
     Assert-Contains -Text $sign -Needle 'authenticode-signed' -Description 'signed metadata'
     Assert-Contains -Text $sign -Needle 'presentCount -ne $values.Count' -Description 'partial signing secret fail-closed check'
+    Assert-Contains -Text $sign -Needle 'id-token: write' -Description 'attestation OIDC permission'
+    Assert-Contains -Text $sign -Needle 'attestations: write' -Description 'attestation permission'
+    Assert-Contains -Text $sign -Needle 'artifact-metadata: write' -Description 'attestation artifact metadata permission'
+    Assert-Contains -Text $sign -Needle 'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6' -Description 'pinned artifact attestation action'
+    Assert-Contains -Text $sign -Needle 'release-manifest-v2.txt' -Description 'canonical v2 candidate manifest'
+    Assert-Contains -Text $sign -Needle 'AddDays(180)' -Description 'long-lived signed manifest expiry'
+    Assert-Contains -Text $sign -Needle 'subject-path:' -Description 'attestation subject paths'
+    Assert-Contains -Text $sign -Needle 'release-candidate/sakura_setup.exe' -Description 'attested installer candidate'
+    Assert-Contains -Text $sign -Needle 'release-candidate/release-manifest-v2.txt' -Description 'attested canonical manifest candidate'
+    Assert-Contains -Text $sign -Needle "[IO.File]::Copy('installer/out/sakura_setup.exe', 'release-candidate/sakura_setup.exe'" -Description 'candidate installer assembly'
+    Assert-Contains -Text $sign -Needle "[IO.File]::Copy('installer/out/release-manifest-v2.txt', 'release-candidate/release-manifest-v2.txt'" -Description 'candidate manifest assembly'
+    Assert-Contains -Text $sign -Needle 'path: |' -Description 'combined bundle upload'
+    Assert-Contains -Text $sign -Needle 'release-bundle' -Description 'full release bundle assembly'
+    Assert-Contains -Text $sign -Needle 'source_commit' -Description 'candidate source commit binding'
+    if ($sign -match '(?i)(?:UPDATE_SIGNING|PROTECTED_PRIVATE_KEY|PRIVATE_KEY|DPAPI).*secrets\.') {
+        throw 'application signing private key must not be received by the workflow'
+    }
+    if ($sign -match 'release-manifest\.txt') { throw 'schema-1 release manifest must not be emitted by the v2 workflow' }
 
     $cleanupNeedle = 'name: Remove signing material before external artifact upload'
+    $attestNeedle = 'name: Attest canonical v2 update candidate'
     $uploadNeedle = 'name: Upload release candidate'
     $cleanupIndex = $Text.IndexOf($cleanupNeedle, [StringComparison]::Ordinal)
+    $attestIndex = $Text.IndexOf($attestNeedle, [StringComparison]::Ordinal)
     $uploadIndex = $Text.IndexOf($uploadNeedle, [StringComparison]::Ordinal)
-    if ($cleanupIndex -lt 0 -or $uploadIndex -lt 0 -or $cleanupIndex -ge $uploadIndex) {
-        throw 'PFX cleanup must precede the final external artifact upload'
+    if ($cleanupIndex -lt 0 -or $attestIndex -lt 0 -or $uploadIndex -lt 0 -or
+        $cleanupIndex -ge $attestIndex -or $attestIndex -ge $uploadIndex) {
+        throw 'PFX cleanup must precede attestation, which must precede the external artifact upload'
     }
-    $cleanup = $Text.Substring($cleanupIndex, $uploadIndex - $cleanupIndex)
+    $cleanup = $Text.Substring($cleanupIndex, $attestIndex - $cleanupIndex)
     Assert-Contains -Text $cleanup -Needle 'if: always()' -Description 'always-run PFX cleanup'
     Assert-Contains -Text $cleanup -Needle '[IO.File]::Delete' -Description 'PFX deletion'
     Assert-Contains -Text $cleanup -Needle 'signing material remained after cleanup' -Description 'PFX cleanup readback'
