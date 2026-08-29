@@ -19,7 +19,9 @@ use crate::TextSink;
 /// readers deliberately skip unknown directory tags.
 pub mod image_format {
     pub const MAGIC: [u8; 8] = *b"SKRADIC\0";
+    /// The writer-facing version alias remains v1 until the v2 writer lands.
     pub const VERSION: u16 = 1;
+    pub const VERSION_V2: u16 = 2;
     pub const HEADER_LEN: usize = 32;
     pub const DIRECTORY_ENTRY_LEN: usize = 16;
     pub const MAX_TABLES: usize = 64;
@@ -32,6 +34,7 @@ pub mod image_format {
     pub const TAG_SURFACES: [u8; 4] = *b"SURF";
     pub const TAG_ANNOTATION_OFFSETS: [u8; 4] = *b"AOFF";
     pub const TAG_ANNOTATIONS: [u8; 4] = *b"ANNO";
+    pub const TAG_ANNOTATION_INDEX: [u8; 4] = *b"AIDX";
     pub const TAG_MATRIX: [u8; 4] = *b"MATR";
 
     // Optional sparse, entry-ordinal-keyed detail data.  These tags deliberately do
@@ -72,8 +75,12 @@ pub mod image_format {
     /// sorted by variant scalar value for binary search.
     pub const SINGLE_KANJI_VARIANT_LEN: usize = 12;
 
+    /// Writer-facing v1 record sizes. Do not repoint these aliases at v2.
     pub const NODE_LEN: usize = 16;
     pub const ENTRY_LEN: usize = 24;
+    pub const NODE_LEN_V2: usize = 16;
+    pub const ENTRY_LEN_V2: usize = 16;
+    pub const ANNOTATION_INDEX_LEN_V2: usize = 8;
     pub const SURFACE_RESTART_INTERVAL: usize = 16;
     pub const NO_ANNOTATION: u32 = u32::MAX;
 
@@ -149,7 +156,7 @@ impl core::ops::BitOr for EntryFlags {
 
 /// One packed dictionary value. Text remains an image offset until a caller
 /// explicitly writes it into a supplied sink.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Entry {
     pub surface_id: u32,
     pub left_id: u16,
@@ -158,7 +165,47 @@ pub struct Entry {
     /// `i32::MAX` means this entry is not prediction-worthy.
     pub prediction_cost: i32,
     pub flags: EntryFlags,
-    annotation_id: u32,
+    /// v1 stores an annotation id; v2 stores the exact ENTR ordinal used to
+    /// search AIDX. Keeping this private prevents cross-image construction.
+    annotation_locator: u32,
+}
+
+impl Default for Entry {
+    fn default() -> Self {
+        Self {
+            surface_id: 0,
+            left_id: 0,
+            right_id: 0,
+            word_cost: 0,
+            prediction_cost: 0,
+            flags: EntryFlags::default(),
+            // No valid v1 annotation id or v2 entry ordinal is inferred by
+            // default construction. Parsed entries always replace this value.
+            annotation_locator: image_format::NO_ANNOTATION,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImageVersion {
+    V1,
+    V2,
+}
+
+impl ImageVersion {
+    const fn node_len(self) -> usize {
+        match self {
+            Self::V1 => image_format::NODE_LEN,
+            Self::V2 => image_format::NODE_LEN_V2,
+        }
+    }
+
+    const fn entry_len(self) -> usize {
+        match self {
+            Self::V1 => image_format::ENTRY_LEN,
+            Self::V2 => image_format::ENTRY_LEN_V2,
+        }
+    }
 }
 
 /// One dictionary value whose reading is a prefix of the query.
@@ -350,6 +397,7 @@ pub struct SingleKanjiVariant {
 /// A validated set of borrowed fixed-layout views over one image.
 #[derive(Clone, Copy)]
 pub struct Dictionary<'a> {
+    version: ImageVersion,
     class_count: usize,
     entry_count: usize,
     node_count: usize,
@@ -364,6 +412,8 @@ pub struct Dictionary<'a> {
     annotation_offsets: &'a [u8],
     annotation_count: usize,
     annotations: &'a [u8],
+    annotation_index: Option<&'a [u8]>,
+    annotation_index_count: usize,
     matrix: &'a [u8],
     /// Byte-aligned bunsetsu-boundary rows without their table header, or
     /// `None` for images compiled before the segmenter table existed.
@@ -399,10 +449,12 @@ impl<'a> Dictionary<'a> {
         if bytes.get(..8) != Some(format::MAGIC.as_slice()) {
             return Err(Error::BadMagic);
         }
-        let version = read_u16(bytes, 8).ok_or(Error::Truncated)?;
-        if version != format::VERSION {
-            return Err(Error::UnsupportedVersion(version));
-        }
+        let raw_version = read_u16(bytes, 8).ok_or(Error::Truncated)?;
+        let version = match raw_version {
+            format::VERSION => ImageVersion::V1,
+            format::VERSION_V2 => ImageVersion::V2,
+            _ => return Err(Error::UnsupportedVersion(raw_version)),
+        };
         let header_len = usize::from(read_u16(bytes, 10).ok_or(Error::Truncated)?);
         let table_count = usize::from(read_u16(bytes, 12).ok_or(Error::Truncated)?);
         let class_count = usize::from(read_u16(bytes, 14).ok_or(Error::Truncated)?);
@@ -435,13 +487,38 @@ impl<'a> Dictionary<'a> {
 
         let louds_table = required_table(bytes, table_count, format::TAG_LOUDS)?;
         let nodes = required_table(bytes, table_count, format::TAG_NODES)?;
-        let labels = required_table(bytes, table_count, format::TAG_LABELS)?;
+        let labels = match version {
+            ImageVersion::V1 => required_table(bytes, table_count, format::TAG_LABELS)?,
+            ImageVersion::V2 => {
+                if optional_table(bytes, table_count, format::TAG_LABELS)?.is_some() {
+                    return Err(Error::BadTable(format::TAG_LABELS));
+                }
+                Table {
+                    tag: format::TAG_LABELS,
+                    bytes: &[],
+                    count: 0,
+                }
+            }
+        };
         let entries = required_table(bytes, table_count, format::TAG_ENTRIES)?;
         let surface_offsets = required_table(bytes, table_count, format::TAG_SURFACE_OFFSETS)?;
         let surfaces = required_table(bytes, table_count, format::TAG_SURFACES)?;
         let annotation_offsets =
             required_table(bytes, table_count, format::TAG_ANNOTATION_OFFSETS)?;
         let annotations = required_table(bytes, table_count, format::TAG_ANNOTATIONS)?;
+        let annotation_index = match version {
+            ImageVersion::V1 => {
+                if optional_table(bytes, table_count, format::TAG_ANNOTATION_INDEX)?.is_some() {
+                    return Err(Error::BadTable(format::TAG_ANNOTATION_INDEX));
+                }
+                None
+            }
+            ImageVersion::V2 => Some(required_table(
+                bytes,
+                table_count,
+                format::TAG_ANNOTATION_INDEX,
+            )?),
+        };
         let matrix = required_table(bytes, table_count, format::TAG_MATRIX)?;
 
         let boundaries = match optional_table(bytes, table_count, format::TAG_BOUNDARIES)? {
@@ -488,11 +565,33 @@ impl<'a> Dictionary<'a> {
             return Err(Error::BadTable(format::TAG_SINGLE_KANJI_INDEX));
         }
 
-        expect_fixed_count(nodes, node_count, format::NODE_LEN)?;
-        expect_fixed_count(labels, node_count, 4)?;
-        expect_fixed_count(entries, entry_count, format::ENTRY_LEN)?;
-        expect_fixed_count(surface_offsets, surface_offsets.count, 4)?;
+        expect_fixed_count(nodes, node_count, version.node_len())?;
+        if version == ImageVersion::V1 {
+            expect_fixed_count(labels, node_count, 4)?;
+        }
+        expect_fixed_count(entries, entry_count, version.entry_len())?;
+        let surface_count = match version {
+            ImageVersion::V1 => {
+                expect_fixed_count(surface_offsets, surface_offsets.count, 4)?;
+                surface_offsets.count
+            }
+            ImageVersion::V2 => {
+                let restart_count = surfaces
+                    .count
+                    .checked_add(format::SURFACE_RESTART_INTERVAL - 1)
+                    .ok_or(Error::BadTable(format::TAG_SURFACE_OFFSETS))?
+                    / format::SURFACE_RESTART_INTERVAL;
+                expect_fixed_count(surface_offsets, restart_count, 4)?;
+                surfaces.count
+            }
+        };
         expect_fixed_count(annotation_offsets, annotation_offsets.count, 4)?;
+        if version == ImageVersion::V2 && annotations.count != annotation_offsets.count {
+            return Err(Error::BadTable(format::TAG_ANNOTATIONS));
+        }
+        if let Some(index) = annotation_index {
+            expect_fixed_count(index, index.count, format::ANNOTATION_INDEX_LEN_V2)?;
+        }
         validate_matrix_table(matrix, class_count)?;
 
         if louds_table.bytes.len() < 4 {
@@ -565,6 +664,7 @@ impl<'a> Dictionary<'a> {
         }
 
         let dictionary = Dictionary {
+            version,
             class_count,
             entry_count,
             node_count,
@@ -574,11 +674,13 @@ impl<'a> Dictionary<'a> {
             labels: labels.bytes,
             entries: entries.bytes,
             surface_offsets: surface_offsets.bytes,
-            surface_count: surface_offsets.count,
+            surface_count,
             surfaces: surfaces.bytes,
             annotation_offsets: annotation_offsets.bytes,
             annotation_count: annotation_offsets.count,
             annotations: annotations.bytes,
+            annotation_index: annotation_index.map(|table| table.bytes),
+            annotation_index_count: annotation_index.map_or(0, |table| table.count),
             matrix: matrix.bytes,
             boundaries,
             details,
@@ -1000,13 +1102,41 @@ impl<'a> Dictionary<'a> {
         }
         let restart = surface_id - (surface_id % SURFACE_RESTART_INTERVAL);
         let mut value = FixedStr::<MAX_PREEDIT_BYTES>::new();
+        let mut v2_cursor = match self.version {
+            ImageVersion::V1 => None,
+            ImageVersion::V2 => Some(
+                read_offset(self.surface_offsets, restart / SURFACE_RESTART_INTERVAL)
+                    .ok_or(Error::BadTable(image_format::TAG_SURFACE_OFFSETS))?,
+            ),
+        };
         for index in restart..=surface_id {
-            let record = self.text_record(
-                self.surface_offsets,
-                self.surface_count,
-                self.surfaces,
-                index,
-            )?;
+            let record = match v2_cursor {
+                None => self.text_record(
+                    self.surface_offsets,
+                    self.surface_count,
+                    self.surfaces,
+                    index,
+                )?,
+                Some(cursor) => {
+                    let suffix_at = cursor
+                        .checked_add(2)
+                        .ok_or(Error::BadTable(image_format::TAG_SURFACES))?;
+                    let suffix_len = usize::from(
+                        read_u16(self.surfaces, suffix_at)
+                            .ok_or(Error::BadTable(image_format::TAG_SURFACES))?,
+                    );
+                    let end = cursor
+                        .checked_add(4)
+                        .and_then(|at| at.checked_add(suffix_len))
+                        .ok_or(Error::BadTable(image_format::TAG_SURFACES))?;
+                    let record = self
+                        .surfaces
+                        .get(cursor..end)
+                        .ok_or(Error::BadTable(image_format::TAG_SURFACES))?;
+                    v2_cursor = Some(end);
+                    record
+                }
+            };
             if record.len() < 4 {
                 return Err(Error::BadTable(image_format::TAG_SURFACES));
             }
@@ -1036,10 +1166,47 @@ impl<'a> Dictionary<'a> {
     /// Writes the optional annotation for `entry`; a missing annotation writes
     /// nothing and succeeds.
     pub fn write_annotation(&self, entry: Entry, sink: &mut impl TextSink) -> Result<(), Error> {
-        if entry.annotation_id == image_format::NO_ANNOTATION {
-            return Ok(());
-        }
-        let annotation_id = to_usize(entry.annotation_id)?;
+        let annotation_id = match self.version {
+            ImageVersion::V1 => {
+                if entry.annotation_locator == image_format::NO_ANNOTATION {
+                    return Ok(());
+                }
+                to_usize(entry.annotation_locator)?
+            }
+            ImageVersion::V2 => {
+                let wanted = entry.annotation_locator;
+                let index = self
+                    .annotation_index
+                    .ok_or(Error::BadTable(image_format::TAG_ANNOTATION_INDEX))?;
+                let mut low = 0usize;
+                let mut high = self.annotation_index_count;
+                let found = loop {
+                    if low >= high {
+                        break None;
+                    }
+                    let middle = low + (high - low) / 2;
+                    let at = middle
+                        .checked_mul(image_format::ANNOTATION_INDEX_LEN_V2)
+                        .ok_or(Error::BadTable(image_format::TAG_ANNOTATION_INDEX))?;
+                    let ordinal = read_u32(index, at)
+                        .ok_or(Error::BadTable(image_format::TAG_ANNOTATION_INDEX))?;
+                    match ordinal.cmp(&wanted) {
+                        core::cmp::Ordering::Less => low = middle + 1,
+                        core::cmp::Ordering::Greater => high = middle,
+                        core::cmp::Ordering::Equal => {
+                            break Some(to_usize(
+                                read_u32(index, at + 4)
+                                    .ok_or(Error::BadTable(image_format::TAG_ANNOTATION_INDEX))?,
+                            )?)
+                        }
+                    }
+                };
+                let Some(annotation_id) = found else {
+                    return Ok(());
+                };
+                annotation_id
+            }
+        };
         let record = self.text_record(
             self.annotation_offsets,
             self.annotation_count,
@@ -1111,6 +1278,9 @@ impl<'a> Dictionary<'a> {
         let mut bit = 0usize;
         let mut edge_count = 0usize;
         for node_index in 0..self.node_count {
+            // Validate every stored scalar, including nodes a malformed child
+            // range might otherwise leave unobserved.
+            self.label(node_index)?;
             let node = self.node(node_index)?;
             if node.value_start > self.entry_count
                 || node.value_count > self.entry_count - node.value_start
@@ -1158,12 +1328,15 @@ impl<'a> Dictionary<'a> {
             }
         }
 
-        self.validate_offsets(
-            self.surface_offsets,
-            self.surface_count,
-            self.surfaces,
-            format::TAG_SURFACES,
-        )?;
+        match self.version {
+            ImageVersion::V1 => self.validate_offsets(
+                self.surface_offsets,
+                self.surface_count,
+                self.surfaces,
+                format::TAG_SURFACES,
+            )?,
+            ImageVersion::V2 => self.validate_v2_surfaces()?,
+        }
 
         if let Some(details) = self.details {
             self.validate_details(details)?;
@@ -1174,17 +1347,161 @@ impl<'a> Dictionary<'a> {
             self.annotations,
             format::TAG_ANNOTATIONS,
         )?;
+        if self.version == ImageVersion::V2 {
+            self.validate_v2_annotations()?;
+            self.validate_v2_annotation_index()?;
+        }
 
         for index in 0..self.entry_count {
             let entry = self.entry(index)?;
             if to_usize(entry.surface_id)? >= self.surface_count
                 || usize::from(entry.left_id) >= self.class_count
                 || usize::from(entry.right_id) >= self.class_count
-                || (entry.annotation_id != format::NO_ANNOTATION
-                    && to_usize(entry.annotation_id)? >= self.annotation_count)
+                || (self.version == ImageVersion::V1
+                    && entry.annotation_locator != format::NO_ANNOTATION
+                    && to_usize(entry.annotation_locator)? >= self.annotation_count)
             {
                 return Err(Error::BadEntry);
             }
+        }
+        Ok(())
+    }
+
+    fn validate_v2_surfaces(&self) -> Result<(), Error> {
+        use image_format as format;
+
+        let restart_count = self
+            .surface_count
+            .checked_add(format::SURFACE_RESTART_INTERVAL - 1)
+            .ok_or(Error::BadTable(format::TAG_SURFACE_OFFSETS))?
+            / format::SURFACE_RESTART_INTERVAL;
+        if restart_count == 0 {
+            if !self.surface_offsets.is_empty() || !self.surfaces.is_empty() {
+                return Err(Error::BadTable(format::TAG_SURFACES));
+            }
+            return Ok(());
+        }
+
+        let mut previous_offset = None;
+        let mut decoded = 0usize;
+        for restart_index in 0..restart_count {
+            let start = read_offset(self.surface_offsets, restart_index)
+                .ok_or(Error::BadTable(format::TAG_SURFACE_OFFSETS))?;
+            let end = if restart_index + 1 < restart_count {
+                read_offset(self.surface_offsets, restart_index + 1)
+                    .ok_or(Error::BadTable(format::TAG_SURFACE_OFFSETS))?
+            } else {
+                self.surfaces.len()
+            };
+            if (restart_index == 0 && start != 0)
+                || start >= self.surfaces.len()
+                || end > self.surfaces.len()
+                || start >= end
+                || previous_offset.is_some_and(|previous| previous >= start)
+            {
+                return Err(Error::BadTable(format::TAG_SURFACE_OFFSETS));
+            }
+            previous_offset = Some(start);
+
+            let remaining = self.surface_count - decoded;
+            let records = remaining.min(format::SURFACE_RESTART_INTERVAL);
+            let mut cursor = start;
+            let mut value = FixedStr::<MAX_PREEDIT_BYTES>::new();
+            for record_index in 0..records {
+                let prefix = usize::from(
+                    read_u16(self.surfaces, cursor).ok_or(Error::BadTable(format::TAG_SURFACES))?,
+                );
+                let suffix_at = cursor
+                    .checked_add(2)
+                    .ok_or(Error::BadTable(format::TAG_SURFACES))?;
+                let suffix_len = usize::from(
+                    read_u16(self.surfaces, suffix_at)
+                        .ok_or(Error::BadTable(format::TAG_SURFACES))?,
+                );
+                let suffix_start = cursor
+                    .checked_add(4)
+                    .ok_or(Error::BadTable(format::TAG_SURFACES))?;
+                let record_end = suffix_start
+                    .checked_add(suffix_len)
+                    .ok_or(Error::BadTable(format::TAG_SURFACES))?;
+                if record_end > end
+                    || prefix > value.len()
+                    || !value.as_str().is_char_boundary(prefix)
+                    || (record_index == 0 && prefix != 0)
+                {
+                    return Err(Error::BadTable(format::TAG_SURFACES));
+                }
+                let suffix = core::str::from_utf8(
+                    self.surfaces
+                        .get(suffix_start..record_end)
+                        .ok_or(Error::BadTable(format::TAG_SURFACES))?,
+                )
+                .map_err(|_| Error::BadUtf8)?;
+                let keep_chars = value.as_str()[..prefix].chars().count();
+                let remove_chars = value.as_str().chars().count() - keep_chars;
+                value.truncate_chars(remove_chars);
+                value.push_str(suffix).map_err(|_| Error::TextOverflow)?;
+                cursor = record_end;
+                decoded += 1;
+            }
+            if cursor != end {
+                return Err(Error::BadTable(format::TAG_SURFACES));
+            }
+        }
+        if decoded != self.surface_count {
+            return Err(Error::BadTable(format::TAG_SURFACES));
+        }
+        Ok(())
+    }
+
+    fn validate_v2_annotations(&self) -> Result<(), Error> {
+        use image_format as format;
+
+        if self.annotation_count == 0 {
+            if !self.annotation_offsets.is_empty() || !self.annotations.is_empty() {
+                return Err(Error::BadTable(format::TAG_ANNOTATIONS));
+            }
+            return Ok(());
+        }
+        if read_offset(self.annotation_offsets, 0) != Some(0) {
+            return Err(Error::BadTable(format::TAG_ANNOTATION_OFFSETS));
+        }
+        for index in 0..self.annotation_count {
+            let record = self.text_record(
+                self.annotation_offsets,
+                self.annotation_count,
+                self.annotations,
+                index,
+            )?;
+            core::str::from_utf8(record).map_err(|_| Error::BadUtf8)?;
+        }
+        Ok(())
+    }
+
+    fn validate_v2_annotation_index(&self) -> Result<(), Error> {
+        use image_format as format;
+
+        let index = self
+            .annotation_index
+            .ok_or(Error::MissingTable(format::TAG_ANNOTATION_INDEX))?;
+        let mut previous_entry = None;
+        for record_index in 0..self.annotation_index_count {
+            let at = record_index
+                .checked_mul(format::ANNOTATION_INDEX_LEN_V2)
+                .ok_or(Error::BadTable(format::TAG_ANNOTATION_INDEX))?;
+            let entry = to_usize(
+                read_u32(index, at).ok_or(Error::BadTable(format::TAG_ANNOTATION_INDEX))?,
+            )?;
+            let annotation = to_usize(
+                read_u32(index, at + 4).ok_or(Error::BadTable(format::TAG_ANNOTATION_INDEX))?,
+            )?;
+            if entry >= self.entry_count
+                || annotation >= self.annotation_count
+                || previous_entry.is_some_and(|previous| previous >= entry)
+            {
+                return Err(Error::BadTable(format::TAG_ANNOTATION_INDEX));
+            }
+            previous_entry = Some(entry);
         }
         Ok(())
     }
@@ -1323,8 +1640,11 @@ impl<'a> Dictionary<'a> {
             return Err(Error::BadTree);
         }
         let at = index
-            .checked_mul(image_format::NODE_LEN)
+            .checked_mul(self.version.node_len())
             .ok_or(Error::BadTree)?;
+        if self.version == ImageVersion::V1 && read_u32(self.nodes, at + 12) != Some(0) {
+            return Err(Error::BadTree);
+        }
         Ok(Node {
             first_child: to_usize(read_u32(self.nodes, at).ok_or(Error::BadTree)?)?,
             child_count: usize::from(read_u16(self.nodes, at + 4).ok_or(Error::BadTree)?),
@@ -1334,8 +1654,22 @@ impl<'a> Dictionary<'a> {
     }
 
     fn label(&self, index: usize) -> Result<char, Error> {
-        let at = index.checked_mul(4).ok_or(Error::BadTree)?;
-        let scalar = read_u32(self.labels, at).ok_or(Error::BadTree)?;
+        if index >= self.node_count {
+            return Err(Error::BadTree);
+        }
+        let scalar = match self.version {
+            ImageVersion::V1 => {
+                let at = index.checked_mul(4).ok_or(Error::BadTree)?;
+                read_u32(self.labels, at).ok_or(Error::BadTree)?
+            }
+            ImageVersion::V2 => {
+                let at = index
+                    .checked_mul(image_format::NODE_LEN_V2)
+                    .and_then(|at| at.checked_add(12))
+                    .ok_or(Error::BadTree)?;
+                read_u32(self.nodes, at).ok_or(Error::BadTree)?
+            }
+        };
         char::from_u32(scalar).ok_or(Error::BadTree)
     }
 
@@ -1344,17 +1678,42 @@ impl<'a> Dictionary<'a> {
             return Err(Error::BadEntry);
         }
         let at = index
-            .checked_mul(image_format::ENTRY_LEN)
+            .checked_mul(self.version.entry_len())
             .ok_or(Error::BadEntry)?;
-        Ok(Entry {
-            surface_id: read_u32(self.entries, at).ok_or(Error::BadEntry)?,
-            left_id: read_u16(self.entries, at + 4).ok_or(Error::BadEntry)?,
-            right_id: read_u16(self.entries, at + 6).ok_or(Error::BadEntry)?,
-            word_cost: read_i32(self.entries, at + 8).ok_or(Error::BadEntry)?,
-            prediction_cost: read_i32(self.entries, at + 12).ok_or(Error::BadEntry)?,
-            flags: EntryFlags::from_bits(read_u16(self.entries, at + 16).ok_or(Error::BadEntry)?),
-            annotation_id: read_u32(self.entries, at + 20).ok_or(Error::BadEntry)?,
-        })
+        match self.version {
+            ImageVersion::V1 => Ok(Entry {
+                surface_id: read_u32(self.entries, at).ok_or(Error::BadEntry)?,
+                left_id: read_u16(self.entries, at + 4).ok_or(Error::BadEntry)?,
+                right_id: read_u16(self.entries, at + 6).ok_or(Error::BadEntry)?,
+                word_cost: read_i32(self.entries, at + 8).ok_or(Error::BadEntry)?,
+                prediction_cost: read_i32(self.entries, at + 12).ok_or(Error::BadEntry)?,
+                flags: EntryFlags::from_bits(
+                    read_u16(self.entries, at + 16).ok_or(Error::BadEntry)?,
+                ),
+                annotation_locator: read_u32(self.entries, at + 20).ok_or(Error::BadEntry)?,
+            }),
+            ImageVersion::V2 => {
+                let prediction = read_u16(self.entries, at + 10).ok_or(Error::BadEntry)?;
+                if read_u16(self.entries, at + 14) != Some(0) {
+                    return Err(Error::BadEntry);
+                }
+                Ok(Entry {
+                    surface_id: read_u32(self.entries, at).ok_or(Error::BadEntry)?,
+                    left_id: read_u16(self.entries, at + 4).ok_or(Error::BadEntry)?,
+                    right_id: read_u16(self.entries, at + 6).ok_or(Error::BadEntry)?,
+                    word_cost: i32::from(read_u16(self.entries, at + 8).ok_or(Error::BadEntry)?),
+                    prediction_cost: if prediction == u16::MAX {
+                        i32::MAX
+                    } else {
+                        i32::from(prediction)
+                    },
+                    flags: EntryFlags::from_bits(
+                        read_u16(self.entries, at + 12).ok_or(Error::BadEntry)?,
+                    ),
+                    annotation_locator: u32::try_from(index).map_err(|_| Error::BadEntry)?,
+                })
+            }
+        }
     }
 
     fn find_child(&self, node: Node, wanted: char) -> Option<usize> {
@@ -1823,4 +2182,490 @@ fn bit_at(bytes: &[u8], index: usize) -> Option<bool> {
 
 fn to_usize(value: u32) -> Result<usize, Error> {
     usize::try_from(value).map_err(|_| Error::BadHeader)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{image_format as format, Dictionary, Entry, EntryFlags, Error};
+
+    #[derive(Clone)]
+    struct TestTable {
+        tag: [u8; 4],
+        bytes: Vec<u8>,
+        count: usize,
+    }
+
+    fn put_u16(bytes: &mut Vec<u8>, value: u16) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn put_u32(bytes: &mut Vec<u8>, value: u32) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn write_u16(bytes: &mut [u8], at: usize, value: u16) {
+        bytes[at..at + 2].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn write_u32(bytes: &mut [u8], at: usize, value: u32) {
+        bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn common_prefix_bytes(left: &str, right: &str) -> usize {
+        left.char_indices()
+            .zip(right.char_indices())
+            .take_while(|((left_at, left_char), (right_at, right_char))| {
+                left_at == right_at && left_char == right_char
+            })
+            .map(|((at, ch), _)| at + ch.len_utf8())
+            .last()
+            .unwrap_or(0)
+    }
+
+    fn v2_surfaces(count: usize, trailing_byte: bool) -> (Vec<String>, Vec<u8>, Vec<u8>) {
+        let values = (0..count)
+            .map(|index| format!("表面{index:02}"))
+            .collect::<Vec<_>>();
+        let mut offsets = Vec::new();
+        let mut data = Vec::new();
+        let mut previous = "";
+        for (index, value) in values.iter().enumerate() {
+            if index % format::SURFACE_RESTART_INTERVAL == 0 {
+                put_u32(&mut offsets, u32::try_from(data.len()).unwrap());
+            }
+            let prefix = if index % format::SURFACE_RESTART_INTERVAL == 0 {
+                0
+            } else {
+                common_prefix_bytes(previous, value)
+            };
+            let suffix = &value[prefix..];
+            put_u16(&mut data, u16::try_from(prefix).unwrap());
+            put_u16(&mut data, u16::try_from(suffix.len()).unwrap());
+            data.extend_from_slice(suffix.as_bytes());
+            previous = value;
+        }
+        if trailing_byte {
+            data.push(0xaa);
+        }
+        (values, offsets, data)
+    }
+
+    fn v2_image(
+        surface_count: usize,
+        annotation_index: &[(u32, u32)],
+        include_labels: bool,
+        trailing_surface_byte: bool,
+    ) -> Vec<u8> {
+        let mut louds = Vec::new();
+        put_u32(&mut louds, 5);
+        louds.push(0b0000_0011);
+
+        // Root has two sorted children. All fixture entries belong to "あ";
+        // "い" keeps child-order validation observable without changing values.
+        let mut nodes = Vec::new();
+        for (first_child, child_count, value_count, value_start, label) in [
+            (1u32, 2u16, 0u16, 0u32, '\0'),
+            (0, 0, u16::try_from(surface_count).unwrap(), 0, 'あ'),
+            (0, 0, 0, u32::try_from(surface_count).unwrap(), 'い'),
+        ] {
+            put_u32(&mut nodes, first_child);
+            put_u16(&mut nodes, child_count);
+            put_u16(&mut nodes, value_count);
+            put_u32(&mut nodes, value_start);
+            put_u32(&mut nodes, label as u32);
+        }
+
+        let mut entries = Vec::new();
+        for index in 0..surface_count {
+            put_u32(&mut entries, u32::try_from(index).unwrap());
+            put_u16(&mut entries, 0);
+            put_u16(&mut entries, 0);
+            put_u16(&mut entries, u16::try_from(100 + index).unwrap());
+            put_u16(
+                &mut entries,
+                if index % 2 == 0 {
+                    u16::MAX
+                } else {
+                    u16::try_from(200 + index).unwrap()
+                },
+            );
+            put_u16(&mut entries, EntryFlags::PREDICTION.bits());
+            put_u16(&mut entries, 0);
+        }
+
+        let (surfaces, surface_offsets, surface_data) =
+            v2_surfaces(surface_count, trailing_surface_byte);
+
+        let annotations = if annotation_index.is_empty() {
+            Vec::new()
+        } else {
+            vec!["注釈0", "annotation one"]
+        };
+        let mut annotation_offsets = Vec::new();
+        let mut annotation_data = Vec::new();
+        for annotation in &annotations {
+            put_u32(
+                &mut annotation_offsets,
+                u32::try_from(annotation_data.len()).unwrap(),
+            );
+            annotation_data.extend_from_slice(annotation.as_bytes());
+        }
+        let mut annotation_index_data = Vec::new();
+        for &(entry, annotation) in annotation_index {
+            put_u32(&mut annotation_index_data, entry);
+            put_u32(&mut annotation_index_data, annotation);
+        }
+
+        let mut matrix = Vec::new();
+        matrix.extend_from_slice(&format::MATRIX_MAGIC);
+        put_u16(&mut matrix, 1);
+        put_u16(&mut matrix, 0);
+        put_u32(&mut matrix, 0);
+        put_u32(&mut matrix, 0);
+        put_u16(&mut matrix, 0);
+        put_u16(&mut matrix, 0);
+        put_u32(&mut matrix, 0);
+        put_u32(&mut matrix, 0);
+
+        let mut tables = vec![
+            TestTable {
+                tag: format::TAG_LOUDS,
+                bytes: louds,
+                count: 5,
+            },
+            TestTable {
+                tag: format::TAG_NODES,
+                bytes: nodes,
+                count: 3,
+            },
+            TestTable {
+                tag: format::TAG_ENTRIES,
+                bytes: entries,
+                count: surface_count,
+            },
+            TestTable {
+                tag: format::TAG_SURFACE_OFFSETS,
+                bytes: surface_offsets,
+                count: surface_count.div_ceil(format::SURFACE_RESTART_INTERVAL),
+            },
+            TestTable {
+                tag: format::TAG_SURFACES,
+                bytes: surface_data,
+                count: surfaces.len(),
+            },
+            TestTable {
+                tag: format::TAG_ANNOTATION_OFFSETS,
+                bytes: annotation_offsets,
+                count: annotations.len(),
+            },
+            TestTable {
+                tag: format::TAG_ANNOTATIONS,
+                bytes: annotation_data,
+                count: annotations.len(),
+            },
+            TestTable {
+                tag: format::TAG_ANNOTATION_INDEX,
+                bytes: annotation_index_data,
+                count: annotation_index.len(),
+            },
+            TestTable {
+                tag: format::TAG_MATRIX,
+                bytes: matrix,
+                count: 1,
+            },
+        ];
+        if include_labels {
+            let mut labels = Vec::new();
+            for label in ['\0', 'あ', 'い'] {
+                put_u32(&mut labels, label as u32);
+            }
+            tables.push(TestTable {
+                tag: format::TAG_LABELS,
+                bytes: labels,
+                count: 3,
+            });
+        }
+        assemble_v2(surface_count, 3, tables)
+    }
+
+    fn assemble_v2(entry_count: usize, node_count: usize, tables: Vec<TestTable>) -> Vec<u8> {
+        let prefix = format::HEADER_LEN + tables.len() * format::DIRECTORY_ENTRY_LEN;
+        let mut image = vec![0; prefix];
+        let mut directory = Vec::new();
+        for table in tables {
+            while !image.len().is_multiple_of(8) {
+                image.push(0);
+            }
+            let offset = image.len();
+            image.extend_from_slice(&table.bytes);
+            directory.push((table.tag, offset, table.bytes.len(), table.count));
+        }
+        image[..8].copy_from_slice(&format::MAGIC);
+        write_u16(&mut image, 8, format::VERSION_V2);
+        write_u16(&mut image, 10, format::HEADER_LEN as u16);
+        write_u16(&mut image, 12, u16::try_from(directory.len()).unwrap());
+        write_u16(&mut image, 14, 1);
+        write_u32(&mut image, 16, u32::try_from(entry_count).unwrap());
+        write_u32(&mut image, 20, u32::try_from(node_count).unwrap());
+        let image_len = u32::try_from(image.len()).unwrap();
+        write_u32(&mut image, 24, image_len);
+        write_u32(&mut image, 28, 0);
+        for (index, (tag, offset, len, count)) in directory.into_iter().enumerate() {
+            let at = format::HEADER_LEN + index * format::DIRECTORY_ENTRY_LEN;
+            image[at..at + 4].copy_from_slice(&tag);
+            write_u32(&mut image, at + 4, u32::try_from(offset).unwrap());
+            write_u32(&mut image, at + 8, u32::try_from(len).unwrap());
+            write_u32(&mut image, at + 12, u32::try_from(count).unwrap());
+        }
+        image
+    }
+
+    fn table_location(image: &[u8], wanted: [u8; 4]) -> (usize, usize, usize) {
+        let count = usize::from(u16::from_le_bytes(image[12..14].try_into().unwrap()));
+        for index in 0..count {
+            let directory = format::HEADER_LEN + index * format::DIRECTORY_ENTRY_LEN;
+            if image[directory..directory + 4] == wanted {
+                let offset =
+                    u32::from_le_bytes(image[directory + 4..directory + 8].try_into().unwrap());
+                let len =
+                    u32::from_le_bytes(image[directory + 8..directory + 12].try_into().unwrap());
+                return (
+                    usize::try_from(offset).unwrap(),
+                    usize::try_from(len).unwrap(),
+                    directory,
+                );
+            }
+        }
+        panic!("missing fixture table {wanted:?}");
+    }
+
+    fn assert_parse_error(image: &[u8], expected: Error) {
+        assert_eq!(
+            Dictionary::parse(image).expect_err("image must fail"),
+            expected
+        );
+    }
+
+    #[test]
+    fn writer_facing_aliases_remain_v1_and_entry_stays_compact() {
+        assert_eq!(format::VERSION, 1);
+        assert_eq!(format::NODE_LEN, 16);
+        assert_eq!(format::ENTRY_LEN, 24);
+        assert_eq!(format::VERSION_V2, 2);
+        assert_eq!(format::NODE_LEN_V2, 16);
+        assert_eq!(format::ENTRY_LEN_V2, 16);
+        assert_eq!(format::ANNOTATION_INDEX_LEN_V2, 8);
+        assert_eq!(core::mem::size_of::<Entry>(), 24);
+        assert_eq!(Entry::default().annotation_locator, format::NO_ANNOTATION);
+    }
+
+    #[test]
+    fn v2_node_entry_surface_and_annotation_round_trip() {
+        let image = v2_image(3, &[(0, 0), (2, 1)], false, false);
+        let dictionary = Dictionary::parse(&image).expect("valid v2 fixture");
+        let mut found = Vec::new();
+        dictionary
+            .common_prefix_search("あ", |matched| {
+                let mut surface = String::new();
+                dictionary
+                    .write_surface(matched.entry, &mut surface)
+                    .expect("surface");
+                let mut annotation = String::new();
+                dictionary
+                    .write_annotation(matched.entry, &mut annotation)
+                    .expect("annotation");
+                found.push((surface, annotation, matched.entry));
+                true
+            })
+            .expect("lookup");
+
+        assert_eq!(found.len(), 3);
+        assert_eq!(
+            (&found[0].0, &found[0].1),
+            (&"表面00".to_owned(), &"注釈0".to_owned())
+        );
+        assert_eq!(
+            (&found[1].0, &found[1].1),
+            (&"表面01".to_owned(), &String::new())
+        );
+        assert_eq!(
+            (&found[2].0, &found[2].1),
+            (&"表面02".to_owned(), &"annotation one".to_owned())
+        );
+        assert_eq!(found[0].2.word_cost, 100);
+        assert_eq!(found[0].2.prediction_cost, i32::MAX);
+        assert_eq!(found[1].2.prediction_cost, 201);
+        assert!(found[2].2.flags.contains(EntryFlags::PREDICTION));
+    }
+
+    #[test]
+    fn versions_and_version_specific_tables_are_strict() {
+        let mut unknown = v2_image(1, &[], false, false);
+        write_u16(&mut unknown, 8, 3);
+        assert_parse_error(&unknown, Error::UnsupportedVersion(3));
+
+        let mixed = v2_image(1, &[], true, false);
+        assert_parse_error(&mixed, Error::BadTable(format::TAG_LABELS));
+
+        let mut missing_aidx = v2_image(1, &[], false, false);
+        let (_, _, directory) = table_location(&missing_aidx, format::TAG_ANNOTATION_INDEX);
+        missing_aidx[directory..directory + 4].copy_from_slice(b"XXXX");
+        assert_parse_error(
+            &missing_aidx,
+            Error::MissingTable(format::TAG_ANNOTATION_INDEX),
+        );
+
+        let mut duplicate_aidx = v2_image(1, &[], false, false);
+        let (_, _, matrix_directory) = table_location(&duplicate_aidx, format::TAG_MATRIX);
+        duplicate_aidx[matrix_directory..matrix_directory + 4]
+            .copy_from_slice(&format::TAG_ANNOTATION_INDEX);
+        assert_parse_error(
+            &duplicate_aidx,
+            Error::DuplicateTable(format::TAG_ANNOTATION_INDEX),
+        );
+    }
+
+    #[test]
+    fn every_truncated_v2_fixture_is_rejected() {
+        let image = v2_image(17, &[(0, 0), (16, 1)], false, false);
+        for end in 0..image.len() {
+            assert!(
+                Dictionary::parse(&image[..end]).is_err(),
+                "truncation at {end} unexpectedly parsed"
+            );
+        }
+    }
+
+    #[test]
+    fn v2_nodes_reject_invalid_scalars_and_unsorted_children() {
+        let mut invalid_scalar = v2_image(1, &[], false, false);
+        let (nodes, _, _) = table_location(&invalid_scalar, format::TAG_NODES);
+        write_u32(
+            &mut invalid_scalar,
+            nodes + format::NODE_LEN_V2 + 12,
+            0xd800,
+        );
+        assert_parse_error(&invalid_scalar, Error::BadTree);
+
+        let mut duplicate_child = v2_image(1, &[], false, false);
+        let (nodes, _, _) = table_location(&duplicate_child, format::TAG_NODES);
+        write_u32(
+            &mut duplicate_child,
+            nodes + 2 * format::NODE_LEN_V2 + 12,
+            'あ' as u32,
+        );
+        assert_parse_error(&duplicate_child, Error::BadTree);
+    }
+
+    #[test]
+    fn v2_entries_reject_nonzero_reserved_bytes() {
+        let mut image = v2_image(1, &[], false, false);
+        let (entries, _, _) = table_location(&image, format::TAG_ENTRIES);
+        write_u16(&mut image, entries + 14, 1);
+        assert_parse_error(&image, Error::BadEntry);
+    }
+
+    #[test]
+    fn v2_annotation_index_rejects_order_duplicates_and_ranges() {
+        let valid = v2_image(3, &[(0, 0), (2, 1)], false, false);
+        let (index, _, _) = table_location(&valid, format::TAG_ANNOTATION_INDEX);
+
+        let mut reversed = valid.clone();
+        write_u32(&mut reversed, index, 2);
+        write_u32(&mut reversed, index + 8, 0);
+        assert_parse_error(&reversed, Error::BadTable(format::TAG_ANNOTATION_INDEX));
+
+        let mut duplicate = valid.clone();
+        write_u32(&mut duplicate, index + 8, 0);
+        assert_parse_error(&duplicate, Error::BadTable(format::TAG_ANNOTATION_INDEX));
+
+        let mut entry_out_of_range = valid.clone();
+        write_u32(&mut entry_out_of_range, index + 8, 3);
+        assert_parse_error(
+            &entry_out_of_range,
+            Error::BadTable(format::TAG_ANNOTATION_INDEX),
+        );
+
+        let mut annotation_out_of_range = valid;
+        write_u32(&mut annotation_out_of_range, index + 4, 2);
+        assert_parse_error(
+            &annotation_out_of_range,
+            Error::BadTable(format::TAG_ANNOTATION_INDEX),
+        );
+    }
+
+    #[test]
+    fn v2_surface_restart_boundaries_round_trip() {
+        for count in [0, 1, 15, 16, 17, 32] {
+            let image = v2_image(count, &[], false, false);
+            let dictionary = Dictionary::parse(&image).expect("boundary fixture");
+            assert_eq!(dictionary.entry_count(), count);
+            for index in 0..count {
+                let entry = dictionary.entry_at(index).expect("entry");
+                let mut surface = String::new();
+                dictionary
+                    .write_surface(entry, &mut surface)
+                    .expect("surface");
+                assert_eq!(surface, format!("表面{index:02}"));
+            }
+        }
+    }
+
+    #[test]
+    fn v2_surface_offsets_reject_reverse_and_out_of_range_values() {
+        let valid = v2_image(17, &[], false, false);
+        let (offsets, _, _) = table_location(&valid, format::TAG_SURFACE_OFFSETS);
+        let (surfaces, surface_len, _) = table_location(&valid, format::TAG_SURFACES);
+        let second = u32::from_le_bytes(valid[offsets + 4..offsets + 8].try_into().unwrap());
+
+        let mut reversed = valid.clone();
+        write_u32(&mut reversed, offsets, second);
+        write_u32(&mut reversed, offsets + 4, 0);
+        assert!(Dictionary::parse(&reversed).is_err());
+
+        let mut out_of_range = valid;
+        write_u32(
+            &mut out_of_range,
+            offsets + 4,
+            u32::try_from(surface_len + 1).unwrap(),
+        );
+        assert_parse_error(&out_of_range, Error::BadTable(format::TAG_SURFACE_OFFSETS));
+        assert!(surfaces > offsets);
+    }
+
+    #[test]
+    fn v2_surfaces_reject_mid_scalar_prefix_bad_lengths_and_restart_prefixes() {
+        let valid = v2_image(17, &[], false, false);
+        let (surfaces, _, _) = table_location(&valid, format::TAG_SURFACES);
+        let first_suffix_len = usize::from(u16::from_le_bytes(
+            valid[surfaces + 2..surfaces + 4].try_into().unwrap(),
+        ));
+        let second_record = surfaces + 4 + first_suffix_len;
+
+        let mut mid_scalar = valid.clone();
+        write_u16(&mut mid_scalar, second_record, 1);
+        assert_parse_error(&mid_scalar, Error::BadTable(format::TAG_SURFACES));
+
+        let mut bad_length = valid.clone();
+        write_u16(&mut bad_length, second_record + 2, u16::MAX);
+        assert_parse_error(&bad_length, Error::BadTable(format::TAG_SURFACES));
+
+        let (offsets, _, _) = table_location(&valid, format::TAG_SURFACE_OFFSETS);
+        let restart = usize::try_from(u32::from_le_bytes(
+            valid[offsets + 4..offsets + 8].try_into().unwrap(),
+        ))
+        .unwrap();
+        let mut nonzero_restart_prefix = valid;
+        write_u16(&mut nonzero_restart_prefix, surfaces + restart, 3);
+        assert_parse_error(
+            &nonzero_restart_prefix,
+            Error::BadTable(format::TAG_SURFACES),
+        );
+    }
+
+    #[test]
+    fn v2_surfaces_reject_trailing_bytes() {
+        let image = v2_image(1, &[], false, true);
+        assert_parse_error(&image, Error::BadTable(format::TAG_SURFACES));
+    }
 }
