@@ -342,15 +342,36 @@ pub struct Normalizer {
 /// Keeping this together makes the long-input dispatch pay for resolving
 /// `FollowMode` once, before choosing between the rewrite and scanner paths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ResolvedWidths {
-    alnum: bool,
-    number: bool,
-    symbol: bool,
-}
+struct ResolvedWidths(u8);
 
 impl ResolvedWidths {
+    const ALNUM: u8 = 1 << 0;
+    const NUMBER: u8 = 1 << 1;
+    const SYMBOL: u8 = 1 << 2;
+    const ALL_FULL: u8 = Self::ALNUM | Self::NUMBER | Self::SYMBOL;
+
+    fn new(alnum: bool, number: bool, symbol: bool) -> Self {
+        Self(
+            (u8::from(alnum) * Self::ALNUM)
+                | (u8::from(number) * Self::NUMBER)
+                | (u8::from(symbol) * Self::SYMBOL),
+        )
+    }
+
     fn all_full(self) -> bool {
-        self.alnum && self.number && self.symbol
+        self.0 == Self::ALL_FULL
+    }
+
+    fn alnum(self) -> bool {
+        self.0 & Self::ALNUM != 0
+    }
+
+    fn number(self) -> bool {
+        self.0 & Self::NUMBER != 0
+    }
+
+    fn symbol(self) -> bool {
+        self.0 & Self::SYMBOL != 0
     }
 }
 
@@ -373,11 +394,13 @@ impl Normalizer {
     /// policy's reach. When at least one policy channel can pass ASCII
     /// through, [`simd`] finds each unchanged run and copies it in one move,
     /// leaving the character-at-a-time path for characters that change. When
-    /// all three resolved channels require full width, no useful alphanumeric,
-    /// number, or symbol run can exist, so the function goes straight through
-    /// [`Normalizer::normalize_char`] instead of paying to discover empty
-    /// runs. Both paths are observably identical to mapping that function over
-    /// `src.chars()`, which is what the tests assert.
+    /// all three resolved channels require full width, governed ASCII cannot
+    /// form a useful run. The function therefore goes straight through
+    /// [`Normalizer::normalize_char`] unless the first byte begins a real
+    /// passthrough run, notably leading spaces or controls; those inputs retain
+    /// the scanner so an unaffected prefix is still copied in bulk. Both paths
+    /// are observably identical to mapping that function over `src.chars()`,
+    /// which is what the tests assert.
     ///
     /// # What that is worth
     ///
@@ -411,11 +434,25 @@ impl Normalizer {
         }
         let resolved = self.resolved_widths(mode);
         if resolved.all_full() {
-            // No alphanumeric, number, or symbol byte can form a useful
-            // passthrough run. Reuse the scalar policy choke point directly
-            // instead of building a LUT and repeatedly discovering empty
-            // runs. Its per-character pushes preserve the documented atomic
-            // overflow prefix exactly.
+            // The all-full table already rejects every symbol, including
+            // `[` and `]`, so the bracket-specific clearing performed by
+            // `passthrough_lut` would be a no-op. Borrow the existing table
+            // directly and use it once for both the gate and scanner entry.
+            let lut = simd::passthrough_lut(true, true, true);
+            let first = src.as_bytes()[0];
+            if simd::admits(lut, first) {
+                return self.normalize_runs_after_admitted_first(
+                    src,
+                    mode,
+                    lut,
+                    dst,
+                    simd::passthrough_len,
+                );
+            }
+            // No useful run starts here. Reuse the scalar policy choke point
+            // directly instead of repeatedly discovering empty runs. Its
+            // per-character pushes preserve the documented atomic overflow
+            // prefix exactly.
             for c in src.chars() {
                 dst.push(self.normalize_char(c, mode))?;
             }
@@ -457,7 +494,8 @@ impl Normalizer {
         resolved: ResolvedWidths,
         dst: &mut impl TextSink,
     ) -> Result<(), Overflow> {
-        self.normalize_runs_with(src, mode, resolved, dst, simd::passthrough_len)
+        let lut = self.passthrough_lut(resolved);
+        self.normalize_runs_with_lut(src, mode, &lut, dst, simd::passthrough_len)
     }
 
     /// The long-string body parameterized by the already-selected run scanner.
@@ -465,25 +503,24 @@ impl Normalizer {
     /// at this narrow boundary lets the SIMD unit benchmark compare concrete
     /// safe-to-call kernels end to end without swapping the process-global
     /// dispatch pointer while tests run in parallel.
-    fn normalize_runs_with(
+    fn normalize_runs_with_lut(
         &self,
         src: &str,
         mode: Mode,
-        resolved: ResolvedWidths,
+        lut: &simd::Lut,
         dst: &mut impl TextSink,
         mut scan: impl FnMut(&[u8], &simd::Lut) -> usize,
     ) -> Result<(), Overflow> {
-        let lut = self.passthrough_lut(resolved);
         let mut rest = src;
         while let Some(&first) = rest.as_bytes().first() {
             // Asking whether a run *starts* here is a table lookup; asking
             // how long it is may be a vector load. Japanese text stops a run
             // at every character, so checking first is what keeps kana from
             // paying vector cost to be told zero.
-            if simd::admits(&lut, first) {
+            if simd::admits(lut, first) {
                 // Sound because a run only ever covers ASCII bytes, so both
                 // ends are character boundaries (see `simd`'s module docs).
-                let (run, tail) = rest.split_at(scan(rest.as_bytes(), &lut));
+                let (run, tail) = rest.split_at(scan(rest.as_bytes(), lut));
                 if dst.push_str(run).is_err() {
                     // `push_str` is all-or-nothing, so nothing landed — and
                     // this function promises the prefix that fits, not an
@@ -508,6 +545,33 @@ impl Normalizer {
         Ok(())
     }
 
+    /// Enters the run path after the caller has already proved that `src`'s
+    /// first byte is admitted by `lut`. This preserves the ordinary scanner
+    /// loop for every other caller while avoiding a duplicate table lookup in
+    /// the all-full leading-passthrough gate.
+    fn normalize_runs_after_admitted_first(
+        &self,
+        src: &str,
+        mode: Mode,
+        lut: &simd::Lut,
+        dst: &mut impl TextSink,
+        mut scan: impl FnMut(&[u8], &simd::Lut) -> usize,
+    ) -> Result<(), Overflow> {
+        debug_assert!(simd::admits(lut, src.as_bytes()[0]));
+        // Sound because admitted runs contain ASCII bytes only, so the split
+        // remains on a character boundary.
+        let (run, tail) = src.split_at(scan(src.as_bytes(), lut));
+        if dst.push_str(run).is_err() {
+            for c in run.chars() {
+                dst.push(c)?;
+            }
+        }
+        if tail.is_empty() {
+            return Ok(());
+        }
+        self.normalize_runs_with_lut(tail, mode, lut, dst, scan)
+    }
+
     /// Test-only entry point for paired AVX2/AVX-512 normalizer measurements.
     ///
     /// Unlike changing `ACTIVE_WIDTH_SCAN`, this does not mutate global state,
@@ -528,12 +592,29 @@ impl Normalizer {
         }
         let resolved = self.resolved_widths(mode);
         if resolved.all_full() {
+            let lut = simd::passthrough_lut(true, true, true);
+            if simd::admits(lut, src.as_bytes()[0]) {
+                return self.normalize_runs_after_admitted_first(
+                    src,
+                    mode,
+                    lut,
+                    dst,
+                    |bytes, lut| {
+                        if bytes.len() < simd::MIN_VECTOR_BYTES {
+                            return simd::passthrough_len(bytes, lut);
+                        }
+                        // SAFETY: upheld by this test-only API's caller.
+                        unsafe { scan(bytes, lut) }
+                    },
+                );
+            }
             for c in src.chars() {
                 dst.push(self.normalize_char(c, mode))?;
             }
             return Ok(());
         }
-        self.normalize_runs_with(src, mode, resolved, dst, |bytes, lut| {
+        let lut = self.passthrough_lut(resolved);
+        self.normalize_runs_with_lut(src, mode, &lut, dst, |bytes, lut| {
             if bytes.len() < simd::MIN_VECTOR_BYTES {
                 // Match production's caller-side scalar short-input path. The
                 // global strategy is not observed here because
@@ -547,17 +628,18 @@ impl Normalizer {
 
     /// The set of single-byte characters this policy leaves alone in `mode`.
     fn resolved_widths(&self, mode: Mode) -> ResolvedWidths {
-        ResolvedWidths {
-            alnum: wants_full(self.width.alnum, mode),
-            number: wants_full(self.width.number, mode),
-            symbol: wants_full(self.width.symbol, mode),
-        }
+        ResolvedWidths::new(
+            wants_full(self.width.alnum, mode),
+            wants_full(self.width.number, mode),
+            wants_full(self.width.symbol, mode),
+        )
     }
 
     /// The set of single-byte characters these already-resolved decisions
     /// leave alone.
     fn passthrough_lut(&self, resolved: ResolvedWidths) -> simd::Lut {
-        let mut lut = *simd::passthrough_lut(resolved.alnum, resolved.number, resolved.symbol);
+        let mut lut =
+            *simd::passthrough_lut(resolved.alnum(), resolved.number(), resolved.symbol());
         // `[`/`]` are otherwise admitted by the ASCII symbol LUT.  They are
         // owned by the bracket setting, so stop SIMD runs at both bytes and
         // let `normalize_char` map them just like the non-ASCII pairs.
@@ -753,6 +835,30 @@ mod tests {
     unsafe fn observed_scan(bytes: &[u8], lut: &simd::Lut) -> usize {
         OBSERVED_SCANS.fetch_add(1, Ordering::Relaxed);
         simd::passthrough_len(bytes, lut)
+    }
+
+    fn assert_observed_scan_count(
+        normalizer: Normalizer,
+        mode: Mode,
+        src: &str,
+        expected_scans: usize,
+    ) {
+        assert!(src.len() >= simd::MIN_VECTOR_BYTES);
+        OBSERVED_SCANS.store(0, Ordering::Relaxed);
+        let mut actual = String::new();
+        // SAFETY: `observed_scan` has no target-feature requirement and
+        // delegates to the production safe dispatcher.
+        unsafe {
+            normalizer
+                .normalize_into_with_scan(src, mode, &mut actual, observed_scan)
+                .expect("a String never overflows");
+        }
+        assert_eq!(actual, scalar_reference(&normalizer, src, mode));
+        assert_eq!(
+            OBSERVED_SCANS.load(Ordering::Relaxed),
+            expected_scans,
+            "{normalizer:?} in {mode:?} chose the wrong path for {src:?}"
+        );
     }
 
     /// Exact pre-I2 dispatch retained only for the ignored A/B benchmark.
@@ -1450,9 +1556,8 @@ mod tests {
     }
 
     #[test]
-    fn all_full_decisions_bypass_the_scanner_and_other_policies_retain_it() {
+    fn all_full_path_selection_uses_the_first_byte_and_preserves_other_policies() {
         let src = "issue_110_width_normalizer_fast_path_identifier_2026";
-        assert!(src.len() >= simd::MIN_VECTOR_BYTES);
         let all_full = Normalizer {
             width: WidthPolicy {
                 alnum: Width::Full,
@@ -1470,27 +1575,60 @@ mod tests {
             ..Normalizer::default()
         };
 
-        for (normalizer, mode, expected_scans) in [
-            (all_full, Mode::Hiragana, 0),
-            (follow_mode, Mode::FullAlnum, 0),
-            (Normalizer::default(), Mode::Hiragana, 1),
-            (follow_mode, Mode::Hiragana, 1),
+        for (normalizer, mode, input, expected_scans) in [
+            // Governed ASCII starts with an unadmitted byte, so both static
+            // Full and mode-resolved Full take the scalar rewrite.
+            (all_full, Mode::Hiragana, src, 0),
+            (follow_mode, Mode::FullAlnum, src, 0),
+            // Leading unaffected bytes retain the scanner under all-full.
+            (all_full, Mode::Hiragana, " issue_110_identifier_2026", 1),
+            (all_full, Mode::Hiragana, "\0issue_110_identifier_2026", 1),
+            // Non-all-full controls keep their pre-I2 scanner choice.
+            (Normalizer::default(), Mode::Hiragana, src, 1),
+            (follow_mode, Mode::Hiragana, src, 1),
         ] {
-            OBSERVED_SCANS.store(0, Ordering::Relaxed);
+            assert_observed_scan_count(normalizer, mode, input, expected_scans);
+        }
+
+        // The gate reads bytes without assuming alignment. Exercise both
+        // sides using offset slices whose starts are explicitly not 32-byte
+        // aligned and whose lengths cross every shipping vector floor.
+        let scalar_storage = "i".repeat(96);
+        let scalar_offset = (1usize..=32)
+            .find(|offset| !(scalar_storage.as_ptr() as usize + offset).is_multiple_of(32))
+            .expect("one of 32 consecutive offsets must be misaligned");
+        let scalar_slice = &scalar_storage[scalar_offset..scalar_offset + 65];
+        assert_observed_scan_count(all_full, Mode::Hiragana, scalar_slice, 0);
+
+        let scanner_storage = " ".repeat(96);
+        let scanner_offset = (1usize..=32)
+            .find(|offset| !(scanner_storage.as_ptr() as usize + offset).is_multiple_of(32))
+            .expect("one of 32 consecutive offsets must be misaligned");
+        let scanner_slice = &scanner_storage[scanner_offset..scanner_offset + 65];
+        assert_observed_scan_count(all_full, Mode::Hiragana, scanner_slice, 1);
+    }
+
+    #[test]
+    fn all_full_identifier_and_leading_passthrough_paths_match_scalar_output() {
+        let all_full = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::Full,
+                number: Width::Full,
+                symbol: Width::Full,
+            },
+            ..Normalizer::default()
+        };
+        for src in [
+            "issue_110_width_normalizer_fast_path_identifier_2026",
+            " issue_110_width_normalizer_fast_path_identifier_2026",
+            "\0\t\n\r\u{1}\u{7f} issue_110_identifier_2026",
+        ] {
+            let expected = scalar_reference(&all_full, src, Mode::Hiragana);
             let mut actual = String::new();
-            // SAFETY: `observed_scan` has no target-feature requirement and
-            // delegates to the production safe dispatcher.
-            unsafe {
-                normalizer
-                    .normalize_into_with_scan(src, mode, &mut actual, observed_scan)
-                    .expect("a String never overflows");
-            }
-            assert_eq!(actual, scalar_reference(&normalizer, src, mode));
-            assert_eq!(
-                OBSERVED_SCANS.load(Ordering::Relaxed),
-                expected_scans,
-                "{normalizer:?} in {mode:?} chose the wrong long-input path"
-            );
+            all_full
+                .normalize_into(src, Mode::Hiragana, &mut actual)
+                .expect("a String never overflows");
+            assert_eq!(actual, expected, "{src:?}");
         }
     }
 
@@ -1534,6 +1672,27 @@ mod tests {
         assert_capacity!(94, 31, Err(Overflow));
         assert_capacity!(95, 31, Err(Overflow));
         assert_capacity!(96, 32, Ok(()));
+
+        // A leading passthrough run selects the hybrid scanner branch. The
+        // space and first widened character fit exactly; the next character
+        // fails atomically and leaves the same normalized prefix as scalar.
+        let leading_space = format!(" {}", "a".repeat(32));
+        let mut scanner_dst = FixedStr::<4>::new();
+        assert_eq!(
+            normalizer.normalize_into(&leading_space, Mode::Hiragana, &mut scanner_dst),
+            Err(Overflow)
+        );
+        assert_eq!(scanner_dst.as_str(), " ａ");
+
+        // When the passthrough run itself is too large, the existing replay
+        // path must retain the exact prefix that fits under the all-full gate.
+        let spaces = " ".repeat(32);
+        let mut run_dst = FixedStr::<20>::new();
+        assert_eq!(
+            normalizer.normalize_into(&spaces, Mode::Hiragana, &mut run_dst),
+            Err(Overflow)
+        );
+        assert_eq!(run_dst.as_str(), " ".repeat(20));
     }
 
     /// The same agreement, driven by character value rather than by string
