@@ -1,7 +1,7 @@
 [package]
 name = "sakura-candidate-sweep"
 description = "Offline sweep of the conversion candidate limit against latency and homophone coverage"
-version = "1.0.31"
+version = "1.0.32"
 edition = "2021"
 rust-version = "1.96"
 license = "MIT"
