@@ -1,8 +1,8 @@
 schema=2
 product=sakura-input
-repository=https://github.com/tsuyoshi-otake/sakura-input
+repository=tsuyoshi-otake/sakura-input
 channel=stable
-platform=windows-x64
+platform=windows-x86_64
 trust_epoch=1
 release_sequence=1
 version=1.0.33
