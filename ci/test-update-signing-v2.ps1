@@ -97,3 +97,9 @@ finally {
     [Array]::Clear($entropy, 0, $entropy.Length)
     if ([IO.Directory]::Exists($temp)) { [IO.Directory]::Delete($temp, $true) }
 }
+
+# Negative fixtures intentionally leave `$LASTEXITCODE` at 1. GitHub's pwsh
+# action shell propagates that stale native exit code even though every
+# assertion above passed, so give the successful terminal state an explicit
+# process exit code.
+exit 0
