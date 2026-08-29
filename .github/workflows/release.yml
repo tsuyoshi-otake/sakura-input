@@ -54,6 +54,10 @@ jobs:
           ./ci/release-workflow-policy.ps1 -SelfTest
           ./ci/release-workflow-policy.ps1
 
+      - name: Test offline update signing v2 with ephemeral key
+        shell: pwsh
+        run: ./ci/test-update-signing-v2.ps1
+
       # These sparse paths must stay in sync with the $SparsePaths list in
       # scripts/build-dictionary.ps1. When -MozcSource is supplied,
       # Resolve-PinnedSource only checks the revision and returns; it never
@@ -212,7 +216,12 @@ jobs:
             'scripts/build-sakura-reranker.ps1',
             'scripts/stage-sakura-rerank.ps1',
             'scripts/sign-release.ps1',
-            'scripts/write-release-manifest.ps1'
+            'scripts/write-release-manifest.ps1',
+            'scripts/sign-update-manifest.ps1',
+            'scripts/verify-update-manifest.ps1',
+            'ci/test-update-signing-v2.ps1',
+            'data/update-signing/public-keys-v1.txt',
+            'data/update-signing/release-sequence.txt'
           )
           $records = [Collections.Generic.List[object]]::new()
           foreach ($relative in $paths) {
@@ -305,11 +314,15 @@ jobs:
     permissions:
       contents: read
       actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       CARGO_TERM_COLOR: always
       CARGO_NET_LOCKED: "true"
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
       RELEASE_VERSION: ${{ needs.build-release.outputs.release-version }}
+      SOURCE_COMMIT: ${{ needs.build-release.outputs.source-commit }}
       BUILD_ARTIFACT_NAME: ${{ needs.build-release.outputs.build-artifact-name }}
       EXPECTED_BUILD_ARTIFACT_DIGEST: ${{ needs.build-release.outputs.build-artifact-digest }}
 
@@ -405,7 +418,12 @@ jobs:
             'scripts/build-sakura-reranker.ps1',
             'scripts/stage-sakura-rerank.ps1',
             'scripts/sign-release.ps1',
-            'scripts/write-release-manifest.ps1'
+            'scripts/write-release-manifest.ps1',
+            'scripts/sign-update-manifest.ps1',
+            'scripts/verify-update-manifest.ps1',
+            'ci/test-update-signing-v2.ps1',
+            'data/update-signing/public-keys-v1.txt',
+            'data/update-signing/release-sequence.txt'
           )
           foreach ($required in $requiredSourceFiles) {
             if (@($sourceRecords | Where-Object { [string]$_.path -ceq $required }).Count -ne 1) {
@@ -507,15 +525,26 @@ jobs:
           -ExpectedSubject $env:SAKURA_SIGNING_CERT_SUBJECT
           -Files installer/out/sakura_setup.exe
 
-      - name: Write updater manifest from the installer
+      - name: Write canonical updater manifest v2 from the installer
         shell: pwsh
-        run: >-
-          ./scripts/write-release-manifest.ps1
-          -Version $env:RELEASE_VERSION
-          -Installer installer/out/sakura_setup.exe
-          -Output installer/out/release-manifest.txt
+        env:
+          SAKURA_SIGNING_CERT_SUBJECT: ${{ secrets.SIGNING_CERTIFICATE_SUBJECT }}
+        run: |
+          $sequence = (Get-Content -Raw -LiteralPath 'data/update-signing/release-sequence.txt').Trim()
+          $expires = [DateTimeOffset]::UtcNow.AddDays(180).ToUnixTimeSeconds()
+          $mode = if ('${{ steps.certificate.outputs.enabled }}' -eq 'true') { 'required' } else { 'unsigned' }
+          $subject = if ($mode -eq 'required') { $env:SAKURA_SIGNING_CERT_SUBJECT } else { '' }
+          ./scripts/write-release-manifest.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -SourceCommit $env:SOURCE_COMMIT `
+            -ReleaseSequence $sequence `
+            -ExpiresUnix $expires `
+            -Authenticode $mode `
+            -ExpectedSubject $subject `
+            -Installer installer/out/sakura_setup.exe `
+            -Output installer/out/release-manifest-v2.txt
 
-      - name: Assemble immutable release bundle
+      - name: Assemble immutable full release bundle
         shell: pwsh
         env:
           SIGNING_STATUS: ${{ steps.certificate.outputs.status }}
@@ -524,7 +553,7 @@ jobs:
           [IO.Directory]::CreateDirectory('release-bundle/payload') | Out-Null
           [IO.File]::WriteAllText('release-bundle/signing-status.txt', "$env:SIGNING_STATUS`n", [Text.UTF8Encoding]::new($false))
           [IO.File]::Copy('installer/out/sakura_setup.exe', 'release-bundle/sakura_setup.exe', $true)
-          [IO.File]::Copy('installer/out/release-manifest.txt', 'release-bundle/release-manifest.txt', $true)
+          [IO.File]::Copy('installer/out/release-manifest-v2.txt', 'release-bundle/release-manifest-v2.txt', $true)
           [IO.File]::Copy("docs/release-notes-v$env:RELEASE_VERSION.md", 'release-bundle/release-notes.md', $true)
           [IO.File]::Copy('artifacts/release/dictionary-build.report.json', 'release-bundle/dictionary-build.report.json', $true)
           [IO.File]::Copy('installer/out/installer-build.report.json', 'release-bundle/installer-build.report.json', $true)
@@ -534,11 +563,7 @@ jobs:
           [IO.File]::Copy('build-provenance.json', 'release-bundle/provenance/build-provenance.json', $true)
           [IO.File]::Copy('data/SOURCES.lock', 'release-bundle/provenance/data/SOURCES.lock', $true)
           [IO.File]::Copy('THIRD_PARTY_NOTICES.md', 'release-bundle/provenance/THIRD_PARTY_NOTICES.md', $true)
-          [IO.File]::Copy(
-            'THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt',
-            'release-bundle/provenance/THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt',
-            $true
-          )
+          [IO.File]::Copy('THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt', 'release-bundle/provenance/THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt', $true)
           $release = 'target/x86_64-pc-windows-msvc/release'
           foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_ai_worker.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe', 'sakura_neural_worker.exe')) {
             [IO.File]::Copy((Join-Path $release $name), (Join-Path 'release-bundle/payload' $name), $true)
@@ -552,8 +577,16 @@ jobs:
             [IO.File]::Copy((Join-Path 'artifacts/release/neural-payload/licenses' $name), (Join-Path 'release-bundle/payload/licenses' $name), $true)
           }
 
-      # This must remain before the external artifact upload. The upload step
-      # is intentionally not allowed to run while the protected PFX exists.
+      - name: Assemble v2 update candidate
+        shell: pwsh
+        run: |
+          [IO.Directory]::CreateDirectory('release-candidate') | Out-Null
+          [IO.File]::Copy('installer/out/sakura_setup.exe', 'release-candidate/sakura_setup.exe', $true)
+          [IO.File]::Copy('installer/out/release-manifest-v2.txt', 'release-candidate/release-manifest-v2.txt', $true)
+
+      # This must remain before every external action and artifact upload. The
+      # upload/attestation steps are intentionally not allowed to run while the
+      # protected PFX exists.
       - name: Remove signing material before external artifact upload
         if: always()
         shell: pwsh
@@ -573,11 +606,20 @@ jobs:
             }
           }
 
+      - name: Attest canonical v2 update candidate
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2 (reviewed 2026-08-29; upstream 2026-08-04; quarantine satisfied)
+        with:
+          subject-path: |
+            release-candidate/sakura_setup.exe
+            release-candidate/release-manifest-v2.txt
+
       - name: Upload release candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (reviewed 2026-08-24; upstream 2025-03-19; quarantine satisfied)
         with:
           name: sakura-input-${{ env.RELEASE_VERSION }}-release-candidate
-          path: release-bundle
+          path: |
+            release-bundle
+            release-candidate
           if-no-files-found: error
           retention-days: 30
 

@@ -1,179 +1,89 @@
 [CmdletBinding()]
 param(
-    [string]$ArtifactDirectory = (Join-Path $PSScriptRoot '..\release-bundle'),
-
-    [string]$Version = '1.0.0',
-
-    [Parameter(Mandatory)]
-    [ValidateNotNullOrEmpty()]
-    [string]$ExpectedSubject,
-
-    [string]$Notes = (Join-Path $PSScriptRoot '..\docs\release-notes-v1.0.0.md'),
-
+    [string]$ArtifactDirectory = (Join-Path $PSScriptRoot '..\release-candidate'),
+    [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Version,
+    [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ProtectedPrivateKey,
+    [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$KeyId,
+    [string]$Notes,
     [switch]$Publish
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-$repositoryName = 'tsuyoshi-otake/sakura-input'
-if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
-    throw 'version must be canonical major.minor.patch'
-}
+$repository = 'tsuyoshi-otake/sakura-input'
+if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'version must be canonical major.minor.patch' }
+if ([string]::IsNullOrWhiteSpace($Notes)) { $Notes = Join-Path $PSScriptRoot "..\docs\release-notes-v$Version.md" }
 $tag = "v$Version"
-if (-not $Publish) {
-    throw 'publishing is an external mutation; pass -Publish only after the Phase 5 strict gate is green'
+if (-not $Publish) { throw 'publishing is an external mutation; pass -Publish only after all v2 gates are green' }
+if ($null -eq (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'gh is required for GitHub operations' }
+
+$root = [IO.Path]::GetFullPath($ArtifactDirectory)
+$installer = Join-Path $root 'sakura_setup.exe'
+$manifest = Join-Path $root 'release-manifest-v2.txt'
+foreach ($path in @($installer,$manifest,$Notes,$ProtectedPrivateKey)) { if (-not [IO.File]::Exists([IO.Path]::GetFullPath($path))) { throw "release input is missing: $path" } }
+$candidateNames = @([IO.Directory]::EnumerateFiles($root, '*', [IO.SearchOption]::TopDirectoryOnly) | ForEach-Object { [IO.Path]::GetFileName($_) } | Sort-Object)
+if ((@($candidateNames) -join ',') -cne 'release-manifest-v2.txt,sakura_setup.exe') {
+    throw 'release candidate must contain exactly installer and canonical v2 manifest before local signing'
+}
+$manifestBytes = [IO.File]::ReadAllBytes($manifest)
+if ($manifestBytes.Length -lt 4 -or $manifestBytes[0] -eq 0xef -or $manifestBytes -contains 0) { throw 'candidate manifest has BOM, NUL, or invalid length' }
+$manifestText = [Text.UTF8Encoding]::new($false, $true).GetString($manifestBytes)
+$manifestLines = $manifestText.Split([char]10)
+$fieldNames = @('schema','product','repository','channel','platform','trust_epoch','release_sequence','version','tag','source_commit','asset_name','installer_url','sha256','size','authenticode','minimum_updater_version','expires_unix')
+if ($manifestLines.Count -ne 18 -or $manifestLines[17] -cne '' -or (0..16 | Where-Object { $manifestLines[$_] -notmatch "^$($fieldNames[$_])=[^\r\n=]+$" }).Count -ne 0) { throw 'candidate manifest is not the exact v2 field order' }
+$sourceCommit = ([regex]::Match($manifestLines[9], '^source_commit=([0-9a-f]{40})$')).Groups[1].Value
+$manifestTag = ([regex]::Match($manifestLines[8], '^tag=(v[0-9]+\.[0-9]+\.[0-9]+)$')).Groups[1].Value
+if ([string]::IsNullOrWhiteSpace($sourceCommit) -or $manifestTag -cne $tag) { throw 'candidate manifest tag/source commit is invalid' }
+$verify = Join-Path $PSScriptRoot 'verify-update-manifest.ps1'
+$sign = Join-Path $PSScriptRoot 'sign-update-manifest.ps1'
+
+function Invoke-Gh { param([Parameter(Mandatory)][string[]]$Arguments,[switch]$AllowFailure)
+    $lines = @(& gh @Arguments); $code = $LASTEXITCODE
+    if (-not $AllowFailure -and $code -ne 0) { throw "gh $($Arguments -join ' ') failed with exit code $code" }
+    [pscustomobject]@{ ExitCode=$code; Lines=$lines }
 }
 
-$bundle = [IO.Path]::GetFullPath($ArtifactDirectory)
-$installer = Join-Path $bundle 'sakura_setup.exe'
-$manifest = Join-Path $bundle 'release-manifest.txt'
-$notesPath = [IO.Path]::GetFullPath($Notes)
-foreach ($path in @($installer, $manifest, $notesPath)) {
-    if (-not [IO.File]::Exists($path)) { throw "release input is missing: $path" }
-}
+# Verify the candidate's GitHub artifact provenance before creating a public
+# release. The application signature is deliberately created locally below.
+$remoteCommitRecord = Invoke-Gh @('api',"repos/$repository/commits/$tag")
+$remoteCommit = (($remoteCommitRecord.Lines -join "`n") | ConvertFrom-Json).sha
+if ([string]$remoteCommit -cne $sourceCommit) { throw "remote tag commit does not match manifest source_commit: $remoteCommit vs $sourceCommit" }
+Invoke-Gh @('attestation','verify',$installer,'--repo',$repository,'--signer-workflow','tsuyoshi-otake/sakura-input/.github/workflows/release.yml','--source-digest',$sourceCommit,'--signer-digest',$sourceCommit) | Out-Null
+Invoke-Gh @('attestation','verify',$manifest,'--repo',$repository,'--signer-workflow','tsuyoshi-otake/sakura-input/.github/workflows/release.yml','--source-digest',$sourceCommit,'--signer-digest',$sourceCommit) | Out-Null
 
-if ($null -eq (Get-Command rtk -ErrorAction SilentlyContinue)) {
-    throw 'rtk is required; all GitHub operations in this repository go through rtk gh'
-}
+& pwsh -NoProfile -ExecutionPolicy Bypass -File $sign -Manifest $manifest -ProtectedPrivateKey $ProtectedPrivateKey -KeyId $KeyId -Output (Join-Path $root 'release-manifest-v2.sig')
+if ($LASTEXITCODE -ne 0) { throw 'local update-manifest signing failed' }
+$signature = Join-Path $root 'release-manifest-v2.sig'
+& pwsh -NoProfile -ExecutionPolicy Bypass -File $verify -Manifest $manifest -Signature $signature -Keyring (Join-Path $PSScriptRoot '..\data\update-signing\public-keys-v1.txt') -VerifyInstaller -Installer $installer
+if ($LASTEXITCODE -ne 0) { throw 'local update-manifest verification failed' }
 
-function Invoke-RtkGh {
-    param(
-        [Parameter(Mandatory)][string[]]$Arguments,
-        [switch]$AllowFailure
-    )
-
-    $output = @(& rtk gh @Arguments)
-    $exitCode = $LASTEXITCODE
-    if (-not $AllowFailure -and $exitCode -ne 0) {
-        throw "rtk gh $($Arguments -join ' ') failed with exit code $exitCode"
-    }
-    return [pscustomobject]@{ ExitCode = $exitCode; Lines = $output }
-}
-
-function Get-Sha256 {
-    param([Parameter(Mandatory)][string]$Path)
-    $stream = [IO.File]::OpenRead($Path)
-    try {
-        $algorithm = [Security.Cryptography.SHA256]::Create()
-        try { return [Convert]::ToHexString($algorithm.ComputeHash($stream)).ToLowerInvariant() }
-        finally { $algorithm.Dispose() }
-    }
-    finally { $stream.Dispose() }
-}
-
-function Assert-Manifest {
-    param(
-        [Parameter(Mandatory)][string]$ManifestPath,
-        [Parameter(Mandatory)][string]$InstallerPath
-    )
-
-    $text = [IO.File]::ReadAllText($ManifestPath, [Text.Encoding]::UTF8)
-    $expected = @(
-        'schema=1',
-        "version=$Version",
-        "installer_url=https://github.com/$repositoryName/releases/download/$tag/sakura_setup.exe",
-        "sha256=$(Get-Sha256 $InstallerPath)",
-        "size=$([IO.FileInfo]::new($InstallerPath).Length)"
-    ) -join "`n"
-    if ($text -cne "$expected`n") {
-        throw 'release manifest is not the exact canonical description of the installer'
-    }
-}
-
-Assert-Manifest -ManifestPath $manifest -InstallerPath $installer
-& pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'verify-release-signatures.ps1') `
-    -ExpectedSubject $ExpectedSubject -Files $installer
-if ($LASTEXITCODE -ne 0) { throw 'local installer signature verification failed' }
-
-& rtk git rev-parse --verify "refs/tags/$tag^{commit}" | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "local tag $tag is missing" }
-Invoke-RtkGh @('auth', 'status') | Out-Null
-$repository = Invoke-RtkGh @('repo', 'view', '--json', 'nameWithOwner')
-$identity = ($repository.Lines -join "`n" | ConvertFrom-Json).nameWithOwner
-if ($identity -cne $repositoryName) {
-    throw "authenticated repository is '$identity', expected '$repositoryName'"
-}
-
-$existing = Invoke-RtkGh -Arguments @('release', 'view', $tag, '--repo', $repositoryName) -AllowFailure
-if ($existing.ExitCode -eq 0) { throw "release $tag already exists" }
-# Distinguish a genuine absent release from authentication/network failure.
-Invoke-RtkGh @('api', "repos/$repositoryName") | Out-Null
-
-$temporaryRoot = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'tmp'))
-[IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
-$readback = [IO.Path]::GetFullPath((Join-Path $temporaryRoot "sakura-input-release-readback-$PID"))
-$expectedPrefix = $temporaryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-if (-not $readback.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'temporary release readback directory escaped ~/tmp'
-}
+$tempRoot = [IO.Path]::GetFullPath((Join-Path ([Environment]::GetFolderPath('UserProfile')) 'tmp'))
+[IO.Directory]::CreateDirectory($tempRoot) | Out-Null
+$readback = Join-Path $tempRoot "sakura-input-release-readback-$PID"
 [IO.Directory]::CreateDirectory($readback) | Out-Null
-
-$watch = [Diagnostics.Stopwatch]::StartNew()
 $draftCreated = $false
 try {
-    Invoke-RtkGh @(
-        'release', 'create', $tag,
-        $installer, $manifest,
-        '--repo', $repositoryName,
-        '--verify-tag',
-        '--draft',
-        '--title', "Sakura Input $Version",
-        '--notes-file', $notesPath
-    ) | Out-Null
+    Invoke-Gh @('release','create',$tag,$installer,$manifest,$signature,'--repo',$repository,'--verify-tag','--draft','--title',"Sakura Input $Version",'--notes-file',[IO.Path]::GetFullPath($Notes)) | Out-Null
     $draftCreated = $true
-
-    Invoke-RtkGh @(
-        'release', 'download', $tag,
-        '--repo', $repositoryName,
-        '--dir', $readback,
-        '--pattern', 'sakura_setup.exe',
-        '--pattern', 'release-manifest.txt'
-    ) | Out-Null
-    $downloadedInstaller = Join-Path $readback 'sakura_setup.exe'
-    $downloadedManifest = Join-Path $readback 'release-manifest.txt'
-    Assert-Manifest -ManifestPath $downloadedManifest -InstallerPath $downloadedInstaller
-    if ((Get-Sha256 $installer) -cne (Get-Sha256 $downloadedInstaller)) {
-        throw 'downloaded draft installer differs from the signed local artifact'
-    }
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'verify-release-signatures.ps1') `
-        -ExpectedSubject $ExpectedSubject -Files $downloadedInstaller
-    if ($LASTEXITCODE -ne 0) { throw 'downloaded draft installer signature verification failed' }
-
-    $draft = Invoke-RtkGh @(
-        'release', 'view', $tag, '--repo', $repositoryName,
-        '--json', 'tagName,isDraft,isPrerelease,assets,url'
-    )
-    $draftRecord = $draft.Lines -join "`n" | ConvertFrom-Json
-    if ($draftRecord.tagName -cne $tag -or -not $draftRecord.isDraft -or $draftRecord.isPrerelease) {
-        throw 'GitHub draft release state is not the requested stable tag'
-    }
-    $assets = @($draftRecord.assets)
-    if ($assets.Count -ne 2 -or @($assets.name | Sort-Object) -join ',' -cne 'release-manifest.txt,sakura_setup.exe') {
-        throw 'draft release does not contain exactly the two updater assets'
-    }
-
-    Invoke-RtkGh @('release', 'edit', $tag, '--repo', $repositoryName, '--draft=false') | Out-Null
-    $published = Invoke-RtkGh @(
-        'release', 'view', $tag, '--repo', $repositoryName,
-        '--json', 'tagName,isDraft,isPrerelease,assets,url,publishedAt'
-    )
-    $publishedRecord = $published.Lines -join "`n" | ConvertFrom-Json
-    if ($publishedRecord.tagName -cne $tag -or $publishedRecord.isDraft -or $publishedRecord.isPrerelease -or [string]::IsNullOrWhiteSpace($publishedRecord.publishedAt)) {
-        throw 'release readback did not reach the explicit published terminal state'
-    }
-    Write-Host "published and read back: $($publishedRecord.url)"
+    Invoke-Gh @('release','download',$tag,'--repo',$repository,'--dir',$readback,'--pattern','sakura_setup.exe','--pattern','release-manifest-v2.txt','--pattern','release-manifest-v2.sig') | Out-Null
+    $ri = Join-Path $readback 'sakura_setup.exe'; $rm = Join-Path $readback 'release-manifest-v2.txt'; $rs = Join-Path $readback 'release-manifest-v2.sig'
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $verify -Manifest $rm -Signature $rs -Keyring (Join-Path $PSScriptRoot '..\data\update-signing\public-keys-v1.txt') -VerifyInstaller -Installer $ri
+    if ($LASTEXITCODE -ne 0) { throw 'downloaded draft failed v2 verification' }
+    $draft = Invoke-Gh @('release','view',$tag,'--repo',$repository,'--json','tagName,isDraft,isPrerelease,assets,url')
+    $record = ($draft.Lines -join "`n") | ConvertFrom-Json
+    if ($record.tagName -cne $tag -or -not $record.isDraft -or $record.isPrerelease) { throw 'draft release state is not the requested stable tag' }
+    $assets = @($record.assets)
+    if ($assets.Count -ne 3 -or (@($assets.name | Sort-Object) -join ',') -cne 'release-manifest-v2.sig,release-manifest-v2.txt,sakura_setup.exe') { throw 'draft does not contain exactly the three v2 updater assets' }
+    Invoke-Gh @('release','edit',$tag,'--repo',$repository,'--draft=false') | Out-Null
+    $published = Invoke-Gh @('release','view',$tag,'--repo',$repository,'--json','tagName,isDraft,isPrerelease,publishedAt,assets,url')
+    $final = ($published.Lines -join "`n") | ConvertFrom-Json
+    if ($final.tagName -cne $tag -or $final.isDraft -or $final.isPrerelease -or [string]::IsNullOrWhiteSpace($final.publishedAt)) { throw 'published release did not reach an explicit stable terminal state' }
+    $finalAssets = @($final.assets)
+    if ($finalAssets.Count -ne 3 -or (@($finalAssets.name | Sort-Object) -join ',') -cne 'release-manifest-v2.sig,release-manifest-v2.txt,sakura_setup.exe') { throw 'published release asset set changed after draft verification' }
+    Write-Host "published and read back: $($final.url)"
 }
 catch {
-    if ($draftCreated) {
-        Write-Warning "publication stopped; $tag remains a draft for inspection"
-    }
+    if ($draftCreated) { Write-Warning "publication stopped; $tag remains a draft for inspection" }
     throw
 }
-finally {
-    $watch.Stop()
-    if ([IO.Directory]::Exists($readback)) {
-        [IO.Directory]::Delete($readback, $true)
-    }
-    Write-Host ("publish workflow elapsed seconds: {0:N3}" -f $watch.Elapsed.TotalSeconds)
-}
+finally { if ([IO.Directory]::Exists($readback)) { [IO.Directory]::Delete($readback,$true) } }

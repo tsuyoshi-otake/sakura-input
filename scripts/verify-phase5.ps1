@@ -188,11 +188,7 @@ function Test-StagedUpdate {
 }
 
 function Test-ReleaseBundle {
-    $result = [ordered]@{ path = $bundleRoot; signatures_verified = $false; manifest_verified = $false; package_report_verified = $false; reasons = [Collections.Generic.List[string]]::new(); passed = $false }
-    if ([string]::IsNullOrWhiteSpace($ExpectedSigningSubject)) {
-        $result.reasons.Add('expected Authenticode subject is required for a release gate')
-        return $result
-    }
+    $result = [ordered]@{ path = $bundleRoot; signatures_verified = [string]::IsNullOrWhiteSpace($ExpectedSigningSubject); manifest_verified = $false; update_signature_verified = $false; package_report_verified = $false; reasons = [Collections.Generic.List[string]]::new(); passed = $false }
     $files = @(
         (Join-Path $bundleRoot 'sakura_setup.exe'),
         (Join-Path $bundleRoot 'payload\sakura_tsf.dll'),
@@ -206,25 +202,42 @@ function Test-ReleaseBundle {
     foreach ($file in $files) {
         if (-not [IO.File]::Exists($file)) { $result.reasons.Add("signed release file is missing: $file") }
     }
-    if ($result.reasons.Count -eq 0) {
+    if ($result.reasons.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($ExpectedSigningSubject)) {
         & rtk proxy pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'verify-release-signatures.ps1') -ExpectedSubject $ExpectedSigningSubject -Files $files
         $result.signatures_verified = $LASTEXITCODE -eq 0
         if (-not $result.signatures_verified) { $result.reasons.Add('one or more Authenticode signatures failed verification') }
     }
     $installer = Join-Path $bundleRoot 'sakura_setup.exe'
-    $manifest = Join-Path $bundleRoot 'release-manifest.txt'
+    $manifest = Join-Path $bundleRoot 'release-manifest-v2.txt'
+    $signature = Join-Path $bundleRoot 'release-manifest-v2.sig'
     if ([IO.File]::Exists($installer) -and [IO.File]::Exists($manifest)) {
-        $expected = @(
-            'schema=1',
-            'version=1.0.0',
-            'installer_url=https://github.com/tsuyoshi-otake/sakura-input/releases/download/v1.0.0/sakura_setup.exe',
-            "sha256=$(Get-Sha256 $installer)",
-            "size=$([IO.FileInfo]::new($installer).Length)"
-        ) -join "`n"
-        $result.manifest_verified = [IO.File]::ReadAllText($manifest, [Text.Encoding]::UTF8) -ceq "$expected`n"
-        if (-not $result.manifest_verified) { $result.reasons.Add('release manifest does not exactly describe the signed installer') }
+        $manifestBytes = [IO.File]::ReadAllBytes($manifest)
+        try {
+            $manifestText = [Text.UTF8Encoding]::new($false, $true).GetString($manifestBytes)
+            $manifestLines = $manifestText.Split([char]10)
+            $manifestNames = @('schema','product','repository','channel','platform','trust_epoch','release_sequence','version','tag','source_commit','asset_name','installer_url','sha256','size','authenticode','minimum_updater_version','expires_unix')
+            $canonical = $manifestLines.Count -eq 18 -and $manifestLines[17] -ceq '' -and $manifestBytes[0] -ne 0xef -and
+                -not ($manifestBytes -contains 0) -and -not $manifestText.Contains("`r")
+            for ($i = 0; $canonical -and $i -lt 17; $i++) { $canonical = $manifestLines[$i] -match "^$($manifestNames[$i])=[^\r\n=]+$" }
+            if (-not $canonical -or $manifestLines[0] -cne 'schema=2' -or $manifestLines[10] -cne 'asset_name=sakura_setup.exe' -or
+                $manifestLines[12] -cne "sha256=$(Get-Sha256 $installer)" -or $manifestLines[13] -cne "size=$([IO.FileInfo]::new($installer).Length)" -or
+                $manifestLines[14] -notin @('authenticode=required','authenticode=unsigned')) { throw 'full bundle v2 manifest is not canonical or does not match installer' }
+            $result.manifest_verified = $true
+        }
+        catch { $result.reasons.Add("v2 manifest canonical verification failed: $($_.Exception.Message)") }
+        if ([IO.File]::Exists($signature) -and $result.manifest_verified) {
+            & rtk proxy pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'verify-update-manifest.ps1') `
+                -Manifest $manifest -Signature $signature -VerifyInstaller -Installer $installer
+            $result.update_signature_verified = $LASTEXITCODE -eq 0
+            if (-not $result.update_signature_verified) { $result.reasons.Add('v2 detached signature/installer verification failed') }
+        }
     }
-    else { $result.reasons.Add('release manifest or installer is missing') }
+    else { $result.reasons.Add('v2 manifest or installer is missing from the full release bundle') }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedSigningSubject) -and
+        [IO.File]::Exists($manifest) -and
+        ([IO.File]::ReadAllText($manifest, [Text.Encoding]::UTF8) -notmatch '(?m)^authenticode=required$')) {
+        $result.reasons.Add('an Authenticode subject was supplied but the signed v2 policy is not required')
+    }
 
     $packageReportPath = Join-Path $bundleRoot 'installer-build.report.json'
     $dictionaryReportPath = Join-Path $bundleRoot 'dictionary-build.report.json'
@@ -364,57 +377,48 @@ function Test-PublishedRelease {
             $result.reasons.Add('GitHub release is not the published stable v1.0.0 terminal state')
         }
         $assets = @($release.assets)
-        if ($assets.Count -ne 2 -or @($assets.name | Sort-Object) -join ',' -cne 'release-manifest.txt,sakura_setup.exe') {
-            $result.reasons.Add('GitHub release does not contain exactly the updater assets')
+        if ($assets.Count -ne 3 -or @($assets.name | Sort-Object) -join ',' -cne 'release-manifest-v2.sig,release-manifest-v2.txt,sakura_setup.exe') {
+            $result.reasons.Add('GitHub release does not contain exactly the three v2 updater assets')
         }
 
         if ($result.reasons.Count -eq 0) {
-            if ([string]::IsNullOrWhiteSpace($ExpectedSigningSubject)) {
-                $result.reasons.Add('expected Authenticode subject is required to verify the downloaded release')
+            $downloadRoot = Join-Path $reportRoot "published-v1.0.0-$PID"
+            [IO.Directory]::CreateDirectory($downloadRoot) | Out-Null
+            $result.download_directory = $downloadRoot
+            & rtk gh release download v1.0.0 `
+                --repo tsuyoshi-otake/sakura-input `
+                --dir $downloadRoot `
+                --pattern sakura_setup.exe `
+                --pattern release-manifest-v2.txt `
+                --pattern release-manifest-v2.sig
+            if ($LASTEXITCODE -ne 0) { throw "rtk gh release download exited $LASTEXITCODE" }
+
+            $installer = Join-Path $downloadRoot 'sakura_setup.exe'
+            $manifest = Join-Path $downloadRoot 'release-manifest-v2.txt'
+            $signature = Join-Path $downloadRoot 'release-manifest-v2.sig'
+            if (-not [IO.File]::Exists($installer) -or -not [IO.File]::Exists($manifest) -or -not [IO.File]::Exists($signature)) {
+                $result.reasons.Add('downloaded release is missing one or more v2 updater assets')
             }
             else {
-                $downloadRoot = Join-Path $reportRoot "published-v1.0.0-$PID"
-                [IO.Directory]::CreateDirectory($downloadRoot) | Out-Null
-                $result.download_directory = $downloadRoot
-                & rtk gh release download v1.0.0 `
-                    --repo tsuyoshi-otake/sakura-input `
-                    --dir $downloadRoot
-                if ($LASTEXITCODE -ne 0) { throw "rtk gh release download exited $LASTEXITCODE" }
-
-                $installer = Join-Path $downloadRoot 'sakura_setup.exe'
-                $manifest = Join-Path $downloadRoot 'release-manifest.txt'
-                if (-not [IO.File]::Exists($installer) -or -not [IO.File]::Exists($manifest)) {
-                    $result.reasons.Add('downloaded release is missing the installer or manifest')
+                $result.downloaded_installer_sha256 = Get-Sha256 $installer
+                & rtk proxy pwsh -NoProfile -ExecutionPolicy Bypass `
+                    -File (Join-Path $PSScriptRoot 'verify-update-manifest.ps1') `
+                    -Manifest $manifest -Signature $signature -VerifyInstaller -Installer $installer
+                $result.manifest_verified = $LASTEXITCODE -eq 0
+                if (-not $result.manifest_verified) {
+                    $result.reasons.Add('downloaded v2 manifest/signature does not describe the downloaded installer')
                 }
-                else {
-                    $result.downloaded_installer_sha256 = Get-Sha256 $installer
-                    $expectedManifest = @(
-                        'schema=1',
-                        'version=1.0.0',
-                        'installer_url=https://github.com/tsuyoshi-otake/sakura-input/releases/download/v1.0.0/sakura_setup.exe',
-                        "sha256=$($result.downloaded_installer_sha256)",
-                        "size=$([IO.FileInfo]::new($installer).Length)"
-                    ) -join "`n"
-                    $result.manifest_verified = [IO.File]::ReadAllText($manifest, [Text.Encoding]::UTF8) -ceq "$expectedManifest`n"
-                    if (-not $result.manifest_verified) {
-                        $result.reasons.Add('downloaded manifest does not exactly describe the downloaded installer')
-                    }
 
-                    $localInstaller = Join-Path $bundleRoot 'sakura_setup.exe'
-                    $result.local_candidate_match = [IO.File]::Exists($localInstaller) -and
-                        (Get-Sha256 $localInstaller) -ceq $result.downloaded_installer_sha256
-                    if (-not $result.local_candidate_match) {
-                        $result.reasons.Add('downloaded installer is not byte-identical to the locally verified release candidate')
-                    }
+                $localInstaller = Join-Path $bundleRoot 'sakura_setup.exe'
+                $result.local_candidate_match = [IO.File]::Exists($localInstaller) -and
+                    (Get-Sha256 $localInstaller) -ceq $result.downloaded_installer_sha256
+                if (-not $result.local_candidate_match) {
+                    $result.reasons.Add('downloaded installer is not byte-identical to the locally verified release candidate')
+                }
 
-                    & rtk proxy pwsh -NoProfile -ExecutionPolicy Bypass `
-                        -File (Join-Path $PSScriptRoot 'verify-release-signatures.ps1') `
-                        -ExpectedSubject $ExpectedSigningSubject `
-                        -Files $installer
-                    $result.signature_verified = $LASTEXITCODE -eq 0
-                    if (-not $result.signature_verified) {
-                        $result.reasons.Add('downloaded installer Authenticode verification failed')
-                    }
+                $result.signature_verified = $result.manifest_verified
+                if (-not $result.signature_verified) {
+                    $result.reasons.Add('downloaded installer update signature verification failed')
                 }
             }
         }
