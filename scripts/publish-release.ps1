@@ -30,7 +30,7 @@ if ($manifestBytes.Length -lt 4 -or $manifestBytes[0] -eq 0xef -or $manifestByte
 $manifestText = [Text.UTF8Encoding]::new($false, $true).GetString($manifestBytes)
 $manifestLines = $manifestText.Split([char]10)
 $fieldNames = @('schema','product','repository','channel','platform','trust_epoch','release_sequence','version','tag','source_commit','asset_name','installer_url','sha256','size','authenticode','minimum_updater_version','expires_unix')
-if ($manifestLines.Count -ne 18 -or $manifestLines[17] -cne '' -or (0..16 | Where-Object { $manifestLines[$_] -notmatch "^$($fieldNames[$_])=[^\r\n=]+$" }).Count -ne 0) { throw 'candidate manifest is not the exact v2 field order' }
+if ($manifestLines.Count -ne 18 -or $manifestLines[17] -cne '' -or @(0..16 | Where-Object { $manifestLines[$_] -notmatch "^$($fieldNames[$_])=[^\r\n=]+$" }).Count -ne 0) { throw 'candidate manifest is not the exact v2 field order' }
 $sourceCommit = ([regex]::Match($manifestLines[9], '^source_commit=([0-9a-f]{40})$')).Groups[1].Value
 $manifestTag = ([regex]::Match($manifestLines[8], '^tag=(v[0-9]+\.[0-9]+\.[0-9]+)$')).Groups[1].Value
 if ([string]::IsNullOrWhiteSpace($sourceCommit) -or $manifestTag -cne $tag) { throw 'candidate manifest tag/source commit is invalid' }
