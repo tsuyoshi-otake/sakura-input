@@ -108,6 +108,26 @@ jobs:
             throw 'a test process survived its invocation'
           }
 
+      - name: Self-test SIMD assembly gate
+        shell: pwsh
+        run: ./ci/check-simd-assembly.ps1 -SelfTest
+
+      - name: Audit SIMD assembly
+        shell: pwsh
+        run: |
+          $auditRoot = Join-Path $env:RUNNER_TEMP 'sakura-simd-assembly'
+          ./ci/check-simd-assembly.ps1 -TargetDirectory $auditRoot
+
+      - name: Prove SIMD assembly audit processes exited
+        if: always()
+        shell: pwsh
+        run: |
+          ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate
+            throw 'a SIMD assembly audit process survived its invocation'
+          }
+
       # DESIGN 7's sandboxed-access claim (the pipe's DACL and low-integrity
       # label must let a real AppContainer token connect and round-trip a
       # keystroke) is not exercised by the default `cargo test --workspace`
