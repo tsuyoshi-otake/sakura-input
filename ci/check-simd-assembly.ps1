@@ -199,8 +199,13 @@ function Assert-MutantRejected {
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$Assembly,
-        [Parameter(Mandatory)][string]$ExpectedError
+        [Parameter(Mandatory)][string]$ExpectedError,
+        [Parameter(Mandatory)][string]$BaselineAssembly
     )
+
+    if ($Assembly -ceq $BaselineAssembly) {
+        throw "self-test mutant '$Name' did not change the fixture"
+    }
 
     try {
         $null = Test-SimdAssembly $Assembly
@@ -218,22 +223,28 @@ function Assert-MutantRejected {
 function Invoke-SelfTest {
     $fixture = Get-SelfTestAssembly
     $null = Test-SimdAssembly $fixture
+    $newline = if ($fixture.Contains("`r`n")) { "`r`n" } else { "`n" }
 
     Assert-MutantRejected 'required instruction removed' `
         ($fixture.Replace('vpshufb', 'vpand')) `
-        '*missing the SSSE3 nibble-LUT shuffle*'
+        '*missing the SSSE3 nibble-LUT shuffle*' `
+        $fixture
     Assert-MutantRejected 'forbidden vector register added' `
-        ($fixture.Replace("`tretq`n`t.def`t_ZN11sakura_core4simd18scan_avx_ssse3_128", "`tvmovdqu`t%xmm0, %xmm1`n`tretq`n`t.def`t_ZN11sakura_core4simd18scan_avx_ssse3_128")) `
-        '*unexpectedly contains vector or mask registers*'
+        ($fixture.Replace("`tretq$newline`t.def`t_ZN11sakura_core4simd18scan_avx_ssse3_128", "`tvmovdqu`t%xmm0, %xmm1$newline`tretq$newline`t.def`t_ZN11sakura_core4simd18scan_avx_ssse3_128")) `
+        '*unexpectedly contains vector or mask registers*' `
+        $fixture
     Assert-MutantRejected 'hot-path CPUID added' `
         ($fixture.Replace("`tmovq`tACTIVE_WIDTH_SCAN", "`tcpuid`n`tmovq`tACTIVE_WIDTH_SCAN")) `
-        '*unexpectedly contains a hot-path CPUID probe*'
+        '*unexpectedly contains a hot-path CPUID probe*' `
+        $fixture
     Assert-MutantRejected 'required symbol removed' `
         ($fixture.Replace('scan_avx2', 'scan_avx2_missing')) `
-        '*expected exactly one emitted symbol for scan_avx2, found 0*'
+        '*expected exactly one emitted symbol for scan_avx2, found 0*' `
+        $fixture
     Assert-MutantRejected 'required symbol duplicated' `
         ($fixture + "`n`t.def`t_ZN11sakura_core4simd9scan_avx217hduplicateE;`n_ZN11sakura_core4simd9scan_avx217hduplicateE:`n`tretq`n") `
-        '*expected exactly one emitted symbol for scan_avx2, found 2*'
+        '*expected exactly one emitted symbol for scan_avx2, found 2*' `
+        $fixture
 
     Write-Host 'SIMD assembly matcher self-test passed: 5/5 mutants rejected'
 }
