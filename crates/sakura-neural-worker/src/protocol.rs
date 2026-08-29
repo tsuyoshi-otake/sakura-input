@@ -6,6 +6,9 @@ pub const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
 const REQUEST_MAGIC: u32 = 0x524e_4b53;
 const RESPONSE_MAGIC: u32 = 0x534e_4b53;
 const VERSION: u16 = 1;
+// Protocol v1 exposed Sakura's former SIMD tier at this exact offset. ONNX
+// Runtime owns execution dispatch, so new workers preserve the slot as zero.
+const LEGACY_TIER_RESERVED: u16 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Candidate {
@@ -105,13 +108,13 @@ pub(crate) fn read(input: &mut impl Read) -> io::Result<Option<Request>> {
         .map(Some)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
-pub(crate) fn write_failure(out: &mut impl Write, id: u64, tier: u16) -> io::Result<()> {
+pub(crate) fn write_failure(out: &mut impl Write, id: u64) -> io::Result<()> {
     let mut p = Vec::new();
     p.extend_from_slice(&RESPONSE_MAGIC.to_le_bytes());
     p.extend_from_slice(&VERSION.to_le_bytes());
     p.extend_from_slice(&2u16.to_le_bytes());
     p.extend_from_slice(&id.to_le_bytes());
-    p.extend_from_slice(&tier.to_le_bytes());
+    p.extend_from_slice(&LEGACY_TIER_RESERVED.to_le_bytes());
     p.extend_from_slice(&0u16.to_le_bytes());
     p.extend_from_slice(&0u32.to_le_bytes());
     out.write_all(&(p.len() as u32).to_le_bytes())?;
@@ -121,7 +124,6 @@ pub(crate) fn write_failure(out: &mut impl Write, id: u64, tier: u16) -> io::Res
 pub(crate) fn write_success(
     out: &mut impl Write,
     id: u64,
-    tier: u16,
     scores: &[(u64, f32)],
 ) -> io::Result<()> {
     if scores.len() > MAX_CANDIDATES || scores.iter().any(|(_, x)| !x.is_finite()) {
@@ -135,7 +137,7 @@ pub(crate) fn write_success(
     p.extend_from_slice(&VERSION.to_le_bytes());
     p.extend_from_slice(&0u16.to_le_bytes());
     p.extend_from_slice(&id.to_le_bytes());
-    p.extend_from_slice(&tier.to_le_bytes());
+    p.extend_from_slice(&LEGACY_TIER_RESERVED.to_le_bytes());
     p.extend_from_slice(&0u16.to_le_bytes());
     p.extend_from_slice(&(scores.len() as u32).to_le_bytes());
     for (f, x) in scores {
@@ -190,14 +192,14 @@ mod tests {
     }
     #[test]
     fn success_rejects_nonfinite() {
-        assert!(write_success(&mut Vec::new(), 7, 2, &[(1, f32::NAN)]).is_err());
-        assert!(write_success(&mut Vec::new(), 7, 2, &[(1, f32::INFINITY)]).is_err())
+        assert!(write_success(&mut Vec::new(), 7, &[(1, f32::NAN)]).is_err());
+        assert!(write_success(&mut Vec::new(), 7, &[(1, f32::INFINITY)]).is_err())
     }
 
     #[test]
     fn success_wire_round_trips_exact_fingerprints_and_float_bits() {
         let mut bytes = Vec::new();
-        write_success(&mut bytes, 7, 2, &[(9, -1.25), (10, 0.5)]).unwrap();
+        write_success(&mut bytes, 7, &[(9, -1.25), (10, 0.5)]).unwrap();
         let length = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
         assert_eq!(length, bytes.len() - 4);
         let payload = &bytes[4..];
@@ -206,7 +208,7 @@ mod tests {
         assert_eq!(u16_at(payload, &mut cursor).unwrap(), VERSION);
         assert_eq!(u16_at(payload, &mut cursor).unwrap(), 0);
         assert_eq!(u64_at(payload, &mut cursor).unwrap(), 7);
-        assert_eq!(u16_at(payload, &mut cursor).unwrap(), 2);
+        assert_eq!(u16_at(payload, &mut cursor).unwrap(), 0);
         assert_eq!(u16_at(payload, &mut cursor).unwrap(), 0);
         assert_eq!(u32_at(payload, &mut cursor).unwrap(), 2);
         assert_eq!(u64_at(payload, &mut cursor).unwrap(), 9);
@@ -214,6 +216,46 @@ mod tests {
         assert_eq!(u64_at(payload, &mut cursor).unwrap(), 10);
         assert_eq!(f32::from_bits(u32_at(payload, &mut cursor).unwrap()), 0.5);
         assert_eq!(cursor, payload.len());
+    }
+
+    #[test]
+    fn protocol_v1_success_layout_keeps_both_reserved_slots_and_score_offsets() {
+        let mut bytes = Vec::new();
+        write_success(&mut bytes, 7, &[(9, -1.25), (10, 0.5)]).unwrap();
+        #[rustfmt::skip]
+        let expected = [
+            0x30, 0x00, 0x00, 0x00, // payload length: 48
+            0x53, 0x4b, 0x4e, 0x53, // response magic
+            0x01, 0x00,             // protocol version
+            0x00, 0x00,             // success status
+            0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // request id
+            0x00, 0x00,             // legacy tier slot, reserved as zero
+            0x00, 0x00,             // second reserved slot
+            0x02, 0x00, 0x00, 0x00, // score count
+            0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // fingerprint 9
+            0x00, 0x00, 0xa0, 0xbf, // -1.25f32
+            0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // fingerprint 10
+            0x00, 0x00, 0x00, 0x3f, // 0.5f32
+        ];
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn protocol_v1_failure_layout_keeps_both_reserved_slots_and_count_offset() {
+        let mut bytes = Vec::new();
+        write_failure(&mut bytes, 7).unwrap();
+        #[rustfmt::skip]
+        let expected = [
+            0x18, 0x00, 0x00, 0x00, // payload length: 24
+            0x53, 0x4b, 0x4e, 0x53, // response magic
+            0x01, 0x00,             // protocol version
+            0x02, 0x00,             // failure status
+            0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // request id
+            0x00, 0x00,             // legacy tier slot, reserved as zero
+            0x00, 0x00,             // second reserved slot
+            0x00, 0x00, 0x00, 0x00, // score count
+        ];
+        assert_eq!(bytes, expected);
     }
 
     #[test]

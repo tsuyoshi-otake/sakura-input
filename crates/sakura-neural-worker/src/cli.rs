@@ -3,12 +3,11 @@ use std::path::PathBuf;
 pub enum Command {
     Stdio(PathBuf),
     Probe(PathBuf),
-    SelfTest(Option<String>),
+    SelfTest,
 }
 pub fn parse(a: &[String]) -> Result<Command, &'static str> {
     let mut m = None;
     let mut p = None;
-    let mut f = None;
     let mut i = 1;
     while i < a.len() {
         match a[i].as_str() {
@@ -24,24 +23,14 @@ pub fn parse(a: &[String]) -> Result<Command, &'static str> {
                 }
                 p = Some(PathBuf::from(&a[i]))
             }
-            "--force-tier" => {
-                i += 1;
-                if f.is_some() || i >= a.len() {
-                    return Err("bad force tier");
-                }
-                if !matches!(a[i].as_str(), "scalar" | "avx" | "avx2" | "avx512") {
-                    return Err("bad force tier");
-                }
-                f = Some(a[i].clone())
-            }
             _ => return Err("unknown argument"),
         }
         i += 1
     }
-    match (m, p, f) {
-        (Some("--stdio"), Some(x), None) => Ok(Command::Stdio(x)),
-        (Some("--probe"), Some(x), None) => Ok(Command::Probe(x)),
-        (Some("--self-test"), None, x) => Ok(Command::SelfTest(x)),
+    match (m, p) {
+        (Some("--stdio"), Some(x)) => Ok(Command::Stdio(x)),
+        (Some("--probe"), Some(x)) => Ok(Command::Probe(x)),
+        (Some("--self-test"), None) => Ok(Command::SelfTest),
         _ => Err("invalid command"),
     }
 }
@@ -55,7 +44,7 @@ mod tests {
     fn ok() {
         assert!(p(&["x", "--stdio", "--model-dir", "m"]).is_ok());
         assert!(p(&["x", "--probe", "--model-dir", "m"]).is_ok());
-        assert!(p(&["x", "--self-test", "--force-tier", "avx2"]).is_ok())
+        assert!(p(&["x", "--self-test"]).is_ok())
     }
     #[test]
     fn no() {
@@ -69,5 +58,13 @@ mod tests {
         ] {
             assert!(p(x).is_err())
         }
+    }
+
+    #[test]
+    fn removed_force_tier_is_rejected_instead_of_claiming_an_execution_tier() {
+        assert_eq!(
+            p(&["x", "--self-test", "--force-tier", "avx2"]),
+            Err("unknown argument")
+        );
     }
 }
