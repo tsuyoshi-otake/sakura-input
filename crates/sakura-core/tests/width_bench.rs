@@ -22,6 +22,9 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::{_mm_lfence, _rdtsc};
+
 use sakura_core::text::TextSink;
 use sakura_core::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
 use sakura_proto::{FixedStr, Mode};
@@ -94,6 +97,123 @@ fn nanos_each(mut body: impl FnMut()) -> f64 {
         best = best.min(start.elapsed());
     }
     best.as_secs_f64() * 1e9 / ROUNDS as f64
+}
+
+/// The best of [`REPEATS`] serialized-TSC measurements, in CPU cycles per
+/// call. The project ships only on x86-64, so this is the most direct A/B
+/// signal for a small branch-and-loop change: unlike wall time it is not
+/// distorted by core-frequency changes between the baseline and candidate.
+#[cfg(target_arch = "x86_64")]
+fn cycles_each(mut body: impl FnMut()) -> f64 {
+    for _ in 0..ROUNDS / 10 {
+        body();
+    }
+    let mut best = u64::MAX;
+    for _ in 0..REPEATS {
+        // SAFETY: LFENCE serializes execution around RDTSC on the supported
+        // x86-64 target; neither intrinsic reads or writes memory.
+        let start = unsafe {
+            _mm_lfence();
+            _rdtsc()
+        };
+        for _ in 0..ROUNDS {
+            body();
+        }
+        // SAFETY: same serialized TSC read as above, after the measured body
+        // has completed.
+        let end = unsafe {
+            _mm_lfence();
+            _rdtsc()
+        };
+        best = best.min(end.wrapping_sub(start));
+    }
+    best as f64 / ROUNDS as f64
+}
+
+#[cfg(target_arch = "x86_64")]
+#[test]
+#[ignore = "timing, not a threshold: run with --release --ignored --nocapture and read it"]
+fn issue_110_width_paths_in_cpu_cycles() {
+    let default = Normalizer::default();
+    let all_full = Normalizer {
+        width: WidthPolicy {
+            alnum: Width::Full,
+            number: Width::Full,
+            symbol: Width::Full,
+        },
+        punctuation: PunctuationStyle::KUTEN_TOUTEN,
+        brackets: BracketStyle::default(),
+    };
+    let follow_mode = Normalizer {
+        width: WidthPolicy {
+            alnum: Width::FollowMode,
+            number: Width::FollowMode,
+            symbol: Width::FollowMode,
+        },
+        punctuation: PunctuationStyle::KUTEN_TOUTEN,
+        brackets: BracketStyle::default(),
+    };
+    let cases = [
+        ("default one-key", &default, Mode::Hiragana, "k"),
+        (
+            "default ASCII",
+            &default,
+            Mode::Hiragana,
+            "docker compose up -d --build --remove-orphans",
+        ),
+        (
+            "default Japanese",
+            &default,
+            Mode::Hiragana,
+            "この変換候補は直前に確定した内容を考慮して並べ替えられます。",
+        ),
+        (
+            "default mixed",
+            &default,
+            Mode::Hiragana,
+            "Docker のビルドキャッシュは ~/.cache/docker に置く、CI でも同じ。",
+        ),
+        (
+            "all-full ASCII",
+            &all_full,
+            Mode::Hiragana,
+            "docker compose up -d --build --remove-orphans",
+        ),
+        (
+            "all-full identifier",
+            &all_full,
+            Mode::Hiragana,
+            "issue_110_width_normalizer_fast_path_identifier_2026",
+        ),
+        (
+            "follow/full-alnum",
+            &follow_mode,
+            Mode::FullAlnum,
+            "issue_110_width_normalizer_fast_path_identifier_2026",
+        ),
+        (
+            "space/control-heavy",
+            &all_full,
+            Mode::Hiragana,
+            concat!(
+                " \t\n\r\0  \u{1}\u{7f} \t\n\r\0  \u{1}\u{7f} ",
+                " \t\n\r\0  \u{1}\u{7f} \t\n\r\0  \u{1}\u{7f} ",
+                " \t\n\r\0  \u{1}\u{7f} \t\n\r\0  \u{1}\u{7f} ",
+            ),
+        ),
+    ];
+
+    println!("\n{:<22} {:>5} {:>14}", "case", "bytes", "cycles/call");
+    for (name, normalizer, mode, src) in cases {
+        let cycles = cycles_each(|| {
+            let mut dst = Sink::new();
+            normalizer
+                .normalize_into(black_box(src), mode, &mut dst)
+                .expect("the sink is sized for the corpus");
+            black_box(dst.len());
+        });
+        println!("{name:<22} {:>5} {cycles:>14.2}", src.len());
+    }
 }
 
 #[test]

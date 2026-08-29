@@ -338,6 +338,22 @@ pub struct Normalizer {
     pub brackets: BracketStyle,
 }
 
+/// One call's mode-resolved answer for the three width-policy channels.
+/// Keeping this together makes the long-input dispatch pay for resolving
+/// `FollowMode` once, before choosing between the rewrite and scanner paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ResolvedWidths {
+    alnum: bool,
+    number: bool,
+    symbol: bool,
+}
+
+impl ResolvedWidths {
+    fn all_full(self) -> bool {
+        self.alnum && self.number && self.symbol
+    }
+}
+
 impl Normalizer {
     /// Normalizes every character of `src` according to `mode` and this
     /// normalizer's policy, appending the result to `dst`.
@@ -354,38 +370,24 @@ impl Normalizer {
     ///
     /// Most text arrives already in the width the policy wants — a half-width
     /// policy changes no ASCII at all, and kana and kanji are outside the
-    /// policy's reach — so this does not walk characters it has nothing to
-    /// say about. [`simd`] finds each run of bytes that will come out
-    /// unchanged and the run is copied in one move, leaving the
-    /// character-at-a-time path for the characters that actually change.
-    /// Observably this is identical to mapping [`Normalizer::normalize_char`]
-    /// over `src.chars()`, which is what the tests assert.
+    /// policy's reach. When at least one policy channel can pass ASCII
+    /// through, [`simd`] finds each unchanged run and copies it in one move,
+    /// leaving the character-at-a-time path for characters that change. When
+    /// all three resolved channels require full width, no useful alphanumeric,
+    /// number, or symbol run can exist, so the function goes straight through
+    /// [`Normalizer::normalize_char`] instead of paying to discover empty
+    /// runs. Both paths are observably identical to mapping that function over
+    /// `src.chars()`, which is what the tests assert.
     ///
     /// # What that is worth
     ///
-    /// Nanoseconds per call, per-character loop → this, best of seven runs on
-    /// one development machine (`tests/width_bench.rs`). The benchmark prints
-    /// the selected strategy separately; a CPU advertising AVX-512 does not
-    /// imply that a given input executed a 512-bit body:
-    ///
-    /// | text | half-width policy (the default) | every channel full-width |
-    /// |------|--------------------------------:|-------------------------:|
-    /// | one keystroke | 1.7 → 2.1 | 1.6 → 2.8 |
-    /// | a 45-byte shell command | 55 → 10 | 62 → 75 |
-    /// | 90 bytes of Japanese prose | 54 → 58 | 54 → 59 |
-    /// | 84 bytes of mixed Japanese and ASCII | 76 → 50 | 77 → 79 |
-    ///
-    /// The left column is what ships, and the command line is the case this
-    /// exists for: five times faster, because an engineer's committed text is
-    /// mostly ASCII the policy has nothing to say about. Everything else is
-    /// within a nanosecond or two either way.
-    ///
-    /// The right column is the price of the guard when *no* ASCII survives
-    /// the policy, so every run is empty and the scan is pure overhead —
-    /// around 20% of a cost measured in tens of nanoseconds, against a
-    /// per-keystroke budget of 5 ms (DESIGN 10). It is a real regression, and
-    /// it is knowingly accepted: the configuration that pays it is the opt-in
-    /// one, and the configuration that gains is the shipped one.
+    /// The ignored release benchmark `issue_110_pre_i2_vs_bypass_in_cpu_cycles`
+    /// measures the exact former scanner dispatch and this dispatch in the
+    /// same compilation unit. It covers the shipped default, all-full ASCII
+    /// and identifiers, `FollowMode + FullAlnum`, and the deliberate adverse
+    /// case: space/control-heavy text under an all-full policy. That last case
+    /// can favour the scanner because those unaffected bytes form one bulk
+    /// passthrough run even though every governed ASCII character is rewritten.
     #[inline]
     pub fn normalize_into(
         &self,
@@ -407,7 +409,19 @@ impl Normalizer {
             }
             return Ok(());
         }
-        self.normalize_runs(src, mode, dst)
+        let resolved = self.resolved_widths(mode);
+        if resolved.all_full() {
+            // No alphanumeric, number, or symbol byte can form a useful
+            // passthrough run. Reuse the scalar policy choke point directly
+            // instead of building a LUT and repeatedly discovering empty
+            // runs. Its per-character pushes preserve the documented atomic
+            // overflow prefix exactly.
+            for c in src.chars() {
+                dst.push(self.normalize_char(c, mode))?;
+            }
+            return Ok(());
+        }
+        self.normalize_runs(src, mode, resolved, dst)
     }
 
     /// Renders kana modes after romaji composition has produced hiragana.
@@ -440,9 +454,10 @@ impl Normalizer {
         &self,
         src: &str,
         mode: Mode,
+        resolved: ResolvedWidths,
         dst: &mut impl TextSink,
     ) -> Result<(), Overflow> {
-        self.normalize_runs_with(src, mode, dst, simd::passthrough_len)
+        self.normalize_runs_with(src, mode, resolved, dst, simd::passthrough_len)
     }
 
     /// The long-string body parameterized by the already-selected run scanner.
@@ -454,12 +469,11 @@ impl Normalizer {
         &self,
         src: &str,
         mode: Mode,
+        resolved: ResolvedWidths,
         dst: &mut impl TextSink,
         mut scan: impl FnMut(&[u8], &simd::Lut) -> usize,
     ) -> Result<(), Overflow> {
-        // Resolved once per call rather than once per character: this is the
-        // whole of what the policy has to say about single-byte characters.
-        let lut = self.passthrough_lut(mode);
+        let lut = self.passthrough_lut(resolved);
         let mut rest = src;
         while let Some(&first) = rest.as_bytes().first() {
             // Asking whether a run *starts* here is a table lookup; asking
@@ -512,7 +526,14 @@ impl Normalizer {
         {
             return self.normalize_into(src, mode, dst);
         }
-        self.normalize_runs_with(src, mode, dst, |bytes, lut| {
+        let resolved = self.resolved_widths(mode);
+        if resolved.all_full() {
+            for c in src.chars() {
+                dst.push(self.normalize_char(c, mode))?;
+            }
+            return Ok(());
+        }
+        self.normalize_runs_with(src, mode, resolved, dst, |bytes, lut| {
             if bytes.len() < simd::MIN_VECTOR_BYTES {
                 // Match production's caller-side scalar short-input path. The
                 // global strategy is not observed here because
@@ -525,12 +546,18 @@ impl Normalizer {
     }
 
     /// The set of single-byte characters this policy leaves alone in `mode`.
-    fn passthrough_lut(&self, mode: Mode) -> simd::Lut {
-        let mut lut = *simd::passthrough_lut(
-            wants_full(self.width.alnum, mode),
-            wants_full(self.width.number, mode),
-            wants_full(self.width.symbol, mode),
-        );
+    fn resolved_widths(&self, mode: Mode) -> ResolvedWidths {
+        ResolvedWidths {
+            alnum: wants_full(self.width.alnum, mode),
+            number: wants_full(self.width.number, mode),
+            symbol: wants_full(self.width.symbol, mode),
+        }
+    }
+
+    /// The set of single-byte characters these already-resolved decisions
+    /// leave alone.
+    fn passthrough_lut(&self, resolved: ResolvedWidths) -> simd::Lut {
+        let mut lut = *simd::passthrough_lut(resolved.alnum, resolved.number, resolved.symbol);
         // `[`/`]` are otherwise admitted by the ASCII symbol LUT.  They are
         // owned by the bracket setting, so stop SIMD runs at both bytes and
         // let `normalize_char` map them just like the non-ASCII pairs.
@@ -719,6 +746,187 @@ fn map_punct(role: PunctRole, style: PunctuationStyle) -> char {
 mod tests {
     use super::*;
     use sakura_proto::FixedStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static OBSERVED_SCANS: AtomicUsize = AtomicUsize::new(0);
+
+    unsafe fn observed_scan(bytes: &[u8], lut: &simd::Lut) -> usize {
+        OBSERVED_SCANS.fetch_add(1, Ordering::Relaxed);
+        simd::passthrough_len(bytes, lut)
+    }
+
+    /// Exact pre-I2 dispatch retained only for the ignored A/B benchmark.
+    /// Both sides therefore share the production scanner, policy code, sink,
+    /// compilation unit, and optimizer visibility.
+    #[cfg(target_arch = "x86_64")]
+    fn pre_i2_normalize_into(
+        normalizer: &Normalizer,
+        src: &str,
+        mode: Mode,
+        dst: &mut impl TextSink,
+    ) -> Result<(), Overflow> {
+        if matches!(mode, Mode::Katakana | Mode::HalfKatakana) {
+            return normalizer.normalize_kana(src, mode, dst);
+        }
+        if src.len() < simd::MIN_VECTOR_BYTES {
+            for character in src.chars() {
+                dst.push(normalizer.normalize_char(character, mode))?;
+            }
+            return Ok(());
+        }
+        let resolved = normalizer.resolved_widths(mode);
+        normalizer.normalize_runs(src, mode, resolved, dst)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    fn width_cycles_each(mut body: impl FnMut()) -> f64 {
+        use std::arch::x86_64::{_mm_lfence, _rdtsc};
+
+        const ROUNDS: usize = 50_000;
+        const REPEATS: usize = 7;
+        for _ in 0..ROUNDS / 10 {
+            body();
+        }
+        let mut best = u64::MAX;
+        for _ in 0..REPEATS {
+            // SAFETY: LFENCE serializes execution around RDTSC on x86-64;
+            // neither intrinsic reads or writes memory.
+            let start = unsafe {
+                _mm_lfence();
+                _rdtsc()
+            };
+            for _ in 0..ROUNDS {
+                body();
+            }
+            // SAFETY: same serialized TSC read as above, after the measured
+            // body has completed.
+            let end = unsafe {
+                _mm_lfence();
+                _rdtsc()
+            };
+            best = best.min(end.wrapping_sub(start));
+        }
+        best as f64 / ROUNDS as f64
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    fn measure_pre_i2_cycles(normalizer: &Normalizer, src: &str, mode: Mode) -> f64 {
+        width_cycles_each(|| {
+            let mut dst = FixedStr::<1024>::new();
+            pre_i2_normalize_into(
+                std::hint::black_box(normalizer),
+                std::hint::black_box(src),
+                std::hint::black_box(mode),
+                &mut dst,
+            )
+            .expect("the benchmark sink is sized");
+            std::hint::black_box(dst.len());
+        })
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    fn measure_i2_cycles(normalizer: &Normalizer, src: &str, mode: Mode) -> f64 {
+        width_cycles_each(|| {
+            let mut dst = FixedStr::<1024>::new();
+            normalizer
+                .normalize_into(
+                    std::hint::black_box(src),
+                    std::hint::black_box(mode),
+                    &mut dst,
+                )
+                .expect("the benchmark sink is sized");
+            std::hint::black_box(normalizer);
+            std::hint::black_box(dst.len());
+        })
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    #[ignore = "timing, not a threshold: run with --release --ignored --nocapture and read it"]
+    fn issue_110_pre_i2_vs_bypass_in_cpu_cycles() {
+        let default = Normalizer::default();
+        let all_full = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::Full,
+                number: Width::Full,
+                symbol: Width::Full,
+            },
+            ..Normalizer::default()
+        };
+        let follow_mode = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::FollowMode,
+                number: Width::FollowMode,
+                symbol: Width::FollowMode,
+            },
+            ..Normalizer::default()
+        };
+        let cases = [
+            ("default one-key", &default, Mode::Hiragana, "k"),
+            (
+                "default ASCII",
+                &default,
+                Mode::Hiragana,
+                "docker compose up -d --build --remove-orphans",
+            ),
+            (
+                "default Japanese",
+                &default,
+                Mode::Hiragana,
+                "この変換候補は直前に確定した内容を考慮して並べ替えられます。",
+            ),
+            (
+                "default mixed",
+                &default,
+                Mode::Hiragana,
+                "Docker のビルドキャッシュは ~/.cache/docker に置く、CI でも同じ。",
+            ),
+            (
+                "all-full ASCII",
+                &all_full,
+                Mode::Hiragana,
+                "docker compose up -d --build --remove-orphans",
+            ),
+            (
+                "all-full identifier",
+                &all_full,
+                Mode::Hiragana,
+                "issue_110_width_normalizer_fast_path_identifier_2026",
+            ),
+            (
+                "follow/full-alnum",
+                &follow_mode,
+                Mode::FullAlnum,
+                "issue_110_width_normalizer_fast_path_identifier_2026",
+            ),
+            (
+                "space/control-heavy",
+                &all_full,
+                Mode::Hiragana,
+                concat!(
+                    " \t\n\r\0  \u{1}\u{7f} \t\n\r\0  \u{1}\u{7f} ",
+                    " \t\n\r\0  \u{1}\u{7f} \t\n\r\0  \u{1}\u{7f} ",
+                    " \t\n\r\0  \u{1}\u{7f} \t\n\r\0  \u{1}\u{7f} ",
+                ),
+            ),
+        ];
+
+        println!(
+            "\n{:<22} {:>5} {:>14} {:>14} {:>10}",
+            "case", "bytes", "old cycles", "new cycles", "delta"
+        );
+        for (name, normalizer, mode, src) in cases {
+            let old_first = measure_pre_i2_cycles(normalizer, src, mode);
+            let new_first = measure_i2_cycles(normalizer, src, mode);
+            let new_cycles = new_first.min(measure_i2_cycles(normalizer, src, mode));
+            let old_cycles = old_first.min(measure_pre_i2_cycles(normalizer, src, mode));
+            let delta = (new_cycles / old_cycles - 1.0) * 100.0;
+            println!(
+                "{name:<22} {:>5} {old_cycles:>14.2} {new_cycles:>14.2} {delta:>9.2}%",
+                src.len()
+            );
+        }
+    }
 
     #[test]
     fn width_offset_is_pinned_to_literal_code_points() {
@@ -1150,6 +1358,7 @@ mod tests {
             "🍣",
             "\0\u{1}\u{7f}",
             "日本語とEnglishが混ざったテキスト、句読点。",
+            "A[、，｡]\0𠮷🍣z．。］終わり",
         ]
         .iter()
         .map(|s| (*s).to_owned())
@@ -1166,7 +1375,17 @@ mod tests {
                 all.push(base.repeat(repeat));
             }
         }
+        let exact_length_pattern = "a1[]!,.Z09_-+/=control".repeat(4);
+        for len in [16usize, 31, 32, 63, 64, 65] {
+            all.push(exact_length_pattern[..len].to_owned());
+        }
         all
+    }
+
+    fn scalar_reference(normalizer: &Normalizer, src: &str, mode: Mode) -> String {
+        src.chars()
+            .map(|c| normalizer.normalize_char(c, mode))
+            .collect()
     }
 
     /// The width-policy run path must be observably identical to the scalar
@@ -1197,6 +1416,124 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn exact_vector_boundaries_are_identical_from_misaligned_slices() {
+        let payload = "a1[]!,.Z09_-+/=control".repeat(4);
+        let storage = format!("{}{payload}", "#".repeat(64));
+        let offset = (1usize..=32)
+            .find(|offset| !(storage.as_ptr() as usize + offset).is_multiple_of(32))
+            .expect("one of 32 consecutive offsets must be misaligned");
+        assert!(!(storage.as_ptr() as usize + offset).is_multiple_of(32));
+
+        for len in [16usize, 31, 32, 63, 64, 65] {
+            let src = &storage[offset..offset + len];
+            assert_eq!(src.len(), len);
+            for normalizer in every_normalizer() {
+                for mode in Mode::ALL {
+                    if matches!(mode, Mode::Katakana | Mode::HalfKatakana) {
+                        continue;
+                    }
+                    let expected = scalar_reference(&normalizer, src, mode);
+                    let mut actual = String::new();
+                    normalizer
+                        .normalize_into(src, mode, &mut actual)
+                        .expect("a String never overflows");
+                    assert_eq!(
+                        actual, expected,
+                        "{normalizer:?} in {mode:?} disagreed at offset {offset}, length {len}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_full_decisions_bypass_the_scanner_and_other_policies_retain_it() {
+        let src = "issue_110_width_normalizer_fast_path_identifier_2026";
+        assert!(src.len() >= simd::MIN_VECTOR_BYTES);
+        let all_full = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::Full,
+                number: Width::Full,
+                symbol: Width::Full,
+            },
+            ..Normalizer::default()
+        };
+        let follow_mode = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::FollowMode,
+                number: Width::FollowMode,
+                symbol: Width::FollowMode,
+            },
+            ..Normalizer::default()
+        };
+
+        for (normalizer, mode, expected_scans) in [
+            (all_full, Mode::Hiragana, 0),
+            (follow_mode, Mode::FullAlnum, 0),
+            (Normalizer::default(), Mode::Hiragana, 1),
+            (follow_mode, Mode::Hiragana, 1),
+        ] {
+            OBSERVED_SCANS.store(0, Ordering::Relaxed);
+            let mut actual = String::new();
+            // SAFETY: `observed_scan` has no target-feature requirement and
+            // delegates to the production safe dispatcher.
+            unsafe {
+                normalizer
+                    .normalize_into_with_scan(src, mode, &mut actual, observed_scan)
+                    .expect("a String never overflows");
+            }
+            assert_eq!(actual, scalar_reference(&normalizer, src, mode));
+            assert_eq!(
+                OBSERVED_SCANS.load(Ordering::Relaxed),
+                expected_scans,
+                "{normalizer:?} in {mode:?} chose the wrong long-input path"
+            );
+        }
+    }
+
+    #[test]
+    fn all_full_overflow_is_atomic_at_every_character_boundary() {
+        let normalizer = Normalizer {
+            width: WidthPolicy {
+                alnum: Width::Full,
+                number: Width::Full,
+                symbol: Width::Full,
+            },
+            ..Normalizer::default()
+        };
+        let src = "a".repeat(32);
+        assert!(src.len() >= simd::MIN_VECTOR_BYTES);
+
+        macro_rules! assert_capacity {
+            ($capacity:literal, $fitting_characters:literal, $result:expr) => {{
+                let mut dst = FixedStr::<$capacity>::new();
+                assert_eq!(
+                    normalizer.normalize_into(&src, Mode::Hiragana, &mut dst),
+                    $result,
+                    "capacity {}",
+                    $capacity
+                );
+                assert_eq!(
+                    dst.as_str(),
+                    "ａ".repeat($fitting_characters),
+                    "capacity {}",
+                    $capacity
+                );
+            }};
+        }
+
+        assert_capacity!(0, 0, Err(Overflow));
+        assert_capacity!(1, 0, Err(Overflow));
+        assert_capacity!(2, 0, Err(Overflow));
+        assert_capacity!(3, 1, Err(Overflow));
+        assert_capacity!(92, 30, Err(Overflow));
+        assert_capacity!(93, 31, Err(Overflow));
+        assert_capacity!(94, 31, Err(Overflow));
+        assert_capacity!(95, 31, Err(Overflow));
+        assert_capacity!(96, 32, Ok(()));
     }
 
     /// The same agreement, driven by character value rather than by string
