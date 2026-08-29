@@ -98,7 +98,7 @@ fn real_ort_model_scores_a_bounded_ipc_request() {
     assert_eq!(u16::from_le_bytes(take(&payload, &mut cursor)), 1);
     assert_eq!(u16::from_le_bytes(take(&payload, &mut cursor)), 0);
     assert_eq!(u64::from_le_bytes(take(&payload, &mut cursor)), 77);
-    let _tier = u16::from_le_bytes(take(&payload, &mut cursor));
+    assert_eq!(u16::from_le_bytes(take(&payload, &mut cursor)), 0);
     assert_eq!(u16::from_le_bytes(take(&payload, &mut cursor)), 0);
     assert_eq!(u32::from_le_bytes(take(&payload, &mut cursor)), 2);
     for expected_fingerprint in [101u64, 202] {
