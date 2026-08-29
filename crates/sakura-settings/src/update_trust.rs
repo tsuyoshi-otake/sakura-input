@@ -130,6 +130,10 @@ pub struct ReleaseManifest {
 
 impl ReleaseManifest {
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
+        Self::parse_with_sequence_floor(bytes, embedded_sequence_floor()?)
+    }
+
+    fn parse_with_sequence_floor(bytes: &[u8], sequence_floor: u64) -> Result<Self, String> {
         let lines = canonical_lines(bytes, 17, "release manifest", 64 * 1024)?;
         let schema = field(lines[0], "schema", "release manifest")?;
         let product = field(lines[1], "product", "release manifest")?;
@@ -181,7 +185,6 @@ impl ReleaseManifest {
                 "release manifest trust epoch {trust_epoch} is unsupported"
             ));
         }
-        let sequence_floor = embedded_sequence_floor()?;
         if release_sequence < sequence_floor {
             return Err(format!(
                 "release sequence {release_sequence} is below the embedded floor {sequence_floor}"
@@ -1185,7 +1188,10 @@ mod tests {
     fn positive_fixture_verifies_with_embedded_cng_key() {
         let manifest_bytes = fixture("manifest-positive.txt");
         let envelope_bytes = fixture("signature-positive.txt");
-        let manifest = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        // This immutable public cryptographic vector is sequence 1 by design.
+        // Parse it against its frozen floor; production parsing still uses the
+        // compiled floor through `ReleaseManifest::parse`.
+        let manifest = ReleaseManifest::parse_with_sequence_floor(&manifest_bytes, 1).unwrap();
         manifest
             .validate_runtime(Version::parse("1.0.33").unwrap(), FIXTURE_TIME)
             .unwrap();
@@ -1235,9 +1241,9 @@ mod tests {
             format!("{source}comment=untrusted\n"),
             source.replace("product=sakura-input", "product=sakura-input "),
         ] {
-            assert!(ReleaseManifest::parse(changed.as_bytes()).is_err());
+            assert!(ReleaseManifest::parse_with_sequence_floor(changed.as_bytes(), 1).is_err());
         }
-        let manifest = ReleaseManifest::parse(&bytes).unwrap();
+        let manifest = ReleaseManifest::parse_with_sequence_floor(&bytes, 1).unwrap();
         assert!(manifest
             .validate_runtime(Version::parse("1.0.32").unwrap(), FIXTURE_TIME)
             .is_err());
@@ -1247,21 +1253,29 @@ mod tests {
 
         let mut bom = vec![0xef, 0xbb, 0xbf];
         bom.extend_from_slice(&bytes);
-        assert!(ReleaseManifest::parse(&bom).is_err());
-        assert!(ReleaseManifest::parse(&bytes[..bytes.len() - 1]).is_err());
-        assert!(ReleaseManifest::parse(&source.replace('\n', "\r\n").into_bytes()).is_err());
+        assert!(ReleaseManifest::parse_with_sequence_floor(&bom, 1).is_err());
+        assert!(ReleaseManifest::parse_with_sequence_floor(&bytes[..bytes.len() - 1], 1).is_err());
+        assert!(ReleaseManifest::parse_with_sequence_floor(
+            &source.replace('\n', "\r\n").into_bytes(),
+            1
+        )
+        .is_err());
         let mut reordered: Vec<_> = source.lines().collect();
         reordered.swap(1, 2);
-        assert!(ReleaseManifest::parse(format!("{}\n", reordered.join("\n")).as_bytes()).is_err());
+        assert!(ReleaseManifest::parse_with_sequence_floor(
+            format!("{}\n", reordered.join("\n")).as_bytes(),
+            1
+        )
+        .is_err());
     }
 
     #[test]
     fn envelope_rejects_tamper_unknown_duplicate_unsorted_and_malformed_records() {
         let manifest_bytes = fixture("manifest-positive.txt");
-        let manifest = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        let manifest = ReleaseManifest::parse_with_sequence_floor(&manifest_bytes, 1).unwrap();
         let envelope = String::from_utf8(fixture("signature-positive.txt")).unwrap();
         let tampered = fixture("manifest-tampered.txt");
-        let tampered_manifest = ReleaseManifest::parse(&tampered).unwrap();
+        let tampered_manifest = ReleaseManifest::parse_with_sequence_floor(&tampered, 1).unwrap();
         assert!(
             verify_signed_manifest(&tampered, &tampered_manifest, envelope.as_bytes()).is_err()
         );
@@ -1341,8 +1355,11 @@ mod tests {
         let installer = temp_installer("state");
         let paths = TrustPaths::adjacent_to(&installer).unwrap();
         let current = Version::parse("1.0.33").unwrap();
-        let manifest_bytes = fixture("manifest-positive.txt");
-        let mut manifest = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        let mut manifest =
+            ReleaseManifest::parse_with_sequence_floor(&fixture("manifest-positive.txt"), 1)
+                .unwrap();
+        manifest.release_sequence = embedded_sequence_floor().unwrap();
+        let manifest_bytes = manifest.canonical_text().into_bytes();
         let digest = sha256_bytes(&manifest_bytes).unwrap();
         assert_eq!(
             authorize_manifest(
@@ -1381,7 +1398,7 @@ mod tests {
         assert!(authorize_manifest(
             &installer,
             current,
-            &ReleaseManifest::parse(&manifest_bytes).unwrap(),
+            &manifest,
             digest,
             Duration::from_secs(1)
         )
@@ -1395,7 +1412,7 @@ mod tests {
         assert!(authorize_manifest(
             &installer,
             current,
-            &ReleaseManifest::parse(&manifest_bytes).unwrap(),
+            &manifest,
             digest,
             Duration::from_secs(1)
         )
@@ -1411,8 +1428,11 @@ mod tests {
     #[test]
     fn manually_installed_current_version_advances_sequence_state() {
         let installer = temp_installer("manual-current");
-        let manifest_bytes = fixture("manifest-positive.txt");
-        let first = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        let mut first =
+            ReleaseManifest::parse_with_sequence_floor(&fixture("manifest-positive.txt"), 1)
+                .unwrap();
+        first.release_sequence = embedded_sequence_floor().unwrap();
+        let manifest_bytes = first.canonical_text().into_bytes();
         authorize_manifest(
             &installer,
             Version::parse("1.0.33").unwrap(),
@@ -1423,7 +1443,7 @@ mod tests {
         .unwrap();
 
         let mut next = first.clone();
-        next.release_sequence = 2;
+        next.release_sequence = first.release_sequence + 1;
         next.version = Version::parse("1.0.34").unwrap();
         next.installer_url = installer_url_for(next.version);
         let next_bytes = next.canonical_text();
@@ -1440,7 +1460,7 @@ mod tests {
         );
         let paths = TrustPaths::adjacent_to(&installer).unwrap();
         let state = TrustState::parse(&fs::read(&paths.state).unwrap()).unwrap();
-        assert_eq!(state.highest_sequence, 2);
+        assert_eq!(state.highest_sequence, first.release_sequence + 1);
         assert_eq!(state.highest_version, Version::parse("1.0.34").unwrap());
         assert!(authorize_manifest(
             &installer,
@@ -1485,8 +1505,11 @@ mod tests {
     fn trust_state_write_failure_is_terminal() {
         let installer = temp_installer("write-failure");
         let paths = TrustPaths::adjacent_to(&installer).unwrap();
-        let manifest_bytes = fixture("manifest-positive.txt");
-        let first = ReleaseManifest::parse(&manifest_bytes).unwrap();
+        let mut first =
+            ReleaseManifest::parse_with_sequence_floor(&fixture("manifest-positive.txt"), 1)
+                .unwrap();
+        first.release_sequence = embedded_sequence_floor().unwrap();
+        let manifest_bytes = first.canonical_text().into_bytes();
         let first_digest = sha256_bytes(&manifest_bytes).unwrap();
         authorize_manifest(
             &installer,
@@ -1504,7 +1527,7 @@ mod tests {
             .open(&paths.state)
             .unwrap();
         let mut next = first;
-        next.release_sequence = 2;
+        next.release_sequence += 1;
         next.version = Version::parse("1.0.34").unwrap();
         next.installer_url = installer_url_for(next.version);
         let next_digest = sha256_bytes(next.canonical_text().as_bytes()).unwrap();
