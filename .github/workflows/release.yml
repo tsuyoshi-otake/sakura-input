@@ -122,8 +122,12 @@ jobs:
         run: ./ci/ensure-cargo-audit.ps1
       - name: Audit dependencies
         run: cargo audit --file Cargo.lock
+      - name: Self-test quiet test runner
+        shell: pwsh
+        run: ./ci/test-run-test-quiet.ps1
       - name: Test
-        run: cargo test --workspace
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }
       - name: Prove test runners exited
         if: always()
         shell: pwsh
@@ -150,13 +154,15 @@ jobs:
         shell: pwsh
         run: |
           $env:SAKURA_PHASE2_DICTIONARY = Join-Path $env:GITHUB_WORKSPACE 'artifacts/release/system.dic'
-          cargo test -p dictc --test conversion real_dictionary_balances_non_initial_fragments_and_productive_bound_forms -- --ignored --nocapture
+          ./ci/run-test-quiet.ps1 -Name 'non-initial allomorph conversion gate' -Command { cargo test -p dictc --test conversion real_dictionary_balances_non_initial_fragments_and_productive_bound_forms -- --ignored --nocapture }
 
       - name: Gate general Japanese surface coverage
-        run: cargo test -p sakura-engine --test shipped_dictionary_ranking general_quality_floor_keeps_tate_vertical_in_the_candidate_page -- --ignored --exact --nocapture
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'general Japanese surface coverage gate' -Command { cargo test -p sakura-engine --test shipped_dictionary_ranking general_quality_floor_keeps_tate_vertical_in_the_candidate_page -- --ignored --exact --nocapture }
 
       - name: Gate learned homophones against cross-commit context
-        run: cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'learned homophone cross-commit gate' -Command { cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture }
 
       - name: Prove dictionary integration test runners exited
         if: always()
