@@ -67,8 +67,13 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Self-test quiet test runner
+        shell: pwsh
+        run: ./ci/test-run-test-quiet.ps1
+
       - name: Test
-        run: cargo test --workspace
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }
 
       - name: Prove workspace test runners exited
         if: always()
@@ -80,23 +85,12 @@ jobs:
             throw 'a test process survived its invocation'
           }
 
-      # `cargo test` captures stdout, so the step above proves the kernels
-      # agree without ever saying *which* kernels — and since the runner CPU
-      # varies (see "Show toolchain and CPU"), that set is not the same from
-      # run to run. Coverage you cannot tell apart from its absence is not
-      # coverage. This costs a few milliseconds and makes the log name the
-      # ISA the run actually exercised, so a reader can check rather than
-      # assume. It does not *require* any particular kernel: AVX-512 is
-      # verified locally by decision, and this step only reports.
-      #
-      # Quoted, and it has to be: the filter `simd::` puts a colon directly
-      # before a space, which is YAML's mapping separator, so unquoted this
-      # one line makes the whole file unparseable. GitHub does not report
-      # that as a syntax error on line 56 — it reports the workflow as
-      # having no triggers at all, names the run after the file path instead
-      # of `CI`, and runs zero jobs.
-      - name: Name the SIMD kernels this runner exercised
-        run: "cargo test -p sakura-core --lib -- simd:: --nocapture"
+      # Keep --nocapture so a failure names the exact host-supported kernel
+      # that disagreed with the scalar reference. Successful output remains
+      # one PASS line like every other test gate.
+      - name: Exercise the SIMD kernels this runner supports
+        shell: pwsh
+        run: "./ci/run-test-quiet.ps1 -Name 'SIMD kernel agreement' -Command { cargo test -p sakura-core --lib -- simd:: --nocapture }"
 
       - name: Prove SIMD test runner exited
         if: always()
@@ -142,7 +136,8 @@ jobs:
       # and plain `--ignored` with no filter would run that copy directly
       # too (see appcontainer.rs's module docs).
       - name: Sandbox access (AppContainer)
-        run: cargo test -p sakura-engine --test appcontainer -- --exact the_pipe_is_reachable_from_a_real_appcontainer_token --ignored --nocapture
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'AppContainer sandbox access' -Command { cargo test -p sakura-engine --test appcontainer -- --exact the_pipe_is_reachable_from_a_real_appcontainer_token --ignored --nocapture }
 
       - name: Prove AppContainer test runner exited
         if: always()
@@ -202,8 +197,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
+      - name: Self-test quiet test runner
+        shell: pwsh
+        run: ./ci/test-run-test-quiet.ps1
       - name: Fuzz the protocol decoders
-        run: cargo test -p sakura-proto --release --test robustness sharded_protocol_campaign -- --exact --ignored --nocapture
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'protocol decoder fuzz smoke' -Command { cargo test -p sakura-proto --release --test robustness sharded_protocol_campaign -- --exact --ignored --nocapture }
       - name: Prove protocol fuzz runner exited
         if: always()
         shell: pwsh
@@ -214,7 +213,8 @@ jobs:
             throw 'a test process survived its invocation'
           }
       - name: Fuzz hostile dictionary images
-        run: cargo test -p dictc --release --test dictionary_robustness sharded_hostile_dictionary_campaign -- --exact --ignored --nocapture
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'hostile dictionary fuzz smoke' -Command { cargo test -p dictc --release --test dictionary_robustness sharded_hostile_dictionary_campaign -- --exact --ignored --nocapture }
       - name: Prove dictionary fuzz runner exited
         if: always()
         shell: pwsh
@@ -225,7 +225,8 @@ jobs:
             throw 'a test process survived its invocation'
           }
       - name: Fuzz the input FSM
-        run: cargo test -p sakura-core --release --test fsm_robustness sharded_fsm_campaign -- --exact --ignored --nocapture
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'input FSM fuzz smoke' -Command { cargo test -p sakura-core --release --test fsm_robustness sharded_fsm_campaign -- --exact --ignored --nocapture }
       - name: Prove FSM fuzz runner exited
         if: always()
         shell: pwsh

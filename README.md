@@ -151,6 +151,6 @@ Windows の「インストールされているアプリ」からアンインス
 
 ## 開発者向け
 
-設計上の制約は [DESIGN.md](DESIGN.md)、フェーズと合格基準は [PLAN.md](PLAN.md)、別セッションへの作業引き継ぎは [CLAUDE.md](CLAUDE.md) を参照してください。通常の検証は `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` です。全フェーズの厳格判定は `scripts/verify-all-phases.ps1`、個別判定は `scripts/verify-phase0.ps1`～`verify-phase5.ps1` を使います。手動・dogfood・互換性・段階更新の記録例は `scripts/templates/` にあり、テンプレートをコピーしただけでは合格にならず、担当者・日時・実ファイルの SHA-256 が検証されます。
+設計上の制約は [DESIGN.md](DESIGN.md)、フェーズと合格基準は [PLAN.md](PLAN.md)、別セッションへの作業引き継ぎは [CLAUDE.md](CLAUDE.md) を参照してください。通常の検証は `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }` です。テストは成功時にPASS 1行だけを表示し、失敗時は保存していた通常ログを全量表示します。全フェーズの厳格判定は `scripts/verify-all-phases.ps1`、個別判定は `scripts/verify-phase0.ps1`～`verify-phase5.ps1` を使います。手動・dogfood・互換性・段階更新の記録例は `scripts/templates/` にあり、テンプレートをコピーしただけでは合格にならず、担当者・日時・実ファイルの SHA-256 が検証されます。
 
 辞書は `scripts/build-dictionary.ps1` が pinned source とSakuraのcurated layerから14カテゴリを決定論的に生成し、`.dic` はリポジトリへコミットしません。外部のカテゴリ辞書を追加する場合だけ `-SystemCategoryDirectory` を指定し、そのmanifestとライセンス宣言を厳格に検証します。`build-installer.ps1` は生成レポートに正規14カテゴリが完全・重複なしで記録されていない辞書を拒否します。`-EngineeringOnly` はローカル実装の反復用であり、CI、実ホスト、経過日数、72時間 fuzz、実署名、公開済み Release の代替にはなりません。

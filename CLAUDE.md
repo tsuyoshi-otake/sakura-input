@@ -1,5 +1,11 @@
 # Sakura Input 引き継ぎ指示書
 
+## テスト出力規約（Issue #111、owner判断、2026-08-30）
+
+- 通常の`cargo test`は、ローカル、Codex作業、CI、releaseのすべてで`./ci/run-test-quiet.ps1`を必ず経由する。成功時は`PASS: <テスト名>`の1行だけを返し、通常ログをコンテキストへ流さない。失敗時は保存していたstdout／stderrを全量再表示し、元の終了コードを失敗理由へ残す。
+- workspace全体の標準コマンドは`./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }`。対象テストも同じ形で`-Command`内の`cargo test`だけを絞る。ラッパーが失敗を報告した後に原因を調べる場合だけ、必要な単独テストを生の`cargo test -- --nocapture`で再実行してよい。
+- ラッパー自体を変更するときは`./ci/test-run-test-quiet.ps1`を実行し、成功出力が1行だけであること、失敗時にstdout／stderr／終了コードが戻ること、workflowに生の`cargo test`がないことを確認する。`cargo fmt`、`cargo clippy`、`cargo audit`はこのラッパーの対象外とする。
+
 ## 製品の主目的：ITエンジニア・ファースト（owner判断、2026-08-24）
 
 - Sakura Inputの主対象は、コード、技術文書、Issue、レビュー、チャット、ターミナルを行き来するITエンジニアとする。製品の短い表現は「コードと日本語の間を、自然につなぐIME」とする。
@@ -178,7 +184,7 @@ tracked diffの変化理由は特定できていない。reviewerの書き込み
    - `Verify:` 同期拒否、非同期遅延、focus変更、deactivate、後続キー入力を再現する回帰テスト。`Expect:` stale callbackが文書やcompositionを変更せず、全分岐がapplied／rejected／cancelled等の明示的終端へ到達する。
    - `Verify:` document editが失敗または拒否されるテスト。`Expect:` 内部composition状態が先行確定せず、文書と内部状態が一致する。
    - `Verify:` VS Code／Electron向けselection経路のテストまたは診断付き実動作確認。`Expect:` 既存の`GetSelection`安全経路を維持し、入力、確定、focus移動でクラッシュやハングがない。
-   - `Verify:` `rtk cargo fmt --all -- --check`、対象テスト、`rtk cargo test --workspace`、`rtk git diff --check`。`Expect:` すべて成功し、cargo／rustc／テストランナーの残存プロセスがない。
+   - `Verify:` `rtk cargo fmt --all -- --check`、静音ラッパー経由の対象テスト、`./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { rtk cargo test --workspace }`、`rtk git diff --check`。`Expect:` すべて成功し、cargo／rustc／テストランナーの残存プロセスがない。
 8. 最後に新しい独立コンテキストのSol reviewer（Sol Advisor 0.2.1既定のGPT-5.6 Sol／high／行動上read-only）で最終レビューする。親セッションの要約だけでなく、実diffとテスト証跡を直接読ませる。指摘修正後に必ず再レビューする。
 
 このVS Codeクラッシュ調査については、現時点でGitHub Issue、コミット、インストーラー、実環境への反映は作成していない。下の「検証済みの状態」は以前のIME機能に対する結果であり、今回のクラッシュ修正が済んだ証拠ではない。
@@ -277,7 +283,7 @@ Computer Useによるメモ帳の目視操作は既存ウィンドウの状態�
 
    ```powershell
    rtk cargo fmt --all -- --check
-   rtk cargo test --workspace
+   ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { rtk cargo test --workspace }
    rtk git diff --check
    ```
 
