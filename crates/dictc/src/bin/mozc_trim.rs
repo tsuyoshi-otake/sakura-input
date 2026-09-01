@@ -6,9 +6,13 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dictc::{
-    category::{mark_non_initial_allomorphs_with_legacy_evidence, parse_mozc_pos_catalog},
+    category::{
+        mark_non_initial_allomorphs_with_boundary_policy, parse_mozc_pos_catalog,
+        parse_non_initial_boundary_policy, NonInitialBoundaryReport,
+    },
     entries_to_tsv, parse_mozc_entries, MozcTrimmer, TrimPolicy, TrimReport, MOZC_UPSTREAM_COMMIT,
 };
+use sha2::{Digest, Sha256};
 
 const MOZC_REPOSITORY: &str = "https://github.com/google/mozc";
 const OUTPUT_LICENSE: &str = "LicenseRef-Mozc-Dictionary";
@@ -25,6 +29,7 @@ const DEFAULT_MAX_SURFACES_PER_READING: Option<usize> = None;
 struct Config {
     shards: Vec<PathBuf>,
     pos_catalog: PathBuf,
+    non_initial_policy: PathBuf,
     output: PathBuf,
     report: PathBuf,
     policy: TrimPolicy,
@@ -56,17 +61,40 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let (mut entries, legacy_evidence, mut trim_report) = trimmer.finish_with_legacy_evidence();
     let pos_source = config.pos_catalog.display().to_string();
     let pos_catalog = parse_mozc_pos_catalog(&pos_source, &read_utf8(&config.pos_catalog)?)?;
-    trim_report.non_initial_entries = mark_non_initial_allomorphs_with_legacy_evidence(
+    let boundary_policy_source = config.non_initial_policy.display().to_string();
+    let boundary_policy_bytes = std::fs::read(&config.non_initial_policy)
+        .map_err(|error| format!("read {}: {error}", config.non_initial_policy.display()))?;
+    let boundary_policy_text = std::str::from_utf8(&boundary_policy_bytes).map_err(|error| {
+        format!(
+            "{} is not valid UTF-8: {error}",
+            config.non_initial_policy.display()
+        )
+    })?;
+    let boundary_policy = parse_non_initial_boundary_policy(
+        &boundary_policy_source,
+        boundary_policy_text,
+        MOZC_UPSTREAM_COMMIT,
+    )?;
+    let boundary_report = mark_non_initial_allomorphs_with_boundary_policy(
         &mut entries,
         &legacy_evidence,
         &pos_catalog,
+        &boundary_policy,
     )?;
+    trim_report.non_initial_entries = boundary_report.remaining_non_initial_entries;
+    trim_report.output_entries = entries.len();
+    let boundary_policy_sha256 = sha256_hex(&boundary_policy_bytes);
     let tsv = entries_to_tsv(&entries, OUTPUT_LICENSE).map_err(|error| error.to_string())?;
-    let report = report_json(&config, trim_report)?;
+    let report = report_json(
+        &config,
+        trim_report,
+        boundary_report,
+        &boundary_policy_sha256,
+    )?;
     replacing_write(&config.output, tsv.as_bytes())?;
     replacing_write(&config.report, report.as_bytes())?;
     println!(
-        "trimmed {} input rows to {} entries ({} cost-filtered, {} deduplicated, {} rows / {} surfaces capped, {} rows / {} surfaces rescued from the legacy row cap) in {:.2}s",
+        "trimmed {} input rows to {} entries ({} cost-filtered, {} deduplicated, {} rows / {} surfaces capped, {} rows / {} surfaces rescued from the legacy row cap, {} initial pairs released after a {}-pair boundary audit) in {:.2}s",
         trim_report.input_entries,
         trim_report.output_entries,
         trim_report.input_entries.saturating_sub(trim_report.cost_eligible),
@@ -75,6 +103,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         trim_report.capped_surfaces,
         trim_report.surface_cap_rescued_entries,
         trim_report.surface_cap_rescued_surfaces,
+        boundary_report.allowed_initial_pairs,
+        boundary_report.audited_blocked_pairs,
         started.elapsed().as_secs_f64()
     );
     Ok(())
@@ -85,6 +115,7 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     let mut output = None;
     let mut report = None;
     let mut pos_catalog = None;
+    let mut non_initial_policy = None;
     let mut max_word_cost = DEFAULT_MAX_WORD_COST;
     let mut max_surfaces_per_reading = DEFAULT_MAX_SURFACES_PER_READING;
     let mut args = args.peekable();
@@ -95,6 +126,11 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
                 &mut pos_catalog,
                 next_path(&mut args, &argument)?,
                 "Mozc POS taxonomy",
+            )?,
+            Some("--non-initial-policy") => set_once(
+                &mut non_initial_policy,
+                next_path(&mut args, &argument)?,
+                "non-initial boundary policy",
             )?,
             Some("--output") => set_once(&mut output, next_path(&mut args, &argument)?, "output")?,
             Some("--report") => set_once(&mut report, next_path(&mut args, &argument)?, "report")?,
@@ -107,6 +143,7 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
             Some("--help" | "-h") => {
                 println!(
                     "Usage: mozc-trim --mozc-system FILE... --mozc-id-def FILE \
+                     --non-initial-policy FILE \
                      --output FILE --report FILE \
                      [--max-word-cost N] [--max-surfaces-per-reading N|none]"
                 );
@@ -119,6 +156,7 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     Ok(Config {
         shards,
         pos_catalog: pos_catalog.ok_or("--mozc-id-def is required")?,
+        non_initial_policy: non_initial_policy.ok_or("--non-initial-policy is required")?,
         output: output.ok_or("--output is required")?,
         report: report.ok_or("--report is required")?,
         policy: TrimPolicy {
@@ -129,11 +167,16 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     })
 }
 
-fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
+fn report_json(
+    config: &Config,
+    report: TrimReport,
+    boundary: NonInitialBoundaryReport,
+    boundary_policy_sha256: &str,
+) -> Result<String, String> {
     let mut output = String::new();
     writeln!(
         &mut output,
-        "{{\n  \"schema_version\": 3,\n  \"mozc_repository\": {},\n  \"mozc_revision\": {},\n  \"output_license\": {},",
+        "{{\n  \"schema_version\": 4,\n  \"mozc_repository\": {},\n  \"mozc_revision\": {},\n  \"output_license\": {},",
         json_string(MOZC_REPOSITORY),
         json_string(MOZC_UPSTREAM_COMMIT),
         json_string(OUTPUT_LICENSE)
@@ -141,7 +184,7 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
     .map_err(|error| error.to_string())?;
     writeln!(
         &mut output,
-        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_surfaces_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"legacy_row_evidence_cap\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
+        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_surfaces_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"legacy_row_evidence_cap\": {},\n  \"non_initial_policy_sha256\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"raw_non_initial_entries\": {},\n  \"raw_non_initial_pairs\": {},\n  \"already_initial_pairs\": {},\n  \"audited_blocked_pairs\": {},\n  \"allowed_initial_pairs\": {},\n  \"retained_non_initial_pairs\": {},\n  \"released_non_initial_entries\": {},\n  \"generated_initial_alias_entries\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
         config.shards.len(),
         config.policy.max_word_cost,
         config
@@ -149,6 +192,7 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
             .max_surfaces_per_reading
             .map_or_else(|| "null".to_string(), |cap| cap.to_string()),
         config.policy.legacy_row_evidence_cap,
+        json_string(boundary_policy_sha256),
         report.input_entries,
         report.cost_eligible,
         report.duplicate_entries,
@@ -157,11 +201,28 @@ fn report_json(config: &Config, report: TrimReport) -> Result<String, String> {
         report.capped_surfaces,
         report.surface_cap_rescued_entries,
         report.surface_cap_rescued_surfaces,
+        boundary.raw_non_initial_entries,
+        boundary.raw_non_initial_pairs,
+        boundary.already_initial_pairs,
+        boundary.audited_blocked_pairs,
+        boundary.allowed_initial_pairs,
+        boundary.retained_non_initial_pairs,
+        boundary.released_non_initial_entries,
+        boundary.generated_initial_alias_entries,
         report.non_initial_entries,
         report.output_entries
     )
     .map_err(|error| error.to_string())?;
     Ok(output)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut output, "{byte:02x}").expect("write to String");
+    }
+    output
 }
 
 fn json_string(value: &str) -> String {
