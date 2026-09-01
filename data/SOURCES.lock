@@ -15,6 +15,15 @@ max_word_cost = 6900
 max_surfaces_per_reading = "none"
 legacy_row_evidence_cap = 12
 
+[sakura_non_initial_boundary_policy]
+path = "data/non-initial-boundary-policy.tsv"
+mozc_revision = "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732"
+bccwj_frequency_list_version = "1.0"
+bccwj_official_page = "https://clrd.ninjal.ac.jp/bccwj/freq-list.html"
+review_scope = "every reading/surface pair whose selected Mozc rows would otherwise all be non-initial"
+allow_rule = "exact short-unit evidence, or >=1000 conservative long-unit endings for readings of 2+ kana, plus the reported 済 form"
+output_license = "MIT"
+
 [smile_chat]
 repository = "https://github.com/systemexe-research-and-development/smile-chat"
 revision = "b5cada441b41c207ab49bf2cd5f1d9c5614c5b92"

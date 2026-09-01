@@ -369,6 +369,11 @@ fn embedded_sequence_floor() -> Result<u64, String> {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn embedded_sequence_floor_for_test() -> u64 {
+    embedded_sequence_floor().expect("embedded release sequence must be valid in tests")
+}
+
 fn is_lower_hex(value: &str, length: usize) -> bool {
     value.len() == length
         && value

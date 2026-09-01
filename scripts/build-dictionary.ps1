@@ -36,6 +36,7 @@ $CuratedHomophoneSystemDetails = Join-Path $RepositoryRoot 'data\curated-homopho
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
+$NonInitialBoundaryPolicy = Join-Path $RepositoryRoot 'data\non-initial-boundary-policy.tsv'
 $LlmDetailTargetDirectory = Join-Path $RepositoryRoot 'data\llm-detail-targets\000010'
 $LlmDetailReleaseDirectory = Join-Path $RepositoryRoot 'data\llm-details\releases\000010'
 $ExpectedSystemCategoryFiles = @(
@@ -77,6 +78,9 @@ if (-not [IO.File]::Exists($CuratedTerms)) {
 }
 if (-not [IO.File]::Exists($ConversionPriorities)) {
     throw "conversion-priority dictionary layer is missing: $ConversionPriorities"
+}
+if (-not [IO.File]::Exists($NonInitialBoundaryPolicy)) {
+    throw "non-initial boundary policy is missing: $NonInitialBoundaryPolicy"
 }
 foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
     if (-not [IO.File]::Exists($path)) {
@@ -354,6 +358,7 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
+        [Parameter(Mandatory)][string]$NonInitialBoundaryPolicyPath,
         [Parameter(Mandatory)][string]$WordNetLmfPath,
         [string[]]$SystemCategoryPaths = @()
     )
@@ -389,7 +394,12 @@ function Invoke-BuildPass {
     foreach ($shard in $shards) {
         $mozcArguments += @('--mozc-system', $shard)
     }
-    $mozcArguments += @('--mozc-id-def', $MozcPosPath, '--output', $systemTsv, '--report', $trimReport)
+    $mozcArguments += @(
+        '--mozc-id-def', $MozcPosPath,
+        '--non-initial-policy', $NonInitialBoundaryPolicyPath,
+        '--output', $systemTsv,
+        '--report', $trimReport
+    )
     Invoke-Rtk -Arguments $mozcArguments
 
     $inflectionArguments = @(
@@ -596,7 +606,9 @@ try {
         -CuratedHomophoneSystemDetailsPath $CuratedHomophoneSystemDetailsPath `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
-        -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
+        -ConversionPrioritiesPath $ConversionPriorities `
+        -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
+        -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
 
     $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'inflection_tsv', 'inflection_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'detail_coverage')
     if (-not $SkipDeterminismCheck) {
@@ -611,7 +623,9 @@ try {
             -CuratedHomophoneSystemDetailsPath $CuratedHomophoneSystemDetailsPath `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
-            -ConversionPrioritiesPath $ConversionPriorities -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
+            -ConversionPrioritiesPath $ConversionPriorities `
+            -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
+            -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
         foreach ($name in $scalarArtifactNames) {
             $firstHash = Get-Sha256 $primary[$name]
             $secondHash = Get-Sha256 $repeat[$name]
@@ -702,6 +716,7 @@ try {
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities
+            non_initial_boundary_policy = Get-ArtifactRecord $NonInitialBoundaryPolicy
             system_category_dictionary = if ($null -eq $SystemCategoryDictionary) {
                 $null
             }

@@ -76,4 +76,8 @@ foreach ($workflow in [System.IO.Directory]::EnumerateFiles($workflowRoot, '*.ym
     }
 }
 
+# The expected failure probe leaves its native exit code in PowerShell's
+# process-wide automatic variable. A successful self-test must not leak that
+# probe result to CI or to a caller that chains the next gate.
+$global:LASTEXITCODE = 0
 Write-Output 'PASS: quiet test runner self-test'
