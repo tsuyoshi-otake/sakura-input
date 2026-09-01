@@ -124,6 +124,167 @@ impl MozcPosCatalog {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InitialBoundaryDecision {
+    AllowInitial,
+    RetainNonInitial,
+}
+
+/// Exhaustive review decisions for readings whose Mozc rows would otherwise
+/// all be hidden at the beginning of a Sakura conversion query.
+#[derive(Debug)]
+pub struct NonInitialBoundaryPolicy {
+    decisions: BTreeMap<(String, String), InitialBoundaryDecision>,
+}
+
+/// Observable result of the raw allomorph classifier plus the exhaustive
+/// initial-boundary review policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NonInitialBoundaryReport {
+    pub raw_non_initial_entries: usize,
+    pub raw_non_initial_pairs: usize,
+    pub already_initial_pairs: usize,
+    pub audited_blocked_pairs: usize,
+    pub allowed_initial_pairs: usize,
+    pub retained_non_initial_pairs: usize,
+    pub released_non_initial_entries: usize,
+    pub generated_initial_alias_entries: usize,
+    pub remaining_non_initial_entries: usize,
+}
+
+/// Parses the canonical, sorted review table for initial-boundary candidates.
+///
+/// The table deliberately covers every `(reading, surface)` pair that would
+/// otherwise disappear completely. This is a fail-closed audit contract, not
+/// a small exception overlay: source drift must update the whole review before
+/// a new dictionary can be built.
+pub fn parse_non_initial_boundary_policy(
+    source: &str,
+    text: &str,
+    expected_mozc_revision: &str,
+) -> Result<NonInitialBoundaryPolicy, String> {
+    const HEADER: &str = "reading\tsurface\tdecision\tevidence";
+    let mut schema_version = None;
+    let mut mozc_revision = None;
+    let mut saw_header = false;
+    let mut previous_key: Option<(String, String)> = None;
+    let mut decisions = BTreeMap::new();
+
+    for (zero_based, raw) in text.lines().enumerate() {
+        let line_number = zero_based + 1;
+        let line = raw.trim_end_matches('\r');
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(comment) = line.strip_prefix('#') {
+            let comment = comment.trim();
+            if let Some(value) = comment.strip_prefix("schema_version:") {
+                set_policy_metadata(
+                    source,
+                    line_number,
+                    "schema_version",
+                    &mut schema_version,
+                    value.trim(),
+                )?;
+            } else if let Some(value) = comment.strip_prefix("mozc_revision:") {
+                set_policy_metadata(
+                    source,
+                    line_number,
+                    "mozc_revision",
+                    &mut mozc_revision,
+                    value.trim(),
+                )?;
+            }
+            continue;
+        }
+        if !saw_header {
+            if line != HEADER {
+                return Err(format!(
+                    "{source}:{line_number}: expected header '{HEADER}'"
+                ));
+            }
+            saw_header = true;
+            continue;
+        }
+
+        let columns = line.split('\t').collect::<Vec<_>>();
+        if columns.len() != 4 {
+            return Err(format!(
+                "{source}:{line_number}: expected 4 tab-separated columns, found {}",
+                columns.len()
+            ));
+        }
+        let reading = columns[0];
+        let surface = columns[1];
+        let evidence = columns[3];
+        if reading.is_empty() || surface.is_empty() || evidence.is_empty() {
+            return Err(format!(
+                "{source}:{line_number}: reading, surface, and evidence must be non-empty"
+            ));
+        }
+        let decision = match columns[2] {
+            "allow-initial" => InitialBoundaryDecision::AllowInitial,
+            "retain-non-initial" => InitialBoundaryDecision::RetainNonInitial,
+            value => {
+                return Err(format!(
+                    "{source}:{line_number}: unknown decision '{value}'"
+                ));
+            }
+        };
+        let key = (reading.to_owned(), surface.to_owned());
+        if previous_key
+            .as_ref()
+            .is_some_and(|previous| previous >= &key)
+        {
+            return Err(format!(
+                "{source}:{line_number}: policy rows must be strictly sorted by reading and surface"
+            ));
+        }
+        previous_key = Some(key.clone());
+        if decisions.insert(key, decision).is_some() {
+            return Err(format!(
+                "{source}:{line_number}: duplicate reading/surface decision"
+            ));
+        }
+    }
+
+    if !saw_header {
+        return Err(format!("{source}: missing policy header"));
+    }
+    if schema_version.as_deref() != Some("1") {
+        return Err(format!(
+            "{source}: schema_version must be exactly 1, found {}",
+            schema_version.as_deref().unwrap_or("<missing>")
+        ));
+    }
+    let actual_revision = mozc_revision.as_deref().unwrap_or("<missing>");
+    if actual_revision != expected_mozc_revision {
+        return Err(format!(
+            "{source}: mozc_revision '{actual_revision}' does not match pinned revision '{expected_mozc_revision}'"
+        ));
+    }
+    if decisions.is_empty() {
+        return Err(format!("{source}: policy has no decisions"));
+    }
+    Ok(NonInitialBoundaryPolicy { decisions })
+}
+
+fn set_policy_metadata(
+    source: &str,
+    line_number: usize,
+    name: &str,
+    slot: &mut Option<String>,
+    value: &str,
+) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{source}:{line_number}: {name} must not be empty"));
+    }
+    if slot.replace(value.to_owned()).is_some() {
+        return Err(format!("{source}:{line_number}: duplicate {name} metadata"));
+    }
+    Ok(())
+}
+
 /// Parses Mozc's `id.def`, keeping the POS fields associated with every
 /// connection id.  Reading the pinned taxonomy at build time is more robust
 /// than baking a fragile range of numeric ids into Sakura.
@@ -207,6 +368,214 @@ pub fn mark_non_initial_allomorphs_with_legacy_evidence(
         pos_catalog,
         |index| legacy_evidence[index],
     ))
+}
+
+/// Runs the raw POS-aware classifier, then applies the exhaustive boundary
+/// review for every pair that would otherwise have no initial candidate.
+pub fn mark_non_initial_allomorphs_with_boundary_policy(
+    entries: &mut Vec<SourceEntry>,
+    legacy_evidence: &[bool],
+    pos_catalog: &MozcPosCatalog,
+    policy: &NonInitialBoundaryPolicy,
+) -> Result<NonInitialBoundaryReport, String> {
+    mark_non_initial_allomorphs_with_legacy_evidence(entries, legacy_evidence, pos_catalog)?;
+
+    let raw_non_initial_entries = entries
+        .iter()
+        .filter(|entry| entry.flags.contains(EntryFlags::NON_INITIAL))
+        .count();
+    let raw_pairs = entries
+        .iter()
+        .filter(|entry| entry.flags.contains(EntryFlags::NON_INITIAL))
+        .map(|entry| (entry.reading.clone(), entry.surface.clone()))
+        .collect::<BTreeSet<_>>();
+    let initially_available = entries
+        .iter()
+        .filter(|entry| !entry.flags.contains(EntryFlags::NON_INITIAL))
+        .map(|entry| (entry.reading.clone(), entry.surface.clone()))
+        .collect::<BTreeSet<_>>();
+    let blocked_pairs = raw_pairs
+        .difference(&initially_available)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let policy_pairs = policy.decisions.keys().cloned().collect::<BTreeSet<_>>();
+    let missing = blocked_pairs
+        .difference(&policy_pairs)
+        .cloned()
+        .collect::<Vec<_>>();
+    let extra = policy_pairs
+        .difference(&blocked_pairs)
+        .cloned()
+        .collect::<Vec<_>>();
+    if !missing.is_empty() || !extra.is_empty() {
+        return Err(format!(
+            "non-initial boundary policy does not exactly cover blocked pairs; missing {} [{}], extra {} [{}]",
+            missing.len(),
+            summarize_reading_surface_pairs(&missing),
+            extra.len(),
+            summarize_reading_surface_pairs(&extra)
+        ));
+    }
+
+    let mut allowed_initial_pairs = 0usize;
+    let mut retained_non_initial_pairs = 0usize;
+    let mut released_non_initial_entries = 0usize;
+    let mut generated_initial_alias_entries = 0usize;
+    let mut initial_aliases = Vec::new();
+    for (pair, decision) in &policy.decisions {
+        match decision {
+            InitialBoundaryDecision::AllowInitial => {
+                let best_index = entries
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, entry)| {
+                        entry.reading == pair.0
+                            && entry.surface == pair.1
+                            && entry.flags.contains(EntryFlags::NON_INITIAL)
+                    })
+                    .min_by_key(|(_, entry)| {
+                        let labels = pos_catalog.labels_for(entry.left_id);
+                        let preference = match labels {
+                            Some(labels)
+                                if labels.first().is_some_and(|label| label == "名詞")
+                                    && has_label(labels, "接尾") =>
+                            {
+                                0u8
+                            }
+                            Some(labels) if has_label(labels, "接尾") => 1u8,
+                            _ => 2u8,
+                        };
+                        (preference, entry.word_cost, entry.left_id, entry.right_id)
+                    })
+                    .map(|(index, _)| index)
+                    .ok_or_else(|| {
+                        format!(
+                            "approved initial pair {}/{} has no non-initial entry",
+                            pair.0, pair.1
+                        )
+                    })?;
+                let target_identity = preferred_initial_identity(entries, pair, pos_catalog)
+                    .unwrap_or((entries[best_index].left_id, entries[best_index].right_id));
+                if let Some(existing_index) = entries.iter().position(|entry| {
+                    entry.reading == pair.0
+                        && entry.surface == pair.1
+                        && entry.left_id == target_identity.0
+                        && entry.right_id == target_identity.1
+                }) {
+                    let entry = &mut entries[existing_index];
+                    entry.flags =
+                        EntryFlags::from_bits(entry.flags.bits() & !EntryFlags::NON_INITIAL.bits());
+                    released_non_initial_entries = released_non_initial_entries.saturating_add(1);
+                } else {
+                    let mut alias = entries[best_index].clone();
+                    alias.left_id = target_identity.0;
+                    alias.right_id = target_identity.1;
+                    alias.flags =
+                        EntryFlags::from_bits(alias.flags.bits() & !EntryFlags::NON_INITIAL.bits());
+                    initial_aliases.push(alias);
+                    generated_initial_alias_entries =
+                        generated_initial_alias_entries.saturating_add(1);
+                }
+                allowed_initial_pairs = allowed_initial_pairs.saturating_add(1);
+            }
+            InitialBoundaryDecision::RetainNonInitial => {
+                retained_non_initial_pairs = retained_non_initial_pairs.saturating_add(1);
+            }
+        }
+    }
+    entries.extend(initial_aliases);
+    entries.sort_by(|a, b| {
+        (
+            &a.reading,
+            a.word_cost,
+            &a.surface,
+            a.left_id,
+            a.right_id,
+            a.flags.bits(),
+        )
+            .cmp(&(
+                &b.reading,
+                b.word_cost,
+                &b.surface,
+                b.left_id,
+                b.right_id,
+                b.flags.bits(),
+            ))
+    });
+
+    for (pair, decision) in &policy.decisions {
+        if *decision == InitialBoundaryDecision::AllowInitial
+            && !entries.iter().any(|entry| {
+                entry.reading == pair.0
+                    && entry.surface == pair.1
+                    && !entry.flags.contains(EntryFlags::NON_INITIAL)
+            })
+        {
+            return Err(format!(
+                "approved initial pair {}/{} remained unavailable",
+                pair.0, pair.1
+            ));
+        }
+    }
+
+    let remaining_non_initial_entries = entries
+        .iter()
+        .filter(|entry| entry.flags.contains(EntryFlags::NON_INITIAL))
+        .count();
+    Ok(NonInitialBoundaryReport {
+        raw_non_initial_entries,
+        raw_non_initial_pairs: raw_pairs.len(),
+        already_initial_pairs: raw_pairs.intersection(&initially_available).count(),
+        audited_blocked_pairs: blocked_pairs.len(),
+        allowed_initial_pairs,
+        retained_non_initial_pairs,
+        released_non_initial_entries,
+        generated_initial_alias_entries,
+        remaining_non_initial_entries,
+    })
+}
+
+fn preferred_initial_identity(
+    entries: &[SourceEntry],
+    pair: &(String, String),
+    pos_catalog: &MozcPosCatalog,
+) -> Option<(u16, u16)> {
+    let unvoiced_readings = unvoiced_initial_readings(&pair.0).collect::<BTreeSet<_>>();
+    entries
+        .iter()
+        .filter(|entry| {
+            entry.surface == pair.1
+                && unvoiced_readings.contains(&entry.reading)
+                && pos_catalog
+                    .labels_for(entry.left_id)
+                    .is_some_and(is_independent_base_pos)
+        })
+        .min_by_key(|entry| {
+            let labels = pos_catalog
+                .labels_for(entry.left_id)
+                .expect("filtered entry has POS labels");
+            let preference = if labels.first().is_some_and(|label| label == "名詞") {
+                0u8
+            } else {
+                1u8
+            };
+            (preference, entry.word_cost, entry.left_id, entry.right_id)
+        })
+        .map(|entry| (entry.left_id, entry.right_id))
+}
+
+fn summarize_reading_surface_pairs(pairs: &[(String, String)]) -> String {
+    const LIMIT: usize = 8;
+    let mut summary = pairs
+        .iter()
+        .take(LIMIT)
+        .map(|(reading, surface)| format!("{reading}/{surface}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if pairs.len() > LIMIT {
+        summary.push_str(", ...");
+    }
+    summary
 }
 
 fn mark_non_initial_allomorphs_by(
@@ -588,8 +957,9 @@ mod tests {
 
     use super::{
         classify_existing_entry, is_address_layer_entry, mark_non_initial_allomorphs,
+        mark_non_initial_allomorphs_with_boundary_policy,
         mark_non_initial_allomorphs_with_legacy_evidence, parse_mozc_pos_catalog,
-        DictionaryCategory,
+        parse_non_initial_boundary_policy, DictionaryCategory,
     };
     use crate::{entries_to_category_tsv, parse_category_entries, parse_entries};
 
@@ -765,6 +1135,121 @@ mod tests {
             mark_non_initial_allomorphs_with_legacy_evidence(&mut entries, &[true], &catalog,)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn exhaustive_boundary_policy_releases_only_one_reviewed_identity_per_pair() {
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "829 動詞,自立,*,*,五段・ワ行促音便,連用形,*\n1949 名詞,接尾,一般,*,*,*,*\n1851 名詞,一般,*,*,*,*,*\n",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            lexical_entry("つかい", "使い", 829),
+            lexical_entry("つかい", "使い", 1851),
+            lexical_entry("ずかい", "使い", 829),
+            lexical_entry("ずかい", "使い", 1949),
+            lexical_entry("すみ", "済み", 829),
+            lexical_entry("ずみ", "済み", 1949),
+            lexical_entry("ふり", "振り", 829),
+            lexical_entry("ふり", "振り", 1851),
+            lexical_entry("ぶり", "振り", 829),
+            lexical_entry("ぶり", "振り", 1949),
+        ];
+        let policy = parse_non_initial_boundary_policy(
+            "policy.tsv",
+            "# schema_version: 1\n# mozc_revision: test-revision\nreading\tsurface\tdecision\tevidence\nずかい\t使い\tretain-non-initial\tfragment-guard\nずみ\t済み\tallow-initial\tcommon-form\nぶり\t振り\tallow-initial\tcommon-form\n",
+            "test-revision",
+        )
+        .expect("policy parses");
+        let report = mark_non_initial_allomorphs_with_boundary_policy(
+            &mut entries,
+            &[true; 10],
+            &catalog,
+            &policy,
+        )
+        .expect("complete policy applies");
+
+        assert_eq!(report.raw_non_initial_entries, 5);
+        assert_eq!(report.raw_non_initial_pairs, 3);
+        assert_eq!(report.already_initial_pairs, 0);
+        assert_eq!(report.audited_blocked_pairs, 3);
+        assert_eq!(report.allowed_initial_pairs, 2);
+        assert_eq!(report.retained_non_initial_pairs, 1);
+        assert_eq!(report.released_non_initial_entries, 0);
+        assert_eq!(report.generated_initial_alias_entries, 2);
+        assert_eq!(report.remaining_non_initial_entries, 5);
+        let released_buri = entries
+            .iter()
+            .filter(|entry| {
+                entry.reading == "ぶり"
+                    && entry.surface == "振り"
+                    && !entry.flags.contains(EntryFlags::NON_INITIAL)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(released_buri.len(), 1);
+        assert_eq!(released_buri[0].left_id, 1851);
+        assert!(entries.iter().any(|entry| {
+            entry.reading == "ぶり"
+                && entry.surface == "振り"
+                && entry.left_id == 829
+                && entry.flags.contains(EntryFlags::NON_INITIAL)
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry.reading == "ずみ"
+                && entry.surface == "済み"
+                && !entry.flags.contains(EntryFlags::NON_INITIAL)
+        }));
+        assert!(entries
+            .iter()
+            .filter(|entry| { entry.reading == "ずかい" && entry.surface == "使い" })
+            .all(|entry| entry.flags.contains(EntryFlags::NON_INITIAL)));
+    }
+
+    #[test]
+    fn boundary_policy_fails_closed_on_source_drift_and_bad_metadata() {
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "829 動詞,自立,*,*,五段・ワ行促音便,連用形,*\n1949 名詞,接尾,一般,*,*,*,*\n1851 名詞,一般,*,*,*,*,*\n",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            lexical_entry("つかい", "使い", 829),
+            lexical_entry("つかい", "使い", 1851),
+            lexical_entry("ずかい", "使い", 829),
+            lexical_entry("ずかい", "使い", 1949),
+            lexical_entry("すみ", "済み", 829),
+            lexical_entry("ずみ", "済み", 1949),
+        ];
+        let incomplete = parse_non_initial_boundary_policy(
+            "policy.tsv",
+            "# schema_version: 1\n# mozc_revision: test-revision\nreading\tsurface\tdecision\tevidence\nずみ\t済み\tallow-initial\tcommon-form\n",
+            "test-revision",
+        )
+        .expect("incomplete policy is syntactically valid");
+        let error = mark_non_initial_allomorphs_with_boundary_policy(
+            &mut entries,
+            &[true; 6],
+            &catalog,
+            &incomplete,
+        )
+        .expect_err("missing blocked pair must fail");
+        assert!(error.contains("missing 1 [ずかい/使い]"), "{error}");
+
+        let wrong_revision = parse_non_initial_boundary_policy(
+            "policy.tsv",
+            "# schema_version: 1\n# mozc_revision: stale\nreading\tsurface\tdecision\tevidence\nずみ\t済み\tallow-initial\tcommon-form\n",
+            "test-revision",
+        )
+        .expect_err("stale Mozc identity must fail");
+        assert!(wrong_revision.contains("does not match pinned revision"));
+        let unsorted = parse_non_initial_boundary_policy(
+            "policy.tsv",
+            "# schema_version: 1\n# mozc_revision: test-revision\nreading\tsurface\tdecision\tevidence\nぶり\t振り\tallow-initial\tcommon-form\nずみ\t済み\tallow-initial\tcommon-form\n",
+            "test-revision",
+        )
+        .expect_err("non-canonical order must fail");
+        assert!(unsorted.contains("strictly sorted"));
     }
 
     #[test]

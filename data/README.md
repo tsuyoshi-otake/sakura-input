@@ -11,6 +11,7 @@ a diff, something has gone wrong.
 | `keymap-atok.toml` | 1 | Alternative ATOK-style bindings |
 | `SOURCES.lock` | 2 | Pinned upstream revisions, paths, license boundaries, and trim policy |
 | `mozc-trim.report.json` | 2 | Machine-readable result of the pinned Mozc trim |
+| `non-initial-boundary-policy.tsv` | 2 | Exhaustive review of every reading/surface pair that the raw allomorph classifier would otherwise hide completely at an initial conversion boundary |
 | `it-terms.tsv` | 2 | Generated MIT-licensed IT overlay from the pinned smile-chat glossary, including deterministic ASCII readings for Shift+English conversion |
 | `it-terms.report.json` | 2 | Import counts, ASCII-only term counts, and the explicit missing-reading gap list |
 | `curated-terms.tsv` | 2 | Project-authored MIT overlay for canonical casing and high-value terms missing from the generated glossary |
@@ -29,6 +30,22 @@ grows, which is why it has no command-line flag. The schema-3 trim report
 records the surface cap (`null` when absent), the frozen evidence cap, and the
 entries/surfaces rescued from the legacy row cap; this keeps general-Japanese
 coverage auditable without hiding it behind a small curated overlay.
+
+`non-initial-boundary-policy.tsv` is pinned to the same Mozc revision and must
+exactly cover every `(reading, surface)` pair whose selected rows would all be
+`non-initial`; missing and obsolete rows fail the build. The current review
+uses exact BCCWJ short-unit evidence, or at least 1,000 conservative BCCWJ
+long-unit endings for readings of two or more kana, plus the reported `ずみ →
+済` form. One-kana long-unit suffix matches are not sufficient evidence. For
+an approved pair, the compiler derives an initial-safe identity from the
+corresponding unvoiced independent base when available and leaves the original
+suffix/inflection identities protected; if the selected identity is already
+initial-safe, it releases only that one row. Thus common forms such as
+`済み`, `振り`, `会社`, `頃`, `分`, `作り`, and `不足` remain available after
+a user-visible composition boundary, while `ずかい → 使い／遣い` remains
+suppressed. The schema-4 trim report records the raw classifier totals, all 287
+audited blocked pairs, the 60 approved pairs, the retained pairs, the released
+and generated initial-entry counts, and the policy SHA-256.
 
 The dictionary compiler also expands Mozc 基本形 verbs and i-adjectives into fused conjugations (`来て`, `書いて`, `行って`, `高くて`, …) at build time. Sakura stores static lattice edges and does not inflect at runtime, so the Mozc trim can keep `来る` while dropping `来て`. `inflection-expand` reads the trimmed system TSV plus pinned `id.def`, emits only missing `(reading, surface)` pairs, and keeps Mozc connection ids. The generated overlay is `LicenseRef-Mozc-Dictionary` and is not checked in; `scripts/build-dictionary.ps1` rebuilds it every pass.
 

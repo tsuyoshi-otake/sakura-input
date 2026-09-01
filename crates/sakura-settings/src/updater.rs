@@ -1611,7 +1611,7 @@ mod tests {
     fn manifest(version: Version) -> ReleaseManifest {
         ReleaseManifest {
             trust_epoch: 1,
-            release_sequence: 2,
+            release_sequence: crate::update_trust::embedded_sequence_floor_for_test(),
             version,
             source_commit: "0000000000000000000000000000000000000000".to_owned(),
             installer_url: installer_url_for(version),
