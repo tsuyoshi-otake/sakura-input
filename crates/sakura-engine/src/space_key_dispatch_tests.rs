@@ -163,7 +163,7 @@ impl ProductionWorld {
                     );
                 }
             }
-            DomainEvent::ReplaceContext { connection }
+            DomainEvent::AbandonContext { connection }
             | DomainEvent::CrashRestart { connection } => {
                 let index = usize::from(connection);
                 if index < self.workers.len() {
@@ -180,6 +180,10 @@ impl ProductionWorld {
             DomainEvent::Disconnect { connection } => {
                 let index = usize::from(connection);
                 if index < self.live.len() {
+                    // The real pipe worker resets its dispatcher when a
+                    // connection ends. Merely stopping delivery leaks a live
+                    // claim in this adapter and is not that lifecycle.
+                    self.workers[index].reset();
                     self.live[index] = false;
                 }
             }
@@ -711,6 +715,23 @@ fn production_crash_restart_does_not_keep_the_old_composition() {
     assert!(!world.last_inserted, "the dropped reading owns this Space");
     assert!(!world.last_converted);
     assert_eq!(world.document_spaces, 0);
+}
+
+#[test]
+fn production_disconnect_releases_the_live_claim_and_keeps_one_teardown_credit() {
+    let mut world = ProductionWorld::new(2);
+    world.apply(DomainEvent::Type { connection: 0 });
+    world.apply(DomainEvent::Disconnect { connection: 0 });
+    world.apply(DomainEvent::Space { targets: 1 << 1 });
+    assert!(
+        !world.last_inserted,
+        "the disconnected reading owns one Space"
+    );
+    world.apply(DomainEvent::Space { targets: 1 << 1 });
+    assert!(
+        world.last_inserted,
+        "a disconnected worker cannot retain a live claim"
+    );
 }
 
 #[test]

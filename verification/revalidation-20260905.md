@@ -21,7 +21,7 @@ Priority and confidence are independent; developer-history failures require expl
 | C2 | IMPROVEMENT | P2 | #103 | separate search/request/surface/frame/arena budgets; baseline measurement pending |
 | C3 | IMPROVEMENT | P2 | #108, #93 | reported CandidateEvidence/projection implementation is in original dirty checkout, absent from fixed remote baseline; preserved, integration pending |
 | O1 | IMPROVEMENT | P2 | #104 | test-only image-policy diagnostics after observed CI rejection; same-commit retry passed, root cause unknown; existing v2 provenance retained, broader runtime/error audit pending; appcontainer-policy-evidence.md |
-| V1 | CONFIRMED | P2 | #106 | TLC runner returned success after Java failure, fixed with explicit result classification and process cleanup; 5 bounded searches and 4 expected witnesses rerun; historical verdict isolated as STALE; REQ09 model correspondence, PBT/C2/mutation manifest and dependency-closure gate pending; space-tlc-execution.md |
+| V1 | CONFIRMED | P2 | #106 | TLC false-success and 3 oracle/adapter correspondence regressions reproduced/fixed; 5 bounded searches+4 witnesses, oracle PBT512/C2 22-of-22, mutation32caught+1unviable; historical verdict STALE; teardown TLA model and dependency-closure CI gate remain; space-tlc-execution.md, space-oracle-correspondence.md |
 | V2 | IMPROVEMENT | P2 | #67 | real ThreadMgr harness feasibility and CI execution graph pending |
 | R1 | CODE_CONFIRMED | P2 | pending | learning::maintenance holds state try_lock across compact_state/sync_data; delayed-I/O reproduction pending; not a #107 diagnosis |
 | A1 | IMPROVEMENT | P2 | pending | extraction only after two concrete applicable stores; runtime/supervisor audit pending |
@@ -46,7 +46,8 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | H3 periodic retention plan | #130 | #131 | input_history::RetentionPlan / writer_loop_with_file / append_payload | maintenance_*; history-maintenance-plan.md and results JSON |
 | H4/H6 live counter exhaustion | #132 | #133 | InputHistoryService::allocate_counter / allocate_session_id / record_* / clear; dispatch/session unavailable-history boundary | counter_exhaustion_*; history-counter-exhaustion.md and results JSON |
 | T1 callback IPC deadline | #134 | #135 | TSF CallbackDeadline/key entries/Engine, Client::call_until/transfer | callback_deadline_*, partial_reply_deadline, completion_racing_timeout, expiry_between_final_check; tsf-callback-deadline.md and results JSON |
-| V1 TLC execution / stale verdict | #106 | pending | verify-space-key-dispatch-tlc.ps1 / Get-TlcOutcome / Invoke-BoundedProcess; traceability schema 2 | self-test, 9 TLC configs, actual timeout; space-tlc-execution.md and generated results |
+| V1 TLC execution / stale verdict | #106 | #136 | verify-space-key-dispatch-tlc.ps1 / Get-TlcOutcome / Invoke-BoundedProcess; traceability schema 2 | self-test, 9 TLC configs, actual timeout; space-tlc-execution.md and generated results |
+| V1 oracle / adapter correspondence | #106 | pending | oracle apply_space/Disconnect, ProductionWorld::Disconnect | 3 pre-fix failures, 47 targeted tests, 33 scoped mutants; space-oracle-correspondence.md and results JSON |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 
