@@ -13,7 +13,7 @@ Priority and confidence are independent; developer-history failures require expl
 | H4 | CONFIRMED | P1 | #116, #132 | startup ID and live counter panic/wrap reproduced and fixed; checked terminal allocation; durable generation/non-reuse remains; history-startup-scan.md, history-counter-exhaustion.md |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
 | H6 | MITIGATED | P1 | #118, #125 | pre-Clear producer resurrection and stop terminal-result counterexamples reproduced/fixed; store ownership in #123; producer admission closure, Flush retries, Clear durability and crash matrix remain; history-clear-epoch.md, history-stop-outcome.md |
-| T1 | CODE_CONFIRMED | P1 | #102 | send_key/link/connect/request and resync each supply independent 50ms budgets; whole-callback scripted/real pipe measurement pending |
+| T1 | CONFIRMED | P1 | #102, #134 | serial private-pipe callback110ms reproduced; parent deadline prevents later key send; pre-send/partial-frame/cancellation boundaries tested; physical COM/ETW/hard timing and deferred UI remain; tsf-callback-deadline.md |
 | T2 | DEFENSE_IN_DEPTH | P1 | #52 | four component counterexamples reproduced and guarded; Requested/exact ticket, context generation, latest UI lease; execution receipt and real COM reachability remain; write-journal-authority.md |
 | T3 | HYPOTHESIS | P1 | #57, #69, #7 | product reachability/COM teardown verification pending |
 | T4 | HYPOTHESIS | P1 | #102, #107 | no current ETW attribution; prior timeout mitigation is not root-cause proof |
@@ -44,7 +44,8 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | H1 publication containment | #127 | #128 | engine compact_file / replace_history_file / require_no_compaction_transaction | publication_*; history-compaction-publication.md and results JSON |
 | O1 AppContainer policy evidence | #104 | #129 | appcontainer integration test rejection diagnostic | image_policy_diagnostics_*; appcontainer-policy-evidence.md and results JSON |
 | H3 periodic retention plan | #130 | #131 | input_history::RetentionPlan / writer_loop_with_file / append_payload | maintenance_*; history-maintenance-plan.md and results JSON |
-| H4/H6 live counter exhaustion | #132 | pending | InputHistoryService::allocate_counter / allocate_session_id / record_* / clear; dispatch/session unavailable-history boundary | counter_exhaustion_*; history-counter-exhaustion.md and results JSON |
+| H4/H6 live counter exhaustion | #132 | #133 | InputHistoryService::allocate_counter / allocate_session_id / record_* / clear; dispatch/session unavailable-history boundary | counter_exhaustion_*; history-counter-exhaustion.md and results JSON |
+| T1 callback IPC deadline | #134 | pending | TSF CallbackDeadline/key entries/Engine, Client::call_until/transfer | callback_deadline_*, partial_reply_deadline, completion_racing_timeout, expiry_between_final_check; tsf-callback-deadline.md and results JSON |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 

@@ -733,7 +733,7 @@ fn handshake(client: &mut Client) -> io::Result<()> {
 
 fn fault(action: &str, error: Fault) -> io::Error {
     let kind = match error {
-        Fault::Timeout => io::ErrorKind::TimedOut,
+        Fault::Timeout | Fault::DeadlineExpired => io::ErrorKind::TimedOut,
         Fault::Disconnected => io::ErrorKind::BrokenPipe,
         Fault::Protocol(_) | Fault::Desynchronized => io::ErrorKind::InvalidData,
         Fault::Encode(_) => io::ErrorKind::InvalidInput,

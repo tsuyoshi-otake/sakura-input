@@ -6805,10 +6805,12 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Result<BOOL> {
+        let _deadline = crate::callback_deadline::CallbackDeadline::enter(engine::KEY_BUDGET);
         self.handle_key(pic, wparam, lparam, true)
     }
 
     fn OnKeyDown(&self, pic: Ref<'_, ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
+        let _deadline = crate::callback_deadline::CallbackDeadline::enter(engine::KEY_BUDGET);
         self.handle_key(pic, wparam, lparam, false)
     }
 
@@ -6839,6 +6841,7 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
     /// the engine is in Direct mode. Normalize it once, then reuse the same
     /// admission, IPC, and document-write path as an ordinary key event.
     fn OnPreservedKey(&self, pic: Ref<'_, ITfContext>, rguid: *const GUID) -> Result<BOOL> {
+        let _deadline = crate::callback_deadline::CallbackDeadline::enter(engine::KEY_BUDGET);
         if rguid.is_null() {
             return Err(Error::from_hresult(E_POINTER));
         }
