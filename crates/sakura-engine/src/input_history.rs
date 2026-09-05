@@ -675,7 +675,36 @@ pub struct InputHistoryService {
     next_sequence: AtomicU64,
     next_session_id: AtomicU64,
     epoch: AtomicU64,
-    worker: Mutex<Option<JoinHandle<()>>>,
+    worker: Mutex<WriterShutdown>,
+}
+
+/// Only stop callers take this mutex. Key-path admission never waits for it.
+struct WriterShutdown {
+    handle: Option<JoinHandle<()>>,
+    outcome: Option<Result<(), ShutdownFailure>>,
+}
+
+struct ShutdownFailure {
+    kind: io::ErrorKind,
+    raw_os_error: Option<i32>,
+    message: String,
+}
+
+impl ShutdownFailure {
+    fn capture(error: io::Error) -> Self {
+        Self {
+            kind: error.kind(),
+            raw_os_error: error.raw_os_error(),
+            message: error.to_string(),
+        }
+    }
+
+    fn error(&self) -> io::Error {
+        self.raw_os_error.map_or_else(
+            || io::Error::new(self.kind, self.message.clone()),
+            io::Error::from_raw_os_error,
+        )
+    }
 }
 
 impl fmt::Debug for InputHistoryService {
@@ -741,7 +770,10 @@ impl InputHistoryService {
             next_sequence: AtomicU64::new(recovered.last_sequence),
             next_session_id: AtomicU64::new(recovered.last_session),
             epoch: AtomicU64::new(0),
-            worker: Mutex::new(Some(worker)),
+            worker: Mutex::new(WriterShutdown {
+                handle: Some(worker),
+                outcome: None,
+            }),
         });
         service.record_engine_start();
         Ok(service)
@@ -999,23 +1031,27 @@ impl InputHistoryService {
     }
 
     pub fn stop(&self) -> io::Result<()> {
-        if self
+        // One caller sends Shutdown and joins; duplicates wait for and replay
+        // the same terminal outcome. A lost reply must never skip the join.
+        let mut shutdown = self
             .worker
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .is_none()
-        {
-            return Ok(());
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(outcome) = &shutdown.outcome {
+            return outcome.as_ref().copied().map_err(ShutdownFailure::error);
         }
         let (reply, receiver) = mpsc::channel();
         let send = self.sender.send(Command::Shutdown { reply });
-        let result = match send {
-            Ok(()) => receiver.recv().map_err(|_| {
+        let mut result = match send {
+            Ok(()) => receiver.recv().unwrap_or_else(|_| {
                 self.stats
                     .persistence_failures
                     .fetch_add(1, Ordering::Relaxed);
-                io::Error::new(io::ErrorKind::BrokenPipe, "input history writer stopped")
-            })?,
+                Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "input history writer stopped",
+                ))
+            }),
             Err(_) => {
                 self.stats
                     .persistence_failures
@@ -1026,15 +1062,22 @@ impl InputHistoryService {
                 ))
             }
         };
-        if let Some(worker) = self
-            .worker
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
-        {
-            let _ = worker.join();
+        if let Some(worker) = shutdown.handle.take() {
+            if worker.join().is_err() {
+                self.stats
+                    .persistence_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                result = Err(io::Error::other("input history writer panicked"));
+            }
         }
-        result
+        shutdown.outcome = Some(result.map_err(ShutdownFailure::capture));
+        shutdown
+            .outcome
+            .as_ref()
+            .expect("joined terminal outcome")
+            .as_ref()
+            .copied()
+            .map_err(ShutdownFailure::error)
     }
 }
 
@@ -1927,6 +1970,116 @@ mod tests {
         let prefix_preserved = after.starts_with(&original);
         assert!(prefix_preserved && session == 701 && sequence == 901,
             "startup prefix={prefix_preserved}, session={session} (expected 701), sequence={sequence} (expected 901)");
+    }
+
+    fn shutdown_fixture(
+        action: impl FnOnce(Receiver<Command>) + Send + 'static,
+    ) -> InputHistoryService {
+        let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
+        InputHistoryService {
+            path: temporary_path("shutdown-only"),
+            sender,
+            stats: Arc::new(InputHistoryStats::default()),
+            next_sequence: AtomicU64::new(0),
+            next_session_id: AtomicU64::new(0),
+            epoch: AtomicU64::new(0),
+            worker: Mutex::new(WriterShutdown {
+                handle: Some(thread::spawn(move || action(receiver))),
+                outcome: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn stop_outcome_keeps_durable_failure_for_later_callers() {
+        let service = shutdown_fixture(|receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            reply
+                .send(Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "synthetic sync failure",
+                )))
+                .unwrap();
+        });
+        let first = service.stop();
+        let second = service.stop();
+        assert_eq!(first.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(second.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn stop_outcome_joins_worker_after_reply_disconnect() {
+        let service = shutdown_fixture(|receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            drop(reply);
+        });
+        let result = service.stop();
+        let joined = service.worker.lock().unwrap().handle.is_none();
+        // Clean up the old implementation before asserting its counterexample.
+        let _ = service.stop();
+        assert!(result.is_err());
+        assert!(
+            joined,
+            "lost reply returned before worker join was owned/completed"
+        );
+    }
+
+    #[test]
+    fn stop_outcome_rejects_success_reply_followed_by_worker_panic() {
+        let service = shutdown_fixture(|receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            reply.send(Ok(())).unwrap();
+            panic!("synthetic worker exit failure");
+        });
+        assert!(
+            service.stop().is_err(),
+            "worker panic was reported as a successful stop"
+        );
+        assert!(
+            service.stop().is_err(),
+            "later stop lost the worker failure"
+        );
+    }
+
+    #[test]
+    fn stop_outcome_concurrent_callers_share_one_shutdown_and_failure() {
+        let (entered, observed) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let service = Arc::new(shutdown_fixture(move |receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(10)).unwrap();
+            reply.send(Err(io::Error::from_raw_os_error(5))).unwrap();
+            assert!(receiver.try_recv().is_err(), "duplicate Shutdown enqueued");
+        }));
+        let start = Arc::new(std::sync::Barrier::new(9));
+        let callers: Vec<_> = (0..8)
+            .map(|_| {
+                let service = Arc::clone(&service);
+                let start = Arc::clone(&start);
+                thread::spawn(move || {
+                    start.wait();
+                    service.stop().unwrap_err().raw_os_error()
+                })
+            })
+            .collect();
+        start.wait();
+        let ready = observed.recv_timeout(Duration::from_secs(10));
+        let _ = release.send(());
+        let results: Vec<_> = callers.into_iter().map(|caller| caller.join()).collect();
+        assert!(ready.is_ok());
+        for result in results {
+            assert_eq!(result.unwrap(), Some(5));
+        }
+        assert!(service.worker.lock().unwrap().handle.is_none());
     }
 
     #[test]

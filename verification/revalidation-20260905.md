@@ -12,7 +12,7 @@ Priority and confidence are independent; developer-history failures require expl
 | H3 | MITIGATED | P1 | #105 | Flush/Shutdown compaction reproduced and removed; 0/16/64 MiB before/after measured; startup/periodic work remains; history-control-barriers.md |
 | H4 | CONFIRMED | P1 | #116 | startup ID regression reproduced and fixed; one validation/ID pass, append handle before spawn; runtime overflow and durable non-reuse remain; history-startup-scan.md |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
-| H6 | MITIGATED | P1 | #118 | old-content resurrection after Clear reproduced for key/commit/AI and fixed with entry epoch capture; duplicate stop, Flush retries, ownership and crash matrix remain; history-clear-epoch.md |
+| H6 | MITIGATED | P1 | #118, #125 | pre-Clear producer resurrection and stop terminal-result counterexamples reproduced/fixed; store ownership in #123; producer admission closure, Flush retries, Clear durability and crash matrix remain; history-clear-epoch.md, history-stop-outcome.md |
 | T1 | CODE_CONFIRMED | P1 | #102 | send_key/link/connect/request and resync each supply independent 50ms budgets; whole-callback scripted/real pipe measurement pending |
 | T2 | DEFENSE_IN_DEPTH | P1 | #52 | four component counterexamples reproduced and guarded; Requested/exact ticket, context generation, latest UI lease; execution receipt and real COM reachability remain; write-journal-authority.md |
 | T3 | HYPOTHESIS | P1 | #57, #69, #7 | product reachability/COM teardown verification pending |
@@ -39,7 +39,8 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | H6 producer epoch | #118 | #119 | engine input_history::record_key / record_commit / record_ai_text / enqueue | clear_rejects_content_prepared_before_its_epoch; history-clear-epoch.md and results JSON |
 | H2 early endpoint ownership | #120 | #121 | engine main::run, Server::reserve / run_when_ready | duplicate_engine_is_rejected_before_dictionary_initialization, startup_reservation_*, startup_spawn_failure_*; engine-startup-ownership.md and results JSON |
 | T2 journal authority | #52 | #122 | TSF WriteCoordinator / guarded candidate cleanup | authority_*; write-journal-authority.md and results JSON |
-| H2 history store ownership | #123 | pending | engine input_history::open / clear_path / acquire_store_owner | store_owner_*, history_store_owner_in_another_process_keeps_input_available; history-store-ownership.md and results JSON |
+| H2 history store ownership | #123 | #124 | engine input_history::open / clear_path / acquire_store_owner | store_owner_*, history_store_owner_in_another_process_keeps_input_available; history-store-ownership.md and results JSON |
+| H6 joined stop result | #125 | pending | engine InputHistoryService::stop / WriterShutdown | stop_outcome_*; history-stop-outcome.md and results JSON |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 
