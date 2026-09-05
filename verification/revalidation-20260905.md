@@ -20,7 +20,7 @@ Priority and confidence are independent; developer-history failures require expl
 | C1 | HYPOTHESIS | P2 | #100 | old 221/477-char numbers are not this run's measurements |
 | C2 | IMPROVEMENT | P2 | #103 | separate search/request/surface/frame/arena budgets; baseline measurement pending |
 | C3 | IMPROVEMENT | P2 | #108, #93 | reported CandidateEvidence/projection implementation is in original dirty checkout, absent from fixed remote baseline; preserved, integration pending |
-| O1 | IMPROVEMENT | P2 | #104 | existing v2 source_commit/provenance retained; runtime/error-boundary audit pending |
+| O1 | IMPROVEMENT | P2 | #104 | test-only image-policy diagnostics after observed CI rejection; same-commit retry passed, root cause unknown; existing v2 provenance retained, broader runtime/error audit pending; appcontainer-policy-evidence.md |
 | V1 | CODE_CONFIRMED | P2 | #106 | requirements/spec pins mismatch even with LF normalization; actual rerun and dependency-closure gate pending |
 | V2 | IMPROVEMENT | P2 | #67 | real ThreadMgr harness feasibility and CI execution graph pending |
 | R1 | CODE_CONFIRMED | P2 | pending | learning::maintenance holds state try_lock across compact_state/sync_data; delayed-I/O reproduction pending; not a #107 diagnosis |
@@ -41,7 +41,8 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | T2 journal authority | #52 | #122 | TSF WriteCoordinator / guarded candidate cleanup | authority_*; write-journal-authority.md and results JSON |
 | H2 history store ownership | #123 | #124 | engine input_history::open / clear_path / acquire_store_owner | store_owner_*, history_store_owner_in_another_process_keeps_input_available; history-store-ownership.md and results JSON |
 | H6 joined stop result | #125 | #126 | engine InputHistoryService::stop / WriterShutdown | stop_outcome_*; history-stop-outcome.md and results JSON |
-| H1 publication containment | #127 | pending | engine compact_file / replace_history_file / require_no_compaction_transaction | publication_*; history-compaction-publication.md and results JSON |
+| H1 publication containment | #127 | #128 | engine compact_file / replace_history_file / require_no_compaction_transaction | publication_*; history-compaction-publication.md and results JSON |
+| O1 AppContainer policy evidence | #104 | pending | appcontainer integration test rejection diagnostic | image_policy_diagnostics_*; appcontainer-policy-evidence.md and results JSON |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 

@@ -223,9 +223,10 @@ impl ServerTrustPolicy {
 /// wherever the fault itself is printed.
 ///
 /// The distinction that matters is between a question answered "no" and a
-/// question that could not be asked: `ImagePathRejected` means a different
-/// program is serving this pipe, while `ImagePathUnreadable` means we never
-/// found out what is. Only the first is evidence of anything untrusted.
+/// question that could not be asked: `ImagePathRejected` means the observed
+/// path did not satisfy policy, while `ImagePathUnreadable` means we never
+/// obtained an image path. Rejection alone does not identify which lexical,
+/// filesystem or equality condition failed, or prove a different executable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerRejection {
     /// The trust policy itself could not be built, so nothing was verified.
