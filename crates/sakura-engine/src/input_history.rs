@@ -412,6 +412,15 @@ pub struct InputHistorySnapshot {
 }
 
 impl InputHistorySnapshot {
+    /// Applies the public viewing/export retention policy without rewriting
+    /// storage. Raw snapshots deliberately remain unfiltered for recovery and
+    /// identifier accounting. `now_ms` also permits deterministic boundary tests.
+    pub fn retain_current_records(&mut self, now_ms: u64) {
+        let cutoff = now_ms.saturating_sub(RETENTION.as_millis() as u64);
+        self.records
+            .retain(|record| record.timestamp_ms() >= cutoff);
+    }
+
     /// Latest engine identity marker in the snapshot, if any.
     pub fn last_engine_identity(&self) -> Option<(&str, &str)> {
         self.records.iter().rev().find_map(|record| match record {
@@ -908,6 +917,9 @@ impl InputHistoryService {
         self.enqueue(record);
     }
 
+    /// FIFO barrier for preceding accepted appends, followed by explicit file
+    /// synchronization. Does not compact; prior queued maintenance can still
+    /// delay completion. Admission drops remain separately observable in stats.
     pub fn flush(&self) -> io::Result<()> {
         let (reply, receiver) = mpsc::channel();
         self.sender.send(Command::Flush { reply }).map_err(|_| {
@@ -1042,6 +1054,9 @@ fn writer_loop_with_interval(
     let mut cleared_epoch = 0;
     let mut last_compaction = Instant::now();
     let mut appends_since_compaction = 0u32;
+    // A later successful sync cannot recover an earlier failed append. Keep
+    // that loss observable at barriers until a successful explicit Clear.
+    let mut append_failed = false;
     loop {
         let wait = compaction_interval.saturating_sub(last_compaction.elapsed());
         let command = match receiver.recv_timeout(wait) {
@@ -1076,46 +1091,32 @@ fn writer_loop_with_interval(
                         }
                     }
                     Err(_) => {
+                        append_failed = true;
                         stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }
             Command::Flush { reply } => {
-                // A manual flush is also a bounded retention checkpoint. This
-                // makes `history export` deterministic even when the writer
-                // has seen fewer than COMPACTION_APPEND_LIMIT events.
-                let result = compact_writer_file(&path, &mut file).and_then(|()| {
-                    if let Some(file) = file.as_mut() {
-                        file.flush()
-                    } else {
-                        Ok(())
-                    }
-                });
+                let result = sync_writer_file(&file, append_failed);
                 if result.is_err() {
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                 }
                 let _ = reply.send(result);
-                appends_since_compaction = 0;
-                last_compaction = Instant::now();
             }
             Command::Clear { epoch, reply } => {
                 cleared_epoch = cleared_epoch.max(epoch);
                 let result = clear_writer_file(&path, &mut file);
                 if result.is_err() {
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    append_failed = false;
                 }
                 let _ = reply.send(result);
                 appends_since_compaction = 0;
                 last_compaction = Instant::now();
             }
             Command::Shutdown { reply } => {
-                let result = compact_writer_file(&path, &mut file).and_then(|()| {
-                    if let Some(file) = file.as_mut() {
-                        file.flush()
-                    } else {
-                        Ok(())
-                    }
-                });
+                let result = sync_writer_file(&file, append_failed);
                 if result.is_err() {
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                 }
@@ -1124,6 +1125,20 @@ fn writer_loop_with_interval(
             }
         }
     }
+}
+
+fn sync_writer_file(file: &Option<File>, append_failed: bool) -> io::Result<()> {
+    let file = file.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotConnected,
+            "input history writer has no file",
+        )
+    })?;
+    file.sync_all()?;
+    if append_failed {
+        return Err(io::Error::other("input history preceding append failed"));
+    }
+    Ok(())
 }
 
 /// Compacts while the writer owns the only open handle to the history file.
@@ -1757,6 +1772,172 @@ mod tests {
             repair_file(&fixture.0).unwrap();
             assert_eq!(fs::read(&fixture.0).unwrap(), original);
             assert_eq!(read_snapshot(&fixture.0).unwrap().records.len(), 1);
+        }
+    }
+
+    fn assert_control_barrier_preserves_bytes(flush_first: bool) {
+        let fixture = ReadFailureFixture(temporary_path("control-barrier"));
+        let now = now_ms();
+        let old = now.saturating_sub(RETENTION.as_millis() as u64 + 1);
+        append_records(&fixture.0, &[key_record(1, old), key_record(2, now)]);
+        let original = fs::read(&fixture.0).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(2);
+        let (flush_reply, flush_result) = mpsc::channel();
+        if flush_first {
+            sender.send(Command::Flush { reply: flush_reply }).unwrap();
+        }
+        let (reply, stopped) = mpsc::channel();
+        sender.send(Command::Shutdown { reply }).unwrap();
+        // Prequeued controls execute deterministically, without a sleep or
+        // spawned thread whose ownership could be lost on assertion failure.
+        writer_loop_with_interval(
+            fixture.0.clone(),
+            receiver,
+            Arc::new(InputHistoryStats::default()),
+            Duration::from_secs(3600),
+        );
+        if flush_first {
+            flush_result.try_recv().unwrap().unwrap();
+        }
+        stopped.try_recv().unwrap().unwrap();
+        assert!(
+            fs::read(&fixture.0).unwrap() == original,
+            "a control barrier must not rewrite or expire existing frames"
+        );
+    }
+
+    #[test]
+    fn flush_barrier_preserves_existing_ciphertext() {
+        assert_control_barrier_preserves_bytes(true);
+    }
+
+    #[test]
+    fn shutdown_barrier_preserves_existing_ciphertext() {
+        assert_control_barrier_preserves_bytes(false);
+    }
+
+    #[test]
+    fn viewing_retention_has_inclusive_cutoff_and_keeps_order() {
+        let now = RETENTION.as_millis() as u64 + 100;
+        let mut snapshot = InputHistorySnapshot {
+            format_version: INPUT_HISTORY_FORMAT_VERSION,
+            records: vec![key_record(3, 101), key_record(1, 99), key_record(2, 100)],
+            ignored_tail_bytes: 7,
+        };
+        snapshot.retain_current_records(now);
+        assert_eq!(
+            snapshot.records,
+            vec![key_record(3, 101), key_record(2, 100)]
+        );
+        assert_eq!(snapshot.ignored_tail_bytes, 7);
+        let before = snapshot.clone();
+        snapshot.retain_current_records(0);
+        assert_eq!(
+            snapshot, before,
+            "early clock must not underflow the cutoff"
+        );
+    }
+
+    #[test]
+    fn barriers_report_missing_handle_and_real_sync_failure() {
+        assert_eq!(
+            sync_writer_file(&None, false).unwrap_err().kind(),
+            io::ErrorKind::NotConnected
+        );
+        let fixture = ReadFailureFixture(temporary_path("sync-denied"));
+        ensure_file(&fixture.0).unwrap();
+        // Windows FlushFileBuffers requires write access. Exercise the real
+        // failure, not an injected helper that simply returns its expectation.
+        let read_only = File::open(&fixture.0).unwrap();
+        assert!(sync_writer_file(&Some(read_only), false).is_err());
+    }
+
+    #[test]
+    fn barriers_keep_failed_append_observable_until_explicit_clear() {
+        let fixture = ReadFailureFixture(temporary_path("barrier-loss"));
+        ensure_file(&fixture.0).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(6);
+        sender
+            .send(Command::Append {
+                epoch: 0,
+                payload: vec![0; MAX_RECORD_BYTES + 1],
+            })
+            .unwrap();
+        let (first, first_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: first }).unwrap();
+        let (retry, retry_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: retry }).unwrap();
+        let (clear, clear_result) = mpsc::channel();
+        sender
+            .send(Command::Clear {
+                epoch: 1,
+                reply: clear,
+            })
+            .unwrap();
+        let (after, after_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: after }).unwrap();
+        let (stop, stop_result) = mpsc::channel();
+        sender.send(Command::Shutdown { reply: stop }).unwrap();
+        writer_loop_with_interval(
+            fixture.0.clone(),
+            receiver,
+            Arc::new(InputHistoryStats::default()),
+            Duration::from_secs(3600),
+        );
+        assert!(first_result.try_recv().unwrap().is_err());
+        assert!(retry_result.try_recv().unwrap().is_err());
+        clear_result.try_recv().unwrap().unwrap();
+        after_result.try_recv().unwrap().unwrap();
+        stop_result.try_recv().unwrap().unwrap();
+    }
+
+    #[test]
+    fn control_barrier_size_matrix() {
+        // Repeated synthetic frames isolate storage-size cost, not ID or
+        // language quality. Build outside the timed region, sync first, and
+        // measure the same Flush+Shutdown pair at all three sizes.
+        let protected = protect(&key_record(1, now_ms()).encode().unwrap()).unwrap();
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&(protected.len() as u32).to_le_bytes());
+        frame.extend_from_slice(&crc32(&protected).to_le_bytes());
+        frame.extend_from_slice(&protected);
+        let block = frame.repeat(128);
+        for mib in [0u64, 16, 64] {
+            let fixture = ReadFailureFixture(temporary_path("barrier-size"));
+            ensure_file(&fixture.0).unwrap();
+            let mut file = OpenOptions::new().append(true).open(&fixture.0).unwrap();
+            let mut remaining = (mib * 1024 * 1024).saturating_sub(HEADER_LEN as u64);
+            while remaining >= block.len() as u64 {
+                file.write_all(&block).unwrap();
+                remaining -= block.len() as u64;
+            }
+            while remaining >= frame.len() as u64 {
+                file.write_all(&frame).unwrap();
+                remaining -= frame.len() as u64;
+            }
+            file.sync_all().unwrap();
+            let bytes = file.metadata().unwrap().len();
+            drop(file);
+            let (sender, receiver) = mpsc::sync_channel(2);
+            let (flushed, flush_result) = mpsc::channel();
+            let (stopped, stop_result) = mpsc::channel();
+            sender.send(Command::Flush { reply: flushed }).unwrap();
+            sender.send(Command::Shutdown { reply: stopped }).unwrap();
+            let started = Instant::now();
+            writer_loop_with_interval(
+                fixture.0.clone(),
+                receiver,
+                Arc::new(InputHistoryStats::default()),
+                Duration::from_secs(3600),
+            );
+            let elapsed = started.elapsed();
+            flush_result.try_recv().unwrap().unwrap();
+            stop_result.try_recv().unwrap().unwrap();
+            assert_eq!(fs::metadata(&fixture.0).unwrap().len(), bytes);
+            println!(
+                "history-control-size target_mib={mib} bytes={bytes} flush_shutdown_us={}",
+                elapsed.as_micros()
+            );
         }
     }
 

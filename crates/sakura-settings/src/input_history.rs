@@ -534,8 +534,20 @@ pub struct HistoryStats {
 }
 
 pub fn view(path: &Path) -> io::Result<InputHistorySnapshot> {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64;
+    view_at(path, now_ms)
+}
+
+fn view_at(path: &Path, now_ms: u64) -> io::Result<InputHistorySnapshot> {
     match read_snapshot(path) {
-        Ok(snapshot) => Ok(snapshot),
+        Ok(mut snapshot) => {
+            snapshot.retain_current_records(now_ms);
+            Ok(snapshot)
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(InputHistorySnapshot {
             format_version: INPUT_HISTORY_FORMAT_VERSION,
             records: Vec::new(),
@@ -784,6 +796,30 @@ mod tests {
             .expect("TSV")
             .contains("engine-package-version\tengine-release-label"));
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn viewing_expires_records_without_mutating_raw_history() {
+        struct Fixture(std::path::PathBuf);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                if self.0.exists() {
+                    std::fs::remove_file(&self.0).expect("remove owned history fixture");
+                }
+            }
+        }
+        let fixture = Fixture(temporary_path("retention-view"));
+        let service = sakura_engine::input_history::InputHistoryService::open(&fixture.0)
+            .expect("open isolated history");
+        service.record_commit(1, ScopeClass::Normal, "synthetic", "synthetic", 0, 0);
+        service.stop().expect("stop isolated history");
+        let original = std::fs::read(&fixture.0).unwrap();
+        let raw = read_snapshot(&fixture.0).unwrap();
+        assert_eq!(raw.records.len(), 2);
+        assert!(view_at(&fixture.0, u64::MAX).unwrap().records.is_empty());
+        assert_eq!(view_at(&fixture.0, 0).unwrap(), raw);
+        assert_eq!(view(&fixture.0).unwrap(), raw);
+        assert_eq!(std::fs::read(&fixture.0).unwrap(), original);
     }
 
     fn key(

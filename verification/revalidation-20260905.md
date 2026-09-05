@@ -9,11 +9,11 @@ Priority and confidence are independent; developer-history failures require expl
 |---|---|---|---|---|
 | H1 | CODE_CONFIRMED | P1 | pending dedicated issue | input_history::compact_file fixed temp, remove then rename; Windows cut points pending |
 | H2 | CODE_CONFIRMED | P1 | pending | main::run initializes dictionary/learning/history before Server ownership; concurrent Windows reproduction pending |
-| H3 | CODE_CONFIRMED | P1 | #105 | writer_loop Flush/Shutdown call compact_writer_file; startup also compacts; timing pending |
+| H3 | MITIGATED | P1 | #105 | Flush/Shutdown compaction reproduced and removed; 0/16/64 MiB before/after measured; startup/periodic work remains; history-control-barriers.md |
 | H4 | CODE_CONFIRMED | P1 | pending | InputHistoryService::open spawns before next_sequence/session scans; unwrap_or(0) present |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
 | H6 | HYPOTHESIS | P1 | pending | Clear epoch acquired at enqueue, duplicate stop and Flush ordering tests pending |
-| T1 | HYPOTHESIS | P1 | #102 | deadline chain and scripted/real pipe measurement pending |
+| T1 | CODE_CONFIRMED | P1 | #102 | send_key/link/connect/request and resync each supply independent 50ms budgets; whole-callback scripted/real pipe measurement pending |
 | T2 | DEFENSE_IN_DEPTH | P1 | #52 | corrected issue read; Ready reject must remain valid; current counterexamples pending |
 | T3 | HYPOTHESIS | P1 | #57, #69, #7 | product reachability/COM teardown verification pending |
 | T4 | HYPOTHESIS | P1 | #102, #107 | no current ETW attribution; prior timeout mitigation is not root-cause proof |
@@ -21,7 +21,7 @@ Priority and confidence are independent; developer-history failures require expl
 | C2 | IMPROVEMENT | P2 | #103 | separate search/request/surface/frame/arena budgets; baseline measurement pending |
 | C3 | IMPROVEMENT | P2 | #108, #93 | reported CandidateEvidence/projection implementation is in original dirty checkout, absent from fixed remote baseline; preserved, integration pending |
 | O1 | IMPROVEMENT | P2 | #104 | existing v2 source_commit/provenance retained; runtime/error-boundary audit pending |
-| V1 | HYPOTHESIS | P2 | #106 | current dependency-closure/hash verification pending |
+| V1 | CODE_CONFIRMED | P2 | #106 | requirements/spec pins mismatch even with LF normalization; actual rerun and dependency-closure gate pending |
 | V2 | IMPROVEMENT | P2 | #67 | real ThreadMgr harness feasibility and CI execution graph pending |
 | R1 | CODE_CONFIRMED | P2 | pending | learning::maintenance holds state try_lock across compact_state/sync_data; delayed-I/O reproduction pending; not a #107 diagnosis |
 | A1 | IMPROVEMENT | P2 | pending | extraction only after two concrete applicable stores; runtime/supervisor audit pending |
