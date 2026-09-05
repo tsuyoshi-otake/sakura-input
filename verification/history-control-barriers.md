@@ -20,7 +20,7 @@ Windows x64 local synthetic files and real DPAPI, rustc/cargo 1.96.0, locked dep
 |---|---|---|
 | `cargo test --locked -p sakura-engine --lib barrier_preserves_existing_ciphertext` before fix | 101 | 2 semantic failures: control handler rewrote/expired frames |
 | `cargo test --locked -p sakura-engine --lib input_history::tests` after initial fix | 0 | 21 passed, 0 ignored, 0 failed |
-| `cargo test --locked --workspace` on final code | 0 | 1,770 passed, 84 ignored, 0 failed; 93 result summaries including 30 zero-test targets |
+| `cargo test --locked --workspace` on final code | 0 | 1,770 passed, 84 ignored, 0 failed; 93 result summaries including 21 completely empty and 9 ignored-only targets |
 | `cargo test --locked -p sakura-engine --lib control_barrier_size_matrix -- --nocapture` with old control branches / final branches | 0 / 0 | 1 executed test each; size measurements below |
 | format, diff whitespace, process-clean | 0 | no errors or owned surviving runners |
 

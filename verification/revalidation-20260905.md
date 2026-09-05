@@ -8,7 +8,7 @@ Priority and confidence are independent; developer-history failures require expl
 | ID | Current classification | Priority | Issue | Current evidence / next verification |
 |---|---|---|---|---|
 | H1 | CODE_CONFIRMED | P1 | pending dedicated issue | input_history::compact_file fixed temp, remove then rename; Windows cut points pending |
-| H2 | CODE_CONFIRMED | P1 | pending | main::run initializes dictionary/learning/history before Server ownership; concurrent Windows reproduction pending |
+| H2 | MITIGATED | P1 | #120 | real duplicate engine initialized dictionary before ownership; fixed by early secured endpoint reservation; per-user cross-logon store ownership remains; engine-startup-ownership.md |
 | H3 | MITIGATED | P1 | #105 | Flush/Shutdown compaction reproduced and removed; 0/16/64 MiB before/after measured; startup/periodic work remains; history-control-barriers.md |
 | H4 | CONFIRMED | P1 | #116 | startup ID regression reproduced and fixed; one validation/ID pass, append handle before spawn; runtime overflow and durable non-reuse remain; history-startup-scan.md |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
@@ -28,6 +28,17 @@ Priority and confidence are independent; developer-history failures require expl
 | A2 | IMPROVEMENT | P2 | pending | config/dictionary/upgrade/security contract audit pending |
 
 Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were fetched through gh. No user input content is included in this ledger. Original dirty worktree remains untouched.
+
+## Delivered patch mapping
+
+| ID / bounded change | Issue | PR | Files / entry points | Test and artifact |
+|---|---|---|---|---|
+| H5 opaque frame preservation | #113 | #114 | engine input_history::scan_frames / repair_file | complete_frame_*; history-read-failure.md and results JSON |
+| H3 control barriers / view retention | #105 | #115 | engine input_history::writer_loop / sync_writer_file; settings input_history::view | barrier_preserves_existing_ciphertext, control_barrier_size_matrix; history-control-barriers.md and results JSON |
+| H4 startup maxima | #116 | #117 | engine input_history::open / scan_frames | startup_preserves_ciphertext_and_recovers_ids_before_retention; history-startup-scan.md and results JSON |
+| H6 producer epoch | #118 | #119 | engine input_history::record_key / record_commit / record_ai_text / enqueue | clear_rejects_content_prepared_before_its_epoch; history-clear-epoch.md and results JSON |
+
+PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 
 ## Evidence limits
 
