@@ -10,7 +10,7 @@ Priority and confidence are independent; developer-history failures require expl
 | H1 | CODE_CONFIRMED | P1 | pending dedicated issue | input_history::compact_file fixed temp, remove then rename; Windows cut points pending |
 | H2 | CODE_CONFIRMED | P1 | pending | main::run initializes dictionary/learning/history before Server ownership; concurrent Windows reproduction pending |
 | H3 | MITIGATED | P1 | #105 | Flush/Shutdown compaction reproduced and removed; 0/16/64 MiB before/after measured; startup/periodic work remains; history-control-barriers.md |
-| H4 | CODE_CONFIRMED | P1 | pending | InputHistoryService::open spawns before next_sequence/session scans; unwrap_or(0) present |
+| H4 | CONFIRMED | P1 | #116 | startup ID regression reproduced and fixed; one validation/ID pass, append handle before spawn; runtime overflow and durable non-reuse remain; history-startup-scan.md |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
 | H6 | HYPOTHESIS | P1 | pending | Clear epoch acquired at enqueue, duplicate stop and Flush ordering tests pending |
 | T1 | CODE_CONFIRMED | P1 | #102 | send_key/link/connect/request and resync each supply independent 50ms budgets; whole-callback scripted/real pipe measurement pending |

@@ -212,6 +212,15 @@ pub enum InputHistoryRecord {
 }
 
 impl InputHistoryRecord {
+    fn session(&self) -> u64 {
+        match self {
+            Self::Key(record) => record.session,
+            Self::Commit(record) => record.session,
+            Self::AiText(record) => record.session,
+            Self::Engine(record) => record.session,
+        }
+    }
+
     fn sequence(&self) -> u64 {
         match self {
             Self::Key(record) => record.sequence,
@@ -691,8 +700,20 @@ impl fmt::Debug for InputHistoryService {
 impl InputHistoryService {
     pub fn open(path: &Path) -> io::Result<Arc<Self>> {
         ensure_file(path)?;
-        repair_file(path)?;
-        compact_file(path)?;
+        let recovered = repair_file(path)?;
+        if recovered.last_sequence == u64::MAX || recovered.last_session == u64::MAX {
+            return Err(invalid_data("input history stored identifiers exhausted"));
+        }
+        // Legacy migration is the explicit exception to no startup rewrite:
+        // do not append current-format markers beneath a legacy header.
+        // Recover IDs before migration can remove expired records.
+        if recovered.format_version != INPUT_HISTORY_FORMAT_VERSION {
+            compact_file(path)?;
+        }
+        // Complete every fallible mandatory step before starting a worker.
+        // Retention belongs to viewing/maintenance, not ID recovery: expired
+        // records still carry high-watermarks in this existing store.
+        let append_file = open_append(path)?;
 
         let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
         let stats = Arc::new(InputHistoryStats::default());
@@ -700,15 +721,15 @@ impl InputHistoryService {
         let writer_path = path.to_owned();
         let worker = thread::Builder::new()
             .name("sakura-input-history".to_owned())
-            .spawn(move || writer_loop(writer_path, receiver, writer_stats))
+            .spawn(move || writer_loop(writer_path, receiver, writer_stats, append_file))
             .map_err(|error| io::Error::other(format!("start input history writer: {error}")))?;
 
         let service = Arc::new(Self {
             path: path.to_owned(),
             sender,
             stats,
-            next_sequence: AtomicU64::new(next_sequence(path).unwrap_or(0)),
-            next_session_id: AtomicU64::new(next_session_id(path).unwrap_or(0)),
+            next_sequence: AtomicU64::new(recovered.last_sequence),
+            next_session_id: AtomicU64::new(recovered.last_session),
             epoch: AtomicU64::new(0),
             worker: Mutex::new(Some(worker)),
         });
@@ -1040,17 +1061,33 @@ pub fn clear_path(path: &Path) -> io::Result<u64> {
     Ok(before)
 }
 
-fn writer_loop(path: PathBuf, receiver: Receiver<Command>, stats: Arc<InputHistoryStats>) {
-    writer_loop_with_interval(path, receiver, stats, COMPACTION_INTERVAL);
+fn writer_loop(
+    path: PathBuf,
+    receiver: Receiver<Command>,
+    stats: Arc<InputHistoryStats>,
+    file: File,
+) {
+    writer_loop_with_file(path, receiver, stats, Some(file), COMPACTION_INTERVAL);
 }
 
+#[cfg(test)]
 fn writer_loop_with_interval(
     path: PathBuf,
     receiver: Receiver<Command>,
     stats: Arc<InputHistoryStats>,
     compaction_interval: Duration,
 ) {
-    let mut file = open_append(&path).ok();
+    let file = open_append(&path).ok();
+    writer_loop_with_file(path, receiver, stats, file, compaction_interval);
+}
+
+fn writer_loop_with_file(
+    path: PathBuf,
+    receiver: Receiver<Command>,
+    stats: Arc<InputHistoryStats>,
+    mut file: Option<File>,
+    compaction_interval: Duration,
+) {
     let mut cleared_epoch = 0;
     let mut last_compaction = Instant::now();
     let mut appends_since_compaction = 0u32;
@@ -1251,7 +1288,7 @@ fn open_append(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-fn repair_file(path: &Path) -> io::Result<()> {
+fn repair_file(path: &Path) -> io::Result<ScanSummary> {
     // Every append enforces MAX_INPUT_HISTORY_BYTES, so bytes past the cap
     // can only be corruption or external tampering. Reading is bounded to
     // the cap so an oversized file cannot force an unbounded allocation at
@@ -1263,16 +1300,26 @@ fn repair_file(path: &Path) -> io::Result<()> {
         .take(MAX_INPUT_HISTORY_BYTES)
         .read_to_end(&mut bytes)?;
     if bytes.is_empty() {
-        return ensure_file(path);
+        ensure_file(path)?;
+        return scan_frames(&header(), None);
     }
-    // The offset is the whole answer here, so the records are decoded for
-    // validation and dropped rather than collected.
-    let (_version, valid_end) = scan_frames(&bytes, None)?;
-    if (valid_end as u64) < file_len {
+    // Recover IDs during the same validation pass; do not materialize a full
+    // record vector or decrypt the file again merely to recover two maxima.
+    let summary = scan_frames(&bytes, None)?;
+    if (summary.valid_end as u64) < file_len {
         let file = OpenOptions::new().write(true).open(path)?;
-        file.set_len(valid_end as u64)?;
+        file.set_len(summary.valid_end as u64)?;
+        file.sync_all()?;
     }
-    Ok(())
+    Ok(summary)
+}
+
+#[derive(Debug)]
+struct ScanSummary {
+    format_version: u16,
+    valid_end: usize,
+    last_sequence: u64,
+    last_session: u64,
 }
 
 fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
@@ -1286,15 +1333,15 @@ fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
 
 fn scan_bytes(bytes: &[u8]) -> io::Result<(u16, Vec<InputHistoryRecord>, usize)> {
     let mut records = Vec::new();
-    let (format_version, valid_end) = scan_frames(bytes, Some(&mut records))?;
-    Ok((format_version, records, valid_end))
+    let summary = scan_frames(bytes, Some(&mut records))?;
+    Ok((summary.format_version, records, summary.valid_end))
 }
 
 /// Walks the frames and returns the offset one past the last valid one.
 ///
 /// `records` is where the decoded records go when the caller wants them.
 /// Passing `None` decodes and drops each one instead, which is what
-/// [`repair_file`] needs: it only ever uses the offset, and materializing a
+/// [`repair_file`] needs: it uses only the boundary/ID summary, and materializing a
 /// 64 MiB file's worth of records — hundreds of megabytes of `String`s —
 /// just to ask where the damage starts is an allocation spike at engine
 /// startup for an answer nobody reads. Complete checksum-valid frames whose
@@ -1304,7 +1351,7 @@ fn scan_bytes(bytes: &[u8]) -> io::Result<(u16, Vec<InputHistoryRecord>, usize)>
 fn scan_frames(
     bytes: &[u8],
     mut records: Option<&mut Vec<InputHistoryRecord>>,
-) -> io::Result<(u16, usize)> {
+) -> io::Result<ScanSummary> {
     if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
         return Err(invalid_data("invalid input history header"));
     }
@@ -1313,6 +1360,8 @@ fn scan_frames(
         return Err(invalid_data("unsupported input history format"));
     }
     let mut offset = HEADER_LEN;
+    let mut last_sequence = 0;
+    let mut last_session = 0;
     while offset + FRAME_HEADER_LEN <= bytes.len() {
         let length = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
         let expected_crc = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap());
@@ -1329,12 +1378,19 @@ fn scan_frames(
         }
         let payload = unprotect(encrypted)?;
         let record = InputHistoryRecord::decode(&payload)?;
+        last_sequence = last_sequence.max(record.sequence());
+        last_session = last_session.max(record.session());
         if let Some(records) = records.as_deref_mut() {
             records.push(record);
         }
         offset = payload_end;
     }
-    Ok((version, offset))
+    Ok(ScanSummary {
+        format_version: version,
+        valid_end: offset,
+        last_sequence,
+        last_session,
+    })
 }
 
 fn compact_file(path: &Path) -> io::Result<()> {
@@ -1381,29 +1437,6 @@ fn compact_file(path: &Path) -> io::Result<()> {
     drop(replacement);
     let _ = fs::remove_file(path);
     fs::rename(temp, path)
-}
-
-fn next_sequence(path: &Path) -> io::Result<u64> {
-    Ok(read_snapshot(path)?
-        .records
-        .iter()
-        .map(InputHistoryRecord::sequence)
-        .max()
-        .unwrap_or(0))
-}
-
-fn next_session_id(path: &Path) -> io::Result<u64> {
-    Ok(read_snapshot(path)?
-        .records
-        .iter()
-        .map(|record| match record {
-            InputHistoryRecord::Key(record) => record.session,
-            InputHistoryRecord::Commit(record) => record.session,
-            InputHistoryRecord::AiText(record) => record.session,
-            InputHistoryRecord::Engine(record) => record.session,
-        })
-        .max()
-        .unwrap_or(0))
 }
 
 /// Package version and installed release label for the running engine.
@@ -1814,6 +1847,62 @@ mod tests {
     #[test]
     fn shutdown_barrier_preserves_existing_ciphertext() {
         assert_control_barrier_preserves_bytes(false);
+    }
+
+    #[test]
+    fn startup_preserves_ciphertext_and_recovers_ids_before_retention() {
+        let fixture = ReadFailureFixture(temporary_path("startup-ids"));
+        let now = now_ms();
+        let mut expired = key_record(900, now.saturating_sub(RETENTION.as_millis() as u64 + 1));
+        if let InputHistoryRecord::Key(record) = &mut expired {
+            record.session = 700;
+        }
+        append_records(&fixture.0, &[expired, key_record(3, now)]);
+        let original = fs::read(&fixture.0).unwrap();
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        let session = service.allocate_session_id();
+        service.stop().unwrap();
+        let after = fs::read(&fixture.0).unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        let sequence = snapshot.records.last().unwrap().sequence();
+        let prefix_preserved = after.starts_with(&original);
+        assert!(prefix_preserved && session == 701 && sequence == 901,
+            "startup prefix={prefix_preserved}, session={session} (expected 701), sequence={sequence} (expected 901)");
+    }
+
+    #[test]
+    fn startup_rejects_exhausted_stored_ids_without_mutating_history() {
+        for session_exhausted in [false, true] {
+            let fixture = ReadFailureFixture(temporary_path("exhausted-ids"));
+            let mut record = key_record(if session_exhausted { 1 } else { u64::MAX }, now_ms());
+            if session_exhausted {
+                if let InputHistoryRecord::Key(record) = &mut record {
+                    record.session = u64::MAX;
+                }
+            }
+            append_records(&fixture.0, &[record]);
+            let original = fs::read(&fixture.0).unwrap();
+            assert_eq!(
+                InputHistoryService::open(&fixture.0).unwrap_err().kind(),
+                io::ErrorKind::InvalidData
+            );
+            assert_eq!(fs::read(&fixture.0).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn legacy_startup_migrates_before_appending_current_markers() {
+        let fixture = ReadFailureFixture(temporary_path("legacy-startup"));
+        append_records(&fixture.0, &[key_record(17, now_ms())]);
+        let mut bytes = fs::read(&fixture.0).unwrap();
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        fs::write(&fixture.0, bytes).unwrap();
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.stop().unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        assert_eq!(snapshot.format_version, INPUT_HISTORY_FORMAT_VERSION);
+        assert_eq!(snapshot.records[0].sequence(), 17);
+        assert_eq!(snapshot.records.last().unwrap().sequence(), 18);
     }
 
     #[test]
