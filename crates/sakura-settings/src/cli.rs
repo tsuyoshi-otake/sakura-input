@@ -581,7 +581,7 @@ pub fn run(command: Command) -> Result<(), String> {
                 "# conversion_key k0=local_live k1=peer_live k2=keycode k3=test_only\n\
 # key_gate skip_probe/no_engine/no_context/unactionable\n\
 # candidate_hide end|keep k0=local_live k1=peer_live k2=owns_ui\n\
-# candidate_show shown|show_failed_end k1=count k2=kind(0=conversion,1=suggestion)\n\
+# candidate_show shown|show_failed k1=count k2=kind(0=conversion,1=suggestion)\n\
 # candidate_end queued|immediate|busy_requeue\n\
 # ui_publish skip_foreign_empty|show|hide|unchanged|copy_failed k0=board_conn k1=board_session k2=pub_conn k3=pub_session\n\
 # idle_fence absorb|open k0=keycode k1=test_only\n\
