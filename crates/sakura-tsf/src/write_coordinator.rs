@@ -804,7 +804,7 @@ mod tests {
     fn authority_ready_head_cannot_be_applied_but_can_be_rejected() {
         let mut journal = active(2);
         reserve_and_attach(&mut journal, "unrequested", true, state("a", true));
-        let ticket = journal.head_ticket().unwrap();
+        let ticket = journal.head_ticket().expect("enqueued head ticket");
         assert!(journal.complete_applied(ticket).is_none());
         assert_eq!(journal.pending_len(), 1);
         assert!(journal.terminal_records().is_empty());
@@ -842,7 +842,11 @@ mod tests {
         let visible = journal.tail_visible();
         reserve_and_attach(journal, "ui", false, visible);
         let ticket = request(journal).ticket;
-        journal.complete_applied(ticket).unwrap().ui_lease.unwrap()
+        journal
+            .complete_applied(ticket)
+            .expect("requested write completes")
+            .ui_lease
+            .expect("completed output issues a UI lease")
     }
 
     #[test]
