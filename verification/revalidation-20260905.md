@@ -12,7 +12,7 @@ Priority and confidence are independent; developer-history failures require expl
 | H3 | MITIGATED | P1 | #105 | Flush/Shutdown compaction reproduced and removed; 0/16/64 MiB before/after measured; startup/periodic work remains; history-control-barriers.md |
 | H4 | CONFIRMED | P1 | #116 | startup ID regression reproduced and fixed; one validation/ID pass, append handle before spawn; runtime overflow and durable non-reuse remain; history-startup-scan.md |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
-| H6 | HYPOTHESIS | P1 | pending | Clear epoch acquired at enqueue, duplicate stop and Flush ordering tests pending |
+| H6 | MITIGATED | P1 | #118 | old-content resurrection after Clear reproduced for key/commit/AI and fixed with entry epoch capture; duplicate stop, Flush retries, ownership and crash matrix remain; history-clear-epoch.md |
 | T1 | CODE_CONFIRMED | P1 | #102 | send_key/link/connect/request and resync each supply independent 50ms budgets; whole-callback scripted/real pipe measurement pending |
 | T2 | DEFENSE_IN_DEPTH | P1 | #52 | corrected issue read; Ready reject must remain valid; current counterexamples pending |
 | T3 | HYPOTHESIS | P1 | #57, #69, #7 | product reachability/COM teardown verification pending |

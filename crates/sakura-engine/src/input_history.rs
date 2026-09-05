@@ -757,29 +757,36 @@ impl InputHistoryService {
     /// Called once when the service starts. Not subject to scope exclusion:
     /// this marker contains only package/release identity, never key content.
     fn record_engine_start(&self) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         let (package_version, release_label) = current_engine_identity();
         let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
-        self.enqueue(InputHistoryRecord::Engine(EngineHistoryRecord {
-            sequence,
-            timestamp_ms: now_ms(),
-            session: 0,
-            scope: ScopeClass::Normal,
-            package_version,
-            release_label,
-        }));
+        self.enqueue(
+            epoch,
+            InputHistoryRecord::Engine(EngineHistoryRecord {
+                sequence,
+                timestamp_ms: now_ms(),
+                session: 0,
+                scope: ScopeClass::Normal,
+                package_version,
+                release_label,
+            }),
+        );
     }
 
-    fn enqueue(&self, record: InputHistoryRecord) {
+    fn enqueue(&self, epoch: u64, record: InputHistoryRecord) {
+        #[cfg(test)]
+        tests::BEFORE_ENQUEUE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
         let Ok(payload) = record.encode() else {
             self.stats
                 .persistence_failures
                 .fetch_add(1, Ordering::Relaxed);
             return;
         };
-        let command = Command::Append {
-            epoch: self.epoch.load(Ordering::Acquire),
-            payload,
-        };
+        let command = Command::Append { epoch, payload };
         match self.sender.try_send(command) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
@@ -819,6 +826,7 @@ impl InputHistoryService {
         beep: bool,
         action: &str,
     ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         if self.stats.excludes(scope, test_only) {
             return;
         }
@@ -850,7 +858,7 @@ impl InputHistoryService {
             action: action.to_owned(),
             dropped_before,
         });
-        self.enqueue(record);
+        self.enqueue(epoch, record);
     }
 
     pub fn record_commit(
@@ -862,6 +870,7 @@ impl InputHistoryService {
         left_context: u16,
         right_context: u16,
     ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         if self.stats.excludes(scope, false) || reading.is_empty() || surface.is_empty() {
             return;
         }
@@ -876,7 +885,7 @@ impl InputHistoryService {
             left_context,
             right_context,
         });
-        self.enqueue(record);
+        self.enqueue(epoch, record);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -899,6 +908,7 @@ impl InputHistoryService {
         attempts: u32,
         test_only: bool,
     ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         if self.stats.excludes(scope, test_only) || source.is_empty() {
             return;
         }
@@ -935,7 +945,7 @@ impl InputHistoryService {
             cached_tokens,
             attempts,
         });
-        self.enqueue(record);
+        self.enqueue(epoch, record);
     }
 
     /// FIFO barrier for preceding accepted appends, followed by explicit file
@@ -1649,6 +1659,12 @@ fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    thread_local! {
+        // Only unit-test binaries contain this rendezvous; release/default
+        // library artifacts cannot pause a producer through this hook.
+        pub(super) static BEFORE_ENQUEUE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -1868,6 +1884,91 @@ mod tests {
         let prefix_preserved = after.starts_with(&original);
         assert!(prefix_preserved && session == 701 && sequence == 901,
             "startup prefix={prefix_preserved}, session={session} (expected 701), sequence={sequence} (expected 901)");
+    }
+
+    #[test]
+    fn clear_rejects_content_prepared_before_its_epoch() {
+        let mut resurrected = Vec::new();
+        for kind in 0..3 {
+            let fixture = ReadFailureFixture(temporary_path("paused-clear"));
+            let service = InputHistoryService::open(&fixture.0).unwrap();
+            let producer_service = Arc::clone(&service);
+            let (paused, pause_observed) = mpsc::channel();
+            let (resume, resumed) = mpsc::channel();
+            let producer = thread::spawn(move || {
+                BEFORE_ENQUEUE.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        paused.send(()).unwrap();
+                        resumed.recv_timeout(Duration::from_secs(10)).unwrap();
+                    }));
+                });
+                match kind {
+                    0 => producer_service.record_key(
+                        1,
+                        ScopeClass::Normal,
+                        1,
+                        Some('x'),
+                        0,
+                        false,
+                        false,
+                        true,
+                        0,
+                        1,
+                        1,
+                        1,
+                        "",
+                        "x",
+                        "",
+                        0,
+                        false,
+                        "char",
+                    ),
+                    1 => producer_service.record_commit(1, ScopeClass::Normal, "x", "X", 0, 0),
+                    _ => producer_service.record_ai_text(
+                        1,
+                        ScopeClass::Normal,
+                        AiTextOperation::Transform,
+                        AiTextStatus::Applied,
+                        "x",
+                        "X",
+                        "synthetic",
+                        "synthetic",
+                        "",
+                        "",
+                        1,
+                        1,
+                        1,
+                        0,
+                        1,
+                        false,
+                    ),
+                }
+            });
+            let paused_ok = pause_observed.recv_timeout(Duration::from_secs(10)).is_ok();
+            let first_clear = service.clear();
+            let second_clear = service.clear();
+            // Always release/join the owned producer before assertions.
+            let _ = resume.send(());
+            let producer_result = producer.join();
+            service.record_commit(2, ScopeClass::Normal, "new", "NEW", 0, 0);
+            let flushed = service.flush();
+            let stopped = service.stop();
+            assert!(paused_ok);
+            first_clear.unwrap();
+            second_clear.unwrap();
+            producer_result.unwrap();
+            flushed.unwrap();
+            stopped.unwrap();
+            let snapshot = read_snapshot(&fixture.0).unwrap();
+            assert!(snapshot.records.iter().any(|record| record.session() == 2));
+            if snapshot.records.iter().any(|record| record.session() == 1) {
+                resurrected.push(kind);
+            }
+        }
+        assert!(
+            resurrected.is_empty(),
+            "old content survived Clear for variants {resurrected:?}"
+        );
     }
 
     #[test]
