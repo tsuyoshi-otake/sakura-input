@@ -14,6 +14,7 @@
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -25,6 +26,9 @@ use sakura_proto::{AiTextOperation, AiTextStatus, InputScope};
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
+};
+use windows::Win32::Storage::FileSystem::{
+    FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT,
 };
 
 const MAGIC: &[u8; 4] = b"SKIH";
@@ -699,6 +703,7 @@ impl fmt::Debug for InputHistoryService {
 
 impl InputHistoryService {
     pub fn open(path: &Path) -> io::Result<Arc<Self>> {
+        let store_owner = acquire_store_owner(path)?;
         ensure_file(path)?;
         let recovered = repair_file(path)?;
         if recovered.last_sequence == u64::MAX || recovered.last_session == u64::MAX {
@@ -721,7 +726,12 @@ impl InputHistoryService {
         let writer_path = path.to_owned();
         let worker = thread::Builder::new()
             .name("sakura-input-history".to_owned())
-            .spawn(move || writer_loop(writer_path, receiver, writer_stats, append_file))
+            .spawn(move || {
+                // Ownership follows the actual worker, including a delayed
+                // exit or unwind, rather than a caller's stop observation.
+                let _store_owner = store_owner;
+                writer_loop(writer_path, receiver, writer_stats, append_file);
+            })
             .map_err(|error| io::Error::other(format!("start input history writer: {error}")))?;
 
         let service = Arc::new(Self {
@@ -1057,6 +1067,12 @@ pub fn read_snapshot(path: &Path) -> io::Result<InputHistorySnapshot> {
 }
 
 pub fn clear_path(path: &Path) -> io::Result<u64> {
+    let _store_owner = acquire_store_owner(path)?;
+    clear_owned_path(path)
+}
+
+/// Caller already owns the separate writer lock (or an isolated unit fixture).
+fn clear_owned_path(path: &Path) -> io::Result<u64> {
     if !path.exists() {
         return Ok(0);
     }
@@ -1069,6 +1085,33 @@ pub fn clear_path(path: &Path) -> io::Result<u64> {
     file.write_all(&header())?;
     file.flush()?;
     Ok(before)
+}
+
+/// The lock object is independent of the replaceable history file. Windows
+/// denies other opens/removal while this exclusive handle exists and removes
+/// the lock only after its final handle closes, including process termination.
+/// This protocol coordinates updated writers using the same logical path.
+fn acquire_store_owner(path: &Path) -> io::Result<File> {
+    let mut name = path
+        .file_name()
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "history path has no file name")
+        })?
+        .to_os_string();
+    name.push(".writer.lock");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        // Never attach delete-on-close to a preexisting object (including a
+        // reparse target). A surviving lock after OS/storage failure requires
+        // explicit recovery, rather than deleting an object we did not create.
+        .create_new(true)
+        .share_mode(0)
+        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(path.with_file_name(name))
 }
 
 fn writer_loop(
@@ -1417,7 +1460,7 @@ fn compact_file(path: &Path) -> io::Result<()> {
         .collect();
     records.sort_by_key(InputHistoryRecord::sequence);
     if records.is_empty() {
-        return clear_path(path).map(|_| ());
+        return clear_owned_path(path).map(|_| ());
     }
 
     let mut encoded = Vec::with_capacity(records.len());
@@ -1884,6 +1927,119 @@ mod tests {
         let prefix_preserved = after.starts_with(&original);
         assert!(prefix_preserved && session == 701 && sequence == 901,
             "startup prefix={prefix_preserved}, session={session} (expected 701), sequence={sequence} (expected 901)");
+    }
+
+    #[test]
+    fn store_owner_rejects_second_service_without_mutation() {
+        let fixture = ReadFailureFixture(temporary_path("two-writers"));
+        let owner = InputHistoryService::open(&fixture.0).unwrap();
+        owner.flush().unwrap();
+        let original = fs::read(&fixture.0).unwrap();
+        let second = InputHistoryService::open(&fixture.0);
+        let rejected = second.is_err();
+        if let Ok(second) = second {
+            second.stop().unwrap();
+        }
+        owner.stop().unwrap();
+        assert!(rejected, "second history writer was admitted");
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+        // A stopped service may still have callers holding its Arc. Only
+        // the worker's actual lifetime owns the store, so handoff now works.
+        let successor = InputHistoryService::open(&fixture.0).unwrap();
+        successor.stop().unwrap();
+    }
+
+    #[test]
+    fn store_owner_excludes_offline_clear() {
+        let fixture = ReadFailureFixture(temporary_path("offline-clear-owner"));
+        let owner = InputHistoryService::open(&fixture.0).unwrap();
+        owner.flush().unwrap();
+        let original = fs::read(&fixture.0).unwrap();
+        let cleared = clear_path(&fixture.0);
+        owner.stop().unwrap();
+        assert!(cleared.is_err(), "offline Clear bypassed the live writer");
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+        clear_path(&fixture.0).unwrap();
+        assert!(read_snapshot(&fixture.0).unwrap().records.is_empty());
+    }
+
+    #[test]
+    fn store_owner_survives_canonical_replacement_and_paths_are_independent() {
+        let fixture = ReadFailureFixture(temporary_path("replace-owner"));
+        let previous = ReadFailureFixture(temporary_path("previous-owner"));
+        let owner = InputHistoryService::open(&fixture.0).unwrap();
+        owner.flush().unwrap();
+        let original = fs::read(&fixture.0).unwrap();
+        fs::rename(&fixture.0, &previous.0).unwrap();
+        fs::write(&fixture.0, original).unwrap();
+        let alias = fixture
+            .0
+            .parent()
+            .unwrap()
+            .join(".")
+            .join(fixture.0.file_name().unwrap());
+        assert!(InputHistoryService::open(&alias).is_err());
+        let independent = ReadFailureFixture(temporary_path("independent-owner"));
+        let other = InputHistoryService::open(&independent.0).unwrap();
+        other.stop().unwrap();
+        owner.stop().unwrap();
+        let successor = InputHistoryService::open(&fixture.0).unwrap();
+        successor.stop().unwrap();
+    }
+
+    #[test]
+    fn store_owner_does_not_delete_a_preexisting_lock_path() {
+        let fixture = ReadFailureFixture(temporary_path("lock-collision"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let original = fs::read(&fixture.0).unwrap();
+        let mut name = fixture.0.file_name().unwrap().to_os_string();
+        name.push(".writer.lock");
+        let lock_path = fixture.0.with_file_name(name);
+        fs::write(&lock_path, b"synthetic preexisting file").unwrap();
+        let opened = InputHistoryService::open(&fixture.0);
+        let rejected = opened.is_err();
+        if let Ok(service) = opened {
+            service.stop().unwrap();
+        }
+        let lock_contents = fs::read(&lock_path).ok();
+        let _ = fs::remove_file(&lock_path);
+        assert!(
+            rejected,
+            "existing lock path must not be adopted for deletion"
+        );
+        assert_eq!(
+            lock_contents.as_deref(),
+            Some(b"synthetic preexisting file".as_slice())
+        );
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+    }
+
+    #[test]
+    fn store_owner_preserves_preexisting_symlink_and_target() {
+        let fixture = ReadFailureFixture(temporary_path("lock-symlink"));
+        let target = ReadFailureFixture(temporary_path("lock-target"));
+        fs::write(&target.0, b"synthetic target").unwrap();
+        let mut name = fixture.0.file_name().unwrap().to_os_string();
+        name.push(".writer.lock");
+        let lock_path = fixture.0.with_file_name(name);
+        std::os::windows::fs::symlink_file(&target.0, &lock_path).unwrap();
+        let opened = InputHistoryService::open(&fixture.0);
+        let rejected = opened.is_err();
+        if let Ok(service) = opened {
+            service.stop().unwrap();
+        }
+        let link_preserved = fs::symlink_metadata(&lock_path)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false);
+        let target_contents = fs::read(&target.0).ok();
+        let _ = fs::remove_file(&lock_path);
+        assert!(rejected);
+        assert!(link_preserved);
+        assert_eq!(
+            target_contents.as_deref(),
+            Some(b"synthetic target".as_slice())
+        );
+        assert!(!fixture.0.exists());
     }
 
     #[test]
