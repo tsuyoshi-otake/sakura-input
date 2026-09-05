@@ -73,6 +73,7 @@ struct Epoch {
     activation: u64,
     focus: u64,
     context: ContextId,
+    context_generation: u64,
     revision: u64,
 }
 
@@ -117,6 +118,7 @@ pub(crate) struct UiLease {
     activation: u64,
     focus: u64,
     context: ContextId,
+    context_generation: u64,
     revision: u64,
 }
 
@@ -139,6 +141,7 @@ struct Operation<T> {
     activation: u64,
     focus: u64,
     context: ContextId,
+    context_generation: u64,
     phase: Phase,
     base_revision: u64,
     result_revision: u64,
@@ -185,6 +188,7 @@ pub(crate) struct WriteCoordinator<T> {
     focus: u64,
     active: bool,
     context: Option<ContextId>,
+    context_generation: u64,
     committed_revision: u64,
     tail_revision: u64,
     committed_visible: VisibleState,
@@ -192,6 +196,7 @@ pub(crate) struct WriteCoordinator<T> {
     operations: VecDeque<Operation<T>>,
     terminals: VecDeque<TerminalRecord>,
     ui_lease: Option<UiLease>,
+    issued_ui_lease: Option<UiLease>,
 }
 
 impl<T> WriteCoordinator<T> {
@@ -204,6 +209,7 @@ impl<T> WriteCoordinator<T> {
             focus: 0,
             active: false,
             context: None,
+            context_generation: 0,
             committed_revision: 0,
             tail_revision: 0,
             committed_visible: VisibleState::empty(),
@@ -211,6 +217,7 @@ impl<T> WriteCoordinator<T> {
             operations: VecDeque::new(),
             terminals: VecDeque::new(),
             ui_lease: None,
+            issued_ui_lease: None,
         }
     }
 
@@ -268,11 +275,13 @@ impl<T> WriteCoordinator<T> {
         match self.context {
             Some(current) if current == context => Vec::new(),
             None => {
+                self.context_generation = self.context_generation.wrapping_add(1);
                 self.context = Some(context);
                 Vec::new()
             }
             Some(_) => {
                 let cancelled = self.cancel_all(CancelReason::ContextReplaced);
+                self.context_generation = self.context_generation.wrapping_add(1);
                 self.context = Some(context);
                 self.committed_revision = 0;
                 self.tail_revision = 0;
@@ -344,6 +353,7 @@ impl<T> WriteCoordinator<T> {
             activation: self.activation,
             focus: self.focus,
             context,
+            context_generation: self.context_generation,
             phase: Phase::Reserved,
             base_revision: self.tail_revision,
             result_revision: self.tail_revision,
@@ -378,6 +388,7 @@ impl<T> WriteCoordinator<T> {
             || operation.activation != self.activation
             || operation.focus != self.focus
             || self.context != Some(operation.context)
+            || self.context_generation != operation.context_generation
         {
             return Err(AdmissionError::ReservationLost);
         }
@@ -433,6 +444,7 @@ impl<T> WriteCoordinator<T> {
             activation: operation.activation,
             focus: operation.focus,
             context: operation.context,
+            context_generation: operation.context_generation,
             revision: operation.base_revision,
         };
         Some(Request {
@@ -457,6 +469,7 @@ impl<T> WriteCoordinator<T> {
                 activation: operation.activation,
                 focus: operation.focus,
                 context: operation.context,
+                context_generation: operation.context_generation,
                 revision: operation.base_revision,
             },
             result_revision: operation.result_revision,
@@ -476,14 +489,20 @@ impl<T> WriteCoordinator<T> {
         if self.focus != ticket.epoch.focus {
             return Err(CancelReason::FocusChanged);
         }
-        if self.context != Some(ticket.epoch.context) {
+        if self.context != Some(ticket.epoch.context)
+            || self.context_generation != ticket.epoch.context_generation
+        {
             return Err(CancelReason::ContextReplaced);
         }
         if self.committed_revision != ticket.epoch.revision {
             return Err(CancelReason::RevisionMismatch);
         }
         match self.operations.front() {
-            Some(operation) if operation.id == ticket.id && operation.phase == Phase::Requested => {
+            Some(operation)
+                if operation.id == ticket.id
+                    && operation.phase == Phase::Requested
+                    && operation.result_revision == ticket.result_revision =>
+            {
                 Ok(())
             }
             _ => Err(CancelReason::StaleCallback),
@@ -491,6 +510,7 @@ impl<T> WriteCoordinator<T> {
     }
 
     pub(crate) fn complete_applied(&mut self, ticket: Ticket) -> Option<Completion<T>> {
+        self.validate_callback(ticket).ok()?;
         self.finish_head(ticket, TerminalOutcome::Applied, true, None)
             .into_iter()
             .next()
@@ -551,9 +571,11 @@ impl<T> WriteCoordinator<T> {
 
     pub(crate) fn adopt_ui_lease(&mut self, lease: UiLease) -> bool {
         if self.active
+            && self.issued_ui_lease == Some(lease)
             && self.activation == lease.activation
             && self.focus == lease.focus
             && self.context == Some(lease.context)
+            && self.context_generation == lease.context_generation
             && self.committed_revision == lease.revision
         {
             self.ui_lease = Some(lease);
@@ -565,15 +587,28 @@ impl<T> WriteCoordinator<T> {
 
     pub(crate) fn validate_ui_lease(&self, lease: UiLease) -> bool {
         self.ui_lease == Some(lease)
+            && self.issued_ui_lease == Some(lease)
             && self.active
             && self.activation == lease.activation
             && self.focus == lease.focus
             && self.context == Some(lease.context)
+            && self.context_generation == lease.context_generation
             && self.committed_revision == lease.revision
     }
 
     pub(crate) fn clear_ui_lease(&mut self) {
         self.ui_lease = None;
+        self.issued_ui_lease = None;
+    }
+
+    /// Failed deferred work may retire only the lease it still owns. A newer
+    /// publication must survive an older completion's failure path.
+    pub(crate) fn clear_ui_lease_if_current(&mut self, lease: UiLease) -> bool {
+        if !self.validate_ui_lease(lease) {
+            return false;
+        }
+        self.clear_ui_lease();
+        true
     }
 
     pub(crate) fn has_ui_lease(&self) -> bool {
@@ -663,6 +698,7 @@ impl<T> WriteCoordinator<T> {
                 activation: first.activation,
                 focus: first.focus,
                 context: first.context,
+                context_generation: first.context_generation,
                 revision: first.result_revision,
             })
         } else {
@@ -674,6 +710,7 @@ impl<T> WriteCoordinator<T> {
             }
             None
         };
+        self.issued_ui_lease = first_lease;
         completed.push(self.complete(first, first_outcome, first_lease));
 
         if first_outcome != TerminalOutcome::Applied {
@@ -761,6 +798,79 @@ mod tests {
 
     fn request(journal: &mut WriteCoordinator<&'static str>) -> Request<&'static str> {
         journal.begin_head().expect("head request")
+    }
+
+    #[test]
+    fn authority_ready_head_cannot_be_applied_but_can_be_rejected() {
+        let mut journal = active(2);
+        reserve_and_attach(&mut journal, "unrequested", true, state("a", true));
+        let ticket = journal.head_ticket().unwrap();
+        assert!(journal.complete_applied(ticket).is_none());
+        assert_eq!(journal.pending_len(), 1);
+        assert!(journal.terminal_records().is_empty());
+        let rejected = journal.reject(ticket, false, None);
+        assert_eq!(rejected.len(), 1);
+        assert_eq!(rejected[0].outcome, TerminalOutcome::Rejected);
+    }
+
+    #[test]
+    fn authority_applied_requires_exact_ticket_fields() {
+        let mut journal = active(2);
+        reserve_and_attach(&mut journal, "requested", true, state("a", true));
+        let ticket = request(&mut journal).ticket;
+        for field in 0..6 {
+            let mut altered = ticket;
+            match field {
+                0 => altered.epoch.activation += 1,
+                1 => altered.epoch.focus += 1,
+                2 => altered.epoch.context = SECOND,
+                3 => altered.epoch.revision += 1,
+                4 => altered.result_revision += 1,
+                _ => altered.epoch.context_generation += 1,
+            }
+            assert!(
+                journal.complete_applied(altered).is_none(),
+                "altered field {field} accepted"
+            );
+            assert_eq!(journal.pending_len(), 1);
+            assert!(journal.terminal_records().is_empty());
+        }
+        assert!(journal.complete_applied(ticket).is_some());
+    }
+
+    fn applied_ui_only_lease(journal: &mut WriteCoordinator<&'static str>) -> UiLease {
+        let visible = journal.tail_visible();
+        reserve_and_attach(journal, "ui", false, visible);
+        let ticket = request(journal).ticket;
+        journal.complete_applied(ticket).unwrap().ui_lease.unwrap()
+    }
+
+    #[test]
+    fn authority_lease_cannot_return_after_context_aba() {
+        let mut journal = active(2);
+        let old = applied_ui_only_lease(&mut journal);
+        assert!(journal.adopt_ui_lease(old));
+        journal.observe_context(SECOND);
+        journal.observe_context(FIRST);
+        assert!(!journal.adopt_ui_lease(old));
+        let current = applied_ui_only_lease(&mut journal);
+        assert!(journal.adopt_ui_lease(current));
+    }
+
+    #[test]
+    fn authority_same_revision_lease_cannot_supersede_newer_output() {
+        let mut journal = active(2);
+        let old = applied_ui_only_lease(&mut journal);
+        assert!(journal.adopt_ui_lease(old));
+        let current = applied_ui_only_lease(&mut journal);
+        assert!(journal.adopt_ui_lease(current));
+        assert!(!journal.adopt_ui_lease(old));
+        assert!(journal.validate_ui_lease(current));
+        assert!(!journal.clear_ui_lease_if_current(old));
+        assert!(journal.validate_ui_lease(current));
+        assert!(journal.clear_ui_lease_if_current(current));
+        assert!(!journal.clear_ui_lease_if_current(current));
+        assert!(!journal.adopt_ui_lease(current));
     }
 
     #[test]

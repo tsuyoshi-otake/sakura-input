@@ -6305,7 +6305,7 @@ impl TextService_Impl {
                 debug_trace_tsf(
                     service.instance_id,
                     "candidate_show",
-                    if shown { "shown" } else { "show_failed_end" },
+                    if shown { "shown" } else { "show_failed" },
                     u64::from(shown),
                     candidates.items.len() as u64,
                     candidates.kind as u64,
@@ -6314,10 +6314,18 @@ impl TextService_Impl {
                 if shown {
                     let _ = service.queue_layout();
                 } else {
-                    if let Ok(mut writes) = service.writes.try_borrow_mut() {
-                        writes.clear_ui_lease();
+                    // A stale completion has no authority to erase a newer
+                    // output's UI after its own lease adoption was refused.
+                    let retired = completion.ui_lease.is_some_and(|lease| {
+                        service
+                            .writes
+                            .try_borrow_mut()
+                            .map(|mut writes| writes.clear_ui_lease_if_current(lease))
+                            .unwrap_or(false)
+                    });
+                    if retired {
+                        let _ = service.queue_end_candidates();
                     }
-                    let _ = service.queue_end_candidates();
                 }
             }
             CandidateEffect::Hide => {
