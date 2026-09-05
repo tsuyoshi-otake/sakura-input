@@ -14,6 +14,7 @@
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,12 +24,13 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_proto::{AiTextOperation, AiTextStatus, InputScope};
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
 };
 use windows::Win32::Storage::FileSystem::{
-    FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT,
+    ReplaceFileW, FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT, REPLACE_FILE_FLAGS,
 };
 
 const MAGIC: &[u8; 4] = b"SKIH";
@@ -1101,6 +1103,7 @@ pub fn default_path() -> io::Result<PathBuf> {
 }
 
 pub fn read_snapshot(path: &Path) -> io::Result<InputHistorySnapshot> {
+    require_no_compaction_transaction(path)?;
     let metadata = fs::metadata(path)?;
     if metadata.len() > MAX_INPUT_HISTORY_BYTES {
         return Err(invalid_data("input history exceeds its hard size bound"));
@@ -1116,6 +1119,7 @@ pub fn clear_path(path: &Path) -> io::Result<u64> {
 
 /// Caller already owns the separate writer lock (or an isolated unit fixture).
 fn clear_owned_path(path: &Path) -> io::Result<u64> {
+    require_no_compaction_transaction(path)?;
     if !path.exists() {
         return Ok(0);
     }
@@ -1274,10 +1278,9 @@ fn sync_writer_file(file: &Option<File>, append_failed: bool) -> io::Result<()> 
     Ok(())
 }
 
-/// Compacts while the writer owns the only open handle to the history file.
-/// The handle is restored even when compaction fails, so a transient rename or
-/// DPAPI error has an explicit failure outcome without permanently disabling
-/// later appends.
+/// Compacts under store ownership after closing this writer's append handle.
+/// Errors before a transaction can reopen the verified canonical; unresolved
+/// publication leaves the handle absent and every later open fails closed.
 fn compact_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<()> {
     if let Some(mut previous) = file.take() {
         previous.flush()?;
@@ -1339,6 +1342,7 @@ fn append_encrypted(file: &mut File, protected: &[u8]) -> io::Result<()> {
 }
 
 fn clear_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<u64> {
+    require_no_compaction_transaction(path)?;
     if let Some(previous) = file.as_mut() {
         previous.flush()?;
     }
@@ -1359,6 +1363,7 @@ fn clear_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<u64> {
 }
 
 fn ensure_file(path: &Path) -> io::Result<()> {
+    require_no_compaction_transaction(path)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1502,10 +1507,6 @@ fn compact_file(path: &Path) -> io::Result<()> {
         .filter(|record| record.timestamp_ms() >= cutoff)
         .collect();
     records.sort_by_key(InputHistoryRecord::sequence);
-    if records.is_empty() {
-        return clear_owned_path(path).map(|_| ());
-    }
-
     let mut encoded = Vec::with_capacity(records.len());
     let mut total = HEADER_LEN as u64;
     for record in records.into_iter().rev() {
@@ -1519,20 +1520,130 @@ fn compact_file(path: &Path) -> io::Result<()> {
         encoded.push(protected);
     }
     encoded.reverse();
-    let temp = path.with_extension("compact.tmp");
+    // This exclusive directory is also the unresolved-transaction marker.
+    // Never adopt, overwrite or clean up a directory created by another run.
+    let transaction = compaction_transaction_path(path)?;
+    fs::create_dir(&transaction)?;
+    let temp = transaction.join("replacement.bin");
+    let backup = transaction.join("previous.bin");
     let mut replacement = OpenOptions::new()
-        .create(true)
+        .create_new(true)
+        .read(true)
         .write(true)
-        .truncate(true)
         .open(&temp)?;
     replacement.write_all(&header())?;
     for payload in &encoded {
         append_encrypted(&mut replacement, payload)?;
     }
-    replacement.flush()?;
+    #[cfg(test)]
+    tests::publication_cut("temp_written")?;
+    replacement.sync_all()?;
+    #[cfg(test)]
+    tests::publication_cut("temp_synced")?;
     drop(replacement);
-    let _ = fs::remove_file(path);
-    fs::rename(temp, path)
+    let expected = validate_compaction_file(&temp)?;
+    #[cfg(test)]
+    let _publication_guard = tests::lock_replacement_if_requested(&temp);
+    replace_history_file(path, &temp, &backup)?;
+    #[cfg(test)]
+    tests::publication_cut("replaced")?;
+    // Preserve candidates until canonical is synced and validated. Subsequent
+    // cleanup errors retain the marker and the validated new canonical, even
+    // if the obsolete backup has already been removed.
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?
+        .sync_all()?;
+    #[cfg(test)]
+    tests::publication_cut("canonical_synced")?;
+    if validate_compaction_file(path)? != expected {
+        return Err(invalid_data("input history published replacement mismatch"));
+    }
+    fs::remove_file(&backup)?;
+    #[cfg(test)]
+    tests::publication_cut("backup_removed")?;
+    fs::remove_dir(&transaction)?;
+    Ok(())
+}
+
+fn compaction_transaction_path(path: &Path) -> io::Result<PathBuf> {
+    let mut name = path
+        .file_name()
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "history path has no file name")
+        })?
+        .to_os_string();
+    name.push(".compaction");
+    Ok(path.with_file_name(name))
+}
+
+fn require_no_compaction_transaction(path: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(compaction_transaction_path(path)?) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+        Ok(_) => Err(io::Error::other(
+            "input history recovery required: unresolved compaction",
+        )),
+    }
+}
+
+/// Bounded complete schema/CRC/DPAPI validation; CRC here is an integrity
+/// comparison, not cryptographic authentication or a recovery generation.
+fn validate_compaction_file(path: &Path) -> io::Result<(usize, u32)> {
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_INPUT_HISTORY_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_INPUT_HISTORY_BYTES {
+        return Err(invalid_data(
+            "input history replacement exceeds hard size bound",
+        ));
+    }
+    let summary = scan_frames(&bytes, None)?;
+    if summary.valid_end != bytes.len() || summary.format_version != INPUT_HISTORY_FORMAT_VERSION {
+        return Err(invalid_data("input history replacement is incomplete"));
+    }
+    Ok((bytes.len(), crc32(&bytes)))
+}
+
+fn replace_history_file(path: &Path, temp: &Path, backup: &Path) -> io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = tests::PARTIAL_REPLACE_ERROR.with(|failure| failure.take()) {
+        if code == 1177 {
+            fs::rename(path, backup)?;
+        }
+        return Err(io::Error::from_raw_os_error(code));
+    }
+    let wide = |path: &Path| -> io::Result<Vec<u16>> {
+        let mut encoded: Vec<_> = path.as_os_str().encode_wide().collect();
+        if encoded.contains(&0) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "history path contains NUL",
+            ));
+        }
+        encoded.push(0);
+        Ok(encoded)
+    };
+    let canonical = wide(path)?;
+    let replacement = wide(temp)?;
+    let previous = wide(backup)?;
+    // SAFETY: all paths are live NUL-terminated buffers, and the caller owns
+    // the cooperative store lock. Backup and replacement are in the newly
+    // created same-volume transaction directory. Do not ignore ACL errors or
+    // use the unsupported REPLACEFILE_WRITE_THROUGH flag.
+    unsafe {
+        ReplaceFileW(
+            PCWSTR(canonical.as_ptr()),
+            PCWSTR(replacement.as_ptr()),
+            PCWSTR(previous.as_ptr()),
+            REPLACE_FILE_FLAGS::default(),
+            None,
+            None,
+        )
+    }
+    .map_err(|error| io::Error::from_raw_os_error(error.code().0 & 0xffff))
 }
 
 /// Package version and installed release label for the running engine.
@@ -2080,6 +2191,205 @@ mod tests {
             assert_eq!(result.unwrap(), Some(5));
         }
         assert!(service.worker.lock().unwrap().handle.is_none());
+    }
+
+    thread_local! {
+        static LOCK_REPLACEMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static PARTIAL_REPLACE_ERROR: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+        static PUBLICATION_CUT: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
+    }
+
+    pub(super) fn publication_cut(point: &'static str) -> io::Result<()> {
+        PUBLICATION_CUT.with(|cut| {
+            if cut.get() == Some(point) {
+                cut.set(None);
+                Err(io::Error::from_raw_os_error(112))
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    pub(super) fn lock_replacement_if_requested(path: &Path) -> Option<File> {
+        LOCK_REPLACEMENT.with(|requested| {
+            requested.replace(false).then(|| {
+                OpenOptions::new()
+                    .read(true)
+                    .share_mode(1)
+                    .open(path)
+                    .unwrap()
+            })
+        })
+    }
+
+    struct PublicationFixture(ReadFailureFixture);
+
+    impl PublicationFixture {
+        fn new(label: &str) -> Self {
+            Self(ReadFailureFixture(temporary_path(label)))
+        }
+        fn path(&self) -> &Path {
+            &self.0 .0
+        }
+        fn transaction(&self) -> PathBuf {
+            let mut name = self.path().file_name().unwrap().to_os_string();
+            name.push(".compaction");
+            self.path().with_file_name(name)
+        }
+    }
+
+    impl Drop for PublicationFixture {
+        fn drop(&mut self) {
+            let directory = self.transaction();
+            for name in ["replacement.bin", "previous.bin"] {
+                match fs::remove_file(directory.join(name)) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => panic!("remove synthetic transaction file: {error}"),
+                }
+            }
+            match fs::remove_dir(&directory) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => panic!("remove synthetic transaction directory: {error}"),
+            }
+        }
+    }
+
+    #[test]
+    fn publication_partial_windows_outcomes_preserve_candidates_and_refuse_reopen() {
+        for code in [1175, 1176, 1177, 5] {
+            let fixture = PublicationFixture::new(&format!("partial-{code}"));
+            append_records(fixture.path(), &[key_record(1, now_ms())]);
+            let original = fs::read(fixture.path()).unwrap();
+            PARTIAL_REPLACE_ERROR.with(|failure| failure.set(Some(code)));
+            assert_eq!(
+                compact_file(fixture.path()).unwrap_err().raw_os_error(),
+                Some(code)
+            );
+            assert!(fixture.transaction().join("replacement.bin").exists());
+            if code == 1177 {
+                assert!(!fixture.path().exists());
+                assert!(fs::read(fixture.transaction().join("previous.bin")).unwrap() == original);
+            } else {
+                assert!(fs::read(fixture.path()).unwrap() == original);
+            }
+            assert!(open_append(fixture.path()).is_err());
+            assert!(InputHistoryService::open(fixture.path()).is_err());
+            assert!(clear_path(fixture.path()).is_err());
+            assert_eq!(fixture.path().exists(), code != 1177);
+        }
+    }
+
+    #[test]
+    fn publication_injected_stage_errors_remain_unavailable_without_cleanup() {
+        for point in [
+            "temp_written",
+            "temp_synced",
+            "replaced",
+            "canonical_synced",
+            "backup_removed",
+        ] {
+            let fixture = PublicationFixture::new(point);
+            append_records(fixture.path(), &[key_record(1, now_ms())]);
+            PUBLICATION_CUT.with(|cut| cut.set(Some(point)));
+            let mut writer = Some(open_append(fixture.path()).unwrap());
+            assert!(compact_writer_file(fixture.path(), &mut writer).is_err());
+            assert!(
+                writer.is_none(),
+                "failed transaction reopened an append handle"
+            );
+            assert!(fixture.transaction().exists());
+            assert!(fixture.path().exists());
+            validate_compaction_file(fixture.path()).unwrap();
+            if point == "backup_removed" {
+                assert!(!fixture.transaction().join("previous.bin").exists());
+                let bytes = fs::read(fixture.path()).unwrap();
+                assert_eq!(scan_snapshot(&bytes).unwrap().records.len(), 1);
+            }
+            assert!(read_snapshot(fixture.path()).is_err());
+            assert!(clear_path(fixture.path()).is_err());
+        }
+    }
+
+    #[test]
+    fn publication_success_removes_transaction_for_empty_and_retained_stores() {
+        for retained in [false, true] {
+            let fixture = PublicationFixture::new("publish-success");
+            let timestamp = if retained { now_ms() } else { 1 };
+            append_records(fixture.path(), &[key_record(1, timestamp)]);
+            compact_file(fixture.path()).unwrap();
+            assert!(!fixture.transaction().exists());
+            assert_eq!(
+                read_snapshot(fixture.path()).unwrap().records.len(),
+                usize::from(retained)
+            );
+            clear_path(fixture.path()).unwrap();
+            assert!(read_snapshot(fixture.path()).unwrap().records.is_empty());
+        }
+    }
+
+    #[test]
+    fn publication_real_sharing_failure_preserves_canonical() {
+        let fixture = PublicationFixture::new("publication-sharing");
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        let original = fs::read(fixture.path()).unwrap();
+        LOCK_REPLACEMENT.with(|requested| requested.set(true));
+        let result = compact_file(fixture.path());
+        assert!(
+            result.is_err(),
+            "real replacement sharing conflict must fail"
+        );
+        assert!(
+            fs::read(fixture.path()).ok().as_deref() == Some(original.as_slice()),
+            "failed publication lost the original canonical"
+        );
+    }
+
+    #[test]
+    fn publication_pending_transaction_prevents_empty_recreation() {
+        let fixture = PublicationFixture::new("pending-missing");
+        fs::create_dir(fixture.transaction()).unwrap();
+        fs::write(fixture.transaction().join("replacement.bin"), header()).unwrap();
+        let opened = InputHistoryService::open(fixture.path());
+        let rejected = opened.is_err();
+        if let Ok(service) = opened {
+            service.stop().unwrap();
+        }
+        assert!(
+            rejected,
+            "unresolved publication was treated as a new store"
+        );
+        assert!(!fixture.path().exists(), "empty canonical was manufactured");
+    }
+
+    #[test]
+    fn publication_pending_transaction_prevents_false_clear_success() {
+        let fixture = PublicationFixture::new("pending-clear");
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        let original = fs::read(fixture.path()).unwrap();
+        fs::create_dir(fixture.transaction()).unwrap();
+        fs::write(fixture.transaction().join("previous.bin"), &original).unwrap();
+        let cleared = clear_path(fixture.path());
+        assert!(
+            cleared.is_err(),
+            "Clear succeeded while recoverable history remained"
+        );
+        assert_eq!(fs::read(fixture.path()).unwrap(), original);
+    }
+
+    #[test]
+    fn publication_preserves_preexisting_legacy_temp() {
+        let fixture = PublicationFixture::new("legacy-temp-collision");
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        let temp = fixture.path().with_extension("compact.tmp");
+        fs::write(&temp, b"synthetic unrelated legacy temp").unwrap();
+        let result = compact_file(fixture.path());
+        assert!(result.is_ok());
+        assert_eq!(
+            fs::read(&temp).ok().as_deref(),
+            Some(b"synthetic unrelated legacy temp".as_slice())
+        );
     }
 
     #[test]

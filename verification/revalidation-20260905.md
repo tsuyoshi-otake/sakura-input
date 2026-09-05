@@ -7,7 +7,7 @@ Priority and confidence are independent; developer-history failures require expl
 
 | ID | Current classification | Priority | Issue | Current evidence / next verification |
 |---|---|---|---|---|
-| H1 | CODE_CONFIRMED | P1 | pending dedicated issue | input_history::compact_file fixed temp, remove then rename; Windows cut points pending |
+| H1 | CONFIRMED | P1 | #127 | real Windows sharing conflict loses canonical on old code; ReplaceFileW/backup/pending-marker containment tested; generation recovery, process-crash and power-loss matrix unfinished; history-compaction-publication.md |
 | H2 | MITIGATED | P1 | #120, #123 | early secured endpoint reservation and cooperative per-path history writer lock; same-store process regression passes; legacy writers, physical cross-logon and watchdog work remain; engine-startup-ownership.md, history-store-ownership.md |
 | H3 | MITIGATED | P1 | #105 | Flush/Shutdown compaction reproduced and removed; 0/16/64 MiB before/after measured; startup/periodic work remains; history-control-barriers.md |
 | H4 | CONFIRMED | P1 | #116 | startup ID regression reproduced and fixed; one validation/ID pass, append handle before spawn; runtime overflow and durable non-reuse remain; history-startup-scan.md |
@@ -40,7 +40,8 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | H2 early endpoint ownership | #120 | #121 | engine main::run, Server::reserve / run_when_ready | duplicate_engine_is_rejected_before_dictionary_initialization, startup_reservation_*, startup_spawn_failure_*; engine-startup-ownership.md and results JSON |
 | T2 journal authority | #52 | #122 | TSF WriteCoordinator / guarded candidate cleanup | authority_*; write-journal-authority.md and results JSON |
 | H2 history store ownership | #123 | #124 | engine input_history::open / clear_path / acquire_store_owner | store_owner_*, history_store_owner_in_another_process_keeps_input_available; history-store-ownership.md and results JSON |
-| H6 joined stop result | #125 | pending | engine InputHistoryService::stop / WriterShutdown | stop_outcome_*; history-stop-outcome.md and results JSON |
+| H6 joined stop result | #125 | #126 | engine InputHistoryService::stop / WriterShutdown | stop_outcome_*; history-stop-outcome.md and results JSON |
+| H1 publication containment | #127 | pending | engine compact_file / replace_history_file / require_no_compaction_transaction | publication_*; history-compaction-publication.md and results JSON |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 
