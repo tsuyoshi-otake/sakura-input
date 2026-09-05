@@ -1,16 +1,31 @@
 # Requirements catalog — Space key dispatch
 
-Revision: `f26191aa16a6b3569cdf004e4852650f7de1a17f`
+Correspondence revalidation base: `bc90f95` (plus recorded working-tree inputs).
 Oracle: `crates/sakura-engine/src/space_key_dispatch_oracle.rs`
 
 Severity: release-blocking unless marked otherwise.
 
-REQ-SPACE-09 was added after the revision recorded above, and it inverted what
-the REQ-SPACE-06 tests asserted about the Space following a crash/restart. The
-oracle, its C2 atoms (now 11) and the Rust tests were changed together and all
-pass. The TLA+ spec, the TLC configurations, the cargo-mutants run and the
-hashes in `traceability.json` still describe the pre-#102 oracle, and need a
-separate re-run before that record can be quoted again.
+The old `f26191a` revision did not identify the evaluated requirements tree.
+Its verdict is preserved as historical evidence, not a current result.
+`traceability.json` separates incomplete current evidence from that history.
+
+The oracle's `AbandonContext` means dropping a context with a live reading and
+reopening the connection. Its adapter uses `Dispatcher::reset`; it is not an
+orderly replacement after commit/cancel. The latter loses no live reading and
+arms no credit, as `replacing_a_context_after_a_commit_absorbs_no_space` checks.
+`CrashRestart` is a connection reset with the shared engine fence surviving;
+it does not establish whole-engine process crash/restart behavior. `Type`
+represents an accepted reading event: the model may have multiple live readings,
+but that does not assert that sequential raw idle-peer letters are accepted by
+the product's live-peer policy. These bounds are part of the correspondence.
+
+A live peer owns its own absorption and does not spend pending teardown credit.
+A disconnected reading can still owe credit to another live idle connection of
+the same host group. The oracle and test adapter now have regressions for those
+distinctions. A boolean pending credit models a coalesced outstanding loss; this
+campaign does not qualify an arbitrary number of distinct losses as separate
+banked credits. The existing TLA SpaceKeyDispatch model still omits that credit;
+its separately rerun finite searches must not be quoted as REQ-SPACE-09 proof.
 
 | ID | Statement | Terminal owner | Persistence | Exclusions |
 |---|---|---|---|---|
@@ -18,7 +33,7 @@ separate re-run before that record can be quoted again.
 | REQ-SPACE-02 | Idle Japanese Space inserts one fullwidth space when no live peer is converting and no teardown absorption is owed (REQ-SPACE-09) | host document via commit | none | Direct; half-width policy |
 | REQ-SPACE-03 | One physical Space must not both insert a document space and convert | the physical key | none | none |
 | REQ-SPACE-04 | Idle Space while a peer is composing/converting is absorbed | the composing connection | none | two unrelated processes |
-| REQ-SPACE-05 | Commit/Cancel/Replace return that connection to Idle | engine session | none | none |
+| REQ-SPACE-05 | Commit/Cancel/abandon return that connection to Idle; orderly replacement after settlement loses no live reading | engine session | none | none |
 | REQ-SPACE-06 | Crash/restart of a connection drops its composition | new session after reconnect | none | other live connections |
 | REQ-SPACE-07 | Timeout Space is absorbed without a document write | recovery fence | none | successful SendKey |
 | REQ-SPACE-08 | Dropped Space leaves composition unchanged | host | none | none |

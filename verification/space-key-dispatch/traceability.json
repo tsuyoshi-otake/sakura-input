@@ -2,7 +2,8 @@
   "schema": 2,
   "domain": "space-key-dispatch",
   "status": "STALE",
-  "product_conformance": "NOT_RUN",
+  "product_conformance": "INCONCLUSIVE",
+  "oracle_campaign": "../space-oracle-correspondence-results.json",
   "model_execution": "tlc-runner-results.json",
   "model_execution_scope": "Existing bounded model only; it omits REQ-SPACE-09. This pointer is not a product verdict or a dependency-freshness gate.",
   "historical": {
@@ -12,8 +13,8 @@
     "reason": "The old revision does not contain all claimed inputs; the actual evaluated revision is unproven. Old NO_GO and counters are historical, not current product findings."
   },
   "remaining": [
-    "Resolve REQ-SPACE-09 correspondence: requirements exclude orderly replace, oracle ReplaceContext arms credit, TLA has no teardown credit.",
-    "Execute and bind current PBT, C2 and mutation outcomes with their own scope and denominator.",
+    "Extend the TLA model with teardown credit and non-vacuous invariants/witnesses. AbandonContext is now distinguished from orderly replacement.",
+    "Oracle PBT/C2/mutation is rerun and scoped; full product equivalence is not established by the fixed production regression.",
     "Connect dependency-closure freshness checks and scope-omission negative controls to CI.",
     "Keep component/model outcomes separate from real TSF and physical Windows routing."
   ]
