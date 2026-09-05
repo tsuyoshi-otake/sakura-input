@@ -655,6 +655,7 @@ impl InputHistoryStats {
 enum Command {
     Append {
         epoch: u64,
+        timestamp_ms: u64,
         payload: Vec<u8>,
     },
     Flush {
@@ -743,9 +744,11 @@ impl InputHistoryService {
         // Legacy migration is the explicit exception to no startup rewrite:
         // do not append current-format markers beneath a legacy header.
         // Recover IDs before migration can remove expired records.
-        if recovered.format_version != INPUT_HISTORY_FORMAT_VERSION {
-            compact_file(path)?;
-        }
+        let retention = if recovered.format_version != INPUT_HISTORY_FORMAT_VERSION {
+            compact_file(path)?
+        } else {
+            recovered.retention
+        };
         // Complete every fallible mandatory step before starting a worker.
         // Retention belongs to viewing/maintenance, not ID recovery: expired
         // records still carry high-watermarks in this existing store.
@@ -761,7 +764,7 @@ impl InputHistoryService {
                 // Ownership follows the actual worker, including a delayed
                 // exit or unwind, rather than a caller's stop observation.
                 let _store_owner = store_owner;
-                writer_loop(writer_path, receiver, writer_stats, append_file);
+                writer_loop(writer_path, receiver, writer_stats, append_file, retention);
             })
             .map_err(|error| io::Error::other(format!("start input history writer: {error}")))?;
 
@@ -824,13 +827,18 @@ impl InputHistoryService {
                 hook();
             }
         });
+        let timestamp_ms = record.timestamp_ms();
         let Ok(payload) = record.encode() else {
             self.stats
                 .persistence_failures
                 .fetch_add(1, Ordering::Relaxed);
             return;
         };
-        let command = Command::Append { epoch, payload };
+        let command = Command::Append {
+            epoch,
+            timestamp_ms,
+            payload,
+        };
         match self.sender.try_send(command) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
@@ -1166,8 +1174,16 @@ fn writer_loop(
     receiver: Receiver<Command>,
     stats: Arc<InputHistoryStats>,
     file: File,
+    retention: RetentionPlan,
 ) {
-    writer_loop_with_file(path, receiver, stats, Some(file), COMPACTION_INTERVAL);
+    writer_loop_with_file(
+        path,
+        receiver,
+        stats,
+        Some(file),
+        COMPACTION_INTERVAL,
+        retention,
+    );
 }
 
 #[cfg(test)]
@@ -1178,7 +1194,12 @@ fn writer_loop_with_interval(
     compaction_interval: Duration,
 ) {
     let file = open_append(&path).ok();
-    writer_loop_with_file(path, receiver, stats, file, compaction_interval);
+    let snapshot = read_snapshot(&path).expect("validated synthetic worker fixture");
+    let mut retention = RetentionPlan::default();
+    for record in snapshot.records {
+        retention.observe(record.timestamp_ms());
+    }
+    writer_loop_with_file(path, receiver, stats, file, compaction_interval, retention);
 }
 
 fn writer_loop_with_file(
@@ -1187,6 +1208,7 @@ fn writer_loop_with_file(
     stats: Arc<InputHistoryStats>,
     mut file: Option<File>,
     compaction_interval: Duration,
+    mut retention: RetentionPlan,
 ) {
     let mut cleared_epoch = 0;
     let mut last_compaction = Instant::now();
@@ -1199,29 +1221,46 @@ fn writer_loop_with_file(
         let command = match receiver.recv_timeout(wait) {
             Ok(command) => command,
             Err(RecvTimeoutError::Timeout) => {
-                if compact_writer_file(&path, &mut file).is_err() {
-                    stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                if retention.is_due(now_ms()) {
+                    match compact_writer_file(&path, &mut file) {
+                        Ok(updated) => retention = updated,
+                        Err(_) => {
+                            stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                 }
                 appends_since_compaction = 0;
                 last_compaction = Instant::now();
+                #[cfg(test)]
+                tests::after_maintenance_check();
                 continue;
             }
             Err(RecvTimeoutError::Disconnected) => break,
         };
         match command {
-            Command::Append { epoch, payload } => {
+            Command::Append {
+                epoch,
+                timestamp_ms,
+                payload,
+            } => {
                 if epoch < cleared_epoch {
                     continue;
                 }
-                let result = append_payload(&path, &mut file, &payload);
+                let result =
+                    append_payload(&path, &mut file, &payload, timestamp_ms, &mut retention);
                 match result {
                     Ok(()) => {
                         appends_since_compaction = appends_since_compaction.saturating_add(1);
                         if appends_since_compaction >= COMPACTION_APPEND_LIMIT
                             || last_compaction.elapsed() >= COMPACTION_INTERVAL
                         {
-                            if compact_writer_file(&path, &mut file).is_err() {
-                                stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                            if retention.is_due(now_ms()) {
+                                match compact_writer_file(&path, &mut file) {
+                                    Ok(updated) => retention = updated,
+                                    Err(_) => {
+                                        stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                                    }
+                                }
                             }
                             appends_since_compaction = 0;
                             last_compaction = Instant::now();
@@ -1247,6 +1286,7 @@ fn writer_loop_with_file(
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                 } else {
                     append_failed = false;
+                    retention = RetentionPlan::default();
                 }
                 let _ = reply.send(result);
                 appends_since_compaction = 0;
@@ -1281,27 +1321,33 @@ fn sync_writer_file(file: &Option<File>, append_failed: bool) -> io::Result<()> 
 /// Compacts under store ownership after closing this writer's append handle.
 /// Errors before a transaction can reopen the verified canonical; unresolved
 /// publication leaves the handle absent and every later open fails closed.
-fn compact_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<()> {
+fn compact_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<RetentionPlan> {
     if let Some(mut previous) = file.take() {
         previous.flush()?;
     }
     let compaction = compact_file(path);
     let reopened = open_append(path);
     match (compaction, reopened) {
-        (Ok(()), Ok(handle)) => {
+        (Ok(retention), Ok(handle)) => {
             *file = Some(handle);
-            Ok(())
+            Ok(retention)
         }
         (Err(error), Ok(handle)) => {
             *file = Some(handle);
             Err(error)
         }
-        (Ok(()), Err(error)) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
         (Err(error), Err(_)) => Err(error),
     }
 }
 
-fn append_payload(path: &Path, file: &mut Option<File>, payload: &[u8]) -> io::Result<()> {
+fn append_payload(
+    path: &Path,
+    file: &mut Option<File>,
+    payload: &[u8],
+    timestamp_ms: u64,
+    retention: &mut RetentionPlan,
+) -> io::Result<()> {
     if payload.len() > MAX_RECORD_BYTES {
         return Err(invalid_data("input history record is too large"));
     }
@@ -1315,7 +1361,7 @@ fn append_payload(path: &Path, file: &mut Option<File>, payload: &[u8]) -> io::R
         if let Some(mut previous) = file.take() {
             previous.flush()?;
         }
-        compact_file(path)?;
+        *retention = compact_file(path)?;
         *file = Some(open_append(path)?);
     }
     if file.is_none() {
@@ -1329,7 +1375,15 @@ fn append_payload(path: &Path, file: &mut Option<File>, payload: &[u8]) -> io::R
             "input history retention limit reached",
         ));
     }
-    append_encrypted(file, &protected)
+    // An I/O error can follow a complete write. Track possible expiry once
+    // writing begins, but do not schedule maintenance for pre-write rejection.
+    retention.observe(timestamp_ms);
+    append_encrypted(file, &protected)?;
+    #[cfg(test)]
+    if tests::FAIL_AFTER_APPEND.with(|fail| fail.replace(false)) {
+        return Err(io::Error::other("synthetic post-write failure"));
+    }
+    Ok(())
 }
 
 fn append_encrypted(file: &mut File, protected: &[u8]) -> io::Result<()> {
@@ -1421,6 +1475,26 @@ struct ScanSummary {
     valid_end: usize,
     last_sequence: u64,
     last_session: u64,
+    retention: RetentionPlan,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct RetentionPlan {
+    oldest_timestamp_ms: Option<u64>,
+}
+
+impl RetentionPlan {
+    fn observe(&mut self, timestamp_ms: u64) {
+        self.oldest_timestamp_ms = Some(
+            self.oldest_timestamp_ms
+                .map_or(timestamp_ms, |old| old.min(timestamp_ms)),
+        );
+    }
+
+    fn is_due(self, now: u64) -> bool {
+        self.oldest_timestamp_ms
+            .is_some_and(|oldest| oldest < now.saturating_sub(RETENTION.as_millis() as u64))
+    }
 }
 
 fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
@@ -1463,6 +1537,7 @@ fn scan_frames(
     let mut offset = HEADER_LEN;
     let mut last_sequence = 0;
     let mut last_session = 0;
+    let mut retention = RetentionPlan::default();
     while offset + FRAME_HEADER_LEN <= bytes.len() {
         let length = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
         let expected_crc = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap());
@@ -1481,6 +1556,7 @@ fn scan_frames(
         let record = InputHistoryRecord::decode(&payload)?;
         last_sequence = last_sequence.max(record.sequence());
         last_session = last_session.max(record.session());
+        retention.observe(record.timestamp_ms());
         if let Some(records) = records.as_deref_mut() {
             records.push(record);
         }
@@ -1491,13 +1567,16 @@ fn scan_frames(
         valid_end: offset,
         last_sequence,
         last_session,
+        retention,
     })
 }
 
-fn compact_file(path: &Path) -> io::Result<()> {
+fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
     let snapshot = match read_snapshot(path) {
         Ok(snapshot) => snapshot,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(RetentionPlan::default())
+        }
         Err(error) => return Err(error),
     };
     let cutoff = now_ms().saturating_sub(RETENTION.as_millis() as u64);
@@ -1509,6 +1588,7 @@ fn compact_file(path: &Path) -> io::Result<()> {
     records.sort_by_key(InputHistoryRecord::sequence);
     let mut encoded = Vec::with_capacity(records.len());
     let mut total = HEADER_LEN as u64;
+    let mut retention = RetentionPlan::default();
     for record in records.into_iter().rev() {
         let payload = record.encode()?;
         let protected = protect(&payload)?;
@@ -1517,6 +1597,7 @@ fn compact_file(path: &Path) -> io::Result<()> {
             break;
         }
         total += frame_len;
+        retention.observe(record.timestamp_ms());
         encoded.push(protected);
     }
     encoded.reverse();
@@ -1564,7 +1645,7 @@ fn compact_file(path: &Path) -> io::Result<()> {
     #[cfg(test)]
     tests::publication_cut("backup_removed")?;
     fs::remove_dir(&transaction)?;
-    Ok(())
+    Ok(retention)
 }
 
 fn compaction_transaction_path(path: &Path) -> io::Result<PathBuf> {
@@ -2081,6 +2162,163 @@ mod tests {
         let prefix_preserved = after.starts_with(&original);
         assert!(prefix_preserved && session == 701 && sequence == 901,
             "startup prefix={prefix_preserved}, session={session} (expected 701), sequence={sequence} (expected 901)");
+    }
+
+    thread_local! {
+        pub(super) static FAIL_AFTER_APPEND: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        static AFTER_MAINTENANCE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn after_maintenance_check() {
+        AFTER_MAINTENANCE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+    }
+
+    #[test]
+    fn maintenance_expires_record_after_uncertain_append_failure() {
+        let fixture = PublicationFixture(ReadFailureFixture(temporary_path("uncertain-expiry")));
+        let path = fixture.0 .0.clone();
+        ensure_file(&path).unwrap();
+        let file = open_append(&path).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
+        let (checked, observed) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        sender
+            .send(Command::Append {
+                epoch: 0,
+                timestamp_ms: 1,
+                payload: key_record(1, 1).encode().unwrap(),
+            })
+            .unwrap();
+        let worker = thread::spawn(move || {
+            FAIL_AFTER_APPEND.with(|fail| fail.set(true));
+            AFTER_MAINTENANCE.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    checked.send(()).unwrap();
+                    released.recv_timeout(Duration::from_secs(10)).unwrap();
+                }));
+            });
+            writer_loop_with_file(
+                path,
+                receiver,
+                Arc::new(InputHistoryStats::default()),
+                Some(file),
+                Duration::from_millis(1),
+                RetentionPlan::default(),
+            );
+        });
+        let checked = observed.recv_timeout(Duration::from_secs(10));
+        let snapshot = read_snapshot(&fixture.0 .0);
+        let (reply, stopped) = mpsc::channel();
+        let sent = sender.send(Command::Shutdown { reply });
+        let _ = release.send(());
+        let joined = worker.join();
+        assert!(checked.is_ok() && sent.is_ok() && joined.is_ok());
+        assert!(
+            stopped.recv().unwrap().is_err(),
+            "append loss remains observable"
+        );
+        assert!(
+            snapshot.unwrap().records.is_empty(),
+            "uncertain expired append must be removed"
+        );
+    }
+
+    #[test]
+    fn maintenance_prewrite_rejection_does_not_schedule_expiry() {
+        let fixture = ReadFailureFixture(temporary_path("rejected-expiry"));
+        let now = now_ms();
+        append_records(&fixture.0, &[key_record(1, now)]);
+        let mut file = Some(open_append(&fixture.0).unwrap());
+        let mut retention = RetentionPlan::default();
+        retention.observe(now);
+        assert!(append_payload(
+            &fixture.0,
+            &mut file,
+            &vec![0; MAX_RECORD_BYTES + 1],
+            1,
+            &mut retention
+        )
+        .is_err());
+        assert_eq!(retention.oldest_timestamp_ms, Some(now));
+        assert!(!retention.is_due(now));
+    }
+
+    #[test]
+    fn maintenance_unexpired_idle_store_preserves_ciphertext() {
+        let fixture = ReadFailureFixture(temporary_path("clean-idle"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let original = fs::read(&fixture.0).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
+        let (checked, observed) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let path = fixture.0.clone();
+        let worker = thread::spawn(move || {
+            AFTER_MAINTENANCE.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    checked.send(()).unwrap();
+                    released.recv_timeout(Duration::from_secs(10)).unwrap();
+                }))
+            });
+            writer_loop_with_interval(
+                path,
+                receiver,
+                Arc::new(InputHistoryStats::default()),
+                Duration::from_millis(1),
+            );
+        });
+        let checked = observed.recv_timeout(Duration::from_secs(10));
+        let unchanged = fs::read(&fixture.0).unwrap() == original;
+        let (reply, stopped) = mpsc::channel();
+        let sent = sender.send(Command::Shutdown { reply });
+        let _ = release.send(());
+        let joined = worker.join();
+        assert!(checked.is_ok());
+        assert!(sent.is_ok());
+        assert!(joined.is_ok());
+        stopped.recv().unwrap().unwrap();
+        assert!(
+            unchanged,
+            "idle unexpired store was re-encrypted and rewritten"
+        );
+    }
+
+    #[test]
+    fn maintenance_plan_has_inclusive_retention_and_observes_older_appends() {
+        let now = RETENTION.as_millis() as u64 + 10;
+        let mut plan = RetentionPlan::default();
+        assert!(!plan.is_due(now));
+        plan.observe(10);
+        assert!(!plan.is_due(now), "record on inclusive cutoff is retained");
+        assert!(plan.is_due(now + 1));
+        plan.observe(5);
+        assert!(plan.is_due(now));
+        assert!(!plan.is_due(0), "clock rollback cannot underflow cutoff");
+        plan = RetentionPlan::default();
+        assert!(
+            !plan.is_due(u64::MAX),
+            "successful empty Clear leaves no expiry work"
+        );
+        plan.observe(u64::MAX);
+        assert!(!plan.is_due(u64::MAX));
+    }
+
+    #[test]
+    fn maintenance_plan_is_recovered_in_scan_and_refreshed_by_compaction() {
+        let fixture = ReadFailureFixture(temporary_path("retention-hint"));
+        let now = now_ms();
+        append_records(&fixture.0, &[key_record(2, now), key_record(1, 1)]);
+        let recovered = repair_file(&fixture.0).unwrap();
+        assert_eq!(recovered.retention.oldest_timestamp_ms, Some(1));
+        let retained = compact_file(&fixture.0).unwrap();
+        assert_eq!(retained.oldest_timestamp_ms, Some(now));
+        assert!(!retained.is_due(now));
+        clear_path(&fixture.0).unwrap();
+        let cleared = compact_file(&fixture.0).unwrap();
+        assert_eq!(cleared.oldest_timestamp_ms, None);
     }
 
     fn shutdown_fixture(
@@ -2669,6 +2907,7 @@ mod tests {
         sender
             .send(Command::Append {
                 epoch: 0,
+                timestamp_ms: now_ms(),
                 payload: vec![0; MAX_RECORD_BYTES + 1],
             })
             .unwrap();
@@ -2705,7 +2944,8 @@ mod tests {
         // Repeated synthetic frames isolate storage-size cost, not ID or
         // language quality. Build outside the timed region, sync first, and
         // measure the same Flush+Shutdown pair at all three sizes.
-        let protected = protect(&key_record(1, now_ms()).encode().unwrap()).unwrap();
+        let timestamp = now_ms();
+        let protected = protect(&key_record(1, timestamp).encode().unwrap()).unwrap();
         let mut frame = Vec::new();
         frame.extend_from_slice(&(protected.len() as u32).to_le_bytes());
         frame.extend_from_slice(&crc32(&protected).to_le_bytes());
@@ -2732,12 +2972,20 @@ mod tests {
             let (stopped, stop_result) = mpsc::channel();
             sender.send(Command::Flush { reply: flushed }).unwrap();
             sender.send(Command::Shutdown { reply: stopped }).unwrap();
+            // Actor/control benchmark: fixture encoding already establishes
+            // this hint; do not time the test helper's startup scan.
+            let append = open_append(&fixture.0).unwrap();
+            let retention = RetentionPlan {
+                oldest_timestamp_ms: (mib != 0).then_some(timestamp),
+            };
             let started = Instant::now();
-            writer_loop_with_interval(
+            writer_loop_with_file(
                 fixture.0.clone(),
                 receiver,
                 Arc::new(InputHistoryStats::default()),
+                Some(append),
                 Duration::from_secs(3600),
+                retention,
             );
             let elapsed = started.elapsed();
             flush_result.try_recv().unwrap().unwrap();
