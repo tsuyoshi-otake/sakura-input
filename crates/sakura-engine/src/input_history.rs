@@ -795,8 +795,32 @@ impl InputHistoryService {
     /// Allocates an ID shared by every dispatcher using this process-wide
     /// history service. The ordinary protocol session ID is local to one pipe
     /// worker and can otherwise collide in a multi-client history stream.
-    pub fn allocate_session_id(&self) -> u64 {
-        self.next_session_id.fetch_add(1, Ordering::Relaxed) + 1
+    /// Returns None on exhaustion; it never wraps or repeats the final ID.
+    pub fn allocate_session_id(&self) -> Option<u64> {
+        self.allocate_counter(&self.next_session_id, Ordering::Relaxed)
+    }
+
+    fn allocate_counter(&self, counter: &AtomicU64, order: Ordering) -> Option<u64> {
+        match counter.fetch_update(order, Ordering::Relaxed, |value| value.checked_add(1)) {
+            Ok(previous) => Some(previous + 1),
+            Err(_) => {
+                self.stats
+                    .persistence_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                None
+            }
+        }
+    }
+
+    // Zero is reserved for engine markers and unavailable history sessions.
+    // Ordinary protocol input can continue after history allocation fails.
+    fn excludes_session(&self, session: u64) -> bool {
+        if session == 0 {
+            self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
     }
 
     /// Records which engine build is about to append developer-history events.
@@ -806,7 +830,9 @@ impl InputHistoryService {
     fn record_engine_start(&self) {
         let epoch = self.epoch.load(Ordering::Acquire);
         let (package_version, release_label) = current_engine_identity();
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         self.enqueue(
             epoch,
             InputHistoryRecord::Engine(EngineHistoryRecord {
@@ -882,7 +908,12 @@ impl InputHistoryService {
         if self.stats.excludes(scope, test_only) {
             return;
         }
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        if self.excludes_session(session) {
+            return;
+        }
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         // Keep this cumulative. A swap before encoding/enqueueing loses the
         // count when the record itself is malformed or the bounded queue is
         // full. The live stats endpoint and every later record remain able to
@@ -926,7 +957,12 @@ impl InputHistoryService {
         if self.stats.excludes(scope, false) || reading.is_empty() || surface.is_empty() {
             return;
         }
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        if self.excludes_session(session) {
+            return;
+        }
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         let record = InputHistoryRecord::Commit(CommitHistoryRecord {
             sequence,
             timestamp_ms: now_ms(),
@@ -964,6 +1000,9 @@ impl InputHistoryService {
         if self.stats.excludes(scope, test_only) || source.is_empty() {
             return;
         }
+        if self.excludes_session(session) {
+            return;
+        }
         self.stats.ai_requests.fetch_add(1, Ordering::Relaxed);
         self.stats
             .ai_attempts
@@ -977,7 +1016,9 @@ impl InputHistoryService {
         self.stats
             .ai_cached_tokens
             .fetch_add(u64::from(cached_tokens), Ordering::Relaxed);
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         let record = InputHistoryRecord::AiText(AiTextHistoryRecord {
             sequence,
             timestamp_ms: now_ms(),
@@ -1022,7 +1063,9 @@ impl InputHistoryService {
     /// Clears all queued and durable records. Epoch tagging prevents a record
     /// that raced with the clear command from being written afterwards.
     pub fn clear(&self) -> io::Result<u64> {
-        let epoch = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        let epoch = self
+            .allocate_counter(&self.epoch, Ordering::AcqRel)
+            .ok_or_else(|| io::Error::other("input history Clear epoch exhausted"))?;
         let (reply, receiver) = mpsc::channel();
         self.sender
             .send(Command::Clear { epoch, reply })
@@ -2154,7 +2197,7 @@ mod tests {
         append_records(&fixture.0, &[expired, key_record(3, now)]);
         let original = fs::read(&fixture.0).unwrap();
         let service = InputHistoryService::open(&fixture.0).unwrap();
-        let session = service.allocate_session_id();
+        let session = service.allocate_session_id().unwrap();
         service.stop().unwrap();
         let after = fs::read(&fixture.0).unwrap();
         let snapshot = read_snapshot(&fixture.0).unwrap();
@@ -3177,13 +3220,215 @@ mod tests {
     }
 
     #[test]
+    fn counter_exhaustion_last_session_id_is_allocated_once_concurrently() {
+        let fixture = ReadFailureFixture(temporary_path("last-session"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service
+            .next_session_id
+            .store(u64::MAX - 1, Ordering::Relaxed);
+        let results = thread::scope(|scope| {
+            let workers: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| service.allocate_session_id()))
+                .collect();
+            workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        service.stop().unwrap();
+        assert_eq!(
+            results.iter().filter(|id| **id == Some(u64::MAX)).count(),
+            1
+        );
+        assert_eq!(results.iter().filter(|id| id.is_none()).count(), 7);
+        assert_eq!(service.allocate_session_id(), None);
+        assert_eq!(service.stats.persistence_failures(), 8);
+        assert_eq!(service.next_session_id.load(Ordering::Relaxed), u64::MAX);
+    }
+
+    #[test]
+    fn counter_exhaustion_last_sequence_and_clear_epoch_are_terminal() {
+        let fixture = ReadFailureFixture(temporary_path("last-sequence-epoch"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.next_sequence.store(u64::MAX - 1, Ordering::Relaxed);
+        service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0);
+        service.record_commit(1, ScopeClass::Normal, "b", "b", 0, 0);
+        service.flush().unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        service.epoch.store(u64::MAX - 1, Ordering::Release);
+        let last_clear = service.clear();
+        let rejected_clear = service.clear();
+        service.record_commit(1, ScopeClass::Normal, "c", "c", 0, 0);
+        service.stop().unwrap();
+        assert_eq!(snapshot.records.len(), 2);
+        assert_eq!(snapshot.records[1].sequence(), u64::MAX);
+        assert_eq!(last_clear.unwrap(), 2);
+        assert!(rejected_clear.is_err());
+        assert!(read_snapshot(&fixture.0).unwrap().records.is_empty());
+        assert_eq!(service.next_sequence.load(Ordering::Relaxed), u64::MAX);
+        assert_eq!(service.epoch.load(Ordering::Acquire), u64::MAX);
+        assert_eq!(service.stats.persistence_failures(), 3);
+    }
+
+    #[test]
+    fn counter_exhaustion_unavailable_session_rejects_all_content_variants() {
+        let fixture = ReadFailureFixture(temporary_path("unavailable-session"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.record_commit(0, ScopeClass::Normal, "a", "a", 0, 0);
+        service.record_key(
+            0,
+            ScopeClass::Normal,
+            1,
+            Some('a'),
+            0,
+            false,
+            false,
+            true,
+            1,
+            1,
+            1,
+            1,
+            "",
+            "a",
+            "",
+            0,
+            false,
+            "char",
+        );
+        service.record_ai_text(
+            0,
+            ScopeClass::Normal,
+            AiTextOperation::Proofread,
+            AiTextStatus::Applied,
+            "a",
+            "b",
+            "model",
+            "provider",
+            "style",
+            "",
+            1,
+            1,
+            1,
+            0,
+            1,
+            false,
+        );
+        service.stop().unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        assert_eq!(
+            snapshot.records.len(),
+            1,
+            "only engine marker may use session zero"
+        );
+        assert!(matches!(snapshot.records[0], InputHistoryRecord::Engine(_)));
+        assert_eq!(service.stats.dropped_events(), 3);
+        assert_eq!(service.next_sequence.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn counter_exhaustion_session_never_panics_or_wraps() {
+        let fixture = ReadFailureFixture(temporary_path("session-exhausted"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.next_session_id.store(u64::MAX, Ordering::Relaxed);
+        let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            service.allocate_session_id()
+        }));
+        let after = service.next_session_id.load(Ordering::Relaxed);
+        service.stop().unwrap();
+        assert!(attempt.is_ok(), "optional history allocation panicked");
+        assert_eq!(after, u64::MAX, "session ID counter wrapped");
+    }
+
+    #[test]
+    fn counter_exhaustion_record_variants_never_panic_or_wrap() {
+        let fixture = ReadFailureFixture(temporary_path("sequence-exhausted"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.flush().unwrap();
+        let before = fs::read(&fixture.0).unwrap();
+        let mut outcomes = Vec::new();
+        for variant in 0..4 {
+            service.next_sequence.store(u64::MAX, Ordering::Relaxed);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match variant {
+                0 => service.record_engine_start(),
+                1 => service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0),
+                2 => service.record_key(
+                    1,
+                    ScopeClass::Normal,
+                    1,
+                    Some('a'),
+                    0,
+                    false,
+                    false,
+                    true,
+                    1,
+                    1,
+                    1,
+                    1,
+                    "",
+                    "a",
+                    "",
+                    0,
+                    false,
+                    "char",
+                ),
+                _ => service.record_ai_text(
+                    1,
+                    ScopeClass::Normal,
+                    AiTextOperation::Proofread,
+                    AiTextStatus::Applied,
+                    "a",
+                    "b",
+                    "model",
+                    "provider",
+                    "style",
+                    "",
+                    1,
+                    1,
+                    1,
+                    0,
+                    1,
+                    false,
+                ),
+            }));
+            outcomes.push((
+                result.is_ok(),
+                service.next_sequence.load(Ordering::Relaxed),
+            ));
+        }
+        service.stop().unwrap();
+        assert!(
+            outcomes.iter().all(|&(ok, n)| ok && n == u64::MAX),
+            "record counter outcomes {outcomes:?}"
+        );
+        assert_eq!(fs::read(&fixture.0).unwrap(), before);
+    }
+
+    #[test]
+    fn counter_exhaustion_clear_preserves_bytes_and_epoch() {
+        let fixture = ReadFailureFixture(temporary_path("epoch-exhausted"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.flush().unwrap();
+        let before = fs::read(&fixture.0).unwrap();
+        service.epoch.store(u64::MAX, Ordering::Release);
+        let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| service.clear()));
+        let after = service.epoch.load(Ordering::Acquire);
+        service.stop().unwrap();
+        assert!(
+            matches!(attempt, Ok(Err(_))),
+            "exhausted Clear must return an error"
+        );
+        assert_eq!(after, u64::MAX);
+        assert_eq!(fs::read(&fixture.0).unwrap(), before);
+    }
+
+    #[test]
     fn session_ids_are_shared_by_the_history_service() {
         let path = temporary_path("session");
         let service = InputHistoryService::open(&path).expect("open");
         let first = service.allocate_session_id();
         let second = service.allocate_session_id();
-        assert_eq!(first, 1);
-        assert_eq!(second, 2);
+        assert_eq!(first, Some(1));
+        assert_eq!(second, Some(2));
         service.stop().expect("stop");
         let _ = fs::remove_file(path);
     }
