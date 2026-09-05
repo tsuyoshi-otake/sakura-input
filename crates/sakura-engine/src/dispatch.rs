@@ -302,7 +302,7 @@ impl Dispatcher {
         if attaching {
             if let Some(history) = self.input_history.as_ref() {
                 self.sessions
-                    .reallocate_history_session_ids(|| history.allocate_session_id());
+                    .reallocate_history_session_ids(|| history.allocate_session_id().unwrap_or(0));
             }
         }
     }
@@ -757,10 +757,10 @@ impl Dispatcher {
                 let resolved =
                     resolve_context_preferences(global, &self.app_profiles, process_name);
                 if let Some(created) = self.sessions.get_mut(session) {
-                    let history_session_id = self
-                        .input_history
-                        .as_ref()
-                        .map_or(session, |history| history.allocate_session_id());
+                    let history_session_id =
+                        self.input_history.as_ref().map_or(session, |history| {
+                            history.allocate_session_id().unwrap_or(0)
+                        });
                     created.set_history_session_id(history_session_id);
                     created.apply_context_preferences(resolved);
                 }
@@ -8242,6 +8242,48 @@ mod tests {
             "Pad may use the local bounded prediction worker"
         );
         runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn counter_exhaustion_unavailable_history_keeps_normal_input() {
+        let path = std::env::temp_dir().join(format!(
+            "sakura-unavailable-history-{}-{}.bin",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let history = InputHistoryService::open(&path).expect("history");
+        let mut dispatcher = builtin_dispatcher();
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "synthetic.exe");
+        dispatcher
+            .sessions
+            .get_mut(session)
+            .expect("session")
+            .set_history_session_id(0);
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        let preedit = out.preedit_text().to_owned();
+        history.stop().expect("history stop");
+        let snapshot = crate::input_history::read_snapshot(&path);
+        let removed = std::fs::remove_file(&path);
+        assert_eq!(preedit, "かな");
+        assert_eq!(
+            snapshot.expect("snapshot").records.len(),
+            1,
+            "only engine marker persists"
+        );
+        assert!(history.stats().dropped_events() > 0);
+        removed.expect("fixture removed");
     }
 
     #[test]

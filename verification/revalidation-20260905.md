@@ -10,7 +10,7 @@ Priority and confidence are independent; developer-history failures require expl
 | H1 | CONFIRMED | P1 | #127 | real Windows sharing conflict loses canonical on old code; ReplaceFileW/backup/pending-marker containment tested; generation recovery, process-crash and power-loss matrix unfinished; history-compaction-publication.md |
 | H2 | MITIGATED | P1 | #120, #123 | early secured endpoint reservation and cooperative per-path history writer lock; same-store process regression passes; legacy writers, physical cross-logon and watchdog work remain; engine-startup-ownership.md, history-store-ownership.md |
 | H3 | MITIGATED | P1 | #105, #116, #130 | control/startup rewrite removed; periodic unexpired rewrite reproduced and gated by cached earliest timestamp; ciphertext reuse and cap-pressure retries remain; history-maintenance-plan.md |
-| H4 | CONFIRMED | P1 | #116 | startup ID regression reproduced and fixed; one validation/ID pass, append handle before spawn; runtime overflow and durable non-reuse remain; history-startup-scan.md |
+| H4 | CONFIRMED | P1 | #116, #132 | startup ID and live counter panic/wrap reproduced and fixed; checked terminal allocation; durable generation/non-reuse remains; history-startup-scan.md, history-counter-exhaustion.md |
 | H5 | CONFIRMED | P1 | #113 | fixed scan_frames propagation; 3 baseline counterexamples; 16 post-fix tests; see history-read-failure.md and results JSON |
 | H6 | MITIGATED | P1 | #118, #125 | pre-Clear producer resurrection and stop terminal-result counterexamples reproduced/fixed; store ownership in #123; producer admission closure, Flush retries, Clear durability and crash matrix remain; history-clear-epoch.md, history-stop-outcome.md |
 | T1 | CODE_CONFIRMED | P1 | #102 | send_key/link/connect/request and resync each supply independent 50ms budgets; whole-callback scripted/real pipe measurement pending |
@@ -43,7 +43,8 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | H6 joined stop result | #125 | #126 | engine InputHistoryService::stop / WriterShutdown | stop_outcome_*; history-stop-outcome.md and results JSON |
 | H1 publication containment | #127 | #128 | engine compact_file / replace_history_file / require_no_compaction_transaction | publication_*; history-compaction-publication.md and results JSON |
 | O1 AppContainer policy evidence | #104 | #129 | appcontainer integration test rejection diagnostic | image_policy_diagnostics_*; appcontainer-policy-evidence.md and results JSON |
-| H3 periodic retention plan | #130 | pending | input_history::RetentionPlan / writer_loop_with_file / append_payload | maintenance_*; history-maintenance-plan.md and results JSON |
+| H3 periodic retention plan | #130 | #131 | input_history::RetentionPlan / writer_loop_with_file / append_payload | maintenance_*; history-maintenance-plan.md and results JSON |
+| H4/H6 live counter exhaustion | #132 | pending | InputHistoryService::allocate_counter / allocate_session_id / record_* / clear; dispatch/session unavailable-history boundary | counter_exhaustion_*; history-counter-exhaustion.md and results JSON |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 
