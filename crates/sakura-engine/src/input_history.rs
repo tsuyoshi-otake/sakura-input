@@ -1282,8 +1282,10 @@ fn scan_bytes(bytes: &[u8]) -> io::Result<(u16, Vec<InputHistoryRecord>, usize)>
 /// [`repair_file`] needs: it only ever uses the offset, and materializing a
 /// 64 MiB file's worth of records — hundreds of megabytes of `String`s —
 /// just to ask where the damage starts is an allocation spike at engine
-/// startup for an answer nobody reads. Decoding still happens either way;
-/// a record that will not decode is exactly what ends the valid region.
+/// startup for an answer nobody reads. Complete checksum-valid frames whose
+/// content cannot be decrypted or decoded return an error: an unavailable
+/// key or unsupported record is not evidence of a torn tail. In particular,
+/// repair must not truncate opaque data or silently discard later frames.
 fn scan_frames(
     bytes: &[u8],
     mut records: Option<&mut Vec<InputHistoryRecord>>,
@@ -1310,12 +1312,8 @@ fn scan_frames(
         if crc32(encrypted) != expected_crc {
             break;
         }
-        let Ok(payload) = unprotect(encrypted) else {
-            break;
-        };
-        let Ok(record) = InputHistoryRecord::decode(&payload) else {
-            break;
-        };
+        let payload = unprotect(encrypted)?;
+        let record = InputHistoryRecord::decode(&payload)?;
         if let Some(records) = records.as_deref_mut() {
             records.push(record);
         }
@@ -1650,6 +1648,115 @@ mod tests {
         for record in records {
             let protected = protect(&record.encode().expect("encode record")).expect("protect");
             append_encrypted(&mut file, &protected).expect("append record");
+        }
+    }
+
+    struct ReadFailureFixture(PathBuf);
+
+    impl Drop for ReadFailureFixture {
+        fn drop(&mut self) {
+            for path in [&self.0, &self.0.with_extension("compact.tmp")] {
+                match fs::remove_file(path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => panic!("remove synthetic history fixture: {error}"),
+                }
+            }
+        }
+    }
+
+    fn assert_complete_frame_failure_preserves_store(encrypted: &[u8]) {
+        let fixture = ReadFailureFixture(temporary_path("read-failure"));
+        let path = &fixture.0;
+        append_records(path, &[key_record(1, now_ms())]);
+        let mut file = OpenOptions::new().append(true).open(path).unwrap();
+        append_encrypted(&mut file, encrypted).unwrap();
+        drop(file);
+        append_records(path, &[key_record(3, now_ms())]);
+        let original = fs::read(path).unwrap();
+
+        // Repair must not transform a complete opaque frame into a torn tail.
+        let repair = repair_file(path);
+        assert_eq!(
+            fs::read(path).unwrap(),
+            original,
+            "repair erased opaque data"
+        );
+        assert!(repair.is_err(), "repair must report unavailable content");
+        assert!(
+            read_snapshot(path).is_err(),
+            "snapshot must not claim completeness"
+        );
+        assert!(
+            compact_file(path).is_err(),
+            "compaction must not omit opaque data"
+        );
+        assert_eq!(fs::read(path).unwrap(), original);
+        let service = InputHistoryService::open(path);
+        if let Ok(service) = &service {
+            service.stop().unwrap();
+        }
+        assert!(
+            service.is_err(),
+            "startup must fail before spawning the writer"
+        );
+        assert_eq!(fs::read(path).unwrap(), original);
+    }
+
+    #[test]
+    fn complete_frame_decryption_failure_preserves_store() {
+        let ciphertext = b"synthetic invalid DPAPI blob";
+        assert!(unprotect(ciphertext).is_err());
+        assert_complete_frame_failure_preserves_store(ciphertext);
+    }
+
+    #[test]
+    fn complete_frame_unknown_record_preserves_store() {
+        // Valid DPAPI and frame checksum; the record type is unsupported.
+        // Include all common fields so decoding reaches the unknown-kind arm,
+        // rather than failing earlier while reading a truncated header.
+        let mut payload = vec![0; 1 + 8 + 8 + 8 + 1];
+        payload[0] = 255;
+        payload[25] = ScopeClass::Normal as u8;
+        assert_eq!(
+            InputHistoryRecord::decode(&payload)
+                .unwrap_err()
+                .to_string(),
+            "unknown input history record"
+        );
+        assert_complete_frame_failure_preserves_store(&protect(&payload).unwrap());
+    }
+
+    #[test]
+    fn complete_frame_malformed_record_preserves_store() {
+        assert_complete_frame_failure_preserves_store(&protect(&[RECORD_KEY]).unwrap());
+    }
+
+    #[test]
+    fn future_history_format_preserves_store() {
+        let fixture = ReadFailureFixture(temporary_path("future-format"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let mut original = fs::read(&fixture.0).unwrap();
+        original[4..6].copy_from_slice(&(INPUT_HISTORY_FORMAT_VERSION + 1).to_le_bytes());
+        fs::write(&fixture.0, &original).unwrap();
+        assert!(repair_file(&fixture.0).is_err());
+        assert!(compact_file(&fixture.0).is_err());
+        assert!(InputHistoryService::open(&fixture.0).is_err());
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+    }
+
+    #[test]
+    fn structural_tail_damage_still_repairs_to_verified_prefix() {
+        for tail in [vec![1, 2, 3], vec![1, 0, 0, 0, 0, 0, 0, 0, 42]] {
+            let fixture = ReadFailureFixture(temporary_path("structural-tail"));
+            append_records(&fixture.0, &[key_record(1, now_ms())]);
+            let original = fs::read(&fixture.0).unwrap();
+            let mut file = OpenOptions::new().append(true).open(&fixture.0).unwrap();
+            file.write_all(&tail).unwrap();
+            drop(file);
+            repair_file(&fixture.0).unwrap();
+            assert_eq!(fs::read(&fixture.0).unwrap(), original);
+            assert_eq!(read_snapshot(&fixture.0).unwrap().records.len(), 1);
         }
     }
 
@@ -2019,6 +2126,16 @@ mod tests {
         assert!(tsv.contains("# sakura-input-history-format: 1"));
         assert!(tsv.contains("# package-version: -"));
         assert!(tsv.contains("# release-label: -"));
+        repair_file(&path).expect("repair v1");
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        compact_file(&path).expect("compact v1");
+        assert_eq!(read_snapshot(&path).unwrap().records, snapshot.records);
+        let service = InputHistoryService::open(&path).expect("open compacted v1");
+        service.stop().expect("stop compacted v1");
+        assert!(read_snapshot(&path)
+            .unwrap()
+            .records
+            .contains(&snapshot.records[0]));
         let _ = fs::remove_file(path);
     }
 
