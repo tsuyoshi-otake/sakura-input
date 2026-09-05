@@ -62,9 +62,14 @@ impl Engine {
     /// Unlike the old `running` helper, this never calls `Client::connect()`;
     /// it cannot see or reuse a user's well-known engine.
     pub fn spawn_isolated() -> Engine {
+        Self::spawn_isolated_with_setup(|_| {})
+    }
+
+    /// Prepares only the owned synthetic profile before the child exists.
+    pub fn spawn_isolated_with_setup(setup: impl FnOnce(&Path)) -> Engine {
         let test_lock = acquire_engine_test_lock();
         let identity = TestIdentity::new("ordinary");
-        Self::spawn(identity, PipeBinding::PrivateTest, test_lock)
+        Self::spawn(identity, PipeBinding::PrivateTest, test_lock, setup)
     }
 
     /// Starts the sole intentional well-known-pipe test owner.
@@ -78,15 +83,22 @@ impl Engine {
         let identity = TestIdentity::new("appcontainer");
         let pipe_name = sakura_ipc::pipe_name()
             .expect("the AppContainer test parent can resolve the production pipe name");
-        Self::spawn(identity, PipeBinding::WellKnown(pipe_name), test_lock)
+        Self::spawn(
+            identity,
+            PipeBinding::WellKnown(pipe_name),
+            test_lock,
+            |_| {},
+        )
     }
 
     fn spawn(
         identity: TestIdentity,
         binding: PipeBinding,
         test_lock: MutexGuard<'static, ()>,
+        setup: impl FnOnce(&Path),
     ) -> Engine {
         let dictionary = test_dictionary(&identity.local_app_data);
+        setup(&identity.local_app_data);
         let pipe_name = binding.name(&identity.pipe_name);
         let control_pipe_name = match &binding {
             PipeBinding::PrivateTest => pipe_name.clone(),

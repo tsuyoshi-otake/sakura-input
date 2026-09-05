@@ -81,6 +81,68 @@ fn duplicate_engine_is_rejected_before_dictionary_initialization() {
     );
 }
 
+#[test]
+fn history_store_owner_in_another_process_keeps_input_available() {
+    let mut owner_slot = None;
+    let mut engine = Engine::spawn_isolated_with_setup(|profile| {
+        let config = profile.join("SakuraInput/config/config.toml");
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(&config, "[meta]\nformat-version = \"4\"\n[input]\ndeveloper-mode = \"true\"\nprediction-enabled = \"false\"\nneural-reranker-scope = \"off\"\n").unwrap();
+        assert!(
+            sakura_engine::configuration::load(&config)
+                .unwrap()
+                .preferences
+                .developer_mode
+        );
+        owner_slot = Some(
+            sakura_engine::input_history::InputHistoryService::open(
+                &profile.join("SakuraInput/history/input.bin"),
+            )
+            .unwrap(),
+        );
+    });
+    // Declared after Engine so unwinding stops this writer before profile
+    // cleanup attempts to remove its exclusively held lock file.
+    let owner = owner_slot.take().unwrap();
+    owner.flush().unwrap();
+    let history_path = engine
+        .local_app_data()
+        .join("SakuraInput/history/input.bin");
+    let original = fs::read(&history_path).unwrap();
+    let mut client = engine.client();
+    let session = session_for(&mut client, "store-owner-probe.exe");
+    for _ in 0..3 {
+        assert!(matches!(
+            client.call(&Request::InputHistoryStats, PATIENT),
+            Ok(Response::InputHistoryStats { active: false, .. })
+        ));
+    }
+    assert!(matches!(
+        client.call(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal
+            },
+            PATIENT
+        ),
+        Ok(Response::Ok)
+    ));
+    assert!(matches!(
+        client.call(
+            &Request::SendKey {
+                session,
+                key: char_key('a')
+            },
+            PATIENT
+        ),
+        Ok(Response::Output(_))
+    ));
+    assert_eq!(fs::read(&history_path).unwrap(), original);
+    drop(client);
+    owner.stop().unwrap();
+    engine.cleanup().unwrap();
+}
+
 fn publish_test_configuration(engine: &Engine, source: &str) {
     let path = engine
         .local_app_data()
