@@ -36,6 +36,51 @@ use common::{char_key, named_key, session_for, shifted_char_key, visible, Engine
 use sakura_ime_eval::capture_engine::capture_candidates;
 use sakura_ime_eval::types::{Constraints, Context, Input, SemanticCase};
 
+#[test]
+fn duplicate_engine_is_rejected_before_dictionary_initialization() {
+    struct OwnedChild(std::process::Child);
+    impl Drop for OwnedChild {
+        fn drop(&mut self) {
+            if !matches!(self.0.try_wait(), Ok(Some(_))) {
+                let _ = self.0.kill();
+            }
+            let _ = self.0.wait();
+        }
+    }
+    let mut engine = Engine::spawn_isolated();
+    drop(engine.client());
+    let missing = engine
+        .local_app_data()
+        .join("deliberately-absent-dictionary.bin");
+    let mut duplicate = OwnedChild(
+        std::process::Command::new(env!("CARGO_BIN_EXE_sakura_engine"))
+            .arg("--test-pipe")
+            .arg(engine.pipe_name())
+            .env("LOCALAPPDATA", engine.local_app_data())
+            .env("SAKURA_DICTIONARY", missing)
+            .spawn()
+            .unwrap(),
+    );
+    let deadline = Instant::now() + PATIENT;
+    let status = loop {
+        if let Some(status) = duplicate.0.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "duplicate engine did not terminate"
+        );
+        sleep(Duration::from_millis(10));
+    };
+    drop(duplicate);
+    engine.cleanup().unwrap();
+    assert_eq!(
+        status.code(),
+        Some(2),
+        "duplicate touched dictionary initialization before claiming ownership"
+    );
+}
+
 fn publish_test_configuration(engine: &Engine, source: &str) {
     let path = engine
         .local_app_data()
