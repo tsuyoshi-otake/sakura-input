@@ -1,0 +1,85 @@
+{
+  "profile": "debug Windows x64 MSVC",
+  "input_hashes": {
+    "crates/sakura-ipc/src/client.rs": "3b7157588fa9a161a3e88f040c9724b460bf48906e70410f0f540a614da5730a",
+    "crates/sakura-tsf/src/engine.rs": "356ce3255e66f9ec04d9300f2bd4e192123c4b14ec26b5a290a403256da5bad3",
+    "crates/sakura-tsf/src/callback_deadline.rs": "231074f5ff6a3a5d2e2b8063cf74a90967c3c89f8ef044ecdbf6b1fe1f2e8e1e",
+    "crates/sakura-tsf/src/lib.rs": "18fb4bf1eb2312dd2c1a2bdef8ce5e7e691a7f75f40b90fc972ea4981cbf380c",
+    "crates/sakura-settings/src/input_history.rs": "646046507df4d0a5d9fbfbed6199fbc8d897f5a6ab29ee2f8402d6d3e654f1b9",
+    "crates/sakura-settings/src/learning.rs": "4e70cae9ba673806886013fcb4b6a8bd3c8dc8177a030de23a3b386c2da3bfe3",
+    "crates/sakura-tsf/src/text_service.rs": "cc4520834ccc417b3e8b412cae523b5b00b660bb9b51035583ee95e7c4616faf",
+    "crates/sakura-ipc/tests/client_server.rs": "36cf9be73ac5cca0302ded5e7cd59d72421b6f311de05ca33eab3dc6608b17cc",
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779",
+    "crates/sakura-ipc/src/transport.rs": "72686745671e3cffc360ffb2509a8110ed99982a7ad6bbd33c0a721fb389f44b"
+  },
+  "rustc": "1.96.0",
+  "runs": [
+    {
+      "totals": [
+        0,
+        1,
+        0
+      ],
+      "exit_code": 101,
+      "log_name": "deadline-before.log",
+      "sha256": "b40018f05024502ae7706125f4d6e61204f6f01caff1d845145590d1afbb5dd8",
+      "command": "cargo test --locked -p sakura-tsf --lib callback_deadline_serial -- --nocapture (old production)"
+    },
+    {
+      "totals": [
+        3,
+        0,
+        0
+      ],
+      "exit_code": 0,
+      "log_name": "deadline-targeted.log",
+      "sha256": "d2428b94adf16fb7e2d2f94e2d67289413de1574093b93a6c31c813b4d04c864",
+      "command": "cargo test --locked -p sakura-tsf --lib callback_deadline -- --nocapture"
+    },
+    {
+      "totals": [
+        0,
+        1,
+        0
+      ],
+      "exit_code": 101,
+      "log_name": "deadline-partial-before.log",
+      "sha256": "8ad41778982972e30876657d192b91b31dcf0fef13654564e5eed155a4349722",
+      "command": "cargo test --locked -p sakura-ipc --test client_server partial_reply_deadline (initial deadline patch)"
+    },
+    {
+      "totals": [
+        35,
+        0,
+        0
+      ],
+      "exit_code": 0,
+      "log_name": "deadline-ipc-reviewed.log",
+      "sha256": "b77d5de477089f72cc2dfdd927f23885b8e0975b744c8f6f1526a78c67b79d4a",
+      "command": "cargo test --locked -p sakura-ipc"
+    },
+    {
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "exit_code": 0,
+      "log_name": "deadline-reviewed-clippy.log",
+      "sha256": "f151e1aad24ef456d194f35f152438a50e50c1aeeaaedf5f1b0c12d09bfc1511",
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings"
+    },
+    {
+      "totals": [
+        1818,
+        0,
+        84
+      ],
+      "exit_code": 0,
+      "log_name": "workspace-deadline-reviewed.log",
+      "sha256": "f7e48bf8557a6bbf444ee58d0cf4bb09b069dac10b27d9b58b504d7054f1697b",
+      "command": "cargo test --locked --workspace"
+    }
+  ],
+  "scope": "Final hashes; reviewed checks precede final documentation-only timeout comment narrowing. Earlier logs are prior iterations. Totals passed/failed/ignored. No hard50ms or realCOM qualification."
+}

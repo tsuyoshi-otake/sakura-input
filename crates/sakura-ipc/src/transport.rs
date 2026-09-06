@@ -107,12 +107,18 @@ pub enum Fault {
     /// for longer than 50 ms (DESIGN 4.3), and a slow engine is answered
     /// by passing the key through, not by waiting.
     ///
-    /// The connection survives a timeout — the request may still be in
+    /// This variant preserves the frame boundary: the connection survives
+    /// because the request may still be in
     /// flight — which is why the protocol puts a monotonic id on every
     /// frame. A late reply is matched by id and discarded, never applied
-    /// to whatever the user typed next.
+    /// to whatever the user typed next. Partial-frame timeout is instead
+    /// Desynchronized and requires dropping the connection.
     Timeout,
-    /// A reply arrived carrying a request id that was never sent.
+    /// An absolute request deadline expired before writing any request byte.
+    /// The peer was not contacted and its session did not change.
+    DeadlineExpired,
+    /// A reply arrived carrying a request id that was never sent, or an
+    /// interrupted partial transfer lost the stream's frame boundary.
     ///
     /// Distinct from [`Protocol`](Fault::Protocol): the bytes decoded
     /// fine, they just do not answer anything this client asked. Nothing
@@ -143,7 +149,8 @@ impl core::fmt::Display for Fault {
             Fault::Protocol(error) => write!(f, "protocol violation: {error:?}"),
             Fault::Encode(error) => write!(f, "failed to encode outgoing request: {error:?}"),
             Fault::Timeout => write!(f, "the engine did not answer in time"),
-            Fault::Desynchronized => write!(f, "reply to a request that was never sent"),
+            Fault::DeadlineExpired => write!(f, "request deadline expired before send"),
+            Fault::Desynchronized => write!(f, "reply identity or stream framing desynchronized"),
             Fault::UntrustedServer {
                 process_id,
                 rejection,

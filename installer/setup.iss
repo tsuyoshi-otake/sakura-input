@@ -70,9 +70,9 @@ en.PostInstallAi=Configure Sakura Input AI text transformation
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "1.0.35"
+#define AppProductVersion "1.0.36"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\1.0.35-dev"
+#define AppVersionedDir "{app}\versions\1.0.36-dev"
 #endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0

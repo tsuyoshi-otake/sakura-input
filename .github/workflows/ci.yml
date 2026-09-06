@@ -71,6 +71,10 @@ jobs:
         shell: pwsh
         run: ./ci/test-run-test-quiet.ps1
 
+      - name: Self-test TLC result and process lifecycle handling
+        shell: pwsh
+        run: ./scripts/verify-space-key-dispatch-tlc.ps1 -SelfTest
+
       - name: Test
         shell: pwsh
         run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }

@@ -84,9 +84,9 @@
 mod common;
 
 use std::env;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::os::windows::ffi::OsStrExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::io::IntoRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -106,9 +106,10 @@ use windows::Win32::Security::{
 };
 use windows::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess, GetExitCodeProcess,
-    InitializeProcThreadAttributeList, OpenProcessToken, TerminateProcess,
-    UpdateProcThreadAttribute, WaitForSingleObject, CREATE_UNICODE_ENVIRONMENT,
+    InitializeProcThreadAttributeList, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW,
+    TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject, CREATE_UNICODE_ENVIRONMENT,
     EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
+    PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
     PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, STARTF_USESTDHANDLES, STARTUPINFOEXW,
     STARTUPINFOW,
 };
@@ -321,7 +322,7 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     let expected_server_pid = child_contract_engine_pid();
     let expected_server_path = env::var(PARENT_ENGINE_PATH_ENV)
         .expect("SandboxedChild::launch always sets the engine image path");
-    let policy = ServerTrustPolicy::Exact(expected_server_path.into());
+    let policy = ServerTrustPolicy::Exact(expected_server_path.clone().into());
     println!(
         "sandbox classification of engine pid {expected_server_pid}: {:?}",
         sakura_ipc::classify_client_process(expected_server_pid)
@@ -354,15 +355,23 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
         Err(sakura_ipc::Fault::UntrustedServer {
             process_id,
             rejection,
-        }) => panic!(
-            "verified connect rejected the parent-owned engine process {process_id}: \
-             {rejection}. The AppContainer could open the data pipe but did not \
-             complete the exact path/token policy before Hello. Read the reason \
-             literally: `image path is not the one the policy accepts` means a \
-             different program served the pipe, while any `failed (...)` reason \
-             means the sandboxed token could not perform that query at all — the \
-             latter is Issue #104's environment flake, not a security finding."
-        ),
+        }) => {
+            eprintln!(
+                "policy diagnostic: rejected_pid_matches_owned={}; {}",
+                process_id == expected_server_pid,
+                image_policy_evidence(
+                    Path::new(&expected_server_path),
+                    query_image_for_diagnostics(process_id),
+                    &policy
+                )
+            );
+            panic!(
+                "verified connect rejected process {process_id}: {rejection}. \
+                 No Hello was sent. A policy rejection identifies a failed policy \
+                 decision, not by itself a different executable or an environment flake. \
+                 The diagnostic is a later read-only query, not the original admission observation."
+            )
+        }
         Err(other) => panic!(
             "connect to {parent_pipe_name:?} failed with an unexpected \
              fault (neither ACCESS_DENIED nor FILE_NOT_FOUND): {other:?}"
@@ -926,6 +935,128 @@ fn grant_appcontainer_access(path: &Path, inherit_to_children: bool) {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
+    }
+}
+
+/// Test-only follow-up query. No raw paths or user input are logged, and this
+/// result never participates in acceptance or authorizes a second connection.
+fn query_image_for_diagnostics(process_id: u32) -> Result<PathBuf, String> {
+    // SAFETY: read-only access to the PID reported by the rejected pipe handle.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) }
+        .map_err(|error| format!("open_failed({:?})", error.code()))?;
+    let mut buffer = vec![0u16; 32_768];
+    let mut length = buffer.len() as u32;
+    // SAFETY: live process handle and writable bounded UTF-16 buffer.
+    let result = unsafe {
+        QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_WIN32,
+            PWSTR(buffer.as_mut_ptr()),
+            &mut length,
+        )
+    }
+    .map_err(|error| format!("image_failed({:?})", error.code()));
+    // SAFETY: this helper owns exactly this handle, including on query failure.
+    unsafe {
+        let _ = CloseHandle(handle);
+    }
+    result?;
+    Ok(PathBuf::from(OsString::from_wide(
+        &buffer[..length as usize],
+    )))
+}
+
+fn image_policy_evidence(
+    expected: &Path,
+    observed: Result<PathBuf, String>,
+    policy: &ServerTrustPolicy,
+) -> String {
+    let shape = |path: &Path| {
+        format!(
+            "absolute={},rooted={},native_device={},nt_dos={},drive_prefix={},parent={},verbatim={},forward_slash={},engine_name={}",
+            path.is_absolute(),
+            path.has_root(),
+            path.as_os_str().to_string_lossy().starts_with(r"\Device\"),
+            path.as_os_str().to_string_lossy().starts_with(r"\??\"),
+            matches!(path.components().next(), Some(std::path::Component::Prefix(prefix)) if matches!(prefix.kind(), std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_))),
+            path.components()
+                .any(|part| matches!(part, std::path::Component::ParentDir)),
+            path.as_os_str().to_string_lossy().starts_with(r"\\?\"),
+            path.as_os_str().to_string_lossy().contains('/'),
+            path.file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("sakura_engine.exe"))
+        )
+    };
+    let Ok(observed) = observed else {
+        return format!(
+            "image_query={}; expected_shape=({})",
+            observed.unwrap_err(),
+            shape(expected)
+        );
+    };
+    let expected_canonical = std::fs::canonicalize(expected);
+    let observed_canonical = std::fs::canonicalize(&observed);
+    let status = |result: &std::io::Result<PathBuf>| match result {
+        Ok(_) => "ok".to_owned(),
+        Err(error) => format!(
+            "error(kind={:?},os={:?})",
+            error.kind(),
+            error.raw_os_error()
+        ),
+    };
+    let equal = |left: &Path, right: &Path| {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    };
+    let canonical_equal = match (&expected_canonical, &observed_canonical) {
+        (Ok(left), Ok(right)) => Some(equal(left, right)),
+        _ => None,
+    };
+    format!("image_query=ok; expected_shape=({}); observed_shape=({}); lexical_equal={}; expected_canonical={}; observed_canonical={}; canonical_equal={canonical_equal:?}; policy_recheck={}",
+        shape(expected), shape(&observed), equal(expected, &observed), status(&expected_canonical), status(&observed_canonical), policy.matches_image_path(&observed))
+}
+
+#[test]
+fn image_policy_diagnostics_explain_shape_without_emitting_paths() {
+    let queried_self =
+        query_image_for_diagnostics(std::process::id()).expect("query owned test process");
+    assert_eq!(
+        std::fs::canonicalize(queried_self).expect("canonical queried image"),
+        std::fs::canonicalize(std::env::current_exe().expect("current image"))
+            .expect("canonical current image")
+    );
+    let expected = PathBuf::from(r"C:\synthetic-private-label\sakura_engine.exe");
+    let observed = PathBuf::from(r"\\?\C:\synthetic-private-label\sakura_engine.exe");
+    let policy = ServerTrustPolicy::Exact(expected.clone());
+    let evidence = image_policy_evidence(&expected, Ok(observed), &policy);
+    assert!(!evidence.contains("synthetic-private-label"));
+    assert!(!evidence.contains(r"C:\"));
+    assert!(evidence.contains("verbatim=true"));
+    assert!(evidence.contains("lexical_equal=false"));
+    assert!(evidence.contains("expected_canonical="));
+    let failed =
+        image_policy_evidence(&expected, Err("open_failed(test_code)".to_owned()), &policy);
+    assert!(failed.contains("image_query=open_failed(test_code)"));
+    assert!(!failed.contains("synthetic-private-label"));
+    for (path, marker) in [
+        (
+            r"\Device\HarddiskVolume7\synthetic-private-label\sakura_engine.exe",
+            "native_device=true",
+        ),
+        (
+            r"\??\C:\synthetic-private-label\sakura_engine.exe",
+            "nt_dos=true",
+        ),
+        (
+            r"C:synthetic-private-label\sakura_engine.exe",
+            "drive_prefix=true",
+        ),
+    ] {
+        let evidence = image_policy_evidence(&expected, Ok(PathBuf::from(path)), &policy);
+        assert!(evidence.contains(marker));
+        assert!(evidence.contains("absolute=false"));
+        assert!(!evidence.contains("synthetic-private-label"));
+        assert!(!evidence.contains("HarddiskVolume7"));
     }
 }
 

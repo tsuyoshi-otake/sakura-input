@@ -1,0 +1,66 @@
+{
+  "revision": "f26191aa16a6b3569cdf004e4852650f7de1a17f",
+  "domain": "space-key-dispatch",
+  "verdict": "NO_GO",
+  "evidence_completeness": "pass",
+  "product_conformance": "fail",
+  "blocker_ids": ["REQ-SPACE-03", "FAIL-SPACE-DUAL", "REQ-SPACE-04"],
+  "hashes": {
+    "oracle": "99897ee6626fd237ddc6a645f30a55e1641afdbb7367457bab85bec0d846bca6",
+    "requirements": "56597ab96a77a9754fc48f48001a06d47c1c26bfb4d868eb4da13dbedcf760aa",
+    "scope_manifest": "b1a7aa0bbf45b7d6fdaaf5d5bec04ad61d123a874aaf6924141925d398ba3f56",
+    "tla_spec": "31dd13cc39f5e34877ebc62bd4c97ba6f74297e0dceacea2040bcfd4b9fef3fe",
+    "tla2tools_jar": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+  },
+  "pbt": {
+    "seed": "0x5350_4143_4520_0816",
+    "seed_decimal": "6003370060463212566",
+    "oracle_counterexample": null,
+    "production_shrunk": "Type(C0), Space(C0|C1)",
+    "canary_seed": "0x5350_4143_4520_0801",
+    "canary_shrunk": [7, 3]
+  },
+  "c2": {
+    "atoms": 10,
+    "polarities_covered": "20/20",
+    "score": 1.0
+  },
+  "mutation": {
+    "tool": "cargo-mutants 27.1.0",
+    "generated": 28,
+    "unviable": 1,
+    "caught": 27,
+    "missed": 0,
+    "raw_score": 1.0,
+    "adjusted_score": 1.0
+  },
+  "tlc": {
+    "version": "2.19",
+    "seed": "20260816",
+    "workers": 2,
+    "safety_configs_exhausted": ["small", "unfenced", "boundary", "actors1", "actors3"],
+    "reachability_counterexamples": ["reach-dual", "reach-convert", "reach-insert"]
+  },
+  "rows": [
+    {"id": "REQ-SPACE-01", "oracle": "space_effect Convert", "impl": "Action::Convert", "status": "product_ok_single"},
+    {"id": "REQ-SPACE-02", "oracle": "Idle Insert", "impl": "idle_space_commit", "status": "product_ok_single"},
+    {"id": "REQ-SPACE-03", "oracle": "no_dual_effect", "impl": "share-nothing workers", "status": "product_counterexample"},
+    {"id": "REQ-SPACE-04", "oracle": "Absorb when peer converting", "impl": "absent fence", "status": "product_gap"},
+    {"id": "REQ-SPACE-05", "oracle": "Commit/Cancel/Replace", "impl": "Enter/Escape", "status": "ok"},
+    {"id": "REQ-SPACE-06", "oracle": "CrashRestart", "impl": "new process/dispatcher", "status": "ok"},
+    {"id": "REQ-SPACE-07", "oracle": "TimeoutSpace", "impl": "client budget", "status": "ok"},
+    {"id": "REQ-SPACE-08", "oracle": "DropSpace", "impl": "host omit", "status": "ok"},
+    {"id": "BND-SPACE-01", "oracle": "MAX_DOCUMENT_SPACES", "impl": "none in product", "status": "model_only"},
+    {"id": "BND-SPACE-02", "oracle": "MAX_CONNECTIONS", "impl": "accept pool", "status": "modeled"},
+    {"id": "BND-SPACE-03", "oracle": "logical_time", "impl": "eventCount", "status": "ok"},
+    {"id": "FAIL-SPACE-DUAL", "oracle": "fence", "impl": "missing", "status": "product_counterexample"},
+    {"id": "FAIL-SPACE-DUP", "status": "ok"},
+    {"id": "FAIL-SPACE-OMIT", "status": "ok"},
+    {"id": "FAIL-SPACE-REORDER", "status": "ok"},
+    {"id": "FAIL-SPACE-CANCEL", "status": "ok"},
+    {"id": "FAIL-SPACE-TIMEOUT", "status": "ok"},
+    {"id": "FAIL-SPACE-CRASH", "status": "ok"},
+    {"id": "FAIL-SPACE-EXHAUST", "status": "model_vs_product"},
+    {"id": "FAIL-SPACE-DEAD", "status": "ok"}
+  ]
+}

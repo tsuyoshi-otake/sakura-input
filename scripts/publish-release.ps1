@@ -59,7 +59,8 @@ if ($LASTEXITCODE -ne 0) { throw 'local update-manifest verification failed' }
 
 $tempRoot = [IO.Path]::GetFullPath((Join-Path ([Environment]::GetFolderPath('UserProfile')) 'tmp'))
 [IO.Directory]::CreateDirectory($tempRoot) | Out-Null
-$readback = Join-Path $tempRoot "sakura-input-release-readback-$PID"
+$readback = [IO.Path]::GetFullPath((Join-Path $tempRoot "sakura-input-release-readback-$PID-$([Guid]::NewGuid().ToString('N'))"))
+if (-not $readback.StartsWith($tempRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'release readback must remain under the owned temporary root' }
 [IO.Directory]::CreateDirectory($readback) | Out-Null
 $draftCreated = $false
 try {
@@ -83,7 +84,14 @@ try {
     Write-Host "published and read back: $($final.url)"
 }
 catch {
-    if ($draftCreated) { Write-Warning "publication stopped; $tag remains a draft for inspection" }
+    if ($draftCreated) { Write-Warning "publication stopped after creating $tag; inspect its current draft/public state before retrying" }
     throw
 }
-finally { if ([IO.Directory]::Exists($readback)) { [IO.Directory]::Delete($readback,$true) } }
+finally {
+    if ([IO.Directory]::Exists($readback)) {
+        $resolvedReadback = [IO.Path]::GetFullPath($readback)
+        if ($resolvedReadback -cne $readback -or -not $resolvedReadback.StartsWith($tempRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'refusing cleanup outside the owned release readback directory' }
+        if (([IO.File]::GetAttributes($resolvedReadback) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'refusing recursive cleanup of a reparse-point readback directory' }
+        [IO.Directory]::Delete($resolvedReadback,$true)
+    }
+}

@@ -1,0 +1,88 @@
+{
+  "input_hashes": {
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779",
+    "crates/sakura-engine/src/input_history.rs": "1cdca527a168d0a6f8178c8560b83c4460c402b5079ba15754515ea48eca42be"
+  },
+  "runs": [
+    {
+      "totals": [
+        0,
+        3,
+        0
+      ],
+      "log_name": "publication-before.log",
+      "sha256": "06a745e0b7876ba63b4752758eec1baa643f14963a44a8ce18c2767e18dbdf74",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::publication_ [old implementation]",
+      "exit_code": 101
+    },
+    {
+      "totals": [
+        0,
+        1,
+        0
+      ],
+      "log_name": "publication-sharing-before.log",
+      "sha256": "bea501f4d3d12919ed45dee2f7c55da055a09aa11af8afe6b23b9e4b8f7c7338",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::publication_real_sharing_failure_preserves_canonical [old implementation with test-only sharing hook]",
+      "exit_code": 101
+    },
+    {
+      "totals": [
+        4,
+        0,
+        0
+      ],
+      "log_name": "publication-after.log",
+      "sha256": "899a307ed358d0a39ef3130246eca288134226f0fb771568756fe6554d57d03e",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::publication_",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        42,
+        0,
+        0
+      ],
+      "log_name": "publication-history.log",
+      "sha256": "1447952d29f4e27c662524657a9a3b11bfdbdafe10b3e4dd24a9be6bd5153c80",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "log_name": "publication-clippy.log",
+      "sha256": "2c4a4a1c70f7abcb2efa87f5d56e0f06d57ed5db53da5297f2f79b641322bf9a",
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        1799,
+        0,
+        84
+      ],
+      "log_name": "workspace-publication.log",
+      "sha256": "007134df5995c8a364dba617932156741feb75750d89b9828083e004ab2b10b6",
+      "command": "cargo test --locked --workspace",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        7,
+        0,
+        0
+      ],
+      "log_name": "publication-reviewed.log",
+      "sha256": "16f625e7d308e0cdca294da8dae5e0d80aa73a76ec36f650bd2c4a8721ff1fef",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::publication_",
+      "exit_code": 0
+    }
+  ],
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "profile": "debug",
+  "scope": "Final input hashes. Earlier logs refer to earlier iterations. Workspace precedes final comment and test-assertion strengthening; final publication filter rerun covers that change. Totals: passed, failed, ignored."
+}
