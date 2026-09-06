@@ -84,7 +84,7 @@ try {
     Write-Host "published and read back: $($final.url)"
 }
 catch {
-    if ($draftCreated) { Write-Warning "publication stopped; $tag remains a draft for inspection" }
+    if ($draftCreated) { Write-Warning "publication stopped after creating $tag; inspect its current draft/public state before retrying" }
     throw
 }
 finally {
