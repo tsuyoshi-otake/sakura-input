@@ -47,10 +47,17 @@ Required Issue snapshots (#7, #52, #57, #67, #69, #93, #100, #102–#108) were f
 | H4/H6 live counter exhaustion | #132 | #133 | InputHistoryService::allocate_counter / allocate_session_id / record_* / clear; dispatch/session unavailable-history boundary | counter_exhaustion_*; history-counter-exhaustion.md and results JSON |
 | T1 callback IPC deadline | #134 | #135 | TSF CallbackDeadline/key entries/Engine, Client::call_until/transfer | callback_deadline_*, partial_reply_deadline, completion_racing_timeout, expiry_between_final_check; tsf-callback-deadline.md and results JSON |
 | V1 TLC execution / stale verdict | #106 | #136 | verify-space-key-dispatch-tlc.ps1 / Get-TlcOutcome / Invoke-BoundedProcess; traceability schema 2 | self-test, 9 TLC configs, actual timeout; space-tlc-execution.md and generated results |
-| V1 oracle / adapter correspondence | #106 | pending | oracle apply_space/Disconnect, ProductionWorld::Disconnect | 3 pre-fix failures, 47 targeted tests, 33 scoped mutants; space-oracle-correspondence.md and results JSON |
+| V1 oracle / adapter correspondence | #106 | #137 | oracle apply_space/Disconnect, ProductionWorld::Disconnect | 3 pre-fix failures, 47 targeted tests, 33 scoped mutants; space-oracle-correspondence.md and results JSON |
+| O1 image namespace diagnostics | #104 | #138 | test-only image_policy_evidence | rooted/native-device/NT-DOS/drive-prefix flags, synthetic private-label omission; no admission-policy change |
 
 PRs are intentionally stacked in this order. They are unmerged; upstream main is not fixed merely because a branch test passes. CI Build and test, Build installer, and Dependency policy passed on #114/#115/#117/#119 when checked; fuzz jobs were skipped. Stacked-base CodeRabbit reviews were skipped, so their green status is not review evidence. Independent requested static reviews were separate, behaviorally read-only, and found no actionable defect within each recorded patch scope.
 
 ## Evidence limits
 
-Unit/component tests using synthetic paths on the current Windows host are distinct from isolated real-TSF and physical E2E. No installation, IME registration, production pipe request, merge, release, signing change or production history read is authorized by this program.
+Unit/component tests using synthetic paths on the current Windows host are distinct from isolated real-TSF and physical E2E. The original revalidation program did not authorize installation, IME registration, production pipe requests, merge, release, signing changes or production history reads.
+
+## Owner-authorized incremental release (#139)
+
+On 2026-09-06 the owner explicitly requested release after the fixes. Integration and publication of the verified patch stack as v1.0.36 are now authorized, using the existing offline signing and candidate/readback gates. Installation and IME registration are outside this publication task. This does not change the incomplete program classifications above.
+
+The v1.0.36 preparation changes only workspace package versions (including the lockfile), installer version, default release tag, release sequence 3 to 4, release notes and readback-directory cleanup containment. No third-party package version or trust key changes. Local versioned workspace verification exited 0 with 1,821 passed / 84 ignored / 0 failed; scoped process inspection found no survivors. Release workflow policy and its self-test passed. Hosted AppContainer and final release gates remain required before publication.
