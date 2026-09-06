@@ -1,0 +1,45 @@
+{
+  "input_hashes": {
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779",
+    "crates/sakura-engine/tests/appcontainer.rs": "a4a4559c820f8138b0331e9700a9c0c859588677df5741744ef9d4d6769fb6ad",
+    "crates/sakura-ipc/src/security.rs": "6270d72d1f5b9bd829eccb7d833ff4d597b3a100961f57f2e342f0ccfd3c7ddf"
+  },
+  "runs": [
+    {
+      "totals": [
+        1,
+        0,
+        0
+      ],
+      "log_name": "appcontainer-diagnostics-targeted-final.log",
+      "sha256": "91e70e3c2a9599369e69874076d773925cf7f86de4483dbb69a25ce672c46223",
+      "exit_code": 0,
+      "command": "cargo test --locked -p sakura-engine --test appcontainer image_policy_diagnostics"
+    },
+    {
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "log_name": "appcontainer-diagnostics-clippy.log",
+      "sha256": "3151b5e36f601cdd0c77b0112b0a33a1fbb994dd939fb09015d3cc6290e0749b",
+      "exit_code": 0,
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings"
+    },
+    {
+      "totals": [
+        1800,
+        0,
+        84
+      ],
+      "log_name": "workspace-policy-evidence.log",
+      "sha256": "d00afb10a2cd356d72ba3108e763a5477afd1bf7005d1615c170e5e2773637e2",
+      "exit_code": 0,
+      "command": "cargo test --locked --workspace"
+    }
+  ],
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "profile": "debug",
+  "scope": "Final hashes; targeted and Clippy runs preceded final self-query assertion/documentation correction. Workspace is final code. Totals: passed, failed, ignored. Real sandbox rejection branch not yet exercised."
+}

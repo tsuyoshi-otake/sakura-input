@@ -137,6 +137,15 @@ fn run(
     // into pass-through input.
     sakura_ipc::security::allow_sandbox_identity_queries()?;
 
+    let server = Server::new(verbose)?;
+    let server = match test_pipe {
+        Some(pipe_name) => server.with_explicit_test_pipe(pipe_name.to_owned()),
+        None => server,
+    };
+    // Own the secured endpoint names before dictionary/store initialization.
+    // A loser cannot mutate history/learning; failures drop the reservation.
+    let server = server.reserve()?;
+
     let dictionary_path = sakura_engine::dictionary::default_path()
         .map_err(|error| windows::core::Error::new(E_FAIL, format!("dictionary path: {error}")))?;
     let conversion = sakura_engine::dictionary::open(&dictionary_path)
@@ -277,48 +286,16 @@ fn run(
     } else {
         None
     };
-    let server = match (prediction_runtime.as_ref(), input_history.as_ref()) {
-        (Some(runtime), Some(history)) => {
-            Server::with_runtime_configuration_and_profiles_and_history(
-                verbose,
-                conversion,
-                learning,
-                runtime.service(),
-                preferences,
-                Arc::clone(&profiles),
-                Arc::clone(history),
-            )?
-        }
-        (Some(runtime), None) => Server::with_runtime_configuration_and_profiles(
-            verbose,
-            conversion,
-            learning,
-            runtime.service(),
-            preferences,
-            Arc::clone(&profiles),
-        )?,
-        (None, Some(history)) => Server::with_configuration_and_profiles_and_history(
-            verbose,
-            conversion,
-            learning,
-            preferences,
-            Arc::clone(&profiles),
-            Arc::clone(history),
-        )?,
-        (None, None) => Server::with_configuration_and_profiles(
-            verbose,
-            conversion,
-            learning,
-            preferences,
-            Arc::clone(&profiles),
-        )?,
-    };
+    let server = server.with_startup_services(
+        conversion,
+        learning,
+        prediction_runtime.as_ref().map(|runtime| runtime.service()),
+        input_history.as_ref().map(Arc::clone),
+        preferences,
+        Arc::clone(&profiles),
+    );
     let server = match long_conversion_runtime.as_ref() {
         Some(runtime) => server.with_long_conversion(runtime.service()),
-        None => server,
-    };
-    let server = match test_pipe {
-        Some(pipe_name) => server.with_explicit_test_pipe(pipe_name.to_owned()),
         None => server,
     };
     let configuration_watcher = config_path.as_ref().and_then(|path| {
@@ -358,13 +335,14 @@ fn run(
         }
         eprintln!("sakura-engine: listening on {}", server.pipe_name());
     }
-    record(
-        event_log,
-        EngineEvent::Ready {
-            elapsed_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
-        },
-    );
-    let result = server.run();
+    let result = server.run_when_ready(|| {
+        record(
+            event_log,
+            EngineEvent::Ready {
+                elapsed_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            },
+        );
+    });
     // The configuration watcher owns a polling thread and callbacks into the
     // dispatcher/UI state. Stop and join it before runtime services release.
     drop(configuration_watcher);

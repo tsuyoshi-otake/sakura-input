@@ -1,5 +1,13 @@
 # Correspondence table and adversarial re-audit — Space-key-dispatch
 
+**HISTORICAL / STALE (marked during #106 revalidation).** The findings and
+counts below are not a current product verdict. The recorded revision is not
+proven to be the evaluated tree. Some implementation descriptions (including
+the missing peer fence) no longer describe current code. The original machine
+record is preserved in `historical/traceability-4c7113c.json`; the current
+`traceability.json` explicitly tracks outstanding evidence. Do not reuse this
+table's PASS/NO_GO, mutation counts or coverage as current evidence.
+
 Date: 2026-08-16
 Revision: `f26191aa16a6b3569cdf004e4852650f7de1a17f`
 Machine-readable map: `traceability.json`

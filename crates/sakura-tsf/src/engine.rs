@@ -9,13 +9,12 @@
 //!
 //! # Everything here is a deadline
 //!
-//! DESIGN 4.3 gives a keystroke 50 ms. That budget covers the round trip
-//! and nothing else, so connecting — the one part that can take real time,
-//! since a busy pipe makes `WaitNamedPipeW` wait — gets its own, much
-//! smaller one. A reconnection that cannot finish inside
-//! [`RECONNECT_BUDGET`] is not worth having: the engine is either not
-//! running or not answering, and both are cases where the right move is to
-//! give the key back to the application and try again later.
+//! The key callback owns one 50 ms IPC deadline. Reconnect, resync, scope,
+//! key and UI requests share its remaining allowance, with smaller local
+//! caps where appropriate. Nested COM callbacks inherit the earlier expiry.
+//! Outside a key callback each operation retains its own bounded allowance.
+//! OS scheduling, synchronous host calls and cancellation completion are not
+//! hard real-time guarantees; the deadline prevents renewed serial IPC waits.
 //!
 //! # What "later" means
 //!
@@ -35,6 +34,7 @@
 //! kept is the assumption that both ends still agree — see
 //! [`Link::resync`].
 
+use crate::callback_deadline;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -48,7 +48,7 @@ use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 
 /// DESIGN 4.3's per-keystroke budget. Exceeding it is a dropped keystroke;
 /// not having it at all is a frozen application.
-const KEY_BUDGET: Duration = Duration::from_millis(50);
+pub(crate) const KEY_BUDGET: Duration = Duration::from_millis(50);
 
 /// Placement is cosmetic and must never consume the whole keystroke budget.
 /// A missed update leaves the popup hidden or at its last valid rectangle;
@@ -256,8 +256,12 @@ impl Engine {
             attempts: record.attempts,
             test_only: record.test_only,
         };
-        match link.client.call(&request, KEY_BUDGET) {
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
+        {
             Ok(Response::Ok) => true,
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 link.desynchronized = true;
@@ -279,16 +283,17 @@ impl Engine {
         if link.input_scope != Some(InputScope::Normal) {
             return Err(ErrorCode::Busy);
         }
-        match link.client.call(
+        match link.client.call_until(
             &Request::StartAiText {
                 session: link.session,
                 operation,
                 text,
             },
-            KEY_BUDGET,
+            callback_deadline::limit(KEY_BUDGET),
         ) {
             Ok(Response::AiTextStarted { job }) => Ok(job),
             Ok(Response::Error(code)) => Err(code),
+            Err(Fault::DeadlineExpired) => Err(ErrorCode::Internal),
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 link.desynchronized = true;
@@ -305,12 +310,12 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return AiTextPoll::Unavailable;
         };
-        match link.client.call(
+        match link.client.call_until(
             &Request::PollAiText {
                 session: link.session,
                 job,
             },
-            UI_BUDGET,
+            callback_deadline::limit(UI_BUDGET),
         ) {
             Ok(Response::AiTextPending { job: returned }) if returned == job => AiTextPoll::Pending,
             Ok(Response::AiTextResult {
@@ -342,6 +347,7 @@ impl Engine {
             Ok(Response::Error(ErrorCode::Malformed | ErrorCode::UnknownSession)) => {
                 AiTextPoll::Missing
             }
+            Err(Fault::DeadlineExpired) => AiTextPoll::Pending,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 AiTextPoll::Pending
@@ -357,14 +363,15 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return false;
         };
-        match link.client.call(
+        match link.client.call_until(
             &Request::CancelAiText {
                 session: link.session,
                 job,
             },
-            UI_BUDGET,
+            callback_deadline::limit(UI_BUDGET),
         ) {
             Ok(Response::Ok) => true,
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 false
@@ -405,18 +412,19 @@ impl Engine {
         }
         let session = link.session;
         let prior = link.mode;
-        match link.client.call(
+        match link.client.call_until(
             &Request::SetMode {
                 session,
                 mode: requested,
             },
-            KEY_BUDGET,
+            callback_deadline::limit(KEY_BUDGET),
         ) {
             Ok(Response::InputMode { mode }) => {
                 link.mode = mode;
                 link.menu_mode_restore = (mode != prior).then_some(prior);
                 true
             }
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 link.desynchronized = true;
@@ -493,12 +501,16 @@ impl Engine {
             session: link.session,
             scope,
         };
-        match link.client.call(&request, KEY_BUDGET) {
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
+        {
             Ok(Response::Ok) => {
                 update_mode_for_scope(link, scope);
                 link.input_scope = Some(scope);
                 true
             }
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 link.desynchronized = true;
@@ -522,11 +534,15 @@ impl Engine {
         let request = Request::ResetDocumentContext {
             session: link.session,
         };
-        match link.client.call(&request, KEY_BUDGET) {
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
+        {
             Ok(Response::Ok) => {
                 link.menu_mode_restore = None;
                 true
             }
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Administration);
                 link.desynchronized = true;
@@ -558,11 +574,11 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return CandidateCommitPoll::Unavailable;
         };
-        match link.client.call(
+        match link.client.call_until(
             &Request::PollCandidateCommit {
                 session: link.session,
             },
-            UI_BUDGET,
+            callback_deadline::limit(UI_BUDGET),
         ) {
             Ok(Response::CandidateCommitPending {
                 request: Some((revision, candidate_index)),
@@ -571,6 +587,7 @@ impl Engine {
                 candidate_index,
             },
             Ok(Response::CandidateCommitPending { request: None }) => CandidateCommitPoll::None,
+            Err(Fault::DeadlineExpired) => CandidateCommitPoll::Unavailable,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::UiPlacement);
                 CandidateCommitPoll::Unavailable
@@ -619,7 +636,10 @@ impl Engine {
             return false;
         };
         let session = link.session;
-        match link.client.call(&Request::Revert { session }, KEY_BUDGET) {
+        match link.client.call_until(
+            &Request::Revert { session },
+            callback_deadline::limit(KEY_BUDGET),
+        ) {
             Ok(Response::Ok) => {
                 link.desynchronized = false;
                 true
@@ -633,6 +653,7 @@ impl Engine {
                 link.desynchronized = false;
                 true
             }
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Revert);
                 link.desynchronized = true;
@@ -657,8 +678,12 @@ impl Engine {
             session: link.session,
             outcome,
         };
-        match link.client.call(&request, KEY_BUDGET) {
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
+        {
             Ok(Response::Ok) => true,
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Revert);
                 link.desynchronized = true;
@@ -691,8 +716,12 @@ impl Engine {
             document,
             renderer_visible,
         };
-        match link.client.call(&request, UI_BUDGET) {
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(UI_BUDGET))
+        {
             Ok(Response::Ok) => true,
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::UiPlacement);
                 false
@@ -725,7 +754,10 @@ impl Engine {
             return Answer::Unavailable;
         };
 
-        match link.client.call(request, KEY_BUDGET) {
+        match link
+            .client
+            .call_until(request, callback_deadline::limit(KEY_BUDGET))
+        {
             Ok(Response::Output(output)) => {
                 if matches!(
                     request,
@@ -765,6 +797,10 @@ impl Engine {
             // so there is nothing to show and nothing to correct.
             Ok(_) => Answer::Unavailable,
 
+            // No request bytes were issued. Preserve the link and its known
+            // session state; only this callback's allowance is exhausted.
+            Err(Fault::DeadlineExpired) => Answer::Unavailable,
+
             // Kept, not dropped: see the module docs. The flag is what
             // stops the next successful call from building on a
             // composition the engine may have moved on from.
@@ -790,6 +826,9 @@ impl Engine {
 
     /// Returns a usable link, building one if the retry interval allows.
     fn link(&mut self) -> Option<&mut Link> {
+        if Instant::now() >= callback_deadline::limit(KEY_BUDGET) {
+            return None;
+        }
         if self.link.is_some() {
             // Resyncing before use rather than at the moment of the
             // timeout: at that moment there was, by definition, no time
@@ -843,11 +882,15 @@ impl Link {
     /// being discarded here is the engine's now-duplicate copy of it.
     fn resync(&mut self) -> bool {
         let session = self.session;
-        match self.client.call(&Request::Revert { session }, KEY_BUDGET) {
+        match self.client.call_until(
+            &Request::Revert { session },
+            callback_deadline::limit(KEY_BUDGET),
+        ) {
             Ok(Response::Ok) => {
                 self.desynchronized = false;
                 true
             }
+            Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::Resynchronize);
                 false
@@ -878,7 +921,10 @@ fn connect_to(name: &str) -> Option<Link> {
 }
 
 fn open(name: Option<&str>) -> Option<Link> {
-    let deadline = Instant::now() + RECONNECT_BUDGET;
+    let deadline = callback_deadline::limit(RECONNECT_BUDGET);
+    if Instant::now() >= deadline {
+        return None;
+    }
     let connected = match name {
         Some(name) => Client::connect_to(name, left(deadline)),
         None => {
@@ -890,6 +936,7 @@ fn open(name: Option<&str>) -> Option<Link> {
     };
     let mut client = match connected {
         Ok(client) => client,
+        Err(Fault::DeadlineExpired) => return None,
         Err(Fault::Timeout) => {
             note_timeout(TimeoutOperation::Connect);
             return None;
@@ -897,16 +944,17 @@ fn open(name: Option<&str>) -> Option<Link> {
         Err(_) => return None,
     };
 
-    match client.call(
+    match client.call_until(
         &Request::Hello {
             client_version: PROTOCOL_VERSION,
         },
-        left(deadline),
+        deadline,
     ) {
         // The version is checked by the engine, which answers `Hello` only
         // when it matches; anything else means this DLL and that engine
         // are from different installs and must not talk.
         Ok(Response::Hello { .. }) => {}
+        Err(Fault::DeadlineExpired) => return None,
         Err(Fault::Timeout) => {
             note_timeout(TimeoutOperation::Handshake);
             return None;
@@ -914,11 +962,11 @@ fn open(name: Option<&str>) -> Option<Link> {
         _ => return None,
     }
 
-    let created = client.call(
+    let created = client.call_until(
         &Request::CreateSession {
             process_name: host_process_name(),
         },
-        left(deadline),
+        deadline,
     );
     match created {
         Ok(Response::SessionCreated { session, mode }) => Some(Link {
@@ -930,6 +978,7 @@ fn open(name: Option<&str>) -> Option<Link> {
             input_scope: None,
             desynchronized: false,
         }),
+        Err(Fault::DeadlineExpired) => None,
         Err(Fault::Timeout) => {
             note_timeout(TimeoutOperation::Handshake);
             None
@@ -1810,6 +1859,104 @@ mod tests {
     /// A timeout is not a death. The request is still in flight and the
     /// engine still holds the session, so reconnecting would throw away the
     /// user's composition to fix a hiccup.
+    #[test]
+    fn callback_deadline_expired_call_sends_nothing_and_keeps_session() {
+        let (checked, observed) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("expired-callback", move |pipe, buffer| {
+            let no_request = matches!(
+                pipe.read_frame_with_deadline(buffer, Duration::from_millis(80)),
+                Err(Fault::Timeout)
+            );
+            checked.send(no_request).expect("observation");
+            answer(pipe, buffer, &Response::Output(latin_preedit("a")));
+        });
+        let mut engine = Engine::attached_to(&name);
+        let link = engine.link.as_mut().expect("connected");
+        let next = link.client.next_request_id();
+        let expired = link.client.call_until(
+            &Request::SendKey {
+                session: link.session,
+                key: a_key('a'),
+            },
+            Instant::now(),
+        );
+        let unchanged = link.client.next_request_id() == next;
+        let (key_refused, ui_refused) = {
+            let _callback = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            (
+                matches!(engine.send_key(a_key('a')), Answer::Unavailable),
+                !engine.set_ui_placement(None, None, false),
+            )
+        };
+        let known = engine.is_connected() && !engine.is_desynchronized();
+        let no_request = observed.recv_timeout(Duration::from_secs(1));
+        let later = engine.send_key(a_key('a'));
+        drop(engine);
+        server.join().expect("scripted peer joined");
+        assert!(matches!(expired, Err(Fault::DeadlineExpired)));
+        assert!(unchanged && key_refused && ui_refused && known);
+        assert!(no_request.expect("bounded observation"));
+        assert!(
+            matches!(later, Answer::Ready(_)),
+            "scope return must restore future allowance"
+        );
+    }
+
+    #[test]
+    fn callback_deadline_serial_resync_scope_and_key_share_one_allowance() {
+        let (name, server) = fake_engine("callback-budget", |pipe, buffer| {
+            let mut kinds = Vec::new();
+            for _ in 0..3 {
+                let Ok(payload) = pipe.read_frame_with_deadline(buffer, Duration::from_millis(200))
+                else {
+                    break;
+                };
+                let (id, request) = decode_request(payload).expect("request");
+                let response = match request {
+                    Request::Revert { .. } => {
+                        kinds.push("resync");
+                        Response::Ok
+                    }
+                    Request::SetInputScope { .. } => {
+                        kinds.push("scope");
+                        Response::Ok
+                    }
+                    Request::SendKey { .. } => {
+                        kinds.push("key");
+                        Response::Output(latin_preedit("a"))
+                    }
+                    _ => panic!("unexpected request"),
+                };
+                std::thread::sleep(Duration::from_millis(35));
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                if pipe.write_all(&reply).is_err() {
+                    break;
+                }
+            }
+            eprintln!("scripted callback requests={kinds:?}");
+        });
+        let mut engine = Engine::attached_to(&name);
+        engine.link.as_mut().expect("connected").desynchronized = true;
+        let started = Instant::now();
+        let answer = {
+            let _callback = crate::callback_deadline::CallbackDeadline::enter(KEY_BUDGET);
+            if engine.set_input_scope(InputScope::Normal) {
+                engine.send_key(a_key('a'))
+            } else {
+                Answer::Unavailable
+            }
+        };
+        let elapsed = started.elapsed();
+        drop(engine);
+        server.join().expect("bounded scripted server");
+        eprintln!("scripted callback elapsed={elapsed:?}");
+        assert!(
+            matches!(answer, Answer::Unavailable),
+            "serial calls each renewed their allowance"
+        );
+    }
+
     #[test]
     fn a_slow_answer_costs_the_budget_but_not_the_connection() {
         let (name, server) = fake_engine("slow", |pipe, buffer| {

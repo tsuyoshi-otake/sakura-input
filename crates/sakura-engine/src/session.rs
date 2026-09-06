@@ -570,6 +570,8 @@ impl Session {
     }
 
     pub(crate) fn set_history_session_id(&mut self, id: SessionId) {
+        // Zero means history unavailable; the history sink rejects content
+        // records with this value while the protocol session remains usable.
         self.history_session_id = id;
     }
 

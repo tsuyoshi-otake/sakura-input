@@ -387,6 +387,7 @@ impl Shared {
 pub struct Server {
     shared: Arc<Shared>,
     stopped: Receiver<StopReason>,
+    reserved_instances: Option<Vec<(Endpoint, PipeInstance)>>,
 }
 
 impl Server {
@@ -601,7 +602,47 @@ impl Server {
                 verbose,
             }),
             stopped,
+            reserved_instances: None,
         })
+    }
+
+    /// Reserves the existing secured endpoint names without starting workers.
+    /// Dropping this value on any later initialization failure releases every
+    /// claim. Ownership is not readiness: requests are served only by run.
+    pub fn reserve(mut self) -> windows::core::Result<Self> {
+        if self.reserved_instances.is_none() {
+            self.reserved_instances = Some(create_initial_instances(&self.shared)?);
+        }
+        Ok(self)
+    }
+
+    /// Installs runtime dependencies after endpoint ownership is secured and
+    /// before any callback or acceptor can observe the shared state.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_startup_services(
+        mut self,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        prediction: Option<Arc<PredictionService>>,
+        input_history: Option<Arc<InputHistoryService>>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+    ) -> Self {
+        let shared = Arc::get_mut(&mut self.shared)
+            .expect("startup services precede shared callbacks and workers");
+        shared.conversion = Some(conversion);
+        shared.learning = Some(learning);
+        shared.prediction = prediction;
+        shared.input_history = input_history;
+        shared.ui = UiBoard::with_appearance_theme_and_pad_shortcut(
+            preferences.appearance_theme,
+            preferences.pad_shortcut,
+        );
+        shared.configuration = RwLock::new(RuntimeConfiguration {
+            preferences,
+            profiles,
+        });
+        self
     }
 
     /// The pipe this server listens on.
@@ -635,6 +676,10 @@ impl Server {
     /// command-line option. Production constructors still resolve their normal
     /// name through [`security::pipe_name`] during construction.
     pub fn with_explicit_test_pipe(mut self, pipe_name: String) -> Self {
+        assert!(
+            self.reserved_instances.is_none(),
+            "pipe name cannot change after reservation"
+        );
         let shared = Arc::get_mut(&mut self.shared)
             .expect("a newly constructed server has no worker thread or shared clone");
         shared.name = pipe_name.clone();
@@ -659,14 +704,20 @@ impl Server {
     /// by a stale copy of the engine, or by something trying to collect
     /// our clients' keystrokes.
     pub fn run(self) -> windows::core::Result<()> {
+        self.run_when_ready(|| {})
+    }
+
+    /// Calls `ready` only after all owned endpoint workers have started.
+    pub fn run_when_ready(mut self, ready: impl FnOnce()) -> windows::core::Result<()> {
         // Each production endpoint owns its own named-pipe object and
         // admission pool. A data-plane flood therefore cannot starve the
         // renderer watchdog or the control channel used by the installer.
-        if self.shared.test_pipe {
-            spawn_worker(&self.shared, Endpoint::Data, true)?;
-        } else {
-            spawn_initial_workers(&self.shared)?;
-        }
+        let instances = match self.reserved_instances.take() {
+            Some(instances) => instances,
+            None => create_initial_instances(&self.shared)?,
+        };
+        spawn_initial_workers(&self.shared, instances)?;
+        ready();
         // `recv` returns when a client asks for shutdown, or when the last
         // pipe instance is released — see [`InstanceSlot::drop`], which is
         // what makes the second case an explicit send. It cannot come from
@@ -863,19 +914,32 @@ fn create_instance(
     )
 }
 
-/// Creates all three first instances before starting any worker thread. This
+/// Creates all required first instances before starting any worker thread. This
 /// prevents a partial startup from leaving a data acceptor alive when the
 /// renderer/control security descriptor or pipe creation fails. Workers also
 /// wait behind a startup gate until all three thread spawns have succeeded;
 /// if a later spawn fails, the gate aborts and the already-created threads are
 /// joined before the error escapes. That makes startup a transaction rather
 /// than relying on process exit to clean up detached acceptors.
-fn spawn_initial_workers(shared: &Arc<Shared>) -> windows::core::Result<()> {
+fn create_initial_instances(
+    shared: &Arc<Shared>,
+) -> windows::core::Result<Vec<(Endpoint, PipeInstance)>> {
     let mut instances = Vec::with_capacity(3);
-    for endpoint in [Endpoint::Data, Endpoint::Renderer, Endpoint::Control] {
+    let endpoints: &[Endpoint] = if shared.test_pipe {
+        &[Endpoint::Data]
+    } else {
+        &[Endpoint::Data, Endpoint::Renderer, Endpoint::Control]
+    };
+    for &endpoint in endpoints {
         instances.push((endpoint, create_instance(shared, endpoint, true)?));
     }
+    Ok(instances)
+}
 
+fn spawn_initial_workers(
+    shared: &Arc<Shared>,
+    mut instances: Vec<(Endpoint, PipeInstance)>,
+) -> windows::core::Result<()> {
     let gate = Arc::new(StartupGate::new());
     let mut workers = Vec::with_capacity(instances.len());
     while let Some((endpoint, instance)) = instances.pop() {
@@ -913,10 +977,30 @@ fn spawn_worker_with_instance(
     // below — the failed spawn here, or the worker ending later.
     let slot = InstanceSlot::claim_for(shared, endpoint);
     let owned = Arc::clone(shared);
+    let job = move || worker_with_gate(owned, instance, slot, endpoint, startup_gate);
+    #[cfg(test)]
+    if tests::FAIL_PIPE_SPAWN_AFTER.with(|remaining| match remaining.get() {
+        Some(0) => {
+            remaining.set(None);
+            true
+        }
+        Some(count) => {
+            remaining.set(Some(count - 1));
+            false
+        }
+        None => false,
+    }) {
+        // Match Builder::spawn failure ownership: the unstarted closure is
+        // dropped, releasing its instance and slot before the error escapes.
+        drop(job);
+        return Err(thread_failure(&std::io::Error::other(
+            "injected pipe spawn failure",
+        )));
+    }
     let spawned = std::thread::Builder::new()
         .name("sakura-pipe".to_owned())
         .stack_size(WORKER_STACK_BYTES)
-        .spawn(move || worker_with_gate(owned, instance, slot, endpoint, startup_gate));
+        .spawn(job);
 
     match spawned {
         Ok(worker) => Ok(worker),
@@ -1810,6 +1894,10 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
 
 #[cfg(test)]
 mod tests {
+    thread_local! {
+        pub(super) static FAIL_PIPE_SPAWN_AFTER: std::cell::Cell<Option<usize>> =
+            const { std::cell::Cell::new(None) };
+    }
     use super::*;
     use sakura_ipc::Client;
     use std::fs;
@@ -2561,6 +2649,67 @@ mod tests {
             r"\\.\pipe\SakuraInputEngineTest-{purpose}-{}-{stamp}",
             std::process::id()
         )
+    }
+
+    fn private_endpoint_server(name: &str) -> Server {
+        let mut server = Server::new(false).unwrap();
+        let shared = Arc::get_mut(&mut server.shared).unwrap();
+        shared.name = format!("{name}-data");
+        shared.renderer_name = format!("{name}-renderer");
+        shared.control_name = format!("{name}-control");
+        server
+    }
+
+    #[test]
+    fn startup_reservation_blocks_duplicates_before_workers_and_releases_on_drop() {
+        let name = unique_test_pipe("reserve");
+        let owner = private_endpoint_server(&name).reserve().unwrap();
+        assert_eq!(owner.shared.total_created.load(Ordering::Relaxed), 0);
+        assert!(private_endpoint_server(&name).reserve().is_err());
+        drop(owner);
+        let replacement = private_endpoint_server(&name).reserve().unwrap();
+        assert_eq!(replacement.reserved_instances.as_ref().unwrap().len(), 3);
+        drop(replacement);
+    }
+
+    #[test]
+    fn startup_reservation_partial_failure_releases_earlier_endpoints_without_ready() {
+        let name = unique_test_pipe("partial-reserve");
+        let blocker = private_endpoint_server(&name);
+        let occupied_renderer = create_instance(&blocker.shared, Endpoint::Renderer, true).unwrap();
+        assert!(private_endpoint_server(&name).reserve().is_err());
+        // A first-instance creation succeeds only if the failed acquisition
+        // dropped its earlier data handle, despite the renderer collision.
+        drop(create_instance(&blocker.shared, Endpoint::Data, true).unwrap());
+        let ready = std::cell::Cell::new(false);
+        assert!(private_endpoint_server(&name)
+            .run_when_ready(|| ready.set(true))
+            .is_err());
+        assert!(!ready.get());
+        drop(occupied_renderer);
+        drop(private_endpoint_server(&name).reserve().unwrap());
+    }
+
+    #[test]
+    fn startup_spawn_failure_joins_workers_releases_slots_and_suppresses_ready() {
+        for preceding_workers in 0..3 {
+            let name = unique_test_pipe("spawn-failure");
+            let server = private_endpoint_server(&name).reserve().unwrap();
+            let shared = Arc::clone(&server.shared);
+            let ready = std::cell::Cell::new(false);
+            FAIL_PIPE_SPAWN_AFTER.with(|remaining| remaining.set(Some(preceding_workers)));
+            let result = server.run_when_ready(|| ready.set(true));
+            FAIL_PIPE_SPAWN_AFTER.with(|remaining| remaining.set(None));
+            assert!(result.is_err());
+            assert!(!ready.get());
+            assert_eq!(shared.total_created.load(Ordering::Relaxed), 0);
+            assert_eq!(shared.created.load(Ordering::Relaxed), 0);
+            assert_eq!(shared.renderer_created.load(Ordering::Relaxed), 0);
+            assert_eq!(shared.control_created.load(Ordering::Relaxed), 0);
+            // No worker-held Shared reference remains after the joined abort.
+            assert_eq!(Arc::strong_count(&shared), 1);
+            drop(private_endpoint_server(&name).reserve().unwrap());
+        }
     }
 
     /// The other half of the same rule: a worker only adds an instance

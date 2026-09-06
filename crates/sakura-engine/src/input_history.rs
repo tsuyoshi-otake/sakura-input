@@ -14,6 +14,8 @@
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -22,9 +24,13 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_proto::{AiTextOperation, AiTextStatus, InputScope};
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
+};
+use windows::Win32::Storage::FileSystem::{
+    ReplaceFileW, FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT, REPLACE_FILE_FLAGS,
 };
 
 const MAGIC: &[u8; 4] = b"SKIH";
@@ -212,6 +218,15 @@ pub enum InputHistoryRecord {
 }
 
 impl InputHistoryRecord {
+    fn session(&self) -> u64 {
+        match self {
+            Self::Key(record) => record.session,
+            Self::Commit(record) => record.session,
+            Self::AiText(record) => record.session,
+            Self::Engine(record) => record.session,
+        }
+    }
+
     fn sequence(&self) -> u64 {
         match self {
             Self::Key(record) => record.sequence,
@@ -412,6 +427,15 @@ pub struct InputHistorySnapshot {
 }
 
 impl InputHistorySnapshot {
+    /// Applies the public viewing/export retention policy without rewriting
+    /// storage. Raw snapshots deliberately remain unfiltered for recovery and
+    /// identifier accounting. `now_ms` also permits deterministic boundary tests.
+    pub fn retain_current_records(&mut self, now_ms: u64) {
+        let cutoff = now_ms.saturating_sub(RETENTION.as_millis() as u64);
+        self.records
+            .retain(|record| record.timestamp_ms() >= cutoff);
+    }
+
     /// Latest engine identity marker in the snapshot, if any.
     pub fn last_engine_identity(&self) -> Option<(&str, &str)> {
         self.records.iter().rev().find_map(|record| match record {
@@ -631,6 +655,7 @@ impl InputHistoryStats {
 enum Command {
     Append {
         epoch: u64,
+        timestamp_ms: u64,
         payload: Vec<u8>,
     },
     Flush {
@@ -653,7 +678,36 @@ pub struct InputHistoryService {
     next_sequence: AtomicU64,
     next_session_id: AtomicU64,
     epoch: AtomicU64,
-    worker: Mutex<Option<JoinHandle<()>>>,
+    worker: Mutex<WriterShutdown>,
+}
+
+/// Only stop callers take this mutex. Key-path admission never waits for it.
+struct WriterShutdown {
+    handle: Option<JoinHandle<()>>,
+    outcome: Option<Result<(), ShutdownFailure>>,
+}
+
+struct ShutdownFailure {
+    kind: io::ErrorKind,
+    raw_os_error: Option<i32>,
+    message: String,
+}
+
+impl ShutdownFailure {
+    fn capture(error: io::Error) -> Self {
+        Self {
+            kind: error.kind(),
+            raw_os_error: error.raw_os_error(),
+            message: error.to_string(),
+        }
+    }
+
+    fn error(&self) -> io::Error {
+        self.raw_os_error.map_or_else(
+            || io::Error::new(self.kind, self.message.clone()),
+            io::Error::from_raw_os_error,
+        )
+    }
 }
 
 impl fmt::Debug for InputHistoryService {
@@ -681,9 +735,24 @@ impl fmt::Debug for InputHistoryService {
 
 impl InputHistoryService {
     pub fn open(path: &Path) -> io::Result<Arc<Self>> {
+        let store_owner = acquire_store_owner(path)?;
         ensure_file(path)?;
-        repair_file(path)?;
-        compact_file(path)?;
+        let recovered = repair_file(path)?;
+        if recovered.last_sequence == u64::MAX || recovered.last_session == u64::MAX {
+            return Err(invalid_data("input history stored identifiers exhausted"));
+        }
+        // Legacy migration is the explicit exception to no startup rewrite:
+        // do not append current-format markers beneath a legacy header.
+        // Recover IDs before migration can remove expired records.
+        let retention = if recovered.format_version != INPUT_HISTORY_FORMAT_VERSION {
+            compact_file(path)?
+        } else {
+            recovered.retention
+        };
+        // Complete every fallible mandatory step before starting a worker.
+        // Retention belongs to viewing/maintenance, not ID recovery: expired
+        // records still carry high-watermarks in this existing store.
+        let append_file = open_append(path)?;
 
         let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
         let stats = Arc::new(InputHistoryStats::default());
@@ -691,17 +760,25 @@ impl InputHistoryService {
         let writer_path = path.to_owned();
         let worker = thread::Builder::new()
             .name("sakura-input-history".to_owned())
-            .spawn(move || writer_loop(writer_path, receiver, writer_stats))
+            .spawn(move || {
+                // Ownership follows the actual worker, including a delayed
+                // exit or unwind, rather than a caller's stop observation.
+                let _store_owner = store_owner;
+                writer_loop(writer_path, receiver, writer_stats, append_file, retention);
+            })
             .map_err(|error| io::Error::other(format!("start input history writer: {error}")))?;
 
         let service = Arc::new(Self {
             path: path.to_owned(),
             sender,
             stats,
-            next_sequence: AtomicU64::new(next_sequence(path).unwrap_or(0)),
-            next_session_id: AtomicU64::new(next_session_id(path).unwrap_or(0)),
+            next_sequence: AtomicU64::new(recovered.last_sequence),
+            next_session_id: AtomicU64::new(recovered.last_session),
             epoch: AtomicU64::new(0),
-            worker: Mutex::new(Some(worker)),
+            worker: Mutex::new(WriterShutdown {
+                handle: Some(worker),
+                outcome: None,
+            }),
         });
         service.record_engine_start();
         Ok(service)
@@ -718,8 +795,32 @@ impl InputHistoryService {
     /// Allocates an ID shared by every dispatcher using this process-wide
     /// history service. The ordinary protocol session ID is local to one pipe
     /// worker and can otherwise collide in a multi-client history stream.
-    pub fn allocate_session_id(&self) -> u64 {
-        self.next_session_id.fetch_add(1, Ordering::Relaxed) + 1
+    /// Returns None on exhaustion; it never wraps or repeats the final ID.
+    pub fn allocate_session_id(&self) -> Option<u64> {
+        self.allocate_counter(&self.next_session_id, Ordering::Relaxed)
+    }
+
+    fn allocate_counter(&self, counter: &AtomicU64, order: Ordering) -> Option<u64> {
+        match counter.fetch_update(order, Ordering::Relaxed, |value| value.checked_add(1)) {
+            Ok(previous) => Some(previous + 1),
+            Err(_) => {
+                self.stats
+                    .persistence_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                None
+            }
+        }
+    }
+
+    // Zero is reserved for engine markers and unavailable history sessions.
+    // Ordinary protocol input can continue after history allocation fails.
+    fn excludes_session(&self, session: u64) -> bool {
+        if session == 0 {
+            self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
     }
 
     /// Records which engine build is about to append developer-history events.
@@ -727,19 +828,32 @@ impl InputHistoryService {
     /// Called once when the service starts. Not subject to scope exclusion:
     /// this marker contains only package/release identity, never key content.
     fn record_engine_start(&self) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         let (package_version, release_label) = current_engine_identity();
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
-        self.enqueue(InputHistoryRecord::Engine(EngineHistoryRecord {
-            sequence,
-            timestamp_ms: now_ms(),
-            session: 0,
-            scope: ScopeClass::Normal,
-            package_version,
-            release_label,
-        }));
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
+        self.enqueue(
+            epoch,
+            InputHistoryRecord::Engine(EngineHistoryRecord {
+                sequence,
+                timestamp_ms: now_ms(),
+                session: 0,
+                scope: ScopeClass::Normal,
+                package_version,
+                release_label,
+            }),
+        );
     }
 
-    fn enqueue(&self, record: InputHistoryRecord) {
+    fn enqueue(&self, epoch: u64, record: InputHistoryRecord) {
+        #[cfg(test)]
+        tests::BEFORE_ENQUEUE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+        let timestamp_ms = record.timestamp_ms();
         let Ok(payload) = record.encode() else {
             self.stats
                 .persistence_failures
@@ -747,7 +861,8 @@ impl InputHistoryService {
             return;
         };
         let command = Command::Append {
-            epoch: self.epoch.load(Ordering::Acquire),
+            epoch,
+            timestamp_ms,
             payload,
         };
         match self.sender.try_send(command) {
@@ -789,10 +904,16 @@ impl InputHistoryService {
         beep: bool,
         action: &str,
     ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         if self.stats.excludes(scope, test_only) {
             return;
         }
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        if self.excludes_session(session) {
+            return;
+        }
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         // Keep this cumulative. A swap before encoding/enqueueing loses the
         // count when the record itself is malformed or the bounded queue is
         // full. The live stats endpoint and every later record remain able to
@@ -820,7 +941,7 @@ impl InputHistoryService {
             action: action.to_owned(),
             dropped_before,
         });
-        self.enqueue(record);
+        self.enqueue(epoch, record);
     }
 
     pub fn record_commit(
@@ -832,10 +953,16 @@ impl InputHistoryService {
         left_context: u16,
         right_context: u16,
     ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         if self.stats.excludes(scope, false) || reading.is_empty() || surface.is_empty() {
             return;
         }
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        if self.excludes_session(session) {
+            return;
+        }
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         let record = InputHistoryRecord::Commit(CommitHistoryRecord {
             sequence,
             timestamp_ms: now_ms(),
@@ -846,7 +973,7 @@ impl InputHistoryService {
             left_context,
             right_context,
         });
-        self.enqueue(record);
+        self.enqueue(epoch, record);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -869,7 +996,11 @@ impl InputHistoryService {
         attempts: u32,
         test_only: bool,
     ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
         if self.stats.excludes(scope, test_only) || source.is_empty() {
+            return;
+        }
+        if self.excludes_session(session) {
             return;
         }
         self.stats.ai_requests.fetch_add(1, Ordering::Relaxed);
@@ -885,7 +1016,9 @@ impl InputHistoryService {
         self.stats
             .ai_cached_tokens
             .fetch_add(u64::from(cached_tokens), Ordering::Relaxed);
-        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
         let record = InputHistoryRecord::AiText(AiTextHistoryRecord {
             sequence,
             timestamp_ms: now_ms(),
@@ -905,9 +1038,12 @@ impl InputHistoryService {
             cached_tokens,
             attempts,
         });
-        self.enqueue(record);
+        self.enqueue(epoch, record);
     }
 
+    /// FIFO barrier for preceding accepted appends, followed by explicit file
+    /// synchronization. Does not compact; prior queued maintenance can still
+    /// delay completion. Admission drops remain separately observable in stats.
     pub fn flush(&self) -> io::Result<()> {
         let (reply, receiver) = mpsc::channel();
         self.sender.send(Command::Flush { reply }).map_err(|_| {
@@ -927,7 +1063,9 @@ impl InputHistoryService {
     /// Clears all queued and durable records. Epoch tagging prevents a record
     /// that raced with the clear command from being written afterwards.
     pub fn clear(&self) -> io::Result<u64> {
-        let epoch = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        let epoch = self
+            .allocate_counter(&self.epoch, Ordering::AcqRel)
+            .ok_or_else(|| io::Error::other("input history Clear epoch exhausted"))?;
         let (reply, receiver) = mpsc::channel();
         self.sender
             .send(Command::Clear { epoch, reply })
@@ -946,23 +1084,27 @@ impl InputHistoryService {
     }
 
     pub fn stop(&self) -> io::Result<()> {
-        if self
+        // One caller sends Shutdown and joins; duplicates wait for and replay
+        // the same terminal outcome. A lost reply must never skip the join.
+        let mut shutdown = self
             .worker
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .is_none()
-        {
-            return Ok(());
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(outcome) = &shutdown.outcome {
+            return outcome.as_ref().copied().map_err(ShutdownFailure::error);
         }
         let (reply, receiver) = mpsc::channel();
         let send = self.sender.send(Command::Shutdown { reply });
-        let result = match send {
-            Ok(()) => receiver.recv().map_err(|_| {
+        let mut result = match send {
+            Ok(()) => receiver.recv().unwrap_or_else(|_| {
                 self.stats
                     .persistence_failures
                     .fetch_add(1, Ordering::Relaxed);
-                io::Error::new(io::ErrorKind::BrokenPipe, "input history writer stopped")
-            })?,
+                Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "input history writer stopped",
+                ))
+            }),
             Err(_) => {
                 self.stats
                     .persistence_failures
@@ -973,15 +1115,22 @@ impl InputHistoryService {
                 ))
             }
         };
-        if let Some(worker) = self
-            .worker
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
-        {
-            let _ = worker.join();
+        if let Some(worker) = shutdown.handle.take() {
+            if worker.join().is_err() {
+                self.stats
+                    .persistence_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                result = Err(io::Error::other("input history writer panicked"));
+            }
         }
-        result
+        shutdown.outcome = Some(result.map_err(ShutdownFailure::capture));
+        shutdown
+            .outcome
+            .as_ref()
+            .expect("joined terminal outcome")
+            .as_ref()
+            .copied()
+            .map_err(ShutdownFailure::error)
     }
 }
 
@@ -1005,6 +1154,7 @@ pub fn default_path() -> io::Result<PathBuf> {
 }
 
 pub fn read_snapshot(path: &Path) -> io::Result<InputHistorySnapshot> {
+    require_no_compaction_transaction(path)?;
     let metadata = fs::metadata(path)?;
     if metadata.len() > MAX_INPUT_HISTORY_BYTES {
         return Err(invalid_data("input history exceeds its hard size bound"));
@@ -1014,6 +1164,13 @@ pub fn read_snapshot(path: &Path) -> io::Result<InputHistorySnapshot> {
 }
 
 pub fn clear_path(path: &Path) -> io::Result<u64> {
+    let _store_owner = acquire_store_owner(path)?;
+    clear_owned_path(path)
+}
+
+/// Caller already owns the separate writer lock (or an isolated unit fixture).
+fn clear_owned_path(path: &Path) -> io::Result<u64> {
+    require_no_compaction_transaction(path)?;
     if !path.exists() {
         return Ok(0);
     }
@@ -1028,94 +1185,158 @@ pub fn clear_path(path: &Path) -> io::Result<u64> {
     Ok(before)
 }
 
-fn writer_loop(path: PathBuf, receiver: Receiver<Command>, stats: Arc<InputHistoryStats>) {
-    writer_loop_with_interval(path, receiver, stats, COMPACTION_INTERVAL);
+/// The lock object is independent of the replaceable history file. Windows
+/// denies other opens/removal while this exclusive handle exists and removes
+/// the lock only after its final handle closes, including process termination.
+/// This protocol coordinates updated writers using the same logical path.
+fn acquire_store_owner(path: &Path) -> io::Result<File> {
+    let mut name = path
+        .file_name()
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "history path has no file name")
+        })?
+        .to_os_string();
+    name.push(".writer.lock");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        // Never attach delete-on-close to a preexisting object (including a
+        // reparse target). A surviving lock after OS/storage failure requires
+        // explicit recovery, rather than deleting an object we did not create.
+        .create_new(true)
+        .share_mode(0)
+        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(path.with_file_name(name))
 }
 
+fn writer_loop(
+    path: PathBuf,
+    receiver: Receiver<Command>,
+    stats: Arc<InputHistoryStats>,
+    file: File,
+    retention: RetentionPlan,
+) {
+    writer_loop_with_file(
+        path,
+        receiver,
+        stats,
+        Some(file),
+        COMPACTION_INTERVAL,
+        retention,
+    );
+}
+
+#[cfg(test)]
 fn writer_loop_with_interval(
     path: PathBuf,
     receiver: Receiver<Command>,
     stats: Arc<InputHistoryStats>,
     compaction_interval: Duration,
 ) {
-    let mut file = open_append(&path).ok();
+    let file = open_append(&path).ok();
+    let snapshot = read_snapshot(&path).expect("validated synthetic worker fixture");
+    let mut retention = RetentionPlan::default();
+    for record in snapshot.records {
+        retention.observe(record.timestamp_ms());
+    }
+    writer_loop_with_file(path, receiver, stats, file, compaction_interval, retention);
+}
+
+fn writer_loop_with_file(
+    path: PathBuf,
+    receiver: Receiver<Command>,
+    stats: Arc<InputHistoryStats>,
+    mut file: Option<File>,
+    compaction_interval: Duration,
+    mut retention: RetentionPlan,
+) {
     let mut cleared_epoch = 0;
     let mut last_compaction = Instant::now();
     let mut appends_since_compaction = 0u32;
+    // A later successful sync cannot recover an earlier failed append. Keep
+    // that loss observable at barriers until a successful explicit Clear.
+    let mut append_failed = false;
     loop {
         let wait = compaction_interval.saturating_sub(last_compaction.elapsed());
         let command = match receiver.recv_timeout(wait) {
             Ok(command) => command,
             Err(RecvTimeoutError::Timeout) => {
-                if compact_writer_file(&path, &mut file).is_err() {
-                    stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                if retention.is_due(now_ms()) {
+                    match compact_writer_file(&path, &mut file) {
+                        Ok(updated) => retention = updated,
+                        Err(_) => {
+                            stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
                 }
                 appends_since_compaction = 0;
                 last_compaction = Instant::now();
+                #[cfg(test)]
+                tests::after_maintenance_check();
                 continue;
             }
             Err(RecvTimeoutError::Disconnected) => break,
         };
         match command {
-            Command::Append { epoch, payload } => {
+            Command::Append {
+                epoch,
+                timestamp_ms,
+                payload,
+            } => {
                 if epoch < cleared_epoch {
                     continue;
                 }
-                let result = append_payload(&path, &mut file, &payload);
+                let result =
+                    append_payload(&path, &mut file, &payload, timestamp_ms, &mut retention);
                 match result {
                     Ok(()) => {
                         appends_since_compaction = appends_since_compaction.saturating_add(1);
                         if appends_since_compaction >= COMPACTION_APPEND_LIMIT
                             || last_compaction.elapsed() >= COMPACTION_INTERVAL
                         {
-                            if compact_writer_file(&path, &mut file).is_err() {
-                                stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                            if retention.is_due(now_ms()) {
+                                match compact_writer_file(&path, &mut file) {
+                                    Ok(updated) => retention = updated,
+                                    Err(_) => {
+                                        stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                                    }
+                                }
                             }
                             appends_since_compaction = 0;
                             last_compaction = Instant::now();
                         }
                     }
                     Err(_) => {
+                        append_failed = true;
                         stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }
             Command::Flush { reply } => {
-                // A manual flush is also a bounded retention checkpoint. This
-                // makes `history export` deterministic even when the writer
-                // has seen fewer than COMPACTION_APPEND_LIMIT events.
-                let result = compact_writer_file(&path, &mut file).and_then(|()| {
-                    if let Some(file) = file.as_mut() {
-                        file.flush()
-                    } else {
-                        Ok(())
-                    }
-                });
+                let result = sync_writer_file(&file, append_failed);
                 if result.is_err() {
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                 }
                 let _ = reply.send(result);
-                appends_since_compaction = 0;
-                last_compaction = Instant::now();
             }
             Command::Clear { epoch, reply } => {
                 cleared_epoch = cleared_epoch.max(epoch);
                 let result = clear_writer_file(&path, &mut file);
                 if result.is_err() {
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    append_failed = false;
+                    retention = RetentionPlan::default();
                 }
                 let _ = reply.send(result);
                 appends_since_compaction = 0;
                 last_compaction = Instant::now();
             }
             Command::Shutdown { reply } => {
-                let result = compact_writer_file(&path, &mut file).and_then(|()| {
-                    if let Some(file) = file.as_mut() {
-                        file.flush()
-                    } else {
-                        Ok(())
-                    }
-                });
+                let result = sync_writer_file(&file, append_failed);
                 if result.is_err() {
                     stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
                 }
@@ -1126,31 +1347,50 @@ fn writer_loop_with_interval(
     }
 }
 
-/// Compacts while the writer owns the only open handle to the history file.
-/// The handle is restored even when compaction fails, so a transient rename or
-/// DPAPI error has an explicit failure outcome without permanently disabling
-/// later appends.
-fn compact_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<()> {
+fn sync_writer_file(file: &Option<File>, append_failed: bool) -> io::Result<()> {
+    let file = file.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotConnected,
+            "input history writer has no file",
+        )
+    })?;
+    file.sync_all()?;
+    if append_failed {
+        return Err(io::Error::other("input history preceding append failed"));
+    }
+    Ok(())
+}
+
+/// Compacts under store ownership after closing this writer's append handle.
+/// Errors before a transaction can reopen the verified canonical; unresolved
+/// publication leaves the handle absent and every later open fails closed.
+fn compact_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<RetentionPlan> {
     if let Some(mut previous) = file.take() {
         previous.flush()?;
     }
     let compaction = compact_file(path);
     let reopened = open_append(path);
     match (compaction, reopened) {
-        (Ok(()), Ok(handle)) => {
+        (Ok(retention), Ok(handle)) => {
             *file = Some(handle);
-            Ok(())
+            Ok(retention)
         }
         (Err(error), Ok(handle)) => {
             *file = Some(handle);
             Err(error)
         }
-        (Ok(()), Err(error)) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
         (Err(error), Err(_)) => Err(error),
     }
 }
 
-fn append_payload(path: &Path, file: &mut Option<File>, payload: &[u8]) -> io::Result<()> {
+fn append_payload(
+    path: &Path,
+    file: &mut Option<File>,
+    payload: &[u8],
+    timestamp_ms: u64,
+    retention: &mut RetentionPlan,
+) -> io::Result<()> {
     if payload.len() > MAX_RECORD_BYTES {
         return Err(invalid_data("input history record is too large"));
     }
@@ -1164,7 +1404,7 @@ fn append_payload(path: &Path, file: &mut Option<File>, payload: &[u8]) -> io::R
         if let Some(mut previous) = file.take() {
             previous.flush()?;
         }
-        compact_file(path)?;
+        *retention = compact_file(path)?;
         *file = Some(open_append(path)?);
     }
     if file.is_none() {
@@ -1178,7 +1418,15 @@ fn append_payload(path: &Path, file: &mut Option<File>, payload: &[u8]) -> io::R
             "input history retention limit reached",
         ));
     }
-    append_encrypted(file, &protected)
+    // An I/O error can follow a complete write. Track possible expiry once
+    // writing begins, but do not schedule maintenance for pre-write rejection.
+    retention.observe(timestamp_ms);
+    append_encrypted(file, &protected)?;
+    #[cfg(test)]
+    if tests::FAIL_AFTER_APPEND.with(|fail| fail.replace(false)) {
+        return Err(io::Error::other("synthetic post-write failure"));
+    }
+    Ok(())
 }
 
 fn append_encrypted(file: &mut File, protected: &[u8]) -> io::Result<()> {
@@ -1191,6 +1439,7 @@ fn append_encrypted(file: &mut File, protected: &[u8]) -> io::Result<()> {
 }
 
 fn clear_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<u64> {
+    require_no_compaction_transaction(path)?;
     if let Some(previous) = file.as_mut() {
         previous.flush()?;
     }
@@ -1211,6 +1460,7 @@ fn clear_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<u64> {
 }
 
 fn ensure_file(path: &Path) -> io::Result<()> {
+    require_no_compaction_transaction(path)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1236,7 +1486,7 @@ fn open_append(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-fn repair_file(path: &Path) -> io::Result<()> {
+fn repair_file(path: &Path) -> io::Result<ScanSummary> {
     // Every append enforces MAX_INPUT_HISTORY_BYTES, so bytes past the cap
     // can only be corruption or external tampering. Reading is bounded to
     // the cap so an oversized file cannot force an unbounded allocation at
@@ -1248,16 +1498,46 @@ fn repair_file(path: &Path) -> io::Result<()> {
         .take(MAX_INPUT_HISTORY_BYTES)
         .read_to_end(&mut bytes)?;
     if bytes.is_empty() {
-        return ensure_file(path);
+        ensure_file(path)?;
+        return scan_frames(&header(), None);
     }
-    // The offset is the whole answer here, so the records are decoded for
-    // validation and dropped rather than collected.
-    let (_version, valid_end) = scan_frames(&bytes, None)?;
-    if (valid_end as u64) < file_len {
+    // Recover IDs during the same validation pass; do not materialize a full
+    // record vector or decrypt the file again merely to recover two maxima.
+    let summary = scan_frames(&bytes, None)?;
+    if (summary.valid_end as u64) < file_len {
         let file = OpenOptions::new().write(true).open(path)?;
-        file.set_len(valid_end as u64)?;
+        file.set_len(summary.valid_end as u64)?;
+        file.sync_all()?;
     }
-    Ok(())
+    Ok(summary)
+}
+
+#[derive(Debug)]
+struct ScanSummary {
+    format_version: u16,
+    valid_end: usize,
+    last_sequence: u64,
+    last_session: u64,
+    retention: RetentionPlan,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct RetentionPlan {
+    oldest_timestamp_ms: Option<u64>,
+}
+
+impl RetentionPlan {
+    fn observe(&mut self, timestamp_ms: u64) {
+        self.oldest_timestamp_ms = Some(
+            self.oldest_timestamp_ms
+                .map_or(timestamp_ms, |old| old.min(timestamp_ms)),
+        );
+    }
+
+    fn is_due(self, now: u64) -> bool {
+        self.oldest_timestamp_ms
+            .is_some_and(|oldest| oldest < now.saturating_sub(RETENTION.as_millis() as u64))
+    }
 }
 
 fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
@@ -1271,23 +1551,25 @@ fn scan_snapshot(bytes: &[u8]) -> io::Result<InputHistorySnapshot> {
 
 fn scan_bytes(bytes: &[u8]) -> io::Result<(u16, Vec<InputHistoryRecord>, usize)> {
     let mut records = Vec::new();
-    let (format_version, valid_end) = scan_frames(bytes, Some(&mut records))?;
-    Ok((format_version, records, valid_end))
+    let summary = scan_frames(bytes, Some(&mut records))?;
+    Ok((summary.format_version, records, summary.valid_end))
 }
 
 /// Walks the frames and returns the offset one past the last valid one.
 ///
 /// `records` is where the decoded records go when the caller wants them.
 /// Passing `None` decodes and drops each one instead, which is what
-/// [`repair_file`] needs: it only ever uses the offset, and materializing a
+/// [`repair_file`] needs: it uses only the boundary/ID summary, and materializing a
 /// 64 MiB file's worth of records — hundreds of megabytes of `String`s —
 /// just to ask where the damage starts is an allocation spike at engine
-/// startup for an answer nobody reads. Decoding still happens either way;
-/// a record that will not decode is exactly what ends the valid region.
+/// startup for an answer nobody reads. Complete checksum-valid frames whose
+/// content cannot be decrypted or decoded return an error: an unavailable
+/// key or unsupported record is not evidence of a torn tail. In particular,
+/// repair must not truncate opaque data or silently discard later frames.
 fn scan_frames(
     bytes: &[u8],
     mut records: Option<&mut Vec<InputHistoryRecord>>,
-) -> io::Result<(u16, usize)> {
+) -> io::Result<ScanSummary> {
     if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
         return Err(invalid_data("invalid input history header"));
     }
@@ -1296,6 +1578,9 @@ fn scan_frames(
         return Err(invalid_data("unsupported input history format"));
     }
     let mut offset = HEADER_LEN;
+    let mut last_sequence = 0;
+    let mut last_session = 0;
+    let mut retention = RetentionPlan::default();
     while offset + FRAME_HEADER_LEN <= bytes.len() {
         let length = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
         let expected_crc = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap());
@@ -1310,24 +1595,31 @@ fn scan_frames(
         if crc32(encrypted) != expected_crc {
             break;
         }
-        let Ok(payload) = unprotect(encrypted) else {
-            break;
-        };
-        let Ok(record) = InputHistoryRecord::decode(&payload) else {
-            break;
-        };
+        let payload = unprotect(encrypted)?;
+        let record = InputHistoryRecord::decode(&payload)?;
+        last_sequence = last_sequence.max(record.sequence());
+        last_session = last_session.max(record.session());
+        retention.observe(record.timestamp_ms());
         if let Some(records) = records.as_deref_mut() {
             records.push(record);
         }
         offset = payload_end;
     }
-    Ok((version, offset))
+    Ok(ScanSummary {
+        format_version: version,
+        valid_end: offset,
+        last_sequence,
+        last_session,
+        retention,
+    })
 }
 
-fn compact_file(path: &Path) -> io::Result<()> {
+fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
     let snapshot = match read_snapshot(path) {
         Ok(snapshot) => snapshot,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(RetentionPlan::default())
+        }
         Err(error) => return Err(error),
     };
     let cutoff = now_ms().saturating_sub(RETENTION.as_millis() as u64);
@@ -1337,12 +1629,9 @@ fn compact_file(path: &Path) -> io::Result<()> {
         .filter(|record| record.timestamp_ms() >= cutoff)
         .collect();
     records.sort_by_key(InputHistoryRecord::sequence);
-    if records.is_empty() {
-        return clear_path(path).map(|_| ());
-    }
-
     let mut encoded = Vec::with_capacity(records.len());
     let mut total = HEADER_LEN as u64;
+    let mut retention = RetentionPlan::default();
     for record in records.into_iter().rev() {
         let payload = record.encode()?;
         let protected = protect(&payload)?;
@@ -1351,46 +1640,134 @@ fn compact_file(path: &Path) -> io::Result<()> {
             break;
         }
         total += frame_len;
+        retention.observe(record.timestamp_ms());
         encoded.push(protected);
     }
     encoded.reverse();
-    let temp = path.with_extension("compact.tmp");
+    // This exclusive directory is also the unresolved-transaction marker.
+    // Never adopt, overwrite or clean up a directory created by another run.
+    let transaction = compaction_transaction_path(path)?;
+    fs::create_dir(&transaction)?;
+    let temp = transaction.join("replacement.bin");
+    let backup = transaction.join("previous.bin");
     let mut replacement = OpenOptions::new()
-        .create(true)
+        .create_new(true)
+        .read(true)
         .write(true)
-        .truncate(true)
         .open(&temp)?;
     replacement.write_all(&header())?;
     for payload in &encoded {
         append_encrypted(&mut replacement, payload)?;
     }
-    replacement.flush()?;
+    #[cfg(test)]
+    tests::publication_cut("temp_written")?;
+    replacement.sync_all()?;
+    #[cfg(test)]
+    tests::publication_cut("temp_synced")?;
     drop(replacement);
-    let _ = fs::remove_file(path);
-    fs::rename(temp, path)
+    let expected = validate_compaction_file(&temp)?;
+    #[cfg(test)]
+    let _publication_guard = tests::lock_replacement_if_requested(&temp);
+    replace_history_file(path, &temp, &backup)?;
+    #[cfg(test)]
+    tests::publication_cut("replaced")?;
+    // Preserve candidates until canonical is synced and validated. Subsequent
+    // cleanup errors retain the marker and the validated new canonical, even
+    // if the obsolete backup has already been removed.
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?
+        .sync_all()?;
+    #[cfg(test)]
+    tests::publication_cut("canonical_synced")?;
+    if validate_compaction_file(path)? != expected {
+        return Err(invalid_data("input history published replacement mismatch"));
+    }
+    fs::remove_file(&backup)?;
+    #[cfg(test)]
+    tests::publication_cut("backup_removed")?;
+    fs::remove_dir(&transaction)?;
+    Ok(retention)
 }
 
-fn next_sequence(path: &Path) -> io::Result<u64> {
-    Ok(read_snapshot(path)?
-        .records
-        .iter()
-        .map(InputHistoryRecord::sequence)
-        .max()
-        .unwrap_or(0))
+fn compaction_transaction_path(path: &Path) -> io::Result<PathBuf> {
+    let mut name = path
+        .file_name()
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "history path has no file name")
+        })?
+        .to_os_string();
+    name.push(".compaction");
+    Ok(path.with_file_name(name))
 }
 
-fn next_session_id(path: &Path) -> io::Result<u64> {
-    Ok(read_snapshot(path)?
-        .records
-        .iter()
-        .map(|record| match record {
-            InputHistoryRecord::Key(record) => record.session,
-            InputHistoryRecord::Commit(record) => record.session,
-            InputHistoryRecord::AiText(record) => record.session,
-            InputHistoryRecord::Engine(record) => record.session,
-        })
-        .max()
-        .unwrap_or(0))
+fn require_no_compaction_transaction(path: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(compaction_transaction_path(path)?) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+        Ok(_) => Err(io::Error::other(
+            "input history recovery required: unresolved compaction",
+        )),
+    }
+}
+
+/// Bounded complete schema/CRC/DPAPI validation; CRC here is an integrity
+/// comparison, not cryptographic authentication or a recovery generation.
+fn validate_compaction_file(path: &Path) -> io::Result<(usize, u32)> {
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_INPUT_HISTORY_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_INPUT_HISTORY_BYTES {
+        return Err(invalid_data(
+            "input history replacement exceeds hard size bound",
+        ));
+    }
+    let summary = scan_frames(&bytes, None)?;
+    if summary.valid_end != bytes.len() || summary.format_version != INPUT_HISTORY_FORMAT_VERSION {
+        return Err(invalid_data("input history replacement is incomplete"));
+    }
+    Ok((bytes.len(), crc32(&bytes)))
+}
+
+fn replace_history_file(path: &Path, temp: &Path, backup: &Path) -> io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = tests::PARTIAL_REPLACE_ERROR.with(|failure| failure.take()) {
+        if code == 1177 {
+            fs::rename(path, backup)?;
+        }
+        return Err(io::Error::from_raw_os_error(code));
+    }
+    let wide = |path: &Path| -> io::Result<Vec<u16>> {
+        let mut encoded: Vec<_> = path.as_os_str().encode_wide().collect();
+        if encoded.contains(&0) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "history path contains NUL",
+            ));
+        }
+        encoded.push(0);
+        Ok(encoded)
+    };
+    let canonical = wide(path)?;
+    let replacement = wide(temp)?;
+    let previous = wide(backup)?;
+    // SAFETY: all paths are live NUL-terminated buffers, and the caller owns
+    // the cooperative store lock. Backup and replacement are in the newly
+    // created same-volume transaction directory. Do not ignore ACL errors or
+    // use the unsupported REPLACEFILE_WRITE_THROUGH flag.
+    unsafe {
+        ReplaceFileW(
+            PCWSTR(canonical.as_ptr()),
+            PCWSTR(replacement.as_ptr()),
+            PCWSTR(previous.as_ptr()),
+            REPLACE_FILE_FLAGS::default(),
+            None,
+            None,
+        )
+    }
+    .map_err(|error| io::Error::from_raw_os_error(error.code().0 & 0xffff))
 }
 
 /// Package version and installed release label for the running engine.
@@ -1603,6 +1980,12 @@ fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    thread_local! {
+        // Only unit-test binaries contain this rendezvous; release/default
+        // library artifacts cannot pause a producer through this hook.
+        pub(super) static BEFORE_ENQUEUE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -1650,6 +2033,1011 @@ mod tests {
         for record in records {
             let protected = protect(&record.encode().expect("encode record")).expect("protect");
             append_encrypted(&mut file, &protected).expect("append record");
+        }
+    }
+
+    struct ReadFailureFixture(PathBuf);
+
+    impl Drop for ReadFailureFixture {
+        fn drop(&mut self) {
+            for path in [&self.0, &self.0.with_extension("compact.tmp")] {
+                match fs::remove_file(path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => panic!("remove synthetic history fixture: {error}"),
+                }
+            }
+        }
+    }
+
+    fn assert_complete_frame_failure_preserves_store(encrypted: &[u8]) {
+        let fixture = ReadFailureFixture(temporary_path("read-failure"));
+        let path = &fixture.0;
+        append_records(path, &[key_record(1, now_ms())]);
+        let mut file = OpenOptions::new().append(true).open(path).unwrap();
+        append_encrypted(&mut file, encrypted).unwrap();
+        drop(file);
+        append_records(path, &[key_record(3, now_ms())]);
+        let original = fs::read(path).unwrap();
+
+        // Repair must not transform a complete opaque frame into a torn tail.
+        let repair = repair_file(path);
+        assert_eq!(
+            fs::read(path).unwrap(),
+            original,
+            "repair erased opaque data"
+        );
+        assert!(repair.is_err(), "repair must report unavailable content");
+        assert!(
+            read_snapshot(path).is_err(),
+            "snapshot must not claim completeness"
+        );
+        assert!(
+            compact_file(path).is_err(),
+            "compaction must not omit opaque data"
+        );
+        assert_eq!(fs::read(path).unwrap(), original);
+        let service = InputHistoryService::open(path);
+        if let Ok(service) = &service {
+            service.stop().unwrap();
+        }
+        assert!(
+            service.is_err(),
+            "startup must fail before spawning the writer"
+        );
+        assert_eq!(fs::read(path).unwrap(), original);
+    }
+
+    #[test]
+    fn complete_frame_decryption_failure_preserves_store() {
+        let ciphertext = b"synthetic invalid DPAPI blob";
+        assert!(unprotect(ciphertext).is_err());
+        assert_complete_frame_failure_preserves_store(ciphertext);
+    }
+
+    #[test]
+    fn complete_frame_unknown_record_preserves_store() {
+        // Valid DPAPI and frame checksum; the record type is unsupported.
+        // Include all common fields so decoding reaches the unknown-kind arm,
+        // rather than failing earlier while reading a truncated header.
+        let mut payload = vec![0; 1 + 8 + 8 + 8 + 1];
+        payload[0] = 255;
+        payload[25] = ScopeClass::Normal as u8;
+        assert_eq!(
+            InputHistoryRecord::decode(&payload)
+                .unwrap_err()
+                .to_string(),
+            "unknown input history record"
+        );
+        assert_complete_frame_failure_preserves_store(&protect(&payload).unwrap());
+    }
+
+    #[test]
+    fn complete_frame_malformed_record_preserves_store() {
+        assert_complete_frame_failure_preserves_store(&protect(&[RECORD_KEY]).unwrap());
+    }
+
+    #[test]
+    fn future_history_format_preserves_store() {
+        let fixture = ReadFailureFixture(temporary_path("future-format"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let mut original = fs::read(&fixture.0).unwrap();
+        original[4..6].copy_from_slice(&(INPUT_HISTORY_FORMAT_VERSION + 1).to_le_bytes());
+        fs::write(&fixture.0, &original).unwrap();
+        assert!(repair_file(&fixture.0).is_err());
+        assert!(compact_file(&fixture.0).is_err());
+        assert!(InputHistoryService::open(&fixture.0).is_err());
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+    }
+
+    #[test]
+    fn structural_tail_damage_still_repairs_to_verified_prefix() {
+        for tail in [vec![1, 2, 3], vec![1, 0, 0, 0, 0, 0, 0, 0, 42]] {
+            let fixture = ReadFailureFixture(temporary_path("structural-tail"));
+            append_records(&fixture.0, &[key_record(1, now_ms())]);
+            let original = fs::read(&fixture.0).unwrap();
+            let mut file = OpenOptions::new().append(true).open(&fixture.0).unwrap();
+            file.write_all(&tail).unwrap();
+            drop(file);
+            repair_file(&fixture.0).unwrap();
+            assert_eq!(fs::read(&fixture.0).unwrap(), original);
+            assert_eq!(read_snapshot(&fixture.0).unwrap().records.len(), 1);
+        }
+    }
+
+    fn assert_control_barrier_preserves_bytes(flush_first: bool) {
+        let fixture = ReadFailureFixture(temporary_path("control-barrier"));
+        let now = now_ms();
+        let old = now.saturating_sub(RETENTION.as_millis() as u64 + 1);
+        append_records(&fixture.0, &[key_record(1, old), key_record(2, now)]);
+        let original = fs::read(&fixture.0).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(2);
+        let (flush_reply, flush_result) = mpsc::channel();
+        if flush_first {
+            sender.send(Command::Flush { reply: flush_reply }).unwrap();
+        }
+        let (reply, stopped) = mpsc::channel();
+        sender.send(Command::Shutdown { reply }).unwrap();
+        // Prequeued controls execute deterministically, without a sleep or
+        // spawned thread whose ownership could be lost on assertion failure.
+        writer_loop_with_interval(
+            fixture.0.clone(),
+            receiver,
+            Arc::new(InputHistoryStats::default()),
+            Duration::from_secs(3600),
+        );
+        if flush_first {
+            flush_result.try_recv().unwrap().unwrap();
+        }
+        stopped.try_recv().unwrap().unwrap();
+        assert!(
+            fs::read(&fixture.0).unwrap() == original,
+            "a control barrier must not rewrite or expire existing frames"
+        );
+    }
+
+    #[test]
+    fn flush_barrier_preserves_existing_ciphertext() {
+        assert_control_barrier_preserves_bytes(true);
+    }
+
+    #[test]
+    fn shutdown_barrier_preserves_existing_ciphertext() {
+        assert_control_barrier_preserves_bytes(false);
+    }
+
+    #[test]
+    fn startup_preserves_ciphertext_and_recovers_ids_before_retention() {
+        let fixture = ReadFailureFixture(temporary_path("startup-ids"));
+        let now = now_ms();
+        let mut expired = key_record(900, now.saturating_sub(RETENTION.as_millis() as u64 + 1));
+        if let InputHistoryRecord::Key(record) = &mut expired {
+            record.session = 700;
+        }
+        append_records(&fixture.0, &[expired, key_record(3, now)]);
+        let original = fs::read(&fixture.0).unwrap();
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        let session = service.allocate_session_id().unwrap();
+        service.stop().unwrap();
+        let after = fs::read(&fixture.0).unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        let sequence = snapshot.records.last().unwrap().sequence();
+        let prefix_preserved = after.starts_with(&original);
+        assert!(prefix_preserved && session == 701 && sequence == 901,
+            "startup prefix={prefix_preserved}, session={session} (expected 701), sequence={sequence} (expected 901)");
+    }
+
+    thread_local! {
+        pub(super) static FAIL_AFTER_APPEND: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        static AFTER_MAINTENANCE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn after_maintenance_check() {
+        AFTER_MAINTENANCE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+    }
+
+    #[test]
+    fn maintenance_expires_record_after_uncertain_append_failure() {
+        let fixture = PublicationFixture(ReadFailureFixture(temporary_path("uncertain-expiry")));
+        let path = fixture.0 .0.clone();
+        ensure_file(&path).unwrap();
+        let file = open_append(&path).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
+        let (checked, observed) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        sender
+            .send(Command::Append {
+                epoch: 0,
+                timestamp_ms: 1,
+                payload: key_record(1, 1).encode().unwrap(),
+            })
+            .unwrap();
+        let worker = thread::spawn(move || {
+            FAIL_AFTER_APPEND.with(|fail| fail.set(true));
+            AFTER_MAINTENANCE.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    checked.send(()).unwrap();
+                    released.recv_timeout(Duration::from_secs(10)).unwrap();
+                }));
+            });
+            writer_loop_with_file(
+                path,
+                receiver,
+                Arc::new(InputHistoryStats::default()),
+                Some(file),
+                Duration::from_millis(1),
+                RetentionPlan::default(),
+            );
+        });
+        let checked = observed.recv_timeout(Duration::from_secs(10));
+        let snapshot = read_snapshot(&fixture.0 .0);
+        let (reply, stopped) = mpsc::channel();
+        let sent = sender.send(Command::Shutdown { reply });
+        let _ = release.send(());
+        let joined = worker.join();
+        assert!(checked.is_ok() && sent.is_ok() && joined.is_ok());
+        assert!(
+            stopped.recv().unwrap().is_err(),
+            "append loss remains observable"
+        );
+        assert!(
+            snapshot.unwrap().records.is_empty(),
+            "uncertain expired append must be removed"
+        );
+    }
+
+    #[test]
+    fn maintenance_prewrite_rejection_does_not_schedule_expiry() {
+        let fixture = ReadFailureFixture(temporary_path("rejected-expiry"));
+        let now = now_ms();
+        append_records(&fixture.0, &[key_record(1, now)]);
+        let mut file = Some(open_append(&fixture.0).unwrap());
+        let mut retention = RetentionPlan::default();
+        retention.observe(now);
+        assert!(append_payload(
+            &fixture.0,
+            &mut file,
+            &vec![0; MAX_RECORD_BYTES + 1],
+            1,
+            &mut retention
+        )
+        .is_err());
+        assert_eq!(retention.oldest_timestamp_ms, Some(now));
+        assert!(!retention.is_due(now));
+    }
+
+    #[test]
+    fn maintenance_unexpired_idle_store_preserves_ciphertext() {
+        let fixture = ReadFailureFixture(temporary_path("clean-idle"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let original = fs::read(&fixture.0).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
+        let (checked, observed) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let path = fixture.0.clone();
+        let worker = thread::spawn(move || {
+            AFTER_MAINTENANCE.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    checked.send(()).unwrap();
+                    released.recv_timeout(Duration::from_secs(10)).unwrap();
+                }))
+            });
+            writer_loop_with_interval(
+                path,
+                receiver,
+                Arc::new(InputHistoryStats::default()),
+                Duration::from_millis(1),
+            );
+        });
+        let checked = observed.recv_timeout(Duration::from_secs(10));
+        let unchanged = fs::read(&fixture.0).unwrap() == original;
+        let (reply, stopped) = mpsc::channel();
+        let sent = sender.send(Command::Shutdown { reply });
+        let _ = release.send(());
+        let joined = worker.join();
+        assert!(checked.is_ok());
+        assert!(sent.is_ok());
+        assert!(joined.is_ok());
+        stopped.recv().unwrap().unwrap();
+        assert!(
+            unchanged,
+            "idle unexpired store was re-encrypted and rewritten"
+        );
+    }
+
+    #[test]
+    fn maintenance_plan_has_inclusive_retention_and_observes_older_appends() {
+        let now = RETENTION.as_millis() as u64 + 10;
+        let mut plan = RetentionPlan::default();
+        assert!(!plan.is_due(now));
+        plan.observe(10);
+        assert!(!plan.is_due(now), "record on inclusive cutoff is retained");
+        assert!(plan.is_due(now + 1));
+        plan.observe(5);
+        assert!(plan.is_due(now));
+        assert!(!plan.is_due(0), "clock rollback cannot underflow cutoff");
+        plan = RetentionPlan::default();
+        assert!(
+            !plan.is_due(u64::MAX),
+            "successful empty Clear leaves no expiry work"
+        );
+        plan.observe(u64::MAX);
+        assert!(!plan.is_due(u64::MAX));
+    }
+
+    #[test]
+    fn maintenance_plan_is_recovered_in_scan_and_refreshed_by_compaction() {
+        let fixture = ReadFailureFixture(temporary_path("retention-hint"));
+        let now = now_ms();
+        append_records(&fixture.0, &[key_record(2, now), key_record(1, 1)]);
+        let recovered = repair_file(&fixture.0).unwrap();
+        assert_eq!(recovered.retention.oldest_timestamp_ms, Some(1));
+        let retained = compact_file(&fixture.0).unwrap();
+        assert_eq!(retained.oldest_timestamp_ms, Some(now));
+        assert!(!retained.is_due(now));
+        clear_path(&fixture.0).unwrap();
+        let cleared = compact_file(&fixture.0).unwrap();
+        assert_eq!(cleared.oldest_timestamp_ms, None);
+    }
+
+    fn shutdown_fixture(
+        action: impl FnOnce(Receiver<Command>) + Send + 'static,
+    ) -> InputHistoryService {
+        let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
+        InputHistoryService {
+            path: temporary_path("shutdown-only"),
+            sender,
+            stats: Arc::new(InputHistoryStats::default()),
+            next_sequence: AtomicU64::new(0),
+            next_session_id: AtomicU64::new(0),
+            epoch: AtomicU64::new(0),
+            worker: Mutex::new(WriterShutdown {
+                handle: Some(thread::spawn(move || action(receiver))),
+                outcome: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn stop_outcome_keeps_durable_failure_for_later_callers() {
+        let service = shutdown_fixture(|receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            reply
+                .send(Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "synthetic sync failure",
+                )))
+                .unwrap();
+        });
+        let first = service.stop();
+        let second = service.stop();
+        assert_eq!(first.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(second.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn stop_outcome_joins_worker_after_reply_disconnect() {
+        let service = shutdown_fixture(|receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            drop(reply);
+        });
+        let result = service.stop();
+        let joined = service.worker.lock().unwrap().handle.is_none();
+        // Clean up the old implementation before asserting its counterexample.
+        let _ = service.stop();
+        assert!(result.is_err());
+        assert!(
+            joined,
+            "lost reply returned before worker join was owned/completed"
+        );
+    }
+
+    #[test]
+    fn stop_outcome_rejects_success_reply_followed_by_worker_panic() {
+        let service = shutdown_fixture(|receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            reply.send(Ok(())).unwrap();
+            panic!("synthetic worker exit failure");
+        });
+        assert!(
+            service.stop().is_err(),
+            "worker panic was reported as a successful stop"
+        );
+        assert!(
+            service.stop().is_err(),
+            "later stop lost the worker failure"
+        );
+    }
+
+    #[test]
+    fn stop_outcome_concurrent_callers_share_one_shutdown_and_failure() {
+        let (entered, observed) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let service = Arc::new(shutdown_fixture(move |receiver| {
+            let Command::Shutdown { reply } = receiver.recv().unwrap() else {
+                panic!("shutdown expected")
+            };
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(10)).unwrap();
+            reply.send(Err(io::Error::from_raw_os_error(5))).unwrap();
+            assert!(receiver.try_recv().is_err(), "duplicate Shutdown enqueued");
+        }));
+        let start = Arc::new(std::sync::Barrier::new(9));
+        let callers: Vec<_> = (0..8)
+            .map(|_| {
+                let service = Arc::clone(&service);
+                let start = Arc::clone(&start);
+                thread::spawn(move || {
+                    start.wait();
+                    service.stop().unwrap_err().raw_os_error()
+                })
+            })
+            .collect();
+        start.wait();
+        let ready = observed.recv_timeout(Duration::from_secs(10));
+        let _ = release.send(());
+        let results: Vec<_> = callers.into_iter().map(|caller| caller.join()).collect();
+        assert!(ready.is_ok());
+        for result in results {
+            assert_eq!(result.unwrap(), Some(5));
+        }
+        assert!(service.worker.lock().unwrap().handle.is_none());
+    }
+
+    thread_local! {
+        static LOCK_REPLACEMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static PARTIAL_REPLACE_ERROR: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+        static PUBLICATION_CUT: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
+    }
+
+    pub(super) fn publication_cut(point: &'static str) -> io::Result<()> {
+        PUBLICATION_CUT.with(|cut| {
+            if cut.get() == Some(point) {
+                cut.set(None);
+                Err(io::Error::from_raw_os_error(112))
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    pub(super) fn lock_replacement_if_requested(path: &Path) -> Option<File> {
+        LOCK_REPLACEMENT.with(|requested| {
+            requested.replace(false).then(|| {
+                OpenOptions::new()
+                    .read(true)
+                    .share_mode(1)
+                    .open(path)
+                    .unwrap()
+            })
+        })
+    }
+
+    struct PublicationFixture(ReadFailureFixture);
+
+    impl PublicationFixture {
+        fn new(label: &str) -> Self {
+            Self(ReadFailureFixture(temporary_path(label)))
+        }
+        fn path(&self) -> &Path {
+            &self.0 .0
+        }
+        fn transaction(&self) -> PathBuf {
+            let mut name = self.path().file_name().unwrap().to_os_string();
+            name.push(".compaction");
+            self.path().with_file_name(name)
+        }
+    }
+
+    impl Drop for PublicationFixture {
+        fn drop(&mut self) {
+            let directory = self.transaction();
+            for name in ["replacement.bin", "previous.bin"] {
+                match fs::remove_file(directory.join(name)) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => panic!("remove synthetic transaction file: {error}"),
+                }
+            }
+            match fs::remove_dir(&directory) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => panic!("remove synthetic transaction directory: {error}"),
+            }
+        }
+    }
+
+    #[test]
+    fn publication_partial_windows_outcomes_preserve_candidates_and_refuse_reopen() {
+        for code in [1175, 1176, 1177, 5] {
+            let fixture = PublicationFixture::new(&format!("partial-{code}"));
+            append_records(fixture.path(), &[key_record(1, now_ms())]);
+            let original = fs::read(fixture.path()).unwrap();
+            PARTIAL_REPLACE_ERROR.with(|failure| failure.set(Some(code)));
+            assert_eq!(
+                compact_file(fixture.path()).unwrap_err().raw_os_error(),
+                Some(code)
+            );
+            assert!(fixture.transaction().join("replacement.bin").exists());
+            if code == 1177 {
+                assert!(!fixture.path().exists());
+                assert!(fs::read(fixture.transaction().join("previous.bin")).unwrap() == original);
+            } else {
+                assert!(fs::read(fixture.path()).unwrap() == original);
+            }
+            assert!(open_append(fixture.path()).is_err());
+            assert!(InputHistoryService::open(fixture.path()).is_err());
+            assert!(clear_path(fixture.path()).is_err());
+            assert_eq!(fixture.path().exists(), code != 1177);
+        }
+    }
+
+    #[test]
+    fn publication_injected_stage_errors_remain_unavailable_without_cleanup() {
+        for point in [
+            "temp_written",
+            "temp_synced",
+            "replaced",
+            "canonical_synced",
+            "backup_removed",
+        ] {
+            let fixture = PublicationFixture::new(point);
+            append_records(fixture.path(), &[key_record(1, now_ms())]);
+            PUBLICATION_CUT.with(|cut| cut.set(Some(point)));
+            let mut writer = Some(open_append(fixture.path()).unwrap());
+            assert!(compact_writer_file(fixture.path(), &mut writer).is_err());
+            assert!(
+                writer.is_none(),
+                "failed transaction reopened an append handle"
+            );
+            assert!(fixture.transaction().exists());
+            assert!(fixture.path().exists());
+            validate_compaction_file(fixture.path()).unwrap();
+            if point == "backup_removed" {
+                assert!(!fixture.transaction().join("previous.bin").exists());
+                let bytes = fs::read(fixture.path()).unwrap();
+                assert_eq!(scan_snapshot(&bytes).unwrap().records.len(), 1);
+            }
+            assert!(read_snapshot(fixture.path()).is_err());
+            assert!(clear_path(fixture.path()).is_err());
+        }
+    }
+
+    #[test]
+    fn publication_success_removes_transaction_for_empty_and_retained_stores() {
+        for retained in [false, true] {
+            let fixture = PublicationFixture::new("publish-success");
+            let timestamp = if retained { now_ms() } else { 1 };
+            append_records(fixture.path(), &[key_record(1, timestamp)]);
+            compact_file(fixture.path()).unwrap();
+            assert!(!fixture.transaction().exists());
+            assert_eq!(
+                read_snapshot(fixture.path()).unwrap().records.len(),
+                usize::from(retained)
+            );
+            clear_path(fixture.path()).unwrap();
+            assert!(read_snapshot(fixture.path()).unwrap().records.is_empty());
+        }
+    }
+
+    #[test]
+    fn publication_real_sharing_failure_preserves_canonical() {
+        let fixture = PublicationFixture::new("publication-sharing");
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        let original = fs::read(fixture.path()).unwrap();
+        LOCK_REPLACEMENT.with(|requested| requested.set(true));
+        let result = compact_file(fixture.path());
+        assert!(
+            result.is_err(),
+            "real replacement sharing conflict must fail"
+        );
+        assert!(
+            fs::read(fixture.path()).ok().as_deref() == Some(original.as_slice()),
+            "failed publication lost the original canonical"
+        );
+    }
+
+    #[test]
+    fn publication_pending_transaction_prevents_empty_recreation() {
+        let fixture = PublicationFixture::new("pending-missing");
+        fs::create_dir(fixture.transaction()).unwrap();
+        fs::write(fixture.transaction().join("replacement.bin"), header()).unwrap();
+        let opened = InputHistoryService::open(fixture.path());
+        let rejected = opened.is_err();
+        if let Ok(service) = opened {
+            service.stop().unwrap();
+        }
+        assert!(
+            rejected,
+            "unresolved publication was treated as a new store"
+        );
+        assert!(!fixture.path().exists(), "empty canonical was manufactured");
+    }
+
+    #[test]
+    fn publication_pending_transaction_prevents_false_clear_success() {
+        let fixture = PublicationFixture::new("pending-clear");
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        let original = fs::read(fixture.path()).unwrap();
+        fs::create_dir(fixture.transaction()).unwrap();
+        fs::write(fixture.transaction().join("previous.bin"), &original).unwrap();
+        let cleared = clear_path(fixture.path());
+        assert!(
+            cleared.is_err(),
+            "Clear succeeded while recoverable history remained"
+        );
+        assert_eq!(fs::read(fixture.path()).unwrap(), original);
+    }
+
+    #[test]
+    fn publication_preserves_preexisting_legacy_temp() {
+        let fixture = PublicationFixture::new("legacy-temp-collision");
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        let temp = fixture.path().with_extension("compact.tmp");
+        fs::write(&temp, b"synthetic unrelated legacy temp").unwrap();
+        let result = compact_file(fixture.path());
+        assert!(result.is_ok());
+        assert_eq!(
+            fs::read(&temp).ok().as_deref(),
+            Some(b"synthetic unrelated legacy temp".as_slice())
+        );
+    }
+
+    #[test]
+    fn store_owner_rejects_second_service_without_mutation() {
+        let fixture = ReadFailureFixture(temporary_path("two-writers"));
+        let owner = InputHistoryService::open(&fixture.0).unwrap();
+        owner.flush().unwrap();
+        let original = fs::read(&fixture.0).unwrap();
+        let second = InputHistoryService::open(&fixture.0);
+        let rejected = second.is_err();
+        if let Ok(second) = second {
+            second.stop().unwrap();
+        }
+        owner.stop().unwrap();
+        assert!(rejected, "second history writer was admitted");
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+        // A stopped service may still have callers holding its Arc. Only
+        // the worker's actual lifetime owns the store, so handoff now works.
+        let successor = InputHistoryService::open(&fixture.0).unwrap();
+        successor.stop().unwrap();
+    }
+
+    #[test]
+    fn store_owner_excludes_offline_clear() {
+        let fixture = ReadFailureFixture(temporary_path("offline-clear-owner"));
+        let owner = InputHistoryService::open(&fixture.0).unwrap();
+        owner.flush().unwrap();
+        let original = fs::read(&fixture.0).unwrap();
+        let cleared = clear_path(&fixture.0);
+        owner.stop().unwrap();
+        assert!(cleared.is_err(), "offline Clear bypassed the live writer");
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+        clear_path(&fixture.0).unwrap();
+        assert!(read_snapshot(&fixture.0).unwrap().records.is_empty());
+    }
+
+    #[test]
+    fn store_owner_survives_canonical_replacement_and_paths_are_independent() {
+        let fixture = ReadFailureFixture(temporary_path("replace-owner"));
+        let previous = ReadFailureFixture(temporary_path("previous-owner"));
+        let owner = InputHistoryService::open(&fixture.0).unwrap();
+        owner.flush().unwrap();
+        let original = fs::read(&fixture.0).unwrap();
+        fs::rename(&fixture.0, &previous.0).unwrap();
+        fs::write(&fixture.0, original).unwrap();
+        let alias = fixture
+            .0
+            .parent()
+            .unwrap()
+            .join(".")
+            .join(fixture.0.file_name().unwrap());
+        assert!(InputHistoryService::open(&alias).is_err());
+        let independent = ReadFailureFixture(temporary_path("independent-owner"));
+        let other = InputHistoryService::open(&independent.0).unwrap();
+        other.stop().unwrap();
+        owner.stop().unwrap();
+        let successor = InputHistoryService::open(&fixture.0).unwrap();
+        successor.stop().unwrap();
+    }
+
+    #[test]
+    fn store_owner_does_not_delete_a_preexisting_lock_path() {
+        let fixture = ReadFailureFixture(temporary_path("lock-collision"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let original = fs::read(&fixture.0).unwrap();
+        let mut name = fixture.0.file_name().unwrap().to_os_string();
+        name.push(".writer.lock");
+        let lock_path = fixture.0.with_file_name(name);
+        fs::write(&lock_path, b"synthetic preexisting file").unwrap();
+        let opened = InputHistoryService::open(&fixture.0);
+        let rejected = opened.is_err();
+        if let Ok(service) = opened {
+            service.stop().unwrap();
+        }
+        let lock_contents = fs::read(&lock_path).ok();
+        let _ = fs::remove_file(&lock_path);
+        assert!(
+            rejected,
+            "existing lock path must not be adopted for deletion"
+        );
+        assert_eq!(
+            lock_contents.as_deref(),
+            Some(b"synthetic preexisting file".as_slice())
+        );
+        assert_eq!(fs::read(&fixture.0).unwrap(), original);
+    }
+
+    #[test]
+    fn store_owner_preserves_preexisting_symlink_and_target() {
+        let fixture = ReadFailureFixture(temporary_path("lock-symlink"));
+        let target = ReadFailureFixture(temporary_path("lock-target"));
+        fs::write(&target.0, b"synthetic target").unwrap();
+        let mut name = fixture.0.file_name().unwrap().to_os_string();
+        name.push(".writer.lock");
+        let lock_path = fixture.0.with_file_name(name);
+        std::os::windows::fs::symlink_file(&target.0, &lock_path).unwrap();
+        let opened = InputHistoryService::open(&fixture.0);
+        let rejected = opened.is_err();
+        if let Ok(service) = opened {
+            service.stop().unwrap();
+        }
+        let link_preserved = fs::symlink_metadata(&lock_path)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false);
+        let target_contents = fs::read(&target.0).ok();
+        let _ = fs::remove_file(&lock_path);
+        assert!(rejected);
+        assert!(link_preserved);
+        assert_eq!(
+            target_contents.as_deref(),
+            Some(b"synthetic target".as_slice())
+        );
+        assert!(!fixture.0.exists());
+    }
+
+    #[test]
+    fn clear_rejects_content_prepared_before_its_epoch() {
+        let mut resurrected = Vec::new();
+        for kind in 0..3 {
+            let fixture = ReadFailureFixture(temporary_path("paused-clear"));
+            let service = InputHistoryService::open(&fixture.0).unwrap();
+            let producer_service = Arc::clone(&service);
+            let (paused, pause_observed) = mpsc::channel();
+            let (resume, resumed) = mpsc::channel();
+            let producer = thread::spawn(move || {
+                BEFORE_ENQUEUE.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        paused.send(()).unwrap();
+                        resumed.recv_timeout(Duration::from_secs(10)).unwrap();
+                    }));
+                });
+                match kind {
+                    0 => producer_service.record_key(
+                        1,
+                        ScopeClass::Normal,
+                        1,
+                        Some('x'),
+                        0,
+                        false,
+                        false,
+                        true,
+                        0,
+                        1,
+                        1,
+                        1,
+                        "",
+                        "x",
+                        "",
+                        0,
+                        false,
+                        "char",
+                    ),
+                    1 => producer_service.record_commit(1, ScopeClass::Normal, "x", "X", 0, 0),
+                    _ => producer_service.record_ai_text(
+                        1,
+                        ScopeClass::Normal,
+                        AiTextOperation::Transform,
+                        AiTextStatus::Applied,
+                        "x",
+                        "X",
+                        "synthetic",
+                        "synthetic",
+                        "",
+                        "",
+                        1,
+                        1,
+                        1,
+                        0,
+                        1,
+                        false,
+                    ),
+                }
+            });
+            let paused_ok = pause_observed.recv_timeout(Duration::from_secs(10)).is_ok();
+            let first_clear = service.clear();
+            let second_clear = service.clear();
+            // Always release/join the owned producer before assertions.
+            let _ = resume.send(());
+            let producer_result = producer.join();
+            service.record_commit(2, ScopeClass::Normal, "new", "NEW", 0, 0);
+            let flushed = service.flush();
+            let stopped = service.stop();
+            assert!(paused_ok);
+            first_clear.unwrap();
+            second_clear.unwrap();
+            producer_result.unwrap();
+            flushed.unwrap();
+            stopped.unwrap();
+            let snapshot = read_snapshot(&fixture.0).unwrap();
+            assert!(snapshot.records.iter().any(|record| record.session() == 2));
+            if snapshot.records.iter().any(|record| record.session() == 1) {
+                resurrected.push(kind);
+            }
+        }
+        assert!(
+            resurrected.is_empty(),
+            "old content survived Clear for variants {resurrected:?}"
+        );
+    }
+
+    #[test]
+    fn startup_rejects_exhausted_stored_ids_without_mutating_history() {
+        for session_exhausted in [false, true] {
+            let fixture = ReadFailureFixture(temporary_path("exhausted-ids"));
+            let mut record = key_record(if session_exhausted { 1 } else { u64::MAX }, now_ms());
+            if session_exhausted {
+                if let InputHistoryRecord::Key(record) = &mut record {
+                    record.session = u64::MAX;
+                }
+            }
+            append_records(&fixture.0, &[record]);
+            let original = fs::read(&fixture.0).unwrap();
+            assert_eq!(
+                InputHistoryService::open(&fixture.0).unwrap_err().kind(),
+                io::ErrorKind::InvalidData
+            );
+            assert_eq!(fs::read(&fixture.0).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn legacy_startup_migrates_before_appending_current_markers() {
+        let fixture = ReadFailureFixture(temporary_path("legacy-startup"));
+        append_records(&fixture.0, &[key_record(17, now_ms())]);
+        let mut bytes = fs::read(&fixture.0).unwrap();
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        fs::write(&fixture.0, bytes).unwrap();
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.stop().unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        assert_eq!(snapshot.format_version, INPUT_HISTORY_FORMAT_VERSION);
+        assert_eq!(snapshot.records[0].sequence(), 17);
+        assert_eq!(snapshot.records.last().unwrap().sequence(), 18);
+    }
+
+    #[test]
+    fn viewing_retention_has_inclusive_cutoff_and_keeps_order() {
+        let now = RETENTION.as_millis() as u64 + 100;
+        let mut snapshot = InputHistorySnapshot {
+            format_version: INPUT_HISTORY_FORMAT_VERSION,
+            records: vec![key_record(3, 101), key_record(1, 99), key_record(2, 100)],
+            ignored_tail_bytes: 7,
+        };
+        snapshot.retain_current_records(now);
+        assert_eq!(
+            snapshot.records,
+            vec![key_record(3, 101), key_record(2, 100)]
+        );
+        assert_eq!(snapshot.ignored_tail_bytes, 7);
+        let before = snapshot.clone();
+        snapshot.retain_current_records(0);
+        assert_eq!(
+            snapshot, before,
+            "early clock must not underflow the cutoff"
+        );
+    }
+
+    #[test]
+    fn barriers_report_missing_handle_and_real_sync_failure() {
+        assert_eq!(
+            sync_writer_file(&None, false).unwrap_err().kind(),
+            io::ErrorKind::NotConnected
+        );
+        let fixture = ReadFailureFixture(temporary_path("sync-denied"));
+        ensure_file(&fixture.0).unwrap();
+        // Windows FlushFileBuffers requires write access. Exercise the real
+        // failure, not an injected helper that simply returns its expectation.
+        let read_only = File::open(&fixture.0).unwrap();
+        assert!(sync_writer_file(&Some(read_only), false).is_err());
+    }
+
+    #[test]
+    fn barriers_keep_failed_append_observable_until_explicit_clear() {
+        let fixture = ReadFailureFixture(temporary_path("barrier-loss"));
+        ensure_file(&fixture.0).unwrap();
+        let (sender, receiver) = mpsc::sync_channel(6);
+        sender
+            .send(Command::Append {
+                epoch: 0,
+                timestamp_ms: now_ms(),
+                payload: vec![0; MAX_RECORD_BYTES + 1],
+            })
+            .unwrap();
+        let (first, first_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: first }).unwrap();
+        let (retry, retry_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: retry }).unwrap();
+        let (clear, clear_result) = mpsc::channel();
+        sender
+            .send(Command::Clear {
+                epoch: 1,
+                reply: clear,
+            })
+            .unwrap();
+        let (after, after_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: after }).unwrap();
+        let (stop, stop_result) = mpsc::channel();
+        sender.send(Command::Shutdown { reply: stop }).unwrap();
+        writer_loop_with_interval(
+            fixture.0.clone(),
+            receiver,
+            Arc::new(InputHistoryStats::default()),
+            Duration::from_secs(3600),
+        );
+        assert!(first_result.try_recv().unwrap().is_err());
+        assert!(retry_result.try_recv().unwrap().is_err());
+        clear_result.try_recv().unwrap().unwrap();
+        after_result.try_recv().unwrap().unwrap();
+        stop_result.try_recv().unwrap().unwrap();
+    }
+
+    #[test]
+    fn control_barrier_size_matrix() {
+        // Repeated synthetic frames isolate storage-size cost, not ID or
+        // language quality. Build outside the timed region, sync first, and
+        // measure the same Flush+Shutdown pair at all three sizes.
+        let timestamp = now_ms();
+        let protected = protect(&key_record(1, timestamp).encode().unwrap()).unwrap();
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&(protected.len() as u32).to_le_bytes());
+        frame.extend_from_slice(&crc32(&protected).to_le_bytes());
+        frame.extend_from_slice(&protected);
+        let block = frame.repeat(128);
+        for mib in [0u64, 16, 64] {
+            let fixture = ReadFailureFixture(temporary_path("barrier-size"));
+            ensure_file(&fixture.0).unwrap();
+            let mut file = OpenOptions::new().append(true).open(&fixture.0).unwrap();
+            let mut remaining = (mib * 1024 * 1024).saturating_sub(HEADER_LEN as u64);
+            while remaining >= block.len() as u64 {
+                file.write_all(&block).unwrap();
+                remaining -= block.len() as u64;
+            }
+            while remaining >= frame.len() as u64 {
+                file.write_all(&frame).unwrap();
+                remaining -= frame.len() as u64;
+            }
+            file.sync_all().unwrap();
+            let bytes = file.metadata().unwrap().len();
+            drop(file);
+            let (sender, receiver) = mpsc::sync_channel(2);
+            let (flushed, flush_result) = mpsc::channel();
+            let (stopped, stop_result) = mpsc::channel();
+            sender.send(Command::Flush { reply: flushed }).unwrap();
+            sender.send(Command::Shutdown { reply: stopped }).unwrap();
+            // Actor/control benchmark: fixture encoding already establishes
+            // this hint; do not time the test helper's startup scan.
+            let append = open_append(&fixture.0).unwrap();
+            let retention = RetentionPlan {
+                oldest_timestamp_ms: (mib != 0).then_some(timestamp),
+            };
+            let started = Instant::now();
+            writer_loop_with_file(
+                fixture.0.clone(),
+                receiver,
+                Arc::new(InputHistoryStats::default()),
+                Some(append),
+                Duration::from_secs(3600),
+                retention,
+            );
+            let elapsed = started.elapsed();
+            flush_result.try_recv().unwrap().unwrap();
+            stop_result.try_recv().unwrap().unwrap();
+            assert_eq!(fs::metadata(&fixture.0).unwrap().len(), bytes);
+            println!(
+                "history-control-size target_mib={mib} bytes={bytes} flush_shutdown_us={}",
+                elapsed.as_micros()
+            );
         }
     }
 
@@ -1832,13 +3220,215 @@ mod tests {
     }
 
     #[test]
+    fn counter_exhaustion_last_session_id_is_allocated_once_concurrently() {
+        let fixture = ReadFailureFixture(temporary_path("last-session"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service
+            .next_session_id
+            .store(u64::MAX - 1, Ordering::Relaxed);
+        let results = thread::scope(|scope| {
+            let workers: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| service.allocate_session_id()))
+                .collect();
+            workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        service.stop().unwrap();
+        assert_eq!(
+            results.iter().filter(|id| **id == Some(u64::MAX)).count(),
+            1
+        );
+        assert_eq!(results.iter().filter(|id| id.is_none()).count(), 7);
+        assert_eq!(service.allocate_session_id(), None);
+        assert_eq!(service.stats.persistence_failures(), 8);
+        assert_eq!(service.next_session_id.load(Ordering::Relaxed), u64::MAX);
+    }
+
+    #[test]
+    fn counter_exhaustion_last_sequence_and_clear_epoch_are_terminal() {
+        let fixture = ReadFailureFixture(temporary_path("last-sequence-epoch"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.next_sequence.store(u64::MAX - 1, Ordering::Relaxed);
+        service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0);
+        service.record_commit(1, ScopeClass::Normal, "b", "b", 0, 0);
+        service.flush().unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        service.epoch.store(u64::MAX - 1, Ordering::Release);
+        let last_clear = service.clear();
+        let rejected_clear = service.clear();
+        service.record_commit(1, ScopeClass::Normal, "c", "c", 0, 0);
+        service.stop().unwrap();
+        assert_eq!(snapshot.records.len(), 2);
+        assert_eq!(snapshot.records[1].sequence(), u64::MAX);
+        assert_eq!(last_clear.unwrap(), 2);
+        assert!(rejected_clear.is_err());
+        assert!(read_snapshot(&fixture.0).unwrap().records.is_empty());
+        assert_eq!(service.next_sequence.load(Ordering::Relaxed), u64::MAX);
+        assert_eq!(service.epoch.load(Ordering::Acquire), u64::MAX);
+        assert_eq!(service.stats.persistence_failures(), 3);
+    }
+
+    #[test]
+    fn counter_exhaustion_unavailable_session_rejects_all_content_variants() {
+        let fixture = ReadFailureFixture(temporary_path("unavailable-session"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.record_commit(0, ScopeClass::Normal, "a", "a", 0, 0);
+        service.record_key(
+            0,
+            ScopeClass::Normal,
+            1,
+            Some('a'),
+            0,
+            false,
+            false,
+            true,
+            1,
+            1,
+            1,
+            1,
+            "",
+            "a",
+            "",
+            0,
+            false,
+            "char",
+        );
+        service.record_ai_text(
+            0,
+            ScopeClass::Normal,
+            AiTextOperation::Proofread,
+            AiTextStatus::Applied,
+            "a",
+            "b",
+            "model",
+            "provider",
+            "style",
+            "",
+            1,
+            1,
+            1,
+            0,
+            1,
+            false,
+        );
+        service.stop().unwrap();
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        assert_eq!(
+            snapshot.records.len(),
+            1,
+            "only engine marker may use session zero"
+        );
+        assert!(matches!(snapshot.records[0], InputHistoryRecord::Engine(_)));
+        assert_eq!(service.stats.dropped_events(), 3);
+        assert_eq!(service.next_sequence.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn counter_exhaustion_session_never_panics_or_wraps() {
+        let fixture = ReadFailureFixture(temporary_path("session-exhausted"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.next_session_id.store(u64::MAX, Ordering::Relaxed);
+        let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            service.allocate_session_id()
+        }));
+        let after = service.next_session_id.load(Ordering::Relaxed);
+        service.stop().unwrap();
+        assert!(attempt.is_ok(), "optional history allocation panicked");
+        assert_eq!(after, u64::MAX, "session ID counter wrapped");
+    }
+
+    #[test]
+    fn counter_exhaustion_record_variants_never_panic_or_wrap() {
+        let fixture = ReadFailureFixture(temporary_path("sequence-exhausted"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.flush().unwrap();
+        let before = fs::read(&fixture.0).unwrap();
+        let mut outcomes = Vec::new();
+        for variant in 0..4 {
+            service.next_sequence.store(u64::MAX, Ordering::Relaxed);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match variant {
+                0 => service.record_engine_start(),
+                1 => service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0),
+                2 => service.record_key(
+                    1,
+                    ScopeClass::Normal,
+                    1,
+                    Some('a'),
+                    0,
+                    false,
+                    false,
+                    true,
+                    1,
+                    1,
+                    1,
+                    1,
+                    "",
+                    "a",
+                    "",
+                    0,
+                    false,
+                    "char",
+                ),
+                _ => service.record_ai_text(
+                    1,
+                    ScopeClass::Normal,
+                    AiTextOperation::Proofread,
+                    AiTextStatus::Applied,
+                    "a",
+                    "b",
+                    "model",
+                    "provider",
+                    "style",
+                    "",
+                    1,
+                    1,
+                    1,
+                    0,
+                    1,
+                    false,
+                ),
+            }));
+            outcomes.push((
+                result.is_ok(),
+                service.next_sequence.load(Ordering::Relaxed),
+            ));
+        }
+        service.stop().unwrap();
+        assert!(
+            outcomes.iter().all(|&(ok, n)| ok && n == u64::MAX),
+            "record counter outcomes {outcomes:?}"
+        );
+        assert_eq!(fs::read(&fixture.0).unwrap(), before);
+    }
+
+    #[test]
+    fn counter_exhaustion_clear_preserves_bytes_and_epoch() {
+        let fixture = ReadFailureFixture(temporary_path("epoch-exhausted"));
+        let service = InputHistoryService::open(&fixture.0).unwrap();
+        service.flush().unwrap();
+        let before = fs::read(&fixture.0).unwrap();
+        service.epoch.store(u64::MAX, Ordering::Release);
+        let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| service.clear()));
+        let after = service.epoch.load(Ordering::Acquire);
+        service.stop().unwrap();
+        assert!(
+            matches!(attempt, Ok(Err(_))),
+            "exhausted Clear must return an error"
+        );
+        assert_eq!(after, u64::MAX);
+        assert_eq!(fs::read(&fixture.0).unwrap(), before);
+    }
+
+    #[test]
     fn session_ids_are_shared_by_the_history_service() {
         let path = temporary_path("session");
         let service = InputHistoryService::open(&path).expect("open");
         let first = service.allocate_session_id();
         let second = service.allocate_session_id();
-        assert_eq!(first, 1);
-        assert_eq!(second, 2);
+        assert_eq!(first, Some(1));
+        assert_eq!(second, Some(2));
         service.stop().expect("stop");
         let _ = fs::remove_file(path);
     }
@@ -2019,6 +3609,16 @@ mod tests {
         assert!(tsv.contains("# sakura-input-history-format: 1"));
         assert!(tsv.contains("# package-version: -"));
         assert!(tsv.contains("# release-label: -"));
+        repair_file(&path).expect("repair v1");
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        compact_file(&path).expect("compact v1");
+        assert_eq!(read_snapshot(&path).unwrap().records, snapshot.records);
+        let service = InputHistoryService::open(&path).expect("open compacted v1");
+        service.stop().expect("stop compacted v1");
+        assert!(read_snapshot(&path)
+            .unwrap()
+            .records
+            .contains(&snapshot.records[0]));
         let _ = fs::remove_file(path);
     }
 
