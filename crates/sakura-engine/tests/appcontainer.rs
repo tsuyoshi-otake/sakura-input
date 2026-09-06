@@ -973,8 +973,12 @@ fn image_policy_evidence(
 ) -> String {
     let shape = |path: &Path| {
         format!(
-            "absolute={},parent={},verbatim={},forward_slash={},engine_name={}",
+            "absolute={},rooted={},native_device={},nt_dos={},drive_prefix={},parent={},verbatim={},forward_slash={},engine_name={}",
             path.is_absolute(),
+            path.has_root(),
+            path.as_os_str().to_string_lossy().starts_with(r"\Device\"),
+            path.as_os_str().to_string_lossy().starts_with(r"\??\"),
+            matches!(path.components().next(), Some(std::path::Component::Prefix(prefix)) if matches!(prefix.kind(), std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_))),
             path.components()
                 .any(|part| matches!(part, std::path::Component::ParentDir)),
             path.as_os_str().to_string_lossy().starts_with(r"\\?\"),
@@ -1034,6 +1038,26 @@ fn image_policy_diagnostics_explain_shape_without_emitting_paths() {
         image_policy_evidence(&expected, Err("open_failed(test_code)".to_owned()), &policy);
     assert!(failed.contains("image_query=open_failed(test_code)"));
     assert!(!failed.contains("synthetic-private-label"));
+    for (path, marker) in [
+        (
+            r"\Device\HarddiskVolume7\synthetic-private-label\sakura_engine.exe",
+            "native_device=true",
+        ),
+        (
+            r"\??\C:\synthetic-private-label\sakura_engine.exe",
+            "nt_dos=true",
+        ),
+        (
+            r"C:synthetic-private-label\sakura_engine.exe",
+            "drive_prefix=true",
+        ),
+    ] {
+        let evidence = image_policy_evidence(&expected, Ok(PathBuf::from(path)), &policy);
+        assert!(evidence.contains(marker));
+        assert!(evidence.contains("absolute=false"));
+        assert!(!evidence.contains("synthetic-private-label"));
+        assert!(!evidence.contains("HarddiskVolume7"));
+    }
 }
 
 /// A double-NUL-terminated `KEY=VALUE\0...\0\0` block: this process's own
