@@ -189,6 +189,17 @@ struct Link {
     /// applied that keystroke, so the two ends can no longer be assumed to
     /// agree about what is being composed.
     desynchronized: bool,
+    /// Only valid until any intervening wire request. In particular a key,
+    /// scope change or resync may replace the board's owner/placement.
+    placement_ack: Option<PlacementAck>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PlacementAck {
+    next_request_id: sakura_proto::RequestId,
+    anchor: Option<ScreenRect>,
+    document: Option<ScreenRect>,
+    renderer_visible: bool,
 }
 
 impl Engine {
@@ -710,6 +721,22 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return false;
         };
+        let placement = PlacementAck {
+            next_request_id: link.client.next_request_id(),
+            anchor,
+            document,
+            renderer_visible,
+        };
+        // Idle mode indicators share geometry across connections without a
+        // candidate owner. Another host may have replaced that anchor since
+        // our last acknowledgement, so only visible candidate placement is
+        // eligible for local deduplication.
+        if renderer_visible && !link.desynchronized && link.placement_ack == Some(placement) {
+            return true;
+        }
+        // Never remember an unacknowledged update, including a timeout whose
+        // late reply may be drained by a future call. No retry is scheduled.
+        link.placement_ack = None;
         let request = Request::SetUiPlacement {
             session: link.session,
             anchor,
@@ -720,7 +747,13 @@ impl Engine {
             .client
             .call_until(&request, callback_deadline::limit(UI_BUDGET))
         {
-            Ok(Response::Ok) => true,
+            Ok(Response::Ok) => {
+                link.placement_ack = Some(PlacementAck {
+                    next_request_id: link.client.next_request_id(),
+                    ..placement
+                });
+                true
+            }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::UiPlacement);
@@ -993,6 +1026,7 @@ fn open(name: Option<&str>) -> Option<Link> {
             mode_before_sensitive: None,
             input_scope: None,
             desynchronized: false,
+            placement_ack: None,
         }),
         Err(Fault::DeadlineExpired) => None,
         Err(Fault::Timeout) => {
@@ -1919,6 +1953,130 @@ mod tests {
         assert!(
             matches!(later, Answer::Ready(_)),
             "scope return must restore future allowance"
+        );
+    }
+
+    #[test]
+    fn ui_placement_timeout_is_not_cached_and_late_ack_is_not_applied_to_new_geometry() {
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("placement-late-ack", move |pipe, buffer| {
+            let mut anchors = Vec::new();
+            loop {
+                let payload = match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
+                    Ok(payload) => payload,
+                    Err(Fault::Disconnected) => break,
+                    Err(fault) => panic!("bounded placement read: {fault:?}"),
+                };
+                let (id, request) = decode_request(payload).expect("decode");
+                let Request::SetUiPlacement { anchor, .. } = request else {
+                    panic!("placement only");
+                };
+                anchors.push(anchor);
+                if anchors.len() == 2 {
+                    release_rx
+                        .recv_timeout(Duration::from_secs(2))
+                        .expect("release late reply");
+                }
+                let mut reply = Vec::new();
+                encode_response(&Response::Ok, id, &mut reply).expect("encode");
+                pipe.write_all(&reply).expect("reply");
+            }
+            observed_tx.send(anchors).expect("observer");
+        });
+        let mut engine = Engine::attached_to(&name);
+        let first = Some(ScreenRect {
+            left: 1,
+            top: 2,
+            right: 3,
+            bottom: 4,
+        });
+        let changed = Some(ScreenRect {
+            left: 10,
+            top: 20,
+            right: 30,
+            bottom: 40,
+        });
+        let newest = Some(ScreenRect {
+            left: 100,
+            top: 200,
+            right: 300,
+            bottom: 400,
+        });
+        let accepted_first = engine.set_ui_placement(first, None, true);
+        let rejected_late = !engine.set_ui_placement(changed, None, true);
+        let healthy = engine.is_connected() && !engine.is_desynchronized();
+        release_tx.send(()).expect("release server");
+        let accepted_retry = engine.set_ui_placement(changed, None, true);
+        let accepted_newest = engine.set_ui_placement(newest, None, true);
+        let duplicate = engine.set_ui_placement(newest, None, true);
+        drop(engine);
+        server.join().expect("peer ended");
+        let anchors = observed_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("anchors");
+        assert!(
+            accepted_first
+                && rejected_late
+                && healthy
+                && accepted_retry
+                && accepted_newest
+                && duplicate
+        );
+        assert_eq!(anchors, vec![first, changed, changed, newest]);
+    }
+
+    #[test]
+    fn ui_placement_repeated_geometry_is_bounded_and_key_output_invalidates_it() {
+        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("placement-dedup", move |pipe, buffer| {
+            let mut placements = 0;
+            loop {
+                let payload = match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
+                    Ok(payload) => payload,
+                    Err(Fault::Disconnected) => break,
+                    Err(fault) => panic!("bounded peer read: {fault:?}"),
+                };
+                let (id, request) = decode_request(payload).expect("request");
+                let response = match request {
+                    Request::SetUiPlacement { .. } => {
+                        placements += 1;
+                        Response::Ok
+                    }
+                    Request::SendKey { .. } => Response::Output(some_output()),
+                    other => panic!("unexpected request: {other:?}"),
+                };
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                pipe.write_all(&reply).expect("reply");
+            }
+            observed_tx.send(placements).expect("observer");
+        });
+        let mut engine = Engine::attached_to(&name);
+        let anchor = Some(ScreenRect {
+            left: 10,
+            top: 20,
+            right: 12,
+            bottom: 40,
+        });
+        let mut accepted = engine.set_ui_placement(anchor, None, true);
+        for _ in 0..100 {
+            accepted &= engine.set_ui_placement(anchor, None, true);
+        }
+        let key = engine.send_key(a_key('a'));
+        accepted &= engine.set_ui_placement(anchor, None, true);
+        accepted &= engine.set_ui_placement(anchor, None, false);
+        accepted &= engine.set_ui_placement(anchor, None, false);
+        drop(engine);
+        server.join().expect("peer ended");
+        let count = observed_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("count");
+        assert!(accepted);
+        assert!(matches!(key, Answer::Ready(_)));
+        assert_eq!(
+            count, 4,
+            "duplicates collapse, but idle geometry must refresh across hosts"
         );
     }
 
