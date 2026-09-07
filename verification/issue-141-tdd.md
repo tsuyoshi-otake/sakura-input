@@ -73,3 +73,37 @@ cancel dispatch computation, release the composition fence early, reverse
 learning/history side effects, or order results across still-connected clients.
 The test proves mode publication, not an observed production candidate loss.
 Other response variants and placement timeouts remain separate investigation.
+
+## Placement duplicates (#142)
+
+The private-pipe fixture issued 104 placement requests for repeated unchanged
+geometry plus a key and visibility transitions before correction (RED). The
+client now remembers one acknowledged visible placement until any intervening
+wire request. The same fixture sends 4 requests (GREEN), retaining repeated idle
+geometry refresh because another host can replace the shared idle mode anchor.
+Storage is O(1), no background queue or retry loop is introduced, and every
+changed geometry or intervening request invalidates the acknowledgement.
+
+A second bounded fixture delays an acknowledgement past the 10 ms budget. The
+failed geometry is not cached; the next externally requested update is sent,
+the old reply is drained by request identity, and the newest geometry can then
+be deduplicated. No text-session desynchronization is introduced.
+
+This proves redundant synthetic work, not the cause of the production
+simultaneous multi-PID timeouts. Real host/DPI visual acceptance remains open.
+
+## Short-reading repair history (#108, case F)
+
+The production 1.0.36 code admitted an Advanced `う -> い` repair as a
+CommitHistory hint merely after an unrelated `い` commit. A synthetic in-memory
+learning test reproduced that failure before the fix. The conservative Rule-only
+admission already present in the owner's separate dirty checkout was ported here
+without modifying that checkout. Four short-reading pairs now pass, while the
+existing named-rule typo-repair test still passes (37 learning tests successful).
+
+The dispatcher fixture checks unchanged candidate text/cost/path evidence and
+automatic commit after a prior `い` commit. It covers off/long/all configuration
+values with no model worker installed in the fixture; it is not a real-model
+quality evaluation. It does not claim that the production user intended a
+different selection, or that all of the broader original #108 requirements are
+complete. No production learning store was read into the fixture or modified.

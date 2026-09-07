@@ -6590,6 +6590,100 @@ mod tests {
     }
 
     #[test]
+    fn short_reading_history_does_not_change_candidate_identity_or_auto_commit() {
+        let conversion = prediction_conversion_from_source(
+            "short-reading-history.tsv",
+            concat!(
+                "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+                "う\t宇\t0\t0\t100\t-\t\texact\n",
+                "う\t羽\t0\t0\t200\t-\t\texact\n",
+                "い\tい\t0\t0\t10\t-\t\tother reading\n",
+            ),
+        );
+        for scope in [
+            NeuralRerankerScope::Off,
+            NeuralRerankerScope::LongTextOnly,
+            NeuralRerankerScope::AllNormalConversions,
+        ] {
+            let mut baseline = None;
+            for learned in [false, true] {
+                let learning = Arc::new(LearningService::memory());
+                if learned {
+                    learning.learn("い", "い", 0, 0);
+                }
+                let signature = with_session_candidates(
+                    &conversion,
+                    Some(&learning),
+                    "う",
+                    ConversionOptions::default(),
+                    |candidates| {
+                        candidates
+                            .iter()
+                            .map(|candidate| {
+                                (
+                                    candidate.text().to_owned(),
+                                    candidate.cost,
+                                    candidate.path_evidence(),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                )
+                .expect("bounded candidate construction");
+                let preferences = Preferences {
+                    neural_reranker_scope: scope,
+                    prediction_enabled: false,
+                    ..Preferences::default()
+                };
+                let mut dispatcher = Dispatcher::new_with_configuration(
+                    Arc::clone(&conversion),
+                    learning,
+                    preferences,
+                )
+                .expect("dispatcher");
+                let mut out = OutputBuf::new();
+                let session = create_session(&mut dispatcher, &mut out, "synthetic-quality.exe");
+                dispatcher.dispatch(
+                    &Request::SetInputScope {
+                        session,
+                        scope: InputScope::Normal,
+                    },
+                    &mut out,
+                );
+                type_word(&mut dispatcher, session, "u", &mut out);
+                dispatcher.dispatch(
+                    &Request::SendKey {
+                        session,
+                        key: named_key(KeyCode::Space),
+                    },
+                    &mut out,
+                );
+                assert_eq!(
+                    out.preedit_text(),
+                    "宇",
+                    "scope={scope:?} learned={learned}"
+                );
+                dispatcher.dispatch(
+                    &Request::SendKey {
+                        session,
+                        key: named_key(KeyCode::Enter),
+                    },
+                    &mut out,
+                );
+                assert_eq!(out.commit_text(), Some("宇"));
+                if let Some(expected) = baseline.as_ref() {
+                    assert_eq!(
+                        &signature, expected,
+                        "prior い commit changed the identity/order for う"
+                    );
+                } else {
+                    baseline = Some(signature);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn ranked_commit_repair_hints_survive_alongside_raw_plans() {
         let dispatcher = raw_repair_conversion_dispatcher();
         let learning = LearningService::memory();
