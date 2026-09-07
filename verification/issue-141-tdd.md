@@ -150,3 +150,38 @@ not rearm Space absorption. The queued-request regression retains `k`.
 This does not make a successful pipe write a document acknowledgement, restore
 already lost preedit, or reverse learning from an operation already dispatched.
 The production host reproduction and installed-build acceptance remain open.
+
+## Installed dictionary and baseline comparison
+
+Read-only dictionary: v1.0.36, 37,383,196 bytes, SHA-256
+`ca1b24fc7f3113998fc73e2722a10865ce36f1eae7f39d7e16170a333febb63f`.
+The new eight-reading regression passes without further ranking changes:
+`つづけようか`, `すすめようか`, `ろうりょく`, `してきますからね`,
+`う`, `いて`, `い`, `なに`. The useful candidate must be present and precede
+the reported lossy alternative if that alternative is present. This is a
+learning-free candidate-order control, not a reproduced production failure.
+
+The first Debug ignored-suite invocation had 32 successes and two failures.
+One benchmark explicitly requires Release. The other asserted that a fixture
+had zero spanning dictionary paths, while this dictionary has six. A detached
+`ef2f021` baseline reproduced that same failure. The candidate-order assertions
+passed on both versions. The stale zero-path assertion was removed; frontier
+presence, rescoring, and resulting candidate order remain required.
+
+Final Release dictionary suite: **35 passed**, including the new regression and
+the existing performance gate (5,000 samples after 500 warmups). Target bridge
+p99 was **2.234 ms**, maximum-bound bridge p99 **1.629 ms**, both below the existing
+20 ms limit. These are conversion measurements on this machine, not TSF IPC or
+end-to-end host-input latency. All owned processes exited.
+
+Command: set `SAKURA_SYSTEM_DIC` to the pinned dictionary, then run
+`cargo test --release --locked --offline -p sakura-engine --test shipped_dictionary_ranking -- --ignored --test-threads=1 --nocapture`.
+
+Baseline and modified worktrees must use separate target directories. During
+comparison, a shared target reused an old test binary and reported zero matching
+tests; that invocation was rejected as evidence. The target-specific local
+packages were cleaned and rebuilt before the new test and final Release suite.
+
+Final combined patch: workspace **1,833 passed / 85 ignored**; Release dictionary
+suite **35 passed** separately; Clippy with `-D warnings`, formatting and diff
+checks passed. Each invocation ended with zero surviving owned processes.
