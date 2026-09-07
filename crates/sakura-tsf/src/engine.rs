@@ -81,9 +81,9 @@ pub enum Answer {
     /// its explicit terminal outcome; handing it to the document would race
     /// the exact-text undo.
     Busy,
-    /// This request never reached the engine: it failed to encode on this
-    /// side of the wire (e.g. a reconversion selection too large to fit
-    /// the protocol). The peer was never contacted and never misbehaved,
+    /// This request never reached the engine: local encoding failed or the
+    /// callback allowance expired before sending to a synchronized session.
+    /// The peer was never contacted for this operation and never misbehaved,
     /// so only this operation is refused — the link, the session, and any
     /// other work already in flight are untouched.
     Rejected,
@@ -219,7 +219,7 @@ impl Engine {
     pub fn send_key(&mut self, key: KeyInput) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::SendKey { session, key })
     }
@@ -227,7 +227,7 @@ impl Engine {
     pub(crate) fn apply_ai_composition(&mut self, result: String) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::ApplyAiComposition { session, result })
     }
@@ -474,7 +474,7 @@ impl Engine {
     ) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         key.test_only = true;
         self.request(&Request::ProbeKey {
@@ -563,7 +563,7 @@ impl Engine {
     pub fn commit(&mut self) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::Commit { session })
     }
@@ -602,7 +602,7 @@ impl Engine {
     pub(crate) fn commit_candidate(&mut self, revision: u64, candidate_index: u16) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::CommitCandidate {
             session,
@@ -618,7 +618,7 @@ impl Engine {
     pub fn reconvert(&mut self, text: String, preview: bool) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::Reconvert {
             session,
@@ -799,6 +799,7 @@ impl Engine {
 
             // No request bytes were issued. Preserve the link and its known
             // session state; only this callback's allowance is exhausted.
+            Err(Fault::DeadlineExpired) if !link.desynchronized => Answer::Rejected,
             Err(Fault::DeadlineExpired) => Answer::Unavailable,
 
             // Kept, not dropped: see the module docs. The flag is what
@@ -821,6 +822,21 @@ impl Engine {
                 self.drop_link();
                 Answer::Unavailable
             }
+        }
+    }
+
+    /// An expired callback can refuse a request without losing its session.
+    /// TSF must cancel only that request, rather than recover and discard all
+    /// preceding writes as it does for Unavailable.
+    fn unissued_answer(&self) -> Answer {
+        if self.link.as_ref().is_some_and(|link| !link.desynchronized)
+            && Instant::now() >= callback_deadline::limit(KEY_BUDGET)
+        {
+            Answer::Rejected
+        } else {
+            // A missing link or an earlier uncertain mutation still needs
+            // recovery. Expiry cannot turn either into a healthy session.
+            Answer::Unavailable
         }
     }
 
@@ -1884,7 +1900,7 @@ mod tests {
         let (key_refused, ui_refused) = {
             let _callback = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
             (
-                matches!(engine.send_key(a_key('a')), Answer::Unavailable),
+                matches!(engine.send_key(a_key('a')), Answer::Rejected),
                 !engine.set_ui_placement(None, None, false),
             )
         };
@@ -1894,12 +1910,85 @@ mod tests {
         drop(engine);
         server.join().expect("scripted peer joined");
         assert!(matches!(expired, Err(Fault::DeadlineExpired)));
-        assert!(unchanged && key_refused && ui_refused && known);
+        assert!(unchanged && ui_refused && known);
+        assert!(
+            key_refused,
+            "an unissued key must not ask TSF to recover a healthy session"
+        );
         assert!(no_request.expect("bounded observation"));
         assert!(
             matches!(later, Answer::Ready(_)),
             "scope return must restore future allowance"
         );
+    }
+
+    #[test]
+    fn callback_deadline_unissued_operations_preserve_the_live_composition_contract() {
+        let (name, server) = fake_engine("unissued-operations", |pipe, buffer| {
+            for (expected, text) in [('k', "k"), ('a', "か")] {
+                let payload = pipe
+                    .read_frame_with_deadline(buffer, Duration::from_secs(2))
+                    .expect("bounded next request");
+                let (id, request) = decode_request(payload).expect("decode");
+                assert!(
+                    matches!(request, Request::SendKey { session: 1, key } if key.ch == Some(expected)),
+                    "no rejected operation or recovery request may reach the peer: {request:?}"
+                );
+                let mut reply = Vec::new();
+                encode_response(&Response::Output(latin_preedit(text)), id, &mut reply)
+                    .expect("encode");
+                pipe.write_all(&reply).expect("write");
+            }
+        });
+        let mut engine = Engine::attached_to(&name);
+        let first = engine.send_key(a_key('k'));
+        let next = engine
+            .link
+            .as_ref()
+            .expect("live link")
+            .client
+            .next_request_id();
+        let refused = {
+            let _expired = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            [
+                engine.send_key(a_key('x')),
+                engine.probe_key(InputScope::Normal, a_key('x')),
+                engine.commit(),
+                engine.reconvert("仮名".to_owned(), false),
+                engine.commit_candidate(1, 0),
+                engine.apply_ai_composition("結果".to_owned()),
+                engine.request(&Request::SendKey {
+                    session: 1,
+                    key: a_key('x'),
+                }),
+            ]
+        };
+        let unchanged = engine.link.as_ref().is_some_and(|link| {
+            link.session == 1 && !link.desynchronized && link.client.next_request_id() == next
+        });
+        let later = engine.send_key(a_key('a'));
+        engine.link.as_mut().expect("same link").desynchronized = true;
+        let (uncertain, missing) = {
+            let _expired = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            (
+                engine.send_key(a_key('x')),
+                Engine::new().send_key(a_key('x')),
+            )
+        };
+        let uncertainty_preserved = engine.is_desynchronized();
+        drop(engine);
+        server.join().expect("peer joined before assertions");
+        assert!(matches!(first, Answer::Ready(_)));
+        assert!(unchanged);
+        assert!(uncertainty_preserved);
+        assert!(matches!(uncertain, Answer::Unavailable));
+        assert!(matches!(missing, Answer::Unavailable));
+        for answer in refused {
+            assert!(matches!(answer, Answer::Rejected),
+                "unissued operations must only cancel their own reservation, not invoke recovery: {answer:?}");
+        }
+        assert!(matches!(later, Answer::Ready(ref output)
+            if output.preedit.as_ref().is_some_and(|preedit| preedit.segments.first().is_some_and(|segment| segment.text == "か"))));
     }
 
     #[test]
