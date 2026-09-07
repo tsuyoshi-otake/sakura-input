@@ -4757,7 +4757,7 @@ impl TextService_Impl {
                 revision,
                 candidate_index,
             } => (revision, candidate_index),
-            CandidateCommitPoll::None => return,
+            CandidateCommitPoll::None | CandidateCommitPoll::Deferred => return,
             CandidateCommitPoll::Unavailable => {
                 service.stop_candidate_commit_timer();
                 let _ = service.queue_end_candidates();
@@ -5470,8 +5470,9 @@ impl TextService_Impl {
                 service.cancel_reservation(reservation, CancelReason::PredecessorFailed);
                 return Ok(true.into());
             }
-            // This request never reached the engine -- it failed to encode
-            // on this side of the wire. Only this reservation is at fault;
+            // This request never reached the engine: local encoding failed
+            // or its callback allowance expired before sending. Only this
+            // reservation is refused;
             // the link and everything else queued on it are untouched, so
             // there is nothing to recover.
             Answer::Rejected => {

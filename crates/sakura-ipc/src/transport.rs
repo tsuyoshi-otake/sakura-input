@@ -15,29 +15,33 @@
 //! protocol crate's tests and fuzzers run on plain byte slices. One framing
 //! implementation, exercised everywhere, beats two that can disagree.
 //!
-//! # Blocking, one thread per connection
+//! # One waiting worker per connection
 //!
-//! No overlapped I/O and no completion port. A connection spends its life
-//! blocked in `ReadFile` waiting for the next keystroke, which is exactly
-//! what a blocking read is for, and the alternative would trade a large
-//! amount of `unsafe` for a scalability limit we will never reach: the
-//! number of connections is the number of host applications a person has
-//! open, not a server's client count.
+//! Each worker waits for its own overlapped I/O to complete; there is no
+//! completion port or concurrent transfer on one instance. Overlapped handles
+//! let a peer inspect disconnection without blocking behind that worker's
+//! pending read. This matters when an abandoned composing worker is still
+//! computing and its replacement must stop treating it as a live duplicate.
 
 use sakura_proto::{payload_len, FRAME_HEADER_LEN, MAX_PAYLOAD};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    CloseHandle, ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED,
-    HANDLE, INVALID_HANDLE_VALUE, WIN32_ERROR,
+    CloseHandle, ERROR_ARITHMETIC_OVERFLOW, ERROR_BROKEN_PIPE, ERROR_IO_INCOMPLETE,
+    ERROR_IO_PENDING, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED, HANDLE,
+    INVALID_HANDLE_VALUE, WIN32_ERROR,
 };
 use windows::Win32::Storage::FileSystem::{
-    FlushFileBuffers, ReadFile, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX,
+    FlushFileBuffers, ReadFile, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED,
+    PIPE_ACCESS_DUPLEX,
 };
 use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
     PeekNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
 };
+use windows::Win32::System::Threading::CreateEventW;
+use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
 
 use crate::security::{Descriptor, ServerRejection};
 
@@ -178,6 +182,130 @@ impl From<windows::core::Error> for Fault {
 #[derive(Debug)]
 pub struct PipeInstance {
     handle: HANDLE,
+    event: HANDLE,
+    connection: Arc<Mutex<ConnectionState>>,
+}
+
+struct ConnectionState {
+    handle: Option<HANDLE>,
+    generation: u64,
+    connected: bool,
+    probe_event: HANDLE,
+    probe_io: Box<OVERLAPPED>,
+    probe_pending: bool,
+}
+
+impl core::fmt::Debug for ConnectionState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ConnectionState")
+            .field("generation", &self.generation)
+            .field("connected", &self.connected)
+            .field("probe_pending", &self.probe_pending)
+            .finish_non_exhaustive()
+    }
+}
+
+// SAFETY: the handle is a cross-thread kernel object. Its only observer uses
+// metadata/zero-byte I/O on an OVERLAPPED handle while holding this state's
+// mutex. The instance joins any probe I/O and invalidates the state under that
+// same mutex before closing it. The boxed OVERLAPPED never moves while pending.
+unsafe impl Send for ConnectionState {}
+
+/// Read-only liveness of one accepted connection, never a later client that
+/// reuses the same pipe instance. Unknown/busy observations retain the claim.
+#[derive(Debug, Clone)]
+pub struct ConnectionProbe {
+    state: Arc<Mutex<ConnectionState>>,
+    generation: u64,
+}
+
+impl ConnectionProbe {
+    /// True only after positive evidence that this exact connection is gone.
+    /// No bytes are read and no retry, background thread, or blocking lock is
+    /// introduced. A PID query cannot substitute for this: Windows continues
+    /// returning the old client PID after its handle has closed.
+    pub fn is_disconnected(&self) -> bool {
+        let Ok(mut state) = self.state.try_lock() else {
+            return false;
+        };
+        if !state.connected || state.generation != self.generation {
+            return true;
+        }
+        let Some(handle) = state.handle else {
+            return true;
+        };
+        let mut transferred = 0;
+        if state.probe_pending {
+            // SAFETY: the boxed operation is still alive; this is a poll,
+            // never a wait on another worker's response or computation.
+            let result =
+                unsafe { GetOverlappedResult(handle, &*state.probe_io, &mut transferred, false) };
+            if result
+                .as_ref()
+                .is_err_and(|error| is(error, ERROR_IO_INCOMPLETE))
+            {
+                return false;
+            }
+            state.probe_pending = false;
+            if result.is_err_and(|error| is_disconnect(&error)) {
+                state.connected = false;
+                return true;
+            }
+        }
+        let mut available = 0;
+        // SAFETY: the state lock prevents close while this call uses the
+        // OVERLAPPED handle. Peek does not consume pending request bytes.
+        match unsafe { PeekNamedPipe(handle, None, 0, None, Some(&mut available), None) } {
+            Err(error) if is_disconnect(&error) => {
+                state.connected = false;
+                true
+            }
+            Err(_) => false,
+            Ok(()) if available == 0 => false,
+            Ok(()) => {
+                // Peek still succeeds on a closed client's unread queue. A
+                // byte-mode null write checks the outbound connection without
+                // sending a frame or consuming its inbound bytes. If Windows
+                // queues it, retain exactly one stable operation and report
+                // unknown until a later poll; never wait on the key path.
+                *state.probe_io = OVERLAPPED {
+                    hEvent: state.probe_event,
+                    ..Default::default()
+                };
+                // SAFETY: no data buffer is supplied; probe_io is boxed and
+                // retained until completion or joined cancellation at teardown.
+                match unsafe { WriteFile(handle, Some(&[]), None, Some(&mut *state.probe_io)) } {
+                    Err(error) if is(&error, ERROR_IO_PENDING) => {
+                        state.probe_pending = true;
+                        false
+                    }
+                    Err(error) if is_disconnect(&error) => {
+                        state.connected = false;
+                        true
+                    }
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
+impl ConnectionState {
+    fn retire(&mut self) {
+        self.connected = false;
+        if self.probe_pending {
+            if let Some(handle) = self.handle {
+                let mut transferred = 0;
+                // SAFETY: cancellation alone is not completion. Joining here
+                // prevents freeing an OVERLAPPED still owned by the kernel.
+                unsafe {
+                    let _ = CancelIoEx(handle, Some(&*self.probe_io));
+                    let _ = GetOverlappedResult(handle, &*self.probe_io, &mut transferred, true);
+                }
+            }
+            self.probe_pending = false;
+        }
+    }
 }
 
 // SAFETY: a pipe handle is a kernel object usable from any thread, and
@@ -214,7 +342,7 @@ impl PipeInstance {
     ) -> windows::core::Result<Self> {
         assert!(max_instances > 0, "a pipe must admit at least one instance");
         let wide = to_wide_nul(name);
-        let mut flags = PIPE_ACCESS_DUPLEX;
+        let mut flags = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
         if first {
             flags |= FILE_FLAG_FIRST_PIPE_INSTANCE;
         }
@@ -245,7 +373,45 @@ impl PipeInstance {
         if handle == INVALID_HANDLE_VALUE {
             return Err(windows::core::Error::from_thread());
         }
-        Ok(PipeInstance { handle })
+        // SAFETY: no name/security pointer is retained. The manual-reset
+        // event is reused only after the preceding operation has completed.
+        let event = match unsafe { CreateEventW(None, true, false, None) } {
+            Ok(event) => event,
+            Err(error) => {
+                // SAFETY: the newly created pipe has not escaped.
+                unsafe {
+                    let _ = CloseHandle(handle);
+                }
+                return Err(error);
+            }
+        };
+        // SAFETY: separate manual-reset event for the sole optional probe.
+        let probe_event = match unsafe { CreateEventW(None, true, false, None) } {
+            Ok(event) => event,
+            Err(error) => {
+                // SAFETY: neither newly created handle has escaped.
+                unsafe {
+                    let _ = CloseHandle(event);
+                    let _ = CloseHandle(handle);
+                }
+                return Err(error);
+            }
+        };
+        Ok(PipeInstance {
+            handle,
+            event,
+            connection: Arc::new(Mutex::new(ConnectionState {
+                handle: Some(handle),
+                generation: 0,
+                connected: false,
+                probe_event,
+                probe_io: Box::new(OVERLAPPED {
+                    hEvent: probe_event,
+                    ..Default::default()
+                }),
+                probe_pending: false,
+            })),
+        })
     }
 
     /// Blocks until a client connects.
@@ -263,15 +429,55 @@ impl PipeInstance {
     /// an error — a host process that exits the instant it connects must
     /// cost nothing more than one wasted accept.
     pub fn wait_for_client(&self) -> windows::core::Result<Accept> {
+        let mut overlapped = OVERLAPPED {
+            hEvent: self.event,
+            ..Default::default()
+        };
         // SAFETY: `handle` is a live pipe instance owned by this struct.
-        // The overlapped pointer is null, which is what makes the call
-        // block, as the pipe was created without `FILE_FLAG_OVERLAPPED`.
-        match unsafe { ConnectNamedPipe(self.handle, None) } {
+        // The local OVERLAPPED stays alive through the completion wait.
+        let started = unsafe { ConnectNamedPipe(self.handle, Some(&mut overlapped)) };
+        let connected = match started {
             Ok(()) => Ok(Accept::Connected),
             Err(error) if is(&error, ERROR_PIPE_CONNECTED) => Ok(Accept::Connected),
+            Err(error) if is(&error, ERROR_IO_PENDING) => {
+                let mut transferred = 0;
+                // SAFETY: this is the operation just issued; waiting joins
+                // it before the stack OVERLAPPED can be released.
+                match unsafe {
+                    GetOverlappedResult(self.handle, &overlapped, &mut transferred, true)
+                } {
+                    Ok(()) => Ok(Accept::Connected),
+                    Err(error) if is(&error, ERROR_NO_DATA) => Ok(Accept::ClientGone),
+                    Err(error) => Err(error),
+                }
+            }
             Err(error) if is(&error, ERROR_NO_DATA) => Ok(Accept::ClientGone),
             Err(error) => Err(error),
+        }?;
+        if matches!(connected, Accept::Connected) {
+            let mut state = self
+                .connection
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.generation = state.generation.checked_add(1).ok_or_else(|| {
+                windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(
+                    ERROR_ARITHMETIC_OVERFLOW.0,
+                ))
+            })?;
+            state.connected = true;
         }
+        Ok(connected)
+    }
+
+    pub fn connection_probe(&self) -> Option<ConnectionProbe> {
+        let state = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.connected.then(|| ConnectionProbe {
+            state: Arc::clone(&self.connection),
+            generation: state.generation,
+        })
     }
 
     /// Releases the current client so the instance can accept another.
@@ -280,6 +486,10 @@ impl PipeInstance {
     /// has not yet read, and the last thing written is usually the reply
     /// the client is waiting for.
     pub fn disconnect(&self) {
+        self.connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retire();
         // SAFETY: `handle` is a live pipe instance owned by this struct.
         // Both calls fail harmlessly when no client is connected, which is
         // why their results are discarded.
@@ -309,17 +519,10 @@ impl PipeInstance {
     fn read_exact(&self, buf: &mut [u8]) -> Result<(), Fault> {
         let mut filled = 0;
         while filled < buf.len() {
-            let mut read = 0u32;
             let rest = &mut buf[filled..];
-            // SAFETY: `rest` is a live, uniquely borrowed slice and `read`
-            // is a valid out-parameter; the overlapped pointer is null to
-            // match the pipe's blocking mode.
-            let result = unsafe { ReadFile(self.handle, Some(rest), Some(&mut read), None) };
-            match result {
-                Ok(()) if read == 0 => return Err(Fault::Disconnected),
-                Ok(()) => filled += read as usize,
-                Err(error) if is_disconnect(&error) => return Err(Fault::Disconnected),
-                Err(error) => return Err(Fault::Os(error)),
+            match self.transfer(Transfer::Read(rest))? {
+                0 => return Err(Fault::Disconnected),
+                read => filled += read as usize,
             }
         }
         Ok(())
@@ -329,20 +532,59 @@ impl PipeInstance {
     pub fn write_all(&self, buf: &[u8]) -> Result<(), Fault> {
         let mut written = 0;
         while written < buf.len() {
-            let mut count = 0u32;
             let rest = &buf[written..];
-            // SAFETY: `rest` is a live slice and `count` is a valid
-            // out-parameter; the overlapped pointer is null to match the
-            // pipe's blocking mode.
-            let result = unsafe { WriteFile(self.handle, Some(rest), Some(&mut count), None) };
-            match result {
-                Ok(()) if count == 0 => return Err(Fault::Disconnected),
-                Ok(()) => written += count as usize,
-                Err(error) if is_disconnect(&error) => return Err(Fault::Disconnected),
-                Err(error) => return Err(Fault::Os(error)),
+            match self.transfer(Transfer::Write(rest))? {
+                0 => return Err(Fault::Disconnected),
+                count => written += count as usize,
             }
         }
         Ok(())
+    }
+
+    fn transfer(&self, operation: Transfer<'_>) -> Result<u32, Fault> {
+        let mut overlapped = OVERLAPPED {
+            hEvent: self.event,
+            ..Default::default()
+        };
+        let mut transferred = 0;
+        // SAFETY: this instance has one owning worker and is not Sync. Both
+        // the buffer and OVERLAPPED outlive the joined pending operation.
+        let started = unsafe {
+            match operation {
+                Transfer::Read(buffer) => ReadFile(
+                    self.handle,
+                    Some(buffer),
+                    Some(&mut transferred),
+                    Some(&mut overlapped),
+                ),
+                Transfer::Write(buffer) => WriteFile(
+                    self.handle,
+                    Some(buffer),
+                    Some(&mut transferred),
+                    Some(&mut overlapped),
+                ),
+            }
+        };
+        let completed = match started {
+            Err(error) if is(&error, ERROR_IO_PENDING) => {
+                #[cfg(test)]
+                tests::AFTER_TRANSFER_PENDING.with(|hook| {
+                    if let Some(hook) = hook.borrow_mut().take() {
+                        hook();
+                    }
+                });
+                // SAFETY: no path returns while the kernel owns the buffer.
+                unsafe { GetOverlappedResult(self.handle, &overlapped, &mut transferred, true) }
+            }
+            other => other,
+        };
+        completed.map(|()| transferred).map_err(|error| {
+            if is_disconnect(&error) {
+                Fault::Disconnected
+            } else {
+                Fault::Os(error)
+            }
+        })
     }
 
     /// Reads one frame's payload into `buf`, replacing its contents.
@@ -418,14 +660,33 @@ impl PipeInstance {
 
 impl Drop for PipeInstance {
     fn drop(&mut self) {
+        {
+            let mut state = self
+                .connection
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.retire();
+            state.handle = None;
+            // SAFETY: retire joined the sole probe operation. Later observers
+            // see connected=false and cannot access this event or the pipe.
+            unsafe {
+                let _ = CloseHandle(state.probe_event);
+            }
+        }
         if !self.handle.is_invalid() {
             // SAFETY: the handle came from `CreateNamedPipeW` and is closed
             // exactly once, here.
             unsafe {
                 let _ = CloseHandle(self.handle);
+                let _ = CloseHandle(self.event);
             }
         }
     }
+}
+
+enum Transfer<'a> {
+    Read(&'a mut [u8]),
+    Write(&'a [u8]),
 }
 
 /// True when the error means the other end is gone rather than that
@@ -447,6 +708,10 @@ pub(crate) fn to_wide_nul(s: &str) -> Vec<u16> {
 
 #[cfg(test)]
 mod tests {
+    thread_local! {
+        pub(super) static AFTER_TRANSFER_PENDING: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
     use super::*;
     use sakura_proto::{encode_request, Request};
     use windows::Win32::Storage::FileSystem::{
@@ -476,6 +741,173 @@ mod tests {
     fn scratch_name(tag: &str) -> String {
         let pid = std::process::id();
         format!(r"\\.\pipe\sakura_input_test_{tag}_{pid}")
+    }
+
+    #[test]
+    fn connection_probe_does_not_wait_behind_a_pending_read() {
+        let name = scratch_name("probe-pending-read");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let server = PipeInstance::create(&name, &security, true).expect("pipe");
+        let client = connect(&name).expect("client");
+        server.wait_for_client().expect("accept");
+        let probe = server.connection_probe().expect("probe");
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            AFTER_TRANSFER_PENDING.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    ready_tx.send(()).expect("ready receiver");
+                }))
+            });
+            let mut buffer = Vec::new();
+            matches!(server.read_frame(&mut buffer), Err(Fault::Disconnected))
+        });
+        let ready = ready_rx.recv_timeout(Duration::from_secs(2));
+        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+        let observer = std::thread::spawn(move || {
+            observed_tx
+                .send(probe.is_disconnected())
+                .expect("observer receiver");
+        });
+        let observed = observed_rx.recv_timeout(Duration::from_millis(300));
+        // SAFETY: closing the owned client ends the pending server read even
+        // when the nonblocking observation assertion is going to fail.
+        unsafe {
+            CloseHandle(client).expect("close client");
+        }
+        let read_ended = reader.join().expect("reader joined");
+        observer.join().expect("observer joined");
+        assert!(ready.is_ok() && read_ended);
+        assert_eq!(
+            observed,
+            Ok(false),
+            "liveness observation waited for the other worker's read"
+        );
+    }
+
+    #[test]
+    fn connection_probe_preserves_queued_bytes_and_a_waiting_client_response() {
+        let name = scratch_name("probe-null-write");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let server = PipeInstance::create(&name, &security, true).expect("pipe");
+        let mut expected = Vec::new();
+        sakura_proto::encode_response(&sakura_proto::Response::Pong, 17, &mut expected)
+            .expect("encode reply");
+        let reply_len = expected.len();
+        let client_thread = std::thread::spawn(move || {
+            let client = connect(&name).expect("client");
+            let mut request = Vec::new();
+            encode_request(&Request::Ping, 17, &mut request).expect("encode request");
+            request.push(0xAA); // Another queued request has begun, but is not consumed here.
+            let mut written = 0;
+            let mut received = vec![0; reply_len];
+            let mut filled = 0;
+            // SAFETY: this synchronous test handle is owned on this thread;
+            // buffers live through each call, and close runs before assertions.
+            unsafe {
+                let sent = WriteFile(client, Some(&request), Some(&mut written), None);
+                if sent.is_ok() {
+                    while filled < received.len() {
+                        let mut count = 0;
+                        if ReadFile(
+                            client,
+                            Some(&mut received[filled..]),
+                            Some(&mut count),
+                            None,
+                        )
+                        .is_err()
+                            || count == 0
+                        {
+                            break;
+                        }
+                        filled += count as usize;
+                    }
+                }
+                let _ = CloseHandle(client);
+            }
+            received.truncate(filled);
+            received
+        });
+        server.wait_for_client().expect("accept");
+        let probe = server.connection_probe().expect("probe");
+        let mut buffer = Vec::new();
+        server.read_frame(&mut buffer).expect("first request");
+        let queued_before = server.available_bytes();
+        let mut stayed_live = true;
+        for _ in 0..8 {
+            stayed_live &= !probe.is_disconnected();
+        }
+        let queued_after = server.available_bytes();
+        let sent = server.write_all(&expected);
+        drop(server);
+        let received = client_thread.join().expect("client joined");
+        assert!(stayed_live && sent.is_ok());
+        assert!(matches!(queued_before, Ok(1)) && matches!(queued_after, Ok(1)));
+        assert_eq!(
+            received, expected,
+            "a zero-byte probe disturbed the framed response"
+        );
+    }
+
+    #[test]
+    fn connection_probe_detects_closed_client_with_unread_queued_bytes() {
+        let name = scratch_name("probe-buffered-close");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let server = PipeInstance::create(&name, &security, true).expect("pipe");
+        let client = connect(&name).expect("client");
+        server.wait_for_client().expect("accept");
+        let probe = server.connection_probe().expect("accepted probe");
+        let live = !probe.is_disconnected();
+        let mut written = 0;
+        // SAFETY: this synchronous test client owns its handle, and the byte
+        // and output count stay live through the completed WriteFile.
+        unsafe {
+            WriteFile(client, Some(&[1]), Some(&mut written), None).expect("buffered byte");
+            CloseHandle(client).expect("close client");
+        }
+        let queued = server
+            .available_bytes()
+            .expect("closing pipe still has buffered bytes");
+        let gone = probe.is_disconnected();
+        drop(server);
+        assert!(live);
+        assert_eq!(queued, 1);
+        assert!(
+            gone,
+            "unread abandoned requests are not a live composing peer"
+        );
+        assert!(
+            probe.is_disconnected(),
+            "observer must be safe after pipe drop"
+        );
+    }
+
+    #[test]
+    fn connection_probe_never_follows_a_reused_pipe_instance() {
+        let name = scratch_name("probe-generation");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let server = PipeInstance::create(&name, &security, true).expect("pipe");
+        let first = connect(&name).expect("first client");
+        server.wait_for_client().expect("first accept");
+        let old = server.connection_probe().expect("old probe");
+        server.disconnect();
+        // SAFETY: the test closes each successful client handle exactly once.
+        unsafe {
+            CloseHandle(first).expect("close first");
+        }
+        let accepting = std::thread::spawn(move || {
+            server.wait_for_client().expect("second accept");
+            server
+        });
+        let second =
+            crate::Client::connect_to(&name, Duration::from_secs(2)).expect("second client");
+        let server = accepting.join().expect("accept ended");
+        let current = server.connection_probe().expect("current probe");
+        let stale = old.is_disconnected();
+        let live = !current.is_disconnected();
+        drop(second);
+        drop(server);
+        assert!(stale && live);
+        assert!(old.is_disconnected() && current.is_disconnected());
     }
 
     #[test]

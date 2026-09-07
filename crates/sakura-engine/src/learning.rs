@@ -999,7 +999,13 @@ impl LearningService {
             }
             if variants
                 .iter()
-                .any(|variant| variant.repaired.as_str() == reading)
+                // A prior commit is evidence for named input rules, not for
+                // broad edit-distance guesses. Otherwise merely committing
+                // "い" makes "う" -> "い" a history-authorized repair.
+                .any(|variant| {
+                    variant.kind == sakura_core::RepairKind::Rule
+                        && variant.repaired.as_str() == reading
+                })
                 && !out.iter().any(|existing| existing.as_str() == reading)
             {
                 let mut text = FixedStr::new();
@@ -2549,6 +2555,38 @@ mod tests {
             hints.iter().any(|hint| hint.as_str() == "こんにちは"),
             "known repair variant must remain available: {hints:?}"
         );
+    }
+
+    #[test]
+    fn advanced_short_readings_do_not_gain_commit_history_authority() {
+        let support = sakura_core::InputSupport::default();
+        for (typed, repaired) in [
+            ("う", "い"),
+            ("いて", "って"),
+            ("い", "お"),
+            ("なに", "ない"),
+        ] {
+            let variants = sakura_core::collect_repair_variants(
+                typed,
+                support,
+                sakura_core::MAX_REPAIR_VARIANTS,
+            );
+            assert!(
+                variants.iter().any(|variant| {
+                    variant.repaired.as_str() == repaired
+                        && variant.kind == sakura_core::RepairKind::Advanced
+                }),
+                "fixture must exercise an actual Advanced variant: {typed} -> {repaired}"
+            );
+            let service = LearningService::memory();
+            assert!(service
+                .collect_commit_repair_readings(typed, support)
+                .is_empty());
+            service.learn(repaired, repaired, 0, 0);
+            let hints = service.collect_commit_repair_readings(typed, support);
+            assert!(hints.is_empty(),
+                "unrelated prior commits must not promote Advanced variants: {typed} -> {repaired}, hints={hints:?}");
+        }
     }
 
     #[test]
