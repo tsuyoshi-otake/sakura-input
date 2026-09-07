@@ -153,8 +153,13 @@ pub(crate) enum AiTextPoll {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CandidateCommitPoll {
-    Pending { revision: u64, candidate_index: u16 },
+    Pending {
+        revision: u64,
+        candidate_index: u16,
+    },
     None,
+    /// No request was sent. The existing timer owns the next bounded attempt.
+    Deferred,
     Unavailable,
 }
 
@@ -585,12 +590,13 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return CandidateCommitPoll::Unavailable;
         };
-        match link.client.call_until(
-            &Request::PollCandidateCommit {
-                session: link.session,
-            },
-            callback_deadline::limit(UI_BUDGET),
-        ) {
+        let request = Request::PollCandidateCommit {
+            session: link.session,
+        };
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(UI_BUDGET))
+        {
             Ok(Response::CandidateCommitPending {
                 request: Some((revision, candidate_index)),
             }) => CandidateCommitPoll::Pending {
@@ -598,9 +604,10 @@ impl Engine {
                 candidate_index,
             },
             Ok(Response::CandidateCommitPending { request: None }) => CandidateCommitPoll::None,
+            Err(Fault::DeadlineExpired) if !link.desynchronized => CandidateCommitPoll::Deferred,
             Err(Fault::DeadlineExpired) => CandidateCommitPoll::Unavailable,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::UiPlacement);
+                note_timeout(timeout_operation(&request));
                 CandidateCommitPoll::Unavailable
             }
             Ok(_) | Err(_) => {
@@ -1054,9 +1061,8 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         Request::Revert { .. } => TimeoutOperation::Revert,
         Request::ResetDocumentContext { .. } => TimeoutOperation::Administration,
         Request::UndoCommit { .. } => TimeoutOperation::Revert,
-        Request::SetUiPlacement { .. }
-        | Request::WatchUi { .. }
-        | Request::PollCandidateCommit { .. } => TimeoutOperation::UiPlacement,
+        Request::SetUiPlacement { .. } | Request::WatchUi { .. } => TimeoutOperation::UiPlacement,
+        Request::PollCandidateCommit { .. } => TimeoutOperation::CandidatePoll,
         Request::Hello { .. } | Request::CreateSession { .. } => TimeoutOperation::Handshake,
         Request::ClearLearning
         | Request::ClearInputHistory
@@ -1957,6 +1963,56 @@ mod tests {
     }
 
     #[test]
+    fn candidate_poll_timeout_is_distinct_from_geometry_timeout() {
+        assert_eq!(
+            timeout_operation(&Request::PollCandidateCommit { session: 1 }).name(),
+            "candidate-poll",
+            "passive polling cannot be counted as placement traffic"
+        );
+    }
+
+    #[test]
+    fn candidate_poll_sent_timeout_is_unavailable_without_retry() {
+        let (name, server) = fake_engine("candidate-poll-timeout", |pipe, buffer| {
+            let payload = pipe.read_frame(buffer).expect("poll request");
+            let (id, request) = decode_request(payload).expect("decode poll");
+            assert_eq!(request, Request::PollCandidateCommit { session: 1 });
+            std::thread::sleep(UI_BUDGET * 3);
+            let mut reply = Vec::new();
+            encode_response(
+                &Response::CandidateCommitPending { request: None },
+                id,
+                &mut reply,
+            )
+            .expect("encode delayed reply");
+            let _ = pipe.write_all(&reply);
+            assert!(
+                pipe.read_frame_with_deadline(buffer, Duration::from_millis(100))
+                    .is_err(),
+                "a failed cosmetic poll must not create hidden retries"
+            );
+        });
+        let mut engine = Engine::attached_to(&name);
+        let before = engine
+            .link
+            .as_ref()
+            .expect("connected")
+            .client
+            .next_request_id();
+        let outcome = engine.poll_candidate_commit();
+        let after = engine
+            .link
+            .as_ref()
+            .expect("retained link")
+            .client
+            .next_request_id();
+        drop(engine);
+        server.join().expect("bounded peer ended");
+        assert_eq!(outcome, CandidateCommitPoll::Unavailable);
+        assert_eq!(after, before + 1);
+    }
+
+    #[test]
     fn ui_placement_timeout_is_not_cached_and_late_ack_is_not_applied_to_new_geometry() {
         let (release_tx, release_rx) = std::sync::mpsc::channel();
         let (observed_tx, observed_rx) = std::sync::mpsc::channel();
@@ -2106,8 +2162,10 @@ mod tests {
             .expect("live link")
             .client
             .next_request_id();
+        let deferred_poll;
         let refused = {
             let _expired = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            deferred_poll = engine.poll_candidate_commit();
             [
                 engine.send_key(a_key('x')),
                 engine.probe_key(InputScope::Normal, a_key('x')),
@@ -2126,11 +2184,13 @@ mod tests {
         });
         let later = engine.send_key(a_key('a'));
         engine.link.as_mut().expect("same link").desynchronized = true;
-        let (uncertain, missing) = {
+        let (uncertain, missing, uncertain_poll, missing_poll) = {
             let _expired = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
             (
                 engine.send_key(a_key('x')),
                 Engine::new().send_key(a_key('x')),
+                engine.poll_candidate_commit(),
+                Engine::new().poll_candidate_commit(),
             )
         };
         let uncertainty_preserved = engine.is_desynchronized();
@@ -2138,9 +2198,16 @@ mod tests {
         server.join().expect("peer joined before assertions");
         assert!(matches!(first, Answer::Ready(_)));
         assert!(unchanged);
+        assert_eq!(
+            deferred_poll,
+            CandidateCommitPoll::Deferred,
+            "an unissued cosmetic poll must not end the candidate UI"
+        );
         assert!(uncertainty_preserved);
         assert!(matches!(uncertain, Answer::Unavailable));
         assert!(matches!(missing, Answer::Unavailable));
+        assert_eq!(uncertain_poll, CandidateCommitPoll::Unavailable);
+        assert_eq!(missing_poll, CandidateCommitPoll::Unavailable);
         for answer in refused {
             assert!(matches!(answer, Answer::Rejected),
                 "unissued operations must only cancel their own reservation, not invoke recovery: {answer:?}");

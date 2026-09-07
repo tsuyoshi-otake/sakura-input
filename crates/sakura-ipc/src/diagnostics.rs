@@ -45,10 +45,13 @@ pub enum TimeoutOperation {
     Resynchronize = 8,
     Administration = 9,
     ProbeKey = 10,
+    /// Passive candidate-click polling. Older builds counted this as code 7,
+    /// so historical ui-placement records cannot be split retrospectively.
+    CandidatePoll = 11,
 }
 
 impl TimeoutOperation {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Connect,
         Self::Handshake,
         Self::Key,
@@ -59,6 +62,7 @@ impl TimeoutOperation {
         Self::Resynchronize,
         Self::Administration,
         Self::ProbeKey,
+        Self::CandidatePoll,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -73,6 +77,7 @@ impl TimeoutOperation {
             Self::Resynchronize => "resynchronize",
             Self::Administration => "administration",
             Self::ProbeKey => "probe-key",
+            Self::CandidatePoll => "candidate-poll",
         }
     }
 
@@ -539,6 +544,22 @@ mod tests {
             0
         );
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn candidate_poll_records_do_not_relabel_legacy_placement_records() {
+        let path = temporary_file("candidate-poll");
+        record_timeout_at(&path, TimeoutOperation::UiPlacement).expect("legacy record");
+        record_timeout_at(&path, TimeoutOperation::CandidatePoll).expect("poll record");
+        let result = read_timeout_diagnostics(&path);
+        let _ = fs::remove_file(path);
+        let diagnostics = result.expect("read both versions' operation codes");
+        assert_eq!(TimeoutOperation::UiPlacement as u16, 7);
+        assert_eq!(TimeoutOperation::CandidatePoll as u16, 11);
+        assert_eq!(diagnostics.valid_events, 2);
+        assert_eq!(diagnostics.invalid_records, 0);
+        assert_eq!(diagnostics.count(TimeoutOperation::UiPlacement), 1);
+        assert_eq!(diagnostics.count(TimeoutOperation::CandidatePoll), 1);
     }
 
     #[test]

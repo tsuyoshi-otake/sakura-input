@@ -4757,7 +4757,7 @@ impl TextService_Impl {
                 revision,
                 candidate_index,
             } => (revision, candidate_index),
-            CandidateCommitPoll::None => return,
+            CandidateCommitPoll::None | CandidateCommitPoll::Deferred => return,
             CandidateCommitPoll::Unavailable => {
                 service.stop_candidate_commit_timer();
                 let _ = service.queue_end_candidates();
