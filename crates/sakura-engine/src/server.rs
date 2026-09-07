@@ -1727,24 +1727,16 @@ fn serve(
 
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
+                #[cfg(test)]
+                tests::BEFORE_OUTPUT.with(|hook| {
+                    if let Some(hook) = hook.borrow_mut().take() {
+                        hook();
+                    }
+                });
                 // The diagnostic helper has a non-trivial call frame. Keep it
                 // entirely off the ordinary 160 KiB worker-stack path.
                 if debug_trace::is_enabled() {
                     trace_key_result(&request, &bufs.out);
-                }
-                if let Some(session) = output_session {
-                    let learning_generation = shared
-                        .learning
-                        .as_ref()
-                        .map_or(0, |learning| learning.generation());
-                    shared.ui.publish_output_from(
-                        dispatcher.ui_owner(),
-                        session,
-                        &bufs.out,
-                        learning_generation,
-                    );
-                } else if let Some(mode) = bufs.out.mode {
-                    shared.ui.publish(mode);
                 }
                 let written = match bufs.out.encode_frame(id, &mut bufs.frame) {
                     Ok(written) => written,
@@ -1763,6 +1755,23 @@ fn serve(
                 };
                 if let Err(fault) = instance.write_all(&bufs.frame[..written]) {
                     return end(fault);
+                }
+                // An abandoned client's output must not replace another
+                // connection's newer UI when its response cannot be sent.
+                // Successful transport is not a host document-apply receipt.
+                if let Some(session) = output_session {
+                    let learning_generation = shared
+                        .learning
+                        .as_ref()
+                        .map_or(0, |learning| learning.generation());
+                    shared.ui.publish_output_from(
+                        dispatcher.ui_owner(),
+                        session,
+                        &bufs.out,
+                        learning_generation,
+                    );
+                } else if let Some(mode) = bufs.out.mode {
+                    shared.ui.publish(mode);
                 }
             }
             Reply::Message(response) => {
@@ -1895,6 +1904,8 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
 #[cfg(test)]
 mod tests {
     thread_local! {
+        pub(super) static BEFORE_OUTPUT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
         pub(super) static FAIL_PIPE_SPAWN_AFTER: std::cell::Cell<Option<usize>> =
             const { std::cell::Cell::new(None) };
     }
@@ -1938,6 +1949,82 @@ mod tests {
             }),
             verbose: false,
         }
+    }
+
+    #[test]
+    fn disconnected_output_cannot_replace_newer_ui_state() {
+        use sakura_proto::{KeyCode, KeyInput, Mode, Modifiers};
+
+        let shared = Arc::new(test_shared(Arc::new(LearningService::memory())));
+        let name = unique_test_pipe("abandoned-output");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let instance = PipeInstance::create(&name, &security, true).expect("create");
+        let mut client = Client::connect_to(&name, Duration::from_secs(5)).expect("connect");
+        instance.wait_for_client().expect("accept");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (session_tx, session_rx) = mpsc::channel();
+        let owned = Arc::clone(&shared);
+        let serving = std::thread::spawn(move || {
+            let mut dispatcher = Dispatcher::new().expect("dispatcher");
+            let mut bufs = Buffers::new();
+            let Reply::Message(Response::SessionCreated { session, .. }) = dispatcher.dispatch(
+                &Request::CreateSession {
+                    process_name: "synthetic.exe".to_owned(),
+                },
+                &mut bufs.out,
+            ) else {
+                panic!("session creation");
+            };
+            session_tx.send(session).expect("session receiver");
+            BEFORE_OUTPUT.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    ready_tx.send(()).expect("ready receiver");
+                    release_rx
+                        .recv_timeout(Duration::from_secs(5))
+                        .expect("release output");
+                }))
+            });
+            serve(
+                &owned,
+                &instance,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut dispatcher,
+                &mut bufs,
+            )
+        });
+        let session = session_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("session");
+        let reply = client.call(
+            &Request::SendKey {
+                session,
+                key: KeyInput {
+                    code: KeyCode::HankakuZenkaku,
+                    ch: None,
+                    modifiers: Modifiers::NONE,
+                    repeat: false,
+                    test_only: false,
+                },
+            },
+            Duration::from_millis(200),
+        );
+        let reached = ready_rx.recv_timeout(Duration::from_secs(5));
+        drop(client);
+        shared.ui.publish(Mode::Katakana);
+        let newer = look(&shared.ui, 0);
+        release_tx.send(()).expect("release server");
+        let outcome = serving.join().expect("server terminated");
+        assert!(matches!(reply, Err(Fault::Timeout)), "{reply:?}");
+        assert!(reached.is_ok(), "request must reach the output boundary");
+        assert!(matches!(outcome, Outcome::Closed | Outcome::Failed(_)));
+        let after = look(&shared.ui, 0);
+        assert_eq!(
+            after.revision, newer.revision,
+            "undeliverable output changed the shared UI"
+        );
+        assert_eq!(after.mode, newer.mode);
     }
 
     #[test]
