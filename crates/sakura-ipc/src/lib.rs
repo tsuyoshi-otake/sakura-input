@@ -35,4 +35,4 @@ pub use security::{
     classify_client_process, pipe_name, pipe_name_for, sddl, sddl_for, verify_server_process,
     ClientTrust, Descriptor, Endpoint, ServerRejection, ServerTrustPolicy, CLIENT_ACCESS,
 };
-pub use transport::{Accept, Fault, PipeInstance, MAX_INSTANCES};
+pub use transport::{Accept, ConnectionProbe, Fault, PipeInstance, MAX_INSTANCES};

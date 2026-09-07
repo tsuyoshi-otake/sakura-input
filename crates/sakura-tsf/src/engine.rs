@@ -81,9 +81,9 @@ pub enum Answer {
     /// its explicit terminal outcome; handing it to the document would race
     /// the exact-text undo.
     Busy,
-    /// This request never reached the engine: it failed to encode on this
-    /// side of the wire (e.g. a reconversion selection too large to fit
-    /// the protocol). The peer was never contacted and never misbehaved,
+    /// This request never reached the engine: local encoding failed or the
+    /// callback allowance expired before sending to a synchronized session.
+    /// The peer was never contacted for this operation and never misbehaved,
     /// so only this operation is refused — the link, the session, and any
     /// other work already in flight are untouched.
     Rejected,
@@ -153,8 +153,13 @@ pub(crate) enum AiTextPoll {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CandidateCommitPoll {
-    Pending { revision: u64, candidate_index: u16 },
+    Pending {
+        revision: u64,
+        candidate_index: u16,
+    },
     None,
+    /// No request was sent. The existing timer owns the next bounded attempt.
+    Deferred,
     Unavailable,
 }
 
@@ -189,6 +194,17 @@ struct Link {
     /// applied that keystroke, so the two ends can no longer be assumed to
     /// agree about what is being composed.
     desynchronized: bool,
+    /// Only valid until any intervening wire request. In particular a key,
+    /// scope change or resync may replace the board's owner/placement.
+    placement_ack: Option<PlacementAck>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PlacementAck {
+    next_request_id: sakura_proto::RequestId,
+    anchor: Option<ScreenRect>,
+    document: Option<ScreenRect>,
+    renderer_visible: bool,
 }
 
 impl Engine {
@@ -219,7 +235,7 @@ impl Engine {
     pub fn send_key(&mut self, key: KeyInput) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::SendKey { session, key })
     }
@@ -227,7 +243,7 @@ impl Engine {
     pub(crate) fn apply_ai_composition(&mut self, result: String) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::ApplyAiComposition { session, result })
     }
@@ -474,7 +490,7 @@ impl Engine {
     ) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         key.test_only = true;
         self.request(&Request::ProbeKey {
@@ -563,7 +579,7 @@ impl Engine {
     pub fn commit(&mut self) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::Commit { session })
     }
@@ -574,12 +590,13 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return CandidateCommitPoll::Unavailable;
         };
-        match link.client.call_until(
-            &Request::PollCandidateCommit {
-                session: link.session,
-            },
-            callback_deadline::limit(UI_BUDGET),
-        ) {
+        let request = Request::PollCandidateCommit {
+            session: link.session,
+        };
+        match link
+            .client
+            .call_until(&request, callback_deadline::limit(UI_BUDGET))
+        {
             Ok(Response::CandidateCommitPending {
                 request: Some((revision, candidate_index)),
             }) => CandidateCommitPoll::Pending {
@@ -587,9 +604,10 @@ impl Engine {
                 candidate_index,
             },
             Ok(Response::CandidateCommitPending { request: None }) => CandidateCommitPoll::None,
+            Err(Fault::DeadlineExpired) if !link.desynchronized => CandidateCommitPoll::Deferred,
             Err(Fault::DeadlineExpired) => CandidateCommitPoll::Unavailable,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::UiPlacement);
+                note_timeout(timeout_operation(&request));
                 CandidateCommitPoll::Unavailable
             }
             Ok(_) | Err(_) => {
@@ -602,7 +620,7 @@ impl Engine {
     pub(crate) fn commit_candidate(&mut self, revision: u64, candidate_index: u16) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::CommitCandidate {
             session,
@@ -618,7 +636,7 @@ impl Engine {
     pub fn reconvert(&mut self, text: String, preview: bool) -> Answer {
         let session = match self.link() {
             Some(link) => link.session,
-            None => return Answer::Unavailable,
+            None => return self.unissued_answer(),
         };
         self.request(&Request::Reconvert {
             session,
@@ -710,6 +728,22 @@ impl Engine {
         let Some(link) = self.link.as_mut() else {
             return false;
         };
+        let placement = PlacementAck {
+            next_request_id: link.client.next_request_id(),
+            anchor,
+            document,
+            renderer_visible,
+        };
+        // Idle mode indicators share geometry across connections without a
+        // candidate owner. Another host may have replaced that anchor since
+        // our last acknowledgement, so only visible candidate placement is
+        // eligible for local deduplication.
+        if renderer_visible && !link.desynchronized && link.placement_ack == Some(placement) {
+            return true;
+        }
+        // Never remember an unacknowledged update, including a timeout whose
+        // late reply may be drained by a future call. No retry is scheduled.
+        link.placement_ack = None;
         let request = Request::SetUiPlacement {
             session: link.session,
             anchor,
@@ -720,7 +754,13 @@ impl Engine {
             .client
             .call_until(&request, callback_deadline::limit(UI_BUDGET))
         {
-            Ok(Response::Ok) => true,
+            Ok(Response::Ok) => {
+                link.placement_ack = Some(PlacementAck {
+                    next_request_id: link.client.next_request_id(),
+                    ..placement
+                });
+                true
+            }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
                 note_timeout(TimeoutOperation::UiPlacement);
@@ -799,6 +839,7 @@ impl Engine {
 
             // No request bytes were issued. Preserve the link and its known
             // session state; only this callback's allowance is exhausted.
+            Err(Fault::DeadlineExpired) if !link.desynchronized => Answer::Rejected,
             Err(Fault::DeadlineExpired) => Answer::Unavailable,
 
             // Kept, not dropped: see the module docs. The flag is what
@@ -821,6 +862,21 @@ impl Engine {
                 self.drop_link();
                 Answer::Unavailable
             }
+        }
+    }
+
+    /// An expired callback can refuse a request without losing its session.
+    /// TSF must cancel only that request, rather than recover and discard all
+    /// preceding writes as it does for Unavailable.
+    fn unissued_answer(&self) -> Answer {
+        if self.link.as_ref().is_some_and(|link| !link.desynchronized)
+            && Instant::now() >= callback_deadline::limit(KEY_BUDGET)
+        {
+            Answer::Rejected
+        } else {
+            // A missing link or an earlier uncertain mutation still needs
+            // recovery. Expiry cannot turn either into a healthy session.
+            Answer::Unavailable
         }
     }
 
@@ -977,6 +1033,7 @@ fn open(name: Option<&str>) -> Option<Link> {
             mode_before_sensitive: None,
             input_scope: None,
             desynchronized: false,
+            placement_ack: None,
         }),
         Err(Fault::DeadlineExpired) => None,
         Err(Fault::Timeout) => {
@@ -1004,9 +1061,8 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         Request::Revert { .. } => TimeoutOperation::Revert,
         Request::ResetDocumentContext { .. } => TimeoutOperation::Administration,
         Request::UndoCommit { .. } => TimeoutOperation::Revert,
-        Request::SetUiPlacement { .. }
-        | Request::WatchUi { .. }
-        | Request::PollCandidateCommit { .. } => TimeoutOperation::UiPlacement,
+        Request::SetUiPlacement { .. } | Request::WatchUi { .. } => TimeoutOperation::UiPlacement,
+        Request::PollCandidateCommit { .. } => TimeoutOperation::CandidatePoll,
         Request::Hello { .. } | Request::CreateSession { .. } => TimeoutOperation::Handshake,
         Request::ClearLearning
         | Request::ClearInputHistory
@@ -1884,7 +1940,7 @@ mod tests {
         let (key_refused, ui_refused) = {
             let _callback = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
             (
-                matches!(engine.send_key(a_key('a')), Answer::Unavailable),
+                matches!(engine.send_key(a_key('a')), Answer::Rejected),
                 !engine.set_ui_placement(None, None, false),
             )
         };
@@ -1894,12 +1950,270 @@ mod tests {
         drop(engine);
         server.join().expect("scripted peer joined");
         assert!(matches!(expired, Err(Fault::DeadlineExpired)));
-        assert!(unchanged && key_refused && ui_refused && known);
+        assert!(unchanged && ui_refused && known);
+        assert!(
+            key_refused,
+            "an unissued key must not ask TSF to recover a healthy session"
+        );
         assert!(no_request.expect("bounded observation"));
         assert!(
             matches!(later, Answer::Ready(_)),
             "scope return must restore future allowance"
         );
+    }
+
+    #[test]
+    fn candidate_poll_timeout_is_distinct_from_geometry_timeout() {
+        assert_eq!(
+            timeout_operation(&Request::PollCandidateCommit { session: 1 }).name(),
+            "candidate-poll",
+            "passive polling cannot be counted as placement traffic"
+        );
+    }
+
+    #[test]
+    fn candidate_poll_sent_timeout_is_unavailable_without_retry() {
+        let (name, server) = fake_engine("candidate-poll-timeout", |pipe, buffer| {
+            let payload = pipe.read_frame(buffer).expect("poll request");
+            let (id, request) = decode_request(payload).expect("decode poll");
+            assert_eq!(request, Request::PollCandidateCommit { session: 1 });
+            std::thread::sleep(UI_BUDGET * 3);
+            let mut reply = Vec::new();
+            encode_response(
+                &Response::CandidateCommitPending { request: None },
+                id,
+                &mut reply,
+            )
+            .expect("encode delayed reply");
+            let _ = pipe.write_all(&reply);
+            assert!(
+                pipe.read_frame_with_deadline(buffer, Duration::from_millis(100))
+                    .is_err(),
+                "a failed cosmetic poll must not create hidden retries"
+            );
+        });
+        let mut engine = Engine::attached_to(&name);
+        let before = engine
+            .link
+            .as_ref()
+            .expect("connected")
+            .client
+            .next_request_id();
+        let outcome = engine.poll_candidate_commit();
+        let after = engine
+            .link
+            .as_ref()
+            .expect("retained link")
+            .client
+            .next_request_id();
+        drop(engine);
+        server.join().expect("bounded peer ended");
+        assert_eq!(outcome, CandidateCommitPoll::Unavailable);
+        assert_eq!(after, before + 1);
+    }
+
+    #[test]
+    fn ui_placement_timeout_is_not_cached_and_late_ack_is_not_applied_to_new_geometry() {
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("placement-late-ack", move |pipe, buffer| {
+            let mut anchors = Vec::new();
+            loop {
+                let payload = match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
+                    Ok(payload) => payload,
+                    Err(Fault::Disconnected) => break,
+                    Err(fault) => panic!("bounded placement read: {fault:?}"),
+                };
+                let (id, request) = decode_request(payload).expect("decode");
+                let Request::SetUiPlacement { anchor, .. } = request else {
+                    panic!("placement only");
+                };
+                anchors.push(anchor);
+                if anchors.len() == 2 {
+                    release_rx
+                        .recv_timeout(Duration::from_secs(2))
+                        .expect("release late reply");
+                }
+                let mut reply = Vec::new();
+                encode_response(&Response::Ok, id, &mut reply).expect("encode");
+                pipe.write_all(&reply).expect("reply");
+            }
+            observed_tx.send(anchors).expect("observer");
+        });
+        let mut engine = Engine::attached_to(&name);
+        let first = Some(ScreenRect {
+            left: 1,
+            top: 2,
+            right: 3,
+            bottom: 4,
+        });
+        let changed = Some(ScreenRect {
+            left: 10,
+            top: 20,
+            right: 30,
+            bottom: 40,
+        });
+        let newest = Some(ScreenRect {
+            left: 100,
+            top: 200,
+            right: 300,
+            bottom: 400,
+        });
+        let accepted_first = engine.set_ui_placement(first, None, true);
+        let rejected_late = !engine.set_ui_placement(changed, None, true);
+        let healthy = engine.is_connected() && !engine.is_desynchronized();
+        release_tx.send(()).expect("release server");
+        let accepted_retry = engine.set_ui_placement(changed, None, true);
+        let accepted_newest = engine.set_ui_placement(newest, None, true);
+        let duplicate = engine.set_ui_placement(newest, None, true);
+        drop(engine);
+        server.join().expect("peer ended");
+        let anchors = observed_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("anchors");
+        assert!(
+            accepted_first
+                && rejected_late
+                && healthy
+                && accepted_retry
+                && accepted_newest
+                && duplicate
+        );
+        assert_eq!(anchors, vec![first, changed, changed, newest]);
+    }
+
+    #[test]
+    fn ui_placement_repeated_geometry_is_bounded_and_key_output_invalidates_it() {
+        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("placement-dedup", move |pipe, buffer| {
+            let mut placements = 0;
+            loop {
+                let payload = match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
+                    Ok(payload) => payload,
+                    Err(Fault::Disconnected) => break,
+                    Err(fault) => panic!("bounded peer read: {fault:?}"),
+                };
+                let (id, request) = decode_request(payload).expect("request");
+                let response = match request {
+                    Request::SetUiPlacement { .. } => {
+                        placements += 1;
+                        Response::Ok
+                    }
+                    Request::SendKey { .. } => Response::Output(some_output()),
+                    other => panic!("unexpected request: {other:?}"),
+                };
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                pipe.write_all(&reply).expect("reply");
+            }
+            observed_tx.send(placements).expect("observer");
+        });
+        let mut engine = Engine::attached_to(&name);
+        let anchor = Some(ScreenRect {
+            left: 10,
+            top: 20,
+            right: 12,
+            bottom: 40,
+        });
+        let mut accepted = engine.set_ui_placement(anchor, None, true);
+        for _ in 0..100 {
+            accepted &= engine.set_ui_placement(anchor, None, true);
+        }
+        let key = engine.send_key(a_key('a'));
+        accepted &= engine.set_ui_placement(anchor, None, true);
+        accepted &= engine.set_ui_placement(anchor, None, false);
+        accepted &= engine.set_ui_placement(anchor, None, false);
+        drop(engine);
+        server.join().expect("peer ended");
+        let count = observed_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("count");
+        assert!(accepted);
+        assert!(matches!(key, Answer::Ready(_)));
+        assert_eq!(
+            count, 4,
+            "duplicates collapse, but idle geometry must refresh across hosts"
+        );
+    }
+
+    #[test]
+    fn callback_deadline_unissued_operations_preserve_the_live_composition_contract() {
+        let (name, server) = fake_engine("unissued-operations", |pipe, buffer| {
+            for (expected, text) in [('k', "k"), ('a', "か")] {
+                let payload = pipe
+                    .read_frame_with_deadline(buffer, Duration::from_secs(2))
+                    .expect("bounded next request");
+                let (id, request) = decode_request(payload).expect("decode");
+                assert!(
+                    matches!(request, Request::SendKey { session: 1, key } if key.ch == Some(expected)),
+                    "no rejected operation or recovery request may reach the peer: {request:?}"
+                );
+                let mut reply = Vec::new();
+                encode_response(&Response::Output(latin_preedit(text)), id, &mut reply)
+                    .expect("encode");
+                pipe.write_all(&reply).expect("write");
+            }
+        });
+        let mut engine = Engine::attached_to(&name);
+        let first = engine.send_key(a_key('k'));
+        let next = engine
+            .link
+            .as_ref()
+            .expect("live link")
+            .client
+            .next_request_id();
+        let deferred_poll;
+        let refused = {
+            let _expired = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            deferred_poll = engine.poll_candidate_commit();
+            [
+                engine.send_key(a_key('x')),
+                engine.probe_key(InputScope::Normal, a_key('x')),
+                engine.commit(),
+                engine.reconvert("仮名".to_owned(), false),
+                engine.commit_candidate(1, 0),
+                engine.apply_ai_composition("結果".to_owned()),
+                engine.request(&Request::SendKey {
+                    session: 1,
+                    key: a_key('x'),
+                }),
+            ]
+        };
+        let unchanged = engine.link.as_ref().is_some_and(|link| {
+            link.session == 1 && !link.desynchronized && link.client.next_request_id() == next
+        });
+        let later = engine.send_key(a_key('a'));
+        engine.link.as_mut().expect("same link").desynchronized = true;
+        let (uncertain, missing, uncertain_poll, missing_poll) = {
+            let _expired = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            (
+                engine.send_key(a_key('x')),
+                Engine::new().send_key(a_key('x')),
+                engine.poll_candidate_commit(),
+                Engine::new().poll_candidate_commit(),
+            )
+        };
+        let uncertainty_preserved = engine.is_desynchronized();
+        drop(engine);
+        server.join().expect("peer joined before assertions");
+        assert!(matches!(first, Answer::Ready(_)));
+        assert!(unchanged);
+        assert_eq!(
+            deferred_poll,
+            CandidateCommitPoll::Deferred,
+            "an unissued cosmetic poll must not end the candidate UI"
+        );
+        assert!(uncertainty_preserved);
+        assert!(matches!(uncertain, Answer::Unavailable));
+        assert!(matches!(missing, Answer::Unavailable));
+        assert_eq!(uncertain_poll, CandidateCommitPoll::Unavailable);
+        assert_eq!(missing_poll, CandidateCommitPoll::Unavailable);
+        for answer in refused {
+            assert!(matches!(answer, Answer::Rejected),
+                "unissued operations must only cancel their own reservation, not invoke recovery: {answer:?}");
+        }
+        assert!(matches!(later, Answer::Ready(ref output)
+            if output.preedit.as_ref().is_some_and(|preedit| preedit.segments.first().is_some_and(|segment| segment.text == "か"))));
     }
 
     #[test]
