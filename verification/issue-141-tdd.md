@@ -182,6 +182,33 @@ comparison, a shared target reused an old test binary and reported zero matching
 tests; that invocation was rejected as evidence. The target-specific local
 packages were cleaned and rebuilt before the new test and final Release suite.
 
-Final combined patch: workspace **1,833 passed / 85 ignored**; Release dictionary
+Before the passive-poll correction: workspace **1,833 passed / 85 ignored**; Release dictionary
 suite **35 passed** separately; Clippy with `-D warnings`, formatting and diff
 checks passed. Each invocation ended with zero surviving owned processes.
+
+## Passive candidate polling (#142)
+
+The v1.0.36 `ui-placement` diagnostic category also counted
+`PollCandidateCommit` timeouts. The observed 29 records cannot retrospectively
+be attributed entirely to geometry updates. New candidate polls use append-only
+operation code 11 (`candidate-poll`); historical code 7 keeps its existing name
+and count. A mixed-record regression verifies this compatibility.
+
+A second unissued-expiry counterexample was found in passive click polling.
+The client returned `Unavailable` before transmitting anything, and TextService
+stopped its timer and ended the candidate UI. RED expected `Deferred`, observed
+`Unavailable`. On a synchronized connection this now returns `Deferred`; the
+existing timer owns the next bounded attempt, with no immediate retry. Missing
+or desynchronized connections and actual sent-request timeouts remain
+`Unavailable`. A private-pipe timeout control verifies exactly one request and
+no hidden retry. The shared callback regression also verifies no wire request,
+unchanged session/request identity, and successful following text input.
+
+The distinction and the no-send UI continuation pass their regressions. This
+does not establish which of the historical records was a passive poll or prove
+that every UI timeout is resolved. Actual host visual acceptance remains open.
+
+Final combined workspace after this correction: **1,836 passed / 85 ignored**,
+Clippy `-D warnings`, formatting and diff checks passed; zero surviving owned
+processes. The separately measured Release dictionary result above still applies
+to the unchanged conversion and learning implementation.
