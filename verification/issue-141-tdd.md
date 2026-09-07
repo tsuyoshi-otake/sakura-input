@@ -107,3 +107,46 @@ values with no model worker installed in the fixture; it is not a real-model
 quality evaluation. It does not claim that the production user intended a
 different selection, or that all of the broader original #108 requirements are
 complete. No production learning store was read into the fixture or modified.
+
+## Abandoned connection ownership (#102, cases A–D)
+
+Two real private-pipe regressions established RED before correction. A worker
+paused after dispatch kept its composition fence after the client timed out and
+closed; a replacement connection's `b` was consumed with no preedit. Separately,
+a queued `a` was dispatched after its client closed, changing the old `k` reading
+to `か`. These are executable counterexamples, not a claim that production logs
+uniquely identify these causes.
+
+Accepted connections now expose a generation-bound liveness probe. The fence
+retires only claims with positive disconnect evidence. Unknown/busy observations
+retain the claim, and a retired claim stays recorded until its owning dispatcher
+finalizes, preventing late teardown from arming the Space latch twice. Queries
+inspect only claims for the requested host: O(number of that host's claims),
+with O(live and retiring sessions) storage and no polling thread or retry loop.
+The server checks connection liveness after decoding and immediately before
+dispatch; abandoned queued requests terminate without dispatch. A computation
+already in progress is not rolled back or forcibly cancelled.
+
+Pipe instances use overlapped handles with explicitly joined operations. This
+lets the liveness query run while its owner waits for a read. A Windows client
+PID lookup still succeeds after close, and PeekNamedPipe can still succeed on
+unread abandoned bytes; neither alone proves liveness. For buffered bytes, a
+zero-byte asynchronous write checks the outbound connection without adding a
+protocol frame or consuming input. At most one probe operation is retained;
+pending probes are polled without waiting and cancelled **and joined** by the
+pipe owner before storage/handles are released. Unknown errors remain unknown.
+
+Transport regressions cover a pending server read, an intact waiting client's
+exact framed reply and queued input, closed clients with unread bytes, pipe
+instance reuse, and observers surviving owner drop. The replacement-connection
+regression verifies `b` preedit/commit and that late old-worker finalization does
+not rearm Space absorption. The queued-request regression retains `k`.
+
+- `cargo test --locked --offline -p sakura-ipc --lib connection_probe`: 4 passed.
+- `cargo test --locked --offline -p sakura-engine --lib disconnected_`: 4 passed.
+- `cargo test --workspace --locked --offline`: passed; all owned runners exited.
+- `cargo clippy --workspace --all-targets --locked --offline -- -D warnings`: passed.
+
+This does not make a successful pipe write a document acknowledgement, restore
+already lost preedit, or reverse learning from an operation already dispatched.
+The production host reproduction and installed-build acceptance remain open.

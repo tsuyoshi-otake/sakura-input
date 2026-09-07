@@ -1507,6 +1507,8 @@ fn serve(
     dispatcher: &mut Dispatcher,
     bufs: &mut Buffers,
 ) -> Outcome {
+    let connection_probe = instance.connection_probe();
+    dispatcher.set_connection_probe(connection_probe.clone());
     let mut initial = match first_request(shared, instance, endpoint, dispatcher, bufs) {
         Ok(initial) => initial,
         Err(outcome) => return outcome,
@@ -1547,6 +1549,15 @@ fn serve(
                 }
             }
         };
+
+        // Closing a client does not remove its unread request bytes. Reject
+        // that queue before any session, history, or shared UI side effect.
+        if connection_probe
+            .as_ref()
+            .is_some_and(sakura_ipc::ConnectionProbe::is_disconnected)
+        {
+            return Outcome::Closed;
+        }
 
         // The pipe name selected by the server is the authority for this
         // allowlist. No client-supplied role or Hello field can widen it.
@@ -1725,6 +1736,14 @@ fn serve(
             );
         }
 
+        // Configuration/runtime locks may have delayed this request since
+        // the first check. Do not dispatch a client that closed while waiting.
+        if connection_probe
+            .as_ref()
+            .is_some_and(sakura_ipc::ConnectionProbe::is_disconnected)
+        {
+            return Outcome::Closed;
+        }
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
                 #[cfg(test)]
@@ -1949,6 +1968,220 @@ mod tests {
             }),
             verbose: false,
         }
+    }
+
+    #[test]
+    fn disconnected_queued_key_is_not_dispatched() {
+        use sakura_proto::{KeyCode, KeyInput, Modifiers};
+        let key = |ch| KeyInput {
+            code: KeyCode::Char,
+            ch: Some(ch),
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        let shared = test_shared(Arc::new(LearningService::memory()));
+        let name = unique_test_pipe("abandoned-queued-key");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let pipe = PipeInstance::create(&name, &security, true).expect("pipe");
+        let mut client = Client::connect_to(&name, Duration::from_secs(2)).expect("client");
+        pipe.wait_for_client().expect("accept");
+        let mut dispatcher = Dispatcher::new().expect("dispatcher");
+        let mut bufs = Buffers::new();
+        let Reply::Message(Response::SessionCreated { session, .. }) = dispatcher.dispatch(
+            &Request::CreateSession {
+                process_name: "synthetic-queued.exe".to_owned(),
+            },
+            &mut bufs.out,
+        ) else {
+            panic!("session");
+        };
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: key('k'),
+            },
+            &mut bufs.out,
+        );
+        let (release_tx, release_rx) = mpsc::channel();
+        let serving = std::thread::spawn(move || {
+            release_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("release request reader");
+            let outcome = serve(
+                &shared,
+                &pipe,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut dispatcher,
+                &mut bufs,
+            );
+            // Inspect the synthetic session before worker reset. No host write
+            // occurs here; this commit is only a probe of what was dispatched.
+            dispatcher.dispatch(&Request::Commit { session }, &mut bufs.out);
+            (outcome, bufs.out.commit_text().map(str::to_owned))
+        });
+        let answer = client.call(
+            &Request::SendKey {
+                session,
+                key: key('a'),
+            },
+            Duration::from_millis(100),
+        );
+        drop(client);
+        release_tx.send(()).expect("release server");
+        let (outcome, text) = serving.join().expect("server ended");
+        assert!(matches!(answer, Err(Fault::Timeout)));
+        assert!(matches!(outcome, Outcome::Closed | Outcome::Failed(_)));
+        assert_eq!(
+            text.as_deref(),
+            Some("k"),
+            "an abandoned queued key still mutated session state"
+        );
+    }
+
+    #[test]
+    fn disconnected_busy_worker_cannot_swallow_replacement_connection_letters() {
+        use sakura_proto::{KeyCode, KeyInput, Modifiers};
+        let key = |code, ch| KeyInput {
+            code,
+            ch,
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        let shared = Arc::new(test_shared(Arc::new(LearningService::memory())));
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let old_name = unique_test_pipe("old-busy-composition");
+        let old_pipe = PipeInstance::create(&old_name, &security, true).expect("old pipe");
+        let mut old_client =
+            Client::connect_to(&old_name, Duration::from_secs(5)).expect("old client");
+        old_pipe.wait_for_client().expect("old accept");
+        let mut old_dispatcher = Dispatcher::new().expect("dispatcher");
+        old_dispatcher.set_composition_fence(Arc::clone(&shared.composition_fence));
+        let mut old_bufs = Buffers::new();
+        let Reply::Message(Response::SessionCreated {
+            session: old_session,
+            ..
+        }) = old_dispatcher.dispatch(
+            &Request::CreateSession {
+                process_name: "synthetic-recovery.exe".to_owned(),
+            },
+            &mut old_bufs.out,
+        )
+        else {
+            panic!("old session");
+        };
+        old_dispatcher.dispatch(
+            &Request::SendKey {
+                session: old_session,
+                key: key(KeyCode::Char, Some('k')),
+            },
+            &mut old_bufs.out,
+        );
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let old_shared = Arc::clone(&shared);
+        let old_server = std::thread::spawn(move || {
+            BEFORE_OUTPUT.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    ready_tx.send(()).expect("ready");
+                    release_rx
+                        .recv_timeout(Duration::from_secs(5))
+                        .expect("release old dispatch");
+                }))
+            });
+            let outcome = serve(
+                &old_shared,
+                &old_pipe,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut old_dispatcher,
+                &mut old_bufs,
+            );
+            old_dispatcher.reset();
+            outcome
+        });
+        let old_reply = old_client.call(
+            &Request::SendKey {
+                session: old_session,
+                key: key(KeyCode::Char, Some('a')),
+            },
+            Duration::from_millis(200),
+        );
+        let reached = ready_rx.recv_timeout(Duration::from_secs(5));
+        drop(old_client);
+
+        let new_name = unique_test_pipe("replacement-composition");
+        let new_pipe = PipeInstance::create(&new_name, &security, true).expect("new pipe");
+        let mut new_client =
+            Client::connect_to(&new_name, Duration::from_secs(5)).expect("new client");
+        new_pipe.wait_for_client().expect("new accept");
+        let new_shared = Arc::clone(&shared);
+        let new_server = std::thread::spawn(move || {
+            let mut dispatcher = Dispatcher::new().expect("new dispatcher");
+            dispatcher.set_composition_fence(Arc::clone(&new_shared.composition_fence));
+            let outcome = serve(
+                &new_shared,
+                &new_pipe,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut dispatcher,
+                &mut Buffers::new(),
+            );
+            dispatcher.reset();
+            outcome
+        });
+        let Response::SessionCreated { session, .. } = new_client
+            .call(
+                &Request::CreateSession {
+                    process_name: "synthetic-recovery.exe".to_owned(),
+                },
+                Duration::from_secs(2),
+            )
+            .expect("new session reply")
+        else {
+            panic!("new session");
+        };
+        let replacement = new_client.call(
+            &Request::SendKey {
+                session,
+                key: key(KeyCode::Char, Some('b')),
+            },
+            Duration::from_secs(2),
+        );
+        release_tx.send(()).expect("release old server");
+        let old_outcome = old_server.join().expect("old server ended");
+        let committed = new_client.call(
+            &Request::SendKey {
+                session,
+                key: key(KeyCode::Enter, None),
+            },
+            Duration::from_secs(2),
+        );
+        let idle_space = new_client.call(
+            &Request::SendKey {
+                session,
+                key: key(KeyCode::Space, None),
+            },
+            Duration::from_secs(2),
+        );
+        drop(new_client);
+        new_server.join().expect("new server ended");
+        assert!(matches!(old_reply, Err(Fault::Timeout)) && reached.is_ok());
+        assert!(matches!(old_outcome, Outcome::Closed | Outcome::Failed(_)));
+        assert!(
+            matches!(replacement, Ok(Response::Output(ref output))
+            if output.preedit.as_ref().is_some_and(|preedit| preedit.segments.first().is_some_and(|segment| segment.text == "b"))),
+            "a disconnected old worker swallowed the new connection's letter: {replacement:?}"
+        );
+        assert!(
+            matches!(committed, Ok(Response::Output(ref output)) if output.commit.as_deref() == Some("b"))
+        );
+        assert!(
+            matches!(idle_space, Ok(Response::Output(ref output)) if output.commit.as_deref() == Some(" ")),
+            "late old teardown armed another absorption after recovery: {idle_space:?}"
+        );
     }
 
     #[test]
