@@ -7,6 +7,9 @@
 
 #![cfg(windows)]
 
+#[path = "support/settings_visual.rs"]
+mod visual;
+
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::path::PathBuf;
@@ -29,8 +32,8 @@ use windows::Win32::UI::Controls::{
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    SendMessageW, BM_GETCHECK, CB_GETCURSEL, LB_GETCOUNT, LB_GETCURSEL, LB_GETITEMRECT, LB_GETTEXT,
-    LB_GETTEXTLEN, WM_DPICHANGED,
+    SendMessageW, BM_CLICK, BM_GETCHECK, CB_GETCURSEL, LB_GETCOUNT, LB_GETCURSEL, LB_GETITEMRECT,
+    LB_GETTEXT, LB_GETTEXTLEN, WM_DPICHANGED, WM_VSCROLL,
 };
 
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -49,7 +52,7 @@ const TVM_GETBKCOLOR: u32 = 0x111f;
 const TVM_GETTEXTCOLOR: u32 = 0x1120;
 const DARK_TREE_BACKGROUND: isize = 0x0025_2525;
 const DARK_TREE_TEXT: isize = 0x00f1_f3f5;
-const LIGHT_TREE_BACKGROUND: isize = 0x00e2_e5e8;
+const LIGHT_TREE_BACKGROUND: isize = 0x00fa_fbfc;
 const LIGHT_TREE_TEXT: isize = 0x002f_2f2f;
 const PROCESS_VM_OPERATION: u32 = 0x0008;
 const PROCESS_VM_READ: u32 = 0x0010;
@@ -179,6 +182,14 @@ const HWND_TOPMOST: HWND = HWND(-1isize as *mut c_void);
 static DESKTOP_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn desktop_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    // SAFETY: this test thread uses physical pointer coordinates throughout.
+    // Without a per-monitor-aware context User32 can virtualize GetWindowRect
+    // while SetCursorPos still consumes physical desktop coordinates.
+    unsafe {
+        let _ = windows::Win32::UI::HiDpi::SetThreadDpiAwarenessContext(
+            windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        );
+    }
     DESKTOP_TEST_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -282,11 +293,9 @@ fn profile_topic_click_shows_only_profile_controls_and_keeps_status_out_of_actio
         "normalizer reset belongs to the selected topic"
     );
     let (status, _) = bottom_status_and_apply(root);
-    let reset_rect = window_rect(reset);
-    cursor.left_click(POINT {
-        x: (reset_rect.left + reset_rect.right) / 2,
-        y: (reset_rect.top + reset_rect.bottom) / 2,
-    });
+    unsafe {
+        let _ = SendMessageW(reset, BM_CLICK, Some(WPARAM(0)), Some(LPARAM(0)));
+    }
     wait_until("input/transform reset status", || {
         status_text(status).starts_with("文字幅・句読点の設定を初期値")
     });
@@ -299,8 +308,9 @@ fn profile_topic_click_shows_only_profile_controls_and_keeps_status_out_of_actio
         "one-line status slot must end before the persistent action row"
     );
     assert!(
-        status_rect.bottom <= apply_rect.bottom,
-        "status stays inside the bottom row"
+        status_rect.bottom <= window_rect(root).bottom
+            && (status_rect.top - apply_rect.top).abs() <= 4,
+        "the wrapped status stays inside and aligned with the bottom row"
     );
     // A physical Apply click proves that an operation cannot expand the status
     // slot over the adjacent controls.  The content is intentionally read only
@@ -315,7 +325,9 @@ fn profile_topic_click_shows_only_profile_controls_and_keeps_status_out_of_actio
     });
     status_rect = window_rect(status);
     assert!(
-        status_rect.right <= apply_rect.left && status_rect.bottom <= apply_rect.bottom,
+        status_rect.right <= apply_rect.left
+            && status_rect.bottom <= window_rect(root).bottom
+            && (status_rect.top - apply_rect.top).abs() <= 4,
         "saved-status control still cannot overlap Apply"
     );
 
@@ -435,13 +447,15 @@ fn dpi_change_reflows_atok_property_sheet_grid_without_clipping() {
         new_tree.right - new_tree.left,
         scale_metric(old_tree.right - old_tree.left, old_dpi, new_dpi)
     );
-    assert_eq!(
-        new_tree.bottom - new_tree.top,
-        scale_metric(old_tree.bottom - old_tree.top, old_dpi, new_dpi)
+    assert!(
+        new_tree.bottom - new_tree.top
+            >= scale_metric(old_tree.bottom - old_tree.top, old_dpi, new_dpi),
+        "the topic rail must gain at least the DPI-scaled height; the non-client frame may leave additional client space"
     );
-    assert_eq!(
-        new_outer.right - new_outer.left,
-        scale_metric(old_outer.right - old_outer.left, old_dpi, new_dpi)
+    assert!(
+        new_outer.right - new_outer.left
+            >= scale_metric(old_outer.right - old_outer.left, old_dpi, new_dpi),
+        "the form viewport must gain at least its DPI-scaled width; the non-client frame may leave additional client space"
     );
     assert_eq!(
         new_apply.right - new_apply.left,
@@ -504,19 +518,7 @@ fn tab_focus_order_skips_hidden_topics_and_ends_at_actions() {
     let ok = find_direct_child_with_text(root, "OK").expect("OK button");
     let cancel = find_direct_child_with_text(root, "キャンセル").expect("Cancel button");
     let apply = find_direct_child_with_text(root, "適用").expect("Apply button");
-    let navigation: Vec<_> = direct_children(root)
-        .into_iter()
-        .filter(|window| {
-            class_name(*window) == "Button"
-                && ["入力・変換", "辞書", "学習", "診断", "更新"]
-                    .contains(&status_text(*window).as_str())
-        })
-        .collect();
-    assert_eq!(
-        navigation.len(),
-        5,
-        "all property-sheet navigation buttons exist"
-    );
+    let navigation = [find_direct_child(root, "SysTabControl32").expect("native tabs")];
 
     let thread_id = window_thread_id(root);
     let mut seen_navigation = Vec::new();
@@ -594,7 +596,7 @@ fn escape_cancel_discards_unapplied_preferences() {
         .into_iter()
         .find(|window| class_name(*window) == "ComboBox" && is_visible(*window))
         .expect("visible appearance ComboBox");
-    select_combo_item_with_mouse(&cursor, appearance, 2);
+    select_combo_item_with_keys(appearance, 2);
     wait_until("dark preview before Escape", || {
         combo_selection(appearance) == 2
             && tree_color(input_tree, TVM_GETBKCOLOR) == DARK_TREE_BACKGROUND
@@ -634,7 +636,7 @@ fn apply_persists_preferences_across_a_user32_relaunch() {
         .into_iter()
         .find(|window| class_name(*window) == "ComboBox" && is_visible(*window))
         .expect("visible appearance ComboBox");
-    select_combo_item_with_mouse(&cursor, appearance, 2);
+    select_combo_item_with_keys(appearance, 2);
 
     let (_, apply) = bottom_status_and_apply(root);
     let apply_rect = window_rect(apply);
@@ -827,7 +829,7 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
         "only the selected 文節変換 page remains visible"
     );
     assert!(
-        find_direct_child_with_text(segment_panel, "sakura-rerank の適用範囲").is_some(),
+        find_direct_child_with_text(segment_panel, "sakura-rerankの適用範囲").is_some(),
         "sakura-rerank scope belongs to the selected 文節変換 page"
     );
 
@@ -851,7 +853,7 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
         "only the selected 文字幅・句読点 page remains visible"
     );
     assert!(
-        find_direct_child_with_text(normalizer_panel, "sakura-rerank の適用範囲").is_none(),
+        find_direct_child_with_text(normalizer_panel, "sakura-rerankの適用範囲").is_none(),
         "normalizer page must not duplicate the sakura-rerank scope control"
     );
     assert!(
@@ -878,18 +880,15 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
             && !is_visible(display_panel),
         "only the selected 推測変換 page remains visible"
     );
-    let prediction_description = find_direct_child_with_text(
-        prediction_panel,
-        "入力中に候補を自動表示し、確定方法を選べます。",
-    )
-    .expect("prediction page description");
-    let prediction_group =
-        find_direct_child_with_text(prediction_panel, "推測候補").expect("prediction group box");
-    let description_rect = window_rect(prediction_description);
-    let group_rect = window_rect(prediction_group);
+    let prediction_heading =
+        find_direct_child_with_text(prediction_panel, "推測変換").expect("prediction heading");
+    let prediction_toggle = find_direct_child_with_text(prediction_panel, "予測入力を使う")
+        .expect("prediction enable checkbox");
+    let heading_rect = window_rect(prediction_heading);
+    let toggle_rect = window_rect(prediction_toggle);
     assert!(
-        group_rect.top >= description_rect.bottom + 8,
-        "prediction group must leave an 8 px visual gap below its description: description={description_rect:?}, group={group_rect:?}"
+        toggle_rect.top >= heading_rect.bottom + 8,
+        "the first prediction setting must follow its compact page heading: heading={heading_rect:?}, toggle={toggle_rect:?}"
     );
 
     click_tree_row_until("連想変換", &cursor, input_tree, || {
@@ -912,7 +911,7 @@ fn input_tree_click_shows_only_selected_conversion_controls() {
         "only the selected 連想変換 page remains visible"
     );
     assert!(
-        find_direct_child_with_text(association_panel, "sakura-rerank の適用範囲").is_none(),
+        find_direct_child_with_text(association_panel, "sakura-rerankの適用範囲").is_none(),
         "association page must not duplicate the sakura-rerank scope control"
     );
     let association_toggle = find_direct_child_with_text(association_panel, "連想変換を使う")
@@ -999,7 +998,7 @@ fn input_support_topic_click_shows_prediction_assistance_controls() {
     );
 }
 
-/// `入力補助` owns only the two physical Space-key rules. The basic input
+/// `入力補助` owns the two physical Space-key rules and the AI trigger. The basic input
 /// method, character type, and conversion method must not be duplicated here.
 /// This drives both native ComboBox popups with User32 pointer input and proves
 /// Apply changes only the two input-assist preferences.
@@ -1035,8 +1034,8 @@ fn input_assist_topic_click_shows_only_input_assist_controls() {
     });
     assert_eq!(
         combos.len(),
-        2,
-        "input-assist exposes only the Space and Shift+Space controls"
+        3,
+        "input-assist exposes Space, Shift+Space, and the AI text trigger"
     );
     for basic_label in ["キー設定", "入力方法", "文字種", "変換方法"] {
         assert!(
@@ -1176,8 +1175,8 @@ fn conversion_category_click_normalizes_to_segment_controls() {
 }
 
 /// The `文字幅・句読点` reset action is a real settings transaction, not a
-/// cosmetic button.  Its group frame must end before the action row begins,
-/// and its physical click must restore only normalizer settings instead of
+/// cosmetic button. Its final setting must end before the action row begins,
+/// and its native activation must restore only normalizer settings instead of
 /// silently resetting a sibling page.
 #[test]
 #[ignore = "requires an interactive User32 desktop"]
@@ -1217,14 +1216,6 @@ fn normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer() {
     });
     let reset = find_direct_child_with_text(normalizer_panel, "初期値に戻す")
         .expect("normalizer reset button");
-    let group = find_direct_child_with_text(normalizer_panel, "入力・変換")
-        .expect("normalizer visual group box");
-    let group_rect = window_rect(group);
-    let reset_rect = window_rect(reset);
-    assert!(
-        reset_rect.top >= group_rect.bottom + 8,
-        "normalizer reset must be below the group border with a clear gap: group={group_rect:?}, reset={reset_rect:?}"
-    );
     let mut combos: Vec<_> = direct_children(normalizer_panel)
         .into_iter()
         .filter(|window| class_name(*window) == "ComboBox" && is_visible(*window))
@@ -1240,32 +1231,56 @@ fn normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer() {
     );
     let preset = combo_beside_label(normalizer_panel, &combos, "表記スタイル");
     let alnum = combo_beside_label(normalizer_panel, &combos, "英字");
+    let brackets_label =
+        find_direct_child_with_text(normalizer_panel, "括弧").expect("bracket setting label");
+    let brackets_rect = window_rect(brackets_label);
+    let reset_rect = window_rect(reset);
+    assert!(
+        reset_rect.top >= brackets_rect.bottom + 8,
+        "normalizer reset must follow the last setting with a clear gap: brackets={brackets_rect:?}, reset={reset_rect:?}"
+    );
     assert_eq!(
         combo_selection(preset),
         0,
         "a freshly launched settings window starts on the standard style"
     );
-    select_combo_item_with_mouse(&cursor, alnum, 1);
+    select_combo_item_with_keys(alnum, 1);
     assert_eq!(
         combo_selection(alnum),
         1,
-        "physical width change is visible before reset"
+        "native width change is visible before reset"
     );
+    wait_until("manual width change updates the style readout", || {
+        combo_selection(preset) == NOTATION_STYLE_CUSTOM_INDEX
+    });
     assert_eq!(
         combo_selection(preset),
         NOTATION_STYLE_CUSTOM_INDEX,
         "hand-editing one of the seven controls moves the preset to カスタム"
     );
+    // The compact viewport keeps the long form scrollable. Reveal its final
+    // action through the same native scroll message as the scrollbar.
+    unsafe {
+        let _ = SendMessageW(outer, WM_VSCROLL, Some(WPARAM(7)), Some(LPARAM(0)));
+    }
+    wait_until("normalizer reset is revealed", || {
+        let rect = window_rect(reset);
+        let viewport = window_rect(outer);
+        rect.top >= viewport.top && rect.bottom <= viewport.bottom
+    });
+    let reset_rect = window_rect(reset);
     let reset_point = POINT {
         x: (reset_rect.left + reset_rect.right) / 2,
         y: (reset_rect.top + reset_rect.bottom) / 2,
     };
     // SAFETY: `reset_point` is inside the live native reset button rectangle.
     assert_eq!(unsafe { WindowFromPoint(reset_point) }, reset);
-    cursor.left_click(POINT {
-        x: reset_point.x,
-        y: reset_point.y,
-    });
+    // BM_CLICK follows the native Button activation path. Pointer routing is
+    // already covered above and by the Apply tests; using the control message
+    // here keeps this state-isolation assertion independent of desktop motion.
+    unsafe {
+        let _ = SendMessageW(reset, BM_CLICK, Some(WPARAM(0)), Some(LPARAM(0)));
+    }
     wait_until("normalizer reset restores the alnum default", || {
         combo_selection(alnum) == 0
     });
@@ -1695,36 +1710,7 @@ fn dictionary_topic_click_shows_only_the_selected_dictionary_group() {
         GetForegroundWindow() == root
     });
 
-    let dictionary_tab =
-        find_direct_child_with_text(root, "辞書").expect("dictionary navigation button");
-    let tab_rect = window_rect(dictionary_tab);
-    let tab_point = POINT {
-        x: (tab_rect.left + tab_rect.right) / 2,
-        y: (tab_rect.top + tab_rect.bottom) / 2,
-    };
-    // SAFETY: `tab_point` is inside the live navigation button rectangle.
-    let tab_hit = unsafe { WindowFromPoint(tab_point) };
-    assert_eq!(
-        tab_hit,
-        dictionary_tab,
-        "the dictionary navigation point must hit the fixture button (point {:?}, tab {:?}, root {:?}, hit {:?})",
-        tab_point,
-        tab_rect,
-        window_rect(root),
-        tab_hit,
-    );
-    assert_eq!(
-        class_name(tab_hit),
-        "Button",
-        "the dictionary navigation point must be covered by the settings button (point {:?}, tab {:?}, root {:?}, foreground {:?}, hit {:?})",
-        tab_point,
-        tab_rect,
-        window_rect(root),
-        // SAFETY: this scalar query has no caller-provided pointers.
-        unsafe { GetForegroundWindow() },
-        tab_hit,
-    );
-    cursor.left_click(tab_point);
+    click_category_tab(&cursor, root, 1);
     wait_until("dictionary page foreground", || unsafe {
         // SAFETY: this scalar query has no caller-provided pointers.
         GetForegroundWindow() == root
@@ -1858,16 +1844,7 @@ fn learning_and_update_topics_are_discoverable_and_clickable() {
     let cursor = CursorRestore::capture();
     raise_fixture_for_input(root);
 
-    let learning_tab =
-        find_direct_child_with_text(root, "学習").expect("learning navigation button");
-    let learning_tab_rect = window_rect(learning_tab);
-    let learning_point = POINT {
-        x: (learning_tab_rect.left + learning_tab_rect.right) / 2,
-        y: (learning_tab_rect.top + learning_tab_rect.bottom) / 2,
-    };
-    // SAFETY: `learning_point` is inside the live navigation button rectangle.
-    assert_eq!(unsafe { WindowFromPoint(learning_point) }, learning_tab);
-    cursor.left_click(learning_point);
+    click_category_tab(&cursor, root, 2);
     wait_until("learning page topics", || {
         find_direct_child(root, "ListBox")
             .map(|list| list_value(list, LB_GETCOUNT) == 2 && list_text(list, 0) == "学習履歴")
@@ -1877,7 +1854,7 @@ fn learning_and_update_topics_are_discoverable_and_clickable() {
     assert_eq!(list_text(learning_topics, 1), "操作");
     let learning_outer = page_outer_with_topic(root, "学習履歴");
     let learning_history = page_topic_panel(learning_outer, "学習履歴");
-    let learning_operations = page_topic_panel(learning_outer, "操作");
+    let learning_operations = page_topic_panel(learning_outer, "学習の操作");
     assert!(is_visible(learning_history));
     assert!(!is_visible(learning_operations));
     click_topic_item(&cursor, learning_topics, 1);
@@ -1885,15 +1862,7 @@ fn learning_and_update_topics_are_discoverable_and_clickable() {
         !is_visible(learning_history) && is_visible(learning_operations)
     });
 
-    let updates_tab = find_direct_child_with_text(root, "更新").expect("updates navigation button");
-    let updates_tab_rect = window_rect(updates_tab);
-    let updates_point = POINT {
-        x: (updates_tab_rect.left + updates_tab_rect.right) / 2,
-        y: (updates_tab_rect.top + updates_tab_rect.bottom) / 2,
-    };
-    // SAFETY: `updates_point` is inside the live navigation button rectangle.
-    assert_eq!(unsafe { WindowFromPoint(updates_point) }, updates_tab);
-    cursor.left_click(updates_point);
+    click_category_tab(&cursor, root, 4);
     wait_until("updates page topics", || {
         find_direct_child(root, "ListBox")
             .map(|list| list_value(list, LB_GETCOUNT) == 3 && list_text(list, 0) == "更新の設定")
@@ -1932,6 +1901,11 @@ impl SettingsFixture {
             std::process::id()
         ));
         std::fs::create_dir_all(&sandbox).expect("create isolated LOCALAPPDATA");
+        // Settings layout/behavior tests must not start network work or race a
+        // background update modal. Update-specific tests can opt in explicitly.
+        sakura_settings::updater::UpdatePreferences { enabled: false }
+            .save(&sandbox.join("SakuraInput/update/settings.txt"))
+            .expect("disable automatic network checks in the isolated fixture");
         let child = spawn_settings_payload(&sandbox);
         Self { child, sandbox }
     }
@@ -2027,18 +2001,39 @@ impl CursorRestore {
     }
 
     fn left_click(&self, point: POINT) {
-        // SAFETY: the point was derived from the fixture window's screen rectangle.
-        let positioned = unsafe { SetCursorPos(point.x, point.y) };
-        assert_ne!(positioned, 0, "position input cursor");
-        let mut actual = POINT::default();
-        // SAFETY: `actual` is valid writable storage for User32's cursor coordinate.
-        let read_back = unsafe { GetCursorPos(&mut actual) };
-        assert_ne!(read_back, 0, "read positioned cursor");
-        assert_eq!(
-            actual, point,
-            "SendInput must use the intended screen point"
-        );
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+            SM_YVIRTUALSCREEN,
+        };
+        // SendInput serializes a batch without interspersing other mouse input.
+        // Separate SetCursorPos/GetCursorPos/click calls allow a concurrent
+        // device movement to redirect the click after its target was checked.
+        let (left, top, width, height) = unsafe {
+            (
+                GetSystemMetrics(SM_XVIRTUALSCREEN),
+                GetSystemMetrics(SM_YVIRTUALSCREEN),
+                GetSystemMetrics(SM_CXVIRTUALSCREEN),
+                GetSystemMetrics(SM_CYVIRTUALSCREEN),
+            )
+        };
+        assert!((left..left + width).contains(&point.x) && (top..top + height).contains(&point.y));
+        let normalize = |value: i32, extent: i32| {
+            ((i64::from(value) * 65536 + 32768) / i64::from(extent)).clamp(0, 65535) as i32
+        };
         let inputs = [
+            TestInput {
+                input_type: INPUT_MOUSE,
+                payload: TestInputPayload {
+                    mouse: TestMouseInput {
+                        dx: normalize(point.x - left, width),
+                        dy: normalize(point.y - top, height),
+                        mouse_data: 0,
+                        flags: 0x0001 | 0x8000 | 0x4000,
+                        time: 0,
+                        extra_info: 0,
+                    },
+                },
+            },
             TestInput {
                 input_type: INPUT_MOUSE,
                 payload: TestInputPayload {
@@ -2067,10 +2062,10 @@ impl CursorRestore {
             },
         ];
         // SAFETY: `inputs` remains live for this synchronous call and has INPUT's C layout.
-        let inserted = unsafe { SendInput(2, inputs.as_ptr(), size_of::<TestInput>() as i32) };
+        let inserted = unsafe { SendInput(3, inputs.as_ptr(), size_of::<TestInput>() as i32) };
         assert_eq!(
-            inserted, 2,
-            "User32 SendInput must insert down and up records"
+            inserted, 3,
+            "User32 SendInput must insert move, down and up records"
         );
     }
 
@@ -2334,6 +2329,37 @@ fn click_topic_item(cursor: &CursorRestore, list: HWND, index: usize) {
     cursor.left_click(point);
 }
 
+fn click_category_tab(cursor: &CursorRestore, root: HWND, index: usize) {
+    use windows::Win32::UI::Controls::{TCM_GETCURSEL, TCM_GETITEMRECT};
+    let tabs = find_direct_child(root, "SysTabControl32").expect("native tabs");
+    let remote = RemoteTreeRect::allocate(window_process_id(tabs));
+    remote.write(&RECT::default());
+    assert_ne!(
+        unsafe {
+            SendMessageW(
+                tabs,
+                TCM_GETITEMRECT,
+                Some(WPARAM(index)),
+                Some(LPARAM(remote.address as isize)),
+            )
+        }
+        .0,
+        0
+    );
+    let rect = remote.read();
+    let mut point = POINT {
+        x: (rect.left + rect.right) / 2,
+        y: (rect.top + rect.bottom) / 2,
+    };
+    assert_ne!(unsafe { ClientToScreen(tabs, &mut point) }, 0);
+    assert_eq!(unsafe { WindowFromPoint(point) }, tabs);
+    cursor.left_click(point);
+    wait_until(
+        "native tab selection",
+        || unsafe { SendMessageW(tabs, TCM_GETCURSEL, None, None) }.0 == index as isize,
+    );
+}
+
 fn bottom_status_and_apply(root: HWND) -> (HWND, HWND) {
     let root_rect = window_rect(root);
     let mut static_controls = direct_children(root)
@@ -2383,7 +2409,7 @@ impl RemoteTreeRect {
             VirtualAllocEx(
                 process,
                 std::ptr::null(),
-                size_of::<RECT>(),
+                4096,
                 MEM_COMMIT | MEM_RESERVE,
                 PAGE_READWRITE,
             )
@@ -2431,6 +2457,60 @@ impl RemoteTreeRect {
         assert_eq!(bytes_read, size_of::<RECT>());
         value
     }
+
+    fn tree_label(&self, tree: HWND, item: HTREEITEM) -> String {
+        use windows::Win32::UI::Controls::{TVIF_TEXT, TVITEMW, TVM_GETITEMW};
+        let mut text = [0u16; 128];
+        let query = TVITEMW {
+            mask: TVIF_TEXT,
+            hItem: item,
+            pszText: windows::core::PWSTR(
+                unsafe { self.address.cast::<u8>().add(size_of::<TVITEMW>()) }.cast(),
+            ),
+            cchTextMax: text.len() as i32,
+            ..Default::default()
+        };
+        let mut copied = 0;
+        unsafe {
+            assert_ne!(
+                WriteProcessMemory(
+                    self.process,
+                    self.address,
+                    (&query as *const TVITEMW).cast(),
+                    size_of::<TVITEMW>(),
+                    &mut copied
+                ),
+                0
+            );
+            assert_eq!(copied, size_of::<TVITEMW>());
+            assert_ne!(
+                SendMessageW(
+                    tree,
+                    TVM_GETITEMW,
+                    None,
+                    Some(LPARAM(self.address as isize))
+                )
+                .0,
+                0
+            );
+            assert_ne!(
+                ReadProcessMemory(
+                    self.process,
+                    query.pszText.0.cast(),
+                    text.as_mut_ptr().cast(),
+                    size_of_val(&text),
+                    &mut copied
+                ),
+                0
+            );
+            assert_eq!(copied, size_of_val(&text));
+        }
+        let length = text
+            .iter()
+            .position(|value| *value == 0)
+            .unwrap_or(text.len());
+        String::from_utf16_lossy(&text[..length])
+    }
 }
 
 impl Drop for RemoteTreeRect {
@@ -2474,60 +2554,27 @@ fn selected_input_tree_item(tree: HWND) -> HTREEITEM {
 }
 
 fn input_tree_item(tree: HWND, label: &str) -> HTREEITEM {
-    let basic = require_tree_item(
-        tree_item_relative(tree, TVGN_ROOT as usize, HTREEITEM::default()),
-        "root 基本 item",
-    );
-    let input_assist = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, basic),
-        "root 入力補助 item",
-    );
-    let conversion = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, input_assist),
-        "root 変換補助 item",
-    );
-    let segment = require_tree_item(
-        tree_item_relative(tree, TVGN_CHILD as usize, conversion),
-        "文節変換 child item",
-    );
-    let normalizer = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, segment),
-        "文字幅・句読点 child item",
-    );
-    let display = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, conversion),
-        "root 表示 item",
-    );
-    let input_support = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, display),
-        "root 入力支援 item",
-    );
-    let prediction = require_tree_item(
-        tree_item_relative(tree, TVGN_CHILD as usize, input_support),
-        "推測変換 child item",
-    );
-    let association = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, prediction),
-        "連想変換 child item",
-    );
-    let profile = require_tree_item(
-        tree_item_relative(tree, TVGN_NEXT as usize, input_support),
-        "root アプリ別の設定 item",
-    );
-
-    match label {
-        "基本" => basic,
-        "入力補助" => input_assist,
-        "変換補助" => conversion,
-        "文節変換" => segment,
-        "文字幅・句読点" | "文字幅・句読点 (reset)" => normalizer,
-        "表示" => display,
-        "入力支援" => input_support,
-        "推測変換" => prediction,
-        "連想変換" => association,
-        "アプリ別の設定" => profile,
-        _ => panic!("unknown input TreeView label {label:?}"),
+    let label = label.strip_suffix(" (reset)").unwrap_or(label);
+    let remote = RemoteTreeRect::allocate(window_process_id(tree));
+    let mut stack = vec![tree_item_relative(
+        tree,
+        TVGN_ROOT as usize,
+        HTREEITEM::default(),
+    )];
+    for _ in 0..128 {
+        let Some(item) = stack.pop() else {
+            break;
+        };
+        if item.0 == 0 {
+            continue;
+        }
+        if remote.tree_label(tree, item) == label {
+            return item;
+        }
+        stack.push(tree_item_relative(tree, TVGN_NEXT as usize, item));
+        stack.push(tree_item_relative(tree, TVGN_CHILD as usize, item));
     }
+    panic!("native input tree has no label {label:?}");
 }
 
 fn tree_item_screen_rect(tree: HWND, item: HTREEITEM) -> RECT {
@@ -2675,12 +2722,38 @@ fn combo_popup(combo: HWND) -> Option<HWND> {
 }
 
 fn select_combo_item_with_mouse(cursor: &CursorRestore, combo: HWND, index: usize) {
+    let page = unsafe { GetParent(combo) };
+    let viewport = unsafe { GetParent(page) };
+    for _ in 0..32 {
+        let rect = window_rect(combo);
+        let viewport_rect = window_rect(viewport);
+        let dpi = unsafe { GetDpiForWindow(combo) }.max(96);
+        let closed_height = (rect.bottom - rect.top).min(scale_metric(30, 96, dpi));
+        let command = if rect.top < viewport_rect.top {
+            Some(0)
+        } else if rect.top + closed_height > viewport_rect.bottom {
+            Some(1)
+        } else {
+            None
+        };
+        let Some(command) = command else {
+            break;
+        };
+        unsafe {
+            let _ = SendMessageW(viewport, WM_VSCROLL, Some(WPARAM(command)), Some(LPARAM(0)));
+        }
+    }
     let rect = window_rect(combo);
+    // Some native CBS_DROPDOWNLIST implementations report the originally
+    // requested drop height from GetWindowRect even while closed. Only the
+    // compact selection field is hit-testable before the popup opens.
+    let dpi = unsafe { GetDpiForWindow(combo) }.max(96);
+    let closed_height = (rect.bottom - rect.top).min(scale_metric(30, 96, dpi));
     let open_point = POINT {
         // The native arrow area opens the list through the actual ComboBox
         // control; no CB_SHOWDROPDOWN or other synthetic message is used.
         x: rect.right - 8,
-        y: (rect.top + rect.bottom) / 2,
+        y: rect.top + closed_height / 2,
     };
     // SAFETY: `open_point` is derived from the live ComboBox screen rectangle.
     let hit = unsafe { WindowFromPoint(open_point) };
@@ -2740,6 +2813,21 @@ fn select_combo_item_with_mouse(cursor: &CursorRestore, combo: HWND, index: usiz
     );
     cursor.left_click(row_point);
     wait_until("native ComboBox selection", || {
+        combo_selection(combo) == index as isize
+    });
+}
+
+fn select_combo_item_with_keys(combo: HWND, index: usize) {
+    use windows::Win32::UI::WindowsAndMessaging::WM_KEYDOWN;
+    // The native closed ComboBox owns Home/Down and emits its own selection
+    // notifications. No synthetic WM_COMMAND or focus-dependent popup is used.
+    unsafe {
+        let _ = SendMessageW(combo, WM_KEYDOWN, Some(WPARAM(0x24)), None);
+        for _ in 0..index {
+            let _ = SendMessageW(combo, WM_KEYDOWN, Some(WPARAM(0x28)), None);
+        }
+    }
+    wait_until("native keyboard combo selection", || {
         combo_selection(combo) == index as isize
     });
 }
