@@ -9,45 +9,45 @@
 通常のパッケージテストは、対話型デスクトップを必要としない。
 
 ```powershell
-rtk cargo test -p sakura-settings
+cargo test -p sakura-settings
 ```
 
 User32 E2E は明示的に ignored テストを起動する。
 
 ```powershell
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   profile_topic_click_shows_only_profile_controls_and_keeps_status_out_of_actions `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   input_tree_click_shows_only_selected_conversion_controls `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   input_assist_topic_click_shows_only_input_assist_controls `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   conversion_category_click_normalizes_to_segment_controls `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   dictionary_topic_click_shows_only_the_selected_dictionary_group `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   normalizer_controls_are_discoverable_clickable_and_apply_persists_values `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   input_method_radio_controls_are_physical_and_persist_to_the_engine_config `
   -- --ignored --exact --nocapture
 
-rtk cargo test -p sakura-settings --test settings_topic_user32 `
+cargo test -p sakura-settings --test settings_topic_user32 `
   learning_and_update_topics_are_discoverable_and_clickable `
   -- --ignored --exact --nocapture
 ```
@@ -56,7 +56,7 @@ rtk cargo test -p sakura-settings --test settings_topic_user32 `
 テストスレッドを作らないため `--test-threads=1` を付ける。
 
 ```powershell
-rtk cargo test -p sakura-settings --test settings_topic_user32 -- `
+cargo test -p sakura-settings --test settings_topic_user32 -- `
   --ignored --nocapture --test-threads=1
 ```
 
@@ -66,7 +66,7 @@ rtk cargo test -p sakura-settings --test settings_topic_user32 -- `
 
 ```powershell
 $env:SAKURA_SETTINGS_E2E_EXE = 'C:\Program Files\Sakura Input\versions\<build>\sakura_settings_payload.exe'
-rtk cargo test -p sakura-settings --test settings_topic_user32 -- `
+cargo test -p sakura-settings --test settings_topic_user32 -- `
   --ignored --nocapture --test-threads=1
 Remove-Item Env:SAKURA_SETTINGS_E2E_EXE
 ```
@@ -143,15 +143,15 @@ Remove-Item Env:SAKURA_SETTINGS_E2E_EXE
 UI側は SET-U32-012 で隔離configへの書き込みを証明し、エンジン側は次の private pipe E2E で同じ形式を読み込み、実際の composition／commit を確認する。
 
 ```powershell
-rtk cargo test -p sakura-engine --test pipe_round_trip `
+cargo test -p sakura-engine --test pipe_round_trip `
   a_running_engine_applies_saved_width_punctuation_and_brackets_to_real_output `
   -- --exact --nocapture
 
-rtk cargo test -p sakura-engine --test pipe_round_trip `
+cargo test -p sakura-engine --test pipe_round_trip `
   a_running_engine_applies_saved_input_method_to_real_output `
   -- --exact --nocapture
 
-rtk cargo test -p sakura-engine --test pipe_round_trip `
+cargo test -p sakura-engine --test pipe_round_trip `
   a_running_engine_applies_saved_default_character_type_to_new_sessions `
   -- --exact --nocapture
 ```
