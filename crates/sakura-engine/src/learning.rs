@@ -999,7 +999,15 @@ impl LearningService {
             }
             if variants
                 .iter()
-                .any(|variant| variant.repaired.as_str() == reading)
+                // Commit history is evidence for the conservative, named
+                // input rules only. Advanced edit-1 variants are deliberately
+                // broad guesses for conversion and must not become durable
+                // repair hints merely because a matching reading was once
+                // committed.
+                .any(|variant| {
+                    variant.kind == sakura_core::RepairKind::Rule
+                        && variant.repaired.as_str() == reading
+                })
                 && !out.iter().any(|existing| existing.as_str() == reading)
             {
                 let mut text = FixedStr::new();
@@ -2549,6 +2557,34 @@ mod tests {
             hints.iter().any(|hint| hint.as_str() == "こんにちは"),
             "known repair variant must remain available: {hints:?}"
         );
+    }
+
+    #[test]
+    fn advanced_repair_variants_are_not_admitted_from_prediction_history() {
+        let support = sakura_core::InputSupport::default();
+        // These are intentionally plausible one-character substitutions, but
+        // they are broad Advanced variants rather than deterministic Rule
+        // repairs. Keep one learned prediction per case so this exercises the
+        // same history-backed path used by a real prior commit.
+        for (typed, repaired) in [("いて", "って"), ("い", "お"), ("なに", "ない")] {
+            let variants = sakura_core::collect_repair_variants(
+                typed,
+                support,
+                sakura_core::MAX_REPAIR_VARIANTS,
+            );
+            assert!(variants.iter().any(|variant| {
+                variant.repaired.as_str() == repaired
+                    && variant.kind == sakura_core::RepairKind::Advanced
+            }));
+
+            let service = LearningService::memory();
+            service.learn(repaired, repaired, 0, 0);
+            let hints = service.collect_commit_repair_readings(typed, support);
+            assert!(
+                hints.is_empty(),
+                "advanced repair unexpectedly became a commit-history hint: {typed} -> {repaired}, hints={hints:?}"
+            );
+        }
     }
 
     #[test]

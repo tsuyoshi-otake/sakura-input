@@ -13,6 +13,8 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
+use sakura_core::CandidateEvidence;
 use sakura_core::{ConversionCandidate, ConversionOptions};
 use sakura_proto::SessionId;
 
@@ -173,16 +175,69 @@ impl LongConversionService {
                 return None;
             }
         }
-        let selected = direct_listwise_index(&result.scores)?;
+        let Some(selected) = protected_listwise_index(&candidates[..model_count], &result.scores)
+        else {
+            result.state = RerankState::LocalFallback;
+            return None;
+        };
         result.state = RerankState::Applied;
         Some(selected)
     }
 }
 
+#[cfg(test)]
 fn direct_listwise_index(scores: &[CandidateScore]) -> Option<usize> {
     let mut selected = None;
     let mut selected_score = f32::NEG_INFINITY;
     for (index, score) in scores.iter().enumerate() {
+        if !score.log_probability.is_finite() {
+            return None;
+        }
+        if selected.is_none() || score.log_probability > selected_score {
+            selected = Some(index);
+            selected_score = score.log_probability;
+        }
+    }
+    selected
+}
+
+/// Chooses a model result without allowing the model to cross a candidate
+/// evidence boundary.  Trustworthy one-edge whole-reading exact candidates
+/// form the strongest group.  Composite lexical candidates may be reordered
+/// only when no exact candidate is present.  Generated, repaired, fallback,
+/// and raw-repair candidates never enter the neural choice set, so their local
+/// ordering remains authoritative.
+fn protected_listwise_index(
+    candidates: &[ConversionCandidate],
+    scores: &[CandidateScore],
+) -> Option<usize> {
+    protected_listwise_index_with(candidates.len(), scores, |index| {
+        candidates[index].evidence_class().neural_group()
+    })
+}
+
+#[inline]
+fn protected_listwise_index_with(
+    candidate_count: usize,
+    scores: &[CandidateScore],
+    mut neural_group_at: impl FnMut(usize) -> Option<u8>,
+) -> Option<usize> {
+    if candidate_count != scores.len() || candidate_count < 2 {
+        return None;
+    }
+    let mut target_group = None;
+    for index in 0..candidate_count {
+        if let Some(group) = neural_group_at(index) {
+            target_group = Some(target_group.map_or(group, |current: u8| current.max(group)));
+        }
+    }
+    let target_group = target_group?;
+    let mut selected = None;
+    let mut selected_score = f32::NEG_INFINITY;
+    for (index, score) in scores.iter().enumerate() {
+        if neural_group_at(index) != Some(target_group) {
+            continue;
+        }
         if !score.log_probability.is_finite() {
             return None;
         }
@@ -586,6 +641,7 @@ fn read_worker_response(input: &mut impl Read) -> io::Result<WorkerResponse> {
 fn candidate_fingerprint(candidate: &ConversionCandidate) -> u64 {
     let mut hash = fingerprint_bytes(candidate.text().as_bytes());
     hash = hash_bytes(hash, &candidate.cost.to_le_bytes());
+    hash = hash_bytes(hash, &[candidate.evidence_class().fingerprint_tag()]);
     hash
 }
 
@@ -701,6 +757,113 @@ mod tests {
             None
         );
         assert_eq!(direct_listwise_index(&[]), None);
+    }
+
+    #[test]
+    fn neural_scores_cannot_cross_protected_candidate_evidence() {
+        let evidence = [
+            CandidateEvidence::ExactSystem,
+            CandidateEvidence::CompositeLexical,
+            CandidateEvidence::Generated,
+            CandidateEvidence::Repair(sakura_core::RepairKind::CommitHistory),
+            CandidateEvidence::Repair(sakura_core::RepairKind::Advanced),
+            CandidateEvidence::Fallback,
+        ];
+        let scores = [
+            CandidateScore {
+                fingerprint: 1,
+                log_probability: -100.0,
+            },
+            CandidateScore {
+                fingerprint: 2,
+                log_probability: 100.0,
+            },
+            CandidateScore {
+                fingerprint: 3,
+                log_probability: 200.0,
+            },
+            CandidateScore {
+                fingerprint: 4,
+                log_probability: 300.0,
+            },
+            CandidateScore {
+                fingerprint: 5,
+                log_probability: 400.0,
+            },
+            CandidateScore {
+                fingerprint: 6,
+                log_probability: 500.0,
+            },
+        ];
+        assert_eq!(
+            protected_listwise_index_with(evidence.len(), &scores, |index| {
+                evidence[index].neural_group()
+            }),
+            Some(0),
+            "a high score on generated/repair/fallback/composite evidence must not outrank exact"
+        );
+
+        let user_and_system = [CandidateEvidence::ExactSystem, CandidateEvidence::ExactUser];
+        let user_and_system_scores = [
+            CandidateScore {
+                fingerprint: 21,
+                log_probability: 100.0,
+            },
+            CandidateScore {
+                fingerprint: 22,
+                log_probability: -100.0,
+            },
+        ];
+        assert_eq!(
+            protected_listwise_index_with(
+                user_and_system.len(),
+                &user_and_system_scores,
+                |index| user_and_system[index].neural_group(),
+            ),
+            Some(1),
+            "the optional model must not undo user-dictionary authority"
+        );
+
+        let composite_only = [
+            CandidateEvidence::CompositeLexical,
+            CandidateEvidence::Generated,
+            CandidateEvidence::Fallback,
+        ];
+        let composite_scores = [
+            CandidateScore {
+                fingerprint: 7,
+                log_probability: -3.0,
+            },
+            CandidateScore {
+                fingerprint: 8,
+                log_probability: 30.0,
+            },
+            CandidateScore {
+                fingerprint: 9,
+                log_probability: 40.0,
+            },
+        ];
+        assert_eq!(
+            protected_listwise_index_with(composite_only.len(), &composite_scores, |index| {
+                composite_only[index].neural_group()
+            }),
+            Some(0),
+            "composite lexical candidates may be reranked only when no exact exists"
+        );
+
+        let derived_only = [
+            CandidateEvidence::Generated,
+            CandidateEvidence::Repair(sakura_core::RepairKind::Advanced),
+        ];
+        assert_eq!(
+            protected_listwise_index_with(
+                derived_only.len(),
+                &scores[..derived_only.len()],
+                |index| derived_only[index].neural_group()
+            ),
+            None,
+            "derived-only candidate sets keep local order"
+        );
     }
 
     #[test]

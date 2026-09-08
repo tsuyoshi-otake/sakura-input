@@ -25,6 +25,7 @@
 #![cfg(windows)]
 
 pub mod ai_text;
+pub(crate) mod candidate_projection;
 pub mod composition_fence;
 pub mod configuration;
 pub mod context_baseline;

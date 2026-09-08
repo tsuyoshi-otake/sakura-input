@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "mozc_repository": "https://github.com/google/mozc",
   "mozc_revision": "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732",
   "output_license": "LicenseRef-Mozc-Dictionary",
@@ -8,6 +8,7 @@
   "max_surfaces_per_reading": null,
   "candidate_cap_unit": "surface",
   "legacy_row_evidence_cap": 12,
+  "non_initial_policy_sha256": "d371b7b2538c2576463fabc7dee658419ef56f13fb5ccf7bcab18f4f4ea41028",
   "input_entries": 1289076,
   "cost_eligible": 467976,
   "duplicate_entries": 8247,
@@ -16,6 +17,14 @@
   "capped_surfaces": 0,
   "surface_cap_rescued_entries": 18014,
   "surface_cap_rescued_surfaces": 13609,
-  "non_initial_entries": 371,
-  "output_entries": 459729
+  "raw_non_initial_entries": 371,
+  "raw_non_initial_pairs": 301,
+  "already_initial_pairs": 14,
+  "audited_blocked_pairs": 287,
+  "allowed_initial_pairs": 60,
+  "retained_non_initial_pairs": 227,
+  "released_non_initial_entries": 2,
+  "generated_initial_alias_entries": 58,
+  "non_initial_entries": 369,
+  "output_entries": 459787
 }

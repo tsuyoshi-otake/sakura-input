@@ -1,7 +1,7 @@
 # llvm-cov line/region coverage — Shift-Latin production functions
 
 Tool: `cargo-llvm-cov 0.8.7` + `llvm-tools-preview`.
-Command: `rtk cargo llvm-cov -p sakura-engine --lib --json --output-path verification/shift-latin-order/coverage/llvm-cov.json -- shift_latin`.
+Command: `cargo llvm-cov -p sakura-engine --lib --json --output-path verification/shift-latin-order/coverage/llvm-cov.json -- shift_latin`.
 Filter: `shift_latin` (45 tests after the coverage-neighbor pass). This is **line/region coverage**, not C2 and not MC/DC.
 
 True C2 / MC/DC of these functions is still impossible from this artifact:

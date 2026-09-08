@@ -42,7 +42,7 @@ Code.exe capture remains **Unverified**. No deliberate crash injection is used.
 
 ## Baseline
 
-Before source implementation, `rtk proxy cargo test -p sakura-tsf -- --nocapture`
+Before source implementation, `cargo test -p sakura-tsf -- --nocapture`
 reported 120 passed and 14 failures. The exact test names and panic signatures
 are recorded in
 `.codex/goal-loop/issue-34-vscode-diagnostics/baseline-sakura-tsf-20260811.md`.

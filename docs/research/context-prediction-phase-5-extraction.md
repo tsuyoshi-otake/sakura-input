@@ -43,13 +43,13 @@ duplicate article ids, and proves both hash and terminal-state accounting.
 With a separately decompressed external XML file:
 
 ```powershell
-rtk cargo run -p dictc --bin context-dataset -- extract `
+cargo run -p dictc --bin context-dataset -- extract `
   --xml C:\context-data\sources\jawiki-20260801.xml `
   --source-manifest corpus\context-prediction\source-manifest.json `
   --output-dir C:\context-data\extracted\jawiki-20260801-run-001 `
   --extractor-sha256 <64-lowercase-hex>
 
-rtk cargo run -p dictc --bin context-dataset -- verify-extraction `
+cargo run -p dictc --bin context-dataset -- verify-extraction `
   --extraction-dir C:\context-data\extracted\jawiki-20260801-run-001
 ```
 

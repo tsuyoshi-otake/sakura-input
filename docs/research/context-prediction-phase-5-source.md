@@ -35,7 +35,7 @@ downloaded or verified locally.
 Example:
 
 ```powershell
-rtk proxy powershell -NoProfile -File scripts/verify-context-prediction-source.ps1 `
+powershell -NoProfile -File scripts/verify-context-prediction-source.ps1 `
   -SourceDirectory "$env:USERPROFILE\tmp\sakura-context-data\sources\jawiki-20260801"
 ```
 
