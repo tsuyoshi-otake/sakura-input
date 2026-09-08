@@ -24,15 +24,24 @@ unsafe extern "system" fn procedure(
     _: usize,
 ) -> LRESULT {
     if message == WM_NCDESTROY {
+        // SAFETY: this is the subclass's terminal notification for `window`;
+        // removing the exact registered callback prevents later dispatch.
         unsafe {
             let _ = RemoveWindowSubclass(window, Some(procedure), 144);
         }
     }
+    // SAFETY: the subclass receives a live tab HWND and only queries its
+    // User32 parent; no ownership is transferred.
     let pointer = unsafe { GetParent(window) }
         .ok()
-        .map(|root| unsafe { GetWindowLongPtrW(root, GWLP_USERDATA) } as *const App)
+        .map(|root| {
+            // SAFETY: the root stores the App pointer on this same UI thread.
+            (unsafe { GetWindowLongPtrW(root, GWLP_USERDATA) }) as *const App
+        })
         .unwrap_or(std::ptr::null());
     if !pointer.is_null() {
+        // SAFETY: the pointer is installed for the root App lifetime and this
+        // callback runs synchronously on its owning UI thread.
         let app = unsafe { &*pointer };
         if app.theme.dark && !app.theme.high_contrast {
             if message == WM_ERASEBKGND {
@@ -40,8 +49,11 @@ unsafe extern "system" fn procedure(
             }
             if message == WM_PAINT {
                 let mut paint = PAINTSTRUCT::default();
+                // SAFETY: WM_PAINT supplies a live window; `paint` remains live
+                // until the matching EndPaint below.
                 let dc = unsafe { BeginPaint(window, &mut paint) };
                 draw(window, dc, app);
+                // SAFETY: balances the successful BeginPaint in this branch.
                 unsafe {
                     let _ = EndPaint(window, &paint);
                 }
@@ -53,6 +65,8 @@ unsafe extern "system" fn procedure(
             }
         }
     }
+    // SAFETY: unhandled messages and untouched scalar parameters are forwarded
+    // exactly once to the native subclass chain.
     unsafe { DefSubclassProc(window, message, wparam, lparam) }
 }
 

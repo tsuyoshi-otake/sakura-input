@@ -40,6 +40,7 @@ fn capture(root: HWND, directory: &Path, name: &str) {
     sleep(INPUT_SETTLING);
     // Paint pending child invalidations before asking the native window to copy
     // its client area. This capture does not depend on taking pointer focus.
+    // SAFETY: `root` is the live fixture HWND and all optional pointer arguments are null.
     unsafe {
         let _ = windows::Win32::Graphics::Gdi::RedrawWindow(
             Some(root),
@@ -90,6 +91,7 @@ fn capture(root: HWND, directory: &Path, name: &str) {
     surface.previous = unsafe { SelectObject(surface.dc, surface.bitmap.into()) };
     // SAFETY: only the known, live fixture window paints into the memory DC.
     assert_ne!(
+        // SAFETY: `root` and the guard-owned compatible DC remain live for the call.
         unsafe { PrintWindow(root, surface.dc, 2) },
         0,
         "native capture"
@@ -189,6 +191,8 @@ fn capture_settings_layout_matrix() {
     let display = input_topic_panel_with_heading(root, "表示");
     let theme = find_direct_child(display, "ComboBox").expect("theme combo");
     for (theme_name, index) in [("light", 1), ("dark", 2)] {
+        // SAFETY: both HWNDs belong to the live fixture and these synchronous messages
+        // carry only scalar values, so no borrowed buffer crosses the process boundary.
         unsafe {
             let _ = SendMessageW(theme, CB_SETCURSEL, Some(WPARAM(index)), None);
             let _ = SendMessageW(
@@ -200,6 +204,8 @@ fn capture_settings_layout_matrix() {
         }
         select_native_category(root, 0);
         for (index, item) in items.iter().enumerate() {
+            // SAFETY: `tree` and `item` were enumerated from the live fixture tree;
+            // TVM_SELECTITEM consumes the item handle synchronously.
             unsafe {
                 let _ = SendMessageW(
                     tree,
@@ -212,6 +218,8 @@ fn capture_settings_layout_matrix() {
             capture(root, &output, &format!("{theme_name}-input-{index:02}"));
             if matches!(index, 2 | 4 | 6 | 10) {
                 let viewport = input_topic_outer(root);
+                // SAFETY: `viewport` is a live fixture scrollbar owner and the message
+                // carries a scalar scroll command without caller-owned pointers.
                 unsafe {
                     let _ = SendMessageW(viewport, WM_VSCROLL, Some(WPARAM(7)), None);
                 }
@@ -235,6 +243,8 @@ fn capture_settings_layout_matrix() {
             let outer = page_outer_with_topic(root, heading);
             assert!(is_visible(outer), "{name} category must be visible");
             for index in 0..count {
+                // SAFETY: the fixture ListBox and root HWND are live; both messages
+                // carry scalar selection/notification data and execute synchronously.
                 unsafe {
                     let _ = SendMessageW(topics, LB_SETCURSEL, Some(WPARAM(index)), None);
                     let _ = SendMessageW(
@@ -246,6 +256,8 @@ fn capture_settings_layout_matrix() {
                 }
                 assert_eq!(list_value(topics, LB_GETCURSEL), index);
                 capture(root, &output, &format!("{theme_name}-{name}-{index:02}"));
+                // SAFETY: `outer` is the live topic viewport and this synchronous
+                // scroll message carries no caller-owned pointer.
                 unsafe {
                     let _ = SendMessageW(outer, WM_VSCROLL, Some(WPARAM(7)), None);
                 }
@@ -263,6 +275,7 @@ fn select_native_category(root: HWND, index: usize) {
     use windows::Win32::UI::Controls::TCM_GETCURSEL;
     let tabs = find_direct_child(root, "SysTabControl32").expect("native category tabs");
     for _ in 0..5 {
+        // SAFETY: `tabs` is a live native tab control and TCM_GETCURSEL is scalar-only.
         let selected = unsafe { SendMessageW(tabs, TCM_GETCURSEL, None, None) }.0 as usize;
         if selected == index {
             return;
@@ -270,6 +283,7 @@ fn select_native_category(root: HWND, index: usize) {
         let key = if selected < index { 0x27 } else { 0x25 };
         // Native tabs own the arrow-to-selection notification path. This sends
         // no borrowed cross-process notification pointer and moves no cursor.
+        // SAFETY: `tabs` is live and WM_KEYDOWN carries only the scalar virtual key.
         unsafe {
             let _ = SendMessageW(
                 tabs,
@@ -280,6 +294,7 @@ fn select_native_category(root: HWND, index: usize) {
         }
     }
     assert_eq!(
+        // SAFETY: `tabs` remains live and TCM_GETCURSEL has no pointer payload.
         unsafe { SendMessageW(tabs, TCM_GETCURSEL, None, None) }.0 as usize,
         index
     );
@@ -300,6 +315,7 @@ fn native_tabs_expose_selected_names_and_keyboard_focus_to_uia() {
     let _foreground = ForegroundRestore::capture();
     let fixture = SettingsFixture::launch();
     let root = fixture.wait_for_window();
+    // SAFETY: initializes COM once on this test thread and the guard below balances it.
     unsafe {
         CoInitializeEx(None, COINIT_APARTMENTTHREADED)
             .ok()
@@ -308,24 +324,30 @@ fn native_tabs_expose_selected_names_and_keyboard_focus_to_uia() {
     struct Apartment;
     impl Drop for Apartment {
         fn drop(&mut self) {
+            // SAFETY: this guard exists only after successful initialization on this thread.
             unsafe {
                 CoUninitialize();
             }
         }
     }
     let _apartment = Apartment;
+    // SAFETY: COM is initialized on this thread and CUIAutomation is an in-process COM class.
     let automation: IUIAutomation =
         unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }
             .expect("UIA client");
     let tabs = find_direct_child(root, "SysTabControl32").expect("native tabs");
+    // SAFETY: `tabs` is a live fixture HWND and `automation` is a valid UIA client.
     let element = unsafe { automation.ElementFromHandle(tabs) }.expect("native tab provider");
     assert_eq!(
+        // SAFETY: `element` is a live UIA element obtained above.
         unsafe { element.CurrentControlType() }.expect("tab control type"),
         UIA_TabControlTypeId
     );
+    // SAFETY: `element` is a live UIA element and this is a read-only property query.
     assert!(unsafe { element.CurrentIsKeyboardFocusable() }
         .expect("tab focusability")
         .as_bool());
+    // SAFETY: the live native tab element advertises the selection provider queried here.
     let selection: IUIAutomationSelectionPattern =
         unsafe { element.GetCurrentPatternAs(UIA_SelectionPatternId) }.expect("selection provider");
     for (index, name) in ["入力・変換", "辞書", "学習", "診断", "更新"]
@@ -333,10 +355,14 @@ fn native_tabs_expose_selected_names_and_keyboard_focus_to_uia() {
         .enumerate()
     {
         select_native_category(root, index);
+        // SAFETY: `selection` is a live UIA selection provider for the fixture tabs.
         let selected = unsafe { selection.GetCurrentSelection() }.expect("selected tabs");
+        // SAFETY: `selected` is the live UIA array returned immediately above.
         assert_eq!(unsafe { selected.Length() }.expect("selection length"), 1);
+        // SAFETY: the asserted one-element UIA array makes index zero valid.
         let item = unsafe { selected.GetElement(0) }.expect("selected item");
         assert_eq!(
+            // SAFETY: `item` is the live selected UIA tab element.
             unsafe { item.CurrentName() }
                 .expect("selected name")
                 .to_string(),
@@ -368,6 +394,8 @@ fn capture_native_settings_pages() {
     );
     for (index, item) in items.into_iter().enumerate() {
         ensure_tree_item_visible(tree, item);
+        // SAFETY: `tree` and `item` belong to the live fixture and TVM_SELECTITEM
+        // consumes the item handle synchronously without a borrowed buffer.
         unsafe {
             let _ = SendMessageW(
                 tree,

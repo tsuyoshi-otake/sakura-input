@@ -2828,6 +2828,8 @@ fn create_main_window() -> WindowsResult<HWND> {
     rect.right = rect.left + scale_dpi_value(WINDOW_WIDTH, 96, dpi);
     rect.bottom = rect.top + scale_dpi_value(WINDOW_HEIGHT, 96, dpi);
     let rect = fit_work_area(window, rect);
+    // SAFETY: `window` is the hidden live root created above and `rect` contains
+    // bounded work-area coordinates used synchronously by User32.
     unsafe {
         SetWindowPos(
             window,
@@ -4079,6 +4081,8 @@ unsafe extern "system" fn panel_window_procedure(
         WM_VSCROLL | WM_HSCROLL | WM_MOUSEWHEEL => {
             // SAFETY: the nested panel resolves the UI-thread-owned root state.
             if let Some(pointer) = unsafe { app_for_panel(panel) } {
+                // SAFETY: `app_for_panel` returned the non-null App pointer
+                // installed on this panel's root for the UI-thread lifetime.
                 let app = unsafe { &mut *pointer };
                 if !app.layout_in_progress {
                     let viewport = app.panels[app.selected_panel];
@@ -4095,6 +4099,7 @@ unsafe extern "system" fn panel_window_procedure(
                 }
                 return LRESULT(0);
             }
+            // SAFETY: construction/teardown messages retain default handling.
             unsafe { DefWindowProcW(panel, message, wparam, lparam) }
         }
         WM_ERASEBKGND => {
@@ -4177,6 +4182,8 @@ unsafe extern "system" fn window_procedure(
             // SAFETY: construction has null user data; normal resize owns a live App.
             let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
             if !pointer.is_null() && wparam.0 != 1 {
+                // SAFETY: non-null root user data is the App owned by this UI
+                // thread, and layout does not retain the reference.
                 unsafe { &mut *pointer }.layout();
             }
             LRESULT(0)
@@ -4194,6 +4201,8 @@ unsafe extern "system" fn window_procedure(
                         bottom: scale_dpi_value(380, 96, dpi),
                     },
                 );
+                // SAFETY: `info` is the non-null MINMAXINFO pointer supplied by
+                // User32 for this synchronous WM_GETMINMAXINFO callback.
                 unsafe {
                     (*info).ptMinTrackSize = POINT {
                         x: rect.right - rect.left,
@@ -4204,11 +4213,18 @@ unsafe extern "system" fn window_procedure(
             LRESULT(0)
         }
         WM_MOUSEWHEEL => {
+            // SAFETY: root user data is either zero during construction or the
+            // live UI-thread-owned App pointer.
             let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
             if !pointer.is_null() {
+                // SAFETY: non-null user data points to the live App; the selected
+                // panel index is maintained within the fixed panel array.
                 let viewport = unsafe { (*pointer).panels[(*pointer).selected_panel] };
+                // SAFETY: the live child receives the original scalar wheel
+                // message synchronously on the same UI thread.
                 return unsafe { SendMessageW(viewport, message, Some(wparam), Some(lparam)) };
             }
+            // SAFETY: no App exists yet, so native default handling owns it.
             unsafe { DefWindowProcW(window, message, wparam, lparam) }
         }
         WM_ERASEBKGND => {
@@ -4304,13 +4320,21 @@ unsafe extern "system" fn window_procedure(
         }
         WM_NOTIFY => {
             let header = lparam.0 as *const NMHDR;
+            // SAFETY: root user data is either zero or the live App pointer
+            // installed and consumed on this UI thread.
             let state = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
             if !state.is_null()
                 && !header.is_null()
+                // SAFETY: both pointers passed the null checks and remain valid
+                // for this synchronous WM_NOTIFY dispatch.
                 && unsafe { (*header).hwndFrom == (*state).tabs && (*header).code == TCN_SELCHANGE }
             {
+                // SAFETY: `state` owns the live native tab HWND; this is a scalar
+                // current-selection query with no retained pointer.
                 let selected = unsafe { SendMessageW((*state).tabs, TCM_GETCURSEL, None, None) }.0;
                 if (0..PANEL_COUNT as isize).contains(&selected) {
+                    // SAFETY: the range check makes the selection valid and the
+                    // mutable App reference is confined to this UI callback.
                     unsafe { &mut *state }.show_panel(selected as usize);
                 }
                 return LRESULT(0);
@@ -4402,7 +4426,11 @@ unsafe extern "system" fn window_procedure(
             // preference; high-contrast changes always supersede a user choice.
             let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
             if !pointer.is_null() {
+                // SAFETY: non-null root user data is the UI-thread-owned App;
+                // this field read is confined to the synchronous callback.
                 if message == WM_SETTINGCHANGE && !unsafe { (*pointer).theme_apply_in_progress } {
+                    // SAFETY: the App remains exclusively owned by this UI
+                    // thread while the callback refreshes presentation state.
                     let app = unsafe { &mut *pointer };
                     if let Err(error) = app.presentation.refresh_fonts(app.dpi) {
                         app.set_status(&format!("文字サイズを更新できませんでした: {error}"));

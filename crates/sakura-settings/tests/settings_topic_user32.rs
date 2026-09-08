@@ -293,6 +293,7 @@ fn profile_topic_click_shows_only_profile_controls_and_keeps_status_out_of_actio
         "normalizer reset belongs to the selected topic"
     );
     let (status, _) = bottom_status_and_apply(root);
+    // SAFETY: `reset` is a live native Button and BM_CLICK carries no pointer payload.
     unsafe {
         let _ = SendMessageW(reset, BM_CLICK, Some(WPARAM(0)), Some(LPARAM(0)));
     }
@@ -1260,6 +1261,7 @@ fn normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer() {
     );
     // The compact viewport keeps the long form scrollable. Reveal its final
     // action through the same native scroll message as the scrollbar.
+    // SAFETY: `outer` is the live viewport and WM_VSCROLL carries a scalar command.
     unsafe {
         let _ = SendMessageW(outer, WM_VSCROLL, Some(WPARAM(7)), Some(LPARAM(0)));
     }
@@ -1278,6 +1280,7 @@ fn normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer() {
     // BM_CLICK follows the native Button activation path. Pointer routing is
     // already covered above and by the Apply tests; using the control message
     // here keeps this state-isolation assertion independent of desktop motion.
+    // SAFETY: `reset` remains a live native Button and BM_CLICK has no pointer payload.
     unsafe {
         let _ = SendMessageW(reset, BM_CLICK, Some(WPARAM(0)), Some(LPARAM(0)));
     }
@@ -2008,6 +2011,8 @@ impl CursorRestore {
         // SendInput serializes a batch without interspersing other mouse input.
         // Separate SetCursorPos/GetCursorPos/click calls allow a concurrent
         // device movement to redirect the click after its target was checked.
+        // SAFETY: these User32 queries return scalar virtual-screen metrics and
+        // accept no caller-owned pointers.
         let (left, top, width, height) = unsafe {
             (
                 GetSystemMetrics(SM_XVIRTUALSCREEN),
@@ -2335,6 +2340,8 @@ fn click_category_tab(cursor: &CursorRestore, root: HWND, index: usize) {
     let remote = RemoteTreeRect::allocate(window_process_id(tabs));
     remote.write(&RECT::default());
     assert_ne!(
+        // SAFETY: `remote.address` names writable storage allocated in the tab
+        // owner's process and remains live through this synchronous message.
         unsafe {
             SendMessageW(
                 tabs,
@@ -2351,11 +2358,14 @@ fn click_category_tab(cursor: &CursorRestore, root: HWND, index: usize) {
         x: (rect.left + rect.right) / 2,
         y: (rect.top + rect.bottom) / 2,
     };
+    // SAFETY: `point` is valid writable storage and `tabs` is a live HWND.
     assert_ne!(unsafe { ClientToScreen(tabs, &mut point) }, 0);
+    // SAFETY: `point` now contains a physical screen coordinate inside the live tab.
     assert_eq!(unsafe { WindowFromPoint(point) }, tabs);
     cursor.left_click(point);
     wait_until(
         "native tab selection",
+        // SAFETY: `tabs` stays live for the fixture lifetime and this is a scalar query.
         || unsafe { SendMessageW(tabs, TCM_GETCURSEL, None, None) }.0 == index as isize,
     );
 }
@@ -2464,6 +2474,8 @@ impl RemoteTreeRect {
         let query = TVITEMW {
             mask: TVIF_TEXT,
             hItem: item,
+            // SAFETY: the allocation contains a TVITEMW followed by enough UTF-16
+            // storage, so this offset remains inside the remote allocation.
             pszText: windows::core::PWSTR(
                 unsafe { self.address.cast::<u8>().add(size_of::<TVITEMW>()) }.cast(),
             ),
@@ -2471,6 +2483,8 @@ impl RemoteTreeRect {
             ..Default::default()
         };
         let mut copied = 0;
+        // SAFETY: the process handle and remote allocation belong to this guard;
+        // each buffer has the exact size supplied to the synchronous kernel calls.
         unsafe {
             assert_ne!(
                 WriteProcessMemory(
@@ -2722,11 +2736,14 @@ fn combo_popup(combo: HWND) -> Option<HWND> {
 }
 
 fn select_combo_item_with_mouse(cursor: &CursorRestore, combo: HWND, index: usize) {
+    // SAFETY: `combo` is a live child HWND discovered from the fixture.
     let page = unsafe { GetParent(combo) };
+    // SAFETY: `page` is the live direct parent returned by User32 above.
     let viewport = unsafe { GetParent(page) };
     for _ in 0..32 {
         let rect = window_rect(combo);
         let viewport_rect = window_rect(viewport);
+        // SAFETY: this scalar query reads DPI from the live ComboBox HWND.
         let dpi = unsafe { GetDpiForWindow(combo) }.max(96);
         let closed_height = (rect.bottom - rect.top).min(scale_metric(30, 96, dpi));
         let command = if rect.top < viewport_rect.top {
@@ -2739,6 +2756,7 @@ fn select_combo_item_with_mouse(cursor: &CursorRestore, combo: HWND, index: usiz
         let Some(command) = command else {
             break;
         };
+        // SAFETY: `viewport` is live and WM_VSCROLL carries only a scalar command.
         unsafe {
             let _ = SendMessageW(viewport, WM_VSCROLL, Some(WPARAM(command)), Some(LPARAM(0)));
         }
@@ -2747,6 +2765,7 @@ fn select_combo_item_with_mouse(cursor: &CursorRestore, combo: HWND, index: usiz
     // Some native CBS_DROPDOWNLIST implementations report the originally
     // requested drop height from GetWindowRect even while closed. Only the
     // compact selection field is hit-testable before the popup opens.
+    // SAFETY: this scalar query reads DPI from the live ComboBox HWND.
     let dpi = unsafe { GetDpiForWindow(combo) }.max(96);
     let closed_height = (rect.bottom - rect.top).min(scale_metric(30, 96, dpi));
     let open_point = POINT {
@@ -2821,6 +2840,7 @@ fn select_combo_item_with_keys(combo: HWND, index: usize) {
     use windows::Win32::UI::WindowsAndMessaging::WM_KEYDOWN;
     // The native closed ComboBox owns Home/Down and emits its own selection
     // notifications. No synthetic WM_COMMAND or focus-dependent popup is used.
+    // SAFETY: `combo` is live and WM_KEYDOWN carries only scalar virtual keys.
     unsafe {
         let _ = SendMessageW(combo, WM_KEYDOWN, Some(WPARAM(0x24)), None);
         for _ in 0..index {
