@@ -284,6 +284,8 @@ impl Presentation {
         // Start from the area without either scrollbar. Starting from the
         // previous page's reduced client area can make two unneeded bars keep
         // one another alive when returning to a short page.
+        // SAFETY: `viewport` is a live child HWND owned by this presentation;
+        // the calls only read its client rectangle, style and DPI metrics.
         let (style, bar_width, bar_height) = unsafe {
             let _ = GetClientRect(viewport, &mut rect);
             use windows::Win32::UI::HiDpi::GetSystemMetricsForDpi;
@@ -438,7 +440,11 @@ fn viewport_extent(
 }
 
 fn reveal_offset(current: i32, viewport: i32, start: i32, length: i32, margin: i32) -> i32 {
-    if start < current + margin {
+    // A control wider than the viewport can never fit completely. Keep its
+    // leading edge visible so keyboard users can still identify the focused
+    // field and reach its primary affordance while horizontal scrolling stays
+    // available for the remainder.
+    if length.saturating_add(margin.saturating_mul(2)) > viewport || start < current + margin {
         (start - margin).max(0)
     } else if start + length > current + viewport - margin {
         (start + length + margin - viewport).max(0)
@@ -709,8 +715,12 @@ mod tests {
         fn new() -> Self {
             register_window_class().expect("register settings classes");
             let window = create_main_window().expect("create settings root");
+            // SAFETY: `window` is the live root created immediately above; the
+            // query returns its User32-owned owner without transferring it.
             let owner = unsafe { GetWindow(window, GW_OWNER) }.expect("owned settings window");
             let mut app = Box::new(App::new(window).expect("create settings form"));
+            // SAFETY: the boxed App has a stable address through the fixture
+            // lifetime and is reclaimed only after the windows are destroyed.
             unsafe {
                 SetWindowLongPtrW(window, GWLP_USERDATA, (&mut *app as *mut App) as isize);
             }
@@ -720,6 +730,7 @@ mod tests {
     impl Drop for NativeFixture {
         fn drop(&mut self) {
             // Destroy all windows before their borrowed font and brush owners.
+            // SAFETY: the fixture owns both live HWNDs and destroys each once.
             unsafe {
                 let _ = DestroyWindow(self.app.window);
                 let _ = DestroyWindow(self.owner);
@@ -728,6 +739,8 @@ mod tests {
     }
     fn screen_rect(window: HWND) -> RECT {
         let mut rect = RECT::default();
+        // SAFETY: callers pass a live fixture HWND and `rect` is writable for
+        // the complete synchronous User32 call.
         unsafe {
             GetWindowRect(window, &mut rect).expect("live control rectangle");
         }
@@ -792,6 +805,8 @@ mod tests {
                     let fields: Vec<_> = page
                         .nodes
                         .iter()
+                        // SAFETY: every node HWND belongs to the live fixture;
+                        // this scalar query only reads the native style bits.
                         .filter(|node| unsafe {
                             GetWindowLongPtrW(node.window, GWL_STYLE) as u32 & WS_TABSTOP.0 != 0
                         })
@@ -811,10 +826,22 @@ mod tests {
                         app.presentation.reveal_focus(field);
                         let rect = screen_rect(field);
                         let view = screen_rect(viewport);
-                        assert!(
+                        let margin = scale_dpi_value(8, 96, dpi);
+                        let field_width = rect.right - rect.left;
+                        let view_width = view.right - view.left;
+                        let horizontally_reachable = if field_width <= view_width {
+                            rect.left >= view.left && rect.right <= view.right
+                        } else {
+                            // On a work area too narrow for the authored form,
+                            // reveal_focus keeps the oversized field's leading
+                            // edge visible and leaves its remainder scrollable.
                             rect.left >= view.left
+                                && rect.left <= view.left + margin
+                                && rect.right > view.right
+                        };
+                        assert!(
+                            horizontally_reachable
                                 && rect.top >= view.top
-                                && rect.right <= view.right
                                 && rect.bottom <= view.bottom,
                             "focus target {:?} stays reachable at dpi={dpi}, category={category}, topic={topic}: {rect:?}, {view:?}",
                             window_text(field)
@@ -838,6 +865,8 @@ mod tests {
         assert_eq!(reveal_offset(142, 200, 300, 34, 8), 142);
         assert_eq!(reveal_offset(142, 200, 52, 34, 8), 44);
         assert_eq!(reveal_offset(0, 200, 0, 34, 8), 0);
+        assert_eq!(reveal_offset(0, 200, 300, 250, 8), 292);
+        assert_eq!(reveal_offset(400, 200, 300, 250, 8), 292);
     }
 
     #[test]
