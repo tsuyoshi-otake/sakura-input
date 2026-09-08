@@ -1,6 +1,6 @@
 # Scoped mutants for the space-key-dispatch oracle campaign.
-# Production dual-delivery is a known baseline failure; do not score
-# dispatch.rs against the dual-delivery requirement until that blocker is gone.
+# This campaign mutates only the independent oracle when passed the explicit
+# --file scope. Its denominator is not a production dispatch mutation score.
 
 examine_re = [
   "space_effect",

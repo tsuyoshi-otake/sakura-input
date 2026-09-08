@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "domain": "space-key-dispatch-tlc",
+  "run_id": "68854a326dcf4b9da445ec4ce4bd22d4",
+  "started_utc": "2026-09-05T15:40:40.9566049Z",
+  "source_revision": "1d102961e2d9a7f2628a047a519ca9a9ef9b6d52",
+  "source_identity": "revision plus normalized working-tree input hashes; revision alone is not the evaluated tree",
+  "scope": "TLA model/configuration only; no Rust, COM, physical routing or REQ-SPACE-09 teardown-credit proof",
+  "hash_encoding": "UTF-8 text with CRLF normalized to LF; jar/logs use raw SHA-256",
+  "inputs": {
+    "scripts/verify-space-key-dispatch-tlc.ps1": "ccd2b520992c46493ce48405e80566abcb0598dfb3cb09212df3d29b22629494",
+    "verification/tla/SpaceKeyDispatch.tla": "3f089068e222a3c91a855e4801b4df4e7ee5440d63920fe1fcd724d79bb71838",
+    "verification/tla/SpaceKeyDispatch-boundary.cfg": "4aae43f4b1ec5cc9d485c688affa4868b5d5609e9aed81928f242fc408249c05"
+  },
+  "jar_sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+  "java_version": "openjdk version \"11.0.31\" 2026-04-21 LTS\r\nOpenJDK Runtime Environment Microsoft-13870636 (build 11.0.31+11-LTS)\r\nOpenJDK 64-Bit Server VM Microsoft-13870636 (build 11.0.31+11-LTS, mixed mode, sharing)",
+  "workers": 2,
+  "seed": "20260816",
+  "timeout_seconds": 1,
+  "status": "INCONCLUSIVE",
+  "results": [
+    {
+      "config": "SpaceKeyDispatch-boundary.cfg",
+      "expected_invariant": "",
+      "status": "INCONCLUSIVE",
+      "stdout_sha256": "643f2b5a8ead49716cea1dd12a390dd9db37e8b177c9c4ade39bd93628f14dd5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": -1,
+      "timed_out": true,
+      "elapsed_ms": 1062.9529,
+      "pid": 42132,
+      "process_exited": true,
+      "tlc_version": "2.19 of 08 August 2024 (rev: 5a47802)"
+    }
+  ],
+  "finished_utc": "2026-09-05T15:40:42.0622451Z"
+}

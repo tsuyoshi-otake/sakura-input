@@ -31,7 +31,8 @@ pub enum ConnState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DomainEvent {
-    /// Start or continue a composition on one connection.
+    /// An accepted start/continuation of a reading, not every raw Type key.
+    /// The production live-peer policy may suppress a raw idle-peer key.
     Type {
         connection: u8,
     },
@@ -45,9 +46,13 @@ pub enum DomainEvent {
     Cancel {
         connection: u8,
     },
-    ReplaceContext {
+    /// Abandon a context with its reading still live, then reconnect.
+    /// Orderly replacement after commit/cancel is not a teardown credit.
+    AbandonContext {
         connection: u8,
     },
+    /// Drop/reopen a connection while the engine's shared fence survives.
+    /// This does not model killing and recreating the entire engine process.
     CrashRestart {
         connection: u8,
     },
@@ -202,7 +207,7 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
                 }
             }
         }
-        DomainEvent::ReplaceContext { connection } => {
+        DomainEvent::AbandonContext { connection } => {
             clear_last_key(state);
             if let Some(index) = valid_connection(state, connection) {
                 if state.connections[index].live {
@@ -229,9 +234,11 @@ pub fn apply(state: &mut OracleState, event: DomainEvent) {
         DomainEvent::Disconnect { connection } => {
             clear_last_key(state);
             if let Some(index) = valid_connection(state, connection) {
-                // A disconnected connection stops receiving keys entirely,
-                // so no replacement can mistake its reading for an idle
-                // document space. It arms nothing.
+                // The dead target receives no more keys, but a surviving
+                // idle peer of the same host can encounter the lost reading.
+                if was_live_reading(state, index) {
+                    state.pending_teardown = true;
+                }
                 state.connections[index].live = false;
                 state.connections[index].state = ConnState::Idle;
             }
@@ -268,9 +275,10 @@ fn apply_space(state: &mut OracleState, targets: u8) {
         if (targets & (1 << index)) == 0 {
             continue;
         }
-        // Only an idle live connection consults the latch, and consulting it
-        // spends it -- one teardown owes one Space, not a standing veto.
-        if state.pending_teardown && was_idle_target(state, index) {
+        // A live peer already owns the absorption; keep the lost reading's
+        // credit until no live reading can handle the user's Space.
+        if state.pending_teardown && was_idle_target(state, index) && !peer_converting(state, index)
+        {
             spent_teardown = true;
         }
         match space_effect(state, index) {
@@ -341,7 +349,7 @@ pub fn atomic_conditions(state: &OracleState, event: DomainEvent) -> [AtomicCond
         DomainEvent::Type { connection }
         | DomainEvent::Commit { connection }
         | DomainEvent::Cancel { connection }
-        | DomainEvent::ReplaceContext { connection }
+        | DomainEvent::AbandonContext { connection }
         | DomainEvent::CrashRestart { connection }
         | DomainEvent::Disconnect { connection } => usize::from(connection),
         DomainEvent::Space { targets } | DomainEvent::TimeoutSpace { targets } => (0..state.actors)

@@ -38,6 +38,8 @@
 //! approximately. A composition that ends the way it was meant to still
 //! uses [`CompositionFence::release`] and arms nothing.
 
+use sakura_ipc::ConnectionProbe;
+use sakura_proto::SessionId;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard};
 
@@ -54,6 +56,15 @@ struct FenceState {
     /// Hosts that lost a live reading to a teardown and have not yet spent
     /// the one Space that loss entitles them to absorb.
     torn_down: HashSet<Box<str>>,
+    /// Only claims for the queried host are inspected. Inactive records stay
+    /// until their owner finalizes, so late teardown cannot spend them twice.
+    owned: HashMap<Box<str>, HashMap<(u64, SessionId), OwnedClaim>>,
+}
+
+#[derive(Debug)]
+struct OwnedClaim {
+    probe: Option<ConnectionProbe>,
+    active: bool,
 }
 
 impl CompositionFence {
@@ -70,12 +81,57 @@ impl CompositionFence {
     /// user typed into it.
     pub fn any_active(&self, process_name: &str) -> bool {
         let key = normalize_process_name(process_name);
-        self.lock()
-            .counts
-            .get(key.as_ref())
-            .copied()
-            .unwrap_or_default()
-            > 0
+        let mut state = self.lock();
+        state.retire_disconnected(key.as_ref());
+        state.counts.get(key.as_ref()).copied().unwrap_or_default() > 0
+    }
+
+    pub(crate) fn acquire_owned(
+        &self,
+        process_name: &str,
+        owner: u64,
+        session: SessionId,
+        probe: Option<ConnectionProbe>,
+    ) {
+        let key = normalize_process_name(process_name);
+        let mut state = self.lock();
+        state.retire_disconnected(key.as_ref());
+        let claims = state.owned.entry(key.clone()).or_default();
+        if let Some(existing) = claims.get_mut(&(owner, session)) {
+            // Binding the accepted connection to an already staged fixture
+            // or session never acquires a second claim or revives a dead one.
+            existing.probe = probe;
+            return;
+        }
+        let active = !probe.as_ref().is_some_and(ConnectionProbe::is_disconnected);
+        claims.insert((owner, session), OwnedClaim { probe, active });
+        if active {
+            state.torn_down.remove(key.as_ref());
+            *state.counts.entry(key).or_default() += 1;
+        }
+    }
+
+    pub(crate) fn release_owned(
+        &self,
+        process_name: &str,
+        owner: u64,
+        session: SessionId,
+        teardown: bool,
+    ) {
+        let key = normalize_process_name(process_name);
+        let mut state = self.lock();
+        let Some(claims) = state.owned.get_mut(key.as_ref()) else {
+            return;
+        };
+        let Some(claim) = claims.remove(&(owner, session)) else {
+            return;
+        };
+        if claims.is_empty() {
+            state.owned.remove(key.as_ref());
+        }
+        if claim.active && state.release_count(key.as_ref()) && teardown {
+            state.torn_down.insert(key);
+        }
     }
 
     pub fn acquire(&self, process_name: &str) {
@@ -119,6 +175,7 @@ impl CompositionFence {
     pub fn consume_teardown(&self, process_name: &str) -> bool {
         let key = normalize_process_name(process_name);
         let mut state = self.lock();
+        state.retire_disconnected(key.as_ref());
         // A live claim already fences this host through `any_active`. Keep
         // the latch for the teardown it was armed for.
         if state.counts.get(key.as_ref()).copied().unwrap_or_default() > 0 {
@@ -135,6 +192,28 @@ impl CompositionFence {
 }
 
 impl FenceState {
+    fn retire_disconnected(&mut self, key: &str) {
+        let mut retired = 0;
+        if let Some(claims) = self.owned.get_mut(key) {
+            for claim in claims.values_mut() {
+                if claim.active
+                    && claim
+                        .probe
+                        .as_ref()
+                        .is_some_and(ConnectionProbe::is_disconnected)
+                {
+                    claim.active = false;
+                    retired += 1;
+                }
+            }
+        }
+        for _ in 0..retired {
+            if self.release_count(key) {
+                self.torn_down.insert(Box::from(key));
+            }
+        }
+    }
+
     /// Drops one claim. `true` when this host actually held one, which is
     /// what makes an abnormal teardown worth a latch.
     fn release_count(&mut self, key: &str) -> bool {

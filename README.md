@@ -85,7 +85,7 @@ sakura_settings.exe update status
 
 AI処理は明示操作時だけ開始し、同時に1件までです。キーの押しっぱなし、連打、同一内容の短時間再送では重複リクエストを作りません。結果待ちの間にフォーカス、選択範囲、元文字列、入力スコープが変わった場合は結果を適用しません。Password、URL、Email、Digits、未知・未分類の入力欄とテスト専用入力では送信しません。開発者モードでは、暗号化された入力履歴へ結果、状態、プロバイダー、スタイル、遅延、試行回数、取得できたトークン数を記録し、`history stats`でAIリクエスト回数とトークン合計を確認できます。
 
-自動更新の確認は既定で有効です。設定画面または `sakura_settings.exe update disable` で明示的に無効化できます。無効化していない場合、設定アプリ起動時にGitHub Releasesの更新を確認します。利用可能な更新があれば確認ダイアログを表示し、同意した場合だけインストーラーを取得・検証・実行します。インストーラーは HTTPS で取得し、固定された配布元、サイズ、SHA-256、Authenticode 署名をすべて検証してから実行します。設定の root 実行ファイルは安定ランチャーで、実体は現在の versioned payload から起動します。
+自動更新の確認は既定で有効です。設定画面または `sakura_settings.exe update disable` で明示的に無効化できます。無効化していない場合、設定アプリ起動時にGitHub Releasesの更新を確認します。利用可能な更新があれば確認ダイアログを表示し、同意した場合だけインストーラーを取得・検証・実行します。更新チャンネルは、Authenticode と Sakura 固有の detached application signature を別々に検証します。Authenticode 署名済みリリースは従来どおり `WinVerifyTrust` を通過する必要があります。owner 承認の Authenticode 未署名リリースでも、canonical `release-manifest-v2.txt` と `release-manifest-v2.sig` が Sakura の固定公開鍵で検証でき、`WinVerifyTrust` が正確に `TRUST_E_NOSIGNATURE` を返す場合だけ自動更新できます。公開鍵、trust epoch、release sequence、鍵の rotation／recovery、Authenticode 判定表は [update-signing v2 contract](verification/update-signing-v2.md) に固定しています。v1.0.33 は旧 updater からの手動 bridge であり、v2 対応 updater の導入後に自動更新を開始します。インストーラーは HTTPS で取得し、固定された配布元、サイズ、SHA-256、署名ポリシーをすべて検証してから実行します。設定の root 実行ファイルは安定ランチャーで、実体は現在の versioned payload から起動します。
 
 ## Sakura Pad（ローカルメモ）
 
@@ -151,6 +151,6 @@ Windows の「インストールされているアプリ」からアンインス
 
 ## 開発者向け
 
-設計上の制約は [DESIGN.md](DESIGN.md)、フェーズと合格基準は [PLAN.md](PLAN.md)、別セッションへの作業引き継ぎは [CLAUDE.md](CLAUDE.md) を参照してください。通常の検証は `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` です。全フェーズの厳格判定は `scripts/verify-all-phases.ps1`、個別判定は `scripts/verify-phase0.ps1`～`verify-phase5.ps1` を使います。手動・dogfood・互換性・段階更新の記録例は `scripts/templates/` にあり、テンプレートをコピーしただけでは合格にならず、担当者・日時・実ファイルの SHA-256 が検証されます。
+設計上の制約は [DESIGN.md](DESIGN.md)、フェーズと合格基準は [PLAN.md](PLAN.md)、別セッションへの作業引き継ぎは [CLAUDE.md](CLAUDE.md) を参照してください。通常の検証は `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }` です。テストは成功時にPASS 1行だけを表示し、失敗時は保存していた通常ログを全量表示します。全フェーズの厳格判定は `scripts/verify-all-phases.ps1`、個別判定は `scripts/verify-phase0.ps1`～`verify-phase5.ps1` を使います。手動・dogfood・互換性・段階更新の記録例は `scripts/templates/` にあり、テンプレートをコピーしただけでは合格にならず、担当者・日時・実ファイルの SHA-256 が検証されます。
 
 辞書は `scripts/build-dictionary.ps1` が pinned source とSakuraのcurated layerから14カテゴリを決定論的に生成し、`.dic` はリポジトリへコミットしません。外部のカテゴリ辞書を追加する場合だけ `-SystemCategoryDirectory` を指定し、そのmanifestとライセンス宣言を厳格に検証します。`build-installer.ps1` は生成レポートに正規14カテゴリが完全・重複なしで記録されていない辞書を拒否します。`-EngineeringOnly` はローカル実装の反復用であり、CI、実ホスト、経過日数、72時間 fuzz、実署名、公開済み Release の代替にはなりません。

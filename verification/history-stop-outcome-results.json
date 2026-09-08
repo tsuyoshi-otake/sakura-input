@@ -1,0 +1,66 @@
+{
+  "input_hashes": {
+    "crates/sakura-engine/src/input_history.rs": "65223ead9370e8b6de036d013505c2fad85b7567d0e7f289b43e8e2af899b23d",
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779"
+  },
+  "runs": [
+    {
+      "log_name": "stop-before.log",
+      "sha256": "075a885326827ef5c7b8703328337d5e84eb889d878d7d944147edf8b4e1aad0",
+      "totals": [
+        0,
+        3,
+        0
+      ],
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::stop_outcome_ [old implementation]",
+      "exit_code": 101
+    },
+    {
+      "log_name": "stop-after.log",
+      "sha256": "4d4eb1d1cc01671d10058fc64e2367074250a4124241390e65ef3083b93ea6e1",
+      "totals": [
+        3,
+        0,
+        0
+      ],
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::stop_outcome_",
+      "exit_code": 0
+    },
+    {
+      "log_name": "stop-history.log",
+      "sha256": "2fcab7dc0d4a58dc291433b4539231096d9377387352a353a7886254cb5eaaca",
+      "totals": [
+        35,
+        0,
+        0
+      ],
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests",
+      "exit_code": 0
+    },
+    {
+      "log_name": "stop-clippy-final.log",
+      "sha256": "be9cf582e66c39eacf02592444850d4d5082ab7eb77f0b717e6c1ced62aebfd9",
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "log_name": "workspace-stop.log",
+      "sha256": "71469223e15215c2c52696aab92c3ba9d2ca1f753a7f296e24ced54d09ae661c",
+      "totals": [
+        1792,
+        0,
+        84
+      ],
+      "command": "cargo test --locked --workspace",
+      "exit_code": 0
+    }
+  ],
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "profile": "debug",
+  "scope": "Final file hashes; before/initial logs describe prior iterations. totals: passed, failed, ignored. No hermetic or physical TSF qualification."
+}

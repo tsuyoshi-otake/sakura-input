@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "issue": 106,
+  "base_revision": "1d102961e2d9a7f2628a047a519ca9a9ef9b6d52",
+  "classification": "CONFIRMED verification runner false success; V1 program remains incomplete",
+  "tlc_generated_manifests": [
+    "space-key-dispatch/tlc-runner-results.json",
+    "space-key-dispatch/tlc-timeout-results.json"
+  ],
+  "commands": [
+    {
+      "command": "old verify-space-key-dispatch-tlc.ps1 -JarPath invalid-tla-tools.jar -Configs SpaceKeyDispatch-small.cfg",
+      "runner_exit": 0,
+      "java_exit": 1,
+      "expectation": "Nonzero runner exit",
+      "status": "FAIL_BEFORE_FIX",
+      "log": "tlc-runner-before.log"
+    },
+    {
+      "command": "verify-space-key-dispatch-tlc.ps1 -JarPath invalid-tla-tools.jar -Configs SpaceKeyDispatch-small.cfg",
+      "runner_exit": 1,
+      "status": "PASS_NEGATIVE_CONTROL",
+      "log": "tlc-invalid-jar-after.log"
+    },
+    {
+      "command": "verify-space-key-dispatch-tlc.ps1 -JarPath pinned.jar -Configs ../SpaceKeyDispatch-small.cfg",
+      "runner_exit": 1,
+      "status": "PASS_NEGATIVE_CONTROL",
+      "log": "tlc-invalid-config.log"
+    },
+    {
+      "command": "verify-space-key-dispatch-tlc.ps1 -SelfTest",
+      "exit": 0,
+      "classifier_cases": 12,
+      "real_child_probes": 2,
+      "log": "tlc-selftest-final.log"
+    },
+    {
+      "command": "verify-space-key-dispatch-tlc.ps1 -JarPath pinned.jar -OutputRoot ../sakura-revalidation-evidence-20260905/tlc-final",
+      "exit": 0,
+      "bounded_complete": 5,
+      "expected_counterexamples": 4,
+      "log": "tlc-final-run.log"
+    },
+    {
+      "command": "verify-space-key-dispatch-tlc.ps1 -JarPath pinned.jar -Configs SpaceKeyDispatch-boundary.cfg -TimeoutSeconds 1",
+      "exit": 1,
+      "campaign_status": "INCONCLUSIVE",
+      "negative_control_status": "PASS",
+      "log": "tlc-timeout-run.log"
+    },
+    {
+      "command": "cargo test --locked --workspace",
+      "exit": 0,
+      "passed": 1818,
+      "ignored": 84,
+      "failed": 0,
+      "log": "workspace-tlc-runner.log"
+    },
+    {
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      "exit": 0,
+      "log": "tlc-runner-clippy.log"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0
+    }
+  ],
+  "local_log_sha256": {
+    "tlc-runner-before.log": "bf92babb4d539b9af0522c5f6e08682370012f320647d16fd14749a0ec113c1e",
+    "tlc-invalid-jar-after.log": "57a8fcb2c327762b511f1df9debe2cd6146546978def62a3c02924ee88795de1",
+    "tlc-invalid-config.log": "985294b78a0ae2243baba8a86d934bbd233af9e403831e25c5365c76ca6eacdf",
+    "tlc-selftest-final.log": "359282784ae9fbbcdd294db7947adcf4ffcc1b5318bdf23a7c89d1d474ad1e80",
+    "tlc-final-run.log": "4b6c48bea3499f537109387be4baf818550ee5dec69c1d2d942b065e0711ef79",
+    "tlc-timeout-run.log": "dedcdaa563c7f16be3d5037d61f5352b573aee4c6adf83206ea6150f5dee1519",
+    "workspace-tlc-runner.log": "e75155339b286fdd535643e9e5b3acf5570a8774af673acd4d3bb40ec93061e9",
+    "tlc-runner-clippy.log": "bf09e74ba75723a8aa774e26410bfcd19cdadaa7dce2cd2e43acd6ae62158ad9"
+  },
+  "log_location": "C:/Users/developer/tmp/sakura-revalidation-evidence-20260905",
+  "cleanup": "Joined owned children/Java; repository-scoped process checker and separate task-scoped Java inventory clean",
+  "limitations": [
+    "Workspace Rust source is unchanged from patch base; later changes in this patch are PowerShell and evidence files.",
+    "The invalid-input probes preceded the jar-snapshot and zero-state refinements; their input-rejection branches were unchanged.",
+    "No current PBT/C2/mutation campaign manifest, full dependency-closure gate or product conformity is claimed.",
+    "Local raw logs are not published CI artifacts.",
+    "Read-only independent review is a behavioral instruction, not OS-enforced isolation."
+  ]
+}

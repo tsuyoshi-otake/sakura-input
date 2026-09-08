@@ -107,6 +107,30 @@ fn verified_connect_rejects_a_wrong_image_without_sending_hello() {
 /// The property the whole overlapped-I/O apparatus exists for: an engine
 /// that stops answering must cost the caller its budget, not its thread.
 #[test]
+fn partial_reply_deadline_cannot_leave_a_reusable_stream() {
+    for prefix in [1, 4, 7] {
+        let (name, server) = with_server(&format!("partial-deadline-{prefix}"), move |pipe| {
+            let mut buf = Vec::new();
+            let request = pipe.read_frame(&mut buf).expect("request");
+            let id = peek_header(request).expect("header").request_id;
+            let mut reply = Vec::new();
+            encode_response(&Response::Pong, id, &mut reply).expect("reply");
+            pipe.write_all(reply.get(..prefix).expect("frame prefix"))
+                .expect("partial reply");
+            std::thread::sleep(Duration::from_millis(120));
+        });
+        let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
+        let result = client.call_until(&Request::Ping, Instant::now() + Duration::from_millis(30));
+        drop(client);
+        server.join().expect("scripted peer joined");
+        assert!(
+            matches!(result, Err(Fault::Desynchronized)),
+            "partial prefix {prefix} must retire stream, got {result:?}"
+        );
+    }
+}
+
+#[test]
 fn a_silent_engine_costs_the_budget_and_no_more() {
     let (name, server) = with_server("timeout", |pipe| {
         let mut buf = Vec::new();

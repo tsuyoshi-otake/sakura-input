@@ -999,11 +999,9 @@ impl LearningService {
             }
             if variants
                 .iter()
-                // Commit history is evidence for the conservative, named
-                // input rules only. Advanced edit-1 variants are deliberately
-                // broad guesses for conversion and must not become durable
-                // repair hints merely because a matching reading was once
-                // committed.
+                // A prior commit is evidence for named input rules, not for
+                // broad edit-distance guesses. Otherwise merely committing
+                // "い" makes "う" -> "い" a history-authorized repair.
                 .any(|variant| {
                     variant.kind == sakura_core::RepairKind::Rule
                         && variant.repaired.as_str() == reading
@@ -2560,30 +2558,34 @@ mod tests {
     }
 
     #[test]
-    fn advanced_repair_variants_are_not_admitted_from_prediction_history() {
+    fn advanced_short_readings_do_not_gain_commit_history_authority() {
         let support = sakura_core::InputSupport::default();
-        // These are intentionally plausible one-character substitutions, but
-        // they are broad Advanced variants rather than deterministic Rule
-        // repairs. Keep one learned prediction per case so this exercises the
-        // same history-backed path used by a real prior commit.
-        for (typed, repaired) in [("いて", "って"), ("い", "お"), ("なに", "ない")] {
+        for (typed, repaired) in [
+            ("う", "い"),
+            ("いて", "って"),
+            ("い", "お"),
+            ("なに", "ない"),
+        ] {
             let variants = sakura_core::collect_repair_variants(
                 typed,
                 support,
                 sakura_core::MAX_REPAIR_VARIANTS,
             );
-            assert!(variants.iter().any(|variant| {
-                variant.repaired.as_str() == repaired
-                    && variant.kind == sakura_core::RepairKind::Advanced
-            }));
-
+            assert!(
+                variants.iter().any(|variant| {
+                    variant.repaired.as_str() == repaired
+                        && variant.kind == sakura_core::RepairKind::Advanced
+                }),
+                "fixture must exercise an actual Advanced variant: {typed} -> {repaired}"
+            );
             let service = LearningService::memory();
+            assert!(service
+                .collect_commit_repair_readings(typed, support)
+                .is_empty());
             service.learn(repaired, repaired, 0, 0);
             let hints = service.collect_commit_repair_readings(typed, support);
-            assert!(
-                hints.is_empty(),
-                "advanced repair unexpectedly became a commit-history hint: {typed} -> {repaired}, hints={hints:?}"
-            );
+            assert!(hints.is_empty(),
+                "unrelated prior commits must not promote Advanced variants: {typed} -> {repaired}, hints={hints:?}");
         }
     }
 

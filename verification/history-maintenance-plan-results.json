@@ -1,0 +1,55 @@
+{
+  "runs": [
+    {
+      "totals": [
+        0,
+        1,
+        0
+      ],
+      "exit_code": 101,
+      "sha256": "2760747f23e4fca581ce9166692db952ecabe1be384680857e6c63b9bae4cc26",
+      "log_name": "maintenance-before.log",
+      "command": "cargo test --locked -p sakura-engine maintenance_unexpired_idle_store_preserves_ciphertext (old production code)"
+    },
+    {
+      "totals": [
+        47,
+        0,
+        0
+      ],
+      "exit_code": 0,
+      "sha256": "ac9696bd135f2e435ee5ddf84dc5cdb1d3f0bf83077a525b6acc97776a1b230d",
+      "log_name": "maintenance-final-history.log",
+      "command": "cargo test --locked -p sakura-engine input_history::tests"
+    },
+    {
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "exit_code": 0,
+      "sha256": "7fccd2900460c17bb583094d8235d6eff3302795092ded9b48425167fefa4848",
+      "log_name": "maintenance-final-clippy.log",
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings"
+    },
+    {
+      "totals": [
+        1805,
+        0,
+        84
+      ],
+      "exit_code": 0,
+      "sha256": "a2daa31d09ec4dd3aca08ff3047f0e4b52e3b917e8b774ee2df2af5a69930d0f",
+      "log_name": "workspace-maintenance-final.log",
+      "command": "cargo test --locked --workspace"
+    }
+  ],
+  "input_hashes": {
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779",
+    "crates/sakura-engine/src/input_history.rs": "e40421e5786e77c2ce70f712685a45c3156e9a26e8905d90638fa1aea7271dac"
+  },
+  "scope": "Final source hashes; old-code semantic counterexample is a prior iteration. Totals passed/failed/ignored. No physical TSF or performance qualification.",
+  "profile": "debug Windows x64 MSVC",
+  "rustc": "1.96.0"
+}

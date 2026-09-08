@@ -387,6 +387,7 @@ impl Shared {
 pub struct Server {
     shared: Arc<Shared>,
     stopped: Receiver<StopReason>,
+    reserved_instances: Option<Vec<(Endpoint, PipeInstance)>>,
 }
 
 impl Server {
@@ -601,7 +602,47 @@ impl Server {
                 verbose,
             }),
             stopped,
+            reserved_instances: None,
         })
+    }
+
+    /// Reserves the existing secured endpoint names without starting workers.
+    /// Dropping this value on any later initialization failure releases every
+    /// claim. Ownership is not readiness: requests are served only by run.
+    pub fn reserve(mut self) -> windows::core::Result<Self> {
+        if self.reserved_instances.is_none() {
+            self.reserved_instances = Some(create_initial_instances(&self.shared)?);
+        }
+        Ok(self)
+    }
+
+    /// Installs runtime dependencies after endpoint ownership is secured and
+    /// before any callback or acceptor can observe the shared state.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_startup_services(
+        mut self,
+        conversion: Arc<ConversionService>,
+        learning: Arc<LearningService>,
+        prediction: Option<Arc<PredictionService>>,
+        input_history: Option<Arc<InputHistoryService>>,
+        preferences: Preferences,
+        profiles: Arc<[AppProfile]>,
+    ) -> Self {
+        let shared = Arc::get_mut(&mut self.shared)
+            .expect("startup services precede shared callbacks and workers");
+        shared.conversion = Some(conversion);
+        shared.learning = Some(learning);
+        shared.prediction = prediction;
+        shared.input_history = input_history;
+        shared.ui = UiBoard::with_appearance_theme_and_pad_shortcut(
+            preferences.appearance_theme,
+            preferences.pad_shortcut,
+        );
+        shared.configuration = RwLock::new(RuntimeConfiguration {
+            preferences,
+            profiles,
+        });
+        self
     }
 
     /// The pipe this server listens on.
@@ -635,6 +676,10 @@ impl Server {
     /// command-line option. Production constructors still resolve their normal
     /// name through [`security::pipe_name`] during construction.
     pub fn with_explicit_test_pipe(mut self, pipe_name: String) -> Self {
+        assert!(
+            self.reserved_instances.is_none(),
+            "pipe name cannot change after reservation"
+        );
         let shared = Arc::get_mut(&mut self.shared)
             .expect("a newly constructed server has no worker thread or shared clone");
         shared.name = pipe_name.clone();
@@ -659,14 +704,20 @@ impl Server {
     /// by a stale copy of the engine, or by something trying to collect
     /// our clients' keystrokes.
     pub fn run(self) -> windows::core::Result<()> {
+        self.run_when_ready(|| {})
+    }
+
+    /// Calls `ready` only after all owned endpoint workers have started.
+    pub fn run_when_ready(mut self, ready: impl FnOnce()) -> windows::core::Result<()> {
         // Each production endpoint owns its own named-pipe object and
         // admission pool. A data-plane flood therefore cannot starve the
         // renderer watchdog or the control channel used by the installer.
-        if self.shared.test_pipe {
-            spawn_worker(&self.shared, Endpoint::Data, true)?;
-        } else {
-            spawn_initial_workers(&self.shared)?;
-        }
+        let instances = match self.reserved_instances.take() {
+            Some(instances) => instances,
+            None => create_initial_instances(&self.shared)?,
+        };
+        spawn_initial_workers(&self.shared, instances)?;
+        ready();
         // `recv` returns when a client asks for shutdown, or when the last
         // pipe instance is released — see [`InstanceSlot::drop`], which is
         // what makes the second case an explicit send. It cannot come from
@@ -863,19 +914,32 @@ fn create_instance(
     )
 }
 
-/// Creates all three first instances before starting any worker thread. This
+/// Creates all required first instances before starting any worker thread. This
 /// prevents a partial startup from leaving a data acceptor alive when the
 /// renderer/control security descriptor or pipe creation fails. Workers also
 /// wait behind a startup gate until all three thread spawns have succeeded;
 /// if a later spawn fails, the gate aborts and the already-created threads are
 /// joined before the error escapes. That makes startup a transaction rather
 /// than relying on process exit to clean up detached acceptors.
-fn spawn_initial_workers(shared: &Arc<Shared>) -> windows::core::Result<()> {
+fn create_initial_instances(
+    shared: &Arc<Shared>,
+) -> windows::core::Result<Vec<(Endpoint, PipeInstance)>> {
     let mut instances = Vec::with_capacity(3);
-    for endpoint in [Endpoint::Data, Endpoint::Renderer, Endpoint::Control] {
+    let endpoints: &[Endpoint] = if shared.test_pipe {
+        &[Endpoint::Data]
+    } else {
+        &[Endpoint::Data, Endpoint::Renderer, Endpoint::Control]
+    };
+    for &endpoint in endpoints {
         instances.push((endpoint, create_instance(shared, endpoint, true)?));
     }
+    Ok(instances)
+}
 
+fn spawn_initial_workers(
+    shared: &Arc<Shared>,
+    mut instances: Vec<(Endpoint, PipeInstance)>,
+) -> windows::core::Result<()> {
     let gate = Arc::new(StartupGate::new());
     let mut workers = Vec::with_capacity(instances.len());
     while let Some((endpoint, instance)) = instances.pop() {
@@ -913,10 +977,30 @@ fn spawn_worker_with_instance(
     // below — the failed spawn here, or the worker ending later.
     let slot = InstanceSlot::claim_for(shared, endpoint);
     let owned = Arc::clone(shared);
+    let job = move || worker_with_gate(owned, instance, slot, endpoint, startup_gate);
+    #[cfg(test)]
+    if tests::FAIL_PIPE_SPAWN_AFTER.with(|remaining| match remaining.get() {
+        Some(0) => {
+            remaining.set(None);
+            true
+        }
+        Some(count) => {
+            remaining.set(Some(count - 1));
+            false
+        }
+        None => false,
+    }) {
+        // Match Builder::spawn failure ownership: the unstarted closure is
+        // dropped, releasing its instance and slot before the error escapes.
+        drop(job);
+        return Err(thread_failure(&std::io::Error::other(
+            "injected pipe spawn failure",
+        )));
+    }
     let spawned = std::thread::Builder::new()
         .name("sakura-pipe".to_owned())
         .stack_size(WORKER_STACK_BYTES)
-        .spawn(move || worker_with_gate(owned, instance, slot, endpoint, startup_gate));
+        .spawn(job);
 
     match spawned {
         Ok(worker) => Ok(worker),
@@ -1423,6 +1507,8 @@ fn serve(
     dispatcher: &mut Dispatcher,
     bufs: &mut Buffers,
 ) -> Outcome {
+    let connection_probe = instance.connection_probe();
+    dispatcher.set_connection_probe(connection_probe.clone());
     let mut initial = match first_request(shared, instance, endpoint, dispatcher, bufs) {
         Ok(initial) => initial,
         Err(outcome) => return outcome,
@@ -1463,6 +1549,15 @@ fn serve(
                 }
             }
         };
+
+        // Closing a client does not remove its unread request bytes. Reject
+        // that queue before any session, history, or shared UI side effect.
+        if connection_probe
+            .as_ref()
+            .is_some_and(sakura_ipc::ConnectionProbe::is_disconnected)
+        {
+            return Outcome::Closed;
+        }
 
         // The pipe name selected by the server is the authority for this
         // allowlist. No client-supplied role or Hello field can widen it.
@@ -1641,26 +1736,26 @@ fn serve(
             );
         }
 
+        // Configuration/runtime locks may have delayed this request since
+        // the first check. Do not dispatch a client that closed while waiting.
+        if connection_probe
+            .as_ref()
+            .is_some_and(sakura_ipc::ConnectionProbe::is_disconnected)
+        {
+            return Outcome::Closed;
+        }
         match dispatcher.dispatch(&request, &mut bufs.out) {
             Reply::Output => {
+                #[cfg(test)]
+                tests::BEFORE_OUTPUT.with(|hook| {
+                    if let Some(hook) = hook.borrow_mut().take() {
+                        hook();
+                    }
+                });
                 // The diagnostic helper has a non-trivial call frame. Keep it
                 // entirely off the ordinary 160 KiB worker-stack path.
                 if debug_trace::is_enabled() {
                     trace_key_result(&request, &bufs.out);
-                }
-                if let Some(session) = output_session {
-                    let learning_generation = shared
-                        .learning
-                        .as_ref()
-                        .map_or(0, |learning| learning.generation());
-                    shared.ui.publish_output_from(
-                        dispatcher.ui_owner(),
-                        session,
-                        &bufs.out,
-                        learning_generation,
-                    );
-                } else if let Some(mode) = bufs.out.mode {
-                    shared.ui.publish(mode);
                 }
                 let written = match bufs.out.encode_frame(id, &mut bufs.frame) {
                     Ok(written) => written,
@@ -1679,6 +1774,23 @@ fn serve(
                 };
                 if let Err(fault) = instance.write_all(&bufs.frame[..written]) {
                     return end(fault);
+                }
+                // An abandoned client's output must not replace another
+                // connection's newer UI when its response cannot be sent.
+                // Successful transport is not a host document-apply receipt.
+                if let Some(session) = output_session {
+                    let learning_generation = shared
+                        .learning
+                        .as_ref()
+                        .map_or(0, |learning| learning.generation());
+                    shared.ui.publish_output_from(
+                        dispatcher.ui_owner(),
+                        session,
+                        &bufs.out,
+                        learning_generation,
+                    );
+                } else if let Some(mode) = bufs.out.mode {
+                    shared.ui.publish(mode);
                 }
             }
             Reply::Message(response) => {
@@ -1810,6 +1922,12 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
 
 #[cfg(test)]
 mod tests {
+    thread_local! {
+        pub(super) static BEFORE_OUTPUT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+        pub(super) static FAIL_PIPE_SPAWN_AFTER: std::cell::Cell<Option<usize>> =
+            const { std::cell::Cell::new(None) };
+    }
     use super::*;
     use sakura_ipc::Client;
     use std::fs;
@@ -1850,6 +1968,296 @@ mod tests {
             }),
             verbose: false,
         }
+    }
+
+    #[test]
+    fn disconnected_queued_key_is_not_dispatched() {
+        use sakura_proto::{KeyCode, KeyInput, Modifiers};
+        let key = |ch| KeyInput {
+            code: KeyCode::Char,
+            ch: Some(ch),
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        let shared = test_shared(Arc::new(LearningService::memory()));
+        let name = unique_test_pipe("abandoned-queued-key");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let pipe = PipeInstance::create(&name, &security, true).expect("pipe");
+        let mut client = Client::connect_to(&name, Duration::from_secs(2)).expect("client");
+        pipe.wait_for_client().expect("accept");
+        let mut dispatcher = Dispatcher::new().expect("dispatcher");
+        let mut bufs = Buffers::new();
+        let Reply::Message(Response::SessionCreated { session, .. }) = dispatcher.dispatch(
+            &Request::CreateSession {
+                process_name: "synthetic-queued.exe".to_owned(),
+            },
+            &mut bufs.out,
+        ) else {
+            panic!("session");
+        };
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: key('k'),
+            },
+            &mut bufs.out,
+        );
+        let (release_tx, release_rx) = mpsc::channel();
+        let serving = std::thread::spawn(move || {
+            release_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("release request reader");
+            let outcome = serve(
+                &shared,
+                &pipe,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut dispatcher,
+                &mut bufs,
+            );
+            // Inspect the synthetic session before worker reset. No host write
+            // occurs here; this commit is only a probe of what was dispatched.
+            dispatcher.dispatch(&Request::Commit { session }, &mut bufs.out);
+            (outcome, bufs.out.commit_text().map(str::to_owned))
+        });
+        let answer = client.call(
+            &Request::SendKey {
+                session,
+                key: key('a'),
+            },
+            Duration::from_millis(100),
+        );
+        drop(client);
+        release_tx.send(()).expect("release server");
+        let (outcome, text) = serving.join().expect("server ended");
+        assert!(matches!(answer, Err(Fault::Timeout)));
+        assert!(matches!(outcome, Outcome::Closed | Outcome::Failed(_)));
+        assert_eq!(
+            text.as_deref(),
+            Some("k"),
+            "an abandoned queued key still mutated session state"
+        );
+    }
+
+    #[test]
+    fn disconnected_busy_worker_cannot_swallow_replacement_connection_letters() {
+        use sakura_proto::{KeyCode, KeyInput, Modifiers};
+        let key = |code, ch| KeyInput {
+            code,
+            ch,
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: false,
+        };
+        let shared = Arc::new(test_shared(Arc::new(LearningService::memory())));
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let old_name = unique_test_pipe("old-busy-composition");
+        let old_pipe = PipeInstance::create(&old_name, &security, true).expect("old pipe");
+        let mut old_client =
+            Client::connect_to(&old_name, Duration::from_secs(5)).expect("old client");
+        old_pipe.wait_for_client().expect("old accept");
+        let mut old_dispatcher = Dispatcher::new().expect("dispatcher");
+        old_dispatcher.set_composition_fence(Arc::clone(&shared.composition_fence));
+        let mut old_bufs = Buffers::new();
+        let Reply::Message(Response::SessionCreated {
+            session: old_session,
+            ..
+        }) = old_dispatcher.dispatch(
+            &Request::CreateSession {
+                process_name: "synthetic-recovery.exe".to_owned(),
+            },
+            &mut old_bufs.out,
+        )
+        else {
+            panic!("old session");
+        };
+        old_dispatcher.dispatch(
+            &Request::SendKey {
+                session: old_session,
+                key: key(KeyCode::Char, Some('k')),
+            },
+            &mut old_bufs.out,
+        );
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let old_shared = Arc::clone(&shared);
+        let old_server = std::thread::spawn(move || {
+            BEFORE_OUTPUT.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    ready_tx.send(()).expect("ready");
+                    release_rx
+                        .recv_timeout(Duration::from_secs(5))
+                        .expect("release old dispatch");
+                }))
+            });
+            let outcome = serve(
+                &old_shared,
+                &old_pipe,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut old_dispatcher,
+                &mut old_bufs,
+            );
+            old_dispatcher.reset();
+            outcome
+        });
+        let old_reply = old_client.call(
+            &Request::SendKey {
+                session: old_session,
+                key: key(KeyCode::Char, Some('a')),
+            },
+            Duration::from_millis(200),
+        );
+        let reached = ready_rx.recv_timeout(Duration::from_secs(5));
+        drop(old_client);
+
+        let new_name = unique_test_pipe("replacement-composition");
+        let new_pipe = PipeInstance::create(&new_name, &security, true).expect("new pipe");
+        let mut new_client =
+            Client::connect_to(&new_name, Duration::from_secs(5)).expect("new client");
+        new_pipe.wait_for_client().expect("new accept");
+        let new_shared = Arc::clone(&shared);
+        let new_server = std::thread::spawn(move || {
+            let mut dispatcher = Dispatcher::new().expect("new dispatcher");
+            dispatcher.set_composition_fence(Arc::clone(&new_shared.composition_fence));
+            let outcome = serve(
+                &new_shared,
+                &new_pipe,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut dispatcher,
+                &mut Buffers::new(),
+            );
+            dispatcher.reset();
+            outcome
+        });
+        let Response::SessionCreated { session, .. } = new_client
+            .call(
+                &Request::CreateSession {
+                    process_name: "synthetic-recovery.exe".to_owned(),
+                },
+                Duration::from_secs(2),
+            )
+            .expect("new session reply")
+        else {
+            panic!("new session");
+        };
+        let replacement = new_client.call(
+            &Request::SendKey {
+                session,
+                key: key(KeyCode::Char, Some('b')),
+            },
+            Duration::from_secs(2),
+        );
+        release_tx.send(()).expect("release old server");
+        let old_outcome = old_server.join().expect("old server ended");
+        let committed = new_client.call(
+            &Request::SendKey {
+                session,
+                key: key(KeyCode::Enter, None),
+            },
+            Duration::from_secs(2),
+        );
+        let idle_space = new_client.call(
+            &Request::SendKey {
+                session,
+                key: key(KeyCode::Space, None),
+            },
+            Duration::from_secs(2),
+        );
+        drop(new_client);
+        new_server.join().expect("new server ended");
+        assert!(matches!(old_reply, Err(Fault::Timeout)) && reached.is_ok());
+        assert!(matches!(old_outcome, Outcome::Closed | Outcome::Failed(_)));
+        assert!(
+            matches!(replacement, Ok(Response::Output(ref output))
+            if output.preedit.as_ref().is_some_and(|preedit| preedit.segments.first().is_some_and(|segment| segment.text == "b"))),
+            "a disconnected old worker swallowed the new connection's letter: {replacement:?}"
+        );
+        assert!(
+            matches!(committed, Ok(Response::Output(ref output)) if output.commit.as_deref() == Some("b"))
+        );
+        assert!(
+            matches!(idle_space, Ok(Response::Output(ref output)) if output.commit.as_deref() == Some(" ")),
+            "late old teardown armed another absorption after recovery: {idle_space:?}"
+        );
+    }
+
+    #[test]
+    fn disconnected_output_cannot_replace_newer_ui_state() {
+        use sakura_proto::{KeyCode, KeyInput, Mode, Modifiers};
+
+        let shared = Arc::new(test_shared(Arc::new(LearningService::memory())));
+        let name = unique_test_pipe("abandoned-output");
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let instance = PipeInstance::create(&name, &security, true).expect("create");
+        let mut client = Client::connect_to(&name, Duration::from_secs(5)).expect("connect");
+        instance.wait_for_client().expect("accept");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (session_tx, session_rx) = mpsc::channel();
+        let owned = Arc::clone(&shared);
+        let serving = std::thread::spawn(move || {
+            let mut dispatcher = Dispatcher::new().expect("dispatcher");
+            let mut bufs = Buffers::new();
+            let Reply::Message(Response::SessionCreated { session, .. }) = dispatcher.dispatch(
+                &Request::CreateSession {
+                    process_name: "synthetic.exe".to_owned(),
+                },
+                &mut bufs.out,
+            ) else {
+                panic!("session creation");
+            };
+            session_tx.send(session).expect("session receiver");
+            BEFORE_OUTPUT.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    ready_tx.send(()).expect("ready receiver");
+                    release_rx
+                        .recv_timeout(Duration::from_secs(5))
+                        .expect("release output");
+                }))
+            });
+            serve(
+                &owned,
+                &instance,
+                Endpoint::Data,
+                ClientTrust::MediumOrHigher,
+                &mut dispatcher,
+                &mut bufs,
+            )
+        });
+        let session = session_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("session");
+        let reply = client.call(
+            &Request::SendKey {
+                session,
+                key: KeyInput {
+                    code: KeyCode::HankakuZenkaku,
+                    ch: None,
+                    modifiers: Modifiers::NONE,
+                    repeat: false,
+                    test_only: false,
+                },
+            },
+            Duration::from_millis(200),
+        );
+        let reached = ready_rx.recv_timeout(Duration::from_secs(5));
+        drop(client);
+        shared.ui.publish(Mode::Katakana);
+        let newer = look(&shared.ui, 0);
+        release_tx.send(()).expect("release server");
+        let outcome = serving.join().expect("server terminated");
+        assert!(matches!(reply, Err(Fault::Timeout)), "{reply:?}");
+        assert!(reached.is_ok(), "request must reach the output boundary");
+        assert!(matches!(outcome, Outcome::Closed | Outcome::Failed(_)));
+        let after = look(&shared.ui, 0);
+        assert_eq!(
+            after.revision, newer.revision,
+            "undeliverable output changed the shared UI"
+        );
+        assert_eq!(after.mode, newer.mode);
     }
 
     #[test]
@@ -2561,6 +2969,67 @@ mod tests {
             r"\\.\pipe\SakuraInputEngineTest-{purpose}-{}-{stamp}",
             std::process::id()
         )
+    }
+
+    fn private_endpoint_server(name: &str) -> Server {
+        let mut server = Server::new(false).unwrap();
+        let shared = Arc::get_mut(&mut server.shared).unwrap();
+        shared.name = format!("{name}-data");
+        shared.renderer_name = format!("{name}-renderer");
+        shared.control_name = format!("{name}-control");
+        server
+    }
+
+    #[test]
+    fn startup_reservation_blocks_duplicates_before_workers_and_releases_on_drop() {
+        let name = unique_test_pipe("reserve");
+        let owner = private_endpoint_server(&name).reserve().unwrap();
+        assert_eq!(owner.shared.total_created.load(Ordering::Relaxed), 0);
+        assert!(private_endpoint_server(&name).reserve().is_err());
+        drop(owner);
+        let replacement = private_endpoint_server(&name).reserve().unwrap();
+        assert_eq!(replacement.reserved_instances.as_ref().unwrap().len(), 3);
+        drop(replacement);
+    }
+
+    #[test]
+    fn startup_reservation_partial_failure_releases_earlier_endpoints_without_ready() {
+        let name = unique_test_pipe("partial-reserve");
+        let blocker = private_endpoint_server(&name);
+        let occupied_renderer = create_instance(&blocker.shared, Endpoint::Renderer, true).unwrap();
+        assert!(private_endpoint_server(&name).reserve().is_err());
+        // A first-instance creation succeeds only if the failed acquisition
+        // dropped its earlier data handle, despite the renderer collision.
+        drop(create_instance(&blocker.shared, Endpoint::Data, true).unwrap());
+        let ready = std::cell::Cell::new(false);
+        assert!(private_endpoint_server(&name)
+            .run_when_ready(|| ready.set(true))
+            .is_err());
+        assert!(!ready.get());
+        drop(occupied_renderer);
+        drop(private_endpoint_server(&name).reserve().unwrap());
+    }
+
+    #[test]
+    fn startup_spawn_failure_joins_workers_releases_slots_and_suppresses_ready() {
+        for preceding_workers in 0..3 {
+            let name = unique_test_pipe("spawn-failure");
+            let server = private_endpoint_server(&name).reserve().unwrap();
+            let shared = Arc::clone(&server.shared);
+            let ready = std::cell::Cell::new(false);
+            FAIL_PIPE_SPAWN_AFTER.with(|remaining| remaining.set(Some(preceding_workers)));
+            let result = server.run_when_ready(|| ready.set(true));
+            FAIL_PIPE_SPAWN_AFTER.with(|remaining| remaining.set(None));
+            assert!(result.is_err());
+            assert!(!ready.get());
+            assert_eq!(shared.total_created.load(Ordering::Relaxed), 0);
+            assert_eq!(shared.created.load(Ordering::Relaxed), 0);
+            assert_eq!(shared.renderer_created.load(Ordering::Relaxed), 0);
+            assert_eq!(shared.control_created.load(Ordering::Relaxed), 0);
+            // No worker-held Shared reference remains after the joined abort.
+            assert_eq!(Arc::strong_count(&shared), 1);
+            drop(private_endpoint_server(&name).reserve().unwrap());
+        }
     }
 
     /// The other half of the same rule: a worker only adds an instance

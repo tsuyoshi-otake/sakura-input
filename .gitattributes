@@ -19,3 +19,7 @@ data/conversion-priorities.tsv whitespace=-blank-at-eol
 # SHA-256 inside their manifests, so a CRLF checkout would change their bytes.
 /eval/corpus/** text eol=lf
 /eval/baselines/** text eol=lf
+
+# Update trust anchors and signature vectors are hashed as exact canonical bytes.
+/data/update-signing/** text eol=lf
+/verification/fixtures/update-signing-v2/** text eol=lf

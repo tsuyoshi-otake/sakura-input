@@ -12,6 +12,47 @@ fn space_on(targets: u8) -> DomainEvent {
     DomainEvent::Space { targets }
 }
 
+/// Contract-level fixture with two accepted live readings. This is not a
+/// claim that serial raw Type keys can establish both in the real engine.
+/// A live peer already owns the idle Space, so it must not spend the credit
+/// reserved for the reading that was lost to teardown.
+#[test]
+fn live_peer_absorption_preserves_the_pending_teardown_credit() {
+    let mut state = apply_all(
+        2,
+        [
+            type_on(0),
+            type_on(1),
+            DomainEvent::CrashRestart { connection: 0 },
+            space_on(1 << 0),
+        ],
+    );
+    assert!(state.last_absorbed);
+    assert!(state.pending_teardown, "the live peer owns this absorption");
+    apply(&mut state, DomainEvent::Commit { connection: 1 });
+    apply(&mut state, space_on(1 << 0));
+    assert!(state.last_absorbed, "the lost reading still owns one Space");
+    assert!(!state.last_inserted);
+    assert!(!state.pending_teardown);
+    apply(&mut state, space_on(1 << 0));
+    assert!(state.last_inserted, "only one teardown credit may be spent");
+}
+
+#[test]
+fn disconnect_of_a_live_reading_owes_one_space_to_a_surviving_idle_peer() {
+    let mut state = apply_all(2, [type_on(0), DomainEvent::Disconnect { connection: 0 }]);
+    apply(&mut state, space_on(1 << 1));
+    assert!(state.last_absorbed);
+    assert!(!state.last_inserted);
+    apply(&mut state, space_on(1 << 1));
+    assert!(state.last_inserted);
+    apply(&mut state, space_on(1 << 0));
+    assert!(
+        !state.last_inserted,
+        "the disconnected target cannot receive Space"
+    );
+}
+
 #[test]
 fn composing_space_converts_and_does_not_insert() {
     let state = apply_all(2, [type_on(0), space_on(1 << 0)]);
@@ -85,7 +126,7 @@ fn cancel_and_replace_drop_composition_without_a_space() {
     assert_eq!(cancelled.document_spaces, 0);
     let replaced = apply_all(
         1,
-        [type_on(0), DomainEvent::ReplaceContext { connection: 0 }],
+        [type_on(0), DomainEvent::AbandonContext { connection: 0 }],
     );
     assert_eq!(replaced.connections[0].state, ConnState::Idle);
 }
@@ -159,7 +200,7 @@ fn replacing_a_context_after_a_commit_absorbs_no_space() {
         [
             type_on(0),
             DomainEvent::Commit { connection: 0 },
-            DomainEvent::ReplaceContext { connection: 0 },
+            DomainEvent::AbandonContext { connection: 0 },
             space_on(1 << 0),
         ],
     );
@@ -459,7 +500,7 @@ fn generate_event(random: u64, actors: u8) -> DomainEvent {
         },
         4 => DomainEvent::Commit { connection },
         5 => DomainEvent::Cancel { connection },
-        6 => DomainEvent::ReplaceContext { connection },
+        6 => DomainEvent::AbandonContext { connection },
         7 => DomainEvent::CrashRestart { connection },
         8 => DomainEvent::Disconnect { connection },
         9 => DomainEvent::DropSpace,
