@@ -9,7 +9,7 @@ retries, duplicate callbacks, and callbacks delivered out of order.
 Run all checked configurations from the repository root:
 
 ```powershell
-rtk proxy powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-engine-recovery-tlc.ps1 -JarPath <path-to-tla2tools.jar>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-engine-recovery-tlc.ps1 -JarPath <path-to-tla2tools.jar>
 ```
 
 The script uses one TLC worker, seed `20260814`, fingerprint index 0, action

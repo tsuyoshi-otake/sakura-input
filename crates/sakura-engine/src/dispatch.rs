@@ -59,6 +59,7 @@ use sakura_proto::{
 };
 
 use crate::ai_text::{AiTextService, Poll as AiPoll, StartError as AiStartError};
+use crate::candidate_projection::{CandidateProjection, ProjectionError};
 use crate::composition_fence::CompositionFence;
 use crate::dictionary::{ConversionService, ConvertFailure};
 use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
@@ -3342,18 +3343,27 @@ fn apply_action(
     out.consumed = true;
     if let Some(offset) = action.candidate_offset() {
         return if session.converting {
-            commit_numbered_candidate(
-                session,
-                services.table,
-                services.normalizer,
-                services.conversion,
-                services.learning,
-                services.input_history,
-                policy,
-                scratch,
-                offset,
-                out,
-            )
+            if !session.conversion_focused() && key.ch.is_some_and(|ch| ch.is_ascii_digit()) {
+                // A compact conversion list is visible, but it has not yet
+                // claimed the keyboard. Keep the first 1-9 keystroke as
+                // literal input: accept the current conversion and feed the
+                // same digit into the next composition, exactly like an
+                // unbound character arriving while conversion is active.
+                commit_conversion_then_feed_literal(session, services, policy, key, scratch, out)
+            } else {
+                commit_numbered_candidate(
+                    session,
+                    services.table,
+                    services.normalizer,
+                    services.conversion,
+                    services.learning,
+                    services.input_history,
+                    policy,
+                    scratch,
+                    offset,
+                    out,
+                )
+            }
         } else {
             commit_numbered_suggestion(
                 session_id,
@@ -3555,40 +3565,52 @@ fn apply_action(
             }
         }
         Action::CandidateNext => {
-            let _ = session.expand_conversion();
-            let index = session.focused_segment();
-            session.clear_segment_transform(index);
-            session.clear_selected_raw_repair();
-            let next = session.segment_selection(index).saturating_add(1);
-            session.set_segment_selection(index, next);
+            if session.expand_conversion() {
+                let index = session.focused_segment();
+                session.clear_segment_transform(index);
+                session.clear_selected_raw_repair();
+                let next = session.segment_selection(index).saturating_add(1);
+                session.set_segment_selection(index, next);
+            } else {
+                out.beep = true;
+            }
         }
         Action::CandidatePrev => {
-            let _ = session.expand_conversion();
-            let index = session.focused_segment();
-            session.clear_segment_transform(index);
-            session.clear_selected_raw_repair();
-            let next = session.segment_selection(index).saturating_sub(1);
-            session.set_segment_selection(index, next);
+            if session.expand_conversion() {
+                let index = session.focused_segment();
+                session.clear_segment_transform(index);
+                session.clear_selected_raw_repair();
+                let next = session.segment_selection(index).saturating_sub(1);
+                session.set_segment_selection(index, next);
+            } else {
+                out.beep = true;
+            }
         }
         Action::CandidatePageDown => {
-            let _ = session.expand_conversion();
-            let index = session.focused_segment();
-            session.clear_segment_transform(index);
-            session.clear_selected_raw_repair();
-            let next = session
-                .segment_selection(index)
-                .saturating_add(CANDIDATE_PAGE_SIZE as i16);
-            session.set_segment_selection(index, next);
+            if session.expand_conversion() {
+                let index = session.focused_segment();
+                session.clear_segment_transform(index);
+                session.clear_selected_raw_repair();
+                let next = session
+                    .segment_selection(index)
+                    .saturating_add(CANDIDATE_PAGE_SIZE as i16);
+                session.set_segment_selection(index, next);
+            } else {
+                out.beep = true;
+            }
         }
         Action::CandidatePageUp => {
-            let _ = session.expand_conversion();
-            let index = session.focused_segment();
-            session.clear_segment_transform(index);
-            session.clear_selected_raw_repair();
-            let next = session
-                .segment_selection(index)
-                .saturating_sub(CANDIDATE_PAGE_SIZE as i16);
-            session.set_segment_selection(index, next);
+            if session.expand_conversion() {
+                let index = session.focused_segment();
+                session.clear_segment_transform(index);
+                session.clear_selected_raw_repair();
+                let next = session
+                    .segment_selection(index)
+                    .saturating_sub(CANDIDATE_PAGE_SIZE as i16);
+                session.set_segment_selection(index, next);
+            } else {
+                out.beep = true;
+            }
         }
         Action::CandidateExpand => {
             // Conversion starts compact. Repeating the action after expansion
@@ -3739,6 +3761,51 @@ fn apply_action(
     Ok(())
 }
 
+/// Accepts the current conversion and feeds the triggering digit into a new
+/// composition. This is the unfocused conversion-list counterpart to the
+/// ordinary character arm in [`apply_key`]: the list is visible, but numeric
+/// shortcuts do not own the keyboard until explicit candidate navigation has
+/// happened.
+#[allow(clippy::too_many_arguments)]
+fn commit_conversion_then_feed_literal(
+    session: &mut Session,
+    services: &KeyServices<'_>,
+    policy: ExecutionPolicy,
+    key: &KeyInput,
+    scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
+    out: &mut OutputBuf,
+) -> Result<(), Overflow> {
+    let Some(character) = key.ch else {
+        // A candidate action is normally bound to a character trigger. Keep
+        // this malformed/custom-map path terminal and recoverable rather
+        // than committing a conversion without a literal continuation.
+        out.beep = true;
+        return Ok(());
+    };
+    commit_pending(
+        session,
+        services.table,
+        services.normalizer,
+        services.conversion,
+        services.learning,
+        services.input_history,
+        policy,
+        scratch,
+        out,
+    )?;
+    feed_input_character(
+        session,
+        services.table,
+        character,
+        key.modifiers.shift(),
+        scratch,
+    )?;
+    // This key accepted the old conversion and started a new composition;
+    // the one-key undo window must not describe only the first half.
+    session.disarm_commit_undo();
+    Ok(())
+}
+
 /// Commits a 1-9 shortcut from the page containing the current selection.
 /// Invalid numbers on a short final page have an explicit, recoverable
 /// outcome: the candidate list stays open and the client is asked to beep.
@@ -3797,12 +3864,33 @@ fn commit_numbered_candidate(
                     invalid_mapping = true;
                     return Ok(None);
                 }
-                let current = selected.rem_euclid(candidates.len() as i16) as usize;
-                let page_start = current / CANDIDATE_PAGE_SIZE * CANDIDATE_PAGE_SIZE;
-                let target = page_start.saturating_add(offset);
-                let Some(candidate) = candidates.get(target) else {
+                let projection = match project_conversion_candidates(
+                    candidates,
+                    "",
+                    SegmentTransform::None,
+                    0,
+                    normalizer,
+                    session.mode,
+                ) {
+                    Ok(projection) => projection,
+                    Err(ProjectionError::SurfaceOverflow) => return Err(Overflow),
+                    Err(_) => return Ok(None),
+                };
+                let Some(current) = projection.normalize_selection(selected) else {
+                    if !projection.is_complete() {
+                        return Err(Overflow);
+                    }
                     return Ok(None);
                 };
+                let page_start = current / CANDIDATE_PAGE_SIZE * CANDIDATE_PAGE_SIZE;
+                let target = page_start.saturating_add(offset);
+                let Some(raw_target) = projection.raw_index(target) else {
+                    if !projection.is_complete() {
+                        return Err(Overflow);
+                    }
+                    return Ok(None);
+                };
+                let candidate = &candidates[raw_target];
                 chosen.push_str(candidate.text())?;
                 chosen_meta = candidate_meta(service, candidate);
                 Ok(i16::try_from(target).ok())
@@ -4100,6 +4188,34 @@ fn append_candidate_surface(
     }
 }
 
+/// Builds the one display projection used by every conversion consumer.
+///
+/// The callback intentionally shares [`append_candidate_surface`] with the
+/// selected preedit and commit paths. A candidate is therefore deduplicated
+/// on the exact string the user will see and that the host will receive after
+/// the current segment transform/normalizer policy, rather than on raw
+/// dictionary bytes or a guessed surface comparison.
+fn project_conversion_candidates(
+    candidates: &[ConversionCandidate],
+    raw_input: &str,
+    transform: SegmentTransform,
+    cycle: u8,
+    normalizer: &Normalizer,
+    mode: Mode,
+) -> Result<CandidateProjection, ProjectionError> {
+    CandidateProjection::build_prefix(candidates.len(), |index, surface| {
+        append_candidate_surface(
+            &candidates[index],
+            raw_input,
+            transform,
+            cycle,
+            normalizer,
+            mode,
+            surface,
+        )
+    })
+}
+
 fn raw_candidate_mapping_is_valid(
     plans: &[RawRepairPlan],
     original: &str,
@@ -4199,6 +4315,7 @@ fn commit_staged_raw_conversion(
     let mut selected_text = FixedStr::<MAX_PREEDIT_BYTES>::new();
     let mut selected_meta = CommitSegmentMeta::default();
     let mut invalid_mapping = false;
+    let mut projection_overflow = false;
     let result = with_session_raw_conversion(
         conversion,
         learning,
@@ -4217,8 +4334,34 @@ fn commit_staged_raw_conversion(
                 invalid_mapping = true;
                 return false;
             }
-            let index = requested.rem_euclid(candidates.len() as i16) as usize;
-            let candidate = &candidates[index];
+            let projection = match project_conversion_candidates(
+                candidates,
+                "",
+                SegmentTransform::None,
+                0,
+                normalizer,
+                session.mode,
+            ) {
+                Ok(projection) => projection,
+                Err(ProjectionError::SurfaceOverflow) => {
+                    projection_overflow = true;
+                    return false;
+                }
+                Err(_) => return false,
+            };
+            let Some(visible_index) = projection.normalize_selection(requested) else {
+                if !projection.is_complete() {
+                    projection_overflow = true;
+                }
+                return false;
+            };
+            let Some(raw_index) = projection.raw_index(visible_index) else {
+                if !projection.is_complete() {
+                    projection_overflow = true;
+                }
+                return false;
+            };
+            let candidate = &candidates[raw_index];
             if selected_text.push_str(candidate.text()).is_err() {
                 return false;
             }
@@ -4244,6 +4387,9 @@ fn commit_staged_raw_conversion(
             out,
             None,
         );
+    }
+    if projection_overflow {
+        return Err(Overflow);
     }
     if !result || selected_text.is_empty() {
         return Ok(false);
@@ -4406,9 +4552,32 @@ fn commit_converted_segments(
                 if candidates.is_empty() {
                     return Ok(None);
                 }
-                let selected = selection.rem_euclid(candidates.len() as i16) as usize;
+                let projection = match project_conversion_candidates(
+                    candidates,
+                    raw_segment,
+                    transform,
+                    cycle,
+                    normalizer,
+                    session.mode,
+                ) {
+                    Ok(projection) => projection,
+                    Err(ProjectionError::SurfaceOverflow) => return Err(Overflow),
+                    Err(_) => return Ok(None),
+                };
+                let Some(selected) = projection.normalize_selection(selection) else {
+                    if !projection.is_complete() {
+                        return Err(Overflow);
+                    }
+                    return Ok(None);
+                };
+                let Some(raw_selected) = projection.raw_index(selected) else {
+                    if !projection.is_complete() {
+                        return Err(Overflow);
+                    }
+                    return Ok(None);
+                };
                 append_candidate_surface(
-                    &candidates[selected],
+                    &candidates[raw_selected],
                     raw_segment,
                     transform,
                     cycle,
@@ -4417,8 +4586,8 @@ fn commit_converted_segments(
                     scratch,
                 )?;
                 selected_surface.clear();
-                selected_surface.push_str(candidates[selected].text())?;
-                Ok(Some(candidate_meta(service, &candidates[selected])))
+                selected_surface.push_str(candidates[raw_selected].text())?;
+                Ok(Some(candidate_meta(service, &candidates[raw_selected])))
             };
         let bridge = if index == 0 {
             session.cross_commit_bridge()
@@ -4715,12 +4884,39 @@ fn begin_conversion(
                 } else {
                     preferred
                 };
-                chosen_selection = i16::try_from(selected).unwrap_or(i16::MAX);
                 if selected >= direct_limit {
                     selected = 0;
-                    chosen_selection = 0;
                 }
-                let candidate = &candidates[selected];
+                let (visible_selected, raw_selected) = match project_conversion_candidates(
+                    candidates,
+                    "",
+                    SegmentTransform::None,
+                    0,
+                    &session.normalizer,
+                    session.mode,
+                ) {
+                    Ok(projection) => {
+                        let Some(visible_selected) = projection.visible_index(selected) else {
+                            return false;
+                        };
+                        let Some(raw_selected) = projection.raw_index(visible_selected) else {
+                            return false;
+                        };
+                        (visible_selected, raw_selected)
+                    }
+                    Err(ProjectionError::SurfaceOverflow) => {
+                        // Keep the raw candidate/segments staged so the
+                        // normal renderer reports the same bounded overflow
+                        // it would have reported before visible projection was
+                        // introduced. This path cannot safely map a duplicate,
+                        // so the selected raw row remains authoritative until
+                        // rendering fails closed.
+                        (selected, selected)
+                    }
+                    Err(_) => return false,
+                };
+                chosen_selection = i16::try_from(visible_selected).unwrap_or(i16::MAX);
+                let candidate = &candidates[raw_selected];
                 for segment in candidate.segments() {
                     let mut mapped = *segment;
                     if candidate.origin() != CandidateOrigin::Direct {
@@ -5798,6 +5994,7 @@ fn render_staged_raw_repair(
     let mut selected = 0usize;
     let mut rendered_chars = 0usize;
     let mut invalid_mapping = false;
+    let mut projection_overflow = false;
     let mut selected_plan_id = None;
     let mut selected_segment_ends = [0u16; MAX_SEGMENTS];
     let mut selected_segment_count = 0usize;
@@ -5819,9 +6016,36 @@ fn render_staged_raw_repair(
                 invalid_mapping = true;
                 return false;
             }
-            selected = requested.rem_euclid(candidates.len() as i16) as usize;
+            let projection = match project_conversion_candidates(
+                candidates,
+                "",
+                SegmentTransform::None,
+                0,
+                normalizer,
+                session.mode,
+            ) {
+                Ok(projection) => projection,
+                Err(ProjectionError::SurfaceOverflow) => {
+                    projection_overflow = true;
+                    return false;
+                }
+                Err(_) => return false,
+            };
+            let Some(visible_index) = projection.normalize_selection(requested) else {
+                if !projection.is_complete() {
+                    projection_overflow = true;
+                }
+                return false;
+            };
+            let Some(raw_index) = projection.raw_index(visible_index) else {
+                if !projection.is_complete() {
+                    projection_overflow = true;
+                }
+                return false;
+            };
+            selected = visible_index;
             scratch.clear();
-            let candidate = &candidates[selected];
+            let candidate = &candidates[raw_index];
             if append_candidate_surface(
                 candidate,
                 "",
@@ -5869,7 +6093,11 @@ fn render_staged_raw_repair(
             {
                 return false;
             }
-            for (candidate_index, candidate) in candidates.iter().enumerate() {
+            for visible_index in projection.visible_indices() {
+                let Some(raw_index) = projection.raw_index(visible_index) else {
+                    return false;
+                };
+                let candidate = &candidates[raw_index];
                 scratch.clear();
                 if append_candidate_surface(
                     candidate,
@@ -5892,7 +6120,7 @@ fn render_staged_raw_repair(
                     // the already-pushed selection just truncates the list;
                     // one at or before it would show the wrong selection, so
                     // that case is still treated as a full render failure.
-                    if candidate_index <= selected {
+                    if visible_index <= selected {
                         return false;
                     }
                     break;
@@ -5919,6 +6147,9 @@ fn render_staged_raw_repair(
             scratch,
             out,
         );
+    }
+    if projection_overflow {
+        return Err(Overflow);
     }
     if !result {
         return Ok(false);
@@ -6074,10 +6305,33 @@ fn render_converted_segments(
             if candidates.is_empty() {
                 return Ok(None);
             }
-            let selected = requested_selection.rem_euclid(candidates.len() as i16) as usize;
+            let projection = match project_conversion_candidates(
+                candidates,
+                raw_segment,
+                SegmentTransform::None,
+                0,
+                normalizer,
+                session.mode,
+            ) {
+                Ok(projection) => projection,
+                Err(ProjectionError::SurfaceOverflow) => return Err(Overflow),
+                Err(_) => return Ok(None),
+            };
+            let Some(selected) = projection.normalize_selection(requested_selection) else {
+                if !projection.is_complete() {
+                    return Err(Overflow);
+                }
+                return Ok(None);
+            };
+            let Some(raw_selected) = projection.raw_index(selected) else {
+                if !projection.is_complete() {
+                    return Err(Overflow);
+                }
+                return Ok(None);
+            };
             scratch.clear();
             append_candidate_surface(
-                &candidates[selected],
+                &candidates[raw_selected],
                 raw_segment,
                 SegmentTransform::None,
                 0,
@@ -6094,7 +6348,11 @@ fn render_converted_segments(
                     u16::try_from(selected).map_err(|_| Overflow)?,
                     CANDIDATE_PAGE_SIZE as u16,
                 )?;
-                for (candidate_index, candidate) in candidates.iter().enumerate() {
+                for visible_index in projection.visible_indices() {
+                    let Some(raw_index) = projection.raw_index(visible_index) else {
+                        return Ok(None);
+                    };
+                    let candidate = &candidates[raw_index];
                     scratch.clear();
                     append_candidate_surface(
                         candidate,
@@ -6114,13 +6372,13 @@ fn render_converted_segments(
                         // the builder is safe; truncating at or before it
                         // would show the wrong selection, so that still
                         // fails the render instead of guessing.
-                        if candidate_index <= selected {
+                        if visible_index <= selected {
                             return Err(overflow);
                         }
                         break;
                     }
                 }
-                if let Some(entry_index) = candidates[selected].system_entry_index() {
+                if let Some(entry_index) = candidates[raw_selected].system_entry_index() {
                     publish_system_candidate_detail(service, entry_index, reading, out);
                 }
             }
@@ -6128,7 +6386,7 @@ fn render_converted_segments(
             Ok(Some((
                 i16::try_from(selected).map_err(|_| Overflow)?,
                 rendered_chars,
-                candidate_meta(service, &candidates[selected]),
+                candidate_meta(service, &candidates[raw_selected]),
             )))
         };
         let bridge = if index == 0 {
@@ -6337,6 +6595,77 @@ mod tests {
 
     fn conversion_dispatcher() -> Dispatcher {
         Dispatcher::new_with_conversion(conversion_fixture()).expect("shipped defaults")
+    }
+
+    fn numeric_focus_conversion_dispatcher() -> Dispatcher {
+        let source = concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "じょうい\t上位\t0\t0\t100\t100\t\tprimary\n",
+            "じょうい\t上位候補二\t0\t0\t200\t200\t\tfixture\n",
+            "じょうい\t上位候補三\t0\t0\t300\t300\t\tfixture\n",
+            "ちょっきん\t直近\t0\t0\t100\t100\t\tprimary\n",
+        );
+        let entries = dictc::parse_entries("numeric-focus.tsv", source).expect("entries");
+        let matrix = dictc::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let image = Box::leak(
+            dictc::compile(&entries, &matrix)
+                .expect("image")
+                .into_boxed_slice(),
+        );
+        Dispatcher::new_with_conversion(Arc::new(
+            ConversionService::from_static_bytes(image).expect("conversion service fixture"),
+        ))
+        .expect("shipped defaults")
+    }
+
+    fn visible_projection_conversion_dispatcher() -> Dispatcher {
+        let source = concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "だいさんばん\t第3番\t0\t0\t100\t100\t\tfirst raw representative\n",
+            "だいさんばん\t第３番\t0\t0\t200\t200\t\twidth duplicate\n",
+            "だいさんばん\t別候補\t0\t0\t300\t300\t\tsecond visible candidate\n",
+        );
+        let entries = dictc::parse_entries("visible-projection.tsv", source).expect("entries");
+        let matrix = dictc::parse_connection(
+            "visible-projection-matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let details = [
+            dictc::SourceDetail {
+                reading: "だいさんばん".into(),
+                surface: "第3番".into(),
+                left_id: 0,
+                right_id: 0,
+                description: "Stable first representative detail.".into(),
+                relations: vec![],
+            },
+            dictc::SourceDetail {
+                reading: "だいさんばん".into(),
+                surface: "別候補".into(),
+                left_id: 0,
+                right_id: 0,
+                description: "Second visible candidate detail.".into(),
+                relations: vec![],
+            },
+        ];
+        let image = Box::leak(
+            dictc::compile_with_details(&entries, &matrix, &details)
+                .expect("image")
+                .into_boxed_slice(),
+        );
+        Dispatcher::new_with_conversion(Arc::new(
+            ConversionService::from_static_bytes(image).expect("conversion service fixture"),
+        ))
+        .expect("shipped defaults")
     }
 
     fn raw_repair_conversion_dispatcher() -> Dispatcher {
@@ -9769,6 +10098,197 @@ mod tests {
     }
 
     #[test]
+    fn unfocused_conversion_number_commits_current_and_starts_literal_digit() {
+        let mut dispatcher = numeric_focus_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "numeric-focus.exe");
+        type_word(&mut dispatcher, session, "joui", &mut out);
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "上位");
+        assert!(!dispatcher
+            .sessions
+            .get(session)
+            .expect("unfocused conversion")
+            .conversion_focused());
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('3'),
+            },
+            &mut out,
+        );
+
+        assert!(!out.beep);
+        assert_eq!(out.commit_text(), Some("上位"));
+        assert_eq!(out.preedit_text(), "3");
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("literal continuation")
+                .state(),
+            State::Composing
+        );
+    }
+
+    #[test]
+    fn unfocused_conversion_number_sequence_stays_literal_after_first_commit() {
+        let mut dispatcher = numeric_focus_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "numeric-sequence.exe");
+        type_word(&mut dispatcher, session, "chokkin", &mut out);
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "直近");
+        assert!(!dispatcher
+            .sessions
+            .get(session)
+            .expect("unfocused conversion")
+            .conversion_focused());
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('9'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("直近"));
+        assert_eq!(out.preedit_text(), "9");
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('0'),
+            },
+            &mut out,
+        );
+        assert!(!out.beep);
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(out.preedit_text(), "90");
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("literal sequence")
+                .state(),
+            State::Composing
+        );
+    }
+
+    #[test]
+    fn focused_conversion_number_selects_visible_slot() {
+        let mut dispatcher = numeric_focus_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "focused-number.exe");
+        type_word(&mut dispatcher, session, "joui", &mut out);
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        let focused = dispatcher
+            .sessions
+            .get(session)
+            .expect("focused conversion");
+        assert!(focused.conversion_focused());
+        assert_eq!(
+            out.to_output()
+                .candidates
+                .expect("expanded candidates")
+                .presentation,
+            CandidatePresentation::Expanded
+        );
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('3'),
+            },
+            &mut out,
+        );
+        assert!(!out.beep);
+        assert_eq!(out.commit_text(), Some("上位候補三"));
+        assert_eq!(out.preedit_text(), "");
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("committed conversion")
+                .state(),
+            State::Idle
+        );
+    }
+
+    #[test]
+    fn focused_conversion_invalid_number_beeps_and_preserves_the_list() {
+        let mut dispatcher = numeric_focus_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "invalid-number.exe");
+        type_word(&mut dispatcher, session, "joui", &mut out);
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        let before = out.preedit_text().to_owned();
+        let candidate_count = out.candidate_count();
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('9'),
+            },
+            &mut out,
+        );
+
+        assert!(out.beep);
+        assert_eq!(out.commit_text(), None);
+        assert_eq!(out.preedit_text(), before);
+        assert_eq!(out.candidate_count(), candidate_count);
+        let live = dispatcher
+            .sessions
+            .get(session)
+            .expect("preserved conversion");
+        assert_eq!(live.state(), State::Converting);
+        assert!(live.conversion_focused());
+    }
+
+    #[test]
     fn conversion_navigation_expands_without_changing_candidate_kind() {
         let mut dispatcher = conversion_dispatcher();
         let mut out = OutputBuf::new();
@@ -10571,6 +11091,176 @@ mod tests {
             dispatcher.sessions.get(session).unwrap().state(),
             State::Idle
         );
+    }
+
+    #[test]
+    fn conversion_projection_deduplicates_visible_width_variants_and_navigation_changes_preedit() {
+        let mut dispatcher = visible_projection_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(
+            &mut dispatcher,
+            &mut out,
+            "visible-projection-navigation.exe",
+        );
+        type_word(&mut dispatcher, session, "daisanban", &mut out);
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "第3番");
+        let visible = (0..out.candidate_count())
+            .filter_map(|index| out.candidate(index).map(|(text, _)| text.to_owned()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            visible
+                .iter()
+                .filter(|text| text.as_str() == "第3番")
+                .count(),
+            1
+        );
+        assert_eq!(
+            visible
+                .iter()
+                .filter(|text| text.as_str() == "第３番")
+                .count(),
+            0
+        );
+        assert!(visible.iter().any(|text| text == "別候補"));
+
+        let first = out.preedit_text().to_owned();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        assert_eq!(out.selected_candidate(), Some(1));
+        assert_ne!(out.preedit_text(), first);
+        assert_eq!(out.preedit_text(), "別候補");
+    }
+
+    #[test]
+    fn conversion_projection_number_and_renderer_click_commit_displayed_identity() {
+        let mut dispatcher = visible_projection_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "visible-projection-number.exe");
+        type_word(&mut dispatcher, session, "daisanban", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        let numbered = out
+            .candidate(1)
+            .expect("second visible candidate")
+            .0
+            .to_owned();
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: char_key('2'),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some(numbered.as_str()));
+
+        let mut dispatcher = visible_projection_conversion_dispatcher();
+        let session = create_session(&mut dispatcher, &mut out, "visible-projection-click.exe");
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "daisanban", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
+            },
+            &mut out,
+        );
+        let clicked = out
+            .candidate(1)
+            .expect("second visible candidate")
+            .0
+            .to_owned();
+        let reply = dispatcher.dispatch(
+            &Request::CommitCandidate {
+                session,
+                revision: 43,
+                candidate_index: 1,
+            },
+            &mut out,
+        );
+        assert_eq!(reply, Reply::Output);
+        assert_eq!(out.commit_text(), Some(clicked.as_str()));
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Idle
+        );
+    }
+
+    #[test]
+    fn conversion_projection_keeps_selected_detail_on_first_raw_representative() {
+        let mut dispatcher = visible_projection_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "visible-projection-detail.exe");
+        type_word(&mut dispatcher, session, "daisanban", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        let first_detail = out
+            .to_output()
+            .candidate_detail
+            .expect("detail for first raw representative");
+        assert_eq!(
+            first_detail.definition,
+            "Stable first representative detail."
+        );
+        assert_eq!(first_detail.reading, "だいさんばん");
+        assert_eq!(out.preedit_text(), out.candidate(0).expect("first row").0);
+
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+        let second_detail = out
+            .to_output()
+            .candidate_detail
+            .expect("detail for second visible candidate");
+        assert_eq!(second_detail.definition, "Second visible candidate detail.");
+        assert_eq!(second_detail.reading, "だいさんばん");
+        assert_eq!(out.preedit_text(), out.candidate(1).expect("second row").0);
     }
 
     #[test]
@@ -14636,15 +15326,16 @@ mod tests {
     }
 
     fn oversized_numbered_candidate_dispatcher() -> Dispatcher {
-        // きょう has one small candidate. です has a small default (index 0)
-        // and a larger alternative (index 1) that, stitched together with
-        // きょう's own committed surface, exceeds MAX_PREEDIT_BYTES -- but
-        // is small enough on its own to render fine in です's own candidate
-        // window before it is picked.
-        let kyou_surface = "あ".repeat(250); // 750 bytes
-        let desu_alt = "い".repeat(350); // 1050 bytes; 750 + 1050 > 1536
+        // The first segment has a tiny dictionary surface but a 170-key raw
+        // spelling. F9 expands that raw spelling to 510 bytes. The second
+        // segment has a 1050-byte dictionary surface, while F6 temporarily
+        // renders only the six-byte reading. Thus the transformed composition
+        // fits, but a numbered pick that clears only the second transform
+        // would stitch 510 + 1050 bytes and overflow MAX_PREEDIT_BYTES.
+        let first_reading = "あ".repeat(170);
+        let second_surface = "い".repeat(350);
         let source = format!(
-            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nきょう\t{kyou_surface}\t0\t0\t100\t100\t\tsmall\nです\tです\t0\t0\t100\t100\t\tsmall-default\nです\t{desu_alt}\t0\t0\t200\t200\t\tlarge-alt\n"
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n{first_reading}\t短\t0\t0\t100\t100\t\tshort-dictionary-surface\nです\t{second_surface}\t0\t0\t100\t100\t\tlarge-default\n"
         );
         let entries =
             dictc::parse_entries("numbered-candidate-overflow.tsv", &source).expect("entries");
@@ -14679,7 +15370,8 @@ mod tests {
         let mut out = OutputBuf::new();
         let session = create_session(&mut dispatcher, &mut out, "editor.exe");
 
-        type_word(&mut dispatcher, session, "kyoudesu", &mut out);
+        let typed = format!("{}desu", "a".repeat(170));
+        type_word(&mut dispatcher, session, &typed, &mut out);
         dispatcher.dispatch(
             &Request::SendKey {
                 session,
@@ -14694,6 +15386,16 @@ mod tests {
             &Request::SendKey {
                 session,
                 key: named_key(KeyCode::Right),
+            },
+            &mut out,
+        );
+        // The list must explicitly own number shortcuts. Focus it before
+        // arming transforms; candidate navigation itself clears the focused
+        // segment transform by design.
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Tab),
             },
             &mut out,
         );
@@ -14714,6 +15416,27 @@ mod tests {
             SegmentTransform::None,
             "F6 must have armed a transform on the focused (です) segment"
         );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Left),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::F9),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Right),
+            },
+            &mut out,
+        );
         let preedit_before = dispatcher
             .sessions
             .get(session)
@@ -14722,12 +15445,13 @@ mod tests {
             .as_str()
             .to_string();
 
-        // "2" picks です's second (larger) candidate. Combined with きょう's
-        // own surface, the stitched commit overflows MAX_PREEDIT_BYTES.
+        // "1" names the sole visible candidate. Clearing its F6 transform
+        // exposes the large dictionary surface and makes the stitched commit
+        // overflow while the first segment remains under F9.
         let reply = dispatcher.dispatch(
             &Request::SendKey {
                 session,
-                key: char_key('2'),
+                key: char_key('1'),
             },
             &mut out,
         );
@@ -14751,19 +15475,21 @@ mod tests {
             "a failed numbered pick must not touch the composition being edited"
         );
 
-        // The session must still be usable afterward: picking です's small
-        // default candidate now commits normally.
+        // The session must still be usable afterward. Cancelling the
+        // conversion restores the raw reading rather than leaving a partial
+        // commit or a poisoned candidate state.
         let reply = dispatcher.dispatch(
             &Request::SendKey {
                 session,
-                key: char_key('1'),
+                key: named_key(KeyCode::Escape),
             },
             &mut out,
         );
-        assert!(!matches!(
-            reply,
-            Reply::Message(Response::Error(ErrorCode::TooLarge))
-        ));
+        assert_eq!(reply, Reply::Output);
+        assert_eq!(
+            dispatcher.sessions.get(session).unwrap().state(),
+            State::Composing
+        );
     }
 
     fn oversized_render_segment_dispatcher() -> Dispatcher {

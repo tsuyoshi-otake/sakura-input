@@ -92,7 +92,7 @@ and other-session text before serialization.
 The existing ignored release benchmark was run with:
 
 ```text
-rtk proxy cargo test -p sakura-engine --release --lib \
+cargo test -p sakura-engine --release --lib \
   prediction::tests::user_dictionary_prediction_evaluation -- \
   --ignored --nocapture
 ```
@@ -158,7 +158,7 @@ instead of `35` when other feature-detection tests ran concurrently. The test
 passes when isolated, and the full workspace passes with one test thread:
 
 ```text
-rtk cargo test --workspace -- --test-threads=1
+cargo test --workspace -- --test-threads=1
 889 passed, 20 ignored
 ```
 

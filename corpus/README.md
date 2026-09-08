@@ -25,7 +25,7 @@ PLAN.md budget's specified workload.
 
 ```powershell
 $env:CARGO_HTTP_CHECK_REVOKE = 'false'
-rtk cargo run --locked --release -p dictc --bin corpus-eval -- `
+cargo run --locked --release -p dictc --bin corpus-eval -- `
   --dictionary "$env:USERPROFILE\tmp\sakura-input-dictionary-build\system.dic" `
   --corpus corpus\held-out.tsv `
   --baseline corpus\mozc-baseline.tsv `

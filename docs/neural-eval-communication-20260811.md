@@ -22,8 +22,8 @@
 実行コマンド（Windows）:
 
 ```powershell
-rtk cargo run -p dictc --bin neural-eval -- --dictionary artifacts\release\system.dic --corpus corpus\neural-eval-communication-draft.tsv --worker artifacts\release\sakura_neural_worker.exe --model-dir artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm --mode long --report C:\Users\developer\tmp\sakura-neural-eval-communication-long-v3.json
-rtk cargo run -p dictc --bin neural-eval -- --dictionary artifacts\release\system.dic --corpus corpus\neural-eval-communication-draft.tsv --worker artifacts\release\sakura_neural_worker.exe --model-dir artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm --mode all-normal --report C:\Users\developer\tmp\sakura-neural-eval-communication-all-normal-v3.json
+cargo run -p dictc --bin neural-eval -- --dictionary artifacts\release\system.dic --corpus corpus\neural-eval-communication-draft.tsv --worker artifacts\release\sakura_neural_worker.exe --model-dir artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm --mode long --report C:\Users\developer\tmp\sakura-neural-eval-communication-long-v3.json
+cargo run -p dictc --bin neural-eval -- --dictionary artifacts\release\system.dic --corpus corpus\neural-eval-communication-draft.tsv --worker artifacts\release\sakura_neural_worker.exe --model-dir artifacts\release\neural\deberta-v2-tiny-japanese-char-wwm --mode all-normal --report C:\Users\developer\tmp\sakura-neural-eval-communication-all-normal-v3.json
 ```
 
 ## 結果

@@ -45,11 +45,13 @@ pub use calendar::{
 };
 pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
 pub use conversion::{
-    candidate_budget, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics,
-    ConversionError, ConversionInput, ConversionInputClass, ConversionOptions, ConversionResult,
+    candidate_budget, CandidateAuthority, CandidateEvidence, CandidateEvidenceClass,
+    CandidateOrigin, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics, ConversionError,
+    ConversionInput, ConversionInputClass, ConversionOptions, ConversionResult,
     ConversionSearchTerminal, ConversionSegment, Converter, CrossCommitBridge, LeftContextId,
-    LiteralPolicy, RightContextId, MAX_CONVERSION_CANDIDATES, MAX_CROSS_COMMIT_CURRENT_BYTES,
-    MAX_CROSS_COMMIT_TAIL_BYTES, MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS,
+    LiteralPolicy, PathEvidence, RawRepairBudget, RawRepairPlan, RepairTier, RightContextId,
+    MAX_CONVERSION_CANDIDATES, MAX_CROSS_COMMIT_CURRENT_BYTES, MAX_CROSS_COMMIT_TAIL_BYTES,
+    MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS,
 };
 pub use cpu::{CpuFeatures, UnsupportedCpu};
 pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};

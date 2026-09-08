@@ -1658,6 +1658,115 @@ fn generic_candidate_quality_covers_reported_unregistered_readings() {
     );
 }
 
+fn assert_candidate_precedes(
+    reading: &str,
+    candidates: &[String],
+    expected: &str,
+    displaced: &str,
+) {
+    let expected_at = candidates
+        .iter()
+        .position(|candidate| candidate == expected)
+        .unwrap_or_else(|| panic!("{reading}: missing expected {expected}: {candidates:?}"));
+    let displaced_at = candidates
+        .iter()
+        .position(|candidate| candidate == displaced)
+        .unwrap_or_else(|| panic!("{reading}: missing displaced {displaced}: {candidates:?}"));
+    assert!(
+        expected_at < displaced_at,
+        "{reading}: expected {expected} at {expected_at} before {displaced} at {displaced_at}: {candidates:?}"
+    );
+}
+
+fn assert_exact_surface_is_not_replaced(reading: &str, candidates: &[String], displaced: &str) {
+    let exact_at = candidates
+        .iter()
+        .position(|candidate| candidate == reading)
+        .unwrap_or_else(|| panic!("{reading}: missing exact surface: {candidates:?}"));
+    if let Some(displaced_at) = candidates
+        .iter()
+        .position(|candidate| candidate == displaced)
+    {
+        assert!(
+            exact_at < displaced_at,
+            "{reading}: exact surface ranked at {exact_at} after {displaced} at {displaced_at}: {candidates:?}"
+        );
+    }
+}
+
+/// Issue #108: recent shipped-dictionary regressions must not let generated
+/// calendar surfaces or a lossy fuzzy splice outrank the exact phrase a user
+/// typed. The assertions use the public dictionary candidate page and do not
+/// seed or inspect private learning state.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_108_shipped_dictionary_keeps_recent_general_japanese_leaders() {
+    for (reading, expected, calendar_splices) in [
+        (
+            "つづけようか",
+            "続けようか",
+            ["続け８日", "続け8日", "続け八日"],
+        ),
+        (
+            "すすめようか",
+            "進めようか",
+            ["進め８日", "進め8日", "進め八日"],
+        ),
+    ] {
+        let candidates = candidates_for(reading);
+        for splice in calendar_splices {
+            assert_candidate_precedes(reading, &candidates, expected, splice);
+        }
+    }
+
+    let labor = candidates_for("ろうりょく");
+    assert_candidate_precedes("ろうりょく", &labor, "労力", "ロウ力");
+
+    let lossless = candidates_for("してきますからね");
+    assert_candidate_precedes(
+        "してきますからね",
+        &lossless,
+        "してきますからね",
+        "指摘ますからね",
+    );
+}
+
+/// Issue #108: an isolated exact reading must not be replaced by an
+/// unrelated one-character Advanced repair. Check both conversion and the
+/// clean prediction worker without any learning service or durable profile.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_108_clean_short_readings_keep_conversion_and_prediction_exact() {
+    for (romaji, reading, displaced) in [
+        ("ite", "いて", "って"),
+        ("i", "い", "お"),
+        ("nani", "なに", "ない"),
+    ] {
+        let mut dispatcher = open_dispatcher();
+        let (composed, candidates) = convert(&mut dispatcher, romaji);
+        assert_eq!(composed, reading, "{romaji}: unexpected composed reading");
+        assert_exact_surface_is_not_replaced(reading, &candidates, displaced);
+
+        let predictions = predictions_for(reading);
+        assert!(
+            !predictions.is_empty(),
+            "{reading}: isolated prediction returned no candidates"
+        );
+        assert!(
+            predictions.iter().all(|(candidate_reading, surface)| {
+                candidate_reading.starts_with(reading) && surface != displaced
+            }),
+            "{reading}: isolated prediction escaped the exact prefix or exposed replacement {displaced}: {predictions:?}"
+        );
+        assert!(
+            predictions
+                .iter()
+                .all(|(_, surface)| surface != displaced),
+            "{reading}: isolated prediction exposed Advanced replacement {displaced}: {predictions:?}"
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn prediction_prefers_exact_readings_and_does_not_repair_known_words() {

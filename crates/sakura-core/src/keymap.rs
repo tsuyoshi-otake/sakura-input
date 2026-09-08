@@ -9,7 +9,11 @@
 //! The same physical key means different things depending on what the
 //! composition is doing: Space converts while typing and moves through
 //! candidates once conversion has started, and Tab focuses a prediction
-//! while typing but opens the candidate table during conversion. So a
+//! while typing but opens the candidate table during conversion. Conversion
+//! starts with a visible but keyboard-unfocused candidate list: numeric
+//! bindings become shortcuts only after explicit candidate navigation or
+//! expansion; before that, digits commit the current conversion and continue
+//! as literal input. So a
 //! binding is `(scope, key, modifiers) -> action`, where scope is either one
 //! [`State`] or `global`.
 //!
@@ -1360,6 +1364,33 @@ mod tests {
                 Some(Action::DeletePredictionHistory),
                 "{preset:?} ctrl+delete",
             );
+        }
+    }
+
+    #[test]
+    fn both_presets_bind_conversion_numbers_for_explicit_focus() {
+        // Conversion starts with a visible but unfocused list. The engine
+        // owns the focus gate; both shipped maps must still expose the same
+        // 1–9 actions once navigation, expansion, or paging has focused it.
+        for preset in [Preset::MsIme, Preset::Atok] {
+            let map = KeyMap::preset(preset).expect("preset compiles");
+            for (digit, action) in [
+                ('1', Action::Candidate1),
+                ('2', Action::Candidate2),
+                ('3', Action::Candidate3),
+                ('4', Action::Candidate4),
+                ('5', Action::Candidate5),
+                ('6', Action::Candidate6),
+                ('7', Action::Candidate7),
+                ('8', Action::Candidate8),
+                ('9', Action::Candidate9),
+            ] {
+                assert_eq!(
+                    map.lookup(State::Converting, &ch(digit, Modifiers::NONE)),
+                    Some(action),
+                    "{preset:?} converting digit {digit}",
+                );
+            }
         }
     }
 

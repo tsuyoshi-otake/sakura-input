@@ -12,6 +12,19 @@ use std::process::Command;
 use std::thread::sleep;
 use std::time::Duration;
 
+mod pages;
+mod presentation;
+mod tabs;
+use pages::*;
+use presentation::{BoxRect, Presentation, TextRole};
+use windows::Win32::UI::Controls::{
+    InitCommonControlsEx, ICC_TAB_CLASSES, INITCOMMONCONTROLSEX, NMHDR, TCIF_TEXT, TCITEMW,
+    TCM_GETCURSEL, TCM_INSERTITEMW, TCM_SETCURSEL, TCN_SELCHANGE,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    WM_HSCROLL, WM_MOUSEWHEEL, WM_SIZE, WM_VSCROLL, WS_MAXIMIZEBOX, WS_THICKFRAME,
+};
+
 use sakura_core::{
     AppProfile, AppearanceTheme, BracketStyle, CommaMark, ConversionMethod, InputMethod,
     InputSupport, NeuralRerankerScope, Normalizer, NotationStyle, PadShortcut, PeriodMark, Preset,
@@ -32,7 +45,7 @@ use windows::Win32::Foundation::{
 };
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
-    ClientToScreen, CreateSolidBrush, DeleteObject, DrawTextW, FillRect, FrameRect, GetStockObject,
+    CreateSolidBrush, DeleteObject, DrawTextW, FillRect, FrameRect, GetStockObject,
     GetSysColorBrush, InvalidateRect, SetBkColor, SetBkMode, SetTextColor, UpdateWindow,
     COLOR_WINDOW, DEFAULT_GUI_FONT, DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBRUSH, HDC, TRANSPARENT,
 };
@@ -58,20 +71,20 @@ use windows::Win32::UI::WindowsAndMessaging::{
     IsIconic, LoadCursorW, LoadImageW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW,
     SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
     SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX,
-    BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_GROUPBOX, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK,
-    CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT,
-    ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN,
-    GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG,
-    ICON_SMALL, IDC_ARROW, IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY,
-    LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR,
-    MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST,
-    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE,
-    SW_SHOW, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
+    BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK, CBN_SELCHANGE,
+    CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, ES_AUTOHSCROLL,
+    ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN, GWLP_USERDATA,
+    GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG, ICON_SMALL, IDC_ARROW,
+    IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL,
+    LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION,
+    MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
+    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
     WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETICON,
     WM_SETTINGCHANGE, WM_THEMECHANGED, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
-    WS_DISABLED, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_GROUP, WS_HSCROLL, WS_MINIMIZEBOX,
-    WS_OVERLAPPED, WS_POPUP, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_GROUP, WS_HSCROLL, WS_MINIMIZEBOX, WS_OVERLAPPED,
+    WS_POPUP, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 #[cfg(test)]
@@ -127,7 +140,7 @@ const DARK_BUTTON_DISABLED: COLORREF = rgb(0x3B, 0x3B, 0x3B);
 const DARK_BUTTON_BORDER: COLORREF = rgb(0x68, 0x63, 0x65);
 const SAKURA_ACCENT: COLORREF = rgb(0xB7, 0x7C, 0x8C);
 const LIGHT_SURFACE: COLORREF = rgb(0xF7, 0xF6, 0xF4);
-const LIGHT_INPUT_SURFACE: COLORREF = rgb(0xE8, 0xE5, 0xE2);
+const LIGHT_INPUT_SURFACE: COLORREF = rgb(0xFC, 0xFB, 0xFA);
 // Keep ordinary Light text neutral; Sakura is reserved for focus and selection.
 const LIGHT_INK: COLORREF = rgb(0x2F, 0x2F, 0x2F);
 const LIGHT_DISABLED_INK: COLORREF = rgb(0x70, 0x70, 0x70);
@@ -137,43 +150,16 @@ const LIGHT_BUTTON_PRESSED: COLORREF = rgb(0xD9, 0xD4, 0xD0);
 const LIGHT_BUTTON_DISABLED: COLORREF = rgb(0xEE, 0xEC, 0xEA);
 const LIGHT_BUTTON_BORDER: COLORREF = rgb(0xBD, 0xB9, 0xB5);
 const LIGHT_SAKURA_ACCENT: COLORREF = rgb(0xB2, 0x8D, 0x96);
-// This is the measured outer size of a compact Japanese IME property dialog
-// at 100% DPI, including the native non-client frame.
-const WINDOW_WIDTH: i32 = 629;
-const WINDOW_HEIGHT: i32 = 464;
-const NAVIGATION_WIDTH: i32 = 161;
-const PANEL_LEFT: i32 = 211;
-const PANEL_TOP: i32 = 74;
-const PANEL_WIDTH: i32 = 385;
-const PANEL_HEIGHT: i32 = 300;
-const BOTTOM_ACTION_Y: i32 = 384;
-// Topic copy ends at y=38.  Start the first framed group on the next 8 px
-// rhythm step so a group caption never crowds the page description.
-const TOPIC_GROUP_TOP: i32 = 48;
-const NORMALIZER_GROUP_HEIGHT: i32 = 192;
-const NORMALIZER_RESET_Y: i32 = 264;
-const NORMALIZER_RESET_HEIGHT: i32 = 24;
-// The profile group frames a list, five rows and its two action buttons. It
-// grew by one row when the notation preset landed; the assert below is what
-// stops the next row from silently overflowing the panel instead.
-const PROFILE_GROUP_HEIGHT: i32 = 216;
-const PROFILE_CONTENT_BOTTOM: i32 = 254;
+// Owner's 615x457 reference sets the size envelope. Keep the initial sheet
+// close to that footprint at 100% DPI, with scrolling for longer native forms.
+const WINDOW_WIDTH: i32 = 640;
+const WINDOW_HEIGHT: i32 = 480;
 // TreeView does not use the parent WM_CTLCOLOR brush for its item labels. Set
 // its documented colors explicitly so dark-mode rows do not retain the native
 // white item background behind otherwise dark panels.
 const TVM_SETBKCOLOR: u32 = 0x111D; // TV_FIRST + 29
 const TVM_SETTEXTCOLOR: u32 = 0x111E; // TV_FIRST + 30
 const CLR_NONE: COLORREF = COLORREF(u32::MAX);
-// ATOK's measured property rail is about 161 logical px wide with a 12–14 px
-// gutter before the right pane. Keep the input TreeView on that same visual
-// grid while the flat pages retain the slightly wider topic ListBox.
-const INPUT_TREE_LEFT: i32 = 36;
-const INPUT_TREE_TOP: i32 = PANEL_TOP + 20;
-const INPUT_TREE_WIDTH: i32 = 161;
-const INPUT_TREE_HEIGHT: i32 = 282;
-// The dictionary page has the densest content. Its last helper baseline must
-// remain above the persistent root action row at every theme/DPI.
-const DICTIONARY_CONTENT_BOTTOM: i32 = 288;
 
 // Input / conversion topic IDs carried by the native tree item's lParam.
 // Every selectable tree row maps to the one right-hand panel it owns.
@@ -212,12 +198,6 @@ const INPUT_TREE_LABELS: [&str; 13] = [
     "連想変換",
     "アプリ別の設定",
 ];
-
-const _: () = assert!(PANEL_TOP + DICTIONARY_CONTENT_BOTTOM < BOTTOM_ACTION_Y);
-const _: () = assert!(NORMALIZER_RESET_Y >= TOPIC_GROUP_TOP + NORMALIZER_GROUP_HEIGHT + 8);
-const _: () = assert!(NORMALIZER_RESET_Y + NORMALIZER_RESET_HEIGHT <= PANEL_HEIGHT - 8);
-const _: () = assert!(TOPIC_GROUP_TOP + PROFILE_GROUP_HEIGHT <= PANEL_HEIGHT - 8);
-const _: () = assert!(PROFILE_CONTENT_BOTTOM <= TOPIC_GROUP_TOP + PROFILE_GROUP_HEIGHT);
 
 #[derive(Debug)]
 struct GeneralControls {
@@ -508,6 +488,16 @@ impl UiTheme {
         // synchronous draw. The window text buffer remains live until DrawTextW
         // returns, and all brushes are held by `self` for the App lifetime.
         unsafe {
+            let font = SendMessageW(
+                item.hwndItem,
+                windows::Win32::UI::WindowsAndMessaging::WM_GETFONT,
+                None,
+                None,
+            );
+            let old_font = windows::Win32::Graphics::Gdi::SelectObject(
+                item.hDC,
+                windows::Win32::Graphics::Gdi::HGDIOBJ(font.0 as *mut c_void),
+            );
             let _ = FillRect(item.hDC, &item.rcItem, fill);
             let _ = FrameRect(item.hDC, &item.rcItem, frame);
             let _ = SetBkMode(item.hDC, TRANSPARENT);
@@ -533,6 +523,7 @@ impl UiTheme {
                 focus_rect.bottom -= 4;
                 let _ = FrameRect(item.hDC, &focus_rect, brushes.accent);
             }
+            let _ = windows::Win32::Graphics::Gdi::SelectObject(item.hDC, old_font);
         }
         true
     }
@@ -623,8 +614,11 @@ const fn close_decision(_request: CloseRequest, update_in_flight: bool) -> Close
 #[derive(Debug)]
 struct App {
     window: HWND,
+    heading: HWND,
+    presentation: Presentation,
+    layout_in_progress: bool,
     panels: [HWND; PANEL_COUNT],
-    navigation: [HWND; PANEL_COUNT],
+    tabs: HWND,
     page_topics: HWND,
     input_tree: HWND,
     status: HWND,
@@ -790,45 +784,9 @@ impl App {
         let update_preferences =
             updater::UpdatePreferences::load(&update_preferences_path).map_err(display)?;
 
-        // Keep the familiar property-sheet shell deliberately compact: the
-        // current configuration is first, categories are a stable left rail,
-        // and every page owns the framed controls on the right.
-        label(window, "現在の設定", 12, 14, 74, 22).map_err(display)?;
-        label(
-            window,
-            "既定の入力設定（アプリ別の設定は各アプリの入力コンテキスト作成時に適用されます）",
-            92,
-            14,
-            510,
-            22,
-        )
-        .map_err(display)?;
-        // Native buttons retain their standard keyboard/UIA behavior while the
-        // owner-draw dark palette gives the row a compact tab-strip treatment.
-        let navigation = [
-            button(window, "入力・変換", 15, 42, 120, 26, false).map_err(display)?,
-            button(window, "辞書", 136, 42, 120, 26, false).map_err(display)?,
-            button(window, "学習", 257, 42, 120, 26, false).map_err(display)?,
-            button(window, "診断", 378, 42, 120, 26, false).map_err(display)?,
-            button(window, "更新", 499, 42, 120, 26, false).map_err(display)?,
-        ];
-        label(
-            window,
-            "設定項目",
-            INPUT_TREE_LEFT,
-            PANEL_TOP - 2,
-            INPUT_TREE_WIDTH,
-            18,
-        )
-        .map_err(display)?;
-        let page_topics = listbox(
-            window,
-            INPUT_TREE_LEFT,
-            INPUT_TREE_TOP,
-            NAVIGATION_WIDTH,
-            INPUT_TREE_HEIGHT,
-        )
-        .map_err(display)?;
+        let heading = label(window, "Sakura Input  /  設定", 24, 20, 500, 28).map_err(display)?;
+        let tabs = category_tabs(window).map_err(display)?;
+        let page_topics = listbox(window, 0, 0, 1, 1).map_err(display)?;
         let input_tree = input_topic_tree(window).map_err(display)?;
         let panels = [
             panel(window).map_err(display)?,
@@ -839,21 +797,36 @@ impl App {
         ];
         let status =
             label(window, "変更は［適用］で保存されます。", 12, 390, 365, 20).map_err(display)?;
-        let ok = button(window, "OK", 384, BOTTOM_ACTION_Y, 68, 26, true).map_err(display)?;
-        let cancel =
-            button(window, "キャンセル", 458, BOTTOM_ACTION_Y, 72, 26, false).map_err(display)?;
-        let apply = button(window, "適用", 536, BOTTOM_ACTION_Y, 68, 26, false).map_err(display)?;
+        let ok = button(window, "OK", 0, 0, 1, 1, true).map_err(display)?;
+        let cancel = button(window, "キャンセル", 0, 0, 1, 1, false).map_err(display)?;
+        let apply = button(window, "適用", 0, 0, 1, 1, false).map_err(display)?;
 
-        let general = create_general_controls(panels[0]).map_err(display)?;
-        let dictionary_controls = create_dictionary_controls(panels[1]).map_err(display)?;
-        let learning_controls = create_learning_controls(panels[2]).map_err(display)?;
-        let diagnostics_controls = create_diagnostics_controls(panels[3]).map_err(display)?;
-        let update_controls = create_update_controls(panels[4]).map_err(display)?;
+        let mut presentation = Presentation::new(window_dpi(window)).map_err(display)?;
+        let general = create_general_controls(panels[0], &mut presentation).map_err(display)?;
+        let dictionary_controls =
+            create_dictionary_controls(panels[1], &mut presentation).map_err(display)?;
+        let learning_controls =
+            create_learning_controls(panels[2], &mut presentation).map_err(display)?;
+        let diagnostics_controls =
+            create_diagnostics_controls(panels[3], &mut presentation).map_err(display)?;
+        let update_controls =
+            create_update_controls(panels[4], &mut presentation).map_err(display)?;
+        presentation.shell_font(heading, TextRole::Section);
+        presentation.shell_font(status, TextRole::Caption);
+        for control in [tabs, page_topics, input_tree, ok, cancel, apply] {
+            presentation.shell_font(control, TextRole::Body);
+        }
+        presentation
+            .refresh_fonts(window_dpi(window))
+            .map_err(display)?;
 
         let mut app = Self {
             window,
+            heading,
+            presentation,
+            layout_in_progress: false,
             panels,
-            navigation,
+            tabs,
             page_topics,
             input_tree,
             status,
@@ -889,14 +862,11 @@ impl App {
         app.refresh_learning()?;
         app.refresh_diagnostics()?;
         app.populate_updates();
+        app.layout();
         Ok(app)
     }
 
     fn handle_command(&mut self, source: HWND, notification: u16) -> Result<(), String> {
-        if let Some(index) = self.navigation.iter().position(|button| *button == source) {
-            self.show_panel(index);
-            return Ok(());
-        }
         if source == self.apply {
             return self.save_global_settings();
         }
@@ -1035,12 +1005,9 @@ impl App {
 
     fn show_panel(&mut self, selected: usize) {
         self.show_page_controls(selected);
-        // SAFETY: navigation controls are live children. Repainting only exposes
-        // the selected-tab visual state; it does not modify focus or command flow.
+        // SAFETY: scalar native selection synchronizes programmatic navigation.
         unsafe {
-            for button in self.navigation {
-                let _ = InvalidateRect(Some(button), None, true);
-            }
+            let _ = SendMessageW(self.tabs, TCM_SETCURSEL, Some(WPARAM(selected)), None);
         }
     }
 
@@ -1192,7 +1159,8 @@ impl App {
     /// when the user selects a topic, exactly that topic's page remains visible.
     /// Each page owns a bounded set of nested topic panels so switching the left
     /// rail never leaves controls from the previous topic in the tab order.
-    fn show_topic_controls(&self, topic: usize) {
+    fn show_topic_controls(&mut self, topic: usize) {
+        self.presentation.reset_scroll();
         // SAFETY: all handles are live child pages. Toggling visibility preserves
         // control state and command routes without recreating native controls.
         unsafe {
@@ -1324,6 +1292,91 @@ impl App {
                 _ => {}
             }
         }
+        self.layout();
+    }
+
+    fn layout(&mut self) {
+        if self.layout_in_progress {
+            return;
+        }
+        self.layout_in_progress = true;
+        let mut client = RECT::default();
+        // SAFETY: layout runs on the root's owning UI thread.
+        unsafe {
+            let _ = GetClientRect(self.window, &mut client);
+        }
+        let px = |value| scale_dpi_value(value, 96, self.presentation.scale);
+        let margin = px(16);
+        let footer = client.bottom - px(52);
+        let top = px(80);
+        let nav_width = px(176).min((client.right / 3).max(px(100)));
+        let left = margin + nav_width + px(16);
+        presentation::move_window(
+            self.heading,
+            BoxRect::new(margin, px(10), client.right - margin * 2, px(20)),
+        );
+        // Only the tab strip owns a hit-test surface. The root paints the body
+        // frame, so it cannot cover sibling forms or change their Tab order.
+        presentation::move_window(
+            self.tabs,
+            BoxRect::new(px(8), px(36), client.right - px(16), px(26)),
+        );
+        for control in [self.input_tree, self.page_topics] {
+            presentation::move_window(
+                control,
+                BoxRect::new(margin, top, nav_width, (footer - top - px(12)).max(1)),
+            );
+        }
+        for panel in self.panels {
+            presentation::move_window(
+                panel,
+                BoxRect::new(
+                    left,
+                    top,
+                    (client.right - left - margin).max(1),
+                    (footer - top - px(12)).max(1),
+                ),
+            );
+        }
+        let action_width = px(76);
+        let action_start = client.right - margin - action_width * 3 - px(8) * 2;
+        for (index, control) in [self.ok, self.cancel, self.apply].into_iter().enumerate() {
+            presentation::move_window(
+                control,
+                BoxRect::new(
+                    action_start + index as i32 * (action_width + px(8)),
+                    footer + px(12),
+                    action_width,
+                    px(28),
+                ),
+            );
+        }
+        presentation::move_window(
+            self.status,
+            BoxRect::new(
+                margin,
+                footer + px(10),
+                (action_start - margin - px(12)).max(1),
+                px(34),
+            ),
+        );
+        // SAFETY: scalar native item-height messages; fonts and row heights share a scale.
+        unsafe {
+            let _ = SendMessageW(
+                self.input_tree,
+                0x111B,
+                Some(WPARAM(px(22) as usize)),
+                Some(LPARAM(0)),
+            );
+            let _ = SendMessageW(
+                self.page_topics,
+                windows::Win32::UI::WindowsAndMessaging::LB_SETITEMHEIGHT,
+                Some(WPARAM(0)),
+                Some(LPARAM(px(26) as isize)),
+            );
+        }
+        self.presentation.reflow(self.panels[self.selected_panel]);
+        self.layout_in_progress = false;
     }
 
     fn populate_general(&mut self) {
@@ -1828,15 +1881,13 @@ impl App {
         }
     }
 
-    /// Reflow the fixed property-sheet grid after Windows moves it to a
-    /// monitor with a different DPI.  The dialog deliberately remains a
-    /// compact, non-resizable property sheet; every child therefore needs the
-    /// same scale transition as the outer rectangle or Japanese labels and the
-    /// bottom action row drift apart.
+    /// Reflow owned fonts and the visible form after a monitor DPI transition.
     fn apply_dpi_change(&mut self, new_dpi: u32, suggested: Option<RECT>) {
         let new_dpi = new_dpi.max(96);
         let old_dpi = self.dpi.max(96);
-        let target = suggested.or_else(|| scaled_window_rect(self.window, old_dpi, new_dpi));
+        let target = suggested
+            .or_else(|| scaled_window_rect(self.window, old_dpi, new_dpi))
+            .map(|rect| fit_work_area(self.window, rect));
 
         if let Some(rect) = target {
             // SAFETY: the root HWND is owned by this UI thread and the
@@ -1855,11 +1906,11 @@ impl App {
             }
         }
 
-        if old_dpi != new_dpi {
-            scale_window_children(self.window, old_dpi, new_dpi);
-            refresh_native_fonts(self.window);
-            self.dpi = new_dpi;
+        self.dpi = new_dpi;
+        if let Err(error) = self.presentation.refresh_fonts(new_dpi) {
+            self.set_status(&format!("文字サイズを更新できませんでした: {error}"));
         }
+        self.layout();
         self.apply_theme();
     }
 
@@ -1884,17 +1935,29 @@ impl App {
         self.theme_apply_in_progress = false;
     }
 
+    fn apply_control_colors(&self, message: u32, dc: HDC, window: HWND) -> Option<HBRUSH> {
+        let brush = self
+            .theme
+            .apply_control_colors(message, dc, self.is_readonly_input(window))?;
+        if message == WM_CTLCOLORSTATIC && self.presentation.role(window) == Some(TextRole::Caption)
+        {
+            // SAFETY: the synchronous paint owns this DC; high contrast returned None above.
+            unsafe {
+                let _ = SetTextColor(dc, self.theme.disabled_ink());
+            }
+        }
+        Some(brush)
+    }
+
     fn is_readonly_input(&self, window: HWND) -> bool {
         window == self.diagnostics_controls.text || window == self.update_controls.result
     }
 
-    fn buttons(&self) -> [HWND; 23] {
+    fn buttons(&self) -> [HWND; 21] {
         [
-            self.navigation[0],
-            self.navigation[1],
-            self.navigation[2],
-            self.navigation[3],
-            self.navigation[4],
+            self.general.ai_api_key_clear,
+            self.general.normalizer_reset,
+            self.general.input_support_reset,
             self.general.profile_save,
             self.general.profile_delete,
             self.dictionary_controls.add,
@@ -1946,11 +2009,7 @@ impl App {
 
     fn draw_button(&self, item: &DRAWITEMSTRUCT) -> bool {
         let default = item.hwndItem == self.ok;
-        let selected_tab = self
-            .navigation
-            .get(self.selected_panel)
-            .is_some_and(|button| *button == item.hwndItem);
-        self.theme.draw_button(item, default, selected_tab)
+        self.theme.draw_button(item, default, false)
     }
 
     fn select_profile(&self) {
@@ -2462,7 +2521,9 @@ impl App {
             updater::UpdateOutcome::TimedOutStillRunning { version } => format!(
                 "Sakura Input {version} のインストーラーはまだ実行中です（30分の待機上限に達しました）。"
             ),
-            updater::UpdateOutcome::Failed { failure, .. } => Self::describe_update_failure(failure),
+            updater::UpdateOutcome::Failed { failure, .. } => {
+                Self::describe_update_failure(failure)
+            }
         }
     }
 
@@ -2522,6 +2583,34 @@ fn window_dpi(window: HWND) -> u32 {
     }
 }
 
+fn fit_work_area(window: HWND, mut rect: RECT) -> RECT {
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    let mut info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: bounded monitor query; a missing monitor preserves native placement.
+    if unsafe {
+        GetMonitorInfoW(
+            MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST),
+            &mut info,
+        )
+    }
+    .as_bool()
+    {
+        let work = info.rcWork;
+        let width = (rect.right - rect.left).min(work.right - work.left).max(1);
+        let height = (rect.bottom - rect.top).min(work.bottom - work.top).max(1);
+        rect.left = rect.left.clamp(work.left, work.right - width);
+        rect.top = rect.top.clamp(work.top, work.bottom - height);
+        rect.right = rect.left + width;
+        rect.bottom = rect.top + height;
+    }
+    rect
+}
+
 fn scale_dpi_value(value: i32, from: u32, to: u32) -> i32 {
     let from = i64::from(from.max(1));
     let to = i64::from(to.max(1));
@@ -2553,81 +2642,6 @@ fn scaled_window_rect(window: HWND, from: u32, to: u32) -> Option<RECT> {
         right: rect.left.saturating_add(width),
         bottom: rect.top.saturating_add(height),
     })
-}
-
-fn child_client_rect(parent: HWND, child: HWND) -> Option<RECT> {
-    let mut screen = RECT::default();
-    let mut origin = POINT { x: 0, y: 0 };
-    // SAFETY: both handles are descendants of the live settings root, and the
-    // output structures outlive the synchronous User32 calls.
-    unsafe {
-        GetWindowRect(child, &mut screen).ok()?;
-        if !ClientToScreen(parent, &mut origin).as_bool() {
-            return None;
-        }
-    }
-    Some(RECT {
-        left: screen.left.saturating_sub(origin.x),
-        top: screen.top.saturating_sub(origin.y),
-        right: screen.right.saturating_sub(origin.x),
-        bottom: screen.bottom.saturating_sub(origin.y),
-    })
-}
-
-fn scale_window_children(parent: HWND, from: u32, to: u32) {
-    // SAFETY: this traversal runs on the settings UI thread. We cache the
-    // next sibling before moving the current child so SetWindowPos cannot
-    // invalidate the iteration order.
-    unsafe {
-        let Ok(mut child) = GetWindow(parent, GW_CHILD) else {
-            return;
-        };
-        while !child.0.is_null() {
-            let next = GetWindow(child, GW_HWNDNEXT).ok();
-            if let Some(rect) = child_client_rect(parent, child) {
-                let x = scale_dpi_value(rect.left, from, to);
-                let y = scale_dpi_value(rect.top, from, to);
-                let width = scale_dpi_value(rect.right.saturating_sub(rect.left), from, to);
-                let height = scale_dpi_value(rect.bottom.saturating_sub(rect.top), from, to);
-                let _ = SetWindowPos(
-                    child,
-                    None,
-                    x,
-                    y,
-                    width.max(1),
-                    height.max(1),
-                    SWP_NOACTIVATE | SWP_NOZORDER,
-                );
-                scale_window_children(child, from, to);
-            }
-            let Some(next) = next else { break };
-            child = next;
-        }
-    }
-}
-
-fn refresh_native_fonts(window: HWND) {
-    // SAFETY: DEFAULT_GUI_FONT is a process-lifetime stock object. Every
-    // descendant borrows the handle through WM_SETFONT and never owns it.
-    unsafe {
-        let font = GetStockObject(DEFAULT_GUI_FONT);
-        let Ok(mut child) = GetWindow(window, GW_CHILD) else {
-            return;
-        };
-        while !child.0.is_null() {
-            let _ = SendMessageW(
-                child,
-                WM_SETFONT,
-                Some(WPARAM(font.0 as usize)),
-                Some(LPARAM(1)),
-            );
-            refresh_native_fonts(child);
-            let Ok(next) = GetWindow(child, GW_HWNDNEXT) else {
-                return;
-            };
-            child = next;
-        }
-    }
 }
 
 const fn button_type_style(owner_draw: bool, default: bool) -> u32 {
@@ -2782,15 +2796,19 @@ fn create_main_window() -> WindowsResult<HWND> {
     };
     // SAFETY: the class has just been registered and all text pointers outlive
     // this synchronous call.
-    unsafe {
+    let window = unsafe {
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             WINDOW_CLASS,
             windows::core::w!("Sakura Input プロパティ"),
-            // Match the fixed-size property-sheet behavior: controls are laid
-            // out against the measured ATOK-like client grid, so a resize must
-            // not create clipped Japanese labels or overlapping action rows.
-            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
+            // Compact by default; longer forms scroll within the fixed action row.
+            WS_OVERLAPPED
+                | WS_CAPTION
+                | WS_SYSMENU
+                | WS_MINIMIZEBOX
+                | WS_CLIPCHILDREN
+                | WS_THICKFRAME
+                | WS_MAXIMIZEBOX,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             WINDOW_WIDTH,
@@ -2800,11 +2818,81 @@ fn create_main_window() -> WindowsResult<HWND> {
             None,
             None,
         )
+    }?;
+    let mut rect = RECT::default();
+    // SAFETY: the hidden root has a monitor DPI before its first visible frame.
+    unsafe {
+        GetWindowRect(window, &mut rect)?;
     }
+    let dpi = window_dpi(window);
+    rect.right = rect.left + scale_dpi_value(WINDOW_WIDTH, 96, dpi);
+    rect.bottom = rect.top + scale_dpi_value(WINDOW_HEIGHT, 96, dpi);
+    let rect = fit_work_area(window, rect);
+    // SAFETY: `window` is the hidden live root created above and `rect` contains
+    // bounded work-area coordinates used synchronously by User32.
+    unsafe {
+        SetWindowPos(
+            window,
+            None,
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            SWP_NOACTIVATE | SWP_NOZORDER,
+        )?;
+    }
+    Ok(window)
 }
 
 fn panel(parent: HWND) -> WindowsResult<HWND> {
-    topic_panel(parent, PANEL_LEFT, PANEL_TOP, PANEL_WIDTH, PANEL_HEIGHT)
+    topic_panel(parent, 0, 0, 1, 1)
+}
+
+fn category_tabs(parent: HWND) -> WindowsResult<HWND> {
+    let init = INITCOMMONCONTROLSEX {
+        dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
+        dwICC: ICC_TAB_CLASSES,
+    };
+    // SAFETY: registers the standard native tab class before creating it.
+    if !unsafe { InitCommonControlsEx(&init) }.as_bool() {
+        return Err(windows::core::Error::from_thread());
+    }
+    let tabs = control(
+        parent,
+        windows::core::w!("SysTabControl32"),
+        "",
+        WS_CHILD
+            | WS_VISIBLE
+            | WS_TABSTOP
+            | windows::Win32::UI::WindowsAndMessaging::WS_CLIPSIBLINGS,
+        WINDOW_EX_STYLE::default(),
+        8,
+        36,
+        608,
+        352,
+    )?;
+    for (index, text) in ["入力・変換", "辞書", "学習", "診断", "更新"]
+        .into_iter()
+        .enumerate()
+    {
+        let mut text = to_wide(text);
+        let item = TCITEMW {
+            mask: TCIF_TEXT,
+            pszText: PWSTR(text.as_mut_ptr()),
+            ..Default::default()
+        };
+        // SAFETY: the native tab copies this label during the synchronous send.
+        unsafe {
+            let _ = SendMessageW(
+                tabs,
+                TCM_INSERTITEMW,
+                Some(WPARAM(index)),
+                Some(LPARAM((&item as *const TCITEMW) as isize)),
+            );
+        }
+    }
+    tabs::install(tabs)?;
+    Ok(tabs)
 }
 
 fn topic_panel(parent: HWND, left: i32, top: i32, width: i32, height: i32) -> WindowsResult<HWND> {
@@ -2812,7 +2900,7 @@ fn topic_panel(parent: HWND, left: i32, top: i32, width: i32, height: i32) -> Wi
         parent,
         PANEL_CLASS,
         "",
-        WS_CHILD | WS_VISIBLE,
+        WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN,
         WS_EX_CONTROLPARENT,
         left,
         top,
@@ -2821,705 +2909,12 @@ fn topic_panel(parent: HWND, left: i32, top: i32, width: i32, height: i32) -> Wi
     )
 }
 
-fn create_general_controls(parent: HWND) -> WindowsResult<GeneralControls> {
-    let basic_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let profile_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let input_assist_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let ai_text_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let segment_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let normalizer_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let prediction_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let association_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let input_repair_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let input_symbol_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let display_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-
-    let parent = basic_panel;
-    label(parent, "基本設定", 4, 2, 190, 20)?;
-    label(parent, "入力方法の基本設定を行います。", 4, 20, 358, 18)?;
-    group_box(parent, "既定の入力", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 166)?;
-    label(parent, "キー設定", 12, 72, 92, 22)?;
-    let keymap = combo(parent, 104, 68, 126, 150)?;
-    add_combo(keymap, "Microsoft IME 互換");
-    add_combo(keymap, "ATOK 互換");
-    label(parent, "入力方法", 12, 102, 92, 22)?;
-    let input_method_romaji = radio(
-        parent,
-        input_method_label(InputMethod::Romaji),
-        104,
-        99,
-        100,
-        22,
-        true,
-    )?;
-    let input_method_kana = radio(
-        parent,
-        input_method_label(InputMethod::Kana),
-        204,
-        99,
-        88,
-        22,
-        false,
-    )?;
-    label(parent, "文字種", 12, 130, 92, 22)?;
-    let default_mode = combo(parent, 104, 126, 155, 150)?;
-    for mode in Mode::ALL {
-        add_combo(default_mode, mode_label(mode));
-    }
-    label(parent, "Sakura Pad", 12, 160, 92, 22)?;
-    let pad_shortcut = combo(parent, 104, 156, 180, 120)?;
-    for shortcut in PadShortcut::ALL {
-        add_combo(pad_shortcut, pad_shortcut_label(shortcut));
-    }
-    let parent = input_assist_panel;
-    label(parent, "入力補助", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "スペースキーで入力する空白文字を設定します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(parent, "空白文字", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 96)?;
-    label(parent, "スペースキー", 12, 72, 96, 20)?;
-    let input_assist_space_width = combo(parent, 116, 68, 160, 120)?;
-    for space_width in SpaceWidth::ALL {
-        add_combo(input_assist_space_width, space_width_label(space_width));
-    }
-    label(parent, "Shift+スペース", 12, 100, 96, 20)?;
-    let input_assist_shift_space = combo(parent, 116, 96, 160, 120)?;
-    add_combo(input_assist_shift_space, "スペースの逆");
-    add_combo(input_assist_shift_space, "常に全角");
-    add_combo(input_assist_shift_space, "常に半角");
-
-    label(parent, "文章変換キー", 12, 132, 96, 20)?;
-    let ai_text_key = combo(parent, 116, 128, 190, 120)?;
-    add_combo(ai_text_key, "変換（Spaceの右・既定）");
-    add_combo(ai_text_key, "Caps Lock");
-    add_combo(ai_text_key, "使わない");
-
-    let parent = ai_text_panel;
-    label(parent, "AI文章変換", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "明示操作した文章だけをGPT-5.6 Lunaへ送信します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    label(parent, "プロバイダー", 12, 56, 92, 20)?;
-    let ai_provider = combo(parent, 110, 52, 220, 150)?;
-    let ai_providers = available_ai_providers();
-    for provider in &ai_providers {
-        add_combo(ai_provider, ai_provider_label(*provider));
-    }
-    label(parent, "モデル", 12, 84, 92, 20)?;
-    let _ai_model = edit(parent, sakura_ai_proto::MODEL, 110, 80, 220, 24, true)?;
-    label(parent, "Endpoint", 12, 112, 92, 20)?;
-    let ai_endpoint = edit(parent, "", 110, 108, 260, 24, false)?;
-    label(parent, "認証", 12, 140, 92, 20)?;
-    let ai_auth = combo(parent, 110, 136, 130, 120)?;
-    for auth in AiAuth::ALL {
-        add_combo(ai_auth, ai_auth_label(auth));
-    }
-    label(parent, "APIキー", 12, 168, 92, 20)?;
-    let ai_api_key = password_edit(parent, 110, 164, 190, 24)?;
-    let ai_api_key_clear = button(parent, "削除", 306, 164, 64, 24, false)?;
-    let ai_api_key_status = label(parent, "", 110, 190, 260, 18)?;
-    label(parent, "変換スタイル", 12, 220, 92, 20)?;
-    let ai_style = combo(parent, 110, 216, 190, 180)?;
-    for style in AiStyle::ALL {
-        add_combo(ai_style, ai_style_label(style));
-    }
-    label(parent, "Effort", 12, 248, 92, 20)?;
-    let ai_effort = combo(parent, 110, 244, 130, 180)?;
-    for effort in AiEffort::ALL {
-        add_combo(ai_effort, ai_effort_label(effort));
-    }
-    label(parent, "Tier", 250, 248, 36, 20)?;
-    let ai_service_tier = combo(parent, 286, 244, 84, 120)?;
-    for tier in AiServiceTier::ALL {
-        add_combo(ai_service_tier, ai_service_tier_label(tier));
-    }
-
-    let parent = prediction_panel;
-    label(parent, "推測変換", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "入力中に候補を自動表示し、確定方法を選べます。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(parent, "推測候補", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 112)?;
-    let prediction = checkbox(parent, "予測入力を使う", 12, 70, 180, 24)?;
-    label(parent, "候補の確定", 12, 104, 92, 22)?;
-    let suggest = combo(parent, 104, 100, 126, 120)?;
-    add_combo(suggest, "Tab");
-    add_combo(suggest, "Shift+Enter");
-    add_combo(suggest, "使わない");
-
-    let parent = segment_panel;
-    label(parent, "文節変換", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "変換単位と sakura-rerank による候補の並べ替えを設定します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(parent, "変換方法", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 80)?;
-    label(parent, "変換単位", 12, 76, 92, 22)?;
-    let conversion_assist_method = combo(parent, 104, 72, 155, 150)?;
-    for method in ConversionMethod::ALL {
-        add_combo(conversion_assist_method, conversion_method_label(method));
-    }
-    group_box(parent, "AI候補の並べ替え", 0, 144, PANEL_WIDTH, 100)?;
-    label(parent, "sakura-rerank の適用範囲", 12, 172, 168, 20)?;
-    let neural_reranker_scope = combo(parent, 184, 168, 168, 120)?;
-    for scope in NeuralRerankerScope::ALL {
-        add_combo(neural_reranker_scope, neural_reranker_scope_label(scope));
-    }
-    label(
-        parent,
-        "文節変換を基本とし、sakura-rerank は候補の並べ替えだけに使用します。",
-        12,
-        204,
-        358,
-        32,
-    )?;
-
-    let parent = normalizer_panel;
-    label(parent, "文字幅・句読点", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "英数字・記号・句読点の表示形式を設定します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(
-        parent,
-        "入力・変換",
-        0,
-        TOPIC_GROUP_TOP,
-        PANEL_WIDTH,
-        NORMALIZER_GROUP_HEIGHT,
-    )?;
-    // The preset sits above the six leaf controls it writes, because it is a
-    // shortcut for them rather than a seventh independent setting: picking a
-    // style fills the rows below in, and editing any row below moves the
-    // preset to `カスタム`. Nothing is stored under the preset's own name.
-    label(parent, "表記スタイル", 12, 76, 76, 22)?;
-    let notation_style = combo(parent, 92, 72, 236, 150)?;
-    for style in NotationStyle::ALL {
-        add_combo(notation_style, style.label());
-    }
-    add_combo(notation_style, NOTATION_STYLE_CUSTOM_LABEL);
-    label(parent, "英字", 12, 104, 42, 22)?;
-    let normalizer_alnum = combo(parent, 54, 100, 108, 120)?;
-    for width in [Width::Half, Width::Full, Width::FollowMode] {
-        add_combo(normalizer_alnum, width_label(width));
-    }
-    label(parent, "数字", 178, 104, 42, 22)?;
-    let normalizer_number = combo(parent, 220, 100, 108, 120)?;
-    for width in [Width::Half, Width::Full, Width::FollowMode] {
-        add_combo(normalizer_number, width_label(width));
-    }
-    label(parent, "句点", 12, 132, 42, 22)?;
-    let punctuation_period = combo(parent, 54, 128, 108, 120)?;
-    for mark in PeriodMark::ALL {
-        add_combo(punctuation_period, period_mark_label(mark));
-    }
-    label(parent, "読点", 178, 132, 42, 22)?;
-    let punctuation_comma = combo(parent, 220, 128, 108, 120)?;
-    for mark in CommaMark::ALL {
-        add_combo(punctuation_comma, comma_mark_label(mark));
-    }
-    label(parent, "記号", 12, 160, 42, 22)?;
-    let normalizer_symbol = combo(parent, 54, 156, 108, 120)?;
-    for width in [Width::Half, Width::Full, Width::FollowMode] {
-        add_combo(normalizer_symbol, width_label(width));
-    }
-    label(parent, "括弧", 178, 160, 42, 22)?;
-    let punctuation_brackets = combo(parent, 220, 156, 108, 120)?;
-    for bracket in BracketStyle::ALL {
-        add_combo(punctuation_brackets, bracket_style_label(bracket));
-    }
-    let normalizer_reset = button(
-        parent,
-        "初期値に戻す",
-        260,
-        NORMALIZER_RESET_Y,
-        116,
-        NORMALIZER_RESET_HEIGHT,
-        false,
-    )?;
-
-    let parent = association_panel;
-    label(parent, "連想変換", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "文節のつながりを使った候補を表示します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(parent, "連想変換", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 92)?;
-    let association = checkbox(parent, "連想変換を使う", 12, 70, 180, 24)?;
-    label(
-        parent,
-        "連想候補は文節変換とは別に表示されます。",
-        12,
-        102,
-        358,
-        20,
-    )?;
-
-    let parent = input_repair_panel;
-    label(parent, "入力誤りの自動修復", 4, 2, 220, 20)?;
-    label(
-        parent,
-        "ローマ字／カナ入力のミスを変換時に修正します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    let input_support_enabled = checkbox(parent, "入力支援を有効にする", 12, 48, 200, 22)?;
-    let input_support_commit_based = checkbox(parent, "確定内容に応じて修正する", 12, 74, 180, 20)?;
-    let input_support_advanced = checkbox(parent, "高度な自動修復を行う", 200, 74, 170, 20)?;
-    let input_support_vowel_count = checkbox(parent, "母音の過不足", 12, 98, 180, 20)?;
-    let input_support_consonant_extra = checkbox(parent, "子音の超過", 200, 98, 170, 20)?;
-    let input_support_n_count = checkbox(parent, "Ｎの過不足", 12, 122, 180, 20)?;
-    let input_support_dakuten_swap = checkbox(parent, "゛／゜の誤り", 200, 122, 170, 20)?;
-    let input_support_tsu_sokuon = checkbox(parent, "つ→っ", 12, 146, 180, 20)?;
-    let input_support_wa_wo = checkbox(parent, "わ→を", 200, 146, 170, 20)?;
-    let input_support_small_u = checkbox(parent, "ぅ→う", 12, 170, 180, 20)?;
-    let input_support_fuzzy_proper_nouns =
-        checkbox(parent, "あいまいな固有名詞", 200, 170, 170, 20)?;
-    let input_support_reset = button(parent, "初期値に戻す", 260, 250, 116, 24, false)?;
-
-    let parent = input_symbol_panel;
-    label(parent, "英単語・記号置換", 4, 2, 220, 20)?;
-    label(
-        parent,
-        "英単語のつづりと、数字・英数字直後の記号を置換します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    let input_support_english_to_katakana = checkbox(
-        parent,
-        "英単語のつづりをカタカナ語に変換する",
-        12,
-        56,
-        340,
-        22,
-    )?;
-    group_box(parent, "長音・句読点の自動置換", 0, 92, PANEL_WIDTH, 140)?;
-    let input_support_period_after_digit =
-        checkbox(parent, "句点（。）→ピリオド（．）", 12, 120, 340, 20)?;
-    let input_support_comma_after_digit =
-        checkbox(parent, "読点（、）→カンマ（，）", 12, 144, 340, 20)?;
-    let input_support_middle_dot_after_digit =
-        checkbox(parent, "中黒（・）→スラッシュ（／）", 12, 168, 340, 20)?;
-    let input_support_long_vowel_after_alnum =
-        checkbox(parent, "長音（ー）→マイナス（－）", 12, 192, 340, 20)?;
-
-    let parent = display_panel;
-    label(parent, "表示", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "候補ウィンドウと設定画面の外観を選びます。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(parent, "外観", 0, TOPIC_GROUP_TOP, PANEL_WIDTH, 116)?;
-    label(parent, "テーマ", 12, 76, 72, 22)?;
-    let appearance = combo(parent, 104, 72, 160, 120)?;
-    for theme in AppearanceTheme::ALL {
-        add_combo(appearance, appearance_label(theme));
-    }
-    label(
-        parent,
-        "ハイ コントラスト設定が有効な場合は、Windows の配色を使用します。",
-        12,
-        110,
-        358,
-        34,
-    )?;
-
-    let parent = profile_panel;
-    label(parent, "アプリ別の設定", 4, 2, 190, 20)?;
-    label(parent, "アプリごとの入力方法を設定します。", 4, 20, 358, 18)?;
-    group_box(
-        parent,
-        "アプリ別の設定",
-        0,
-        TOPIC_GROUP_TOP,
-        PANEL_WIDTH,
-        PROFILE_GROUP_HEIGHT,
-    )?;
-    let profile_list = listbox(parent, 12, 68, 150, 154)?;
-    label(parent, "実行ファイル名", 170, 68, 86, 20)?;
-    let profile_process = edit(parent, "", 260, 64, 117, 24, false)?;
-    label(parent, "既定の入力モード", 170, 94, 86, 20)?;
-    let profile_mode = combo(parent, 260, 90, 117, 160)?;
-    for mode in Mode::ALL {
-        add_combo(profile_mode, mode_label(mode));
-    }
-    let profile_prediction = checkbox(parent, "予測入力を使う", 170, 116, 116, 22)?;
-    label(parent, "候補の確定", 170, 140, 86, 20)?;
-    let profile_suggest = combo(parent, 260, 136, 117, 120)?;
-    add_combo(profile_suggest, "Tab");
-    add_combo(profile_suggest, "Shift+Enter");
-    add_combo(profile_suggest, "使わない");
-    // A profile stores a `Normalizer` but no space width, so the per-app form
-    // of the setting is the preset alone — the six leaf controls of the
-    // 文字幅・句読点 page are deliberately not duplicated here.
-    label(parent, "表記スタイル", 170, 166, 86, 20)?;
-    let profile_notation = combo(parent, 260, 162, 117, 150)?;
-    for style in NotationStyle::ALL {
-        add_combo(profile_notation, style.label());
-    }
-    add_combo(profile_notation, NOTATION_STYLE_CUSTOM_LABEL);
-    select_combo(profile_mode, mode_index(Mode::Hiragana));
-    select_combo(profile_suggest, suggest_index(SuggestAccept::Tab));
-    select_combo(profile_notation, notation_style_index(None));
-    let profile_save = button(parent, "追加／更新", 170, 192, 100, 22, false)?;
-    let profile_delete = button(parent, "削除", 278, 192, 99, 22, false)?;
-    label(
-        parent,
-        "例: code.exe　設定はアプリが入力コンテキストを作成したときに適用されます。",
-        12,
-        240,
-        358,
-        14,
-    )?;
-    Ok(GeneralControls {
-        basic_panel,
-        profile_panel,
-        input_assist_panel,
-        ai_text_panel,
-        segment_panel,
-        normalizer_panel,
-        prediction_panel,
-        association_panel,
-        display_panel,
-        input_repair_panel,
-        input_symbol_panel,
-        keymap,
-        input_method_romaji,
-        input_method_kana,
-        default_mode,
-        pad_shortcut,
-        input_assist_space_width,
-        input_assist_shift_space,
-        ai_text_key,
-        ai_provider,
-        ai_endpoint,
-        ai_auth,
-        ai_api_key,
-        ai_api_key_status,
-        ai_api_key_clear,
-        ai_style,
-        ai_effort,
-        ai_service_tier,
-        ai_providers,
-        conversion_assist_method,
-        prediction,
-        suggest,
-        association,
-        appearance,
-        neural_reranker_scope,
-        notation_style,
-        normalizer_alnum,
-        normalizer_number,
-        normalizer_symbol,
-        punctuation_period,
-        punctuation_comma,
-        punctuation_brackets,
-        normalizer_reset,
-        input_support_enabled,
-        input_support_commit_based,
-        input_support_advanced,
-        input_support_vowel_count,
-        input_support_consonant_extra,
-        input_support_n_count,
-        input_support_dakuten_swap,
-        input_support_tsu_sokuon,
-        input_support_wa_wo,
-        input_support_small_u,
-        input_support_fuzzy_proper_nouns,
-        input_support_reset,
-        input_support_english_to_katakana,
-        input_support_period_after_digit,
-        input_support_comma_after_digit,
-        input_support_middle_dot_after_digit,
-        input_support_long_vowel_after_alnum,
-        profile_list,
-        profile_process,
-        profile_mode,
-        profile_prediction,
-        profile_suggest,
-        profile_notation,
-        profile_save,
-        profile_delete,
-    })
-}
-
-fn create_dictionary_controls(parent: HWND) -> WindowsResult<DictionaryControls> {
-    let entries_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let io_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    label(parent, "辞書", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "ユーザー辞書の登録・入出力を行います。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    let parent = entries_panel;
-    group_box(parent, "ユーザー辞書", 0, 38, PANEL_WIDTH, 160)?;
-    let list = listbox(parent, 12, 58, 148, 132)?;
-    label(parent, "読み", 160, 58, 60, 20)?;
-    let reading = edit(parent, "", 220, 54, 153, 24, false)?;
-    label(parent, "単語", 160, 84, 60, 20)?;
-    let surface = edit(parent, "", 220, 80, 153, 24, false)?;
-    label(parent, "品詞", 160, 110, 60, 20)?;
-    let part_of_speech = combo(parent, 220, 106, 153, 200)?;
-    for pos in UserPartOfSpeech::ALL {
-        add_combo(
-            part_of_speech,
-            &format!("{} — {}", pos.spec().name, pos.spec().label),
-        );
-    }
-    select_combo(part_of_speech, 0);
-    label(parent, "コメント", 160, 136, 60, 20)?;
-    let comment = edit(parent, "", 220, 132, 153, 24, false)?;
-    let add = button(parent, "追加", 160, 162, 68, 22, false)?;
-    let update = button(parent, "更新", 234, 162, 68, 22, false)?;
-    let delete = button(parent, "削除", 308, 162, 65, 22, false)?;
-
-    let parent = io_panel;
-    group_box(parent, "辞書ファイル", 0, 38, PANEL_WIDTH, 78)?;
-    label(parent, "ファイル", 12, 58, 56, 20)?;
-    let path = edit(parent, "", 68, 54, 230, 24, false)?;
-    label(parent, "形式", 306, 58, 38, 20)?;
-    let format = combo(parent, 326, 54, 50, 160)?;
-    add_combo(format, "自動");
-    for value in DictionaryFormat::ALL {
-        add_combo(format, value.name());
-    }
-    select_combo(format, 0);
-    let import_mode = combo(parent, 12, 82, 128, 100)?;
-    add_combo(import_mode, "追加して登録");
-    add_combo(import_mode, "すべて置き換え");
-    select_combo(import_mode, 0);
-    let import = button(parent, "インポート", 150, 82, 112, 20, false)?;
-    let export = button(parent, "エクスポート", 270, 82, 106, 20, false)?;
-    label(
-        parent,
-        "MS-IME／ATOK は UTF-16LE、Sakura／Mozc は UTF-8 です。未対応の項目は登録しません。",
-        12,
-        142,
-        358,
-        14,
-    )?;
-    Ok(DictionaryControls {
-        entries_panel,
-        io_panel,
-        list,
-        reading,
-        surface,
-        part_of_speech,
-        comment,
-        add,
-        update,
-        delete,
-        path,
-        format,
-        import_mode,
-        import,
-        export,
-    })
-}
-
-fn create_learning_controls(parent: HWND) -> WindowsResult<LearningControls> {
-    let history_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let operations_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    label(parent, "学習", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "確定済みの学習履歴を新しい順に表示します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    let parent = history_panel;
-    group_box(parent, "学習履歴", 0, 40, PANEL_WIDTH, 190)?;
-    let list = listbox(parent, 12, 62, 358, 150)?;
-    let parent = operations_panel;
-    group_box(parent, "操作", 0, 40, PANEL_WIDTH, 80)?;
-    let refresh = button(parent, "最新の状態に更新", 12, 62, 122, 22, false)?;
-    label(parent, "書き出し先", 144, 64, 62, 20)?;
-    let export_path = edit(parent, "", 188, 60, 110, 24, false)?;
-    let export = button(parent, "TSV 出力", 306, 60, 70, 22, false)?;
-    let clear = button(parent, "学習を消去", 12, 90, 122, 22, false)?;
-    label(
-        parent,
-        "消去は実行中の engine に送信します。完了した消去・出力は［キャンセル］では戻せません。",
-        144,
-        90,
-        258,
-        22,
-    )?;
-    Ok(LearningControls {
-        history_panel,
-        operations_panel,
-        list,
-        export_path,
-        refresh,
-        export,
-        clear,
-    })
-}
-
-fn create_diagnostics_controls(parent: HWND) -> WindowsResult<DiagnosticsControls> {
-    label(parent, "詳細設定・診断", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "通信のタイムアウトと整合性の状態を確認します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    group_box(parent, "診断情報", 0, 40, PANEL_WIDTH, 210)?;
-    let text = multiline_readonly(parent, 12, 62, 358, 168)?;
-    group_box(parent, "操作", 0, 236, PANEL_WIDTH, 64)?;
-    let refresh = button(parent, "最新の状態に更新", 12, 258, 122, 22, false)?;
-    let clear = button(parent, "カウンターを消去", 144, 258, 130, 22, false)?;
-    label(
-        parent,
-        "診断ログは 1 MiB に制限され、例外的なタイムアウト時だけ記録されます。",
-        12,
-        282,
-        358,
-        12,
-    )?;
-    Ok(DiagnosticsControls {
-        text,
-        refresh,
-        clear,
-    })
-}
-
-fn create_update_controls(parent: HWND) -> WindowsResult<UpdateControls> {
-    let settings_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let available_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    let status_panel = topic_panel(parent, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)?;
-    label(parent, "更新", 4, 2, 190, 20)?;
-    label(
-        parent,
-        "署名済みのリリース確認とインストールを管理します。",
-        4,
-        20,
-        358,
-        18,
-    )?;
-    let parent = settings_panel;
-    group_box(parent, "更新の確認", 0, 40, PANEL_WIDTH, 86)?;
-    let enabled = checkbox(parent, "設定画面の起動時に更新を確認する", 12, 64, 260, 24)?;
-    let save = button(parent, "設定を保存", 260, 64, 116, 24, false)?;
-    let parent = available_panel;
-    group_box(parent, "利用可能な更新", 0, 40, PANEL_WIDTH, 92)?;
-    let check = button(parent, "今すぐ確認", 12, 64, 106, 24, false)?;
-    let apply = button(
-        parent,
-        "ダウンロードして検証・インストール",
-        128,
-        64,
-        202,
-        24,
-        false,
-    )?;
-    label(
-        parent,
-        "更新確認は任意です。取得前に配布先、サイズ、SHA-256 と Authenticode 署名を確認します。",
-        12,
-        96,
-        358,
-        24,
-    )?;
-    let parent = status_panel;
-    group_box(parent, "更新の状態", 0, 40, PANEL_WIDTH, 78)?;
-    let result = multiline_readonly(parent, 12, 62, 358, 40)?;
-    label(
-        parent,
-        "結果は成功・再起動が必要・タイムアウト・失敗を区別して表示します。",
-        12,
-        106,
-        358,
-        12,
-    )?;
-    Ok(UpdateControls {
-        settings_panel,
-        available_panel,
-        status_panel,
-        enabled,
-        save,
-        check,
-        apply,
-        result,
-    })
-}
-
 fn label(parent: HWND, text: &str, x: i32, y: i32, width: i32, height: i32) -> WindowsResult<HWND> {
     control(
         parent,
         windows::core::w!("STATIC"),
         text,
         WS_CHILD | WS_VISIBLE,
-        WINDOW_EX_STYLE::default(),
-        x,
-        y,
-        width,
-        height,
-    )
-}
-
-/// A native group box gives the compact pages a familiar property-dialog
-/// hierarchy without creating a custom accessibility surface or a focus stop.
-fn group_box(
-    parent: HWND,
-    text: &str,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-) -> WindowsResult<HWND> {
-    control(
-        parent,
-        windows::core::w!("BUTTON"),
-        text,
-        // Group boxes are visual containers, never command targets.  Marking
-        // them disabled keeps User32 hit-testing on the native controls they
-        // surround (ComboBox/ListBox/Button) while preserving the standard
-        // property-sheet frame and its UIA grouping semantics.
-        WS_CHILD | WS_VISIBLE | WS_DISABLED | WINDOW_STYLE(BS_GROUPBOX as u32),
         WINDOW_EX_STYLE::default(),
         x,
         y,
@@ -3693,10 +3088,10 @@ fn input_topic_tree(parent: HWND) -> WindowsResult<HWND> {
             | WS_VSCROLL
             | WINDOW_STYLE(TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | TVS_SHOWSELALWAYS),
         WS_EX_CLIENTEDGE,
-        INPUT_TREE_LEFT,
-        INPUT_TREE_TOP,
-        INPUT_TREE_WIDTH,
-        INPUT_TREE_HEIGHT,
+        0,
+        0,
+        1,
+        1,
     )
 }
 
@@ -4644,6 +4039,12 @@ fn pump(window: HWND) {
             // custom panel, so Tab/Shift+Tab traverse its native WS_TABSTOP
             // controls instead of being dispatched as unhandled key messages.
             if IsDialogMessageW(window, &message).as_bool() {
+                let pointer = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut App;
+                if !pointer.is_null() {
+                    (*pointer)
+                        .presentation
+                        .reveal_focus(windows::Win32::UI::Input::KeyboardAndMouse::GetFocus());
+                }
                 continue;
             }
             let _ = TranslateMessage(&message);
@@ -4659,7 +4060,10 @@ unsafe fn app_for_panel(panel: HWND) -> Option<*mut App> {
     // system painting.
     unsafe {
         let mut root = GetParent(panel).ok()?;
-        while let Ok(parent) = GetParent(root) {
+        while GetWindowLongPtrW(root, GWLP_USERDATA) == 0 {
+            let Ok(parent) = GetParent(root) else {
+                return None;
+            };
             root = parent;
         }
         let pointer = GetWindowLongPtrW(root, GWLP_USERDATA) as *mut App;
@@ -4674,6 +4078,30 @@ unsafe extern "system" fn panel_window_procedure(
     lparam: LPARAM,
 ) -> LRESULT {
     match message {
+        WM_VSCROLL | WM_HSCROLL | WM_MOUSEWHEEL => {
+            // SAFETY: the nested panel resolves the UI-thread-owned root state.
+            if let Some(pointer) = unsafe { app_for_panel(panel) } {
+                // SAFETY: `app_for_panel` returned the non-null App pointer
+                // installed on this panel's root for the UI-thread lifetime.
+                let app = unsafe { &mut *pointer };
+                if !app.layout_in_progress {
+                    let viewport = app.panels[app.selected_panel];
+                    let wheel = (message == WM_MOUSEWHEEL).then(|| {
+                        let delta = ((wparam.0 >> 16) as u16) as i16;
+                        -i32::from(delta) * scale_dpi_value(40, 96, app.presentation.scale) / 120
+                    });
+                    app.presentation.scroll(
+                        viewport,
+                        message == WM_HSCROLL,
+                        wparam.0 as u16,
+                        wheel,
+                    );
+                }
+                return LRESULT(0);
+            }
+            // SAFETY: construction/teardown messages retain default handling.
+            unsafe { DefWindowProcW(panel, message, wparam, lparam) }
+        }
         WM_ERASEBKGND => {
             // SAFETY: this procedure owns the live panel and only reads root UI state.
             let Some(pointer) = (unsafe { app_for_panel(panel) }) else {
@@ -4702,10 +4130,10 @@ unsafe extern "system" fn panel_window_procedure(
             // SAFETY: the panel shares the root's UI thread and WM_CTLCOLOR is
             // synchronous. The child HWND in LPARAM is valid for this call.
             let app = unsafe { &*pointer };
-            if let Some(brush) = app.theme.apply_control_colors(
+            if let Some(brush) = app.apply_control_colors(
                 message,
                 HDC(wparam.0 as *mut c_void),
-                app.is_readonly_input(HWND(lparam.0 as *mut c_void)),
+                HWND(lparam.0 as *mut c_void),
             ) {
                 return LRESULT(brush.0 as isize);
             }
@@ -4750,6 +4178,55 @@ unsafe extern "system" fn window_procedure(
     lparam: LPARAM,
 ) -> LRESULT {
     match message {
+        WM_SIZE => {
+            // SAFETY: construction has null user data; normal resize owns a live App.
+            let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+            if !pointer.is_null() && wparam.0 != 1 {
+                // SAFETY: non-null root user data is the App owned by this UI
+                // thread, and layout does not retain the reference.
+                unsafe { &mut *pointer }.layout();
+            }
+            LRESULT(0)
+        }
+        windows::Win32::UI::WindowsAndMessaging::WM_GETMINMAXINFO => {
+            let info = lparam.0 as *mut windows::Win32::UI::WindowsAndMessaging::MINMAXINFO;
+            if !info.is_null() {
+                let dpi = window_dpi(window);
+                let rect = fit_work_area(
+                    window,
+                    RECT {
+                        left: 0,
+                        top: 0,
+                        right: scale_dpi_value(560, 96, dpi),
+                        bottom: scale_dpi_value(380, 96, dpi),
+                    },
+                );
+                // SAFETY: `info` is the non-null MINMAXINFO pointer supplied by
+                // User32 for this synchronous WM_GETMINMAXINFO callback.
+                unsafe {
+                    (*info).ptMinTrackSize = POINT {
+                        x: rect.right - rect.left,
+                        y: rect.bottom - rect.top,
+                    };
+                }
+            }
+            LRESULT(0)
+        }
+        WM_MOUSEWHEEL => {
+            // SAFETY: root user data is either zero during construction or the
+            // live UI-thread-owned App pointer.
+            let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+            if !pointer.is_null() {
+                // SAFETY: non-null user data points to the live App; the selected
+                // panel index is maintained within the fixed panel array.
+                let viewport = unsafe { (*pointer).panels[(*pointer).selected_panel] };
+                // SAFETY: the live child receives the original scalar wheel
+                // message synchronously on the same UI thread.
+                return unsafe { SendMessageW(viewport, message, Some(wparam), Some(lparam)) };
+            }
+            // SAFETY: no App exists yet, so native default handling owns it.
+            unsafe { DefWindowProcW(window, message, wparam, lparam) }
+        }
         WM_ERASEBKGND => {
             // SAFETY: user data is zero only while the top-level window is
             // being constructed or destroyed; otherwise it is the live App.
@@ -4769,6 +4246,23 @@ unsafe extern "system" fn window_procedure(
                     &rect,
                     (&*pointer).theme.surface_brush(),
                 );
+                let app = &*pointer;
+                let px = |value| scale_dpi_value(value, 96, app.presentation.scale);
+                let body = RECT {
+                    left: px(8),
+                    top: px(60),
+                    right: rect.right - px(8),
+                    bottom: rect.bottom - px(52),
+                };
+                let border = app
+                    .theme
+                    .brushes
+                    .as_ref()
+                    .map(|brushes| brushes.button_border)
+                    .unwrap_or_else(|| {
+                        GetSysColorBrush(windows::Win32::Graphics::Gdi::COLOR_WINDOWFRAME)
+                    });
+                let _ = FrameRect(HDC(wparam.0 as *mut c_void), &body, border);
             }
             LRESULT(1)
         }
@@ -4780,10 +4274,10 @@ unsafe extern "system" fn window_procedure(
             if !pointer.is_null() {
                 // SAFETY: the root stores this App pointer on its owning UI thread.
                 let app = unsafe { &*pointer };
-                if let Some(brush) = app.theme.apply_control_colors(
+                if let Some(brush) = app.apply_control_colors(
                     message,
                     HDC(wparam.0 as *mut c_void),
-                    app.is_readonly_input(HWND(lparam.0 as *mut c_void)),
+                    HWND(lparam.0 as *mut c_void),
                 ) {
                     return LRESULT(brush.0 as isize);
                 }
@@ -4825,6 +4319,26 @@ unsafe extern "system" fn window_procedure(
             unsafe { DefWindowProcW(window, message, wparam, lparam) }
         }
         WM_NOTIFY => {
+            let header = lparam.0 as *const NMHDR;
+            // SAFETY: root user data is either zero or the live App pointer
+            // installed and consumed on this UI thread.
+            let state = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+            if !state.is_null()
+                && !header.is_null()
+                // SAFETY: both pointers passed the null checks and remain valid
+                // for this synchronous WM_NOTIFY dispatch.
+                && unsafe { (*header).hwndFrom == (*state).tabs && (*header).code == TCN_SELCHANGE }
+            {
+                // SAFETY: `state` owns the live native tab HWND; this is a scalar
+                // current-selection query with no retained pointer.
+                let selected = unsafe { SendMessageW((*state).tabs, TCM_GETCURSEL, None, None) }.0;
+                if (0..PANEL_COUNT as isize).contains(&selected) {
+                    // SAFETY: the range check makes the selection valid and the
+                    // mutable App reference is confined to this UI callback.
+                    unsafe { &mut *state }.show_panel(selected as usize);
+                }
+                return LRESULT(0);
+            }
             // TreeView selection is a WM_NOTIFY payload rather than a
             // WM_COMMAND. Only the live input tree is allowed to change the
             // visible right-hand topic panel.
@@ -4912,6 +4426,17 @@ unsafe extern "system" fn window_procedure(
             // preference; high-contrast changes always supersede a user choice.
             let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
             if !pointer.is_null() {
+                // SAFETY: non-null root user data is the UI-thread-owned App;
+                // this field read is confined to the synchronous callback.
+                if message == WM_SETTINGCHANGE && !unsafe { (*pointer).theme_apply_in_progress } {
+                    // SAFETY: the App remains exclusively owned by this UI
+                    // thread while the callback refreshes presentation state.
+                    let app = unsafe { &mut *pointer };
+                    if let Err(error) = app.presentation.refresh_fonts(app.dpi) {
+                        app.set_status(&format!("文字サイズを更新できませんでした: {error}"));
+                    }
+                    app.layout();
+                }
                 // SAFETY: the root stores this App pointer on its owning UI thread.
                 unsafe { &mut *pointer }.refresh_auto_appearance();
             }
@@ -5224,28 +4749,6 @@ mod tests {
     }
 
     #[test]
-    fn compact_property_sheet_geometry_keeps_the_navigation_and_actions_separate() {
-        assert_eq!((WINDOW_WIDTH, WINDOW_HEIGHT), (629, 464));
-        assert_eq!(PANEL_LEFT, INPUT_TREE_LEFT + INPUT_TREE_WIDTH + 14);
-        let outer_width = std::hint::black_box(WINDOW_WIDTH);
-        let tree_left = std::hint::black_box(INPUT_TREE_LEFT);
-        let tree_width = std::hint::black_box(INPUT_TREE_WIDTH);
-        let tree_top = std::hint::black_box(INPUT_TREE_TOP);
-        let tree_height = std::hint::black_box(INPUT_TREE_HEIGHT);
-        let action_row = std::hint::black_box(380);
-        assert!(PANEL_LEFT + PANEL_WIDTH < outer_width);
-        assert!(tree_left + tree_width < PANEL_LEFT);
-        assert!(tree_top + tree_height <= action_row);
-    }
-
-    #[test]
-    fn dictionary_content_stays_above_the_persistent_action_row() {
-        let content_bottom = std::hint::black_box(PANEL_TOP + DICTIONARY_CONTENT_BOTTOM);
-        let action_row = std::hint::black_box(BOTTOM_ACTION_Y);
-        assert!(content_bottom < action_row);
-    }
-
-    #[test]
     fn every_close_route_waits_for_an_in_flight_update_then_closes_after_completion() {
         for request in [CloseRequest::Ok, CloseRequest::Cancel, CloseRequest::Window] {
             assert_eq!(
@@ -5266,7 +4769,7 @@ mod tests {
         assert_eq!(LIGHT_SURFACE, rgb(0xF7, 0xF6, 0xF4));
         assert_eq!(LIGHT_INK, rgb(0x2F, 0x2F, 0x2F));
         assert_eq!(LIGHT_DISABLED_INK, rgb(0x70, 0x70, 0x70));
-        assert_eq!(LIGHT_INPUT_SURFACE, rgb(0xE8, 0xE5, 0xE2));
+        assert_eq!(LIGHT_INPUT_SURFACE, rgb(0xFC, 0xFB, 0xFA));
         assert_eq!(LIGHT_BUTTON_BORDER, rgb(0xBD, 0xB9, 0xB5));
         assert_eq!(LIGHT_SAKURA_ACCENT, rgb(0xB2, 0x8D, 0x96));
     }

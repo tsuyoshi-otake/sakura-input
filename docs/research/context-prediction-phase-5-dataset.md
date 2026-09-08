@@ -81,14 +81,14 @@ Tier A records. Build success alone is not an acceptance result.
 Example after an external replay exists:
 
 ```powershell
-rtk cargo run -p dictc --bin context-dataset -- build `
+cargo run -p dictc --bin context-dataset -- build `
   --records C:\context-data\replay\records.jsonl `
   --source-manifest corpus\context-prediction\source-manifest.json `
   --output-dir C:\context-data\datasets\jawiki-20260801-run-001 `
   --generator-sha256 <64-lowercase-hex> `
   --dictionary-sha256 <64-lowercase-hex>
 
-rtk cargo run -p dictc --bin context-dataset -- verify `
+cargo run -p dictc --bin context-dataset -- verify `
   --dataset-dir C:\context-data\datasets\jawiki-20260801-run-001
 ```
 

@@ -173,6 +173,11 @@
       "bytes": 20516,
       "sha256": "d371b7b2538c2576463fabc7dee658419ef56f13fb5ccf7bcab18f4f4ea41028"
     },
+    "non_initial_boundary_policy": {
+      "file": "non-initial-boundary-policy.tsv",
+      "bytes": 20516,
+      "sha256": "d371b7b2538c2576463fabc7dee658419ef56f13fb5ccf7bcab18f4f4ea41028"
+    },
     "system_category_dictionary": null
   },
   "artifacts": {
