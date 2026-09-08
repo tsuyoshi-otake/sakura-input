@@ -357,10 +357,17 @@ pub struct Session {
     pub(crate) cursor: u16,
     /// Whether the reading has entered dictionary conversion.
     pub(crate) converting: bool,
-    /// Conversion starts compact and only CandidateExpand exposes its page.
+    /// Conversion starts compact; explicit candidate navigation, paging, or
+    /// CandidateExpand exposes its page.
     /// This belongs to the session rather than the renderer so output survives
     /// UI reconnection and every conversion terminal path can reset it.
     conversion_presentation: CandidatePresentation,
+    /// Conversion candidates are visible as soon as conversion starts, but
+    /// their numbered shortcuts are inactive until an explicit candidate
+    /// navigation/expand/page action focuses the list. This is independent
+    /// of `conversion_presentation`: compact is a rendering choice, while
+    /// this flag is keyboard ownership.
+    conversion_focused: bool,
     /// Monotonic identity for the preedit text used by the prediction worker.
     pub(crate) prediction_generation: u64,
     /// Suggestions may be visible without owning keyboard focus.
@@ -371,10 +378,14 @@ pub struct Session {
     pub(crate) suggestion_selection: i16,
     /// Signed until rendering so `CandidatePrev` from zero can mean the last
     /// item without knowing the current candidate count in the key handler.
+    /// Conversion selections are in visible-projection space; the renderer
+    /// and commit paths map them to the first raw representative only after
+    /// rebuilding the same candidate projection.
     pub(crate) selected_candidate: i16,
     /// UTF-8 reading end offsets for every pinned conversion segment.
     segment_ends: FixedVec<u16, MAX_SEGMENTS>,
-    /// Candidate selection is independent for each segment.
+    /// Candidate selection is independent for each segment. Values are
+    /// visible candidate indices, never raw converter indices.
     segment_selections: [i16; MAX_SEGMENTS],
     segment_transforms: [SegmentTransform; MAX_SEGMENTS],
     segment_transform_cycles: [u8; MAX_SEGMENTS],
@@ -446,6 +457,7 @@ impl Session {
             cursor: 0,
             converting: false,
             conversion_presentation: CandidatePresentation::Compact,
+            conversion_focused: false,
             prediction_generation: 0,
             suggestions_visible: false,
             suggestion_focused: false,
@@ -676,6 +688,7 @@ impl Session {
         self.cursor = 0;
         self.converting = false;
         self.conversion_presentation = CandidatePresentation::Compact;
+        self.conversion_focused = false;
         self.invalidate_prediction();
         self.selected_candidate = 0;
         self.clear_segments();
@@ -724,6 +737,7 @@ impl Session {
         }
         self.converting = false;
         self.conversion_presentation = CandidatePresentation::Compact;
+        self.conversion_focused = false;
         self.invalidate_prediction();
         self.selected_candidate = 0;
         self.clear_segments();
@@ -910,17 +924,28 @@ impl Session {
     pub(crate) fn begin_conversion(&mut self) {
         self.converting = true;
         self.conversion_presentation = CandidatePresentation::Compact;
+        self.conversion_focused = false;
     }
 
-    /// Changes a live conversion to expanded presentation. Repeating the
-    /// action is a successful no-op, while callers receive `false` outside
-    /// conversion and can report their recoverable beep outcome.
+    /// Changes a live conversion to expanded presentation and gives the
+    /// candidate list keyboard focus. Repeating the action is a successful
+    /// no-op, while callers receive `false` outside conversion and can report
+    /// their recoverable beep outcome.
     pub(crate) fn expand_conversion(&mut self) -> bool {
         if !self.converting {
             return false;
         }
         self.conversion_presentation = CandidatePresentation::Expanded;
+        self.conversion_focused = true;
         true
+    }
+
+    /// Returns whether numbered conversion shortcuts currently own the
+    /// keyboard. A visible compact list is deliberately not enough: the
+    /// first digit after conversion commits the current candidate and starts
+    /// literal digit input, matching the prediction-list focus contract.
+    pub(crate) const fn conversion_focused(&self) -> bool {
+        self.conversion_focused
     }
 
     pub(crate) const fn conversion_presentation(&self) -> CandidatePresentation {

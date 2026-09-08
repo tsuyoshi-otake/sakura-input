@@ -1135,6 +1135,50 @@ fn real_dictionary_balances_non_initial_fragments_and_productive_bound_forms() {
     assert!(ordinary.iter().any(|candidate| candidate.text() == "使い"));
     assert!(ordinary.iter().any(|candidate| candidate.text() == "遣い"));
 
+    let completed = converter
+        .convert(&dictionary, "ずみ", ConversionOptions::default())
+        .expect("ずみ conversion");
+    let completed_texts = completed
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect::<Vec<_>>();
+    for expected in ["済み", "済"] {
+        assert!(
+            completed_texts.contains(&expected),
+            "ずみ lost common form {expected}: {completed_texts:?}"
+        );
+    }
+    for unexpected in ["住み", "積み"] {
+        assert!(
+            !completed_texts.contains(&unexpected),
+            "ずみ exposed unreviewed fragment {unexpected}: {completed_texts:?}"
+        );
+    }
+
+    for (reading, expected) in [
+        ("ぶり", "振り"),
+        ("どの", "殿"),
+        ("ぷん", "分"),
+        ("ごろ", "頃"),
+        ("がいしゃ", "会社"),
+        ("づくり", "作り"),
+        ("がかり", "係"),
+        ("ぶそく", "不足"),
+        ("づかい", "遣い"),
+    ] {
+        let standalone = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("reviewed boundary conversion");
+        let texts = standalone
+            .iter()
+            .map(|candidate| candidate.text())
+            .collect::<Vec<_>>();
+        assert!(
+            texts.contains(&expected),
+            "{reading} lost reviewed common form {expected}: {texts:?}"
+        );
+    }
+
     let edition = converter
         .convert(&dictionary, "ばん", ConversionOptions::default())
         .expect("ばん conversion");

@@ -98,6 +98,9 @@ up = "candidate_prev"
 "ctrl+p" = "candidate_prev"
 page_down = "candidate_page_down"
 page_up = "candidate_page_up"
+# The engine keeps these bindings reserved for the focused candidate list.
+# Immediately after conversion starts the list is visible but unfocused, so
+# 1–9 commit the current conversion and continue as literal digit input.
 "1" = "candidate_1"
 "2" = "candidate_2"
 "3" = "candidate_3"

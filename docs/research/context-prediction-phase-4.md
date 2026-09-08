@@ -101,7 +101,7 @@ are drawn.
 - `Verify:` evaluator unit tests. `Expect:` all named Phase 4 metrics expose
   sample counts; stale output preserves generator order; protected candidates
   cannot be lost, reordered, or demoted.
-- `Verify:` `rtk cargo fmt --all -- --check`, engine tests, workspace tests,
+- `Verify:` `cargo fmt --all -- --check`, engine tests, workspace tests,
   workspace clippy with `-D warnings`, dependency policy, and
-  `rtk git diff --check`. `Expect:` all pass and no cargo/rustc/test process for
+  `git diff --check`. `Expect:` all pass and no cargo/rustc/test process for
   this worktree remains.
