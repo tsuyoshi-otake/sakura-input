@@ -20,7 +20,7 @@ use crate::input_repair::{
 };
 use crate::numerals::{
     is_decorative_numeral_char, is_numeric_day_surface, parse_numeric_prefix,
-    should_emit_numeric_span, NumericSpan, NUMERIC_STYLES,
+    should_emit_numeric_span, NumericCounter, NumericSpan, NUMERIC_STYLES,
 };
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
@@ -87,6 +87,10 @@ const KATAKANA_COST_PER_CHAR: i64 = 2_800;
 const COUNTER_WORD_COST: i64 = 3_500;
 // Explicit decimal input and counter/calendar forms are authoritative.
 const NUMBER_FORM_COST: i64 = 800;
+/// A generated calendar day after a lexical edge is weaker evidence than a
+/// whole-reading lexical path. Keep the edge available for real compounds,
+/// but price this ambiguous non-initial splice like an ordinary counter edge.
+const GENERATED_DAY_SUFFIX_PENALTY: i64 = COUNTER_WORD_COST - NUMBER_FORM_COST;
 // A bare spoken number still offers numeric forms, but common lexical
 // homophones should win: せん -> 線, にじゅう -> 二重, さんぜん -> 産前.
 const BARE_KANA_NUMBER_FORM_COST: i64 = 5_000;
@@ -492,6 +496,90 @@ impl CandidateAuthority {
     }
 }
 
+/// Text-free evidence carried by a materialized conversion candidate.
+///
+/// Candidate cost is a useful local ordering signal, but it is not authority:
+/// a generated calendar/numeric surface, a repaired dictionary edge, or a
+/// composite path must not become equivalent to an exact whole-reading edge
+/// merely because a later ranker assigns it a lower score.  Keep this enum
+/// derived from path metadata rather than from the candidate's rendered text.
+///
+/// `ExactSystem` and `ExactUser` are the only trustworthy whole-reading
+/// classes.  `CompositeLexical` remains ordinary lexical evidence, but is a
+/// weaker class because it is made from more than one edge.  `Repair` keeps
+/// the original repair kind so commit-history and advanced repairs cannot be
+/// silently treated as ordinary dictionary entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CandidateEvidence {
+    ExactSystem,
+    ExactUser,
+    CompositeLexical,
+    Generated,
+    Repair(RepairKind),
+    /// A path containing more than one repair kind cannot be reduced to one
+    /// provenance label without losing information.  It is still protected
+    /// from neural reordering just like a single repair kind.
+    MixedRepair,
+    Fallback,
+    RawRepair {
+        tier: RepairTier,
+    },
+}
+
+/// Descriptive alias for callers that prefer the longer contract name.
+pub type CandidateEvidenceClass = CandidateEvidence;
+
+impl CandidateEvidence {
+    /// Whether this evidence is a trustworthy one-edge whole-reading answer.
+    pub const fn is_trustworthy_whole_reading_exact(self) -> bool {
+        matches!(self, Self::ExactSystem | Self::ExactUser)
+    }
+
+    /// Whether this class may participate in the optional ordinary lexical
+    /// neural reranker.  Exact system/user candidates share one group, while
+    /// composite lexical candidates form a weaker group.  Everything derived,
+    /// repaired, generated, or fallback remains local-order-only.
+    pub const fn neural_group(self) -> Option<u8> {
+        match self {
+            // User-dictionary authority is already an explicit product
+            // contract. Keep it above system exact entries so the optional
+            // model cannot silently undo a user's deliberate override.
+            Self::ExactUser => Some(3),
+            Self::ExactSystem => Some(2),
+            Self::CompositeLexical => Some(1),
+            Self::Generated
+            | Self::Repair(_)
+            | Self::MixedRepair
+            | Self::Fallback
+            | Self::RawRepair { .. } => None,
+        }
+    }
+
+    /// A stable, text-free tag for candidate-set fingerprints.  This is an
+    /// implementation detail of the engine/worker handshake; it deliberately
+    /// does not expose any surface text or dictionary ordinal.
+    pub const fn fingerprint_tag(self) -> u8 {
+        match self {
+            Self::ExactSystem => 1,
+            Self::ExactUser => 2,
+            Self::CompositeLexical => 3,
+            Self::Generated => 4,
+            Self::Repair(RepairKind::Rule) => 10,
+            Self::Repair(RepairKind::Advanced) => 11,
+            Self::Repair(RepairKind::EnglishSpelling) => 12,
+            Self::Repair(RepairKind::CommitHistory) => 13,
+            Self::MixedRepair => 14,
+            Self::Fallback => 20,
+            Self::RawRepair {
+                tier: RepairTier::LocalCompletion,
+            } => 30,
+            Self::RawRepair {
+                tier: RepairTier::GeneralSingleInsertion,
+            } => 31,
+        }
+    }
+}
+
 /// The repair tier attached to a raw-repair plan and its accepted candidates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairTier {
@@ -564,6 +652,36 @@ impl PathEvidence {
 
     pub const fn has_repair_kind(self, kind: RepairKind) -> bool {
         self.repair_kinds & repair_kind_bit(kind) != 0
+    }
+
+    /// Whether this path contains a repair edge or a spelling-correction
+    /// dictionary edge.  Spelling-correction is kept as a separate counter in
+    /// the coarse contract, but it has the same authority boundary as the
+    /// explicit English-spelling repair kind.
+    pub const fn has_repair_evidence(self) -> bool {
+        self.spelling_edges != 0 || self.repair_kinds != 0
+    }
+
+    /// Returns the sole repair kind when the path has exactly one.  Multiple
+    /// kinds are intentionally reported as `None` so callers can fail closed
+    /// with [`CandidateEvidence::MixedRepair`].
+    pub const fn sole_repair_kind(self) -> Option<RepairKind> {
+        let known = repair_kind_bit(RepairKind::Rule)
+            | repair_kind_bit(RepairKind::Advanced)
+            | repair_kind_bit(RepairKind::EnglishSpelling)
+            | repair_kind_bit(RepairKind::CommitHistory);
+        if self.repair_kinds & !known != 0 || self.repair_kinds.count_ones() != 1 {
+            return None;
+        }
+        if self.has_repair_kind(RepairKind::Rule) {
+            Some(RepairKind::Rule)
+        } else if self.has_repair_kind(RepairKind::Advanced) {
+            Some(RepairKind::Advanced)
+        } else if self.has_repair_kind(RepairKind::EnglishSpelling) {
+            Some(RepairKind::EnglishSpelling)
+        } else {
+            Some(RepairKind::CommitHistory)
+        }
     }
 
     fn add_surface(&mut self, surface: Surface, spelling: bool) {
@@ -1114,6 +1232,10 @@ pub struct ConversionCandidate {
     synthetic_exact: bool,
     origin: CandidateOrigin,
     path_evidence: PathEvidence,
+    /// True when the materialized path contains a generated calendar day
+    /// edge after its reading start. This metadata keeps the admission rule
+    /// independent of surface text and survives candidate cloning.
+    generated_day_suffix: bool,
     /// Folded from raw path edges while the optional combined pass knows its
     /// exact reading boundary. Display bunsetsu fusion cannot forge it.
     bridge_boundary_kind: Option<BridgeBoundaryKind>,
@@ -1185,6 +1307,67 @@ impl ConversionCandidate {
 
     pub const fn path_evidence(&self) -> PathEvidence {
         self.path_evidence
+    }
+
+    /// Computes the candidate's authority class from its immutable path
+    /// evidence.  No rendered surface comparison is involved, so homophones
+    /// such as `労力` and `ロウ力` retain different provenance even when a
+    /// normalizer would make them look alike.
+    pub fn evidence_class(&self) -> CandidateEvidence {
+        if let CandidateOrigin::RawRepair { tier, .. } = self.origin {
+            return CandidateEvidence::RawRepair { tier };
+        }
+
+        let evidence = self.path_evidence;
+        if evidence.has_repair_evidence() {
+            // A spelling-correction flag is the same unconfirmed boundary as
+            // the explicit English-spelling repair kind.  If both it and
+            // another repair are present, retain the ambiguity instead of
+            // selecting one label by accident.
+            if evidence.spelling_edges != 0 {
+                return if evidence.repair_kinds == 0 {
+                    CandidateEvidence::Repair(RepairKind::EnglishSpelling)
+                } else {
+                    CandidateEvidence::MixedRepair
+                };
+            }
+            return evidence
+                .sole_repair_kind()
+                .map_or(CandidateEvidence::MixedRepair, CandidateEvidence::Repair);
+        }
+        if evidence.generated_edges != 0 {
+            return CandidateEvidence::Generated;
+        }
+        if evidence.fallback_edges != 0 {
+            return CandidateEvidence::Fallback;
+        }
+
+        // `system_entry_index` is only materialized for a one-edge system
+        // path.  Requiring the same one-segment/full-prefix shape here keeps
+        // the exact class honest even if a future materializer adds another
+        // source of entry ordinals.
+        let one_whole_segment = self.segments.len() == 1
+            && self.segments()[0].reading_start == 0
+            && self.segments()[0].reading_end > 0;
+        if one_whole_segment && evidence.system_edges == 1 && self.system_entry_index().is_some() {
+            return CandidateEvidence::ExactSystem;
+        }
+        if one_whole_segment && evidence.user_edges == 1 && evidence.system_edges == 0 {
+            return CandidateEvidence::ExactUser;
+        }
+        if evidence.system_edges != 0 || evidence.user_edges != 0 {
+            return CandidateEvidence::CompositeLexical;
+        }
+
+        // Defensive default for a future edge kind that forgot to update the
+        // evidence counters.  It must remain outside neural lexical groups.
+        CandidateEvidence::Fallback
+    }
+
+    /// Convenience predicate for callers enforcing a whole-reading authority
+    /// boundary without matching enum variants themselves.
+    pub fn is_trustworthy_whole_reading_exact(&self) -> bool {
+        self.evidence_class().is_trustworthy_whole_reading_exact()
     }
 
     pub const fn was_cross_commit_rescored(&self) -> bool {
@@ -1400,6 +1583,7 @@ pub struct Converter {
 struct GeneratedSurface {
     text: FixedStr<MAX_PREEDIT_BYTES>,
     annotation: FixedStr<MAX_PREEDIT_BYTES>,
+    counter: Option<NumericCounter>,
 }
 
 impl Converter {
@@ -1647,6 +1831,7 @@ impl Converter {
                     self.apply_it_completion_coherence(dictionary, reading, options)?;
                     self.apply_it_compound_coherence(reading, options);
                     self.add_date_candidates(reading, civil_date)?;
+                    self.demote_generated_day_suffixes(reading.len());
                     self.prefer_numeric_forms(reading)?;
                     self.drop_jitsu_day_counts(reading);
                     self.apply_exact_lexical_quality_gate(reading);
@@ -2726,6 +2911,7 @@ impl Converter {
                     generated_edges: 1,
                     ..PathEvidence::default()
                 },
+                generated_day_suffix: false,
                 bridge_boundary_kind: None,
                 commit_bridge_tail: CommitBridgeTailStorage::default(),
                 cross_commit_rescored: false,
@@ -2831,6 +3017,7 @@ impl Converter {
                         generated_edges: 1,
                         ..PathEvidence::default()
                     },
+                    generated_day_suffix: false,
                     bridge_boundary_kind: None,
                     commit_bridge_tail: CommitBridgeTailStorage::default(),
                     cross_commit_rescored: false,
@@ -3013,6 +3200,44 @@ impl Converter {
             .retain(|candidate| !is_numeric_day_surface(candidate.text()));
     }
 
+    /// A generated day at a non-zero reading offset is only an ambiguous
+    /// compound edge when a lexical node can actually precede it. Synthetic
+    /// reading/katakana nodes are intentionally ignored: they do not provide
+    /// the lexical evidence this admission guard is meant to qualify.
+    fn has_lexical_predecessor(&self, start: usize) -> bool {
+        let mut previous = self.ends_at.get(start).copied().unwrap_or(NONE);
+        while previous != NONE {
+            let node = self.nodes[previous];
+            if matches!(node.surface, Surface::Dictionary { .. } | Surface::User(_)) {
+                return true;
+            }
+            previous = node.next_at_end;
+        }
+        false
+    }
+
+    /// A fully covered, system-only path is stronger evidence than a
+    /// generated calendar suffix. This pass only moves the generated edge
+    /// behind that evidence; it does not remove it, so legitimate numeric
+    /// compounds remain available when no lexical interpretation exists.
+    fn demote_generated_day_suffixes(&mut self, reading_len: usize) {
+        let Some(best_lexical_cost) = self
+            .candidates
+            .iter()
+            .filter(|candidate| candidate.has_full_system_coverage(reading_len))
+            .map(|candidate| candidate.cost)
+            .min()
+        else {
+            return;
+        };
+        let floor = best_lexical_cost.saturating_add(1);
+        for candidate in &mut self.candidates {
+            if candidate.generated_day_suffix {
+                candidate.cost = candidate.cost.max(floor);
+            }
+        }
+    }
+
     fn add_numeric_forms(
         &mut self,
         dictionary: &Dictionary<'_>,
@@ -3032,7 +3257,15 @@ impl Converter {
             // 先日, not 1000 followed by 日.
             return Ok(());
         }
-        let form_cost = numeric_form_cost(&reading[start..end], span);
+        let lexical_predecessor = span.counter == Some(NumericCounter::Day)
+            && start > 0
+            && self.has_lexical_predecessor(start);
+        let form_cost =
+            numeric_form_cost(&reading[start..end], span).saturating_add(if lexical_predecessor {
+                GENERATED_DAY_SUFFIX_PENALTY
+            } else {
+                0
+            });
         for (index, style) in NUMERIC_STYLES.into_iter().enumerate() {
             if self.generated.len() >= MAX_GENERATED_SURFACES {
                 break;
@@ -3054,7 +3287,11 @@ impl Converter {
             let Ok(generated_index) = u16::try_from(self.generated.len()) else {
                 break;
             };
-            self.generated.push(GeneratedSurface { text, annotation });
+            self.generated.push(GeneratedSurface {
+                text,
+                annotation,
+                counter: span.counter,
+            });
             self.add_node(
                 dictionary,
                 NodeSpec {
@@ -3164,6 +3401,7 @@ impl Converter {
                     generated_edges: 1,
                     ..PathEvidence::default()
                 },
+                generated_day_suffix: false,
                 bridge_boundary_kind: None,
                 commit_bridge_tail: CommitBridgeTailStorage::default(),
                 cross_commit_rescored: false,
@@ -3245,6 +3483,7 @@ impl Converter {
                     generated_edges: 1,
                     ..PathEvidence::default()
                 },
+                generated_day_suffix: false,
                 bridge_boundary_kind: None,
                 commit_bridge_tail: CommitBridgeTailStorage::default(),
                 cross_commit_rescored: false,
@@ -4448,6 +4687,7 @@ fn make_lossless_fallback(
             fallback_edges: 1,
             ..PathEvidence::default()
         },
+        generated_day_suffix: false,
         bridge_boundary_kind: None,
         commit_bridge_tail: CommitBridgeTailStorage::default(),
         cross_commit_rescored: false,
@@ -4515,6 +4755,7 @@ fn make_synthetic_exact(
             fallback_edges: 1,
             ..PathEvidence::default()
         },
+        generated_day_suffix: false,
         bridge_boundary_kind: None,
         commit_bridge_tail: CommitBridgeTailStorage::default(),
         cross_commit_rescored: false,
@@ -4551,6 +4792,7 @@ fn make_candidate(
     let mut annotation = FixedStr::new();
     let mut segments = FixedVec::new();
     let mut path_evidence = PathEvidence::default();
+    let mut generated_day_suffix = false;
     let mut bridge_boundary_kind = None;
     let mut commit_bridge_tail = CommitBridgeTailStorage::default();
     let mut previous_right_id = initial_right_id;
@@ -4602,6 +4844,8 @@ fn make_candidate(
                 let surface = generated
                     .get(usize::from(index))
                     .ok_or(ConversionError::NoPath)?;
+                generated_day_suffix |=
+                    node.start > 0 && surface.counter == Some(NumericCounter::Day);
                 text.push_str(surface.text.as_str())
                     .map_err(|_| ConversionError::OutputTooLong)?;
                 if annotation.is_empty() && !surface.annotation.is_empty() {
@@ -4684,6 +4928,7 @@ fn make_candidate(
         synthetic_exact: false,
         origin: CandidateOrigin::Direct,
         path_evidence,
+        generated_day_suffix,
         bridge_boundary_kind,
         commit_bridge_tail,
         cross_commit_rescored: false,
@@ -4783,10 +5028,10 @@ mod tests {
     use std::collections::{BTreeMap, VecDeque};
 
     use super::{
-        candidate_budget, CandidateAuthority, CandidateOrigin, ConversionCandidate,
-        ConversionInput, ConversionInputClass, ConversionOptions, Converter, CorrectionMap,
-        CorrectionMapError, CorrectionRun, CrossCommitBridge, DictionaryEdgeBudget, LiteralPolicy,
-        RawRepairBudget, RawRepairPlan, RepairTier, RightContextId,
+        candidate_budget, CandidateAuthority, CandidateEvidence, CandidateOrigin,
+        ConversionCandidate, ConversionInput, ConversionInputClass, ConversionOptions, Converter,
+        CorrectionMap, CorrectionMapError, CorrectionRun, CrossCommitBridge, DictionaryEdgeBudget,
+        LiteralPolicy, RawRepairBudget, RawRepairPlan, RepairTier, RightContextId,
         BASE_DICTIONARY_EDGES_PER_READING, MAX_CONVERSION_CANDIDATES,
         MAX_DICTIONARY_SURFACES_PER_READING, SINGLE_KANJI_ANNOTATION,
     };
@@ -5700,6 +5945,89 @@ mod tests {
         );
     }
 
+    #[test]
+    fn derived_repair_evidence_stays_outside_neural_lexical_groups() {
+        for kind in [
+            RepairKind::Rule,
+            RepairKind::Advanced,
+            RepairKind::CommitHistory,
+            RepairKind::EnglishSpelling,
+        ] {
+            let evidence = CandidateEvidence::Repair(kind);
+            assert_eq!(evidence.neural_group(), None, "{kind:?}");
+            assert!(!evidence.is_trustworthy_whole_reading_exact());
+        }
+        assert_eq!(CandidateEvidence::Generated.neural_group(), None);
+        assert_eq!(CandidateEvidence::Fallback.neural_group(), None);
+        assert_eq!(
+            CandidateEvidence::RawRepair {
+                tier: RepairTier::GeneralSingleInsertion,
+            }
+            .neural_group(),
+            None
+        );
+    }
+
+    #[test]
+    fn candidate_evidence_keeps_exact_and_composite_homophones_distinct() {
+        let bytes = synthetic_dictionary(&[
+            fixture_entry("ろうりょく", "労力", 0, EntryFlags::NONE),
+            fixture_entry("ろう", "ロウ", 1, EntryFlags::NONE),
+            fixture_entry("りょく", "力", 1, EntryFlags::NONE),
+        ]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "ろうりょく", ConversionOptions::default())
+            .expect("homophone conversion");
+
+        let exact = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "労力")
+            .expect("whole-reading exact candidate");
+        assert_eq!(exact.evidence_class(), CandidateEvidence::ExactSystem);
+        assert!(exact.is_trustworthy_whole_reading_exact());
+
+        let composite = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "ロウ力")
+            .expect("composite lexical homophone");
+        assert_eq!(
+            composite.evidence_class(),
+            CandidateEvidence::CompositeLexical
+        );
+        assert!(!composite.is_trustworthy_whole_reading_exact());
+        assert_ne!(exact.evidence_class(), composite.evidence_class());
+    }
+
+    #[test]
+    fn candidate_evidence_preserves_commit_history_repair_boundary() {
+        let bytes = cross_commit_fixture();
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        converter.set_commit_repair_readings(&["もれないか"]);
+        let candidates = converter
+            .convert(&dictionary, "ないか", ConversionOptions::default())
+            .expect("commit-history conversion");
+
+        let repaired = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "漏れないか")
+            .expect("commit-history candidate");
+        assert_eq!(
+            repaired.evidence_class(),
+            CandidateEvidence::Repair(RepairKind::CommitHistory)
+        );
+        assert!(!repaired.is_trustworthy_whole_reading_exact());
+
+        let exact = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "内科")
+            .expect("ordinary exact candidate");
+        assert_eq!(exact.evidence_class(), CandidateEvidence::ExactSystem);
+        assert!(exact.is_trustworthy_whole_reading_exact());
+    }
+
     fn cross_commit_fixture() -> Vec<u8> {
         synthetic_dictionary(&[
             fixture_entry("もれ", "漏れ", 0, EntryFlags::NONE),
@@ -6064,7 +6392,17 @@ mod tests {
             .find(|candidate| candidate.text() == "利用者語")
             .expect("user candidate remains reachable");
         assert_eq!(user.path_evidence().user_edges, 1);
+        assert_eq!(user.evidence_class(), CandidateEvidence::ExactUser);
+        assert!(user.is_trustworthy_whole_reading_exact());
         assert!(!user.was_cross_commit_rescored());
+
+        let system = bridged
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.text() == "内科")
+            .expect("system candidate remains reachable");
+        assert_eq!(system.evidence_class(), CandidateEvidence::ExactSystem);
+        assert!(system.is_trustworthy_whole_reading_exact());
 
         let exact = converter
             .convert_with_user_dictionary_input_bridge_detailed(
@@ -6177,6 +6515,10 @@ mod tests {
         assert_eq!(exact.candidates().len(), 1);
         assert_eq!(exact.candidates()[0].text(), "rおぐ");
         assert!(exact.candidates()[0].is_synthetic_exact());
+        assert_eq!(
+            exact.candidates()[0].evidence_class(),
+            CandidateEvidence::Fallback
+        );
 
         let later = converter
             .convert(&dictionary, "あいう", ConversionOptions::default())
@@ -6232,6 +6574,96 @@ mod tests {
         assert_eq!(
             surfaces.iter().filter(|surface| **surface == "1日").count(),
             1
+        );
+        let generated = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "1日")
+            .expect("generated numeric candidate");
+        assert_eq!(generated.evidence_class(), CandidateEvidence::Generated);
+        assert!(!generated.is_trustworthy_whole_reading_exact());
+    }
+
+    #[test]
+    fn generated_day_suffixes_stay_behind_lexical_verb_phrases() {
+        let bytes = synthetic_dictionary(&[
+            // The split lexical paths model the verb stem followed by the
+            // question ending. Their combined cost is below the guarded
+            // generated day suffix, but above the old unguarded form.
+            fixture_entry("つづけ", "続け", 1_000, EntryFlags::NONE),
+            fixture_entry("すすめ", "進め", 1_000, EntryFlags::NONE),
+            fixture_entry("よう", "よう", 1_000, EntryFlags::NONE),
+            fixture_entry("か", "か", 1_000, EntryFlags::NONE),
+        ]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+
+        let standalone = converter
+            .convert(&dictionary, "ようか", ConversionOptions::default())
+            .expect("standalone calendar day");
+        assert!(
+            standalone
+                .iter()
+                .any(|candidate| candidate.text() == "八日"),
+            "standalone ようか must retain the traditional day form: {standalone:?}"
+        );
+
+        for (reading, expected) in [
+            ("つづけようか", "続けようか"),
+            ("すすめようか", "進めようか"),
+        ] {
+            let candidates = converter
+                .convert(&dictionary, reading, ConversionOptions::default())
+                .expect("lexical verb phrase");
+            assert_eq!(
+                candidates.first().map(ConversionCandidate::text),
+                Some(expected),
+                "generated ようか must not overtake the lexical phrase for {reading}: {candidates:?}"
+            );
+            let lexical_cost = candidates
+                .iter()
+                .find(|candidate| candidate.text() == expected)
+                .map(|candidate| candidate.cost)
+                .expect("lexical phrase candidate");
+            assert!(
+                candidates
+                    .iter()
+                    .filter(|candidate| candidate.generated_day_suffix)
+                    .all(|candidate| candidate.cost > lexical_cost),
+                "the generated day splice must be demoted below lexical evidence for {reading}: {candidates:?}"
+            );
+
+            // The admission price must protect the top result even when the
+            // caller asks for only one candidate, before an N-best lexical
+            // alternative could be retained for the relative demotion pass.
+            let top_one = converter
+                .convert(
+                    &dictionary,
+                    reading,
+                    ConversionOptions {
+                        max_candidates: 1,
+                        ..ConversionOptions::default()
+                    },
+                )
+                .expect("single-candidate lexical verb phrase");
+            assert_eq!(top_one[0].text(), expected, "single-candidate {reading}");
+        }
+    }
+
+    #[test]
+    fn generated_day_suffix_remains_available_without_a_lexical_whole_path() {
+        let bytes =
+            synthetic_dictionary(&[fixture_entry("ことし", "今年", 1_000, EntryFlags::NONE)]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "ことしようか", ConversionOptions::default())
+            .expect("calendar compound");
+        assert!(
+            candidates.iter().any(|candidate| {
+                candidate.text().starts_with("今年")
+                    && candidate.path_evidence().generated_edges > 0
+            }),
+            "a legal numeric compound must remain available without a lexical whole path: {candidates:?}"
         );
     }
 
@@ -6327,6 +6759,31 @@ mod tests {
             .expect("dakuten repair remains available");
         assert!(repaired.path_evidence().has_repair_kind(RepairKind::Rule));
         assert!(repaired.path_evidence().has_unconfirmed_repair());
+        assert_eq!(
+            repaired.evidence_class(),
+            CandidateEvidence::Repair(RepairKind::Rule)
+        );
+        assert!(!repaired.is_trustworthy_whole_reading_exact());
+    }
+
+    #[test]
+    fn english_spelling_repair_is_not_promoted_to_exact_evidence() {
+        let bytes =
+            synthetic_dictionary(&[fixture_entry("アップル", "アップル", 100, EntryFlags::NONE)]);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "あｐｐｌｅ", ConversionOptions::default())
+            .expect("English spelling conversion");
+        let repaired = candidates
+            .iter()
+            .find(|candidate| candidate.text() == "アップル")
+            .expect("English spelling repair remains available");
+        assert_eq!(
+            repaired.evidence_class(),
+            CandidateEvidence::Repair(RepairKind::EnglishSpelling)
+        );
+        assert!(!repaired.is_trustworthy_whole_reading_exact());
     }
 
     #[test]
@@ -6812,6 +7269,12 @@ mod tests {
             candidates[17].origin(),
             CandidateOrigin::RawRepair {
                 plan_id: 21,
+                tier: RepairTier::LocalCompletion,
+            }
+        );
+        assert_eq!(
+            candidates[17].evidence_class(),
+            CandidateEvidence::RawRepair {
                 tier: RepairTier::LocalCompletion,
             }
         );

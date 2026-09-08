@@ -44,7 +44,7 @@ without inventing a label.
 ## Invocation
 
 ```powershell
-rtk cargo run -p dictc --bin context-dataset -- import-rerank `
+cargo run -p dictc --bin context-dataset -- import-rerank `
   --source-spans C:\context-data\rerank\source-spans.jsonl `
   --source-span-manifest C:\context-data\rerank\source-spans.manifest.json `
   --source-span-manifest-sha256 <pinned-manifest-sha256> `
@@ -54,7 +54,7 @@ rtk cargo run -p dictc --bin context-dataset -- import-rerank `
   --source-id wikimedia-jawiki-20260801 `
   --output-dir C:\context-data\imports\jawiki-run-001
 
-rtk cargo run -p dictc --bin context-dataset -- verify-rerank-import `
+cargo run -p dictc --bin context-dataset -- verify-rerank-import `
   --import-dir C:\context-data\imports\jawiki-run-001
 ```
 

@@ -106,7 +106,7 @@
 Windowsでは素の`sh`がWSLへ入りWindowsパスを解決できなかった。役割exactnessチェックにはGit Bashを明示し、次のコマンドで3役すべて`exact`を確認した。
 
 ```powershell
-rtk proxy powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' -lc 'sh /c/Users/developer/.codex/plugins/cache/sol-advisor/sol-advisor/0.2.1/scripts/install-agents.sh --check'"
+powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' -lc 'sh /c/Users/developer/.codex/plugins/cache/sol-advisor/sol-advisor/0.2.1/scripts/install-agents.sh --check'"
 ```
 
 確認済みの役割は次のとおり。
@@ -130,7 +130,7 @@ rtk proxy powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' 
 つまりモデルとeffortはユーザー指定どおりだったが、read-onlyはプロンプト上の行動制約だけで、OS／ランタイムによる強制read-onlyではなかった。次回も起動直後に次の検査を行い、同じ結果なら「強制read-onlyではない」残余リスクを隠さないこと。起動前後で差分を記録し、レビュー後に書き込みがないことも検証する。
 
 ```powershell
-rtk proxy powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' -lc 'sh /c/Users/developer/.codex/plugins/cache/sol-advisor/sol-advisor/0.2.1/scripts/inspect-agent-runtime.sh <thread-id>'"
+powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' -lc 'sh /c/Users/developer/.codex/plugins/cache/sol-advisor/sol-advisor/0.2.1/scripts/inspect-agent-runtime.sh <thread-id>'"
 ```
 
 ### 現時点の技術的な観察（未確定）
@@ -170,21 +170,21 @@ rtk proxy powershell -NoProfile -Command "& 'C:\Program Files\Git\bin\bash.exe' 
 - 停止後のtracked diff SHA-256：`7da8797be49bdc2db804f27e8b4c474265c8072175fcd16459177cbd4d762ec7`
 - untracked name-list SHA-256：前後とも`abe1b6b652e840b174ba3b6100683a1cc4c45f30df7e9429a1ee464079137288`
 
-tracked diffの変化理由は特定できていない。reviewerの書き込み、ユーザーまたは別プロセスの並行変更、改行処理などのどれかを証明できるスナップショットがないため、推測で巻き戻さないこと。次セッションは最初に`rtk git status --short`と関連diffを読み、現在の内容を所有者不明の既存変更として保全すること。
+tracked diffの変化理由は特定できていない。reviewerの書き込み、ユーザーまたは別プロセスの並行変更、改行処理などのどれかを証明できるスナップショットがないため、推測で巻き戻さないこと。次セッションは最初に`git status --short`と関連diffを読み、現在の内容を所有者不明の既存変更として保全すること。
 
 ### 次セッションの推奨再開順序
 
 1. このファイル、`README.md`、`.claude/memory/rules.md`、必要な`DESIGN.md`／`PLAN.md`を読む。
-2. `rtk git status --short`でdirty worktreeを確認し、特にTSF関連ファイルの差分を精読する。既存変更へ上書きしない。
+2. `git status --short`でdirty worktreeを確認し、特にTSF関連ファイルの差分を精読する。既存変更へ上書きしない。
 3. `$sol-advisor:orchestration`の`SKILL.md`と必要な参照を完全に読み直し、上記Git Bashコマンドで役割プリフライトを再実行する。
 4. 新しいSol reviewer（Sol Advisor 0.2.1既定のGPT-5.6 Sol／high／行動上read-only）へ、3案のコミットメント境界を相談する。起動直後にruntimeを検査し、終了後に差分不変を確認する。
-5. 原因仮説、再現条件、安全不変条件、変更対象、テスト方法を含む5部構成の実装仕様を作る。非自明な計画をユーザーが明示承認した後、対応Issueがなければ`rtk gh`でtracking Issueを作る。
+5. 原因仮説、再現条件、安全不変条件、変更対象、テスト方法を含む5部構成の実装仕様を作る。非自明な計画をユーザーが明示承認した後、対応Issueがなければ`gh`でtracking Issueを作る。
 6. この問題はCOM／TSF／非同期状態機械をまたぐため、実装委譲は原則`sol_advisor_terra_implementer`（GPT-5.6 Terra／max）が適切。委譲後も親セッションが差分を精読し、検証責任を持つ。
 7. 少なくとも以下のrubricを満たすまで修正と検証を繰り返す。
    - `Verify:` 同期拒否、非同期遅延、focus変更、deactivate、後続キー入力を再現する回帰テスト。`Expect:` stale callbackが文書やcompositionを変更せず、全分岐がapplied／rejected／cancelled等の明示的終端へ到達する。
    - `Verify:` document editが失敗または拒否されるテスト。`Expect:` 内部composition状態が先行確定せず、文書と内部状態が一致する。
    - `Verify:` VS Code／Electron向けselection経路のテストまたは診断付き実動作確認。`Expect:` 既存の`GetSelection`安全経路を維持し、入力、確定、focus移動でクラッシュやハングがない。
-   - `Verify:` `rtk cargo fmt --all -- --check`、静音ラッパー経由の対象テスト、`./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { rtk cargo test --workspace }`、`rtk git diff --check`。`Expect:` すべて成功し、cargo／rustc／テストランナーの残存プロセスがない。
+   - `Verify:` `cargo fmt --all -- --check`、対象テスト、`cargo test --workspace`、`git diff --check`。`Expect:` すべて成功し、cargo／rustc／テストランナーの残存プロセスがない。
 8. 最後に新しい独立コンテキストのSol reviewer（Sol Advisor 0.2.1既定のGPT-5.6 Sol／high／行動上read-only）で最終レビューする。親セッションの要約だけでなく、実diffとテスト証跡を直接読ませる。指摘修正後に必ず再レビューする。
 
 このVS Codeクラッシュ調査については、現時点でGitHub Issue、コミット、インストーラー、実環境への反映は作成していない。下の「検証済みの状態」は以前のIME機能に対する結果であり、今回のクラッシュ修正が済んだ証拠ではない。
@@ -254,9 +254,9 @@ Password、URL、Email、Digitsは機微スコープとして常に除外しま�
 
 2026-08-02時点で以下を確認済みです。
 
-- `rtk cargo fmt --all -- --check` 成功
-- `rtk cargo test --workspace`：`496 passed / 12 ignored`
-- `rtk git diff --check` 成功
+- `cargo fmt --all -- --check` 成功
+- `cargo test --workspace`：`496 passed / 12 ignored`
+- `git diff --check` 成功
 - リリースビルド成功：`x86_64-pc-windows-msvc`
 - インストーラー生成成功：Inno Setup 6.7.3、warnings 0
 - 実環境へ最新版を再インストール済み
@@ -276,15 +276,15 @@ Computer Useによるメモ帳の目視操作は既存ウィンドウの状態�
 
 ## 別セッションで再開するときの手順
 
-1. `rtk git status --short`で、既存の大量の変更・未追跡ファイルを確認する。作業ツリーは意図的にdirtyなので、`git reset --hard`や`git checkout --`を実行しない。
+1. `git status --short`で、既存の大量の変更・未追跡ファイルを確認する。作業ツリーは意図的にdirtyなので、`git reset --hard`や`git checkout --`を実行しない。
 2. `CLAUDE.md`、`README.md`、必要なら`DESIGN.md`／`PLAN.md`を読む。
 3. `crates/sakura-engine/src/dispatch.rs`の`ModeKanaCycle`と回帰テストを読み、現在の一時変換／永続切替の境界を壊さない。
 4. 変更後は少なくとも次を実行する。
 
    ```powershell
-   rtk cargo fmt --all -- --check
-   ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { rtk cargo test --workspace }
-   rtk git diff --check
+   cargo fmt --all -- --check
+   cargo test --workspace
+   git diff --check
    ```
 
 5. バイナリ変更をユーザー環境へ反映する依頼がある場合だけ、リリースビルド、`scripts/build-installer.ps1`、インストーラー実行の順に行う。インストーラーの`Start-Process -Wait`ラッパーは本体終了後に戻らないことがあるため、ログで`Installation process succeeded`と`Log closed`を確認してから、残ったラッパーだけをPID指定で終了する。
@@ -299,7 +299,7 @@ Computer Useによるメモ帳の目視操作は既存ウィンドウの状態�
 
 ## 作業上の注意
 
-- シェル操作はこのリポジトリの指示に従い`rtk`を先頭につける。
+- シェル操作は通常のコマンドを直接実行する。
 - ファイル編集は`apply_patch`を使う。
 - 既存のユーザー変更を上書き・整理・削除しない。
 - GitHub操作が必要になっても、GitHub connectorではなくリポジトリの指示にあるCLI経路を使う。
