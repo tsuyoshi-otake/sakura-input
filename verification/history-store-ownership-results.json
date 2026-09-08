@@ -1,0 +1,102 @@
+{
+  "input_hashes": {
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779",
+    "crates/sakura-engine/src/input_history.rs": "1749d4d2093ea7bacb090d52e9765fa822347bb00c4b77f0a4f15899ee7fdb46",
+    "crates/sakura-engine/Cargo.toml": "de78ed4f8b6d8aedc1414cb65751f6b4bde661b684f89f8d9beba9cf24c720e9",
+    "crates/sakura-engine/tests/common/mod.rs": "be0bc7e9fd5d0a9c9ddb05dec5dd36767fe9f4a548597da69dec6c17d9a28d4f",
+    "crates/sakura-engine/tests/pipe_round_trip.rs": "e02ec145d9943a4147e752fe4c637e3a75c986e60a03bf40c0feef691ce70e6b"
+  },
+  "runs": [
+    {
+      "totals": [
+        0,
+        2,
+        0
+      ],
+      "sha256": "fefdef1117d033c3cc222e030bca0c05c93ad86846e788b6399bc87120acd608",
+      "log_name": "store-lock-before.log",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::store_owner_ [old implementation]",
+      "exit_code": 101
+    },
+    {
+      "totals": [
+        0,
+        1,
+        0
+      ],
+      "sha256": "64fcb555488e2096cca84b5301cd8e6059a4d16704f29bd427b7bce4f45b2b3f",
+      "log_name": "store-lock-collision-before.log",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::store_owner_does_not_delete_a_preexisting_lock_path [initial create(true) implementation]",
+      "exit_code": 101
+    },
+    {
+      "totals": [
+        30,
+        0,
+        0
+      ],
+      "sha256": "cab98d5efe14de75c28d3c67488a80e8efb61c59fe9af7c6b8d34f4e13be0209",
+      "log_name": "store-lock-final-targeted.log",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        1,
+        0,
+        0
+      ],
+      "sha256": "cddc5cc397d10dd48664cad6e8c1283293e56b2fd68ef572e9dec1b6ff845ec1",
+      "log_name": "store-lock-process.log",
+      "command": "cargo test --locked -p sakura-engine --test pipe_round_trip history_store_owner_in_another_process_keeps_input_available",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        1787,
+        0,
+        84
+      ],
+      "sha256": "0e447f8e577021801ff876997dce99904b0819604c7748c4b51adf73bd560a10",
+      "log_name": "workspace-store-lock-final.log",
+      "command": "cargo test --locked --workspace",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        1,
+        0,
+        0
+      ],
+      "sha256": "1754aba185e6bb48a578b1c5f005de7c5729c0e05e2cfe5815f329f7302d57a5",
+      "log_name": "store-lock-symlink.log",
+      "command": "cargo test --locked -p sakura-engine --lib input_history::tests::store_owner_preserves_preexisting_symlink_and_target",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "sha256": "d29abb2c57fec721e1b7ef7db8f9080095b996423884dc3cbf453fb2e529884e",
+      "log_name": "store-lock-clippy.log",
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "totals": [
+        1788,
+        0,
+        84
+      ],
+      "sha256": "c803c75d92245c2762867f3a3cf8cca6dcdf029bf41decd9e9c80f8e42dffeeb",
+      "log_name": "workspace-store-lock-reviewed.log",
+      "command": "cargo test --locked --workspace",
+      "exit_code": 0
+    }
+  ],
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "profile": "debug",
+  "scope": "Final input hashes; earlier logs describe earlier iterations, not identical final source. totals order: passed, failed, ignored."
+}

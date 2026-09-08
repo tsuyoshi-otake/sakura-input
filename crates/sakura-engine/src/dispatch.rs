@@ -177,6 +177,7 @@ pub struct Dispatcher {
     composition_fence: Option<Arc<CompositionFence>>,
     /// Local mirror of fence claims for sessions this worker owns.
     fence_claims: HashMap<SessionId, (Box<str>, bool)>,
+    connection_probe: Option<sakura_ipc::ConnectionProbe>,
     /// Process-wide candidate-board identity. Independent of AI-text owners:
     /// those restart at 1 on a private `AiTextService`, which Dual TSF workers
     /// would collide on.
@@ -303,7 +304,7 @@ impl Dispatcher {
         if attaching {
             if let Some(history) = self.input_history.as_ref() {
                 self.sessions
-                    .reallocate_history_session_ids(|| history.allocate_session_id());
+                    .reallocate_history_session_ids(|| history.allocate_session_id().unwrap_or(0));
             }
         }
     }
@@ -378,6 +379,7 @@ impl Dispatcher {
             sessions: SessionTable::new(),
             composition_fence: None,
             fence_claims: HashMap::new(),
+            connection_probe: None,
             ui_connection: ui::allocate_board_connection(),
             scratch: FixedStr::new(),
         }
@@ -387,6 +389,22 @@ impl Dispatcher {
     /// Protocol session ids restart at 1 on every worker; this does not.
     pub(crate) fn ui_owner(&self) -> u64 {
         self.ui_connection
+    }
+
+    pub(crate) fn set_connection_probe(&mut self, probe: Option<sakura_ipc::ConnectionProbe>) {
+        self.connection_probe = probe;
+        if let Some(fence) = self.composition_fence.as_ref() {
+            for (&session, (name, claimed)) in &self.fence_claims {
+                if *claimed {
+                    fence.acquire_owned(
+                        name,
+                        self.ui_connection,
+                        session,
+                        self.connection_probe.clone(),
+                    );
+                }
+            }
+        }
     }
 
     /// Attaches the process-wide composition fence used to absorb idle Space
@@ -443,7 +461,7 @@ impl Dispatcher {
             .or_insert_with(|| (Box::from(process_name.as_str()), false));
         if entry.0.as_ref() != process_name {
             if entry.1 {
-                fence.release(entry.0.as_ref());
+                fence.release_owned(entry.0.as_ref(), self.ui_connection, id, false);
                 entry.1 = false;
             }
             entry.0 = Box::from(process_name.as_str());
@@ -452,9 +470,14 @@ impl Dispatcher {
             return;
         }
         if want {
-            fence.acquire(process_name.as_str());
+            fence.acquire_owned(
+                process_name.as_str(),
+                self.ui_connection,
+                id,
+                self.connection_probe.clone(),
+            );
         } else {
-            fence.release(process_name.as_str());
+            fence.release_owned(process_name.as_str(), self.ui_connection, id, false);
         }
         entry.1 = want;
     }
@@ -473,16 +496,16 @@ impl Dispatcher {
         };
         if claimed {
             if let Some(fence) = self.composition_fence.as_ref() {
-                fence.release_after_teardown(name.as_ref());
+                fence.release_owned(name.as_ref(), self.ui_connection, id, true);
             }
         }
     }
 
     fn release_all_composition_fence_claims(&mut self) {
         if let Some(fence) = self.composition_fence.as_ref() {
-            for (_, (name, claimed)) in self.fence_claims.drain() {
+            for (id, (name, claimed)) in self.fence_claims.drain() {
                 if claimed {
-                    fence.release_after_teardown(name.as_ref());
+                    fence.release_owned(name.as_ref(), self.ui_connection, id, true);
                 }
             }
         } else {
@@ -498,6 +521,7 @@ impl Dispatcher {
     /// the same pipe instance.
     pub fn reset(&mut self) {
         self.release_all_composition_fence_claims();
+        self.connection_probe = None;
         self.ai_text.cancel_owner(self.ai_text_owner);
         self.ai_text_owner = self.ai_text.allocate_owner();
         self.sessions.clear();
@@ -758,10 +782,10 @@ impl Dispatcher {
                 let resolved =
                     resolve_context_preferences(global, &self.app_profiles, process_name);
                 if let Some(created) = self.sessions.get_mut(session) {
-                    let history_session_id = self
-                        .input_history
-                        .as_ref()
-                        .map_or(session, |history| history.allocate_session_id());
+                    let history_session_id =
+                        self.input_history.as_ref().map_or(session, |history| {
+                            history.allocate_session_id().unwrap_or(0)
+                        });
                     created.set_history_session_id(history_session_id);
                     created.apply_context_preferences(resolved);
                 }
@@ -6919,6 +6943,100 @@ mod tests {
     }
 
     #[test]
+    fn short_reading_history_does_not_change_candidate_identity_or_auto_commit() {
+        let conversion = prediction_conversion_from_source(
+            "short-reading-history.tsv",
+            concat!(
+                "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+                "う\t宇\t0\t0\t100\t-\t\texact\n",
+                "う\t羽\t0\t0\t200\t-\t\texact\n",
+                "い\tい\t0\t0\t10\t-\t\tother reading\n",
+            ),
+        );
+        for scope in [
+            NeuralRerankerScope::Off,
+            NeuralRerankerScope::LongTextOnly,
+            NeuralRerankerScope::AllNormalConversions,
+        ] {
+            let mut baseline = None;
+            for learned in [false, true] {
+                let learning = Arc::new(LearningService::memory());
+                if learned {
+                    learning.learn("い", "い", 0, 0);
+                }
+                let signature = with_session_candidates(
+                    &conversion,
+                    Some(&learning),
+                    "う",
+                    ConversionOptions::default(),
+                    |candidates| {
+                        candidates
+                            .iter()
+                            .map(|candidate| {
+                                (
+                                    candidate.text().to_owned(),
+                                    candidate.cost,
+                                    candidate.path_evidence(),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                )
+                .expect("bounded candidate construction");
+                let preferences = Preferences {
+                    neural_reranker_scope: scope,
+                    prediction_enabled: false,
+                    ..Preferences::default()
+                };
+                let mut dispatcher = Dispatcher::new_with_configuration(
+                    Arc::clone(&conversion),
+                    learning,
+                    preferences,
+                )
+                .expect("dispatcher");
+                let mut out = OutputBuf::new();
+                let session = create_session(&mut dispatcher, &mut out, "synthetic-quality.exe");
+                dispatcher.dispatch(
+                    &Request::SetInputScope {
+                        session,
+                        scope: InputScope::Normal,
+                    },
+                    &mut out,
+                );
+                type_word(&mut dispatcher, session, "u", &mut out);
+                dispatcher.dispatch(
+                    &Request::SendKey {
+                        session,
+                        key: named_key(KeyCode::Space),
+                    },
+                    &mut out,
+                );
+                assert_eq!(
+                    out.preedit_text(),
+                    "宇",
+                    "scope={scope:?} learned={learned}"
+                );
+                dispatcher.dispatch(
+                    &Request::SendKey {
+                        session,
+                        key: named_key(KeyCode::Enter),
+                    },
+                    &mut out,
+                );
+                assert_eq!(out.commit_text(), Some("宇"));
+                if let Some(expected) = baseline.as_ref() {
+                    assert_eq!(
+                        &signature, expected,
+                        "prior い commit changed the identity/order for う"
+                    );
+                } else {
+                    baseline = Some(signature);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn ranked_commit_repair_hints_survive_alongside_raw_plans() {
         let dispatcher = raw_repair_conversion_dispatcher();
         let learning = LearningService::memory();
@@ -8571,6 +8689,48 @@ mod tests {
             "Pad may use the local bounded prediction worker"
         );
         runtime.stop().expect("prediction worker joins");
+    }
+
+    #[test]
+    fn counter_exhaustion_unavailable_history_keeps_normal_input() {
+        let path = std::env::temp_dir().join(format!(
+            "sakura-unavailable-history-{}-{}.bin",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let history = InputHistoryService::open(&path).expect("history");
+        let mut dispatcher = builtin_dispatcher();
+        dispatcher.set_input_history(Some(Arc::clone(&history)));
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "synthetic.exe");
+        dispatcher
+            .sessions
+            .get_mut(session)
+            .expect("session")
+            .set_history_session_id(0);
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        let preedit = out.preedit_text().to_owned();
+        history.stop().expect("history stop");
+        let snapshot = crate::input_history::read_snapshot(&path);
+        let removed = std::fs::remove_file(&path);
+        assert_eq!(preedit, "かな");
+        assert_eq!(
+            snapshot.expect("snapshot").records.len(),
+            1,
+            "only engine marker persists"
+        );
+        assert!(history.stats().dropped_events() > 0);
+        removed.expect("fixture removed");
     }
 
     #[test]

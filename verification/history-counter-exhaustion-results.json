@@ -1,0 +1,57 @@
+{
+  "input_hashes": {
+    "Cargo.lock": "c0e4130571bec85212aba43bf05d81248dc5438899bef07c85fbb7a4080d5779",
+    "crates/sakura-engine/src/dispatch.rs": "66418297a44878c3022de81caa428f0e006d1e42f334f66ac929efb964fbcf91",
+    "crates/sakura-engine/src/input_history.rs": "19411af08ec8c46b3d11f14aedfbec6615a61ce6e0224144721510a3b40431f3",
+    "crates/sakura-engine/src/session.rs": "55e8c16ee41a036591e64dce894a028f9445e84cc544a5c88296a85648d8a11d"
+  },
+  "runs": [
+    {
+      "log_name": "counter-before.log",
+      "exit_code": 101,
+      "totals": [
+        0,
+        3,
+        0
+      ],
+      "sha256": "6af6d819ec5a62ced50cc636e582db6ae29959d3460a35413bc4090ff94eebf7",
+      "command": "cargo test --locked -p sakura-engine --lib counter_exhaustion (old code)"
+    },
+    {
+      "log_name": "counter-targeted.log",
+      "exit_code": 0,
+      "totals": [
+        7,
+        0,
+        0
+      ],
+      "sha256": "6a53b3ceba2410d4b6f2681142bb7861205736d5adc5b9c741feb93a732b98ef",
+      "command": "cargo test --locked -p sakura-engine --lib counter_exhaustion"
+    },
+    {
+      "log_name": "counter-clippy.log",
+      "exit_code": 0,
+      "totals": [
+        0,
+        0,
+        0
+      ],
+      "sha256": "132cc74261f1e52deaa888d5992f6f038c7ff96f7914025af036b9d62533ecf4",
+      "command": "cargo clippy --locked --workspace --all-targets -- -D warnings"
+    },
+    {
+      "log_name": "workspace-counter.log",
+      "exit_code": 0,
+      "totals": [
+        1812,
+        0,
+        84
+      ],
+      "sha256": "af9476a86033b00fba7d86eb3ca27e98426c20d6dbea72dc33932fb31e5af9a2",
+      "command": "cargo test --locked --workspace"
+    }
+  ],
+  "rustc": "1.96.0",
+  "profile": "debug Windows x64 MSVC",
+  "scope": "Final source hashes; old-code semantic counterexamples are a prior iteration. Totals passed/failed/ignored. No release or durable restart qualification."
+}

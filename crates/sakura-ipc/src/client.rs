@@ -17,17 +17,20 @@
 //!
 //! The budget is 50 ms per keystroke (DESIGN 4.3), which is a real
 //! deadline, so every call here is issued overlapped and waited on with a
-//! timeout. Missing it is [`Fault::Timeout`] and the caller passes the key
-//! through untouched.
+//! timeout. Missing it before send is [`Fault::DeadlineExpired`]. After a
+//! request is issued, no-response-byte expiry is [`Fault::Timeout`]; partial
+//! frame/cancellation uncertainty is [`Fault::Desynchronized`].
 //!
 //! # Why a timeout does not close the connection
 //!
-//! The request is still in flight when the deadline passes. Reconnecting
+//! When no response bytes were consumed, the request can still be in flight
+//! when the deadline passes. Reconnecting
 //! would throw away the session — the engine's per-session state is keyed
 //! to the connection — so the connection is kept and the *reply* is dealt
 //! with instead: every frame carries a monotonic request id, and a reply
 //! whose id is older than what this client is now waiting for is read and
-//! dropped, silently, before it can be mistaken for an answer.
+//! dropped, silently, before it can be mistaken for an answer. A partial-frame
+//! timeout has lost this boundary and requires retiring the connection.
 //!
 //! That rule is here rather than in the DLL on purpose. A late "commit
 //! これは" applied on top of text the application already received raw is
@@ -226,15 +229,34 @@ impl Client {
     /// are discarded on the way, without disturbing the connection.
     pub fn call(&mut self, request: &Request, budget: Duration) -> Result<Response, Fault> {
         let deadline = Instant::now() + budget;
+        self.call_until(request, deadline)
+    }
+
+    /// Uses a caller-owned absolute deadline across serial requests. Expiry
+    /// before send is distinct from an uncertain in-flight timeout.
+    pub fn call_until(&mut self, request: &Request, deadline: Instant) -> Result<Response, Fault> {
+        if Instant::now() >= deadline {
+            return Err(Fault::DeadlineExpired);
+        }
         let id = self.next_id;
-        self.next_id = self.next_id.wrapping_add(1);
 
         encode_request(request, id, &mut self.request).map_err(Fault::Encode)?;
+        if Instant::now() >= deadline {
+            return Err(Fault::DeadlineExpired);
+        }
+        self.next_id = self.next_id.wrapping_add(1);
+        #[cfg(test)]
+        tests::before_request_write();
         // Borrowed out of `self` so the buffer is not aliased by the
         // `&mut self` the I/O helpers take.
         let frame = core::mem::take(&mut self.request);
         let sent = self.write_all(&frame, deadline);
         self.request = frame;
+        if matches!(sent, Err(Fault::DeadlineExpired)) {
+            // The final check can race expiry before the first WriteFile.
+            // write_all reports this only when it issued no request bytes.
+            self.next_id = id;
+        }
         sent?;
 
         loop {
@@ -286,14 +308,30 @@ impl Client {
         body.resize(len, 0);
         let read = self.read_exact(&mut body, deadline);
         self.reply = body;
-        read?;
+        // The header has already left the stream. A body timeout cannot be
+        // retried as though the next byte were another frame's header.
+        read.map_err(|error| match error {
+            Fault::Timeout => Fault::Desynchronized,
+            other => other,
+        })?;
         Ok(&self.reply)
     }
 
     fn read_exact(&mut self, buf: &mut [u8], deadline: Instant) -> Result<(), Fault> {
         let mut filled = 0;
         while filled < buf.len() {
-            let read = self.transfer(Op::Read(&mut buf[filled..]), deadline)?;
+            let read = self
+                .transfer(Op::Read(&mut buf[filled..]), deadline)
+                .map_err(|error| {
+                    if filled != 0 && matches!(error, Fault::Timeout | Fault::DeadlineExpired) {
+                        Fault::Desynchronized
+                    } else if matches!(error, Fault::DeadlineExpired) {
+                        // Request was sent; no reply bytes have arrived yet.
+                        Fault::Timeout
+                    } else {
+                        error
+                    }
+                })?;
             if read == 0 {
                 return Err(Fault::Disconnected);
             }
@@ -305,7 +343,15 @@ impl Client {
     fn write_all(&mut self, buf: &[u8], deadline: Instant) -> Result<(), Fault> {
         let mut written = 0;
         while written < buf.len() {
-            let count = self.transfer(Op::Write(&buf[written..]), deadline)?;
+            let count = self
+                .transfer(Op::Write(&buf[written..]), deadline)
+                .map_err(|error| {
+                    if written != 0 && matches!(error, Fault::Timeout | Fault::DeadlineExpired) {
+                        Fault::Desynchronized
+                    } else {
+                        error
+                    }
+                })?;
             if count == 0 {
                 return Err(Fault::Disconnected);
             }
@@ -316,6 +362,9 @@ impl Client {
 
     /// Issues one overlapped operation and waits for it, or cancels it.
     fn transfer(&mut self, op: Op<'_>, deadline: Instant) -> Result<usize, Fault> {
+        if Instant::now() >= deadline {
+            return Err(Fault::DeadlineExpired);
+        }
         let mut overlapped = OVERLAPPED {
             hEvent: self.event,
             ..Default::default()
@@ -368,8 +417,15 @@ impl Client {
             // The timeout arrives as a WAIT_* status rather than an
             // ERROR_*, which is why it is not checked with `is`.
             Err(error) if error.code() == windows::core::HRESULT::from_win32(WAIT_TIMEOUT.0) => {
-                self.abandon(&overlapped);
-                Err(Fault::Timeout)
+                #[cfg(test)]
+                tests::after_timeout();
+                if self.abandon(&overlapped) {
+                    Err(Fault::Timeout)
+                } else {
+                    // Cancellation raced completion or had an unknown
+                    // outcome. Consumed/written bytes cannot be replayed.
+                    Err(Fault::Desynchronized)
+                }
             }
             Err(error) if is_disconnect(&error) => Err(Fault::Disconnected),
             Err(error) => Err(Fault::Os(error)),
@@ -385,7 +441,9 @@ impl Client {
     /// hand the caller a buffer that is still being written to — a
     /// use-after-free that reproduces only under load, which is the worst
     /// kind.
-    fn abandon(&self, overlapped: &OVERLAPPED) {
+    /// True only when cancellation reports no transferred bytes. A completed
+    /// transfer racing cancellation must retire this stream, not lose bytes.
+    fn abandon(&self, overlapped: &OVERLAPPED) -> bool {
         // SAFETY: `overlapped` describes an operation still outstanding on
         // `self.handle`.
         unsafe {
@@ -394,7 +452,8 @@ impl Client {
             // Blocks until the cancellation lands; the expected result is
             // ERROR_OPERATION_ABORTED, and any other outcome equally means
             // the kernel is done with the buffer.
-            let _ = GetOverlappedResult(self.handle, overlapped, &mut transferred, true);
+            let result = GetOverlappedResult(self.handle, overlapped, &mut transferred, true);
+            transferred == 0 && result.is_err_and(|error| is(&error, ERROR_OPERATION_ABORTED))
         }
     }
 }
@@ -451,3 +510,103 @@ fn to_wide_nul(s: &str) -> Vec<u16> {
 /// `FILE_FLAG_OVERLAPPED` is a `FILE_FLAGS_AND_ATTRIBUTES`; naming the
 /// import above keeps the `CreateFileW` call readable.
 const _: FILE_FLAGS_AND_ATTRIBUTES = FILE_FLAG_OVERLAPPED;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Descriptor, PipeInstance};
+    use std::sync::mpsc;
+
+    thread_local! {
+        static AFTER_TIMEOUT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+        static BEFORE_REQUEST_WRITE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn before_request_write() {
+        BEFORE_REQUEST_WRITE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+    }
+
+    #[test]
+    fn expiry_between_final_check_and_write_is_not_sent() {
+        let name = format!(
+            r"\\.\pipe\sakura_before_write_expiry_{}",
+            std::process::id()
+        );
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let pipe = PipeInstance::create(&name, &security, true).expect("private pipe");
+        let server = std::thread::spawn(move || {
+            pipe.wait_for_client().expect("client");
+            let mut request = Vec::new();
+            pipe.read_frame_with_deadline(&mut request, Duration::from_millis(80))
+                .map(|_| ())
+        });
+        let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
+        let next = client.next_request_id();
+        BEFORE_REQUEST_WRITE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(|| {
+                std::thread::sleep(Duration::from_millis(30));
+            }))
+        });
+        let result = client.call_until(&Request::Ping, Instant::now() + Duration::from_millis(20));
+        let unchanged = client.next_request_id() == next;
+        let peer = server.join().expect("peer joined");
+        drop(client);
+        assert!(matches!(result, Err(Fault::DeadlineExpired)) && unchanged);
+        assert!(
+            matches!(peer, Err(Fault::Timeout)),
+            "no bytes issued at the raced boundary"
+        );
+    }
+
+    pub(super) fn after_timeout() {
+        AFTER_TIMEOUT.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+    }
+
+    #[test]
+    fn completion_racing_timeout_retires_the_partial_stream() {
+        let name = format!(r"\\.\pipe\sakura_cancel_completion_{}", std::process::id());
+        let security = Descriptor::for_pipe().expect("descriptor");
+        let pipe = PipeInstance::create(&name, &security, true).expect("private pipe");
+        let (release, released) = mpsc::channel();
+        let (written, observed) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            pipe.wait_for_client().expect("client");
+            let mut request = Vec::new();
+            pipe.read_frame_with_deadline(&mut request, Duration::from_secs(1))
+                .expect("request");
+            released
+                .recv_timeout(Duration::from_secs(1))
+                .expect("timeout reached");
+            pipe.write_all(&[1])
+                .expect("complete pending read with one byte");
+            written.send(()).expect("written notification");
+            // Keep the peer alive until the client has observed the completed
+            // read, so cancellation cannot be mistaken for disconnect.
+            let _ = pipe.read_frame_with_deadline(&mut request, Duration::from_millis(100));
+        });
+        let mut client = Client::connect_to(&name, PATIENT_CONNECT).expect("connect");
+        AFTER_TIMEOUT.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                release.send(()).expect("release peer");
+                observed
+                    .recv_timeout(Duration::from_secs(1))
+                    .expect("peer wrote");
+            }));
+        });
+        let result = client.call_until(&Request::Ping, Instant::now() + Duration::from_millis(20));
+        drop(client);
+        server.join().expect("peer joined");
+        assert!(
+            matches!(result, Err(Fault::Desynchronized)),
+            "completed read cannot be discarded as reusable timeout: {result:?}"
+        );
+    }
+}

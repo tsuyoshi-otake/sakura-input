@@ -1,0 +1,313 @@
+{
+  "schema": 1,
+  "domain": "space-key-dispatch-oracle-correspondence",
+  "base_revision": "bc90f95d789dd8a3eda3ae30e363c3ff1b67fc48",
+  "workspace_verification": {"command": "cargo test --locked --workspace", "exit_code": 0, "passed": 1821, "failed": 0, "ignored": 84, "log_sha256": "af0166cf983cba3a767346160f44ca1de4c4cc38a2128ab969feca2d872e01af"},
+  "clippy_verification": {"command": "cargo clippy --locked --workspace --all-targets -- -D warnings", "exit_code": 0, "log_sha256": "5c06c1de7574b7788d0aa8c661938bfc0a203e93f1fc8723cdbd85b3f3859be3"},
+  "format_and_diff_checks": "cargo fmt --all -- --check and git diff --check exited 0",
+  "status": "PASS",
+  "scope": "Oracle contract and dispatcher test adapter only; no whole-engine crash, real pipe/TSF/physical routing or full product conformance",
+  "input_hash_encoding": "UTF-8 text, CRLF normalized to LF",
+  "inputs": {
+    "Cargo.lock": "c70ac8e8510e2bd1a62088174789c12d6aae017d6041a614b83cab907fcb8644",
+    "rust-toolchain.toml": "6ea47db9a87d952738688c9c0efad8ebb6437246f2c7397f8042d14faae57f6c",
+    "Cargo.toml": "186a5126ffbb0991cc1224531c515452d28197fc0c639f11b859a6759d14254b",
+    "crates/sakura-engine/Cargo.toml": "adabdca342cd8b3dfe6b4537c531b3587d589ae7c86ba20f84ade9e6cb26931d",
+    "crates/sakura-engine/src/space_key_dispatch_oracle.rs": "e6990e7067fa32f89d710d7d2abbe8b85f5e382ba3db59be3da6b4101802d79e",
+    "crates/sakura-engine/src/space_key_dispatch_oracle_tests.rs": "ae962eb815abe6b690b55fb185a99debecd9f1372da67bfbea0bb872cce6ec5d",
+    "crates/sakura-engine/src/space_key_dispatch_tests.rs": "02166f241b950db29669b771580e1697a77bc049688f86f72566393246be3603",
+    "verification/space-key-dispatch/cargo-mutants.toml": "b50230d5f8d11e9895ef65d09a7069342dfdd86d4b239b7c676251828f3d6a94"
+  },
+  "counterexamples": {
+    "old_exit_codes": [
+      101,
+      101,
+      101
+    ],
+    "old_semantic_failures": 3,
+    "corrected_command": "cargo test --locked -p sakura-engine --lib space_key_dispatch",
+    "exit_code": 0,
+    "passed": 47,
+    "failed": 0,
+    "ignored": 0
+  },
+  "pbt": {
+    "scope": "Independent oracle state machine; not randomized production comparison",
+    "seed": "0x5350_4143_4520_0816",
+    "generator": "xorshift13/7/17 and generate_event(random % 11), source-hash identified; AbandonContext event semantics",
+    "cases": 512,
+    "actors": [
+      1,
+      3
+    ],
+    "events_per_case": [
+      3,
+      10
+    ],
+    "assertions": [
+      "no_dual_effect after every event",
+      "document_spaces <= MAX_DOCUMENT_SPACES"
+    ],
+    "extra_cases": "explicit cap and disconnected-target coverage probes",
+    "failing_shrink": null,
+    "shrink_canary": {
+      "seed": "0x5350_4143_4520_0801",
+      "witness": [
+        7,
+        3
+      ],
+      "scope": "Separate synthetic predicate, not a product failure"
+    }
+  },
+  "c2": {
+    "scope": "Named atomic_conditions observations in the oracle, not production condition coverage or MC/DC",
+    "atoms": 11,
+    "covered_polarities": 22,
+    "total_polarities": 22,
+    "report": "space-key-dispatch/coverage/c2-report.md"
+  },
+  "production_comparison": {
+    "kind": "fixed regression",
+    "events": [
+      "Type(C0)",
+      "Space(C0|C1)"
+    ],
+    "generated_cases": 0,
+    "legacy_artifact": "space-key-dispatch/pbt-production-shrunk-counterexample.md",
+    "warning": "Legacy filename/seed label does not indicate a generated PBT or a current failing shrink."
+  },
+  "mutation": {
+    "tool": "cargo-mutants 27.1.0",
+    "command": "cargo mutants --file crates/sakura-engine/src/space_key_dispatch_oracle.rs --config verification/space-key-dispatch/cargo-mutants.toml --jobs 1 --copy-target false --copy-vcs false --no-shuffle --timeout 30 --build-timeout 240 --cargo-arg=--locked --output <task-evidence>/space-mutants-current",
+    "exit_code": 0,
+    "baseline": {
+      "status": "Success",
+      "test_passed": 24,
+      "test_failed": 0
+    },
+    "generated": 33,
+    "caught": 32,
+    "missed": 0,
+    "unviable": 1,
+    "timeout": 0,
+    "error": 0,
+    "semantic_kill_audit": "All32 caught logs have a successful Build and test exit101 with nonzero Rust assertion failures. Unviable is SpaceEffect:Default E0277; excluded from semantic kills.",
+    "raw_outcomes_sha256": "1585031f0278a31aa8d2c42a5abcdc8faaf9cc9cbf1a4f96495ff7c7e6f0a50d",
+    "outcomes": [
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:140:5: replace peer_converting -> bool with true",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_140_col_5.log",
+        "log_sha256": "82e2767dad6e15bbace0e53b6d2f7461158a1dbcd6c4437e8d767a56a8d9117a"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:140:5: replace peer_converting -> bool with false",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_140_col_5_001.log",
+        "log_sha256": "551df6a24c312f5e85020786f67294278e7e39632e2042349b8f80fb4ba619e7"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:143:13: replace && with || in peer_converting",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_143_col_13.log",
+        "log_sha256": "e402ccdf91392baa9204957df06ccaf19bfe76b8184c18ecc94e3c732a316284"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:142:13: replace && with || in peer_converting",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_142_col_13.log",
+        "log_sha256": "310e81363cfa6801efc3b41dad35439cc6f5d6f69a7d5430714c7ff77ab3921e"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:141:15: replace != with == in peer_converting",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_141_col_15.log",
+        "log_sha256": "74844ccbb55a40ee32f9cb20ee77f5d8f2d799e0ac8fa06bdc531062f7d387e3"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:151:5: replace space_effect -> SpaceEffect with Default::default()",
+        "status": "Unviable",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_151_col_5.log",
+        "log_sha256": "72522561556b51ce9cc164b1673200a14dd20bb6330f37f45346192068b59aa1"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:151:35: replace || with && in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_151_col_35.log",
+        "log_sha256": "b4def0008f74e9116549faa04cf3c8b3ebf9d0cb9b11e973deb18b9cc3ac1e4b"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:151:19: replace >= with < in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_151_col_19.log",
+        "log_sha256": "ba6f11c6b9663a2e830d70bc5bed81a6c9cfaf8c8e83b6f1c164dea7ea189fd0"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:151:38: delete ! in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_151_col_38.log",
+        "log_sha256": "7c70c03d2d457d2017132e24bfa9381b46b2856548f47b70993a0b3209d03c8a"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:156:28: replace match guard peer_converting(state, connection) with true in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_156_col_28.log",
+        "log_sha256": "54c0dab9ebbf4be1e67c9798dc9d4536c89385257a3a8c3f416c603a6310d3de"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:156:28: replace match guard peer_converting(state, connection) with false in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_156_col_28_001.log",
+        "log_sha256": "ad69f5ccccdb954498f61cd81378efd7340f72df535a35b747e4a6758ee3dc4d"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:157:28: replace match guard state.pending_teardown with true in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_157_col_28.log",
+        "log_sha256": "8066ff441aceb0de548409f583b6a3f284f1c6c080ca6ce5db697edc90b0f51e"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:157:28: replace match guard state.pending_teardown with false in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_157_col_28_001.log",
+        "log_sha256": "7d378dfb96fbc1a604d8fb8aa9be6e3a4f5295a9571895f81337fbde5af32f8e"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:158:28: replace match guard state.document_spaces >= MAX_DOCUMENT_SPACES with true in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_158_col_28.log",
+        "log_sha256": "06477c807bb903790719f03958a1f9ff37ae89f4db11e018f3bbef76809b1855"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:158:28: replace match guard state.document_spaces >= MAX_DOCUMENT_SPACES with false in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_158_col_28_001.log",
+        "log_sha256": "a6604367fb6e6aae9c5384e83e85ed500ada3fa8d8b04211070ad97a95b1bbf8"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:158:50: replace >= with < in space_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_158_col_50.log",
+        "log_sha256": "dc8981530454ee8a0f472de15e41c395d07ea9579dc56db69fa1759b6cb981ec"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:186:5: replace apply with ()",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_186_col_5.log",
+        "log_sha256": "5d2368f4d9aba78fc3d39d56117ec8f0a86d20bde3e72e15f1df10500c9165b1"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:248:24: replace != with == in apply",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_248_col_24.log",
+        "log_sha256": "a043ccf111d2b6843f1495851030e8c1a3444793344048107ed41dd03dc1e2a8"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:265:5: replace apply_space with ()",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_265_col_5.log",
+        "log_sha256": "46f948fb8e012225a4f5c9759c5655706ef74eeb6a33dc53ca7c55a32f3275c9"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:266:16: replace == with != in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_266_col_16.log",
+        "log_sha256": "022135f2acbf609098d4b55db1a7137dd8a1ceeabe57f9456d697cafa94d951f"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:275:37: replace == with != in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_275_col_37.log",
+        "log_sha256": "c2fa78cd6232d358172adb04216fc7701d533cd992bc7e65c488be70ccbc1472"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:275:21: replace & with | in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_275_col_21.log",
+        "log_sha256": "3b1915396c71422e29efe3c303a66ed0339d831207a051c21c2406342ee5baa1"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:275:21: replace & with ^ in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_275_col_21_001.log",
+        "log_sha256": "566ee3f239980a7513ce2b06b619441ab9b9c3af2d2d36b1531a6381a8fdf624"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:275:26: replace << with >> in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_275_col_26.log",
+        "log_sha256": "f470c55d9973cad9716bf710d321d93c36f4825e540a0dda8420718afe8c29fb"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:280:68: replace && with || in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_280_col_68.log",
+        "log_sha256": "0c5781b3fc40e94542d97fd5c373619dc65498b9867769b18c19957dff9f8d96"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:280:35: replace && with || in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_280_col_35.log",
+        "log_sha256": "f527918a9eb1cb7c38ff9096f1d13665110b03f3e8008889855cc5677cc172c5"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:280:71: delete ! in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_280_col_71.log",
+        "log_sha256": "663cac64b2fba73503911acf1e2742b5d8348a6786c84e8fdbd657b739db02a4"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:301:17: replace && with || in apply_space",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_301_col_17.log",
+        "log_sha256": "cb321d78eb51583743c013325514888af0bbe17d81f9fba1c3cf55a6cb244c39"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:327:5: replace apply_all -> OracleState with Default::default()",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_327_col_5.log",
+        "log_sha256": "75a731c2f6596a3f43d02e17139a148945eac2a87ba607183bb1606b49a48758"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:335:5: replace no_dual_effect -> bool with true",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_335_col_5.log",
+        "log_sha256": "498301cf4a5e10bdbc17b1720258b6661d690e17c5a1e190ec30e4afa15c9410"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:335:5: replace no_dual_effect -> bool with false",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_335_col_5_001.log",
+        "log_sha256": "b449331ee9ee08c6c6d9100524797e2fa4205e486d1bdf04b5927114002fc04e"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:335:5: delete ! in no_dual_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_335_col_5_002.log",
+        "log_sha256": "539d71ba7dae4704a2b14adf94c211284c91d9e2744b52caaad29de2b1829043"
+      },
+      {
+        "name": "crates/sakura-engine/src/space_key_dispatch_oracle.rs:335:27: replace && with || in no_dual_effect",
+        "status": "CaughtMutant",
+        "log": "log/crates__sakura-engine__src__space_key_dispatch_oracle.rs_line_335_col_27.log",
+        "log_sha256": "f21cd43339921e1e4a4d5a2a64cc1acff82017cc935af6b01d8bc75ccb261db3"
+      }
+    ]
+  },
+  "local_log_sha256": {
+    "space-oracle-before.log": "201e91082529e8d0f017f1a925d7f6faec5b82972b215c27cc295d25bd51ac11",
+    "space-disconnect-before.log": "ed0a3268be5a6bc6699b7885c978872b632e7741890629ef5bcb66a566db9a77",
+    "space-disconnect-adapter-before.log": "6c4d823447d607c7b17987b90c8461183228949c5a64eec14a67c2ca3bb9aeb3",
+    "space-oracle-corrected.log": "4425715f90a34035e452436445b6c0c361d0acce170ccda76be864b2ef9f203c",
+    "space-mutants-stdout.log": "dccbf3b5359c2555674bfdceb6747c4d8a782032996ce9b952044dc8eaaa73c9",
+    "space-mutants-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "space-mutants-process.json": "4f3bd0d1ecfdfc95f0860c45b453a05538a7ebbd1cb26e07f25b24e1b3d5845d"
+  },
+  "local_log_root": "C:/Users/developer/tmp/sakura-revalidation-evidence-20260905",
+  "cleanup": "Parent runner exit0; exact owned process joined; no repository or mutation scratch executable remained",
+  "limitations": [
+    "The source hashes identify this run; they are not yet a CI dependency-closure freshness gate.",
+    "TLA SpaceKeyDispatch has not been extended with teardown credit and remains a separate bounded model.",
+    "Read-only independent reviewer is behaviorally constrained. Parent corrected review text saying33caught to actual32caught+1unviable."
+  ]
+}
