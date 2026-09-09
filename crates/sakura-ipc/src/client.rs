@@ -87,6 +87,14 @@ pub struct Client {
     next_id: RequestId,
     request: Vec<u8>,
     reply: Vec<u8>,
+    /// Wall time the most recent [`call_until`](Client::call_until) spent
+    /// before it returned, however it returned.
+    ///
+    /// A caller that records a timeout needs to say how long it actually
+    /// waited, and only this function knows: the deadline it was handed is
+    /// shared across a whole callback, so subtracting it would report the
+    /// callback's remaining allowance rather than this request's wait.
+    last_call_elapsed: Duration,
 }
 
 // SAFETY: both handles are kernel objects with no thread affinity, and
@@ -220,6 +228,7 @@ impl Client {
             next_id: 1,
             request: Vec::new(),
             reply: Vec::new(),
+            last_call_elapsed: Duration::ZERO,
         })
     }
 
@@ -235,6 +244,26 @@ impl Client {
     /// Uses a caller-owned absolute deadline across serial requests. Expiry
     /// before send is distinct from an uncertain in-flight timeout.
     pub fn call_until(&mut self, request: &Request, deadline: Instant) -> Result<Response, Fault> {
+        let started = Instant::now();
+        let answer = self.call_until_inner(request, deadline);
+        self.last_call_elapsed = started.elapsed();
+        answer
+    }
+
+    /// How long the most recent [`call_until`](Self::call_until) took.
+    ///
+    /// Zero before the first call. Meaningful on every outcome, but the one
+    /// that matters is [`Fault::Timeout`]: it separates an engine that was
+    /// marginally late from one that was stalled for seconds.
+    pub fn last_call_elapsed(&self) -> Duration {
+        self.last_call_elapsed
+    }
+
+    fn call_until_inner(
+        &mut self,
+        request: &Request,
+        deadline: Instant,
+    ) -> Result<Response, Fault> {
         if Instant::now() >= deadline {
             return Err(Fault::DeadlineExpired);
         }

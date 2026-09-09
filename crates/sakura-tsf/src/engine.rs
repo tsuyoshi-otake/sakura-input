@@ -279,7 +279,10 @@ impl Engine {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 false
             }
@@ -311,7 +314,10 @@ impl Engine {
             Ok(Response::Error(code)) => Err(code),
             Err(Fault::DeadlineExpired) => Err(ErrorCode::Internal),
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 Err(ErrorCode::Internal)
             }
@@ -365,7 +371,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => AiTextPoll::Pending,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 AiTextPoll::Pending
             }
             Ok(_) | Err(_) => {
@@ -389,7 +398,10 @@ impl Engine {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 false
             }
             Ok(Response::Error(_)) => false,
@@ -442,7 +454,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 false
             }
@@ -528,7 +543,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 link.input_scope = None;
                 false
@@ -560,7 +578,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 false
             }
@@ -607,7 +628,7 @@ impl Engine {
             Err(Fault::DeadlineExpired) if !link.desynchronized => CandidateCommitPoll::Deferred,
             Err(Fault::DeadlineExpired) => CandidateCommitPoll::Unavailable,
             Err(Fault::Timeout) => {
-                note_timeout(timeout_operation(&request));
+                note_timeout(timeout_operation(&request), link.client.last_call_elapsed());
                 CandidateCommitPoll::Unavailable
             }
             Ok(_) | Err(_) => {
@@ -673,7 +694,7 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Revert);
+                note_timeout(TimeoutOperation::Revert, link.client.last_call_elapsed());
                 link.desynchronized = true;
                 false
             }
@@ -703,7 +724,7 @@ impl Engine {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Revert);
+                note_timeout(TimeoutOperation::Revert, link.client.last_call_elapsed());
                 link.desynchronized = true;
                 false
             }
@@ -763,7 +784,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::UiPlacement);
+                note_timeout(
+                    TimeoutOperation::UiPlacement,
+                    link.client.last_call_elapsed(),
+                );
                 false
             }
             Ok(_) | Err(_) => {
@@ -846,7 +870,7 @@ impl Engine {
             // stops the next successful call from building on a
             // composition the engine may have moved on from.
             Err(Fault::Timeout) => {
-                note_timeout(timeout_operation(request));
+                note_timeout(timeout_operation(request), link.client.last_call_elapsed());
                 if session_effect(request) == SessionEffect::MayMutate {
                     link.desynchronized = true;
                 }
@@ -948,7 +972,10 @@ impl Link {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Resynchronize);
+                note_timeout(
+                    TimeoutOperation::Resynchronize,
+                    self.client.last_call_elapsed(),
+                );
                 false
             }
             // Still not answering, or answering something unexpected.
@@ -981,6 +1008,9 @@ fn open(name: Option<&str>) -> Option<Link> {
     if Instant::now() >= deadline {
         return None;
     }
+    // No `Client` exists yet on this path, so the wait behind a connect
+    // timeout has to be measured here rather than read back off one.
+    let connect_started = Instant::now();
     let connected = match name {
         Some(name) => Client::connect_to(name, left(deadline)),
         None => {
@@ -994,7 +1024,7 @@ fn open(name: Option<&str>) -> Option<Link> {
         Ok(client) => client,
         Err(Fault::DeadlineExpired) => return None,
         Err(Fault::Timeout) => {
-            note_timeout(TimeoutOperation::Connect);
+            note_timeout(TimeoutOperation::Connect, connect_started.elapsed());
             return None;
         }
         Err(_) => return None,
@@ -1012,7 +1042,7 @@ fn open(name: Option<&str>) -> Option<Link> {
         Ok(Response::Hello { .. }) => {}
         Err(Fault::DeadlineExpired) => return None,
         Err(Fault::Timeout) => {
-            note_timeout(TimeoutOperation::Handshake);
+            note_timeout(TimeoutOperation::Handshake, client.last_call_elapsed());
             return None;
         }
         _ => return None,
@@ -1037,7 +1067,7 @@ fn open(name: Option<&str>) -> Option<Link> {
         }),
         Err(Fault::DeadlineExpired) => None,
         Err(Fault::Timeout) => {
-            note_timeout(TimeoutOperation::Handshake);
+            note_timeout(TimeoutOperation::Handshake, client.last_call_elapsed());
             None
         }
         _ => None,
@@ -1157,19 +1187,25 @@ const fn scope_is_sensitive(scope: InputScope) -> bool {
     )
 }
 
+/// Records one expiry, with how long the caller actually waited for it.
+///
+/// The wait is the whole point of the second argument: a `key` record on its
+/// own cannot say whether the engine answered 1 ms past a 50 ms budget or was
+/// stalled for two seconds, and those are different failures with different
+/// fixes. It carries no request content, only the duration.
 #[cfg(not(test))]
-fn note_timeout(operation: TimeoutOperation) {
+fn note_timeout(operation: TimeoutOperation, elapsed: Duration) {
     // Diagnostic failure must never replace the original, recoverable timeout
     // with a host-application error.
-    let _ = diagnostics::record_timeout(operation);
+    let _ = diagnostics::record_timeout(operation, elapsed);
 }
 
 #[cfg(test)]
-fn note_timeout(operation: TimeoutOperation) {
+fn note_timeout(operation: TimeoutOperation, elapsed: Duration) {
     // Unit tests deliberately manufacture timeout paths. Keep that evidence
     // under the system temporary directory so `cargo test` can never append to
     // the installed user's durable diagnostics profile.
-    let _ = diagnostics::record_timeout_at(&test_timeout_log_path(), operation);
+    let _ = diagnostics::record_timeout_at(&test_timeout_log_path(), operation, elapsed);
 }
 
 #[cfg(test)]
