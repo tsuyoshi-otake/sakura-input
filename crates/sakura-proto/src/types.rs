@@ -1038,6 +1038,270 @@ impl ErrorCode {
     }
 }
 
+/// One named stage of the engine's per-request work.
+///
+/// The engine keeps a running total for each of these so a stall can be
+/// attributed to a stage instead of guessed at. The set is deliberately fixed:
+/// it is an index into a statically sized table, never a key that grows with
+/// traffic, and every member names a span of time. Nothing here can carry what
+/// the user typed, which reading was looked up, or which candidate won —
+/// a site is a duration and a count and nothing else.
+///
+/// The stages are not a partition of a request. `RequestTotal` contains the
+/// others, `RuntimeServicesTotal` contains `RuntimeServicesLockWait`, and
+/// `LearningLockWait` is reached from inside `Dispatch` on some requests and
+/// from a background maintenance pass on others. Summing them is meaningless;
+/// comparing one against `RequestTotal` is the intended use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum EngineTimingSite {
+    /// A whole request, from a decoded frame to a written reply.
+    RequestTotal = 0,
+    /// Waiting for the process-wide `dynamic_runtimes` mutex, which every
+    /// request on every pipe takes. A holder that blocks here blocks the key
+    /// path of every other connection too.
+    RuntimeServicesLockWait = 1,
+    /// The whole runtime-services check, including the first-time activation
+    /// work that runs while the mutex above is held.
+    RuntimeServicesTotal = 2,
+    /// Reading the configuration snapshot, which takes its own lock.
+    ConfigurationSnapshot = 3,
+    /// The dispatcher itself: key handling, conversion and candidate building.
+    Dispatch = 4,
+    /// Encoding the reply frame.
+    Encoding = 5,
+    /// Writing the reply frame to the pipe.
+    ReplyWrite = 6,
+    /// Waiting for the learning store's mutex.
+    LearningLockWait = 7,
+    /// The developer-mode key trace, which writes to a file on the reply path
+    /// and is therefore inside the client's budget whenever it is enabled.
+    DebugTraceEmit = 8,
+}
+
+impl EngineTimingSite {
+    /// All `EngineTimingSite` variants, in declaration order.
+    pub const ALL: [EngineTimingSite; 9] = [
+        EngineTimingSite::RequestTotal,
+        EngineTimingSite::RuntimeServicesLockWait,
+        EngineTimingSite::RuntimeServicesTotal,
+        EngineTimingSite::ConfigurationSnapshot,
+        EngineTimingSite::Dispatch,
+        EngineTimingSite::Encoding,
+        EngineTimingSite::ReplyWrite,
+        EngineTimingSite::LearningLockWait,
+        EngineTimingSite::DebugTraceEmit,
+    ];
+
+    /// A stable, machine-readable name. Reports are matched on this rather
+    /// than on ordinal so a saved report stays readable across builds.
+    pub fn name(self) -> &'static str {
+        match self {
+            EngineTimingSite::RequestTotal => "request-total",
+            EngineTimingSite::RuntimeServicesLockWait => "runtime-services-lock-wait",
+            EngineTimingSite::RuntimeServicesTotal => "runtime-services-total",
+            EngineTimingSite::ConfigurationSnapshot => "configuration-snapshot",
+            EngineTimingSite::Dispatch => "dispatch",
+            EngineTimingSite::Encoding => "encoding",
+            EngineTimingSite::ReplyWrite => "reply-write",
+            EngineTimingSite::LearningLockWait => "learning-lock-wait",
+            EngineTimingSite::DebugTraceEmit => "debug-trace-emit",
+        }
+    }
+
+    /// Encodes as one byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly: an unrecognised value is
+    /// [`Error::BadEnum`] (see module docs).
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(EngineTimingSite::RequestTotal),
+            1 => Ok(EngineTimingSite::RuntimeServicesLockWait),
+            2 => Ok(EngineTimingSite::RuntimeServicesTotal),
+            3 => Ok(EngineTimingSite::ConfigurationSnapshot),
+            4 => Ok(EngineTimingSite::Dispatch),
+            5 => Ok(EngineTimingSite::Encoding),
+            6 => Ok(EngineTimingSite::ReplyWrite),
+            7 => Ok(EngineTimingSite::LearningLockWait),
+            8 => Ok(EngineTimingSite::DebugTraceEmit),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+/// What the engine has measured at one [`EngineTimingSite`].
+///
+/// `total_us` and `max_us` saturate rather than wrap. A saturated total is
+/// still ordered correctly against a smaller one, whereas a wrapped total
+/// would read as a fast stage, which is the one reading that must never be
+/// produced by an accumulator that has been running for a long session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineTimingEntry {
+    pub site: EngineTimingSite,
+    pub samples: u64,
+    pub total_us: u64,
+    pub max_us: u64,
+}
+
+impl EngineTimingEntry {
+    /// The mean, or `None` when the site has never been reached.
+    ///
+    /// A site with no samples must not report `0`: an unexercised stage and an
+    /// instantaneous one are different answers, and only one of them means the
+    /// measurement is working.
+    pub fn mean_us(&self) -> Option<u64> {
+        (self.samples > 0).then(|| self.total_us / self.samples)
+    }
+
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        self.site.encode(w)?;
+        w.write_u64(self.samples)?;
+        w.write_u64(self.total_us)?;
+        w.write_u64(self.max_us)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            site: EngineTimingSite::decode(r)?,
+            samples: r.read_u64()?,
+            total_us: r.read_u64()?,
+            max_us: r.read_u64()?,
+        })
+    }
+}
+
+/// A place in the engine's key path where a stress harness may insert a
+/// deterministic delay.
+///
+/// The four points are chosen so that the state of the world differs at each
+/// one, not merely the elapsed time. A key delayed before dispatch has touched
+/// nothing; delayed during conversion it holds the dictionary and learning
+/// services but has not changed the session; delayed after mutation the
+/// session has already advanced while the client still has no answer; delayed
+/// during the reply the answer exists as bytes that are not yet on the wire.
+/// Those are four different failure stories, and a harness that cannot select
+/// between them cannot tell which invariant it is testing.
+///
+/// This enum is part of the ordinary protocol, and a production engine answers
+/// a status request with every point disarmed. That is deliberate: the ability
+/// to prove no injection is active belongs in the shipping build, not only in
+/// the test build.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FaultPoint {
+    /// After the request frame is decoded, before the dispatcher sees it. No
+    /// session state has changed and no reply exists.
+    BeforeDispatch = 0,
+    /// Inside key handling, immediately before the session is mutated. The
+    /// conversion, learning and prediction services are already resolved.
+    DuringConversion = 1,
+    /// Immediately after the session has been mutated, before the reply is
+    /// rendered or encoded. This is the window in which a client timeout means
+    /// the engine has applied a key the client has given up on.
+    AfterMutation = 2,
+    /// After the reply frame is encoded, before it is written to the pipe. The
+    /// answer exists and is correct; only its delivery is late.
+    ///
+    /// This sits on the key/output reply path, not on administrative replies:
+    /// the question it exists to ask is what a host does with a key whose
+    /// answer arrives after it stopped waiting. A count read back from
+    /// [`FaultStatus`](crate::Request::FaultStatus) therefore counts key
+    /// replies, not every request the engine answered.
+    DuringReply = 3,
+}
+
+impl FaultPoint {
+    /// All `FaultPoint` variants, in declaration order.
+    pub const ALL: [FaultPoint; 4] = [
+        FaultPoint::BeforeDispatch,
+        FaultPoint::DuringConversion,
+        FaultPoint::AfterMutation,
+        FaultPoint::DuringReply,
+    ];
+
+    /// The stable name used on the command line and in reports.
+    pub fn name(self) -> &'static str {
+        match self {
+            FaultPoint::BeforeDispatch => "before-dispatch",
+            FaultPoint::DuringConversion => "during-conversion",
+            FaultPoint::AfterMutation => "after-mutation",
+            FaultPoint::DuringReply => "during-reply",
+        }
+    }
+
+    /// Parses a name from [`FaultPoint::name`]. Unknown names are rejected
+    /// rather than ignored: a typo that silently armed nothing would let a
+    /// stress run report "no input was lost" when nothing was ever injected.
+    pub fn parse(name: &str) -> Option<Self> {
+        FaultPoint::ALL.into_iter().find(|p| p.name() == name)
+    }
+
+    /// Encodes as one byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly: an unrecognised value is
+    /// [`Error::BadEnum`] (see module docs).
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(FaultPoint::BeforeDispatch),
+            1 => Ok(FaultPoint::DuringConversion),
+            2 => Ok(FaultPoint::AfterMutation),
+            3 => Ok(FaultPoint::DuringReply),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+/// What is armed at one [`FaultPoint`], and what it has actually done.
+///
+/// `fired` and `slept_us` are reported alongside the configuration because a
+/// harness must be able to prove the delay happened. A run that configures a
+/// two-second stall, observes no lost input and never checks that the stall
+/// occurred has demonstrated nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FaultInjectionEntry {
+    pub point: FaultPoint,
+    /// The configured delay. Zero means this point is disarmed.
+    pub delay_us: u64,
+    /// How many further times this point will delay. `u64::MAX` means "every
+    /// time"; zero means the configured budget is spent.
+    pub remaining: u64,
+    /// How many times this point has delayed so far.
+    pub fired: u64,
+    /// The total time actually slept here, which can exceed
+    /// `delay_us * fired` because a sleep is a minimum, not a promise.
+    pub slept_us: u64,
+}
+
+impl FaultInjectionEntry {
+    /// True when this point will still delay at least once more.
+    pub fn is_armed(&self) -> bool {
+        self.delay_us > 0 && self.remaining > 0
+    }
+
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        self.point.encode(w)?;
+        w.write_u64(self.delay_us)?;
+        w.write_u64(self.remaining)?;
+        w.write_u64(self.fired)?;
+        w.write_u64(self.slept_us)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            point: FaultPoint::decode(r)?,
+            delay_us: r.read_u64()?,
+            remaining: r.read_u64()?,
+            fired: r.read_u64()?,
+            slept_us: r.read_u64()?,
+        })
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

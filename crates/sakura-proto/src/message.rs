@@ -19,8 +19,9 @@
 //! mis-attributed to the next one).
 
 use crate::types::{
-    AppearanceTheme, CandidateDetail, CandidateList, ErrorCode, InputScope, KeyInput, Mode, Output,
-    PadShortcut, ScreenRect,
+    AppearanceTheme, CandidateDetail, CandidateList, EngineTimingEntry, EngineTimingSite,
+    ErrorCode, FaultInjectionEntry, FaultPoint, InputScope, KeyInput, Mode, Output, PadShortcut,
+    ScreenRect,
 };
 use crate::wire::{Reader, Sink, VecSink};
 use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
@@ -64,6 +65,12 @@ pub(crate) const REQ_COMMIT_CANDIDATE: u16 = 0x001C;
 /// Invalidates document-relative, memory-only context while preserving the
 /// session's explicit input mode and profile configuration.
 pub(crate) const REQ_RESET_DOCUMENT_CONTEXT: u16 = 0x001D;
+/// Reads the engine's per-stage timing accumulators. Content-free: the reply
+/// carries counts and durations only.
+pub(crate) const REQ_ENGINE_TIMING: u16 = 0x001E;
+/// Reads the engine's armed key-path delays. Content-free: points, durations
+/// and counts only.
+pub(crate) const REQ_FAULT_STATUS: u16 = 0x001F;
 
 // Wire values for each response message type. `RES_OUTPUT` is also used
 // directly by `crate::output::OutputBuf::encode_frame`, which encodes a
@@ -83,6 +90,8 @@ pub(crate) const RES_AI_TEXT_PENDING: u16 = 0x800B;
 pub(crate) const RES_AI_TEXT_RESULT: u16 = 0x800C;
 pub(crate) const RES_CANDIDATE_COMMIT_QUEUED: u16 = 0x800D;
 pub(crate) const RES_CANDIDATE_COMMIT_PENDING: u16 = 0x800E;
+pub(crate) const RES_ENGINE_TIMING: u16 = 0x800F;
+pub(crate) const RES_FAULT_STATUS: u16 = 0x8010;
 pub(crate) const RES_ERROR: u16 = 0x80FF;
 
 /// A message sent from a client (the TSF DLL) to the engine.
@@ -155,6 +164,16 @@ pub enum Request {
     FlushInputHistory,
     /// Reads live developer input-history drop and persistence counters.
     InputHistoryStats,
+    /// Reads the engine's per-stage timing accumulators. The reply carries
+    /// counts and durations only, never text, so it can be collected from a
+    /// real session without recording what was typed.
+    EngineTiming,
+    /// Reads which deterministic key-path delays this engine has armed, and
+    /// what they have actually done. Content-free: points, durations and
+    /// counts only. A shipping engine cannot arm any of them, so this reply is
+    /// how a stress run proves the delay it configured was really applied, and
+    /// how anyone can prove a user's engine has none.
+    FaultStatus,
     /// Tells the engine the input scope of the focused field.
     SetInputScope {
         session: SessionId,
@@ -397,6 +416,18 @@ pub enum Response {
         ai_output_tokens: u64,
         ai_cached_tokens: u64,
     },
+    /// Answers [`Request::EngineTiming`]: one entry per
+    /// [`EngineTimingSite`], in declaration order.
+    EngineTiming {
+        entries: Vec<EngineTimingEntry>,
+    },
+    /// Answers [`Request::FaultStatus`]: one entry per [`FaultPoint`], in
+    /// declaration order. A production engine answers with every point
+    /// disarmed, which is what makes "no delay was injected" a checkable
+    /// claim rather than an assumption.
+    FaultStatus {
+        entries: Vec<FaultInjectionEntry>,
+    },
     /// Answers [`Request::DeleteHistoryCandidate`]. `false` is a terminal,
     /// fail-closed no-op for stale UI, a non-history row, disabled learning,
     /// a duplicate click, or a persistence failure. The renderer must wait
@@ -616,6 +647,8 @@ fn request_msg_type(req: &Request) -> u16 {
         Request::ClearInputHistory => REQ_CLEAR_INPUT_HISTORY,
         Request::FlushInputHistory => REQ_FLUSH_INPUT_HISTORY,
         Request::InputHistoryStats => REQ_INPUT_HISTORY_STATS,
+        Request::EngineTiming => REQ_ENGINE_TIMING,
+        Request::FaultStatus => REQ_FAULT_STATUS,
     }
 }
 
@@ -740,6 +773,8 @@ fn encode_request_body<S: Sink>(req: &Request, w: &mut S) -> Result<(), Error> {
         Request::ClearInputHistory => Ok(()),
         Request::FlushInputHistory => Ok(()),
         Request::InputHistoryStats => Ok(()),
+        Request::EngineTiming => Ok(()),
+        Request::FaultStatus => Ok(()),
         Request::WatchUi { since } => w.write_u64(*since),
         Request::SetUiPlacement {
             session,
@@ -763,6 +798,8 @@ fn response_msg_type(res: &Response) -> u16 {
         Response::Pong => RES_PONG,
         Response::Ok => RES_OK,
         Response::InputHistoryStats { .. } => RES_INPUT_HISTORY_STATS,
+        Response::EngineTiming { .. } => RES_ENGINE_TIMING,
+        Response::FaultStatus { .. } => RES_FAULT_STATUS,
         Response::InputMode { .. } => RES_INPUT_MODE,
         Response::HistoryCandidateDeleted { .. } => RES_HISTORY_CANDIDATE_DELETED,
         Response::CandidateCommitQueued { .. } => RES_CANDIDATE_COMMIT_QUEUED,
@@ -852,6 +889,29 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
             w.write_u64(*ai_input_tokens)?;
             w.write_u64(*ai_output_tokens)?;
             w.write_u64(*ai_cached_tokens)
+        }
+        Response::EngineTiming { entries } => {
+            // The site set is fixed, so a longer list means the sender built
+            // something the receiver cannot index. Refuse it here rather than
+            // letting the reader decide what to drop.
+            if entries.len() > EngineTimingSite::ALL.len() {
+                return Err(Error::TooLarge);
+            }
+            w.write_count(entries.len())?;
+            for entry in entries {
+                entry.encode(w)?;
+            }
+            Ok(())
+        }
+        Response::FaultStatus { entries } => {
+            if entries.len() > FaultPoint::ALL.len() {
+                return Err(Error::TooLarge);
+            }
+            w.write_count(entries.len())?;
+            for entry in entries {
+                entry.encode(w)?;
+            }
+            Ok(())
         }
         Response::Ui(ui) => {
             if ui.candidate_detail.is_some() && ui.candidates.is_none() {
@@ -1010,6 +1070,8 @@ pub fn decode_request(payload: &[u8]) -> Result<(RequestId, Request), Error> {
         REQ_CLEAR_INPUT_HISTORY => Request::ClearInputHistory,
         REQ_FLUSH_INPUT_HISTORY => Request::FlushInputHistory,
         REQ_INPUT_HISTORY_STATS => Request::InputHistoryStats,
+        REQ_ENGINE_TIMING => Request::EngineTiming,
+        REQ_FAULT_STATUS => Request::FaultStatus,
         REQ_WATCH_UI => Request::WatchUi {
             since: r.read_u64()?,
         },
@@ -1093,6 +1155,33 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
             ai_output_tokens: r.read_u64()?,
             ai_cached_tokens: r.read_u64()?,
         },
+        RES_ENGINE_TIMING => {
+            let count = usize::from(r.read_count()?);
+            // A frame claiming more entries than there are sites cannot have
+            // come from a build this one can read. Stop before allocating for
+            // a length that a peer chose.
+            if count > EngineTimingSite::ALL.len() {
+                return Err(Error::BadEnum);
+            }
+            let mut entries = Vec::with_capacity(count);
+            for _ in 0..count {
+                entries.push(EngineTimingEntry::decode(&mut r)?);
+            }
+            Response::EngineTiming { entries }
+        }
+        RES_FAULT_STATUS => {
+            let count = usize::from(r.read_count()?);
+            // As above: the point set is fixed, so a longer list cannot have
+            // come from a build this one can read.
+            if count > FaultPoint::ALL.len() {
+                return Err(Error::BadEnum);
+            }
+            let mut entries = Vec::with_capacity(count);
+            for _ in 0..count {
+                entries.push(FaultInjectionEntry::decode(&mut r)?);
+            }
+            Response::FaultStatus { entries }
+        }
         RES_UI => {
             let revision = r.read_u64()?;
             let appearance_theme = AppearanceTheme::decode(&mut r)?;

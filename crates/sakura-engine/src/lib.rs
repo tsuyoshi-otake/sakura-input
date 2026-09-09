@@ -41,6 +41,7 @@ mod developer_history_order;
 pub mod dictionary;
 pub mod dispatch;
 pub mod event_log;
+pub mod fault_injection;
 pub mod input_history;
 pub mod learning;
 pub mod long_conversion;
@@ -58,6 +59,7 @@ mod shift_latin_oracle_tests;
 #[cfg(test)]
 #[path = "shift_latin_order_tests.rs"]
 mod shift_latin_order;
+pub mod timing;
 // Always compiled so cargo-mutants can score the independent oracle.
 // Production dispatch never calls it; release dead-code paths stay unused.
 #[cfg(test)]

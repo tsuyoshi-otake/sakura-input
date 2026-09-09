@@ -39,11 +39,12 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use sakura_core::{default_app_profiles, AppProfile, AppearanceTheme, Preferences};
 use sakura_proto::{
-    encode_response, peek_header, ErrorCode, OutputBuf, Request, RequestId, Response, MAX_FRAME,
+    encode_response, peek_header, EngineTimingSite, ErrorCode, FaultPoint, OutputBuf, Request,
+    RequestId, Response, MAX_FRAME,
 };
 #[cfg(test)]
 use sakura_proto::{AiTextOperation, AiTextStatus, SessionId};
@@ -57,10 +58,12 @@ use crate::ai_text::AiTextService;
 use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
+use crate::fault_injection;
 use crate::input_history::InputHistoryService;
 use crate::learning::{ForgetPredictionOutcome, LearningService};
 use crate::long_conversion::{LongConversionRuntime, LongConversionService};
 use crate::prediction::{PredictionRuntime, PredictionService};
+use crate::timing;
 use crate::ui::UiBoard;
 
 #[derive(Debug, Clone)]
@@ -264,10 +267,22 @@ impl Shared {
         let long_requested =
             preferences.neural_reranker_scope != sakura_core::NeuralRerankerScope::Off;
         let history_requested = preferences.developer_mode;
+        // Timed separately from the body below because they answer different
+        // questions. Time spent here is time this request lost to whatever
+        // another connection was doing while holding the process-wide mutex —
+        // first-time prediction start-up, an input-history store being opened,
+        // a reranker child process being spawned. Time spent after it is this
+        // request's own. Only the first kind explains one connection stalling
+        // because of another's work, so #148 cannot merge them.
+        let lock_started = Instant::now();
         let mut dynamic = match self.dynamic_runtimes.lock() {
             Ok(dynamic) => dynamic,
             Err(poisoned) => poisoned.into_inner(),
         };
+        timing::observe(
+            EngineTimingSite::RuntimeServicesLockWait,
+            lock_started.elapsed(),
+        );
 
         if !prediction_requested {
             // Dropping the owner stops the worker; a dispatcher that still
@@ -1480,6 +1495,8 @@ fn request_allowed(endpoint: Endpoint, request: &Request, client_trust: ClientTr
                 | Request::ClearInputHistory
                 | Request::FlushInputHistory
                 | Request::InputHistoryStats
+                | Request::EngineTiming
+                | Request::FaultStatus
                 | Request::Shutdown
                 | Request::Ping
         ),
@@ -1669,6 +1686,14 @@ fn serve(
             continue;
         }
 
+        // From here to the end of this iteration is the engine's service time
+        // for one request, and it is what a client's expired budget has to be
+        // compared against. It starts below the branches above rather than at
+        // the decoded frame because `WatchUi` blocks on purpose until the UI
+        // moves; folding a long poll into this total would bury every key
+        // request under it.
+        let _request_span = timing::Span::start(EngineTimingSite::RequestTotal);
+
         let consumed_candidate_commit = if let Request::CommitCandidate {
             session,
             revision,
@@ -1721,9 +1746,14 @@ fn serve(
             _ => None,
         };
 
-        let configuration = shared.configuration_snapshot();
-        let runtime_services =
-            shared.runtime_services(&configuration.preferences, &configuration.profiles);
+        let configuration = {
+            let _span = timing::Span::start(EngineTimingSite::ConfigurationSnapshot);
+            shared.configuration_snapshot()
+        };
+        let runtime_services = {
+            let _span = timing::Span::start(EngineTimingSite::RuntimeServicesTotal);
+            shared.runtime_services(&configuration.preferences, &configuration.profiles)
+        };
         dispatcher.set_prediction(runtime_services.prediction);
         dispatcher.set_long_conversion(runtime_services.long_conversion);
         dispatcher.set_input_history(runtime_services.input_history);
@@ -1744,7 +1774,15 @@ fn serve(
         {
             return Outcome::Closed;
         }
-        match dispatcher.dispatch(&request, &mut bufs.out) {
+        // Nothing has been touched yet: the frame is decoded, no session has
+        // moved and no reply exists. A key delayed here is the mildest of the
+        // four stories, and the one a correct client should always survive.
+        fault_injection::delay(FaultPoint::BeforeDispatch);
+        let reply = {
+            let _span = timing::Span::start(EngineTimingSite::Dispatch);
+            dispatcher.dispatch(&request, &mut bufs.out)
+        };
+        match reply {
             Reply::Output => {
                 #[cfg(test)]
                 tests::BEFORE_OUTPUT.with(|hook| {
@@ -1755,9 +1793,20 @@ fn serve(
                 // The diagnostic helper has a non-trivial call frame. Keep it
                 // entirely off the ordinary 160 KiB worker-stack path.
                 if debug_trace::is_enabled() {
+                    // Timed because it is a file write on the reply path, and
+                    // it is enabled by exactly the developer mode used to
+                    // collect the reports #148 is working from. If this cost
+                    // is material then those reports measured the instrument
+                    // as well as the engine, and the two configurations have
+                    // to be compared rather than pooled.
+                    let _span = timing::Span::start(EngineTimingSite::DebugTraceEmit);
                     trace_key_result(&request, &bufs.out);
                 }
-                let written = match bufs.out.encode_frame(id, &mut bufs.frame) {
+                let encoded = {
+                    let _span = timing::Span::start(EngineTimingSite::Encoding);
+                    bufs.out.encode_frame(id, &mut bufs.frame)
+                };
+                let written = match encoded {
                     Ok(written) => written,
                     Err(error) => {
                         // The engine built something that will not fit on
@@ -1772,7 +1821,15 @@ fn serve(
                         return Outcome::Failed(Fault::Protocol(error));
                     }
                 };
-                if let Err(fault) = instance.write_all(&bufs.frame[..written]) {
+                // The answer exists and is correct; only its delivery is late.
+                // A client that gives up here has abandoned a key the engine
+                // has already applied.
+                fault_injection::delay(FaultPoint::DuringReply);
+                let transported = {
+                    let _span = timing::Span::start(EngineTimingSite::ReplyWrite);
+                    instance.write_all(&bufs.frame[..written])
+                };
+                if let Err(fault) = transported {
                     return end(fault);
                 }
                 // An abandoned client's output must not replace another

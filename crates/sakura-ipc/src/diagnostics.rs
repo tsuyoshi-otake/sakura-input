@@ -20,7 +20,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use windows::Win32::System::Threading::GetCurrentThreadId;
 
@@ -30,6 +30,14 @@ const FORMAT_VERSION: u16 = 1;
 const RECORD_BYTES: usize = 32;
 pub const MAX_TIMEOUT_LOG_BYTES: u64 = 1024 * 1024;
 pub const MAX_DISCONNECT_LOG_BYTES: u64 = 1024 * 1024;
+
+/// Value stored in a record's detail field when the writer had nothing to put
+/// there: every record an older build wrote, and every disconnect record.
+///
+/// Zero is not a possible measurement because [`encode_elapsed_ms`] floors a
+/// real one at 1 ms, so a reader can tell "not measured" from "measured as
+/// fast as this field can express" without a second format version.
+const DETAIL_ABSENT: u32 = 0;
 
 /// The bounded operation whose deadline expired.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,10 +194,51 @@ impl DisconnectReason {
     }
 }
 
+/// How long the operation had actually been waiting when its deadline
+/// expired, summarised over every record that carried a measurement.
+///
+/// Without this a 51 ms expiry and a 1800 ms one are the same record, so the
+/// counters cannot say whether the engine was marginally late or entirely
+/// stalled. It is deliberately a summary rather than a per-event series: the
+/// log stays a fixed-width bounded append, and nothing about *what* the user
+/// typed can be reconstructed from three integers per operation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ElapsedSummary {
+    /// Records carrying a measurement. Builds before this field existed wrote
+    /// none, so this can be below the operation's own count.
+    pub samples: u64,
+    pub total_ms: u64,
+    pub max_ms: u32,
+}
+
+impl ElapsedSummary {
+    pub fn mean_ms(&self) -> Option<u64> {
+        (self.samples > 0).then(|| self.total_ms / self.samples)
+    }
+
+    fn observe(&mut self, elapsed_ms: u32) {
+        self.samples = self.samples.saturating_add(1);
+        self.total_ms = self.total_ms.saturating_add(u64::from(elapsed_ms));
+        self.max_ms = self.max_ms.max(elapsed_ms);
+    }
+}
+
+/// Clamps a measured wait into the record's detail field.
+///
+/// A real measurement is floored at 1 ms so it can never collide with
+/// [`DETAIL_ABSENT`], and saturated at the top so a pathological wait is
+/// reported as "at least this long" rather than wrapping into a small number.
+fn encode_elapsed_ms(elapsed: Duration) -> u32 {
+    u32::try_from(elapsed.as_millis())
+        .unwrap_or(u32::MAX)
+        .max(1)
+}
+
 /// Aggregate shown by settings and captured by dogfood evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimeoutDiagnostics {
     counts: [u64; TimeoutOperation::ALL.len()],
+    elapsed: [ElapsedSummary; TimeoutOperation::ALL.len()],
     pub valid_events: u64,
     pub invalid_records: u64,
     pub ignored_tail_bytes: u64,
@@ -202,6 +251,7 @@ impl Default for TimeoutDiagnostics {
     fn default() -> Self {
         Self {
             counts: [0; TimeoutOperation::ALL.len()],
+            elapsed: [ElapsedSummary::default(); TimeoutOperation::ALL.len()],
             valid_events: 0,
             invalid_records: 0,
             ignored_tail_bytes: 0,
@@ -215,6 +265,12 @@ impl Default for TimeoutDiagnostics {
 impl TimeoutDiagnostics {
     pub fn count(&self, operation: TimeoutOperation) -> u64 {
         self.counts[operation.index()]
+    }
+
+    /// Waiting time behind this operation's expiries. Empty when every record
+    /// for it predates the field.
+    pub fn elapsed(&self, operation: TimeoutOperation) -> ElapsedSummary {
+        self.elapsed[operation.index()]
     }
 }
 
@@ -294,6 +350,7 @@ fn append_event(
     magic: &[u8; 4],
     ceiling: u64,
     code: u16,
+    detail: u32,
     kind: &str,
 ) -> io::Result<()> {
     if let Some(parent) = path.parent() {
@@ -322,7 +379,12 @@ fn append_event(
     // SAFETY: GetCurrentThreadId has no preconditions and returns a scalar.
     let thread = unsafe { GetCurrentThreadId() };
     record[20..24].copy_from_slice(&thread.to_le_bytes());
-    // Bytes 24..28 are reserved for a future request-id discriminator.
+    // Bytes 24..28 carry the kind-specific detail: elapsed milliseconds for a
+    // timeout, `DETAIL_ABSENT` for a disconnect. The checksum below is taken
+    // over the bytes actually written, and older records hold zeros there
+    // under their own valid checksum, so populating this field neither
+    // invalidates an existing log nor needs a new `FORMAT_VERSION`.
+    record[24..28].copy_from_slice(&detail.to_le_bytes());
     let checksum = crc32(&record[..28]);
     record[28..].copy_from_slice(&checksum.to_le_bytes());
 
@@ -351,6 +413,7 @@ fn scan_events(
     kind: &str,
     counts: &mut [u64],
     resolve: impl Fn(u16) -> Option<usize>,
+    mut observe_detail: impl FnMut(usize, u32),
 ) -> io::Result<EventTotals> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
@@ -387,6 +450,10 @@ fn scan_events(
         let timestamp = u64::from_le_bytes(record[8..16].try_into().expect("fixed record"));
         totals.valid_events = totals.valid_events.saturating_add(1);
         counts[index] = counts[index].saturating_add(1);
+        let detail = u32::from_le_bytes(record[24..28].try_into().expect("fixed record"));
+        if detail != DETAIL_ABSENT {
+            observe_detail(index, detail);
+        }
         totals.first_timestamp_ms = Some(
             totals
                 .first_timestamp_ms
@@ -416,16 +483,24 @@ fn truncate_log(path: &Path) -> io::Result<()> {
 /// Best-effort public entry point for DLL callers. Callers intentionally
 /// discard this result: diagnostics must never turn a recoverable timeout into
 /// a host-application failure.
-pub fn record_timeout(operation: TimeoutOperation) -> io::Result<()> {
-    record_timeout_at(&default_timeout_log_path()?, operation)
+///
+/// `elapsed` is how long the caller had been waiting when it gave up. It is
+/// the wait itself, not anything about the request's content.
+pub fn record_timeout(operation: TimeoutOperation, elapsed: Duration) -> io::Result<()> {
+    record_timeout_at(&default_timeout_log_path()?, operation, elapsed)
 }
 
-pub fn record_timeout_at(path: &Path, operation: TimeoutOperation) -> io::Result<()> {
+pub fn record_timeout_at(
+    path: &Path,
+    operation: TimeoutOperation,
+    elapsed: Duration,
+) -> io::Result<()> {
     append_event(
         path,
         MAGIC,
         MAX_TIMEOUT_LOG_BYTES,
         operation as u16,
+        encode_elapsed_ms(elapsed),
         "timeout",
     )
 }
@@ -439,6 +514,7 @@ pub fn read_timeout_diagnostics(path: &Path) -> io::Result<TimeoutDiagnostics> {
         "timeout",
         &mut diagnostics.counts,
         |code| TimeoutOperation::from_wire(code).map(TimeoutOperation::index),
+        |index, elapsed_ms| diagnostics.elapsed[index].observe(elapsed_ms),
     )?;
     diagnostics.valid_events = totals.valid_events;
     diagnostics.invalid_records = totals.invalid_records;
@@ -466,6 +542,7 @@ pub fn record_disconnect_at(path: &Path, reason: DisconnectReason) -> io::Result
         MAGIC_DISCONNECT,
         MAX_DISCONNECT_LOG_BYTES,
         reason as u16,
+        DETAIL_ABSENT,
         "disconnect",
     )
 }
@@ -479,6 +556,8 @@ pub fn read_disconnect_diagnostics(path: &Path) -> io::Result<DisconnectDiagnost
         "disconnect",
         &mut diagnostics.counts,
         |code| DisconnectReason::from_wire(code).map(DisconnectReason::index),
+        // A reset has no waiting time to report; its detail stays absent.
+        |_, _| {},
     )?;
     diagnostics.valid_events = totals.valid_events;
     diagnostics.invalid_records = totals.invalid_records;
@@ -523,9 +602,16 @@ mod tests {
     #[test]
     fn fixed_records_are_counted_by_operation_and_clear_to_zero() {
         let path = temporary_file("roundtrip");
-        record_timeout_at(&path, TimeoutOperation::Key).expect("key timeout");
-        record_timeout_at(&path, TimeoutOperation::Key).expect("second key timeout");
-        record_timeout_at(&path, TimeoutOperation::Reconvert).expect("reconversion timeout");
+        record_timeout_at(&path, TimeoutOperation::Key, Duration::from_millis(60))
+            .expect("key timeout");
+        record_timeout_at(&path, TimeoutOperation::Key, Duration::from_millis(120))
+            .expect("second key timeout");
+        record_timeout_at(
+            &path,
+            TimeoutOperation::Reconvert,
+            Duration::from_millis(75),
+        )
+        .expect("reconversion timeout");
 
         let diagnostics = read_timeout_diagnostics(&path).expect("diagnostics");
         assert_eq!(diagnostics.valid_events, 3);
@@ -547,10 +633,96 @@ mod tests {
     }
 
     #[test]
+    fn waiting_time_is_summarised_per_operation() {
+        let path = temporary_file("elapsed");
+        record_timeout_at(&path, TimeoutOperation::Key, Duration::from_millis(60))
+            .expect("first key timeout");
+        record_timeout_at(&path, TimeoutOperation::Key, Duration::from_millis(1_800))
+            .expect("second key timeout");
+        record_timeout_at(&path, TimeoutOperation::Commit, Duration::from_millis(52))
+            .expect("commit timeout");
+        let result = read_timeout_diagnostics(&path);
+        let _ = fs::remove_file(path);
+        let diagnostics = result.expect("diagnostics");
+
+        // The point of the field: two `key` records that used to be
+        // indistinguishable now say that one was marginal and one was a stall.
+        let key = diagnostics.elapsed(TimeoutOperation::Key);
+        assert_eq!(key.samples, 2);
+        assert_eq!(key.max_ms, 1_800);
+        assert_eq!(key.total_ms, 1_860);
+        assert_eq!(key.mean_ms(), Some(930));
+
+        let commit = diagnostics.elapsed(TimeoutOperation::Commit);
+        assert_eq!(commit.samples, 1);
+        assert_eq!(commit.max_ms, 52);
+
+        // An operation that never expired reports nothing rather than zero.
+        assert_eq!(
+            diagnostics.elapsed(TimeoutOperation::Connect),
+            ElapsedSummary::default()
+        );
+        assert_eq!(
+            diagnostics.elapsed(TimeoutOperation::Connect).mean_ms(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_sub_millisecond_wait_is_still_distinguishable_from_an_unmeasured_one() {
+        let path = temporary_file("elapsed-floor");
+        // Written the way a build from before this field wrote it: a valid
+        // record whose detail bytes are zero, under its own valid checksum.
+        append_event(
+            &path,
+            MAGIC,
+            MAX_TIMEOUT_LOG_BYTES,
+            TimeoutOperation::Key as u16,
+            DETAIL_ABSENT,
+            "timeout",
+        )
+        .expect("legacy record");
+        record_timeout_at(&path, TimeoutOperation::Key, Duration::from_micros(400))
+            .expect("sub-millisecond timeout");
+        let result = read_timeout_diagnostics(&path);
+        let _ = fs::remove_file(path);
+        let diagnostics = result.expect("diagnostics");
+
+        // Both records count. Only the measured one contributes a sample, so
+        // an old log is reported as unmeasured instead of as instantaneous.
+        assert_eq!(diagnostics.valid_events, 2);
+        assert_eq!(diagnostics.invalid_records, 0);
+        assert_eq!(diagnostics.count(TimeoutOperation::Key), 2);
+        let key = diagnostics.elapsed(TimeoutOperation::Key);
+        assert_eq!(key.samples, 1);
+        assert_eq!(key.max_ms, 1);
+    }
+
+    #[test]
+    fn an_implausibly_long_wait_saturates_rather_than_wrapping() {
+        assert_eq!(
+            encode_elapsed_ms(Duration::from_secs(60 * 60 * 24 * 365)),
+            u32::MAX
+        );
+        assert_eq!(encode_elapsed_ms(Duration::ZERO), 1);
+        assert_ne!(encode_elapsed_ms(Duration::ZERO), DETAIL_ABSENT);
+    }
+
+    #[test]
     fn candidate_poll_records_do_not_relabel_legacy_placement_records() {
         let path = temporary_file("candidate-poll");
-        record_timeout_at(&path, TimeoutOperation::UiPlacement).expect("legacy record");
-        record_timeout_at(&path, TimeoutOperation::CandidatePoll).expect("poll record");
+        record_timeout_at(
+            &path,
+            TimeoutOperation::UiPlacement,
+            Duration::from_millis(12),
+        )
+        .expect("legacy record");
+        record_timeout_at(
+            &path,
+            TimeoutOperation::CandidatePoll,
+            Duration::from_millis(11),
+        )
+        .expect("poll record");
         let result = read_timeout_diagnostics(&path);
         let _ = fs::remove_file(path);
         let diagnostics = result.expect("read both versions' operation codes");
@@ -565,7 +737,8 @@ mod tests {
     #[test]
     fn corrupt_and_torn_records_are_visible_but_never_counted() {
         let path = temporary_file("corrupt");
-        record_timeout_at(&path, TimeoutOperation::Commit).expect("valid record");
+        record_timeout_at(&path, TimeoutOperation::Commit, Duration::from_millis(55))
+            .expect("valid record");
         let mut bytes = fs::read(&path).expect("read");
         bytes[6] = 0xff;
         bytes.extend_from_slice(b"tail");
@@ -625,7 +798,8 @@ mod tests {
         assert_eq!(as_timeouts.count(TimeoutOperation::Key), 0);
 
         let timeouts = temporary_file("cross-timeout");
-        record_timeout_at(&timeouts, TimeoutOperation::Key).expect("timeout record");
+        record_timeout_at(&timeouts, TimeoutOperation::Key, Duration::from_millis(60))
+            .expect("timeout record");
         let as_disconnects = read_disconnect_diagnostics(&timeouts).expect("disconnect read");
         assert_eq!(as_disconnects.valid_events, 0);
         assert_eq!(as_disconnects.invalid_records, 1);

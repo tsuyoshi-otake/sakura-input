@@ -10,8 +10,8 @@ use sakura_core::{
 use sakura_proto::Mode;
 use sakura_settings::user_dictionary::{self, ImportMode};
 use sakura_settings::{
-    configuration::ConfigurationDocument, diagnostics, formats, input_history, learning, paths,
-    updater,
+    configuration::ConfigurationDocument, diagnostics, engine_faults, engine_timing, formats,
+    input_history, learning, paths, updater,
 };
 
 pub const USAGE: &str = "\
@@ -50,6 +50,8 @@ Usage: sakura_settings <command>\n\
   history clear\n\
   history stats\n\
   diagnostics show [text|tsv]\n\
+  diagnostics timing [text|tsv]\n\
+  diagnostics faults [text|tsv]\n\
   diagnostics debug\n\
   diagnostics clear\n\
   update status\n\
@@ -122,6 +124,12 @@ pub enum Command {
         tsv: bool,
     },
     DiagnosticsDebug,
+    DiagnosticsTiming {
+        tsv: bool,
+    },
+    DiagnosticsFaults {
+        tsv: bool,
+    },
     DiagnosticsClear,
     UpdateStatus,
     UpdateEnable,
@@ -223,6 +231,14 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
             Ok(Command::DiagnosticsShow { tsv: false })
         }
         ["diagnostics", "show", "tsv"] => Ok(Command::DiagnosticsShow { tsv: true }),
+        ["diagnostics", "timing"] | ["diagnostics", "timing", "text"] => {
+            Ok(Command::DiagnosticsTiming { tsv: false })
+        }
+        ["diagnostics", "timing", "tsv"] => Ok(Command::DiagnosticsTiming { tsv: true }),
+        ["diagnostics", "faults"] | ["diagnostics", "faults", "text"] => {
+            Ok(Command::DiagnosticsFaults { tsv: false })
+        }
+        ["diagnostics", "faults", "tsv"] => Ok(Command::DiagnosticsFaults { tsv: true }),
         ["diagnostics", "debug"] => Ok(Command::DiagnosticsDebug),
         ["diagnostics", "clear"] => Ok(Command::DiagnosticsClear),
         ["update", "status"] => Ok(Command::UpdateStatus),
@@ -573,6 +589,30 @@ pub fn run(command: Command) -> Result<(), String> {
             } else {
                 println!("--- debug.tsv ---");
                 print!("{debug}");
+            }
+        }
+        Command::DiagnosticsTiming { tsv } => {
+            // Read from the live engine rather than a file: these are running
+            // totals of one process, and two readings taken around a load are
+            // what carries the information, not either one alone.
+            let snapshot = engine_timing::read().map_err(display)?;
+            if tsv {
+                print!("{}", engine_timing::render_tsv(&snapshot));
+            } else {
+                print!("{}", engine_timing::render_text(&snapshot));
+            }
+        }
+        Command::DiagnosticsFaults { tsv } => {
+            // The engine carries four deliberate delay points for the stress
+            // harness. They cannot be armed without a private test pipe, and
+            // this asks the engine actually answering this session whether
+            // that promise held — a claim worth being able to check rather
+            // than assume.
+            let snapshot = engine_faults::read().map_err(display)?;
+            if tsv {
+                print!("{}", engine_faults::render_tsv(&snapshot));
+            } else {
+                print!("{}", engine_faults::render_text(&snapshot));
             }
         }
         Command::DiagnosticsDebug => {
@@ -1034,6 +1074,26 @@ mod tests {
         assert!(matches!(
             parse_words(&["diagnostics", "debug"]),
             Ok(Command::DiagnosticsDebug)
+        ));
+        assert!(matches!(
+            parse_words(&["diagnostics", "timing"]),
+            Ok(Command::DiagnosticsTiming { tsv: false })
+        ));
+        assert!(matches!(
+            parse_words(&["diagnostics", "timing", "text"]),
+            Ok(Command::DiagnosticsTiming { tsv: false })
+        ));
+        assert!(matches!(
+            parse_words(&["diagnostics", "timing", "tsv"]),
+            Ok(Command::DiagnosticsTiming { tsv: true })
+        ));
+        assert!(matches!(
+            parse_words(&["diagnostics", "faults"]),
+            Ok(Command::DiagnosticsFaults { tsv: false })
+        ));
+        assert!(matches!(
+            parse_words(&["diagnostics", "faults", "tsv"]),
+            Ok(Command::DiagnosticsFaults { tsv: true })
         ));
         assert!(matches!(
             parse_words(&["update", "enable"]),
