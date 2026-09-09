@@ -1038,6 +1038,140 @@ impl ErrorCode {
     }
 }
 
+/// One named stage of the engine's per-request work.
+///
+/// The engine keeps a running total for each of these so a stall can be
+/// attributed to a stage instead of guessed at. The set is deliberately fixed:
+/// it is an index into a statically sized table, never a key that grows with
+/// traffic, and every member names a span of time. Nothing here can carry what
+/// the user typed, which reading was looked up, or which candidate won —
+/// a site is a duration and a count and nothing else.
+///
+/// The stages are not a partition of a request. `RequestTotal` contains the
+/// others, `RuntimeServicesTotal` contains `RuntimeServicesLockWait`, and
+/// `LearningLockWait` is reached from inside `Dispatch` on some requests and
+/// from a background maintenance pass on others. Summing them is meaningless;
+/// comparing one against `RequestTotal` is the intended use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum EngineTimingSite {
+    /// A whole request, from a decoded frame to a written reply.
+    RequestTotal = 0,
+    /// Waiting for the process-wide `dynamic_runtimes` mutex, which every
+    /// request on every pipe takes. A holder that blocks here blocks the key
+    /// path of every other connection too.
+    RuntimeServicesLockWait = 1,
+    /// The whole runtime-services check, including the first-time activation
+    /// work that runs while the mutex above is held.
+    RuntimeServicesTotal = 2,
+    /// Reading the configuration snapshot, which takes its own lock.
+    ConfigurationSnapshot = 3,
+    /// The dispatcher itself: key handling, conversion and candidate building.
+    Dispatch = 4,
+    /// Encoding the reply frame.
+    Encoding = 5,
+    /// Writing the reply frame to the pipe.
+    ReplyWrite = 6,
+    /// Waiting for the learning store's mutex.
+    LearningLockWait = 7,
+    /// The developer-mode key trace, which writes to a file on the reply path
+    /// and is therefore inside the client's budget whenever it is enabled.
+    DebugTraceEmit = 8,
+}
+
+impl EngineTimingSite {
+    /// All `EngineTimingSite` variants, in declaration order.
+    pub const ALL: [EngineTimingSite; 9] = [
+        EngineTimingSite::RequestTotal,
+        EngineTimingSite::RuntimeServicesLockWait,
+        EngineTimingSite::RuntimeServicesTotal,
+        EngineTimingSite::ConfigurationSnapshot,
+        EngineTimingSite::Dispatch,
+        EngineTimingSite::Encoding,
+        EngineTimingSite::ReplyWrite,
+        EngineTimingSite::LearningLockWait,
+        EngineTimingSite::DebugTraceEmit,
+    ];
+
+    /// A stable, machine-readable name. Reports are matched on this rather
+    /// than on ordinal so a saved report stays readable across builds.
+    pub fn name(self) -> &'static str {
+        match self {
+            EngineTimingSite::RequestTotal => "request-total",
+            EngineTimingSite::RuntimeServicesLockWait => "runtime-services-lock-wait",
+            EngineTimingSite::RuntimeServicesTotal => "runtime-services-total",
+            EngineTimingSite::ConfigurationSnapshot => "configuration-snapshot",
+            EngineTimingSite::Dispatch => "dispatch",
+            EngineTimingSite::Encoding => "encoding",
+            EngineTimingSite::ReplyWrite => "reply-write",
+            EngineTimingSite::LearningLockWait => "learning-lock-wait",
+            EngineTimingSite::DebugTraceEmit => "debug-trace-emit",
+        }
+    }
+
+    /// Encodes as one byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly: an unrecognised value is
+    /// [`Error::BadEnum`] (see module docs).
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(EngineTimingSite::RequestTotal),
+            1 => Ok(EngineTimingSite::RuntimeServicesLockWait),
+            2 => Ok(EngineTimingSite::RuntimeServicesTotal),
+            3 => Ok(EngineTimingSite::ConfigurationSnapshot),
+            4 => Ok(EngineTimingSite::Dispatch),
+            5 => Ok(EngineTimingSite::Encoding),
+            6 => Ok(EngineTimingSite::ReplyWrite),
+            7 => Ok(EngineTimingSite::LearningLockWait),
+            8 => Ok(EngineTimingSite::DebugTraceEmit),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+/// What the engine has measured at one [`EngineTimingSite`].
+///
+/// `total_us` and `max_us` saturate rather than wrap. A saturated total is
+/// still ordered correctly against a smaller one, whereas a wrapped total
+/// would read as a fast stage, which is the one reading that must never be
+/// produced by an accumulator that has been running for a long session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineTimingEntry {
+    pub site: EngineTimingSite,
+    pub samples: u64,
+    pub total_us: u64,
+    pub max_us: u64,
+}
+
+impl EngineTimingEntry {
+    /// The mean, or `None` when the site has never been reached.
+    ///
+    /// A site with no samples must not report `0`: an unexercised stage and an
+    /// instantaneous one are different answers, and only one of them means the
+    /// measurement is working.
+    pub fn mean_us(&self) -> Option<u64> {
+        (self.samples > 0).then(|| self.total_us / self.samples)
+    }
+
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        self.site.encode(w)?;
+        w.write_u64(self.samples)?;
+        w.write_u64(self.total_us)?;
+        w.write_u64(self.max_us)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            site: EngineTimingSite::decode(r)?,
+            samples: r.read_u64()?,
+            total_us: r.read_u64()?,
+            max_us: r.read_u64()?,
+        })
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

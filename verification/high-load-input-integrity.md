@@ -1,8 +1,8 @@
 # 高負荷時の入力・変換整合性（#148）
 
 Baseline HEAD: `5eb40e3807c2997270b7361f6ca0c63bf09743d1` (main, v1.0.38, clean worktree)
-Program status: **Phase 0 IN PROGRESS**. 下記は静的なコード読取りの結果であり、
-実測でも原因確定でもない。実測は Phase 1 以降で追記する。
+Program status: **Phase 1 IN PROGRESS**（計装のみ。修正・採取は未実施）。
+§2 / §3 / §4 は静的なコード読取りの結果であり、実測でも原因確定でもない。
 
 ## 1. 目的
 
@@ -301,7 +301,84 @@ I/O 圧力下ではこの寄与が支配的になり得る。
 `emit_at` の1回あたりコストを idle / I/O 圧力下で直接計測し、
 developer mode on/off で key round trip の p50/p95/p99 を比較する。
 
-## 5. 実施済み / 未実施
+## 5. 実装済みの計装（観測性のみ。動作は変更していない）
+
+Phase 1 は「まず観測性を完成させる。修正を先に入れない」であり、
+ここに挙げるものはすべて bounded / versioned / content-free の診断であり、
+KEY_BUDGET、timeout policy、キー意味論、write journal の終端は変更していない。
+
+### 5.1 timeout が実際に待った時間（commit 3592204）
+
+`Client::last_call_elapsed()` が直前の `call` / `call_until` の実測待ち時間を返す。
+`sakura-ipc` の timeout 診断レコードはこの実測値を保持し、TSF 側 16 箇所の
+`note_timeout` がそれを渡す。
+
+これで区別できるようになったこと:
+
+- **budget 切れ**（`Fault::DeadlineExpired`、`CallbackDeadline` の残余が尽きた）
+- **engine 無応答**（`Fault::Timeout`、名前付きパイプの読み待ちが満了した）
+
+従来はどちらも「timeout 1件」としか記録されず、
+「50 ms のうち何 ms を誰が使ったか」が事後に復元できなかった。
+
+### 5.2 engine 側 per-stage timing（本コミット）
+
+`crates/sakura-engine/src/timing.rs` に、固定 9 site の lock-free accumulator
+（`samples` / `total_us` / `max_us` の `AtomicU64` 3本）を置く。
+
+| site | 何を測るか | どの仮説へ効くか |
+|---|---|---|
+| `request-total` | `WatchUi` 等の long-poll 分岐を抜けた後の 1 リクエスト全体 | 全体の基準線 |
+| `runtime-services-lock-wait` | `Shared::dynamic_runtimes` の mutex 取得待ち | **H-E** |
+| `runtime-services-total` | 同 mutex 区間を含む runtime 構築全体 | **H-E** |
+| `configuration-snapshot` | 設定スナップショット取得 | H-E の周辺切り分け |
+| `dispatch` | `Dispatcher::dispatch`（変換本体を含む） | §4 の `dispatch_us` |
+| `encoding` | 応答フレームの encode | §4 の `encoding_us` |
+| `reply-write` | パイプへの `write_all` | §4 の `reply_us` |
+| `learning-lock-wait` | `LearningService` の state mutex 取得待ち | §4 の `learning_us`、`compact_state` 保持中の巻き込み |
+| `debug-trace-emit` | developer mode 時の per-key trace 書き出し | **H-F** |
+
+読み出しは protocol の `Request::EngineTiming` → `Response::EngineTiming`
+（`PROTOCOL_VERSION` 20 → **21**）。CLI は次のとおり。
+
+```
+sakura_settings.exe diagnostics timing
+sakura_settings.exe diagnostics timing tsv
+```
+
+設計上の決定と、その理由:
+
+- **常時オン**。「有効化してから記録する」診断は、稀な最初の 1 回を記録できない。
+- **saturating**。総和・最大は決して wrap しない。wrap した総和は停止した engine を
+  高速な engine として報告する。
+- **`samples` を独立に保持**。「到達しなかった」（`mean_us() == None`、text では
+  `not reached`、TSV では空欄）と「0 µs だった」を混同しない。
+- **累積、リセットなし**。stress 実行の前後 2 点を引き算して使う。
+- **`request-total` は `WatchUi` の long-poll 分岐より後**から開始する。
+  意図的な長待ちでキー要求の分布を埋めない。
+- **9 site は partition ではない**（`request-total` が他を含み、
+  `runtime-services-total` が `runtime-services-lock-wait` を含む）。合計に意味はない。
+- **engine 不在は `TimingSnapshot::EngineNotRunning`** という独立の値であり、
+  エラーでもゼロ表でもない。stress harness が「何も測れなかった」を
+  「何も遅くなかった」として記録することを防ぐ。
+
+privacy: 記録するのは stage 名（固定文字列）と回数・µs のみ。入力本文、
+ユーザー辞書、host document text、reading / surface は一切含まない。
+engine プロセス内のメモリだけに存在し、ファイルへ書かない。
+
+### 5.3 この計装で **まだ測れないもの**
+
+- `queue_wait_us`（ワーカースレッドの受理から dispatch 開始まで）
+- `conversion_us` / `dictionary_us`（`dispatch` の内訳）
+- §4 が要求する 15 個の TSF 側タイムスタンプ
+- `key_seq` / `document_revision` / `composition_generation` の protocol 露出
+- ETW（CPU sampling / context switch / hard fault）との突き合わせ
+
+したがって現時点では、`dispatch` が長い理由が変換計算なのか辞書 I/O なのか
+hard page fault なのかは**分離できない**。#107 の page-fault 仮説は
+依然として未確定であり、ETW 実測なしに原因確定としてはならない。
+
+## 6. 実施済み / 未実施
 
 | 項目 | 状態 |
 |---|---|
@@ -309,13 +386,18 @@ developer mode on/off で key round trip の p50/p95/p99 を比較する。
 | baseline HEAD 固定 | 実施済み |
 | TSF 側キー経路マップ | 実施済み（静的読取り、§2） |
 | engine 側キー経路マップ | 実施済み（静的読取り、§3） |
-| correlation ID / timing 計装 | **未実施** |
+| timeout 実測待ち時間の記録 | 実施済み（3592204、§5.1） |
+| engine 側 per-stage timing 計装 | 実施済み（§5.2。計装のみで、負荷下の採取は未実施） |
+| correlation ID（`key_seq` / `document_revision` / `composition_generation`）| **未実施** |
+| TSF 側 15 タイムスタンプ | **未実施** |
+| `queue_wait_us` / `conversion_us` / `dictionary_us` | **未実施** |
 | deterministic delay injection | **未実施** |
 | stress harness | **未実施** |
 | ETW 因果確定 | **未実施** |
 | PBT / mutation / TLC | **未実施** |
 | 実ホスト E2E | **未実施** |
 
-本文書の §2 / §3 はすべて静的コード読取りであり、
-**実行時計測・ETW・stress は一切実施していない**。
-H-A〜H-F はいずれも仮説であり、原因確定ではない。
+本文書の §2 / §3 はすべて静的コード読取りである。
+§5 の計装はコードとして存在するが、**負荷下での採取・ETW・stress は
+一切実施していない**。すなわち現時点で得られている数値は 0 件であり、
+H-A〜H-F はいずれも仮説のままで、原因確定ではない。
