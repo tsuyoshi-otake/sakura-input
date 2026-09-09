@@ -694,7 +694,9 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   acronyms reachable from `え` would trade a general-Japanese regression for an
   IT gain. Curated kana rows are conversion-only (`prediction_cost = -`).
 
-- **A user-deletable record must never fail harder than its own absence.**
+- **A user-deletable record that is merely weaker than what the binary already
+  enforces must never fail harder than its own absence.** (Bytes that are not a
+  well-formed record are a different case and stay terminal.)
   Verified 2026-09-09 (#150): `%LOCALAPPDATA%\SakuraInput\update\trust-state.txt`
   is written only by updater-driven checks, so a machine that installs by hand
   keeps whatever sequence its last check saw (4 / 1.0.36 here) while every new
