@@ -828,14 +828,22 @@ impl TrustState {
             highest_version,
             manifest_sha256,
         };
-        let sequence_floor = embedded_sequence_floor()?;
-        if state.trust_epoch != EMBEDDED_TRUST_EPOCH || state.highest_sequence < sequence_floor {
-            return Err("update trust state is below the embedded trust floor".to_owned());
-        }
         if state.canonical_text().as_bytes() != bytes {
             return Err("update trust state is not canonical".to_owned());
         }
         Ok(state)
+    }
+
+    /// Whether this state can still bound future manifests.
+    ///
+    /// A state weaker than the floor embedded in this binary carries no
+    /// information the binary does not already enforce, so callers treat it as
+    /// absent instead of as an error (#150). Rejecting it outright would buy no
+    /// security -- the file sits in a user-writable directory, so anyone who
+    /// wants it gone can simply delete it -- while permanently breaking update
+    /// checks for a user who installed a newer version by hand.
+    fn bounds_future_manifests(&self, sequence_floor: u64) -> bool {
+        self.trust_epoch == EMBEDDED_TRUST_EPOCH && self.highest_sequence >= sequence_floor
     }
 
     fn canonical_text(&self) -> String {
@@ -906,9 +914,17 @@ pub fn authorize_manifest(
     let paths = TrustPaths::adjacent_to(installer)?;
     let _lock = acquire_exclusive_lock(&paths.state_lock, timeout)
         .map_err(|error| format!("could not acquire update trust-state lock: {error}"))?;
-    let previous = read_trust_state(&paths.state)?
-        .map(|bytes| TrustState::parse(&bytes))
-        .transpose()?;
+    // Every terminal state error names the file, because deleting it is the
+    // only recovery a user has. That covers the reader's own failures (open,
+    // metadata, oversize, short read) as well as a state that parses as
+    // something other than a canonical record.
+    let previous = read_trust_state(&paths.state)
+        .map_err(|error| name_trust_state_file(&paths.state, error))?
+        .map(|bytes| {
+            TrustState::parse(&bytes).map_err(|error| name_trust_state_file(&paths.state, error))
+        })
+        .transpose()?
+        .filter(|previous| previous.bounds_future_manifests(sequence_floor));
 
     let decision = if let Some(previous) = previous {
         if previous.trust_epoch != EMBEDDED_TRUST_EPOCH
@@ -979,6 +995,14 @@ pub fn authorize_manifest(
 fn write_trust_state(path: &Path, state: TrustState) -> Result<(), String> {
     atomic_replace_trust_state(path, state.canonical_text().as_bytes())
         .map_err(|error| format!("could not atomically write update trust state: {error}"))
+}
+
+/// Point a terminal trust-state error at the file the user has to delete.
+fn name_trust_state_file(path: &Path, error: String) -> String {
+    format!(
+        "{error} ({}); delete that file to rebuild it from the next signed manifest",
+        path.display()
+    )
 }
 
 fn read_trust_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
@@ -1427,6 +1451,130 @@ mod tests {
         let _held = acquire_exclusive_lock(&paths.state_lock, Duration::from_secs(1)).unwrap();
         assert!(acquire_exclusive_lock(&paths.state_lock, Duration::from_millis(20)).is_err());
         drop(_held);
+        let _ = fs::remove_dir_all(installer.parent().unwrap());
+    }
+
+    #[test]
+    fn a_trust_state_below_the_embedded_floor_is_treated_as_absent_and_rebuilt() {
+        // Reproduces the field report behind #150: a machine whose last
+        // updater-driven check ran on 1.0.36 keeps `highest_sequence` at that
+        // release's sequence forever, because installing later versions by hand
+        // never advances the file. Every subsequent build embeds a higher floor,
+        // so the state can never catch up on its own.
+        let installer = temp_installer("stale-floor");
+        let paths = TrustPaths::adjacent_to(&installer).unwrap();
+        let floor = embedded_sequence_floor().unwrap();
+        fs::create_dir_all(paths.state.parent().unwrap()).unwrap();
+        let stale = TrustState {
+            trust_epoch: EMBEDDED_TRUST_EPOCH,
+            highest_sequence: floor - 1,
+            highest_version: Version::parse("1.0.36").unwrap(),
+            manifest_sha256: [7u8; 32],
+        };
+        fs::write(&paths.state, stale.canonical_text().as_bytes()).unwrap();
+        assert!(!stale.bounds_future_manifests(floor));
+
+        let mut manifest =
+            ReleaseManifest::parse_with_sequence_floor(&fixture("manifest-positive.txt"), 1)
+                .unwrap();
+        manifest.release_sequence = floor;
+        manifest.version = Version::parse("1.0.39").unwrap();
+        manifest.installer_url = installer_url_for(manifest.version);
+        let digest = sha256_bytes(manifest.canonical_text().as_bytes()).unwrap();
+        let current = Version::parse("1.0.39").unwrap();
+
+        assert_eq!(
+            authorize_manifest(
+                &installer,
+                current,
+                &manifest,
+                digest,
+                Duration::from_secs(1)
+            )
+            .unwrap(),
+            TrustDecision::Current
+        );
+
+        // The unusable state was replaced by one derived from the
+        // signature-verified manifest, so it now sits at the embedded floor and
+        // resumes bounding replays.
+        let rebuilt = TrustState::parse(&fs::read(&paths.state).unwrap()).unwrap();
+        assert!(rebuilt.bounds_future_manifests(floor));
+        assert_eq!(rebuilt.highest_sequence, floor);
+        assert_eq!(rebuilt.highest_version, current);
+        assert_eq!(rebuilt.manifest_sha256, digest);
+
+        let mut replay = manifest.clone();
+        replay.version = Version::parse("1.0.38").unwrap();
+        replay.installer_url = installer_url_for(replay.version);
+        let replay_digest = sha256_bytes(replay.canonical_text().as_bytes()).unwrap();
+        assert!(authorize_manifest(
+            &installer,
+            current,
+            &replay,
+            replay_digest,
+            Duration::from_secs(1)
+        )
+        .is_err());
+
+        // A state written under a retired keyring epoch is unusable for the same
+        // reason and takes the same path.
+        let wrong_epoch = TrustState {
+            trust_epoch: EMBEDDED_TRUST_EPOCH + 1,
+            highest_sequence: floor + 10,
+            highest_version: Version::parse("1.0.40").unwrap(),
+            manifest_sha256: [9u8; 32],
+        };
+        assert!(!wrong_epoch.bounds_future_manifests(floor));
+        fs::write(&paths.state, wrong_epoch.canonical_text().as_bytes()).unwrap();
+        assert_eq!(
+            authorize_manifest(
+                &installer,
+                current,
+                &manifest,
+                digest,
+                Duration::from_secs(1)
+            )
+            .unwrap(),
+            TrustDecision::Current
+        );
+        assert_eq!(
+            TrustState::parse(&fs::read(&paths.state).unwrap())
+                .unwrap()
+                .highest_sequence,
+            floor
+        );
+
+        // Bytes that are not a well-formed state stay a terminal error, but the
+        // message now names the file so the user can act on it.
+        fs::write(&paths.state, b"corrupt\n").unwrap();
+        let error = authorize_manifest(
+            &installer,
+            current,
+            &manifest,
+            digest,
+            Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert!(error.contains("trust-state.txt"), "{error}");
+
+        // The oversize rejection happens inside the reader, before any parse,
+        // so it needs the same treatment.
+        fs::write(
+            &paths.state,
+            vec![b'x'; (MAX_TRUST_STATE_BYTES + 1) as usize],
+        )
+        .unwrap();
+        let error = authorize_manifest(
+            &installer,
+            current,
+            &manifest,
+            digest,
+            Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert!(error.contains("exceeds"), "{error}");
+        assert!(error.contains("trust-state.txt"), "{error}");
         let _ = fs::remove_dir_all(installer.parent().unwrap());
     }
 

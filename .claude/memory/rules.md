@@ -693,3 +693,19 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   predictive; a kana reading shares its prefixes with ordinary words, and 470
   acronyms reachable from `え` would trade a general-Japanese regression for an
   IT gain. Curated kana rows are conversion-only (`prediction_cost = -`).
+
+- **A user-deletable record that is merely weaker than what the binary already
+  enforces must never fail harder than its own absence.** (Bytes that are not a
+  well-formed record are a different case and stay terminal.)
+  Verified 2026-09-09 (#150): `%LOCALAPPDATA%\SakuraInput\update\trust-state.txt`
+  is written only by updater-driven checks, so a machine that installs by hand
+  keeps whatever sequence its last check saw (4 / 1.0.36 here) while every new
+  build embeds a higher floor (7 in 1.0.39). `TrustState::parse` rejected a
+  state below that floor as a terminal error, so the settings app answered every
+  update check with "update trust state is below the embedded trust floor" and
+  had no way back -- while an attacker who disliked the file could simply delete
+  it and get the accepted no-state path. The bound that actually holds is the
+  one embedded in the binary. A stored bound weaker than the embedded one is
+  *no bound*, not corruption: fold it into the absent case and rewrite it from
+  the signature-verified input. Keep genuinely malformed bytes terminal, and
+  put the file's full path in that message so the user can recover.
