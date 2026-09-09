@@ -1370,3 +1370,60 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 学び: **「engine 不在」は値であって、エラーでもゼロ表でもない。** `TimingSnapshot::EngineNotRunning` を独立の variant にしないと、stress harness が「何も測れなかった」を「何も遅くなかった」として記録してしまう。
 - 学び: **計装 site の集合が partition でないなら、それを型のドキュメントに書く。** `request-total` は他を含み `runtime-services-total` は自分の lock wait を含むので、合計に意味はない。後から読む人が足し算をする前に止める必要がある。
 - 学び（作業環境）: **このマシンでは `perl -0pi -e 's|...|...|'` による複数行 in-place 置換が信用できない。** 置換ではなくファイル先頭への追記になったり、`format_args!` の内部へ差し込まれたりした（2回発生）。行番号指定の `sed` か、`head`/`cat`/`tail` による splice、または `sed -i 'Nr file'` を使う。`sed -z` の複数行パターンも、同じ形の別箇所（今回は導入した helper 自身の本体）を巻き込んで無限再帰を作ったので、置換対象が一意であることを確認してから使う。
+
+## 2026-09-09 — #148 高負荷時の入力ロスレス化 Phase 2（決定論的遅延注入 + stress harness）
+
+- **Issue / commit**: #148 / `ad47c1b`（Phase 1 は `fe0b95f`, `c7c435a`）
+- **症状（未解決）**: 高負荷下で入力文字・preedit・変換状態が失われる報告。
+  Phase 1 で engine 側 per-stage timing は入れたが、「engine を実際に止めたとき
+  入力が生き残るか」は測れていなかった。
+- **根本原因**: 未確定。本 Phase は原因を確定していない。
+- **やったこと**:
+  - `crates/sakura-engine/src/fault_injection.rs`（新規）。4 点
+    （before-dispatch / during-conversion / after-mutation / during-reply）へ
+    release ビルドに残る sleep 注入点を追加。
+  - arming gate: `--fault-injection <spec>` は `--test-pipe`（既存の
+    `validate_test_pipe()` で `\\.\pipe\SakuraInputEngineTest-` に限定）が
+    同時にあるときだけ受理。なければ **起動拒否**。env var / file 経路なし。
+    `install()` は 2 回目を拒否（one-shot）。
+  - `Request::FaultStatus` / `Response::FaultStatus` を追加し
+    `PROTOCOL_VERSION` 21 → 22。payload は 4 件固定のカウンタのみで content-free。
+    `sakura_settings.exe diagnostics faults [text|tsv]`（`engine_faults.rs`）で
+    ユーザーが自分の engine が disarmed であることを確認できる。
+  - `Engine::spawn_isolated_with_faults(spec)` と
+    `tests/high_load_key_integrity.rs`（7 tests）。実行ごとに一意な
+    `LOCALAPPDATA` / private pipe / 辞書 fixture、synthetic input のみ。
+- **検証**: `cargo fmt --all -- --check` / `cargo clippy --workspace
+  --all-targets -- -D warnings` / `./ci/run-test-quiet.ps1 -Name 'workspace
+  tests' -Command { cargo test --workspace }` / `git diff --check` すべて成功。
+  cargo・rustc・test child プロセスの残存なし（残っていた `sakura_engine.exe`
+  PID 23540 は 1.0.37 のユーザー実環境 engine で、`--test-pipe` を持たない別物）。
+- **学び（実測で得た事実。原因確定ではない）**:
+  1. **engine 側の入力欠落は 0。** `during-reply=400` を arm し、クライアント
+     budget を 50 ms（TSF の `KEY_BUDGET`）にすると client は諦めるが、
+     次のキーの reply には諦めたキーの結果が含まれている。engine は適用済み。
+  2. **stale reply は配送されない。** `sakura-ipc` の `client.rs` は
+     `header.request_id` を照合し、古い id の frame をループで読み飛ばす
+     （新しすぎる id は `Fault::Desynchronized`）。したがって「古い結果を
+     新しい request の答えとして適用する」経路は IPC 層には無い。
+  3. ⇒ ホストで文字が消えるなら、それは **engine が失ったのではなく TSF 層が
+     諦めた結果**。Phase 3 / Phase 5 の対象。
+- **設計判断の記録**:
+  - 4 点を分けたのは経過時間ではなく **世界の状態** が違うから。特に
+    `after-mutation` は「クライアントが諦めたキーを engine は適用済み」という
+    唯一の順序で、欠落と重複の双方が起こり得る窓。
+  - `fired` / `slept_us` は要求値でなく **実測値**。負荷下の scheduler は
+    寝過ごすので、harness が assert すべきは起きたことであって頼んだことではない。
+  - spec の parse は fail-closed。黙って何も arm しないと、stress 実行が
+    「入力は失われなかった」を、何も注入していない実行について報告してしまう。
+  - `during-reply` は key/output の reply 経路だけに置いた。administrative
+    reply は遅らせない。よって `fired` は key reply 件数であり全 request 数ではない。
+    types.rs の doc comment に明記済み（実装時に test が fired=2 で落ちて判明）。
+- **テスト作成時の誤り（自分側）**: `"sakura"` の逐次 preedit を
+  `["さ", ...]` と予想したが実際は `["s", "さ", "さk", ...]`（単独子音は
+  母音が来るまで roman のまま）。また変換中の `Escape` は composition を
+  クリアせず変換前の読みへ戻す。どちらも engine の正しい挙動で、期待値の側が
+  誤り。実挙動を確認してから expectation を書くこと。
+- **残り**: 負荷下の実採取、ETW 因果確定（H-E / H-F）、correlation ID、
+  TSF 側 15 タイムスタンプ、`queue_wait_us` / `conversion_us` /
+  `dictionary_us`、Pending/ACK 設計、PBT / mutation / TLC、実ホスト E2E。
