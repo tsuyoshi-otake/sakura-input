@@ -546,6 +546,17 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   closed after all earlier gates passed. An exact `.gitattributes` `eol=lf`
   rule keeps the reviewed manifest bytes identical across checkouts.
 
+- **Write those files as bytes, not as text.** The `.gitattributes` pin above
+  keeps git from changing them; it cannot stop the tool that creates them.
+  Verified 2026-09-09 (#148): bumping `data/update-signing/release-sequence.txt`
+  with Python's `Path.write_text` produced `7\r\n` under Windows' default
+  newline translation, and because the file is embedded with `include_bytes!`
+  and compared to `format!("{floor}\n")`, fourteen `sakura-settings`
+  `update_trust` and `updater` tests failed with "embedded release sequence
+  contains CR or NUL". Write with explicit bytes (`printf '7\n' >`, or
+  `newline=""`) and confirm with `xxd` before running anything else — the
+  failure surfaces far from the write, in tests that never mention the file.
+
 - **A voiced suffix needs an attested independent unvoiced base before it may
   be marked non-initial.** Same-surface suffix, prefix, or non-independent
   evidence is insufficient: Mozc assigns both `ばん` and `はん` → `版` its
