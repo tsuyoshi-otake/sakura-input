@@ -599,7 +599,7 @@ pub fn flush(_path: &Path) -> io::Result<FlushRoute> {
             format!("unexpected input-history flush response: {response:?}"),
         )),
         Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration);
+            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
             Err(fault("flush input history through engine", Fault::Timeout))
         }
         Err(error) => Err(fault("flush input history through engine", error)),
@@ -665,7 +665,7 @@ pub fn stats(_path: &Path) -> io::Result<HistoryStats> {
             format!("unexpected input-history stats response: {response:?}"),
         )),
         Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration);
+            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
             Err(fault(
                 "read input-history stats through engine",
                 Fault::Timeout,
@@ -694,7 +694,7 @@ pub fn clear(path: &Path) -> io::Result<ClearRoute> {
             format!("unexpected input-history clear response: {response:?}"),
         )),
         Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration);
+            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
             Err(fault("clear input history through engine", Fault::Timeout))
         }
         Err(error) => Err(fault("clear input history through engine", error)),
@@ -724,7 +724,7 @@ fn handshake(client: &mut Client) -> io::Result<()> {
             format!("unexpected settings handshake response: {response:?}"),
         )),
         Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration);
+            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
             Err(fault("negotiate with engine", Fault::Timeout))
         }
         Err(error) => Err(fault("negotiate with engine", error)),

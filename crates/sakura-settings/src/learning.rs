@@ -71,7 +71,7 @@ pub fn clear(path: &Path) -> io::Result<ClearRoute> {
             ))
         }
         Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration);
+            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
             return Err(fault("negotiate with engine", Fault::Timeout));
         }
         Err(error) => return Err(fault("negotiate with engine", error)),
@@ -87,7 +87,7 @@ pub fn clear(path: &Path) -> io::Result<ClearRoute> {
             format!("unexpected clear-learning response: {response:?}"),
         )),
         Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration);
+            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
             Err(fault("clear learning through engine", Fault::Timeout))
         }
         Err(error) => Err(fault("clear learning through engine", error)),
