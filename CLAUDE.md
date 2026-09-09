@@ -21,6 +21,15 @@
 - updater側の`WinVerifyTrust` fail-closed検証は弱めない。未署名リリースの自動取得・実行は拒否される設計を維持し、未署名版は手動インストール対象として扱う。
 - 署名secretが3点すべて揃っている場合は従来どおり署名・検証してよい。部分設定は曖昧な成果物を作らずCIを失敗させる。
 
+## 更新trust stateの扱い（Issue #150、2026-09-09）
+
+- `%LOCALAPPDATA%\SakuraInput\update\trust-state.txt`のように、ユーザーが削除できる場所に置いた記録は、**「存在しない」場合より厳しく失敗させてはいけない**。削除すれば消える情報を根拠に恒久エラーを返しても攻撃者は止まらず、正規の利用者だけが更新確認を永久に失う。1.0.39の`更新情報の検証に失敗しました: update trust state is below the embedded trust floor`はこの型の欠陥だった。
+- 実際のanti-rollback境界は、バイナリへ`include_bytes!`で埋め込んだfloor（`data/update-signing/release-sequence.txt`）だけである。これはバイナリを差し替えない限り動かせない。埋め込みfloorを下回るstateや`EMBEDDED_TRUST_EPOCH`と一致しないstateは、「下限として使えない＝下限が無い」と解釈し、署名検証済みmanifestから書き直す。エラーにしない。
+- 手動インストールはtrust stateを進めない。updater経由の更新確認だけが書き込む。したがって「stateのsequence ＜ 実行中ビルドのfloor」は異常ではなく、リリースのたびにfloorが上がる以上、手動インストールを続ける利用者では必ず発生する。この差を異常として扱う分岐を新設しない。
+- 形式不正・上限超過のstateは従来どおりfail closedで終端してよいが、メッセージに**そのファイルのフルパスを含める**。利用者が自力で回復できない終端エラーを作らない。
+- replay／equivocation／rollbackの拒否は弱めない。使えないstateを「無し」として扱うことと、正当なstateによる下限判定を外すことは別物である。`verification/update-signing-v2.md`のv2契約はtrust stateに言及していないため、この回復挙動は契約変更ではない。
+- 一般化：更新・署名まわりで「埋め込み値」と「永続化した値」を比較する分岐を足すときは、永続化側が欠落した場合と古い場合の two case を必ず並べて設計し、古い側が欠落側より厳しい結果にならないことをテストで固定する。
+
 ## Issue #58 GPT-5.6 Luna文章変換・選択文字列校正
 
 - AI文章変換は明示操作だけで起動する。共通トリガーは既定のJIS `変換`、設定可能な`Caps Lock`、無効の3択で、preeditを優先し、次にホストの非空選択範囲を対象とする。対象がない場合は既存キー動作へ戻す。校正はlanguage-barメニューから選択文字列に対してだけ起動し、composition中は拒否する。

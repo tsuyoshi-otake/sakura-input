@@ -1541,3 +1541,60 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   `-KeyId`、active key `178bc99d…b6c47`）を要求し、これは owner の資格情報なので
   エージェントは扱わない。候補 2 点は `release-candidate/`（untracked）へ配置済みで、
   同スクリプトの既定入力ディレクトリと一致する。
+
+## 2026-09-09 1.0.39 公開完了と、更新確認が恒久的に失敗する欠陥の修正（#148 / #150）
+
+- **訂正**: 直前の項の「GitHub Release は未作成（owner 作業）」は解消済み。DPAPI
+  保護鍵は**パスを渡すだけ**でよく、鍵の値をエージェントが見ることはないため、
+  `gh` の保存済みトークンと同じ扱いにできる（owner 指摘）。
+  `scripts/publish-release.ps1` を実行し
+  https://github.com/tsuyoshi-otake/sakura-input/releases/tag/v1.0.39 を公開した
+  （`isDraft=false`、`publishedAt=2026-09-09T10:23:25Z`、asset 3 点、
+  検証は `1 valid pinned signature`）。実行時に `ConvertFrom-Json: Invalid
+  property identifier character` で落ちたのは、`gh api .../commits/v1.0.39` の
+  diff に含まれる日本語リリースノートをコンソールの既定エンコーディングが壊した
+  ため。`pwsh -NoProfile` で `[Console]::OutputEncoding` と `$OutputEncoding` を
+  UTF-8 に設定して再実行し成功。スクリプトは変更していない。
+
+### #150 更新確認が古い trust state で恒久的に失敗する
+
+- **症状**: 新規インストールした 1.0.39 の設定アプリが、更新確認のたびに
+  `更新情報の検証に失敗しました: update trust state is below the embedded trust
+  floor` を返し、回復手段が無い。
+- **実測**: `%LOCALAPPDATA%\SakuraInput\update\trust-state.txt`
+  は `trust_epoch=1` / `highest_sequence=4` / `highest_version=1.0.36`
+  （mtime 2026-09-06 14:22）。インストール済みバイナリの埋め込み floor は 7。
+  `release-sequence.txt` の履歴は 1.0.34→2、1.0.35→3、1.0.36→4、1.0.37→5、
+  1.0.38→6、1.0.39→7。手動インストールは state を進めないので 4 のまま固定され、
+  4 < 7 が manifest 取得前の `TrustState::parse` で終端エラーになっていた。
+  同じ条件は 1.0.37（floor 5）、1.0.38（floor 6）でも成立しており、**1.0.39 の
+  リリース作業が原因ではない**。
+- **根本原因**: state が「無い」場合は正常系として受理されるのに、「古い」場合だけ
+  恒久エラーだった。しかも state はユーザー書込可能な場所にあるため、削除すれば
+  受理される。厳しく落としてもセキュリティ上の利得は無く、正規利用者だけが恒久的に
+  更新確認を失う。実効的な anti-rollback 境界はバイナリ埋め込みの floor であり、
+  これはバイナリを差し替えない限り動かせない。
+- **修正**: `TrustState::parse` から floor / epoch 判定を外し、
+  `TrustState::bounds_future_manifests(sequence_floor)` を新設。
+  `authorize_manifest` は下限として使えない state を `None` と同じ既存経路へ落とし、
+  署名検証済み manifest から state を書き直す。形式不正・上限超過は従来どおり終端
+  エラーだが、メッセージに state ファイルのフルパスを付けた。replay／equivocation／
+  rollback の拒否と `WinVerifyTrust` fail-closed は変更していない。
+  `verification/update-signing-v2.md` の v2 契約は trust state に言及していないため
+  契約変更ではない。
+- **検証**: `cargo fmt --all -- --check`、
+  `cargo clippy -p sakura-settings --all-targets --offline -- -D warnings`、
+  `./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace
+  --offline }` がすべて成功。回帰テスト
+  `update_trust::tests::a_trust_state_below_the_embedded_floor_is_treated_as_absent_and_rebuilt`
+  を追加し、実機と同じ値（state 4 / 1.0.36、floor、manifest 1.0.39）で更新確認が
+  成功して state が floor へ書き直されること、epoch 不一致 state も同じ経路を通る
+  こと、書き直し後に replay が再び拒否されること、壊れた state のエラーがパスを
+  含むことを固定した。cargo／rustc の残存プロセスなし。
+- **学び**: `.claude/memory/rules.md` と `CLAUDE.md` に「ユーザーが削除できる記録は
+  その不在より厳しく失敗させない」「埋め込み値より弱い永続値は『境界なし』であって
+  破損ではない」「手動インストールは trust state を進めない」を追加した。
+- **既存インストールの回復**: 1.0.39 のバイナリにはこの修正が入っていないため、
+  利用者側では state ファイルを削除するのが唯一の回復手段（次回の更新確認で
+  署名検証済み manifest から再構築される）。実行は owner の判断に委ねており、
+  エージェントからは削除していない。
