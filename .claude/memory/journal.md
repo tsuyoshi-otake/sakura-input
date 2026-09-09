@@ -1525,3 +1525,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - **署名**: owner 判断（2026-08-22）どおり Authenticode 未署名。ノートで未署名と
   明記し、`release-manifest-v2.txt` との SHA-256 照合を案内。updater の
   `WinVerifyTrust` fail-closed は変更していない。
+- **公開まで（追記）**: PR #149 は CI 3 件 pass（Build and test 6m58s / Build
+  installer 6m33s / Dependency policy 1m1s、Fuzz は対象外で skip）。CodeRabbit は
+  必須でないため owner 指示により待たずに merge（`7940d04`）。タグ `v1.0.39` を
+  push し `release.yml` run 34337385228 が success（build 18m15s + package 50s）。
+  成果物 `sakura-input-1.0.39-release-candidate` の
+  `sakura_setup.exe` は 24,530,941 bytes / sha256 `b74ab1b5…4c5120` で、
+  同梱 `release-manifest-v2.txt`（`release_sequence=7`、`source_commit=7940d04…`、
+  `authenticode=unsigned`）の値と一致。`signing-status.txt` は
+  `unsigned-owner-approved`。両ファイルの `gh attestation verify` は
+  `--signer-workflow release.yml` と `--source-digest 7940d04…` で成功
+  （誤 digest による negative control は exit 1 で失敗することも確認）。
+- **未完（owner 作業）**: **GitHub Release は未作成。** `scripts/publish-release.ps1`
+  は DPAPI 保護された Sakura 更新署名の秘密鍵（`-ProtectedPrivateKey` と
+  `-KeyId`、active key `178bc99d…b6c47`）を要求し、これは owner の資格情報なので
+  エージェントは扱わない。候補 2 点は `release-candidate/`（untracked）へ配置済みで、
+  同スクリプトの既定入力ディレクトリと一致する。
