@@ -1578,7 +1578,16 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   `TrustState::bounds_future_manifests(sequence_floor)` を新設。
   `authorize_manifest` は下限として使えない state を `None` と同じ既存経路へ落とし、
   署名検証済み manifest から state を書き直す。形式不正・上限超過は従来どおり終端
-  エラーだが、メッセージに state ファイルのフルパスを付けた。replay／equivocation／
+  エラーだが、メッセージに state ファイルのフルパスを付けた。
+  **レビュー指摘による訂正（PR #151、CodeRabbit と Codex が独立に指摘）**: 最初の
+  修正はパスを `TrustState::parse` の失敗にしか付けておらず、
+  `MAX_TRUST_STATE_BYTES` 超過は `read_trust_state` が parse の前に返すため
+  パスが入らないままだった。`name_trust_state_file` を切り出して reader の
+  失敗（open／metadata／oversize／short read）にも適用し、サイズ超過の
+  回帰アサーションを追加した。`CLAUDE.md` と `rules.md` の表現も、
+  「形式は正しいが使えない state」と「形式が壊れた state」を混同しないよう、
+  また埋め込み floor（動かせない下限）と永続 state（使える場合の追加 replay
+  境界）を 2 層として書き分けるよう直した。replay／equivocation／
   rollback の拒否と `WinVerifyTrust` fail-closed は変更していない。
   `verification/update-signing-v2.md` の v2 契約は trust state に言及していないため
   契約変更ではない。

@@ -914,14 +914,14 @@ pub fn authorize_manifest(
     let paths = TrustPaths::adjacent_to(installer)?;
     let _lock = acquire_exclusive_lock(&paths.state_lock, timeout)
         .map_err(|error| format!("could not acquire update trust-state lock: {error}"))?;
-    let previous = read_trust_state(&paths.state)?
+    // Every terminal state error names the file, because deleting it is the
+    // only recovery a user has. That covers the reader's own failures (open,
+    // metadata, oversize, short read) as well as a state that parses as
+    // something other than a canonical record.
+    let previous = read_trust_state(&paths.state)
+        .map_err(|error| name_trust_state_file(&paths.state, error))?
         .map(|bytes| {
-            TrustState::parse(&bytes).map_err(|error| {
-                format!(
-                    "{error} ({}); delete that file to rebuild it from the next signed manifest",
-                    paths.state.display()
-                )
-            })
+            TrustState::parse(&bytes).map_err(|error| name_trust_state_file(&paths.state, error))
         })
         .transpose()?
         .filter(|previous| previous.bounds_future_manifests(sequence_floor));
@@ -995,6 +995,14 @@ pub fn authorize_manifest(
 fn write_trust_state(path: &Path, state: TrustState) -> Result<(), String> {
     atomic_replace_trust_state(path, state.canonical_text().as_bytes())
         .map_err(|error| format!("could not atomically write update trust state: {error}"))
+}
+
+/// Point a terminal trust-state error at the file the user has to delete.
+fn name_trust_state_file(path: &Path, error: String) -> String {
+    format!(
+        "{error} ({}); delete that file to rebuild it from the next signed manifest",
+        path.display()
+    )
 }
 
 fn read_trust_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
@@ -1548,6 +1556,24 @@ mod tests {
             Duration::from_secs(1),
         )
         .unwrap_err();
+        assert!(error.contains("trust-state.txt"), "{error}");
+
+        // The oversize rejection happens inside the reader, before any parse,
+        // so it needs the same treatment.
+        fs::write(
+            &paths.state,
+            vec![b'x'; (MAX_TRUST_STATE_BYTES + 1) as usize],
+        )
+        .unwrap();
+        let error = authorize_manifest(
+            &installer,
+            current,
+            &manifest,
+            digest,
+            Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert!(error.contains("exceeds"), "{error}");
         assert!(error.contains("trust-state.txt"), "{error}");
         let _ = fs::remove_dir_all(installer.parent().unwrap());
     }
