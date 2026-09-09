@@ -1099,6 +1099,7 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::FlushInputHistory
         | Request::InputHistoryStats
         | Request::EngineTiming
+        | Request::FaultStatus
         | Request::DeleteHistoryCandidate { .. }
         | Request::QueueCandidateCommit { .. }
         | Request::SetInputScope { .. }
@@ -1140,6 +1141,7 @@ fn session_effect(request: &Request) -> SessionEffect {
         | Request::PollAiText { .. }
         | Request::InputHistoryStats
         | Request::EngineTiming
+        | Request::FaultStatus
         | Request::Hello { .. } => SessionEffect::ReadOnly,
         Request::SendKey { .. }
         | Request::Commit { .. }

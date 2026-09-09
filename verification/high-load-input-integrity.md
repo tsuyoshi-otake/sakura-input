@@ -1,7 +1,7 @@
 # 高負荷時の入力・変換整合性（#148）
 
 Baseline HEAD: `5eb40e3807c2997270b7361f6ca0c63bf09743d1` (main, v1.0.38, clean worktree)
-Program status: **Phase 1 IN PROGRESS**（計装のみ。修正・採取は未実施）。
+Program status: **Phase 2 IN PROGRESS**（計装と注入基盤。負荷下の採取・ETW は未実施）。
 §2 / §3 / §4 は静的なコード読取りの結果であり、実測でも原因確定でもない。
 
 ## 1. 目的
@@ -219,9 +219,13 @@ learning の blocking `.lock()` は 16 箇所（`learning.rs` の `.lock()` 全�
 `key_seq` / `document_revision` / `composition_generation` は、
 **現状どれも protocol に存在しない**。
 
-### 3.5 既存の遅延注入 hook
+### 3.5 既存の遅延注入 hook（Phase 2 以前の記述）
 
-**production の key path へ時間遅延を注入する仕組みは存在しない。** 近いものは:
+> **この節は baseline HEAD 時点の記述である。** 「production の key path へ
+> 時間遅延を注入する仕組みは存在しない」は Phase 2（§5.4）で解消された。
+> 以下は経緯として残す。
+
+**（baseline 時点）production の key path へ時間遅延を注入する仕組みは存在しない。** 近いものは:
 
 - `server.rs:1926-1927` `tests::BEFORE_OUTPUT`（`#[cfg(test)]` の任意 closure、`Reply::Output` の encode 直前 `server.rs:1749-1754` で同期実行）
 - `input_history.rs:1986` `tests::BEFORE_ENQUEUE`（`enqueue()` 先頭 `input_history.rs:851`）
@@ -378,6 +382,98 @@ engine プロセス内のメモリだけに存在し、ファイルへ書かな�
 hard page fault なのかは**分離できない**。#107 の page-fault 仮説は
 依然として未確定であり、ETW 実測なしに原因確定としてはならない。
 
+
+## 5.4 deterministic delay injection と stress harness（Phase 2、本コミット）
+
+§3.5 が記録していた「production の key path へ時間遅延を注入する仕組みは
+存在しない」は、本コミットで **もはや成り立たない**。release ビルドに残る
+注入点を新設した。
+
+### 5.4.1 4 つの注入点
+
+`crates/sakura-engine/src/fault_injection.rs`（新規）。
+`FaultPoint`（`crates/sakura-proto/src/types.rs`）は 4 点で、これは
+「経過時間の違い」ではなく **世界の状態の違い** で分けている。
+
+| point | 位置 | その時点で成立していること |
+|---|---|---|
+| `before-dispatch` | `server.rs` frame decode 後、`dispatcher.dispatch()` 直前 | session 未変更、reply 不在。最も軽い story |
+| `during-conversion` | `dispatch.rs` `apply_key()` 直前 | dictionary / learning / prediction は解決済み、session 未変更 |
+| `after-mutation` | `dispatch.rs` `apply_key()` の `Ok(())` 直後 | **session は前進済み**、render / encode / send は未実施 |
+| `during-reply` | `server.rs` `Reply::Output` の encode 後、`write_all` 直前 | 答えは存在し正しい。遅いのは配送だけ |
+
+`after-mutation` が「クライアントが諦めたキーを engine は適用済み」という
+唯一の順序であり、欠落と重複の双方が起こり得る窓である。
+`during-reply` は key / output の reply 経路だけに置いてある（administrative
+reply は遅延させない）。したがって `fired` は key reply の件数であり、
+engine が答えた全リクエスト数ではない。
+
+### 5.4.2 なぜ出荷ビルドに残して安全か
+
+- **arming は引数のみ。** `--fault-injection <spec>` を、`main` は
+  `--test-pipe` が同時にあるときだけ受理する（`main.rs` `startup_options`）。
+  `--test-pipe` の値は既存の `validate_test_pipe()` により
+  `\\.\pipe\SakuraInputEngineTest-` 私設名前空間に限定される。
+  production の pipe 名を持つ engine は、この引数があると **起動を拒否する**
+  （起動して黙って止まるのではない）。環境変数もファイルも受け付けない。
+- **one-shot。** `install()` は 2 回目の呼び出しを拒否する。起動後に
+  arm / re-arm / disarm できる経路はない。
+- **検証可能。** `Request::FaultStatus` は production ビルドにも存在し、
+  全 point が disarmed であることを答える。「注入は動いていない」が
+  仮定ではなく **確認できる主張** になる。`sakura_settings.exe diagnostics
+  faults [text|tsv]` がその読み出し口（`engine_faults.rs`）。
+- **fail-closed parse。** spec の綴り間違いは起動失敗にする。黙って何も
+  arm しなければ、stress 実行が「入力は失われなかった」を、そもそも何も
+  注入していない実行について報告してしまう。
+- **計測値を返す。** `fired` と `slept_us` は要求値ではなく **実測値**。
+  負荷下の scheduler は寝過ごすので、harness が assert すべきは
+  「起きたこと」であって「頼んだこと」ではない。
+- **exactly-once claim。** slot は compare-exchange ループで、1 回だけ arm
+  した point は同時接続下でもちょうど 1 リクエストを遅らせる。
+
+spec 文法は `point=milliseconds[/occurrences]` のカンマ区切り。
+上限は `MAX_DELAY = 10 s`、`MAX_SPEC_BYTES = 256`。
+`occurrences` 省略時は無制限（`u64::MAX`、`FaultStatus` では `every` と表示）。
+
+### 5.4.3 harness
+
+`crates/sakura-engine/tests/common/mod.rs` に
+`Engine::spawn_isolated_with_faults(spec)` を追加。既存の
+`spawn_isolated()` と同じく **実行ファイル** `sakura_engine.exe` を、
+実行ごとに一意な `LOCALAPPDATA`、一意な private pipe、専用の辞書 fixture で
+起動する。ユーザーの実環境・実履歴・実 learning には触れない。
+入力はすべて synthetic key である。
+
+`crates/sakura-engine/tests/high_load_key_integrity.rs`（新規、7 tests）:
+
+| test | arm | 確認した不変条件 |
+|---|---|---|
+| `an_engine_started_without_the_argument_has_every_point_disarmed` | なし | 引数なしの engine は全 point disarmed、`fired` = 0、`slept_us` = 0 |
+| `a_stall_before_dispatch_delays_every_key_without_losing_one` | `before-dispatch=50` | 6 キーで実測 300 ms 以上遅延。読みは `s → さ → さk → さく → さくr → さくら` と入力順どおりに伸び、欠落・重複・順序破壊なし。Enter の commit はちょうど 1 回 |
+| `a_stall_after_the_session_advanced_still_commits_exactly_once` | `after-mutation=400/1` | 400 ms 以上遅延した最初のキーの reply がそのキーを表す。bounded slot は使い切ると disarm（`remaining` = 0）。後続キーは通常どおり進み、commit は 1 回 |
+| `a_stall_during_conversion_keeps_the_session_and_its_candidates` | `during-conversion=100/3` | 変換後の候補が空でない。session は分割されず、commit 後も同一 session で入力継続可 |
+| `an_abandoned_reply_is_never_delivered_as_the_answer_to_the_next_key` | `during-reply=400` | budget 50 ms（= TSF の `KEY_BUDGET`）のクライアントが諦めた後、次のキーの reply は **自分の reply** であり、古い reply ではない。かつその reply には諦めたキーが含まれる |
+
+最後の 1 件が §7 に対する現時点の実測事実である:
+
+> **engine 側の入力欠落は 0 である。** クライアントが `KEY_BUDGET` で諦めても、
+> engine はそのキーを適用済みで、次の reply にその結果が含まれる。
+> stale reply は `sakura-ipc` の request id 照合（`client.rs` の
+> `header.request_id` 比較）により捨てられ、新しい request の答えとして
+> 配送されることはない。
+
+**したがって、ホスト側で文字が消えるとすれば、それは engine が失った
+のではなく TSF 層が諦めた結果である。** これは Phase 3 / Phase 5 の対象で
+あり、本コミットでは修正していない。§4 の H-A〜H-F はいずれも依然として
+仮説であり、この harness は原因を確定していない。
+
+### 5.4.4 protocol
+
+`PROTOCOL_VERSION` 21 → 22。`Request::FaultStatus` / `Response::FaultStatus`
+を追加した。payload は `FaultInjectionEntry { point, delay_us, remaining,
+fired, slept_us }` × 4 で、**内容（入力本文・辞書・host document text）を
+一切含まない**。bounded（常に 4 件）かつ versioned である。
+
 ## 6. 実施済み / 未実施
 
 | 項目 | 状態 |
@@ -391,13 +487,18 @@ hard page fault なのかは**分離できない**。#107 の page-fault 仮説�
 | correlation ID（`key_seq` / `document_revision` / `composition_generation`）| **未実施** |
 | TSF 側 15 タイムスタンプ | **未実施** |
 | `queue_wait_us` / `conversion_us` / `dictionary_us` | **未実施** |
-| deterministic delay injection | **未実施** |
-| stress harness | **未実施** |
+| deterministic delay injection | 実施済み（§5.4.1〜5.4.2。release ビルドに残る 4 点、`--fault-injection` + `--test-pipe` gate、`FaultStatus` で検証可） |
+| stress harness | 実施済み（§5.4.3。`spawn_isolated_with_faults` + `high_load_key_integrity.rs` 7 tests。負荷下の長時間実行は未実施） |
 | ETW 因果確定 | **未実施** |
 | PBT / mutation / TLC | **未実施** |
 | 実ホスト E2E | **未実施** |
 
 本文書の §2 / §3 はすべて静的コード読取りである。
-§5 の計装はコードとして存在するが、**負荷下での採取・ETW・stress は
-一切実施していない**。すなわち現時点で得られている数値は 0 件であり、
-H-A〜H-F はいずれも仮説のままで、原因確定ではない。
+§5.1 / §5.2 の計装はコードとして存在するが、**負荷下での採取・ETW は
+一切実施していない**。§5.4 の注入と harness は実行済みで、そこから得られた
+事実は「注入した遅延の下でも engine 側の入力欠落・重複・順序破壊は 0 であり、
+stale reply は新しい request の答えとして配送されない」ことだけである。
+これは **原因の確定ではない**。H-A〜H-F はいずれも仮説のままであり、
+特に H-E（`Shared::dynamic_runtimes` の process-wide mutex）と
+H-F（developer mode のファイル syscall）は ETW 実測前であって、
+どちらも原因と断定してはならない。

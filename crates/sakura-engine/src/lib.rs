@@ -41,6 +41,7 @@ mod developer_history_order;
 pub mod dictionary;
 pub mod dispatch;
 pub mod event_log;
+pub mod fault_injection;
 pub mod input_history;
 pub mod learning;
 pub mod long_conversion;

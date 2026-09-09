@@ -1172,6 +1172,136 @@ impl EngineTimingEntry {
         })
     }
 }
+
+/// A place in the engine's key path where a stress harness may insert a
+/// deterministic delay.
+///
+/// The four points are chosen so that the state of the world differs at each
+/// one, not merely the elapsed time. A key delayed before dispatch has touched
+/// nothing; delayed during conversion it holds the dictionary and learning
+/// services but has not changed the session; delayed after mutation the
+/// session has already advanced while the client still has no answer; delayed
+/// during the reply the answer exists as bytes that are not yet on the wire.
+/// Those are four different failure stories, and a harness that cannot select
+/// between them cannot tell which invariant it is testing.
+///
+/// This enum is part of the ordinary protocol, and a production engine answers
+/// a status request with every point disarmed. That is deliberate: the ability
+/// to prove no injection is active belongs in the shipping build, not only in
+/// the test build.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FaultPoint {
+    /// After the request frame is decoded, before the dispatcher sees it. No
+    /// session state has changed and no reply exists.
+    BeforeDispatch = 0,
+    /// Inside key handling, immediately before the session is mutated. The
+    /// conversion, learning and prediction services are already resolved.
+    DuringConversion = 1,
+    /// Immediately after the session has been mutated, before the reply is
+    /// rendered or encoded. This is the window in which a client timeout means
+    /// the engine has applied a key the client has given up on.
+    AfterMutation = 2,
+    /// After the reply frame is encoded, before it is written to the pipe. The
+    /// answer exists and is correct; only its delivery is late.
+    ///
+    /// This sits on the key/output reply path, not on administrative replies:
+    /// the question it exists to ask is what a host does with a key whose
+    /// answer arrives after it stopped waiting. A count read back from
+    /// [`FaultStatus`](crate::Request::FaultStatus) therefore counts key
+    /// replies, not every request the engine answered.
+    DuringReply = 3,
+}
+
+impl FaultPoint {
+    /// All `FaultPoint` variants, in declaration order.
+    pub const ALL: [FaultPoint; 4] = [
+        FaultPoint::BeforeDispatch,
+        FaultPoint::DuringConversion,
+        FaultPoint::AfterMutation,
+        FaultPoint::DuringReply,
+    ];
+
+    /// The stable name used on the command line and in reports.
+    pub fn name(self) -> &'static str {
+        match self {
+            FaultPoint::BeforeDispatch => "before-dispatch",
+            FaultPoint::DuringConversion => "during-conversion",
+            FaultPoint::AfterMutation => "after-mutation",
+            FaultPoint::DuringReply => "during-reply",
+        }
+    }
+
+    /// Parses a name from [`FaultPoint::name`]. Unknown names are rejected
+    /// rather than ignored: a typo that silently armed nothing would let a
+    /// stress run report "no input was lost" when nothing was ever injected.
+    pub fn parse(name: &str) -> Option<Self> {
+        FaultPoint::ALL.into_iter().find(|p| p.name() == name)
+    }
+
+    /// Encodes as one byte.
+    pub fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(self as u8)
+    }
+
+    /// Decodes one byte strictly: an unrecognised value is
+    /// [`Error::BadEnum`] (see module docs).
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        match r.read_u8()? {
+            0 => Ok(FaultPoint::BeforeDispatch),
+            1 => Ok(FaultPoint::DuringConversion),
+            2 => Ok(FaultPoint::AfterMutation),
+            3 => Ok(FaultPoint::DuringReply),
+            _ => Err(Error::BadEnum),
+        }
+    }
+}
+
+/// What is armed at one [`FaultPoint`], and what it has actually done.
+///
+/// `fired` and `slept_us` are reported alongside the configuration because a
+/// harness must be able to prove the delay happened. A run that configures a
+/// two-second stall, observes no lost input and never checks that the stall
+/// occurred has demonstrated nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FaultInjectionEntry {
+    pub point: FaultPoint,
+    /// The configured delay. Zero means this point is disarmed.
+    pub delay_us: u64,
+    /// How many further times this point will delay. `u64::MAX` means "every
+    /// time"; zero means the configured budget is spent.
+    pub remaining: u64,
+    /// How many times this point has delayed so far.
+    pub fired: u64,
+    /// The total time actually slept here, which can exceed
+    /// `delay_us * fired` because a sleep is a minimum, not a promise.
+    pub slept_us: u64,
+}
+
+impl FaultInjectionEntry {
+    /// True when this point will still delay at least once more.
+    pub fn is_armed(&self) -> bool {
+        self.delay_us > 0 && self.remaining > 0
+    }
+
+    pub fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        self.point.encode(w)?;
+        w.write_u64(self.delay_us)?;
+        w.write_u64(self.remaining)?;
+        w.write_u64(self.fired)?;
+        w.write_u64(self.slept_us)
+    }
+
+    pub fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            point: FaultPoint::decode(r)?,
+            delay_us: r.read_u64()?,
+            remaining: r.read_u64()?,
+            fired: r.read_u64()?,
+            slept_us: r.read_u64()?,
+        })
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
