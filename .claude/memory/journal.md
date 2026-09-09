@@ -1485,3 +1485,43 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   並行接続）、ETW 因果確定（H-E / H-F）、correlation ID、TSF 側 15 タイムスタンプ、
   `queue_wait_us` / `conversion_us` / `dictionary_us`、Pending/ACK 設計、
   PBT / mutation / TLC。
+
+## 2026-09-09 — 1.0.39 リリース準備（#148 Phase 1–3 の観測手段を出荷）
+
+- **Issue / commit / PR**: #148 / `a93a695` / PR #149
+- **内容**: 修正ではなく観測手段だけのリリース。症状（高負荷時の入力ロス）は
+  未解決であり、リリースノートの冒頭でそう明記した。
+  - `diagnostics timing`（段階別の所要時間、timeout の実待ち時間）
+  - 出荷 engine に 4 つの遅延注入点（before-dispatch / during-conversion /
+    after-mutation / during-reply）
+  - `diagnostics faults`（利用者が自分の engine で全点 disarmed を確認できる）
+  - `PROTOCOL_VERSION` 21 → 22
+- **バージョン 5 箇所**: `Cargo.toml` + `Cargo.lock` 再生成、`installer/setup.iss`
+  の `AppProductVersion` と `AppVersionedDir`、`.github/workflows/release.yml` の
+  既定タグ、`data/update-signing/release-sequence.txt` 6 → 7。
+- **失敗と根本原因（今回）**: `release-sequence.txt` を Python の
+  `Path.write_text` で書いたところ Windows の既定改行変換で `7\r\n` になり、
+  `sakura-settings` の `update_trust::*` / `updater::*` 14 件が
+  `embedded release sequence contains CR or NUL` で失敗した。このファイルは
+  `include_bytes!` で埋め込まれ `format!("{floor}\n")` とバイト比較される。
+  `printf '7\n' >` で書き直し、`xxd` で `370a` を確認して解消。
+  `.gitattributes` には既に `/data/update-signing/** text eol=lf` があり
+  （24 行目）、原因は git ではなく自分の書き込みだった。誤って追加した
+  `.gitattributes` の行は HEAD とバイト同一に戻した。
+- **学び**: このリポジトリは `core.autocrlf=true` で worktree は CRLF、
+  commit 時に LF へ正規化される。**バイト列が意味を持つファイルを書くときは
+  `newline=""` かバイト書き込みを使う。** テキストとして書くと環境依存になる。
+  もう一点、`bash` ツール経由の heredoc では Python ソース中のバックスラッシュが
+  半分に潰れることがある。パス文字列を扱うときは `chr(92)` で組むのが確実。
+- **検証**: `cargo fmt --all -- --check` / `cargo clippy --workspace
+  --all-targets --offline -- -D warnings` / `./ci/run-test-quiet.ps1 -Name
+  'workspace tests' -Command { cargo test --workspace --offline }`
+  （1,893 passed / 91 ignored / 94 binaries）/ release build
+  `x86_64-pc-windows-msvc` / `scripts/build-installer.ps1`（version 1.0.39、
+  warnings 0、`sakura_setup.exe` 24,544,545 bytes sha256
+  `c126112893a68c58f55ae6868f03583b69ec856715ee8bce377e4255d03f39b7`）/
+  `git diff --check`。辞書 payload は 1.0.38 とバイト同一
+  （`system.dic` sha256 `ca1b24fc...febb63f`）で、本ブランチに辞書入力の変更なし。
+- **署名**: owner 判断（2026-08-22）どおり Authenticode 未署名。ノートで未署名と
+  明記し、`release-manifest-v2.txt` との SHA-256 照合を案内。updater の
+  `WinVerifyTrust` fail-closed は変更していない。
