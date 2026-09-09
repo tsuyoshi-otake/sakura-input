@@ -1,7 +1,7 @@
 # 高負荷時の入力・変換整合性（#148）
 
 Baseline HEAD: `5eb40e3807c2997270b7361f6ca0c63bf09743d1` (main, v1.0.38, clean worktree)
-Program status: **Phase 2 IN PROGRESS**（計装と注入基盤。負荷下の採取・ETW は未実施）。
+Program status: **Phase 3 IN PROGRESS**（注入基盤は完成。反例の特定を開始。負荷下の採取・ETW は未実施）。
 §2 / §3 / §4 は静的なコード読取りの結果であり、実測でも原因確定でもない。
 
 ## 1. 目的
@@ -444,7 +444,9 @@ spec 文法は `point=milliseconds[/occurrences]` のカンマ区切り。
 起動する。ユーザーの実環境・実履歴・実 learning には触れない。
 入力はすべて synthetic key である。
 
-`crates/sakura-engine/tests/high_load_key_integrity.rs`（新規、7 tests）:
+`crates/sakura-engine/tests/high_load_key_integrity.rs`（新規、5 tests。
+§5.5 の 1 件を加えて現在は 6 tests。前コミットの本節が「7 tests」と
+書いていたのは誤記である）:
 
 | test | arm | 確認した不変条件 |
 |---|---|---|
@@ -474,6 +476,97 @@ spec 文法は `point=milliseconds[/occurrences]` のカンマ区切り。
 fired, slept_us }` × 4 で、**内容（入力本文・辞書・host document text）を
 一切含まない**。bounded（常に 4 件）かつ versioned である。
 
+## 5.5 諦めたキーの行方（Phase 3 入口。観測のみ、修正なし）
+
+Phase 2 の実測は「engine 側の入力欠落は 0」で終わっている。ならば
+ホストで文字が消える経路は engine の外にしかない。本節はその続きを
+**観測だけ**で辿った結果である。動作は一切変更していない。
+
+### 5.5.1 反証された前提
+
+`sakura-tsf/src/engine.rs` の `Link::resync` は、キーが `KEY_BUDGET` を
+超えた後で `Request::Revert` を送り、engine が composing していたものを
+捨てる。その doc comment は、これを次の理由で無害だと書いていた。
+
+> the text the user could see was committed into the document at the moment
+> of the timeout (see `text_service`'s `finalize`), so what is being
+> discarded here is the engine's now-duplicate copy of it.
+
+これは engine の状態についての主張なので、実 engine に対して検査できる。
+`crates/sakura-engine/tests/high_load_key_integrity.rs` の
+`the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`
+は、`during-reply=200` を arm した実 `sakura_engine.exe` に対し、同一
+session へ同じ 4 キーを 2 周打ち、3 打目を 50 ms クライアントとして諦める。
+2 周の違いは `Revert` を挟むか否かの 1 リクエストだけである。
+
+| 周 | 送ったもの | 4 打目の reply |
+|---|---|---|
+| 1 | `k` `a` （諦めた `i`） `u` | `かいう` |
+| 2 | `k` `a` （諦めた `i`） **`Revert`** `u` | `う` |
+
+1 周目が示すのは Phase 2 の再確認で、諦めたキーも engine は適用済みである
+こと。2 周目との差 `かい` が `Revert` の除去したものである。このうち
+`か` はホストが既に見ていたので finalize が commit でき、doc comment の
+言う duplicate に当たる。**`い` は当たらない。** クライアントは
+そのキーの reply を一度も受け取っていないので、ホストがそれを表示した
+ことも commit したこともあり得ない。
+
+⇒ doc comment の "This is not data loss" は **成り立たない**。
+該当箇所は本コミットで訂正した。挙動そのものは変更していない。
+
+### 5.5.2 諦めたキーは再送されない
+
+`crates/sakura-tsf/src/engine.rs` の
+`the_key_after_a_timeout_sends_revert_and_never_retries_the_abandoned_key`
+は、scripted peer に届いたリクエストを記録する。`SendKey` が
+`KEY_BUDGET` を超えた後、次のキーで peer が受け取る列は
+
+```
+SendKey(k)   ← 諦められた。peer は 200 ms 後に返信する
+Revert       ← Link::resync
+SendKey(u)
+```
+
+であり、session id は変わらない。**諦めたキーの再送は無い。**
+5.5.1 と合わせると、そのキーの効果を engine から取り戻す経路は存在しない。
+
+### 5.5.3 実キー経路では resync にすら到達しない（静的読取り。未実測）
+
+ここから先は**コード読取りだけ**であり、実測していない。
+
+`text_service.rs:5486` のキー経路は `Answer::Unavailable` を
+`recover_from_engine_unavailable` (`text_service.rs:5536`) で処理する。
+その中の `disconnect(DisconnectReason::EngineUnavailableRecovery)`
+(`text_service.rs:5550`) は §2.6 のとおり `self.engine` を
+`Engine::new()` で置き換える。つまり **desynchronized な link は
+resync される前に破棄され、次のキーは新しい接続と新しい session から
+始まる。**
+
+したがって 5.5.2 で観測した `Revert` 列は、キー経路ではなく
+administrative timeout（`SetInputScope` / `SetMode` / menu mode restore /
+AI text / revert / undo settle — `engine.rs` の 286 / 321 / 461 / 550 /
+585 / 698 / 728 行）から到達する。どちらの経路でも、諦めたキーが
+engine 側から消える点は同じである。
+
+キー経路で可視テキストを救うのは
+`enqueue_finalization_for_visible(..., composition_projection())`
+(`text_service.rs:5571`) であり、その入力は **TSF 自身の projection** で
+ある。定義上、reply が届かなかったキーはそこに含まれ得ない。
+
+### 5.5.4 現時点の位置づけ
+
+- 実測で確定したこと: 諦めたキーの効果は engine 側から失われ、再送されない。
+- 静的読取りのみ: 実ホストのキー経路が resync ではなく disconnect を通ること、
+  finalize が救えるのは可視分だけであること。
+- **未実施**: 実ホスト（TSF DLL を実際にロードした host）での再現。
+  §6 の「実ホスト E2E」に含める。
+- これは **原因の確定ではない**。H-A〜H-F は依然として仮説であり、
+  「高負荷でこの timeout がどれだけ起きるか」は ETW 前に断定できない。
+  本節が言えるのは「起きたときに何が失われるか」だけである。
+
+修正はしていない。§29 の禁止事項どおり、`KEY_BUDGET` の延長も
+timeout の握り潰しも retry ループも本コミットには含まない。
+
 ## 6. 実施済み / 未実施
 
 | 項目 | 状態 |
@@ -488,17 +581,20 @@ fired, slept_us }` × 4 で、**内容（入力本文・辞書・host document t
 | TSF 側 15 タイムスタンプ | **未実施** |
 | `queue_wait_us` / `conversion_us` / `dictionary_us` | **未実施** |
 | deterministic delay injection | 実施済み（§5.4.1〜5.4.2。release ビルドに残る 4 点、`--fault-injection` + `--test-pipe` gate、`FaultStatus` で検証可） |
-| stress harness | 実施済み（§5.4.3。`spawn_isolated_with_faults` + `high_load_key_integrity.rs` 7 tests。負荷下の長時間実行は未実施） |
+| stress harness | 実施済み（§5.4.3。`spawn_isolated_with_faults` + `high_load_key_integrity.rs` 6 tests。負荷下の長時間実行は未実施） |
+| 諦めたキーの行方の特定 | 実施済み（§5.5。実 engine で `Revert` が未受領のキーを捨てることを確認。修正は未実施） |
 | ETW 因果確定 | **未実施** |
 | PBT / mutation / TLC | **未実施** |
-| 実ホスト E2E | **未実施** |
+| 実ホスト E2E | **未実施**（§5.5.3 の disconnect 経路の実測を含む） |
 
 本文書の §2 / §3 はすべて静的コード読取りである。
 §5.1 / §5.2 の計装はコードとして存在するが、**負荷下での採取・ETW は
 一切実施していない**。§5.4 の注入と harness は実行済みで、そこから得られた
 事実は「注入した遅延の下でも engine 側の入力欠落・重複・順序破壊は 0 であり、
 stale reply は新しい request の答えとして配送されない」ことだけである。
-これは **原因の確定ではない**。H-A〜H-F はいずれも仮説のままであり、
+§5.5 はその続きとして、諦めたキーが engine 側から失われ再送されないことを
+実測した。ただし §5.5.3（実キー経路が resync ではなく disconnect を通る）は
+静的読取りのみで未実測である。いずれも **原因の確定ではない**。H-A〜H-F はいずれも仮説のままであり、
 特に H-E（`Shared::dynamic_runtimes` の process-wide mutex）と
 H-F（developer mode のファイル syscall）は ETW 実測前であって、
 どちらも原因と断定してはならない。

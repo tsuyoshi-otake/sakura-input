@@ -82,6 +82,32 @@ fn commit_of(response: &Response) -> Option<String> {
     }
 }
 
+/// Sends a key the way a client that gives up at `TSF_KEY_BUDGET` does, and
+/// asserts that it really did give up. The engine still applies the key; what
+/// the client loses is the reply, not the keystroke.
+fn abandon(client: &mut Client, session: SessionId, character: char) {
+    let answer = client.call(
+        &Request::SendKey {
+            session,
+            key: char_key(character),
+        },
+        TSF_KEY_BUDGET,
+    );
+    assert!(
+        matches!(answer, Err(Fault::Timeout | Fault::DeadlineExpired)),
+        "the client outlasted a stall it was supposed to abandon: {answer:?}"
+    );
+}
+
+/// The one request `sakura_tsf`'s `Link::resync` sends before its next key.
+fn revert(client: &mut Client, session: SessionId) {
+    let answer = client.call(&Request::Revert { session }, PATIENT);
+    assert!(
+        matches!(answer, Ok(Response::Ok)),
+        "the engine must accept the resync the TSF sends: {answer:?}"
+    );
+}
+
 fn fault_status(client: &mut Client) -> Vec<FaultInjectionEntry> {
     match client.call(&Request::FaultStatus, PATIENT) {
         Ok(Response::FaultStatus { entries }) => {
@@ -306,6 +332,58 @@ fn an_abandoned_reply_is_never_delivered_as_the_answer_to_the_next_key() {
     let status = entry(&fault_status(&mut client), FaultPoint::DuringReply);
     assert_eq!(status.fired, 2, "{status:?}");
     assert!(status.slept_us >= 2 * 395_000, "{status:?}");
+
+    drop(client);
+    engine.cleanup().expect("clean shutdown");
+}
+
+/// What `Request::Revert` actually removes after a key was abandoned.
+///
+/// `sakura_tsf`'s `Link::resync` sends exactly this request when the previous
+/// key timed out, and its doc comment justifies doing so by saying that what
+/// it discards is "the engine's now-duplicate copy" of text the host already
+/// committed. That is a claim about the engine's state, so it is checkable
+/// here, against the real engine, with a real stall.
+///
+/// The same four keys are typed twice into one session, abandoning the third
+/// the way a 50 ms client does. The two rounds differ in one request: the
+/// second sends the `Revert`. What they disagree about is what the `Revert`
+/// removed.
+#[test]
+fn the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw() {
+    let mut engine = Engine::spawn_isolated_with_faults("during-reply=200");
+    let mut client = engine.client();
+    handshake(&mut client);
+    let session = session_for(&mut client, "high-load.exe");
+
+    // Round one, without the resync: the engine keeps composing across the
+    // key the client stopped waiting for, so that key is in the next reply.
+    assert_eq!(preedit_of(&send_char(&mut client, session, 'k')), "k");
+    assert_eq!(preedit_of(&send_char(&mut client, session, 'a')), "か");
+    abandon(&mut client, session, 'i');
+    assert_eq!(
+        preedit_of(&send_char(&mut client, session, 'u')),
+        "かいう",
+        "the engine applied the abandoned key; only its reply was lost"
+    );
+    revert(&mut client, session);
+
+    // Round two, with it.
+    assert_eq!(preedit_of(&send_char(&mut client, session, 'k')), "k");
+    assert_eq!(preedit_of(&send_char(&mut client, session, 'a')), "か");
+    abandon(&mut client, session, 'i');
+    revert(&mut client, session);
+    assert_eq!(
+        preedit_of(&send_char(&mut client, session, 'u')),
+        "う",
+        "the Revert emptied the reading rather than trimming it to what the host saw"
+    );
+
+    // Both rounds were stalled on every key reply, so neither result came
+    // from an engine that was never actually held still.
+    let status = entry(&fault_status(&mut client), FaultPoint::DuringReply);
+    assert_eq!(status.fired, 8, "{status:?}");
+    assert!(status.slept_us >= 8 * 195_000, "{status:?}");
 
     drop(client);
     engine.cleanup().expect("clean shutdown");

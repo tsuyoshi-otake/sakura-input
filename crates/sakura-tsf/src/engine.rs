@@ -956,10 +956,24 @@ impl Link {
     /// Throws away whatever the engine was composing, so both ends start
     /// the next keystroke from nothing.
     ///
-    /// Returns whether the link is still usable. This is not data loss:
-    /// the text the user could see was committed into the document at the
-    /// moment of the timeout (see `text_service`'s `finalize`), so what is
-    /// being discarded here is the engine's now-duplicate copy of it.
+    /// Returns whether the link is still usable.
+    ///
+    /// This used to be documented as costing nothing, on the grounds that
+    /// the text the user could see was already committed into the document
+    /// by `text_service`'s finalization, leaving only a duplicate to
+    /// discard. Measurement disagrees (#148 phase 3). A key whose reply
+    /// timed out was still applied by the engine, so the reading this
+    /// empties contains that key as well, and that part of it was never
+    /// visible and therefore never committed:
+    /// `sakura-engine`'s
+    /// `the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`
+    /// drives a real engine held still on purpose and reads back `かいう`
+    /// without this request and `う` with it. What survives is what the
+    /// host had already been shown; the abandoned keystroke does not.
+    ///
+    /// The behaviour is left as it is until #148 has a design that can
+    /// recover such a key rather than merely narrow the window in which
+    /// one is lost.
     fn resync(&mut self) -> bool {
         let session = self.session;
         match self.client.call_until(
@@ -1310,6 +1324,19 @@ mod tests {
             modifiers: Modifiers::NONE,
             repeat: false,
             test_only: false,
+        }
+    }
+
+    /// Names a request the way a journal needs it: enough to tell a resync
+    /// from a key, and one key from another.
+    fn describe(request: &Request) -> String {
+        match request {
+            Request::Revert { .. } => "Revert".to_owned(),
+            Request::SendKey { key, .. } => match key.ch {
+                Some(ch) => format!("SendKey({ch})"),
+                None => "SendKey(?)".to_owned(),
+            },
+            other => format!("{other:?}"),
         }
     }
 
@@ -2308,6 +2335,91 @@ mod tests {
         assert!(
             matches!(answer, Answer::Unavailable),
             "serial calls each renewed their allowance"
+        );
+    }
+
+    /// The wire sequence a timed-out key produces, as the engine sees it.
+    ///
+    /// This is the observation half of #148 phase 3. It records what the peer
+    /// is actually asked, so that the claim in [`Link::resync`]'s doc comment —
+    /// that the composition it throws away is a duplicate of text the host
+    /// already committed — can be checked against what the engine was holding.
+    /// It is checked in `sakura-engine`'s
+    /// `the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`,
+    /// and it does not hold: the reading discarded also contains the key whose
+    /// reply this client abandoned, which no host ever saw and so cannot have
+    /// committed.
+    ///
+    /// Nothing is changed here. The keystroke is never re-sent, which is the
+    /// other half of why it cannot come back.
+    #[test]
+    fn the_key_after_a_timeout_sends_revert_and_never_retries_the_abandoned_key() {
+        let (sender, journal) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("abandoned-key-resync", move |pipe, buffer| {
+            // The first key: read, outlast the client's budget, then answer
+            // anyway. A slow engine is still a live engine, and the reply it
+            // eventually writes is what the next call has to step over.
+            let Ok(payload) = pipe.read_frame(buffer) else {
+                return;
+            };
+            let (id, request) = decode_request(payload).expect("a decodable request");
+            let _ = sender.send(describe(&request));
+            std::thread::sleep(Duration::from_millis(200));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(latin_preedit("k")), id, &mut reply).expect("encode");
+            if pipe.write_all(&reply).is_err() {
+                return;
+            }
+            // Whatever the client sends next, answered without delay.
+            for _ in 0..2 {
+                let Ok(payload) = pipe.read_frame_with_deadline(buffer, Duration::from_secs(2))
+                else {
+                    return;
+                };
+                let (id, request) = decode_request(payload).expect("a decodable request");
+                let _ = sender.send(describe(&request));
+                let response = match request {
+                    Request::Revert { .. } => Response::Ok,
+                    _ => Response::Output(latin_preedit("u")),
+                };
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                if pipe.write_all(&reply).is_err() {
+                    return;
+                }
+            }
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        let session = engine.link.as_ref().map(|link| link.session);
+        let abandoned = engine.send_key(a_key('k'));
+        let marked = engine.is_desynchronized();
+        // The user types the next key after the slow reply has landed, so
+        // this measures the resync and not a second timeout.
+        std::thread::sleep(Duration::from_millis(300));
+        let next = engine.send_key(a_key('u'));
+        let recovered = engine.is_connected() && !engine.is_desynchronized();
+        let same_session = engine.link.as_ref().map(|link| link.session);
+        drop(engine);
+        server.join().expect("the scripted peer");
+
+        let asked: Vec<String> = journal.try_iter().collect();
+        assert!(matches!(abandoned, Answer::Unavailable));
+        assert!(marked, "a mutating key that timed out must be uncertain");
+        assert_eq!(
+            asked,
+            vec![
+                "SendKey(k)".to_owned(),
+                "Revert".to_owned(),
+                "SendKey(u)".to_owned()
+            ],
+            "the next key must resync first, and must not resend the abandoned key"
+        );
+        assert!(matches!(next, Answer::Ready(_)));
+        assert!(recovered, "an answered Revert clears the uncertainty");
+        assert_eq!(
+            same_session, session,
+            "the resync keeps the session it emptied"
         );
     }
 
