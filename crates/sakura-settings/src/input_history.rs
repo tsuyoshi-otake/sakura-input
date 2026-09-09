@@ -4,22 +4,21 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io;
 use std::path::Path;
-use std::time::Duration;
 
 use sakura_engine::input_history::{
     clear_path, read_snapshot, InputHistoryRecord, InputHistorySnapshot, KeyHistoryRecord,
     ScopeClass, INPUT_HISTORY_FORMAT_VERSION,
 };
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
-use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy};
-use sakura_proto::{Request, Response, PROTOCOL_VERSION};
-use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND};
+use sakura_ipc::{Client, Endpoint, Fault};
+use sakura_proto::{Request, Response};
 #[cfg(windows)]
 use windows::Win32::Globalization::{NormalizationC, NormalizeString};
 
+use crate::engine_admin::{
+    engine_is_definitely_absent, fault, handshake, installed_root_policy, ADMIN_CALL_BUDGET,
+};
 use crate::storage::atomic_write;
-
-const ADMIN_CALL_BUDGET: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClearRoute {
@@ -705,67 +704,6 @@ pub fn clear_offline(path: &Path) -> io::Result<ClearRoute> {
     Ok(ClearRoute::Offline {
         cleared_records: clear_path(path)?,
     })
-}
-
-fn handshake(client: &mut Client) -> io::Result<()> {
-    match client.call(
-        &Request::Hello {
-            client_version: PROTOCOL_VERSION,
-        },
-        ADMIN_CALL_BUDGET,
-    ) {
-        Ok(Response::Hello { server_version, .. }) if server_version == PROTOCOL_VERSION => Ok(()),
-        Ok(Response::Error(code)) => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("engine rejected settings handshake: {code:?}"),
-        )),
-        Ok(response) => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("unexpected settings handshake response: {response:?}"),
-        )),
-        Err(Fault::Timeout) => {
-            let _ = record_timeout(TimeoutOperation::Administration, client.last_call_elapsed());
-            Err(fault("negotiate with engine", Fault::Timeout))
-        }
-        Err(error) => Err(fault("negotiate with engine", error)),
-    }
-}
-
-fn fault(action: &str, error: Fault) -> io::Error {
-    let kind = match error {
-        Fault::Timeout | Fault::DeadlineExpired => io::ErrorKind::TimedOut,
-        Fault::Disconnected => io::ErrorKind::BrokenPipe,
-        Fault::Protocol(_) | Fault::Desynchronized => io::ErrorKind::InvalidData,
-        Fault::Encode(_) => io::ErrorKind::InvalidInput,
-        Fault::UntrustedServer { .. } => io::ErrorKind::PermissionDenied,
-        Fault::Os(_) => io::ErrorKind::Other,
-    };
-    io::Error::new(kind, format!("{action}: {error}"))
-}
-
-fn installed_root_policy() -> io::Result<ServerTrustPolicy> {
-    let executable = std::env::current_exe()?;
-    let root = executable
-        .parent()
-        .and_then(|release| release.parent())
-        .and_then(|versions| versions.parent())
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "settings executable is not versioned",
-            )
-        })?;
-    Ok(ServerTrustPolicy::InstalledRoot(root.to_path_buf()))
-}
-
-fn engine_is_definitely_absent(error: &Fault) -> bool {
-    let Fault::Os(error) = error else {
-        return false;
-    };
-    let raw = error.code().0 as u32;
-    let file_not_found = 0x8007_0000 | ERROR_FILE_NOT_FOUND.0;
-    let path_not_found = 0x8007_0000 | ERROR_PATH_NOT_FOUND.0;
-    raw == file_not_found || raw == path_not_found
 }
 
 #[cfg(test)]
