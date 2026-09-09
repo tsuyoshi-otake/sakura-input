@@ -279,7 +279,10 @@ impl Engine {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 false
             }
@@ -311,7 +314,10 @@ impl Engine {
             Ok(Response::Error(code)) => Err(code),
             Err(Fault::DeadlineExpired) => Err(ErrorCode::Internal),
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 Err(ErrorCode::Internal)
             }
@@ -365,7 +371,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => AiTextPoll::Pending,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 AiTextPoll::Pending
             }
             Ok(_) | Err(_) => {
@@ -389,7 +398,10 @@ impl Engine {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 false
             }
             Ok(Response::Error(_)) => false,
@@ -442,7 +454,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 false
             }
@@ -528,7 +543,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 link.input_scope = None;
                 false
@@ -560,7 +578,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Administration);
+                note_timeout(
+                    TimeoutOperation::Administration,
+                    link.client.last_call_elapsed(),
+                );
                 link.desynchronized = true;
                 false
             }
@@ -607,7 +628,7 @@ impl Engine {
             Err(Fault::DeadlineExpired) if !link.desynchronized => CandidateCommitPoll::Deferred,
             Err(Fault::DeadlineExpired) => CandidateCommitPoll::Unavailable,
             Err(Fault::Timeout) => {
-                note_timeout(timeout_operation(&request));
+                note_timeout(timeout_operation(&request), link.client.last_call_elapsed());
                 CandidateCommitPoll::Unavailable
             }
             Ok(_) | Err(_) => {
@@ -673,7 +694,7 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Revert);
+                note_timeout(TimeoutOperation::Revert, link.client.last_call_elapsed());
                 link.desynchronized = true;
                 false
             }
@@ -703,7 +724,7 @@ impl Engine {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Revert);
+                note_timeout(TimeoutOperation::Revert, link.client.last_call_elapsed());
                 link.desynchronized = true;
                 false
             }
@@ -763,7 +784,10 @@ impl Engine {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::UiPlacement);
+                note_timeout(
+                    TimeoutOperation::UiPlacement,
+                    link.client.last_call_elapsed(),
+                );
                 false
             }
             Ok(_) | Err(_) => {
@@ -846,7 +870,7 @@ impl Engine {
             // stops the next successful call from building on a
             // composition the engine may have moved on from.
             Err(Fault::Timeout) => {
-                note_timeout(timeout_operation(request));
+                note_timeout(timeout_operation(request), link.client.last_call_elapsed());
                 if session_effect(request) == SessionEffect::MayMutate {
                     link.desynchronized = true;
                 }
@@ -932,10 +956,24 @@ impl Link {
     /// Throws away whatever the engine was composing, so both ends start
     /// the next keystroke from nothing.
     ///
-    /// Returns whether the link is still usable. This is not data loss:
-    /// the text the user could see was committed into the document at the
-    /// moment of the timeout (see `text_service`'s `finalize`), so what is
-    /// being discarded here is the engine's now-duplicate copy of it.
+    /// Returns whether the link is still usable.
+    ///
+    /// This used to be documented as costing nothing, on the grounds that
+    /// the text the user could see was already committed into the document
+    /// by `text_service`'s finalization, leaving only a duplicate to
+    /// discard. Measurement disagrees (#148 phase 3). A key whose reply
+    /// timed out was still applied by the engine, so the reading this
+    /// empties contains that key as well, and that part of it was never
+    /// visible and therefore never committed:
+    /// `sakura-engine`'s
+    /// `the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`
+    /// drives a real engine held still on purpose and reads back `かいう`
+    /// without this request and `う` with it. What survives is what the
+    /// host had already been shown; the abandoned keystroke does not.
+    ///
+    /// The behaviour is left as it is until #148 has a design that can
+    /// recover such a key rather than merely narrow the window in which
+    /// one is lost.
     fn resync(&mut self) -> bool {
         let session = self.session;
         match self.client.call_until(
@@ -948,7 +986,10 @@ impl Link {
             }
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
-                note_timeout(TimeoutOperation::Resynchronize);
+                note_timeout(
+                    TimeoutOperation::Resynchronize,
+                    self.client.last_call_elapsed(),
+                );
                 false
             }
             // Still not answering, or answering something unexpected.
@@ -981,6 +1022,9 @@ fn open(name: Option<&str>) -> Option<Link> {
     if Instant::now() >= deadline {
         return None;
     }
+    // No `Client` exists yet on this path, so the wait behind a connect
+    // timeout has to be measured here rather than read back off one.
+    let connect_started = Instant::now();
     let connected = match name {
         Some(name) => Client::connect_to(name, left(deadline)),
         None => {
@@ -994,7 +1038,7 @@ fn open(name: Option<&str>) -> Option<Link> {
         Ok(client) => client,
         Err(Fault::DeadlineExpired) => return None,
         Err(Fault::Timeout) => {
-            note_timeout(TimeoutOperation::Connect);
+            note_timeout(TimeoutOperation::Connect, connect_started.elapsed());
             return None;
         }
         Err(_) => return None,
@@ -1012,7 +1056,7 @@ fn open(name: Option<&str>) -> Option<Link> {
         Ok(Response::Hello { .. }) => {}
         Err(Fault::DeadlineExpired) => return None,
         Err(Fault::Timeout) => {
-            note_timeout(TimeoutOperation::Handshake);
+            note_timeout(TimeoutOperation::Handshake, client.last_call_elapsed());
             return None;
         }
         _ => return None,
@@ -1037,7 +1081,7 @@ fn open(name: Option<&str>) -> Option<Link> {
         }),
         Err(Fault::DeadlineExpired) => None,
         Err(Fault::Timeout) => {
-            note_timeout(TimeoutOperation::Handshake);
+            note_timeout(TimeoutOperation::Handshake, client.last_call_elapsed());
             None
         }
         _ => None,
@@ -1068,6 +1112,8 @@ fn timeout_operation(request: &Request) -> TimeoutOperation {
         | Request::ClearInputHistory
         | Request::FlushInputHistory
         | Request::InputHistoryStats
+        | Request::EngineTiming
+        | Request::FaultStatus
         | Request::DeleteHistoryCandidate { .. }
         | Request::QueueCandidateCommit { .. }
         | Request::SetInputScope { .. }
@@ -1108,6 +1154,8 @@ fn session_effect(request: &Request) -> SessionEffect {
         | Request::Ping
         | Request::PollAiText { .. }
         | Request::InputHistoryStats
+        | Request::EngineTiming
+        | Request::FaultStatus
         | Request::Hello { .. } => SessionEffect::ReadOnly,
         Request::SendKey { .. }
         | Request::Commit { .. }
@@ -1157,19 +1205,25 @@ const fn scope_is_sensitive(scope: InputScope) -> bool {
     )
 }
 
+/// Records one expiry, with how long the caller actually waited for it.
+///
+/// The wait is the whole point of the second argument: a `key` record on its
+/// own cannot say whether the engine answered 1 ms past a 50 ms budget or was
+/// stalled for two seconds, and those are different failures with different
+/// fixes. It carries no request content, only the duration.
 #[cfg(not(test))]
-fn note_timeout(operation: TimeoutOperation) {
+fn note_timeout(operation: TimeoutOperation, elapsed: Duration) {
     // Diagnostic failure must never replace the original, recoverable timeout
     // with a host-application error.
-    let _ = diagnostics::record_timeout(operation);
+    let _ = diagnostics::record_timeout(operation, elapsed);
 }
 
 #[cfg(test)]
-fn note_timeout(operation: TimeoutOperation) {
+fn note_timeout(operation: TimeoutOperation, elapsed: Duration) {
     // Unit tests deliberately manufacture timeout paths. Keep that evidence
     // under the system temporary directory so `cargo test` can never append to
     // the installed user's durable diagnostics profile.
-    let _ = diagnostics::record_timeout_at(&test_timeout_log_path(), operation);
+    let _ = diagnostics::record_timeout_at(&test_timeout_log_path(), operation, elapsed);
 }
 
 #[cfg(test)]
@@ -1270,6 +1324,19 @@ mod tests {
             modifiers: Modifiers::NONE,
             repeat: false,
             test_only: false,
+        }
+    }
+
+    /// Names a request the way a journal needs it: enough to tell a resync
+    /// from a key, and one key from another.
+    fn describe(request: &Request) -> String {
+        match request {
+            Request::Revert { .. } => "Revert".to_owned(),
+            Request::SendKey { key, .. } => match key.ch {
+                Some(ch) => format!("SendKey({ch})"),
+                None => "SendKey(?)".to_owned(),
+            },
+            other => format!("{other:?}"),
         }
     }
 
@@ -2268,6 +2335,91 @@ mod tests {
         assert!(
             matches!(answer, Answer::Unavailable),
             "serial calls each renewed their allowance"
+        );
+    }
+
+    /// The wire sequence a timed-out key produces, as the engine sees it.
+    ///
+    /// This is the observation half of #148 phase 3. It records what the peer
+    /// is actually asked, so that the claim in [`Link::resync`]'s doc comment —
+    /// that the composition it throws away is a duplicate of text the host
+    /// already committed — can be checked against what the engine was holding.
+    /// It is checked in `sakura-engine`'s
+    /// `the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`,
+    /// and it does not hold: the reading discarded also contains the key whose
+    /// reply this client abandoned, which no host ever saw and so cannot have
+    /// committed.
+    ///
+    /// Nothing is changed here. The keystroke is never re-sent, which is the
+    /// other half of why it cannot come back.
+    #[test]
+    fn the_key_after_a_timeout_sends_revert_and_never_retries_the_abandoned_key() {
+        let (sender, journal) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("abandoned-key-resync", move |pipe, buffer| {
+            // The first key: read, outlast the client's budget, then answer
+            // anyway. A slow engine is still a live engine, and the reply it
+            // eventually writes is what the next call has to step over.
+            let Ok(payload) = pipe.read_frame(buffer) else {
+                return;
+            };
+            let (id, request) = decode_request(payload).expect("a decodable request");
+            let _ = sender.send(describe(&request));
+            std::thread::sleep(Duration::from_millis(200));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(latin_preedit("k")), id, &mut reply).expect("encode");
+            if pipe.write_all(&reply).is_err() {
+                return;
+            }
+            // Whatever the client sends next, answered without delay.
+            for _ in 0..2 {
+                let Ok(payload) = pipe.read_frame_with_deadline(buffer, Duration::from_secs(2))
+                else {
+                    return;
+                };
+                let (id, request) = decode_request(payload).expect("a decodable request");
+                let _ = sender.send(describe(&request));
+                let response = match request {
+                    Request::Revert { .. } => Response::Ok,
+                    _ => Response::Output(latin_preedit("u")),
+                };
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                if pipe.write_all(&reply).is_err() {
+                    return;
+                }
+            }
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        let session = engine.link.as_ref().map(|link| link.session);
+        let abandoned = engine.send_key(a_key('k'));
+        let marked = engine.is_desynchronized();
+        // The user types the next key after the slow reply has landed, so
+        // this measures the resync and not a second timeout.
+        std::thread::sleep(Duration::from_millis(300));
+        let next = engine.send_key(a_key('u'));
+        let recovered = engine.is_connected() && !engine.is_desynchronized();
+        let same_session = engine.link.as_ref().map(|link| link.session);
+        drop(engine);
+        server.join().expect("the scripted peer");
+
+        let asked: Vec<String> = journal.try_iter().collect();
+        assert!(matches!(abandoned, Answer::Unavailable));
+        assert!(marked, "a mutating key that timed out must be uncertain");
+        assert_eq!(
+            asked,
+            vec![
+                "SendKey(k)".to_owned(),
+                "Revert".to_owned(),
+                "SendKey(u)".to_owned()
+            ],
+            "the next key must resync first, and must not resend the abandoned key"
+        );
+        assert!(matches!(next, Answer::Ready(_)));
+        assert!(recovered, "an answered Revert clears the uncertainty");
+        assert_eq!(
+            same_session, session,
+            "the resync keeps the session it emptied"
         );
     }
 

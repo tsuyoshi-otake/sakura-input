@@ -10,6 +10,7 @@
 #![windows_subsystem = "windows"]
 
 use sakura_engine::event_log::{prune_default_dumps, EngineEvent, EventLog, WidthScanStrategy};
+use sakura_engine::fault_injection::Plan;
 use sakura_engine::server::Server;
 use std::time::Instant;
 
@@ -55,6 +56,20 @@ fn main() {
     let verbose = options.verbose;
     if verbose {
         attach_parent_console();
+    }
+
+    // Arm the delays before the pipe exists, so no client can observe an
+    // engine that is half-armed, and refuse to continue if arming fails:
+    // a harness that believes it injected a stall, and did not, would read
+    // "no input was lost" off a run that never tested anything.
+    if let Some(plan) = options.fault_injection.as_ref() {
+        if let Err(error) = sakura_engine::fault_injection::install(plan) {
+            eprintln!("sakura-engine: {error}");
+            std::process::exit(EXIT_FAILED);
+        }
+        if verbose {
+            eprintln!("sakura-engine: fault injection: {}", plan.describe());
+        }
     }
 
     // Before the pipe, before the dictionary, before anything can be waiting
@@ -366,6 +381,9 @@ fn run(
 struct StartupOptions {
     verbose: bool,
     test_pipe: Option<String>,
+    /// Present only for a harness that also asked for a private pipe. See
+    /// `startup_options` for why the two arguments are tied together.
+    fault_injection: Option<Plan>,
 }
 
 fn startup_options(arguments: impl IntoIterator<Item = String>) -> Result<StartupOptions, String> {
@@ -386,8 +404,30 @@ fn startup_options(arguments: impl IntoIterator<Item = String>) -> Result<Startu
                     return Err("--test-pipe may be supplied only once".to_owned());
                 }
             }
+            "--fault-injection" => {
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "--fault-injection requires a delay plan".to_owned())?;
+                if options
+                    .fault_injection
+                    .replace(Plan::parse(&value)?)
+                    .is_some()
+                {
+                    return Err("--fault-injection may be supplied only once".to_owned());
+                }
+            }
             _ => {}
         }
+    }
+    // The delays exist so a stress harness can hold a real engine still at a
+    // named moment; they have no purpose in front of a real user, and a
+    // process that answers the session's production pipe is in front of one.
+    // Tying the two arguments together here — rather than trusting the
+    // caller — is what lets the shipped binary carry the injection points at
+    // all: an engine bound to the production name refuses to start while the
+    // argument is present, instead of starting and quietly stalling keys.
+    if options.fault_injection.is_some() && options.test_pipe.is_none() {
+        return Err("--fault-injection requires --test-pipe".to_owned());
     }
     Ok(options)
 }
@@ -468,6 +508,7 @@ mod tests {
             Ok(StartupOptions {
                 verbose: true,
                 test_pipe: None,
+                fault_injection: None,
             })
         );
         assert_eq!(
@@ -475,6 +516,7 @@ mod tests {
             Ok(StartupOptions {
                 verbose: false,
                 test_pipe: Some(format!("{TEST_PIPE_PREFIX}one")),
+                fault_injection: None,
             })
         );
     }
@@ -487,6 +529,67 @@ mod tests {
             format!("{TEST_PIPE_PREFIX}one"),
             "--test-pipe".to_owned(),
             format!("{TEST_PIPE_PREFIX}two"),
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn fault_injection_is_accepted_only_beside_a_private_test_pipe() {
+        let pipe = format!("{TEST_PIPE_PREFIX}faults");
+        let accepted = startup_options([
+            "--test-pipe".to_owned(),
+            pipe.clone(),
+            "--fault-injection".to_owned(),
+            "before-dispatch=50".to_owned(),
+        ])
+        .expect("a plan beside a private pipe is a harness, not a user");
+        assert_eq!(accepted.test_pipe.as_deref(), Some(pipe.as_str()));
+        assert_eq!(
+            accepted
+                .fault_injection
+                .as_ref()
+                .map(|plan| plan.describe()),
+            Some("before-dispatch=50ms/every".to_owned())
+        );
+
+        // The whole safety argument for shipping the injection points is
+        // this line: without a private pipe the process would answer the
+        // real session's clients, so it refuses to start at all rather than
+        // stalling a real user's keys.
+        assert_eq!(
+            startup_options([
+                "--fault-injection".to_owned(),
+                "before-dispatch=50".to_owned(),
+            ]),
+            Err("--fault-injection requires --test-pipe".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_fault_plan_is_refused_when_it_is_absent_repeated_or_malformed() {
+        let pipe = format!("{TEST_PIPE_PREFIX}faults");
+        assert!(startup_options([
+            "--test-pipe".to_owned(),
+            pipe.clone(),
+            "--fault-injection".to_owned(),
+        ])
+        .is_err());
+        assert!(startup_options([
+            "--test-pipe".to_owned(),
+            pipe.clone(),
+            "--fault-injection".to_owned(),
+            "before-dispatch=50".to_owned(),
+            "--fault-injection".to_owned(),
+            "during-reply=10".to_owned(),
+        ])
+        .is_err());
+        // A typo that armed nothing would let a stress run report "no input
+        // was lost" about a run in which nothing was ever injected.
+        assert!(startup_options([
+            "--test-pipe".to_owned(),
+            pipe,
+            "--fault-injection".to_owned(),
+            "after-commit=50".to_owned(),
         ])
         .is_err());
     }

@@ -16,14 +16,15 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
-use std::sync::{Arc, Mutex, TryLockError};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::debug_trace;
-use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
+use sakura_proto::{EngineTimingSite, FixedStr, MAX_PREEDIT_BYTES};
 
 use crate::session::text_hash;
+use crate::timing;
 
 const MAGIC: &[u8; 4] = b"SKLR";
 const HEADER_LEN: usize = 8;
@@ -766,6 +767,31 @@ impl LearningSnapshot {
 }
 
 impl LearningService {
+    /// Takes the store's mutex, recording how long the wait was.
+    ///
+    /// Every public entry point on this service goes through here so the wait
+    /// is measured once, in one place, rather than at nine call sites that
+    /// would drift apart. The measurement matters because the holder can be
+    /// doing something very long — `compact_state` keeps the lock across a
+    /// full log replay and rewrite — and a caller blocked behind that is
+    /// indistinguishable, from the outside, from a conversion that was simply
+    /// slow. #148 has to be able to tell those apart before it can attribute a
+    /// stalled keystroke to anything.
+    ///
+    /// A poisoned mutex is recovered rather than propagated, which is what
+    /// every call site here already did: the learned data behind it is a cache
+    /// that can be rebuilt, and refusing to convert because an unrelated
+    /// thread panicked would turn a degraded feature into a dead IME.
+    fn lock_state(&self) -> MutexGuard<'_, State> {
+        let started = Instant::now();
+        let guard = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        timing::observe(EngineTimingSite::LearningLockWait, started.elapsed());
+        guard
+    }
+
     pub fn memory() -> Self {
         Self {
             state: Mutex::new(State {
@@ -890,10 +916,7 @@ impl LearningService {
             return;
         }
         let day = unix_day();
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
         state.sequence = state.sequence.saturating_add(1);
         let sequence = state.sequence;
         state
@@ -924,10 +947,7 @@ impl LearningService {
         left_context: u16,
         candidates: impl IntoIterator<Item = (&'a str, u16)> + Clone,
     ) -> LearningPreference {
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = self.lock_state();
         state
             .index
             .preference(reading, left_context, candidates, unix_day())
@@ -940,10 +960,7 @@ impl LearningService {
             return;
         }
         let day = unix_day();
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
         let hash = text_hash(reading);
         if !state.repair_suppress.insert(hash) {
             return;
@@ -959,10 +976,7 @@ impl LearningService {
         if reading.is_empty() {
             return false;
         }
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = self.lock_state();
         state.repair_suppress.contains(&text_hash(reading))
     }
 
@@ -989,10 +1003,7 @@ impl LearningService {
             // keystroke budget even though ordinary conversion is cheap.
             return out;
         }
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = self.lock_state();
         state.prediction_history.for_each(|reading, _surface| {
             if out.len() >= 8 {
                 return;
@@ -1022,10 +1033,7 @@ impl LearningService {
         prefix: &str,
         visit: impl FnMut(&str, &str, u16, i64) -> bool,
     ) {
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = self.lock_state();
         state
             .prediction_history
             .visit(prefix, unix_day(), state.sequence, visit);
@@ -1044,10 +1052,7 @@ impl LearningService {
         if reading.is_empty() || surface.is_empty() {
             return Ok(ForgetPredictionOutcome::NotFound);
         }
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
         let Some(path) = state.log.path.clone() else {
             return Ok(ForgetPredictionOutcome::Unavailable);
         };
@@ -1337,10 +1342,7 @@ impl LearningService {
     /// path either restores the old writer or leaves it explicitly disabled;
     /// no caller can observe an empty in-memory index backed by the old log.
     pub fn clear(&self) -> io::Result<u64> {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
         let cleared_records = state.log.records;
         let Some(path) = state.log.path.clone() else {
             state.index = Index::new();
@@ -1417,12 +1419,7 @@ impl LearningService {
     }
 
     pub fn path(&self) -> Option<PathBuf> {
-        self.state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .log
-            .path
-            .clone()
+        self.lock_state().log.path.clone()
     }
 }
 

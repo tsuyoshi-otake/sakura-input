@@ -1354,3 +1354,174 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 導入直後の観察: sakura_engine が一時的に **5プロセス**、合計 working set 310 MB まで増え、**約2分で1プロセスへ収束**した。各ホストが DLL を読み直して一斉に engine を起動し、パイプ争奪に負けた側が退出する挙動。収束するので不具合とは判断していないが、その間 45.4 MiB のマッピングがプロセス数だけ重複する。#107 に参考として記録。
 - 学び: **プロセスを終了させる操作の前に、そのプロセスからしか取れない計測を先に取る。** 再インストールは engine を殺すので、4時間36分ぶんの trim 追跡データはインストールした瞬間に永久に失われるところだった。稼働の長いプロセスは、それ自体が再現の難しい観測装置である。
 - 学び: **プロセス数の異常は、増加を見た瞬間に報告せず収束を確認してから判断する。** 5プロセスを見た時点で「増え続けている」と書いたが誤りで、実際は2分で収束した。10秒間隔で7サンプル取るだけで正しい結論に変わった。
+
+## 2026-09-09 — #148 高負荷時の入力ロスレス化 Phase 0–1: 経路マップと engine 内部計装（#148, #102, #107, #134, #141, #142）
+
+- 症状: 高負荷（CPU / メモリ / ディスク I/O / OS scheduler）下で入力文字・preedit・変換状態が失われる、という報告群（#102 / #107 / #141 / #142）。個別 Issue はあるが「高負荷でも入力を失わない」という上位の信頼性 Issue が存在しなかったため、親 Issue **#148** を作成した。既存 Issue を「解決済み」「原因確定」へ書き換えることはしていない。
+- baseline HEAD を `5eb40e3`（main, v1.0.38, clean worktree）に固定し、Issue と `verification/high-load-input-integrity.md` の双方へ記録した。**過去の調査結果を再検証なしに現行コードへ適用しない**方針を明記。
+- **`57a0b8d` Phase 0**: 物理キー1打の経路を TSF 側 / engine 側の両方について静的に読み取り、段階表・最悪ケースの同期 IPC 往復・`CallbackDeadline` を持たない入口・write journal 満杯時の終端・既存の sequence/generation/revision・`disconnect(reason)` の21経路を文書化。仮説 H-A〜H-F を「仮説」として明示。
+- **`3592204` Phase 1(1)**: `Client::last_call_elapsed()` を追加し、timeout 診断レコードが**実際に待った時間**を保持するようにした。TSF 側 16 箇所の `note_timeout` が渡す。これで `Fault::DeadlineExpired`（budget 切れ）と `Fault::Timeout`（engine 無応答）が事後に区別できる。従来はどちらも「timeout 1件」で、50 ms の内訳が復元不能だった。
+- **`fe0b95f` Phase 1(2)**: `crates/sakura-engine/src/timing.rs` に固定 9 site の lock-free accumulator（`AtomicU64` × 3、RAII `Span`）を追加。`request-total` / `runtime-services-lock-wait` / `runtime-services-total` / `configuration-snapshot` / `dispatch` / `encoding` / `reply-write` / `learning-lock-wait` / `debug-trace-emit`。`Request::EngineTiming` で読み出し（`PROTOCOL_VERSION` 20 → 21）、`sakura_settings.exe diagnostics timing [text|tsv]`。
+- 仮説分離の狙い: `runtime-services-lock-wait` と `-total` の差が **H-E**（process-wide `dynamic_runtimes` mutex による他コネクション待ち）を、`debug-trace-emit` が **H-F**（developer mode が reply path に per-key ファイル書き込みを足す）を測る。H-F は #102/#107/#141/#142 のレポート採取時に有効だった設定そのものなので、**レポートが engine ではなく計測器を測っていた可能性**を検定する。
+- 併せて `LearningService` の state mutex 取得を 9 箇所から `lock_state()` 1 箇所へ集約（`compact_state` が log 全体の replay+rewrite の間 lock を保持するため、その後ろの待ちは外から「遅い変換」と区別できない）。`sakura-settings` の administrative connect/handshake/fault 分類の重複を `engine_admin.rs` へ集約。
+- 検証: fmt / clippy `-D warnings` / `./ci/run-test-quiet.ps1` workspace tests / `git diff --check` すべて PASS。cargo・rustc の残存 0（稼働中の `sakura_engine` / `sakura_renderer` は `C:\Program Files\Sakura Input\versions\1.0.37-...` の実機導入分でテスト残骸ではないことを Path で確認）。
+- **未実施を明示**: 負荷下での実測採取（測定値は現時点 0 件）、ETW、fault injection、stress harness、PBT、mutation、TLC、release build、実ホスト E2E。`queue_wait_us` / `conversion_us` / `dictionary_us` / TSF 側 15 タイムスタンプ / `key_seq`・`document_revision`・`composition_generation` の protocol 露出も未実施。**#107 の page-fault 仮説は ETW 実測なしに原因確定としない**、を Issue コメントと文書の両方に書いた。
+- 学び: **計装は「常時オン・saturating・`samples` 独立・累積」の4点で設計する。** 有効化してから記録する診断は稀な最初の 1 回を取り逃す。wrap した総和は停止した engine を高速な engine として報告する。`samples` を持たないと「到達しなかった」と「0 µs だった」が同じ 0 になる。リセットしないので stress 前後の差分がそのまま使える。
+- 学び: **「engine 不在」は値であって、エラーでもゼロ表でもない。** `TimingSnapshot::EngineNotRunning` を独立の variant にしないと、stress harness が「何も測れなかった」を「何も遅くなかった」として記録してしまう。
+- 学び: **計装 site の集合が partition でないなら、それを型のドキュメントに書く。** `request-total` は他を含み `runtime-services-total` は自分の lock wait を含むので、合計に意味はない。後から読む人が足し算をする前に止める必要がある。
+- 学び（作業環境）: **このマシンでは `perl -0pi -e 's|...|...|'` による複数行 in-place 置換が信用できない。** 置換ではなくファイル先頭への追記になったり、`format_args!` の内部へ差し込まれたりした（2回発生）。行番号指定の `sed` か、`head`/`cat`/`tail` による splice、または `sed -i 'Nr file'` を使う。`sed -z` の複数行パターンも、同じ形の別箇所（今回は導入した helper 自身の本体）を巻き込んで無限再帰を作ったので、置換対象が一意であることを確認してから使う。
+
+## 2026-09-09 — #148 高負荷時の入力ロスレス化 Phase 2（決定論的遅延注入 + stress harness）
+
+- **Issue / commit**: #148 / `ad47c1b`（Phase 1 は `fe0b95f`, `c7c435a`）
+- **症状（未解決）**: 高負荷下で入力文字・preedit・変換状態が失われる報告。
+  Phase 1 で engine 側 per-stage timing は入れたが、「engine を実際に止めたとき
+  入力が生き残るか」は測れていなかった。
+- **根本原因**: 未確定。本 Phase は原因を確定していない。
+- **やったこと**:
+  - `crates/sakura-engine/src/fault_injection.rs`（新規）。4 点
+    （before-dispatch / during-conversion / after-mutation / during-reply）へ
+    release ビルドに残る sleep 注入点を追加。
+  - arming gate: `--fault-injection <spec>` は `--test-pipe`（既存の
+    `validate_test_pipe()` で `\\.\pipe\SakuraInputEngineTest-` に限定）が
+    同時にあるときだけ受理。なければ **起動拒否**。env var / file 経路なし。
+    `install()` は 2 回目を拒否（one-shot）。
+  - `Request::FaultStatus` / `Response::FaultStatus` を追加し
+    `PROTOCOL_VERSION` 21 → 22。payload は 4 件固定のカウンタのみで content-free。
+    `sakura_settings.exe diagnostics faults [text|tsv]`（`engine_faults.rs`）で
+    ユーザーが自分の engine が disarmed であることを確認できる。
+  - `Engine::spawn_isolated_with_faults(spec)` と
+    `tests/high_load_key_integrity.rs`（7 tests）。実行ごとに一意な
+    `LOCALAPPDATA` / private pipe / 辞書 fixture、synthetic input のみ。
+- **検証**: `cargo fmt --all -- --check` / `cargo clippy --workspace
+  --all-targets -- -D warnings` / `./ci/run-test-quiet.ps1 -Name 'workspace
+  tests' -Command { cargo test --workspace }` / `git diff --check` すべて成功。
+  cargo・rustc・test child プロセスの残存なし（残っていた `sakura_engine.exe`
+  PID 23540 は 1.0.37 のユーザー実環境 engine で、`--test-pipe` を持たない別物）。
+- **学び（実測で得た事実。原因確定ではない）**:
+  1. **engine 側の入力欠落は 0。** `during-reply=400` を arm し、クライアント
+     budget を 50 ms（TSF の `KEY_BUDGET`）にすると client は諦めるが、
+     次のキーの reply には諦めたキーの結果が含まれている。engine は適用済み。
+  2. **stale reply は配送されない。** `sakura-ipc` の `client.rs` は
+     `header.request_id` を照合し、古い id の frame をループで読み飛ばす
+     （新しすぎる id は `Fault::Desynchronized`）。したがって「古い結果を
+     新しい request の答えとして適用する」経路は IPC 層には無い。
+  3. ⇒ ホストで文字が消えるなら、それは **engine が失ったのではなく TSF 層が
+     諦めた結果**。Phase 3 / Phase 5 の対象。
+- **設計判断の記録**:
+  - 4 点を分けたのは経過時間ではなく **世界の状態** が違うから。特に
+    `after-mutation` は「クライアントが諦めたキーを engine は適用済み」という
+    唯一の順序で、欠落と重複の双方が起こり得る窓。
+  - `fired` / `slept_us` は要求値でなく **実測値**。負荷下の scheduler は
+    寝過ごすので、harness が assert すべきは起きたことであって頼んだことではない。
+  - spec の parse は fail-closed。黙って何も arm しないと、stress 実行が
+    「入力は失われなかった」を、何も注入していない実行について報告してしまう。
+  - `during-reply` は key/output の reply 経路だけに置いた。administrative
+    reply は遅らせない。よって `fired` は key reply 件数であり全 request 数ではない。
+    types.rs の doc comment に明記済み（実装時に test が fired=2 で落ちて判明）。
+- **テスト作成時の誤り（自分側）**: `"sakura"` の逐次 preedit を
+  `["さ", ...]` と予想したが実際は `["s", "さ", "さk", ...]`（単独子音は
+  母音が来るまで roman のまま）。また変換中の `Escape` は composition を
+  クリアせず変換前の読みへ戻す。どちらも engine の正しい挙動で、期待値の側が
+  誤り。実挙動を確認してから expectation を書くこと。
+- **残り**: 負荷下の実採取、ETW 因果確定（H-E / H-F）、correlation ID、
+  TSF 側 15 タイムスタンプ、`queue_wait_us` / `conversion_us` /
+  `dictionary_us`、Pending/ACK 設計、PBT / mutation / TLC、実ホスト E2E。
+
+## 2026-09-09 — #148 高負荷時の入力ロスレス化 Phase 3 入口（諦めたキーの行方を実測）
+
+- **Issue / commit**: #148 / `8c66824`（Phase 1: `fe0b95f` `c7c435a`、Phase 2: `ad47c1b` `4cb22a9`）
+- **症状（未解決）**: 高負荷下で入力文字が失われる報告。Phase 2 で
+  「engine 側の入力欠落は 0」まで分かったが、では誰が捨てているのかが不明だった。
+- **根本原因**: **未確定**（頻度の原因は ETW 前で断定不可）。ただし
+  「timeout が起きたとき何が失われるか」は本コミットで確定した。
+- **やったこと（観測のみ。動作変更なし）**:
+  - `crates/sakura-engine/tests/high_load_key_integrity.rs` に
+    `the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`。
+    実 `sakura_engine.exe` に `during-reply=200` を arm し、同一 session へ
+    同じ 4 キーを 2 周。3 打目を 50 ms クライアントとして諦める。
+    `Revert` の有無だけが違う。
+  - `crates/sakura-tsf/src/engine.rs` に
+    `the_key_after_a_timeout_sends_revert_and_never_retries_the_abandoned_key`。
+    scripted peer が受け取ったリクエスト列を記録する。
+  - `Link::resync` の doc comment を訂正。
+  - `verification/high-load-input-integrity.md` §5.5 を追加、status を
+    Phase 3 に更新、§5.4.3 の「7 tests」誤記（実際は 5）を訂正。
+- **検証**: `cargo fmt --all -- --check` / `cargo clippy --workspace
+  --all-targets --offline -- -D warnings` / `./ci/run-test-quiet.ps1 -Name
+  'workspace tests' -Command { cargo test --workspace --offline }` /
+  `git diff --check` すべて成功。cargo・rustc・test child の残存なし
+  （`sakura_engine.exe` PID 23540 は前回同様ユーザーの 1.0.37 実環境 engine）。
+- **学び（実測）**:
+  1. **`Link::resync` の doc comment は誤りだった。** 「捨てるのは engine の
+     now-duplicate copy」と書かれていたが、実測は
+     `k a (諦めた i) u` → `かいう` / `k a (諦めた i) Revert u` → `う`。
+     差分 `かい` のうち `か` は duplicate だが **`い` は違う**。その reply は
+     クライアントに一度も届いていないので、ホストが表示も commit もしていない。
+  2. **諦めたキーは再送されない。** peer が見る列は
+     `SendKey(k)` → `Revert` → `SendKey(u)`、session id は不変。
+     engine 側からその効果を取り戻す経路は存在しない。
+- **学び（静的読取りのみ。未実測と明記した）**:
+  3. 実キー経路は resync に到達しない。`text_service.rs:5486` の
+     `Answer::Unavailable` → `recover_from_engine_unavailable`
+     (`:5536`) → `disconnect(EngineUnavailableRecovery)` (`:5550`) が
+     `self.engine` を `Engine::new()` で置換する（§2.6）。desynchronized な
+     link は resync される前に破棄され、次キーは新接続・新 session になる。
+     観測した `Revert` 列は administrative timeout（`engine.rs` 286/321/461/
+     550/585/698/728）から到達する。
+  4. 可視テキストを救う `enqueue_finalization_for_visible(...,
+     composition_projection())` (`text_service.rs:5571`) の入力は TSF 自身の
+     projection なので、**定義上** reply が届かなかったキーを含み得ない。
+- **設計判断の記録**:
+  - 反例は「Revert あり／なし」の 1 リクエスト差で作った。負荷や
+    タイミングではなく **1 リクエストだけ** が違うので、差分の帰属が一意になる。
+  - 同一 engine 内で 2 session を使う案は取りやめた。同一接続の 2 本目の
+    session は 1 本目に live composition があると `consumed: true,
+    preedit: None` を返す（未調査。#148 とは別件として task に切り出し済み）。
+    1 session 2 周に変更した。
+  - doc comment の訂正は「修正を先に入れない」に反しない。挙動は変えておらず、
+    反証済みの主張を残す方が有害と判断した。
+- **残り**: §5.5.3 の実ホスト E2E 実測、§6 の全遅延値行列（49/50/51 ms 境界と
+  並行接続）、ETW 因果確定（H-E / H-F）、correlation ID、TSF 側 15 タイムスタンプ、
+  `queue_wait_us` / `conversion_us` / `dictionary_us`、Pending/ACK 設計、
+  PBT / mutation / TLC。
+
+## 2026-09-09 — 1.0.39 リリース準備（#148 Phase 1–3 の観測手段を出荷）
+
+- **Issue / commit / PR**: #148 / `a93a695` / PR #149
+- **内容**: 修正ではなく観測手段だけのリリース。症状（高負荷時の入力ロス）は
+  未解決であり、リリースノートの冒頭でそう明記した。
+  - `diagnostics timing`（段階別の所要時間、timeout の実待ち時間）
+  - 出荷 engine に 4 つの遅延注入点（before-dispatch / during-conversion /
+    after-mutation / during-reply）
+  - `diagnostics faults`（利用者が自分の engine で全点 disarmed を確認できる）
+  - `PROTOCOL_VERSION` 21 → 22
+- **バージョン 5 箇所**: `Cargo.toml` + `Cargo.lock` 再生成、`installer/setup.iss`
+  の `AppProductVersion` と `AppVersionedDir`、`.github/workflows/release.yml` の
+  既定タグ、`data/update-signing/release-sequence.txt` 6 → 7。
+- **失敗と根本原因（今回）**: `release-sequence.txt` を Python の
+  `Path.write_text` で書いたところ Windows の既定改行変換で `7\r\n` になり、
+  `sakura-settings` の `update_trust::*` / `updater::*` 14 件が
+  `embedded release sequence contains CR or NUL` で失敗した。このファイルは
+  `include_bytes!` で埋め込まれ `format!("{floor}\n")` とバイト比較される。
+  `printf '7\n' >` で書き直し、`xxd` で `370a` を確認して解消。
+  `.gitattributes` には既に `/data/update-signing/** text eol=lf` があり
+  （24 行目）、原因は git ではなく自分の書き込みだった。誤って追加した
+  `.gitattributes` の行は HEAD とバイト同一に戻した。
+- **学び**: このリポジトリは `core.autocrlf=true` で worktree は CRLF、
+  commit 時に LF へ正規化される。**バイト列が意味を持つファイルを書くときは
+  `newline=""` かバイト書き込みを使う。** テキストとして書くと環境依存になる。
+  もう一点、`bash` ツール経由の heredoc では Python ソース中のバックスラッシュが
+  半分に潰れることがある。パス文字列を扱うときは `chr(92)` で組むのが確実。
+- **検証**: `cargo fmt --all -- --check` / `cargo clippy --workspace
+  --all-targets --offline -- -D warnings` / `./ci/run-test-quiet.ps1 -Name
+  'workspace tests' -Command { cargo test --workspace --offline }`
+  （1,893 passed / 91 ignored / 94 binaries）/ release build
+  `x86_64-pc-windows-msvc` / `scripts/build-installer.ps1`（version 1.0.39、
+  warnings 0、`sakura_setup.exe` 24,544,545 bytes sha256
+  `c126112893a68c58f55ae6868f03583b69ec856715ee8bce377e4255d03f39b7`）/
+  `git diff --check`。辞書 payload は 1.0.38 とバイト同一
+  （`system.dic` sha256 `ca1b24fc...febb63f`）で、本ブランチに辞書入力の変更なし。
+- **署名**: owner 判断（2026-08-22）どおり Authenticode 未署名。ノートで未署名と
+  明記し、`release-manifest-v2.txt` との SHA-256 照合を案内。updater の
+  `WinVerifyTrust` fail-closed は変更していない。

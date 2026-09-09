@@ -51,9 +51,9 @@ use sakura_core::{
 };
 use sakura_ipc::debug_trace;
 use sakura_proto::{
-    AiTextOperation, AiTextStatus, CandidateDetailInput, ErrorCode, FixedStr, FixedVec, InputScope,
-    KeyCode, KeyInput, Mode, OutputBuf, Overflow, Request, Response, SessionId, UnderlineKind,
-    UndoCommitOutcome, CANDIDATE_PAGE_SIZE, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES,
+    AiTextOperation, AiTextStatus, CandidateDetailInput, ErrorCode, FaultPoint, FixedStr, FixedVec,
+    InputScope, KeyCode, KeyInput, Mode, OutputBuf, Overflow, Request, Response, SessionId,
+    UnderlineKind, UndoCommitOutcome, CANDIDATE_PAGE_SIZE, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES,
     MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_COMMIT_BYTES,
     MAX_PREEDIT_BYTES, MAX_SEGMENTS, PROTOCOL_VERSION,
 };
@@ -628,6 +628,12 @@ impl Dispatcher {
             Request::ClearInputHistory => self.clear_input_history(),
             Request::FlushInputHistory => self.flush_input_history(),
             Request::InputHistoryStats => self.input_history_stats(),
+            Request::EngineTiming => Reply::Message(Response::EngineTiming {
+                entries: crate::timing::snapshot(),
+            }),
+            Request::FaultStatus => Reply::Message(Response::FaultStatus {
+                entries: crate::fault_injection::status(),
+            }),
             Request::SetInputScope { session, scope } => self.set_input_scope(*session, *scope),
             Request::SetMode { session, mode } => self.set_mode(*session, *mode),
             Request::ApplyAiComposition { session, result } => {
@@ -725,6 +731,8 @@ impl Dispatcher {
             | Request::ClearInputHistory
             | Request::FlushInputHistory
             | Request::InputHistoryStats
+            | Request::EngineTiming
+            | Request::FaultStatus
             | Request::RecordAiText { .. }
             | Request::PollAiText { .. }
             | Request::CancelAiText { .. }
@@ -1204,6 +1212,10 @@ impl Dispatcher {
             } else {
                 String::new()
             };
+            // The dictionary, learning and prediction services are resolved
+            // and the session is still untouched. A key delayed here is one
+            // the engine could still decline to apply.
+            crate::fault_injection::delay(FaultPoint::DuringConversion);
             match apply_key(
                 id,
                 session,
@@ -1219,6 +1231,12 @@ impl Dispatcher {
                 },
             ) {
                 Ok(()) => {
+                    // The session has advanced. Nothing has been rendered,
+                    // encoded or sent, so a client that times out from here on
+                    // has abandoned a key the engine has already applied —
+                    // the one ordering in which a lost keystroke and a
+                    // duplicated one are both possible.
+                    crate::fault_injection::delay(FaultPoint::AfterMutation);
                     if let Some(restored) = session.take_mode_restored() {
                         out.mode.get_or_insert(restored);
                     }
@@ -13924,15 +13942,15 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_the_previous_v19_version_is_rejected() {
+    fn hello_with_the_previous_v21_version_is_rejected() {
         assert_eq!(
-            PROTOCOL_VERSION, 20,
-            "the Pad shortcut adds v20 UI-state wire data"
+            PROTOCOL_VERSION, 22,
+            "the fault-injection status snapshot adds a v22 request and response"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();
 
-        let reply = dispatcher.dispatch(&Request::Hello { client_version: 19 }, &mut out);
+        let reply = dispatcher.dispatch(&Request::Hello { client_version: 21 }, &mut out);
 
         assert_eq!(
             reply,
@@ -13941,10 +13959,10 @@ mod tests {
     }
 
     #[test]
-    fn hello_with_v20_version_is_accepted() {
+    fn hello_with_v22_version_is_accepted() {
         assert_eq!(
-            PROTOCOL_VERSION, 20,
-            "the Pad shortcut adds v20 UI-state wire data"
+            PROTOCOL_VERSION, 22,
+            "the fault-injection status snapshot adds a v22 request and response"
         );
         let mut dispatcher = builtin_dispatcher();
         let mut out = OutputBuf::new();

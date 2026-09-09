@@ -16,6 +16,9 @@ pub const CALLER_DIRECTORY_VARIABLE: &str = "SAKURA_SETTINGS_CALLER_DIRECTORY";
 
 pub mod configuration;
 pub mod diagnostics;
+pub mod engine_admin;
+pub mod engine_faults;
+pub mod engine_timing;
 pub mod formats;
 pub mod input_history;
 pub mod learning;
