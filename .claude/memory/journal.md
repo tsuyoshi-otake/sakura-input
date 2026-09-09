@@ -1354,3 +1354,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 導入直後の観察: sakura_engine が一時的に **5プロセス**、合計 working set 310 MB まで増え、**約2分で1プロセスへ収束**した。各ホストが DLL を読み直して一斉に engine を起動し、パイプ争奪に負けた側が退出する挙動。収束するので不具合とは判断していないが、その間 45.4 MiB のマッピングがプロセス数だけ重複する。#107 に参考として記録。
 - 学び: **プロセスを終了させる操作の前に、そのプロセスからしか取れない計測を先に取る。** 再インストールは engine を殺すので、4時間36分ぶんの trim 追跡データはインストールした瞬間に永久に失われるところだった。稼働の長いプロセスは、それ自体が再現の難しい観測装置である。
 - 学び: **プロセス数の異常は、増加を見た瞬間に報告せず収束を確認してから判断する。** 5プロセスを見た時点で「増え続けている」と書いたが誤りで、実際は2分で収束した。10秒間隔で7サンプル取るだけで正しい結論に変わった。
+
+## 2026-09-09 — #148 高負荷時の入力ロスレス化 Phase 0–1: 経路マップと engine 内部計装（#148, #102, #107, #134, #141, #142）
+
+- 症状: 高負荷（CPU / メモリ / ディスク I/O / OS scheduler）下で入力文字・preedit・変換状態が失われる、という報告群（#102 / #107 / #141 / #142）。個別 Issue はあるが「高負荷でも入力を失わない」という上位の信頼性 Issue が存在しなかったため、親 Issue **#148** を作成した。既存 Issue を「解決済み」「原因確定」へ書き換えることはしていない。
+- baseline HEAD を `5eb40e3`（main, v1.0.38, clean worktree）に固定し、Issue と `verification/high-load-input-integrity.md` の双方へ記録した。**過去の調査結果を再検証なしに現行コードへ適用しない**方針を明記。
+- **`57a0b8d` Phase 0**: 物理キー1打の経路を TSF 側 / engine 側の両方について静的に読み取り、段階表・最悪ケースの同期 IPC 往復・`CallbackDeadline` を持たない入口・write journal 満杯時の終端・既存の sequence/generation/revision・`disconnect(reason)` の21経路を文書化。仮説 H-A〜H-F を「仮説」として明示。
+- **`3592204` Phase 1(1)**: `Client::last_call_elapsed()` を追加し、timeout 診断レコードが**実際に待った時間**を保持するようにした。TSF 側 16 箇所の `note_timeout` が渡す。これで `Fault::DeadlineExpired`（budget 切れ）と `Fault::Timeout`（engine 無応答）が事後に区別できる。従来はどちらも「timeout 1件」で、50 ms の内訳が復元不能だった。
+- **`fe0b95f` Phase 1(2)**: `crates/sakura-engine/src/timing.rs` に固定 9 site の lock-free accumulator（`AtomicU64` × 3、RAII `Span`）を追加。`request-total` / `runtime-services-lock-wait` / `runtime-services-total` / `configuration-snapshot` / `dispatch` / `encoding` / `reply-write` / `learning-lock-wait` / `debug-trace-emit`。`Request::EngineTiming` で読み出し（`PROTOCOL_VERSION` 20 → 21）、`sakura_settings.exe diagnostics timing [text|tsv]`。
+- 仮説分離の狙い: `runtime-services-lock-wait` と `-total` の差が **H-E**（process-wide `dynamic_runtimes` mutex による他コネクション待ち）を、`debug-trace-emit` が **H-F**（developer mode が reply path に per-key ファイル書き込みを足す）を測る。H-F は #102/#107/#141/#142 のレポート採取時に有効だった設定そのものなので、**レポートが engine ではなく計測器を測っていた可能性**を検定する。
+- 併せて `LearningService` の state mutex 取得を 9 箇所から `lock_state()` 1 箇所へ集約（`compact_state` が log 全体の replay+rewrite の間 lock を保持するため、その後ろの待ちは外から「遅い変換」と区別できない）。`sakura-settings` の administrative connect/handshake/fault 分類の重複を `engine_admin.rs` へ集約。
+- 検証: fmt / clippy `-D warnings` / `./ci/run-test-quiet.ps1` workspace tests / `git diff --check` すべて PASS。cargo・rustc の残存 0（稼働中の `sakura_engine` / `sakura_renderer` は `C:\Program Files\Sakura Input\versions\1.0.37-...` の実機導入分でテスト残骸ではないことを Path で確認）。
+- **未実施を明示**: 負荷下での実測採取（測定値は現時点 0 件）、ETW、fault injection、stress harness、PBT、mutation、TLC、release build、実ホスト E2E。`queue_wait_us` / `conversion_us` / `dictionary_us` / TSF 側 15 タイムスタンプ / `key_seq`・`document_revision`・`composition_generation` の protocol 露出も未実施。**#107 の page-fault 仮説は ETW 実測なしに原因確定としない**、を Issue コメントと文書の両方に書いた。
+- 学び: **計装は「常時オン・saturating・`samples` 独立・累積」の4点で設計する。** 有効化してから記録する診断は稀な最初の 1 回を取り逃す。wrap した総和は停止した engine を高速な engine として報告する。`samples` を持たないと「到達しなかった」と「0 µs だった」が同じ 0 になる。リセットしないので stress 前後の差分がそのまま使える。
+- 学び: **「engine 不在」は値であって、エラーでもゼロ表でもない。** `TimingSnapshot::EngineNotRunning` を独立の variant にしないと、stress harness が「何も測れなかった」を「何も遅くなかった」として記録してしまう。
+- 学び: **計装 site の集合が partition でないなら、それを型のドキュメントに書く。** `request-total` は他を含み `runtime-services-total` は自分の lock wait を含むので、合計に意味はない。後から読む人が足し算をする前に止める必要がある。
+- 学び（作業環境）: **このマシンでは `perl -0pi -e 's|...|...|'` による複数行 in-place 置換が信用できない。** 置換ではなくファイル先頭への追記になったり、`format_args!` の内部へ差し込まれたりした（2回発生）。行番号指定の `sed` か、`head`/`cat`/`tail` による splice、または `sed -i 'Nr file'` を使う。`sed -z` の複数行パターンも、同じ形の別箇所（今回は導入した helper 自身の本体）を巻き込んで無限再帰を作ったので、置換対象が一意であることを確認してから使う。

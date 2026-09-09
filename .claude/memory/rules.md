@@ -283,6 +283,22 @@ turns out to be wrong, delete it — a stale rule is worse than no rule.
   messages with the file-writing tool into the session scratchpad and use
   `git commit -F <path>`.
 
+- **`perl -0pi -e 's|...|...|'` multi-line in-place substitution is unreliable
+  here.** Verified 2026-09-09 (#148): one run prepended the replacement to the
+  top of `crates/sakura-engine/src/timing.rs` instead of substituting, and
+  another silently placed the replacement inside a `format_args!` in
+  `crates/sakura-engine/src/server.rs`, producing parse errors far from the
+  intended site. Use `sed` with explicit line numbers, `sed -i 'Nr <file>'` to
+  splice a prepared block, or `head`/`cat`/`tail` reassembly.
+
+- **A `sed -z` multi-line pattern must be proven unique before it is applied.**
+  In the same session, a pattern meant to route nine `self.state.lock()` call
+  sites through a new `lock_state()` helper also rewrote the helper's own body,
+  making it call itself. Grep the pattern and count the matches first, and
+  re-read the helper after any replace-all that could match its definition.
+  Line numbers taken from an earlier grep also go stale after an intervening
+  edit changes the line count — re-grep immediately before splicing.
+
 - **`.cargo/config.toml` pins `x86_64-pc-windows-msvc`**, so release artifacts
   live under `target/x86_64-pc-windows-msvc/release/`, not `target/release/`.
   Anything that hard-codes the old path (installer sources, size checks) is
