@@ -43,8 +43,8 @@ use std::time::{Duration, Instant};
 
 use sakura_core::{default_app_profiles, AppProfile, AppearanceTheme, Preferences};
 use sakura_proto::{
-    encode_response, peek_header, EngineTimingSite, ErrorCode, OutputBuf, Request, RequestId,
-    Response, MAX_FRAME,
+    encode_response, peek_header, EngineTimingSite, ErrorCode, FaultPoint, OutputBuf, Request,
+    RequestId, Response, MAX_FRAME,
 };
 #[cfg(test)]
 use sakura_proto::{AiTextOperation, AiTextStatus, SessionId};
@@ -58,6 +58,7 @@ use crate::ai_text::AiTextService;
 use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
+use crate::fault_injection;
 use crate::input_history::InputHistoryService;
 use crate::learning::{ForgetPredictionOutcome, LearningService};
 use crate::long_conversion::{LongConversionRuntime, LongConversionService};
@@ -1495,6 +1496,7 @@ fn request_allowed(endpoint: Endpoint, request: &Request, client_trust: ClientTr
                 | Request::FlushInputHistory
                 | Request::InputHistoryStats
                 | Request::EngineTiming
+                | Request::FaultStatus
                 | Request::Shutdown
                 | Request::Ping
         ),
@@ -1772,6 +1774,10 @@ fn serve(
         {
             return Outcome::Closed;
         }
+        // Nothing has been touched yet: the frame is decoded, no session has
+        // moved and no reply exists. A key delayed here is the mildest of the
+        // four stories, and the one a correct client should always survive.
+        fault_injection::delay(FaultPoint::BeforeDispatch);
         let reply = {
             let _span = timing::Span::start(EngineTimingSite::Dispatch);
             dispatcher.dispatch(&request, &mut bufs.out)
@@ -1815,6 +1821,10 @@ fn serve(
                         return Outcome::Failed(Fault::Protocol(error));
                     }
                 };
+                // The answer exists and is correct; only its delivery is late.
+                // A client that gives up here has abandoned a key the engine
+                // has already applied.
+                fault_injection::delay(FaultPoint::DuringReply);
                 let transported = {
                     let _span = timing::Span::start(EngineTimingSite::ReplyWrite);
                     instance.write_all(&bufs.frame[..written])

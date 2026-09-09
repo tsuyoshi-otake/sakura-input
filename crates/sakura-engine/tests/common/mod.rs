@@ -69,7 +69,28 @@ impl Engine {
     pub fn spawn_isolated_with_setup(setup: impl FnOnce(&Path)) -> Engine {
         let test_lock = acquire_engine_test_lock();
         let identity = TestIdentity::new("ordinary");
-        Self::spawn(identity, PipeBinding::PrivateTest, test_lock, setup)
+        Self::spawn(identity, PipeBinding::PrivateTest, test_lock, setup, None)
+    }
+
+    /// Starts an isolated engine that will stall itself at named points.
+    ///
+    /// `spec` is `point=milliseconds[/occurrences]`, comma separated; see
+    /// `sakura_engine::fault_injection::Plan`. The delays are real sleeps
+    /// inside the real `sakura_engine.exe`, which is the whole purpose: a
+    /// `#[cfg(test)]` hook lives in the test binary's own process and can
+    /// never make the shipped engine late. The engine refuses to start with
+    /// this argument unless `--test-pipe` is also present, so this stays
+    /// confined to the per-run private pipe and profile below.
+    pub fn spawn_isolated_with_faults(spec: &str) -> Engine {
+        let test_lock = acquire_engine_test_lock();
+        let identity = TestIdentity::new("faults");
+        Self::spawn(
+            identity,
+            PipeBinding::PrivateTest,
+            test_lock,
+            |_| {},
+            Some(spec),
+        )
     }
 
     /// Starts the sole intentional well-known-pipe test owner.
@@ -88,6 +109,7 @@ impl Engine {
             PipeBinding::WellKnown(pipe_name),
             test_lock,
             |_| {},
+            None,
         )
     }
 
@@ -96,6 +118,7 @@ impl Engine {
         binding: PipeBinding,
         test_lock: MutexGuard<'static, ()>,
         setup: impl FnOnce(&Path),
+        faults: Option<&str>,
     ) -> Engine {
         let dictionary = test_dictionary(&identity.local_app_data);
         setup(&identity.local_app_data);
@@ -111,6 +134,16 @@ impl Engine {
             .env("LOCALAPPDATA", &identity.local_app_data);
         if binding.uses_explicit_test_pipe() {
             command.arg("--test-pipe").arg(&pipe_name);
+        }
+        if let Some(spec) = faults {
+            // Asserted here rather than left to the engine's own refusal, so a
+            // test that asked for delays on the production name fails as a
+            // test bug instead of as a child that would not start.
+            assert!(
+                binding.uses_explicit_test_pipe(),
+                "fault injection is confined to the private test pipe"
+            );
+            command.arg("--fault-injection").arg(spec);
         }
         let child = command
             .spawn()
