@@ -1427,3 +1427,61 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - **残り**: 負荷下の実採取、ETW 因果確定（H-E / H-F）、correlation ID、
   TSF 側 15 タイムスタンプ、`queue_wait_us` / `conversion_us` /
   `dictionary_us`、Pending/ACK 設計、PBT / mutation / TLC、実ホスト E2E。
+
+## 2026-09-09 — #148 高負荷時の入力ロスレス化 Phase 3 入口（諦めたキーの行方を実測）
+
+- **Issue / commit**: #148 / `8c66824`（Phase 1: `fe0b95f` `c7c435a`、Phase 2: `ad47c1b` `4cb22a9`）
+- **症状（未解決）**: 高負荷下で入力文字が失われる報告。Phase 2 で
+  「engine 側の入力欠落は 0」まで分かったが、では誰が捨てているのかが不明だった。
+- **根本原因**: **未確定**（頻度の原因は ETW 前で断定不可）。ただし
+  「timeout が起きたとき何が失われるか」は本コミットで確定した。
+- **やったこと（観測のみ。動作変更なし）**:
+  - `crates/sakura-engine/tests/high_load_key_integrity.rs` に
+    `the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw`。
+    実 `sakura_engine.exe` に `during-reply=200` を arm し、同一 session へ
+    同じ 4 キーを 2 周。3 打目を 50 ms クライアントとして諦める。
+    `Revert` の有無だけが違う。
+  - `crates/sakura-tsf/src/engine.rs` に
+    `the_key_after_a_timeout_sends_revert_and_never_retries_the_abandoned_key`。
+    scripted peer が受け取ったリクエスト列を記録する。
+  - `Link::resync` の doc comment を訂正。
+  - `verification/high-load-input-integrity.md` §5.5 を追加、status を
+    Phase 3 に更新、§5.4.3 の「7 tests」誤記（実際は 5）を訂正。
+- **検証**: `cargo fmt --all -- --check` / `cargo clippy --workspace
+  --all-targets --offline -- -D warnings` / `./ci/run-test-quiet.ps1 -Name
+  'workspace tests' -Command { cargo test --workspace --offline }` /
+  `git diff --check` すべて成功。cargo・rustc・test child の残存なし
+  （`sakura_engine.exe` PID 23540 は前回同様ユーザーの 1.0.37 実環境 engine）。
+- **学び（実測）**:
+  1. **`Link::resync` の doc comment は誤りだった。** 「捨てるのは engine の
+     now-duplicate copy」と書かれていたが、実測は
+     `k a (諦めた i) u` → `かいう` / `k a (諦めた i) Revert u` → `う`。
+     差分 `かい` のうち `か` は duplicate だが **`い` は違う**。その reply は
+     クライアントに一度も届いていないので、ホストが表示も commit もしていない。
+  2. **諦めたキーは再送されない。** peer が見る列は
+     `SendKey(k)` → `Revert` → `SendKey(u)`、session id は不変。
+     engine 側からその効果を取り戻す経路は存在しない。
+- **学び（静的読取りのみ。未実測と明記した）**:
+  3. 実キー経路は resync に到達しない。`text_service.rs:5486` の
+     `Answer::Unavailable` → `recover_from_engine_unavailable`
+     (`:5536`) → `disconnect(EngineUnavailableRecovery)` (`:5550`) が
+     `self.engine` を `Engine::new()` で置換する（§2.6）。desynchronized な
+     link は resync される前に破棄され、次キーは新接続・新 session になる。
+     観測した `Revert` 列は administrative timeout（`engine.rs` 286/321/461/
+     550/585/698/728）から到達する。
+  4. 可視テキストを救う `enqueue_finalization_for_visible(...,
+     composition_projection())` (`text_service.rs:5571`) の入力は TSF 自身の
+     projection なので、**定義上** reply が届かなかったキーを含み得ない。
+- **設計判断の記録**:
+  - 反例は「Revert あり／なし」の 1 リクエスト差で作った。負荷や
+    タイミングではなく **1 リクエストだけ** が違うので、差分の帰属が一意になる。
+  - 同一 engine 内で 2 session を使う案は取りやめた。同一接続の 2 本目の
+    session は 1 本目に live composition があると `consumed: true,
+    preedit: None` を返す（未調査。#148 とは別件として task に切り出し済み）。
+    1 session 2 周に変更した。
+  - doc comment の訂正は「修正を先に入れない」に反しない。挙動は変えておらず、
+    反証済みの主張を残す方が有害と判断した。
+- **残り**: §5.5.3 の実ホスト E2E 実測、§6 の全遅延値行列（49/50/51 ms 境界と
+  並行接続）、ETW 因果確定（H-E / H-F）、correlation ID、TSF 側 15 タイムスタンプ、
+  `queue_wait_us` / `conversion_us` / `dictionary_us`、Pending/ACK 設計、
+  PBT / mutation / TLC。
