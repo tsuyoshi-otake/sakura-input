@@ -30,7 +30,7 @@
 //! a default rather than an override. Unmatched keys return `None`, which is
 //! the engine's signal to treat the key as text (or to pass it through).
 
-use sakura_proto::{KeyCode, KeyInput, Modifiers};
+use sakura_values::{KeyCode, KeyInput, Modifiers};
 
 use crate::config::{self, Document, ParseError, Value};
 

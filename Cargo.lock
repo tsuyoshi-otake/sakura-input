@@ -294,7 +294,7 @@ dependencies = [
 name = "sakura-core"
 version = "1.0.39"
 dependencies = [
- "sakura-proto",
+ "sakura-values",
 ]
 
 [[package]]
