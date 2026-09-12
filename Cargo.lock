@@ -410,6 +410,7 @@ name = "sakura-store"
 version = "1.0.39"
 dependencies = [
  "sakura-values",
+ "windows",
 ]
 
 [[package]]
