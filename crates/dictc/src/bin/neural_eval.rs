@@ -6,6 +6,8 @@
 //! dictionary.  The corpus format deliberately reuses the frozen Phase 2
 //! `id<TAB>slice<TAB>reading<TAB>expected` contract.
 
+use sakura_rerank_proto::{Candidate as WireCandidate, Frame, Limits};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -17,11 +19,6 @@ use std::time::Duration;
 use sakura_core::{ConversionCandidate, ConversionOptions, Converter, Dictionary};
 use serde::Serialize;
 
-const MAX_CANDIDATES: usize = 6;
-const MAX_FRAME_BYTES: usize = 32 * 1024;
-const REQUEST_MAGIC: u32 = 0x524E_4B53; // SKNR
-const RESPONSE_MAGIC: u32 = 0x534E_4B53; // SKNS
-const PROTOCOL_VERSION: u16 = 1;
 const MINIMUM_LONG_READING_CHARS: usize = 10;
 const MINIMUM_SEGMENTED_READING_CHARS: usize = 3;
 /// A quality-acceptance comparison needs enough independently reviewed cases
@@ -501,7 +498,7 @@ fn evaluate(
                 dictionary,
                 &case.reading,
                 ConversionOptions {
-                    max_candidates: MAX_CANDIDATES,
+                    max_candidates: Limits::MAX_CANDIDATES,
                     ..ConversionOptions::default()
                 },
             )
@@ -634,7 +631,7 @@ fn mrr(milli_sum: u64, evaluated: usize) -> f64 {
 fn snapshot_candidates(candidates: &[ConversionCandidate]) -> Vec<SnapshotCandidate> {
     candidates
         .iter()
-        .take(MAX_CANDIDATES)
+        .take(Limits::MAX_CANDIDATES)
         .map(|candidate| SnapshotCandidate {
             fingerprint: candidate_fingerprint(candidate.text(), candidate.cost),
             text: candidate.text().to_owned(),
@@ -697,94 +694,49 @@ fn select_top1(candidates: &[SnapshotCandidate], scores: &[(u64, f32)]) -> Resul
 }
 
 fn encode_request(request_id: u64, candidates: &[SnapshotCandidate]) -> Result<Vec<u8>, String> {
-    if candidates.is_empty() || candidates.len() > MAX_CANDIDATES {
+    if candidates.is_empty() || candidates.len() > Limits::MAX_CANDIDATES {
         return Err("candidate count is out of bounds".to_owned());
     }
-    let mut payload = Vec::new();
-    put_u32(&mut payload, REQUEST_MAGIC);
-    put_u16(&mut payload, PROTOCOL_VERSION);
-    put_u16(&mut payload, 0);
-    put_u64(&mut payload, request_id);
-    put_u32(&mut payload, 0);
-    put_u32(&mut payload, candidates.len() as u32);
-    for candidate in candidates {
-        if candidate.text.is_empty() || candidate.text.len() > 3 * 1024 {
-            return Err("candidate text is out of bounds".to_owned());
-        }
-        put_u64(&mut payload, candidate.fingerprint);
-        put_i32(
-            &mut payload,
-            candidate.local_cost.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
-        );
-        put_u32(&mut payload, candidate.text.len() as u32);
-        payload.extend_from_slice(candidate.text.as_bytes());
-    }
-    if payload.len() > MAX_FRAME_BYTES {
-        return Err("request frame is too large".to_owned());
-    }
-    let mut frame = Vec::with_capacity(payload.len() + 4);
-    put_u32(&mut frame, payload.len() as u32);
-    frame.extend_from_slice(&payload);
-    Ok(frame)
+    let candidates = candidates
+        .iter()
+        .map(|candidate| WireCandidate {
+            fingerprint: candidate.fingerprint,
+            local_cost: candidate.local_cost.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+            text: Cow::Borrowed(candidate.text.as_str()),
+        })
+        .collect();
+    let frame = Frame::Request {
+        id: request_id,
+        context: Cow::Borrowed(&[]),
+        candidates,
+    };
+    let mut bytes = Vec::new();
+    sakura_rerank_proto::write_frame(&mut bytes, &frame)
+        .map_err(|error| format!("request encode failed: {error}"))?;
+    Ok(bytes)
 }
-
 fn read_response(input: &mut impl Read) -> io::Result<WorkerResponse> {
-    let mut length = [0u8; 4];
-    input.read_exact(&mut length)?;
-    let length = u32::from_le_bytes(length) as usize;
-    if length == 0 || length > MAX_FRAME_BYTES {
-        return Err(io::Error::new(
+    match sakura_rerank_proto::read_frame(input)? {
+        Some(Frame::Response {
+            id, status, scores, ..
+        }) => Ok(WorkerResponse {
+            request_id: id,
+            status,
+            scores: scores
+                .into_iter()
+                .map(|score| (score.fingerprint, score.value))
+                .collect(),
+        }),
+        Some(Frame::Request { .. }) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "invalid response length",
-        ));
+            "expected rerank response",
+        )),
+        None => Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "missing rerank response",
+        )),
     }
-    let mut payload = vec![0; length];
-    input.read_exact(&mut payload)?;
-    let mut cursor = 0;
-    if take_u32(&payload, &mut cursor)? != RESPONSE_MAGIC
-        || take_u16(&payload, &mut cursor)? != PROTOCOL_VERSION
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid response header",
-        ));
-    }
-    let status = take_u16(&payload, &mut cursor)?;
-    let request_id = take_u64(&payload, &mut cursor)?;
-    let _tier = take_u16(&payload, &mut cursor)?;
-    if take_u16(&payload, &mut cursor)? != 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid response reserved field",
-        ));
-    }
-    let count = take_u32(&payload, &mut cursor)? as usize;
-    if count > MAX_CANDIDATES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid response count",
-        ));
-    }
-    let mut scores = Vec::with_capacity(count);
-    for _ in 0..count {
-        scores.push((
-            take_u64(&payload, &mut cursor)?,
-            f32::from_bits(take_u32(&payload, &mut cursor)?),
-        ));
-    }
-    if cursor != payload.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "trailing response bytes",
-        ));
-    }
-    Ok(WorkerResponse {
-        request_id,
-        status,
-        scores,
-    })
 }
-
 fn candidate_fingerprint(text: &str, cost: i64) -> u64 {
     hash_bytes(
         hash_bytes(0xCBF2_9CE4_8422_2325, text.as_bytes()),
@@ -798,38 +750,6 @@ fn hash_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
     }
     hash
 }
-fn put_u16(out: &mut Vec<u8>, value: u16) {
-    out.extend_from_slice(&value.to_le_bytes())
-}
-fn put_u32(out: &mut Vec<u8>, value: u32) {
-    out.extend_from_slice(&value.to_le_bytes())
-}
-fn put_i32(out: &mut Vec<u8>, value: i32) {
-    out.extend_from_slice(&value.to_le_bytes())
-}
-fn put_u64(out: &mut Vec<u8>, value: u64) {
-    out.extend_from_slice(&value.to_le_bytes())
-}
-fn take<const N: usize>(input: &[u8], cursor: &mut usize) -> io::Result<[u8; N]> {
-    let end = cursor
-        .checked_add(N)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "response overflow"))?;
-    let bytes = input
-        .get(*cursor..end)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "truncated response"))?;
-    *cursor = end;
-    Ok(bytes.try_into().expect("slice length is fixed"))
-}
-fn take_u16(input: &[u8], cursor: &mut usize) -> io::Result<u16> {
-    Ok(u16::from_le_bytes(take(input, cursor)?))
-}
-fn take_u32(input: &[u8], cursor: &mut usize) -> io::Result<u32> {
-    Ok(u32::from_le_bytes(take(input, cursor)?))
-}
-fn take_u64(input: &[u8], cursor: &mut usize) -> io::Result<u64> {
-    Ok(u64::from_le_bytes(take(input, cursor)?))
-}
-
 fn write_report(path: &Path, report: &Report) -> Result<(), String> {
     let parent = path
         .parent()
@@ -845,6 +765,31 @@ fn write_report(path: &Path, report: &Report) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn put_u16(out: &mut Vec<u8>, value: u16) {
+        out.extend_from_slice(&value.to_le_bytes())
+    }
+    fn put_u32(out: &mut Vec<u8>, value: u32) {
+        out.extend_from_slice(&value.to_le_bytes())
+    }
+    fn put_u64(out: &mut Vec<u8>, value: u64) {
+        out.extend_from_slice(&value.to_le_bytes())
+    }
+    fn take<const N: usize>(input: &[u8], cursor: &mut usize) -> io::Result<[u8; N]> {
+        let end = cursor
+            .checked_add(N)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "response overflow"))?;
+        let bytes = input
+            .get(*cursor..end)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "truncated response"))?;
+        *cursor = end;
+        Ok(bytes.try_into().expect("slice length is fixed"))
+    }
+    fn take_u16(input: &[u8], cursor: &mut usize) -> io::Result<u16> {
+        Ok(u16::from_le_bytes(take(input, cursor)?))
+    }
+    fn take_u32(input: &[u8], cursor: &mut usize) -> io::Result<u32> {
+        Ok(u32::from_le_bytes(take(input, cursor)?))
+    }
 
     fn candidate(fingerprint: u64, text: &str, local_cost: i64) -> SnapshotCandidate {
         SnapshotCandidate {
@@ -875,8 +820,11 @@ mod tests {
             frame.len() - 4
         );
         let mut cursor = 4;
-        assert_eq!(take_u32(&frame, &mut cursor).unwrap(), REQUEST_MAGIC);
-        assert_eq!(take_u16(&frame, &mut cursor).unwrap(), PROTOCOL_VERSION);
+        assert_eq!(
+            take_u32(&frame, &mut cursor).unwrap(),
+            Limits::REQUEST_MAGIC
+        );
+        assert_eq!(take_u16(&frame, &mut cursor).unwrap(), Limits::VERSION);
         assert!(encode_request(1, &[]).is_err());
     }
 
@@ -884,8 +832,8 @@ mod tests {
     fn response_parser_rejects_trailing_data() {
         let mut bytes = Vec::new();
         let mut payload = Vec::new();
-        put_u32(&mut payload, RESPONSE_MAGIC);
-        put_u16(&mut payload, PROTOCOL_VERSION);
+        put_u32(&mut payload, Limits::RESPONSE_MAGIC);
+        put_u16(&mut payload, Limits::VERSION);
         put_u16(&mut payload, 0);
         put_u64(&mut payload, 1);
         put_u16(&mut payload, 1);
