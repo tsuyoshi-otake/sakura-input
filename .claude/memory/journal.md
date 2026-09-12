@@ -1734,6 +1734,21 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Sol Medium は編集を担当。検証責任は親が持ち、外部／subagent レビューは依頼していない。
   今回の検証を過去の Opus rubric 25/25 の再採点とは表現しない。
 
+## 2026-09-13 Phase 0.1 TSF DLL サイズゲート（#154）
+
+- `ci/check-dll-size.ps1` は Cargo metadata の target directory と build target から
+  release DLL を特定する。1,048,576 bytes は許可し、1 byte 超過と欠落はフルパス付きで失敗する。
+  CI の既存 workspace release build の直後に自己テストと実 DLL 検査を追加した。
+- Verify: 自己テスト、`cargo build -p sakura-tsf --release --locked`、実 DLL 検査、
+  CARGO_TARGET_DIR 変更先の fixture と欠落検査、`ci/check-process-clean.ps1`。
+  Expect: 境界／超過／欠落の判定が正しく、実 DLL は予算内、残存 runner 無し。結果 PASS。
+  実 DLL は 437,760 bytes。製品コード、依存バージョン、wire 契約は変更していない。
+- 検証で得た学び: TKW で native Cargo を直接起動すると rustup proxy の toolchain 継承を
+  失い、repository 外の build-script 作業ディレクトリで既定 stable を選ぶ場合がある。
+  初回 build はその経路の rustup component conflict で失敗した。親が repository の
+  active toolchain 1.96.0 を確認し、同じ一時実行へ RUSTUP_TOOLCHAIN を明示した再実行は成功。
+  グローバル stable の修復やバージョン変更は行っていない。
+
 ## 2026-09-13 Native image namespace support (#104)
 
 - Hosted runs 34704517571 and 34705378113 again rejected an owned engine; later diagnostics reported native-device image paths. Original admission data remains unobserved, so historical causality is not claimed.
