@@ -22,4 +22,3 @@
 - Gate A/B、Windows CPU batch-one 10,000回以上のcold/warm latency、private working setは未完了の別工程であり、実モデルIPC成功やinstaller同梱を品質gate合格と表現しない。
 
 このファイルは、別セッションでSakura Inputの作業を再開するAI／開発者向けの引き継ぎメモです。まずこのファイルと`README.md`を読み、必要に応じて`DESIGN.md`、`PLAN.md`、ユーザーが提示した`AGENTS.md`相当の指示を確認してください。
-

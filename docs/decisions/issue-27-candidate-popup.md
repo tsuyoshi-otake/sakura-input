@@ -5,4 +5,3 @@
 - light／dark paletteに加え、Windows high-contrastではsystem roleを使う。UI-less hostには`ITfUIElement`候補データ経路を保ち、popupの可視性に依存させない。compact／expanded表示は既存のengine semanticsとキー操作を維持し、新しい候補定義や操作を追加しない。
 - 実装は通常のWin32 popupをGDI（`CreateFontW`／`DrawTextW`／brush）で描く。layered windowやDirectWriteを使う設計として説明しない。これはrendererの描画境界だけの変更で、候補用raster assetの再生成は不要であり、Issue #26のmode-indicator assetを変更・流用しない。
 - unit testと実renderer processのintegration testにより、compact／expanded semantics、260–480 logical px幅、DPI変更、non-activation、キャレット追従、ページ、数字選択、UI Automation公開は自動検証済み。最新版再インストール後の通常light実画面スクリーンショットでは、候補本文、右側annotation列、淡い選択面と桜色rail、予測footer、`1–9/9`ページ表示を目視確認済み。Issue #27の検証記録ではmode-indicator assetに差分がないことも確認済み。残る受け入れ作業はdark／Windows high-contrastの実画面確認だけである。
-

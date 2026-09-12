@@ -8,4 +8,3 @@
 - `Normal`と確定分類されたscopeだけを許可する。Password、URL、Email、Digits、unknown、classification failure、`test_only`はworker起動前と履歴入口の双方でfail closedにする。開発者履歴は既存DPAPI・保持上限を使い、operation/status/model/provider/style、bounded source/result、content-free error code、latency、attempts、token metricsを記録する。
 - 仕様・探索結果・未検証範囲は`verification/ai-text-verification.md`、TLA+モデルは`verification/tla/AiTextLifecycle.tla`にある。モデルは実装コードから独立した状態名と遷移で、Safety/Liveness/deadlock/reachabilityを3構成で検査する。探索上限を実装保証と混同しない。
 - このIssue #58ではownerがSolAdvisorを使用しないよう明示している。古いVS Codeクラッシュ引き継ぎ節にあるSolAdvisor必須記述を、この機能の実装・検証へ適用しない。
-

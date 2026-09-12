@@ -66,4 +66,3 @@ It is optional dated context, not required reading for unrelated work. Use
 `docs/history/CLAUDE-section-map.md` to locate every original section. Historical
 test totals, artifacts, installed build IDs, and agent/runtime observations do
 not establish current verification.
-

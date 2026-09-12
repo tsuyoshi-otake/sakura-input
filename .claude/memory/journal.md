@@ -1807,3 +1807,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   R1〜R14／8 見出し／23 契約の一意性、全案内先の存在、IRV SelfTest、diff check。
   Expect: すべて PASS。新設 AGENTS.md の読解量を除外しないよう IRV の無条件文書へ追加した。
   元 baseline の数値は更新していない。rules.md の縮約は Phase 7.11 として別に扱う。
+
+- 追検証: 初回の staged diff check は抽出文書の EOF 空行を指摘したが、shell が後続 commit
+  を継続していた。空行だけを除去し、非ゼロ終了で直ちに止まる呼び出しで再検証して PASS。
+  最終の LF 作業ファイルは CLAUDE 3,977 bytes／AGENTS 738 bytes。原本 hash と抽出本文一致は不変。

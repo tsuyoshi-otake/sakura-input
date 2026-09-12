@@ -12,4 +12,3 @@ Read `CLAUDE.md` before repository work.
   original exit status and prove repository test processes exited afterward.
 - Keep refactor dependencies acyclic, state transitions terminal, and hot-path
   work bounded. Verify changed behavior and report residual risk.
-
