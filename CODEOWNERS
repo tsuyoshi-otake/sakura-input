@@ -1,0 +1,8 @@
+# Phase 0 ownership. More specific teams can replace these entries when assigned.
+* @tsuyoshi-otake
+/crates/*/ @tsuyoshi-otake
+/tools/ @tsuyoshi-otake
+/docs/contracts/ @tsuyoshi-otake
+/verification/ @tsuyoshi-otake
+/ci/ @tsuyoshi-otake
+/.github/ @tsuyoshi-otake
