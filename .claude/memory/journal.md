@@ -1811,3 +1811,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 追検証: 初回の staged diff check は抽出文書の EOF 空行を指摘したが、shell が後続 commit
   を継続していた。空行だけを除去し、非ゼロ終了で直ちに止まる呼び出しで再検証して PASS。
   最終の LF 作業ファイルは CLAUDE 3,977 bytes／AGENTS 738 bytes。原本 hash と抽出本文一致は不変。
+
+## 2026-09-13 Phase 0.8 IRV の CI 導入（#154）
+
+- PR ごとの CI に IRV SelfTest と baseline 比較を追加した。比較は pipeline で受けず直接呼び、
+  元の終了コードを保つ。D14 に従い 0.5／7.11 完了までは文書予算を Warn とする。
+  PR テンプレートへ `IRV:` 行と変更理由・検証・crate 憲章の記載欄を追加した。
+- Verify: IRV SelfTest と各既 commit の archive に対する比較を親が直接実行。
+  Expect: 既知の文書超過は非増加なら note、CI verifier 追加は WARN、他の基準値は維持。
+  結果は期待どおり。CI 上のダミー PR による WARN／FAIL はこの後の検証であり未完了。
