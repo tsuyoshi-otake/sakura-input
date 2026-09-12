@@ -111,9 +111,11 @@ MAX_FRAME = 32*1024;  MAX_CANDIDATES = 6;  MAX_CANDIDATE_BYTES = 3*1024;
 REQUEST_MAGIC = 0x524e_4b53;  RESPONSE_MAGIC = 0x534e_4b53;  VERSION: u16 = 1;
 ```
 
-and the engine re-declares the same literals a third time at `crates/sakura-engine/src/long_conversion.rs:25-30` (`MAXIMUM_MODEL_CANDIDATES = 6`, `MAXIMUM_FRAME_BYTES = 32*1024`, `REQUEST_MAGIC = 0x524E_4B53 // SKNR`, `RESPONSE_MAGIC = 0x534E_4B53 // SKNS`, `PROTOCOL_VERSION = 1`, `WORKER_RESPONSE_TIMEOUT = 500 ms`).
+and the engine re-declares the same protocol literals at `crates/sakura-engine/src/long_conversion.rs:25-30` (`MAXIMUM_MODEL_CANDIDATES = 6`, `MAXIMUM_FRAME_BYTES = 32*1024`, `REQUEST_MAGIC = 0x524E_4B53 // SKNR`, `RESPONSE_MAGIC = 0x534E_4B53 // SKNS`, `PROTOCOL_VERSION = 1`, `WORKER_RESPONSE_TIMEOUT = 500 ms`).
 
-So the live reranker protocol exists in two hand-written copies with no shared crate, while the crate named "the neural protocol" (`SCV1`, wire v2) is dormant: its only consumers are `crates/sakura-engine/src/context_intelligence.rs:16` (imports `Fingerprint` only) and `crates/dictc/src/context_dataset.rs:14`. `docs/neural-context-contract-v1.md` documents `SCV1` and says nothing about `SKNR`/`SKNS`.
+Correction verified 2026-09-13 before Phase 2.3: a third live copy exists in `crates/dictc/src/bin/neural_eval.rs` (magic constants at lines 22–23, `encode_request` at 699 and `read_response` at 731). Its offline `WorkerClient::score` path uses that codec. Phase 2.3 must migrate all three copies and run worker, engine and offline evaluator tests; Phase 3.9 must preserve the evaluator's allowed-consumer identity after its move to `tools/`.
+
+The separate research protocol (`SCV1`, wire v2) is not SKNR/SKNS; `docs/neural-context-contract-v1.md` documents SCV1 only. Its research consumers and 32-byte fingerprint must remain distinct from the live reranker's u64 fingerprint.
 
 ## 5. dictc anatomy
 
