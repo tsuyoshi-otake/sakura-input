@@ -1779,6 +1779,22 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   ファイル handle が後始末まで残ったため。別名と読み取り完了済み配列へ変更し、
   主例外を cleanup 例外で隠さないようにした後、SelfTest と実検査が成功した。
 
+## 2026-09-13 Phase 0.4 形式検証の分類と手動 workflow（#154）
+
+- tracked cfg 48 本を manifest と照合し、通常 33 構成と期待する invariant 反例 15 構成を
+  分類する runner を追加した。TLC 1.7.4 の JAR hash を固定し、終了コード・完了 marker・
+  trace・期待 invariant を検証する。非同期 stdout／stderr、時間上限、子 process tree の
+  後始末と hash 付き receipt を runner が所有する。
+- Verify: 親が全 48 構成を実 TLC で実行、SelfTest 9 分類と子 process の失敗／timeout を実行。
+  Expect: 正常探索 33 と意図した反例 15 が PASS、期待しない失敗は成功扱いされない。
+  全条件 PASS。実行後、48 receipt の model／cfg hash が現在のファイルと一致することと
+  所有 Java process の残存無しを確認した。局所探索を実装全体の証明とは表現しない。
+- Windows の反例出力は CRLF のため初回の厳密 invariant 行判定が不一致になった。
+  正規表現を CRLF 対応にし、その fixture を追加後、全構成で再検証した。
+- workflow は tracked cfg から matrix を生成し、最大 4 job、各 job 20 分、子 17 分で制限する。
+  現段階は workflow_dispatch のみで continue-on-error を維持。Phase 7.9 での blocking 化は
+  別工程であり、この記録は GitHub workflow の実行済みを意味しない。
+
 ## 2026-09-13 Hosted dependency scanner portability (#154)
 
 - Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
