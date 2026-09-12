@@ -1,5 +1,5 @@
 use super::*;
-use sakura_proto::FixedStr;
+use sakura_values::FixedStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static OBSERVED_SCANS: AtomicUsize = AtomicUsize::new(0);

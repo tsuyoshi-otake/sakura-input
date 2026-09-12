@@ -10,7 +10,7 @@ use crate::keymap::Preset;
 use crate::width::{
     BracketStyle, CommaMark, Normalizer, PeriodMark, PunctuationStyle, Width, WidthPolicy,
 };
-use sakura_proto::{AppearanceTheme, Mode, PadShortcut};
+use sakura_values::{AppearanceTheme, Mode, PadShortcut};
 
 // The appearance section is optional, so adding its theme key remains
 // compatible with v4 readers and does not require a format-version bump.
