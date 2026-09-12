@@ -1896,3 +1896,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - PRs #155, #156, #157, #158, #159, #160, #162 and #169 are merged after their current-head checks succeeded. Prerequisite #167 passed hosted CI 34707773916, including the actual production-pipe AppContainer test, before merge. This establishes the new native-identity contract, not every historical #104 failure's cause.
 - Parent verified main ruleset 23073135 is active, main-only, with no bypass actors: required PRs, deletion/force-push prohibition and strict fmt, dependency-rules, workspace-tests, irv-regression, dll-size and Dependency policy contexts. The effective-rule API agrees with the committed definition. An incomplete-check PR BLOCKED observation remains pending.
 - A parent-run desktop capability probe obtained read and limited create/write-object access to WinSta0/Default in interactive session 1 and closed every owned handle. No UI operation occurred. This is access evidence only; D6 still needs the specified desktop tests' runtime and stability evidence.
+
+## 2026-09-13 Verify formatting reaches a stable result (#168)
+
+- Hosted run 34709081162 rejected one leading blank line in the extracted dispatch_tests.rs. The initial rustfmt pass had left this blank line while unindenting the verbatim inline body; a later pass removed it. Rust tests had passed, but formatting had not been checked for stability.
+- Removed that single blank line. Parent Verify: cargo fmt --all -- --check and git diff --check. Expect: no further change required. Result: PASS. For subsequent extractions, always run the explicit check after formatting; do not equate a successful formatting command with check success.
