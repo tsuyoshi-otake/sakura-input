@@ -44,14 +44,18 @@ jobs:
       CARGO_HTTP_CHECK_REVOKE: "false"
       RUSTUP_TOOLCHAIN: 1.96.0-x86_64-pc-windows-msvc
       CARGO_TARGET_DIR: ${{ github.workspace }}\target\desktop-hosted-candidate
-      SAKURA_DESKTOP_EVIDENCE: ${{ runner.temp }}\sakura-desktop-evidence
-      LOCALAPPDATA: ${{ runner.temp }}\sakura-desktop-localappdata
-      SAKURA_ISOLATED_USERPROFILE: ${{ runner.temp }}\sakura-desktop-userprofile
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; reviewed release older than 7 days
 
       - name: Prepare isolated evidence and profile directories
         run: |
+          $env:SAKURA_DESKTOP_EVIDENCE = Join-Path $env:RUNNER_TEMP 'sakura-desktop-evidence'
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'sakura-desktop-localappdata'
+          $env:SAKURA_ISOLATED_USERPROFILE = Join-Path $env:RUNNER_TEMP 'sakura-desktop-userprofile'
+          foreach ($name in @('SAKURA_DESKTOP_EVIDENCE', 'LOCALAPPDATA', 'SAKURA_ISOLATED_USERPROFILE')) {
+            "$name=$([Environment]::GetEnvironmentVariable($name))" |
+              Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          }
           [IO.Directory]::CreateDirectory($env:SAKURA_DESKTOP_EVIDENCE) | Out-Null
           [IO.Directory]::CreateDirectory($env:LOCALAPPDATA) | Out-Null
           [IO.Directory]::CreateDirectory($env:SAKURA_ISOLATED_USERPROFILE) | Out-Null
