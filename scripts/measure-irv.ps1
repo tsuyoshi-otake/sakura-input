@@ -69,6 +69,301 @@ function Expand-Entry {
 }
 $script:MissingEntries = @()
 
+function Get-RustLexicalView {
+    param([Parameter(Mandatory)][string]$Text)
+
+    # Preserve character positions and newlines, but blank tokens that cannot
+    # contain Rust attributes or item delimiters. The scan is bounded O(N).
+    $view = $Text.ToCharArray()
+    $length = $view.Length
+    $index = 0
+    $blockDepth = 0
+    while ($index -lt $length) {
+        if ($blockDepth -gt 0) {
+            if ($index + 1 -lt $length -and $Text[$index] -eq '/' -and $Text[$index + 1] -eq '*') {
+                if ($view[$index] -notin "`r", "`n") { $view[$index] = ' ' }
+                if ($view[$index + 1] -notin "`r", "`n") { $view[$index + 1] = ' ' }
+                $blockDepth++
+                $index += 2
+                continue
+            }
+            if ($index + 1 -lt $length -and $Text[$index] -eq '*' -and $Text[$index + 1] -eq '/') {
+                if ($view[$index] -notin "`r", "`n") { $view[$index] = ' ' }
+                if ($view[$index + 1] -notin "`r", "`n") { $view[$index + 1] = ' ' }
+                $blockDepth--
+                $index += 2
+                continue
+            }
+            if ($view[$index] -notin "`r", "`n") { $view[$index] = ' ' }
+            $index++
+            continue
+        }
+
+        if ($index + 1 -lt $length -and $Text[$index] -eq '/' -and $Text[$index + 1] -eq '/') {
+            while ($index -lt $length -and $Text[$index] -notin "`r", "`n") {
+                $view[$index] = ' '
+                $index++
+            }
+            continue
+        }
+        if ($index + 1 -lt $length -and $Text[$index] -eq '/' -and $Text[$index + 1] -eq '*') {
+            $view[$index] = ' '
+            $view[$index + 1] = ' '
+            $blockDepth = 1
+            $index += 2
+            continue
+        }
+
+        # Raw strings: r"...", r#"..."#, br##"..."##. Starting at r
+        # also handles the r within a byte-raw prefix.
+        if ($Text[$index] -eq 'r') {
+            $probe = $index + 1
+            $hashes = 0
+            while ($probe -lt $length -and $Text[$probe] -eq '#') { $hashes++; $probe++ }
+            if ($probe -lt $length -and $Text[$probe] -eq '"') {
+                $cursor = $index
+                $end = -1
+                $probe++
+                while ($probe -lt $length) {
+                    if ($Text[$probe] -eq '"') {
+                        $terminatorMatches = $true
+                        for ($hash = 0; $hash -lt $hashes; $hash++) {
+                            if ($probe + 1 + $hash -ge $length -or $Text[$probe + 1 + $hash] -ne '#') {
+                                $terminatorMatches = $false
+                                break
+                            }
+                        }
+                        if ($terminatorMatches) { $end = $probe + $hashes; break }
+                    }
+                    $probe++
+                }
+                if ($end -lt 0) { throw "unterminated Rust raw string at character $index" }
+                while ($cursor -le $end) {
+                    if ($view[$cursor] -notin "`r", "`n") { $view[$cursor] = ' ' }
+                    $cursor++
+                }
+                $index = $end + 1
+                continue
+            }
+        }
+
+        if ($Text[$index] -eq '"') {
+            $cursor = $index
+            $index++
+            $escaped = $false
+            $closed = $false
+            while ($index -lt $length) {
+                $character = $Text[$index]
+                if (-not $escaped -and $character -eq '"') { $closed = $true; $index++; break }
+                if ($character -in "`r", "`n") { $escaped = $false }
+                elseif (-not $escaped -and $character -eq '\') { $escaped = $true }
+                else { $escaped = $false }
+                $index++
+            }
+            if (-not $closed) { throw "unterminated Rust string at character $cursor" }
+            while ($cursor -lt $index) {
+                if ($view[$cursor] -notin "`r", "`n") { $view[$cursor] = ' ' }
+                $cursor++
+            }
+            continue
+        }
+
+        if ($Text[$index] -eq "'") {
+            $end = -1
+            if ($index + 1 -lt $length -and $Text[$index + 1] -eq '\') {
+                $escape = $index + 2
+                if ($escape -ge $length -or $Text[$escape] -in "`r", "`n") {
+                    throw "unterminated Rust character escape at character $index"
+                }
+                if ($Text[$escape] -eq 'u') {
+                    $probe = $escape + 1
+                    if ($probe -ge $length -or $Text[$probe] -ne '{') {
+                        throw "malformed Rust Unicode character escape at character $index"
+                    }
+                    while ($probe -lt $length -and $Text[$probe] -ne '}') { $probe++ }
+                    if ($probe -ge $length) { throw "unterminated Rust Unicode character escape at character $index" }
+                    $closing = $probe + 1
+                }
+                elseif ($Text[$escape] -eq 'x') {
+                    $closing = $escape + 3
+                }
+                else {
+                    # Single-character escapes include quote and backslash.
+                    $closing = $escape + 1
+                }
+                if ($closing -lt $length -and $Text[$closing] -eq "'") { $end = $closing }
+            }
+            elseif ($index + 2 -lt $length -and $Text[$index + 2] -eq "'") {
+                $end = $index + 2
+            }
+            elseif ($index + 3 -lt $length -and
+                [char]::IsHighSurrogate($Text[$index + 1]) -and
+                [char]::IsLowSurrogate($Text[$index + 2]) -and
+                $Text[$index + 3] -eq "'") {
+                $end = $index + 3
+            }
+            if ($end -ge 0) {
+                for ($cursor = $index; $cursor -le $end; $cursor++) { $view[$cursor] = ' ' }
+                $index = $end + 1
+                continue
+            }
+            if ($index + 1 -lt $length -and $Text[$index + 1] -eq '\') {
+                throw "unterminated Rust character literal at character $index"
+            }
+        }
+        $index++
+    }
+    if ($blockDepth -ne 0) { throw 'unterminated Rust block comment' }
+    -join $view
+}
+
+function Get-RustAttributeGroupStart {
+    param([string]$Lexical, [int]$AttributeStart)
+    $cursor = $AttributeStart
+    while ($true) {
+        $probe = $cursor - 1
+        while ($probe -ge 0 -and [char]::IsWhiteSpace($Lexical[$probe])) { $probe-- }
+        if ($probe -lt 0 -or $Lexical[$probe] -ne ']') { break }
+        $depth = 1
+        $probe--
+        while ($probe -ge 0 -and $depth -gt 0) {
+            if ($Lexical[$probe] -eq ']') { $depth++ }
+            elseif ($Lexical[$probe] -eq '[') { $depth-- }
+            $probe--
+        }
+        if ($depth -ne 0) { throw 'unterminated Rust attribute before cfg(test)' }
+        while ($probe -ge 0 -and [char]::IsWhiteSpace($Lexical[$probe])) { $probe-- }
+        if ($probe -lt 0 -or $Lexical[$probe] -ne '#') { break }
+        $cursor = $probe
+    }
+    $cursor
+}
+
+function Get-RustCfgItemEnd {
+    param([string]$Lexical, [int]$AfterAttribute)
+
+    $length = $Lexical.Length
+    $cursor = $AfterAttribute
+    # Skip whitespace and any attributes following cfg(test).
+    while ($true) {
+        while ($cursor -lt $length -and [char]::IsWhiteSpace($Lexical[$cursor])) { $cursor++ }
+        if ($cursor -ge $length) { throw 'cfg(test) has no following Rust item' }
+        if ($Lexical[$cursor] -ne '#') { break }
+        $attributeBracket = $cursor + 1
+        while ($attributeBracket -lt $length -and [char]::IsWhiteSpace($Lexical[$attributeBracket])) { $attributeBracket++ }
+        if ($attributeBracket -ge $length -or $Lexical[$attributeBracket] -ne '[') { break }
+        $depth = 1
+        $cursor = $attributeBracket + 1
+        while ($cursor -lt $length -and $depth -gt 0) {
+            if ($Lexical[$cursor] -eq '[') { $depth++ }
+            elseif ($Lexical[$cursor] -eq ']') { $depth-- }
+            $cursor++
+        }
+        if ($depth -ne 0) { throw 'unterminated Rust attribute after cfg(test)' }
+    }
+    if ($cursor -ge $length) { throw 'cfg(test) has no following Rust item' }
+    $itemStart = $cursor
+    $prefixLength = [Math]::Min(240, $length - $itemStart)
+    $itemPrefix = $Lexical.Substring($itemStart, $prefixLength)
+    $visibility = '(?:pub(?:\s*\([^)]*\))?\s+)?'
+    $isFunction = $itemPrefix -match "^\s*$visibility(?:(?:const|async|unsafe|default)\s+)*(?:extern\s+(?:`"[^`"]*`"\s+)?)?fn\b"
+    $requiresSemicolon = -not $isFunction -and $itemPrefix -match "^\s*$visibility(?:static\b|type\b|use\b|const\s+)"
+    $braceTerminated = $isFunction -or $itemPrefix -match "^\s*$visibility(?:impl\b|mod\b|struct\b|enum\b|union\b|trait\b|macro_rules\s*!|if\b|for\b|while\b|loop\b|match\b)"
+    $allowComma = -not $requiresSemicolon -and -not $braceTerminated
+    # Angle depth is needed for function const generics and comma-terminated
+    # fields/variants. Do not treat comparison operators in cfg(test) control
+    # statements as generic delimiters.
+    $trackAngle = $isFunction -or $allowComma
+
+    $paren = 0
+    $bracket = 0
+    $angle = 0
+    $brace = 0
+    $headerBrace = 0
+    $firstTopBrace = -1
+    while ($cursor -lt $length) {
+        $character = $Lexical[$cursor]
+        switch ($character) {
+            '(' { $paren++ }
+            ')' { if ($paren -eq 0) { throw 'unbalanced parenthesis in cfg(test) item' }; $paren-- }
+            '[' { $bracket++ }
+            ']' { if ($bracket -eq 0) { throw 'unbalanced bracket in cfg(test) item' }; $bracket-- }
+            '<' { if ($trackAngle -and $paren -eq 0 -and $bracket -eq 0 -and $brace -eq 0 -and $headerBrace -eq 0) { $angle++ } }
+            '>' { if ($trackAngle -and $paren -eq 0 -and $bracket -eq 0 -and $brace -eq 0 -and $headerBrace -eq 0 -and $angle -gt 0) { $angle-- } }
+            '{' {
+                if ($paren -eq 0 -and $bracket -eq 0) {
+                    if ($headerBrace -gt 0) { $headerBrace++ }
+                    elseif ($isFunction -and $angle -gt 0) { $headerBrace = 1 }
+                    else {
+                        if ($brace -eq 0) { $firstTopBrace = $cursor }
+                        $brace++
+                    }
+                }
+            }
+            '}' {
+                if ($paren -eq 0 -and $bracket -eq 0 -and $headerBrace -gt 0) {
+                    $headerBrace--
+                }
+                elseif ($paren -eq 0 -and $bracket -eq 0 -and $brace -gt 0) {
+                    $brace--
+                    if ($brace -eq 0 -and -not $requiresSemicolon) {
+                        return [pscustomobject]@{ End = $cursor; Terminator = 'brace'; ItemStart = $itemStart }
+                    }
+                }
+            }
+            ';' {
+                if ($paren -eq 0 -and $bracket -eq 0 -and $angle -eq 0 -and $brace -eq 0 -and $headerBrace -eq 0) {
+                    return [pscustomobject]@{ End = $cursor; Terminator = 'semicolon'; ItemStart = $itemStart }
+                }
+            }
+            ',' {
+                if ($allowComma -and $paren -eq 0 -and $bracket -eq 0 -and $angle -eq 0 -and $brace -eq 0 -and $headerBrace -eq 0) {
+                    return [pscustomobject]@{ End = $cursor; Terminator = 'comma'; ItemStart = $itemStart }
+                }
+            }
+        }
+        $cursor++
+    }
+    if ($firstTopBrace -ge 0 -or $paren -ne 0 -or $bracket -ne 0 -or $angle -ne 0 -or $brace -ne 0 -or $headerBrace -ne 0) {
+        throw 'unterminated cfg(test) Rust item'
+    }
+    throw 'cfg(test) Rust item has no brace or semicolon terminator'
+}
+
+function Measure-RustInlineTestLoc {
+    param([Parameter(Mandatory)][string]$Text)
+    if ($Text.Length -eq 0) { return 0 }
+    $lexical = Get-RustLexicalView $Text
+    $lineStarts = [Collections.Generic.List[int]]::new()
+    $lineStarts.Add(0)
+    for ($index = 0; $index -lt $Text.Length; $index++) {
+        if ($Text[$index] -eq "`n" -and $index + 1 -lt $Text.Length) { $lineStarts.Add($index + 1) }
+    }
+    $counted = [Collections.Generic.HashSet[int]]::new()
+    $coveredThrough = -1
+    $lineCursor = 0
+    $pattern = [regex]'#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]'
+    foreach ($match in $pattern.Matches($lexical)) {
+        if ($match.Index -le $coveredThrough) { continue }
+        $item = Get-RustCfgItemEnd $lexical ($match.Index + $match.Length)
+        $itemPrefix = $lexical.Substring($item.ItemStart, [Math]::Min(160, $item.End - $item.ItemStart + 1))
+        # An out-of-line module declaration has no inline test body. Its
+        # cfg/path attributes must not consume production LOC.
+        if ($item.Terminator -eq 'semicolon' -and $itemPrefix -match '^\s*(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+[A-Za-z_][A-Za-z0-9_]*\s*;') {
+            $coveredThrough = $item.End
+            continue
+        }
+        $start = Get-RustAttributeGroupStart $lexical $match.Index
+        while ($lineCursor + 1 -lt $lineStarts.Count -and $lineStarts[$lineCursor + 1] -le $start) { $lineCursor++ }
+        $startLine = $lineCursor
+        while ($lineCursor + 1 -lt $lineStarts.Count -and $lineStarts[$lineCursor + 1] -le $item.End) { $lineCursor++ }
+        $endLine = $lineCursor
+        for ($line = $startLine; $line -le $endLine; $line++) { [void]$counted.Add($line) }
+        $coveredThrough = $item.End
+    }
+    $counted.Count
+}
+
 function Measure-File {
     param([string]$Path)
     $bytes = (Get-Item $Path).Length
@@ -78,11 +373,7 @@ function Measure-File {
     if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $lines++ }
     $inlineTest = 0
     if ($Path -match '\.rs$') {
-        $index = 0
-        foreach ($line in ($text -split "`n")) {
-            $index++
-            if ($line -match '^\s*#\[cfg\(test\)\]') { $inlineTest = $lines - $index + 1; break }
-        }
+        $inlineTest = Measure-RustInlineTestLoc $text
     }
     [pscustomobject]@{ path = $Path; loc = $lines; bytes = $bytes; inline_test_loc = $inlineTest }
 }
@@ -206,6 +497,23 @@ function Compare-Snapshot {
 }
 
 function Invoke-SelfTest {
+    $fixtureRoot = Join-Path $PSScriptRoot 'fixtures/irv-inline'
+    $fixtureManifest = Get-Content -LiteralPath (Join-Path $fixtureRoot 'expected.json') -Raw | ConvertFrom-Json
+    foreach ($case in $fixtureManifest.cases) {
+        $fixturePath = Join-Path $fixtureRoot ([string]$case.file)
+        $fixtureText = [IO.File]::ReadAllText($fixturePath)
+        if ($case.PSObject.Properties['expect_error'] -and [bool]$case.expect_error) {
+            $failedAsExpected = $false
+            try { [void](Measure-RustInlineTestLoc $fixtureText) } catch { $failedAsExpected = $true }
+            if (-not $failedAsExpected) { throw "selftest: malformed fixture must fail: $($case.file)" }
+            continue
+        }
+        $actualInline = Measure-RustInlineTestLoc $fixtureText
+        if ($actualInline -ne [int]$case.inline_test_loc) {
+            throw "selftest: $($case.file) expected $($case.inline_test_loc) inline LOC, got $actualInline"
+        }
+    }
+
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("irv-selftest-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path (Join-Path $tmp 'src') | Out-Null
     try {
