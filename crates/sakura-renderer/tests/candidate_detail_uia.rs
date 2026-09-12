@@ -26,22 +26,27 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
     COLORREF, HWND, LPARAM, LRESULT, POINT, RPC_E_CHANGED_MODE, WPARAM,
 };
-use windows::Win32::Graphics::Gdi::{GetDC, GetPixel, ReleaseDC, CLR_INVALID};
+use windows::Win32::Graphics::Gdi::{
+    GetDC, GetPixel, GetSysColor, ReleaseDC, CLR_INVALID, COLOR_HIGHLIGHT,
+};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
     COINIT_APARTMENTTHREADED,
 };
-use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
+use windows::Win32::UI::Accessibility::{
+    CUIAutomation, IUIAutomation, IUIAutomationElement, HCF_HIGHCONTRASTON, HIGHCONTRASTW,
+};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetCursorPos,
     GetForegroundWindow, GetMessageW, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
     IsWindowVisible, PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW, SetCursorPos,
-    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, CS_HREDRAW,
-    CS_VREDRAW, GWLP_USERDATA, GWL_EXSTYLE, GWL_STYLE, HTCLIENT, HWND_TOPMOST, MA_NOACTIVATE, MSG,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DESTROY,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_RBUTTONDOWN, WM_RBUTTONUP,
-    WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW,
+    TranslateMessage, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, GWL_EXSTYLE, GWL_STYLE, HTCLIENT,
+    HWND_TOPMOST, MA_NOACTIVATE, MSG, SPI_GETHIGHCONTRAST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_CLOSE, WM_DESTROY, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_RBUTTONDOWN, WM_RBUTTONUP, WNDCLASSW,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -319,16 +324,34 @@ fn appearance_switch_repaints_a_visible_candidate_popup() {
     );
 
     let popup = wait_for_candidate_window(renderer.pid());
+    let probe = candidate_appearance_probe(popup);
+    println!(
+        "candidate appearance probe: dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {})",
+        probe.dpi,
+        probe.high_contrast_query_succeeded,
+        probe.high_contrast_enabled,
+        probe.system_highlight,
+        probe.sample_x,
+        probe.sample_y
+    );
+    let expected_dark = expected_candidate_selected(AppearanceTheme::Dark, probe);
     assert_eq!(
-        wait_for_surface_color(popup, COLORREF(0x0025_2525)),
-        COLORREF(0x0025_2525),
+        wait_for_candidate_selected_color(popup, expected_dark, "initial Dark", probe),
+        expected_dark,
         "the initial dark candidate frame must be painted before the switch"
     );
 
     engine.publish(state_with_theme(2, AppearanceTheme::Light, 0, None, anchor));
+    let expected_light = expected_candidate_selected(AppearanceTheme::Light, probe);
+    if probe.high_contrast_enabled {
+        println!(
+            "candidate appearance probe limitation: Dark and Light both resolve to the exact system highlight {:?} under High Contrast; both UiState values are published and asserted, but equal pixels cannot identify when the Light update was processed",
+            probe.system_highlight
+        );
+    }
     assert_eq!(
-        wait_for_surface_color(popup, COLORREF(0x00E2_E5E8)),
-        COLORREF(0x00E2_E5E8),
+        wait_for_candidate_selected_color(popup, expected_light, "published Light", probe),
+        expected_light,
         "the existing popup must repaint with the light selected-row surface"
     );
     assert!(
@@ -1635,13 +1658,103 @@ fn wait_for_surface_color(window: HWND, expected: COLORREF) -> COLORREF {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CandidateAppearanceProbe {
+    dpi: u32,
+    high_contrast_query_succeeded: bool,
+    high_contrast_enabled: bool,
+    system_highlight: COLORREF,
+    sample_x: i32,
+    sample_y: i32,
+}
+
+fn candidate_appearance_probe(window: HWND) -> CandidateAppearanceProbe {
+    // SAFETY: `window` is live and owned by the test renderer process.
+    let dpi = unsafe { GetDpiForWindow(window) };
+    let mut high_contrast = HIGHCONTRASTW {
+        cbSize: core::mem::size_of::<HIGHCONTRASTW>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: Windows fills the initialized HIGHCONTRASTW structure. This is
+    // the same read-only system query used by the renderer palette resolver.
+    let high_contrast_query_succeeded = unsafe {
+        SystemParametersInfoW(
+            SPI_GETHIGHCONTRAST,
+            high_contrast.cbSize,
+            Some((&mut high_contrast as *mut HIGHCONTRASTW).cast()),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+        .is_ok()
+    };
+    let high_contrast_enabled =
+        high_contrast_query_succeeded && (high_contrast.dwFlags.0 & HCF_HIGHCONTRASTON.0) != 0;
+    // SAFETY: COLOR_HIGHLIGHT is a valid system color index and the call has
+    // no ownership or lifetime requirements.
+    let system_highlight = COLORREF(unsafe { GetSysColor(COLOR_HIGHLIGHT) });
+    CandidateAppearanceProbe {
+        dpi,
+        high_contrast_query_succeeded,
+        high_contrast_enabled,
+        system_highlight,
+        sample_x: scaled_logical_px(6, dpi),
+        sample_y: scaled_logical_px(14, dpi),
+    }
+}
+
+fn expected_candidate_selected(
+    requested: AppearanceTheme,
+    probe: CandidateAppearanceProbe,
+) -> COLORREF {
+    if probe.high_contrast_enabled {
+        probe.system_highlight
+    } else {
+        match requested {
+            AppearanceTheme::Dark => COLORREF(0x0025_2525),
+            AppearanceTheme::Light => COLORREF(0x00E2_E5E8),
+            AppearanceTheme::Auto => panic!("appearance fixture requests only Dark or Light"),
+        }
+    }
+}
+
+fn wait_for_candidate_selected_color(
+    window: HWND,
+    expected: COLORREF,
+    phase: &str,
+    probe: CandidateAppearanceProbe,
+) -> COLORREF {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let observed = surface_color_at(window, probe.sample_x, probe.sample_y);
+        if observed == expected {
+            return observed;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "candidate selected surface mismatch: phase={phase} dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {}) expected={expected:?} actual={observed:?}",
+            probe.dpi,
+            probe.high_contrast_query_succeeded,
+            probe.high_contrast_enabled,
+            probe.system_highlight,
+            probe.sample_x,
+            probe.sample_y
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
 fn candidate_surface_color(window: HWND) -> COLORREF {
     // SAFETY: `window` is live and owned by the test renderer process. The
     // client point (4, 1) is inside the selected row but outside text and rail.
+    surface_color_at(window, 4, 1)
+}
+
+fn surface_color_at(window: HWND, sample_x: i32, sample_y: i32) -> COLORREF {
+    // SAFETY: `window` is live and owned by the test renderer process, and the
+    // caller supplies a client coordinate for an immediate pixel sample.
     let dc = unsafe { GetDC(Some(window)) };
     assert!(!dc.is_invalid(), "acquire candidate popup paint DC");
     // SAFETY: `dc` is live until the paired ReleaseDC immediately below.
-    let color = unsafe { GetPixel(dc, 4, 1) };
+    let color = unsafe { GetPixel(dc, sample_x, sample_y) };
     // SAFETY: balances the successful GetDC above for this exact HWND/DC pair.
     let released = unsafe { ReleaseDC(Some(window), dc) };
     assert_ne!(released, 0, "release candidate popup paint DC");
