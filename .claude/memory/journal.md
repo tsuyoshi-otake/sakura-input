@@ -1954,3 +1954,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Initial snapshot invocation exposed that the existing -Out implementation joins its argument to RepositoryRoot even for an absolute path. That invocation failed before writing; reran with a relative output path, then used isolated committed archives. This path-interface issue is separate from the inline metric correction and was not silently patched into it.
 - PR #175 passed all required latest-head checks and installer at 52f26f3e and merged normally. PR #176 was refreshed on main. Phase 2 is tracked by #178; its golden fixture is PR #179. Desktop stability and R9/oracle ordering remain explicit outstanding Phase 1 work.
 - PR #176 subsequently passed every required check and installer at 12eaf474 and merged normally. PR #177 was retargeted to main for refreshed checks.
+
+## 2026-09-13 Pin protocol v22 frames before value extraction (#178)
+
+- Phase 2 tracking Issue #178 records all 15 executable table rows. Phase 1 desktop evidence and the oracle/R9 transition remain explicit outstanding conditions. PR #174 passed all latest-head required checks and installer build at 46fede0d and merged normally; PR #175 was updated to main for fresh checks.
+- Add six golden test functions with literal full frames for Hello request/response, representative Output, three KeyInput values, every Mode and InputScope, and two appearance/pad combinations. Expected bytes are independent constants, decoded as well as compared with current encoders. Parent inspected framing, LE widths, tags, discriminants, UTF-8 payload and field ordering before value/codec extraction.
+- Verify: wrapped full sakura-proto package tests, explicit cargo fmt check, git diff --check and repository-scoped process cleanup. Result: 102 passed, one ignored, zero failed; the existing 96 passed/one ignored remain unchanged and six golden tests are added. No production files, protocol version or dependencies changed. The golden PR must merge before the values extraction.
+
+- PR #179 subsequently passed latest-main CI and installer at 3955ac3f and merged. Refreshing #180 required resolving only the append-only journal conflict; both complete entries were retained. No source conflict occurred.
