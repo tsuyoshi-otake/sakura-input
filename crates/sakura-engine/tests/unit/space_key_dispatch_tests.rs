@@ -8,10 +8,10 @@ use sakura_proto::{
 use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{take_conversion_lookup_count_for_test, Dispatcher, Reply};
-use crate::space_key_dispatch_oracle::{
+use crate::ui::UiBoard;
+use sakura_oracles::space_key_dispatch_oracle::{
     apply, apply_all, no_dual_effect, ConnState, DomainEvent, OracleState,
 };
-use crate::ui::UiBoard;
 
 fn char_key(character: char) -> KeyInput {
     KeyInput {

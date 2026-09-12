@@ -308,6 +308,7 @@ dependencies = [
  "sakura-ime-eval",
  "sakura-ipc",
  "sakura-neural-proto",
+ "sakura-oracles",
  "sakura-proto",
  "sakura-reg",
  "sakura-rerank-proto",
@@ -358,6 +359,10 @@ dependencies = [
  "serde_json",
  "sha2",
 ]
+
+[[package]]
+name = "sakura-oracles"
+version = "1.0.39"
 
 [[package]]
 name = "sakura-proto"
