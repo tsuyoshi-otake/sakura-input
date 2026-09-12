@@ -14,23 +14,23 @@
 use core::fmt;
 
 use sakura_neural_proto::Fingerprint;
-use sakura_proto::{FixedStr, InputScope};
+use sakura_values::{FixedStr, InputScope};
 
 /// Maximum UTF-8 bytes retained from Sakura-owned commits in one session.
 ///
 /// This is intentionally below the shared wire contract's 512-byte ceiling.
 /// The smaller inline store keeps the future 64-session table bounded while
 /// leaving room for a separator or a later tokenizer-specific envelope.
-pub const MAX_SEMANTIC_CONTEXT_BYTES: usize = 256;
+pub(crate) const MAX_SEMANTIC_CONTEXT_BYTES: usize = 256;
 
 /// Maximum number of recent commit transitions represented by the coarse
 /// bounded count. The text tail remains authoritative when older commits have
 /// already fallen out of the byte window.
-pub const MAX_SEMANTIC_COMMIT_COUNT: u8 = 8;
+pub(crate) const MAX_SEMANTIC_COMMIT_COUNT: u8 = 8;
 
 /// Why engine-owned semantic context was explicitly revoked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContextClearReason {
+pub(crate) enum ContextClearReason {
     SensitiveScope,
     UnclassifiedScope,
     SessionDeleted,
@@ -42,7 +42,7 @@ pub enum ContextClearReason {
 
 /// Observable terminal result of a context lifecycle operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContextMutation {
+pub(crate) enum ContextMutation {
     Retained,
     Appended {
         truncated: bool,
@@ -55,7 +55,7 @@ pub enum ContextMutation {
 
 /// Immutable, allocation-free snapshot of one session's semantic context.
 #[derive(Clone, PartialEq, Eq)]
-pub struct SemanticContextSnapshot {
+pub(crate) struct SemanticContextSnapshot {
     committed_tail: FixedStr<MAX_SEMANTIC_CONTEXT_BYTES>,
     context_generation: u64,
     sentence_generation: u64,
@@ -64,23 +64,23 @@ pub struct SemanticContextSnapshot {
 }
 
 impl SemanticContextSnapshot {
-    pub fn committed_tail(&self) -> &str {
+    pub(crate) fn committed_tail(&self) -> &str {
         self.committed_tail.as_str()
     }
 
-    pub const fn context_generation(&self) -> u64 {
+    pub(crate) const fn context_generation(&self) -> u64 {
         self.context_generation
     }
 
-    pub const fn sentence_generation(&self) -> u64 {
+    pub(crate) const fn sentence_generation(&self) -> u64 {
         self.sentence_generation
     }
 
-    pub const fn last_commit_count(&self) -> u8 {
+    pub(crate) const fn last_commit_count(&self) -> u8 {
         self.last_commit_count
     }
 
-    pub const fn fingerprint(&self) -> &Fingerprint {
+    pub(crate) const fn fingerprint(&self) -> &Fingerprint {
         &self.fingerprint
     }
 }
@@ -100,7 +100,7 @@ impl fmt::Debug for SemanticContextSnapshot {
 
 /// Volatile semantic context owned by exactly one engine session.
 #[derive(Clone, PartialEq, Eq)]
-pub struct SessionSemanticContext {
+pub(crate) struct SessionSemanticContext {
     committed_tail: FixedStr<MAX_SEMANTIC_CONTEXT_BYTES>,
     context_generation: u64,
     sentence_generation: u64,
@@ -108,7 +108,7 @@ pub struct SessionSemanticContext {
 }
 
 impl SessionSemanticContext {
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             committed_tail: FixedStr::new(),
             // Zero is reserved as an unknown/uninitialized correlation value by
@@ -119,23 +119,23 @@ impl SessionSemanticContext {
         }
     }
 
-    pub fn committed_tail(&self) -> &str {
+    pub(crate) fn committed_tail(&self) -> &str {
         self.committed_tail.as_str()
     }
 
-    pub const fn context_generation(&self) -> u64 {
+    pub(crate) const fn context_generation(&self) -> u64 {
         self.context_generation
     }
 
-    pub const fn sentence_generation(&self) -> u64 {
+    pub(crate) const fn sentence_generation(&self) -> u64 {
         self.sentence_generation
     }
 
-    pub const fn last_commit_count(&self) -> u8 {
+    pub(crate) const fn last_commit_count(&self) -> u8 {
         self.last_commit_count
     }
 
-    pub fn fingerprint(&self) -> Fingerprint {
+    pub(crate) fn fingerprint(&self) -> Fingerprint {
         semantic_fingerprint(
             self.committed_tail.as_bytes(),
             self.context_generation,
@@ -144,7 +144,7 @@ impl SessionSemanticContext {
         )
     }
 
-    pub fn snapshot(&self) -> SemanticContextSnapshot {
+    pub(crate) fn snapshot(&self) -> SemanticContextSnapshot {
         SemanticContextSnapshot {
             committed_tail: self.committed_tail.clone(),
             context_generation: self.context_generation,
@@ -159,7 +159,7 @@ impl SessionSemanticContext {
     /// A positively classified Normal scope retains existing context. Every
     /// other state revokes it, including an unclassified value represented as
     /// `Normal` plus `classified = false`.
-    pub fn observe_scope(&mut self, scope: InputScope, classified: bool) -> ContextMutation {
+    pub(crate) fn observe_scope(&mut self, scope: InputScope, classified: bool) -> ContextMutation {
         if classified && scope == InputScope::Normal {
             return ContextMutation::Retained;
         }
@@ -178,7 +178,7 @@ impl SessionSemanticContext {
     /// while a document edit is merely planned or in flight. `test_only` is an
     /// explicit pure rejection. Invalid scope clears any retained context so a
     /// missed scope transition cannot leave personal text available.
-    pub fn append_definitive_commit(
+    pub(crate) fn append_definitive_commit(
         &mut self,
         scope: InputScope,
         classified: bool,
@@ -216,7 +216,7 @@ impl SessionSemanticContext {
     /// Generations advance even when the tail is already empty. This makes an
     /// explicit lifecycle boundary observable and invalidates a snapshot taken
     /// before a deactivate/context-replacement pair with no intervening commit.
-    pub fn clear(&mut self, reason: ContextClearReason) -> ContextMutation {
+    pub(crate) fn clear(&mut self, reason: ContextClearReason) -> ContextMutation {
         self.committed_tail.clear();
         self.last_commit_count = 0;
         self.context_generation = next_generation(self.context_generation);
@@ -465,11 +465,7 @@ mod tests {
         // the chosen inline representation well below a second preedit buffer.
         let context_bytes = core::mem::size_of::<SessionSemanticContext>();
         let snapshot_bytes = core::mem::size_of::<SemanticContextSnapshot>();
-        let current_session_bytes = core::mem::size_of::<crate::session::Session>();
-        println!(
-            "context-core size: context={context_bytes} snapshot={snapshot_bytes} current-session={current_session_bytes} projected-inline-session={}",
-            current_session_bytes.saturating_add(context_bytes)
-        );
+        println!("context-core size: context={context_bytes} snapshot={snapshot_bytes}");
         assert!(context_bytes <= 296);
         assert!(snapshot_bytes <= 328);
     }
