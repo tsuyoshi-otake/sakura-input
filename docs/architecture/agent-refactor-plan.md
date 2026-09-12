@@ -547,6 +547,8 @@ merge gate の構成（0.6 で必須チェックにする job 名）：
 | 1.8 | engine の test-only module 退避 | `*_tests.rs` 12 本を `tests/` または対応 sibling へ、`*_oracle.rs` は 2.4 まで残置 | `ls crates/sakura-engine/src` | `src/` に `_tests.rs` は sibling 規約のものだけ | S |
 | 1.9 | `#[ignore]` に理由付与 | 95 本すべて `#[ignore = "..."]` | `rg -n '#\[ignore\]$' crates` | 空 | S |
 | 1.10 | scheduled desktop job | D6 の environment prerequisite を先に満たす。interactive User32 desktop、必要な権限、安定実行を実測できる runner 候補で `.github/workflows/desktop-tests.yml`（`--ignored`、weekly＋dispatch）を作る。2026-09-13 の GitHub runners API は対象 runner 0 件 | workflow_dispatch で対象 test を列挙し、desktop session／User32 capability と結果 artifact を確認 | metadata から列挙した対象 test が実行される。証拠が揃わなければ workflow／Phase 5 は開始せず D6 を未決のまま保つ | M（D6 証拠ゲート） |
+
+Phase 1.10 の prerequisite 計測に限り、既存 `ci.yml` の `workflow_dispatch` に既定 false の opt-in input と、`windows-latest` 上でだけ動く非定期 diagnostic job を先行追加してよい。この job は runner 候補の session／User32 capability、Cargo metadata から列挙した ignored desktop test、exact filter の一意性、同一 test 3 回の結果、process cleanup を artifact に記録する。これは D6 admission や Phase 1.10 完了ではない。証拠を評価して D6 を決めるまで、weekly trigger、`.github/workflows/desktop-tests.yml`、全 ignored desktop suite、Phase 5 の実装を追加しない。
 | 1.11 | R9 を blocking に | 0.3 の `-Advisory` から R9 を外す | `pwsh ./ci/check-dependency-rules.ps1` | R9 違反 0 | S |
 
 ### Phase 2：葉 crate 抽出（依存の逆流を消す、13 ステップ）
