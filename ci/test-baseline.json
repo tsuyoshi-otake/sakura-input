@@ -1,7 +1,7 @@
 {
   "schema": "sakura-test-baseline-v1",
-  "generated_utc": "2026-09-12T16:11:11.7858165Z",
-  "source_commit": "123647f51f8d939e3e5b869c8a05a7ef5a75686e",
+  "generated_utc": "2026-09-12T17:19:49.2154739Z",
+  "source_commit": "86371f4905785c4c132d881eb1e61d51ede934e1",
   "toolchain": {
     "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
     "rustc_verbose": [
@@ -458,9 +458,9 @@
           "suite": "unit",
           "source": "crates/sakura-ipc/src/lib.rs",
           "cargo_label": "Running src\\lib.rs",
-          "discovered": 36,
-          "executed": 36,
-          "passed": 36,
+          "discovered": 39,
+          "executed": 39,
+          "passed": 39,
           "failed": 0,
           "ignored": 0,
           "measured": 0,
@@ -500,9 +500,9 @@
         }
       ],
       "totals": {
-        "discovered": 43,
-        "executed": 43,
-        "passed": 43,
+        "discovered": 46,
+        "executed": 46,
+        "passed": 46,
         "failed": 0,
         "ignored": 0
       }
@@ -3056,9 +3056,9 @@
   "totals": {
     "packages": 16,
     "suites": 94,
-    "discovered": 1985,
-    "executed": 1894,
-    "passed": 1894,
+    "discovered": 1988,
+    "executed": 1897,
+    "passed": 1897,
     "failed": 0,
     "ignored": 91
   }

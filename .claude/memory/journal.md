@@ -1749,6 +1749,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   active toolchain 1.96.0 を確認し、同じ一時実行へ RUSTUP_TOOLCHAIN を明示した再実行は成功。
   グローバル stable の修復やバージョン変更は行っていない。
 
+
 ## 2026-09-13 Phase 0.2 実測テスト基準（#154）
 
 - Cargo metadata から workspace package と default target／feature 範囲を取得し、
@@ -1831,3 +1832,33 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify: PR #163 irv-regression job 103586235440 and PR #164 job 103586240195 logs. Expect: WARN succeeds, critical benchmark threshold breach fails. Both matched: WARN KEYMODE 24,418 versus 21,664 (+12.7%); FAIL TSF reentrancy 17,259 versus 13,543 (+27.4%) and dual candidate 17,024 versus 13,015 (+30.8%).
 - These are IRV job results, not whole-PR successes. Both synthetic PRs were closed without merge, remote probe branches deleted, and all four owned CI/installer runs confirmed completed/cancelled after the relevant job evidence was captured.
 - Original baseline remains unchanged. The dependency scanner prerequisite was propagated by merge, retaining both journal histories.
+
+## 2026-09-13 Native image namespace support (#104)
+
+- Hosted runs 34704517571 and 34705378113 again rejected an owned engine; later diagnostics reported native-device image paths. Original admission data remains unobserved, so historical causality is not claimed.
+- Added bounded current-drive mapping before the existing exact/canonical/reparse/layout checks, with no process requery, retries or integrity exception. Five new tests include real Windows mapping and negative policy controls.
+- Parent verification on the implementation stack: IPC security tests, locked IPC clippy with warnings denied, wrapped locked workspace tests, process cleanup and diff checks passed. The identical source patch is carried here onto main so this prerequisite can land independently of the architecture gates. Hosted sandbox evidence remains pending.
+
+## 2026-09-13 Hosted namespace rejection persists (#104)
+
+- PR #167 job 103586927461 still rejects the owned engine before Hello after the mapping proposal. The local private-pipe AppContainer test passes, so local success does not establish hosted compatibility.
+- Added test-only, content-free current-drive diagnostics: API status, returned length/termination, mapping namespace shape, exact device-prefix boundary and mapped lexical equality. No diagnostic authorizes a connection or changes production policy.
+- Verify: wrapped diagnostic unit test and private-pipe real AppContainer test; repository process cleanup and diff checks. Expect: pass and no surviving owned processes. Result: PASS. An initial compile failure used the wrong windows-result API name; corrected to the pinned version's Error::from_thread before rerunning.
+- Hosted diagnostics remain required before selecting another fix. #104 and architecture Phase 0 delivery remain incomplete.
+
+## 2026-09-13 Deterministic sandbox namespace counterexample (#104)
+
+- Hosted job 103588260690 passed, including the original ignored AppContainer test. That intermittent success did not exercise native normalization reliably.
+- Added a test-only PROCESS_NAME_NATIVE query after verified connection and owned-PID equality, before Hello, requiring the existing policy to accept the resulting native path. Local private sandbox now fails deterministically: drive_mapping_query=error(code=HRESULT(0x80070005)), policy_recheck=false. QueryDosDeviceW cannot supply the proposed mapping inside this AppContainer token. Diagnostic unit test passed; owned processes exited after the failing integration test.
+- This is direct evidence against the mapping proposal, not proof of every historical #104 failure's cause. Replace the proposal with an explicit trusted native identity contract for the sandbox test; do not weaken production InstalledRoot checks.
+
+## 2026-09-13 Exact native identity for owned sandbox tests (#104)
+
+- Removed the rejected production mapping proposal. Added ExactNative for trusted callers owning the expected engine; the sandbox parent captures its native image path before launch and transports exact UTF-16 separately. Admission queries PROCESS_NAME_NATIVE once and checks strict shape plus complete equality. Existing Exact and InstalledRoot paths remain unchanged from main. Exact pipe PID verification still precedes Hello.
+- Verify: wrapped IPC security tests, diagnostic unit test, real private-pipe AppContainer integration, locked IPC/engine all-target clippy with warnings denied, wrapped locked workspace tests, scoped process cleanup and diff check. Expect: all pass with no owned runners surviving. Result: PASS. TKW request c724738b2e6548c1910ae77b6127caf1 captures clippy; parent directly ran all checks. Hosted sandbox verification remains pending.
+- Reusable finding: an unrestricted parent API succeeding does not establish availability under AppContainer; validate the actual namespace and API under the sandbox token before choosing an admission mechanism. The old mapping counterexample is retained above.
+
+## 2026-09-13 Refresh observed baseline after prerequisite tests (#154)
+
+- Re-ran record-test-baseline.ps1 against 86371f4 before Phase 1 test extraction. All 16 packages and 94 suites completed: 1,988 discovered, 1,897 passed, 91 ignored, 0 failed. Only sakura-ipc changed from the prior inventory (43 to 46), exactly the three new #104 native identity tests; every other package total is unchanged. Scoped process cleanup passed.
+- The baseline is regenerated from actual per-package default-feature runs, not an edited historical count. It remains distinct from workspace feature-unified execution. Parent owns verification.
