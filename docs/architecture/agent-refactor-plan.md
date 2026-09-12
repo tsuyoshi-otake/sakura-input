@@ -546,9 +546,9 @@ merge gate の構成（0.6 で必須チェックにする job 名）：
 | 1.7 | renderer / settings | `candidate.rs`、`pad.rs`、`ui.rs`、`updater.rs`、`update_trust.rs` のテスト分離 | 各 `cargo test -p <crate> --lib` | 件数不変 | S |
 | 1.8 | engine の test-only module 退避 | `*_tests.rs` 12 本を `tests/` または対応 sibling へ、`*_oracle.rs` は 2.4 まで残置 | `ls crates/sakura-engine/src` | `src/` に `_tests.rs` は sibling 規約のものだけ | S |
 | 1.9 | `#[ignore]` に理由付与 | 95 本すべて `#[ignore = "..."]` | `rg -n '#\[ignore\]$' crates` | 空 | S |
-| 1.10 | scheduled desktop job | D6 の environment prerequisite を先に満たす。interactive User32 desktop、必要な権限、安定実行を実測できる runner 候補で `.github/workflows/desktop-tests.yml`（`--ignored`、weekly＋dispatch）を作る。2026-09-13 の GitHub runners API は対象 runner 0 件 | workflow_dispatch で対象 test を列挙し、desktop session／User32 capability と結果 artifact を確認 | metadata から列挙した対象 test が実行される。証拠が揃わなければ workflow／Phase 5 は開始せず D6 を未決のまま保つ | M（D6 証拠ゲート） |
+| 1.10 | scheduled desktop job | D6 で admission 済みの GitHub-hosted `windows-latest` に `.github/workflows/desktop-tests.yml`（weekly＋dispatch、`all`／`settings`／`renderer`、直列実行）を作る。Cargo metadata と `--list --ignored` の集合を manifest と照合し、settings 21 件、renderer 11 件中 manual 900 秒 harness 1 件を明示除外して自動 10 件を固定する | workflow_dispatch で対象 test を列挙し、capability、各 exact identity と `1 passed`、process cleanup、結果 artifact を確認 | 選択した全対象が 1 件ずつ実行される。初回 admitted full-suite run の結果を Phase 1.10 の完了証拠にする | M |
 
-Phase 1.10 の prerequisite 計測に限り、既存 `ci.yml` の `workflow_dispatch` に既定 false の opt-in input と、`windows-latest` 上でだけ動く非定期 diagnostic job を先行追加してよい。この job は runner 候補の session／User32 capability、Cargo metadata から列挙した ignored desktop test、exact filter の一意性、同一 test 3 回の結果、process cleanup を artifact に記録する。これは D6 admission や Phase 1.10 完了ではない。証拠を評価して D6 を決めるまで、weekly trigger、`.github/workflows/desktop-tests.yml`、全 ignored desktop suite、Phase 5 の実装を追加しない。
+Phase 1.10 の prerequisite 計測は commit `98ef18c18c94efdab9744aae93f0c97bb916d208`、GitHub Actions run `34713825191`／job `103607261803` で合格した。session 2、`WinSta0`／`Default` input desktop、cursor／screen、exact tab-focus test 3 回、process cleanup を artifact で確認したため D6 は GitHub-hosted `windows-latest` に決定した。根拠と digest は `docs/architecture/desktop-runner-admission.md` に固定する。この prerequisite は runner admission の証拠であり、全 ignored suite の合格証拠ではない。
 | 1.11 | R9 を blocking に | 0.3 の `-Advisory` から R9 を外す | `pwsh ./ci/check-dependency-rules.ps1` | R9 違反 0 | S |
 
 ### Phase 2：葉 crate 抽出（依存の逆流を消す、15 ステップ）
@@ -717,7 +717,7 @@ Phase 1（テスト分離）の訂正実測では、§4.1 の 6 読解集合の 
 
 ## 7. Owner 判断が必要な項目
 
-D1、D2、D4、D5、D8〜D14 は 2026-09-13 に owner が判断を委任し、下表の内容で決定した。D3 はそれ以前から計画上「決定済み扱い」である。D6 は runner の環境証拠、D7 は Issue #7 の実 dump／report 証拠が揃うまで未決とする。
+D1、D2、D4〜D6、D8〜D14 は 2026-09-13 に owner が判断を委任し、下表の内容で決定した。D3 はそれ以前から計画上「決定済み扱い」である。D7 は Issue #7 の実 dump／report 証拠が揃うまで未決とする。
 
 | ID | 判断 | 影響ステップ | 決定内容／未決項目の既定案 |
 |---|---|---|---|
@@ -726,7 +726,7 @@ D1、D2、D4、D5、D8〜D14 は 2026-09-13 に owner が判断を委任し、�
 | D3 | `wire.rs`（proto の低レベル codec）を `sakura-values` に降ろすか proto に残すか | 2.1 | **決定済み扱い**：proto に残す。values は値型のみで、codec は proto の `impl Wire for` に置く（§3.1.1、R12）。異論があれば 2.1a の前に |
 | D4 | core facade の未使用再輸出を削除してよいか | 3.5 | **決定済み（2026-09-13 owner 委任）**：Cargo metadata の全 package／target、docs、supported API の caller が 0 と証明できた item だけ削除。件数と外部利用者不在を先に仮定しない |
 | D5 | `Session` 148 field の分割を行うか | 4.9 | **決定済み（2026-09-13 owner 委任）**：行う。ただし Phase 4 の最後、単独 PR |
-| D6 | settings topic registry の desktop test を走らせる runner | 1.10、5.9 | **未決**：2026-09-13 の GitHub runners API は対象 runner 0 件。interactive User32 desktop／権限／列挙した ignored test の runtime と安定性を実測してから self-hosted と GitHub-hosted の可否・cadence を決める |
+| D6 | settings topic registry の desktop test を走らせる runner | 1.10、5.9 | **決定済み（2026-09-13 hosted diagnostic）**：GitHub-hosted `windows-latest` を使う。run `34713825191`／job `103607261803` で interactive User32 capability、metadata inventory、exact tab-focus test 3 回、process cleanup が合格した。weekly＋dispatch、リポジトリ単位の直列実行、毎回の capability／inventory fail-closed、artifact 保存を維持する。全 ignored suite の合格は Phase 1.10 初回実行で別途確認する（`docs/architecture/desktop-runner-admission.md`） |
 | D7 | `GuardForeignCandidateEnd`／`RestoreCurrentPlacement` の扱い（6.9 の前提） | 6.9 | **未決**：Issue #7 コメントには 2026-08-02 の dump filename／report 記述があるが attachment は未確認。実 dump／report を取得・検証してから決め、6.8〜6.10 はそれまで開始しない |
 | D8 | TLC workflow をブロッキングにするか | 7.9 | **決定済み（2026-09-13 owner 委任）**：Phase 3 完了後、expected counterexample を正規化して全 cfg が意味上 green と確認できた時点でブロッキング化 |
 | D9 | `.claude/memory/rules.md` 45 KB の分割 | 7.11 | **決定済み（2026-09-13 owner 委任）**：topic 別に移動、削除しない |
