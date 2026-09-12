@@ -88,7 +88,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::io::IntoRawHandle;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf, Prefix};
 use std::process::Command;
 use std::time::Duration;
 
@@ -104,6 +104,7 @@ use windows::Win32::Security::Isolation::{
 use windows::Win32::Security::{
     FreeSid, GetTokenInformation, TokenIsAppContainer, PSID, SECURITY_CAPABILITIES, TOKEN_QUERY,
 };
+use windows::Win32::Storage::FileSystem::QueryDosDeviceW;
 use windows::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess, GetExitCodeProcess,
     InitializeProcThreadAttributeList, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW,
@@ -1012,8 +1013,106 @@ fn image_policy_evidence(
         (Ok(left), Ok(right)) => Some(equal(left, right)),
         _ => None,
     };
-    format!("image_query=ok; expected_shape=({}); observed_shape=({}); lexical_equal={}; expected_canonical={}; observed_canonical={}; canonical_equal={canonical_equal:?}; policy_recheck={}",
-        shape(expected), shape(&observed), equal(expected, &observed), status(&expected_canonical), status(&observed_canonical), policy.matches_image_path(&observed))
+    format!("image_query=ok; expected_shape=({}); observed_shape=({}); lexical_equal={}; expected_canonical={}; observed_canonical={}; canonical_equal={canonical_equal:?}; {}; policy_recheck={}",
+        shape(expected), shape(&observed), equal(expected, &observed), status(&expected_canonical), status(&observed_canonical), drive_mapping_evidence(expected, &observed), policy.matches_image_path(&observed))
+}
+
+/// Test-only metadata for the expected drive's DOS-device mapping. No path,
+/// drive letter, mapping text, or user-controlled content is emitted.
+fn drive_mapping_evidence(expected: &Path, observed: &Path) -> String {
+    let Some(drive) = expected_drive_letter(expected) else {
+        return "drive_mapping_query=not_applicable; drive_mapping_length=None; drive_mapping_double_nul=None; drive_mapping_native_device=None; drive_mapping_nt_dos=None; mapping_prefix_boundary=None; mapped_lexical_equal=None".to_owned();
+    };
+    let drive_name = [u16::from(drive), u16::from(b':'), 0];
+    let mut buffer = vec![0u16; 32_768];
+    // SAFETY: `drive_name` is NUL-terminated and the bounded buffer is
+    // writable for the size passed to QueryDosDeviceW.
+    let length =
+        unsafe { QueryDosDeviceW(PCWSTR(drive_name.as_ptr()), Some(buffer.as_mut_slice())) };
+    if length == 0 {
+        return format!(
+            "drive_mapping_query=error(code={:?}); drive_mapping_length=0; drive_mapping_double_nul=None; drive_mapping_native_device=None; drive_mapping_nt_dos=None; mapping_prefix_boundary=None; mapped_lexical_equal=None",
+            Error::from_thread().code()
+        );
+    }
+    if length as usize > buffer.len() {
+        return format!(
+            "drive_mapping_query=invalid_length; drive_mapping_length={length}; drive_mapping_double_nul=None; drive_mapping_native_device=None; drive_mapping_nt_dos=None; mapping_prefix_boundary=None; mapped_lexical_equal=None"
+        );
+    }
+
+    let returned = &buffer[..length as usize];
+    let double_nul = returned.ends_with(&[0, 0]);
+    let current = double_nul
+        .then(|| returned.iter().position(|unit| *unit == 0))
+        .flatten()
+        .filter(|end| *end != 0)
+        .and_then(|end| String::from_utf16(&returned[..end]).ok());
+    let mapping_native_device = current
+        .as_deref()
+        .map(|mapping| ascii_starts_with(mapping, r"\Device\"));
+    let mapping_nt_dos = current
+        .as_deref()
+        .map(|mapping| ascii_starts_with(mapping, r"\??\"));
+    let observed_text = observed.to_str();
+    let prefix_boundary = current
+        .as_deref()
+        .and_then(|mapping| observed_text.map(|observed| ascii_prefix_boundary(observed, mapping)));
+    let mapped_equal = match (current.as_deref(), observed_text, expected.to_str()) {
+        (Some(mapping), Some(observed), Some(expected))
+            if safe_native_text(mapping)
+                && safe_native_text(observed)
+                && ascii_prefix_boundary(observed, mapping) =>
+        {
+            let mapped = format!(
+                "{}:{}",
+                char::from(drive.to_ascii_uppercase()),
+                &observed[mapping.len()..]
+            );
+            Some(mapped.eq_ignore_ascii_case(expected))
+        }
+        _ => None,
+    };
+
+    format!(
+        "drive_mapping_query=ok; drive_mapping_length={length}; drive_mapping_double_nul={double_nul}; drive_mapping_native_device={mapping_native_device:?}; drive_mapping_nt_dos={mapping_nt_dos:?}; mapping_prefix_boundary={prefix_boundary:?}; mapped_lexical_equal={mapped_equal:?}"
+    )
+}
+
+fn expected_drive_letter(path: &Path) -> Option<u8> {
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => Some(drive),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn ascii_prefix_boundary(value: &str, prefix: &str) -> bool {
+    prefix.is_ascii()
+        && value.len() > prefix.len()
+        && value.is_char_boundary(prefix.len())
+        && value[..prefix.len()].eq_ignore_ascii_case(prefix)
+        && value.as_bytes()[prefix.len()] == b'\\'
+}
+
+fn ascii_starts_with(value: &str, prefix: &str) -> bool {
+    prefix.is_ascii()
+        && value.len() >= prefix.len()
+        && value.is_char_boundary(prefix.len())
+        && value[..prefix.len()].eq_ignore_ascii_case(prefix)
+}
+
+fn safe_native_text(path: &str) -> bool {
+    path.is_ascii()
+        && ascii_starts_with(path, r"\Device\")
+        && !path.contains('\0')
+        && !path.contains('/')
+        && path
+            .split('\\')
+            .skip(1)
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 #[test]
@@ -1034,6 +1133,13 @@ fn image_policy_diagnostics_explain_shape_without_emitting_paths() {
     assert!(evidence.contains("verbatim=true"));
     assert!(evidence.contains("lexical_equal=false"));
     assert!(evidence.contains("expected_canonical="));
+    assert!(evidence.contains("drive_mapping_query="));
+    assert!(evidence.contains("drive_mapping_length="));
+    assert!(evidence.contains("drive_mapping_double_nul="));
+    assert!(evidence.contains("drive_mapping_native_device="));
+    assert!(evidence.contains("drive_mapping_nt_dos="));
+    assert!(evidence.contains("mapping_prefix_boundary="));
+    assert!(evidence.contains("mapped_lexical_equal="));
     let failed =
         image_policy_evidence(&expected, Err("open_failed(test_code)".to_owned()), &policy);
     assert!(failed.contains("image_query=open_failed(test_code)"));
