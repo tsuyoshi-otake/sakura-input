@@ -1,0 +1,16 @@
+[package]
+name = "sakura-context-research"
+description = "Dormant Issue 34 context research, available only through an explicit engine feature."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+sakura-neural-proto.workspace = true
+sakura-values.workspace = true
+
+[lints]
+workspace = true

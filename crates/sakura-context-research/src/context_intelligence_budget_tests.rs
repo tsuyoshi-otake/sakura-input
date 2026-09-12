@@ -5,13 +5,13 @@ use std::cell::Cell;
 use std::hint::black_box;
 use std::time::Instant;
 
-use sakura_engine::context_evaluation::{evaluate_replay, ReplayObservation};
-use sakura_engine::context_intelligence::{ContextClearReason, SessionSemanticContext};
-use sakura_engine::prediction_snapshot::{
+use crate::context_evaluation::{evaluate_replay, ReplayObservation};
+use crate::context_intelligence::{ContextClearReason, SessionSemanticContext};
+use crate::prediction_snapshot::{
     DictionaryIdentity, PredictionSnapshot, SnapshotCandidateInput, SnapshotSource,
 };
 use sakura_neural_proto::CandidateAuthority;
-use sakura_proto::InputScope;
+use sakura_values::InputScope;
 
 thread_local! {
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
