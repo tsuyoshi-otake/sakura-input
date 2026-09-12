@@ -140,6 +140,12 @@ fn encode(frame: &Frame<'_>) -> io::Result<Vec<u8>> {
 fn decode(payload: &[u8]) -> io::Result<Frame<'static>> {
     let mut cursor = 0;
     let magic = get32(payload, &mut cursor)?;
+    if magic != Limits::REQUEST_MAGIC && magic != Limits::RESPONSE_MAGIC {
+        // The previous worker decoder rejected a complete unknown magic
+        // before attempting to read the version, including 4- and 5-byte
+        // payloads. Preserve that InvalidData classification here.
+        return invalid_data("invalid magic");
+    }
     if get16(payload, &mut cursor)? != Limits::VERSION {
         return invalid_data("invalid version");
     }
@@ -178,7 +184,7 @@ fn decode(payload: &[u8]) -> io::Result<Frame<'static>> {
             context,
             candidates,
         })
-    } else if magic == Limits::RESPONSE_MAGIC {
+    } else {
         let status = get16(payload, &mut cursor)?;
         let id = get64(payload, &mut cursor)?;
         let legacy_tier_reserved = get16(payload, &mut cursor)?;
@@ -205,8 +211,6 @@ fn decode(payload: &[u8]) -> io::Result<Frame<'static>> {
             legacy_tier_reserved,
             scores,
         })
-    } else {
-        invalid_data("invalid magic")
     }
 }
 
@@ -294,6 +298,18 @@ mod tests {
             read_frame(&mut transport.as_slice()).unwrap_err().kind(),
             io::ErrorKind::InvalidData
         );
+    }
+
+    #[test]
+    fn complete_unknown_magic_precedes_version_decode() {
+        for payload in [b"NOPE".as_slice(), b"NOPE!".as_slice()] {
+            let mut transport = Vec::with_capacity(4 + payload.len());
+            transport.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+            transport.extend_from_slice(payload);
+            let error = read_frame(&mut transport.as_slice()).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+            assert_eq!(error.to_string(), "invalid magic");
+        }
     }
 
     #[test]
