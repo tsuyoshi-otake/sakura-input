@@ -1897,6 +1897,18 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Parent verified main ruleset 23073135 is active, main-only, with no bypass actors: required PRs, deletion/force-push prohibition and strict fmt, dependency-rules, workspace-tests, irv-regression, dll-size and Dependency policy contexts. The effective-rule API agrees with the committed definition. An incomplete-check PR BLOCKED observation remains pending.
 - A parent-run desktop capability probe obtained read and limited create/write-object access to WinSta0/Default in interactive session 1 and closed every owned handle. No UI operation occurred. This is access evidence only; D6 still needs the specified desktop tests' runtime and stability evidence.
 
+## 2026-09-13 Complete hosted Phase 0 acceptance (#154)
+
+- Verify: downloaded all receipts from hosted formal run 34708409971 and checked manifest identities, model/configuration/JAR hashes, stdout/stderr hashes, specified negative-control classifications, timeout and child-exit fields. Expect: 33 completed safety configurations and 15 specified counterexamples. Result: 48/48 PASS, all children exited without timeout; the workflow's 49 jobs all succeeded.
+- Verify: PR #170 at 4dd4bd4 with required checks IN_PROGRESS. Expect: effective main ruleset blocks merge even when the diff is mergeable. Result: mergeStateStatus BLOCKED, mergeable MERGEABLE. No bypass was used.
+- All Phase 0 checklist items are complete and #154 is closed with the evidence table. Phase 1 proceeds under #168; later phases and the D6/D7 gates are not declared complete.
+
+## 2026-09-13 Extract five engine test modules (#168)
+
+- Phase 1.2 moves input_history, server, session, prediction and learning inline test bodies into their respective sibling files after git mv. Production prefixes and module identities are retained.
+- Verify: parent ran the pre-format verbatim checker, then formatted and compared all five production prefixes and their 251/192/178/225/561 string literals. Wrapped engine library execution matched all 575 prior runtime identities and outcomes: 573 passed / 2 ignored. Diff whitespace and scoped process cleanup passed.
+- Production line counts are now 1,983 / 1,982 / 1,878 / 1,113 / 2,439 respectively. This is structural separation only; persistence, prediction, learning and server behavior remain unchanged.
+
 ## 2026-09-13 Verify formatting reaches a stable result (#168)
 
 - Hosted run 34709081162 rejected one leading blank line in the extracted dispatch_tests.rs. The initial rustfmt pass had left this blank line while unindenting the verbatim inline body; a later pass removed it. Rust tests had passed, but formatting had not been checked for stability.
