@@ -1820,3 +1820,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify: IRV SelfTest と各既 commit の archive に対する比較を親が直接実行。
   Expect: 既知の文書超過は非増加なら note、CI verifier 追加は WARN、他の基準値は維持。
   結果は期待どおり。CI 上のダミー PR による WARN／FAIL はこの後の検証であり未完了。
+
+## 2026-09-13 Phase 7.11 適用条件を保持した rules 縮約（#161）
+
+- Phase 7 の実装 Issue #161 を作成。commit `eedded5` で旧 rules.md を先に
+  `docs/history/rules.pre-154.md` へ移動した。45,652 bytes／SHA-256
+  `e4016aa130b536fc168c8b12317fbca1ca4277f90afed9d8f3c5f769de74a687` は不変。
+  全 section を 7 トピックへ原文のまま抽出し、該当時は必読とする条件表を入口へ置いた。
+- Verify: 原本 hash、7 抽出の完全一致、全見出し集合、必読先の存在、元 benchmark coverage 不変、
+  IRV SelfTest、Fail mode 比較。Expect: 元規則を失わず合計 ≤24,576 bytes。すべて PASS。
+  LF 作業ファイルの無条件合計は 9,565 bytes。CI と PR テンプレートを D14 の Fail mode へ変更。
+  この PR は Phase 0.5 の文書縮約 PR より後に merge する。
+- 条件付き規則と owner 判断の読解量も各 Issue benchmark の docs へ追加した。source／test／
+  contract の既存集合と元 baseline は不変。全 Issue 共通を表す IRV-DOCS は従来の
+  DESIGN／README に新 architecture entry を加え、Issue 固有トピックは該当 benchmark に数える。
+  初回は CI／Windows 固有トピックまで全 Issue 共通へ加えて +25.6% FAIL となったため、
+  issue_shape と必読条件を照合して分類を訂正した。閾値や基準を緩めてはいない。
