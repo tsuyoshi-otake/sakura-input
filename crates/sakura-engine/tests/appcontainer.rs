@@ -110,9 +110,9 @@ use windows::Win32::System::Threading::{
     InitializeProcThreadAttributeList, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW,
     TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject, CREATE_UNICODE_ENVIRONMENT,
     EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
-    PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, STARTF_USESTDHANDLES, STARTUPINFOEXW,
-    STARTUPINFOW,
+    PROCESS_NAME_FORMAT, PROCESS_NAME_NATIVE, PROCESS_NAME_WIN32,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
 };
 
 use common::{session_for, test_char_key, visible, Engine, PATIENT};
@@ -387,6 +387,26 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     assert_eq!(
         actual_server_pid, expected_server_pid,
         "refusing sandboxed protocol traffic: the exact pipe connection is served by pid {actual_server_pid}, not the parent-owned engine pid {expected_server_pid}; no protocol request was sent"
+    );
+
+    // Deterministic test-only coverage for the native namespace normalizer.
+    // Verified admission and exact pipe/PID identity above remain mandatory;
+    // this read-only query neither authorizes nor retries a connection.
+    let native_image = query_image_with_format(expected_server_pid, PROCESS_NAME_NATIVE)
+        .unwrap_or_else(|error| {
+            panic!(
+                "native image policy probe: {}",
+                image_policy_evidence(Path::new(&expected_server_path), Err(error), &policy)
+            )
+        });
+    let native_shape = native_image
+        .as_os_str()
+        .to_string_lossy()
+        .starts_with(r"\Device\");
+    assert!(
+        native_shape && policy.matches_image_path(&native_image),
+        "native image policy probe: {}",
+        image_policy_evidence(Path::new(&expected_server_path), Ok(native_image), &policy)
     );
 
     match client.call(
@@ -942,6 +962,13 @@ fn grant_appcontainer_access(path: &Path, inherit_to_children: bool) {
 /// Test-only follow-up query. No raw paths or user input are logged, and this
 /// result never participates in acceptance or authorizes a second connection.
 fn query_image_for_diagnostics(process_id: u32) -> Result<PathBuf, String> {
+    query_image_with_format(process_id, PROCESS_NAME_WIN32)
+}
+
+fn query_image_with_format(
+    process_id: u32,
+    format: PROCESS_NAME_FORMAT,
+) -> Result<PathBuf, String> {
     // SAFETY: read-only access to the PID reported by the rejected pipe handle.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) }
         .map_err(|error| format!("open_failed({:?})", error.code()))?;
@@ -949,12 +976,7 @@ fn query_image_for_diagnostics(process_id: u32) -> Result<PathBuf, String> {
     let mut length = buffer.len() as u32;
     // SAFETY: live process handle and writable bounded UTF-16 buffer.
     let result = unsafe {
-        QueryFullProcessImageNameW(
-            handle,
-            PROCESS_NAME_WIN32,
-            PWSTR(buffer.as_mut_ptr()),
-            &mut length,
-        )
+        QueryFullProcessImageNameW(handle, format, PWSTR(buffer.as_mut_ptr()), &mut length)
     }
     .map_err(|error| format!("image_failed({:?})", error.code()));
     // SAFETY: this helper owns exactly this handle, including on query failure.
