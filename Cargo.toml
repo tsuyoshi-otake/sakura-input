@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/sakura-core",
+    "crates/sakura-values",
     "crates/sakura-proto",
     "crates/sakura-neural-proto",
     "crates/sakura-ipc",
@@ -33,6 +34,7 @@ authors = ["Sakura Input contributors"]
 # hashing, and tokenization. CI enforces both sets with ci/dep-policy.ps1.
 [workspace.dependencies]
 sakura-core = { path = "crates/sakura-core" }
+sakura-values = { path = "crates/sakura-values" }
 sakura-proto = { path = "crates/sakura-proto" }
 sakura-neural-proto = { path = "crates/sakura-neural-proto" }
 sakura-ai-proto = { path = "crates/sakura-ai-proto" }
