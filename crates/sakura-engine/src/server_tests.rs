@@ -1,4 +1,3 @@
-
 thread_local! {
     pub(super) static BEFORE_OUTPUT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
