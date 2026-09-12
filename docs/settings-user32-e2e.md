@@ -143,15 +143,15 @@ Remove-Item Env:SAKURA_SETTINGS_E2E_EXE
 UI側は SET-U32-012 で隔離configへの書き込みを証明し、エンジン側は次の private pipe E2E で同じ形式を読み込み、実際の composition／commit を確認する。
 
 ```powershell
-cargo test -p sakura-engine --test pipe_round_trip `
+cargo test -p sakura-engine --features dev-fixtures --test pipe_round_trip `
   a_running_engine_applies_saved_width_punctuation_and_brackets_to_real_output `
   -- --exact --nocapture
 
-cargo test -p sakura-engine --test pipe_round_trip `
+cargo test -p sakura-engine --features dev-fixtures --test pipe_round_trip `
   a_running_engine_applies_saved_input_method_to_real_output `
   -- --exact --nocapture
 
-cargo test -p sakura-engine --test pipe_round_trip `
+cargo test -p sakura-engine --features dev-fixtures --test pipe_round_trip `
   a_running_engine_applies_saved_default_character_type_to_new_sessions `
   -- --exact --nocapture
 ```

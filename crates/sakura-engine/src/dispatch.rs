@@ -1904,7 +1904,7 @@ fn record_conversion_lookup_for_test() {
 }
 
 /// Returns and resets the current test thread's calls into `ConversionService`.
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 pub(crate) fn take_conversion_lookup_count_for_test() -> u64 {
     TEST_CONVERSION_LOOKUPS.with(|count| count.replace(0))
 }
@@ -6452,6 +6452,6 @@ fn render_converted_segments(
     Ok(true)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 #[path = "dispatch_tests.rs"]
 mod tests;
