@@ -1717,3 +1717,19 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   2,167 行を計算して訂正した。過去の 25/25 PASS を今回の再検証とは表現しない。
 - **残件**: D1〜D2・D4〜D11（D3 は従来から決定済み扱い）、PR #153 のレビューと
   merge。実装は Phase 0 の別 Issue で扱う。
+
+## 2026-09-13 全 Phase 実装の承認と計画の実行可能性修正（#152、#154）
+
+- owner は Phase 0〜7 の全実装を明示承認。実装用 Issue #154 を Phase 0 専用に作成した。
+  計画 PR #153 には実装を混ぜず、計画書と分析 6 本だけを更新する。
+- D1、D2、D4、D5、D8〜D11 は委任された既定案で決定。D6 は実 desktop runner の
+  環境証拠、D7 は #7 の実 dump／report の取得・検証が残る。過去コメント中の filename を
+  添付取得済みとみなさず、Phase 6.8〜6.10 の開始条件を維持した。D12〜D14 は変更無し。
+- 計画修正は metadata 由来の package／target 基準、実 DLL 出力先、TLC の正常／期待反例分類、
+  shared path の CI fallback、依存と symbol の実解決、sibling test 許可、store の runtime 非所有、
+  renderer 逆向き依存、研究 feature 維持、完全な契約 inventory と履歴保持を対象にした。
+- Verify: 親が 7 文書の実差分を直接確認し、step／D ID 集合の不変、R1〜R14 の一意性、
+  契約 filename 23 件の一意性、D6／D7 未決、D12〜D14 行不変、IRV 資材不変、
+  `git diff --check` を実行。Expect: 全条件を満たす。結果 PASS。
+- Sol Medium は編集を担当。検証責任は親が持ち、外部／subagent レビューは依頼していない。
+  今回の検証を過去の Opus rubric 25/25 の再採点とは表現しない。

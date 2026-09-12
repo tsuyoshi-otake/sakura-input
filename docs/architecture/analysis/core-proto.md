@@ -268,15 +268,15 @@ Dependencies are strictly downward in the list above. Per-module contract:
 
 One PR per step, behavior-preserving, compilable at every point, ordered by reading-cost reduction per unit of risk.
 
-**Step 1 — Move every `mod tests` to a sibling `*_tests.rs`.** Mechanical: `#[cfg(test)] #[path = "conversion_tests.rs"] mod tests;`; cut the block verbatim; add `use super::*;`. All 16 core and 5 proto modules. Removes 9,131 lines from core's production files and 2,463 from proto's, zero import changes elsewhere. Risk: very low.
-`Verify:` `./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }`; `rg -n 'mod tests \{' crates/sakura-core/src/*.rs`.
-`Expect:` same test counts as HEAD (49 in `conversion::tests`); no `mod tests {` body left in any `src/*.rs`.
+**Step 1 — Move every inline `mod tests` in both source trees to sibling `*_tests.rs`.** Mechanical: `#[cfg(test)] #[path = "conversion_tests.rs"] mod tests;`; cut the block verbatim; add `use super::*;`. Sibling private-unit test modules are an allowed final layout. Risk: very low.
+`Verify:` `./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }`; recursively search `crates/sakura-core/src/**` and `crates/sakura-proto/src/**` for inline `mod tests {` bodies.
+`Expect:` the Phase 0 metadata baseline test universe is unchanged; no inline `mod tests {` body remains in either tree.
 
 **Step 2 — Fix the two test-only cycles.** Move the `allows_system_entry` assertions into `input_repair_tests.rs`; move the `crate::width` uses out of `simd_tests.rs`. Risk: very low.
 `Verify:` `rg -n 'crate::allows_system_entry' crates/sakura-core/src/preferences*`; `rg -n 'crate::width' crates/sakura-core/src/simd*`.
 `Expect:` both 0 matches; `cargo test -p sakura-core --lib` unchanged.
 
-**Step 3 — Extract `sakura-values`. (owner decision:** does `wire.rs` move down with the value types, or do `encode`/`decode` become free functions in proto?**)** Move `proto/fixed.rs` verbatim plus `types.rs:24–476` and `lib.rs:78–107`; add compat `pub use sakura_values::{…}` to `sakura-proto/src/lib.rs`; repoint core's 18 sites and its Cargo dependency. Risk: medium — the only crate-graph change; compat re-exports mean no consumer outside core is edited.
+**Step 3 — Extract `sakura-values`; keep wire codec in proto (D3).** Move `proto/fixed.rs` verbatim plus value definitions including `InputScope`; add compat `pub use sakura_values::{…}` to `sakura-proto/src/lib.rs`; implement encoding in proto's `wire_types.rs`; repoint core and its Cargo dependency. Risk: medium — the only crate-graph change; compat re-exports mean no consumer outside core is edited.
 `Verify:` `rg -c 'sakura_proto' crates/sakura-core/src`; `cargo tree -p sakura-core --depth 1`; `cargo test --workspace`; `cargo test -p sakura-proto --test roundtrip`.
 `Expect:` `0`; core's only dependency is `sakura-values`; roundtrip/robustness byte-identical, `PROTOCOL_VERSION` still 22.
 
@@ -296,13 +296,13 @@ One PR per step, behavior-preserving, compilable at every point, ordered by read
 `Verify:` `cargo test -p sakura-core --lib`; `cargo test -p sakura-core --test zero_alloc`; `cargo test -p sakura-core --release --test fsm_robustness sharded_fsm_campaign -- --exact --ignored`.
 `Expect:` zero-alloc still reports 0 allocations per keystroke; FSM campaign completes with the same shard/seed defaults.
 
-**Step 8 — Prune the facade. (owner decision:** deleting a `pub use` is a public API change even with no in-tree consumer.**)** Remove the ~28 dead flat re-exports from `lib.rs:42–83`; keep `pub mod` for every module. Risk: low in-tree.
-`Verify:` `cargo build --workspace --all-targets`; `cargo test --workspace`.
-`Expect:` clean build; `lib.rs` re-export count drops from 113 to ~85.
+**Step 8 — Prune the facade after caller proof (D4).** Deleting a `pub use` is a public API change. Enumerate all workspace packages/targets with `cargo metadata`, supported external API references, and docs; remove only exports whose callers are proven zero and keep every unproven export. Do not preselect a count. Risk: low in-tree, externally visible.
+`Verify:` `cargo build --workspace --all-targets`; retain a per-item caller report from metadata targets, docs, and supported API checks.
+`Expect:` clean build; every removed export has proven caller count zero.
 
-**Step 9 — Replace `research-top32` / `research-wide-candidates` with a runtime bound. (owner decision:** compile-time constant becomes a `Converter` field on the hot path.**)** Delete the nine `#[cfg(feature = …)]` sites; add a ceiling parameter to `Converter::new` defaulting to `MAX_CANDIDATES`; arenas still sized to the ceiling at construction. Risk: medium — touches the arena sizing the zero-allocation guarantee rests on.
-`Verify:` `rg -c 'research-top32|research-wide-candidates' crates tools`; `cargo test -p sakura-core --test zero_alloc`; `cargo test -p sakura-core --lib conversion::`.
-`Expect:` 0 feature references outside docs; zero-alloc unchanged; conversion tests unchanged at the default ceiling.
+**Step 9 — Preserve the research candidate-bound feature while splitting (D11).** Move the `research-top32` / `research-wide-candidates` cfg sites with their owning logic and keep the current default/research behavior; do not replace the research feature with a runtime bound in this refactor. Risk: medium because arena sizing underpins zero allocation.
+`Verify:` test default and research-feature builds through the quiet wrapper, including zero-allocation and conversion suites; audit that each cfg moved with its logic.
+`Expect:` feature names and both behaviors remain available; zero-allocation and candidate ceilings are unchanged.
 
 **Step 10 — Split `proto/message.rs` and `proto/types.rs`.** `message/{tags,header,request,response,ui_state}.rs` with wire tags kept in one file so a tag collision stays a one-file check; `types.rs` residue splits into `render.rs` and `diagnostics.rs`. Risk: low.
 `Verify:` `cargo test -p sakura-proto`; `cargo test -p sakura-proto --release --test robustness sharded_protocol_campaign -- --exact --ignored --nocapture`; `rg -n 'PROTOCOL_VERSION: u16 = 22' crates/sakura-proto/src/lib.rs`.

@@ -226,16 +226,30 @@ docs/
   architecture/conversion.md       ex-DESIGN §5
   architecture/ui.md               ex-DESIGN §8
   architecture/packaging.md        ex-DESIGN §12
-  contracts/input-scope.md         sakura-tsf     fail-closed scope classification (single home)
-  contracts/ipc-v1.md              sakura-proto   framing, versioning, request ids, size caps
-  contracts/write-journal.md       sakura-tsf     ticket/epoch/validate_callback authority
-  contracts/candidate-ui.md        sakura-renderer popup ownership, UIA, placement
-  contracts/developer-history.md   sakura-engine  DPAPI, 1024 queue, 30 d / 64 MiB, epochs
-  contracts/update-trust.md        sakura-settings signing, WinVerifyTrust, stale trust state
-  contracts/neural-rerank.md       protocol v1, fail-closed, budgets
-  contracts/ai-text.md             sakura-engine  single job, latch, cooldown, deadline
-  contracts/dependencies.md        repo           full-scratch rule + dep-policy self-test
-  contracts/test-output.md         repo           run-test-quiet, process-exit proof
+  contracts/                       main plan §3.5 の完全 inventory（1契約1文書1 owner）
+    input-scope.md                  fail-closed scope classification (single home)
+    ipc-v1.md                      wire framing/version/request ids/size caps
+    ipc-pipe-security.md           name/DACL/label
+    ipc-server-trust.md            image-path/admission policy
+    ipc-client-deadline.md         timeout/late reply
+    ipc-diagnostics.md             on-disk diagnostic format
+    debug-trace.md                 debug branch trace
+    callback-deadline.md           TSF callback deadline
+    write-journal.md               ticket/epoch/validate_callback authority
+    candidate-ui.md                popup ownership/UIA/placement
+    dictionary-image.md            reader+writer tags/versions/optional tables
+    developer-history.md           input-history store contract
+    learning-store.md              learning store contract
+    update-trust.md                signing/WinVerifyTrust/stale trust state
+    neural-rerank.md               full protocol v1/fail-closed/bounds
+    ai-text.md                     worker protocol and lifecycle
+    context-protocol.md            SCV1 context contract
+    registry-layout.md             GUID/registry layout
+    keymap-format.md               keymap TOML
+    config-format.md               config compatibility
+    engine-admin.md                fault injection/admin protocol
+    dependencies.md                Cargo edge rules
+    test-output.md                 quiet wrapper/process-exit proof
   decisions/2026-08-22-release-signing.md        owner-authored, ≤ 2 KB each, append-only
   decisions/2026-08-24-it-engineer-first.md
   decisions/2026-08-30-test-output-convention.md  (#111)
@@ -273,14 +287,14 @@ One PR per step. Old locations keep a one-line pointer for one release.
 
 1. **[owner decision] Extract owner decisions from `CLAUDE.md`** into `docs/decisions/`. `Verify:` `ls docs/decisions/*.md | wc -l` = 4 and `rg -c 'docs/decisions/' CLAUDE.md` ≥ 4. `Expect:` each file reproduces its section byte-for-byte minus heading; `CLAUDE.md` drops 6,812 B.
 2. **[owner decision] Demote `CLAUDE.md` history.** Move §最優先タスク (10,147 B), §検証済みの状態, status halves of §Issue #26/#27/#28/#30/#32/#58, and `ISSUE-COMPLETION-REVIEW.md` into `docs/history/issues/`. Move whole, do not summarise. `Verify:` `wc -c CLAUDE.md` ≤ 8192. `Expect:` no `1f5ca43e` / `496 passed` string remains in `CLAUDE.md`.
-3. **Add 15 per-crate READMEs.** Fix the five stale code citations as symbol names. `Verify:` `ls crates/*/README.md | wc -l` = 15; `rg -n 'dispatch.rs:1039|keymap.rs:1295|write_coordinator.rs.*469' -g '*.md' .` empty. `Expect:` every crate README names ≥1 executable `cargo test -p <crate>` command.
+3. **Add per-crate READMEs for the metadata-derived set.** Use `cargo metadata --no-deps --format-version 1` and select workspace manifests directly under `crates/`; do not freeze a historical crate count. Fix stale code citations as symbol names. `Verify:` compare that directory set with README parents and validate the template headings. `Expect:` exact set equality; every crate README names an executable package-appropriate test/build command.
 4. **Split `DESIGN.md`.** §5 → `docs/architecture/conversion.md`, §8 → `ui.md`, §12 → `packaging.md`, §2 → `docs/history/product-requirements.md`. `Verify:` `wc -c DESIGN.md` ≤ 40960; link checker 0 broken. `Expect:` concatenated byte count ≥ 100,119 (nothing lost).
-5. **Create `docs/contracts/` and dedupe.** Ten contract files; duplicate restatements become links. `Verify:` `rg -c 'Password.*URL.*Email' -g '*.md' .` ≤ 4. `Expect:` `docs/contracts/input-scope.md` is the only normative statement.
+5. **Create `docs/contracts/` and dedupe.** Materialize the complete unique inventory in the main plan §3.5, including the full dictionary-image reader/writer contract; duplicate restatements become links. `Verify:` exact filename/owner set equality between the index and inventory, canonical-symbol resolution, and sensitive-scope dedupe. `Expect:` no missing/duplicate owner; `input-scope.md` is the only normative sensitive-scope statement.
 6. **Relocate `docs/` history.** 34 release notes → `docs/history/releases/`; research → `docs/history/research/`; misfiled verification → `verification/sakura-settings/appearance/`; contracts → `docs/contracts/`. `Verify:` `ls docs/*.md | wc -l` = 1. `Expect:` `ls docs/history/releases/*.md | wc -l` = 34.
-7. **Consolidate `verification/`.** Move 23 flat `.md` + 15 `-results.json` into `verification/<crate>/<feature>/`; move each `*.tla` + cfgs next to its record; add `verification/README.md`; `historical/` → `verification/_historical/`; commit or drop uncommitted `log_name` hashes. Runners' `$MODEL_DIR`/`$OutputRoot` paths change in the same PR. `Verify:` `ls verification/*.md 2>/dev/null | wc -l` = 0; `pwsh ./scripts/verify-space-key-dispatch-tlc.ps1 -SelfTest` exits 0. `Expect:` `git ls-files verification | wc -l` unchanged at 187.
+7. **Consolidate `verification/`.** Move every committed existing artifact through an explicit old→new path mapping; put each model/cfg beside its record, move historical material to `_historical`, and update runner paths in the same PR. New `verification/README.md` and correspondence files are tracked separately from moves. Commit evidence logs or remove unverifiable hash claims. `Verify:` mapping is bijective, each moved artifact keeps `git log --follow`, and new files pass their schema checks. `Expect:` no existing artifact is lost or duplicated; no fixed historical total is used after new files are added.
 8. **Add `correspondence.json` per verification folder + CI check.** Schema: model, cfgs, runner, Rust symbols, binding tests. `Verify:` new `ci/check-verification-correspondence.ps1 -SelfTest` exits 0 and the real run fails when a named symbol is absent. `Expect:` all 10 models have a non-STALE correspondence file (#106).
-9. **Per-crate CI job (closes #89).** `changed-crates` paths-filter matrix running `cargo clippy -p X --all-targets -- -D warnings` and `./ci/run-test-quiet.ps1 -Name 'X tests' -Command { cargo test -p X --locked }` + `check-process-clean.ps1`; restrict the workspace job to `push: main` and tags; keep `cargo build --workspace --release` on every PR. `Verify:` a PR touching only `crates/sakura-logon/**` produces exactly one crate job; `pwsh ./ci/dep-policy.ps1 -SelfTest` exits 0. `Expect:` single-crate PR wall-clock drops materially below 6m58s (`journal.md:1528`).
-10. **Wire formal verification.** New `formal-verification.yml` (workflow_dispatch + weekly) running all 8 TLC runners over 48 cfgs with the pinned jar hash. `Verify:` `rg -c 'verify-.*-tlc' .github/workflows/formal-verification.yml` = 8. `Expect:` per-model pass/fail, no Java survivor.
-11. **Move test-only modules out of `src/`.** 12 oracle/`*_tests.rs` modules → `tests/` or a `verification` feature. `Verify:` `find crates -path '*/src/*' \( -name '*_tests.rs' -o -name '*oracle*.rs' \) | wc -l` = 0 and workspace test count unchanged. `Expect:` `src/` contains only shipped behaviour.
-12. **Split `scripts/`** into `scripts/{build,release,verify,tools}/` and fix residual `rtk` references. `Verify:` `rg -c '\brtk\b' scripts crates .github ci` = 0; every `scripts/…ps1` path in workflows resolves. `Expect:` `installer.yml`, `release.yml`, `fuzz-campaign.yml` unchanged in behaviour.
-13. **[owner decision] Split `.claude/memory/`.** `rules.md` §Session state (18,410 B) and §Overflow-hazard (5,091 B) are component-scoped. **Do not delete any rule** — relocate only, leaving a pointer. `Verify:` total rule-bullet count across `rules.md` + crate READMEs unchanged. `Expect:` `wc -c .claude/memory/rules.md` drops while no learning is lost.
+9. **Per-crate CI job (closes #89).** Build the matrix from changed paths plus the actual `cargo metadata` dependency graph. Explicitly map `data/`, root manifests/lockfile, `.cargo/`, toolchain, common scripts/CI/workflows; any unmapped shared path falls back to the full workspace. Run package-appropriate clippy/test commands and process cleanup. `Verify:` self-tests cover crate-local, mapped shared, and unknown shared paths. `Expect:` local changes include the package and real downstreams; unknown shared input cannot skip tests.
+10. **Wire formal verification.** New `formal-verification.yml` runs every discovered TLC runner/config with the pinned jar hash. First classify configs as normal-success or expected-counterexample and normalize the latter only when the expected invariant/trace appears; an unexpected success/failure remains red. Make blocking only after all configs are green under that classification. `Verify:` compare discovered runner/config set with workflow matrix and check Java cleanup. `Expect:` every config reaches an explicit classified result and no Java survivor remains.
+11. **Separate test code without banning sibling tests.** Move cross-module/process tests and oracles to integration/verification support where APIs permit; keep private-unit sibling `*_tests.rs` under `src/` behind `#[cfg(test)]`. `Verify:` architecture check rejects shipped references to test-only modules and compares the Phase 0 metadata test universe. `Expect:` no production target reaches test support and no test disappears.
+12. **Split `scripts/`** into `scripts/{build,release,verify,tools}/` and fix active `rtk` references. Search real active locations: scripts, `ci/`, workflows, and crate `tests/**`; classify historical docs and fixture/data hits as exclusions instead of demanding a repository-wide empty result. `Verify:` every active script path referenced by workflows resolves. `Expect:` active execution references are zero and each residual hit has an explicit historical/data classification.
+13. **Split `.claude/memory/` (D9 decided 2026-09-13).** Relocate component-scoped rules without deletion and leave an index pointer. `Verify:` total rule-bullet identity across old/new files is preserved. `Expect:` the root file meets its budget while no learning is lost.
