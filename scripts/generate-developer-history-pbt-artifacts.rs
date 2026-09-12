@@ -4,7 +4,7 @@
 //! `#[test]` modules. This binary includes the same independent oracle and
 //! writes the same verification artifacts the Windows test would.
 
-#[path = "../crates/sakura-engine/src/developer_history_oracle.rs"]
+#[path = "../crates/sakura-oracles/src/developer_history_oracle.rs"]
 mod developer_history_oracle;
 
 use std::collections::HashMap;
@@ -185,7 +185,7 @@ fn main() {
     fs::create_dir_all(&dir).expect("coverage directory");
     let mut rows = String::from(
         "# Atomic-condition (C2) coverage — developer-history oracle\n\n\
-         Scope: `crates/sakura-engine/src/developer_history_oracle.rs` predicates in `atomic_conditions`.\n\
+         Scope: `crates/sakura-oracles/src/developer_history_oracle.rs` predicates in `atomic_conditions`.\n\
          This is atomic-condition polarity coverage of the independent oracle, not MC/DC of the whole workspace and not line coverage claimed as C2.\n\n\
          | condition | false | true |\n|---|---|---|\n",
     );

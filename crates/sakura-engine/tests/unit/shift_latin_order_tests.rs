@@ -10,7 +10,9 @@ use sakura_proto::{
 
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
-use crate::shift_latin_oracle::{apply, apply_all, atomic_conditions, DomainEvent, OracleState};
+use sakura_oracles::shift_latin_oracle::{
+    apply, apply_all, atomic_conditions, DomainEvent, OracleState,
+};
 
 fn char_key(character: char) -> KeyInput {
     KeyInput {

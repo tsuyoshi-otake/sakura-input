@@ -32,10 +32,6 @@ pub mod context_baseline;
 pub mod context_evaluation;
 pub mod context_intelligence;
 #[cfg(test)]
-mod developer_history_oracle;
-#[cfg(test)]
-mod developer_history_oracle_tests;
-#[cfg(test)]
 #[path = "../tests/unit/developer_history_order_tests.rs"]
 mod developer_history_order;
 pub mod dictionary;
@@ -53,21 +49,11 @@ mod shift_ascii_space;
 #[cfg(test)]
 mod shift_ascii_space_tests;
 #[cfg(test)]
-mod shift_latin_oracle;
-#[cfg(test)]
-mod shift_latin_oracle_tests;
-#[cfg(test)]
 #[path = "../tests/unit/shift_latin_order_tests.rs"]
 mod shift_latin_order;
-pub mod timing;
-// Always compiled so cargo-mutants can score the independent oracle.
-// Production dispatch never calls it; release dead-code paths stay unused.
 #[cfg(test)]
 #[path = "../tests/unit/space_key_dispatch_tests.rs"]
 mod space_key_dispatch;
-#[allow(dead_code)]
-mod space_key_dispatch_oracle;
-#[cfg(test)]
-mod space_key_dispatch_oracle_tests;
+pub mod timing;
 pub mod ui;
 pub mod user_dictionary;
