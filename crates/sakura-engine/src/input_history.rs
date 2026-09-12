@@ -22,11 +22,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use sakura_store::crypto::{DpapiSealer, Sealer};
 use sakura_values::{AiTextOperation, AiTextStatus, InputScope};
-use windows::Win32::Foundation::{LocalFree, HLOCAL};
-use windows::Win32::Security::Cryptography::{
-    CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
-};
 use windows::Win32::Storage::FileSystem::{
     FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT,
 };
@@ -1348,63 +1345,11 @@ fn header() -> [u8; HEADER_LEN] {
 }
 
 fn protect(bytes: &[u8]) -> io::Result<Vec<u8>> {
-    let input = CRYPT_INTEGER_BLOB {
-        cbData: u32::try_from(bytes.len())
-            .map_err(|_| invalid_data("input history payload too large"))?,
-        pbData: bytes.as_ptr() as *mut u8,
-    };
-    let mut output = CRYPT_INTEGER_BLOB {
-        cbData: 0,
-        pbData: std::ptr::null_mut(),
-    };
-    // SAFETY: `input` borrows `bytes` for the duration of the call and
-    // `output` is writable. DPAPI allocates `output.pbData`; it is copied
-    // before being released exactly once with LocalFree.
-    unsafe {
-        CryptProtectData(
-            &input,
-            windows::core::PCWSTR::null(),
-            None,
-            None,
-            None,
-            0,
-            &mut output,
-        )
-        .map_err(|error| io::Error::other(format!("DPAPI protect: {error}")))?;
-        let protected = if output.pbData.is_null() {
-            Err(io::Error::other("DPAPI returned an empty payload"))
-        } else {
-            Ok(std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec())
-        };
-        let _ = LocalFree(Some(HLOCAL(output.pbData.cast())));
-        protected
-    }
+    DpapiSealer.seal(bytes)
 }
 
 fn unprotect(bytes: &[u8]) -> io::Result<Vec<u8>> {
-    let input = CRYPT_INTEGER_BLOB {
-        cbData: u32::try_from(bytes.len())
-            .map_err(|_| invalid_data("protected payload too large"))?,
-        pbData: bytes.as_ptr() as *mut u8,
-    };
-    let mut output = CRYPT_INTEGER_BLOB {
-        cbData: 0,
-        pbData: std::ptr::null_mut(),
-    };
-    // SAFETY: `input` borrows the protected bytes for the call and `output`
-    // is writable. DPAPI owns the returned allocation until the matching
-    // LocalFree after the plaintext has been copied.
-    unsafe {
-        CryptUnprotectData(&input, None, None, None, None, 0, &mut output)
-            .map_err(|error| io::Error::other(format!("DPAPI unprotect: {error}")))?;
-        let plain = if output.pbData.is_null() {
-            Err(io::Error::other("DPAPI returned an empty payload"))
-        } else {
-            Ok(std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec())
-        };
-        let _ = LocalFree(Some(HLOCAL(output.pbData.cast())));
-        plain
-    }
+    DpapiSealer.open(bytes)
 }
 
 fn now_ms() -> u64 {
