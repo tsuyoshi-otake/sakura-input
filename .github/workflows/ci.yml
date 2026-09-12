@@ -20,6 +20,21 @@ env:
   CARGO_NET_LOCKED: "true"
 
 jobs:
+  dependency-rules:
+    name: dependency-rules
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test dependency boundaries
+        shell: pwsh
+        run: ./ci/check-dependency-rules.ps1 -SelfTest
+      # Rules become blocking individually when their migration completes.
+      - name: Audit current and planned dependency boundaries
+        shell: pwsh
+        run: ./ci/check-dependency-rules.ps1 -Advisory
+
   build-and-test:
     name: Build and test
     runs-on: windows-latest
