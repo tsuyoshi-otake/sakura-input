@@ -715,7 +715,7 @@ fn direct_ascii_passthrough_kernel_benchmark_x86_64() {
 #[ignore = "timing, not a threshold: run with --release --ignored --nocapture and read it"]
 fn end_to_end_normalizer_avx512_vs_avx2_benchmark() {
     use crate::width::{Normalizer, PunctuationStyle, Width, WidthPolicy};
-    use sakura_proto::{FixedStr, Mode};
+    use sakura_values::{FixedStr, Mode};
     use std::hint::black_box;
     use std::time::Instant;
 

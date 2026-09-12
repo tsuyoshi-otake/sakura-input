@@ -9,8 +9,8 @@ use core::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 #[cfg(not(any(feature = "research-top32", feature = "research-wide-candidates")))]
-use sakura_proto::MAX_CANDIDATES;
-use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
+use sakura_values::MAX_CANDIDATES;
+use sakura_values::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
 use crate::calendar::{date_offset_for_reading, date_surface_specs, CivilDate};
 use crate::dictionary::{Dictionary, Entry, EntryFlags, SingleKanjiVariant};

@@ -7,7 +7,7 @@
 //! Every generator is finite: a fixed scratch of variants, a character-edit
 //! radius of one, and no whole-dictionary fuzzy scan.
 
-use sakura_proto::{FixedStr, FixedVec, MAX_PREEDIT_BYTES};
+use sakura_values::{FixedStr, FixedVec, MAX_PREEDIT_BYTES};
 
 use crate::dictionary::EntryFlags;
 use crate::preferences::InputSupport;
@@ -1004,7 +1004,7 @@ fn romaji_to_katakana(romaji: &str) -> Option<FixedStr<MAX_PREEDIT_BYTES>> {
 mod tests {
     use super::*;
     use crate::width::{BracketStyle, Normalizer, PunctuationStyle, WidthPolicy};
-    use sakura_proto::Mode;
+    use sakura_values::Mode;
 
     #[test]
     fn duplicated_n_and_missing_n_are_repaired() {

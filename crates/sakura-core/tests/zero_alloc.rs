@@ -20,7 +20,7 @@ use std::cell::Cell;
 use sakura_core::keymap::{KeyMap, Preset, State};
 use sakura_core::romaji::{Input, Table};
 use sakura_core::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
-use sakura_proto::{FixedStr, KeyCode, KeyInput, Mode, Modifiers};
+use sakura_values::{FixedStr, KeyCode, KeyInput, Mode, Modifiers};
 
 thread_local! {
     /// `const` initialization matters: a lazily-initialized thread-local

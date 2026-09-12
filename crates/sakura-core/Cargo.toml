@@ -8,11 +8,11 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
-# Only `sakura-proto`, which is itself dependency-free: this crate must build
+# Only `sakura-values`, which is itself dependency-free: this crate must build
 # and be testable on any platform (DESIGN.md 1, "portable core"). A `windows`
 # dependency here is a design violation, not an oversight.
 [dependencies]
-sakura-proto.workspace = true
+sakura-values.workspace = true
 
 [features]
 # Retains otherwise bench-only SIMD kernels only in the isolated assembly
