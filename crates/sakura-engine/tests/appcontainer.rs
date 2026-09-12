@@ -88,7 +88,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::io::IntoRawHandle;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf, Prefix};
 use std::process::Command;
 use std::time::Duration;
 
@@ -104,14 +104,15 @@ use windows::Win32::Security::Isolation::{
 use windows::Win32::Security::{
     FreeSid, GetTokenInformation, TokenIsAppContainer, PSID, SECURITY_CAPABILITIES, TOKEN_QUERY,
 };
+use windows::Win32::Storage::FileSystem::QueryDosDeviceW;
 use windows::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess, GetExitCodeProcess,
     InitializeProcThreadAttributeList, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW,
     TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject, CREATE_UNICODE_ENVIRONMENT,
     EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
-    PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, STARTF_USESTDHANDLES, STARTUPINFOEXW,
-    STARTUPINFOW,
+    PROCESS_NAME_FORMAT, PROCESS_NAME_NATIVE, PROCESS_NAME_WIN32,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
 };
 
 use common::{session_for, test_char_key, visible, Engine, PATIENT};
@@ -146,6 +147,11 @@ const PARENT_ENGINE_PID_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PID";
 /// sandboxed probe uses this policy before Hello, exercising the same kernel
 /// path/integrity binding as the production TSF client.
 const PARENT_ENGINE_PATH_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PATH";
+
+/// Native-device identity captured by the trusted parent from the engine PID
+/// it owns. This is a separate contract from the DOS path retained for
+/// content-free diagnostics.
+const PARENT_ENGINE_NATIVE_PATH_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_NATIVE_PATH";
 
 /// Whether the child should independently derive the production Data name.
 /// Private-pipe verification uses the explicit name while retaining the same
@@ -322,7 +328,9 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     let expected_server_pid = child_contract_engine_pid();
     let expected_server_path = env::var(PARENT_ENGINE_PATH_ENV)
         .expect("SandboxedChild::launch always sets the engine image path");
-    let policy = ServerTrustPolicy::Exact(expected_server_path.clone().into());
+    let expected_native_path = env::var_os(PARENT_ENGINE_NATIVE_PATH_ENV)
+        .expect("SandboxedChild::launch always sets the native engine identity");
+    let policy = ServerTrustPolicy::ExactNative(expected_native_path.into());
     println!(
         "sandbox classification of engine pid {expected_server_pid}: {:?}",
         sakura_ipc::classify_client_process(expected_server_pid)
@@ -386,6 +394,27 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     assert_eq!(
         actual_server_pid, expected_server_pid,
         "refusing sandboxed protocol traffic: the exact pipe connection is served by pid {actual_server_pid}, not the parent-owned engine pid {expected_server_pid}; no protocol request was sent"
+    );
+
+    // Deterministic test-only coverage for the exact native identity contract.
+    // Verified admission and exact pipe/PID identity above remain mandatory;
+    // this read-only query neither authorizes nor retries a connection.
+    let native_image = query_image_with_format(expected_server_pid, PROCESS_NAME_NATIVE)
+        .unwrap_or_else(|error| {
+            panic!(
+                "native image policy probe: {}",
+                image_policy_evidence(Path::new(&expected_server_path), Err(error), &policy)
+            )
+        });
+    let native_shape = native_image
+        .as_os_str()
+        .encode_wide()
+        .collect::<Vec<_>>()
+        .starts_with(&r"\Device\".encode_utf16().collect::<Vec<_>>());
+    assert!(
+        native_shape && policy.matches_image_path(&native_image),
+        "native image policy probe: {}",
+        image_policy_evidence(Path::new(&expected_server_path), Ok(native_image), &policy)
     );
 
     match client.call(
@@ -530,6 +559,11 @@ impl SandboxedChild {
         parent_pipe_name: &str,
         production_pipe: bool,
     ) -> SandboxedChild {
+        // The parent owns this engine process. Capture its native identity
+        // before sandbox launch so the peer cannot supply its own expectation.
+        let owned_engine_native_path =
+            query_image_with_format(owned_engine_pid, PROCESS_NAME_NATIVE)
+                .expect("query native identity of the parent-owned engine");
         let profile_wide = to_wide_nul(APPCONTAINER_PROFILE_NAME);
         let display_wide = to_wide_nul("Sakura Input test AppContainer");
         let desc_wide = to_wide_nul(
@@ -602,15 +636,22 @@ impl SandboxedChild {
         };
 
         let mut environment_block = build_environment_block(&[
-            (PARENT_PIPE_NAME_ENV, parent_pipe_name.to_owned()),
-            (PARENT_ENGINE_PID_ENV, owned_engine_pid.to_string()),
+            (PARENT_PIPE_NAME_ENV, OsString::from(parent_pipe_name)),
+            (
+                PARENT_ENGINE_PID_ENV,
+                OsString::from(owned_engine_pid.to_string()),
+            ),
             (
                 PARENT_ENGINE_PATH_ENV,
-                env!("CARGO_BIN_EXE_sakura_engine").to_owned(),
+                OsString::from(env!("CARGO_BIN_EXE_sakura_engine")),
+            ),
+            (
+                PARENT_ENGINE_NATIVE_PATH_ENV,
+                owned_engine_native_path.into_os_string(),
             ),
             (
                 PARENT_PRODUCTION_PIPE_ENV,
-                if production_pipe { "1" } else { "0" }.to_owned(),
+                OsString::from(if production_pipe { "1" } else { "0" }),
             ),
         ]);
 
@@ -941,6 +982,13 @@ fn grant_appcontainer_access(path: &Path, inherit_to_children: bool) {
 /// Test-only follow-up query. No raw paths or user input are logged, and this
 /// result never participates in acceptance or authorizes a second connection.
 fn query_image_for_diagnostics(process_id: u32) -> Result<PathBuf, String> {
+    query_image_with_format(process_id, PROCESS_NAME_WIN32)
+}
+
+fn query_image_with_format(
+    process_id: u32,
+    format: PROCESS_NAME_FORMAT,
+) -> Result<PathBuf, String> {
     // SAFETY: read-only access to the PID reported by the rejected pipe handle.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) }
         .map_err(|error| format!("open_failed({:?})", error.code()))?;
@@ -948,12 +996,7 @@ fn query_image_for_diagnostics(process_id: u32) -> Result<PathBuf, String> {
     let mut length = buffer.len() as u32;
     // SAFETY: live process handle and writable bounded UTF-16 buffer.
     let result = unsafe {
-        QueryFullProcessImageNameW(
-            handle,
-            PROCESS_NAME_WIN32,
-            PWSTR(buffer.as_mut_ptr()),
-            &mut length,
-        )
+        QueryFullProcessImageNameW(handle, format, PWSTR(buffer.as_mut_ptr()), &mut length)
     }
     .map_err(|error| format!("image_failed({:?})", error.code()));
     // SAFETY: this helper owns exactly this handle, including on query failure.
@@ -1012,8 +1055,106 @@ fn image_policy_evidence(
         (Ok(left), Ok(right)) => Some(equal(left, right)),
         _ => None,
     };
-    format!("image_query=ok; expected_shape=({}); observed_shape=({}); lexical_equal={}; expected_canonical={}; observed_canonical={}; canonical_equal={canonical_equal:?}; policy_recheck={}",
-        shape(expected), shape(&observed), equal(expected, &observed), status(&expected_canonical), status(&observed_canonical), policy.matches_image_path(&observed))
+    format!("image_query=ok; expected_shape=({}); observed_shape=({}); lexical_equal={}; expected_canonical={}; observed_canonical={}; canonical_equal={canonical_equal:?}; {}; policy_recheck={}",
+        shape(expected), shape(&observed), equal(expected, &observed), status(&expected_canonical), status(&observed_canonical), drive_mapping_evidence(expected, &observed), policy.matches_image_path(&observed))
+}
+
+/// Test-only metadata for the expected drive's DOS-device mapping. No path,
+/// drive letter, mapping text, or user-controlled content is emitted.
+fn drive_mapping_evidence(expected: &Path, observed: &Path) -> String {
+    let Some(drive) = expected_drive_letter(expected) else {
+        return "drive_mapping_query=not_applicable; drive_mapping_length=None; drive_mapping_double_nul=None; drive_mapping_native_device=None; drive_mapping_nt_dos=None; mapping_prefix_boundary=None; mapped_lexical_equal=None".to_owned();
+    };
+    let drive_name = [u16::from(drive), u16::from(b':'), 0];
+    let mut buffer = vec![0u16; 32_768];
+    // SAFETY: `drive_name` is NUL-terminated and the bounded buffer is
+    // writable for the size passed to QueryDosDeviceW.
+    let length =
+        unsafe { QueryDosDeviceW(PCWSTR(drive_name.as_ptr()), Some(buffer.as_mut_slice())) };
+    if length == 0 {
+        return format!(
+            "drive_mapping_query=error(code={:?}); drive_mapping_length=0; drive_mapping_double_nul=None; drive_mapping_native_device=None; drive_mapping_nt_dos=None; mapping_prefix_boundary=None; mapped_lexical_equal=None",
+            Error::from_thread().code()
+        );
+    }
+    if length as usize > buffer.len() {
+        return format!(
+            "drive_mapping_query=invalid_length; drive_mapping_length={length}; drive_mapping_double_nul=None; drive_mapping_native_device=None; drive_mapping_nt_dos=None; mapping_prefix_boundary=None; mapped_lexical_equal=None"
+        );
+    }
+
+    let returned = &buffer[..length as usize];
+    let double_nul = returned.ends_with(&[0, 0]);
+    let current = double_nul
+        .then(|| returned.iter().position(|unit| *unit == 0))
+        .flatten()
+        .filter(|end| *end != 0)
+        .and_then(|end| String::from_utf16(&returned[..end]).ok());
+    let mapping_native_device = current
+        .as_deref()
+        .map(|mapping| ascii_starts_with(mapping, r"\Device\"));
+    let mapping_nt_dos = current
+        .as_deref()
+        .map(|mapping| ascii_starts_with(mapping, r"\??\"));
+    let observed_text = observed.to_str();
+    let prefix_boundary = current
+        .as_deref()
+        .and_then(|mapping| observed_text.map(|observed| ascii_prefix_boundary(observed, mapping)));
+    let mapped_equal = match (current.as_deref(), observed_text, expected.to_str()) {
+        (Some(mapping), Some(observed), Some(expected))
+            if safe_native_text(mapping)
+                && safe_native_text(observed)
+                && ascii_prefix_boundary(observed, mapping) =>
+        {
+            let mapped = format!(
+                "{}:{}",
+                char::from(drive.to_ascii_uppercase()),
+                &observed[mapping.len()..]
+            );
+            Some(mapped.eq_ignore_ascii_case(expected))
+        }
+        _ => None,
+    };
+
+    format!(
+        "drive_mapping_query=ok; drive_mapping_length={length}; drive_mapping_double_nul={double_nul}; drive_mapping_native_device={mapping_native_device:?}; drive_mapping_nt_dos={mapping_nt_dos:?}; mapping_prefix_boundary={prefix_boundary:?}; mapped_lexical_equal={mapped_equal:?}"
+    )
+}
+
+fn expected_drive_letter(path: &Path) -> Option<u8> {
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => Some(drive),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn ascii_prefix_boundary(value: &str, prefix: &str) -> bool {
+    prefix.is_ascii()
+        && value.len() > prefix.len()
+        && value.is_char_boundary(prefix.len())
+        && value[..prefix.len()].eq_ignore_ascii_case(prefix)
+        && value.as_bytes()[prefix.len()] == b'\\'
+}
+
+fn ascii_starts_with(value: &str, prefix: &str) -> bool {
+    prefix.is_ascii()
+        && value.len() >= prefix.len()
+        && value.is_char_boundary(prefix.len())
+        && value[..prefix.len()].eq_ignore_ascii_case(prefix)
+}
+
+fn safe_native_text(path: &str) -> bool {
+    path.is_ascii()
+        && ascii_starts_with(path, r"\Device\")
+        && !path.contains('\0')
+        && !path.contains('/')
+        && path
+            .split('\\')
+            .skip(1)
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 #[test]
@@ -1034,6 +1175,13 @@ fn image_policy_diagnostics_explain_shape_without_emitting_paths() {
     assert!(evidence.contains("verbatim=true"));
     assert!(evidence.contains("lexical_equal=false"));
     assert!(evidence.contains("expected_canonical="));
+    assert!(evidence.contains("drive_mapping_query="));
+    assert!(evidence.contains("drive_mapping_length="));
+    assert!(evidence.contains("drive_mapping_double_nul="));
+    assert!(evidence.contains("drive_mapping_native_device="));
+    assert!(evidence.contains("drive_mapping_nt_dos="));
+    assert!(evidence.contains("mapping_prefix_boundary="));
+    assert!(evidence.contains("mapped_lexical_equal="));
     let failed =
         image_policy_evidence(&expected, Err("open_failed(test_code)".to_owned()), &policy);
     assert!(failed.contains("image_query=open_failed(test_code)"));
@@ -1070,7 +1218,7 @@ fn image_policy_diagnostics_explain_shape_without_emitting_paths() {
 /// environment state is exactly the kind of thing that is safe today, in a
 /// single-threaded test, and a data race the day this stops being the only
 /// thing touching it.
-fn build_environment_block(extra: &[(&str, String)]) -> Vec<u16> {
+fn build_environment_block(extra: &[(&str, OsString)]) -> Vec<u16> {
     let mut block = Vec::new();
     for (key, value) in env::vars_os() {
         let overridden = key == CHILD_MARKER_ENV
@@ -1084,7 +1232,7 @@ fn build_environment_block(extra: &[(&str, String)]) -> Vec<u16> {
     }
     push_env_entry(&mut block, OsStr::new(CHILD_MARKER_ENV), OsStr::new("1"));
     for (key, value) in extra {
-        push_env_entry(&mut block, OsStr::new(key), OsStr::new(value.as_str()));
+        push_env_entry(&mut block, OsStr::new(key), value);
     }
     block.push(0); // the block's own terminating empty string
     block

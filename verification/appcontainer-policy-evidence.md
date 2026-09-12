@@ -1,5 +1,25 @@
 # AppContainer image-policy evidence (#104, O1)
 
+Current proposal (2026-09-13): ownership-safe sandbox tests use an explicit
+`ExactNative` policy whose expected UTF-16 identity is captured by the trusted
+parent from its owned engine PID before sandbox launch. Admission performs one
+`PROCESS_NAME_NATIVE` image query and requires strict native-device shape and
+complete code-unit equality. Existing `Exact` and production `InstalledRoot`
+remain unchanged from main. The earlier drive-mapping proposal below was
+rejected by a deterministic real-sandbox counterexample and has been removed.
+Historical entries below describe their respective revisions, not the current
+implementation.
+
+Parent verification of the replacement: IPC security tests, diagnostic unit
+test, and the ignored private-pipe real AppContainer test passed. The native
+identity assertion and exact owned pipe PID check both precede Hello. Process
+cleanup passed. Hosted sandbox verification remains required; these results
+do not establish the cause of every historical #104 failure.
+
+Locked IPC/engine all-target clippy with warnings denied and the wrapped locked
+workspace tests also passed. The parent ran all verification directly; the Sol
+Medium subagent supplied an implementation draft only.
+
 Baseline main `f48d8f55fcab3f9abb210aa2a442cd8b217df1f1`, v1.0.35. Patch base #128 (`eae7127`). Classification: **IMPROVEMENT** for diagnostics; intermittent CI root cause remains **HYPOTHESIS**.
 
 PR #126 run 33968517317 attempt 1 failed in Sandbox access (AppContainer). The reason was ImagePathRejected, and the rejected PID printed in the log equaled the test-owned engine PID. One same-commit rerun passed Build and test in 8m27s. The original failure log is retained at the evidence sibling as `stop-ci-appcontainer-failure.log`. This is an observed failed policy decision, not proof of a different executable, nor proof that the shutdown patch caused or fixed it.
@@ -17,3 +37,17 @@ Final `cargo test --locked --workspace` exited 0: 1,800 passed / 84 ignored / 0 
 Independent adversarial static review passed the unchanged trust/Hello boundary, read-only handle ownership and diagnostic content checks. The reviewer ran no tests or edits; requested read-only behavior was not enforced by the OS.
 
 Windows x64, Rust/Cargo 1.96.0, debug, locked dependencies. No local AppContainer integration/production well-known-pipe test was run. Full #104/O1 and causal attribution remain unfinished; no trust check was weakened to turn CI green.
+
+## 2026-09-13 bounded native namespace support
+
+CI runs 34704517571 and 34705378113 again rejected the owned engine before Hello. The later diagnostic reported a native-device path, expected DOS drive path, expected canonicalization OS 5 and observed canonicalization OS 3. The original admission value remains unobserved; these failures support a namespace hypothesis without proving historical causality.
+
+The policy now translates a captured native-device path using only the anchor drive's current QueryDosDeviceW mapping. A single bounded lookup uses the first MULTI_SZ entry, never historical mappings. Exact device-prefix and separator matching, malformed-path rejection, and the existing canonical/reparse/layout/equality checks remain required. There is no process requery, retry, reconnect, token exception or new raw-path log. Unresolvable mappings reject. The pre-existing Exact lexical fallback remains test/diagnostic scope; InstalledRoot still requires filesystem validation.
+
+Parent verification: five new unit tests cover mapping, prefix collision, malformed/NUL input, current-versus-historical MULTI_SZ termination, and actual Windows drive mapping through both policies with negative sibling/exact-path controls. IPC security tests, locked IPC all-target clippy with warnings denied, and the wrapped locked workspace tests passed. Repository process cleanup and diff checks passed. The real sandbox integration remains hosted-CI verification; local workspace success does not exercise ignored sandbox tests or establish that #104 is resolved.
+
+### Follow-up: mapping proposal remains insufficient
+
+Hosted PR #167 job 103586927461 failed with the same owned-PID rejection and later native-device shape. The ignored private-pipe AppContainer test passed locally, with scoped process cleanup, demonstrating an environment difference but not its cause. Added bounded test-only drive-mapping diagnostics to discriminate API failure, termination, mapping namespace and prefix/equality mismatch without printing paths. The diagnostic unit test and private sandbox test passed after this addition. No new admission fallback or retry was added; #104 remains open.
+
+The following hosted job 103588260690 passed the original sandbox test. A deterministic native-image assertion was therefore added inside the real sandbox, after verified pipe admission and owned-PID equality but before Hello. This produced a local counterexample: `drive_mapping_query=error(code=HRESULT(0x80070005))`, `policy_recheck=false`. The proposed normalizer cannot query the DOS-device mapping under this AppContainer token. Diagnostic unit tests passed and owned test processes exited. The mapping proposal must be replaced; intermittent CI success is not sufficient evidence to merge it.
