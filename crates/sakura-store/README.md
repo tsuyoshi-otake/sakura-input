@@ -18,7 +18,7 @@ Defines the durable learning and developer-history formats once for engine, sett
 
 ## Allowed dependencies
 
-`sakura-values` is the only unconditional dependency. `windows` is allowed only behind the `dpapi` feature and only in `crypto`.
+`sakura-values` is the only unconditional dependency. Target-specific `windows` bindings are limited to `Win32_Foundation` and `Win32_Storage_FileSystem` for `input_history::persistence`; Phase 2.2c may add the reviewed `dpapi` feature only in `crypto`.
 
 ## Allowed consumers
 
@@ -26,7 +26,7 @@ Defines the durable learning and developer-history formats once for engine, sett
 
 ## Public API budget
 
-At most 12 public types and 15 public functions. Public modules and names remain domain-specific; no generic dumping-ground API.
+At most 12 public types and 23 public functions. The Phase 2.2b allowance is limited to six retention/size/path/replacement functions; two additional functions are reserved for the Phase 2.2c `Sealer::seal`/`open` contract. Public modules and names remain domain-specific; no generic dumping-ground API.
 
 ## Invariants
 
