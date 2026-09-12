@@ -173,7 +173,7 @@
       "tests": [],
       "contracts": [],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/overflow-packaging.md", "docs/rules/session-and-later-findings.md"],
-      "config": [".github/workflows/ci.yml", "ci/*.ps1"],
+      "config": [".github/workflows/ci.yml", ".github/workflows/desktop-tests.yml", ".github/desktop-test-inventory.json", "ci/*.ps1"],
       "verification": [],
       "semantic": {
         "method": "agent-verified (docs/architecture/analysis/docs-verification-ci.md §8)",
