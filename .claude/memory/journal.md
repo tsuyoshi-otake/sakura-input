@@ -1820,3 +1820,14 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify: IRV SelfTest と各既 commit の archive に対する比較を親が直接実行。
   Expect: 既知の文書超過は非増加なら note、CI verifier 追加は WARN、他の基準値は維持。
   結果は期待どおり。CI 上のダミー PR による WARN／FAIL はこの後の検証であり未完了。
+
+## 2026-09-13 Hosted dependency scanner portability (#154)
+
+- Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
+- Parent Verify: both scanner SelfTests, complete advisory finding equivalence after path/whitespace normalization, and forced-no-rg R1 enforcement. Expect: matching findings and nonzero enforcement of the existing violation. Passed. This identical correction is applied directly to PR #157, superseding the late-stack delivery in #166 so its prerequisite job can pass before merging.
+
+## 2026-09-13 Real PR IRV controls (#154)
+
+- Verify: PR #163 irv-regression job 103586235440 and PR #164 job 103586240195 logs. Expect: WARN succeeds, critical benchmark threshold breach fails. Both matched: WARN KEYMODE 24,418 versus 21,664 (+12.7%); FAIL TSF reentrancy 17,259 versus 13,543 (+27.4%) and dual candidate 17,024 versus 13,015 (+30.8%).
+- These are IRV job results, not whole-PR successes. Both synthetic PRs were closed without merge, remote probe branches deleted, and all four owned CI/installer runs confirmed completed/cancelled after the relevant job evidence was captured.
+- Original baseline remains unchanged. The dependency scanner prerequisite was propagated by merge, retaining both journal histories.
