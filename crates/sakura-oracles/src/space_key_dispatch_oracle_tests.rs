@@ -302,7 +302,7 @@ fn oracle_source_has_no_production_imports() {
     std::fs::write(
         dir.join("oracle-provenance.md"),
         "# Oracle provenance\n\n\
-source: `crates/sakura-engine/src/space_key_dispatch_oracle.rs`\n\n\
+source: `crates/sakura-oracles/src/space_key_dispatch_oracle.rs`\n\n\
 static production-import scan: pass\n\n\
 forbidden tokens checked: crate::dispatch, crate::session, crate::server, \
 sakura_core::keymap, KeyMap, idle_space_commit, Dispatcher, SessionTable\n\n\
@@ -533,7 +533,7 @@ fn write_c2_report(seen: &[[bool; 2]; ATOM_COUNT]) {
         .collect();
     let mut report = String::from(
         "# Atomic-condition (C2) coverage — Space-key-dispatch oracle\n\n\
-Scope: `crates/sakura-engine/src/space_key_dispatch_oracle.rs` predicates in `atomic_conditions`.\n\
+Scope: `crates/sakura-oracles/src/space_key_dispatch_oracle.rs` predicates in `atomic_conditions`.\n\
 This is atomic-condition polarity coverage of the independent oracle, not MC/DC of `dispatch.rs`.\n\n\
 | condition | false | true |\n|---|---|---|\n",
     );

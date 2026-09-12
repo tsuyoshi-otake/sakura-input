@@ -1,6 +1,7 @@
 # Scoped mutants for the space-key-dispatch oracle campaign.
-# This campaign mutates only the independent oracle when passed the explicit
-# --file scope. Its denominator is not a production dispatch mutation score.
+# Run from the repository root with --manifest-path crates/sakura-oracles/Cargo.toml
+# and --file crates/sakura-oracles/src/space_key_dispatch_oracle.rs.
+# Its denominator is not a production dispatch mutation score.
 
 examine_re = [
   "space_effect",
