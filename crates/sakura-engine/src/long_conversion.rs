@@ -5,6 +5,8 @@
 //! waits for it: only an exact owner/session/generation/reading/candidate-set
 //! result can be consumed, otherwise the existing local ranking remains final.
 
+use sakura_rerank_proto::{Candidate as WireCandidate, Frame, Limits};
+use std::borrow::Cow;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -23,12 +25,7 @@ use crate::dictionary::ConversionService;
 
 const MINIMUM_LONG_READING_CHARS: usize = 10;
 const MINIMUM_SEGMENTED_READING_CHARS: usize = 3;
-const MAXIMUM_MODEL_CANDIDATES: usize = 6;
 const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_millis(500);
-const MAXIMUM_FRAME_BYTES: usize = 32 * 1024;
-const REQUEST_MAGIC: u32 = 0x524E_4B53; // SKNR
-const RESPONSE_MAGIC: u32 = 0x534E_4B53; // SKNS
-const PROTOCOL_VERSION: u16 = 1;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,7 +157,7 @@ impl LongConversionService {
         if result.state != RerankState::Ready || result.key != expected_key {
             return None;
         }
-        let model_count = candidates.len().min(MAXIMUM_MODEL_CANDIDATES);
+        let model_count = candidates.len().min(Limits::MAX_CANDIDATES);
         if model_count < 2 || result.scores.len() != model_count {
             return None;
         }
@@ -398,7 +395,7 @@ fn build_candidates(
     work: &WorkRequest,
 ) -> Option<Vec<ModelCandidate>> {
     let mut options = work.options;
-    options.max_candidates = MAXIMUM_MODEL_CANDIDATES;
+    options.max_candidates = Limits::MAX_CANDIDATES;
     conversion
         .with_candidates(&work.reading, options, |candidates| {
             if candidates.len() < 2
@@ -414,7 +411,7 @@ fn build_candidates(
             Some(
                 candidates
                     .iter()
-                    .take(MAXIMUM_MODEL_CANDIDATES)
+                    .take(Limits::MAX_CANDIDATES)
                     .map(|candidate| ModelCandidate {
                         fingerprint: candidate_fingerprint(candidate),
                         local_cost: candidate.cost,
@@ -549,96 +546,52 @@ struct WorkerResponse {
 }
 
 fn encode_request(request_id: u64, candidates: &[ModelCandidate]) -> Result<Vec<u8>, String> {
-    if candidates.is_empty() || candidates.len() > MAXIMUM_MODEL_CANDIDATES {
+    if candidates.is_empty() || candidates.len() > Limits::MAX_CANDIDATES {
         return Err("neural candidate count is out of bounds".to_owned());
     }
-    let mut payload = Vec::with_capacity(128);
-    push_u32(&mut payload, REQUEST_MAGIC);
-    push_u16(&mut payload, PROTOCOL_VERSION);
-    push_u16(&mut payload, 0);
-    push_u64(&mut payload, request_id);
-    push_u32(&mut payload, 0); // Reserved context bytes.
-    push_u32(&mut payload, candidates.len() as u32);
-    for candidate in candidates {
-        if candidate.text.is_empty() || candidate.text.len() > 3 * 1024 {
-            return Err("neural candidate text is out of bounds".to_owned());
-        }
-        push_u64(&mut payload, candidate.fingerprint);
-        push_i32(
-            &mut payload,
-            candidate.local_cost.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
-        );
-        push_u32(&mut payload, candidate.text.len() as u32);
-        payload.extend_from_slice(candidate.text.as_bytes());
-    }
-    if payload.len() > MAXIMUM_FRAME_BYTES {
-        return Err("neural request frame is too large".to_owned());
-    }
-    let mut frame = Vec::with_capacity(payload.len() + 4);
-    push_u32(&mut frame, payload.len() as u32);
-    frame.extend_from_slice(&payload);
-    Ok(frame)
+    let candidates = candidates
+        .iter()
+        .map(|candidate| WireCandidate {
+            fingerprint: candidate.fingerprint,
+            local_cost: candidate.local_cost.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+            text: Cow::Borrowed(candidate.text.as_str()),
+        })
+        .collect();
+    let frame = Frame::Request {
+        id: request_id,
+        context: Cow::Borrowed(&[]),
+        candidates,
+    };
+    let mut bytes = Vec::new();
+    sakura_rerank_proto::write_frame(&mut bytes, &frame)
+        .map_err(|error| format!("neural request encode failed: {error}"))?;
+    Ok(bytes)
 }
-
 fn read_worker_response(input: &mut impl Read) -> io::Result<WorkerResponse> {
-    let mut length = [0u8; 4];
-    input.read_exact(&mut length)?;
-    let length = u32::from_le_bytes(length) as usize;
-    if length == 0 || length > MAXIMUM_FRAME_BYTES {
-        return Err(io::Error::new(
+    match sakura_rerank_proto::read_frame(input)? {
+        Some(Frame::Response {
+            id, status, scores, ..
+        }) => Ok(WorkerResponse {
+            request_id: id,
+            status,
+            scores: scores
+                .into_iter()
+                .map(|score| CandidateScore {
+                    fingerprint: score.fingerprint,
+                    log_probability: score.value,
+                })
+                .collect(),
+        }),
+        Some(Frame::Request { .. }) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "neural response length is invalid",
-        ));
+            "expected rerank response",
+        )),
+        None => Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "missing rerank response",
+        )),
     }
-    let mut payload = vec![0u8; length];
-    input.read_exact(&mut payload)?;
-    let mut cursor = 0usize;
-    if take_u32(&payload, &mut cursor)? != RESPONSE_MAGIC
-        || take_u16(&payload, &mut cursor)? != PROTOCOL_VERSION
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "neural response header is invalid",
-        ));
-    }
-    let status = take_u16(&payload, &mut cursor)?;
-    let request_id = take_u64(&payload, &mut cursor)?;
-    let _cpu_tier = take_u16(&payload, &mut cursor)?;
-    if take_u16(&payload, &mut cursor)? != 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "neural response reserved field is invalid",
-        ));
-    }
-    let count = take_u32(&payload, &mut cursor)? as usize;
-    if count > MAXIMUM_MODEL_CANDIDATES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "neural response count is invalid",
-        ));
-    }
-    let mut scores = Vec::with_capacity(count);
-    for _ in 0..count {
-        let fingerprint = take_u64(&payload, &mut cursor)?;
-        let log_probability = f32::from_bits(take_u32(&payload, &mut cursor)?);
-        scores.push(CandidateScore {
-            fingerprint,
-            log_probability,
-        });
-    }
-    if cursor != payload.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "neural response has trailing bytes",
-        ));
-    }
-    Ok(WorkerResponse {
-        request_id,
-        status,
-        scores,
-    })
 }
-
 fn candidate_fingerprint(candidate: &ConversionCandidate) -> Fingerprint {
     let mut hash = fingerprint_bytes(candidate.text().as_bytes());
     hash = hash_bytes(hash, &candidate.cost.to_le_bytes());
@@ -678,48 +631,6 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-fn push_u16(output: &mut Vec<u8>, value: u16) {
-    output.extend_from_slice(&value.to_le_bytes());
-}
-
-fn push_u32(output: &mut Vec<u8>, value: u32) {
-    output.extend_from_slice(&value.to_le_bytes());
-}
-
-fn push_i32(output: &mut Vec<u8>, value: i32) {
-    output.extend_from_slice(&value.to_le_bytes());
-}
-
-fn push_u64(output: &mut Vec<u8>, value: u64) {
-    output.extend_from_slice(&value.to_le_bytes());
-}
-
-fn take_u16(input: &[u8], cursor: &mut usize) -> io::Result<u16> {
-    let bytes = take::<2>(input, cursor)?;
-    Ok(u16::from_le_bytes(bytes))
-}
-
-fn take_u32(input: &[u8], cursor: &mut usize) -> io::Result<u32> {
-    let bytes = take::<4>(input, cursor)?;
-    Ok(u32::from_le_bytes(bytes))
-}
-
-fn take_u64(input: &[u8], cursor: &mut usize) -> io::Result<u64> {
-    let bytes = take::<8>(input, cursor)?;
-    Ok(u64::from_le_bytes(bytes))
-}
-
-fn take<const N: usize>(input: &[u8], cursor: &mut usize) -> io::Result<[u8; N]> {
-    let end = cursor
-        .checked_add(N)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "neural response overflow"))?;
-    let bytes = input.get(*cursor..end).ok_or_else(|| {
-        io::Error::new(io::ErrorKind::UnexpectedEof, "neural response is truncated")
-    })?;
-    *cursor = end;
-    Ok(bytes.try_into().expect("slice length is fixed"))
 }
 
 #[cfg(test)]
@@ -901,7 +812,7 @@ mod tests {
 
     #[test]
     fn response_parser_rejects_oversized_frames() {
-        let length = ((MAXIMUM_FRAME_BYTES + 1) as u32).to_le_bytes();
+        let length = ((Limits::MAX_FRAME + 1) as u32).to_le_bytes();
         let mut bytes = length.as_slice();
         assert_eq!(
             read_worker_response(&mut bytes).unwrap_err().kind(),
