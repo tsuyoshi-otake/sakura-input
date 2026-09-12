@@ -1,8 +1,8 @@
 //! Sakura Input IPC protocol: hand-rolled, fixed-layout, versioned.
 //!
 //! This crate is the **stable contract** between the TSF DLL, the engine,
-//! and the renderer (DESIGN.md §5.5, §7). It has zero external
-//! dependencies (std only), contains no `unsafe`, and every decode path
+//! and the renderer (DESIGN.md §5.5, §7). It depends only on the workspace
+//! `sakura-values` crate and std, has no third-party dependencies or `unsafe`, and every decode path
 //! returns `Result` instead of panicking — the pipe is a hostile boundary
 //! and every byte on it is untrusted input.
 //!
@@ -37,26 +37,37 @@
 //! - [`output`] — [`OutputBuf`], the zero-allocation builder used on the
 //!   engine's hot path (DESIGN.md §5.7).
 
-pub mod fixed;
+pub mod fixed {
+    pub use sakura_values::{FixedStr, FixedVec, Overflow};
+}
 pub mod message;
 pub mod output;
 pub mod types;
 pub mod wire;
+mod wire_types;
 
-pub use fixed::{FixedStr, FixedVec, Overflow};
 pub use message::{
     decode_request, decode_response, encode_request, encode_response, payload_len, peek_header,
-    AiTextOperation, AiTextStatus, Header, Request, Response, UiState, UndoCommitOutcome,
+    Header, Request, Response, UiState, UndoCommitOutcome,
 };
 pub use output::{
     CandidateDetailInput, CandidateDetailRef, CandidateDetailTerms, OutputBuf, SegSpan,
 };
+pub use sakura_values::{
+    AiTextOperation, AiTextStatus, AppearanceTheme, FixedStr, FixedVec, InputScope, KeyCode,
+    KeyInput, Mode, Modifiers, Overflow, PadShortcut, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES,
+    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
+    MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES,
+    MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES, MAX_CANDIDATE_TEXT_BYTES, MAX_COMMIT_BYTES,
+    MAX_PREEDIT_BYTES, MAX_SEGMENTS,
+};
 pub use types::{
-    AppearanceTheme, Candidate, CandidateDetail, CandidateKind, CandidateList, EngineTimingEntry,
-    EngineTimingSite, ErrorCode, FaultInjectionEntry, FaultPoint, InputScope, KeyCode, KeyInput,
-    Mode, Modifiers, Output, PadShortcut, Preedit, ScreenRect, Segment, UnderlineKind,
+    Candidate, CandidateDetail, CandidateKind, CandidateList, EngineTimingEntry, EngineTimingSite,
+    ErrorCode, FaultInjectionEntry, FaultPoint, Output, Preedit, ScreenRect, Segment,
+    UnderlineKind,
 };
 pub use wire::Error;
+pub use wire_types::Wire;
 
 /// The protocol version this crate implements. Carried in every payload;
 /// a decoder rejects any other value with `Error::UnsupportedVersion`.
@@ -76,54 +87,6 @@ pub const MAX_FRAME: usize = FRAME_HEADER_LEN + MAX_PAYLOAD;
 /// The largest UTF-8 byte length allowed for any individual `&str` field
 /// on the wire (e.g. a process name, a segment's text).
 pub const MAX_STRING_BYTES: usize = 4096;
-
-/// The capacity, in UTF-8 bytes, of [`OutputBuf`]'s preedit text buffer.
-pub const MAX_PREEDIT_BYTES: usize = 1536;
-
-/// The capacity, in UTF-8 bytes, of [`OutputBuf`]'s commit text buffer.
-pub const MAX_COMMIT_BYTES: usize = 1536;
-
-/// The maximum number of segments a preedit composition or an
-/// [`OutputBuf`] may hold.
-pub const MAX_SEGMENTS: usize = 64;
-
-/// Candidates shown on one numbered page.
-pub const CANDIDATE_PAGE_SIZE: usize = 9;
-
-/// Maximum candidates carried in one output frame.
-///
-/// Two bounded pages were enough while the converter could only offer
-/// two pages' worth. They are not enough for a one-mora reading: the
-/// pinned single-kanji table alone names 315 characters under こう, and a
-/// commercial IME lists 210 under ひ (Issue #95). The frame therefore
-/// carries a paging-sized list rather than a two-page one.
-///
-/// This is the ceiling, not the working limit. What a given reading may
-/// actually spend is `sakura_core::conversion::candidate_budget`, which
-/// keeps a long reading at its former bound.
-pub const MAX_CANDIDATES: usize = 256;
-
-/// Fixed storage for all candidate surfaces or annotations in an `OutputBuf`.
-pub const MAX_CANDIDATE_TEXT_BYTES: usize = MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE;
-
-/// Maximum UTF-8 byte length of a selected candidate's reading.
-pub const MAX_CANDIDATE_DETAIL_READING_BYTES: usize = 256;
-
-/// Maximum UTF-8 byte length of a full selected-candidate definition.
-///
-/// This exceeds common UI display limits deliberately: UI Automation receives
-/// the complete source-backed definition, never a silently truncated one.
-pub const MAX_CANDIDATE_DETAIL_DEFINITION_BYTES: usize = 1024;
-
-/// Maximum UTF-8 byte length of one related-term label.
-pub const MAX_CANDIDATE_DETAIL_RELATION_BYTES: usize = 128;
-
-/// Maximum related words in each of aliases, related, similar, and antonyms.
-pub const MAX_CANDIDATE_DETAIL_RELATIONS: usize = 3;
-
-/// Fixed backing storage for all relation strings in an [`OutputBuf`].
-pub const MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES: usize =
-    MAX_CANDIDATE_DETAIL_RELATION_BYTES * MAX_CANDIDATE_DETAIL_RELATIONS * 4;
 
 /// Identifies one editing session on the engine.
 pub type SessionId = u64;
