@@ -148,6 +148,11 @@ const PARENT_ENGINE_PID_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PID";
 /// path/integrity binding as the production TSF client.
 const PARENT_ENGINE_PATH_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_PATH";
 
+/// Native-device identity captured by the trusted parent from the engine PID
+/// it owns. This is a separate contract from the DOS path retained for
+/// content-free diagnostics.
+const PARENT_ENGINE_NATIVE_PATH_ENV: &str = "SAKURA_APPCONTAINER_PARENT_ENGINE_NATIVE_PATH";
+
 /// Whether the child should independently derive the production Data name.
 /// Private-pipe verification uses the explicit name while retaining the same
 /// production Data descriptor and verified server-process checks.
@@ -323,7 +328,9 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
     let expected_server_pid = child_contract_engine_pid();
     let expected_server_path = env::var(PARENT_ENGINE_PATH_ENV)
         .expect("SandboxedChild::launch always sets the engine image path");
-    let policy = ServerTrustPolicy::Exact(expected_server_path.clone().into());
+    let expected_native_path = env::var_os(PARENT_ENGINE_NATIVE_PATH_ENV)
+        .expect("SandboxedChild::launch always sets the native engine identity");
+    let policy = ServerTrustPolicy::ExactNative(expected_native_path.into());
     println!(
         "sandbox classification of engine pid {expected_server_pid}: {:?}",
         sakura_ipc::classify_client_process(expected_server_pid)
@@ -389,7 +396,7 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
         "refusing sandboxed protocol traffic: the exact pipe connection is served by pid {actual_server_pid}, not the parent-owned engine pid {expected_server_pid}; no protocol request was sent"
     );
 
-    // Deterministic test-only coverage for the native namespace normalizer.
+    // Deterministic test-only coverage for the exact native identity contract.
     // Verified admission and exact pipe/PID identity above remain mandatory;
     // this read-only query neither authorizes nor retries a connection.
     let native_image = query_image_with_format(expected_server_pid, PROCESS_NAME_NATIVE)
@@ -401,8 +408,9 @@ fn the_probe_confirms_it_is_sandboxed_then_uses_the_pipe() {
         });
     let native_shape = native_image
         .as_os_str()
-        .to_string_lossy()
-        .starts_with(r"\Device\");
+        .encode_wide()
+        .collect::<Vec<_>>()
+        .starts_with(&r"\Device\".encode_utf16().collect::<Vec<_>>());
     assert!(
         native_shape && policy.matches_image_path(&native_image),
         "native image policy probe: {}",
@@ -551,6 +559,11 @@ impl SandboxedChild {
         parent_pipe_name: &str,
         production_pipe: bool,
     ) -> SandboxedChild {
+        // The parent owns this engine process. Capture its native identity
+        // before sandbox launch so the peer cannot supply its own expectation.
+        let owned_engine_native_path =
+            query_image_with_format(owned_engine_pid, PROCESS_NAME_NATIVE)
+                .expect("query native identity of the parent-owned engine");
         let profile_wide = to_wide_nul(APPCONTAINER_PROFILE_NAME);
         let display_wide = to_wide_nul("Sakura Input test AppContainer");
         let desc_wide = to_wide_nul(
@@ -623,15 +636,22 @@ impl SandboxedChild {
         };
 
         let mut environment_block = build_environment_block(&[
-            (PARENT_PIPE_NAME_ENV, parent_pipe_name.to_owned()),
-            (PARENT_ENGINE_PID_ENV, owned_engine_pid.to_string()),
+            (PARENT_PIPE_NAME_ENV, OsString::from(parent_pipe_name)),
+            (
+                PARENT_ENGINE_PID_ENV,
+                OsString::from(owned_engine_pid.to_string()),
+            ),
             (
                 PARENT_ENGINE_PATH_ENV,
-                env!("CARGO_BIN_EXE_sakura_engine").to_owned(),
+                OsString::from(env!("CARGO_BIN_EXE_sakura_engine")),
+            ),
+            (
+                PARENT_ENGINE_NATIVE_PATH_ENV,
+                owned_engine_native_path.into_os_string(),
             ),
             (
                 PARENT_PRODUCTION_PIPE_ENV,
-                if production_pipe { "1" } else { "0" }.to_owned(),
+                OsString::from(if production_pipe { "1" } else { "0" }),
             ),
         ]);
 
@@ -1198,7 +1218,7 @@ fn image_policy_diagnostics_explain_shape_without_emitting_paths() {
 /// environment state is exactly the kind of thing that is safe today, in a
 /// single-threaded test, and a data race the day this stops being the only
 /// thing touching it.
-fn build_environment_block(extra: &[(&str, String)]) -> Vec<u16> {
+fn build_environment_block(extra: &[(&str, OsString)]) -> Vec<u16> {
     let mut block = Vec::new();
     for (key, value) in env::vars_os() {
         let overridden = key == CHILD_MARKER_ENV
@@ -1212,7 +1232,7 @@ fn build_environment_block(extra: &[(&str, String)]) -> Vec<u16> {
     }
     push_env_entry(&mut block, OsStr::new(CHILD_MARKER_ENV), OsStr::new("1"));
     for (key, value) in extra {
-        push_env_entry(&mut block, OsStr::new(key), OsStr::new(value.as_str()));
+        push_env_entry(&mut block, OsStr::new(key), value);
     }
     block.push(0); // the block's own terminating empty string
     block
