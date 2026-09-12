@@ -10,7 +10,7 @@
   "thresholds": {
     "warn_physical_increase_ratio": 0.10,
     "fail_critical_increase_ratio": 0.25,
-    "rationale": "10% is below the smallest single-step change the plan expects to produce (Phase 1 test relocation removes 40-60%), so any +10% drift is a real regression, not noise. 25% on a critical benchmark equals re-merging one mid-sized module (~1,000 LOC into a 4,000 LOC set) and must block."
+    "rationale": "LOC over a fixed file inventory is deterministic; a +10% increase is reading-cost growth requiring explanation, not measurement noise. Keep the existing 10% WARN and 25% critical FAIL thresholds. The former Phase 1 40-60% estimate was corrected in #173 and is not the justification for these thresholds."
   },
   "benchmarks": [
     {
