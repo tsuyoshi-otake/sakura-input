@@ -357,6 +357,9 @@ dependencies = [
 [[package]]
 name = "sakura-proto"
 version = "1.0.39"
+dependencies = [
+ "sakura-values",
+]
 
 [[package]]
 name = "sakura-reg"
@@ -410,6 +413,10 @@ dependencies = [
  "windows",
  "windows-core",
 ]
+
+[[package]]
+name = "sakura-values"
+version = "1.0.39"
 
 [[package]]
 name = "serde"
