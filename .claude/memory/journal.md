@@ -1793,3 +1793,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - workflow は tracked cfg から matrix を生成し、最大 4 job、各 job 20 分、子 17 分で制限する。
   現段階は workflow_dispatch のみで continue-on-error を維持。Phase 7.9 での blocking 化は
   別工程であり、この記録は GitHub workflow の実行済みを意味しない。
+
+## 2026-09-13 Hosted dependency scanner portability (#154)
+
+- Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
+- Parent Verify: both scanner SelfTests, complete advisory finding equivalence after path/whitespace normalization, and forced-no-rg R1 enforcement. Expect: matching findings and nonzero enforcement of the existing violation. Passed. This identical correction is applied directly to PR #157, superseding the late-stack delivery in #166 so its prerequisite job can pass before merging.
