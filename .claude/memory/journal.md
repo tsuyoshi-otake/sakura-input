@@ -1749,6 +1749,23 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   active toolchain 1.96.0 を確認し、同じ一時実行へ RUSTUP_TOOLCHAIN を明示した再実行は成功。
   グローバル stable の修復やバージョン変更は行っていない。
 
+
+## 2026-09-13 Phase 0.2 実測テスト基準（#154）
+
+- Cargo metadata から workspace package と default target／feature 範囲を取得し、
+  各 package を quiet wrapper 経由で実行する `ci/record-test-baseline.ps1` を追加した。
+  結果は package／suite 単位で記録し、欠落した summary、失敗、件数不整合を拒否する。
+- Verify: 実 workspace の記録と、その JSON を `-Compare` に渡した再実行。
+  Expect: 16 packages、94 suites、1,894 passed、91 ignored、0 failed が一致する。
+  両実行とも PASS。これは package ごとの default features の集合であり、ignored を
+  実行済みと数えたり、workspace 一括の feature 統合結果と同一視したりしない。
+- Verify: parser／target selection／比較の SelfTest と `ci/check-process-clean.ps1`。
+  Expect: 失敗結果・欠落 suite・test 件数減少を拒否し、commit／timestamp の差は許容、
+  実行後の runner 残存無し。結果 PASS。
+- 初回検証では OrderedDictionary の pipeline 集計と空行を含む実 libtest 出力で失敗した。
+  記録型を PSCustomObject に固定し、入力に空文字列を許容して fixture に実際の空行を追加した。
+  修正後に全 package の記録・比較を実行済み。製品コードと依存は変更していない。
+
 ## 2026-09-13 Native image namespace support (#104)
 
 - Hosted runs 34704517571 and 34705378113 again rejected an owned engine; later diagnostics reported native-device image paths. Original admission data remains unobserved, so historical causality is not claimed.
@@ -1773,3 +1790,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Removed the rejected production mapping proposal. Added ExactNative for trusted callers owning the expected engine; the sandbox parent captures its native image path before launch and transports exact UTF-16 separately. Admission queries PROCESS_NAME_NATIVE once and checks strict shape plus complete equality. Existing Exact and InstalledRoot paths remain unchanged from main. Exact pipe PID verification still precedes Hello.
 - Verify: wrapped IPC security tests, diagnostic unit test, real private-pipe AppContainer integration, locked IPC/engine all-target clippy with warnings denied, wrapped locked workspace tests, scoped process cleanup and diff check. Expect: all pass with no owned runners surviving. Result: PASS. TKW request c724738b2e6548c1910ae77b6127caf1 captures clippy; parent directly ran all checks. Hosted sandbox verification remains pending.
 - Reusable finding: an unrestricted parent API succeeding does not establish availability under AppContainer; validate the actual namespace and API under the sandbox token before choosing an admission mechanism. The old mapping counterexample is retained above.
+
+## 2026-09-13 Refresh observed baseline after prerequisite tests (#154)
+
+- Re-ran record-test-baseline.ps1 against 86371f4 before Phase 1 test extraction. All 16 packages and 94 suites completed: 1,988 discovered, 1,897 passed, 91 ignored, 0 failed. Only sakura-ipc changed from the prior inventory (43 to 46), exactly the three new #104 native identity tests; every other package total is unchanged. Scoped process cleanup passed.
+- The baseline is regenerated from actual per-package default-feature runs, not an edited historical count. It remains distinct from workspace feature-unified execution. Parent owns verification.
