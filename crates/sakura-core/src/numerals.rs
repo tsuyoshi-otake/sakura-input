@@ -4,7 +4,7 @@
 //! lattice of homophones (`二重` + `呼ん`). Sakura otherwise has only dictionary
 //! costs, which is why superscript and circled numerals can win.
 
-use sakura_proto::Overflow;
+use sakura_values::Overflow;
 
 use crate::TextSink;
 

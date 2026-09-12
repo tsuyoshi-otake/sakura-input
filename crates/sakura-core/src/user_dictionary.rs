@@ -5,7 +5,7 @@ use core::fmt;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 
-use sakura_proto::MAX_PREEDIT_BYTES;
+use sakura_values::MAX_PREEDIT_BYTES;
 
 use crate::dictionary::EntryFlags;
 

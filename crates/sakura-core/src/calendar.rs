@@ -3,7 +3,7 @@
 //! The converter stays a pure function of `(dictionary, reading, civil date)`.
 //! Local time belongs to the engine; this module only formats a supplied day.
 
-use sakura_proto::Overflow;
+use sakura_values::Overflow;
 
 use crate::TextSink;
 
