@@ -1607,3 +1607,43 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   利用者側では state ファイルを削除するのが唯一の回復手段（次回の更新確認で
   署名検証済み manifest から再構築される）。実行は owner の判断に委ねており、
   エージェントからは削除していない。
+
+## 2026-09-12 エージェント指向リファクタリング計画の作成（#152）
+
+- **依頼**: Clean Architecture の形合わせではなく、High Cohesion / Low Coupling /
+  One-way Dependency / Change Locality / Small Agent Context / Formal Verification
+  Boundary などを最大化し、Issue 1 件あたりにエージェントが読むコード・文書・
+  テストを最小化する計画を作る。実装はしない。基準は origin/main `a370477`。
+- **成果物**: `docs/architecture/agent-refactor-plan.md`（約 54 KB、日本語）と
+  根拠の静的解析 6 本 `docs/architecture/analysis/*.md`（engine、core-proto、tsf、
+  contracts-dictc-tools、docs-verification-ci、renderer-settings）。解析は Opus
+  subagent 6 体を読み取り専用（cargo 実行なし）で並列に走らせた。Issue #152 に
+  進捗コメント 5 本を小刻みに投稿。
+- **計画の骨子**: Phase 0 ゲート整備（DLL 1 MiB、crate 別テスト基準値、`rg` 依存
+  規則 R1〜R11、TLC workflow 非ブロッキング、CLAUDE.md ≤8 KB）→ 1 テスト分離
+  （sibling `*_tests.rs`、renderer `lib.rs`）→ 2 葉 crate（`sakura-values`、
+  `sakura-store`、`sakura-rerank-proto`、`sakura-oracles`、`sakura-context`）→
+  3 core/proto/ipc/reg/dictc 分割 → 4 engine → 5 renderer/settings → 6 TSF
+  （`session/` に `use windows` 禁止＝形式検証境界）→ 7 文書・verification 再編
+  （`docs/contracts`、`docs/decisions`、`correspondence.json` の CI 検査）。
+  全 82 ステップに `Verify:`/`Expect:`。TSF の write journal／candidate board に
+  触る 6.8〜6.10 は **#7 のクラッシュ証拠が添付されるまで着手しない**。
+- **検証**: 独立 `rubric-verifier`（Opus、fresh context）で 12 基準を採点。初回は
+  C2（`long_conversion.rs` の rerank magic 引用が 2 行ずれ、実際は :28-29）と
+  C4（ステップ 7.13 の Verify/Expect が空）で FAIL。両方修正して再採点で PASS。
+  他 10 基準（行数 12 件が `wc -l` と一致、12 原則の指標化、R1〜R11 が実行可能、
+  owner 判断 D1〜D11、読解セット表 16 行、命名統一、リポジトリ変更が
+  `docs/architecture/` 配下のみ）は初回から PASS。
+- **学び**:
+  - 解析レポートを subagent に書かせても harness がファイル書き込みを遮断し
+    `tasks/*.output` が 0 byte になる。レポートは親が Write で永続化する。
+  - 自分で要約した数値は投稿前に元レポートと突き合わせる。comment-03 の初稿は
+    存在しない `session/` ディレクトリを既存扱いし、読解セット数値もレポートと
+    ずれていた（投稿前に発見・修正）。
+  - 行番号引用は `sed -n Np` で 1 件ずつ確認する。`sed -n 20,34p` の出力から
+    目視で数えた行番号は 2 行ずれた。verifier がこれを拾った。
+  - 複数レポートが同じ概念に別名を付ける（`sakura-limits`／`sakura-values`、
+    `sakura-stores`／`sakura-store`）。統合時に命名表を 1 節設けて固定する。
+- **未了（owner 判断待ち）**: D1〜D11（CLAUDE.md の停止中調査の扱い、DESIGN.md
+  分割、`wire.rs` の置き場、`Session` 分割、desktop test runner、TLC ブロッキング化
+  など）。コミットは未実施（依頼があれば行う）。
