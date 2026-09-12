@@ -21,7 +21,7 @@
       "production": ["crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/session.rs", "crates/sakura-core/src/keymap.rs"],
       "tests": [],
       "contracts": ["data/keymap-ms-ime.toml", "data/keymap-atok.toml"],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/session-and-later-findings.md", "docs/decisions/input-behavior.md"],
       "config": [],
       "verification": [],
       "semantic": {
@@ -42,7 +42,7 @@
       "production": ["crates/sakura-core/src/conversion.rs", "crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/candidate_projection.rs", "crates/sakura-engine/src/prediction.rs"],
       "tests": [],
       "contracts": [],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/session-and-later-findings.md", "docs/rules/performance.md", "docs/rules/overflow-packaging.md", "docs/decisions/product-direction.md"],
       "config": [],
       "verification": [],
       "semantic": {
@@ -60,7 +60,7 @@
       "production": ["crates/sakura-tsf/src/text_service.rs", "crates/sakura-tsf/src/candidate_ui.rs", "crates/sakura-tsf/src/write_coordinator.rs", "crates/sakura-tsf/src/edit_session.rs", "crates/sakura-tsf/src/composition.rs"],
       "tests": [],
       "contracts": [],
-      "docs": ["verification/revalidation-20260905.md"],
+      "docs": ["verification/revalidation-20260905.md", "docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/tsf-reentrancy.md"],
       "config": [],
       "verification": ["verification/dual-tsf-candidate-board/tla-record.md", "verification/tla/DualTsfCandidateBoard.tla"],
       "semantic": {
@@ -80,7 +80,7 @@
       "production": ["crates/sakura-tsf/src/text_service.rs", "crates/sakura-tsf/src/key_handler.rs", "crates/sakura-tsf/src/conversion_key.rs", "crates/sakura-tsf/src/engine.rs"],
       "tests": [],
       "contracts": [],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/tsf-reentrancy.md", "docs/rules/session-and-later-findings.md", "docs/decisions/input-behavior.md"],
       "config": [],
       "verification": ["verification/dual-tsf-physical-key-arbitration/tla-record.md", "verification/tla/DualTsfPhysicalKeyArbitration.tla"],
       "semantic": {
@@ -98,7 +98,7 @@
       "production": ["crates/sakura-core/src/conversion.rs", "crates/sakura-core/src/numerals.rs", "crates/sakura-core/src/calendar.rs", "crates/sakura-core/src/width.rs"],
       "tests": [],
       "contracts": [],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/performance.md", "docs/rules/session-and-later-findings.md", "docs/rules/overflow-packaging.md", "docs/decisions/product-direction.md"],
       "config": [],
       "verification": [],
       "semantic": {
@@ -116,7 +116,7 @@
       "production": ["crates/sakura-core/src/dictionary.rs", "crates/dictc/src/lib.rs"],
       "tests": ["crates/dictc/tests/image.rs"],
       "contracts": ["verification/dictionary-format-v2.md"],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/overflow-packaging.md", "docs/decisions/issue-28-candidate-details.md"],
       "config": [],
       "verification": [],
       "semantic": {
@@ -136,7 +136,7 @@
       "production": ["crates/sakura-engine/src/input_history.rs", "crates/sakura-settings/src/input_history.rs", "crates/sakura-settings/src/cli.rs", "crates/sakura-proto/src/message.rs"],
       "tests": [],
       "contracts": [],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/session-and-later-findings.md", "docs/decisions/developer-history.md"],
       "config": [],
       "verification": ["verification/history-*.md", "verification/tla/DeveloperHistory.tla"],
       "semantic": {
@@ -154,7 +154,7 @@
       "production": ["crates/sakura-renderer/src/candidate.rs", "crates/sakura-renderer/src/indicator.rs", "crates/sakura-renderer/src/theme.rs", "crates/sakura-renderer/src/main.rs"],
       "tests": [],
       "contracts": [],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/decisions/issue-27-candidate-popup.md", "docs/decisions/issue-28-candidate-details.md"],
       "config": [],
       "verification": [],
       "semantic": {
@@ -172,7 +172,7 @@
       "production": [],
       "tests": [],
       "contracts": [],
-      "docs": [],
+      "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/overflow-packaging.md", "docs/rules/session-and-later-findings.md"],
       "config": [".github/workflows/ci.yml", "ci/*.ps1"],
       "verification": [],
       "semantic": {
@@ -190,7 +190,7 @@
       "production": [],
       "tests": [],
       "contracts": [],
-      "docs": ["DESIGN.md", "README.md"],
+      "docs": ["DESIGN.md", "README.md", "docs/architecture/README.md"],
       "config": [],
       "verification": [],
       "semantic": {

@@ -92,5 +92,5 @@ paths must preserve coverage, including relocated tests; do not reduce measured
 work by silently dropping files. Record changes in the project journal.
 
 Run cargo tests through `ci/run-test-quiet.ps1` and prove owned processes exited.
-Until both 0.5 and 7.11 are complete, use `-DocsBudgetMode Warn`; the last completion
-PR must prove the 24,576-byte unconditional-document budget and switch CI to Fail.
+The combined Phase 0.5/7.11 entry points fit the 24,576-byte unconditional-document
+budget. Use `-DocsBudgetMode Fail`; CI rejects over-budget documents even without growth.
