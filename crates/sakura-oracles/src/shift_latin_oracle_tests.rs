@@ -215,7 +215,7 @@ fn oracle_c2_campaign_sees_every_atomic_polarity() {
         "cursor_interior",
     ];
     let mut report = String::from("# Atomic-condition (C2) coverage — Shift-Latin oracle\n\n");
-    report.push_str("Scope: `crates/sakura-engine/src/shift_latin_oracle.rs` predicates in `atomic_conditions`.\n");
+    report.push_str("Scope: `crates/sakura-oracles/src/shift_latin_oracle.rs` predicates in `atomic_conditions`.\n");
     report.push_str("This is atomic-condition polarity coverage of the independent oracle, not MC/DC of the whole workspace and not line coverage claimed as C2.\n\n");
     report.push_str("| condition | false | true |\n|---|---|---|\n");
     for (index, id) in ids.into_iter().enumerate() {

@@ -34,7 +34,7 @@
 //! The latch is counted rather than timed. One absorbed Space per teardown
 //! covers the failure, can never permanently swallow a full-width space,
 //! and holds no wall clock — so the independent oracle in
-//! [`crate::space_key_dispatch_oracle`] models it exactly rather than
+//! `sakura-oracles::space_key_dispatch_oracle` models it exactly rather than
 //! approximately. A composition that ends the way it was meant to still
 //! uses [`CompositionFence::release`] and arms nothing.
 
