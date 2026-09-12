@@ -35,6 +35,22 @@ jobs:
         shell: pwsh
         run: ./ci/check-dependency-rules.ps1 -Advisory
 
+  irv-regression:
+    name: irv-regression
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test IRV regression decisions
+        shell: pwsh
+        run: ./scripts/measure-irv.ps1 -SelfTest
+      # D14: change to Fail in the last PR completing both 0.5 and 7.11,
+      # after that PR proves the unconditional document budget is satisfied.
+      - name: Compare committed IRV baseline
+        shell: pwsh
+        run: ./scripts/measure-irv.ps1 -Compare verification/irv/baseline.json -DocsBudgetMode Warn
+
   build-and-test:
     name: Build and test
     runs-on: windows-latest
