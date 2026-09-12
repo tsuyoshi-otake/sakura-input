@@ -1,0 +1,14 @@
+[package]
+name = "sakura-values"
+description = "Shared bounded value types for Sakura Input crates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

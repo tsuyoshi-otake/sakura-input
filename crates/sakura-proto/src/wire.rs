@@ -15,9 +15,9 @@
 //! [`crate::output::OutputBuf::encode_frame`], which must not allocate at
 //! all).
 
-use crate::fixed::Overflow;
 use crate::MAX_STRING_BYTES;
 use core::fmt;
+use sakura_values::Overflow;
 
 /// Errors produced while decoding (or, for [`Error::Overflow`] /
 /// [`Error::TooLarge`], while encoding into a fixed-size destination).

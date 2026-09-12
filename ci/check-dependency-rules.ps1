@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$allRules = 1..9 | ForEach-Object { "R$_" }
+$allRules = @((1..9 | ForEach-Object { "R$_" }) + 'R12')
 $requested = @($Enforce | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToUpperInvariant() } | Where-Object { $_ })
 $unknown = @($requested | Where-Object { $allRules -cnotcontains $_ } | Sort-Object -Unique)
 if ($unknown.Count) { throw "Unknown dependency rule(s): $($unknown -join ', ')" }
@@ -340,6 +340,21 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
         finally {
             $rgExecutable = $savedRgExecutable
         }
+        $r12Fixture = Join-Path $fixtureRoot 'values'
+        [void][IO.Directory]::CreateDirectory($r12Fixture)
+        $r12Bad = Join-Path $r12Fixture 'lib.rs'
+        [IO.File]::WriteAllText($r12Bad, "pub fn encode() {}`n")
+        $r12Pattern = '(?:\bsakura_proto\b|\bwire::|\bReader\b|\bSink\b|\bfn\s+encode\b|\bfn\s+decode\b)'
+        $savedRgExecutable = $rgExecutable
+        try {
+            $rgExecutable = $null
+            if (@(Invoke-SourceScan 'R12 fixture' $r12Fixture $r12Pattern).Count -ne 1) {
+                throw 'R12 missing-rg fixture did not reject fn encode'
+            }
+        }
+        finally {
+            $rgExecutable = $savedRgExecutable
+        }
 
         $renderer = Join-Path $fixtureRoot 'renderer'
         $indicator = Join-Path $renderer 'indicator'
@@ -357,7 +372,7 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
         $r5Negative = Get-R5Audit $renderer
         if ($r5Negative.Findings.Count -ne 2) { throw 'R5 negative fixture failed' }
 
-        Write-Host 'PASS: dependency rule fixtures cover metadata edges, rg-free source rejection, R5/R8 ownership, and R9 placement'
+        Write-Host 'PASS: dependency rule fixtures cover metadata edges, rg-free source rejection, R5/R8 ownership, R9 placement, and R12 values isolation'
     }
     catch {
         $fixtureFailure = $_
@@ -410,6 +425,27 @@ Add-Result 'R8' $(if ($r8.Count) { 'VIOLATION' } else { 'PASS' }) 'reranker prot
 
 $r9 = @(Get-R9Findings $productionRust)
 Add-Result 'R9' $(if ($r9.Count) { 'VIOLATION' } else { 'PASS' }) 'test-only source placement' $r9
+
+$r12 = [Collections.Generic.List[string]]::new()
+$valuesRoot = Join-Path $repoRoot 'crates/sakura-values/src'
+if (-not [IO.Directory]::Exists($valuesRoot)) {
+    $r12.Add('crates/sakura-values/src is missing')
+}
+else {
+    $r12Pattern = '(?:\bsakura_proto\b|\bwire::|\bReader\b|\bSink\b|\bfn\s+encode\b|\bfn\s+decode\b)'
+    foreach ($hit in @(Invoke-SourceScan 'R12' $valuesRoot $r12Pattern)) { $r12.Add($hit) }
+}
+$valuesPackage = @($metadata.packages | Where-Object { $_.name -ceq 'sakura-values' })
+if ($valuesPackage.Count -ne 1) {
+    $r12.Add("expected one sakura-values package, found $($valuesPackage.Count)")
+}
+else {
+    $normalDependencies = @($valuesPackage[0].dependencies | Where-Object { $null -eq $_.kind })
+    if ($normalDependencies.Count -ne 0) {
+        $r12.Add("sakura-values has normal dependencies: $($normalDependencies.name -join ', ')")
+    }
+}
+Add-Result 'R12' $(if ($r12.Count) { 'VIOLATION' } else { 'PASS' }) 'values must not know wire and must remain a dependency leaf' @($r12)
 
 if ($results.Count -ne $allRules.Count) {
     throw "Dependency audit produced $($results.Count) results for $($allRules.Count) rules"

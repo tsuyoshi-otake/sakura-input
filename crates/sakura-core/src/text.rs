@@ -11,7 +11,7 @@
 //! write is always better than the alternatives — truncating silently loses
 //! the user's text, and growing turns a bounded engine into an unbounded one.
 
-use sakura_proto::{FixedStr, Overflow};
+use sakura_values::{FixedStr, Overflow};
 
 /// Somewhere UTF-8 text can be appended.
 pub trait TextSink {

@@ -24,6 +24,7 @@ use crate::types::{
     ScreenRect,
 };
 use crate::wire::{Reader, Sink, VecSink};
+use crate::wire_types::Wire;
 use crate::{RequestId, Revision, SessionId, FRAME_HEADER_LEN, MAX_PAYLOAD, PROTOCOL_VERSION};
 
 // Re-exported so `sakura_proto::message::Error` and `sakura_proto::Error`
@@ -324,57 +325,7 @@ impl UndoCommitOutcome {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AiTextOperation {
-    Transform = 1,
-    Proofread = 2,
-}
-
-impl AiTextOperation {
-    fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
-        w.write_u8(self as u8)
-    }
-
-    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
-        match r.read_u8()? {
-            1 => Ok(Self::Transform),
-            2 => Ok(Self::Proofread),
-            _ => Err(Error::BadEnum),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AiTextStatus {
-    Applied = 1,
-    Cancelled = 2,
-    Timeout = 3,
-    MissingKey = 4,
-    WorkerError = 5,
-    ApiError = 6,
-    Rejected = 7,
-}
-
-impl AiTextStatus {
-    fn encode<S: Sink>(self, w: &mut S) -> Result<(), Error> {
-        w.write_u8(self as u8)
-    }
-
-    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
-        match r.read_u8()? {
-            1 => Ok(Self::Applied),
-            2 => Ok(Self::Cancelled),
-            3 => Ok(Self::Timeout),
-            4 => Ok(Self::MissingKey),
-            5 => Ok(Self::WorkerError),
-            6 => Ok(Self::ApiError),
-            7 => Ok(Self::Rejected),
-            _ => Err(Error::BadEnum),
-        }
-    }
-}
+pub use sakura_values::{AiTextOperation, AiTextStatus};
 
 /// A message sent from the engine back to a client.
 #[derive(Debug, Clone, PartialEq, Eq)]

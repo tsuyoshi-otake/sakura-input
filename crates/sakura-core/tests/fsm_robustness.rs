@@ -9,7 +9,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use sakura_core::keymap::{Action, KeyMap, Preset, State};
 use sakura_core::romaji::{Input, Table, MAX_SEQUENCE};
-use sakura_proto::{FixedStr, KeyCode, KeyInput, Modifiers};
+use sakura_values::{FixedStr, KeyCode, KeyInput, Modifiers};
 
 const DEFAULT_ITERATIONS: u64 = 20_000;
 const OUTPUT_CAPACITY: usize = 1_024;
