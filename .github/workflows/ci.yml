@@ -323,14 +323,100 @@ jobs:
               Tee-Object -FilePath $cleanupLog -Append
             if ($LASTEXITCODE -ne 0) { throw 'desktop test process cleanup failed' }
           }
-          $expectedParent = [IO.Path]::GetFullPath($env:RUNNER_TEMP) + [IO.Path]::DirectorySeparatorChar
-          foreach ($candidate in @($env:LOCALAPPDATA, $env:SAKURA_ISOLATED_USERPROFILE)) {
-            $isolated = [IO.Path]::GetFullPath($candidate)
-            if (-not $isolated.StartsWith($expectedParent, [StringComparison]::OrdinalIgnoreCase)) {
-              throw "refusing to delete isolated state outside RUNNER_TEMP: $isolated"
+          function Resolve-ContainedPath {
+            param([string] $Path, [string] $Parent)
+            $full = [IO.Path]::GetFullPath($Path)
+            $parentPrefix = [IO.Path]::GetFullPath($Parent).TrimEnd(
+              [IO.Path]::DirectorySeparatorChar,
+              [IO.Path]::AltDirectorySeparatorChar
+            ) + [IO.Path]::DirectorySeparatorChar
+            if (-not $full.StartsWith($parentPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "refusing cleanup outside owned parent ${Parent}: $full"
             }
-            if ([IO.Directory]::Exists($isolated)) { [IO.Directory]::Delete($isolated, $true) }
+            $full
           }
+
+          function Remove-OwnedTree {
+            param([string] $Path, [string] $Parent)
+            $owned = Resolve-ContainedPath -Path $Path -Parent $Parent
+            if (-not [IO.Directory]::Exists($owned)) { return }
+            $attributes = [IO.File]::GetAttributes($owned)
+            if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw "refusing recursive cleanup of reparse-point root: $owned"
+            }
+            [IO.Directory]::Delete($owned, $true)
+          }
+
+          $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+          $profileRoot = [IO.Path]::GetFullPath($env:SAKURA_ISOLATED_USERPROFILE)
+          $runnerTempPrefix = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd(
+            [IO.Path]::DirectorySeparatorChar,
+            [IO.Path]::AltDirectorySeparatorChar
+          ) + [IO.Path]::DirectorySeparatorChar
+          foreach ($root in @($localRoot, $profileRoot)) {
+            if (-not $root.StartsWith($runnerTempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "isolated root is outside RUNNER_TEMP: $root"
+            }
+          }
+
+          # The workflow owns only Sakura Input data below its isolated
+          # LOCALAPPDATA, not shell-created siblings such as INetCache.
+          Remove-OwnedTree -Path (Join-Path $localRoot 'SakuraInput') -Parent $localRoot
+
+          # SettingsFixture::launch creates exactly these per-test sandboxes.
+          # Drop normally removes them; this catches only interrupted fixtures.
+          $fixtureParent = Resolve-ContainedPath -Path (Join-Path $profileRoot 'tmp') `
+            -Parent $profileRoot
+          if ([IO.Directory]::Exists($fixtureParent)) {
+            foreach ($fixture in [IO.Directory]::EnumerateDirectories(
+              $fixtureParent,
+              'sakura-settings-user32-*',
+              [IO.SearchOption]::TopDirectoryOnly
+            )) {
+              Remove-OwnedTree -Path $fixture -Parent $fixtureParent
+            }
+          }
+
+          # Record immediate residuals without walking or deleting the
+          # OS-materialized profile. The ephemeral hosted VM owns their teardown.
+          $residuals = [Collections.Generic.List[object]]::new()
+          foreach ($root in @($localRoot, $profileRoot)) {
+            foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries(
+              $root,
+              '*',
+              [IO.SearchOption]::TopDirectoryOnly
+            )) {
+              try {
+                $attributes = [IO.File]::GetAttributes($entry)
+                $residuals.Add([ordered]@{
+                  root = $root
+                  relative_path = [IO.Path]::GetRelativePath($root, $entry)
+                  kind = if (($attributes -band [IO.FileAttributes]::Directory) -ne 0) {
+                    'directory'
+                  } else { 'file' }
+                  attributes = $attributes.ToString()
+                  reparse_point = ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+                })
+              } catch {
+                $residuals.Add([ordered]@{
+                  root = $root
+                  relative_path = [IO.Path]::GetRelativePath($root, $entry)
+                  metadata_error = $_.Exception.Message
+                })
+              }
+            }
+          }
+          [ordered]@{
+            cleanup_scope = @(
+              "$localRoot\SakuraInput"
+              "$fixtureParent\sakura-settings-user32-*"
+            )
+            recursive_profile_delete_attempted = $false
+            residual_profile_owner = 'GitHub-hosted ephemeral VM teardown'
+            residuals = @($residuals)
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (
+            Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cleanup-residuals.json'
+          ) -Encoding utf8
 
       - name: Upload hosted desktop diagnostic evidence
         if: always()
