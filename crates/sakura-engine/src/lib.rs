@@ -36,7 +36,7 @@ mod developer_history_oracle;
 #[cfg(test)]
 mod developer_history_oracle_tests;
 #[cfg(test)]
-#[path = "developer_history_order_tests.rs"]
+#[path = "../tests/unit/developer_history_order_tests.rs"]
 mod developer_history_order;
 pub mod dictionary;
 pub mod dispatch;
@@ -57,13 +57,13 @@ mod shift_latin_oracle;
 #[cfg(test)]
 mod shift_latin_oracle_tests;
 #[cfg(test)]
-#[path = "shift_latin_order_tests.rs"]
+#[path = "../tests/unit/shift_latin_order_tests.rs"]
 mod shift_latin_order;
 pub mod timing;
 // Always compiled so cargo-mutants can score the independent oracle.
 // Production dispatch never calls it; release dead-code paths stay unused.
 #[cfg(test)]
-#[path = "space_key_dispatch_tests.rs"]
+#[path = "../tests/unit/space_key_dispatch_tests.rs"]
 mod space_key_dispatch;
 #[allow(dead_code)]
 mod space_key_dispatch_oracle;
