@@ -27,7 +27,8 @@ use windows::Win32::Foundation::{
     COLORREF, HWND, LPARAM, LRESULT, POINT, RPC_E_CHANGED_MODE, WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    GetDC, GetPixel, GetSysColor, ReleaseDC, CLR_INVALID, COLOR_HIGHLIGHT,
+    GetDC, GetMonitorInfoW, GetPixel, GetSysColor, MonitorFromRect, ReleaseDC, CLR_INVALID,
+    COLOR_HIGHLIGHT, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
@@ -203,6 +204,21 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
             .expect("candidate popup UIA element")
     };
     assert_noninteractive_popup(popup, &element);
+    let initial_rect = window_rect(popup);
+    let mut monitor_info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: initial_rect and monitor_info are live values for immediate queries.
+    unsafe {
+        let monitor = MonitorFromRect(&initial_rect, MONITOR_DEFAULTTONEAREST);
+        assert!(GetMonitorInfoW(monitor, &mut monitor_info).as_bool());
+        println!(
+            "detail geometry: dpi={} work={:?} initial={initial_rect:?}",
+            GetDpiForWindow(popup),
+            monitor_info.rcWork
+        );
+    }
 
     // Complete source-backed preview: UIA must include the complete text and
     // must not claim there is more source text when the flag is false.
@@ -210,12 +226,16 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
     engine.publish(state(2, 0, Some(full), anchor(120, 120)));
     let full_name = wait_for_name(&element, "complete-definition");
     assert!(!full_name.contains("Definition continues."));
-    let short_detail_rect = window_rect(popup);
+    let short_detail_rect = wait_for_wider_window(popup, initial_rect.right - initial_rect.left);
 
     // Changing only definition length must not alter the candidate/detail
     // horizontal rhythm. The fixed-width detail grows vertically to expose the
     // complete preview instead of making the popup jitter sideways.
-    let long_definition = format!("long-complete-definition-{}", "x".repeat(880));
+    // Keep this geometry fixture shorter than the nine-row candidate list.
+    // Oversized details may legitimately be omitted to avoid covering the
+    // composition on a short desktop; the separate long-preview check below
+    // retains the original 880-character UIA payload.
+    let long_definition = format!("long-complete-definition-{}", "x".repeat(160));
     engine.publish(state(
         3,
         0,
@@ -235,9 +255,24 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
             >= short_detail_rect.bottom - short_detail_rect.top
     );
 
+    let oversized_definition = format!("oversized-complete-definition-{}", "x".repeat(880));
+    engine.publish(state(
+        4,
+        0,
+        Some(detail(&oversized_definition, false, 0)),
+        anchor(120, 120),
+    ));
+    let oversized_name = wait_for_name(&element, "oversized-complete-definition");
+    assert!(oversized_name.contains(&oversized_definition));
+    assert!(!oversized_name.contains("Definition continues."));
+    println!(
+        "detail geometry: short={short_detail_rect:?} long={long_detail_rect:?} oversized={:?}",
+        window_rect(popup)
+    );
+
     // An update for a different selected candidate with no detail must clear
     // the prior detail rather than leave the old text associated with B.
-    engine.publish(state(4, 1, None, anchor(120, 120)));
+    engine.publish(state(5, 1, None, anchor(120, 120)));
     let cleared_name = wait_for_name(&element, "selected 2 of 18");
     assert!(
         !cleared_name.contains("Detail for selected candidate"),
@@ -247,7 +282,7 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
 
     // A truncated wire preview must keep the explicit continuation marker.
     let truncated = detail("preview-definition", true, 0b1111);
-    engine.publish(state(5, 1, Some(truncated), anchor(120, 120)));
+    engine.publish(state(6, 1, Some(truncated), anchor(120, 120)));
     let truncated_name = wait_for_name(&element, "preview-definition");
     assert!(truncated_name.contains("Definition continues."));
 
@@ -1616,6 +1651,21 @@ fn window_rect(window: HWND) -> windows::Win32::Foundation::RECT {
     // SAFETY: caller provides the live popup HWND and `rect` is a valid out-pointer.
     unsafe { GetWindowRect(window, &mut rect).expect("candidate popup rectangle") };
     rect
+}
+
+fn wait_for_wider_window(window: HWND, initial_width: i32) -> windows::Win32::Foundation::RECT {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let rect = window_rect(window);
+        if rect.right - rect.left > initial_width {
+            return rect;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "detail pane never enlarged the popup: {rect:?}, initial width={initial_width}"
+        );
+        sleep(Duration::from_millis(20));
+    }
 }
 
 fn wait_for_indicator_state(window: HWND, expected: isize) {
