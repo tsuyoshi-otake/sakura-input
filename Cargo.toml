@@ -10,6 +10,7 @@ members = [
     "crates/sakura-reg",
     "crates/sakura-tsf",
     "crates/sakura-engine",
+    "crates/sakura-rerank-proto",
     "crates/sakura-renderer",
     "crates/sakura-regtool",
     "crates/sakura-logon",
@@ -43,6 +44,7 @@ sakura-ai-proto = { path = "crates/sakura-ai-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
 sakura-engine = { path = "crates/sakura-engine" }
+sakura-rerank-proto = { path = "crates/sakura-rerank-proto" }
 windows-core = "0.62"
 windows = "0.62"
 # Pinned, streaming-only parsers used exclusively by the offline `dictc` build
