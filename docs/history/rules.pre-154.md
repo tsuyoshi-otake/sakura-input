@@ -1,0 +1,711 @@
+# Verified rules for this repository
+
+Only things that were actually observed here go in this file. Each rule says
+what was measured, so a later reader can tell a law from a guess. When a rule
+turns out to be wrong, delete it — a stale rule is worse than no rule.
+
+## Performance
+
+- **Do not ship a performance claim a benchmark has not made.** The SIMD run
+  scanner in `sakura-core::width` was written, reviewed and committed with a
+  confident doc table before anything measured it. The benchmark, written
+  afterwards, showed it made Japanese prose — the single most common input
+  this IME will ever see — **34 % slower**. Write the benchmark first, or at
+  minimum before the doc comment.
+
+- **`&src[at..]` re-validates a UTF-8 character boundary on every index.** On
+  text where most characters take the slow branch (i.e. all Japanese), that
+  check costs more than a vectorized run scan saves. Walk a `Chars` iterator
+  and take `chars.as_str()` for the remainder instead. This one change moved
+  Japanese prose from 0.66× to 0.93× against the scalar loop.
+
+- **Below one vector block there is nothing to amortize a scanner's setup
+  over.** `normalize_into` short-circuits `src.len() < MIN_VECTOR_BYTES` to a
+  plain per-character loop in a body small enough to inline, so a single
+  keystroke — the overwhelmingly common call — never pays for a function call
+  into the run scanner.
+
+- **Microbenchmarks here report the best of N runs, never the mean.**
+  Everything that makes a run slower (preemption, a frequency dip, a cache
+  eviction) is additive noise on top of a fixed cost, so the minimum is the
+  estimator that converges. Measured with the mean, one unchanged loop
+  reported 53 ns and then 100 ns on consecutive runs; best-of-7 is stable to
+  within a few percent. See `crates/sakura-core/tests/width_bench.rs`.
+
+## CI and verification
+
+- **A workflow that never runs is indistinguishable from a workflow that
+  passes.** `ci.yml` and `installer.yml` both triggered on `push: branches:
+  [master]` while this repository's only branch is `main`. `gh run list`
+  returned nothing: neither had run on any commit, and several "CI is green"
+  assumptions were assumptions about a workflow that was not executing. Check
+  `gh run list` after adding or editing a workflow, not just the YAML.
+
+- **A processor's model name is not evidence about the ISA available to your
+  process. Only a feature probe is.** This was got wrong twice in one hour,
+  each time by reasoning from the name printed by `Get-CimInstance
+  Win32_Processor`:
+
+  | run | reported processor | inferred | **measured** |
+  |---|---|---|---|
+  | `6848ac5` | AMD EPYC 7763 (Zen 3) | no AVX-512 | not printed |
+  | `e829ff9` | AMD EPYC 9V74 (Zen 4) | AVX-512 | not printed |
+  | `577a550` | Intel Xeon Platinum 8573C | AVX-512 | **`tier avx512bw`** |
+  | `6905660` | AMD EPYC 9V74 (Zen 4) | AVX-512 | **`tier avx2`** |
+  | `173c216` | AMD EPYC 7763 (Zen 3) | no AVX-512 | **`tier avx2`** |
+
+  The fourth row is the point. Zen 4 has AVX-512 in silicon, and that runner
+  still reports `avx2` — the hypervisor does not expose it to the guest.
+  `is_x86_feature_detected!` knows that; a datasheet does not. The fifth row
+  is the same lesson from the other side: an inference that happened to be
+  right is still not a measurement until the log prints one.
+
+  Of five runs, three printed a kernel list and **one** covered AVX-512. Treat
+  CI coverage of that kernel as occasional, never as given.
+
+- **`windows-latest` is not one machine, so a green CI run's differential
+  SIMD coverage is not a fixed quantity.** Four runs of one workflow inside
+  an hour drew three processors and two different ISA tiers. Since the
+  `simd::` tests only exercise kernels the host supports, and `cargo test`
+  captures stdout, the first two runs covered AVX-512 or did not with nothing
+  readable afterwards to tell the two apart — worse than a known gap, and the
+  same failure as a workflow that never runs.
+
+  Fixed by making each run state its own scope: a CI step re-runs `simd::`
+  with `--nocapture` so the log prints `kernels under test: [...] (tier ...)`.
+  It paid for itself immediately by producing the fourth row above and
+  refuting the inference in the second. **Quote that line, never the CPU
+  name, when claiming a kernel was covered.**
+
+  **AVX-512 verification is local, by the owner's decision (2026-07-31)**, and
+  CI is not to be extended to *require* it — the step above only reports what
+  happened to be covered. The standing obligation is therefore to run
+  `cargo test -p sakura-core --lib -- simd:: --nocapture` on this machine
+  before releasing anything that touches the kernels. Since production now
+  keeps AVX-512 bench-only, confirm the printed `kernels under test` includes
+  the scalar, AVX/SSSE3, AVX2, and all three AVX-512BW+VL threshold variants;
+  `resolved width scan avx2-hybrid` is the intended shipping selection, not a
+  coverage failure. Verified here on 2026-08-22.
+
+- **A `cargo test` filter that ends in `::` makes an unquoted YAML `run:`
+  line unparseable, and GitHub reports it as anything but a syntax error.**
+  `run: cargo test -p sakura-core --lib -- simd:: --nocapture` puts a colon
+  immediately before a space, which is YAML's mapping separator: the file
+  stops parsing at that line (`mapping values are not allowed here`, line 56
+  column 54). What GitHub then showed was **the whole workflow having no
+  triggers** — `gh run list` named the run `.github/workflows/ci.yml` instead
+  of `CI`, it ran **zero jobs**, `gh run view --log-failed` said "log not
+  found", and `gh workflow run ci.yml` refused with HTTP 422 *"Workflow does
+  not have 'workflow_dispatch' trigger"* about a file that plainly has one.
+  Recognise that signature: it means unparseable, not misconfigured.
+
+  Quote any `run:` value containing `: `. And parse workflow files locally
+  before pushing — `~/tmp/yamlvenv/Scripts/python.exe` has `pyyaml` for
+  exactly this; a red run is a cheap way to find out, but a run that never
+  starts teaches nothing on its own.
+
+- **A sandbox test that does not prove it is sandboxed proves nothing.** A
+  test that connects to the pipe "from an AppContainer" passes just as
+  happily when the AppContainer was never applied. The child must assert
+  `TokenIsAppContainer` on its own token before it does anything else.
+
+- **A test that leaks a watchdog corrupts the *next* run, not its own.**
+  `tests/watchdog_recovery.rs` kills the engine and waits for the renderer to
+  restart it, with a no-renderer control phase to prove nothing ambient does
+  the restarting. An early version leaked its renderer, and the following
+  run saw an engine reappear 12.75 s after the kill — about one
+  `WATCH_BUDGET` — with no renderer of its own started. The control's 5 s
+  window missed it, so the test would have passed for entirely the wrong
+  reason. Two fixes, both structural: refuse to start when **any** Sakura
+  process is running (a renderer holds no pipe, so only the process list
+  finds it), and tear down the watchdog *before* the thing it watches, or it
+  dutifully restarts what the teardown just stopped.
+
+- **Verify a test can fail before believing it passed.** Commenting out the
+  renderer spawn made `watchdog_recovery` fail after 30 s with the intended
+  message. Without that run, "it passed" would have been indistinguishable
+  from "it cannot fail".
+
+- **A test that configures a setting to a non-default value has not tested
+  the default.** Issue #99's two dispatch tests for the punctuation family
+  each set the role they exercised to a non-default mark (`FullWidth` comma,
+  `HalfWidth` period). Both passed. Under the shipped `Touten`/`Kuten` style
+  the configured mark *is* the reading, and that is the one case where the
+  ranker moved the selection off the configured row — so every test was green
+  and every real installation was wrong. Pick fixture values because they hit
+  the interesting case, not because they are visibly different from the
+  default, and cover `PunctuationStyle::ALL`-style enums by iterating.
+
+- **Candidate *order* and candidate *selection* are separate contracts owned
+  by separate code.** The converter builds the list; `preferred_candidate_index`
+  and `preserve_exact_initial` in `dispatch.rs` decide what is highlighted.
+  Fixing one leaves the other free to produce "the list is right but the wrong
+  character lands in the document", which is the hardest failure for a user to
+  describe. Assert both.
+
+- **Suppressing learning on the way *in* is not the same as ignoring it on the
+  way *out*.** `synthetic_exact` kept the punctuation rows out of the learning
+  store, but surfaces learned under an *earlier* setting still outranked the
+  configured mark on every later conversion. A feature that declares one
+  durable preference has to close both directions.
+
+- **本番コードが per-user の永続ファイルへ書くなら、その writer にテスト用の
+  差し替え経路を用意する。** `sakura-tsf` の `note_timeout` / `note_disconnect`
+  は `#[cfg(test)]` でシステム temp へ向き先を変える。これを忘れた writer が
+  1つでもあると、`cargo test --workspace`（現在 1,721 テスト）が実ユーザーの
+  `%LOCALAPPDATA%` 診断プロファイルへ追記する。テストが汚れるのではなく**本番
+  の観測データが汚れる**問題で、被害はテスト終了後に残り、しかもその数値を
+  根拠に次の判断をしてしまう。新しい diagnostics writer を足すときは、既存
+  writer の `#[cfg(test)]` 版を必ず一緒に写す。
+
+- **同じ終了処理を複数の理由で呼ぶ関数は、理由を必須引数にする。** #102 では
+  `TextService::disconnect()` が引数なしで、engine セッションを捨てる 21 の
+  production 経路が区別できなかった。optional な注釈にすると必ず「あとで
+  埋める」経路が残る。必須引数にすれば、新しい経路の追加が名前を決めるまで
+  コンパイルエラーになる。
+
+- **同じ形式の bounded log を2本持つときは、種別を分けているものが何かを明示
+  してテストで固定する。** IPC diagnostics では timeout と disconnect の wire
+  code 1..10 が**両方で有効**であり、分けているのは 4 byte の magic だけ
+  である。誤って相手のリーダに読ませると、別の意味のカウンタが黙って増える。
+  「片方のログをもう片方として読んでも 1 件も計上されない」を両方向で固定
+  する。
+
+- **理由を捨てている行を直すだけでは足りないことがある。情報を生成している行
+  まで遡る。** #104 では `client.rs` の `verify_server_process(...).is_err()`
+  が容疑だったが、`verify_server_process` の 5 step はすべて
+  `ERROR_ACCESS_DENIED` になり得て、うち 2 つはその HRESULT を**自分で合成**
+  していた。呼び出し側で理由を通しても step は区別できないままだった。
+  「どこで情報が失われたか」は、捨てている行と生成している行の両方を見る。
+
+- **variant 名が主張になっている error 型を、手近だからという理由で流用しない。**
+  `sakura-renderer` の `PipeBinding::connect` は、自分の `current_exe()` が
+  読めない／install root へ親辿りできないという**接続前**の失敗に対して
+  `Fault::UntrustedServer { process_id: 0 }` を返していた。peer を判定して
+  いないのに untrusted を名乗るので、ログがそのまま虚偽になる。判定していない
+  ことを言う variant（ここでは `ServerRejection::PolicyUnavailable`）を用意する。
+
+## Windows specifics
+
+- **Real-process tests must isolate `LOCALAPPDATA` unless they explicitly test
+  the installed user profile.** The engine's learning, configuration, user
+  dictionary, and diagnostics all derive from that root. A candidate UIA test
+  once restored a previously learned candidate at index 11 and opened on page 2
+  before the test sent PageDown. A unique per-run app-data directory both makes
+  the test deterministic and prevents verification from mutating user state.
+
+- **Auxiliary indexes over a mapped dictionary should retain image offsets, not
+  copied records.** Copying every 24-byte entry into the prediction index pushed
+  private working set over the 15 MiB release gate. A four-byte entry index lets
+  the hot path materialize the validated record from the read-only mapping only
+  when ranking or rendering it; the compact index passed the footprint gate
+  while keeping end-to-end prediction p99 below 0.3 ms.
+
+- **A server-side UI Automation raw provider needs COM initialized on the
+  renderer UI thread before the provider/window is created.** The candidate
+  window handled `WM_GETOBJECT` and called `UiaReturnRawElementProvider`, yet a
+  separate real UIA client saw only the generic host-window provider (empty
+  Name and no Sakura AutomationId). Adding an STA guard before window creation
+  made the custom `IRawElementProviderSimple` discoverable; the real-process
+  `candidate_uia` test now proves Name, AutomationId, control type, bounding
+  rectangle, paging updates, and hidden/off-screen state.
+
+- **`FILE_APPEND_DATA` and `FILE_CREATE_PIPE_INSTANCE` are the same bit
+  (0x0004).** A named-pipe client that asks for `GENERIC_READ | GENERIC_WRITE`
+  is therefore also asking for permission to create a pipe instance, which the
+  server's DACL rightly refuses. Clients must request the exact
+  `CLIENT_ACCESS` mask — see `sakura-ipc::security`.
+
+- **Inno Setup has no native way to fail an uninstall when an
+  `[UninstallRun]` entry exits nonzero.** A failing entry is a line in the log
+  and file removal proceeds regardless — which is exactly how an IME leaves
+  Windows pointing at a text service whose DLL is gone. `installer/setup.iss`
+  runs `--unregister` from a `Check:` function that execs it, reads the real
+  exit code and calls `Abort`.
+
+- **`$args` is a PowerShell automatic variable.** Assigning to it inside a
+  function shadows the unbound-argument array for the rest of that body. Name
+  the local something else (`$installerArgs`).
+
+- **`$PSCmdlet` resolves from the enclosing script scope inside plain
+  (non-advanced) functions of an advanced script**, so `-WhatIf` propagates
+  into helpers that never declared `[CmdletBinding()]`. Verified with a
+  purpose-built probe script rather than assumed.
+
+- **Opening the engine pipe is not a successful protocol handshake.** The
+  renderer watchdog used to reset its reconnect delay as soon as `CreateFileW`
+  succeeded. A reachable engine that rejected `Hello` therefore produced an
+  immediate reconnect storm, even though the source comment claimed backoff
+  would slow it. Only a valid `Hello` may reset the delay; protocol rejection
+  retains exponential backoff up to the ceiling. The schedule is now a tested
+  explicit terminal transition in `sakura-renderer::watch`.
+
+- **Every child wait must consume the caller's remaining deadline, not a fresh
+  per-operation timeout.** `sakura-regtool --stop` had an overall deadline but
+  each pipe reconnect could independently wait the full two-second patient
+  budget, allowing the loop to overshoot its advertised terminal. Each connect
+  and sleep is now capped by the remaining duration, with the cap covered by a
+  regression test.
+
+- **After a synthetic `WM_DPICHANGED`, wait relative to the most recently
+  observed rectangle.** The live candidate UIA test compared the post-DPI move
+  against its original caret rectangle. Because an earlier placement had
+  already changed that rectangle, the wait completed immediately on stale
+  state and raced the new placement. Capturing the DPI rectangle first and
+  requiring a subsequent change made the real HWND/UIA assertion deterministic.
+
+- **A Cargo target directory is not the installed product layout.** The
+  watchdog correctly starts its sibling engine, but that engine cannot discover
+  `{app}\dict\system.dic` when both executables live under `target\...\debug`.
+  Installed-layout supervisor tests must pass an explicit dictionary path to
+  the supervisor so the restarted child inherits the same validated data root.
+
+- **Diagnostic tier names must come from the same canonical vocabulary as CPU
+  dispatch.** The core selected `avx512bw` while the engine event log shortened
+  it to `avx512`, causing machine-readable Phase 1 evidence to reject a healthy
+  startup. `CpuTier::name()` now emits the exact core tier and has a unit test.
+
+- **Isolating `LOCALAPPDATA` also hides per-user developer tools.** A clean
+  verification profile could not find Inno Setup even though it was installed
+  under `%USERPROFILE%\AppData\Local\Programs`. Tool discovery used by isolated
+  real-process tests must accept an explicit path and check that fixed per-user
+  install location instead of treating the isolated application-data root as
+  the developer's tool root.
+
+## This machine
+
+- **Every `cargo` invocation must be prefixed with
+  `CARGO_HTTP_CHECK_REVOKE=false`**, or the fetch fails with
+  `CRYPT_E_NO_REVOKE_CHECK (0x80092012)`.
+
+- **Heredocs through the Bash tool fail here** (`unexpected EOF`, and
+  `$TMPDIR` is unset so `/msg.txt` is a permission error). Write commit
+  messages with the file-writing tool into the session scratchpad and use
+  `git commit -F <path>`.
+
+- **`perl -0pi -e 's|...|...|'` multi-line in-place substitution is unreliable
+  here.** Verified 2026-09-09 (#148): one run prepended the replacement to the
+  top of `crates/sakura-engine/src/timing.rs` instead of substituting, and
+  another silently placed the replacement inside a `format_args!` in
+  `crates/sakura-engine/src/server.rs`, producing parse errors far from the
+  intended site. Use `sed` with explicit line numbers, `sed -i 'Nr <file>'` to
+  splice a prepared block, or `head`/`cat`/`tail` reassembly.
+
+- **A `sed -z` multi-line pattern must be proven unique before it is applied.**
+  In the same session, a pattern meant to route nine `self.state.lock()` call
+  sites through a new `lock_state()` helper also rewrote the helper's own body,
+  making it call itself. Grep the pattern and count the matches first, and
+  re-read the helper after any replace-all that could match its definition.
+  Line numbers taken from an earlier grep also go stale after an intervening
+  edit changes the line count — re-grep immediately before splicing.
+
+- **`.cargo/config.toml` pins `x86_64-pc-windows-msvc`**, so release artifacts
+  live under `target/x86_64-pc-windows-msvc/release/`, not `target/release/`.
+  Anything that hard-codes the old path (installer sources, size checks) is
+  silently looking at a stale or absent file.
+
+- **This repository's PowerShell scripts require pwsh 7, not Windows
+  PowerShell 5.1.** `build-dictionary.ps1` uses `[IO.EnumerationOptions]`,
+  a .NET Core-only type that 5.1 cannot resolve (`型 [IO.EnumerationOptions]
+  が見つかりません`). CI already runs them under `shell: pwsh`; locally use
+  `"/c/Program Files/PowerShell/7/pwsh" -NoProfile -ExecutionPolicy Bypass
+  -File <script>`. Piping such a script to `tail` also swallows its nonzero
+  exit, so read the log text for a thrown error rather than trusting the
+  exit status.
+
+- **The candidate popup can be screenshotted reliably only by asking the
+  window to draw itself.** It is non-activating and click-through, so it sits
+  under whatever is foreground and a desktop capture gets the occluding
+  window. Find the `SakuraInputCandidates` HWND with `EnumWindows` and call
+  `PrintWindow(hwnd, hdc, 2 /* PW_RENDERFULLCONTENT */)`. Two more facts that
+  cost time: the popup opens *compact* (selected row plus footer, 50 px tall)
+  and needs Tab — `candidate_expand` under the MS-IME keymap — to show every
+  row, and `VK_CONVERT` is not delivered by `keybd_event`, so drive conversion
+  with Space. Confirm a synthetic key actually reached the IME by logging
+  `KeyDown` in the host: consumed keys arrive as `ProcessKey (229)`.
+
+## TSF re-entrancy safety
+
+- **Treat every separately re-entrant COM call as its own authority boundary.**
+  A lease check around an aggregate operation is insufficient when that
+  operation performs several host calls. Check authority before and after each
+  call, and suppress all later calls as soon as lifecycle, focus, context, or
+  operation ownership changes.
+
+- **Install cleanup ownership before validating authority after a successful
+  host Begin.** Re-entry can invalidate the caller while `BeginUIElement`
+  succeeds. Record the exact manager, element, and id first, then evaluate the
+  post-call lease; otherwise teardown loses the only matching `EndUIElement`.
+
+- **A refused single-threaded state borrow needs an out-of-band terminal
+  owner.** For delayed TSF callbacks, retain an exact operation token plus one
+  bounded deferred or lifecycle-owned settlement. Never leave a state such as
+  `QueryQueued` merely because a `RefCell` borrow or hidden-window post failed.
+
+- **Candidate teardown and candidate Begin/Update must share one exclusion
+  domain.** Hold it across subscription removal, `UnadviseSink`,
+  `EndUIElement`, controller restoration, and retained-work repost. Re-entrant
+  work must survive the old teardown and keep its own eventual cleanup owner.
+
+## Overflow-hazard test construction (dictionaries and prediction)
+
+- **`dictc::parse_entries` rejects any single `reading`/`surface` field over
+  `MAX_PREEDIT_BYTES` (1536 bytes) at compile time.** A dictionary TSV cannot
+  contain an oversized field to use as an overflow-test fixture — `dictc`
+  itself refuses to compile it. To construct a *runtime* overflow with a
+  *compile-valid* dictionary, attach a custom `AppProfile` with
+  `WidthPolicy { alnum: Width::Full, .. }` and use an ASCII surface: each
+  ASCII byte widens to a 3-byte fullwidth character during
+  `Normalizer::normalize_into`, so e.g. 600 dictc-legal ASCII bytes become
+  1800 bytes at render/commit time, well past the 1536-byte scratch buffer.
+  Confirmed working for `oversized_render_segment_dispatcher`
+  (`crates/sakura-engine/src/dispatch.rs`).
+
+- **`Converter::search_n_best` (`crates/sakura-core/src/conversion.rs`) used
+  to let one oversized N-best candidate's `ConversionError::OutputTooLong`
+  abort the whole search via `?`, discarding every candidate already found —
+  including the guaranteed-good cheapest one from `build_viterbi_candidate` —
+  and silently degrading the entire conversion to raw/unconverted display.**
+  Fixed by catching `Err(ConversionError::OutputTooLong)` specifically inside
+  the search loop and `continue`-ing instead of propagating it; every other
+  error variant still propagates via `return Err(error)`. This was found
+  purely as a side effect of writing an unrelated dispatch.rs regression
+  test — a symptom worth remembering: "conversion silently fell back to the
+  raw reading" is a search_n_best-abort symptom, not just a lattice/dictionary
+  problem.
+
+- **A `PredictionCandidate` surface is typed `FixedStr<MAX_PREDICTION_SURFACE_BYTES>`
+  (512 bytes) regardless of source (system dictionary, user dictionary, or
+  learned history) — `crates/sakura-engine/src/prediction.rs`.** An entry
+  whose surface exceeds 512 bytes is not truncated, it is silently dropped:
+  `system_candidate`/`user_candidate`/the history callback all build the
+  candidate with `.push_str(...).ok()?`, so a `None` return removes the
+  candidate from the ranked list with no error anywhere. Symptom: a
+  dictionary entry with `flags=predict` never appears as a Tab suggestion —
+  `State::Predicting` is never reached — even though the same dictionary
+  entry converts fine through ordinary (non-prediction) conversion. Check
+  `MAX_PREDICTION_SURFACE_BYTES` before assuming a Tab-suggestion bug is a
+  reading-length or indexing bug.
+
+- **`MAX_PREDICTION_SURFACE_BYTES` (512) × the widest possible
+  `normalize_into` expansion ratio (3, ASCII→fullwidth) exactly equals
+  `MAX_PREEDIT_BYTES` (1536).** This means `commit_suggestion_at`'s
+  `normalizer.normalize_into(candidate.surface(), ...)` call can **never**
+  actually overflow for any real (system/user/history) prediction candidate:
+  the maximal legitimate surface always lands exactly on the 1536-byte
+  boundary, and `FixedStr::push_str` accepts a write landing exactly on
+  capacity (`new_len > N` is the rejection condition, not `>=`). Do not write
+  a black-box regression test asserting `ErrorCode::TooLarge` from this path
+  — it is unreachable given today's constants, not merely hard to trigger.
+  Instead assert the boundary succeeds exactly at 1536 bytes (see
+  `a_maximal_suggestion_commit_fits_exactly_at_the_preedit_boundary` in
+  `crates/sakura-engine/src/dispatch.rs`), so a future change narrowing
+  either constant (or widening the expansion ratio) fails loudly here instead
+  of silently reopening the corruption `commit_suggestion_at`'s
+  stage-before-mutate ordering was written to prevent.
+
+- **Any regex in the packaging scripts that anchors on a line of a tracked
+  text file must allow the carriage return (`\r?$`, or `\s*$`).** The
+  repository stores LF; this machine and the GitHub Actions Windows runners
+  both check out with `core.autocrlf=true`, so the working tree is CRLF and
+  .NET's multiline `$` matches before the `\n`, leaving the `\r` unmatched.
+  Verified 2026-08-14 (#50): `scripts/build-installer.ps1` and
+  `.github/workflows/release.yml` each refused a correct tree this way. The
+  trap is that the same file builds fine until a `git checkout` touches it —
+  a working copy written by an editor keeps LF and hides the bug, so "it
+  worked last release" is not evidence. `crates/sakura-regtool/tests/
+  packaging_version.rs::every_packaging_version_gate_allows_a_carriage_return`
+  guards the two known gates; extend its table when adding a new one.
+
+- **Do not trust MSYS/Git Bash `cat -A`, `sed`, or `hexdump` to tell you a
+  file's line endings.** Those tools opened `installer/setup.iss` in text mode
+  and showed `22 0a` (LF) for a line that .NET read as `22 0d` (CRLF).
+  Verified 2026-08-14 (#50) — the LF reading sent the investigation the wrong
+  way for several minutes. Read the bytes through the runtime that actually
+  consumes the file: `[IO.File]::ReadAllText` in PowerShell for the packaging
+  scripts, `std::fs::read_to_string` in Rust for the tests.
+
+## Session state that describes a composition
+
+- **A flag that qualifies a composition must not be able to outlive one.**
+  `Session::shifted_ascii` (the temporary English composition) was cleared
+  only by `Session::reset` and by receiving a non-ASCII character. Erasing the
+  composition with Backspace or forward Delete reached neither, and the
+  resulting `Idle`-with-latch state was invisible, sticky (every romaji
+  keystroke is ASCII), and unrecoverable by any key (#51). Restore such an
+  invariant at one point per key in `apply_key`, before prediction and
+  rendering — not by adding a clear to each erase path, which is the
+  list-of-cases shape `Session::reset`'s doc comment already argues against.
+
+- **`is_composing()` is not a safe proxy for "this flag is still meaningful".**
+  It deliberately ignores `shifted_ascii` once `raw_input` is empty, and
+  `commit_pending` returns early on `!is_composing()`. Any state that both
+  gates on `is_composing()` and is only cleared inside it can strand itself.
+
+- **Measure a "nothing works" report instead of reasoning about it.** Pressing
+  each plausible recovery key from the stuck state and recording consumed /
+  resulting preedit / flag turned an unfalsifiable severity claim into a table
+  that named the two keys that *would* have recovered (Escape, Enter) and why
+  neither could fire. That table is what proved the root cause was the whole
+  cause and not one of several.
+
+- **Key-map modifiers match exactly, so a held Shift turns Backspace into a
+  different key.** `[composing] backspace = delete_back` does not consume
+  Shift+Backspace. Holding Shift to type English therefore leaked Backspace
+  (and Left/Right) to the host unless those chords were bound. Verified by
+  `KeyMap::lookup(State::Composing, shift+backspace)` and the AIUEO repair
+  tests in `shift_latin_order_tests`.
+
+- **When visible English text is `raw_input`, the caret must be a raw-input
+  index.** `render_preedit` used to pin the caret at `raw_input.len()` while
+  Backspace popped the last raw byte and deleted `preedit[cursor-1]`. After
+  Left, that pair produced AIUEO → AIUOE / AIUOEO. Verified by
+  `production_left_then_backspace_deletes_the_character_before_the_caret`
+  and by a mutant that restored end-append (`AIUOE`).
+
+- **`resync_shifted_ascii_from_raw` is what makes later English conversion
+  possible, even though the user sees `raw_input`.** `begin_conversion`
+  beeps when `preedit` is empty. A no-op resync leaves `preedit` empty after
+  Shift+Latin typing, so Space never reaches the IT-flag dictionary path.
+  Visible-text tests cannot kill that mutant; a convert-after-CLAUDE test
+  can. Verified by cargo-mutants 27.1.0
+  (`replace resync_shifted_ascii_from_raw -> Ok(())` caught) and
+  `resync_is_required_for_shifted_ascii_dictionary_conversion`.
+
+- **`WriteCoordinator::attach` refuses a plan whose `before` is not the
+  journal tail.** After engine plans commit `AIUEO`, a host-stolen
+  `AIUE`→`AIUOEO` attach is `ProjectionMismatch`. This is the strongest
+  COM-free stand-in for “Shift+Backspace must not be applied by the host
+  while the engine still owns the key.” Verified by
+  `shift_latin_backspace_retype_plans_commit_in_order_and_never_aiuoeo`.
+
+- **Whole-function llvm-cov of `feed_character` / `apply_backspace` /
+  `render_preedit` is not Shift-Latin coverage.** Each function returns
+  early on `shifted_ascii`; the remaining regions are kana / pending-romaji
+  / CJK normalize. Measure the early-return arm line ranges separately
+  (2278–2326, 3502–3512, 4165–4193) and list the rest as out of scope.
+  Verified 2026-08-15: `shift_latin` filter, 45 tests, arm 98.5 / 90.0 /
+  75.5 while whole-function backspace stayed 25.0% (20/80). `mcdc_records`
+  were 0.
+
+- **Escape after Convert is not convert-cancel.** Production Escape clears
+  the English buffer; converting Backspace cancels conversion without
+  deleting a letter. A coverage PBT that maps `Convert` to Space after
+  punctuation also diverges: `decide_shift_ascii_convert` inserts a literal
+  U+0020. Verified by the first fail of
+  `production_convert_cancel_then_home_backspace_keeps_press_order` (got
+  `"X"` vs `"XAIUEO"`) and coverage-neighbor case 1 (`"AIUEO--IEUA "` vs
+  `"AIUEO--IEUA"`).
+
+- **`sakura_tsf_test_host` / `e2e-host` is the installed language profile,
+  not a Sakura-only HWND.** The next automated layer that does not touch
+  the installed IME is a process-local EDIT plus `checked_host_call` /
+  `plan_from_visible`. A live `ITfContext` / `ITfRange` still cannot be
+  constructed in this crate. Verified by
+  `shift_latin_settext_payloads_reach_a_process_local_edit_hwnd_and_never_aiuoeo`
+  and the recovery-test comment in `text_service.rs`.
+
+- **Process-leak assertions must identify the owned artifact, not only the
+  executable name.** The capture verifier initially counted the user's
+  installed `sakura_engine.exe` as a leak; scoping by the repository debug
+  path plus `--test-pipe` distinguished it from owned children. Verified by
+  the missing-dictionary capture check: exit 2, no output, identical private
+  process sets.
+
+- **Serialize real engine child lifetimes within a Windows integration test
+  binary when parallel startup is load-sensitive.** `space_key_dispatch_pipe`
+  reproduced `STATUS_ACCESS_VIOLATION` under repeated `--test-threads=2` runs
+  while five serial runs passed; a lifetime mutex in the shared harness was
+  followed by ten successful parallel-thread repetitions and a green
+  workspace run. The mutex owns no protected data, so recover its poison after
+  a failed assertion; otherwise one failed child test suppresses the terminal
+  results of every later integration test in the process.
+
+- **Pass a fixed diagnostic payload as a record, not positional scalar
+  arguments.** Converting `debug_trace` to `TraceEvent` preserved its
+  content-free wire row and made the evaluation dependency graph pass strict
+  `cargo clippy -- -D warnings` without an allow-list.
+
+- **Every workflow sparse-checkout that runs the dictionary builder must include
+  every pinned input it validates, not only the obvious dictionary directory.** `build-dictionary`
+  consumes Mozc's `src/data/rules/segmenter.def` in addition to
+  `src/data/dictionary_oss`; omitting it made both release and ordinary
+  installer workflows fail before compilation. Verified by complete two-pass
+  dictionary builds after adding that exact file to each workflow checkout.
+
+- **Do not generate a numeric surface already supplied by an exact dictionary
+  edge.** N-best deduplicates by rendered surface, so a cheaper generated `一日`
+  can otherwise hide the lexical entry's cost, ordinal, and detail provenance.
+  Skip only the identical generated surface, then rank the remaining numeric
+  spellings behind the exact lexical form. Verified by the synthetic core test
+  and all 19 shipped-dictionary ranking tests for 1.0.18.
+
+- **Pin line endings for every text file whose raw SHA-256 is a release
+  contract.** The reranker research manifest had the reviewed LF hash locally,
+  but a Windows Actions checkout converted it to CRLF and the installer failed
+  closed after all earlier gates passed. An exact `.gitattributes` `eol=lf`
+  rule keeps the reviewed manifest bytes identical across checkouts.
+
+- **Write those files as bytes, not as text.** The `.gitattributes` pin above
+  keeps git from changing them; it cannot stop the tool that creates them.
+  Verified 2026-09-09 (#148): bumping `data/update-signing/release-sequence.txt`
+  with Python's `Path.write_text` produced `7\r\n` under Windows' default
+  newline translation, and because the file is embedded with `include_bytes!`
+  and compared to `format!("{floor}\n")`, fourteen `sakura-settings`
+  `update_trust` and `updater` tests failed with "embedded release sequence
+  contains CR or NUL". Write with explicit bytes (`printf '7\n' >`, or
+  `newline=""`) and confirm with `xxd` before running anything else — the
+  failure surfaces far from the write, in tests that never mention the file.
+
+- **A voiced suffix needs an attested independent unvoiced base before it may
+  be marked non-initial.** Same-surface suffix, prefix, or non-independent
+  evidence is insufficient: Mozc assigns both `ばん` and `はん` → `版` its
+  generic suffix class, while `び` → `日` was incorrectly hidden because
+  `ひ` → `日` existed only as suffix and non-independent nouns. The fixed-source
+  rule first reduced 532 to 500 marked entries by rejecting suffix-only evidence,
+  then to 494 by rejecting prefix/non-independent evidence; the second step
+  changed only six entries across five readings and made `日` top-ranked for
+  `び` and `ぴ`, while all four `ずかい` → `使い` / `遣い` identities stayed
+  non-initial. Do not substitute a word-cost dominance rule: the measured
+  version restored 325 entries and changed 229 readings, including obvious
+  lexical fragments.
+
+- **Keep per-candidate provenance bit-packed inside the fixed conversion
+  arena.** Four repair counters pushed the Windows test harness over its stack
+  boundary at 32-way parallelism even though serial tests passed. A one-byte
+  repair-kind mask preserved the required evidence and restored the 32-thread
+  test plus the 128 KiB worker-stack checks.
+
+- **Measure stack *usage*, never stack *headroom*, and read it out of the
+  object file.** Three journal entries recorded the raw-repair overflow as
+  "falsified by measurement" and one session withdrew the correct
+  `#[inline(never)]` fix on the strength of a padding probe: `black_box([0u8;
+  16384])` still passed, so the frame looked to have 16 KiB spare. A padding
+  probe only reports that N more bytes fit wherever the compiler put them; it
+  cannot say which frame is live at peak depth. Disassembly answered it in one
+  pass. `ConversionCandidate` is 4,152 bytes, an unoptimised build gives every
+  by-value move and temporary its own slot, and
+  `convert_input_with_raw_repair_plans` carried ten of them in a 41,456-byte
+  frame that stayed live across the corrected pass's whole conversion subtree
+  -- 136 KiB required against 128 KiB reserved. Extracting the two
+  candidate-moving blocks into `admit_repair_pass` and `merge_repair_scratch`
+  moved those slots into siblings that are dead while anything deep runs,
+  taking the orchestrating frame to 7,576 bytes and the requirement under
+  68 KiB. Total bytes did not shrink; their lifetime did. Procedure:
+  `cargo rustc -p <crate> --lib --profile dev -- --emit=obj=<path> -C
+  codegen-units=1`, then `llvm-objdump -d -C` from the toolchain's
+  `lib/rustlib/<target>/bin/`. The linked `.exe` has no COFF symbol table, so
+  it must be the object file. Match **both** prologue forms: `subq $0xN, %rsp`
+  and the MSVC big-frame `movl $0xN, %eax` ... `callq` ... `subq %rax, %rsp`.
+  The second has no `__chkstk` string in the disassembly because the call goes
+  through a relocation, and skipping it hides exactly the largest frames.
+
+- **A sweep that passes in every condition is a claim about the harness before
+  it is a claim about the code.** `cargo test ... -- --exact <filter>` with a
+  filter that is not the full test path runs zero tests and exits 0. The
+  earlier "48 of 48 stack/limit combinations passed, 256 candidates fit in
+  64 KiB" has that shape, and the same false green appeared again today.
+  Read the `running N tests` line, not the exit code. Near a resource
+  boundary a single run is probabilistic -- this overflow reproduced about 30%
+  of the time -- so run several trials per point (20 here) before calling a
+  size passing or failing.
+
+- **Raising a ceiling constant changes space as well as time, so audit inline
+  array dimensions for it.** #94 and #95 tied
+  `MAX_DICTIONARY_SURFACES_PER_READING` to `MAX_CONVERSION_CANDIDATES`, which
+  read as a candidate-count change but grew `DictionaryEdgeBudget`'s inline
+  `[u32; N]` from 64 to 1,040 bytes while it stayed `Copy` and while
+  `build_lattice` constructed a fresh one per reading start. The conversion
+  path has two invariants at once and satisfying either alone is wrong: a
+  per-call `Vec::with_capacity` fits the stack guard but breaks
+  `conversion_into_reused_candidate_buffers_allocates_nothing` and
+  `cross_commit_bridge_conversion_allocates_nothing`. Scratch that must be
+  both large and allocation-free belongs in the `Converter` arena, reset per
+  use.
+
+- **A branch with no upstream has no CI, and `ci.yml` is not all of CI.**
+  `feat/95-single-kanji-and-candidate-cap` accumulated nine code commits that
+  no workflow ever saw, and four gates were red. Three were in `ci.yml` and
+  reproduce locally: `cargo test --workspace` (the raw-repair stack overflow),
+  `cargo clippy --workspace --all-targets -- -D warnings`
+  (`field_reassign_with_default` in two committed #99 tests), and
+  `cargo fmt --all -- --check`. Running those three and declaring the push
+  green still shipped a red `installer.yml`, because #95 added
+  `src/data/single_kanji` to `build-dictionary.ps1`'s own `$SparsePaths` and
+  its required-file checks but not to the `sparse-checkout` in `installer.yml`
+  or `release.yml` — and `release.yml` runs only on a tag, so that half would
+  have surfaced at release time. Before a push that lands accumulated work,
+  enumerate every workflow the push triggers (`ls .github/workflows`) rather
+  than the subset that is convenient to run locally, and treat a green local
+  suite on a branch CI has never seen as unverified.
+
+- **A path list duplicated between a script and a workflow will drift, so make
+  the two comparable and say which is authoritative.** `Resolve-PinnedSource`
+  re-asserts its sparse profile only for the clone it manages itself; when
+  `-MozcSource` names a directory, as both workflows do, it verifies the
+  revision and returns, so anything missing from the workflow's list reaches
+  the build as a hard failure with no repair path. The lists are now literal
+  matches — `src/data/rules` rather than `src/data/rules/segmenter.def`, which
+  cone mode resolves identically because a listed file pulls in its ancestors'
+  immediate entries — and both steps carry a comment naming the script as the
+  source of truth.
+
+- **A glossary supplies each term's meaning, not the reading a user types.**
+  `data/it-terms.tsv` is generated from a term glossary, so `ACM` arrived with
+  the reading `えーだぶりゅーえすさーてぃふぃけーとまねーじゃー` and nothing
+  else, and 2,315 of 9,687 ASCII IT surfaces (23%) had no kana reading at all.
+  Coverage counted from the source therefore overstates reachability: the row
+  exists and the term is still untypeable. Audit a generated dictionary by the
+  reading a user would actually press, not by the entry count. The same
+  mismatch produces compound-only heads -- the glossary lists `RFC 7807` and
+  `PR Review` but never `RFC` or `PR` -- so check every multi-token surface's
+  head for a standalone entry.
+
+- **An IT reading may take rank two, never rank one, from a word that already
+  owned that reading.** Dump the pre-overlay dictionary and intersect it with
+  the readings being added: of the overlay's 754 kana readings 32 landed on a
+  reading that already had a dictionary entry, and eleven of those led the
+  existing word until they were re-priced to yield (cost 9000, or 16000 where
+  9000 was not enough -- `IA` and `ACID` both needed the higher price). The
+  measurement is cheap and it is the only way to keep the project's "no
+  general-Japanese regression for an IT gain" rule honest. Do not try to
+  express this as a blanket assertion over candidate lists -- most "Japanese
+  candidates" are the reading's own hiragana echo or lattice-assembled
+  fragments, so an absolute guard fails on 500 harmless rows. Pin the measured
+  collisions instead.
+
+- **Comparing rank one is not enough: an exact entry prunes the whole fuzzy
+  expansion beneath it.** Adding one row collapses the reading's candidate list
+  -- `じーぴーゆー` went from 108 candidates to two -- because the engine stops
+  expanding a reading fuzzily once it matches exactly. Words the fuzzy list used
+  to carry disappear from ranks well below the leader, where a leader-only diff
+  never looks. That is how `ぐろっく`/Grok silently removed `クロック` *and*
+  `黒く`, and `ぴんぐ`/ping removed `ピンク` while the leader check stayed
+  green. Diff the **whole** candidate list against a dictionary built from HEAD,
+  and widen the probe window first: at 8 candidates the window truncated 718 of
+  754 lists and the audit saw almost nothing. The invariant to hold is that
+  every pruned word is still reachable from the reading that is actually its
+  own (`炙ろう` from `あぶろう`, not from `あぶろ`); where it is not, drop the
+  row rather than re-price it, and leave the term to its ASCII reading.
+
+- **Give a kana reading prediction only when it cannot crowd a prefix.** A
+  Shift+ASCII reading competes only with other Latin runs, so it stays
+  predictive; a kana reading shares its prefixes with ordinary words, and 470
+  acronyms reachable from `え` would trade a general-Japanese regression for an
+  IT gain. Curated kana rows are conversion-only (`prediction_cost = -`).
+
+- **A user-deletable record that is merely weaker than what the binary already
+  enforces must never fail harder than its own absence.** (Bytes that are not a
+  well-formed record are a different case and stay terminal.)
+  Verified 2026-09-09 (#150): `%LOCALAPPDATA%\SakuraInput\update\trust-state.txt`
+  is written only by updater-driven checks, so a machine that installs by hand
+  keeps whatever sequence its last check saw (4 / 1.0.36 here) while every new
+  build embeds a higher floor (7 in 1.0.39). `TrustState::parse` rejected a
+  state below that floor as a terminal error, so the settings app answered every
+  update check with "update trust state is below the embedded trust floor" and
+  had no way back -- while an attacker who disliked the file could simply delete
+  it and get the accepted no-state path. The bound that actually holds is the
+  one embedded in the binary. A stored bound weaker than the embedded one is
+  *no bound*, not corruption: fold it into the absent case and rewrite it from
+  the signature-verified input. Keep genuinely malformed bytes terminal, and
+  put the file's full path in that message so the user can recover.
