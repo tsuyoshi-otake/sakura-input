@@ -6,8 +6,8 @@ use std::io;
 use std::path::Path;
 
 use sakura_engine::input_history::{
-    clear_path, read_snapshot, InputHistoryRecord, InputHistorySnapshot, KeyHistoryRecord,
-    ScopeClass, INPUT_HISTORY_FORMAT_VERSION,
+    clear_path, read_snapshot, HistoryScope, InputHistoryRecord, InputHistorySnapshot,
+    InputHistorySnapshotExt, KeyHistoryRecord, INPUT_HISTORY_FORMAT_VERSION,
 };
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
 use sakura_ipc::{Client, Endpoint, Fault};
@@ -124,11 +124,11 @@ pub fn mine_snapshot(snapshot: &InputHistorySnapshot) -> MineReport {
         let lower_bound = previous_commit
             .insert(commit.session, commit.sequence)
             .unwrap_or(0);
-        if commit.scope != ScopeClass::Normal
+        if commit.scope != HistoryScope::Normal
             || !safe_text(&commit.reading)
             || !safe_text(&commit.surface)
         {
-            if commit.scope != ScopeClass::Normal {
+            if commit.scope != HistoryScope::Normal {
                 stats.excluded_non_normal += 1;
             } else {
                 stats.excluded_private += 1;
@@ -319,7 +319,7 @@ fn reconstruct_typing(
         .copied()
         .filter(|key| key.sequence > lower_bound && key.sequence < upper_bound)
     {
-        if key.scope != ScopeClass::Normal
+        if key.scope != HistoryScope::Normal
             || key.repeat
             || key.delete_before > 0
             || key.beep
@@ -709,7 +709,9 @@ pub fn clear_offline(path: &Path) -> io::Result<ClearRoute> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_engine::input_history::{CommitHistoryRecord, InputHistoryRecord, KeyHistoryRecord};
+    use sakura_engine::input_history::{
+        CommitHistoryRecord, InputHistoryRecord, KeyHistoryRecord, ScopeClass,
+    };
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -764,7 +766,7 @@ mod tests {
         sequence: u64,
         session: u64,
         character: Option<char>,
-        scope: ScopeClass,
+        scope: HistoryScope,
     ) -> InputHistoryRecord {
         InputHistoryRecord::Key(KeyHistoryRecord {
             sequence,
@@ -793,7 +795,7 @@ mod tests {
     fn commit(
         sequence: u64,
         session: u64,
-        scope: ScopeClass,
+        scope: HistoryScope,
         reading: &str,
         surface: &str,
     ) -> InputHistoryRecord {
@@ -814,21 +816,27 @@ mod tests {
         let snapshot = InputHistorySnapshot {
             format_version: INPUT_HISTORY_FORMAT_VERSION,
             records: vec![
-                key(1, 7, Some('k'), ScopeClass::Normal),
-                key(2, 7, Some('y'), ScopeClass::Normal),
-                key(3, 7, Some('o'), ScopeClass::Normal),
-                key(4, 7, Some('u'), ScopeClass::Normal),
-                commit(5, 7, ScopeClass::Normal, "きょう", "今日"),
+                key(1, 7, Some('k'), HistoryScope::Normal),
+                key(2, 7, Some('y'), HistoryScope::Normal),
+                key(3, 7, Some('o'), HistoryScope::Normal),
+                key(4, 7, Some('u'), HistoryScope::Normal),
+                commit(5, 7, HistoryScope::Normal, "きょう", "今日"),
                 commit(
                     6,
                     7,
-                    ScopeClass::Sensitive,
+                    HistoryScope::Sensitive,
                     "https://example.invalid",
                     "URL",
                 ),
-                commit(7, 7, ScopeClass::Normal, "mail@example.invalid", "メール"),
-                commit(8, 7, ScopeClass::Normal, "A9bC7dE8fG9hI0jK1lM2nO3p", "秘密"),
-                commit(9, 7, ScopeClass::Unclassified, "ひみつ", "秘密"),
+                commit(7, 7, HistoryScope::Normal, "mail@example.invalid", "メール"),
+                commit(
+                    8,
+                    7,
+                    HistoryScope::Normal,
+                    "A9bC7dE8fG9hI0jK1lM2nO3p",
+                    "秘密",
+                ),
+                commit(9, 7, HistoryScope::Unclassified, "ひみつ", "秘密"),
             ],
             ignored_tail_bytes: 0,
         };
@@ -848,8 +856,14 @@ mod tests {
         let mut records = Vec::new();
         for index in 0..10 {
             let key_sequence = index * 2 + 1;
-            records.push(key(key_sequence, 11, Some('a'), ScopeClass::Normal));
-            records.push(commit(key_sequence + 1, 11, ScopeClass::Normal, "a", "あ"));
+            records.push(key(key_sequence, 11, Some('a'), HistoryScope::Normal));
+            records.push(commit(
+                key_sequence + 1,
+                11,
+                HistoryScope::Normal,
+                "a",
+                "あ",
+            ));
         }
         let snapshot = InputHistorySnapshot {
             format_version: INPUT_HISTORY_FORMAT_VERSION,
@@ -878,8 +892,8 @@ mod tests {
         let snapshot = InputHistorySnapshot {
             format_version: INPUT_HISTORY_FORMAT_VERSION,
             records: vec![
-                key(1, 12, Some('k'), ScopeClass::Normal),
-                commit(2, 12, ScopeClass::Normal, "か\u{3099}", "が"),
+                key(1, 12, Some('k'), HistoryScope::Normal),
+                commit(2, 12, HistoryScope::Normal, "か\u{3099}", "が"),
             ],
             ignored_tail_bytes: 0,
         };
@@ -894,11 +908,11 @@ mod tests {
         for index in 0..120 {
             let session = index + 1;
             let key_sequence = index * 2 + 1;
-            records.push(key(key_sequence, session, Some('a'), ScopeClass::Normal));
+            records.push(key(key_sequence, session, Some('a'), HistoryScope::Normal));
             records.push(commit(
                 key_sequence + 1,
                 session,
-                ScopeClass::Normal,
+                HistoryScope::Normal,
                 &format!("term{index}"),
                 &format!("表{index}"),
             ));

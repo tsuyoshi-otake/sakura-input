@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$allRules = @((1..9 | ForEach-Object { "R$_" }) + 'R12')
+$allRules = @((1..9 | ForEach-Object { "R$_" }) + @('R12', 'R13'))
 $requested = @($Enforce | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToUpperInvariant() } | Where-Object { $_ })
 $unknown = @($requested | Where-Object { $allRules -cnotcontains $_ } | Sort-Object -Unique)
 if ($unknown.Count) { throw "Unknown dependency rule(s): $($unknown -join ', ')" }
@@ -195,6 +195,39 @@ function Check-DirectBoundary($Metadata, [string]$Rule, [string]$Package, [strin
     Add-Result $Rule $(if ($details.Count) { 'VIOLATION' } else { 'PASS' }) $Summary @($details)
 }
 
+function Get-R13Findings($Metadata, [string]$SourceRoot) {
+    $findings = [Collections.Generic.List[string]]::new()
+    $packages = @($Metadata.packages | Where-Object { $_.name -ceq 'sakura-store' })
+    if ($packages.Count -ne 1) {
+        $findings.Add("expected one sakura-store package, found $($packages.Count)")
+    }
+    else {
+        $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        [void]$allowed.Add('sakura-values')
+        [void]$allowed.Add('windows')
+        $normal = @($packages[0].dependencies | Where-Object { $null -eq $_.kind })
+        foreach ($dependency in $normal) {
+            if (-not $allowed.Contains([string]$dependency.name)) {
+                $findings.Add("sakura-store has forbidden normal dependency: $($dependency.name)")
+            }
+        }
+        if (@($normal | Where-Object { $_.name -ceq 'sakura-values' }).Count -ne 1) {
+            $findings.Add('sakura-store must have exactly one normal dependency on sakura-values')
+        }
+    }
+
+    if (-not [IO.Directory]::Exists($SourceRoot)) {
+        $findings.Add('crates/sakura-store/src is missing')
+    }
+    else {
+        # Durable records legitimately contain a `session` value. Reject only
+        # runtime ownership/dependency paths; never scan for that raw token.
+        $pattern = '(?:\bstd::thread\b|\bstd::sync::mpsc\b|\bstd::sync::\{[^}\r\n]*\bmpsc\b|\bstd::\{[^}\r\n]*\bthread\b|\bmpsc::|\bsakura_engine\b|\bsakura_proto\b|\bsakura_ipc\b|\bcrate::session(?:::|\b)|::session::)'
+        foreach ($hit in @(Invoke-SourceScan 'R13' $SourceRoot $pattern)) { $findings.Add($hit) }
+    }
+    return @($findings)
+}
+
 function Get-RerankOwnershipFindings([string[]]$Files, [string]$OwnerRoot) {
     $findings = [Collections.Generic.List[string]]::new()
     $ownerPrefix = [IO.Path]::GetFullPath($OwnerRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
@@ -340,6 +373,25 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
         finally {
             $rgExecutable = $savedRgExecutable
         }
+        $r13Fixture = Join-Path $fixtureRoot 'store/src'
+        [void][IO.Directory]::CreateDirectory($r13Fixture)
+        $r13File = Join-Path $r13Fixture 'format.rs'
+        [IO.File]::WriteAllText($r13File, "pub struct Record { pub session: u64 }`n")
+        $r13Metadata = [pscustomobject]@{ packages = @(
+            [pscustomobject]@{ name = 'sakura-store'; dependencies = @(
+                [pscustomobject]@{ name = 'sakura-values'; kind = $null },
+                [pscustomobject]@{ name = 'windows'; kind = $null },
+                [pscustomobject]@{ name = 'dev-helper'; kind = 'dev' }
+            ) }
+        ) }
+        if (@(Get-R13Findings $r13Metadata $r13Fixture).Count -ne 0) {
+            throw 'R13 allowed dependency/session-field fixture failed'
+        }
+        [IO.File]::WriteAllText($r13File, "pub struct Record { pub session: u64 }`nuse std::thread;`n")
+        $r13Metadata.packages[0].dependencies += [pscustomobject]@{ name = 'sakura-engine'; kind = $null }
+        if (@(Get-R13Findings $r13Metadata $r13Fixture).Count -ne 2) {
+            throw 'R13 runtime path/dependency negative fixture failed'
+        }
         $r12Fixture = Join-Path $fixtureRoot 'values'
         [void][IO.Directory]::CreateDirectory($r12Fixture)
         $r12Bad = Join-Path $r12Fixture 'lib.rs'
@@ -372,7 +424,7 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
         $r5Negative = Get-R5Audit $renderer
         if ($r5Negative.Findings.Count -ne 2) { throw 'R5 negative fixture failed' }
 
-        Write-Host 'PASS: dependency rule fixtures cover metadata edges, rg-free source rejection, R5/R8 ownership, R9 placement, and R12 values isolation'
+        Write-Host 'PASS: dependency rule fixtures cover metadata edges, rg-free source rejection, R5/R8 ownership, R9 placement, R12 values isolation, and R13 store isolation'
     }
     catch {
         $fixtureFailure = $_
@@ -446,6 +498,9 @@ else {
     }
 }
 Add-Result 'R12' $(if ($r12.Count) { 'VIOLATION' } else { 'PASS' }) 'values must not know wire and must remain a dependency leaf' @($r12)
+
+$r13 = @(Get-R13Findings $metadata (Join-Path $repoRoot 'crates/sakura-store/src'))
+Add-Result 'R13' $(if ($r13.Count) { 'VIOLATION' } else { 'PASS' }) 'store must own data/codec without runtime dependencies' $r13
 
 if ($results.Count -ne $allRules.Count) {
     throw "Dependency audit produced $($results.Count) results for $($allRules.Count) rules"

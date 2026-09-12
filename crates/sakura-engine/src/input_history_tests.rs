@@ -22,7 +22,7 @@ fn key_record(sequence: u64, timestamp_ms: u64) -> InputHistoryRecord {
         sequence,
         timestamp_ms,
         session: 1,
-        scope: ScopeClass::Normal,
+        scope: HistoryScope::Normal,
         key_code: 1,
         character: Some('x'),
         modifiers: 0,
@@ -120,7 +120,7 @@ fn complete_frame_unknown_record_preserves_store() {
     // rather than failing earlier while reading a truncated header.
     let mut payload = vec![0; 1 + 8 + 8 + 8 + 1];
     payload[0] = 255;
-    payload[25] = ScopeClass::Normal as u8;
+    payload[25] = HistoryScope::Normal as u8;
     assert_eq!(
         InputHistoryRecord::decode(&payload)
             .unwrap_err()
@@ -132,7 +132,8 @@ fn complete_frame_unknown_record_preserves_store() {
 
 #[test]
 fn complete_frame_malformed_record_preserves_store() {
-    assert_complete_frame_failure_preserves_store(&protect(&[RECORD_KEY]).unwrap());
+    // A key tag (1) with none of its required fields is a truncated record.
+    assert_complete_frame_failure_preserves_store(&protect(&[1]).unwrap());
 }
 
 #[test]
@@ -1100,7 +1101,7 @@ fn key_and_commit_records_roundtrip_through_dpapi() {
     };
     assert_eq!(key.sequence, 2);
     assert_eq!(key.session, 7);
-    assert_eq!(key.scope, ScopeClass::Normal);
+    assert_eq!(key.scope, HistoryScope::Normal);
     assert_eq!(key.key_code, 1);
     assert_eq!(key.character, Some('\t'));
     assert!(key.consumed);
@@ -1117,7 +1118,7 @@ fn key_and_commit_records_roundtrip_through_dpapi() {
     };
     assert_eq!(commit.sequence, 3);
     assert_eq!(commit.session, 7);
-    assert_eq!(commit.scope, ScopeClass::Normal);
+    assert_eq!(commit.scope, HistoryScope::Normal);
     assert_eq!(commit.left_context, 3);
     assert_eq!(commit.right_context, 4);
     assert!(!commit.reading.is_empty());
@@ -1686,7 +1687,7 @@ fn golden_key_record(action: String) -> InputHistoryRecord {
         sequence: 0x0102_0304_0506_0708,
         timestamp_ms: 0x1112_1314_1516_1718,
         session: 0x2122_2324_2526_2728,
-        scope: ScopeClass::Unclassified,
+        scope: HistoryScope::Unclassified,
         key_code: 0x3041,
         character: Some('\u{3042}'),
         modifiers: 0xa5,
@@ -1722,7 +1723,7 @@ fn plaintext_record_payloads_are_stable_golden_bytes() {
             sequence: 9,
             timestamp_ms: 10,
             session: 11,
-            scope: ScopeClass::Normal,
+            scope: HistoryScope::Normal,
             reading: "かな".to_owned(),
             surface: "仮名".to_owned(),
             left_context: 0x1213,
@@ -1735,7 +1736,7 @@ fn plaintext_record_payloads_are_stable_golden_bytes() {
             sequence: 12,
             timestamp_ms: 13,
             session: 14,
-            scope: ScopeClass::Sensitive,
+            scope: HistoryScope::Sensitive,
             operation: AiTextOperation::Proofread,
             status: AiTextStatus::ApiError,
             source: "元".to_owned(),
@@ -1757,7 +1758,7 @@ fn plaintext_record_payloads_are_stable_golden_bytes() {
             sequence: 20,
             timestamp_ms: 21,
             session: 22,
-            scope: ScopeClass::Normal,
+            scope: HistoryScope::Normal,
             package_version: "1.2.3".to_owned(),
             release_label: "r".to_owned(),
         }),
