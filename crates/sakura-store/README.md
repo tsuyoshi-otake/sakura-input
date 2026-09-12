@@ -26,7 +26,7 @@ Defines the durable learning and developer-history formats once for engine, sett
 
 ## Public API budget
 
-At most 12 public types and 23 public functions. The Phase 2.2b allowance is limited to six retention/size/path/replacement functions; the `Sealer::seal`/`open` contract uses the two reserved Phase 2.2c functions. Public modules and names remain domain-specific; no generic dumping-ground API.
+The final learning-store boundary allows at most 20 public types and 31 public functions. The first pure learning-codec extraction reaches 14/31 by adding `LearningRecord`, `LearningSnapshot`, temporary `DecodedRecord`, and eight low-level functions to the existing 11/23 surface. The transaction move replaces `DecodedRecord` with `LearningLog`, `ReplayView`, `ReplayEvent`, `OperationReceipt`, `LearningLogError`, `LogMaintenance`, and `LogForget`; makes all eight low-level functions crate-private; and exposes exactly `memory`, `append`, `append_repair_suppress`, `read_snapshot`, `open`, `maintain`, `forget_exact`, and `clear`. That produces 20/31. TSV formatting belongs to settings and is excluded. The Phase 2.2b allowance remains limited to six retention/size/path/replacement functions; the `Sealer::seal`/`open` contract uses the two reserved Phase 2.2c functions. Public modules and names remain domain-specific; no generic dumping-ground API.
 
 ## Invariants
 
