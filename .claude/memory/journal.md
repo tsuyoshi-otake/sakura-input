@@ -1739,3 +1739,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Hosted runs 34704517571 and 34705378113 again rejected an owned engine; later diagnostics reported native-device image paths. Original admission data remains unobserved, so historical causality is not claimed.
 - Added bounded current-drive mapping before the existing exact/canonical/reparse/layout checks, with no process requery, retries or integrity exception. Five new tests include real Windows mapping and negative policy controls.
 - Parent verification on the implementation stack: IPC security tests, locked IPC clippy with warnings denied, wrapped locked workspace tests, process cleanup and diff checks passed. The identical source patch is carried here onto main so this prerequisite can land independently of the architecture gates. Hosted sandbox evidence remains pending.
+
+## 2026-09-13 Hosted namespace rejection persists (#104)
+
+- PR #167 job 103586927461 still rejects the owned engine before Hello after the mapping proposal. The local private-pipe AppContainer test passes, so local success does not establish hosted compatibility.
+- Added test-only, content-free current-drive diagnostics: API status, returned length/termination, mapping namespace shape, exact device-prefix boundary and mapped lexical equality. No diagnostic authorizes a connection or changes production policy.
+- Verify: wrapped diagnostic unit test and private-pipe real AppContainer test; repository process cleanup and diff checks. Expect: pass and no surviving owned processes. Result: PASS. An initial compile failure used the wrong windows-result API name; corrected to the pinned version's Error::from_thread before rerunning.
+- Hosted diagnostics remain required before selecting another fix. #104 and architecture Phase 0 delivery remain incomplete.
