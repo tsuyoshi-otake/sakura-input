@@ -1733,3 +1733,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   `git diff --check` を実行。Expect: 全条件を満たす。結果 PASS。
 - Sol Medium は編集を担当。検証責任は親が持ち、外部／subagent レビューは依頼していない。
   今回の検証を過去の Opus rubric 25/25 の再採点とは表現しない。
+
+## 2026-09-13 Native image namespace support (#104)
+
+- Hosted runs 34704517571 and 34705378113 again rejected an owned engine; later diagnostics reported native-device image paths. Original admission data remains unobserved, so historical causality is not claimed.
+- Added bounded current-drive mapping before the existing exact/canonical/reparse/layout checks, with no process requery, retries or integrity exception. Five new tests include real Windows mapping and negative policy controls.
+- Parent verification on the implementation stack: IPC security tests, locked IPC clippy with warnings denied, wrapped locked workspace tests, process cleanup and diff checks passed. The identical source patch is carried here onto main so this prerequisite can land independently of the architecture gates. Hosted sandbox evidence remains pending.
