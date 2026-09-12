@@ -66,6 +66,7 @@ dependencies = [
  "sakura-core",
  "sakura-neural-proto",
  "sakura-proto",
+ "sakura-rerank-proto",
  "serde",
  "serde_json",
  "sha2",
@@ -309,6 +310,7 @@ dependencies = [
  "sakura-neural-proto",
  "sakura-proto",
  "sakura-reg",
+ "sakura-rerank-proto",
  "sakura-store",
  "sakura-values",
  "windows",
@@ -351,6 +353,7 @@ name = "sakura-neural-worker"
 version = "1.0.39"
 dependencies = [
  "ort",
+ "sakura-rerank-proto",
  "serde",
  "serde_json",
  "sha2",
@@ -389,6 +392,13 @@ dependencies = [
  "sakura-proto",
  "windows",
  "windows-core",
+]
+
+[[package]]
+name = "sakura-rerank-proto"
+version = "1.0.39"
+dependencies = [
+ "sakura-values",
 ]
 
 [[package]]
