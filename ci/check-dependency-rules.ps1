@@ -2,7 +2,8 @@
 param(
     [switch]$Advisory,
     [string[]]$Enforce = @(),
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$ForceNoRg
 )
 
 Set-StrictMode -Version Latest
@@ -15,6 +16,25 @@ if ($unknown.Count) { throw "Unknown dependency rule(s): $($unknown -join ', ')"
 $enforced = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($rule in $requested) { [void]$enforced.Add($rule) }
 $results = [Collections.Generic.List[object]]::new()
+
+function Resolve-NativeCommand([string[]]$Names, [switch]$Required) {
+    foreach ($name in $Names) {
+        $command = Get-Command -Name $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $command) {
+            $path = if (-not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+                [string]$command.Source
+            }
+            else {
+                [string]$command.Path
+            }
+            if (-not [string]::IsNullOrWhiteSpace($path)) { return $path }
+        }
+    }
+    if ($Required) { throw "Required native command was not found: $($Names -join ', ')" }
+    return $null
+}
+
+$rgExecutable = if ($ForceNoRg) { $null } else { Resolve-NativeCommand @('rg.exe', 'rg') }
 
 function Get-RustFiles([string]$Root, [switch]$IncludeTests) {
     if (-not [IO.Directory]::Exists($Root)) { return @() }
@@ -74,7 +94,7 @@ function Find-InFiles([string[]]$Files, [string]$Pattern) {
         $lineNumber = 0
         foreach ($line in [IO.File]::ReadAllLines($file)) {
             $lineNumber++
-            if ($line -match $Pattern) {
+            if ($line -cmatch $Pattern) {
                 $relative = [IO.Path]::GetRelativePath($repoRoot, $file)
                 $sourceHits.Add("${relative}:${lineNumber}:$($line.Trim())")
             }
@@ -83,22 +103,36 @@ function Find-InFiles([string[]]$Files, [string]$Pattern) {
     return @($sourceHits)
 }
 
-function Invoke-RgScan([string]$Rule, [string]$Path, [string]$Pattern) {
-    $rg = (Get-Command rg.exe -ErrorAction SilentlyContinue).Source
-    if (-not $rg) { $rg = (Get-Command rg -ErrorAction Stop).Source }
-    $run = Invoke-Captured $rg @('--no-config', '--no-heading', '--color', 'never', '-n', '--glob', '*.rs', $Pattern, $Path)
-    if ($run.ExitCode -eq 1) { return @() }
-    if ($run.ExitCode -eq 0) { return @($run.Stdout.TrimEnd() -split "`r?`n") }
-    throw "rg failed for $Rule (exit $($run.ExitCode)): $($run.Stderr.Trim())"
+function Invoke-SourceScan([string]$Rule, [string]$Path, [string]$Pattern) {
+    if (-not [IO.File]::Exists($Path) -and -not [IO.Directory]::Exists($Path)) {
+        throw "Scan path does not exist for ${Rule}: $Path"
+    }
+    if ($null -ne $rgExecutable) {
+        $run = Invoke-Captured $rgExecutable @('--no-config', '--no-ignore', '--hidden', '--with-filename', '--no-heading', '--color', 'never', '-n', '--glob', '*.rs', $Pattern, $Path)
+        if ($run.ExitCode -eq 1) { return @() }
+        if ($run.ExitCode -eq 0) {
+            if ([string]::IsNullOrEmpty($run.Stdout)) { throw "rg returned success without matches for $Rule" }
+            return @($run.Stdout.TrimEnd() -split "`r?`n")
+        }
+        throw "rg failed for $Rule (exit $($run.ExitCode)): $($run.Stderr.Trim())"
+    }
+
+    $files = if ([IO.File]::Exists($Path)) {
+        if ([IO.Path]::GetExtension($Path) -cne '.rs') { @() } else { @($Path) }
+    }
+    else {
+        @(Get-RustFiles $Path -IncludeTests)
+    }
+    return @(Find-InFiles $files $Pattern)
 }
 
-function Invoke-RgRule([string]$Rule, [string]$RelativePath, [string]$Pattern, [string]$Boundary) {
+function Invoke-SourceRule([string]$Rule, [string]$RelativePath, [string]$Pattern, [string]$Boundary) {
     $path = Join-Path $repoRoot $RelativePath
     if (-not [IO.File]::Exists($path) -and -not [IO.Directory]::Exists($path)) {
         Add-Result $Rule 'PENDING' "$Boundary pending: future path does not exist" @($RelativePath)
         return
     }
-    $hits = @(Invoke-RgScan $Rule $path $Pattern)
+    $hits = @(Invoke-SourceScan $Rule $path $Pattern)
     if (-not $hits.Count) {
         Add-Result $Rule 'PASS' $Boundary
     }
@@ -107,7 +141,7 @@ function Invoke-RgRule([string]$Rule, [string]$RelativePath, [string]$Pattern, [
     }
 }
 
-function Get-R5Audit([string]$RendererRoot, [switch]$FixtureOnly) {
+function Get-R5Audit([string]$RendererRoot) {
     $findings = [Collections.Generic.List[string]]::new()
     $pending = [Collections.Generic.List[string]]::new()
     $scopes = @(
@@ -134,13 +168,7 @@ function Get-R5Audit([string]$RendererRoot, [switch]$FixtureOnly) {
             $pending.Add("$($scope.Name) future module pending: $([IO.Path]::GetRelativePath($repoRoot, $scope.Future))")
         }
         foreach ($path in $paths) {
-            if ($FixtureOnly) {
-                $files = if ([IO.File]::Exists($path)) { @($path) } else { @(Get-RustFiles $path -IncludeTests) }
-                foreach ($hit in @(Find-InFiles $files $scope.Pattern)) { $findings.Add("$($scope.Name): $hit") }
-            }
-            else {
-                foreach ($hit in @(Invoke-RgScan 'R5' $path $scope.Pattern)) { $findings.Add("$($scope.Name): $hit") }
-            }
+            foreach ($hit in @(Invoke-SourceScan 'R5' $path $scope.Pattern)) { $findings.Add("$($scope.Name): $hit") }
         }
     }
     return [pscustomobject]@{ Findings = @($findings); Pending = @($pending) }
@@ -163,15 +191,7 @@ function Check-DirectBoundary($Metadata, [string]$Rule, [string]$Package, [strin
 
     $path = Join-Path $repoRoot $SourcePath
     if (-not [IO.Directory]::Exists($path)) { throw "Source boundary does not exist: $SourcePath" }
-    $rg = (Get-Command rg.exe -ErrorAction SilentlyContinue).Source
-    if (-not $rg) { $rg = (Get-Command rg -ErrorAction Stop).Source }
-    $run = Invoke-Captured $rg @('--no-config', '--no-heading', '--color', 'never', '-n', '--glob', '*.rs', $ImportPattern, $path)
-    if ($run.ExitCode -eq 0) {
-        foreach ($line in @($run.Stdout.TrimEnd() -split "`r?`n")) { $details.Add($line) }
-    }
-    elseif ($run.ExitCode -ne 1) {
-        throw "rg failed for $Rule (exit $($run.ExitCode)): $($run.Stderr.Trim())"
-    }
+    foreach ($line in @(Invoke-SourceScan $Rule $path $ImportPattern)) { $details.Add($line) }
     Add-Result $Rule $(if ($details.Count) { 'VIOLATION' } else { 'PASS' }) $Summary @($details)
 }
 
@@ -303,6 +323,24 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
             throw 'Source scan fixture failed'
         }
 
+        $fallbackRoot = Join-Path $fixtureRoot 'fallback-boundary'
+        [void][IO.Directory]::CreateDirectory($fallbackRoot)
+        $fallbackFile = Join-Path $fallbackRoot 'lib.rs'
+        [IO.File]::WriteAllText($fallbackFile, "use sakura_proto::Message;`nuse SAKURA_PROTO::Message;`n")
+        $savedRgExecutable = $rgExecutable
+        try {
+            $rgExecutable = $null
+            $fallbackHits = @(Invoke-SourceScan 'self-test fallback' $fallbackRoot '\bsakura_proto\b')
+            $fallbackState = if ($fallbackHits.Count) { 'VIOLATION' } else { 'PASS' }
+            if ($fallbackState -cne 'VIOLATION' -or $fallbackHits.Count -ne 1 -or
+                [string]$fallbackHits[0] -notmatch 'lib\.rs:1:use sakura_proto::Message;') {
+                throw 'Missing-rg fallback did not reject the known source violation'
+            }
+        }
+        finally {
+            $rgExecutable = $savedRgExecutable
+        }
+
         $renderer = Join-Path $fixtureRoot 'renderer'
         $indicator = Join-Path $renderer 'indicator'
         $candidate = Join-Path $renderer 'candidate'
@@ -312,14 +350,14 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
         $candidateFile = Join-Path $candidate 'mod.rs'
         [IO.File]::WriteAllText($indicatorFile, 'use crate::events::CandidateEvent;')
         [IO.File]::WriteAllText($candidateFile, 'use crate::events::CandidateEvent;')
-        $r5Positive = Get-R5Audit $renderer -FixtureOnly
+        $r5Positive = Get-R5Audit $renderer
         if ($r5Positive.Findings.Count -ne 0 -or $r5Positive.Pending.Count -ne 0) { throw 'R5 positive fixture failed' }
         [IO.File]::WriteAllText($indicatorFile, 'use crate::candidate::Window;')
         [IO.File]::WriteAllText($candidateFile, 'use crate::{accessibility, watch};')
-        $r5Negative = Get-R5Audit $renderer -FixtureOnly
+        $r5Negative = Get-R5Audit $renderer
         if ($r5Negative.Findings.Count -ne 2) { throw 'R5 negative fixture failed' }
 
-        Write-Host 'PASS: dependency rule fixtures cover metadata edges, source matches, R5/R8 ownership, and R9 placement'
+        Write-Host 'PASS: dependency rule fixtures cover metadata edges, rg-free source rejection, R5/R8 ownership, and R9 placement'
     }
     catch {
         $fixtureFailure = $_
@@ -339,22 +377,21 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
     return
 }
 
-$cargo = (Get-Command cargo.exe -ErrorAction SilentlyContinue).Source
-if (-not $cargo) { $cargo = (Get-Command cargo -ErrorAction Stop).Source }
+$cargo = Resolve-NativeCommand @('cargo.exe', 'cargo') -Required
 $metadataRun = Invoke-Captured $cargo @('metadata', '--no-deps', '--format-version', '1', '--locked')
 if ($metadataRun.ExitCode -ne 0) { throw "cargo metadata failed (exit $($metadataRun.ExitCode)): $($metadataRun.Stderr.Trim())" }
 try { $metadata = $metadataRun.Stdout | ConvertFrom-Json } catch { throw "cargo metadata returned invalid JSON: $($_.Exception.Message)" }
 
 Check-DirectBoundary $metadata 'R1' 'sakura-core' 'sakura-proto' 'crates/sakura-core/src' '\bsakura_proto\b' 'core must not know proto'
 Check-DirectBoundary $metadata 'R2' 'sakura-settings' 'sakura-engine' 'crates/sakura-settings/src' '\bsakura_engine\b' 'settings must not know engine'
-Invoke-RgRule 'R3' 'crates/sakura-tsf/src/session' '(?:\buse\s+windows\b|\bwindows::)' 'TSF session must not know Win32/COM'
-Invoke-RgRule 'R4' 'crates/sakura-engine/src/state' '\buse\s+crate::(?:keys|commit|render|ipc|request|services|runtime)\b' 'engine state must not know upper layers'
+Invoke-SourceRule 'R3' 'crates/sakura-tsf/src/session' '(?:\buse\s+windows\b|\bwindows::)' 'TSF session must not know Win32/COM'
+Invoke-SourceRule 'R4' 'crates/sakura-engine/src/state' '\buse\s+crate::(?:keys|commit|render|ipc|request|services|runtime)\b' 'engine state must not know upper layers'
 $r5 = Get-R5Audit (Join-Path $repoRoot 'crates/sakura-renderer/src')
 $r5Details = @($r5.Findings) + @($r5.Pending)
 $r5State = if ($r5.Findings.Count) { 'VIOLATION' } elseif ($r5.Pending.Count) { 'PENDING' } else { 'PASS' }
 Add-Result 'R5' $r5State 'renderer boundary transitional regex scan (AST module-edge enforcement pending)' $r5Details
-Invoke-RgRule 'R6' 'crates/sakura-renderer/src/pad/rail.rs' '\bcrate::pad::' 'pad rail must not know pad implementation'
-Invoke-RgRule 'R7' 'crates/sakura-settings/src/ui/presentation.rs' '\buse\s+(?:super|crate)::' 'settings UI presentation must be a leaf'
+Invoke-SourceRule 'R6' 'crates/sakura-renderer/src/pad/rail.rs' '\bcrate::pad::' 'pad rail must not know pad implementation'
+Invoke-SourceRule 'R7' 'crates/sakura-settings/src/ui/presentation.rs' '\buse\s+(?:super|crate)::' 'settings UI presentation must be a leaf'
 
 $allRust = Get-RustFiles (Join-Path $repoRoot 'crates') -IncludeTests
 $productionRust = @($allRust | Where-Object { $_ -match '[\\/]src[\\/]' })
