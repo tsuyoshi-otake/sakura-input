@@ -3,6 +3,7 @@
 mod ai_text;
 mod appearance;
 mod capacity;
+mod fingerprint;
 mod fixed;
 mod input;
 mod scope;
@@ -15,6 +16,7 @@ pub use capacity::{
     MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES,
     MAX_CANDIDATE_TEXT_BYTES, MAX_COMMIT_BYTES, MAX_PREEDIT_BYTES, MAX_SEGMENTS,
 };
+pub use fingerprint::Fingerprint;
 pub use fixed::{FixedStr, FixedVec, Overflow};
 pub use input::{KeyCode, KeyInput, Mode, Modifiers};
 pub use scope::InputScope;

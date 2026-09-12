@@ -309,6 +309,7 @@ dependencies = [
  "sakura-neural-proto",
  "sakura-proto",
  "sakura-reg",
+ "sakura-values",
  "windows",
 ]
 
