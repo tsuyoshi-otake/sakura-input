@@ -45,11 +45,11 @@ jobs:
       - name: Self-test IRV regression decisions
         shell: pwsh
         run: ./scripts/measure-irv.ps1 -SelfTest
-      # D14: change to Fail in the last PR completing both 0.5 and 7.11,
-      # after that PR proves the unconditional document budget is satisfied.
+      # D14: instruction and memory compaction now fit the combined budget.
+      # This PR must merge after the Phase 0.5 instruction compaction.
       - name: Compare committed IRV baseline
         shell: pwsh
-        run: ./scripts/measure-irv.ps1 -Compare verification/irv/baseline.json -DocsBudgetMode Warn
+        run: ./scripts/measure-irv.ps1 -Compare verification/irv/baseline.json -DocsBudgetMode Fail
 
   build-and-test:
     name: Build and test
