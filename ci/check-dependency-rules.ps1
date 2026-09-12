@@ -278,8 +278,9 @@ function Get-RerankOwnershipFindings([string[]]$Files, [string]$OwnerRoot) {
     return @($findings)
 }
 
-function Get-R9Findings([string[]]$Files) {
+function Get-R9Findings([string[]]$Files, [string]$OracleRoot = (Join-Path $repoRoot 'crates/sakura-oracles/src')) {
     $findings = [Collections.Generic.List[string]]::new()
+    $oraclePrefix = [IO.Path]::GetFullPath($OracleRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     $declarationPattern = '(?ms)#\[cfg\s*\(\s*test\s*\)\]\s*(?:#\[path\s*=\s*"([^"]+)"\]\s*)?mod\s+([A-Za-z0-9_]+)\s*;'
     foreach ($file in $Files) {
         $text = [IO.File]::ReadAllText($file)
@@ -289,7 +290,7 @@ function Get-R9Findings([string[]]$Files) {
             $leaf -notmatch '_tests\.rs$' -and $leaf -cne 'testing.rs') {
             $findings.Add("$relative is a file-level cfg(test) module outside *_tests.rs/testing.rs")
         }
-        if ($leaf -match '_oracle\.rs$') {
+        if ($leaf -match '_oracle\.rs$' -and -not [IO.Path]::GetFullPath($file).StartsWith($oraclePrefix, [StringComparison]::OrdinalIgnoreCase)) {
             $findings.Add("$relative is an oracle under src; migration to sakura-oracles is pending")
         }
         foreach ($match in [regex]::Matches($text, $declarationPattern)) {
@@ -300,6 +301,16 @@ function Get-R9Findings([string[]]$Files) {
         }
     }
     return @($findings | Sort-Object -Unique)
+}
+
+function Get-OracleDependencyFindings($Metadata) {
+    foreach ($package in $Metadata.packages) {
+        foreach ($dependency in $package.dependencies) {
+            if ($dependency.name -ceq 'sakura-oracles' -and $dependency.kind -cne 'dev') {
+                "$($package.name) must consume sakura-oracles only as a dev-dependency"
+            }
+        }
+    }
 }
 
 if ($SelfTest) {
@@ -321,6 +332,19 @@ if ($SelfTest) {
         [IO.File]::WriteAllText($bad, "#![cfg(test)]`n")
         if (@(Get-R9Findings @($allowed, $testing)).Count -ne 0) { throw 'R9 allowed fixture failed' }
         if (@(Get-R9Findings @($bad)).Count -ne 1) { throw 'R9 negative fixture failed' }
+        $oracleOwner = Join-Path $fixtureRoot 'sakura-oracles/src'
+        [void][IO.Directory]::CreateDirectory($oracleOwner)
+        $ownedOracle = Join-Path $oracleOwner 'reference_oracle.rs'
+        [IO.File]::WriteAllText($ownedOracle, '// independent reference algorithm')
+        if (@(Get-R9Findings @($ownedOracle) $oracleOwner).Count -ne 0) { throw 'R9 oracle owner fixture failed' }
+        if (@(Get-R9Findings @($ownedOracle) ($oracleOwner + '-other')).Count -ne 1) { throw 'R9 oracle sibling exclusion failed' }
+        foreach ($kind in @('dev', 'build', $null)) {
+            $oracleMetadata = [pscustomobject]@{ packages = @([pscustomobject]@{
+                name = 'consumer'; dependencies = @([pscustomobject]@{ name = 'sakura-oracles'; kind = $kind })
+            }) }
+            $expectedCount = if ($kind -ceq 'dev') { 0 } else { 1 }
+            if (@(Get-OracleDependencyFindings $oracleMetadata).Count -ne $expectedCount) { throw 'R9 oracle dependency fixture failed' }
+        }
 
         $ownerFile = Join-Path $owner 'lib.rs'
         $uniqueText = @'
@@ -475,7 +499,7 @@ foreach ($consumer in @('sakura-engine', 'sakura-neural-worker')) {
 }
 Add-Result 'R8' $(if ($r8.Count) { 'VIOLATION' } else { 'PASS' }) 'reranker protocol must have one owner' @($r8)
 
-$r9 = @(Get-R9Findings $productionRust)
+$r9 = @(Get-R9Findings $productionRust) + @(Get-OracleDependencyFindings $metadata)
 Add-Result 'R9' $(if ($r9.Count) { 'VIOLATION' } else { 'PASS' }) 'test-only source placement' $r9
 
 $r12 = [Collections.Generic.List[string]]::new()
