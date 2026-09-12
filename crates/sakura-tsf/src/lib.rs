@@ -30,10 +30,13 @@ mod edit_session;
 mod engine;
 mod engine_recovery;
 #[cfg(test)]
+#[path = "../tests/unit/engine_recovery_tests.rs"]
 mod engine_recovery_tests;
 mod exports;
 mod key_handler;
 mod mode_item;
 mod reconversion;
+#[cfg(test)]
+mod testing;
 mod text_service;
 mod write_coordinator;
