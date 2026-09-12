@@ -162,8 +162,8 @@ jobs:
             if ($target.Count -ne 1) { throw "metadata target count for $($suite.package)/$($suite.target): $($target.Count)" }
             $raw = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "list-$($suite.id).cargo.raw.log"
             $wrapper = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "list-$($suite.id).wrapper.log"
-            $selector = switch ($suite.kind) { 'lib' { @('--lib') }; 'bin' { @('--bin', $suite.target) }; 'test' { @('--test', $suite.target) }; default { throw "unsupported kind: $($suite.kind)" } }
-            $release = if ($suite.release) { @('--release') } else { @() }
+            [string[]]$selector = switch ($suite.kind) { 'lib' { @('--lib') }; 'bin' { @('--bin', $suite.target) }; 'test' { @('--test', $suite.target) }; default { throw "unsupported kind: $($suite.kind)" } }
+            [string[]]$release = if ($suite.release) { @('--release') } else { @() }
             & ./ci/run-test-quiet.ps1 -Name "desktop inventory $($suite.id)" -Command {
               & $cargo test --locked -p $suite.package @selector @release -- --list --ignored *> $raw
               $exit = [int]$global:LASTEXITCODE; Get-Content $raw; $global:LASTEXITCODE = $exit
@@ -220,8 +220,8 @@ jobs:
           Write-DesktopResults $result
           $sequence = 0
           foreach ($suite in $selected) {
-            $selector = switch ($suite.kind) { 'lib' { @('--lib') }; 'bin' { @('--bin', $suite.target) }; 'test' { @('--test', $suite.target) }; default { throw "unsupported kind: $($suite.kind)" } }
-            $release = if ($suite.release) { @('--release') } else { @() }
+            [string[]]$selector = switch ($suite.kind) { 'lib' { @('--lib') }; 'bin' { @('--bin', $suite.target) }; 'test' { @('--test', $suite.target) }; default { throw "unsupported kind: $($suite.kind)" } }
+            [string[]]$release = if ($suite.release) { @('--release') } else { @() }
             foreach ($identity in @($suite.tests | Where-Object { $_ -notin @($manifest.excluded.identity) })) {
               $sequence++
               $slug = '{0:d3}-{1}' -f $sequence, ($identity -replace '[^A-Za-z0-9_.-]', '_')
