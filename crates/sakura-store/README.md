@@ -7,7 +7,7 @@ Defines the durable learning and developer-history formats once for engine, sett
 ## Owns
 
 - Namespaced `input_history` and `learning` record layouts, versions, bounds, and pure codecs.
-- Persistence rules, atomic file replacement, bounded retention, and compaction pure functions added in their planned phases.
+- `input_history::persistence`: the 30-day retention rule, 64 MiB hard limit, pure age/order selection, canonical `input.bin` placement, transaction path, and exact `ReplaceFileW` replacement primitive.
 - The `Sealer` boundary and Windows DPAPI implementation added in Phase 2.2c.
 
 ## Must not own
@@ -30,8 +30,8 @@ At most 12 public types and 23 public functions. The Phase 2.2b allowance is lim
 
 ## Invariants
 
-Existing format versions, discriminants, little-endian layout, UTF-8 validation, checksums, size bounds, and fail-closed decoding remain byte-compatible. Sensitive scope classification stays in engine; store records only the already-decided durable class.
+Existing format versions, discriminants, little-endian layout, UTF-8 validation, checksums, size bounds, inclusive retention cutoff, transaction path, replacement ordering, and fail-closed decoding remain byte-compatible. Sensitive scope classification stays in engine; store records only the already-decided durable class. Transaction-marker admission, the writer actor, and protected-frame preparation stay in engine.
 
 ## Verification
 
-Run store unit/golden tests, provenance-fixture decode-to-encode identity, dependency rule R13, and the existing engine/settings tests through the repository quiet-test wrapper.
+Run store unit/golden/persistence tests, provenance-fixture decode-to-encode identity, dependency rule R13, DeveloperHistory correspondence, and the existing engine/settings tests through the repository quiet-test wrapper.
