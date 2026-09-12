@@ -151,7 +151,7 @@
       "issue_shape": "candidate popup layout / placement (#47, #142 type)",
       "critical": false,
       "entry_point": "crates/sakura-renderer/src/candidate.rs",
-      "production": ["crates/sakura-renderer/src/candidate.rs", "crates/sakura-renderer/src/indicator.rs", "crates/sakura-renderer/src/theme.rs", "crates/sakura-renderer/src/main.rs"],
+      "production": ["crates/sakura-renderer/src/candidate.rs", "crates/sakura-renderer/src/indicator.rs", "crates/sakura-renderer/src/theme.rs", "crates/sakura-renderer/src/main.rs", "crates/sakura-renderer/src/lib.rs"],
       "tests": [],
       "contracts": [],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/decisions/issue-27-candidate-popup.md", "docs/decisions/issue-28-candidate-details.md"],
