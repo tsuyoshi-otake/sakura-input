@@ -309,6 +309,7 @@ dependencies = [
  "sakura-neural-proto",
  "sakura-proto",
  "sakura-reg",
+ "sakura-store",
  "sakura-values",
  "windows",
 ]
@@ -402,6 +403,13 @@ dependencies = [
  "sakura-reg",
  "windows",
  "windows-core",
+]
+
+[[package]]
+name = "sakura-store"
+version = "1.0.39"
+dependencies = [
+ "sakura-values",
 ]
 
 [[package]]

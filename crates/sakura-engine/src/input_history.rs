@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_proto::{AiTextOperation, AiTextStatus, InputScope};
+use sakura_values::{AiTextOperation, AiTextStatus, InputScope};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
@@ -36,22 +36,14 @@ use windows::Win32::Storage::FileSystem::{
 const MAGIC: &[u8; 4] = b"SKIH";
 const HEADER_LEN: usize = 8;
 const FRAME_HEADER_LEN: usize = 8;
-const MAX_RECORD_BYTES: usize = 16 * 1024;
 const QUEUE_CAPACITY: usize = 1024;
 const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const COMPACTION_INTERVAL: Duration = Duration::from_secs(60);
 const COMPACTION_APPEND_LIMIT: u32 = 256;
 
-pub const INPUT_HISTORY_FORMAT_VERSION: u16 = 2;
-const INPUT_HISTORY_FORMAT_VERSION_MIN: u16 = 1;
 pub const MAX_INPUT_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 pub const ENGINE_PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const VERSION_BUILD_ID_LENGTH: usize = 16;
-
-const RECORD_KEY: u8 = 1;
-const RECORD_COMMIT: u8 = 2;
-const RECORD_AI_TEXT: u8 = 3;
-const RECORD_ENGINE: u8 = 4;
 
 /// Scope classification attached to every persisted record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +52,16 @@ pub enum ScopeClass {
     Unclassified = 0,
     Normal = 1,
     Sensitive = 2,
+}
+
+impl From<ScopeClass> for HistoryScope {
+    fn from(value: ScopeClass) -> Self {
+        match value {
+            ScopeClass::Unclassified => Self::Unclassified,
+            ScopeClass::Normal => Self::Normal,
+            ScopeClass::Sensitive => Self::Sensitive,
+        }
+    }
 }
 
 impl ScopeClass {
@@ -86,29 +88,12 @@ impl ScopeClass {
             Self::Sensitive => "sensitive",
         }
     }
-
-    fn from_u8(value: u8) -> io::Result<Self> {
-        match value {
-            0 => Ok(Self::Unclassified),
-            1 => Ok(Self::Normal),
-            2 => Ok(Self::Sensitive),
-            _ => Err(invalid_data("unknown input history scope")),
-        }
-    }
 }
 
 const fn ai_operation_name(operation: AiTextOperation) -> &'static str {
     match operation {
         AiTextOperation::Transform => "transform",
         AiTextOperation::Proofread => "proofread",
-    }
-}
-
-fn decode_ai_operation(value: u8) -> io::Result<AiTextOperation> {
-    match value {
-        1 => Ok(AiTextOperation::Transform),
-        2 => Ok(AiTextOperation::Proofread),
-        _ => Err(invalid_data("unknown AI text operation")),
     }
 }
 
@@ -124,320 +109,31 @@ const fn ai_status_name(status: AiTextStatus) -> &'static str {
     }
 }
 
-fn decode_ai_status(value: u8) -> io::Result<AiTextStatus> {
-    match value {
-        1 => Ok(AiTextStatus::Applied),
-        2 => Ok(AiTextStatus::Cancelled),
-        3 => Ok(AiTextStatus::Timeout),
-        4 => Ok(AiTextStatus::MissingKey),
-        5 => Ok(AiTextStatus::WorkerError),
-        6 => Ok(AiTextStatus::ApiError),
-        7 => Ok(AiTextStatus::Rejected),
-        _ => Err(invalid_data("unknown AI text status")),
-    }
+pub use sakura_store::input_history::{
+    AiTextHistoryRecord, CommitHistoryRecord, EngineHistoryRecord, HistoryScope,
+    InputHistoryRecord, InputHistorySnapshot, InputHistoryStats, InputHistoryStatsSnapshot,
+    KeyHistoryRecord, INPUT_HISTORY_FORMAT_VERSION, INPUT_HISTORY_FORMAT_VERSION_MIN,
+    MAX_RECORD_BYTES,
+};
+
+pub trait InputHistorySnapshotExt {
+    fn retain_current_records(&mut self, now_ms: u64);
+    fn last_engine_identity(&self) -> Option<(&str, &str)>;
+    fn to_tsv(&self) -> String;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyHistoryRecord {
-    pub sequence: u64,
-    pub timestamp_ms: u64,
-    pub session: u64,
-    pub scope: ScopeClass,
-    pub key_code: u16,
-    pub character: Option<char>,
-    pub modifiers: u8,
-    pub repeat: bool,
-    pub consumed: bool,
-    pub state_before: u8,
-    pub state_after: u8,
-    pub mode_before: u8,
-    pub mode_after: u8,
-    pub preedit_before: String,
-    pub preedit_after: String,
-    pub commit: String,
-    pub delete_before: u16,
-    pub beep: bool,
-    pub action: String,
-    pub dropped_before: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CommitHistoryRecord {
-    pub sequence: u64,
-    pub timestamp_ms: u64,
-    pub session: u64,
-    pub scope: ScopeClass,
-    pub reading: String,
-    pub surface: String,
-    pub left_context: u16,
-    pub right_context: u16,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AiTextHistoryRecord {
-    pub sequence: u64,
-    pub timestamp_ms: u64,
-    pub session: u64,
-    pub scope: ScopeClass,
-    pub operation: AiTextOperation,
-    pub status: AiTextStatus,
-    pub source: String,
-    pub result: String,
-    pub model: String,
-    pub provider: String,
-    pub style: String,
-    pub error_code: String,
-    pub latency_ms: u64,
-    pub input_tokens: u32,
-    pub output_tokens: u32,
-    pub cached_tokens: u32,
-    pub attempts: u32,
-}
-
-/// Marks which engine build wrote the following history records.
-///
-/// Emitted once when the developer-history service starts so `history show`
-/// and exports can attribute a log stream to a package version and, for
-/// installed builds, the `versions/<version>-<build-id>` release label.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EngineHistoryRecord {
-    pub sequence: u64,
-    pub timestamp_ms: u64,
-    pub session: u64,
-    pub scope: ScopeClass,
-    pub package_version: String,
-    pub release_label: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputHistoryRecord {
-    Key(KeyHistoryRecord),
-    Commit(CommitHistoryRecord),
-    AiText(AiTextHistoryRecord),
-    Engine(EngineHistoryRecord),
-}
-
-impl InputHistoryRecord {
-    fn session(&self) -> u64 {
-        match self {
-            Self::Key(record) => record.session,
-            Self::Commit(record) => record.session,
-            Self::AiText(record) => record.session,
-            Self::Engine(record) => record.session,
-        }
-    }
-
-    fn sequence(&self) -> u64 {
-        match self {
-            Self::Key(record) => record.sequence,
-            Self::Commit(record) => record.sequence,
-            Self::AiText(record) => record.sequence,
-            Self::Engine(record) => record.sequence,
-        }
-    }
-
-    fn timestamp_ms(&self) -> u64 {
-        match self {
-            Self::Key(record) => record.timestamp_ms,
-            Self::Commit(record) => record.timestamp_ms,
-            Self::AiText(record) => record.timestamp_ms,
-            Self::Engine(record) => record.timestamp_ms,
-        }
-    }
-
-    fn encode(&self) -> io::Result<Vec<u8>> {
-        let mut bytes = Vec::with_capacity(256);
-        match self {
-            Self::Key(record) => {
-                bytes.push(RECORD_KEY);
-                put_u64(&mut bytes, record.sequence);
-                put_u64(&mut bytes, record.timestamp_ms);
-                put_u64(&mut bytes, record.session);
-                bytes.push(record.scope as u8);
-                put_u16(&mut bytes, record.key_code);
-                put_u32(
-                    &mut bytes,
-                    record.character.map_or(0, |character| character as u32),
-                );
-                bytes.push(record.modifiers);
-                bytes.push(u8::from(record.repeat));
-                bytes.push(u8::from(record.consumed));
-                bytes.push(record.state_before);
-                bytes.push(record.state_after);
-                bytes.push(record.mode_before);
-                bytes.push(record.mode_after);
-                put_string(&mut bytes, &record.preedit_before)?;
-                put_string(&mut bytes, &record.preedit_after)?;
-                put_string(&mut bytes, &record.commit)?;
-                put_u16(&mut bytes, record.delete_before);
-                bytes.push(u8::from(record.beep));
-                put_string(&mut bytes, &record.action)?;
-                put_u64(&mut bytes, record.dropped_before);
-            }
-            Self::Commit(record) => {
-                bytes.push(RECORD_COMMIT);
-                put_u64(&mut bytes, record.sequence);
-                put_u64(&mut bytes, record.timestamp_ms);
-                put_u64(&mut bytes, record.session);
-                bytes.push(record.scope as u8);
-                put_u16(&mut bytes, record.left_context);
-                put_u16(&mut bytes, record.right_context);
-                put_string(&mut bytes, &record.reading)?;
-                put_string(&mut bytes, &record.surface)?;
-            }
-            Self::AiText(record) => {
-                bytes.push(RECORD_AI_TEXT);
-                put_u64(&mut bytes, record.sequence);
-                put_u64(&mut bytes, record.timestamp_ms);
-                put_u64(&mut bytes, record.session);
-                bytes.push(record.scope as u8);
-                bytes.push(record.operation as u8);
-                bytes.push(record.status as u8);
-                put_string(&mut bytes, &record.source)?;
-                put_string(&mut bytes, &record.result)?;
-                put_string(&mut bytes, &record.model)?;
-                put_string(&mut bytes, &record.provider)?;
-                put_string(&mut bytes, &record.style)?;
-                put_string(&mut bytes, &record.error_code)?;
-                put_u64(&mut bytes, record.latency_ms);
-                put_u32(&mut bytes, record.input_tokens);
-                put_u32(&mut bytes, record.output_tokens);
-                put_u32(&mut bytes, record.cached_tokens);
-                put_u32(&mut bytes, record.attempts);
-            }
-            Self::Engine(record) => {
-                bytes.push(RECORD_ENGINE);
-                put_u64(&mut bytes, record.sequence);
-                put_u64(&mut bytes, record.timestamp_ms);
-                put_u64(&mut bytes, record.session);
-                bytes.push(record.scope as u8);
-                put_string(&mut bytes, &record.package_version)?;
-                put_string(&mut bytes, &record.release_label)?;
-            }
-        }
-        if bytes.len() > MAX_RECORD_BYTES {
-            return Err(invalid_data("input history record is too large"));
-        }
-        Ok(bytes)
-    }
-
-    fn decode(bytes: &[u8]) -> io::Result<Self> {
-        let mut reader = Reader::new(bytes);
-        let kind = reader.u8()?;
-        let sequence = reader.u64()?;
-        let timestamp_ms = reader.u64()?;
-        let session = reader.u64()?;
-        let scope = ScopeClass::from_u8(reader.u8()?)?;
-        let record = match kind {
-            RECORD_KEY => {
-                let key_code = reader.u16()?;
-                let character = match reader.u32()? {
-                    0 => None,
-                    value => Some(
-                        char::from_u32(value)
-                            .ok_or_else(|| invalid_data("invalid key character"))?,
-                    ),
-                };
-                let modifiers = reader.u8()?;
-                let repeat = reader.bool()?;
-                let consumed = reader.bool()?;
-                let state_before = reader.u8()?;
-                let state_after = reader.u8()?;
-                let mode_before = reader.u8()?;
-                let mode_after = reader.u8()?;
-                let preedit_before = reader.string()?;
-                let preedit_after = reader.string()?;
-                let commit = reader.string()?;
-                let delete_before = reader.u16()?;
-                let beep = reader.bool()?;
-                let action = reader.string()?;
-                let dropped_before = reader.u64()?;
-                Self::Key(KeyHistoryRecord {
-                    sequence,
-                    timestamp_ms,
-                    session,
-                    scope,
-                    key_code,
-                    character,
-                    modifiers,
-                    repeat,
-                    consumed,
-                    state_before,
-                    state_after,
-                    mode_before,
-                    mode_after,
-                    preedit_before,
-                    preedit_after,
-                    commit,
-                    delete_before,
-                    beep,
-                    action,
-                    dropped_before,
-                })
-            }
-            RECORD_COMMIT => Self::Commit(CommitHistoryRecord {
-                sequence,
-                timestamp_ms,
-                session,
-                scope,
-                left_context: reader.u16()?,
-                right_context: reader.u16()?,
-                reading: reader.string()?,
-                surface: reader.string()?,
-            }),
-            RECORD_AI_TEXT => Self::AiText(AiTextHistoryRecord {
-                sequence,
-                timestamp_ms,
-                session,
-                scope,
-                operation: decode_ai_operation(reader.u8()?)?,
-                status: decode_ai_status(reader.u8()?)?,
-                source: reader.string()?,
-                result: reader.string()?,
-                model: reader.string()?,
-                provider: reader.string()?,
-                style: reader.string()?,
-                error_code: reader.string()?,
-                latency_ms: reader.u64()?,
-                input_tokens: reader.u32()?,
-                output_tokens: reader.u32()?,
-                cached_tokens: reader.u32()?,
-                attempts: reader.u32()?,
-            }),
-            RECORD_ENGINE => Self::Engine(EngineHistoryRecord {
-                sequence,
-                timestamp_ms,
-                session,
-                scope,
-                package_version: reader.string()?,
-                release_label: reader.string()?,
-            }),
-            _ => return Err(invalid_data("unknown input history record")),
-        };
-        reader.finish()?;
-        Ok(record)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputHistorySnapshot {
-    pub format_version: u16,
-    pub records: Vec<InputHistoryRecord>,
-    pub ignored_tail_bytes: usize,
-}
-
-impl InputHistorySnapshot {
+impl InputHistorySnapshotExt for InputHistorySnapshot {
     /// Applies the public viewing/export retention policy without rewriting
     /// storage. Raw snapshots deliberately remain unfiltered for recovery and
     /// identifier accounting. `now_ms` also permits deterministic boundary tests.
-    pub fn retain_current_records(&mut self, now_ms: u64) {
+    fn retain_current_records(&mut self, now_ms: u64) {
         let cutoff = now_ms.saturating_sub(RETENTION.as_millis() as u64);
         self.records
             .retain(|record| record.timestamp_ms() >= cutoff);
     }
 
     /// Latest engine identity marker in the snapshot, if any.
-    pub fn last_engine_identity(&self) -> Option<(&str, &str)> {
+    fn last_engine_identity(&self) -> Option<(&str, &str)> {
         self.records.iter().rev().find_map(|record| match record {
             InputHistoryRecord::Engine(record) => Some((
                 record.package_version.as_str(),
@@ -447,7 +143,7 @@ impl InputHistorySnapshot {
         })
     }
 
-    pub fn to_tsv(&self) -> String {
+    fn to_tsv(&self) -> String {
         let (package_version, release_label) = self.last_engine_identity().unwrap_or(("-", "-"));
         let mut output = format!(
             "# sakura-input-history-format: {}\n\
@@ -566,88 +262,20 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
     }
 }
 
-#[derive(Debug, Default)]
-pub struct InputHistoryStats {
-    dropped_events: AtomicU64,
-    persistence_failures: AtomicU64,
-    excluded_unclassified_events: AtomicU64,
-    excluded_sensitive_events: AtomicU64,
-    excluded_test_only_events: AtomicU64,
-    ai_requests: AtomicU64,
-    ai_attempts: AtomicU64,
-    ai_input_tokens: AtomicU64,
-    ai_output_tokens: AtomicU64,
-    ai_cached_tokens: AtomicU64,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct InputHistoryStatsSnapshot {
-    pub dropped_events: u64,
-    pub persistence_failures: u64,
-    pub excluded_unclassified_events: u64,
-    pub excluded_sensitive_events: u64,
-    pub excluded_test_only_events: u64,
-    pub ai_requests: u64,
-    pub ai_attempts: u64,
-    pub ai_input_tokens: u64,
-    pub ai_output_tokens: u64,
-    pub ai_cached_tokens: u64,
-}
-
-impl InputHistoryStats {
-    pub fn dropped_events(&self) -> u64 {
-        self.dropped_events.load(Ordering::Relaxed)
+fn excludes(stats: &InputHistoryStats, scope: ScopeClass, test_only: bool) -> bool {
+    if test_only {
+        stats.record_excluded_test_only();
+        return true;
     }
-
-    pub fn persistence_failures(&self) -> u64 {
-        self.persistence_failures.load(Ordering::Relaxed)
-    }
-
-    pub fn excluded_unclassified_events(&self) -> u64 {
-        self.excluded_unclassified_events.load(Ordering::Relaxed)
-    }
-
-    pub fn excluded_sensitive_events(&self) -> u64 {
-        self.excluded_sensitive_events.load(Ordering::Relaxed)
-    }
-
-    pub fn excluded_test_only_events(&self) -> u64 {
-        self.excluded_test_only_events.load(Ordering::Relaxed)
-    }
-
-    pub fn snapshot(&self) -> InputHistoryStatsSnapshot {
-        InputHistoryStatsSnapshot {
-            dropped_events: self.dropped_events(),
-            persistence_failures: self.persistence_failures(),
-            excluded_unclassified_events: self.excluded_unclassified_events(),
-            excluded_sensitive_events: self.excluded_sensitive_events(),
-            excluded_test_only_events: self.excluded_test_only_events(),
-            ai_requests: self.ai_requests.load(Ordering::Relaxed),
-            ai_attempts: self.ai_attempts.load(Ordering::Relaxed),
-            ai_input_tokens: self.ai_input_tokens.load(Ordering::Relaxed),
-            ai_output_tokens: self.ai_output_tokens.load(Ordering::Relaxed),
-            ai_cached_tokens: self.ai_cached_tokens.load(Ordering::Relaxed),
+    match scope {
+        ScopeClass::Normal => false,
+        ScopeClass::Unclassified => {
+            stats.record_excluded_unclassified();
+            true
         }
-    }
-
-    fn excludes(&self, scope: ScopeClass, test_only: bool) -> bool {
-        if test_only {
-            self.excluded_test_only_events
-                .fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
-        match scope {
-            ScopeClass::Normal => false,
-            ScopeClass::Unclassified => {
-                self.excluded_unclassified_events
-                    .fetch_add(1, Ordering::Relaxed);
-                true
-            }
-            ScopeClass::Sensitive => {
-                self.excluded_sensitive_events
-                    .fetch_add(1, Ordering::Relaxed);
-                true
-            }
+        ScopeClass::Sensitive => {
+            stats.record_excluded_sensitive();
+            true
         }
     }
 }
@@ -712,6 +340,7 @@ impl ShutdownFailure {
 
 impl fmt::Debug for InputHistoryService {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let stats = self.stats.snapshot();
         formatter
             .debug_struct("InputHistoryService")
             .field("path", &self.path)
@@ -719,15 +348,15 @@ impl fmt::Debug for InputHistoryService {
             .field("persistence_failures", &self.stats.persistence_failures())
             .field(
                 "excluded_unclassified_events",
-                &self.stats.excluded_unclassified_events(),
+                &stats.excluded_unclassified_events,
             )
             .field(
                 "excluded_sensitive_events",
-                &self.stats.excluded_sensitive_events(),
+                &stats.excluded_sensitive_events,
             )
             .field(
                 "excluded_test_only_events",
-                &self.stats.excluded_test_only_events(),
+                &stats.excluded_test_only_events,
             )
             .finish()
     }
@@ -804,9 +433,7 @@ impl InputHistoryService {
         match counter.fetch_update(order, Ordering::Relaxed, |value| value.checked_add(1)) {
             Ok(previous) => Some(previous + 1),
             Err(_) => {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.record_persistence_failure();
                 None
             }
         }
@@ -816,7 +443,7 @@ impl InputHistoryService {
     // Ordinary protocol input can continue after history allocation fails.
     fn excludes_session(&self, session: u64) -> bool {
         if session == 0 {
-            self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
+            self.stats.record_drop();
             true
         } else {
             false
@@ -839,7 +466,7 @@ impl InputHistoryService {
                 sequence,
                 timestamp_ms: now_ms(),
                 session: 0,
-                scope: ScopeClass::Normal,
+                scope: HistoryScope::Normal,
                 package_version,
                 release_label,
             }),
@@ -855,9 +482,7 @@ impl InputHistoryService {
         });
         let timestamp_ms = record.timestamp_ms();
         let Ok(payload) = record.encode() else {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
+            self.stats.record_persistence_failure();
             return;
         };
         let command = Command::Append {
@@ -868,12 +493,10 @@ impl InputHistoryService {
         match self.sender.try_send(command) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
-                self.stats.dropped_events.fetch_add(1, Ordering::Relaxed);
+                self.stats.record_drop();
             }
             Err(TrySendError::Disconnected(_)) => {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.record_persistence_failure();
             }
         }
     }
@@ -905,7 +528,7 @@ impl InputHistoryService {
         action: &str,
     ) {
         let epoch = self.epoch.load(Ordering::Acquire);
-        if self.stats.excludes(scope, test_only) {
+        if excludes(&self.stats, scope, test_only) {
             return;
         }
         if self.excludes_session(session) {
@@ -918,12 +541,12 @@ impl InputHistoryService {
         // count when the record itself is malformed or the bounded queue is
         // full. The live stats endpoint and every later record remain able to
         // explain what was dropped.
-        let dropped_before = self.stats.dropped_events.load(Ordering::Relaxed);
+        let dropped_before = self.stats.dropped_events();
         let record = InputHistoryRecord::Key(KeyHistoryRecord {
             sequence,
             timestamp_ms: now_ms(),
             session,
-            scope,
+            scope: scope.into(),
             key_code,
             character,
             modifiers,
@@ -954,7 +577,7 @@ impl InputHistoryService {
         right_context: u16,
     ) {
         let epoch = self.epoch.load(Ordering::Acquire);
-        if self.stats.excludes(scope, false) || reading.is_empty() || surface.is_empty() {
+        if excludes(&self.stats, scope, false) || reading.is_empty() || surface.is_empty() {
             return;
         }
         if self.excludes_session(session) {
@@ -967,7 +590,7 @@ impl InputHistoryService {
             sequence,
             timestamp_ms: now_ms(),
             session,
-            scope,
+            scope: scope.into(),
             reading: reading.to_owned(),
             surface: surface.to_owned(),
             left_context,
@@ -997,25 +620,14 @@ impl InputHistoryService {
         test_only: bool,
     ) {
         let epoch = self.epoch.load(Ordering::Acquire);
-        if self.stats.excludes(scope, test_only) || source.is_empty() {
+        if excludes(&self.stats, scope, test_only) || source.is_empty() {
             return;
         }
         if self.excludes_session(session) {
             return;
         }
-        self.stats.ai_requests.fetch_add(1, Ordering::Relaxed);
         self.stats
-            .ai_attempts
-            .fetch_add(u64::from(attempts), Ordering::Relaxed);
-        self.stats
-            .ai_input_tokens
-            .fetch_add(u64::from(input_tokens), Ordering::Relaxed);
-        self.stats
-            .ai_output_tokens
-            .fetch_add(u64::from(output_tokens), Ordering::Relaxed);
-        self.stats
-            .ai_cached_tokens
-            .fetch_add(u64::from(cached_tokens), Ordering::Relaxed);
+            .record_ai_usage(attempts, input_tokens, output_tokens, cached_tokens);
         let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
             return;
         };
@@ -1023,7 +635,7 @@ impl InputHistoryService {
             sequence,
             timestamp_ms: now_ms(),
             session,
-            scope,
+            scope: scope.into(),
             operation,
             status,
             source: source.to_owned(),
@@ -1047,15 +659,11 @@ impl InputHistoryService {
     pub fn flush(&self) -> io::Result<()> {
         let (reply, receiver) = mpsc::channel();
         self.sender.send(Command::Flush { reply }).map_err(|_| {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
+            self.stats.record_persistence_failure();
             io::Error::new(io::ErrorKind::BrokenPipe, "input history writer stopped")
         })?;
         receiver.recv().map_err(|_| {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
+            self.stats.record_persistence_failure();
             io::Error::new(io::ErrorKind::BrokenPipe, "input history writer stopped")
         })?
     }
@@ -1070,15 +678,11 @@ impl InputHistoryService {
         self.sender
             .send(Command::Clear { epoch, reply })
             .map_err(|_| {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.record_persistence_failure();
                 io::Error::new(io::ErrorKind::BrokenPipe, "input history writer stopped")
             })?;
         receiver.recv().map_err(|_| {
-            self.stats
-                .persistence_failures
-                .fetch_add(1, Ordering::Relaxed);
+            self.stats.record_persistence_failure();
             io::Error::new(io::ErrorKind::BrokenPipe, "input history writer stopped")
         })?
     }
@@ -1097,18 +701,14 @@ impl InputHistoryService {
         let send = self.sender.send(Command::Shutdown { reply });
         let mut result = match send {
             Ok(()) => receiver.recv().unwrap_or_else(|_| {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.record_persistence_failure();
                 Err(io::Error::new(
                     io::ErrorKind::BrokenPipe,
                     "input history writer stopped",
                 ))
             }),
             Err(_) => {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.record_persistence_failure();
                 Err(io::Error::new(
                     io::ErrorKind::BrokenPipe,
                     "input history writer stopped",
@@ -1117,9 +717,7 @@ impl InputHistoryService {
         };
         if let Some(worker) = shutdown.handle.take() {
             if worker.join().is_err() {
-                self.stats
-                    .persistence_failures
-                    .fetch_add(1, Ordering::Relaxed);
+                self.stats.record_persistence_failure();
                 result = Err(io::Error::other("input history writer panicked"));
             }
         }
@@ -1268,7 +866,7 @@ fn writer_loop_with_file(
                     match compact_writer_file(&path, &mut file) {
                         Ok(updated) => retention = updated,
                         Err(_) => {
-                            stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                            stats.record_persistence_failure();
                         }
                     }
                 }
@@ -1301,7 +899,7 @@ fn writer_loop_with_file(
                                 match compact_writer_file(&path, &mut file) {
                                     Ok(updated) => retention = updated,
                                     Err(_) => {
-                                        stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                                        stats.record_persistence_failure();
                                     }
                                 }
                             }
@@ -1311,14 +909,14 @@ fn writer_loop_with_file(
                     }
                     Err(_) => {
                         append_failed = true;
-                        stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                        stats.record_persistence_failure();
                     }
                 }
             }
             Command::Flush { reply } => {
                 let result = sync_writer_file(&file, append_failed);
                 if result.is_err() {
-                    stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                    stats.record_persistence_failure();
                 }
                 let _ = reply.send(result);
             }
@@ -1326,7 +924,7 @@ fn writer_loop_with_file(
                 cleared_epoch = cleared_epoch.max(epoch);
                 let result = clear_writer_file(&path, &mut file);
                 if result.is_err() {
-                    stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                    stats.record_persistence_failure();
                 } else {
                     append_failed = false;
                     retention = RetentionPlan::default();
@@ -1338,7 +936,7 @@ fn writer_loop_with_file(
             Command::Shutdown { reply } => {
                 let result = sync_writer_file(&file, append_failed);
                 if result.is_err() {
-                    stats.persistence_failures.fetch_add(1, Ordering::Relaxed);
+                    stats.record_persistence_failure();
                 }
                 let _ = reply.send(result);
                 break;
@@ -1862,88 +1460,6 @@ fn unprotect(bytes: &[u8]) -> io::Result<Vec<u8>> {
         };
         let _ = LocalFree(Some(HLOCAL(output.pbData.cast())));
         plain
-    }
-}
-
-fn put_u16(bytes: &mut Vec<u8>, value: u16) {
-    bytes.extend_from_slice(&value.to_le_bytes());
-}
-
-fn put_u32(bytes: &mut Vec<u8>, value: u32) {
-    bytes.extend_from_slice(&value.to_le_bytes());
-}
-
-fn put_u64(bytes: &mut Vec<u8>, value: u64) {
-    bytes.extend_from_slice(&value.to_le_bytes());
-}
-
-fn put_string(bytes: &mut Vec<u8>, value: &str) -> io::Result<()> {
-    let length =
-        u16::try_from(value.len()).map_err(|_| invalid_data("input history text too long"))?;
-    put_u16(bytes, length);
-    bytes.extend_from_slice(value.as_bytes());
-    Ok(())
-}
-
-struct Reader<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-
-impl<'a> Reader<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, offset: 0 }
-    }
-
-    fn take(&mut self, length: usize) -> io::Result<&'a [u8]> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .ok_or_else(|| invalid_data("input history record overflow"))?;
-        let bytes = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or_else(|| invalid_data("truncated input history record"))?;
-        self.offset = end;
-        Ok(bytes)
-    }
-
-    fn u8(&mut self) -> io::Result<u8> {
-        Ok(*self.take(1)?.first().expect("one byte"))
-    }
-
-    fn u16(&mut self) -> io::Result<u16> {
-        Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))
-    }
-
-    fn u32(&mut self) -> io::Result<u32> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
-    }
-
-    fn u64(&mut self) -> io::Result<u64> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
-    }
-
-    fn bool(&mut self) -> io::Result<bool> {
-        match self.u8()? {
-            0 => Ok(false),
-            1 => Ok(true),
-            _ => Err(invalid_data("invalid input history boolean")),
-        }
-    }
-
-    fn string(&mut self) -> io::Result<String> {
-        let length = self.u16()? as usize;
-        String::from_utf8(self.take(length)?.to_vec())
-            .map_err(|_| invalid_data("input history text is not UTF-8"))
-    }
-
-    fn finish(self) -> io::Result<()> {
-        if self.offset == self.bytes.len() {
-            Ok(())
-        } else {
-            Err(invalid_data("trailing input history record bytes"))
-        }
     }
 }
 
