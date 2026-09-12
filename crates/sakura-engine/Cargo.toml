@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+context-research = ["dep:sakura-context-research"]
+
 [[bin]]
 name = "sakura_engine"
 path = "src/main.rs"
@@ -15,6 +19,7 @@ path = "src/main.rs"
 [dependencies]
 sakura-rerank-proto.workspace = true
 sakura-core.workspace = true
+sakura-context-research = { workspace = true, optional = true }
 sakura-ai-proto.workspace = true
 sakura-ipc.workspace = true
 sakura-neural-proto.workspace = true

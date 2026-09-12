@@ -8,12 +8,12 @@ use sakura_neural_proto::{
     CandidateAuthority, Fingerprint, MAX_CANDIDATE_SURFACE_BYTES, MAX_PREDICTION_CANDIDATES,
     MAX_READING_BYTES,
 };
-use sakura_proto::InputScope;
+use sakura_values::InputScope;
 
 /// Candidate provenance used by the offline source-hit metric.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
-pub enum SnapshotSource {
+pub(crate) enum SnapshotSource {
     History = 1,
     #[default]
     SystemDictionary = 2,
@@ -25,7 +25,7 @@ pub enum SnapshotSource {
 /// Learned-history candidates deliberately use `None`: their durable learning
 /// identity is not a dictionary ordinal and must not be guessed from text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DictionaryIdentity {
+pub(crate) enum DictionaryIdentity {
     SystemEntry(u32),
     UserEntry(u32),
 }
@@ -36,36 +36,36 @@ pub enum DictionaryIdentity {
 /// strings. This boundary performs no NFKC or width conversion and therefore
 /// cannot silently disagree with the candidate that would be committed.
 #[derive(Debug, Clone, Copy)]
-pub struct SnapshotCandidateInput<'a> {
-    pub reading: &'a str,
-    pub surface: &'a str,
-    pub dictionary_identity: Option<DictionaryIdentity>,
-    pub base_cost: i32,
-    pub authority: CandidateAuthority,
-    pub source: SnapshotSource,
-    pub right_id: u16,
-    pub is_it: bool,
+pub(crate) struct SnapshotCandidateInput<'a> {
+    pub(crate) reading: &'a str,
+    pub(crate) surface: &'a str,
+    pub(crate) dictionary_identity: Option<DictionaryIdentity>,
+    pub(crate) base_cost: i32,
+    pub(crate) authority: CandidateAuthority,
+    pub(crate) source: SnapshotSource,
+    pub(crate) right_id: u16,
+    pub(crate) is_it: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct TextFingerprint {
-    pub hash: u64,
-    pub byte_len: u16,
+pub(crate) struct TextFingerprint {
+    pub(crate) hash: u64,
+    pub(crate) byte_len: u16,
 }
 
 /// One candidate in the private, fixed-capacity snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PredictionSnapshotCandidate {
-    pub candidate_id: u64,
-    pub reading: TextFingerprint,
-    pub surface: TextFingerprint,
-    pub dictionary_identity: Option<DictionaryIdentity>,
-    pub base_cost: i32,
-    pub authority: CandidateAuthority,
-    pub source: SnapshotSource,
-    pub right_id: u16,
-    pub is_it: bool,
-    pub original_index: u8,
+pub(crate) struct PredictionSnapshotCandidate {
+    pub(crate) candidate_id: u64,
+    pub(crate) reading: TextFingerprint,
+    pub(crate) surface: TextFingerprint,
+    pub(crate) dictionary_identity: Option<DictionaryIdentity>,
+    pub(crate) base_cost: i32,
+    pub(crate) authority: CandidateAuthority,
+    pub(crate) source: SnapshotSource,
+    pub(crate) right_id: u16,
+    pub(crate) is_it: bool,
+    pub(crate) original_index: u8,
 }
 
 impl Default for PredictionSnapshotCandidate {
@@ -87,15 +87,15 @@ impl Default for PredictionSnapshotCandidate {
 
 /// Exact correlation tuple required before an offline score response is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SnapshotCorrelation {
-    pub session_id: u64,
-    pub context_generation: u64,
-    pub composition_generation: u64,
-    pub candidate_set_fingerprint: Fingerprint,
+pub(crate) struct SnapshotCorrelation {
+    pub(crate) session_id: u64,
+    pub(crate) context_generation: u64,
+    pub(crate) composition_generation: u64,
+    pub(crate) candidate_set_fingerprint: Fingerprint,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PredictionSnapshot {
+pub(crate) struct PredictionSnapshot {
     correlation: SnapshotCorrelation,
     candidates: [PredictionSnapshotCandidate; MAX_PREDICTION_CANDIDATES],
     len: usize,
@@ -106,7 +106,7 @@ impl PredictionSnapshot {
     /// Builds an immutable snapshot without changing the visible prediction
     /// result. Sensitive, unclassified, test-only, oversized, and malformed
     /// inputs fail before a partial snapshot can escape.
-    pub fn build(
+    pub(crate) fn build(
         session_id: u64,
         context_generation: u64,
         composition_generation: u64,
@@ -183,29 +183,29 @@ impl PredictionSnapshot {
         })
     }
 
-    pub const fn correlation(&self) -> SnapshotCorrelation {
+    pub(crate) const fn correlation(&self) -> SnapshotCorrelation {
         self.correlation
     }
 
-    pub fn candidates(&self) -> &[PredictionSnapshotCandidate] {
+    pub(crate) fn candidates(&self) -> &[PredictionSnapshotCandidate] {
         &self.candidates[..self.len]
     }
 
-    pub const fn offered_count(&self) -> usize {
+    pub(crate) const fn offered_count(&self) -> usize {
         self.offered
     }
 
-    pub const fn duplicate_count(&self) -> usize {
+    pub(crate) const fn duplicate_count(&self) -> usize {
         self.offered - self.len
     }
 
-    pub fn candidate(&self, candidate_id: u64) -> Option<&PredictionSnapshotCandidate> {
+    pub(crate) fn candidate(&self, candidate_id: u64) -> Option<&PredictionSnapshotCandidate> {
         self.candidates()
             .iter()
             .find(|candidate| candidate.candidate_id == candidate_id)
     }
 
-    pub const fn accepts(&self, response: SnapshotCorrelation) -> bool {
+    pub(crate) const fn accepts(&self, response: SnapshotCorrelation) -> bool {
         self.correlation.session_id == response.session_id
             && self.correlation.context_generation == response.context_generation
             && self.correlation.composition_generation == response.composition_generation
@@ -217,7 +217,7 @@ impl PredictionSnapshot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SnapshotError {
+pub(crate) enum SnapshotError {
     SensitiveScope,
     UnclassifiedScope,
     TestOnly,
@@ -486,6 +486,6 @@ mod tests {
     #[test]
     fn internal_pool_does_not_expand_the_visible_prediction_page() {
         assert_eq!(MAX_PREDICTION_CANDIDATES, 32);
-        assert_eq!(crate::prediction::MAX_SUGGESTIONS, 9);
+        assert_eq!(crate::context_evaluation::DISPLAY_CANDIDATES, 9);
     }
 }
