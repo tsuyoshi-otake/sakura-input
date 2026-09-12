@@ -1,0 +1,204 @@
+{
+  "$schema_note": "IRV (Issue Reading Volume) benchmark suite. Each benchmark fixes one representative Issue shape and the file set an agent must load (physical) plus the ranges it must actually understand (semantic). Measured by scripts/measure-irv.ps1. Paths are repository-relative; entries ending in '/**' or containing '*' are globs. Line ranges are 1-based inclusive.",
+  "version": 1,
+  "unconditional_docs": {
+    "note": "Loaded for every Issue regardless of type (agent instructions). Counted once in IRV-DOCS and added to every benchmark's docs category.",
+    "files": ["CLAUDE.md", ".claude/memory/rules.md"],
+    "budget_bytes": 24576,
+    "budget_rationale": "8 KiB CLAUDE.md + 16 KiB rules.md (plan §1a). Today: 40,118 + 45,652 = 85,770 B."
+  },
+  "thresholds": {
+    "warn_physical_increase_ratio": 0.10,
+    "fail_critical_increase_ratio": 0.25,
+    "rationale": "10% is below the smallest single-step change the plan expects to produce (Phase 1 test relocation removes 40-60%), so any +10% drift is a real regression, not noise. 25% on a critical benchmark equals re-merging one mid-sized module (~1,000 LOC into a 4,000 LOC set) and must block."
+  },
+  "benchmarks": [
+    {
+      "id": "IRV-ENGINE-KEY-MODE",
+      "issue_shape": "無変換 / mode cycle / key-to-action mapping (#51 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-engine/src/dispatch.rs::apply_action (Action::ModeKanaCycle)",
+      "production": ["crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/session.rs", "crates/sakura-core/src/keymap.rs"],
+      "tests": [],
+      "contracts": ["data/keymap-ms-ime.toml", "data/keymap-atok.toml"],
+      "docs": [],
+      "config": [],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/engine.md §9)",
+        "ranges": [
+          {"file": "crates/sakura-engine/src/dispatch.rs", "start": 3350, "end": 3780, "why": "apply_action, 45 arms"},
+          {"file": "crates/sakura-engine/src/dispatch.rs", "start": 3435, "end": 3520, "why": "ModeKanaCycle + SegmentTransform path"}
+        ],
+        "estimated_loc": 900,
+        "target_loc_after": 900
+      }
+    },
+    {
+      "id": "IRV-ENGINE-CANDIDATE",
+      "issue_shape": "candidate order / ranking / evidence (#94, #108 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-core/src/conversion.rs (ranking) + crates/sakura-engine/src/candidate_projection.rs",
+      "production": ["crates/sakura-core/src/conversion.rs", "crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/candidate_projection.rs", "crates/sakura-engine/src/prediction.rs"],
+      "tests": [],
+      "contracts": [],
+      "docs": [],
+      "config": [],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/core-proto.md §9, engine.md §9)",
+        "ranges": [],
+        "estimated_loc": 3050,
+        "target_loc_after": 3050
+      }
+    },
+    {
+      "id": "IRV-TSF-REENTRANCY",
+      "issue_shape": "re-entrant candidate UI crash / teardown (#7 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-tsf/src/text_service.rs (deferred / candidate_operation_active latches)",
+      "production": ["crates/sakura-tsf/src/text_service.rs", "crates/sakura-tsf/src/candidate_ui.rs", "crates/sakura-tsf/src/write_coordinator.rs", "crates/sakura-tsf/src/edit_session.rs", "crates/sakura-tsf/src/composition.rs"],
+      "tests": [],
+      "contracts": [],
+      "docs": ["verification/revalidation-20260905.md"],
+      "config": [],
+      "verification": ["verification/dual-tsf-candidate-board/tla-record.md", "verification/tla/DualTsfCandidateBoard.tla"],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/tsf.md §9)",
+        "ranges": [
+          {"file": "crates/sakura-tsf/src/text_service.rs", "start": 998, "end": 1026, "why": "re-entry latch fields"}
+        ],
+        "estimated_loc": 910,
+        "target_loc_after": 910
+      }
+    },
+    {
+      "id": "IRV-TSF-DUAL-KEY",
+      "issue_shape": "Dual-TSF physical key arbitration (#69 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-tsf/src/key_handler.rs",
+      "production": ["crates/sakura-tsf/src/text_service.rs", "crates/sakura-tsf/src/key_handler.rs", "crates/sakura-tsf/src/conversion_key.rs", "crates/sakura-tsf/src/engine.rs"],
+      "tests": [],
+      "contracts": [],
+      "docs": [],
+      "config": [],
+      "verification": ["verification/dual-tsf-physical-key-arbitration/tla-record.md", "verification/tla/DualTsfPhysicalKeyArbitration.tla"],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/tsf.md §9)",
+        "ranges": [],
+        "estimated_loc": 540,
+        "target_loc_after": 540
+      }
+    },
+    {
+      "id": "IRV-CORE-CONVERSION",
+      "issue_shape": "punctuation / numeral / date candidate synthesis (#99 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-core/src/conversion.rs (special candidate synthesis)",
+      "production": ["crates/sakura-core/src/conversion.rs", "crates/sakura-core/src/numerals.rs", "crates/sakura-core/src/calendar.rs", "crates/sakura-core/src/width.rs"],
+      "tests": [],
+      "contracts": [],
+      "docs": [],
+      "config": [],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/core-proto.md §9)",
+        "ranges": [],
+        "estimated_loc": 450,
+        "target_loc_after": 450
+      }
+    },
+    {
+      "id": "IRV-DICTIONARY-FORMAT",
+      "issue_shape": "dictionary image format / reader-writer conformance (#109 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-core/src/dictionary.rs::image_format",
+      "production": ["crates/sakura-core/src/dictionary.rs", "crates/dictc/src/lib.rs"],
+      "tests": ["crates/dictc/tests/image.rs"],
+      "contracts": ["verification/dictionary-format-v2.md"],
+      "docs": [],
+      "config": [],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/core-proto.md §9, contracts-dictc-tools.md §8)",
+        "ranges": [
+          {"file": "crates/sakura-core/src/dictionary.rs", "start": 20, "end": 103, "why": "image_format"}
+        ],
+        "estimated_loc": 1150,
+        "target_loc_after": 1150
+      }
+    },
+    {
+      "id": "IRV-HISTORY-STORE",
+      "issue_shape": "developer history store / compaction / stats (#113-#132 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-engine/src/input_history.rs",
+      "production": ["crates/sakura-engine/src/input_history.rs", "crates/sakura-settings/src/input_history.rs", "crates/sakura-settings/src/cli.rs", "crates/sakura-proto/src/message.rs"],
+      "tests": [],
+      "contracts": [],
+      "docs": [],
+      "config": [],
+      "verification": ["verification/history-*.md", "verification/tla/DeveloperHistory.tla"],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/engine.md §9)",
+        "ranges": [],
+        "estimated_loc": 950,
+        "target_loc_after": 950
+      }
+    },
+    {
+      "id": "IRV-RENDERER-POPUP",
+      "issue_shape": "candidate popup layout / placement (#47, #142 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-renderer/src/candidate.rs",
+      "production": ["crates/sakura-renderer/src/candidate.rs", "crates/sakura-renderer/src/indicator.rs", "crates/sakura-renderer/src/theme.rs", "crates/sakura-renderer/src/main.rs"],
+      "tests": [],
+      "contracts": [],
+      "docs": [],
+      "config": [],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/renderer-settings.md §9)",
+        "ranges": [],
+        "estimated_loc": 700,
+        "target_loc_after": 700
+      }
+    },
+    {
+      "id": "IRV-CI",
+      "issue_shape": "CI / test-runner / process convention change (#111 type)",
+      "critical": false,
+      "entry_point": ".github/workflows/ci.yml",
+      "production": [],
+      "tests": [],
+      "contracts": [],
+      "docs": [],
+      "config": [".github/workflows/ci.yml", "ci/*.ps1"],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/docs-verification-ci.md §8)",
+        "ranges": [],
+        "estimated_loc": 600,
+        "target_loc_after": 600
+      }
+    },
+    {
+      "id": "IRV-DOCS",
+      "issue_shape": "unconditional agent-instruction load (every Issue)",
+      "critical": true,
+      "entry_point": "CLAUDE.md",
+      "production": [],
+      "tests": [],
+      "contracts": [],
+      "docs": ["DESIGN.md", "README.md"],
+      "config": [],
+      "verification": [],
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/docs-verification-ci.md §8)",
+        "ranges": [],
+        "estimated_loc": 0,
+        "target_loc_after": 0
+      }
+    }
+  ]
+}

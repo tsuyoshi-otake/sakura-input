@@ -1,0 +1,738 @@
+{
+  "measured_at": "2026-09-12T14:48:13Z",
+  "commit": "97705a5",
+  "unconditional_docs": {
+    "files": [
+      ".claude/memory/rules.md",
+      "CLAUDE.md"
+    ],
+    "bytes": 85770,
+    "budget_bytes": 24576
+  },
+  "thresholds": {
+    "warn_physical_increase_ratio": 0.1,
+    "fail_critical_increase_ratio": 0.25,
+    "rationale": "10% is below the smallest single-step change the plan expects to produce (Phase 1 test relocation removes 40-60%), so any +10% drift is a real regression, not noise. 25% on a critical benchmark equals re-merging one mid-sized module (~1,000 LOC into a 4,000 LOC set) and must block."
+  },
+  "benchmarks": [
+    {
+      "id": "IRV-ENGINE-KEY-MODE",
+      "issue_shape": "無変換 / mode cycle / key-to-action mapping (#51 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-engine/src/dispatch.rs::apply_action (Action::ModeKanaCycle)",
+      "physical": {
+        "loc": 21664,
+        "bytes": 845745,
+        "file_count": 5,
+        "inline_test_loc": 16737,
+        "loc_excluding_inline_tests": 4927,
+        "with_unconditional_docs_bytes": 931515,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-core/src/keymap.rs",
+              "crates/sakura-engine/src/dispatch.rs",
+              "crates/sakura-engine/src/session.rs"
+            ],
+            "file_count": 3,
+            "loc": 21279,
+            "bytes": 831131,
+            "inline_test_loc": 16737
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [
+              "data/keymap-atok.toml",
+              "data/keymap-ms-ime.toml"
+            ],
+            "file_count": 2,
+            "loc": 385,
+            "bytes": 14614,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/engine.md §9)",
+        "verified_range_loc": 517,
+        "estimated_loc": 900,
+        "target_loc_after": 900
+      }
+    },
+    {
+      "id": "IRV-ENGINE-CANDIDATE",
+      "issue_shape": "candidate order / ranking / evidence (#94, #108 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-core/src/conversion.rs (ranking) + crates/sakura-engine/src/candidate_projection.rs",
+      "physical": {
+        "loc": 26842,
+        "bytes": 1059791,
+        "file_count": 4,
+        "inline_test_loc": 19396,
+        "loc_excluding_inline_tests": 7446,
+        "with_unconditional_docs_bytes": 1145561,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-core/src/conversion.rs",
+              "crates/sakura-engine/src/candidate_projection.rs",
+              "crates/sakura-engine/src/dispatch.rs",
+              "crates/sakura-engine/src/prediction.rs"
+            ],
+            "file_count": 4,
+            "loc": 26842,
+            "bytes": 1059791,
+            "inline_test_loc": 19396
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/core-proto.md §9, engine.md §9)",
+        "verified_range_loc": 0,
+        "estimated_loc": 3050,
+        "target_loc_after": 3050
+      }
+    },
+    {
+      "id": "IRV-TSF-REENTRANCY",
+      "issue_shape": "re-entrant candidate UI crash / teardown (#7 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-tsf/src/text_service.rs (deferred / candidate_operation_active latches)",
+      "physical": {
+        "loc": 13543,
+        "bytes": 554795,
+        "file_count": 8,
+        "inline_test_loc": 4685,
+        "loc_excluding_inline_tests": 8858,
+        "with_unconditional_docs_bytes": 640565,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-tsf/src/candidate_ui.rs",
+              "crates/sakura-tsf/src/composition.rs",
+              "crates/sakura-tsf/src/edit_session.rs",
+              "crates/sakura-tsf/src/text_service.rs",
+              "crates/sakura-tsf/src/write_coordinator.rs"
+            ],
+            "file_count": 5,
+            "loc": 13210,
+            "bytes": 533874,
+            "inline_test_loc": 4685
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [
+              "verification/revalidation-20260905.md"
+            ],
+            "file_count": 1,
+            "loc": 65,
+            "bytes": 10108,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [
+              "verification/dual-tsf-candidate-board/tla-record.md",
+              "verification/tla/DualTsfCandidateBoard.tla"
+            ],
+            "file_count": 2,
+            "loc": 268,
+            "bytes": 10813,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/tsf.md §9)",
+        "verified_range_loc": 29,
+        "estimated_loc": 910,
+        "target_loc_after": 910
+      }
+    },
+    {
+      "id": "IRV-TSF-DUAL-KEY",
+      "issue_shape": "Dual-TSF physical key arbitration (#69 type)",
+      "critical": true,
+      "entry_point": "crates/sakura-tsf/src/key_handler.rs",
+      "physical": {
+        "loc": 13015,
+        "bytes": 531060,
+        "file_count": 6,
+        "inline_test_loc": 5006,
+        "loc_excluding_inline_tests": 8009,
+        "with_unconditional_docs_bytes": 616830,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-tsf/src/conversion_key.rs",
+              "crates/sakura-tsf/src/engine.rs",
+              "crates/sakura-tsf/src/key_handler.rs",
+              "crates/sakura-tsf/src/text_service.rs"
+            ],
+            "file_count": 4,
+            "loc": 12697,
+            "bytes": 519804,
+            "inline_test_loc": 5006
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [
+              "verification/dual-tsf-physical-key-arbitration/tla-record.md",
+              "verification/tla/DualTsfPhysicalKeyArbitration.tla"
+            ],
+            "file_count": 2,
+            "loc": 318,
+            "bytes": 11256,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/tsf.md §9)",
+        "verified_range_loc": 0,
+        "estimated_loc": 540,
+        "target_loc_after": 540
+      }
+    },
+    {
+      "id": "IRV-CORE-CONVERSION",
+      "issue_shape": "punctuation / numeral / date candidate synthesis (#99 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-core/src/conversion.rs (special candidate synthesis)",
+      "physical": {
+        "loc": 10355,
+        "bytes": 418312,
+        "file_count": 4,
+        "inline_test_loc": 3963,
+        "loc_excluding_inline_tests": 6392,
+        "with_unconditional_docs_bytes": 504082,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-core/src/calendar.rs",
+              "crates/sakura-core/src/conversion.rs",
+              "crates/sakura-core/src/numerals.rs",
+              "crates/sakura-core/src/width.rs"
+            ],
+            "file_count": 4,
+            "loc": 10355,
+            "bytes": 418312,
+            "inline_test_loc": 3963
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/core-proto.md §9)",
+        "verified_range_loc": 0,
+        "estimated_loc": 450,
+        "target_loc_after": 450
+      }
+    },
+    {
+      "id": "IRV-DICTIONARY-FORMAT",
+      "issue_shape": "dictionary image format / reader-writer conformance (#109 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-core/src/dictionary.rs::image_format",
+      "physical": {
+        "loc": 5306,
+        "bytes": 207843,
+        "file_count": 4,
+        "inline_test_loc": 485,
+        "loc_excluding_inline_tests": 4821,
+        "with_unconditional_docs_bytes": 293613,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/dictc/src/lib.rs",
+              "crates/sakura-core/src/dictionary.rs"
+            ],
+            "file_count": 2,
+            "loc": 4658,
+            "bytes": 179911,
+            "inline_test_loc": 485
+          },
+          "tests": {
+            "files": [
+              "crates/dictc/tests/image.rs"
+            ],
+            "file_count": 1,
+            "loc": 536,
+            "bytes": 21986,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [
+              "verification/dictionary-format-v2.md"
+            ],
+            "file_count": 1,
+            "loc": 112,
+            "bytes": 5946,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/core-proto.md §9, contracts-dictc-tools.md §8)",
+        "verified_range_loc": 84,
+        "estimated_loc": 1150,
+        "target_loc_after": 1150
+      }
+    },
+    {
+      "id": "IRV-HISTORY-STORE",
+      "issue_shape": "developer history store / compaction / stats (#113-#132 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-engine/src/input_history.rs",
+      "physical": {
+        "loc": 7797,
+        "bytes": 329935,
+        "file_count": 15,
+        "inline_test_loc": 3417,
+        "loc_excluding_inline_tests": 4380,
+        "with_unconditional_docs_bytes": 415705,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-engine/src/input_history.rs",
+              "crates/sakura-proto/src/message.rs",
+              "crates/sakura-settings/src/cli.rs",
+              "crates/sakura-settings/src/input_history.rs"
+            ],
+            "file_count": 4,
+            "loc": 7148,
+            "bytes": 275712,
+            "inline_test_loc": 3417
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [
+              "verification/history-clear-epoch.md",
+              "verification/history-compaction-publication.md",
+              "verification/history-control-barriers.md",
+              "verification/history-counter-exhaustion.md",
+              "verification/history-maintenance-plan.md",
+              "verification/history-read-failure-issue.md",
+              "verification/history-read-failure.md",
+              "verification/history-startup-scan.md",
+              "verification/history-stop-outcome.md",
+              "verification/history-store-ownership.md",
+              "verification/tla/DeveloperHistory.tla"
+            ],
+            "file_count": 11,
+            "loc": 649,
+            "bytes": 54223,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/engine.md §9)",
+        "verified_range_loc": 0,
+        "estimated_loc": 950,
+        "target_loc_after": 950
+      }
+    },
+    {
+      "id": "IRV-RENDERER-POPUP",
+      "issue_shape": "candidate popup layout / placement (#47, #142 type)",
+      "critical": false,
+      "entry_point": "crates/sakura-renderer/src/candidate.rs",
+      "physical": {
+        "loc": 5631,
+        "bytes": 213180,
+        "file_count": 4,
+        "inline_test_loc": 3940,
+        "loc_excluding_inline_tests": 1691,
+        "with_unconditional_docs_bytes": 298950,
+        "categories": {
+          "production": {
+            "files": [
+              "crates/sakura-renderer/src/candidate.rs",
+              "crates/sakura-renderer/src/indicator.rs",
+              "crates/sakura-renderer/src/main.rs",
+              "crates/sakura-renderer/src/theme.rs"
+            ],
+            "file_count": 4,
+            "loc": 5631,
+            "bytes": 213180,
+            "inline_test_loc": 3940
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/renderer-settings.md §9)",
+        "verified_range_loc": 0,
+        "estimated_loc": 700,
+        "target_loc_after": 700
+      }
+    },
+    {
+      "id": "IRV-CI",
+      "issue_shape": "CI / test-runner / process convention change (#111 type)",
+      "critical": false,
+      "entry_point": ".github/workflows/ci.yml",
+      "physical": {
+        "loc": 1749,
+        "bytes": 76614,
+        "file_count": 10,
+        "inline_test_loc": 0,
+        "loc_excluding_inline_tests": 1749,
+        "with_unconditional_docs_bytes": 162384,
+        "categories": {
+          "production": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [
+              ".github/workflows/ci.yml",
+              "ci/check-process-clean.ps1",
+              "ci/check-simd-assembly.ps1",
+              "ci/dep-policy.ps1",
+              "ci/ensure-cargo-audit.ps1",
+              "ci/release-workflow-policy.ps1",
+              "ci/run-test-quiet.ps1",
+              "ci/test-run-test-quiet.ps1",
+              "ci/test-update-signing-v2.ps1",
+              "ci/write-step-timings.ps1"
+            ],
+            "file_count": 10,
+            "loc": 1749,
+            "bytes": 76614,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/docs-verification-ci.md §8)",
+        "verified_range_loc": 0,
+        "estimated_loc": 600,
+        "target_loc_after": 600
+      }
+    },
+    {
+      "id": "IRV-DOCS",
+      "issue_shape": "unconditional agent-instruction load (every Issue)",
+      "critical": true,
+      "entry_point": "CLAUDE.md",
+      "physical": {
+        "loc": 1775,
+        "bytes": 125847,
+        "file_count": 2,
+        "inline_test_loc": 0,
+        "loc_excluding_inline_tests": 1775,
+        "with_unconditional_docs_bytes": 211617,
+        "categories": {
+          "production": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "tests": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "contracts": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "docs": {
+            "files": [
+              "DESIGN.md",
+              "README.md"
+            ],
+            "file_count": 2,
+            "loc": 1775,
+            "bytes": 125847,
+            "inline_test_loc": 0
+          },
+          "config": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          },
+          "verification": {
+            "files": [],
+            "file_count": 0,
+            "loc": 0,
+            "bytes": 0,
+            "inline_test_loc": 0
+          }
+        }
+      },
+      "semantic": {
+        "method": "agent-verified (docs/architecture/analysis/docs-verification-ci.md §8)",
+        "verified_range_loc": 0,
+        "estimated_loc": 0,
+        "target_loc_after": 0
+      }
+    }
+  ]
+}
