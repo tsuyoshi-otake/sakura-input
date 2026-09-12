@@ -1647,3 +1647,40 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - **未了（owner 判断待ち）**: D1〜D11（CLAUDE.md の停止中調査の扱い、DESIGN.md
   分割、`wire.rs` の置き場、`Session` 分割、desktop test runner、TLC ブロッキング化
   など）。コミットは未実施（依頼があれば行う）。
+
+## 2026-09-13 リファクタリング計画のレビュー対応：IRV を中心 KPI に（#152、PR #153、0ca477c）
+
+- **依頼**: owner レビュー 14 項目。IRV（Issue Reading Volume）を正式な fitness
+  function にし、Physical／Semantic を区別、固定 ID の benchmark suite と baseline、
+  回帰ゲート、新 crate 憲章、`sakura-values` の依存方向修正、`sakura-store` 境界、
+  main 保護、文書前倒し、PR 境界の再評価、Phase 別受け入れ基準、fresh context の
+  verifier 再採点、Issue の最終報告。「ローカル作成済み」を完了条件にしない。
+- **成果物**: 計画 §1.1〜§1.1.2（IRV 定義・benchmark 10 件・baseline・gate）、
+  §3.1.1 憲章（5 crate × 6 項目）、R12〜R14、Phase 0 を 5→9 ステップ（ruleset、
+  baseline、irv-regression job、文書前倒し）、Phase 2 再設計（2.0 golden fixture、
+  2.1a〜2.1c、2.2a〜2.2d）、§4 PR 境界の原則、§4.1 受け入れ基準 20 行、D12〜D14。
+  `scripts/measure-irv.ps1`（`-SelfTest`／`-Out`／`-Compare`／`-DocsBudgetMode`）、
+  `verification/irv/benchmarks.json`、`baseline.json`（97705a5 で計測）。
+  Issue 本文を GitHub 実体基準のチェックリストに更新、PR #153 本文更新、最終報告
+  コメント投稿。
+- **検証**: `rubric-verifier`（Opus、fresh context）で C1〜C25 を採点し 25/25 PASS。
+  初稿 rubric 12 件に加え、IRV 定義、Physical/Semantic、benchmark ID の plan／JSON
+  一致、baseline 表 10/10 一致、self-test PASS と compare の exit code、gate の
+  閾値と根拠、憲章 6 項目、values/wire 方向、store 境界、ruleset 計画、文書前倒し、
+  PR 境界、GitHub 上の PR／Issue／remote HEAD 一致を検査。
+- **学び**:
+  - Bash heredoc に日本語の長文を入れると `unexpected EOF while looking for
+    matching` で失敗した（2 回）。文書は Write tool でファイル化し、挿入は
+    `perl splice.pl <plan> <insert> <after-line>` で行う。
+  - perl で全角記号（`）`、`、`）を扱うときは `-CSD -Mutf8` が必須。ASCII の
+    `)` では一致しない。
+  - Issue コメントに計画の数値を「要約」すると捏造が混ざる。今回 §4.1 の Phase 別
+    目標を記憶から書いて `900→≤600` という存在しない値を作りかけた。投稿前に
+    `awk '/^#### 4\.1/,/^### Phase 0/'` で表を引き直して置換した。
+  - `measure-irv.ps1 -Compare` は FAIL で exit 1 を返す。パイプで受けると
+    exit code が消えるので、CI では直接呼ぶ。docs 予算超過が既知の間は
+    `-DocsBudgetMode Warn` で運用し、FAIL 化の時期は D14 で owner が決める。
+  - ステップ ID に `2.1a` のような接尾辞を入れたら、rubric の正規表現を
+    `^\| [0-7]\.[0-9]+[a-z]? \|` に合わせて更新する必要がある。
+- **未了（owner 判断）**: D1〜D14。PR #153 のレビューと merge。実装は Phase 0 から
+  別 Issue。
