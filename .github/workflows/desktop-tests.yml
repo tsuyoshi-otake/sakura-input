@@ -1,0 +1,310 @@
+name: Desktop tests
+
+on:
+  schedule:
+    - cron: '23 18 * * 3'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Desktop suite to run
+        required: true
+        default: all
+        type: choice
+        options: [all, settings, renderer]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sakura-desktop-user32-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  desktop-tests:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+    env:
+      CARGO_HTTP_CHECK_REVOKE: 'false'
+      CARGO_NET_LOCKED: 'true'
+      RUSTUP_TOOLCHAIN: 1.96.0-x86_64-pc-windows-msvc
+      CARGO_TARGET_DIR: ${{ github.workspace }}\target\desktop-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; reviewed release older than 7 days
+
+      - name: Prepare isolated desktop state
+        run: |
+          $mode = if ('${{ github.event_name }}' -eq 'schedule') { 'all' } else { '${{ inputs.mode }}' }
+          if ($mode -notin @('all', 'settings', 'renderer')) { throw "unsupported desktop mode: $mode" }
+          $evidence = Join-Path $env:RUNNER_TEMP 'sakura-desktop-evidence'
+          $local = Join-Path $env:RUNNER_TEMP 'sakura-desktop-localappdata'
+          $profile = Join-Path $env:RUNNER_TEMP 'sakura-desktop-userprofile'
+          $screenshots = Join-Path $evidence 'settings-screenshots'
+          foreach ($path in @($evidence, $local, $profile, $screenshots)) {
+            [IO.Directory]::CreateDirectory($path) | Out-Null
+          }
+          $originalProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $originalProfile '.cargo' }
+          $rustupHome = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $originalProfile '.rustup' }
+          @{
+            SAKURA_DESKTOP_MODE = $mode
+            SAKURA_DESKTOP_EVIDENCE = $evidence
+            LOCALAPPDATA = $local
+            SAKURA_ISOLATED_USERPROFILE = $profile
+            USERPROFILE = $profile
+            CARGO_HOME = $cargoHome
+            RUSTUP_HOME = $rustupHome
+            SAKURA_SETTINGS_SCREENSHOTS = $screenshots
+            SAKURA_RENDERER_RESOURCE_REPORT = (Join-Path $evidence 'renderer-resource.json')
+            SAKURA_CANDIDATE_UIA_REPORT = (Join-Path $evidence 'candidate-uia.json')
+          }.GetEnumerator() | ForEach-Object {
+            "$($_.Key)=$($_.Value)" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          }
+          [ordered]@{
+            schema = 1
+            commit = $env:GITHUB_SHA
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            event = $env:GITHUB_EVENT_NAME
+            mode = $mode
+            runner_image = $env:ImageVersion
+            toolchain = $env:RUSTUP_TOOLCHAIN
+          } | ConvertTo-Json | Set-Content (Join-Path $evidence 'run-identity.json') -Encoding utf8
+          $sourcePaths = @(
+            'crates/sakura-settings/tests/settings_topic_user32.rs',
+            'crates/sakura-renderer/src/indicator.rs',
+            'crates/sakura-renderer/src/lib.rs',
+            'crates/sakura-renderer/src/main.rs',
+            'crates/sakura-renderer/tests/pad_ui.rs',
+            'crates/sakura-renderer/tests/candidate_detail_uia.rs',
+            'crates/sakura-renderer/tests/watchdog_recovery.rs',
+            'crates/sakura-renderer/tests/resource_budget.rs',
+            'crates/sakura-renderer/tests/candidate_uia.rs',
+            '.github/desktop-test-inventory.json',
+            '.github/workflows/desktop-tests.yml'
+          )
+          @($sourcePaths | ForEach-Object {
+            if (-not [IO.File]::Exists($_)) { throw "source identity missing: $_" }
+            [ordered]@{ path=$_; sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() }
+          }) | ConvertTo-Json | Set-Content (Join-Path $evidence 'source-identities.json') -Encoding utf8
+
+      - name: Prove interactive User32 capability
+        run: |
+          $raw = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'capability-probe.txt'
+          try {
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Text;
+          public static class SakuraDesktopProbe {
+            [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
+            [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr GetProcessWindowStation();
+            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr GetThreadDesktop(uint id);
+            [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr OpenInputDesktop(uint f, bool i, uint a);
+            [DllImport("user32.dll", SetLastError=true)] public static extern bool CloseDesktop(IntPtr d);
+            [DllImport("user32.dll", SetLastError=true)] public static extern bool GetCursorPos(out Point p);
+            [DllImport("user32.dll")] public static extern int GetSystemMetrics(int n);
+            [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+            static extern bool GetUserObjectInformation(IntPtr h, int n, StringBuilder b, uint len, out uint needed);
+            public static string ObjectName(IntPtr h) {
+              uint needed; GetUserObjectInformation(h, 2, null, 0, out needed);
+              var b = new StringBuilder((int)(needed / 2) + 1);
+              return GetUserObjectInformation(h, 2, b, (uint)(b.Capacity * 2), out needed) ? b.ToString() : null;
+            }
+          }
+          '@
+            $p = [Diagnostics.Process]::GetCurrentProcess()
+            $station = [SakuraDesktopProbe]::GetProcessWindowStation()
+            $thread = [SakuraDesktopProbe]::GetThreadDesktop([SakuraDesktopProbe]::GetCurrentThreadId())
+            $input = [SakuraDesktopProbe]::OpenInputDesktop(0, $false, 0x0181)
+            $point = [SakuraDesktopProbe+Point]::new()
+            $cursor = [SakuraDesktopProbe]::GetCursorPos([ref]$point)
+            $fail = @()
+            if ($p.SessionId -eq 0) { $fail += 'session 0' }
+            if ($station -eq [IntPtr]::Zero) { $fail += 'missing window station' }
+            if ($thread -eq [IntPtr]::Zero) { $fail += 'missing thread desktop' }
+            if ($input -eq [IntPtr]::Zero) { $fail += 'missing input desktop' }
+            if (-not $cursor) { $fail += 'cursor unavailable' }
+            $width = [SakuraDesktopProbe]::GetSystemMetrics(0)
+            $height = [SakuraDesktopProbe]::GetSystemMetrics(1)
+            if ($width -le 0 -or $height -le 0) { $fail += 'screen extent unavailable' }
+            [ordered]@{ session=$p.SessionId; user_interactive=[Environment]::UserInteractive;
+              window_station=if($station -ne [IntPtr]::Zero){[SakuraDesktopProbe]::ObjectName($station)}else{$null};
+              thread_desktop=if($thread -ne [IntPtr]::Zero){[SakuraDesktopProbe]::ObjectName($thread)}else{$null};
+              input_desktop=if($input -ne [IntPtr]::Zero){[SakuraDesktopProbe]::ObjectName($input)}else{$null};
+              cursor=$cursor; width=$width; height=$height; failures=$fail } |
+              ConvertTo-Json | Tee-Object -FilePath $raw
+            if ($fail.Count) { throw ($fail -join '; ') }
+          } catch { ($_ | Out-String) | Add-Content $raw; throw }
+          finally { if ($input -and $input -ne [IntPtr]::Zero) { [void][SakuraDesktopProbe]::CloseDesktop($input) } }
+
+      - name: Inventory ignored tests from Cargo metadata
+        run: |
+          rustup show
+          if ($LASTEXITCODE -ne 0) { throw 'pinned toolchain provisioning failed' }
+          $cargo = (rustup.exe which cargo).Trim()
+          if (-not [IO.File]::Exists($cargo)) { throw 'cargo executable was not resolved' }
+          $metadataPath = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cargo-metadata.json'
+          & $cargo metadata --locked --no-deps --format-version 1 1> $metadataPath 2> (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cargo-metadata.stderr.log')
+          if ($LASTEXITCODE -ne 0) { throw "cargo metadata failed: $LASTEXITCODE" }
+          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+          $manifest = Get-Content '.github/desktop-test-inventory.json' -Raw | ConvertFrom-Json
+          $selected = @($manifest.suites | Where-Object { $env:SAKURA_DESKTOP_MODE -in @('all', $_.mode) })
+          $observed = @()
+          foreach ($suite in $selected) {
+            $package = @($metadata.packages | Where-Object name -eq $suite.package)
+            if ($package.Count -ne 1) { throw "metadata package count for $($suite.package): $($package.Count)" }
+            $target = @($package[0].targets | Where-Object { $_.name -eq $suite.target -and $_.kind -contains $suite.kind })
+            if ($target.Count -ne 1) { throw "metadata target count for $($suite.package)/$($suite.target): $($target.Count)" }
+            $raw = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "list-$($suite.id).cargo.raw.log"
+            $wrapper = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "list-$($suite.id).wrapper.log"
+            $selector = switch ($suite.kind) { 'lib' { @('--lib') }; 'bin' { @('--bin', $suite.target) }; 'test' { @('--test', $suite.target) }; default { throw "unsupported kind: $($suite.kind)" } }
+            $release = if ($suite.release) { @('--release') } else { @() }
+            & ./ci/run-test-quiet.ps1 -Name "desktop inventory $($suite.id)" -Command {
+              & $cargo test --locked -p $suite.package @selector @release -- --list --ignored *> $raw
+              $exit = [int]$global:LASTEXITCODE; Get-Content $raw; $global:LASTEXITCODE = $exit
+            } *>&1 | Tee-Object -FilePath $wrapper
+            if ($LASTEXITCODE -ne 0) { throw "inventory failed: $($suite.id)" }
+            $names = @((Get-Content $raw) | ForEach-Object { if ($_ -match '^(.+): test$') { $Matches[1] } })
+            if (@($names | Sort-Object -Unique).Count -ne $names.Count) { throw "duplicate test identity: $($suite.id)" }
+            $expected = @($suite.tests)
+            $delta = @((Compare-Object ($expected | Sort-Object) ($names | Sort-Object)))
+            if ($delta.Count) { throw "ignored inventory drift for $($suite.id): $($delta | Out-String)" }
+            $observed += [ordered]@{ id=$suite.id; package=$suite.package; target=$suite.target; kind=$suite.kind; release=$suite.release; tests=$names }
+          }
+          $settingsSuites = @($observed | Where-Object id -eq 'settings-user32')
+          $settingsCount = @($settingsSuites.tests).Count
+          $rendererSuites = @($observed | Where-Object { $_.id -ne 'settings-user32' })
+          $rendererNames = @($rendererSuites.tests)
+          $excludedCount = @($rendererNames | Where-Object { $_ -eq 'the_pad_stays_open_for_a_look' }).Count
+          $rendererCount = @($rendererNames | Where-Object { $_ -ne 'the_pad_stays_open_for_a_look' }).Count
+          if ($env:SAKURA_DESKTOP_MODE -in @('all','settings') -and $settingsCount -ne 21) { throw "expected 21 settings tests; got $settingsCount" }
+          if ($env:SAKURA_DESKTOP_MODE -in @('all','renderer') -and $excludedCount -ne 1) { throw "expected the manual renderer exclusion once; got $excludedCount" }
+          if ($env:SAKURA_DESKTOP_MODE -in @('all','renderer') -and $rendererCount -ne 10) { throw "expected 10 automatic renderer tests; got $rendererCount" }
+          [ordered]@{ schema=1; commit=$env:GITHUB_SHA; mode=$env:SAKURA_DESKTOP_MODE; suites=$observed;
+            excluded=@([ordered]@{ identity='the_pad_stays_open_for_a_look'; reason='manual design review harness; default duration is 900 seconds' }) } |
+            ConvertTo-Json -Depth 8 | Set-Content (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'inventory.json') -Encoding utf8
+
+      - name: Build renderer desktop prerequisites
+        if: env.SAKURA_DESKTOP_MODE == 'all' || env.SAKURA_DESKTOP_MODE == 'renderer'
+        run: |
+          $dictionaryDir = Join-Path $env:RUNNER_TEMP 'sakura-desktop-dictionary'
+          & ./scripts/build-dictionary.ps1 -OutputDirectory $dictionaryDir *> (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'dictionary-build.raw.log')
+          if ($LASTEXITCODE -ne 0) { throw "dictionary build failed: $LASTEXITCODE" }
+          $dictionary = Join-Path $dictionaryDir 'system.dic'
+          if (-not [IO.File]::Exists($dictionary)) { throw "dictionary output missing: $dictionary" }
+          $cargo = (rustup.exe which cargo).Trim()
+          & $cargo build --locked --workspace *> (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cargo-build-debug.raw.log')
+          if ($LASTEXITCODE -ne 0) { throw "debug workspace build failed: $LASTEXITCODE" }
+          & $cargo build --locked -p sakura-engine -p sakura-renderer --release *> (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cargo-build-release.raw.log')
+          if ($LASTEXITCODE -ne 0) { throw "release renderer prerequisites failed: $LASTEXITCODE" }
+          "SAKURA_PHASE1_DICTIONARY=$dictionary" | Add-Content $env:GITHUB_ENV -Encoding utf8
+          "SAKURA_PHASE2_DICTIONARY=$dictionary" | Add-Content $env:GITHUB_ENV -Encoding utf8
+
+      - name: Run selected desktop tests serially
+        run: |
+          $cargo = (rustup.exe which cargo).Trim()
+          $manifest = Get-Content '.github/desktop-test-inventory.json' -Raw | ConvertFrom-Json
+          $selected = @($manifest.suites | Where-Object { $env:SAKURA_DESKTOP_MODE -in @('all', $_.mode) })
+          $result = [Collections.Generic.List[object]]::new()
+          $resultPath = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'results.json'
+          function Write-DesktopResults([Collections.Generic.List[object]]$Records) {
+            [ordered]@{ schema=1; commit=$env:GITHUB_SHA; mode=$env:SAKURA_DESKTOP_MODE;
+              count=$Records.Count; results=@($Records | ForEach-Object { $_ }) } |
+              ConvertTo-Json -Depth 6 | Set-Content $resultPath -Encoding utf8
+          }
+          Write-DesktopResults $result
+          $sequence = 0
+          foreach ($suite in $selected) {
+            $selector = switch ($suite.kind) { 'lib' { @('--lib') }; 'bin' { @('--bin', $suite.target) }; 'test' { @('--test', $suite.target) }; default { throw "unsupported kind: $($suite.kind)" } }
+            $release = if ($suite.release) { @('--release') } else { @() }
+            foreach ($identity in @($suite.tests | Where-Object { $_ -notin @($manifest.excluded.identity) })) {
+              $sequence++
+              $slug = '{0:d3}-{1}' -f $sequence, ($identity -replace '[^A-Za-z0-9_.-]', '_')
+              $raw = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "$slug.cargo.raw.log"
+              $wrapper = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "$slug.wrapper.log"
+              $name = "desktop $($suite.mode) $identity"
+              $started = [DateTime]::UtcNow
+              & ./ci/run-test-quiet.ps1 -Name $name -Command {
+                & $cargo test --locked -p $suite.package @selector @release $identity -- --exact --ignored --show-output --test-threads=1 *> $raw
+                $exit = [int]$global:LASTEXITCODE; Get-Content $raw; $global:LASTEXITCODE = $exit
+              } *>&1 | Tee-Object -FilePath $wrapper
+              $testExit = [int]$LASTEXITCODE
+              $wrapperLines = @((Get-Content $wrapper) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+              if ($testExit -ne 0) { throw "desktop test failed: $identity (exit $testExit)" }
+              if ($wrapperLines.Count -ne 1 -or $wrapperLines[0] -ne "PASS: $name") { throw "quiet wrapper proof failed: $identity" }
+              $cargoLines = Get-Content $raw
+              $identityCount = @($cargoLines | Where-Object { $_ -match ('^test ' + [regex]::Escape($identity) + ' \.\.\. ok$') }).Count
+              $summaryCount = @($cargoLines | Where-Object { $_ -match '^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; .+ finished in ' }).Count
+              if ($identityCount -ne 1 -or $summaryCount -ne 1) { throw "exact-one proof failed for ${identity}: identity=$identityCount summary=$summaryCount" }
+              $processLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE "$slug.process-clean.log"
+              & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE *>&1 | Tee-Object -FilePath $processLog
+              if ($LASTEXITCODE -ne 0) {
+                & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate *>&1 | Tee-Object -FilePath $processLog -Append
+                & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE *>&1 | Tee-Object -FilePath $processLog -Append
+                if ($LASTEXITCODE -ne 0) { throw "desktop process survived: $identity" }
+                throw "desktop test leaked a process and required termination: $identity"
+              }
+              $result.Add([ordered]@{ sequence=$sequence; mode=$suite.mode; suite=$suite.id; identity=$identity;
+                passed=1; failed=0; elapsed_seconds=([DateTime]::UtcNow-$started).TotalSeconds })
+              Write-DesktopResults $result
+            }
+          }
+
+      - name: Prove process exit and clean task-owned state
+        if: always()
+        run: |
+          $cleanupLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cleanup.raw.log'
+          & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE *>&1 | Tee-Object -FilePath $cleanupLog
+          if ($LASTEXITCODE -ne 0) {
+            & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate *>&1 | Tee-Object -FilePath $cleanupLog -Append
+            & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE *>&1 | Tee-Object -FilePath $cleanupLog -Append
+            if ($LASTEXITCODE -ne 0) { throw 'desktop process cleanup failed' }
+          }
+          function Resolve-Contained([string]$Path, [string]$Parent) {
+            $full = [IO.Path]::GetFullPath($Path)
+            $prefix = [IO.Path]::GetFullPath($Parent).TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar
+            if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw "cleanup escaped owned parent: $full" }
+            $full
+          }
+          function Remove-OwnedTree([string]$Path, [string]$Parent) {
+            $owned = Resolve-Contained $Path $Parent
+            if (-not [IO.Directory]::Exists($owned)) { return }
+            if (([IO.File]::GetAttributes($owned) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "cleanup root is a reparse point: $owned" }
+            [IO.Directory]::Delete($owned, $true)
+          }
+          $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+          $profileRoot = [IO.Path]::GetFullPath($env:SAKURA_ISOLATED_USERPROFILE)
+          $runnerRoot = [IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          [void](Resolve-Contained $localRoot $runnerRoot)
+          [void](Resolve-Contained $profileRoot $runnerRoot)
+          Remove-OwnedTree (Join-Path $localRoot 'SakuraInput') $localRoot
+          $fixtureParent = Join-Path $profileRoot 'tmp'
+          if ([IO.Directory]::Exists($fixtureParent)) {
+            foreach ($path in [IO.Directory]::EnumerateDirectories($fixtureParent, 'sakura-settings-user32-*', [IO.SearchOption]::TopDirectoryOnly)) {
+              Remove-OwnedTree $path $fixtureParent
+            }
+          }
+          $residuals = @()
+          foreach ($root in @($localRoot,$profileRoot)) {
+            if ([IO.Directory]::Exists($root)) {
+              $residuals += [IO.Directory]::EnumerateFileSystemEntries($root, '*', [IO.SearchOption]::TopDirectoryOnly) |
+                ForEach-Object { [ordered]@{ path=$_; attributes=[IO.File]::GetAttributes($_).ToString() } }
+            }
+          }
+          [ordered]@{ cleanup_scope=@((Join-Path $localRoot 'SakuraInput'),(Join-Path $fixtureParent 'sakura-settings-user32-*'));
+            recursive_profile_delete_attempted=$false; residual_profile_owner='GitHub-hosted ephemeral VM teardown'; residuals=$residuals } |
+            ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cleanup-residuals.json') -Encoding utf8
+
+      - name: Upload desktop evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2; reviewed release older than 7 days
+        with:
+          name: desktop-tests-${{ env.SAKURA_DESKTOP_MODE }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}\sakura-desktop-evidence
+          if-no-files-found: error
+          retention-days: 30

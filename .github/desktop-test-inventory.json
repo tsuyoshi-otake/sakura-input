@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "suites": [
+    {
+      "id": "settings-user32",
+      "mode": "settings",
+      "package": "sakura-settings",
+      "target": "settings_topic_user32",
+      "kind": "test",
+      "release": false,
+      "tests": [
+        "apply_persists_preferences_across_a_user32_relaunch",
+        "conversion_category_click_normalizes_to_segment_controls",
+        "dictionary_topic_click_shows_only_the_selected_dictionary_group",
+        "dpi_change_reflows_atok_property_sheet_grid_without_clipping",
+        "escape_cancel_discards_unapplied_preferences",
+        "input_assist_topic_click_shows_only_input_assist_controls",
+        "input_method_radio_controls_are_physical_and_persist_to_the_engine_config",
+        "input_support_topic_click_shows_prediction_assistance_controls",
+        "input_tree_click_shows_only_selected_conversion_controls",
+        "learning_and_update_topics_are_discoverable_and_clickable",
+        "normalizer_controls_are_discoverable_clickable_and_apply_persists_values",
+        "normalizer_reset_is_separate_from_its_group_and_restores_only_normalizer",
+        "notation_style_preset_writes_both_pages_and_persists",
+        "profile_topic_click_shows_only_profile_controls_and_keeps_status_out_of_actions",
+        "second_settings_launch_activates_the_existing_window",
+        "tab_focus_order_skips_hidden_topics_and_ends_at_actions",
+        "theme_combo_updates_input_tree_colors_through_user32",
+        "visual::capture_initial_compact_settings",
+        "visual::capture_native_settings_pages",
+        "visual::capture_settings_layout_matrix",
+        "visual::native_tabs_expose_selected_names_and_keyboard_focus_to_uia"
+      ]
+    },
+    {
+      "id": "renderer-lib",
+      "mode": "renderer",
+      "package": "sakura-renderer",
+      "target": "sakura_renderer",
+      "kind": "lib",
+      "release": false,
+      "tests": [
+        "indicator::tests::repositioning_moves_a_visible_bar_and_leaves_a_hidden_one_alone"
+      ]
+    },
+    {
+      "id": "renderer-pad-ui",
+      "mode": "renderer",
+      "package": "sakura-renderer",
+      "target": "pad_ui",
+      "kind": "test",
+      "release": false,
+      "tests": [
+        "the_pad_splits_above_the_breakpoint_and_folds_below_it",
+        "the_pad_stays_open_for_a_look",
+        "typing_into_a_fresh_pad_puts_the_memo_in_the_list"
+      ]
+    },
+    {
+      "id": "renderer-candidate-detail-uia",
+      "mode": "renderer",
+      "package": "sakura-renderer",
+      "target": "candidate_detail_uia",
+      "kind": "test",
+      "release": false,
+      "tests": [
+        "appearance_switch_repaints_a_visible_candidate_popup",
+        "history_delete_uses_typed_index_keeps_popup_until_next_ui_state_and_never_activates",
+        "mode_indicator_is_horizontal_nonactivating_and_repaints_light_and_dark",
+        "selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe"
+      ]
+    },
+    {
+      "id": "renderer-watchdog",
+      "mode": "renderer",
+      "package": "sakura-renderer",
+      "target": "watchdog_recovery",
+      "kind": "test",
+      "release": false,
+      "tests": [
+        "a_killed_engine_comes_back_only_when_the_renderer_is_watching"
+      ]
+    },
+    {
+      "id": "renderer-resource-budget",
+      "mode": "renderer",
+      "package": "sakura-renderer",
+      "target": "resource_budget",
+      "kind": "test",
+      "release": true,
+      "tests": [
+        "renderer_with_candidates_stays_within_its_footprint_budget"
+      ]
+    },
+    {
+      "id": "renderer-candidate-uia",
+      "mode": "renderer",
+      "package": "sakura-renderer",
+      "target": "candidate_uia",
+      "kind": "test",
+      "release": true,
+      "tests": [
+        "popup_follows_caret_pages_selects_by_digit_and_exposes_uia"
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "identity": "the_pad_stays_open_for_a_look",
+      "reason": "manual design review harness; default duration is 900 seconds"
+    }
+  ]
+}
