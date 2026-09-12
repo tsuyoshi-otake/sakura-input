@@ -7,6 +7,7 @@ use sakura_core::{
     PadShortcut, Preset, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionaryEntry,
     UserPartOfSpeech,
 };
+use sakura_engine::input_history::InputHistorySnapshotExt;
 use sakura_proto::Mode;
 use sakura_settings::user_dictionary::{self, ImportMode};
 use sakura_settings::{
