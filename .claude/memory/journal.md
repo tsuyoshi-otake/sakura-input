@@ -1847,3 +1847,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify: PR #163 irv-regression job 103586235440 and PR #164 job 103586240195 logs. Expect: WARN succeeds, critical benchmark threshold breach fails. Both matched: WARN KEYMODE 24,418 versus 21,664 (+12.7%); FAIL TSF reentrancy 17,259 versus 13,543 (+27.4%) and dual candidate 17,024 versus 13,015 (+30.8%).
 - These are IRV job results, not whole-PR successes. Both synthetic PRs were closed without merge, remote probe branches deleted, and all four owned CI/installer runs confirmed completed/cancelled after the relevant job evidence was captured.
 - Original baseline remains unchanged. The dependency scanner prerequisite was propagated by merge, retaining both journal histories.
+
+## 2026-09-13 Versioned main ruleset and named checks (#154)
+
+- Added the Phase 0.6 main-only ruleset definition with no bypass actors, required PRs, deletion/force-push prohibition and six strict required checks. Three bounded alias jobs expose existing aggregate fmt/workspace/DLL work and fail unless the aggregate job succeeded; they do not duplicate builds or claim future crate-tests coverage.
+- Verify: parent parsed the JSON, exact required contexts, ref/enforcement/bypass boundaries and all three bounded fail-closed aliases; diff check. Expect: complete definition without applying it prematurely. Result: PASS.
+- GitHub application and effective-rule verification remain pending until the named checks actually succeed. A committed definition is not evidence that main is protected.
