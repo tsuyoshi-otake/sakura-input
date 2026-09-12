@@ -1991,3 +1991,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - PR #180 passed all required checks and installer at 443e88e and merged. Refreshed #181 onto that main; the only conflict was this append-only journal, resolved by retaining both histories. No Rust source conflict occurred.
 - PR #181 subsequently merged at 68dd044. Refreshed values extraction onto main with both journal histories retained and no Rust conflict; fresh CI covers the combined prerequisites.
 - Refreshed the stacked core dependency PR from the values prerequisite after its main update; both journal entries retained, no Rust conflict.
+
+## 2026-09-13 Name the shared candidate fingerprint representation (#178)
+
+- Phase 2.1c adds the dependency-free Fingerprint = u64 alias to values and uses it for candidate/model score tokens and candidate-set results in engine. Hash algorithms, inputs, cost/text/evidence tags and byte representation remain unchanged. Owner/session/generation/reading hashes retain their existing types. The type documentation explicitly excludes cryptographic trust use.
+- Verify: parent inspected the complete production diff and ran wrapped engine library tests: 576 passed, two existing ignores. All 575 earlier identities/outcomes remain unchanged; the only three additions are the already merged history payload goldens. Enforced R1/R12, formatting, diff check, IRV baseline comparison and scoped process cleanup pass. The existing CI reading-volume warning remains; this step does not claim final Phase 2 budget completion.

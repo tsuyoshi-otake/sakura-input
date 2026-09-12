@@ -8,7 +8,7 @@ Define shared value types and capacity bounds without coupling consumers to a pr
 
 ## Owns
 
-Fixed-capacity strings/vectors and overflow; input, appearance, scope, and AI-text values; shared value/container capacities.
+Fixed-capacity strings/vectors and overflow; input, appearance, scope, and AI-text values; shared value/container capacities; opaque candidate fingerprint equality tokens.
 
 ## Must not own
 
