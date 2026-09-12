@@ -1,4 +1,3 @@
-
 thread_local! {
     // Only unit-test binaries contain this rendezvous; release/default
     // library artifacts cannot pause a producer through this hook.

@@ -1,4 +1,3 @@
-
 use super::*;
 use sakura_core::{
     ConversionOptions, UserDictionaryEntry, UserPartOfSpeech, MAX_USER_DICTIONARY_ENTRIES,
