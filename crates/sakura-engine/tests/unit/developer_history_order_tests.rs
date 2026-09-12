@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::developer_history_oracle::{
+use sakura_oracles::developer_history_oracle::{
     apply, apply_all, atomic_conditions, DomainEvent, OracleState, ScopeKind,
 };
 
@@ -204,7 +204,7 @@ fn developer_history_c2_campaign_covers_oracle_polarities_and_writes_report() {
     fs::create_dir_all(&dir).expect("coverage directory");
     let mut rows = String::from(
         "# Atomic-condition (C2) coverage — developer-history oracle\n\n\
-         Scope: `crates/sakura-engine/src/developer_history_oracle.rs` predicates in `atomic_conditions`.\n\
+         Scope: `crates/sakura-oracles/src/developer_history_oracle.rs` predicates in `atomic_conditions`.\n\
          This is atomic-condition polarity coverage of the independent oracle, not MC/DC of the whole workspace and not line coverage claimed as C2.\n\n\
          | condition | false | true |\n|---|---|---|\n",
     );
