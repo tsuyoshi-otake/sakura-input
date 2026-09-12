@@ -28,9 +28,6 @@ pub mod ai_text;
 pub(crate) mod candidate_projection;
 pub mod composition_fence;
 pub mod configuration;
-pub mod context_baseline;
-pub mod context_evaluation;
-pub mod context_intelligence;
 #[cfg(test)]
 #[path = "../tests/unit/developer_history_order_tests.rs"]
 mod developer_history_order;
@@ -42,7 +39,6 @@ pub mod input_history;
 pub mod learning;
 pub mod long_conversion;
 pub mod prediction;
-pub mod prediction_snapshot;
 pub mod server;
 pub mod session;
 mod shift_ascii_space;
@@ -57,3 +53,13 @@ mod space_key_dispatch;
 pub mod timing;
 pub mod ui;
 pub mod user_dictionary;
+
+#[cfg(all(test, feature = "context-research"))]
+mod context_research_session_size_tests {
+    #[test]
+    fn context_research_session_size_diagnostic() {
+        let current_session_bytes = core::mem::size_of::<crate::session::Session>();
+        assert_eq!(crate::prediction::MAX_SUGGESTIONS, 9);
+        println!("context-core engine size: current-session={current_session_bytes}");
+    }
+}
