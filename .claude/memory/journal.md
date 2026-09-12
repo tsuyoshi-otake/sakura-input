@@ -1607,3 +1607,129 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   利用者側では state ファイルを削除するのが唯一の回復手段（次回の更新確認で
   署名検証済み manifest から再構築される）。実行は owner の判断に委ねており、
   エージェントからは削除していない。
+
+## 2026-09-12 エージェント指向リファクタリング計画の作成（#152）
+
+- **依頼**: Clean Architecture の形合わせではなく、High Cohesion / Low Coupling /
+  One-way Dependency / Change Locality / Small Agent Context / Formal Verification
+  Boundary などを最大化し、Issue 1 件あたりにエージェントが読むコード・文書・
+  テストを最小化する計画を作る。実装はしない。基準は origin/main `a370477`。
+- **成果物**: `docs/architecture/agent-refactor-plan.md`（約 54 KB、日本語）と
+  根拠の静的解析 6 本 `docs/architecture/analysis/*.md`（engine、core-proto、tsf、
+  contracts-dictc-tools、docs-verification-ci、renderer-settings）。解析は Opus
+  subagent 6 体を読み取り専用（cargo 実行なし）で並列に走らせた。Issue #152 に
+  進捗コメント 5 本を小刻みに投稿。
+- **計画の骨子**: Phase 0 ゲート整備（DLL 1 MiB、crate 別テスト基準値、`rg` 依存
+  規則 R1〜R11、TLC workflow 非ブロッキング、CLAUDE.md ≤8 KB）→ 1 テスト分離
+  （sibling `*_tests.rs`、renderer `lib.rs`）→ 2 葉 crate（`sakura-values`、
+  `sakura-store`、`sakura-rerank-proto`、`sakura-oracles`、`sakura-context`）→
+  3 core/proto/ipc/reg/dictc 分割 → 4 engine → 5 renderer/settings → 6 TSF
+  （`session/` に `use windows` 禁止＝形式検証境界）→ 7 文書・verification 再編
+  （`docs/contracts`、`docs/decisions`、`correspondence.json` の CI 検査）。
+  全 82 ステップに `Verify:`/`Expect:`。TSF の write journal／candidate board に
+  触る 6.8〜6.10 は **#7 のクラッシュ証拠が添付されるまで着手しない**。
+- **検証**: 独立 `rubric-verifier`（Opus、fresh context）で 12 基準を採点。初回は
+  C2（`long_conversion.rs` の rerank magic 引用が 2 行ずれ、実際は :28-29）と
+  C4（ステップ 7.13 の Verify/Expect が空）で FAIL。両方修正して再採点で PASS。
+  他 10 基準（行数 12 件が `wc -l` と一致、12 原則の指標化、R1〜R11 が実行可能、
+  owner 判断 D1〜D11、読解セット表 16 行、命名統一、リポジトリ変更が
+  `docs/architecture/` 配下のみ）は初回から PASS。
+- **学び**:
+  - 解析レポートを subagent に書かせても harness がファイル書き込みを遮断し
+    `tasks/*.output` が 0 byte になる。レポートは親が Write で永続化する。
+  - 自分で要約した数値は投稿前に元レポートと突き合わせる。comment-03 の初稿は
+    存在しない `session/` ディレクトリを既存扱いし、読解セット数値もレポートと
+    ずれていた（投稿前に発見・修正）。
+  - 行番号引用は `sed -n Np` で 1 件ずつ確認する。`sed -n 20,34p` の出力から
+    目視で数えた行番号は 2 行ずれた。verifier がこれを拾った。
+  - 複数レポートが同じ概念に別名を付ける（`sakura-limits`／`sakura-values`、
+    `sakura-stores`／`sakura-store`）。統合時に命名表を 1 節設けて固定する。
+- **未了（owner 判断待ち）**: D1〜D11（CLAUDE.md の停止中調査の扱い、DESIGN.md
+  分割、`wire.rs` の置き場、`Session` 分割、desktop test runner、TLC ブロッキング化
+  など）。コミットは未実施（依頼があれば行う）。
+
+## 2026-09-13 リファクタリング計画のレビュー対応：IRV を中心 KPI に（#152、PR #153、0ca477c）
+
+- **依頼**: owner レビュー 14 項目。IRV（Issue Reading Volume）を正式な fitness
+  function にし、Physical／Semantic を区別、固定 ID の benchmark suite と baseline、
+  回帰ゲート、新 crate 憲章、`sakura-values` の依存方向修正、`sakura-store` 境界、
+  main 保護、文書前倒し、PR 境界の再評価、Phase 別受け入れ基準、fresh context の
+  verifier 再採点、Issue の最終報告。「ローカル作成済み」を完了条件にしない。
+- **成果物**: 計画 §1.1〜§1.1.2（IRV 定義・benchmark 10 件・baseline・gate）、
+  §3.1.1 憲章（5 crate × 6 項目）、R12〜R14、Phase 0 を 5→9 ステップ（ruleset、
+  baseline、irv-regression job、文書前倒し）、Phase 2 再設計（2.0 golden fixture、
+  2.1a〜2.1c、2.2a〜2.2d）、§4 PR 境界の原則、§4.1 受け入れ基準 20 行、D12〜D14。
+  `scripts/measure-irv.ps1`（`-SelfTest`／`-Out`／`-Compare`／`-DocsBudgetMode`）、
+  `verification/irv/benchmarks.json`、`baseline.json`（97705a5 で計測）。
+  Issue 本文を GitHub 実体基準のチェックリストに更新、PR #153 本文更新、最終報告
+  コメント投稿。
+- **検証**: `rubric-verifier`（Opus、fresh context）で C1〜C25 を採点し 25/25 PASS。
+  初稿 rubric 12 件に加え、IRV 定義、Physical/Semantic、benchmark ID の plan／JSON
+  一致、baseline 表 10/10 一致、self-test PASS と compare の exit code、gate の
+  閾値と根拠、憲章 6 項目、values/wire 方向、store 境界、ruleset 計画、文書前倒し、
+  PR 境界、GitHub 上の PR／Issue／remote HEAD 一致を検査。
+- **学び**:
+  - Bash heredoc に日本語の長文を入れると `unexpected EOF while looking for
+    matching` で失敗した（2 回）。文書は Write tool でファイル化し、挿入は
+    `perl splice.pl <plan> <insert> <after-line>` で行う。
+  - perl で全角記号（`）`、`、`）を扱うときは `-CSD -Mutf8` が必須。ASCII の
+    `)` では一致しない。
+  - Issue コメントに計画の数値を「要約」すると捏造が混ざる。今回 §4.1 の Phase 別
+    目標を記憶から書いて `900→≤600` という存在しない値を作りかけた。投稿前に
+    `awk '/^#### 4\.1/,/^### Phase 0/'` で表を引き直して置換した。
+  - `measure-irv.ps1 -Compare` は FAIL で exit 1 を返す。パイプで受けると
+    exit code が消えるので、CI では直接呼ぶ。docs 予算超過が既知の間は
+    `-DocsBudgetMode Warn` で運用し、FAIL 化の時期は D14 で owner が決める。
+  - ステップ ID に `2.1a` のような接尾辞を入れたら、rubric の正規表現を
+    `^\| [0-7]\.[0-9]+[a-z]? \|` に合わせて更新する必要がある。
+- **未了（owner 判断）**: D1〜D14。PR #153 のレビューと merge。実装は Phase 0 から
+  別 Issue。
+
+## 2026-09-13 D12〜D14 の判断委任と計画への反映（#152、PR #153）
+
+- **依頼と範囲**: owner が D12〜D14 の判断を委任。Sol Medium subagent が計画書の
+  編集を担当し、親 Codex が実差分とコマンド結果を直接検証した。独立 verifier の
+  再採点ではない。実装・ruleset の適用・PR の merge は今回の範囲に含めない。
+- **決定**: D12 は Phase 0 実装担当が admin 認証済み `gh` で ruleset を適用する。
+  bypass actor は無し、緊急時も PR と必須 check を通す。D13 は研究用 crate を
+  `context-research` feature 限定で残し、1 年間の未使用を確認した場合だけ別 PR
+  で削除する。D14 は 0.5 と 7.11 が揃う最後の PR で文書予算内と Fail mode の
+  成功を確認して CI を切り替え、以後の PR で予算超過を FAIL にする。
+- **変更**: 計画 §1.1.2、crate 概要、Phase 0.6／0.8／2.5、§7 を整合させた。
+  main への直接 push による拒否試験は、ruleset 詳細・main の実効規則・検証 PR
+  の BLOCKED 状態の確認へ置換。権限の読み取り確認は `permissions.admin=true`、
+  ruleset は `[]` で、保護の実適用済みとは扱わない。
+- **検証チェックリスト（親が実行、すべて期待どおり）**:
+  - Verify: `git show f228a36:docs/architecture/agent-refactor-plan.md` と現行の
+    D 行・Phase ID を照合。Expect: D1〜D11 は同一、D12〜D14 は日付付きで決定済み、
+    ID は 14 件一意、Phase ID 不変、0.6／0.8／2.5 の Verify／Expect は非空。
+  - Verify: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/measure-irv.ps1
+    -Compare verification/irv/baseline.json -DocsBudgetMode Warn` を直接実行。
+    Expect: exit 0／PASS、10 benchmark の Physical LOC はすべて増減 0%。確認済み。
+  - Verify: 同コマンドで `-DocsBudgetMode Warn` を省略して直接実行。
+    Expect: 無条件文書 85,770 B > 24,576 B により exit 1／FAIL。確認済み。
+  - Verify: IRV script／benchmarks／baseline の `git diff --exit-code f228a36`、
+    `git diff --check`、実行後の repository／measure-irv に対応する process 確認。
+    Expect: IRV 資材不変、空白エラー無し、検査自身の PID を除いて残存無し。確認済み。
+- **確認した注意点**: Warn mode は既知超過が増えていなければ note／PASS、Fail
+  mode は増加の有無に関係なく超過を拒否する。計画にあった「300 行追加 → WARN」
+  は 21,664 LOC の 10% に届かないため、JSON の基準値と閾値から最小超過の
+  2,167 行を計算して訂正した。過去の 25/25 PASS を今回の再検証とは表現しない。
+- **残件**: D1〜D2・D4〜D11（D3 は従来から決定済み扱い）、PR #153 のレビューと
+  merge。実装は Phase 0 の別 Issue で扱う。
+
+## 2026-09-13 全 Phase 実装の承認と計画の実行可能性修正（#152、#154）
+
+- owner は Phase 0〜7 の全実装を明示承認。実装用 Issue #154 を Phase 0 専用に作成した。
+  計画 PR #153 には実装を混ぜず、計画書と分析 6 本だけを更新する。
+- D1、D2、D4、D5、D8〜D11 は委任された既定案で決定。D6 は実 desktop runner の
+  環境証拠、D7 は #7 の実 dump／report の取得・検証が残る。過去コメント中の filename を
+  添付取得済みとみなさず、Phase 6.8〜6.10 の開始条件を維持した。D12〜D14 は変更無し。
+- 計画修正は metadata 由来の package／target 基準、実 DLL 出力先、TLC の正常／期待反例分類、
+  shared path の CI fallback、依存と symbol の実解決、sibling test 許可、store の runtime 非所有、
+  renderer 逆向き依存、研究 feature 維持、完全な契約 inventory と履歴保持を対象にした。
+- Verify: 親が 7 文書の実差分を直接確認し、step／D ID 集合の不変、R1〜R14 の一意性、
+  契約 filename 23 件の一意性、D6／D7 未決、D12〜D14 行不変、IRV 資材不変、
+  `git diff --check` を実行。Expect: 全条件を満たす。結果 PASS。
+- Sol Medium は編集を担当。検証責任は親が持ち、外部／subagent レビューは依頼していない。
+  今回の検証を過去の Opus rubric 25/25 の再採点とは表現しない。
