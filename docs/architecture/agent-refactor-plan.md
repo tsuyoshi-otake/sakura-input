@@ -3,13 +3,17 @@
 - 基準コミット：`a370477`（origin/main、2026-09-12、v1.0.39、PR #151 merge）
 - 追跡 Issue：[#152](https://github.com/tsuyoshi-otake/sakura-input/issues/152)
 - 根拠資料：`docs/architecture/analysis/{engine,core-proto,tsf,contracts-dictc-tools,docs-verification-ci,renderer-settings}.md`（HEAD a370477 に対する静的解析 6 本。本書の行番号・件数はすべてそこから引用）
-- 本書の位置づけ：**計画書**。コード変更は含まない。各ステップは「1 PR ＝ エージェント 1 セッションで読解・変更・検証が完結する粒度」に切ってある。
+- 本書の位置づけ：**計画書**。コード変更は含まない。各ステップは「エージェント 1 セッションで読解・変更・検証が完結する粒度」に切ってある。PR との対応は §4 冒頭の境界原則に従う（1 ステップ ＝ 1 PR は機械的規則にしない）。
+- 中心 KPI：**IRV（Issue Reading Volume、§1.1）**。1 Issue を安全に変更するためにエージェントが読むコード・テスト・契約・文書・設定の総量を、Phase 0 で計測し（`verification/irv/baseline.json`）、全 PR で回帰検査し、Phase ごとに目標値まで下げる。
+- 追跡 PR：[#153](https://github.com/tsuyoshi-otake/sakura-input/pull/153)
 
 ---
 
 ## 0. 要旨（この 1 画面だけ読めば方針が分かる）
 
-**目的**：1 つの Issue を直すとき、エージェントが読むコード・文書・テストを最小化する。Clean Architecture の形に合わせることが目的ではない。
+**目的**：1 つの Issue を直すとき、エージェントが読むコード・文書・テストを最小化する。Clean Architecture の形に合わせることが目的ではない。判定基準は **IRV（Issue Reading Volume）**：代表 Issue 形 10 種について「読み込む量（Physical）」と「理解が要る量（Semantic）」を別々に測り、両方を下げる（§1.1）。
+
+**IRV の現状**（Phase 0 基準値、§1.1.1）：`無変換` 系 Issue で 21,664 行を読むが理解が要るのは 900 行。候補順序系 26,842 行／3,050 行。TSF 再入系 13,543 行／910 行。無条件に読む文書 85,770 B（予算 24,576 B）。
 
 **現状の要点**（詳細は §2）
 
@@ -25,16 +29,17 @@
 
 **方針**（詳細は §3）
 
-1. **テストを本体から出す**（sibling `*_tests.rs`）。挙動不変・最小リスクで、読解量を 40〜60% 減らす。最初にやる。
-2. **葉 crate を 5 つ切る**（`sakura-values`、`sakura-store`、`sakura-rerank-proto`、`sakura-oracles`、`sakura-context`）。依存の逆流を全て消し、`rg` 1 行で検査できる方向規則にする。
+0. **ゲートを先に置く**（Phase 0）：main を ruleset で保護して PR 必須にし、依存規則・crate 別テスト・workspace テスト・IRV 回帰・DLL サイズを必須チェックにする。IRV 基準値をここで固定する。
+1. **テストを本体から出す**（sibling `*_tests.rs`）。挙動不変・最小リスクで、Physical IRV を 40〜60% 減らす。最初にやる。**Semantic IRV はこれでは下がらない**（§1.1）。
+2. **葉 crate を 5 つ切る**（`sakura-values`、`sakura-store`、`sakura-rerank-proto`、`sakura-oracles`、`sakura-context-research`）。依存の逆流を全て消し、`rg` 1 行で検査できる方向規則にする。各 crate は憲章（Purpose／Owns／Must not own／Allowed dependencies／Allowed consumers／Public API budget、§3.1.1）を持ち、「どこにも置けないものを置く場所」にしない。
 3. **god file を「変更理由」で分割**する。行数ではなく Issue の型で切る。分割後の各ディレクトリに「この Issue 型はここ」の対応表を置く。
 4. **crate 単位の CI ゲート**（paths filter matrix、DLL サイズ、TLC、verification⇄Rust 対応検査）を足し、モジュールを独立に検証可能にする。
-5. **文書を「契約」「判断」「履歴」に分け**、`CLAUDE.md` を 8 KB 以下、crate ごとに README ≤4 KB を置く。
+5. **文書を「契約」「判断」「履歴」に分け**、`CLAUDE.md` を 8 KB 以下、crate ごとに README ≤4 KB を置く。crate 責務・依存規則・不変条件・所有・契約・移行規則は Phase 0〜2 で前倒しし、新 crate を作る PR は README と依存規則を同梱する（Phase 7 は残りの整理だけ）。
 6. **形式検証境界を実ディレクトリにする**：`sakura-tsf/src/session/` に `use windows` を禁止し、TLA+ モデルと 1:1 対応する `correspondence.json` を CI で検査する。
 
 **順序**：Phase 0（ゲート整備）→ 1（テスト分離）→ 2（葉 crate）→ 3（core/proto/ipc/reg/dictc 分割）→ 4（engine）→ 5（renderer/settings）→ 6（TSF）。Phase 7（文書・verification）は Phase 0 から並走。TSF の write journal／candidate teardown に触る 3 工程は **#7 のクラッシュ証拠が取れるまで着手しない**（§6）。
 
-**規模**：PR 約 70 本。Phase 1〜2 だけで読解セットの削減幅の 6 割が得られる（§5）。
+**規模**：ステップ 93。PR はステップと 1:1 ではない（§4 冒頭の境界原則）。Phase 1〜2 だけで Physical IRV の削減幅の 6 割が得られる（§5）。各 Phase の受け入れ基準は IRV 目標値で書く（§4.1）。最終目標は代表 10 ベンチマークで **Physical ≤1,200 行、Semantic ≤1,000 行**（例外 2 件は §4.1 に理由付きで明記）。
 
 ---
 
@@ -57,6 +62,92 @@
 | Formal Verification Boundary | `correspondence.json` の Rust シンボル解決率 | 0%（`traceability.json` STALE） | 100%、CI で検査 |
 | 誤認しにくい構造 | Issue 型 → ディレクトリ対応表（§3.7）の一意性 | 無し | 全 Issue 型に 1 ディレクトリ |
 
+
+### 1.1 中心 KPI：IRV（Issue Reading Volume）
+
+本計画の成否は次の 1 問で判定する。**「ある Issue を渡されたエージェントが、その Issue と無関係なコードを読まず、狭い責務境界の中だけで安全に理解・変更・検証できるようになったか」**。これを測る Architecture Fitness Function として IRV を定義し、Phase 0 で基準値を取り、以後の全 PR で回帰を検査する。§1 の 12 指標は IRV を下げるための手段であり、IRV が下がらない分割は成果と見なさない。
+
+**定義**：IRV(b) ＝ 代表 Issue 形 b を安全に変更するためにエージェントが読む必要のある資料の総量。次の 6 カテゴリの合計。
+
+| カテゴリ | 含むもの | 単位 |
+|---|---|---|
+| Production Code | 変更対象と、その挙動を決める呼び出し元・呼び出し先 | LOC・bytes・ファイル数 |
+| Test Code | 変更で壊れうる既存テストと、追加すべきテストの置き場 | 同上 |
+| Contract / Protocol | wire 形式、keymap、TOML／JSON schema、`PROTOCOL_VERSION` | 同上 |
+| Documentation | Issue 型別の契約文書と、**無条件に読む文書**（`CLAUDE.md`、`.claude/memory/rules.md`） | bytes（LOC も記録） |
+| Build / CI / Config | `Cargo.toml`、workflow、`ci/*.ps1` のうち変更経路に関わるもの | 同上 |
+| Verification / Formal Model | 対応する TLA+ モデル、cfg、record | 同上 |
+
+単位は当面 LOC・bytes・ファイル数。トークン数は `scripts/measure-irv.ps1` に tokenizer を差し込めば同じ JSON に列を足せる（`physical.tokens`）。
+
+**Physical IRV と Semantic IRV**
+
+| | 定義 | 測り方 | 下がる操作 |
+|---|---|---|---|
+| Physical IRV | 機械的に読み込まれる量（`Read` されるファイルの総 LOC・bytes） | `measure-irv.ps1` が自動計測 | テスト分離、ファイル分割、依存の切断 |
+| Semantic IRV | 正しく変更するために**理解しなければならない**量（型・不変条件・状態遷移・呼び出し経路） | 解析レポート §9 の必読範囲をエージェントまたは人が確認し、`semantic.ranges` に行範囲で記録 | 変更理由ごとの責務分割、依存方向の一方向化、契約の単一化 |
+
+**原則：ファイルを分割しただけでは Semantic IRV は下がらない。** インラインテストを sibling に移す Phase 1 は Physical IRV だけを下げる（`dispatch.rs` 21,664→4,927 LOC）。`apply_action` 431 行を 45 ファイルに割っても、45 ファイルを全部読まないと `無変換` を直せないなら Semantic IRV は同じである。Semantic IRV が下がるのは、Issue 型ごとに「ここだけ読めばよい」入口と契約が定まり、境界の外を読まなくても安全だと言える構造になったときだけ。各 Phase の受け入れ基準（§4）は両方を別々に持つ。
+
+**測定の 2 層**
+
+| 層 | 誰が | 何を | 位置づけ |
+|---|---|---|---|
+| 自動近似 | `scripts/measure-irv.ps1`（CI） | `benchmarks.json` に固定したファイル集合の LOC／bytes／ファイル数、インラインテスト行数、無条件文書 bytes | 毎 PR の回帰ゲート。**近似**であり、依存の切断はファイル集合の更新（＝ベンチマーク定義の PR）で反映する |
+| 検証済み semantic 集合 | 解析レポート §9 を書いたエージェント、または Phase 完了時のレビュア | `semantic.ranges`（file・start・end・why）と `estimated_loc` | Phase 受け入れ時に更新。自動化しない。行範囲は `sed -n` で実在を確認する |
+
+#### 1.1.1 IRV ベンチマークスイート
+
+`verification/irv/benchmarks.json` に固定 ID で定義する。ID は変更しない（履歴比較のため）。ファイル集合は構造変更のたびに更新するが、**Issue 形（issue_shape）と entry point の意味は変えない**。
+
+| ID | Issue 形（例） | entry point | critical |
+|---|---|---|---|
+| `IRV-ENGINE-KEY-MODE` | `無変換`／モード循環／キー→Action（#51） | `dispatch.rs::apply_action`（`Action::ModeKanaCycle`） | ✔ |
+| `IRV-ENGINE-CANDIDATE` | 候補順序／ranking／evidence（#94、#108） | `core/conversion.rs` ranking ＋ `engine/candidate_projection.rs` | ✔ |
+| `IRV-TSF-REENTRANCY` | 再入 candidate UI クラッシュ／teardown（#7） | `tsf/text_service.rs` の deferred／latch | ✔ |
+| `IRV-TSF-DUAL-KEY` | Dual-TSF 物理キー調停（#69） | `tsf/key_handler.rs` | ✔ |
+| `IRV-CORE-CONVERSION` | 句読点・数字・日付候補合成（#99） | `core/conversion.rs` synthesis | |
+| `IRV-DICTIONARY-FORMAT` | 辞書イメージ形式／reader-writer 適合（#109） | `core/dictionary.rs::image_format` | |
+| `IRV-HISTORY-STORE` | 開発者履歴 store／compaction／stats（#113〜#132） | `engine/input_history.rs` | |
+| `IRV-RENDERER-POPUP` | 候補ポップアップ配置（#47、#142） | `renderer/candidate.rs` | |
+| `IRV-CI` | CI／テスト runner／プロセス規約（#111） | `.github/workflows/ci.yml` | |
+| `IRV-DOCS` | 無条件に読む文書（全 Issue） | `CLAUDE.md` | ✔ |
+
+critical ＝ 過去 1 年で最も Issue が集中し、かつ状態機械を含む（誤読がクラッシュに直結する）4 系統と、全 Issue に乗る文書負荷。
+
+**Phase 0 基準値**（`verification/irv/baseline.json`、コミット 97705a5 のツリーで `measure-irv.ps1 -Out` により計測。`LOC` は `wc -l` 相当、`除テスト` はインラインテスト（最初の `#[cfg(test)]` 以降）を除いた行数、`Semantic` は解析レポート §9 の必読見積り）
+
+| ID | Physical LOC | 除テスト LOC | bytes | ファイル数 | Semantic LOC |
+|---|---:|---:|---:|---:|---:|
+| `IRV-ENGINE-KEY-MODE` | 21,664 | 4,927 | 845,745 | 5 | 900 |
+| `IRV-ENGINE-CANDIDATE` | 26,842 | 7,446 | 1,059,791 | 4 | 3,050 |
+| `IRV-TSF-REENTRANCY` | 13,543 | 8,858 | 554,795 | 8 | 910 |
+| `IRV-TSF-DUAL-KEY` | 13,015 | 8,009 | 531,060 | 6 | 540 |
+| `IRV-CORE-CONVERSION` | 10,355 | 6,392 | 418,312 | 4 | 450 |
+| `IRV-DICTIONARY-FORMAT` | 5,306 | 4,821 | 207,843 | 4 | 1,150 |
+| `IRV-HISTORY-STORE` | 7,797 | 4,380 | 329,935 | 15 | 950 |
+| `IRV-RENDERER-POPUP` | 5,631 | 1,691 | 213,180 | 4 | 700 |
+| `IRV-CI` | 1,749 | 1,749 | 76,614 | 10 | 600 |
+| `IRV-DOCS` | 1,775 | 1,775 | 125,847 | 2 | — |
+| 無条件文書（全ベンチマークに加算） | — | — | **85,770** | 2 | — |
+
+読み方：`IRV-ENGINE-KEY-MODE` は「`無変換` を直すために 21,664 行を Read するが、うち 16,737 行はインラインテストで、本当に理解が要るのは 900 行」。Physical と Semantic の差 24 倍が、この計画で消す無駄である。
+
+#### 1.1.2 IRV 回帰ゲート（Phase 0 で導入、全 PR で実行）
+
+`scripts/measure-irv.ps1 -Compare verification/irv/baseline.json` を CI job `irv-regression` として必須チェックにする。判定：
+
+| 条件 | 判定 | 根拠 |
+|---|---|---|
+| 依存境界違反（§3.3 の R1〜R12 のうち blocking 化済みのもの） | **FAIL** | 逆流 1 本で下流 crate 全体が読解集合に戻る。IRV の増分では捕まえられない構造回帰 |
+| 無条件文書（`CLAUDE.md`＋`rules.md`）が予算 24,576 B を超えて**増加** | 予算超過中は **WARN**（現状 85,770 B）、予算達成後（0.5／7.11 完了後）は **FAIL** | 全 Issue に乗る固定費。8 KiB＋16 KiB は §3.5 の上限 |
+| 代表ベンチマークの Physical LOC が基準比 **+10%** | **WARN**（PR 本文に理由必須） | Phase 1 の最小ステップでも 40〜60% 減る計画なので、+10% は測定ノイズではなく実際の逆行 |
+| critical ベンチマークの Physical LOC が基準比 **+25%** | **FAIL** | 4,000 LOC の集合に 1,000 LOC のモジュールを再併合したのと同じ規模。critical 4 系統では誤読がクラッシュに直結する |
+| `benchmarks.json` のファイル集合が実在しない（移動忘れ） | **FAIL** | 計測不能を静かに 0 にしない |
+
+基準値は **Phase ごとに更新**する（Phase 完了 PR で `-Out` を再実行し、受け入れ基準を満たしたことを同じ PR で示す）。途中 PR は直前の基準値と比較するので、IRV は Phase 内で単調非増加になる。しきい値の変更は `benchmarks.json` の `thresholds.rationale` の書き換えを伴う PR でのみ行う。
+
+`-Compare` は FAIL で exit 1 を返す。CI ではパイプで受けず（`| tail` は exit code を隠す）、直接実行する。
 ---
 
 ## 2. 現状の構造的問題（証拠付き）
@@ -149,7 +240,7 @@
                      │          │            │              │
  契約/転送      sakura-proto  sakura-ipc  sakura-rerank-proto  sakura-ai-proto  sakura-context-proto(旧 neural-proto)
                      │          │
- 領域            sakura-core  sakura-store  sakura-context  sakura-reg(識別子のみ)  sakura-user-prefs  sakura-install-maintenance
+ 領域            sakura-core  sakura-store  sakura-context-research(feature 限定)  sakura-reg(識別子のみ)  sakura-user-prefs  sakura-install-maintenance
                      │          │
  葉              sakura-values (FixedStr/FixedVec/Overflow, capacity, Mode/KeyCode/KeyInput/Modifiers, AppearanceTheme/PadShortcut, Fingerprint)
  dev only        sakura-oracles (engine の TLA+ oracle 12 モジュール)   dictc-core / dictc(bin)   tools/*
@@ -159,16 +250,32 @@
 
 | crate | 中身 | 由来 | 優先 |
 |---|---|---|---|
-| `sakura-values` | `fixed.rs`（FixedStr/FixedVec/Overflow）、`capacity.rs`（上限定数）、`input.rs`（Mode/KeyCode/KeyInput/Modifiers）、`appearance.rs`（AppearanceTheme/PadShortcut）、`fingerprint.rs`（候補 fingerprint） | core §7 の `sakura-values` と contracts §6 の `sakura-limits` を統合。名前は `sakura-values` に統一 | 必須 |
-| `sakura-store` | learning／input_history の record・codec・DPAPI・snapshot reader | engine §7、renderer-settings §5、contracts §6 の `sakura-stores` を統合。名前は `sakura-store` に統一 | 必須 |
+| `sakura-values` | `fixed.rs`（FixedStr/FixedVec/Overflow）、`capacity.rs`（上限定数）、`input.rs`（Mode/KeyCode/KeyInput/Modifiers）、`appearance.rs`（AppearanceTheme/PadShortcut）、`scope.rs`（InputScope）、`ai_text.rs`（AiTextOperation/AiTextStatus）、`fingerprint.rs`（候補 fingerprint）。**wire codec は持たない**（proto 側が `impl Wire for` で実装、§4 Phase 2） | core §7 の `sakura-values` と contracts §6 の `sakura-limits` を統合。名前は `sakura-values` に統一 | 必須 |
+| `sakura-store` | learning／input_history の **format（record layout・上限）／codec／persistence（ファイル配置・保持・compaction の純関数）／crypto（DPAPI を trait の背後に）**。writer thread・queue は engine に残す | engine §7、renderer-settings §5、contracts §6 の `sakura-stores` を統合。名前は `sakura-store` に統一 | 必須 |
 | `sakura-rerank-proto` | `SKNR`/`SKNS` v1（magic、frame、bounds） | contracts §6 | 必須 |
 | `sakura-oracles` | engine の `*_oracle.rs` 12 モジュール（dev-dependency のみ） | engine §7 | 推奨 |
-| `sakura-context` | #34 休眠 4 モジュール 1,846 行 | engine §7 | 推奨 |
+| `sakura-context-research` | #34 休眠 4 モジュール 1,846 行。名前に `research` を付け、feature `context-research` でしか engine に入らない。`sakura-context` という広い名前は採らない（owner D13：削除して履歴に残す案もある） | engine §7 | 推奨 |
 | `sakura-context-proto` | `sakura-neural-proto`（SCV1）の改名 | contracts §6 | 任意 |
 | `sakura-user-prefs` | Credential Manager＋user preference（reg から） | contracts §6 | 推奨 |
 | `sakura-install-maintenance` | maintenance／launcher／vscode_diagnostics（reg から） | contracts §6 | 推奨 |
 | `dictc-core` | dictc lib の compile／image writer。`dictc` は bin だけの薄い crate に | contracts §6 | 推奨 |
 | `sakura-diagnostics` | ipc の `debug_trace.rs`／`diagnostics.rs`（pipe と無関係） | contracts §6 | 任意 |
+
+### 3.1.1 新 crate の憲章（junk drawer 化の防止）
+
+新 crate は例外なく次の 6 項目を `crates/<crate>/README.md` の見出しとして持つ。**Must not own** に書かれたものを入れる PR は、憲章を改訂する PR を先に通さない限り merge しない。Public API budget は `pub` item 数の上限で、超えたら分割か憲章改訂。`ci/check-dependency-rules.ps1` は README の `Allowed dependencies` と `Cargo.toml` の `[dependencies]` が一致することも検査する（R14 として 2.8 で追加）。
+
+| 項目 | `sakura-values` | `sakura-store` | `sakura-rerank-proto` | `sakura-oracles` | `sakura-context-research` |
+|---|---|---|---|---|---|
+| **Purpose** | 全 crate が共有する値型と上限定数の唯一の定義 | 学習／入力履歴の永続レコードの形式・codec・保存規則を engine と settings で 1 定義にする | reranker worker との protocol v1（`SKNR`／`SKNS`）の唯一の定義 | engine の TLA+ oracle（参照実装）を production から隔離する | #34 の休眠 context 研究コードを既定 build から外し、所在だけ残す |
+| **Owns** | `FixedStr`／`FixedVec`／`Overflow`、上限定数（`MAX_CANDIDATES`、`MAX_PREEDIT_BYTES`、`MAX_SEGMENTS` ほか）、`Mode`／`KeyCode`／`KeyInput`／`Modifiers`、`AppearanceTheme`／`PadShortcut`、`InputScope`、`AiTextOperation`／`AiTextStatus`、`Fingerprint` | `format`（record layout、version、`MAX_RECORD_BYTES`）、`codec`（record／snapshot の encode・decode）、`persistence`（`input.bin` 配置、atomic write、30 日保持、64 MiB 上限、compaction の純関数）、`crypto`（`Sealer` trait と `DpapiSealer`） | magic、frame header、bounds、request／response の encode・decode、version 定数 | `*_oracle.rs` 12 モジュール（現 `engine/src`）と oracle 用 fixture | 現 engine の休眠 4 モジュール 1,846 行のみ |
+| **Must not own** | wire codec（`Reader`／`Sink`／`encode`／`decode`）、`PROTOCOL_VERSION`、message／header、I/O、Windows API、ロジック（変換・keymap 解決） | writer thread・queue・`InputHistoryService`（engine）、`ScopeClass` 分類（engine）、CLI 表示（settings）、engine identity／session id（値として受け取るだけ）、`sakura_proto` の型 | ONNX、model manifest 検証、timeout／fallback 方針、候補 scoring の意味 | production から参照されるもの、`#[cfg(test)]` 外で使われる item | 既定 build から参照されるもの、runtime IPC、新規研究コード（新しい研究は新 Issue で新 crate） |
+| **Allowed dependencies** | なし（`std` のみ） | `sakura-values`；`windows`（feature `dpapi`、`crypto/` 内のみ） | `sakura-values` | `sakura-engine`（dev）、`sakura-values`、`proptest` | `sakura-values`、`sakura-core` |
+| **Allowed consumers** | 全 crate | `sakura-engine`、`sakura-settings`、`tools/*` | `sakura-engine`、`sakura-neural-worker` | `sakura-engine`（dev-dependency のみ）、cargo-mutants | `sakura-engine`（feature `context-research` のみ） |
+| **Public API budget** | `pub` 型 ≤25、`pub fn` は値の構築・変換のみ（I/O 0） | `pub` 型 ≤12、`pub fn` ≤15 | `pub` item ≤8 | `pub mod` 12、`pub fn` は oracle 入口のみ | `pub` item ≤6 |
+| **検査** | R12、`cargo tree -p sakura-values -e normal` | R13 | R8 | `rg -n 'oracle' target/release/deps/*.d` 空 | `rg -n 'sakura_context_research' crates/sakura-engine/src` が `#[cfg(feature)]` 配下のみ |
+
+Phase 3 以降で分割される既存 crate（`sakura-user-prefs`、`sakura-install-maintenance`、`dictc-core`、`sakura-diagnostics`、`sakura-context-proto`）も同じ 6 項目を README に持つ（各ステップの PR に同梱）。「どこにも置けないものを置く場所」が要ると感じたら、それは境界の誤りであり、crate を増やすのではなく §3.1 の図を直す Issue を立てる。
 
 ### 3.2 crate ごとの目標モジュールツリー
 
@@ -286,6 +393,9 @@ dictc-core/src/  compile/ image/ overlay/ detail/   dictc/src/bin/*.rs (11 bin�
 | R9 | test-only module は src に置かない | `rg -l --files-with-matches '^#!\[cfg\(test\)\]' crates/*/src` → `*_tests.rs` 以外 0 |
 | R10 | 未使用 facade 再輸出なし | `cargo doc`＋`rg` は不可のため、`ci/check-facade.ps1` が `pub use` 各 item の被参照を `rg` で数える |
 | R11 | tools workspace も dep-policy 対象 | `ci/dep-policy.ps1` が `tools/*/Cargo.lock` も読む |
+| R12 | values は wire を知らない | `rg -n 'sakura_proto\|wire::\|Reader\|Sink\|fn encode\|fn decode' crates/sakura-values/src`；`cargo tree -p sakura-values -e normal` が `sakura-values` 1 行のみ |
+| R13 | store は runtime を持たない | `rg -n 'std::thread\|mpsc\|sakura_engine\|sakura_proto' crates/sakura-store/src` |
+| R14 | README の Allowed dependencies と `Cargo.toml` が一致 | `ci/check-dependency-rules.ps1 -Charters` が各 `crates/*/README.md` の `## Allowed dependencies` 節と `[dependencies]` を突き合わせる（2.8 で追加） |
 
 ### 3.4 テスト配置規約
 
@@ -349,9 +459,62 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 
 各ステップの形式：**目的 → 変更 → Verify: → Expect:**。`Verify:` の cargo test は必ず `./ci/run-test-quiet.ps1 -Name '<name>' -Command { ... }` 経由。全ステップ共通の前提：`cargo fmt --all -- --check`、`git diff --check`、`./ci/check-process-clean.ps1` が成功。
 
-規模の目安：S = 1 PR・エージェント 1 セッション（30〜90 分）、M = 1〜2 PR・半日、L = 2〜4 PR・1 日超。
+規模の目安：S = エージェント 1 セッション（30〜90 分）、M = 半日、L = 1 日超。
 
-### Phase 0：ゲート整備（コード移動なし、5 PR）
+**PR 境界の原則**（「1 ステップ ＝ 1 PR」を機械的規則にしない）
+
+1. **1 PR ＝ 1 変更理由 ＝ 1 つのレビュー可能な意味単位。** レビュアが「なぜこの diff か」を 1 文で言えない PR は分ける。
+2. **構造変更・挙動変更・契約変更を同じ PR に混ぜない。** 構造 PR（`git mv`、分割、crate 新設）は `git diff -M --stat` で rename として見え、production の意味差分は 0。挙動変更 PR は構造を動かさない。契約変更（wire、ファイル形式、公開 API、`PROTOCOL_VERSION`）はこの計画の範囲外で、必要なら別 Issue。
+3. **PR 自身の IRV を小さく保つ。** レビュアが読む production diff ≤1,500 行、読解対象は 1 crate ＋ その README ＋ 対応する契約文書 1 本まで。1 ステップがこれを超えるなら分ける（2.2a〜2.2d、5.10 のように）。逆に、同じ変更理由の機械的な小変更（≤50 行の rename が数本）は 1 PR にまとめてよい。
+4. **新 crate を作る PR は文書を同梱する。** `crates/<crate>/README.md`（§3.1.1 の 6 見出し）、§3.3 への依存規則追加、`verification/irv/benchmarks.json` のファイル集合更新を同じ PR に含める。後回しにした README は書かれない。
+5. **各 PR 本文は §9.2 のテンプレ**（Reads／Changes／Verify／Expect／IRV before→after）。
+
+#### 4.1 Phase ごとの受け入れ基準（IRV 目標値）
+
+Physical は `measure-irv.ps1` の `physical.loc`、Semantic は Phase 完了レビューで更新する `semantic.estimated_loc`。目標値の根拠：§5 の after 列（各解析レポート §9 の必読見積り）を切り上げたもの。Phase 1 の値は基準値の `除テスト LOC`（§1.1.1）そのもの。
+
+| Phase | ベンチマーク | Physical 目標 | Semantic 目標 | 根拠 |
+|---|---|---:|---:|---|
+| 0 | 全部 | 基準値を記録（変化なし） | 記録のみ | ゲートと基準値の固定が目的 |
+| 1 | `IRV-ENGINE-KEY-MODE` | ≤5,000 | 900（不変） | 除テスト 4,927 |
+| 1 | `IRV-ENGINE-CANDIDATE` | ≤7,500 | 3,050（不変） | 除テスト 7,446 |
+| 1 | `IRV-TSF-REENTRANCY` | ≤8,900 | 910（不変） | 除テスト 8,858 |
+| 1 | `IRV-TSF-DUAL-KEY` | ≤8,100 | 540（不変） | 除テスト 8,009 |
+| 1 | `IRV-CORE-CONVERSION` | ≤6,400 | 450（不変） | 除テスト 6,392 |
+| 1 | `IRV-RENDERER-POPUP` | ≤1,700 | 700（不変） | 除テスト 1,691 |
+| 2 | `IRV-HISTORY-STORE` | ≤3,000、ファイル数 ≤8 | ≤950 | settings が engine の 3,632 行ファイルを読まなくなる。store 4 分割で読む範囲が 1 モジュールに |
+| 2 | `IRV-CORE-CONVERSION` | proto をファイル集合から除く | 450 | R1 blocking |
+| 3 | `IRV-CORE-CONVERSION` | ≤1,200 | ≤450 | §5：11,279→450 |
+| 3 | `IRV-DICTIONARY-FORMAT` | ≤1,500 | ≤1,150 | §5：5,020→1,150＋writer |
+| 3 | `IRV-ENGINE-CANDIDATE` | ≤4,000 | ≤3,050 | ranking 8 サブモジュールのうち Issue 型で 2〜3 個 |
+| 4 | `IRV-ENGINE-KEY-MODE` | ≤1,200 | ≤900 | §5：19,600→900 |
+| 4 | `IRV-HISTORY-STORE` | ≤1,200 | ≤950 | §5：7,000→950 |
+| 4 | `IRV-ENGINE-CANDIDATE` | ≤3,500 | ≤3,050 | candidate_projection／prediction が `candidates/` に閉じる |
+| 5 | `IRV-RENDERER-POPUP` | ≤1,200 | ≤700 | §5：3,730→700 |
+| 6 | `IRV-TSF-REENTRANCY` | ≤1,200 | ≤910 | §5：9,700→910 |
+| 6 | `IRV-TSF-DUAL-KEY` | ≤1,000 | ≤540 | §5：7,400→540 |
+| 7（並走） | `IRV-DOCS`／無条件文書 | 無条件文書 ≤24,576 B、Issue 型別契約 ≤22,000 B | — | §3.5 の上限 |
+| 7（並走） | `IRV-CI` | ≤1,200 | ≤600 | ci.yml＋変更対象 ps1 1 本 |
+
+最終目標：10 ベンチマークすべてで **Physical ≤1,200 行、Semantic ≤1,000 行**。例外は 2 件で、`IRV-ENGINE-CANDIDATE`（Semantic 3,050：ranking は cost・learning・dedup・evidence を同時に理解しないと安全に変えられない。Physical ≤3,500）と `IRV-DICTIONARY-FORMAT`（Semantic 1,150：形式仕様・reader・writer を必ず一緒に読む契約。Physical ≤1,500）。この 2 件を無理に 1,000 以下へ割ると「分割しただけで Semantic が下がらない」状態になるため、目標にしない。
+
+Phase 完了 PR は `measure-irv.ps1 -Out verification/irv/baseline.json` を再実行して基準値を更新し、上表の該当行を PR 本文に before→after で貼る。目標未達なら Phase を閉じない。
+
+### Phase 0：ゲート整備（コード移動なし、9 ステップ）
+
+目的：**main を保護し、以後の全 PR が同じゲートを通る状態を作る**。現状（2026-09-12 に `gh api` で確認）：リポジトリは public、`main` に branch protection なし（`/branches/main/protection` が 404）、ruleset なし（`/rulesets` が `[]`）。誰でも直接 push できる。
+
+merge gate の構成（0.6 で必須チェックにする job 名）：
+
+| job | 内容 | 由来 |
+|---|---|---|
+| `fmt` | `cargo fmt --all -- --check`、`git diff --check` | 既存 |
+| `dependency-rules` | `ci/check-dependency-rules.ps1`（R1〜R13、blocking 化済みのみ FAIL） | 0.3 |
+| `crate-tests` | 変更 crate と下流だけ `cargo test -p`（7.8 の matrix。それまでは `workspace-tests` と同一） | 7.8 |
+| `workspace-tests` | `./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }` | 既存 `ci.yml:80` |
+| `irv-regression` | `scripts/measure-irv.ps1 -Compare verification/irv/baseline.json` | 0.8 |
+| `dll-size` | `ci/check-dll-size.ps1` | 0.1 |
+| `formal-verification` | TLC。0.4 では非ブロッキング、7.9 で必須に | 0.4／7.9 |
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -359,11 +522,15 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 0.2 | crate 単位テストの基準値記録 | 各 crate の `cargo test -p <crate> --lib` 件数を `ci/test-baseline.json` に記録（renderer は `--bin sakura_renderer`） | `pwsh ./ci/record-test-baseline.ps1` | 15 crate 分の件数が JSON に出る。合計 1,988 | S |
 | 0.3 | 依存規則スクリプト | `ci/check-dependency-rules.ps1`（§3.3 の R1〜R9。現状違反する規則は `-Advisory` で警告のみ） | `pwsh ./ci/check-dependency-rules.ps1` | R8・R9・R11 以外は今は違反を列挙し exit 0。Phase 完了ごとに `-Advisory` を外す | S |
 | 0.4 | 形式検証 workflow（非ブロッキング） | `.github/workflows/formal-verification.yml`：tla2tools.jar を SHA-256 固定で取得、10 モデル × 48 cfg を matrix、`continue-on-error: true`、1 cfg 20 分 timeout、`verify-space-key-dispatch-tlc.ps1` の process lifecycle を流用 | workflow_dispatch で実行 | 48 job が完走。既知の `-bug` cfg は反例を出して赤、それ以外は緑 | M |
-| 0.5 | `AGENTS.md` と `CLAUDE.md` の縮約 | `AGENTS.md` 新設（≤1 KB）、`CLAUDE.md` から §最優先タスク（10,147 B）を `docs/history/issues/vscode-crash-investigation-20260802.md` へ移動、stale 行番号 5 箇所を修正、`apply_patch` 記述を削除、SolAdvisor 矛盾を owner 判断 D1 へ | `wc -c CLAUDE.md AGENTS.md`；`rg -n 'dispatch.rs:1039\|keymap.rs:1295\|496 passed\|apply_patch' CLAUDE.md` | ≤8,192 B／≤1,024 B。rg 空 | S（owner 承認要） |
+| 0.5 | `AGENTS.md` と `CLAUDE.md` の縮約 | `AGENTS.md` 新設（≤1 KB）、`CLAUDE.md` から §最優先タスク（10,147 B）を `docs/history/issues/vscode-crash-investigation-20260802.md` へ移動、stale 行番号 5 箇所を修正、`apply_patch` 記述を削除、SolAdvisor 矛盾を owner 判断 D1 へ | `wc -c CLAUDE.md AGENTS.md`；`rg -n 'dispatch.rs:1039\|keymap.rs:1295\|496 passed\|apply_patch' CLAUDE.md`；`scripts/measure-irv.ps1 -Compare` | ≤8,192 B／≤1,024 B。rg 空。無条件文書 bytes が 85,770 から減少 | S（owner 承認要） |
+| 0.6 | main 保護 ruleset と merge gate | GitHub **ruleset**（classic branch protection ではなく）を `main` に作成：PR 必須（approval 0 でよいが PR 経由必須）、直接 push・force push・削除禁止、必須 status check ＝ 上表の `fmt`／`dependency-rules`／`workspace-tests`／`irv-regression`／`dll-size`（`crate-tests` は 7.8 後、`formal-verification` は 7.9 後に追加）、bypass actor 無し。定義 JSON を `ci/rulesets/main.json` に commit し、`gh api -X POST repos/{owner}/{repo}/rulesets --input ci/rulesets/main.json` で適用。ruleset を選ぶ理由：JSON で export／再適用でき、複数を重ねられ、必須チェックの追加が差分 commit で追える（classic は UI 設定で履歴が残らない） | `gh api repos/tsuyoshi-otake/sakura-input/rulesets --jq '.[].name'`；`gh api repos/tsuyoshi-otake/sakura-input/rulesets/{id} --jq '.rules[].type'`；検証用 branch から `git push origin HEAD:main` | `main-protection` 1 件。`pull_request`・`required_status_checks`・`non_fast_forward`・`deletion` を含む。push が `GH013` で拒否される | S（owner D12：admin 権限） |
+| 0.7 | IRV 基準値の固定 | `verification/irv/benchmarks.json`（10 ベンチマーク、§1.1.1）、`scripts/measure-irv.ps1`、`verification/irv/baseline.json` を commit（PR #153 に同梱済み） | `pwsh ./scripts/measure-irv.ps1 -SelfTest`；`pwsh ./scripts/measure-irv.ps1 -Compare verification/irv/baseline.json` | SelfTest PASS。同一ツリーで各ベンチマーク ok、無条件文書だけ予算超過 | S |
+| 0.8 | `irv-regression` CI job | `ci.yml` に job 追加（`-Compare` を直接実行、パイプ無し）。無条件文書の予算超過は 0.5・7.11 完了まで WARN 扱い（`-DocsBudgetMode Warn`、D14）。PR 本文の `IRV:` 行を必須にする PR テンプレ | ダミー PR で `dispatch.rs` に 300 行追加 → WARN、`text_service.rs` に 3,400 行追加 → FAIL を確認して close | 判定が §1.1.2 の表どおり | S |
+| 0.9 | 文書の前倒し（crate 責務・依存規則・不変条件・所有・契約・移行規則） | `docs/architecture/README.md`（crate 図 §3.1、R1〜R13、憲章テンプレ §3.1.1、移行規則「構造 PR は `git mv` 先行、挙動変更と混ぜない」）、`docs/templates/crate-readme.md`（Purpose／Owns／Must not own／Allowed dependencies／Allowed consumers／Public API budget／Issue 型／テストコマンド）、`CODEOWNERS`（crate ごとの owner、当面は全て owner 1 名）、`docs/contracts/README.md`（18 契約の一覧と owner crate。本文は 7.5）。旧 7.13 をここに統合 | `wc -c docs/architecture/README.md`；`grep -c "^| R[0-9]* |" docs/architecture/README.md`；`grep -c '^## ' docs/templates/crate-readme.md`；`ls docs/contracts/README.md CODEOWNERS` | ≤8,192 B。13 行。8 見出し。存在 | S |
 
-### Phase 1：テスト分離（挙動不変、11 PR）
+### Phase 1：テスト分離（挙動不変、11 ステップ）
 
-原則：production 行を 1 行も変えない。`git diff --stat` で production ファイルは削除行のみ。
+原則：production 行を 1 行も変えない。`git diff --stat` で production ファイルは削除行のみ。**この Phase で下がるのは Physical IRV だけ**であり、各 PR の `IRV:` 行には `semantic unchanged` と明記する（§1.1）。受け入れ基準は §4.1 の Phase 1 行（`IRV-ENGINE-KEY-MODE` ≤5,000 行など）。
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -379,20 +546,36 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 1.10 | scheduled desktop job | `.github/workflows/desktop-tests.yml`（self-hosted or windows-latest、`--ignored` 実行、weekly＋dispatch） | workflow_dispatch | settings 27 本・renderer 実 process テストが走り、結果が artifact に残る | M（owner: runner） |
 | 1.11 | R9 を blocking に | 0.3 の `-Advisory` から R9 を外す | `pwsh ./ci/check-dependency-rules.ps1` | R9 違反 0 | S |
 
-### Phase 2：葉 crate 抽出（依存の逆流を消す、8 PR）
+### Phase 2：葉 crate 抽出（依存の逆流を消す、13 ステップ）
+
+各 crate の憲章は §3.1.1。新 crate を作るステップは README・依存規則・`benchmarks.json` 更新を同じ PR に含める（§4 冒頭 4.）。
+
+**2.1 の設計（`sakura-values` と wire codec の方向）**。現状は `crates/sakura-proto/src/types.rs` が `use crate::wire::{Error, Reader, Sink}`（:15）を持ち、`KeyCode`（:71/:77）、`Modifiers`（:216/:222）、`KeyInput`（:243/:252）、`Mode`（:297/:303）、`AppearanceTheme`（:358/:364）、`PadShortcut`（:412/:418）、`InputScope`（:456/:462）が固有メソッド `encode<S: Sink>`／`decode(&mut Reader)` を持つ。値型をそのまま values に移すと values が wire codec に依存し、目的（`sakura-values ← core, proto`、`proto ← wire codec`）と逆になる。よって：
+
+- **values が持つもの**：型定義、`repr`、判別値（`as u8` など）、`Default`／`Eq`／`Hash`、値としての不変条件（`FixedStr` の容量、`Modifiers` のビット）。
+- **proto が持つもの**：`wire.rs`（`Reader`／`Sink`／`Error`）と、新設 `wire_types.rs` の `pub trait Wire { fn encode<S: Sink>(&self, s: &mut S) -> Result<(), Error>; fn decode(r: &mut Reader<'_>) -> Result<Self, Error>; }` および `impl Wire for sakura_values::Mode` 等の実装。バイト表現は現行 `types.rs` の本体をそのまま移すので **wire 互換**。
+- **下流の呼び出し**：`Mode::encode(&m, &mut sink)` は `use sakura_proto::Wire;` を足せば同じ式で動く（trait メソッド）。`message.rs` 内の呼び出しは同一 crate なので import 1 行。
+- **`PROTOCOL_VERSION`**：`lib.rs:63` の `22` を変えない。バイト列が変わらないことは 2.0 の golden fixture で固定する。
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
-| 2.1 | `sakura-values` | proto から `FixedStr/FixedVec/Overflow`、上限定数、`Mode/KeyCode/KeyInput/Modifiers/AppearanceTheme/PadShortcut` を移動。proto は `pub use sakura_values::*` で再輸出（下流無変更）。`Fingerprint` は 2.3 で追加 | R1；`cargo test -p sakura-proto`（roundtrip/robustness/zero_alloc）；`rg -n 'PROTOCOL_VERSION: u16 = 22' crates/sakura-proto/src/lib.rs` | R1 空。codec テスト全 pass。1 件 | M（owner D3: wire.rs） |
-| 2.2 | `sakura-store` | `engine/src/input_history.rs` の record・codec・DPAPI・queue（`crate::` 参照ゼロの部分）と `learning.rs` の store 部分を移動。settings は `sakura-store` を参照 | R2；`cargo test -p sakura-store`；`cargo test -p sakura-settings`；既存 DPAPI ファイルの読み戻しテスト | R2 空。`history show/export/stats` の統合テスト pass、`input.bin` 形式不変 | M |
-| 2.3 | `sakura-rerank-proto` | `neural-worker/src/protocol.rs:3-8` と `engine/src/long_conversion.rs:28-29` を 1 crate に。`Fingerprint` を values へ | R8；`cargo test -p sakura-neural-worker`；2 候補 protocol v1 IPC テスト | R8 が 1 件。worker と engine が同じ定義を使う | S |
-| 2.4 | `sakura-oracles` | engine の `*_oracle.rs` 12 モジュールを dev-dependency crate へ。`lib.rs:66` の常時 compile を削除。cargo-mutants 設定を repoint | `cargo build -p sakura-engine --release` の後 `rg -n 'oracle' target/release/deps/*.d`；`cargo test -p sakura-engine` | release binary に oracle シンボル無し。テスト件数不変 | S |
-| 2.5 | `sakura-context` | #34 休眠 4 モジュール 1,846 行を feature `context` 付き別 crate へ | `cargo build -p sakura-engine`；`cargo build -p sakura-engine --features context` | 既定 build から 1,846 行が消える。feature 付きで従来どおり | S |
+| 2.0 | wire golden fixture | 変更前に、代表 message（`KeyInput`×3、`Mode`×6、`AppearanceTheme`×2、`PadShortcut`×2、`InputScope` 全値、request/response 各 1）の encode 結果を hex で `crates/sakura-proto/tests/golden_v22.rs` に固定。挙動変更なし | `cargo test -p sakura-proto --test golden_v22` | 全 pass（自分自身と一致） | S |
+| 2.1a | `sakura-values` 新設（proto 内部は不変） | `crates/sakura-values`（`fixed.rs`、`capacity.rs`、`input.rs`、`appearance.rs`、`scope.rs`、`ai_text.rs`）。proto は `pub use sakura_values::{...}` で同名再輸出し、codec は `wire_types.rs` の `impl Wire for` に移す。README（憲章 6 見出し）、R12 行、`benchmarks.json` 更新を同梱 | R12；`cargo tree -p sakura-values -e normal`；`cargo test -p sakura-proto`（roundtrip／robustness／zero_alloc／golden_v22）；`rg -n 'PROTOCOL_VERSION: u16 = 22' crates/sakura-proto/src/lib.rs`；`rg -n 'fn encode\|fn decode' crates/sakura-proto/src/types.rs`；`cargo build --workspace` | R12 空。依存 0 行。全 pass、golden 一致。1 件。`types.rs` の encode/decode 0 件（`wire_types.rs` に移動）。下流無変更で build 成功 | M |
+| 2.1b | core を values に向ける | `crates/sakura-core` の 18 参照（`calendar.rs:6`、`conversion.rs:12-13`、`dictionary.rs:11`、`editing.rs:7,325`、`input_repair.rs:10,1007`、`keymap.rs:33`、`lib.rs:74`、`numerals.rs:7`、`preferences.rs:13`、`romaji.rs:29`、`simd.rs:1762`、`text.rs:14`、`user_dictionary.rs:8`、`width.rs:20,830`）を `sakura_values::` に。`Cargo.toml` から `sakura-proto` を外す | R1；`cargo tree -p sakura-core -e normal \| rg proto`；`cargo test -p sakura-core` | R1 空。proto が出ない。件数不変 | S |
+| 2.1c | `Fingerprint` を values へ | 2.3 の前提。`engine/src/long_conversion.rs` の候補 fingerprint 型を `values/fingerprint.rs` に | `cargo test -p sakura-engine --lib long_conversion` | 不変 | S |
+| 2.2a | `sakura-store::format`＋`codec`（純関数） | `engine/src/input_history.rs` の record 定義（:141-213）、`MAX_RECORD_BYTES` 16 KiB（:39）、`InputHistorySnapshot`（:423）、`InputHistoryStats`（:570）の **型と encode/decode** を `crates/sakura-store/src/{format,codec}.rs` に。`AiTextOperation`／`AiTextStatus`／`InputScope` は 2.1a の values を使う（`input_history.rs:26` の `sakura_proto` import が消える）。engine は `pub use` で同名参照。README・R13 行・`benchmarks.json` 同梱 | R13；`cargo test -p sakura-store`；既存 `input.bin` fixture の decode→encode が byte 一致 | R13 空。roundtrip pass。fixture byte 一致 | M |
+| 2.2b | `sakura-store::persistence`（保持・compaction の純関数とファイル配置） | `RETENTION` 30 日（:41）、`MAX_INPUT_HISTORY_BYTES` 64 MiB（:47）、compaction の選別規則を `persistence.rs` に **入力 `&[Record]` → 出力 `Vec<Record>`** の純関数として。`%LOCALAPPDATA%\SakuraInput\history\input.bin` の path 規則と atomic write も同モジュール。writer loop（:1215）・queue・`InputHistoryService`（:674）・`ScopeClass`（:59）は **engine に残す**（4.1 で `history/service.rs`） | `cargo test -p sakura-store --lib persistence`；TLA+ `DeveloperHistory` の compaction 不変条件を correspondence に紐付け | 30 日／64 MiB の境界テスト pass。engine 側の行数が減るだけで挙動不変 | M |
+| 2.2c | `sakura-store::crypto`（DPAPI を trait の背後に） | `input_history.rs:27-32` の DPAPI 呼び出しを `trait Sealer { fn seal(&[u8]) -> Result<Vec<u8>>; fn open(&[u8]) -> Result<Vec<u8>>; }` と `DpapiSealer`（feature `dpapi`、既定 on）に。テストは `PlainSealer` | `cargo test -p sakura-store --no-default-features`；`cargo test -p sakura-store`；既存 DPAPI ファイルの読み戻し | 非 Windows 依存でテスト可。既存ファイルが読める | S |
+| 2.2d | settings を store に向ける | `settings/src/learning.rs:6`、`settings/src/input_history.rs:8` の `sakura_engine::` を `sakura_store::` に。`Cargo.toml` から `sakura-engine` を外す | R2；`cargo tree -p sakura-settings -e normal \| rg engine`；`cargo test -p sakura-settings`；`history show/export/stats` 統合テスト | R2 空。engine が出ない。pass。`input.bin` 形式不変 | S |
+| 2.3 | `sakura-rerank-proto` | `neural-worker/src/protocol.rs:3-8` と `engine/src/long_conversion.rs:28-29` を 1 crate に（`Fingerprint` は 2.1c 済み）。README・R8 更新・`benchmarks.json` 同梱 | R8；`cargo test -p sakura-neural-worker`；2 候補 protocol v1 IPC テスト | R8 が 1 件。worker と engine が同じ定義を使う | S |
+| 2.4 | `sakura-oracles` | engine の `*_oracle.rs` 12 モジュールを dev-dependency crate へ。`lib.rs:66` の常時 compile を削除。cargo-mutants 設定を repoint。README 同梱 | `cargo build -p sakura-engine --release` の後 `rg -n 'oracle' target/release/deps/*.d`；`cargo test -p sakura-engine` | release binary に oracle シンボル無し。テスト件数不変 | S |
+| 2.5 | `sakura-context-research` | #34 休眠 4 モジュール 1,846 行を feature `context-research` 付き別 crate へ。README の Owns は 4 モジュール限定、Must not own に「既定 build から参照されるもの」。owner D13 で削除を選ぶなら `git rm` ＋ `docs/history/research/` に所在を記す | `cargo build -p sakura-engine`；`cargo build -p sakura-engine --features context-research`；`rg -n 'sakura_context_research' crates/sakura-engine/src --glob '!**/*_tests.rs'` | 既定 build から 1,846 行が消える。feature 付きで従来どおり。参照は `#[cfg(feature)]` 配下のみ | S（owner D13） |
 | 2.6 | engine dev-deps 整理 | `ime-eval` dev-dep を削除（`tests/pipe_round_trip.rs:36-37` は ime-eval 側の integration test へ）、`dictc` は feature `dictc-fixtures` 背後 | `cargo tree -p sakura-engine -e dev`；`cargo test -p sakura-engine` | ime-eval が出ない。テスト pass | S |
 | 2.7 | `sakura-context-proto` 改名 | `sakura-neural-proto` → `sakura-context-proto`（`SCV1` は不変） | `rg -n 'sakura_neural_proto\|sakura-neural-proto' .` | 空 | S |
-| 2.8 | R1・R2・R8 を blocking に | 0.3 の `-Advisory` から外す | `pwsh ./ci/check-dependency-rules.ps1` | 違反 0 | S |
+| 2.8 | R1・R2・R8・R12・R13 を blocking に | 0.3 の `-Advisory` から外す | `pwsh ./ci/check-dependency-rules.ps1` | 違反 0 | S |
+| 2.9 | Phase 2 受け入れ | `measure-irv.ps1 -Out` で基準値更新。§4.1 の Phase 2 行を PR 本文に | `pwsh ./scripts/measure-irv.ps1 -Compare`（更新前基準と） | `IRV-HISTORY-STORE` ≤3,000 行・≤8 ファイル。`IRV-CORE-CONVERSION` の集合から proto が消える | S |
 
-### Phase 3：core／proto／ipc／reg／dictc の分割（10 PR）
+### Phase 3：core／proto／ipc／reg／dictc の分割（10 ステップ）
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -407,7 +590,7 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 3.9 | `dictc-core`＋thin `dictc` | lib を `dictc-core` へ、dictc を import しない 3 bin（2,323 行）を `tools/` へ | 辞書 2-pass 再ビルド | 39,349,040 bytes／SHA-256 `b7d08643…` 一致 | M |
 | 3.10 | tools workspace 統合 | `candidate-sweep` を workspace member に、`candidate-snapshot` は dep-policy が `Cargo.lock` を読む | `pwsh ./ci/dep-policy.ps1` | tools の lock も監査される（R11） | S |
 
-### Phase 4：engine の分割（12 PR）
+### Phase 4：engine の分割（12 ステップ）
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -424,7 +607,7 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 4.11 | engine README | `crates/sakura-engine/README.md` ≤4 KB | `wc -c` | ≤4,096 B | S |
 | 4.12 | R4 blocking＋file budget 報告 | `ci/report-file-budget.ps1`（1,500 行超の production ファイルを警告、非ブロッキング） | 実行 | engine で 1,500 行超が 0 | S |
 
-### Phase 5：renderer／settings の分割（12 PR）
+### Phase 5：renderer／settings の分割（12 ステップ）
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -441,7 +624,7 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 5.11 | `cli/` 分割 | parse/run/render | `cargo test -p sakura-settings --lib cli` | 不変 | S |
 | 5.12 | `config/`、`history/`、`engine/` | §3.2 どおり | `cargo test -p sakura-settings` | 不変 | S |
 
-### Phase 6：TSF の分割（11 PR、後半 3 本は証拠ゲート付き）
+### Phase 6：TSF の分割（11 ステップ、後半 3 本は証拠ゲート付き）
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -458,13 +641,15 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 6.10 | `com/text_service.rs` 残余分割 | ≤1,300 行（vtable 572＋委譲） | `wc -l crates/sakura-tsf/src/com/text_service.rs`；DLL サイズ；実機 smoke（メモ帳／VS Code で入力・確定・focus 移動） | ≤1,300。≤1 MiB。クラッシュ・ハング無し | L |
 | 6.11 | TSF README＋`docs/contracts/write-journal.md` | | `wc -c` | ≤4 KB | S |
 
-### Phase 7：文書・verification・CI（Phase 0 から並走、13 PR）
+### Phase 7：文書・verification・CI（Phase 0 から並走、12 ステップ）
+
+前倒し済みの項目：crate 図・依存規則・憲章テンプレ・移行規則・`CODEOWNERS`・契約一覧は 0.9、crate README は各 crate を新設または分割する PR（2.1a、2.2a、2.3〜2.5、4.11、6.11）に同梱。ここに残るのは既存文書の整理と検査の自動化だけ。
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
 | 7.1 | `docs/decisions/` 抽出 | CLAUDE.md の owner 判断 4 件（テスト出力 #111、IT エンジニア・ファースト、リリース署名、trust state #150）を 1 件 1 ファイルに。CLAUDE.md はリンク | `wc -c CLAUDE.md` | 段階的に ≤8 KB | S（owner D1） |
 | 7.2 | `docs/history/` へ退避 | release-notes 36 本、research、停止中調査 | `ls docs` | `docs/` 直下は ≤10 ファイル | S |
-| 7.3 | crate README 15 本 | テンプレ：責務／公開 API／Issue 型／禁止依存／テストコマンド | `for c in crates/*; wc -c $c/README.md` | 15/15、各 ≤4,096 B | M |
+| 7.3 | 既存 crate README の残り | 0.9 のテンプレで、Phase 2〜6 の PR に同梱されなかった既存 crate（ipc、reg、dictc、workers、logon）の README を書く | `for c in crates/*; wc -c $c/README.md`；`for c in crates/*; grep -c '^## ' $c/README.md` | 15/15、各 ≤4,096 B、各 8 見出し | S |
 | 7.4 | DESIGN.md 分割 | 不変条件だけ残し、詳細を `docs/architecture/{conversion,ui,packaging}.md` へ | `wc -c DESIGN.md` | ≤40,960 B | M（owner D2） |
 | 7.5 | `docs/contracts/` 12 本 | §3.5。config-format と engine-admin は新規執筆 | `ls docs/contracts \| wc -l`；`rg -c 'Password.*URL.*Email.*Digits' --glob '!docs/contracts/input-scope.md' .` | 12。機微スコープ規則の再掲 0 | M |
 | 7.6 | verification 再編 | §3.6。`git mv` のみ、内容不変。`.gitignore:24` と tracked 3 件の矛盾を解消 | `git log --follow` が繋がる；`find verification -type f \| wc -l` | 187 ファイル | M |
@@ -474,13 +659,13 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 | 7.10 | scripts 整理・`rtk` 残滓除去 | `scripts/` を build／verify／release に分け、`rtk` 参照を削除 | `rg -n 'rtk' scripts ci tests` | 空 | S |
 | 7.11 | `rules.md` 分割 | `.claude/memory/rules.md` 45,652 B を topic 別に（削除せず移動） | `wc -c .claude/memory/rules.md` | ≤16 KB＋`rules/<topic>.md` | S（owner D9） |
 | 7.12 | Issue 型→ディレクトリ表 | §3.7 を CLAUDE.md に | `rg -n 'Issue 型' CLAUDE.md` | 1 件 | S |
-| 7.13 | `docs/architecture/README.md` | crate 図（§3.1）と R1〜R11 を 1 ページに | `wc -c docs/architecture/README.md`；`grep -c "^| R[0-9]* |" docs/architecture/README.md` | ≤8,192 B。R1〜R11 の 11 行 | S |
+| 7.13 | （0.9 に統合） | `docs/architecture/README.md` は Phase 0 で作成済み。ここでは Phase 6 完了後の crate 図更新のみ | `grep -c "^| R[0-9]* |" docs/architecture/README.md` | 13 行 | S |
 
 ---
 
 ## 5. 読解セットの before → after
 
-行数＝Issue 修正時に必ず読む production コード。散文＝必読文書 bytes。after は各解析レポートの見積り。
+行数＝Issue 修正時に必ず読む production コード（**Physical IRV の見積り**。`benchmarks.json` の計測値とは集合が少し違う：この表はテストを除いた production 行、計測はファイル全体）。散文＝必読文書 bytes。after は各解析レポートの見積りで、§4.1 の Phase 目標値はこの after 列を切り上げたもの。Semantic IRV は §1.1.1 の表を正とする。
 
 | Issue 型 | 例 | コード before | コード after | 散文 before | 散文 after | 主に効く Phase |
 |---|---|---:|---:|---:|---:|---|
@@ -516,7 +701,10 @@ Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 
 | `PROTOCOL_VERSION` の暗黙変更 | 2.1・3.6 で `= 22` を rg 固定。wire 形式変更はこの計画の範囲外 |
 | 分割で pub 面が広がる | `pub(crate)` を既定、crate 境界の `pub` は README に列挙（3.5、4.11、6.11、7.3） |
 | `git blame` の断絶 | 分割は `git mv` → 編集の 2 commit に分け、`--follow` が繋がるようにする |
-| 大 PR による review 不能 | 1 PR ＝ 1 ステップ。production 行の変更を伴う PR は diff ≤1,500 行 |
+| 大 PR による review 不能 | §4 冒頭の PR 境界原則（1 PR ＝ 1 変更理由、構造／挙動／契約を混ぜない、production diff ≤1,500 行） |
+| 分割したのに Issue が楽にならない（Physical だけ下がる） | Phase 受け入れを Semantic IRV でも判定（§4.1）。`semantic.ranges` を Phase 完了レビューで更新し、行範囲の実在を `sed -n` で確認 |
+| 新 crate が「置き場のないものの置き場」になる | 憲章（§3.1.1）の Must not own と Public API budget を README に置き、`rg` で検査（R12、R13）。名前を広く取らない（`sakura-context` → `sakura-context-research`） |
+| main へ直接 push されてゲートが素通りする | 0.6 の ruleset（PR 必須、force push・削除禁止、必須チェック）を Phase 1 の前に有効化 |
 | `#[ignore]` テストの黙殺 | 1.10 の scheduled job を Phase 5 の前に稼働させる |
 | CI 時間の増加 | 7.8 の matrix で通常 PR は ≤3 分。full は週次と release |
 
@@ -528,7 +716,7 @@ Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 
 |---|---|---|---|
 | D1 | CLAUDE.md の §最優先タスク（VS Code 調査）と SolAdvisor 記述をどう扱うか（履歴へ退避か削除か） | 0.5、7.1 | `docs/history/issues/` へ退避、CLAUDE.md からは 3 行のリンクに |
 | D2 | DESIGN.md 100 KB をどこまで分割するか | 7.4 | 不変条件と境界だけ残し ≤40 KB |
-| D3 | `wire.rs`（proto の低レベル codec）を `sakura-values` に降ろすか proto に残すか | 2.1 | proto に残す（values は値型のみ） |
+| D3 | `wire.rs`（proto の低レベル codec）を `sakura-values` に降ろすか proto に残すか | 2.1 | **決定済み扱い**：proto に残す。values は値型のみで、codec は proto の `impl Wire for` に置く（§3.1.1、R12）。異論があれば 2.1a の前に |
 | D4 | core facade の未使用再輸出 ~28 を削除してよいか | 3.5 | 削除（外部利用者なし） |
 | D5 | `Session` 148 field の分割を行うか | 4.9 | 行う。ただし Phase 4 の最後、単独 PR |
 | D6 | settings topic registry のため 17 本の desktop test を走らせる runner | 1.10、5.9 | self-hosted Windows runner を週次 |
@@ -537,6 +725,9 @@ Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 
 | D9 | `.claude/memory/rules.md` 45 KB の分割 | 7.11 | topic 別に移動、削除しない |
 | D10 | `session/` を独立 crate（`sakura-tsf-session`）にするか、ディレクトリのままか | 6.7 | Phase 6 完了まではディレクトリ＋R3。安定後に crate 化を再検討 |
 | D11 | 実行時の候補上限（`research-wide-candidates` feature）を残すか | 3.1 | 残す（研究用） |
+| D12 | main の ruleset を誰が作るか（repo admin 権限が要る）、緊急時の bypass を許すか | 0.6 | owner が `gh api` で作成。bypass actor は無し（緊急時も PR＋admin merge） |
+| D13 | `sakura-context-research`（#34 休眠 1,846 行）を crate 化して残すか、削除して git 履歴に残すか | 2.5 | crate 化して feature 限定。1 年間 feature が使われなければ削除 |
+| D14 | IRV 回帰ゲートの無条件文書 FAIL 化のタイミング | 0.8 | 0.5 と 7.11 の両方が merge された PR から FAIL |
 
 ---
 
@@ -549,6 +740,8 @@ Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 
 | `sakura-values` | `sakura-limits`（contracts §6） |
 | `sakura-store` | `sakura-stores`（contracts §6） |
 | `sakura-context-proto` | `sakura-neural-proto`（現行名） |
+| `sakura-context-research` | `sakura-context`（engine §7、本書初版） |
+| Physical IRV／Semantic IRV | 「読解セット」（§5、初版）は Physical IRV の見積りに相当 |
 | `session/`（tsf） | 「純粋状態機械層」（tsf §7） |
 | `<name>_tests.rs` | 「sibling test file」 |
 
@@ -567,9 +760,12 @@ git diff --check
 ./ci/check-dependency-rules.ps1
 ./ci/check-dll-size.ps1
 ./ci/check-verification-correspondence.ps1
+./scripts/measure-irv.ps1 -SelfTest
+./scripts/measure-irv.ps1 -Compare verification/irv/baseline.json      # 全 PR。FAIL で exit 1
+./scripts/measure-irv.ps1 -Out verification/irv/baseline.json          # Phase 完了 PR だけ
 ```
 
-ローカルでは cargo の前に `CARGO_HTTP_CHECK_REVOKE=false` を付ける。
+ローカルでは cargo の前に `CARGO_HTTP_CHECK_REVOKE=false` を付ける。`measure-irv.ps1` の引数：`-Benchmarks`（既定 `verification/irv/benchmarks.json`）、`-Out`、`-Compare`、`-SelfTest`、`-RepositoryRoot`。
 
 ### 9.2 PR テンプレ（各ステップ共通）
 
@@ -579,6 +775,7 @@ Reads: <このステップで読んだファイル、行数合計>
 Changes: production <±行>, tests <±行>, moved <ファイル数>
 Verify: <実行したコマンドと結果 1 行ずつ>
 Expect: <観測値> (baseline: <値>)
+IRV: <benchmark id> physical <before>→<after> LOC, semantic <before>→<after> (unchanged なら明記)
 Rules now blocking: <R#>
 ```
 
