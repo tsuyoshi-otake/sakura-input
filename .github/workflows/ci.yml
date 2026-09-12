@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      desktop_hosted_candidate:
+        description: Measure interactive User32 support on windows-latest
+        required: false
+        default: false
+        type: boolean
 
 # Only superseded pull-request runs share a concurrency group. Every non-PR
 # run uses its unique run id, so GitHub cannot replace even a pending main,
@@ -20,6 +26,406 @@ env:
   CARGO_NET_LOCKED: "true"
 
 jobs:
+  desktop-hosted-candidate:
+    name: Hosted desktop candidate diagnostic
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.desktop_hosted_candidate }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    concurrency:
+      group: sakura-desktop-hosted-candidate-${{ github.repository }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+    env:
+      CARGO_HTTP_CHECK_REVOKE: "false"
+      RUSTUP_TOOLCHAIN: 1.96.0-x86_64-pc-windows-msvc
+      CARGO_TARGET_DIR: ${{ github.workspace }}\target\desktop-hosted-candidate
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; reviewed release older than 7 days
+
+      - name: Prepare isolated evidence and profile directories
+        run: |
+          $env:SAKURA_DESKTOP_EVIDENCE = Join-Path $env:RUNNER_TEMP 'sakura-desktop-evidence'
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'sakura-desktop-localappdata'
+          $env:SAKURA_ISOLATED_USERPROFILE = Join-Path $env:RUNNER_TEMP 'sakura-desktop-userprofile'
+          foreach ($name in @('SAKURA_DESKTOP_EVIDENCE', 'LOCALAPPDATA', 'SAKURA_ISOLATED_USERPROFILE')) {
+            "$name=$([Environment]::GetEnvironmentVariable($name))" |
+              Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          }
+          [IO.Directory]::CreateDirectory($env:SAKURA_DESKTOP_EVIDENCE) | Out-Null
+          [IO.Directory]::CreateDirectory($env:LOCALAPPDATA) | Out-Null
+          [IO.Directory]::CreateDirectory($env:SAKURA_ISOLATED_USERPROFILE) | Out-Null
+          $originalProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $originalProfile '.cargo' }
+          $rustupHome = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $originalProfile '.rustup' }
+          "CARGO_HOME=$cargoHome" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          "RUSTUP_HOME=$rustupHome" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          "USERPROFILE=$env:SAKURA_ISOLATED_USERPROFILE" |
+            Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          $commit = (& git.exe rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') {
+            throw 'could not record the checked-out commit SHA'
+          }
+          $testSource = Join-Path $env:GITHUB_WORKSPACE `
+            'crates/sakura-settings/tests/settings_topic_user32.rs'
+          [ordered]@{
+            commit_sha = $commit
+            test_source = 'crates/sakura-settings/tests/settings_topic_user32.rs'
+            test_source_sha256 = (Get-FileHash -LiteralPath $testSource -Algorithm SHA256).Hash.ToLowerInvariant()
+          } | ConvertTo-Json | Set-Content -LiteralPath (
+            Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'source-identity.json'
+          ) -Encoding utf8
+
+      - name: Record session and User32 capabilities
+        run: |
+          $rawPath = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'capability-probe.txt'
+          $jsonPath = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'capability-probe.json'
+          $inputDesktop = [IntPtr]::Zero
+          try {
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.ComponentModel;
+          using System.Runtime.InteropServices;
+
+          public static class DesktopCandidateNative {
+              [StructLayout(LayoutKind.Sequential)]
+              public struct Point { public int X; public int Y; }
+
+              [DllImport("kernel32.dll")]
+              public static extern uint GetCurrentThreadId();
+
+              [DllImport("user32.dll", SetLastError = true)]
+              public static extern IntPtr GetProcessWindowStation();
+
+              [DllImport("user32.dll", SetLastError = true)]
+              public static extern IntPtr GetThreadDesktop(uint threadId);
+
+              [DllImport("user32.dll", SetLastError = true)]
+              public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
+
+              [DllImport("user32.dll", SetLastError = true)]
+              [return: MarshalAs(UnmanagedType.Bool)]
+              public static extern bool CloseDesktop(IntPtr desktop);
+
+              [DllImport("user32.dll")]
+              public static extern IntPtr GetForegroundWindow();
+
+              [DllImport("user32.dll", SetLastError = true)]
+              [return: MarshalAs(UnmanagedType.Bool)]
+              public static extern bool GetCursorPos(out Point point);
+
+              [DllImport("user32.dll")]
+              public static extern int GetSystemMetrics(int index);
+
+              [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+              [return: MarshalAs(UnmanagedType.Bool)]
+              private static extern bool GetUserObjectInformationW(
+                  IntPtr handle, int index, IntPtr information, uint length, ref uint needed);
+
+              public static string ObjectName(IntPtr handle) {
+                  uint needed = 0;
+                  GetUserObjectInformationW(handle, 2, IntPtr.Zero, 0, ref needed);
+                  if (needed == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+                  IntPtr buffer = Marshal.AllocHGlobal(checked((int)needed));
+                  try {
+                      if (!GetUserObjectInformationW(handle, 2, buffer, needed, ref needed))
+                          throw new Win32Exception(Marshal.GetLastWin32Error());
+                      return Marshal.PtrToStringUni(buffer) ?? "";
+                  } finally { Marshal.FreeHGlobal(buffer); }
+              }
+          }
+          '@
+
+            $process = [Diagnostics.Process]::GetCurrentProcess()
+            $station = [DesktopCandidateNative]::GetProcessWindowStation()
+            $threadDesktop = [DesktopCandidateNative]::GetThreadDesktop(
+              [DesktopCandidateNative]::GetCurrentThreadId()
+            )
+            $inputDesktop = [DesktopCandidateNative]::OpenInputDesktop(0, $false, 0x0181)
+            $cursor = [DesktopCandidateNative+Point]::new()
+            $cursorReadable = [DesktopCandidateNative]::GetCursorPos([ref]$cursor)
+            $failures = [Collections.Generic.List[string]]::new()
+            if ($process.SessionId -eq 0) { $failures.Add('process is in session 0') }
+            if ($station -eq [IntPtr]::Zero) { $failures.Add('no process window station') }
+            if ($threadDesktop -eq [IntPtr]::Zero) { $failures.Add('no thread desktop') }
+            if ($inputDesktop -eq [IntPtr]::Zero) { $failures.Add('OpenInputDesktop failed') }
+            if (-not $cursorReadable) { $failures.Add('GetCursorPos failed') }
+            $width = [DesktopCandidateNative]::GetSystemMetrics(0)
+            $height = [DesktopCandidateNative]::GetSystemMetrics(1)
+            if ($width -le 0 -or $height -le 0) { $failures.Add('desktop has no screen extent') }
+
+            $probe = [ordered]@{
+              utc = [DateTime]::UtcNow.ToString('O')
+              runner_name = $env:RUNNER_NAME
+              runner_os = $env:RUNNER_OS
+              runner_arch = $env:RUNNER_ARCH
+              machine = [Environment]::MachineName
+              user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+              process_id = $PID
+              process_session_id = $process.SessionId
+              session_name = $env:SESSIONNAME
+              environment_user_interactive = [Environment]::UserInteractive
+              window_station = if ($station -ne [IntPtr]::Zero) {
+                [DesktopCandidateNative]::ObjectName($station)
+              } else { $null }
+              thread_desktop = if ($threadDesktop -ne [IntPtr]::Zero) {
+                [DesktopCandidateNative]::ObjectName($threadDesktop)
+              } else { $null }
+              input_desktop = if ($inputDesktop -ne [IntPtr]::Zero) {
+                [DesktopCandidateNative]::ObjectName($inputDesktop)
+              } else { $null }
+              foreground_hwnd = [DesktopCandidateNative]::GetForegroundWindow().ToInt64()
+              cursor_readable = $cursorReadable
+              cursor_x = $cursor.X
+              cursor_y = $cursor.Y
+              screen_width = $width
+              screen_height = $height
+              failures = @($failures)
+              probe_passed = $failures.Count -eq 0
+            }
+            $probe | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jsonPath -Encoding utf8
+            $probe.GetEnumerator() | ForEach-Object {
+              '{0}={1}' -f $_.Key, ($_.Value -join ',')
+            } | Tee-Object -FilePath $rawPath
+            if ($failures.Count -ne 0) {
+              throw "hosted desktop capability probe failed: $($failures -join '; ')"
+            }
+          } catch {
+            ($_ | Out-String) | Add-Content -LiteralPath $rawPath -Encoding utf8
+            throw
+          } finally {
+            if ($null -ne $inputDesktop -and $inputDesktop -ne [IntPtr]::Zero) {
+              if (-not [DesktopCandidateNative]::CloseDesktop($inputDesktop)) {
+                Write-Warning 'CloseDesktop failed'
+              }
+            }
+          }
+
+      - name: Discover ignored settings desktop tests and prove exact filter
+        run: |
+          rustup show
+          if ($LASTEXITCODE -ne 0) { throw 'pinned toolchain provisioning failed' }
+          $cargo = (rustup.exe which cargo).Trim()
+          if ([string]::IsNullOrWhiteSpace($cargo) -or -not [IO.File]::Exists($cargo)) {
+            throw 'rustup did not resolve a native cargo executable'
+          }
+          $metadataPath = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cargo-metadata.json'
+          $metadataErrorPath = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cargo-metadata.stderr.log'
+          & $cargo metadata --locked --no-deps --format-version 1 1> $metadataPath 2> $metadataErrorPath
+          if ($LASTEXITCODE -ne 0) { throw "cargo metadata failed with exit $LASTEXITCODE" }
+          $metadata = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
+          $package = @($metadata.packages | Where-Object name -eq 'sakura-settings')
+          if ($package.Count -ne 1) { throw "expected one sakura-settings package; got $($package.Count)" }
+          $target = @($package[0].targets | Where-Object {
+            $_.name -eq 'settings_topic_user32' -and $_.kind -contains 'test'
+          })
+          if ($target.Count -ne 1) { throw "expected one settings desktop test target; got $($target.Count)" }
+          $selection = [ordered]@{
+            package = $package[0].name
+            target = $target[0].name
+            kind = @($target[0].kind)
+            source_path = $target[0].src_path
+          }
+          $selection | ConvertTo-Json -Depth 3 |
+            Set-Content -LiteralPath (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'selected-target.json') -Encoding utf8
+
+          $listName = 'hosted desktop ignored-test inventory'
+          $listCargoLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'ignored-tests.cargo.raw.log'
+          $listWrapperLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'ignored-tests.wrapper.log'
+          try {
+            & ./ci/run-test-quiet.ps1 -Name $listName -Command {
+              & $cargo test --locked -p $package[0].name --test $target[0].name -- `
+                --list --ignored *> $listCargoLog
+              $cargoExit = [int]$global:LASTEXITCODE
+              Get-Content -LiteralPath $listCargoLog
+              $global:LASTEXITCODE = $cargoExit
+            } *>&1 | Tee-Object -FilePath $listWrapperLog
+          } catch {
+            ($_ | Out-String) | Add-Content -LiteralPath $listWrapperLog -Encoding utf8
+            throw
+          }
+          $wrapperLines = @(Get-Content -LiteralPath $listWrapperLog |
+            Where-Object { $_.Trim().Length -ne 0 })
+          if ($wrapperLines.Count -ne 1 -or $wrapperLines[0] -ne "PASS: $listName") {
+            throw 'quiet wrapper emitted unexpected ignored-test inventory output'
+          }
+          $exactName = 'tab_focus_order_skips_hidden_topics_and_ends_at_actions'
+          $matches = @(Get-Content -LiteralPath $listCargoLog | ForEach-Object {
+            $_ -replace "`e\[[0-9;]*[A-Za-z]", ''
+          } | Where-Object {
+            $_ -match ('^' + [regex]::Escape($exactName) + ': test$')
+          })
+          if ($matches.Count -ne 1) {
+            throw "exact desktop filter must occur once in --list output; got $($matches.Count)"
+          }
+          $exactName | Set-Content -LiteralPath (
+            Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'exact-test-filter.txt'
+          ) -Encoding ascii
+
+      - name: Run exact tab-focus desktop test three times
+        run: |
+          $cargo = (rustup.exe which cargo).Trim()
+          $package = 'sakura-settings'
+          $target = 'settings_topic_user32'
+          $filter = Get-Content -LiteralPath (
+            Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'exact-test-filter.txt'
+          ) -Raw
+          $filter = $filter.Trim()
+          for ($round = 1; $round -le 3; $round++) {
+            $name = "hosted desktop tab focus round $round"
+            $cargoLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE `
+              "exact-tab-round-$round.cargo.raw.log"
+            $wrapperLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE `
+              "exact-tab-round-$round.wrapper.log"
+            try {
+              & ./ci/run-test-quiet.ps1 -Name $name -Command {
+                & $cargo test --locked -p $package --test $target $filter -- `
+                  --exact --ignored --nocapture --test-threads=1 *> $cargoLog
+                $cargoExit = [int]$global:LASTEXITCODE
+                Get-Content -LiteralPath $cargoLog
+                $global:LASTEXITCODE = $cargoExit
+              } *>&1 | Tee-Object -FilePath $wrapperLog
+            } catch {
+              ($_ | Out-String) | Add-Content -LiteralPath $wrapperLog -Encoding utf8
+              throw
+            }
+            $wrapperLines = @(Get-Content -LiteralPath $wrapperLog |
+              Where-Object { $_.Trim().Length -ne 0 })
+            if ($wrapperLines.Count -ne 1 -or $wrapperLines[0] -ne "PASS: $name") {
+              throw "quiet wrapper emitted unexpected success output in round $round"
+            }
+            $cargoLines = @(Get-Content -LiteralPath $cargoLog | ForEach-Object {
+              ($_ -replace "`e\[[0-9;]*[A-Za-z]", '').Trim()
+            })
+            $identity = @($cargoLines | Where-Object { $_ -eq "test $filter ... ok" })
+            $summary = @($cargoLines | Where-Object {
+              $_ -match '^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in .+$'
+            })
+            if ($identity.Count -ne 1 -or $summary.Count -ne 1) {
+              throw "round $round did not prove exactly one passing requested test"
+            }
+          }
+
+      - name: Prove test processes exited and clean isolated state
+        if: always()
+        run: |
+          $cleanupLog = Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cleanup.raw.log'
+          & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE *>&1 |
+            Tee-Object -FilePath $cleanupLog
+          if ($LASTEXITCODE -ne 0) {
+            & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE -Terminate *>&1 |
+              Tee-Object -FilePath $cleanupLog -Append
+            & ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE *>&1 |
+              Tee-Object -FilePath $cleanupLog -Append
+            if ($LASTEXITCODE -ne 0) { throw 'desktop test process cleanup failed' }
+          }
+          function Resolve-ContainedPath {
+            param([string] $Path, [string] $Parent)
+            $full = [IO.Path]::GetFullPath($Path)
+            $parentPrefix = [IO.Path]::GetFullPath($Parent).TrimEnd(
+              [IO.Path]::DirectorySeparatorChar,
+              [IO.Path]::AltDirectorySeparatorChar
+            ) + [IO.Path]::DirectorySeparatorChar
+            if (-not $full.StartsWith($parentPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "refusing cleanup outside owned parent ${Parent}: $full"
+            }
+            $full
+          }
+
+          function Remove-OwnedTree {
+            param([string] $Path, [string] $Parent)
+            $owned = Resolve-ContainedPath -Path $Path -Parent $Parent
+            if (-not [IO.Directory]::Exists($owned)) { return }
+            $attributes = [IO.File]::GetAttributes($owned)
+            if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw "refusing recursive cleanup of reparse-point root: $owned"
+            }
+            [IO.Directory]::Delete($owned, $true)
+          }
+
+          $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+          $profileRoot = [IO.Path]::GetFullPath($env:SAKURA_ISOLATED_USERPROFILE)
+          $runnerTempPrefix = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd(
+            [IO.Path]::DirectorySeparatorChar,
+            [IO.Path]::AltDirectorySeparatorChar
+          ) + [IO.Path]::DirectorySeparatorChar
+          foreach ($root in @($localRoot, $profileRoot)) {
+            if (-not $root.StartsWith($runnerTempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "isolated root is outside RUNNER_TEMP: $root"
+            }
+          }
+
+          # The workflow owns only Sakura Input data below its isolated
+          # LOCALAPPDATA, not shell-created siblings such as INetCache.
+          Remove-OwnedTree -Path (Join-Path $localRoot 'SakuraInput') -Parent $localRoot
+
+          # SettingsFixture::launch creates exactly these per-test sandboxes.
+          # Drop normally removes them; this catches only interrupted fixtures.
+          $fixtureParent = Resolve-ContainedPath -Path (Join-Path $profileRoot 'tmp') `
+            -Parent $profileRoot
+          if ([IO.Directory]::Exists($fixtureParent)) {
+            foreach ($fixture in [IO.Directory]::EnumerateDirectories(
+              $fixtureParent,
+              'sakura-settings-user32-*',
+              [IO.SearchOption]::TopDirectoryOnly
+            )) {
+              Remove-OwnedTree -Path $fixture -Parent $fixtureParent
+            }
+          }
+
+          # Record immediate residuals without walking or deleting the
+          # OS-materialized profile. The ephemeral hosted VM owns their teardown.
+          $residuals = [Collections.Generic.List[object]]::new()
+          foreach ($root in @($localRoot, $profileRoot)) {
+            foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries(
+              $root,
+              '*',
+              [IO.SearchOption]::TopDirectoryOnly
+            )) {
+              try {
+                $attributes = [IO.File]::GetAttributes($entry)
+                $residuals.Add([ordered]@{
+                  root = $root
+                  relative_path = [IO.Path]::GetRelativePath($root, $entry)
+                  kind = if (($attributes -band [IO.FileAttributes]::Directory) -ne 0) {
+                    'directory'
+                  } else { 'file' }
+                  attributes = $attributes.ToString()
+                  reparse_point = ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+                })
+              } catch {
+                $residuals.Add([ordered]@{
+                  root = $root
+                  relative_path = [IO.Path]::GetRelativePath($root, $entry)
+                  metadata_error = $_.Exception.Message
+                })
+              }
+            }
+          }
+          [ordered]@{
+            cleanup_scope = @(
+              "$localRoot\SakuraInput"
+              "$fixtureParent\sakura-settings-user32-*"
+            )
+            recursive_profile_delete_attempted = $false
+            residual_profile_owner = 'GitHub-hosted ephemeral VM teardown'
+            residuals = @($residuals)
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (
+            Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'cleanup-residuals.json'
+          ) -Encoding utf8
+
+      - name: Upload hosted desktop diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2; reviewed release older than 7 days
+        with:
+          name: hosted-desktop-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}\sakura-desktop-evidence
+          if-no-files-found: error
+          retention-days: 14
   dependency-rules:
     name: dependency-rules
     runs-on: windows-latest
