@@ -140,7 +140,7 @@ critical ＝ 過去 1 年で最も Issue が集中し、かつ状態機械を含
 | 条件 | 判定 | 根拠 |
 |---|---|---|
 | 依存境界違反（§3.3 の R1〜R12 のうち blocking 化済みのもの） | **FAIL** | 逆流 1 本で下流 crate 全体が読解集合に戻る。IRV の増分では捕まえられない構造回帰 |
-| 無条件文書（`CLAUDE.md`＋`rules.md`）が予算 24,576 B を超えて**増加** | 予算超過中は **WARN**（現状 85,770 B）、予算達成後（0.5／7.11 完了後）は **FAIL** | 全 Issue に乗る固定費。8 KiB＋16 KiB は §3.5 の上限 |
+| 無条件文書（`CLAUDE.md`＋`rules.md`）が予算 24,576 B を超過 | WARN mode では基準から増加した場合だけ **WARN**、非増加なら note／PASS（現状 85,770 B）。0.5／7.11 のうち後に完了する工程の PR で予算内を検証して CI を切り替え、その次の PR から、増加の有無にかかわらず予算超過を **FAIL** | 全 Issue に乗る固定費。8 KiB＋16 KiB は §3.5 の上限。D14 として 2026-09-13 に owner が判断を委任し、この切替時点に決定 |
 | 代表ベンチマークの Physical LOC が基準比 **+10%** | **WARN**（PR 本文に理由必須） | Phase 1 の最小ステップでも 40〜60% 減る計画なので、+10% は測定ノイズではなく実際の逆行 |
 | critical ベンチマークの Physical LOC が基準比 **+25%** | **FAIL** | 4,000 LOC の集合に 1,000 LOC のモジュールを再併合したのと同じ規模。critical 4 系統では誤読がクラッシュに直結する |
 | `benchmarks.json` のファイル集合が実在しない（移動忘れ） | **FAIL** | 計測不能を静かに 0 にしない |
@@ -254,7 +254,7 @@ critical ＝ 過去 1 年で最も Issue が集中し、かつ状態機械を含
 | `sakura-store` | learning／input_history の **format（record layout・上限）／codec／persistence（ファイル配置・保持・compaction の純関数）／crypto（DPAPI を trait の背後に）**。writer thread・queue は engine に残す | engine §7、renderer-settings §5、contracts §6 の `sakura-stores` を統合。名前は `sakura-store` に統一 | 必須 |
 | `sakura-rerank-proto` | `SKNR`/`SKNS` v1（magic、frame、bounds） | contracts §6 | 必須 |
 | `sakura-oracles` | engine の `*_oracle.rs` 12 モジュール（dev-dependency のみ） | engine §7 | 推奨 |
-| `sakura-context-research` | #34 休眠 4 モジュール 1,846 行。名前に `research` を付け、feature `context-research` でしか engine に入らない。`sakura-context` という広い名前は採らない（owner D13：削除して履歴に残す案もある） | engine §7 | 推奨 |
+| `sakura-context-research` | #34 休眠 4 モジュール 1,846 行。名前に `research` を付け、feature `context-research` でしか engine に入らない。`sakura-context` という広い名前は採らない。1 年間 feature が使われなかったことを確認した場合だけ、別の削除 PR で廃止する（期限だけで自動削除しない） | engine §7 | 決定済み（D13、2026-09-13 owner 委任） |
 | `sakura-context-proto` | `sakura-neural-proto`（SCV1）の改名 | contracts §6 | 任意 |
 | `sakura-user-prefs` | Credential Manager＋user preference（reg から） | contracts §6 | 推奨 |
 | `sakura-install-maintenance` | maintenance／launcher／vscode_diagnostics（reg から） | contracts §6 | 推奨 |
@@ -502,7 +502,7 @@ Phase 完了 PR は `measure-irv.ps1 -Out verification/irv/baseline.json` を再
 
 ### Phase 0：ゲート整備（コード移動なし、9 ステップ）
 
-目的：**main を保護し、以後の全 PR が同じゲートを通る状態を作る**。現状（2026-09-12 に `gh api` で確認）：リポジトリは public、`main` に branch protection なし（`/branches/main/protection` が 404）、ruleset なし（`/rulesets` が `[]`）。誰でも直接 push できる。
+目的：**main を保護し、以後の全 PR が同じゲートを通る状態を作る**。現状（2026-09-12 に `gh api` で確認）：リポジトリは public、`main` に branch protection なし（`/branches/main/protection` が 404）、ruleset なし（`/rulesets` が `[]`）。push 権限のある利用者が PR を経ず直接 push できる。2026-09-13 の読み取り確認では、現在の認証に `permissions.admin=true` があり、ruleset は引き続き `[]`。これは Phase 0.6 で適用できる権限があることの確認であり、適用済みという意味ではない。
 
 merge gate の構成（0.6 で必須チェックにする job 名）：
 
@@ -523,9 +523,9 @@ merge gate の構成（0.6 で必須チェックにする job 名）：
 | 0.3 | 依存規則スクリプト | `ci/check-dependency-rules.ps1`（§3.3 の R1〜R9。現状違反する規則は `-Advisory` で警告のみ） | `pwsh ./ci/check-dependency-rules.ps1` | R8・R9・R11 以外は今は違反を列挙し exit 0。Phase 完了ごとに `-Advisory` を外す | S |
 | 0.4 | 形式検証 workflow（非ブロッキング） | `.github/workflows/formal-verification.yml`：tla2tools.jar を SHA-256 固定で取得、10 モデル × 48 cfg を matrix、`continue-on-error: true`、1 cfg 20 分 timeout、`verify-space-key-dispatch-tlc.ps1` の process lifecycle を流用 | workflow_dispatch で実行 | 48 job が完走。既知の `-bug` cfg は反例を出して赤、それ以外は緑 | M |
 | 0.5 | `AGENTS.md` と `CLAUDE.md` の縮約 | `AGENTS.md` 新設（≤1 KB）、`CLAUDE.md` から §最優先タスク（10,147 B）を `docs/history/issues/vscode-crash-investigation-20260802.md` へ移動、stale 行番号 5 箇所を修正、`apply_patch` 記述を削除、SolAdvisor 矛盾を owner 判断 D1 へ | `wc -c CLAUDE.md AGENTS.md`；`rg -n 'dispatch.rs:1039\|keymap.rs:1295\|496 passed\|apply_patch' CLAUDE.md`；`scripts/measure-irv.ps1 -Compare` | ≤8,192 B／≤1,024 B。rg 空。無条件文書 bytes が 85,770 から減少 | S（owner 承認要） |
-| 0.6 | main 保護 ruleset と merge gate | GitHub **ruleset**（classic branch protection ではなく）を `main` に作成：PR 必須（approval 0 でよいが PR 経由必須）、直接 push・force push・削除禁止、必須 status check ＝ 上表の `fmt`／`dependency-rules`／`workspace-tests`／`irv-regression`／`dll-size`（`crate-tests` は 7.8 後、`formal-verification` は 7.9 後に追加）、bypass actor 無し。定義 JSON を `ci/rulesets/main.json` に commit し、`gh api -X POST repos/{owner}/{repo}/rulesets --input ci/rulesets/main.json` で適用。ruleset を選ぶ理由：JSON で export／再適用でき、複数を重ねられ、必須チェックの追加が差分 commit で追える（classic は UI 設定で履歴が残らない） | `gh api repos/tsuyoshi-otake/sakura-input/rulesets --jq '.[].name'`；`gh api repos/tsuyoshi-otake/sakura-input/rulesets/{id} --jq '.rules[].type'`；検証用 branch から `git push origin HEAD:main` | `main-protection` 1 件。`pull_request`・`required_status_checks`・`non_fast_forward`・`deletion` を含む。push が `GH013` で拒否される | S（owner D12：admin 権限） |
+| 0.6 | main 保護 ruleset と merge gate | GitHub **ruleset**（classic branch protection ではなく）を `main` に作成：PR 必須（approval 0 でよいが PR 経由必須）、直接 push・force push・削除禁止、必須 status check ＝ 上表の `fmt`／`dependency-rules`／`workspace-tests`／`irv-regression`／`dll-size`（`crate-tests` は 7.8 後、`formal-verification` は 7.9 後に追加）、bypass actor 無し。定義 JSON を `ci/rulesets/main.json` に commit し、Phase 0 の実装担当が repo admin 権限を持つ認証済み `gh` で `gh api -X POST repos/{owner}/{repo}/rulesets --input ci/rulesets/main.json` を実行する。緊急時も同じ PR と必須 status check を通し、管理者権限で check を迂回しない。本計画の更新時点では ruleset を実適用せず、Phase 0 の実装 Issue で適用する。ruleset を選ぶ理由：JSON で export／再適用でき、複数を重ねられ、必須チェックの追加が差分 commit で追える（classic は UI 設定で履歴が残らない） | `gh api repos/tsuyoshi-otake/sakura-input/rulesets --jq '.[].name'`；`gh api repos/tsuyoshi-otake/sakura-input/rulesets/{id}` で `enforcement`・`conditions`・`bypass_actors`・必須 check を照合；`gh api repos/tsuyoshi-otake/sakura-input/rules/branches/main` で `main` に実際に適用される規則を照合；必須 check が未完了の検証 PR を `gh pr view <number> --json mergeStateStatus,statusCheckRollup` で確認 | `main-protection` 1 件が active かつ `main` 対象で、bypass actor は空。実効規則に `pull_request`・`required_status_checks`・`non_fast_forward`・`deletion` を含み、指定した必須 check が一致する。必須 check が未完了の検証 PR は `BLOCKED` | S（D12 決定済み、2026-09-13 owner 委任。適用者に repo admin 権限が必要） |
 | 0.7 | IRV 基準値の固定 | `verification/irv/benchmarks.json`（10 ベンチマーク、§1.1.1）、`scripts/measure-irv.ps1`、`verification/irv/baseline.json` を commit（PR #153 に同梱済み） | `pwsh ./scripts/measure-irv.ps1 -SelfTest`；`pwsh ./scripts/measure-irv.ps1 -Compare verification/irv/baseline.json` | SelfTest PASS。同一ツリーで各ベンチマーク ok、無条件文書だけ予算超過 | S |
-| 0.8 | `irv-regression` CI job | `ci.yml` に job 追加（`-Compare` を直接実行、パイプ無し）。無条件文書の予算超過は 0.5・7.11 完了まで WARN 扱い（`-DocsBudgetMode Warn`、D14）。PR 本文の `IRV:` 行を必須にする PR テンプレ | ダミー PR で `dispatch.rs` に 300 行追加 → WARN、`text_service.rs` に 3,400 行追加 → FAIL を確認して close | 判定が §1.1.2 の表どおり | S |
+| 0.8 | `irv-regression` CI job | `ci.yml` に job 追加（`-Compare` を直接実行、パイプ無し）。0.5・7.11 の両方が merge されるまでは `-DocsBudgetMode Warn` を使う（予算超過中の増加だけ WARN、非増加は note／PASS）。両工程のうち後に完了する工程の PR で予算内を証明して FAIL mode へ切り替え、その次の PR から増加の有無にかかわらず予算超過を失敗させる（D14）。PR 本文の `IRV:` 行を必須にする PR テンプレ | 導入時はダミー PR で `dispatch.rs` に基準 Physical LOC × WARN 閾値を超える行数を追加（現 baseline 21,664 × 0.1 に対し 2,167 行）→ WARN、`text_service.rs` に 3,400 行追加 → FAIL を確認して close。0.5／7.11 のうち後に完了する工程の PR では `-DocsBudgetMode Warn` で無条件文書 ≤24,576 B を確認し、CI を FAIL mode に切り替えた状態でも同じ tree の `-Compare` が成功することを確認 | 0.5・7.11 の両方が merge されるまでは、文書予算超過かつ増加なら WARN、非増加なら note／PASS。その次の PR からは増加の有無にかかわらず予算超過が FAIL。その他の判定は常に §1.1.2 の表どおり | S（D14 決定済み、2026-09-13 owner 委任） |
 | 0.9 | 文書の前倒し（crate 責務・依存規則・不変条件・所有・契約・移行規則） | `docs/architecture/README.md`（crate 図 §3.1、R1〜R13、憲章テンプレ §3.1.1、移行規則「構造 PR は `git mv` 先行、挙動変更と混ぜない」）、`docs/templates/crate-readme.md`（Purpose／Owns／Must not own／Allowed dependencies／Allowed consumers／Public API budget／Issue 型／テストコマンド）、`CODEOWNERS`（crate ごとの owner、当面は全て owner 1 名）、`docs/contracts/README.md`（18 契約の一覧と owner crate。本文は 7.5）。旧 7.13 をここに統合 | `wc -c docs/architecture/README.md`；`grep -c "^| R[0-9]* |" docs/architecture/README.md`；`grep -c '^## ' docs/templates/crate-readme.md`；`ls docs/contracts/README.md CODEOWNERS` | ≤8,192 B。13 行。8 見出し。存在 | S |
 
 ### Phase 1：テスト分離（挙動不変、11 ステップ）
@@ -569,7 +569,7 @@ merge gate の構成（0.6 で必須チェックにする job 名）：
 | 2.2d | settings を store に向ける | `settings/src/learning.rs:6`、`settings/src/input_history.rs:8` の `sakura_engine::` を `sakura_store::` に。`Cargo.toml` から `sakura-engine` を外す | R2；`cargo tree -p sakura-settings -e normal \| rg engine`；`cargo test -p sakura-settings`；`history show/export/stats` 統合テスト | R2 空。engine が出ない。pass。`input.bin` 形式不変 | S |
 | 2.3 | `sakura-rerank-proto` | `neural-worker/src/protocol.rs:3-8` と `engine/src/long_conversion.rs:28-29` を 1 crate に（`Fingerprint` は 2.1c 済み）。README・R8 更新・`benchmarks.json` 同梱 | R8；`cargo test -p sakura-neural-worker`；2 候補 protocol v1 IPC テスト | R8 が 1 件。worker と engine が同じ定義を使う | S |
 | 2.4 | `sakura-oracles` | engine の `*_oracle.rs` 12 モジュールを dev-dependency crate へ。`lib.rs:66` の常時 compile を削除。cargo-mutants 設定を repoint。README 同梱 | `cargo build -p sakura-engine --release` の後 `rg -n 'oracle' target/release/deps/*.d`；`cargo test -p sakura-engine` | release binary に oracle シンボル無し。テスト件数不変 | S |
-| 2.5 | `sakura-context-research` | #34 休眠 4 モジュール 1,846 行を feature `context-research` 付き別 crate へ。README の Owns は 4 モジュール限定、Must not own に「既定 build から参照されるもの」。owner D13 で削除を選ぶなら `git rm` ＋ `docs/history/research/` に所在を記す | `cargo build -p sakura-engine`；`cargo build -p sakura-engine --features context-research`；`rg -n 'sakura_context_research' crates/sakura-engine/src --glob '!**/*_tests.rs'` | 既定 build から 1,846 行が消える。feature 付きで従来どおり。参照は `#[cfg(feature)]` 配下のみ | S（owner D13） |
+| 2.5 | `sakura-context-research` | #34 休眠 4 モジュール 1,846 行を feature `context-research` 付き別 crate へ。README の Owns は 4 モジュール限定、Must not own に「既定 build から参照されるもの」。crate 化して残し、1 年間 feature が使われなかったことを確認した場合だけ、所在を `docs/history/research/` に記録する別の削除 PR で廃止する。期限到来だけで自動削除しない | `cargo build -p sakura-engine`；`cargo build -p sakura-engine --features context-research`；`rg -n 'sakura_context_research' crates/sakura-engine/src --glob '!**/*_tests.rs'` | 既定 build から 1,846 行が消える。feature 付きで従来どおり。参照は `#[cfg(feature)]` 配下のみ。削除は 1 年間の未使用を確認した別 PR でのみ行われる | S（D13 決定済み、2026-09-13 owner 委任） |
 | 2.6 | engine dev-deps 整理 | `ime-eval` dev-dep を削除（`tests/pipe_round_trip.rs:36-37` は ime-eval 側の integration test へ）、`dictc` は feature `dictc-fixtures` 背後 | `cargo tree -p sakura-engine -e dev`；`cargo test -p sakura-engine` | ime-eval が出ない。テスト pass | S |
 | 2.7 | `sakura-context-proto` 改名 | `sakura-neural-proto` → `sakura-context-proto`（`SCV1` は不変） | `rg -n 'sakura_neural_proto\|sakura-neural-proto' .` | 空 | S |
 | 2.8 | R1・R2・R8・R12・R13 を blocking に | 0.3 の `-Advisory` から外す | `pwsh ./ci/check-dependency-rules.ps1` | 違反 0 | S |
@@ -712,7 +712,9 @@ Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 
 
 ## 7. Owner 判断が必要な項目
 
-| ID | 判断 | 影響ステップ | 既定案 |
+D12〜D14 は 2026-09-13 に owner が判断を委任し、下表の内容で決定した。D3 はそれ以前から計画上「決定済み扱い」である。D1〜D2・D4〜D11 は今回の委任対象ではなく、引き続き owner 判断を要する。
+
+| ID | 判断 | 影響ステップ | 決定内容／未決項目の既定案 |
 |---|---|---|---|
 | D1 | CLAUDE.md の §最優先タスク（VS Code 調査）と SolAdvisor 記述をどう扱うか（履歴へ退避か削除か） | 0.5、7.1 | `docs/history/issues/` へ退避、CLAUDE.md からは 3 行のリンクに |
 | D2 | DESIGN.md 100 KB をどこまで分割するか | 7.4 | 不変条件と境界だけ残し ≤40 KB |
@@ -725,9 +727,9 @@ Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 
 | D9 | `.claude/memory/rules.md` 45 KB の分割 | 7.11 | topic 別に移動、削除しない |
 | D10 | `session/` を独立 crate（`sakura-tsf-session`）にするか、ディレクトリのままか | 6.7 | Phase 6 完了まではディレクトリ＋R3。安定後に crate 化を再検討 |
 | D11 | 実行時の候補上限（`research-wide-candidates` feature）を残すか | 3.1 | 残す（研究用） |
-| D12 | main の ruleset を誰が作るか（repo admin 権限が要る）、緊急時の bypass を許すか | 0.6 | owner が `gh api` で作成。bypass actor は無し（緊急時も PR＋admin merge） |
-| D13 | `sakura-context-research`（#34 休眠 1,846 行）を crate 化して残すか、削除して git 履歴に残すか | 2.5 | crate 化して feature 限定。1 年間 feature が使われなければ削除 |
-| D14 | IRV 回帰ゲートの無条件文書 FAIL 化のタイミング | 0.8 | 0.5 と 7.11 の両方が merge された PR から FAIL |
+| D12 | main の ruleset を誰が作るか（repo admin 権限が要る）、緊急時の bypass を許すか | 0.6 | **決定済み（2026-09-13 owner 委任）**：Phase 0 の実装担当が repo admin 権限を持つ認証済み `gh` で適用。bypass actor は無し。緊急時も同じ PR と必須 check を通し、管理者権限で迂回しない。本計画更新では実適用しない |
+| D13 | `sakura-context-research`（#34 休眠 1,846 行）を crate 化して残すか、削除して git 履歴に残すか | 2.5 | **決定済み（2026-09-13 owner 委任）**：crate 化して feature 限定で残す。1 年間 feature が使われなかったことを確認した場合だけ別の削除 PR で廃止し、期限だけで自動削除しない |
+| D14 | IRV 回帰ゲートの無条件文書 FAIL 化のタイミング | 0.8 | **決定済み（2026-09-13 owner 委任）**：0.5 と 7.11 の両方が merge されるまで WARN mode。後に完了する工程の PR で予算内と FAIL mode の成功を検証して切り替え、その次の PR から FAIL |
 
 ---
 
