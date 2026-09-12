@@ -1766,6 +1766,24 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   記録型を PSCustomObject に固定し、入力に空文字列を許容して fixture に実際の空行を追加した。
   修正後に全 package の記録・比較を実行済み。製品コードと依存は変更していない。
 
+## 2026-09-13 Phase 0.3 依存規則の advisory 検査（#154）
+
+- R1〜R9 を列挙する検査と CI job を追加。既存違反は advisory として可視化し、
+  `-Enforce R1,R2` のように移行完了した規則だけを blocking に切り替えられる。
+  R1／R2 は Cargo metadata と Rust source の両方、R8 は全 wire 定数の所有先を確認する。
+  未作成の対象は PENDING、R5 は AST による最終検査前の暫定 regex と明示する。
+- Verify: SelfTest、実 repository の advisory 検査、`-Enforce R1`、`-Enforce R99`。
+  Expect: fixture が成功し、現状の違反は WARN／PENDING、R1 強制と未知規則は非ゼロ終了。
+  親が直接実行し、すべて期待どおり。advisory 成功を依存違反ゼロとは表現しない。
+- SelfTest 初回失敗は PowerShell 自動変数 `$Matches` との衝突と、遅延 ReadLines の
+  ファイル handle が後始末まで残ったため。別名と読み取り完了済み配列へ変更し、
+  主例外を cleanup 例外で隠さないようにした後、SelfTest と実検査が成功した。
+
+## 2026-09-13 Hosted dependency scanner portability (#154)
+
+- Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
+- Parent Verify: both scanner SelfTests, complete advisory finding equivalence after path/whitespace normalization, and forced-no-rg R1 enforcement. Expect: matching findings and nonzero enforcement of the existing violation. Passed. This identical correction is applied directly to PR #157, superseding the late-stack delivery in #166 so its prerequisite job can pass before merging.
+
 ## 2026-09-13 Native image namespace support (#104)
 
 - Hosted runs 34704517571 and 34705378113 again rejected an owned engine; later diagnostics reported native-device image paths. Original admission data remains unobserved, so historical causality is not claimed.
