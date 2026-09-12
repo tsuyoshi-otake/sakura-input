@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::input_history::{InputHistoryRecord, InputHistoryService, ScopeClass};
+use crate::input_history::{HistoryScope, InputHistoryRecord, InputHistoryService};
 use sakura_core::keymap::{KeyMap, State};
 use sakura_core::width::{
     BracketStyle, CommaMark, PeriodMark, PunctuationStyle, Width, WidthPolicy,
@@ -2018,7 +2018,7 @@ fn developer_history_captures_real_keys_but_not_test_unclassified_or_sensitive_k
     assert_eq!(stats.excluded_test_only_events, 0);
     let record = keys[0];
     assert_eq!(record.character, Some('k'));
-    assert_eq!(record.scope, ScopeClass::Normal);
+    assert_eq!(record.scope, HistoryScope::Normal);
     assert_eq!(record.session, 1);
     let next = keys[1];
     assert_eq!(next.character, Some('a'));
