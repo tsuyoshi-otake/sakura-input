@@ -1842,3 +1842,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Repeated hosted failures retain owned PID, ImagePathRejected, and later native-device path evidence. Original admission observation remains unknown; no historical-cause claim.
 - Implemented bounded anchor-drive QueryDosDeviceW translation before existing path policy. First current mapping only; no historical mapping, requery/retry, token exception, or raw-path logging.
 - Parent Verify: five new security tests including real Windows mapping and negative policy controls; locked IPC all-target clippy -D warnings; wrapped locked workspace tests; process cleanup; git diff --check. Expect: all pass, no surviving runner. All passed. Hosted sandbox confirmation remains pending.
+
+## 2026-09-13 Hosted dependency scanner portability (#154)
+
+- Run 34704979746 failed under StrictMode because absent rg.exe was dereferenced through .Source. Command discovery now checks native application existence; missing rg uses the existing bounded source-file scanner instead of skipping the rule.
+- Parent Verify: self-tests with and without rg; full advisory findings compared after path/whitespace normalization; forced no-rg R1 enforcement. Expect: identical findings and nonzero exit on the known violation. All passed. Comparison exposed single-file rg output omitting filenames; --with-filename now makes evidence attributable. Fallback regexes are case-sensitive like rg, and both scans include hidden/ignored Rust sources.
