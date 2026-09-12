@@ -133,7 +133,7 @@
       "issue_shape": "developer history store / compaction / stats (#113-#132 type)",
       "critical": false,
       "entry_point": "crates/sakura-engine/src/input_history.rs",
-      "production": ["crates/sakura-engine/src/input_history.rs", "crates/sakura-store/src/input_history/format.rs", "crates/sakura-store/src/input_history/codec.rs", "crates/sakura-store/src/input_history/persistence.rs", "crates/sakura-settings/src/input_history.rs", "crates/sakura-settings/src/cli.rs", "crates/sakura-proto/src/message.rs"],
+      "production": ["crates/sakura-engine/src/input_history.rs", "crates/sakura-store/src/input_history/format.rs", "crates/sakura-store/src/input_history/codec.rs", "crates/sakura-store/src/input_history/persistence.rs", "crates/sakura-store/src/crypto.rs", "crates/sakura-settings/src/input_history.rs", "crates/sakura-settings/src/cli.rs", "crates/sakura-proto/src/message.rs"],
       "tests": [],
       "contracts": [],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/session-and-later-findings.md", "docs/decisions/developer-history.md"],
