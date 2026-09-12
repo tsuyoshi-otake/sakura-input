@@ -9,31 +9,31 @@ use sakura_neural_proto::{CandidateAuthority, MAX_PREDICTION_CANDIDATES};
 
 use crate::prediction_snapshot::{PredictionSnapshot, SnapshotCorrelation, SnapshotSource};
 
-pub const DISPLAY_CANDIDATES: usize = 9;
+pub(crate) const DISPLAY_CANDIDATES: usize = 9;
 
 /// One ordered replay observation. Candidate ids contain no candidate text.
 #[derive(Debug, Clone, Copy)]
-pub struct ReplayObservation<'a> {
-    pub snapshot: &'a PredictionSnapshot,
+pub(crate) struct ReplayObservation<'a> {
+    pub(crate) snapshot: &'a PredictionSnapshot,
     /// Proposed full internal order, never a post-display reorder.
-    pub ranked_candidate_ids: &'a [u64],
+    pub(crate) ranked_candidate_ids: &'a [u64],
     /// Exact committed candidate when replay ground truth has one.
-    pub expected_candidate_id: Option<u64>,
+    pub(crate) expected_candidate_id: Option<u64>,
     /// Correlation returned with the proposed ranking.
-    pub response_correlation: SnapshotCorrelation,
+    pub(crate) response_correlation: SnapshotCorrelation,
     /// Characters/keystrokes required without and with prediction acceptance.
-    pub keystrokes_without_prediction: u16,
-    pub keystrokes_with_prediction: u16,
+    pub(crate) keystrokes_without_prediction: u16,
+    pub(crate) keystrokes_with_prediction: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Fraction {
-    pub numerator: u64,
-    pub denominator: u64,
+pub(crate) struct Fraction {
+    pub(crate) numerator: u64,
+    pub(crate) denominator: u64,
 }
 
 impl Fraction {
-    pub fn value(self) -> f64 {
+    pub(crate) fn value(self) -> f64 {
         if self.denominator == 0 {
             0.0
         } else {
@@ -43,33 +43,33 @@ impl Fraction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct SourceHit {
-    pub source: SnapshotSource,
-    pub top9_hits: u64,
-    pub oracle_opportunities: u64,
+pub(crate) struct SourceHit {
+    pub(crate) source: SnapshotSource,
+    pub(crate) top9_hits: u64,
+    pub(crate) oracle_opportunities: u64,
 }
 
 /// Aggregate Phase 4 metrics. Sums and denominators remain available so report
 /// writers do not lose the sample size behind a floating-point rate.
 #[derive(Debug, Clone, PartialEq)]
-pub struct EvaluationMetrics {
-    pub observations: u64,
-    pub labelled_observations: u64,
-    pub oracle_recall_at_9: Fraction,
-    pub oracle_recall_at_16: Fraction,
-    pub oracle_recall_at_32: Fraction,
-    pub top_1: Fraction,
-    pub top_3: Fraction,
-    pub top_9: Fraction,
-    pub reciprocal_rank_sum: f64,
-    pub ndcg_sum: f64,
-    pub keystrokes_saved: u64,
-    pub keystrokes_without_prediction: u64,
-    pub persistence: Fraction,
-    pub churn: Fraction,
-    pub stale_responses: Fraction,
-    pub duplicates_removed: Fraction,
-    pub source_hits: [SourceHit; 3],
+pub(crate) struct EvaluationMetrics {
+    pub(crate) observations: u64,
+    pub(crate) labelled_observations: u64,
+    pub(crate) oracle_recall_at_9: Fraction,
+    pub(crate) oracle_recall_at_16: Fraction,
+    pub(crate) oracle_recall_at_32: Fraction,
+    pub(crate) top_1: Fraction,
+    pub(crate) top_3: Fraction,
+    pub(crate) top_9: Fraction,
+    pub(crate) reciprocal_rank_sum: f64,
+    pub(crate) ndcg_sum: f64,
+    pub(crate) keystrokes_saved: u64,
+    pub(crate) keystrokes_without_prediction: u64,
+    pub(crate) persistence: Fraction,
+    pub(crate) churn: Fraction,
+    pub(crate) stale_responses: Fraction,
+    pub(crate) duplicates_removed: Fraction,
+    pub(crate) source_hits: [SourceHit; 3],
 }
 
 impl Default for EvaluationMetrics {
@@ -110,15 +110,15 @@ impl Default for EvaluationMetrics {
 }
 
 impl EvaluationMetrics {
-    pub fn mrr(&self) -> f64 {
+    pub(crate) fn mrr(&self) -> f64 {
         mean(self.reciprocal_rank_sum, self.labelled_observations)
     }
 
-    pub fn ndcg(&self) -> f64 {
+    pub(crate) fn ndcg(&self) -> f64 {
         mean(self.ndcg_sum, self.labelled_observations)
     }
 
-    pub fn keystroke_saving_rate(&self) -> f64 {
+    pub(crate) fn keystroke_saving_rate(&self) -> f64 {
         Fraction {
             numerator: self.keystrokes_saved,
             denominator: self.keystrokes_without_prediction,
@@ -128,7 +128,7 @@ impl EvaluationMetrics {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EvaluationError {
+pub(crate) enum EvaluationError {
     TooManyRankedCandidates,
     DuplicateRankedCandidate,
     UnexpectedRankedCandidate,
@@ -140,7 +140,7 @@ pub enum EvaluationError {
 
 /// Evaluates an ordered replay without allocating candidate text or mutating
 /// any prediction state.
-pub fn evaluate_replay(
+pub(crate) fn evaluate_replay(
     observations: &[ReplayObservation<'_>],
 ) -> Result<EvaluationMetrics, EvaluationError> {
     let mut metrics = EvaluationMetrics::default();
@@ -376,7 +376,7 @@ impl OriginalIds {
 mod tests {
     use super::*;
     use crate::prediction_snapshot::{DictionaryIdentity, SnapshotCandidateInput};
-    use sakura_proto::InputScope;
+    use sakura_values::InputScope;
 
     fn input<'a>(
         reading: &'a str,
