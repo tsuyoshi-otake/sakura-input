@@ -14,7 +14,6 @@
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,24 +23,21 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_values::{AiTextOperation, AiTextStatus, InputScope};
-use windows::core::PCWSTR;
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
 };
 use windows::Win32::Storage::FileSystem::{
-    ReplaceFileW, FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT, REPLACE_FILE_FLAGS,
+    FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT,
 };
 
 const MAGIC: &[u8; 4] = b"SKIH";
 const HEADER_LEN: usize = 8;
 const FRAME_HEADER_LEN: usize = 8;
 const QUEUE_CAPACITY: usize = 1024;
-const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const COMPACTION_INTERVAL: Duration = Duration::from_secs(60);
 const COMPACTION_APPEND_LIMIT: u32 = 256;
 
-pub const MAX_INPUT_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 pub const ENGINE_PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const VERSION_BUILD_ID_LENGTH: usize = 16;
 
@@ -109,6 +105,12 @@ const fn ai_status_name(status: AiTextStatus) -> &'static str {
     }
 }
 
+use sakura_store::input_history::persistence::{
+    compaction_transaction_path, exceeds_history_size,
+    replace_history_file as store_replace_history_file, retained_records, retention_cutoff,
+    RETENTION,
+};
+pub use sakura_store::input_history::persistence::{default_path, MAX_INPUT_HISTORY_BYTES};
 pub use sakura_store::input_history::{
     AiTextHistoryRecord, CommitHistoryRecord, EngineHistoryRecord, HistoryScope,
     InputHistoryRecord, InputHistorySnapshot, InputHistoryStats, InputHistoryStatsSnapshot,
@@ -127,7 +129,7 @@ impl InputHistorySnapshotExt for InputHistorySnapshot {
     /// storage. Raw snapshots deliberately remain unfiltered for recovery and
     /// identifier accounting. `now_ms` also permits deterministic boundary tests.
     fn retain_current_records(&mut self, now_ms: u64) {
-        let cutoff = now_ms.saturating_sub(RETENTION.as_millis() as u64);
+        let cutoff = retention_cutoff(now_ms);
         self.records
             .retain(|record| record.timestamp_ms() >= cutoff);
     }
@@ -738,19 +740,6 @@ impl Drop for InputHistoryService {
     }
 }
 
-pub fn default_path() -> io::Result<PathBuf> {
-    let local = std::env::var_os("LOCALAPPDATA").ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            "LOCALAPPDATA is unavailable for the developer input history",
-        )
-    })?;
-    Ok(PathBuf::from(local)
-        .join("SakuraInput")
-        .join("history")
-        .join("input.bin"))
-}
-
 pub fn read_snapshot(path: &Path) -> io::Result<InputHistorySnapshot> {
     require_no_compaction_transaction(path)?;
     let metadata = fs::metadata(path)?;
@@ -998,7 +987,7 @@ fn append_payload(
         .as_ref()
         .and_then(|handle| handle.metadata().ok())
         .map_or(0, |metadata| metadata.len());
-    if current_len.saturating_add(frame_len) > MAX_INPUT_HISTORY_BYTES {
+    if exceeds_history_size(current_len, frame_len) {
         if let Some(mut previous) = file.take() {
             previous.flush()?;
         }
@@ -1010,7 +999,7 @@ fn append_payload(
     }
     let file = file.as_mut().expect("input history writer opened the file");
     let current_len = file.metadata()?.len();
-    if current_len.saturating_add(frame_len) > MAX_INPUT_HISTORY_BYTES {
+    if exceeds_history_size(current_len, frame_len) {
         return Err(io::Error::new(
             io::ErrorKind::WriteZero,
             "input history retention limit reached",
@@ -1220,13 +1209,7 @@ fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
         }
         Err(error) => return Err(error),
     };
-    let cutoff = now_ms().saturating_sub(RETENTION.as_millis() as u64);
-    let mut records: Vec<_> = snapshot
-        .records
-        .into_iter()
-        .filter(|record| record.timestamp_ms() >= cutoff)
-        .collect();
-    records.sort_by_key(InputHistoryRecord::sequence);
+    let records = retained_records(snapshot.records, now_ms());
     let mut encoded = Vec::with_capacity(records.len());
     let mut total = HEADER_LEN as u64;
     let mut retention = RetentionPlan::default();
@@ -1234,7 +1217,7 @@ fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
         let payload = record.encode()?;
         let protected = protect(&payload)?;
         let frame_len = FRAME_HEADER_LEN as u64 + protected.len() as u64;
-        if total.saturating_add(frame_len) > MAX_INPUT_HISTORY_BYTES {
+        if exceeds_history_size(total, frame_len) {
             break;
         }
         total += frame_len;
@@ -1289,17 +1272,6 @@ fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
     Ok(retention)
 }
 
-fn compaction_transaction_path(path: &Path) -> io::Result<PathBuf> {
-    let mut name = path
-        .file_name()
-        .ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "history path has no file name")
-        })?
-        .to_os_string();
-    name.push(".compaction");
-    Ok(path.with_file_name(name))
-}
-
 fn require_no_compaction_transaction(path: &Path) -> io::Result<()> {
     match fs::symlink_metadata(compaction_transaction_path(path)?) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -1337,35 +1309,7 @@ fn replace_history_file(path: &Path, temp: &Path, backup: &Path) -> io::Result<(
         }
         return Err(io::Error::from_raw_os_error(code));
     }
-    let wide = |path: &Path| -> io::Result<Vec<u16>> {
-        let mut encoded: Vec<_> = path.as_os_str().encode_wide().collect();
-        if encoded.contains(&0) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "history path contains NUL",
-            ));
-        }
-        encoded.push(0);
-        Ok(encoded)
-    };
-    let canonical = wide(path)?;
-    let replacement = wide(temp)?;
-    let previous = wide(backup)?;
-    // SAFETY: all paths are live NUL-terminated buffers, and the caller owns
-    // the cooperative store lock. Backup and replacement are in the newly
-    // created same-volume transaction directory. Do not ignore ACL errors or
-    // use the unsupported REPLACEFILE_WRITE_THROUGH flag.
-    unsafe {
-        ReplaceFileW(
-            PCWSTR(canonical.as_ptr()),
-            PCWSTR(replacement.as_ptr()),
-            PCWSTR(previous.as_ptr()),
-            REPLACE_FILE_FLAGS::default(),
-            None,
-            None,
-        )
-    }
-    .map_err(|error| io::Error::from_raw_os_error(error.code().0 & 0xffff))
+    store_replace_history_file(path, temp, backup)
 }
 
 /// Package version and installed release label for the running engine.
