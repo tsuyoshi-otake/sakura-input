@@ -14,10 +14,10 @@ flowchart TD
   Contracts --> Values[sakura-values: shared values and capacities]
   Domains --> Values
   Engine[engine: queues, sessions, runtime] --> Research[context-research: optional research]
-  Research --> Core[core: conversion rules]
+  Research --> NeuralProto[sakura-neural-proto: SCV1 context contract]
   Research --> Values
   Offline[dictc and offline tools] --> Compiler[dictc-core]
-  Compiler --> Core
+  Compiler --> Core[core: conversion rules]
 ```
 
 - `sakura-values` owns shared values, never wire codecs, I/O, or Windows APIs.
