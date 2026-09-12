@@ -1,6 +1,6 @@
 [package]
-name = "sakura-proto"
-description = "Hand-rolled fixed-layout IPC codec and message set for the Sakura Input protocol."
+name = "sakura-values"
+description = "Shared bounded value types for Sakura Input crates."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,6 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-sakura-values.workspace = true
 
 [lints]
 workspace = true

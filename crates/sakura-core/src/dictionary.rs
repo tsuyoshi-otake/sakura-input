@@ -8,7 +8,7 @@
 
 use core::fmt;
 
-use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
+use sakura_values::{FixedStr, MAX_PREEDIT_BYTES};
 
 use crate::TextSink;
 

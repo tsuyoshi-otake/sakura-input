@@ -71,7 +71,7 @@ pub use preferences::{
     SpaceWidth, SuggestAccept, CONFIG_FORMAT_VERSION,
 };
 pub use romaji::{Input, Table, TableError, TableErrorKind};
-pub use sakura_proto::{AppearanceTheme, PadShortcut};
+pub use sakura_values::{AppearanceTheme, PadShortcut};
 pub use simd::{KernelMetadata, KernelSet, WidthScanStrategy, WidthScanStrategyId};
 pub use text::TextSink;
 pub use user_dictionary::{

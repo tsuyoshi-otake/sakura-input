@@ -20,6 +20,7 @@ use crate::types::{
     Preedit, Segment, UnderlineKind,
 };
 use crate::wire::{Error, Sink, SliceSink};
+use crate::wire_types::Wire;
 use crate::{
     RequestId, CANDIDATE_PAGE_SIZE, FRAME_HEADER_LEN, MAX_CANDIDATES,
     MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,

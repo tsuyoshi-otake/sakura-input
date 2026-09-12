@@ -27,7 +27,7 @@ use std::arch::x86_64::{_mm_lfence, _rdtsc};
 
 use sakura_core::text::TextSink;
 use sakura_core::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
-use sakura_proto::{FixedStr, Mode};
+use sakura_values::{FixedStr, Mode};
 
 /// Sized for the longest corpus at its worst case: every ASCII byte becoming
 /// a three-byte full-width character.

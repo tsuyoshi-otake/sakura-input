@@ -26,7 +26,7 @@
 //! sink the caller owns (DESIGN 5.7). `tests/zero_alloc.rs` asserts this
 //! against a counting allocator rather than trusting the claim.
 
-use sakura_proto::{FixedStr, FixedVec, Overflow};
+use sakura_values::{FixedStr, FixedVec, Overflow};
 
 use crate::config::{self, Document, ParseError, Value};
 use crate::text::TextSink;

@@ -4,7 +4,7 @@
 //! fixed scratch buffer. Explicit F9/F10 intent is represented by the `full`
 //! argument and therefore bypasses the ordinary width policy exactly once.
 
-use sakura_proto::Overflow;
+use sakura_values::Overflow;
 
 use crate::TextSink;
 
@@ -322,7 +322,7 @@ pub fn identifier_into(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_proto::FixedStr;
+    use sakura_values::FixedStr;
 
     fn transformed(source: &str, raw: &str, transform: SegmentTransform, cycle: u8) -> String {
         let mut output = FixedStr::<128>::new();

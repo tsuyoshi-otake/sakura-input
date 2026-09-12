@@ -17,7 +17,7 @@
 use crate::editing::{half_katakana, katakana_char};
 use crate::simd;
 use crate::text::TextSink;
-use sakura_proto::{Mode, Overflow};
+use sakura_values::{Mode, Overflow};
 
 /// A width policy value for one character class (DESIGN §2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
