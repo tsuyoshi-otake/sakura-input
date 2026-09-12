@@ -1684,3 +1684,36 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
     `^\| [0-7]\.[0-9]+[a-z]? \|` に合わせて更新する必要がある。
 - **未了（owner 判断）**: D1〜D14。PR #153 のレビューと merge。実装は Phase 0 から
   別 Issue。
+
+## 2026-09-13 D12〜D14 の判断委任と計画への反映（#152、PR #153）
+
+- **依頼と範囲**: owner が D12〜D14 の判断を委任。Sol Medium subagent が計画書の
+  編集を担当し、親 Codex が実差分とコマンド結果を直接検証した。独立 verifier の
+  再採点ではない。実装・ruleset の適用・PR の merge は今回の範囲に含めない。
+- **決定**: D12 は Phase 0 実装担当が admin 認証済み `gh` で ruleset を適用する。
+  bypass actor は無し、緊急時も PR と必須 check を通す。D13 は研究用 crate を
+  `context-research` feature 限定で残し、1 年間の未使用を確認した場合だけ別 PR
+  で削除する。D14 は 0.5 と 7.11 が揃う最後の PR で文書予算内と Fail mode の
+  成功を確認して CI を切り替え、以後の PR で予算超過を FAIL にする。
+- **変更**: 計画 §1.1.2、crate 概要、Phase 0.6／0.8／2.5、§7 を整合させた。
+  main への直接 push による拒否試験は、ruleset 詳細・main の実効規則・検証 PR
+  の BLOCKED 状態の確認へ置換。権限の読み取り確認は `permissions.admin=true`、
+  ruleset は `[]` で、保護の実適用済みとは扱わない。
+- **検証チェックリスト（親が実行、すべて期待どおり）**:
+  - Verify: `git show f228a36:docs/architecture/agent-refactor-plan.md` と現行の
+    D 行・Phase ID を照合。Expect: D1〜D11 は同一、D12〜D14 は日付付きで決定済み、
+    ID は 14 件一意、Phase ID 不変、0.6／0.8／2.5 の Verify／Expect は非空。
+  - Verify: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/measure-irv.ps1
+    -Compare verification/irv/baseline.json -DocsBudgetMode Warn` を直接実行。
+    Expect: exit 0／PASS、10 benchmark の Physical LOC はすべて増減 0%。確認済み。
+  - Verify: 同コマンドで `-DocsBudgetMode Warn` を省略して直接実行。
+    Expect: 無条件文書 85,770 B > 24,576 B により exit 1／FAIL。確認済み。
+  - Verify: IRV script／benchmarks／baseline の `git diff --exit-code f228a36`、
+    `git diff --check`、実行後の repository／measure-irv に対応する process 確認。
+    Expect: IRV 資材不変、空白エラー無し、検査自身の PID を除いて残存無し。確認済み。
+- **確認した注意点**: Warn mode は既知超過が増えていなければ note／PASS、Fail
+  mode は増加の有無に関係なく超過を拒否する。計画にあった「300 行追加 → WARN」
+  は 21,664 LOC の 10% に届かないため、JSON の基準値と閾値から最小超過の
+  2,167 行を計算して訂正した。過去の 25/25 PASS を今回の再検証とは表現しない。
+- **残件**: D1〜D2・D4〜D11（D3 は従来から決定済み扱い）、PR #153 のレビューと
+  merge。実装は Phase 0 の別 Issue で扱う。
