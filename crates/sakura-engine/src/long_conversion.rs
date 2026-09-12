@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use sakura_core::CandidateEvidence;
 use sakura_core::{ConversionCandidate, ConversionOptions};
 use sakura_proto::SessionId;
+use sakura_values::Fingerprint;
 
 use crate::dictionary::ConversionService;
 
@@ -65,21 +66,21 @@ struct WorkRequest {
 
 #[derive(Debug, Clone)]
 struct ModelCandidate {
-    fingerprint: u64,
+    fingerprint: Fingerprint,
     local_cost: i64,
     text: String,
 }
 
 #[derive(Debug, Clone)]
 struct CandidateScore {
-    fingerprint: u64,
+    fingerprint: Fingerprint,
     log_probability: f32,
 }
 
 #[derive(Debug, Clone)]
 struct WorkResult {
     key: RequestKey,
-    candidate_set: u64,
+    candidate_set: Fingerprint,
     scores: Vec<CandidateScore>,
     state: RerankState,
 }
@@ -638,14 +639,14 @@ fn read_worker_response(input: &mut impl Read) -> io::Result<WorkerResponse> {
     })
 }
 
-fn candidate_fingerprint(candidate: &ConversionCandidate) -> u64 {
+fn candidate_fingerprint(candidate: &ConversionCandidate) -> Fingerprint {
     let mut hash = fingerprint_bytes(candidate.text().as_bytes());
     hash = hash_bytes(hash, &candidate.cost.to_le_bytes());
     hash = hash_bytes(hash, &[candidate.evidence_class().fingerprint_tag()]);
     hash
 }
 
-fn candidate_set_fingerprint(candidates: &[ConversionCandidate]) -> u64 {
+fn candidate_set_fingerprint(candidates: &[ConversionCandidate]) -> Fingerprint {
     candidates
         .iter()
         .fold(0xCBF2_9CE4_8422_2325, |hash, candidate| {
@@ -653,7 +654,7 @@ fn candidate_set_fingerprint(candidates: &[ConversionCandidate]) -> u64 {
         })
 }
 
-fn model_candidate_set_fingerprint(candidates: &[ModelCandidate]) -> u64 {
+fn model_candidate_set_fingerprint(candidates: &[ModelCandidate]) -> Fingerprint {
     candidates
         .iter()
         .fold(0xCBF2_9CE4_8422_2325, |hash, candidate| {
