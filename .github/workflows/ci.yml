@@ -34,7 +34,9 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: sakura-desktop-hosted-candidate-${{ github.repository }}
+      # Share the physical-desktop lock with desktop-tests.yml while this
+      # prerequisite diagnostic remains dispatchable.
+      group: sakura-desktop-user32-${{ github.repository }}
       cancel-in-progress: false
     defaults:
       run:
