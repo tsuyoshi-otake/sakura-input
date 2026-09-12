@@ -1811,3 +1811,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - 追検証: 初回の staged diff check は抽出文書の EOF 空行を指摘したが、shell が後続 commit
   を継続していた。空行だけを除去し、非ゼロ終了で直ちに止まる呼び出しで再検証して PASS。
   最終の LF 作業ファイルは CLAUDE 3,977 bytes／AGENTS 738 bytes。原本 hash と抽出本文一致は不変。
+
+## 2026-09-13 Hosted dependency scanner portability (#154)
+
+- Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
+- Parent Verify: both scanner SelfTests, complete advisory finding equivalence after path/whitespace normalization, and forced-no-rg R1 enforcement. Expect: matching findings and nonzero enforcement of the existing violation. Passed. This identical correction is applied directly to PR #157, superseding the late-stack delivery in #166 so its prerequisite job can pass before merging.
