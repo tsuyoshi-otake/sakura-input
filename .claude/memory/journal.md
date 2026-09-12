@@ -1908,3 +1908,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Phase 1.2 moves input_history, server, session, prediction and learning inline test bodies into their respective sibling files after git mv. Production prefixes and module identities are retained.
 - Verify: parent ran the pre-format verbatim checker, then formatted and compared all five production prefixes and their 251/192/178/225/561 string literals. Wrapped engine library execution matched all 575 prior runtime identities and outcomes: 573 passed / 2 ignored. Diff whitespace and scoped process cleanup passed.
 - Production line counts are now 1,983 / 1,982 / 1,878 / 1,113 / 2,439 respectively. This is structural separation only; persistence, prediction, learning and server behavior remain unchanged.
+
+## 2026-09-13 Verify formatting reaches a stable result (#168)
+
+- Hosted run 34709081162 rejected one leading blank line in the extracted dispatch_tests.rs. The initial rustfmt pass had left this blank line while unindenting the verbatim inline body; a later pass removed it. Rust tests had passed, but formatting had not been checked for stability.
+- Removed that single blank line. Parent Verify: cargo fmt --all -- --check and git diff --check. Expect: no further change required. Result: PASS. For subsequent extractions, always run the explicit check after formatting; do not equate a successful formatting command with check success.
