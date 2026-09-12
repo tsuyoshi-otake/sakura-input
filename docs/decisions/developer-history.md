@@ -25,4 +25,3 @@ sakura_settings.exe config set developer-mode off
 Password、URL、Email、Digitsは機微スコープとして常に除外します。未分類または未知の入力スコープも保存してはいけません。TSFはキーをengineへ渡す前に`ITfInputScope`を分類し、分類失敗・未知値はfail-closedにします。履歴サービスの入口でも`Normal`かつ明示的に分類済みのレコードだけを受け付けるため、この二重防御を維持してください。
 
 保存は現在のWindowsユーザー向けDPAPI、有界1,024件キュー、30日保持、64 MiB上限、アイドル時を含む定期compactで行います。キーパスをブロックしないため、キュー落ち・保存失敗は`history stats`の累積カウンタで確認します。`history clear`、`history export`、`history stats`の結果は明示的な成功／失敗として扱ってください。
-
