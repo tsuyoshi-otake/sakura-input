@@ -1777,3 +1777,8 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - SelfTest 初回失敗は PowerShell 自動変数 `$Matches` との衝突と、遅延 ReadLines の
   ファイル handle が後始末まで残ったため。別名と読み取り完了済み配列へ変更し、
   主例外を cleanup 例外で隠さないようにした後、SelfTest と実検査が成功した。
+
+## 2026-09-13 Hosted dependency scanner portability (#154)
+
+- Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
+- Parent Verify: both scanner SelfTests, complete advisory finding equivalence after path/whitespace normalization, and forced-no-rg R1 enforcement. Expect: matching findings and nonzero enforcement of the existing violation. Passed. This identical correction is applied directly to PR #157, superseding the late-stack delivery in #166 so its prerequisite job can pass before merging.
