@@ -13,7 +13,7 @@ Scoring, ONNX, model validation, process lifecycle, timeout, retry, or fallback 
 `sakura-values` only.
 
 ## Allowed consumers
-`sakura-engine`, `sakura-neural-worker`, and offline `dictc` neural evaluation.
+`sakura-engine`, `sakura-neural-worker`, and offline neural evaluation (currently `dictc`, then its tools package after Phase 3.9).
 
 ## Public API budget
 Six top-level public items: `Limits`, `Candidate`, `Score`, `Frame`, `read_frame`, and `write_frame`.
