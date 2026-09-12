@@ -205,6 +205,51 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./ci/write-step-timings.ps1 -JobName 'Build and test'
 
+  fmt:
+    name: fmt
+    needs: build-and-test
+    if: ${{ always() }}
+    timeout-minutes: 2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require the aggregated build and test job
+        shell: bash
+        env:
+          UPSTREAM_RESULT: ${{ needs.build-and-test.result }}
+        run: test "$UPSTREAM_RESULT" = success
+
+  workspace-tests:
+    name: workspace-tests
+    needs: build-and-test
+    if: ${{ always() }}
+    timeout-minutes: 2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require the aggregated build and test job
+        shell: bash
+        env:
+          UPSTREAM_RESULT: ${{ needs.build-and-test.result }}
+        run: test "$UPSTREAM_RESULT" = success
+
+  dll-size:
+    name: dll-size
+    needs: build-and-test
+    if: ${{ always() }}
+    timeout-minutes: 2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require the aggregated build and test job
+        shell: bash
+        env:
+          UPSTREAM_RESULT: ${{ needs.build-and-test.result }}
+        run: test "$UPSTREAM_RESULT" = success
+
   dependency-policy:
     name: Dependency policy
     runs-on: windows-latest
