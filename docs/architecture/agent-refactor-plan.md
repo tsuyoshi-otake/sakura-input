@@ -30,7 +30,7 @@
 **方針**（詳細は §3）
 
 0. **ゲートを先に置く**（Phase 0）：main を ruleset で保護して PR 必須にし、依存規則・crate 別テスト・workspace テスト・IRV 回帰・DLL サイズを必須チェックにする。IRV 基準値をここで固定する。
-1. **テストを本体から出す**（sibling `*_tests.rs`）。挙動不変・最小リスクで、Physical IRV を 40〜60% 減らす。最初にやる。**Semantic IRV はこれでは下がらない**（§1.1）。
+1. **テストを本体から出す**（sibling `*_tests.rs`）。挙動不変で、Phase 1 の 6 読解集合では Physical IRV が約 16〜55% 減った（#173 訂正実測）。最初にやる。**Semantic IRV はこれでは下がらない**（§1.1）。
 2. **葉 crate を 5 つ切る**（`sakura-values`、`sakura-store`、`sakura-rerank-proto`、`sakura-oracles`、`sakura-context-research`）。依存の逆流を全て消し、Cargo metadata と Rust-aware architecture check で検査できる方向規則にする。各 crate は憲章（Purpose／Owns／Must not own／Allowed dependencies／Allowed consumers／Public API budget、§3.1.1）を持ち、「どこにも置けないものを置く場所」にしない。
 3. **god file を「変更理由」で分割**する。行数ではなく Issue の型で切る。分割後の各ディレクトリに「この Issue 型はここ」の対応表を置く。
 4. **crate 単位の CI ゲート**（paths filter matrix、DLL サイズ、TLC、verification⇄Rust 対応検査）を足し、モジュールを独立に検証可能にする。
@@ -87,7 +87,7 @@
 | Physical IRV | 機械的に読み込まれる量（`Read` されるファイルの総 LOC・bytes） | `measure-irv.ps1` が自動計測 | テスト分離、ファイル分割、依存の切断 |
 | Semantic IRV | 正しく変更するために**理解しなければならない**量（型・不変条件・状態遷移・呼び出し経路） | 解析レポート §9 の必読範囲をエージェントまたは人が確認し、`semantic.ranges` に行範囲で記録 | 変更理由ごとの責務分割、依存方向の一方向化、契約の単一化 |
 
-**原則：ファイルを分割しただけでは Semantic IRV は下がらない。** インラインテストを sibling に移す Phase 1 は Physical IRV だけを下げる（`dispatch.rs` 21,664→4,927 LOC）。`apply_action` 431 行を 45 ファイルに割っても、45 ファイルを全部読まないと `無変換` を直せないなら Semantic IRV は同じである。Semantic IRV が下がるのは、Issue 型ごとに「ここだけ読めばよい」入口と契約が定まり、境界の外を読まなくても安全だと言える構造になったときだけ。各 Phase の受け入れ基準（§4）は両方を別々に持つ。
+**原則：ファイルを分割しただけでは Semantic IRV は下がらない。** インラインテストを sibling に移す Phase 1 は Physical IRV だけを下げる（KEY-MODE の読解集合は Phase 1 前後で 22,251→10,082 LOC。単独の `dispatch.rs` の行数ではない。#173 の訂正計測）。`apply_action` 431 行を 45 ファイルに割っても、45 ファイルを全部読まないと `無変換` を直せないなら Semantic IRV は同じである。Semantic IRV が下がるのは、Issue 型ごとに「ここだけ読めばよい」入口と契約が定まり、境界の外を読まなくても安全だと言える構造になったときだけ。各 Phase の受け入れ基準（§4）は両方を別々に持つ。
 
 **測定の 2 層**
 
@@ -115,7 +115,7 @@
 
 critical ＝ 過去 1 年で最も Issue が集中し、かつ状態機械を含む（誤読がクラッシュに直結する）4 系統と、全 Issue に乗る文書負荷。
 
-**Phase 0 基準値**（`verification/irv/baseline.json`、コミット 97705a5 のツリーで `measure-irv.ps1 -Out` により計測。`LOC` は `wc -l` 相当、`除テスト` はインラインテスト（最初の `#[cfg(test)]` 以降）を除いた行数、`Semantic` は解析レポート §9 の必読見積り）
+**Phase 0 基準値（歴史的な v1 出力）**（`verification/irv/baseline.json`、コミット 97705a5 のツリーを対象に計測。`LOC` は `wc -l` 相当、`Semantic` は解析レポート §9 の必読見積り）。**除テスト列は #173 の集計不具合の影響を受けており、目標値の根拠に使わない。** 最初の `#[cfg(test)]` 以降すべてを除外すると、途中の helper より後の production も消えてしまう。Physical LOC と回帰判定は影響を受けない。元 baseline は保存し、訂正した Phase 1 前後の別計測を [`inline-accounting.md`](../../verification/irv/inline-accounting.md) と [`phase1-corrected.json`](../../verification/irv/phase1-corrected.json) に記録する。
 
 | ID | Physical LOC | 除テスト LOC | bytes | ファイル数 | Semantic LOC |
 |---|---:|---:|---:|---:|---:|
@@ -141,7 +141,7 @@ critical ＝ 過去 1 年で最も Issue が集中し、かつ状態機械を含
 |---|---|---|
 | 依存境界違反（§3.3 の R1〜R12 のうち blocking 化済みのもの） | **FAIL** | 逆流 1 本で下流 crate 全体が読解集合に戻る。IRV の増分では捕まえられない構造回帰 |
 | 無条件文書（`CLAUDE.md`＋`rules.md`）が予算 24,576 B を超過 | WARN mode では基準から増加した場合だけ **WARN**、非増加なら note／PASS（現状 85,770 B）。0.5／7.11 のうち後に完了する工程の PR で予算内を検証して CI を切り替え、その次の PR から、増加の有無にかかわらず予算超過を **FAIL** | 全 Issue に乗る固定費。8 KiB＋16 KiB は §3.5 の上限。D14 として 2026-09-13 に owner が判断を委任し、この切替時点に決定 |
-| 代表ベンチマークの Physical LOC が基準比 **+10%** | **WARN**（PR 本文に理由必須） | Phase 1 の最小ステップでも 40〜60% 減る計画なので、+10% は測定ノイズではなく実際の逆行 |
+| 代表ベンチマークの Physical LOC が基準比 **+10%** | **WARN**（PR 本文に理由必須） | ファイル集合を固定した LOC は決定的な計測であり、+10% の増加はノイズでなく読解負荷の増加。理由を説明する閾値として維持する |
 | critical ベンチマークの Physical LOC が基準比 **+25%** | **FAIL** | 4,000 LOC の集合に 1,000 LOC のモジュールを再併合したのと同じ規模。critical 4 系統では誤読がクラッシュに直結する |
 | `benchmarks.json` のファイル集合が実在しない（移動忘れ） | **FAIL** | 計測不能を静かに 0 にしない |
 
@@ -474,17 +474,17 @@ verification/_historical/   (revalidation-*.md、issue-141-tdd.md など)
 
 #### 4.1 Phase ごとの受け入れ基準（IRV 目標値）
 
-Physical は `measure-irv.ps1` の `physical.loc`、Semantic は Phase 完了レビューで更新する `semantic.estimated_loc`。目標値の根拠：§5 の after 列（各解析レポート §9 の必読見積り）を切り上げたもの。Phase 1 の値は基準値の `除テスト LOC`（§1.1.1）そのもの。
+Physical は `measure-irv.ps1` の `physical.loc`、Semantic は Phase 完了レビューで更新する `semantic.estimated_loc`。Phase 2 以降の根拠は §5 の after 列（各解析レポート §9 の必読見積り）。Phase 1 は #173 の訂正計測（`758c93f`→`ed712b4`）に基づき、挙動不変の分離後の実測を 100 LOC 単位で切り上げる（余裕 0〜99 LOC）。旧 `除テスト LOC` から導いた値は撤回する。計測元・scanner・manifest の hash と差分理由は `verification/irv/phase1-corrected.json`／`inline-accounting.md` に固定し、semantic 目標と後続 Phase の目標は変えない。
 
 | Phase | ベンチマーク | Physical 目標 | Semantic 目標 | 根拠 |
 |---|---|---:|---:|---|
 | 0 | 全部 | 基準値を記録（変化なし） | 記録のみ | ゲートと基準値の固定が目的 |
-| 1 | `IRV-ENGINE-KEY-MODE` | ≤5,000 | 900（不変） | 除テスト 4,927 |
-| 1 | `IRV-ENGINE-CANDIDATE` | ≤7,500 | 3,050（不変） | 除テスト 7,446 |
-| 1 | `IRV-TSF-REENTRANCY` | ≤8,900 | 910（不変） | 除テスト 8,858 |
-| 1 | `IRV-TSF-DUAL-KEY` | ≤8,100 | 540（不変） | 除テスト 8,009 |
-| 1 | `IRV-CORE-CONVERSION` | ≤6,400 | 450（不変） | 除テスト 6,392 |
-| 1 | `IRV-RENDERER-POPUP` | ≤1,700 | 700（不変） | 除テスト 1,691 |
+| 1 | `IRV-ENGINE-KEY-MODE` | ≤10,100 | 900（不変） | 訂正実測 22,251→10,082、余裕 18 |
+| 1 | `IRV-ENGINE-CANDIDATE` | ≤13,700 | 3,050（不変） | 訂正実測 27,531→13,630、余裕 70 |
+| 1 | `IRV-TSF-REENTRANCY` | ≤11,700 | 910（不変） | 訂正実測 13,859→11,610、余裕 90 |
+| 1 | `IRV-TSF-DUAL-KEY` | ≤11,400 | 540（不変） | 訂正実測 13,624→11,375、余裕 25 |
+| 1 | `IRV-CORE-CONVERSION` | ≤7,600 | 450（不変） | 訂正実測 11,044→7,511、余裕 89 |
+| 1 | `IRV-RENDERER-POPUP` | ≤4,600 | 700（不変） | 訂正実測 5,939→4,581、余裕 19 |
 | 2 | `IRV-HISTORY-STORE` | ≤3,000、ファイル数 ≤8 | ≤950 | settings が engine の 3,632 行ファイルを読まなくなる。store 4 分割で読む範囲が 1 モジュールに |
 | 2 | `IRV-CORE-CONVERSION` | proto をファイル集合から除く | 450 | R1 blocking |
 | 3 | `IRV-CORE-CONVERSION` | ≤1,200 | ≤450 | §5：11,279→450 |
@@ -533,7 +533,7 @@ merge gate の構成（0.6 で必須チェックにする job 名）：
 
 ### Phase 1：テスト分離（挙動不変、11 ステップ）
 
-原則：production 行を 1 行も変えない。`git diff --stat` で production ファイルは削除行のみ。**この Phase で下がるのは Physical IRV だけ**であり、各 PR の `IRV:` 行には `semantic unchanged` と明記する（§1.1）。受け入れ基準は §4.1 の Phase 1 行（`IRV-ENGINE-KEY-MODE` ≤5,000 行など）。
+原則：production の挙動を変えない。test module／path 宣言、renderer の薄い entry wrapper と機械的な整形を除き、移動元の production と test body を保存する。`git diff --stat` の削除行数だけでなく、実コードとテスト identity を照合する。**この Phase で下がるのは Physical IRV だけ**であり、各 PR の `IRV:` 行には `semantic unchanged` と明記する（§1.1）。受け入れ基準は #173 で訂正した §4.1 の Phase 1 行（`IRV-ENGINE-KEY-MODE` ≤10,100 行など）。desktop と R9 の条件も別に満たす。
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
@@ -689,7 +689,7 @@ merge gate の構成（0.6 で必須チェックにする job 名）：
 | reranker／server trust | #88, #104 | 2,100 | 730 | 170,000 | 20,000 | 2.3、3.7 |
 | CI／プロセス | #111 系 | — | — | 215,000 | 22,000 | 7.x |
 
-Phase 1（テスト分離）だけで engine・core・tsf の行数が 40〜60% 減る。Phase 2 で crate 越しの読解（proto codec、engine の store）が消える。残りの削減はモジュール分割による。
+Phase 1（テスト分離）の訂正実測では、§4.1 の 6 読解集合の Physical LOC は約 16〜55% 減る。すべてが 40〜60% 減るという旧見積りは撤回する（#173）。Phase 2 で crate 越しの読解（proto codec、engine の store）を減らし、残りは Issue 型に対応する責務分離で削減する。
 
 ---
 

@@ -1,0 +1,13 @@
+{
+  "cases": [
+    { "file": "mid-file-items.rs", "inline_test_loc": 15 },
+    { "file": "trailing-module.rs", "inline_test_loc": 16 },
+    { "file": "declaration-only.rs", "inline_test_loc": 0 },
+    { "file": "lexical-decoys.rs", "inline_test_loc": 0 },
+    { "file": "syntax-edge-cases.rs", "inline_test_loc": 7 },
+    { "file": "actual-item-forms.rs", "inline_test_loc": 30 },
+    { "file": "missing-item.rs", "expect_error": true },
+    { "file": "unterminated-item.rs", "expect_error": true },
+    { "file": "unterminated-raw-string.rs", "expect_error": true }
+  ]
+}
