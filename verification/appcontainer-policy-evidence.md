@@ -1,5 +1,25 @@
 # AppContainer image-policy evidence (#104, O1)
 
+Current proposal (2026-09-13): ownership-safe sandbox tests use an explicit
+`ExactNative` policy whose expected UTF-16 identity is captured by the trusted
+parent from its owned engine PID before sandbox launch. Admission performs one
+`PROCESS_NAME_NATIVE` image query and requires strict native-device shape and
+complete code-unit equality. Existing `Exact` and production `InstalledRoot`
+remain unchanged from main. The earlier drive-mapping proposal below was
+rejected by a deterministic real-sandbox counterexample and has been removed.
+Historical entries below describe their respective revisions, not the current
+implementation.
+
+Parent verification of the replacement: IPC security tests, diagnostic unit
+test, and the ignored private-pipe real AppContainer test passed. The native
+identity assertion and exact owned pipe PID check both precede Hello. Process
+cleanup passed. Hosted sandbox verification remains required; these results
+do not establish the cause of every historical #104 failure.
+
+Locked IPC/engine all-target clippy with warnings denied and the wrapped locked
+workspace tests also passed. The parent ran all verification directly; the Sol
+Medium subagent supplied an implementation draft only.
+
 Baseline main `f48d8f55fcab3f9abb210aa2a442cd8b217df1f1`, v1.0.35. Patch base #128 (`eae7127`). Classification: **IMPROVEMENT** for diagnostics; intermittent CI root cause remains **HYPOTHESIS**.
 
 PR #126 run 33968517317 attempt 1 failed in Sandbox access (AppContainer). The reason was ImagePathRejected, and the rejected PID printed in the log equaled the test-owned engine PID. One same-commit rerun passed Build and test in 8m27s. The original failure log is retained at the evidence sibling as `stop-ci-appcontainer-failure.log`. This is an observed failed policy decision, not proof of a different executable, nor proof that the shutdown patch caused or fixed it.
