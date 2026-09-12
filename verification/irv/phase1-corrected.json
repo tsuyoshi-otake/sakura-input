@@ -1,0 +1,197 @@
+{
+  "schema": "sakura-irv-phase1-corrected-v1",
+  "issue": 173,
+  "scanner_sha256": "b21c83532e4d0ed7170c5618e2acbecd7b313ab2bdeedc9ad7be985dc5d8d7a1",
+  "source_policy": "git archive of committed bytes; no working-copy contents; source commit explicitly recorded",
+  "before_commit": "758c93f6dd79971977350c31d4d595396689f976",
+  "after_commit": "ed712b4bab56a19647bdf7810d6fd9f66061538c",
+  "before_manifest_sha256": "e842256dd717411e0a2246bd58afa7a1df054c960f5a4a6d62350fa4d19f64cd",
+  "after_manifest_sha256": "6c6f32284528912c3447410d73d56079c6016a758727f1fa6393d9f333350b1b",
+  "manifest_delta": "Renderer lib.rs added alongside main.rs after startup ownership moved; all other benchmark memberships and issue shapes identical.",
+  "historical_baseline_sha256": "d8a4fe2f3f1452fb654daa27851c64c2e16bc7b2e268452cda1bc4a71345b889",
+  "historical_baseline_policy": "Preserved; original inline/excluding-test fields are affected by #173. Physical totals remain valid.",
+  "before_snapshot_sha256": "a84a5cf332e8eb928540b4e6f0d18e8110ba1f1b2fbf898f7b4c45417d2f7b6f",
+  "after_snapshot_sha256": "03a4b52256418b1ac58e5939b107dbb28fbb7d41272706fa016896a168a9c4ae",
+  "benchmarks": [
+    {
+      "id": "IRV-ENGINE-KEY-MODE",
+      "before": {
+        "physical_loc": 22251,
+        "inline_test_loc": 12208,
+        "excluding_inline_tests": 10043,
+        "bytes": 885083,
+        "files": 11
+      },
+      "after": {
+        "physical_loc": 10082,
+        "inline_test_loc": 30,
+        "excluding_inline_tests": 10052,
+        "bytes": 424573,
+        "files": 11
+      },
+      "semantic_estimated_loc": 900
+    },
+    {
+      "id": "IRV-ENGINE-CANDIDATE",
+      "before": {
+        "physical_loc": 27531,
+        "inline_test_loc": 14100,
+        "excluding_inline_tests": 13431,
+        "bytes": 1106914,
+        "files": 12
+      },
+      "after": {
+        "physical_loc": 13630,
+        "inline_test_loc": 190,
+        "excluding_inline_tests": 13440,
+        "bytes": 568703,
+        "files": 12
+      },
+      "semantic_estimated_loc": 3050
+    },
+    {
+      "id": "IRV-TSF-REENTRANCY",
+      "before": {
+        "physical_loc": 13859,
+        "inline_test_loc": 3959,
+        "excluding_inline_tests": 9900,
+        "bytes": 575845,
+        "files": 13
+      },
+      "after": {
+        "physical_loc": 11610,
+        "inline_test_loc": 1706,
+        "excluding_inline_tests": 9904,
+        "bytes": 483481,
+        "files": 13
+      },
+      "semantic_estimated_loc": 910
+    },
+    {
+      "id": "IRV-TSF-DUAL-KEY",
+      "before": {
+        "physical_loc": 13624,
+        "inline_test_loc": 3967,
+        "excluding_inline_tests": 9657,
+        "bytes": 571705,
+        "files": 13
+      },
+      "after": {
+        "physical_loc": 11375,
+        "inline_test_loc": 1714,
+        "excluding_inline_tests": 9661,
+        "bytes": 479341,
+        "files": 13
+      },
+      "semantic_estimated_loc": 540
+    },
+    {
+      "id": "IRV-CORE-CONVERSION",
+      "before": {
+        "physical_loc": 11044,
+        "inline_test_loc": 3764,
+        "excluding_inline_tests": 7280,
+        "bytes": 465435,
+        "files": 12
+      },
+      "after": {
+        "physical_loc": 7511,
+        "inline_test_loc": 225,
+        "excluding_inline_tests": 7286,
+        "bytes": 318670,
+        "files": 12
+      },
+      "semantic_estimated_loc": 450
+    },
+    {
+      "id": "IRV-DICTIONARY-FORMAT",
+      "before": {
+        "physical_loc": 5684,
+        "inline_test_loc": 485,
+        "excluding_inline_tests": 5199,
+        "bytes": 235783,
+        "files": 10
+      },
+      "after": {
+        "physical_loc": 5202,
+        "inline_test_loc": 0,
+        "excluding_inline_tests": 5202,
+        "bytes": 217002,
+        "files": 10
+      },
+      "semantic_estimated_loc": 1150
+    },
+    {
+      "id": "IRV-HISTORY-STORE",
+      "before": {
+        "physical_loc": 8402,
+        "inline_test_loc": 2332,
+        "excluding_inline_tests": 6070,
+        "bytes": 370591,
+        "files": 21
+      },
+      "after": {
+        "physical_loc": 6753,
+        "inline_test_loc": 680,
+        "excluding_inline_tests": 6073,
+        "bytes": 305140,
+        "files": 21
+      },
+      "semantic_estimated_loc": 950
+    },
+    {
+      "id": "IRV-RENDERER-POPUP",
+      "before": {
+        "physical_loc": 5939,
+        "inline_test_loc": 1908,
+        "excluding_inline_tests": 4031,
+        "bytes": 238055,
+        "files": 10
+      },
+      "after": {
+        "physical_loc": 4581,
+        "inline_test_loc": 543,
+        "excluding_inline_tests": 4038,
+        "bytes": 185945,
+        "files": 11
+      },
+      "semantic_estimated_loc": 700
+    },
+    {
+      "id": "IRV-CI",
+      "before": {
+        "physical_loc": 3961,
+        "inline_test_loc": 0,
+        "excluding_inline_tests": 3961,
+        "bytes": 195795,
+        "files": 20
+      },
+      "after": {
+        "physical_loc": 3961,
+        "inline_test_loc": 0,
+        "excluding_inline_tests": 3961,
+        "bytes": 195795,
+        "files": 20
+      },
+      "semantic_estimated_loc": 600
+    },
+    {
+      "id": "IRV-DOCS",
+      "before": {
+        "physical_loc": 1871,
+        "inline_test_loc": 0,
+        "excluding_inline_tests": 1871,
+        "bytes": 131366,
+        "files": 3
+      },
+      "after": {
+        "physical_loc": 1871,
+        "inline_test_loc": 0,
+        "excluding_inline_tests": 1871,
+        "bytes": 131366,
+        "files": 3
+      },
+      "semantic_estimated_loc": 0
+    }
+  ]
+}
