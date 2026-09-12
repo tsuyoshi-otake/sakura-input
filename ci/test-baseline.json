@@ -1,0 +1,3065 @@
+{
+  "schema": "sakura-test-baseline-v1",
+  "generated_utc": "2026-09-12T17:19:49.2154739Z",
+  "source_commit": "86371f4905785c4c132d881eb1e61d51ede934e1",
+  "toolchain": {
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "rustc_verbose": [
+      "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "binary: rustc",
+      "commit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96",
+      "commit-date: 2026-05-25",
+      "host: x86_64-pc-windows-msvc",
+      "release: 1.96.0",
+      "LLVM version: 22.1.2"
+    ],
+    "build_target": {
+      "triple": "x86_64-pc-windows-msvc",
+      "source": ".cargo/config.toml [build].target"
+    }
+  },
+  "invocation": {
+    "command": "cargo test --locked -p <workspace-package>",
+    "package_discovery": "cargo metadata --locked --no-deps --format-version 1",
+    "target_selection": "Cargo default package targets",
+    "feature_selection": "default features"
+  },
+  "packages": [
+    {
+      "package": "sakura-core",
+      "manifest": "crates/sakura-core/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_core",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-core/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "fsm_robustness",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-core/tests/fsm_robustness.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "width_bench",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-core/tests/width_bench.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "zero_alloc",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-core/tests/zero_alloc.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_core",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-core/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 299,
+          "executed": 296,
+          "passed": 296,
+          "failed": 0,
+          "ignored": 3,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "fsm_robustness",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-core/tests/fsm_robustness.rs",
+          "cargo_label": "Running tests\\fsm_robustness.rs",
+          "discovered": 2,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "width_bench",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-core/tests/width_bench.rs",
+          "cargo_label": "Running tests\\width_bench.rs",
+          "discovered": 2,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 2,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "zero_alloc",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-core/tests/zero_alloc.rs",
+          "cargo_label": "Running tests\\zero_alloc.rs",
+          "discovered": 5,
+          "executed": 5,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_core",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-core/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_core",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 308,
+        "executed": 302,
+        "passed": 302,
+        "failed": 0,
+        "ignored": 6
+      }
+    },
+    {
+      "package": "sakura-proto",
+      "manifest": "crates/sakura-proto/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_proto",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-proto/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "robustness",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-proto/tests/robustness.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "roundtrip",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-proto/tests/roundtrip.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "zero_alloc",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-proto/tests/zero_alloc.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-proto/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 67,
+          "executed": 67,
+          "passed": 67,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "robustness",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-proto/tests/robustness.rs",
+          "cargo_label": "Running tests\\robustness.rs",
+          "discovered": 7,
+          "executed": 6,
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "roundtrip",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-proto/tests/roundtrip.rs",
+          "cargo_label": "Running tests\\roundtrip.rs",
+          "discovered": 22,
+          "executed": 22,
+          "passed": 22,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "zero_alloc",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-proto/tests/zero_alloc.rs",
+          "cargo_label": "Running tests\\zero_alloc.rs",
+          "discovered": 1,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-proto/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_proto",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 97,
+        "executed": 96,
+        "passed": 96,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    {
+      "package": "sakura-neural-proto",
+      "manifest": "crates/sakura-neural-proto/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_neural_proto",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-neural-proto/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_neural_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-neural-proto/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 7,
+          "executed": 7,
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_neural_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-neural-proto/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_neural_proto",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 7,
+        "executed": 7,
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-ipc",
+      "manifest": "crates/sakura-ipc/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_ipc",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-ipc/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "client_server",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-ipc/tests/client_server.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_ipc",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-ipc/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 39,
+          "executed": 39,
+          "passed": 39,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "client_server",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-ipc/tests/client_server.rs",
+          "cargo_label": "Running tests\\client_server.rs",
+          "discovered": 7,
+          "executed": 7,
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_ipc",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-ipc/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_ipc",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 46,
+        "executed": 46,
+        "passed": 46,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-reg",
+      "manifest": "crates/sakura-reg/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_reg",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-reg/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "launcher_roundtrip",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-reg/tests/launcher_roundtrip.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_reg",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-reg/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 36,
+          "executed": 36,
+          "passed": 36,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "launcher_roundtrip",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-reg/tests/launcher_roundtrip.rs",
+          "cargo_label": "Running tests\\launcher_roundtrip.rs",
+          "discovered": 2,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_reg",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-reg/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_reg",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 38,
+        "executed": 37,
+        "passed": 37,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    {
+      "package": "sakura-tsf",
+      "manifest": "crates/sakura-tsf/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_tsf",
+          "kinds": [
+            "cdylib"
+          ],
+          "source": "crates/sakura-tsf/src/lib.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "sakura_tsf_test_host",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-tsf/src/bin/sakura_tsf_test_host.rs",
+          "test": false,
+          "doctest": false,
+          "required_features": [
+            "e2e-host"
+          ],
+          "expected_suites": [],
+          "exclusion_reason": "required default features are not enabled: e2e-host"
+        },
+        {
+          "name": "prediction_navigation_user32",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-tsf/tests/prediction_navigation_user32.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_tsf",
+          "target_kind": [
+            "cdylib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-tsf/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 200,
+          "executed": 200,
+          "passed": 200,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "prediction_navigation_user32",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-tsf/tests/prediction_navigation_user32.rs",
+          "cargo_label": "Running tests\\prediction_navigation_user32.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 200,
+        "executed": 200,
+        "passed": 200,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-engine",
+      "manifest": "crates/sakura-engine/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_engine",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-engine/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "prediction_eval",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-engine/src/bin/prediction_eval.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "sakura_engine",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-engine/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "appcontainer",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/appcontainer.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "context_intelligence_budget",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/context_intelligence_budget.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "cross_commit_learning",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/cross_commit_learning.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "high_load_key_integrity",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/high_load_key_integrity.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "ipc_latency",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/ipc_latency.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "pipe_round_trip",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/pipe_round_trip.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "resource_budget",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/resource_budget.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "shipped_dictionary_ranking",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/shipped_dictionary_ranking.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "space_key_dispatch_pipe",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/space_key_dispatch_pipe.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "zero_alloc_dispatch",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-engine/tests/zero_alloc_dispatch.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_engine",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-engine/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 575,
+          "executed": 573,
+          "passed": 573,
+          "failed": 0,
+          "ignored": 2,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "prediction_eval",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-engine/src/bin/prediction_eval.rs",
+          "cargo_label": "Running src\\bin\\prediction_eval.rs",
+          "discovered": 1,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_engine",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-engine/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 6,
+          "executed": 6,
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "appcontainer",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/appcontainer.rs",
+          "cargo_label": "Running tests\\appcontainer.rs",
+          "discovered": 7,
+          "executed": 4,
+          "passed": 4,
+          "failed": 0,
+          "ignored": 3,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "context_intelligence_budget",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/context_intelligence_budget.rs",
+          "cargo_label": "Running tests\\context_intelligence_budget.rs",
+          "discovered": 3,
+          "executed": 2,
+          "passed": 2,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "cross_commit_learning",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/cross_commit_learning.rs",
+          "cargo_label": "Running tests\\cross_commit_learning.rs",
+          "discovered": 2,
+          "executed": 2,
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "high_load_key_integrity",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/high_load_key_integrity.rs",
+          "cargo_label": "Running tests\\high_load_key_integrity.rs",
+          "discovered": 8,
+          "executed": 8,
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "ipc_latency",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/ipc_latency.rs",
+          "cargo_label": "Running tests\\ipc_latency.rs",
+          "discovered": 3,
+          "executed": 2,
+          "passed": 2,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "pipe_round_trip",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/pipe_round_trip.rs",
+          "cargo_label": "Running tests\\pipe_round_trip.rs",
+          "discovered": 12,
+          "executed": 12,
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "resource_budget",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/resource_budget.rs",
+          "cargo_label": "Running tests\\resource_budget.rs",
+          "discovered": 1,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "shipped_dictionary_ranking",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/shipped_dictionary_ranking.rs",
+          "cargo_label": "Running tests\\shipped_dictionary_ranking.rs",
+          "discovered": 38,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 37,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "space_key_dispatch_pipe",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/space_key_dispatch_pipe.rs",
+          "cargo_label": "Running tests\\space_key_dispatch_pipe.rs",
+          "discovered": 14,
+          "executed": 14,
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "zero_alloc_dispatch",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-engine/tests/zero_alloc_dispatch.rs",
+          "cargo_label": "Running tests\\zero_alloc_dispatch.rs",
+          "discovered": 6,
+          "executed": 6,
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_engine",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-engine/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_engine",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 676,
+        "executed": 631,
+        "passed": 631,
+        "failed": 0,
+        "ignored": 45
+      }
+    },
+    {
+      "package": "sakura-ai-proto",
+      "manifest": "crates/sakura-ai-proto/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_ai_proto",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-ai-proto/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_ai_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-ai-proto/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 6,
+          "executed": 6,
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_ai_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-ai-proto/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_ai_proto",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 6,
+        "executed": 6,
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "dictc",
+      "manifest": "crates/dictc/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "dictc",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/dictc/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "category-split",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/category_split.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "compound-homophone-scan",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/compound_homophone_scan.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "context-dataset",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/context_dataset.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "corpus-eval",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/corpus_eval.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "dictc",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "glossary-import",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/glossary_import.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "inflection-expand",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/inflection_expand.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "llm-detail-drafts",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/llm_detail_drafts.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "llm-detail-promote",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/llm_detail_promote.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "llm-detail-targets",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/llm_detail_targets.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "mozc-trim",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/mozc_trim.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "neural-eval",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/dictc/src/bin/neural_eval.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "boundaries",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/boundaries.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "conversion",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/conversion.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "conversion_priorities",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/conversion_priorities.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "curated_details",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/curated_details.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "curated_terms",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/curated_terms.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "details",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/details.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "dictionary_robustness",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/dictionary_robustness.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "glossary",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/glossary.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "homophone_compounds",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/homophone_compounds.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "image",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/image.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "inflection",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/inflection.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "mozc",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/mozc.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "overlay_conditions",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/overlay_conditions.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "overlay_properties",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/overlay_properties.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "single_kanji",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/single_kanji.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "source_format_conditions",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/source_format_conditions.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "source_format_properties",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/source_format_properties.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "trim",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/dictc/tests/trim.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "dictc",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 69,
+          "executed": 68,
+          "passed": 68,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "category-split",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/category_split.rs",
+          "cargo_label": "Running src\\bin\\category_split.rs",
+          "discovered": 1,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "compound-homophone-scan",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/compound_homophone_scan.rs",
+          "cargo_label": "Running src\\bin\\compound_homophone_scan.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "context-dataset",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/context_dataset.rs",
+          "cargo_label": "Running src\\bin\\context_dataset.rs",
+          "discovered": 3,
+          "executed": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "corpus-eval",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/corpus_eval.rs",
+          "cargo_label": "Running src\\bin\\corpus_eval.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "dictc",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "glossary-import",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/glossary_import.rs",
+          "cargo_label": "Running src\\bin\\glossary_import.rs",
+          "discovered": 2,
+          "executed": 2,
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "inflection-expand",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/inflection_expand.rs",
+          "cargo_label": "Running src\\bin\\inflection_expand.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "llm-detail-drafts",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/llm_detail_drafts.rs",
+          "cargo_label": "Running src\\bin\\llm_detail_drafts.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "llm-detail-promote",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/llm_detail_promote.rs",
+          "cargo_label": "Running src\\bin\\llm_detail_promote.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "llm-detail-targets",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/llm_detail_targets.rs",
+          "cargo_label": "Running src\\bin\\llm_detail_targets.rs",
+          "discovered": 4,
+          "executed": 4,
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "mozc-trim",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/mozc_trim.rs",
+          "cargo_label": "Running src\\bin\\mozc_trim.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "neural-eval",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/dictc/src/bin/neural_eval.rs",
+          "cargo_label": "Running src\\bin\\neural_eval.rs",
+          "discovered": 6,
+          "executed": 6,
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "boundaries",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/boundaries.rs",
+          "cargo_label": "Running tests\\boundaries.rs",
+          "discovered": 5,
+          "executed": 5,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "conversion",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/conversion.rs",
+          "cargo_label": "Running tests\\conversion.rs",
+          "discovered": 33,
+          "executed": 32,
+          "passed": 32,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "conversion_priorities",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/conversion_priorities.rs",
+          "cargo_label": "Running tests\\conversion_priorities.rs",
+          "discovered": 8,
+          "executed": 8,
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "curated_details",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/curated_details.rs",
+          "cargo_label": "Running tests\\curated_details.rs",
+          "discovered": 8,
+          "executed": 8,
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "curated_terms",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/curated_terms.rs",
+          "cargo_label": "Running tests\\curated_terms.rs",
+          "discovered": 1,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "details",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/details.rs",
+          "cargo_label": "Running tests\\details.rs",
+          "discovered": 3,
+          "executed": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "dictionary_robustness",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/dictionary_robustness.rs",
+          "cargo_label": "Running tests\\dictionary_robustness.rs",
+          "discovered": 2,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "glossary",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/glossary.rs",
+          "cargo_label": "Running tests\\glossary.rs",
+          "discovered": 13,
+          "executed": 13,
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "homophone_compounds",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/homophone_compounds.rs",
+          "cargo_label": "Running tests\\homophone_compounds.rs",
+          "discovered": 3,
+          "executed": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "image",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/image.rs",
+          "cargo_label": "Running tests\\image.rs",
+          "discovered": 14,
+          "executed": 14,
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "inflection",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/inflection.rs",
+          "cargo_label": "Running tests\\inflection.rs",
+          "discovered": 5,
+          "executed": 5,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "mozc",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/mozc.rs",
+          "cargo_label": "Running tests\\mozc.rs",
+          "discovered": 5,
+          "executed": 5,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "overlay_conditions",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/overlay_conditions.rs",
+          "cargo_label": "Running tests\\overlay_conditions.rs",
+          "discovered": 5,
+          "executed": 5,
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "overlay_properties",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/overlay_properties.rs",
+          "cargo_label": "Running tests\\overlay_properties.rs",
+          "discovered": 5,
+          "executed": 4,
+          "passed": 4,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "single_kanji",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/single_kanji.rs",
+          "cargo_label": "Running tests\\single_kanji.rs",
+          "discovered": 10,
+          "executed": 10,
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "source_format_conditions",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/source_format_conditions.rs",
+          "cargo_label": "Running tests\\source_format_conditions.rs",
+          "discovered": 8,
+          "executed": 8,
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "source_format_properties",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/source_format_properties.rs",
+          "cargo_label": "Running tests\\source_format_properties.rs",
+          "discovered": 4,
+          "executed": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "trim",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/dictc/tests/trim.rs",
+          "cargo_label": "Running tests\\trim.rs",
+          "discovered": 4,
+          "executed": 4,
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "dictc",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/dictc/src/lib.rs",
+          "cargo_label": "Doc-tests dictc",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 221,
+        "executed": 216,
+        "passed": 216,
+        "failed": 0,
+        "ignored": 5
+      }
+    },
+    {
+      "package": "sakura-ime-eval",
+      "manifest": "tools/ime-eval/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_ime_eval",
+          "kinds": [
+            "lib"
+          ],
+          "source": "tools/ime-eval/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "ime-eval",
+          "kinds": [
+            "bin"
+          ],
+          "source": "tools/ime-eval/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "comparison",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/comparison.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "phase1",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/phase1.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "quality_stage1",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/quality_stage1.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_ime_eval",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "tools/ime-eval/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 12,
+          "executed": 12,
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "ime-eval",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "tools/ime-eval/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "comparison",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/comparison.rs",
+          "cargo_label": "Running tests\\comparison.rs",
+          "discovered": 12,
+          "executed": 12,
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "phase1",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/phase1.rs",
+          "cargo_label": "Running tests\\phase1.rs",
+          "discovered": 17,
+          "executed": 17,
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "quality_stage1",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/quality_stage1.rs",
+          "cargo_label": "Running tests\\quality_stage1.rs",
+          "discovered": 9,
+          "executed": 9,
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_ime_eval",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "tools/ime-eval/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_ime_eval",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 50,
+        "executed": 50,
+        "passed": 50,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-renderer",
+      "manifest": "crates/sakura-renderer/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_renderer",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-renderer/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "candidate_detail_uia",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-renderer/tests/candidate_detail_uia.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "candidate_uia",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-renderer/tests/candidate_uia.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "pad_ui",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-renderer/tests/pad_ui.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "resource_budget",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-renderer/tests/resource_budget.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "watchdog_recovery",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-renderer/tests/watchdog_recovery.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_renderer",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-renderer/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 146,
+          "executed": 145,
+          "passed": 145,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "candidate_detail_uia",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-renderer/tests/candidate_detail_uia.rs",
+          "cargo_label": "Running tests\\candidate_detail_uia.rs",
+          "discovered": 4,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 4,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "candidate_uia",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-renderer/tests/candidate_uia.rs",
+          "cargo_label": "Running tests\\candidate_uia.rs",
+          "discovered": 1,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "pad_ui",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-renderer/tests/pad_ui.rs",
+          "cargo_label": "Running tests\\pad_ui.rs",
+          "discovered": 3,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 3,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "resource_budget",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-renderer/tests/resource_budget.rs",
+          "cargo_label": "Running tests\\resource_budget.rs",
+          "discovered": 1,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "watchdog_recovery",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-renderer/tests/watchdog_recovery.rs",
+          "cargo_label": "Running tests\\watchdog_recovery.rs",
+          "discovered": 1,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 156,
+        "executed": 145,
+        "passed": 145,
+        "failed": 0,
+        "ignored": 11
+      }
+    },
+    {
+      "package": "sakura-regtool",
+      "manifest": "crates/sakura-regtool/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_regtool",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-regtool/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "packaging_version",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-regtool/tests/packaging_version.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_regtool",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-regtool/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 18,
+          "executed": 18,
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "packaging_version",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-regtool/tests/packaging_version.rs",
+          "cargo_label": "Running tests\\packaging_version.rs",
+          "discovered": 3,
+          "executed": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 21,
+        "executed": 21,
+        "passed": 21,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-logon",
+      "manifest": "crates/sakura-logon/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_logon",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-logon/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "sakura_logon",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-logon/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_logon",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-logon/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 3,
+          "executed": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_logon",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-logon/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_logon",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-logon/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_logon",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 3,
+        "executed": 3,
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-settings",
+      "manifest": "crates/sakura-settings/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_settings",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-settings/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "sakura_settings",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-settings/src/bootstrap.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "sakura_settings_payload",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-settings/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "format_fixtures",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-settings/tests/format_fixtures.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "settings_topic_user32",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-settings/tests/settings_topic_user32.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_settings",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-settings/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 55,
+          "executed": 55,
+          "passed": 55,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_settings",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-settings/src/bootstrap.rs",
+          "cargo_label": "Running src\\bootstrap.rs",
+          "discovered": 1,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_settings_payload",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-settings/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 37,
+          "executed": 37,
+          "passed": 37,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "format_fixtures",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-settings/tests/format_fixtures.rs",
+          "cargo_label": "Running tests\\format_fixtures.rs",
+          "discovered": 2,
+          "executed": 2,
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "settings_topic_user32",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-settings/tests/settings_topic_user32.rs",
+          "cargo_label": "Running tests\\settings_topic_user32.rs",
+          "discovered": 21,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 21,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_settings",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-settings/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_settings",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 116,
+        "executed": 95,
+        "passed": 95,
+        "failed": 0,
+        "ignored": 21
+      }
+    },
+    {
+      "package": "sakura-neural-worker",
+      "manifest": "crates/sakura-neural-worker/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_neural_worker",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-neural-worker/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "real_model_e2e",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-neural-worker/tests/real_model_e2e.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_neural_worker",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-neural-worker/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 26,
+          "executed": 26,
+          "passed": 26,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "real_model_e2e",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-neural-worker/tests/real_model_e2e.rs",
+          "cargo_label": "Running tests\\real_model_e2e.rs",
+          "discovered": 1,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 27,
+        "executed": 26,
+        "passed": 26,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    {
+      "package": "sakura-ai-worker",
+      "manifest": "crates/sakura-ai-worker/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_ai_worker",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-ai-worker/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_ai_worker",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-ai-worker/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 16,
+          "executed": 16,
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 16,
+        "executed": 16,
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  ],
+  "totals": {
+    "packages": 16,
+    "suites": 94,
+    "discovered": 1988,
+    "executed": 1897,
+    "passed": 1897,
+    "failed": 0,
+    "ignored": 91
+  }
+}
