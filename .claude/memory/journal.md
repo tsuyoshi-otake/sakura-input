@@ -1884,3 +1884,20 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Re-ran record-test-baseline.ps1 against 86371f4 before Phase 1 test extraction. All 16 packages and 94 suites completed: 1,988 discovered, 1,897 passed, 91 ignored, 0 failed. Only sakura-ipc changed from the prior inventory (43 to 46), exactly the three new #104 native identity tests; every other package total is unchanged. Scoped process cleanup passed.
 - The baseline is regenerated from actual per-package default-feature runs, not an edited historical count. It remains distinct from workspace feature-unified execution. Parent owns verification.
+
+## 2026-09-13 Extract dispatch tests without changing production (#168)
+
+- Phase 1.1 moves the trailing inline tests to dispatch_tests.rs after a git mv operation, retaining dispatch::tests and private-parent access. Production is 6,457 lines with the canonical cfg/path/module declaration; the plan's 6,455-line estimate omitted two declaration lines.
+- Verify: parent compared the complete verbatim body before formatting and the unchanged production prefix, 1,768 string literals and 168 test declarations after formatting. Wrapped dispatch-filter tests passed (220 total, including exactly 168 dispatch::tests); wrapped engine library tests passed with the baseline's 573 passed / 2 ignored. Diff whitespace and scoped process cleanup passed. A first literal scanner incorrectly included quoted prose in doc comments; excluding comments removed that false positive without editing Rust.
+- The broad dispatch filter also selects 52 tests outside the moved module. Do not confuse its count with the moved module's 168 tests. Runtime test identities remain unchanged.
+
+## 2026-09-13 Deliver Phase 0 gates and activate protection (#154)
+
+- PRs #155, #156, #157, #158, #159, #160, #162 and #169 are merged after their current-head checks succeeded. Prerequisite #167 passed hosted CI 34707773916, including the actual production-pipe AppContainer test, before merge. This establishes the new native-identity contract, not every historical #104 failure's cause.
+- Parent verified main ruleset 23073135 is active, main-only, with no bypass actors: required PRs, deletion/force-push prohibition and strict fmt, dependency-rules, workspace-tests, irv-regression, dll-size and Dependency policy contexts. The effective-rule API agrees with the committed definition. An incomplete-check PR BLOCKED observation remains pending.
+- A parent-run desktop capability probe obtained read and limited create/write-object access to WinSta0/Default in interactive session 1 and closed every owned handle. No UI operation occurred. This is access evidence only; D6 still needs the specified desktop tests' runtime and stability evidence.
+
+## 2026-09-13 Verify formatting reaches a stable result (#168)
+
+- Hosted run 34709081162 rejected one leading blank line in the extracted dispatch_tests.rs. The initial rustfmt pass had left this blank line while unindenting the verbatim inline body; a later pass removed it. Rust tests had passed, but formatting had not been checked for stability.
+- Removed that single blank line. Parent Verify: cargo fmt --all -- --check and git diff --check. Expect: no further change required. Result: PASS. For subsequent extractions, always run the explicit check after formatting; do not equate a successful formatting command with check success.
