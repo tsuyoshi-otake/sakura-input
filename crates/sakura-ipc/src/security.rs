@@ -57,7 +57,7 @@
 //! either, and an unused grant is only an attack surface.
 
 use std::ffi::{c_void, OsString};
-use std::os::windows::ffi::OsStringExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
@@ -78,6 +78,7 @@ use windows::Win32::Security::{
     NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, TOKEN_ACCESS_MASK,
     TOKEN_GROUPS, TOKEN_INFORMATION_CLASS, TOKEN_MANDATORY_LABEL, TOKEN_QUERY, TOKEN_USER,
 };
+use windows::Win32::Storage::FileSystem::QueryDosDeviceW;
 use windows::Win32::System::SystemServices::SECURITY_MANDATORY_MEDIUM_RID;
 use windows::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW,
@@ -190,22 +191,28 @@ impl ServerTrustPolicy {
     pub fn matches_image_path(&self, image: &Path) -> bool {
         match self {
             Self::Exact(expected) => {
+                let Some(image) = normalize_native_image_path(expected, image) else {
+                    return false;
+                };
                 match (
                     canonical_non_reparse(expected),
-                    canonical_non_reparse(image),
+                    canonical_non_reparse(&image),
                 ) {
                     (Some(expected), Some(image)) => {
                         is_engine_image(&image) && same_windows_path(&expected, &image)
                     }
                     _ => {
                         lexically_safe_engine_path(expected)
-                            && lexically_safe_engine_path(image)
-                            && same_windows_path(expected, image)
+                            && lexically_safe_engine_path(&image)
+                            && same_windows_path(expected, &image)
                     }
                 }
             }
             Self::InstalledRoot(root) => {
-                let Some(image) = canonical_non_reparse(image) else {
+                let Some(image) = normalize_native_image_path(root, image) else {
+                    return false;
+                };
+                let Some(image) = canonical_non_reparse(&image) else {
                     return false;
                 };
                 installed_layout_matches(root, &image)
@@ -492,6 +499,148 @@ fn lexically_safe_engine_path(path: &Path) -> bool {
 fn same_windows_path(left: &Path, right: &Path) -> bool {
     left.to_string_lossy()
         .eq_ignore_ascii_case(&right.to_string_lossy())
+}
+
+/// Preserves the image path captured by the one admission-time
+/// `QueryFullProcessImageNameW` call while translating its namespace only
+/// when the policy anchor's DOS drive has one unambiguous current device
+/// prefix. This is not a second process-image query.
+fn normalize_native_image_path(anchor: &Path, image: &Path) -> Option<PathBuf> {
+    let image_units: Vec<u16> = image.as_os_str().encode_wide().collect();
+    if !starts_with_ascii_case(&image_units, r"\Device\".encode_utf16()) {
+        return Some(image.to_owned());
+    }
+
+    let drive = dos_drive_letter(anchor)?;
+    let target = current_device_target(drive)?;
+    native_device_to_dos(drive, &image_units, &target)
+        .map(|units| PathBuf::from(OsString::from_wide(&units)))
+}
+
+fn dos_drive_letter(anchor: &Path) -> Option<u16> {
+    let units: Vec<u16> = anchor.as_os_str().encode_wide().collect();
+    let drive = match units.as_slice() {
+        [drive, colon, separator, ..]
+            if ascii_letter(*drive)
+                && *colon == u16::from(b':')
+                && *separator == u16::from(b'\\') =>
+        {
+            *drive
+        }
+        [slash1, slash2, question, slash3, drive, colon, separator, ..]
+            if *slash1 == u16::from(b'\\')
+                && *slash2 == u16::from(b'\\')
+                && *question == u16::from(b'?')
+                && *slash3 == u16::from(b'\\')
+                && ascii_letter(*drive)
+                && *colon == u16::from(b':')
+                && *separator == u16::from(b'\\') =>
+        {
+            *drive
+        }
+        _ => return None,
+    };
+    Some(ascii_upper(drive))
+}
+
+fn ascii_letter(unit: u16) -> bool {
+    (u16::from(b'A')..=u16::from(b'Z')).contains(&unit)
+        || (u16::from(b'a')..=u16::from(b'z')).contains(&unit)
+}
+
+fn ascii_upper(unit: u16) -> u16 {
+    if (u16::from(b'a')..=u16::from(b'z')).contains(&unit) {
+        unit - u16::from(b'a') + u16::from(b'A')
+    } else {
+        unit
+    }
+}
+
+fn current_device_target(drive: u16) -> Option<Vec<u16>> {
+    let drive_name = [drive, u16::from(b':'), 0];
+    // QueryDosDeviceW documents a multi-string result. Keep this admission
+    // lookup bounded and fail closed rather than retrying across a mapping
+    // change.
+    let mut buffer = vec![0u16; 32_768];
+    // SAFETY: `drive_name` is NUL-terminated and `buffer` is writable for its
+    // reported UTF-16 length.
+    let length =
+        unsafe { QueryDosDeviceW(PCWSTR(drive_name.as_ptr()), Some(buffer.as_mut_slice())) };
+    if length == 0 || length as usize > buffer.len() {
+        return None;
+    }
+    first_current_mapping(&buffer[..length as usize])
+}
+
+fn first_current_mapping(multisz: &[u16]) -> Option<Vec<u16>> {
+    // QueryDosDeviceW returns a MULTI_SZ: each entry is NUL-terminated and an
+    // additional NUL follows the final entry. Refuse truncated observations.
+    if multisz.len() < 3 || !multisz.ends_with(&[0, 0]) {
+        return None;
+    }
+    // For a specific drive, Windows places the current mapping first and may
+    // append undeleted historical mappings. Only the first mapping describes
+    // the anchor now; accepting a later entry could revive a stale alias.
+    let end = multisz.iter().position(|unit| *unit == 0)?;
+    (end != 0).then(|| multisz[..end].to_vec())
+}
+
+fn native_device_to_dos(drive: u16, image: &[u16], target: &[u16]) -> Option<Vec<u16>> {
+    if !ascii_letter(drive)
+        || !well_formed_native_path(image)
+        || !well_formed_device_target(target)
+        || target.len() >= image.len()
+        || image[target.len()] != u16::from(b'\\')
+        || !starts_with_ascii_case(image, target.iter().copied())
+    {
+        return None;
+    }
+
+    let mut dos = Vec::with_capacity(2 + image.len() - target.len());
+    dos.push(ascii_upper(drive));
+    dos.push(u16::from(b':'));
+    dos.extend_from_slice(&image[target.len()..]);
+    Some(dos)
+}
+
+fn well_formed_native_path(path: &[u16]) -> bool {
+    starts_with_ascii_case(path, r"\Device\".encode_utf16())
+        && path.last().is_some_and(|unit| *unit != u16::from(b'\\'))
+        && !path.contains(&0)
+        && !path.iter().any(|unit| *unit == u16::from(b'/'))
+        && path
+            .split(|unit| *unit == u16::from(b'\\'))
+            .skip(1)
+            .all(|part| {
+                !part.is_empty()
+                    && part != [u16::from(b'.')]
+                    && part != [u16::from(b'.'), u16::from(b'.')]
+            })
+}
+
+fn well_formed_device_target(target: &[u16]) -> bool {
+    well_formed_native_path(target) && target.iter().all(|unit| *unit <= 0x7f)
+}
+
+fn starts_with_ascii_case(value: &[u16], prefix: impl IntoIterator<Item = u16>) -> bool {
+    let mut value = value.iter().copied();
+    prefix.into_iter().all(|expected| {
+        value
+            .next()
+            .is_some_and(|actual| ascii_u16_eq(actual, expected))
+    })
+}
+
+fn ascii_u16_eq(left: u16, right: u16) -> bool {
+    left <= 0x7f && right <= 0x7f && ascii_lower(left) == ascii_lower(right)
+}
+
+fn ascii_lower(unit: u16) -> u16 {
+    if (u16::from(b'A')..=u16::from(b'Z')).contains(&unit) {
+        unit - u16::from(b'A') + u16::from(b'a')
+    } else {
+        unit
+    }
 }
 
 fn canonical_non_reparse(path: &Path) -> Option<PathBuf> {
@@ -1039,6 +1188,116 @@ mod tests {
         assert_ne!(renderer, control);
         assert!(renderer.ends_with("_renderer"));
         assert!(control.ends_with("_control"));
+    }
+
+    fn wide(value: &str) -> Vec<u16> {
+        value.encode_utf16().collect()
+    }
+
+    #[test]
+    fn native_image_maps_only_through_the_anchored_drive_device() {
+        let image = wide(
+            r"\Device\HarddiskVolume4\Program Files\Sakura Input\versions\1.0.0\sakura_engine.exe",
+        );
+        let target = wide(r"\Device\HarddiskVolume4");
+
+        let mapped = native_device_to_dos(u16::from(b'C'), &image, &target)
+            .expect("one exact current device prefix");
+
+        assert_eq!(
+            String::from_utf16(&mapped).expect("valid fixture"),
+            r"C:\Program Files\Sakura Input\versions\1.0.0\sakura_engine.exe"
+        );
+    }
+
+    #[test]
+    fn native_image_rejects_prefix_collisions() {
+        let image = wide(r"\Device\HarddiskVolume10\Sakura Input\sakura_engine.exe");
+        assert!(
+            native_device_to_dos(u16::from(b'C'), &image, &wide(r"\Device\HarddiskVolume1"))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn native_image_rejects_malformed_or_nonlocal_inputs() {
+        let target = wide(r"\Device\HarddiskVolume4");
+        for rejected in [
+            r"relative\sakura_engine.exe",
+            r"\\server\share\sakura_engine.exe",
+            r"\Device\HarddiskVolume4\..\sakura_engine.exe",
+            r"\Device\HarddiskVolume4\\sakura_engine.exe",
+            r"\Device\HarddiskVolume4/sakura_engine.exe",
+        ] {
+            assert!(
+                native_device_to_dos(u16::from(b'C'), &wide(rejected), &target).is_none(),
+                "accepted {rejected}"
+            );
+        }
+
+        let mut embedded_nul = wide(r"\Device\HarddiskVolume4\Sakura Input");
+        embedded_nul.push(0);
+        embedded_nul.extend(wide(r"hidden\sakura_engine.exe"));
+        assert!(native_device_to_dos(u16::from(b'C'), &embedded_nul, &target).is_none());
+
+        assert!(dos_drive_letter(Path::new(r"relative\sakura_engine.exe")).is_none());
+        assert!(dos_drive_letter(Path::new(r"\\server\share\sakura_engine.exe")).is_none());
+        assert_eq!(
+            dos_drive_letter(Path::new(r"c:\Sakura Input\sakura_engine.exe")),
+            Some(u16::from(b'C'))
+        );
+        assert_eq!(
+            dos_drive_letter(Path::new(r"\\?\c:\Sakura Input\sakura_engine.exe")),
+            Some(u16::from(b'C'))
+        );
+        assert!(dos_drive_letter(Path::new(r"\\?\UNC\server\share\sakura_engine.exe")).is_none());
+    }
+
+    #[test]
+    fn current_device_mapping_requires_complete_multisz_termination() {
+        let current = wide(r"\Device\HarddiskVolume4");
+        let historical = wide(r"\Device\HarddiskVolume3");
+        let mut complete = current.clone();
+        complete.push(0);
+        complete.extend_from_slice(&historical);
+        complete.extend_from_slice(&[0, 0]);
+        assert_eq!(first_current_mapping(&complete), Some(current.clone()));
+
+        let mut missing_final_nul = current.clone();
+        missing_final_nul.push(0);
+        assert!(first_current_mapping(&missing_final_nul).is_none());
+
+        let mut no_termination = current;
+        no_termination.extend_from_slice(&historical);
+        assert!(first_current_mapping(&no_termination).is_none());
+    }
+
+    #[test]
+    fn native_image_uses_real_drive_mapping_and_preserves_policy_boundaries() {
+        let root =
+            std::env::temp_dir().join(format!("sakura-native-policy-{}", std::process::id()));
+        let engine = root
+            .join("versions")
+            .join("fixture")
+            .join(ENGINE_IMAGE_NAME);
+        std::fs::create_dir_all(engine.parent().unwrap()).unwrap();
+        std::fs::write(&engine, b"policy fixture").unwrap();
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(root.clone());
+        let drive = dos_drive_letter(&engine).expect("local test drive");
+        let mut native = current_device_target(drive).expect("real QueryDosDeviceW mapping");
+        let engine_units: Vec<u16> = engine.as_os_str().encode_wide().collect();
+        native.extend_from_slice(&engine_units[2..]);
+        let native = PathBuf::from(OsString::from_wide(&native));
+        assert!(ServerTrustPolicy::Exact(engine.clone()).matches_image_path(&native));
+        assert!(ServerTrustPolicy::InstalledRoot(root.clone()).matches_image_path(&native));
+        assert!(!ServerTrustPolicy::Exact(root.join(ENGINE_IMAGE_NAME)).matches_image_path(&native));
+        assert!(!ServerTrustPolicy::InstalledRoot(root.join("sibling")).matches_image_path(&native));
     }
 
     #[test]

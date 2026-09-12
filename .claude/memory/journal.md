@@ -1836,3 +1836,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   DESIGN／README に新 architecture entry を加え、Issue 固有トピックは該当 benchmark に数える。
   初回は CI／Windows 固有トピックまで全 Issue 共通へ加えて +25.6% FAIL となったため、
   issue_shape と必読条件を照合して分類を訂正した。閾値や基準を緩めてはいない。
+
+## 2026-09-13 Native image namespace support (#104)
+
+- Repeated hosted failures retain owned PID, ImagePathRejected, and later native-device path evidence. Original admission observation remains unknown; no historical-cause claim.
+- Implemented bounded anchor-drive QueryDosDeviceW translation before existing path policy. First current mapping only; no historical mapping, requery/retry, token exception, or raw-path logging.
+- Parent Verify: five new security tests including real Windows mapping and negative policy controls; locked IPC all-target clippy -D warnings; wrapped locked workspace tests; process cleanup; git diff --check. Expect: all pass, no surviving runner. All passed. Hosted sandbox confirmation remains pending.
