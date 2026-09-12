@@ -1746,3 +1746,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Added test-only, content-free current-drive diagnostics: API status, returned length/termination, mapping namespace shape, exact device-prefix boundary and mapped lexical equality. No diagnostic authorizes a connection or changes production policy.
 - Verify: wrapped diagnostic unit test and private-pipe real AppContainer test; repository process cleanup and diff checks. Expect: pass and no surviving owned processes. Result: PASS. An initial compile failure used the wrong windows-result API name; corrected to the pinned version's Error::from_thread before rerunning.
 - Hosted diagnostics remain required before selecting another fix. #104 and architecture Phase 0 delivery remain incomplete.
+
+## 2026-09-13 Deterministic sandbox namespace counterexample (#104)
+
+- Hosted job 103588260690 passed, including the original ignored AppContainer test. That intermittent success did not exercise native normalization reliably.
+- Added a test-only PROCESS_NAME_NATIVE query after verified connection and owned-PID equality, before Hello, requiring the existing policy to accept the resulting native path. Local private sandbox now fails deterministically: drive_mapping_query=error(code=HRESULT(0x80070005)), policy_recheck=false. QueryDosDeviceW cannot supply the proposed mapping inside this AppContainer token. Diagnostic unit test passed; owned processes exited after the failing integration test.
+- This is direct evidence against the mapping proposal, not proof of every historical #104 failure's cause. Replace the proposal with an explicit trusted native identity contract for the sandbox test; do not weaken production InstalledRoot checks.
