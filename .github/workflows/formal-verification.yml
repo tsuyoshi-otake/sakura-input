@@ -1,0 +1,82 @@
+name: Formal verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover TLC configurations
+    runs-on: windows-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; reviewed release older than 7 days
+
+      - name: Validate inventory and build matrix
+        id: matrix
+        shell: pwsh
+        run: |
+          # SelfTest fails when a tracked configuration is missing from the
+          # manifest, appears more than once, or has invalid metadata.
+          ./ci/run-formal-configuration.ps1 -SelfTest
+          $tracked = @(
+            git ls-files -- 'verification/tla/*.cfg' |
+              ForEach-Object { [IO.Path]::GetFileName($_) } |
+              Sort-Object
+          )
+          if ($LASTEXITCODE -ne 0 -or $tracked.Count -eq 0) {
+            throw 'Cannot discover tracked TLA+ configurations'
+          }
+          $matrix = [ordered]@{ configuration = $tracked } | ConvertTo-Json -Compress
+          "matrix=$matrix" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+  tlc:
+    name: TLC / ${{ matrix.configuration }}
+    needs: discover
+    runs-on: windows-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; reviewed release older than 7 days
+
+      - name: Download reviewed TLC 1.7.4 artifact
+        shell: pwsh
+        run: |
+          $metadata = Get-Content ./ci/formal-configurations.json -Raw | ConvertFrom-Json
+          $jar = Join-Path $env:RUNNER_TEMP 'tla2tools-1.7.4.jar'
+          Invoke-WebRequest -Uri $metadata.tlc.url -OutFile $jar -TimeoutSec 120
+          $actual = (Get-FileHash -LiteralPath $jar -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $metadata.tlc.sha256) {
+            throw "Downloaded TLC hash mismatch: $actual"
+          }
+
+      # The child gets 17 minutes so the script still owns process-tree cleanup
+      # and result classification before GitHub's 20-minute job limit fires.
+      - name: Check configuration
+        shell: pwsh
+        run: |
+          $jar = Join-Path $env:RUNNER_TEMP 'tla2tools-1.7.4.jar'
+          $output = Join-Path $env:RUNNER_TEMP '${{ matrix.configuration }}'
+          ./ci/run-formal-configuration.ps1 `
+            -Configuration '${{ matrix.configuration }}' `
+            -JarPath $jar `
+            -OutputDirectory $output `
+            -TimeoutSeconds 1020
+
+      - name: Upload TLC receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (reviewed 2026-08-24; upstream 2025-03-19; quarantine satisfied)
+        with:
+          name: tlc-${{ matrix.configuration }}
+          path: |
+            ${{ runner.temp }}/${{ matrix.configuration }}/stdout.log
+            ${{ runner.temp }}/${{ matrix.configuration }}/stderr.log
+            ${{ runner.temp }}/${{ matrix.configuration }}/result.json
+          if-no-files-found: warn
