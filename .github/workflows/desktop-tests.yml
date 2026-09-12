@@ -191,6 +191,8 @@ jobs:
 
       - name: Build renderer desktop prerequisites
         if: env.SAKURA_DESKTOP_MODE == 'all' || env.SAKURA_DESKTOP_MODE == 'renderer'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $dictionaryDir = Join-Path $env:RUNNER_TEMP 'sakura-desktop-dictionary'
           & ./scripts/build-dictionary.ps1 -OutputDirectory $dictionaryDir *> (Join-Path $env:SAKURA_DESKTOP_EVIDENCE 'dictionary-build.raw.log')
