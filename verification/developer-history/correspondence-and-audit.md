@@ -22,6 +22,15 @@
 | Publish before request | mid-state detached allowed | not forbidden until request |
 | CLI settle | retry 30×100ms across watcher | settle-failed hard error |
 
+## Persistence and compaction correspondence
+
+| Product rule | TLA abstraction | Rust owner | Verification limit |
+|---|---|---|---|
+| Retain timestamps at or after `now - 30 days`, then sort by ascending sequence | No age or ordering variable | `sakura_store::input_history::persistence::retained_records` | Store boundary tests; TLC does not prove the 30-day cutoff or ordering |
+| Reject an append when the actual protected frame would make `input.bin` exceed 64 MiB | `DurableBounded` uses abstract `MaxRecords` | Store `MAX_INPUT_HISTORY_BYTES`/`exceeds_history_size`; engine supplies actual DPAPI frame length | TLC proves its record-count abstraction only; engine/store tests own byte accounting |
+| Keep the existing durable state when persistence fails | `PersistFail` leaves `durableCount` unchanged | Engine writer loop and persistence-failure counter | TLC does not model DPAPI, filesystem atomicity, or `ReplaceFileW` |
+| Publish a validated replacement or leave recovery explicit | No replacement transaction state | Store `replace_history_file`; engine store lock, checkpoints, validation, and unresolved-marker admission | Existing engine failure-injection tests own transaction ordering and recovery |
+
 ## Adversarial re-audit
 
 1. **Could CLI still print restart-required as success?** No — strings removed; settle mismatch returns `Err`.
