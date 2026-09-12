@@ -158,6 +158,14 @@ jobs:
       - name: Build release
         run: cargo build --workspace --release
 
+      - name: Self-test TSF DLL size gate
+        shell: pwsh
+        run: ./ci/check-dll-size.ps1 -SelfTest
+
+      - name: Enforce TSF DLL size budget
+        shell: pwsh
+        run: ./ci/check-dll-size.ps1
+
       - name: Summarize step timings
         if: always()
         continue-on-error: true
