@@ -13,6 +13,7 @@ name = "sakura_engine"
 path = "src/main.rs"
 
 [dependencies]
+sakura-rerank-proto.workspace = true
 sakura-core.workspace = true
 sakura-ai-proto.workspace = true
 sakura-ipc.workspace = true
