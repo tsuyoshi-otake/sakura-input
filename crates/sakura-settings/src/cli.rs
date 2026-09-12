@@ -459,7 +459,7 @@ pub fn run(command: Command) -> Result<(), String> {
         }
         Command::LearningShow => {
             let snapshot = learning::view(&paths::learning().map_err(display)?).map_err(display)?;
-            print!("{}", snapshot.to_tsv());
+            print!("{}", learning::snapshot_to_tsv(&snapshot));
             if snapshot.ignored_tail_bytes > 0 {
                 eprintln!(
                     "warning: ignored {} unverified trailing bytes",
