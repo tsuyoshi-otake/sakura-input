@@ -1971,3 +1971,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - PR #179 subsequently passed latest-main CI and installer at 3955ac3f and merged. Refreshing #180 required resolving only the append-only journal conflict; both complete entries were retained. No source conflict occurred.
 
 - PR #180 passed all required checks and installer at 443e88e and merged. Refreshed #181 onto that main; the only conflict was this append-only journal, resolved by retaining both histories. No Rust source conflict occurred.
+
+## 2026-09-13 Add an opt-in hosted desktop prerequisite diagnostic (#168)
+
+- Added a default-off input to existing CI workflow_dispatch and a conditional windows-latest diagnostic. It records source identity and User32/session capabilities, discovers the settings target through Cargo metadata, retains ignored inventory, and runs one exact tab-focus test three sequential times through the quiet wrapper. Raw Cargo logs independently prove one passing requested identity per round. Isolated user/app-data paths preserve original Rust tool homes; a 30-minute job limit, repository diagnostic concurrency and always-run cleanup bound ownership.
+- Parent verified YAML parsing, all five embedded PowerShell steps, exact default-off condition, timeout/runner selection and structural equality of every pre-existing CI job. The original temp execution patch expected an absent blank line; parent removed that context-only blank and applied the previously unapplied chunk. IRV comparison exits zero with the existing CI warning (4,277 physical LOC versus the original 1,749). No desktop runner admission is claimed before the hosted artifact is inspected.
+- Clarified that this dispatch-only prerequisite measurement may precede D6. The weekly desktop workflow, full ignored suite and Phase 5 remain gated on evidence and admission. Local single-test success alone is insufficient.
+- PR #181 passed fresh required CI and installer at 68dd044 and merged normally; literal history payload fixtures are now available before store extraction.
