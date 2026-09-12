@@ -3,9 +3,9 @@
   "version": 1,
   "unconditional_docs": {
     "note": "Loaded for every Issue regardless of type (agent instructions). Counted once in IRV-DOCS and added to every benchmark's docs category.",
-    "files": ["CLAUDE.md", ".claude/memory/rules.md"],
+    "files": ["AGENTS.md", "CLAUDE.md", ".claude/memory/rules.md"],
     "budget_bytes": 24576,
-    "budget_rationale": "8 KiB CLAUDE.md + 16 KiB rules.md (plan §1a). Today: 40,118 + 45,652 = 85,770 B."
+    "budget_rationale": "24 KiB combined budget including the new AGENTS.md entry point, compact CLAUDE.md, and unconditional memory rules. The original 85,770-byte baseline remains fixed; adding an entry point must not hide its reading cost."
   },
   "thresholds": {
     "warn_physical_increase_ratio": 0.10,
