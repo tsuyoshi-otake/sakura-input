@@ -1946,6 +1946,13 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify: exact moved-file SHA-256 and cfg/path/module declarations, wrapped engine library, all runtime identities/outcomes, fmt check, diff check and scoped process cleanup. Result: all 575 identities match the prior run (573 passed, two ignored), and all checks pass.
 - Phase 1.9 Verify: parent searched all Rust files and ran the ignore inventory checker. Result: 94 ignored attributes already have explicit reasons, zero bare #[ignore]. No Rust edit is needed for that step. Full R9 enforcement remains ordered after Phase 2.4 because current R9 also flags the intentionally retained oracles.
 
+## 2026-09-13 Pin history payload bytes before store extraction (#178)
+
+- Added three tests to the existing input_history sibling test module. Four literal plaintext payloads cover Key, Commit, AiText and Engine tags, all three durable scope tags, multibyte UTF-8, and little-endian numeric fields. These are synthetic payload fixtures, not captured input.bin files or encrypted user records. Parent compared their field order with the unchanged pre-extraction encoder and decoder.
+- Verify: wrapped input_history library filter passed 56 tests (53 existing plus three new), zero failed/ignored; literal encode/decode equality, malformed scope/bool/truncation/trailing bytes, and 16,384/16,385-byte encode boundaries passed. Explicit fmt check, diff check and repository process cleanup passed. Production source is unchanged.
+- Preparation exposed that durable ScopeClass has tags 0/1/2 while InputScope has six different tags. Store extraction must preserve a separate durable representation and keep classification/exclusion in engine; replacing the stored enum with InputScope would change the format. The tracked tree has no existing input.bin fixture, so these pre-extraction literals provide payload-level provenance without claiming encrypted-file compatibility yet.
+- PR #177 passed every required latest-head check and installer at c41a6640 and merged normally. Issue #168 now tracks steps 1.1 through 1.9 as complete, with desktop evidence and oracle-dependent R9 acceptance explicitly open. PRs #179 and #180 were retargeted and refreshed against main.
+
 ## 2026-09-13 Correct inline-test accounting and Phase 1 estimates (#173)
 
 - Replaced first-cfg-to-EOF counting with a bounded lexical/item scanner. Added nine fixed fixture cases for mid-file items, fields, attributes, literals, declarations and malformed input. Exact cfg(test) is the metric boundary; arbitrary cfg predicates and macro grammar are not claimed as supported.
@@ -1980,3 +1987,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Phase 2.1b changes twenty-one Rust references across eighteen files from proto to values and replaces the direct manifest/lockfile dependency. Parent mechanically compared every changed core file against only that name substitution; no algorithm, constant, test or behavior changed. The plan's older eighteen-reference inventory predates the Phase 1 test moves.
 - Verify: wrapped full core package tests passed 302 tests with six existing ignores; all 299 library identities/outcomes match the Phase 1 source exactly (296 pass/three ignores). The integration zero-allocation tests pass. Enforced R1/R12 and cargo tree show core -> values only. The mandatory SIMD assembly gate passed scalar, AVX/SSSE3, AVX2 and shared AVX-512 symbol checks at target/simd-assembly-gate/run-9b7414841de64937ba85949a6b42228f/. fmt, diff, IRV baseline comparison and process cleanup passed; the existing IRV-CI warning remains.
+
+- PR #180 passed all required checks and installer at 443e88e and merged. Refreshed #181 onto that main; the only conflict was this append-only journal, resolved by retaining both histories. No Rust source conflict occurred.
+- PR #181 subsequently merged at 68dd044. Refreshed values extraction onto main with both journal histories retained and no Rust conflict; fresh CI covers the combined prerequisites.
+- Refreshed the stacked core dependency PR from the values prerequisite after its main update; both journal entries retained, no Rust conflict.

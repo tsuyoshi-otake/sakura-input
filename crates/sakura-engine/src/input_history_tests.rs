@@ -1647,3 +1647,174 @@ fn installed_release_dir_names_require_version_and_hex_build_id() {
     assert!(!is_installed_release_dir("1.0.11-not-hex-buildid"));
     assert!(!is_installed_release_dir("target"));
 }
+
+// Golden plaintext payloads pinned before the sakura-store extraction.
+// Provenance: field-by-field transcription of input_history.rs encode() at
+// SHA-256 ff5a4987b79b90d32c3123e81ce919e29679b7fb477fc9850a6d1d6ca624126e.
+// Integers are little-endian and strings are u16 byte length + UTF-8. These
+// are record payloads, not generated-at-runtime or DPAPI-encrypted fixtures.
+const GOLDEN_KEY_UNCLASSIFIED: &[u8] = &[
+    0x01, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12,
+    0x11, 0x28, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x00, 0x41, 0x30, 0x42, 0x30, 0x00, 0x00,
+    0xa5, 0x01, 0x00, 0x02, 0x03, 0x04, 0x05, 0x01, 0x00, 0x61, 0x03, 0x00, 0xe3, 0x81, 0x82, 0x00,
+    0x00, 0x07, 0x06, 0x01, 0x03, 0x00, 0x6b, 0x65, 0x79, 0x38, 0x37, 0x36, 0x35, 0x34, 0x33, 0x32,
+    0x31,
+];
+
+const GOLDEN_COMMIT_NORMAL: &[u8] = &[
+    0x02, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x13, 0x12, 0x15, 0x14, 0x06, 0x00,
+    0xe3, 0x81, 0x8b, 0xe3, 0x81, 0xaa, 0x06, 0x00, 0xe4, 0xbb, 0xae, 0xe5, 0x90, 0x8d,
+];
+
+const GOLDEN_AI_SENSITIVE: &[u8] = &[
+    0x03, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x06, 0x03, 0x00, 0xe5, 0x85,
+    0x83, 0x01, 0x00, 0x52, 0x01, 0x00, 0x6d, 0x01, 0x00, 0x70, 0x00, 0x00, 0x01, 0x00, 0x65, 0x0f,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x12,
+    0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00,
+];
+
+const GOLDEN_ENGINE_NORMAL: &[u8] = &[
+    0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x05, 0x00, 0x31, 0x2e, 0x32, 0x2e,
+    0x33, 0x01, 0x00, 0x72,
+];
+
+fn golden_key_record(action: String) -> InputHistoryRecord {
+    InputHistoryRecord::Key(KeyHistoryRecord {
+        sequence: 0x0102_0304_0506_0708,
+        timestamp_ms: 0x1112_1314_1516_1718,
+        session: 0x2122_2324_2526_2728,
+        scope: ScopeClass::Unclassified,
+        key_code: 0x3041,
+        character: Some('\u{3042}'),
+        modifiers: 0xa5,
+        repeat: true,
+        consumed: false,
+        state_before: 2,
+        state_after: 3,
+        mode_before: 4,
+        mode_after: 5,
+        preedit_before: "a".to_owned(),
+        preedit_after: "あ".to_owned(),
+        commit: String::new(),
+        delete_before: 0x0607,
+        beep: true,
+        action,
+        dropped_before: 0x3132_3334_3536_3738,
+    })
+}
+
+fn assert_plaintext_golden(record: InputHistoryRecord, expected: &[u8]) {
+    assert_eq!(record.encode().expect("encode golden record"), expected);
+    assert_eq!(
+        InputHistoryRecord::decode(expected).expect("decode golden record"),
+        record
+    );
+}
+
+#[test]
+fn plaintext_record_payloads_are_stable_golden_bytes() {
+    assert_plaintext_golden(golden_key_record("key".to_owned()), GOLDEN_KEY_UNCLASSIFIED);
+    assert_plaintext_golden(
+        InputHistoryRecord::Commit(CommitHistoryRecord {
+            sequence: 9,
+            timestamp_ms: 10,
+            session: 11,
+            scope: ScopeClass::Normal,
+            reading: "かな".to_owned(),
+            surface: "仮名".to_owned(),
+            left_context: 0x1213,
+            right_context: 0x1415,
+        }),
+        GOLDEN_COMMIT_NORMAL,
+    );
+    assert_plaintext_golden(
+        InputHistoryRecord::AiText(AiTextHistoryRecord {
+            sequence: 12,
+            timestamp_ms: 13,
+            session: 14,
+            scope: ScopeClass::Sensitive,
+            operation: AiTextOperation::Proofread,
+            status: AiTextStatus::ApiError,
+            source: "元".to_owned(),
+            result: "R".to_owned(),
+            model: "m".to_owned(),
+            provider: "p".to_owned(),
+            style: String::new(),
+            error_code: "e".to_owned(),
+            latency_ms: 15,
+            input_tokens: 16,
+            output_tokens: 17,
+            cached_tokens: 18,
+            attempts: 19,
+        }),
+        GOLDEN_AI_SENSITIVE,
+    );
+    assert_plaintext_golden(
+        InputHistoryRecord::Engine(EngineHistoryRecord {
+            sequence: 20,
+            timestamp_ms: 21,
+            session: 22,
+            scope: ScopeClass::Normal,
+            package_version: "1.2.3".to_owned(),
+            release_label: "r".to_owned(),
+        }),
+        GOLDEN_ENGINE_NORMAL,
+    );
+}
+
+#[test]
+fn plaintext_record_decoder_rejects_malformed_boundaries() {
+    let mut unknown_scope = GOLDEN_COMMIT_NORMAL.to_vec();
+    unknown_scope[25] = 3;
+    assert_eq!(
+        InputHistoryRecord::decode(&unknown_scope)
+            .unwrap_err()
+            .to_string(),
+        "unknown input history scope"
+    );
+
+    let mut invalid_boolean = GOLDEN_KEY_UNCLASSIFIED.to_vec();
+    invalid_boolean[33] = 2;
+    assert_eq!(
+        InputHistoryRecord::decode(&invalid_boolean)
+            .unwrap_err()
+            .to_string(),
+        "invalid input history boolean"
+    );
+
+    assert_eq!(
+        InputHistoryRecord::decode(&GOLDEN_COMMIT_NORMAL[..GOLDEN_COMMIT_NORMAL.len() - 1])
+            .unwrap_err()
+            .to_string(),
+        "truncated input history record"
+    );
+
+    let mut trailing = GOLDEN_AI_SENSITIVE.to_vec();
+    trailing.push(0);
+    assert_eq!(
+        InputHistoryRecord::decode(&trailing)
+            .unwrap_err()
+            .to_string(),
+        "trailing input history record bytes"
+    );
+}
+
+#[test]
+fn plaintext_record_encoder_enforces_exact_size_boundary() {
+    const KEY_BYTES_EXCLUDING_ACTION: usize = 62;
+    let exact = golden_key_record("x".repeat(MAX_RECORD_BYTES - KEY_BYTES_EXCLUDING_ACTION));
+    assert_eq!(
+        exact.encode().expect("record at size limit").len(),
+        MAX_RECORD_BYTES
+    );
+
+    let oversized =
+        golden_key_record("x".repeat(MAX_RECORD_BYTES - KEY_BYTES_EXCLUDING_ACTION + 1));
+    assert_eq!(
+        oversized.encode().unwrap_err().to_string(),
+        "input history record is too large"
+    );
+}
