@@ -1795,6 +1795,24 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   現段階は workflow_dispatch のみで continue-on-error を維持。Phase 7.9 での blocking 化は
   別工程であり、この記録は GitHub workflow の実行済みを意味しない。
 
+## 2026-09-13 Phase 0.5／0.9 文書の入口と所有境界（#154）
+
+- commit `9297343` で元 CLAUDE.md を先に `docs/history/CLAUDE.pre-154.md` へ移動し、
+  40,118 bytes／SHA-256 `0f50a454c692373d4060960e6f3624498979921c7bf51b1bae9928640360613c`
+  の不変を確認した。新しい入口は CLAUDE 3,978 bytes、AGENTS 739 bytes。
+  owner 判断 12 件と VS Code 調査の 13 抽出が原文の連続部分に完全一致することを検証した。
+- 現行 code と将来の設計を区別する案内、全 14 依存規則、8 見出しの crate 憲章テンプレート、
+  CODEOWNERS、契約 23 件の所有者 inventory を追加した。契約本文は Phase 7.5 の未完了項目。
+  architecture README は 5,418 bytes。実在する 45 個の Markdown link を直接検査した。
+- Verify: 文書予算、原本 hash、抽出原文一致、stale 行番号と編集ツール名の CLAUDE からの除去、
+  R1〜R14／8 見出し／23 契約の一意性、全案内先の存在、IRV SelfTest、diff check。
+  Expect: すべて PASS。新設 AGENTS.md の読解量を除外しないよう IRV の無条件文書へ追加した。
+  元 baseline の数値は更新していない。rules.md の縮約は Phase 7.11 として別に扱う。
+
+- 追検証: 初回の staged diff check は抽出文書の EOF 空行を指摘したが、shell が後続 commit
+  を継続していた。空行だけを除去し、非ゼロ終了で直ちに止まる呼び出しで再検証して PASS。
+  最終の LF 作業ファイルは CLAUDE 3,977 bytes／AGENTS 738 bytes。原本 hash と抽出本文一致は不変。
+
 ## 2026-09-13 Hosted dependency scanner portability (#154)
 
 - Hosted run 34704979746 failed on absent rg.exe .Source under StrictMode. Native command discovery is now null-safe and absent rg uses the built-in scanner with the same case-sensitive rules. Single-file rg results now include filenames.
