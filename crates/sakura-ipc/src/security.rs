@@ -57,7 +57,7 @@
 //! either, and an unused grant is only an attack surface.
 
 use std::ffi::{c_void, OsString};
-use std::os::windows::ffi::OsStringExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
@@ -81,7 +81,8 @@ use windows::Win32::Security::{
 use windows::Win32::System::SystemServices::SECURITY_MANDATORY_MEDIUM_RID;
 use windows::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW,
-    PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_NAME_FORMAT, PROCESS_NAME_NATIVE, PROCESS_NAME_WIN32,
+    PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 /// The prefix every instance of the pipe shares.
@@ -144,13 +145,20 @@ pub const CLIENT_ACCESS: u32 = 0x0010_0183;
 ///
 /// This is deliberately a typed policy rather than a string prefix. A
 /// versioned install may have an older TSF DLL talking to a newly installed
-/// engine, so callers use [`InstalledRoot`] for production. [`Exact`] is for
-/// ownership-safe tests and diagnostics where one image is intentionally
-/// fixed.
+/// engine, so callers use [`InstalledRoot`] for production. [`Exact`] and
+/// [`ExactNative`] are for ownership-safe tests and diagnostics where one
+/// image is intentionally fixed by the trusted caller rather than the peer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerTrustPolicy {
     /// Accept exactly one canonical image path.
     Exact(PathBuf),
+    /// Accept exactly one strict native-device image path.
+    ///
+    /// The trusted caller must obtain this expected identity from a process
+    /// it owns. This variant selects `PROCESS_NAME_NATIVE` for the single
+    /// admission-time image query; it does not accept a path claimed by the
+    /// pipe peer or perform ambient drive mapping.
+    ExactNative(PathBuf),
     /// Accept `root\\versions\\<one direct release directory>\\sakura_engine.exe`.
     InstalledRoot(PathBuf),
 }
@@ -203,6 +211,13 @@ impl ServerTrustPolicy {
                             && same_windows_path(expected, image)
                     }
                 }
+            }
+            Self::ExactNative(expected) => {
+                let expected: Vec<u16> = expected.as_os_str().encode_wide().collect();
+                let image: Vec<u16> = image.as_os_str().encode_wide().collect();
+                strict_native_engine_path(&expected)
+                    && strict_native_engine_path(&image)
+                    && expected == image
             }
             Self::InstalledRoot(root) => {
                 let Some(image) = canonical_non_reparse(image) else {
@@ -282,8 +297,12 @@ pub fn verify_server_process(
 ) -> core::result::Result<(), ServerRejection> {
     let process = ProcessHandle::open(process_id)
         .map_err(|error| ServerRejection::ProcessUnopenable(error.code()))?;
+    let image_format = match policy {
+        ServerTrustPolicy::ExactNative(_) => PROCESS_NAME_NATIVE,
+        ServerTrustPolicy::Exact(_) | ServerTrustPolicy::InstalledRoot(_) => PROCESS_NAME_WIN32,
+    };
     let image = process
-        .image_path()
+        .image_path(image_format)
         .map_err(|error| ServerRejection::ImagePathUnreadable(error.code()))?;
     if !policy.matches_image_path(&image) {
         return Err(ServerRejection::ImagePathRejected);
@@ -494,6 +513,27 @@ fn same_windows_path(left: &Path, right: &Path) -> bool {
         .eq_ignore_ascii_case(&right.to_string_lossy())
 }
 
+fn strict_native_engine_path(path: &[u16]) -> bool {
+    let native_prefix: Vec<u16> = r"\Device\".encode_utf16().collect();
+    let engine_name: Vec<u16> = ENGINE_IMAGE_NAME.encode_utf16().collect();
+    path.starts_with(&native_prefix)
+        && path[native_prefix.len()..].contains(&u16::from(b'\\'))
+        && !path.contains(&0)
+        && !path.iter().any(|unit| *unit == u16::from(b'/'))
+        && path
+            .split(|unit| *unit == u16::from(b'\\'))
+            .skip(1)
+            .all(|part| {
+                !part.is_empty()
+                    && part != [u16::from(b'.')]
+                    && part != [u16::from(b'.'), u16::from(b'.')]
+            })
+        && path
+            .rsplit(|unit| *unit == u16::from(b'\\'))
+            .next()
+            .is_some_and(|name| name == engine_name.as_slice())
+}
+
 fn canonical_non_reparse(path: &Path) -> Option<PathBuf> {
     if contains_parent_component(path) || reject_reparse_components(path).is_err() {
         return None;
@@ -553,7 +593,7 @@ impl ProcessHandle {
         Ok(Self { handle })
     }
 
-    fn image_path(&self) -> Result<PathBuf> {
+    fn image_path(&self, format: PROCESS_NAME_FORMAT) -> Result<PathBuf> {
         // Windows documents 32,767 UTF-16 code units as the maximum extended
         // path. A full fixed buffer avoids a retry race while keeping this
         // one-time admission query bounded.
@@ -564,7 +604,7 @@ impl ProcessHandle {
         unsafe {
             QueryFullProcessImageNameW(
                 self.handle,
-                PROCESS_NAME_WIN32,
+                format,
                 PWSTR(buffer.as_mut_ptr()),
                 &mut length,
             )?;
@@ -1039,6 +1079,56 @@ mod tests {
         assert_ne!(renderer, control);
         assert!(renderer.ends_with("_renderer"));
         assert!(control.ends_with("_control"));
+    }
+
+    #[test]
+    fn exact_native_policy_requires_full_utf16_identity() {
+        let expected = PathBuf::from(r"\Device\HarddiskVolume7\owned\sakura_engine.exe");
+        let policy = ServerTrustPolicy::ExactNative(expected.clone());
+        assert!(policy.matches_image_path(&expected));
+        assert!(!policy.matches_image_path(Path::new(
+            r"\Device\HarddiskVolume8\owned\sakura_engine.exe"
+        )));
+        assert!(!policy.matches_image_path(Path::new(
+            r"\Device\HarddiskVolume7\other\sakura_engine.exe"
+        )));
+        assert!(!policy.matches_image_path(Path::new(
+            r"\device\HarddiskVolume7\owned\sakura_engine.exe"
+        )));
+    }
+
+    #[test]
+    fn exact_native_policy_rejects_non_native_and_malformed_paths() {
+        for rejected in [
+            r"C:\owned\sakura_engine.exe",
+            r"\\?\C:\owned\sakura_engine.exe",
+            r"\??\C:\owned\sakura_engine.exe",
+            r"\Device\sakura_engine.exe",
+            r"\Device\HarddiskVolume7\owned\..\sakura_engine.exe",
+            r"\Device\HarddiskVolume7\\sakura_engine.exe",
+            r"\Device\HarddiskVolume7/owned/sakura_engine.exe",
+            r"\Device\HarddiskVolume7\owned\sakura_engine.exe.bak",
+        ] {
+            let path = PathBuf::from(rejected);
+            assert!(!ServerTrustPolicy::ExactNative(path.clone()).matches_image_path(&path));
+        }
+
+        let mut nul = r"\Device\HarddiskVolume7\owned\sakura_engine.exe"
+            .encode_utf16()
+            .collect::<Vec<_>>();
+        nul.insert(nul.len() - ENGINE_IMAGE_NAME.len(), 0);
+        let nul = PathBuf::from(OsString::from_wide(&nul));
+        assert!(!ServerTrustPolicy::ExactNative(nul.clone()).matches_image_path(&nul));
+    }
+
+    #[test]
+    fn native_process_image_query_returns_native_namespace() {
+        let process = ProcessHandle::open(std::process::id()).expect("current process");
+        let native = process
+            .image_path(PROCESS_NAME_NATIVE)
+            .expect("native process image query");
+        let units: Vec<u16> = native.as_os_str().encode_wide().collect();
+        assert!(units.starts_with(&r"\Device\".encode_utf16().collect::<Vec<_>>()));
     }
 
     #[test]
