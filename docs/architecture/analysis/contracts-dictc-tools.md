@@ -186,12 +186,12 @@ Two contracts have no document at all; three have only a module comment or a dup
 5. **`debug_trace.rs` is inside `sakura-ipc` but is not about the pipe**; 12 of ~50 `sakura_ipc::` references target it. *Boundary:* move it and `diagnostics.rs` into `sakura-diagnostics`.
 6. **The IPC diagnostics log is a versioned on-disk contract with no document** (`diagnostics.rs:27-32`). *Boundary:* own crate + `docs/contracts/ipc-diagnostics-log.md`.
 7. **`security.rs` (1,350 lines) fuses two policies with different consumers** — admission (`:88-141`) vs server trust (`:151-320, 453-513`, #104). *Boundary:* `security/admission.rs` + `security/server_trust.rs`.
-8. **`sakura-settings` links all of `sakura-engine` for five uses.** *Boundary:* extract `sakura-stores` (`learning.rs`, `input_history.rs`).
+8. **`sakura-settings` links all of `sakura-engine` for five uses.** *Boundary:* extract the pure store formats into `sakura-store`; keep runtime services in engine.
 9. **`sakura-engine` dev-depends on all of `dictc` for four functions and on all of `tools/ime-eval` for one test file** (`Cargo.toml:41-42`). *Boundary:* a `test-dictionary` fixture façade and a small `semantic-fixtures` crate.
 10. **`dictc/src/lib.rs` (1,987 lines) has zero inline tests** and the highest churn measured (18/150 commits). *Boundary:* move the format conformance suite next to the format definition in `sakura-core`.
 11. **19 % of dictc's library serves one binary** — `context_corpus` + `context_dataset` + `context_rerank_import` = 2,987 lines for `bin/context_dataset.rs`. *Boundary:* a `dictc-context-dataset` unit.
 12. **Three dictc binaries import nothing from dictc** (`bin/corpus_eval.rs`, `bin/neural_eval.rs`, `bin/compound_homophone_scan.rs`, 2,323 lines). *Boundary:* move to a `tools/conversion-eval` member.
-13. **`dictc → sakura-proto` is one constant and `dictc → sakura-neural-proto` is one module.** *Boundary:* a `sakura-limits` leaf crate holding shared bounds.
+13. **`dictc → sakura-proto` is one constant and `dictc → sakura-neural-proto` is one module.** *Boundary:* a `sakura-values` leaf crate holding shared bounds and value types; `sakura-neural-proto` is renamed `sakura-context-proto`.
 14. **`tools/candidate-sweep` is outside the workspace with no stated reason and no CI reference**; `candidate-snapshot`'s isolation is justified in code but nowhere in `docs/` or `ci/`. *Boundary:* fold sweep in; document snapshot's exemption.
 15. **`ci/dep-policy.ps1` cannot see nested workspaces** — `Get-WorkspaceCrateName` (`:131+`) derives names from the root `members` regex, so `tools/candidate-snapshot`'s `serde`/`serde_json`/`sha2` are unaudited against the DESIGN §3.1 allowlist.
 
@@ -199,9 +199,9 @@ Two contracts have no document at all; three have only a module comment or a dup
 
 ```
 crates/
-  sakura-limits/            NEW leaf: shared bounds + Fingerprint. deps: none.
-  sakura-proto/             wire messages. deps: sakura-limits.
-  sakura-core/              portable core. deps: sakura-limits (NOT sakura-proto).
+  sakura-values/            NEW leaf: shared bounds + Fingerprint. deps: none.
+  sakura-proto/             wire messages. deps: sakura-values.
+  sakura-core/              portable core. deps: sakura-values (NOT sakura-proto).
                             + tests/dictionary_format.rs  ← MOVED from dictc/tests/{image,dictionary_robustness}.rs
   sakura-ipc/               ONLY the pipe.
     src/transport.rs            framing + one instance
@@ -212,7 +212,8 @@ crates/
   sakura-reg/               identity + registration ONLY (guids, com_server, profile, registry, module, wide, user_profile, launcher)
   sakura-install-maintenance/ NEW: maintenance, payloads, diagnostics(WER), vscode_diagnostics. single consumer: sakura-regtool
   sakura-user-prefs/        NEW: user_preferences + credentials
-  sakura-stores/            NEW: learning.rs + input_history.rs (cuts settings→engine)
+  sakura-store/             NEW: pure learning/history formats, codec, persistence and crypto;
+                            deps: sakura-values + windows. No queue, writer loop or service owner.
   sakura-ai-proto/          unchanged
   sakura-rerank-proto/      NEW: SKNR/SKNS v1, one definition
   sakura-context-proto/     RENAMED from sakura-neural-proto (SCV1)
@@ -241,9 +242,9 @@ Reading set for four representative issues:
 
 Every step is one PR, compiles at each point, keeps old paths alive with `pub use` re-exports.
 
-**Step 1 — `docs/contracts/` index.** One file per §7 row: owning crate, canonical `path:line`, verification artifact, version constant; back-reference comment at each canonical site. Risk: none. *Verify:* `rg -c '^' docs/contracts/*.md` lists ≥15 files; `rg -n 'docs/contracts/' crates | wc -l` ≥ 15. *Expect:* every contract has a document and a code→doc link.
+**Step 1 — `docs/contracts/` index.** Use the complete unique inventory in the main plan §3.5, including all §7 runtime rows plus input scope, write journal, candidate UI, dependency, and test-output contracts. Each file records owning crate, canonical symbol/path, compatibility/version rule, and verification artifact; each canonical site links back. Dictionary image inventory must cover reader and writer constants, every tag and optional table rather than the headline magic/version alone. Risk: none. *Verify:* compare the exact filename/owner set in `docs/contracts/README.md` with main-plan §3.5; verify every canonical symbol resolves exactly once. *Expect:* no missing or duplicate contract/owner, and every contract has code→doc traceability.
 
-**Step 2 — unify the reranker protocol.** Extract `crates/sakura-rerank-proto` from `sakura-neural-worker/src/protocol.rs`; the worker `pub use`s it; replace `long_conversion.rs:25-30` literals with imports. Add to root `members` and `$RuntimeCrates` (`ci/dep-policy.ps1:121-124`). Risk: medium — assert byte-equality of old and new literals before deleting either. *Verify:* `rg -n '0x524[eE]_4[bB]53' crates` returns one hit; quiet wrapper on `cargo test -p sakura-rerank-proto -p sakura-neural-worker -p sakura-engine`; `pwsh ./ci/dep-policy.ps1 -SelfTest` then `pwsh ./ci/dep-policy.ps1`. *Expect:* one definition site, all tests pass, no new packages in `Cargo.lock`.
+**Step 2 — unify the reranker protocol.** Extract `crates/sakura-rerank-proto` as owner of both request/response magics, protocol version, `MAX_FRAME`, `MAX_CANDIDATES`, and `MAX_CANDIDATE_BYTES`; both engine and worker depend on it directly and import every production constant. A documented golden test fixture may retain literal bytes, but no production duplicate is allowed. Add the crate to root members and dependency policy. Risk: medium — assert byte equality of request and response frames before deleting either copy. *Verify:* use `cargo metadata` to prove both dependency edges; search production sources for each magic/version/bound and run the three packages through the quiet wrapper plus dependency-policy self-test. *Expect:* each production contract value has one definition in `sakura-rerank-proto`, both consumers use it, and wire bytes are unchanged.
 
 **Step 3 — split `sakura-diagnostics` out of `sakura-ipc`.** Move `diagnostics.rs` + `debug_trace.rs` verbatim; keep re-exports. Risk: low. *Verify:* `cargo test -p sakura-ipc -p sakura-diagnostics`; `rg -n 'windows' crates/sakura-diagnostics/Cargo.toml` empty; `pwsh ./ci/dep-policy.ps1`. *Expect:* `sakura-ipc` drops ~1,070 lines; both log formats platform-independently testable.
 
@@ -253,9 +254,9 @@ Every step is one PR, compiles at each point, keeps old paths alive with `pub us
 
 **Step 6 — `sakura-user-prefs` out of `sakura-reg`.** Owner-decision: moves `Win32_Security_Credentials` to a new crate name to be added to `$RuntimeCrates`. *Verify:* `rg -n 'Credentials' crates/*/Cargo.toml` names only `sakura-user-prefs`; `pwsh ./ci/dep-policy.ps1`. *Expect:* one crate owns every secret-bearing API.
 
-**Step 7 — `sakura-limits` leaf crate.** Move shared bounds and `FixedStr`/`Overflow` there; `sakura-proto` re-exports; then drop `dictc → sakura-proto`. Owner-decision: new allowlisted member. *Verify:* `rg -n 'sakura_proto' crates/sakura-core/src | wc -l` → 0; `cargo test -p sakura-core -p sakura-proto`; `pwsh ./ci/dep-policy.ps1 -SelfTest`. *Expect:* the portable core no longer depends on the wire protocol.
+**Step 7 — `sakura-values` leaf crate.** Move shared bounds, `FixedStr`/`Overflow`, `Fingerprint`, and shared value types there; `sakura-proto` re-exports while retaining wire codecs; then drop `dictc → sakura-proto`. *Verify:* use `cargo metadata` to prove core and dictc have no proto edge, then run core/proto tests and dependency-policy self-test. *Expect:* the portable core and dictionary compiler no longer depend on the wire protocol.
 
-**Step 8 — `sakura-stores` out of `sakura-engine`; cut settings→engine.** Move `learning.rs` and `input_history.rs` with their `verification/history-*.md` cross-references. Risk: medium (DPAPI store formats with live migration v1→v3). *Verify:* `cargo test -p sakura-stores -p sakura-engine -p sakura-settings`; `rg -n 'sakura-engine' crates/sakura-settings/Cargo.toml` empty. *Expect:* the settings binary stops linking dispatch/conversion.
+**Step 8 — `sakura-store` out of `sakura-engine`; cut settings→engine.** Move only pure record/format, codec, retention/compaction, path/atomic persistence, crypto, and shared hashing. Engine keeps queue ownership, writer loops, timing, diagnostics, and service lifecycle; store depends only on `sakura-values` and `windows`, never proto/ipc/session. Repoint settings and engine in the same change. Risk: medium (DPAPI store formats with live migration v1→v3). *Verify:* test store/engine/settings; use `cargo metadata` for settings→engine absence and store's exact allowed dependencies; search store for thread/channel/service/session imports. *Expect:* settings stops linking engine, existing files round-trip byte-identically, and no writer lifecycle or engine back-edge enters store.
 
 **Step 9 — dictc split, three PRs.** (a) extract `dictc-core`; (b) move the context-dataset unit to `tools/dictc-context-dataset`; (c) move three non-dictc binaries to `tools/conversion-eval`. Owner-decision: `$OfflineDetailParserCrates` (`ci/dep-policy.ps1:125-129`) re-scoped. Risk: medium-high. *Verify:* `cargo build --workspace --bins`; quiet wrapper on `cargo test -p dictc-core -p dictc`; rebuild the shipped image and compare against 39,349,040 bytes / SHA-256 `b7d08643…` in `data/dictionary-build.report.json`; dep-policy self-test + run. *Expect:* byte-identical image; `dictc-core` under ~9,000 lines.
 

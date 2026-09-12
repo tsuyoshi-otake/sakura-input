@@ -245,10 +245,11 @@ Would become headlessly testable after separating layout/model from painting: `p
 ```
 crates/sakura-store/               (new; no Win32 UI, no engine)
   src/lib.rs
-  src/learning_store.rs            <- sakura-engine/src/learning.rs
-  src/input_history_store.rs       <- sakura-engine/src/input_history.rs
+  src/learning_store.rs            pure format/codec/snapshot/persistence only
+  src/input_history_store.rs       pure format/codec/snapshot/persistence only
   src/text_hash.rs                 <- engine session::text_hash
-  deps: sakura-proto, sakura-ipc(debug_trace), windows{Security_Cryptography,Storage_FileSystem}
+  deps: sakura-values, windows{Security_Cryptography,Storage_FileSystem}
+  no queues, writer loops, timing, diagnostics, service lifecycle, or session imports
   sakura-engine re-exports under old paths
 
 crates/sakura-renderer/
@@ -261,11 +262,14 @@ crates/sakura-renderer/
   src/indicator/{mod,placement,paint,window}.rs
   src/pad/{mod,layout,model,paint,window,storage,list,rail,icon,caption,tooltip}.rs
   src/input/{raw_input,gesture}.rs
+  src/events.rs                    neutral candidate commit/history-delete DTOs (leaf)
   src/watch/{mod,backoff,relaunch,workers}.rs
   src/accessibility.rs
   tests/  (process-level only)
 allowed edges: window -> paint -> layout/placement -> theme/screen ; model -> storage
-              accessibility -> proto only ; nothing depends on candidate except main
+              accessibility -> proto only ; candidate/window -> events
+              main composes candidate snapshots with accessibility and watch; no candidate -> accessibility/watch
+              nothing depends on candidate except main
 
 crates/sakura-settings/
   src/lib.rs
@@ -303,14 +307,14 @@ Bound verification artifacts: `tests/candidate_detail_uia.rs` + `candidate_uia.r
 ## 10. Migration sequence
 
 1. **Renderer `lib.rs`.** Add `crates/sakura-renderer/src/lib.rs` re-exporting existing modules; `main.rs` becomes `use sakura_renderer::…`. Risk: low (check the single-instance mutex is only touched from `main`). `Verify:` `cargo test -p sakura-renderer --lib`. `Expect:` the ~150 previously bin-only unit tests run under `--lib` with the same pass count.
-2. **Break the two renderer cycles.** Move `pad::dpi_of` (`pad.rs:1513`) and `candidate::monitor_work_area` (`candidate.rs:432`) + `ROW_HEIGHT_96`/`NUMBER_WIDTH_96` into `theme.rs`/new `screen.rs`; fix `pad_rail.rs:351`, `indicator.rs:57,76,261,573`. `Verify:` `rg -c 'crate::pad::' crates/sakura-renderer/src/pad_rail.rs` → 0 and `rg -c 'candidate::' crates/sakura-renderer/src/indicator.rs` → 0; `cargo test -p sakura-renderer --lib`. `Expect:` both zero, tests unchanged.
-3. **Split `candidate.rs` by seam.** `candidate/layout.rs` (`:87-127,1544-2066`), `placement.rs` (`:425-757`), `paint.rs` (`:1228-2018`), `overlay.rs` (`:758-1227`), `window.rs` (`:147-409`). Risk: medium (33 tests re-homed). `Verify:` `cargo test -p sakura-renderer --lib candidate::`. `Expect:` 33 tests, same names, all pass.
-4. **Extract `sakura-store`.** Move `sakura-engine/src/{input_history,learning}.rs` + `session::text_hash`; re-export from the engine; repoint `settings/src/{input_history,learning}.rs`; drop `sakura-engine` from `crates/sakura-settings/Cargo.toml`. Risk: medium (DPAPI + writer threads move verbatim; do not touch scope fail-closed checks). `Verify:` `rg -c 'sakura_engine' crates/sakura-settings/src` → 0; `cargo test -p sakura-store`; `cargo test -p sakura-settings --lib`. `Expect:` zero hits; the 6 history + 2 learning tests pass unchanged.
+2. **Break renderer reverse edges.** Move `pad::dpi_of` and `candidate::monitor_work_area` plus `ROW_HEIGHT_96`/`NUMBER_WIDTH_96` into `theme.rs`/`screen.rs`, eliminating `indicator → candidate` and `pad_rail → pad`. Move `CandidateCommitRequest`/`HistoryDeleteRequest` from `watch` to leaf `events.rs`, so candidate and watch both depend on neutral DTOs. `Verify:` architecture checks for all four forbidden edges plus renderer tests. `Expect:` `indicator → candidate`, `pad_rail → pad`, and `candidate → watch` are zero with unchanged behavior.
+3. **Split `candidate.rs` by seam and remove its accessibility back-edge.** Split layout/placement/paint/overlay/window; have candidate expose a neutral UI snapshot/update event, while `main` invokes `CandidateAccessibility`. Candidate must not construct the accessibility adapter or import `watch`. Risk: medium. `Verify:` renderer candidate/UIA tests and architecture checks for `candidate → accessibility/watch`. `Expect:` tests retain their identities and both forbidden edges are zero.
+4. **Extract `sakura-store`.** Move only pure formats, codecs, retention/compaction, persistence paths/atomic operations, crypto, snapshot readers, and `text_hash`; keep writer threads, queues, timing, diagnostics, and services in engine. Repoint settings in the same PR and drop its engine dependency. Store depends only on values/windows and never session/proto/ipc. Risk: medium. `Verify:` metadata edge checks, existing-file byte roundtrip, and store audit for thread/channel/service/session imports. `Expect:` settings has no engine edge; store has no writer loop or back-edge; store/engine/settings tests pass.
 5. **Split `update_trust.rs`.** `update/contract.rs` (`:29-790`) and `update/trust_state.rs` (`:792-1162`). Keep `include_bytes!` paths and the fixture directory byte-identical. Risk: medium-high (fail-closed boundary). `Verify:` `pwsh ./ci/test-update-signing-v2.ps1`; `cargo test -p sakura-settings --lib update::`. `Expect:` script passes with unchanged fixture output; 9 trust tests pass.
 6. **Split `updater.rs` by trait impl.** `update/{flow,http,digest,authenticode,installer}.rs`. `Verify:` `cargo test -p sakura-settings --lib update::flow`; `pwsh ./ci/test-update-signing-v2.ps1`. `Expect:` 16 updater tests pass; no new `windows` feature needed.
 7. **Extract `ui/model.rs`.** Move `ui.rs:3397-3853` plus 12 mapping tests. `Verify:` `cargo test -p sakura-settings --lib ui::model` (after step 9) or `--bin sakura_settings_payload model`. `Expect:` same 12 tests, ui.rs down ~460 lines.
 8. **Make `ui/presentation.rs` a leaf.** Move control factory (`:2912-3227`) and helpers (`:3228-3396`) into it; delete `use super::*`. `Verify:` `rg -c 'use super::\*' crates/sakura-settings/src/ui/presentation.rs` → 0; `cargo build -p sakura-settings`. `Expect:` zero, clean build.
-9. **`ui.rs` → `ui/mod.rs` + topic registry.** Replace `show_topic_controls` (`:1162-1296`) with a table and `handle_command` (`:869-1004`) with per-topic `on_command`. Risk: medium — visibility and focus order covered only by ignored desktop tests. **Owner decision:** run `settings_topic_user32.rs` (17 ignored tests) manually as the gate. `Verify:` `cargo test -p sakura-settings --test settings_topic_user32 -- --ignored` on a desktop. `Expect:` 17 pass, including `tab_focus_order_skips_hidden_topics_and_ends_at_actions`.
+9. **`ui.rs` → `ui/mod.rs` + topic registry.** Replace `show_topic_controls` with a table and `handle_command` with per-topic `on_command`. Risk: medium. D6 remains an environment prerequisite: choose no runner until an interactive User32 desktop, permissions, discovered ignored-test inventory, runtime, and stability are evidenced. `Verify:` run the metadata-discovered desktop set on the proven runner. `Expect:` every discovered target passes, including `tab_focus_order_skips_hidden_topics_and_ends_at_actions`; otherwise stop before migration.
 10. **Move topics out one at a time**, easiest first (diagnostics, learning, update, dictionary, then the eleven input topics). `Verify:` `cargo build -p sakura-settings && cargo test -p sakura-settings`; `wc -l crates/sakura-settings/src/ui/mod.rs`. `Expect:` mod.rs shrinks monotonically toward <600 lines; no test name changes.
 11. **Split `pad.rs`.** `pad/layout.rs` (`:173-685` + 14 tests), `pad/model.rs` (`:728-784,2336-2831`), `pad/paint.rs` (`:1963-2335`), `pad/window.rs` (`:785-1961,2833-3141`). `Verify:` `cargo test -p sakura-renderer --lib pad::layout`. `Expect:` the geometry tests pass without a desktop.
-12. **Per-crate CI jobs.** Add `cargo test -p sakura-renderer --lib`, `-p sakura-settings --lib`, `-p sakura-store` alongside the workspace run. **Owner decision:** scheduled desktop job for the 27 ignored tests. `Verify:` `pwsh ./ci/run-test-quiet.ps1 -Name 'renderer lib' -Command { cargo test -p sakura-renderer --lib }`. `Expect:` one `PASS:` line per job.
+12. **Per-crate CI jobs.** Add package-appropriate renderer/settings/store jobs alongside the workspace run. Add a scheduled desktop job only after D6's runner evidence gate passes; discover target tests rather than freezing a historical count. `Verify:` quiet wrapper for headless jobs and workflow dispatch on the proven desktop runner. `Expect:` one `PASS:` line per headless job and an artifact containing every discovered desktop result.

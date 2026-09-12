@@ -252,9 +252,9 @@ crates/sakura-tsf/src/
 tests/prediction_navigation_user32.rs
 ```
 
-One-way dependencies: `com/ → session/`, `com/ → host/`, `host/ → (nothing)`, `session/ → (nothing)`; `host/engine` may use `session/callback_deadline`. **`session/` must not `use windows::` at all** — mechanically checkable (`rg -n 'use windows' src/session/` must be empty) and simultaneously the formal-verification boundary.
+One-way dependencies: `com/ → session/`, `com/ → host/`, `host/ → (nothing)` except the explicit `host/engine → session/callback_deadline` edge, and `session/ → (nothing)`. **`session/` must not `use windows::` at all** — mechanically checkable and simultaneously the formal-verification boundary. The architecture check allowlists only that exact host exception; it must reject any other `host → session` edge.
 
-Test convention: `session/**` → inline tests, no pipes/COM/threads. `host/**` → inline tests with trait-injected host calls (the `composition.rs` pattern). `com/**` → the fake-engine pipe fixtures, consolidated into one `com/testing.rs`. Desktop E2E stays in `tests/`.
+Test convention: `session/**` and `host/**` may use inline or sibling `*_tests.rs` private-unit tests, with no pipes/COM/threads in session tests and trait-injected host calls in host tests. `com/**` uses fake-engine pipe fixtures consolidated into one `com/testing.rs`. Desktop E2E stays in `tests/`.
 
 Bound verification artifacts: `session/key_arbitration.rs` ← `DualTsfPhysicalKeyArbitration.tla` + `TsfProbeHostInsert.tla`; `session/candidate_board.rs` ← `DualTsfCandidateBoard.tla`; `session/recovery_fence.rs` ← `EngineRecovery.tla`; `session/write_journal.rs` ← `verification/write-journal-authority.md`; `session/callback_deadline.rs` ← `verification/tsf-callback-deadline.md`; `session/ai_text.rs` ← `AiTextLifecycle.tla`; `session/write_pipeline.rs` ← `TsfPredictingSpace.tla`.
 
@@ -279,7 +279,7 @@ Ordered by reading-cost reduction per unit of risk. One PR each; compiles at eve
 
 **Step 1 — `git mv src/engine_recovery_tests.rs src/engine_recovery/oracle_tests.rs`,** making `engine_recovery` a directory module; adjust `lib.rs:30-31`.
 `Verify:` `cargo test -p sakura-tsf --lib engine_recovery`; `rg -n 'engine_recovery_tests' crates/sakura-tsf` → no hits.
-`Expect:` 5 tests pass; no `_tests.rs` beside production modules. Risk: nil.
+`Expect:` 5 tests pass; the oracle is discoverable as an allowed sibling private-unit test and no shipped target imports it. Risk: nil.
 
 **Step 2 — break the `exports`↔`class_factory` cycle.** Move `on_object_created`/`on_object_destroyed`/`LIVE_OBJECTS` (`exports.rs:29-48`) into `src/live_objects.rs`.
 `Verify:` `rg -n 'use crate::exports' crates/sakura-tsf/src` → no hits; `cargo test -p sakura-tsf --lib`.
@@ -321,4 +321,4 @@ Ordered by reading-cost reduction per unit of risk. One PR each; compiles at eve
 
 - **Steps 8, 9 and 10 must NOT begin before a crash dump / diagnostic-ring capture for #7 exists.** They move the exact code (`write_coordinator`, candidate lease/teardown, the `TextService` field layout) whose current shape is the only recorded defense for T2/T3. A behavior-preserving move is still a move: if the crash is later reproduced against a different layout, the `verification/` evidence no longer points at readable code.
 - **Steps 0–7 are safe now:** 0–2 change no production logic; 3–5 regroup fields and relocate already-cohesive types; 6–7 touch modules that are already COM-free or isolated and are covered by TLC configs runnable before and after.
-- **Owner decisions:** (i) whether `session/` later becomes its own crate (real build/test isolation, but a crate boundary inside a 1 MB `cdylib` — measure with Step 0's size gate first); (ii) whether the TLC runners become CI-blocking; (iii) whether Step 9 waits for `GuardForeignCandidateEnd` / `RestoreCurrentPlacement` (both recorded **not implemented** at `verification/dual-tsf-candidate-board/tla-record.md:19-20`) so model and code agree before the file moves.
+- **Decisions and gates:** (i) D10 is decided: keep `session/` as a directory plus R3 through Phase 6 and reconsider a crate only in a later Issue; (ii) D8 is decided: make TLC blocking only after expected-counterexample normalization and all discovered configs are meaningfully green; (iii) D7 remains blocked on verified Issue #7 dump/report evidence. The 2026-08-02 filename/report mentioned in comments is not an attachment, so Steps 8–10 must not infer `GuardForeignCandidateEnd` / `RestoreCurrentPlacement` behavior from it.
