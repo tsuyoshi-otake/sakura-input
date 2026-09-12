@@ -38,7 +38,7 @@ Run from the repository root using PowerShell 7:
 
 ```powershell
 $env:CARGO_HTTP_CHECK_REVOKE = 'false'
-./ci/run-test-quiet.ps1 -Name 'engine and oracle tests' -Command { cargo test -p sakura-engine -p sakura-oracles --locked }
+./ci/run-test-quiet.ps1 -Name 'engine and oracle tests' -Command { cargo test -p sakura-engine -p sakura-oracles --features sakura-engine/dev-fixtures --locked }
 ./ci/check-process-clean.ps1 -RepositoryRoot (Get-Location)
 ./ci/check-dependency-rules.ps1 -SelfTest
 ./ci/check-dependency-rules.ps1 -Advisory -Enforce R9

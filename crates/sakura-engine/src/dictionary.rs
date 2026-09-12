@@ -522,7 +522,7 @@ fn installed_path(executable: &Path) -> PathBuf {
         .join("system.dic")
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 mod tests {
     use super::*;
 
