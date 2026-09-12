@@ -18,7 +18,7 @@
       "issue_shape": "無変換 / mode cycle / key-to-action mapping (#51 type)",
       "critical": true,
       "entry_point": "crates/sakura-engine/src/dispatch.rs::apply_action (Action::ModeKanaCycle)",
-      "production": ["crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/session.rs", "crates/sakura-core/src/keymap.rs"],
+      "production": ["crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/session.rs", "crates/sakura-core/src/keymap.rs", "crates/sakura-values/src/input.rs"],
       "tests": [],
       "contracts": ["data/keymap-ms-ime.toml", "data/keymap-atok.toml"],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/session-and-later-findings.md", "docs/decisions/input-behavior.md"],
