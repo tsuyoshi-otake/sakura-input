@@ -12,6 +12,7 @@ members = [
     "crates/sakura-engine",
     "crates/sakura-rerank-proto",
     "crates/sakura-oracles",
+    "crates/sakura-context-research",
     "crates/sakura-renderer",
     "crates/sakura-regtool",
     "crates/sakura-logon",
@@ -45,6 +46,7 @@ sakura-ai-proto = { path = "crates/sakura-ai-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
 sakura-engine = { path = "crates/sakura-engine" }
+sakura-context-research = { path = "crates/sakura-context-research" }
 sakura-oracles = { path = "crates/sakura-oracles" }
 sakura-rerank-proto = { path = "crates/sakura-rerank-proto" }
 windows-core = "0.62"
