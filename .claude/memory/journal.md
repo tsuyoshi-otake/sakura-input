@@ -2139,3 +2139,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 ## 2026-09-13 Extract conversion candidate assembly (#206)
 
 - Move `ConversionCandidate` / `ConversionSegment` and their methods into `conversion/candidates/assembly.rs`. Facade paths stay via `pub use`. Parent materializers keep writing fields through `pub(in crate::conversion)`. Search, ranking, synthesis, and raw-repair algorithms stay in `mod.rs`. ENGINE-CANDIDATE IRV now includes `assembly.rs`.
+
+## 2026-09-13 Extract conversion synthesis so CORE-CONVERSION can drop mod.rs (#206)
+
+- Adding type leaves to the same IRV file set while `conversion/mod.rs` remains required does not lower Semantic IRV and can raise Physical IRV. Phase 3 acceptance is `IRV-CORE-CONVERSION` ≤1,200 and `IRV-ENGINE-CANDIDATE` ≤4,000. The next extract is therefore the #99 change reason, not more options/input/result files.
+- Move post-search synthesis into `conversion/synthesis/{punctuation,numerals,dates,single_kanji}.rs`. Lattice-time `add_numeric_forms` stays in `mod.rs` because it writes search nodes. Public names and research candidate ceilings are unchanged.
+- `IRV-CORE-CONVERSION` production now lists the synthesis files plus `assembly.rs` / `evidence.rs` / `numerals.rs` / `calendar.rs` / `width.rs`, and no longer lists `conversion/mod.rs`. Measured Physical IRV 7,071 → 3,442. Phase 3 target ≤1,200 remains open (width split is 3.3; do not update `baseline.json`). ENGINE-CANDIDATE is not given the synthesis files; it fell 16,282 → 15,837 only because `mod.rs` shrank.
