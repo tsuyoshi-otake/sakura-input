@@ -6,7 +6,7 @@ use crate::numerals::{
 };
 
 use super::super::{
-    numeric_form_cost, CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate,
+    numeric_form_cost, sort_by_cost, CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate,
     ConversionError, ConversionSegment, Converter, PathEvidence, NO_SYSTEM_ENTRY_INDEX,
 };
 
@@ -122,7 +122,7 @@ impl Converter {
                 ),
             });
         }
-        self.candidates.sort_by_key(|candidate| candidate.cost);
+        sort_by_cost(&mut self.candidates);
         Ok(())
     }
 }
