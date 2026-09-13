@@ -6,6 +6,7 @@
 - 本書の位置づけ：**計画書**。コード変更は含まない。各ステップは「エージェント 1 セッションで読解・変更・検証が完結する粒度」に切ってある。PR との対応は §4 冒頭の境界原則に従う（1 ステップ ＝ 1 PR は機械的規則にしない）。
 - 中心 KPI：**IRV（Issue Reading Volume、§1.1）**。1 Issue を安全に変更するためにエージェントが読むコード・テスト・契約・文書・設定の総量を、Phase 0 で計測し（`verification/irv/baseline.json`）、全 PR で回帰検査し、Phase ごとに目標値まで下げる。
 - 追跡 PR：[#153](https://github.com/tsuyoshi-otake/sakura-input/pull/153)
+- 製品リリース：この一連変更を正式公開するときの番号は `2.0.0`（`docs/decisions/architecture-major-release.md`）。中間 PR では version を上げない。
 
 ---
 
