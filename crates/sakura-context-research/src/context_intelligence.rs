@@ -13,7 +13,7 @@
 
 use core::fmt;
 
-use sakura_neural_proto::Fingerprint;
+use sakura_context_proto::Fingerprint;
 use sakura_values::{FixedStr, InputScope};
 
 /// Maximum UTF-8 bytes retained from Sakura-owned commits in one session.

@@ -4,7 +4,7 @@
 //! raw candidate text, call the production prediction path, or change visible
 //! order. Replay/evaluator tooling can use it before a neural model is admitted.
 
-use sakura_neural_proto::{CandidateAuthority, MAX_PREDICTION_CANDIDATES, MAX_RESIDUAL};
+use sakura_context_proto::{CandidateAuthority, MAX_PREDICTION_CANDIDATES, MAX_RESIDUAL};
 
 const RIGHT_CONTEXT_BONUS: i16 = 192;
 const RECENT_EXACT_BONUS: i16 = 512;
