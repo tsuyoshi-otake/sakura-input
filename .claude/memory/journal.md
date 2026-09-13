@@ -2182,3 +2182,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Move `reset` / `build_lattice` / repair edges / `add_node` / suffix costs onto `conversion/search/lattice.rs`, and `search_n_best` / Viterbi materialization onto `conversion/search/viterbi.rs`. `add_numeric_forms` stays on `Converter` in `mod.rs` because it writes generated day edges after search.
 - These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
 - Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
+
+## 2026-09-13 Extract conversion ranking cost leaves (#206)
+
+- Move `connection_cost` / `numeric_form_cost` / `synthetic_run_cost` into `conversion/ranking/cost.rs`. Facade `pub(in crate::conversion)` keeps search, assembly, and lattice-time numeric edges on the conversion names.
+- These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
