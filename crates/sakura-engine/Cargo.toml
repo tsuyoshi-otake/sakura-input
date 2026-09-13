@@ -93,6 +93,10 @@ features = [
 
 [dev-dependencies]
 sakura-oracles.workspace = true
+# Existing learning transaction fault tests execute through sakura-store after
+# extraction. Cargo unifies this only for engine test builds; the store default
+# feature set keeps the hooks out of shipping binaries.
+sakura-store = { workspace = true, features = ["test-hooks"] }
 
 [lints]
 workspace = true
