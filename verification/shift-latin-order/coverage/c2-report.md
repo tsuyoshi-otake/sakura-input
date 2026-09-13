@@ -1,6 +1,6 @@
 # Atomic-condition (C2) coverage — Shift-Latin oracle
 
-Scope: `crates/sakura-oracles/src/shift_latin_oracle.rs` predicates in `atomic_conditions`.
+Scope: `crates/sakura-engine/src/shift_latin_oracle.rs` predicates in `atomic_conditions`.
 This is atomic-condition polarity coverage of the independent oracle, not MC/DC of the whole workspace and not line coverage claimed as C2.
 
 | condition | false | true |
