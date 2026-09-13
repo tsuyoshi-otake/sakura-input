@@ -11,7 +11,7 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use sakura_neural_proto::{
+use sakura_context_proto::{
     MAX_CANDIDATE_SURFACE_BYTES, MAX_CONTEXT_BYTES, MAX_PREDICTION_CANDIDATES, MAX_READING_BYTES,
 };
 use serde::{Deserialize, Serialize};

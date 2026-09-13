@@ -5,7 +5,7 @@ members = [
     "crates/sakura-store",
     "crates/sakura-values",
     "crates/sakura-proto",
-    "crates/sakura-neural-proto",
+    "crates/sakura-context-proto",
     "crates/sakura-ipc",
     "crates/sakura-reg",
     "crates/sakura-tsf",
@@ -41,7 +41,7 @@ sakura-core = { path = "crates/sakura-core" }
 sakura-store = { path = "crates/sakura-store" }
 sakura-values = { path = "crates/sakura-values" }
 sakura-proto = { path = "crates/sakura-proto" }
-sakura-neural-proto = { path = "crates/sakura-neural-proto" }
+sakura-context-proto = { path = "crates/sakura-context-proto" }
 sakura-ai-proto = { path = "crates/sakura-ai-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }

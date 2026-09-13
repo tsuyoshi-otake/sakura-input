@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-sakura-neural-proto.workspace = true
+sakura-context-proto.workspace = true
 sakura-values.workspace = true
 
 [lints]
