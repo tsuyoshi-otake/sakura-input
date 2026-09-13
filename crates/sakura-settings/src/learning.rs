@@ -3,12 +3,14 @@
 use std::io;
 use std::path::Path;
 
-use sakura_engine::learning::{
-    read_snapshot, LearningService, LearningSnapshot, LEARNING_FORMAT_VERSION,
-};
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
 use sakura_ipc::{Client, Endpoint, Fault};
 use sakura_proto::{Request, Response};
+#[cfg(test)]
+use sakura_store::learning::LearningRecord;
+use sakura_store::learning::{
+    read_snapshot, LearningLog, LearningSnapshot, LEARNING_FORMAT_VERSION,
+};
 
 use crate::engine_admin::{
     engine_is_definitely_absent, fault, handshake, installed_root_policy, ADMIN_CALL_BUDGET,
@@ -106,8 +108,9 @@ pub fn clear(path: &Path) -> io::Result<ClearRoute> {
 }
 
 pub fn clear_offline(path: &Path) -> io::Result<ClearRoute> {
-    let service = LearningService::open(path)?;
-    let cleared_records = service.clear()?;
+    let (mut log, _, _open_receipt) =
+        LearningLog::open(path, |_| ()).map_err(|error| error.source)?;
+    let (cleared_records, _, _clear_receipt) = log.clear(|_| ()).map_err(|error| error.source)?;
     Ok(ClearRoute::Offline { cleared_records })
 }
 
@@ -131,10 +134,9 @@ mod tests {
     fn offline_clear_replaces_live_and_durable_history() {
         let directory = temporary_directory("clear");
         let path = directory.join("learning.bin");
-        let service = LearningService::open(&path).expect("open");
-        service.learn("さくら", "桜", 1, 2);
-        service.maintain().expect("flush");
-        drop(service);
+        let (mut log, _, _) = LearningLog::open(&path, |_| ()).expect("open");
+        log.append("さくら", "桜", 1, 2, 20708).expect("append");
+        drop(log);
         assert_eq!(view(&path).expect("before").records.len(), 1);
         assert_eq!(
             clear_offline(&path).expect("clear"),
@@ -163,7 +165,7 @@ mod tests {
     fn learning_snapshot_tsv_preserves_exact_escaping() {
         let snapshot = LearningSnapshot {
             format_version: LEARNING_FORMAT_VERSION,
-            records: vec![sakura_engine::learning::LearningRecord {
+            records: vec![LearningRecord {
                 sequence: 1,
                 day: 2,
                 left_context: 7,

@@ -3,7 +3,7 @@
 ## Purpose
 Retain the dormant Issue 34 context experiment outside default engine builds.
 Track reading cost with the [IRV inventory](../../verification/irv/benchmarks.json).
-The SCV1 contract remains owned by [sakura-neural-proto](../sakura-neural-proto/src/lib.rs).
+The SCV1 contract remains owned by [sakura-context-proto](../sakura-context-proto/src/lib.rs).
 
 ## Owns
 Exactly `context_baseline`, `context_evaluation`, `context_intelligence`, and `prediction_snapshot`, including their existing inline unit tests.
@@ -12,7 +12,7 @@ Exactly `context_baseline`, `context_evaluation`, `context_intelligence`, and `p
 Anything referenced by the default build, runtime IPC, engine sessions, current prediction behavior, new research, or unrelated abandoned code.
 
 ## Allowed dependencies
-`sakura-values` for the exact shared `FixedStr` and `InputScope` definitions, plus `sakura-neural-proto` for its distinct `CandidateAuthority`, 32-byte `Fingerprint`, and existing candidate bounds. No engine dependency is allowed. Revision `d45a1bc` records this dependency boundary before implementation.
+`sakura-values` for the exact shared `FixedStr` and `InputScope` definitions, plus `sakura-context-proto` for its distinct `CandidateAuthority`, 32-byte `Fingerprint`, and existing candidate bounds. No engine dependency is allowed. Revision `d45a1bc` records this dependency boundary before implementation.
 
 ## Allowed consumers
 Only `sakura-engine` through feature `context-research`. The research budget suite is crate-owned and accesses internals only during this crate's unit-test build.

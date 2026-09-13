@@ -14,7 +14,7 @@ flowchart TD
   Contracts --> Values[sakura-values: shared values and capacities]
   Domains --> Values
   Engine[engine: queues, sessions, runtime] --> Research[context-research: optional research]
-  Research --> NeuralProto[sakura-neural-proto: SCV1 context contract]
+  Research --> NeuralProto[sakura-context-proto: SCV1 context contract]
   Research --> Values
   Offline[dictc and offline tools] --> Compiler[dictc-core]
   Compiler --> Core[core: conversion rules]

@@ -20,6 +20,8 @@ pub mod engine_admin;
 pub mod engine_faults;
 pub mod engine_timing;
 pub mod formats;
+mod history_file;
+mod history_present;
 pub mod input_history;
 pub mod learning;
 pub mod paths;

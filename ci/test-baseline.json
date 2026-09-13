@@ -514,8 +514,8 @@
       }
     },
     {
-      "package": "sakura-neural-proto",
-      "manifest": "crates/sakura-neural-proto/Cargo.toml",
+      "package": "sakura-context-proto",
+      "manifest": "crates/sakura-context-proto/Cargo.toml",
       "features": {
         "mode": "default",
         "default_enabled": [],
@@ -525,11 +525,11 @@
       },
       "target_scope": [
         {
-          "name": "sakura_neural_proto",
+          "name": "sakura_context_proto",
           "kinds": [
             "lib"
           ],
-          "source": "crates/sakura-neural-proto/src/lib.rs",
+          "source": "crates/sakura-context-proto/src/lib.rs",
           "test": true,
           "doctest": true,
           "required_features": [],
@@ -542,12 +542,12 @@
       ],
       "target_results": [
         {
-          "target": "sakura_neural_proto",
+          "target": "sakura_context_proto",
           "target_kind": [
             "lib"
           ],
           "suite": "unit",
-          "source": "crates/sakura-neural-proto/src/lib.rs",
+          "source": "crates/sakura-context-proto/src/lib.rs",
           "cargo_label": "Running src\\lib.rs",
           "discovered": 7,
           "executed": 7,
@@ -558,13 +558,13 @@
           "filtered_out": 0
         },
         {
-          "target": "sakura_neural_proto",
+          "target": "sakura_context_proto",
           "target_kind": [
             "lib"
           ],
           "suite": "doc",
-          "source": "crates/sakura-neural-proto/src/lib.rs",
-          "cargo_label": "Doc-tests sakura_neural_proto",
+          "source": "crates/sakura-context-proto/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_context_proto",
           "discovered": 0,
           "executed": 0,
           "passed": 0,

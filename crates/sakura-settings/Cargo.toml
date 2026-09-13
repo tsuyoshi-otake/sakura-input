@@ -19,8 +19,9 @@ path = "src/main.rs"
 [dependencies]
 sakura-ai-proto.workspace = true
 sakura-core.workspace = true
-sakura-engine.workspace = true
 sakura-ipc.workspace = true
+sakura-store.workspace = true
+sakura-values.workspace = true
 sakura-proto.workspace = true
 sakura-reg.workspace = true
 windows-core.workspace = true

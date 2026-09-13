@@ -5,6 +5,9 @@ use sakura_values::{AiTextOperation, AiTextStatus};
 pub const MAX_RECORD_BYTES: usize = 16 * 1024;
 pub const INPUT_HISTORY_FORMAT_VERSION: u16 = 2;
 pub const INPUT_HISTORY_FORMAT_VERSION_MIN: u16 = 1;
+pub const HISTORY_MAGIC: [u8; 4] = *b"SKIH";
+pub const HISTORY_HEADER_LEN: usize = 8;
+pub const HISTORY_FRAME_HEADER_LEN: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
