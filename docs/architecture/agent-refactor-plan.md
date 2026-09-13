@@ -584,7 +584,7 @@ Phase 1.10 の prerequisite 計測は commit `98ef18c18c94efdab9744aae93f0c97bb9
 
 | # | ステップ | 変更 | Verify: | Expect: | 規模 |
 |---|---|---|---|---|---|
-| 3.1 | `conversion/` 分割 | §3.2 の 8 サブモジュール。公開 API（`convert`, `ConversionOptions`, `Candidate`）は `conversion/mod.rs` で維持 | `cargo test -p sakura-core --lib conversion`；`cargo bench`（あれば）；`tools/ime-eval` の固定コーパス比較 | テスト件数不変。ime-eval の recall／top-1 が bit 一致 | L |
+| 3.1 | `conversion/` 分割 | 追跡 [#206](https://github.com/tsuyoshi-otake/sakura-input/issues/206)。§3.2 の module tree。公開名は現行の `Converter`／`ConversionOptions`／`ConversionCandidate`（free `convert` / `Candidate` は存在しない）。最初の PR は `git mv` で directory 化し、後続 PR で leaf を出す | `cargo test -p sakura-core --lib conversion`；`cargo bench`（あれば）；`tools/ime-eval` の固定コーパス比較 | テスト件数不変。ime-eval の recall／top-1 が bit 一致 | L |
 | 3.2 | `dictionary/` 分割 | `format.rs` を唯一定義に。`dictc/tests/image.rs` の適合テストを core 側にも複製（reader 視点） | `cargo test -p sakura-core --lib dictionary`；辞書再ビルド | 通常ビルド辞書が 39,349,040 bytes、SHA-256 `b7d08643…` で一致 | M |
 | 3.3 | `width/`＋simd | `width/scan/` に simd を収容 | `pwsh ./ci/check-simd-assembly.ps1`；`cargo test -p sakura-core --features simd-assembly-audit` | 成功 | M |
 | 3.4 | `romaji/`、`keymap/`、`preferences/` | §3.2 どおり | `cargo test -p sakura-core --lib` | 件数不変 | M |
