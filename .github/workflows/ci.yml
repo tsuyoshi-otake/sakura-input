@@ -504,7 +504,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture' -- -D warnings
 
       - name: Self-test quiet test runner
         shell: pwsh
@@ -516,7 +516,7 @@ jobs:
 
       - name: Test
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }
+        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture' }
 
       - name: Prove workspace test runners exited
         if: always()
@@ -580,7 +580,7 @@ jobs:
       # too (see appcontainer.rs's module docs).
       - name: Sandbox access (AppContainer)
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'AppContainer sandbox access' -Command { cargo test -p sakura-engine --test appcontainer -- --exact the_pipe_is_reachable_from_a_real_appcontainer_token --ignored --nocapture }
+        run: ./ci/run-test-quiet.ps1 -Name 'AppContainer sandbox access' -Command { cargo test -p sakura-engine --features dev-fixtures --test appcontainer -- --exact the_pipe_is_reachable_from_a_real_appcontainer_token --ignored --nocapture }
 
       - name: Prove AppContainer test runner exited
         if: always()

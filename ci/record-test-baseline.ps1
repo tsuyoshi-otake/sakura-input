@@ -1,11 +1,12 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Records the default per-package Cargo test baseline from observed suites.
+    Records per-package Cargo tests with their explicit fixture feature contract.
 
 .DESCRIPTION
     Discovers workspace packages and targets with locked `cargo metadata`, then
-    runs `cargo test --locked -p <package>` through run-test-quiet.ps1. Cargo's
+    runs `cargo test --locked -p <package>` with recorded additive features
+    through run-test-quiet.ps1. Cargo's
     normal output is retained only in a temporary capture used to associate
     each `Running` label with its terminal libtest summary. The output JSON is
     published only after every expected suite has a successful summary.
@@ -29,6 +30,12 @@ $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $quietRunner = Join-Path $PSScriptRoot 'run-test-quiet.ps1'
 $utf8NoBom = [Text.UTF8Encoding]::new($false)
+# Test-only features required to preserve the pre-refactor package test universe.
+# Cargo default features remain enabled; these entries are additive.
+$packageTestFeatures = [ordered]@{
+    'sakura-engine' = @('dev-fixtures')
+    'sakura-ime-eval' = @('engine-fixture')
+}
 
 function Assert-Rejected {
     param(
@@ -60,11 +67,15 @@ function Assert-CargoSucceeded {
     }
 }
 
-function Get-DefaultFeatureSet {
-    param([Parameter(Mandatory)]$Package)
+function Get-EnabledFeatureSet {
+    param(
+        [Parameter(Mandatory)]$Package,
+        [AllowEmptyCollection()][string[]]$ExplicitFeatures = @()
+    )
 
     $enabled = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $pending = [Collections.Generic.Queue[string]]::new()
+    $requested = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $defaultProperty = $Package.features.PSObject.Properties['default']
     if ($null -ne $defaultProperty) {
         foreach ($feature in @($defaultProperty.Value)) {
@@ -72,6 +83,18 @@ function Get-DefaultFeatureSet {
                 $pending.Enqueue([string]$feature)
             }
         }
+    }
+    foreach ($feature in @($ExplicitFeatures)) {
+        if ([string]::IsNullOrWhiteSpace($feature)) {
+            throw "package '$($Package.name)' has an empty explicit test feature"
+        }
+        if (-not $requested.Add($feature)) {
+            throw "package '$($Package.name)' has duplicate explicit test feature '$feature'"
+        }
+        if ($null -eq $Package.features.PSObject.Properties[$feature]) {
+            throw "package '$($Package.name)' has no declared feature '$feature'"
+        }
+        $pending.Enqueue($feature)
     }
 
     while ($pending.Count -gt 0) {
@@ -90,6 +113,22 @@ function Get-DefaultFeatureSet {
     Write-Output -NoEnumerate $enabled
 }
 
+function Get-PackageTestFeatures {
+    param([Parameter(Mandatory)]$Package)
+
+    $packageName = [string]$Package.name
+    if (-not $packageTestFeatures.Contains($packageName)) { return @() }
+    $explicit = @($packageTestFeatures[$packageName] | ForEach-Object { [string]$_ })
+    $defaultEnabled = Get-EnabledFeatureSet -Package $Package
+    foreach ($feature in $explicit) {
+        if ($defaultEnabled.Contains($feature)) {
+            throw "package '$packageName' explicit test feature '$feature' is already default-enabled"
+        }
+    }
+    $null = Get-EnabledFeatureSet -Package $Package -ExplicitFeatures $explicit
+    return @($explicit | Sort-Object)
+}
+
 function Get-RequiredFeatures {
     param([Parameter(Mandatory)]$Target)
 
@@ -101,10 +140,11 @@ function Get-RequiredFeatures {
 function Get-ExpectedSuites {
     param(
         [Parameter(Mandatory)]$Package,
-        [Parameter(Mandatory)]$Target
+        [Parameter(Mandatory)]$Target,
+        [AllowEmptyCollection()][string[]]$ExplicitFeatures = @()
     )
 
-    $enabled = Get-DefaultFeatureSet -Package $Package
+    $enabled = Get-EnabledFeatureSet -Package $Package -ExplicitFeatures $ExplicitFeatures
     $required = @(Get-RequiredFeatures -Target $Target)
     $missing = @($required | Where-Object { -not $enabled.Contains($_) })
     if ($missing.Count -gt 0) { return @() }
@@ -135,9 +175,12 @@ function Resolve-SourceTarget {
         [Parameter(Mandatory)][string]$SourceLabel
     )
 
-    $suffix = '/' + $SourceLabel.Replace('\', '/').TrimStart('/')
+    # Cargo labels paths relative to the package, not a unique filename suffix.
+    # A package-local fixture binary may share src/main.rs with another crate.
+    $packageDirectory = [IO.Path]::GetDirectoryName([string]$Package.manifest_path)
+    $sourcePath = [IO.Path]::GetFullPath((Join-Path $packageDirectory $SourceLabel))
     $matches = @($Package.targets | Where-Object {
-        ([string]$_.src_path).Replace('\', '/').EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)
+        [IO.Path]::GetFullPath([string]$_.src_path).Equals($sourcePath, [StringComparison]::OrdinalIgnoreCase)
     })
     if ($matches.Count -ne 1) {
         throw "package '$($Package.name)' suite source '$SourceLabel' matched $($matches.Count) metadata targets"
@@ -164,7 +207,8 @@ function Resolve-DocTarget {
 function Convert-CargoTestOutput {
     param(
         [Parameter(Mandatory)]$Package,
-        [Parameter(Mandatory)][AllowEmptyCollection()][AllowEmptyString()][string[]]$Lines
+        [Parameter(Mandatory)][AllowEmptyCollection()][AllowEmptyString()][string[]]$Lines,
+        [AllowEmptyCollection()][string[]]$ExplicitFeatures = @()
     )
 
     $results = [Collections.Generic.List[object]]::new()
@@ -261,7 +305,7 @@ function Convert-CargoTestOutput {
 
     foreach ($target in @($Package.targets)) {
         $sourcePath = Convert-ToRepositoryPath -Path ([string]$target.src_path)
-        foreach ($suite in @(Get-ExpectedSuites -Package $Package -Target $target)) {
+        foreach ($suite in @(Get-ExpectedSuites -Package $Package -Target $target -ExplicitFeatures $ExplicitFeatures)) {
             if (-not $seen.Contains("$sourcePath|$suite")) {
                 throw "package '$($Package.name)' expected $suite suite for '$sourcePath', but Cargo emitted no result"
             }
@@ -271,16 +315,19 @@ function Convert-CargoTestOutput {
 }
 
 function Get-TargetScope {
-    param([Parameter(Mandatory)]$Package)
+    param(
+        [Parameter(Mandatory)]$Package,
+        [AllowEmptyCollection()][string[]]$ExplicitFeatures = @()
+    )
 
-    $enabled = Get-DefaultFeatureSet -Package $Package
+    $enabled = Get-EnabledFeatureSet -Package $Package -ExplicitFeatures $ExplicitFeatures
     return @($Package.targets | ForEach-Object {
         $required = @(Get-RequiredFeatures -Target $_)
         $missing = @($required | Where-Object { -not $enabled.Contains($_) })
-        $expected = @(Get-ExpectedSuites -Package $Package -Target $_)
+        $expected = @(Get-ExpectedSuites -Package $Package -Target $_ -ExplicitFeatures $ExplicitFeatures)
         $reason = $null
         if ($missing.Count -gt 0) {
-            $reason = 'required default features are not enabled: ' + ($missing -join ', ')
+            $reason = 'required recorded features are not enabled: ' + ($missing -join ', ')
         }
         elseif ($expected.Count -eq 0) {
             $reason = 'Cargo metadata disables test and doctest for this target'
@@ -321,9 +368,9 @@ function Get-ComparisonLines {
     if ([string]$Document.schema -cne 'sakura-test-baseline-v1') {
         throw "unsupported test baseline schema: $([string]$Document.schema)"
     }
-    if ([string]$Document.invocation.command -cne 'cargo test --locked -p <workspace-package>' -or
-        [string]$Document.invocation.target_selection -cne 'Cargo default package targets' -or
-        [string]$Document.invocation.feature_selection -cne 'default features') {
+    if ([string]$Document.invocation.command -cne 'cargo test --locked -p <workspace-package> [--features <package-features>]' -or
+        [string]$Document.invocation.target_selection -cne 'Cargo package targets enabled by recorded features' -or
+        [string]$Document.invocation.feature_selection -cne 'default features plus explicit per-package features') {
         throw 'test baseline uses a different Cargo command universe'
     }
 
@@ -337,7 +384,12 @@ function Get-ComparisonLines {
         }
         $manifest = ([string]$package.manifest).Replace('\', '/')
         $defaultFeatures = @($package.features.default_enabled | ForEach-Object { [string]$_ } | Sort-Object)
-        $lines.Add("P|$packageName|$manifest|$([string]$package.features.mode)|$($defaultFeatures -join ',')|$([bool]$package.features.all_features)|$([bool]$package.features.no_default_features)")
+        $explicitProperty = $package.features.PSObject.Properties['explicit_enabled']
+        if ($null -eq $explicitProperty) {
+            throw "test baseline package '$packageName' does not record explicit feature selection"
+        }
+        $explicitFeatures = @($explicitProperty.Value | ForEach-Object { [string]$_ } | Sort-Object)
+        $lines.Add("P|$packageName|$manifest|$([string]$package.features.mode)|$($defaultFeatures -join ',')|$($explicitFeatures -join ',')|$([bool]$package.features.all_features)|$([bool]$package.features.no_default_features)")
 
         foreach ($target in @($package.target_scope)) {
             $source = ([string]$target.source).Replace('\', '/')
@@ -396,7 +448,8 @@ function Invoke-TextCommand {
 function Invoke-SelfTest {
     $fixturePackage = [pscustomobject]@{
         name = 'fixture-package'
-        features = [pscustomobject]@{ default = @() }
+        manifest_path = (Join-Path $repository 'fixture/Cargo.toml')
+        features = [pscustomobject]@{ default = @('base'); base = @(); optional = @() }
         targets = @(
             [pscustomobject]@{ name = 'fixture_lib'; kind = @('lib'); src_path = (Join-Path $repository 'fixture\src\lib.rs'); test = $true; doctest = $true; 'required-features' = @() }
             [pscustomobject]@{ name = 'fixture-bin'; kind = @('bin'); src_path = (Join-Path $repository 'fixture\src\main.rs'); test = $true; doctest = $false; 'required-features' = @() }
@@ -431,6 +484,7 @@ function Invoke-SelfTest {
 
     $binOnlyPackage = [pscustomobject]@{
         name = 'bin-only'
+        manifest_path = (Join-Path $repository 'bin-only/Cargo.toml')
         features = [pscustomobject]@{ default = @() }
         targets = @(
             [pscustomobject]@{ name = 'bin-only'; kind = @('bin'); src_path = (Join-Path $repository 'bin-only\src\main.rs'); test = $true; doctest = $false; 'required-features' = @() }
@@ -445,6 +499,21 @@ function Invoke-SelfTest {
         throw 'self-test bin-only package was not recorded as a binary unit suite'
     }
 
+    $sharedSuffix = [pscustomobject]@{
+        name = 'shared-suffix'
+        manifest_path = $binOnlyPackage.manifest_path
+        targets = @($binOnlyPackage.targets) + @([pscustomobject]@{
+            name = 'foreign-entry'; src_path = (Join-Path $repository 'foreign/src/main.rs')
+        })
+    }
+    if ((Resolve-SourceTarget -Package $sharedSuffix -SourceLabel 'src/main.rs').name -cne 'bin-only' -or
+        (Resolve-SourceTarget -Package $sharedSuffix -SourceLabel '../foreign/src/main.rs').name -cne 'foreign-entry') {
+        throw 'self-test source resolution confused package-local and foreign main.rs'
+    }
+    Assert-Rejected -Name 'unmatched package path' -ExpectedError '*matched 0 metadata targets' -Check {
+        $null = Resolve-SourceTarget -Package $sharedSuffix -SourceLabel 'other/src/main.rs'
+    }
+
     $disabledPackage = [pscustomobject]@{
         name = 'feature-disabled'
         features = [pscustomobject]@{ default = @(); optional = @() }
@@ -454,8 +523,41 @@ function Invoke-SelfTest {
     }
     $disabledScope = @(Get-TargetScope -Package $disabledPackage)
     if ($disabledScope.Count -ne 1 -or @($disabledScope[0].expected_suites).Count -ne 0 -or
-        [string]$disabledScope[0].exclusion_reason -notlike 'required default features are not enabled:*') {
+        [string]$disabledScope[0].exclusion_reason -notlike 'required recorded features are not enabled:*') {
         throw 'self-test required-feature-disabled binary was not explicitly excluded'
+    }
+    $enabledScope = @(Get-TargetScope -Package $disabledPackage -ExplicitFeatures @('optional'))
+    if ($enabledScope.Count -ne 1 -or (@($enabledScope[0].expected_suites) -join ',') -cne 'unit' -or
+        $null -ne $enabledScope[0].exclusion_reason) {
+        throw 'self-test explicit feature did not restore its required target'
+    }
+    $defaultSet = Get-EnabledFeatureSet -Package $fixturePackage
+    $combinedSet = Get-EnabledFeatureSet -Package $fixturePackage -ExplicitFeatures @('optional')
+    if (-not $defaultSet.Contains('base') -or $defaultSet.Contains('optional') -or
+        -not $combinedSet.Contains('base') -or -not $combinedSet.Contains('optional')) {
+        throw 'self-test explicit features did not preserve the default feature closure'
+    }
+    $packageTestFeatures.Add('feature-disabled', @('optional'))
+    try {
+        if ((@(Get-PackageTestFeatures -Package $disabledPackage) -join ',') -cne 'optional') {
+            throw 'self-test package feature contract was not resolved'
+        }
+        $redundantPackage = [pscustomobject]@{
+            name = 'feature-disabled'
+            features = [pscustomobject]@{ default = @('optional'); optional = @() }
+        }
+        Assert-Rejected -Name 'default-enabled explicit feature' -ExpectedError "*explicit test feature 'optional' is already default-enabled" -Check {
+            $null = Get-PackageTestFeatures -Package $redundantPackage
+        }
+    }
+    finally {
+        $packageTestFeatures.Remove('feature-disabled')
+    }
+    Assert-Rejected -Name 'unknown explicit feature' -ExpectedError "*has no declared feature 'missing'*" -Check {
+        $null = Get-EnabledFeatureSet -Package $disabledPackage -ExplicitFeatures @('missing')
+    }
+    Assert-Rejected -Name 'duplicate explicit feature' -ExpectedError "*duplicate explicit test feature 'optional'*" -Check {
+        $null = Get-EnabledFeatureSet -Package $disabledPackage -ExplicitFeatures @('optional', 'optional')
     }
 
     Assert-Rejected -Name 'missing summary' -ExpectedError '*has no terminal summary*' -Check {
@@ -474,14 +576,14 @@ function Invoke-SelfTest {
         source_commit = 'old'
         toolchain = [pscustomobject]@{ build_target = [pscustomobject]@{ triple = 'fixture-target' } }
         invocation = [pscustomobject]@{
-            command = 'cargo test --locked -p <workspace-package>'
-            target_selection = 'Cargo default package targets'
-            feature_selection = 'default features'
+            command = 'cargo test --locked -p <workspace-package> [--features <package-features>]'
+            target_selection = 'Cargo package targets enabled by recorded features'
+            feature_selection = 'default features plus explicit per-package features'
         }
         packages = @([pscustomobject]@{
             package = 'fixture-package'; manifest = 'fixture/Cargo.toml'
-            features = [pscustomobject]@{ mode = 'default'; default_enabled = @(); all_features = $false; no_default_features = $false }
-            target_scope = @(Get-TargetScope -Package $fixturePackage)
+            features = [pscustomobject]@{ mode = 'default-plus-explicit'; default_enabled = @('base'); explicit_enabled = @('optional'); all_features = $false; no_default_features = $false }
+            target_scope = @(Get-TargetScope -Package $fixturePackage -ExplicitFeatures @('optional'))
             target_results = $parsed
         })
     }
@@ -496,6 +598,11 @@ function Invoke-SelfTest {
     $comparisonCopy.packages[0].target_results[0].passed++
     $comparisonCopy.packages[0].target_results = @($comparisonCopy.packages[0].target_results | Select-Object -Skip 1)
     Assert-Rejected -Name 'lost target suite' -ExpectedError 'test baseline differs*' -Check {
+        Assert-BaselineMatches -Expected $comparisonFixture -Actual $comparisonCopy
+    }
+    $comparisonCopy = $comparisonFixture | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $comparisonCopy.packages[0].features.explicit_enabled = @()
+    Assert-Rejected -Name 'changed explicit features' -ExpectedError 'test baseline differs*' -Check {
         Assert-BaselineMatches -Expected $comparisonFixture -Actual $comparisonCopy
     }
     Write-Output 'PASS: test baseline parser self-test'
@@ -520,6 +627,13 @@ try {
     foreach ($member in @($metadata.workspace_members)) { $null = $memberIds.Add([string]$member) }
     $packages = @($metadata.packages | Where-Object { $memberIds.Contains([string]$_.id) })
     if ($packages.Count -eq 0) { throw 'cargo metadata returned no workspace packages' }
+    foreach ($contractPackage in @($packageTestFeatures.Keys)) {
+        $matches = @($packages | Where-Object { [string]$_.name -ceq [string]$contractPackage })
+        if ($matches.Count -ne 1) {
+            throw "explicit test feature contract package '$contractPackage' matched $($matches.Count) workspace packages"
+        }
+        $null = Get-PackageTestFeatures -Package $matches[0]
+    }
 
     $sourceCommit = Invoke-TextCommand -Executable 'git' -Arguments @('rev-parse', '--verify', 'HEAD')
     if ($sourceCommit -notmatch '^[0-9a-fA-F]{40}$') { throw "git returned an invalid source commit: $sourceCommit" }
@@ -539,15 +653,20 @@ try {
         $packageRecords = [Collections.Generic.List[object]]::new()
         foreach ($package in $packages) {
             $packageName = [string]$package.name
-            $defaultFeatureSet = Get-DefaultFeatureSet -Package $package
+            $explicitFeatures = @(Get-PackageTestFeatures -Package $package)
+            $defaultFeatureSet = Get-EnabledFeatureSet -Package $package
             $defaultFeatures = @(foreach ($feature in $defaultFeatureSet) { [string]$feature }) | Sort-Object
+            $cargoArguments = @('test', '--locked', '-p', $packageName)
+            if ($explicitFeatures.Count -gt 0) {
+                $cargoArguments += @('--features', ($explicitFeatures -join ','))
+            }
             $capturePath = Join-Path $captureRoot ($packageName + '-' + [guid]::NewGuid().ToString('N') + '.log')
             $exitPath = Join-Path $captureRoot ($packageName + '-' + [guid]::NewGuid().ToString('N') + '.exit')
             $ownedCaptureFiles.Add($capturePath)
             $ownedCaptureFiles.Add($exitPath)
             $command = {
                 $capturedLines = [Collections.Generic.List[string]]::new()
-                & cargo test --locked -p $packageName 2>&1 | ForEach-Object {
+                & cargo @cargoArguments 2>&1 | ForEach-Object {
                     $text = [string]$_
                     $null = $capturedLines.Add($text)
                     Write-Output $text
@@ -562,7 +681,7 @@ try {
                 $global:LASTEXITCODE = $cargoExitCode
             }.GetNewClosure()
 
-            & $quietRunner -Name "$packageName default tests" -Command $command
+            & $quietRunner -Name "$packageName recorded-feature tests" -Command $command
             if (-not [IO.File]::Exists($exitPath)) {
                 throw "cargo test for package '$packageName' produced no exit status"
             }
@@ -573,17 +692,18 @@ try {
             }
             Assert-CargoSucceeded -PackageName $packageName -ExitCode $cargoExitCode
             $captured = @([IO.File]::ReadAllLines($capturePath, $utf8NoBom))
-            $targetResults = @(Convert-CargoTestOutput -Package $package -Lines $captured)
+            $targetResults = @(Convert-CargoTestOutput -Package $package -Lines $captured -ExplicitFeatures $explicitFeatures)
             $packageRecords.Add([pscustomobject][ordered]@{
                 package = $packageName
                 manifest = Convert-ToRepositoryPath -Path ([string]$package.manifest_path)
                 features = [pscustomobject][ordered]@{
-                    mode = 'default'
+                    mode = if ($explicitFeatures.Count -gt 0) { 'default-plus-explicit' } else { 'default' }
                     default_enabled = @($defaultFeatures)
+                    explicit_enabled = @($explicitFeatures)
                     all_features = $false
                     no_default_features = $false
                 }
-                target_scope = @(Get-TargetScope -Package $package)
+                target_scope = @(Get-TargetScope -Package $package -ExplicitFeatures $explicitFeatures)
                 target_results = $targetResults
                 totals = [pscustomobject][ordered]@{
                     discovered = [long](($targetResults | Measure-Object -Property discovered -Sum).Sum)
@@ -606,10 +726,10 @@ try {
                 build_target = $buildTarget
             }
             invocation = [pscustomobject][ordered]@{
-                command = 'cargo test --locked -p <workspace-package>'
+                command = 'cargo test --locked -p <workspace-package> [--features <package-features>]'
                 package_discovery = 'cargo metadata --locked --no-deps --format-version 1'
-                target_selection = 'Cargo default package targets'
-                feature_selection = 'default features'
+                target_selection = 'Cargo package targets enabled by recorded features'
+                feature_selection = 'default features plus explicit per-package features'
             }
             packages = $packageRecords.ToArray()
             totals = [pscustomobject][ordered]@{
@@ -639,7 +759,7 @@ try {
             try {
                 [IO.File]::WriteAllText($temporaryOutput, (($document | ConvertTo-Json -Depth 12) + [Environment]::NewLine), $utf8NoBom)
                 if ([IO.File]::Exists($outputPath)) {
-                    [IO.File]::Replace($temporaryOutput, $outputPath, $null)
+                    [IO.File]::Replace($temporaryOutput, $outputPath, [NullString]::Value)
                 }
                 else {
                     [IO.File]::Move($temporaryOutput, $outputPath)

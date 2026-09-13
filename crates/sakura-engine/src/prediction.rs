@@ -307,7 +307,7 @@ impl Mailbox {
         Some(true)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "dev-fixtures"))]
     fn set_scripted_prediction(&self, reading: &str, surface: &str) {
         let mut script = TestPredictionScript {
             available: false,
@@ -328,7 +328,7 @@ impl Mailbox {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(script);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "dev-fixtures"))]
     fn set_scripted_prediction_available(&self, available: bool) {
         if let Some(script) = self
             .scripted
@@ -520,12 +520,12 @@ impl PredictionService {
     /// empty, so callers can exercise the bounded explicit retry transition;
     /// `test_set_scripted_prediction_available(true)` exposes the candidate
     /// for the retry without involving the worker thread or a timeout.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "dev-fixtures"))]
     pub(crate) fn test_script_prediction(&self, reading: &str, surface: &str) {
         self.mailbox.set_scripted_prediction(reading, surface);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "dev-fixtures"))]
     pub(crate) fn test_set_scripted_prediction_available(&self, available: bool) {
         self.mailbox.set_scripted_prediction_available(available);
     }
@@ -1108,6 +1108,6 @@ fn worker(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 #[path = "prediction_tests.rs"]
 mod tests;

@@ -44,10 +44,10 @@ pub mod session;
 mod shift_ascii_space;
 #[cfg(test)]
 mod shift_ascii_space_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 #[path = "../tests/unit/shift_latin_order_tests.rs"]
 mod shift_latin_order;
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 #[path = "../tests/unit/space_key_dispatch_tests.rs"]
 mod space_key_dispatch;
 pub mod timing;
