@@ -2158,3 +2158,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Compare against the previous snapshot: `IRV-HISTORY-STORE` 7,797 → 2,672 physical LOC / 8 files (−65.7%). Meets ≤3,000 and ≤8. Production stays the engine writer plus the four store modules; proto, settings CLI, settings view/export, dated `verification/history-*.md`, and unconditional-doc duplicates are other Issue types after 2.2d.
 - On `be3b48c` (before merging #210), `IRV-CORE-CONVERSION` production was `calendar.rs`, `conversion.rs`, `numerals.rs`, `width.rs` — no proto. `-Out` recorded HISTORY-STORE 2,672/8, CORE-CONVERSION 7,511/12, CANDIDATE 16,259/17, CI 5,034.
 - After merging origin/main (#210), `benchmarks.json` keeps the 2.9 HISTORY-STORE set and the 3.1 CORE/CANDIDATE sets. Re-measure: HISTORY-STORE 2,672/8 (unchanged), CORE-CONVERSION 3,442/17 (no proto), ENGINE-CANDIDATE 11,958/21. Compare against the `be3b48c` snapshot is PASS. Then `-Out` records this combined inventory. Phase 3 targets ≤1,200 / ≤4,000 stay open; do not hide a miss.
+
+## 2026-09-13 Extract conversion options, input, and result leaves (#206)
+
+- Move `candidate_budget` / `ConversionOptions`, the classified `ConversionInput` pair, and `ConversionResult` / diagnostics / error into `conversion/{options,input,result}.rs`. Facade `pub use` keeps public names. Repair, bridge, search, and ranking stay in `mod.rs`.
+- These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Adding type leaves to the same reading set while the god file remains does not lower Semantic IRV. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. fmt check and process cleanup PASS.

@@ -23,18 +23,25 @@ use crate::numerals::{
 };
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
-use crate::width::PunctuationStyle;
 use crate::TextSink;
 
 mod candidates;
 mod evidence;
+mod input;
+mod options;
 mod ranking;
+mod result;
 mod synthesis;
 
 pub use candidates::{ConversionCandidate, ConversionSegment};
 pub use evidence::{
     CandidateAuthority, CandidateEvidence, CandidateEvidenceClass, CandidateOrigin, PathEvidence,
     RepairTier,
+};
+pub use input::{ConversionInput, ConversionInputClass, LiteralPolicy};
+pub use options::{candidate_budget, ConversionOptions};
+pub use result::{
+    ConversionDiagnostics, ConversionError, ConversionResult, ConversionSearchTerminal,
 };
 
 const NONE: usize = usize::MAX;
@@ -76,17 +83,6 @@ pub const MAX_CONVERSION_CANDIDATES: usize = 32;
 /// shipping bound moves. Shipping targets never enable this feature.
 #[cfg(feature = "research-wide-candidates")]
 pub const MAX_CONVERSION_CANDIDATES: usize = 512;
-/// Reading lengths, in characters, that split [`candidate_budget`] into its
-/// three tiers. Kana readings only, so counted with `chars()`, not bytes.
-const CANDIDATE_BUDGET_SHORT_READING_CHARS: usize = 4;
-const CANDIDATE_BUDGET_MEDIUM_READING_CHARS: usize = 8;
-/// Tier ceilings for [`candidate_budget`]. Deliberately independent of
-/// [`MAX_CONVERSION_CANDIDATES`]: a research build may move that ceiling to
-/// measure a wider limit, but the per-tier numbers below are measurements
-/// against the shipping value of 256 and do not move with it.
-const CANDIDATE_BUDGET_SHORT: usize = 256;
-const CANDIDATE_BUDGET_MEDIUM: usize = 108;
-const CANDIDATE_BUDGET_LONG: usize = 18;
 const GENERATED_DATE_VARIANTS: usize = 4;
 const GENERATED_VARIANT_SLACK: usize = GENERATED_DATE_VARIANTS;
 const FALLBACK_WORD_COST: i64 = 8_000;
@@ -205,72 +201,6 @@ fn numeric_form_cost(source: &str, span: NumericSpan) -> i64 {
     } else {
         BARE_KANA_NUMBER_FORM_COST
     }
-}
-
-/// How many candidates a request for `reading` may actually receive, no
-/// matter how high the caller's `max_candidates` or
-/// [`MAX_CONVERSION_CANDIDATES`] itself goes.
-///
-/// Issue #95 raised [`MAX_CONVERSION_CANDIDATES`] from 18 to 256 so a short
-/// reading could reach the single-kanji and homophone surfaces the old
-/// ceiling trimmed away. Benchmarking that change on the shipped dictionary
-/// (`tools/candidate-sweep`) showed the benefit is confined to short
-/// readings, while the p95 latency cost of a wide list is not (p95 per
-/// reading, shipped dictionary):
-///
-/// | reading length | limit 18  | limit 256 | single kanji / homophone gained |
-/// |-----------------|----------:|----------:|-----------------------------------|
-/// | 1-4 chars       |    162 us |  1,638 us | yes -- all of it                  |
-/// | 5-8 chars       |    595 us |  3,002 us | none                               |
-/// | 29 chars        |  1,674 us | 11,458 us | none                               |
-/// | 93 chars        |  5,412 us | 36,379 us | none                               |
-/// | 221 chars       | 59,984 us | 50,832 us | none (`MAX_SEARCH_STATES` saturates; only 3 candidates come out at any limit) |
-/// | 477 chars       | 62,024 us | 62,286 us | none                               |
-///
-/// A wide list only ever pays for itself on a short reading. Beyond a
-/// handful of characters the extra candidates are alternate whole-sentence
-/// parses nobody pages through, bought with tens of milliseconds of added
-/// Space-key latency -- conversion has no time budget in code, so this is
-/// purely about what a user perceives while typing. Hence three tiers
-/// instead of one global ceiling: short readings keep the full budget, long
-/// readings keep the original pre-#95 bound, and medium readings sit at a
-/// compromise between the two.
-pub fn candidate_budget(reading: &str) -> usize {
-    let chars = reading.chars().count();
-    if chars <= CANDIDATE_BUDGET_SHORT_READING_CHARS {
-        CANDIDATE_BUDGET_SHORT
-    } else if chars <= CANDIDATE_BUDGET_MEDIUM_READING_CHARS {
-        CANDIDATE_BUDGET_MEDIUM
-    } else {
-        CANDIDATE_BUDGET_LONG
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConversionOptions {
-    pub max_candidates: usize,
-    /// Whether candidates may contain several bunsetsu segments.
-    pub method: ConversionMethod,
-    /// Proportional reduction for entries tagged `IT`, in thousandths.
-    pub it_bias_per_mille: u16,
-    /// Absolute ceiling on the IT reduction, preserving base-cost precedence.
-    pub max_it_boost: i32,
-    /// Right connection class carried from the previous commit. Zero is the
-    /// ordinary beginning-of-sentence class.
-    pub initial_right_id: u16,
-    /// ATOK-style input assistance applied while building the lattice.
-    pub input_support: crate::preferences::InputSupport,
-    /// When true, skip every repair / English-spelling edge. Used after the
-    /// user rejects an automatic repair by resizing segments.
-    pub skip_input_repair: bool,
-    /// Independent aggregate budgets for the optional sequential raw-repair
-    /// passes. Ordinary direct conversion does not consume these budgets.
-    pub raw_repair_budget: RawRepairBudget,
-    /// The reader's configured punctuation marks. The converter uses this
-    /// only to decide which member of a punctuation family it offers first
-    /// (Issue #99); it never rewrites a surface to match, which stays the
-    /// width choke point's job.
-    pub punctuation: PunctuationStyle,
 }
 
 /// Typed sides of one connection-matrix lookup. Keeping them distinct at the
@@ -714,216 +644,6 @@ impl RawRepairPlan {
             && self.map.corrected_len() as usize == self.corrected_reading.len()
     }
 }
-
-impl Default for ConversionOptions {
-    fn default() -> Self {
-        Self {
-            max_candidates: MAX_CONVERSION_CANDIDATES,
-            method: ConversionMethod::MultiSegment,
-            it_bias_per_mille: 100,
-            max_it_boost: 800,
-            initial_right_id: 0,
-            input_support: crate::preferences::InputSupport::default(),
-            skip_input_repair: false,
-            raw_repair_budget: RawRepairBudget::default(),
-            punctuation: PunctuationStyle::default(),
-        }
-    }
-}
-
-/// How the converter treats the caller-supplied literal surface.
-///
-/// `Ranked` is the ordinary N-best path.  The two exact policies are
-/// deliberately explicit: they bypass inference paths that could otherwise
-/// rewrite an opaque token or an unresolved Latin fragment.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum LiteralPolicy {
-    #[default]
-    Ranked,
-    ExactTop1,
-    ExactOnly,
-}
-
-/// The caller's classification for one conversion request.
-///
-/// The class and [`LiteralPolicy`] form a checked pair. Keeping the class in
-/// the conversion input makes the policy boundary visible to every consumer
-/// instead of relying on a convention around a raw reading string.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConversionInputClass {
-    Ordinary,
-    OpaqueAsciiIdentifier,
-    MixedUnresolvedLatin,
-}
-
-/// A conversion lookup reading together with the literal surface the user
-/// typed before lookup normalization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConversionInput<'a> {
-    pub lookup_reading: &'a str,
-    pub exact_surface: &'a str,
-    pub class: ConversionInputClass,
-    pub literal_policy: LiteralPolicy,
-}
-
-impl<'a> ConversionInput<'a> {
-    /// Preserves the legacy conversion contract for callers that supply only a
-    /// reading: ordinary lookup and normal cost ranking.
-    pub const fn ordinary(reading: &'a str) -> Self {
-        Self {
-            lookup_reading: reading,
-            exact_surface: reading,
-            class: ConversionInputClass::Ordinary,
-            literal_policy: LiteralPolicy::Ranked,
-        }
-    }
-
-    pub const fn new(
-        lookup_reading: &'a str,
-        exact_surface: &'a str,
-        class: ConversionInputClass,
-        literal_policy: LiteralPolicy,
-    ) -> Self {
-        Self {
-            lookup_reading,
-            exact_surface,
-            class,
-            literal_policy,
-        }
-    }
-
-    fn validate(self) -> Result<(), ConversionError> {
-        if self.lookup_reading.is_empty() {
-            return Err(ConversionError::EmptyReading);
-        }
-        if self.lookup_reading.len() > MAX_PREEDIT_BYTES {
-            return Err(ConversionError::ReadingTooLong);
-        }
-        if self.exact_surface.is_empty() || self.exact_surface.len() > MAX_PREEDIT_BYTES {
-            return Err(ConversionError::InvalidOptions);
-        }
-
-        match (self.class, self.literal_policy) {
-            (ConversionInputClass::Ordinary, LiteralPolicy::Ranked) => Ok(()),
-            (ConversionInputClass::OpaqueAsciiIdentifier, LiteralPolicy::ExactTop1) => {
-                if self.lookup_reading.len() != self.exact_surface.len()
-                    || !self.lookup_reading.eq_ignore_ascii_case(self.exact_surface)
-                    || !is_ascii_alpha_digit_identifier(self.lookup_reading)
-                    || !is_ascii_alpha_digit_identifier(self.exact_surface)
-                {
-                    return Err(ConversionError::InvalidOptions);
-                }
-                Ok(())
-            }
-            (ConversionInputClass::MixedUnresolvedLatin, LiteralPolicy::ExactOnly) => {
-                if self.lookup_reading != self.exact_surface
-                    || !is_mixed_unresolved_latin(self.lookup_reading)
-                    || !is_mixed_unresolved_latin(self.exact_surface)
-                {
-                    return Err(ConversionError::InvalidOptions);
-                }
-                Ok(())
-            }
-            _ => Err(ConversionError::InvalidOptions),
-        }
-    }
-}
-
-/// Explicit terminal condition for the bounded N-best search.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConversionSearchTerminal {
-    CandidateLimitReached,
-    SearchExhausted,
-    StateBudgetReached,
-    LatticeBudgetReached,
-}
-
-/// Aggregate, text-free evidence about one conversion attempt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConversionDiagnostics {
-    pub terminal: ConversionSearchTerminal,
-    /// Number of lattice nodes materialized for this pass.
-    pub lattice_nodes: usize,
-    pub states_pushed: usize,
-    pub incoherent_prefixes_pruned: usize,
-    pub lossless_fallback_inserted: bool,
-    /// Number of corrected passes that were actually attempted by the
-    /// one-slot raw-repair API. Ordinary conversion leaves this at zero.
-    pub raw_repair_passes: usize,
-    /// Number of raw-repair candidates admitted after the source/evidence
-    /// gate. Direct candidates are not included.
-    pub raw_repair_candidates_added: usize,
-    /// Number of candidate objects materialized by corrected passes before
-    /// dedupe and evidence filtering. This is the aggregate candidate-budget
-    /// consumption, including candidates that were later rejected.
-    pub raw_repair_candidates_examined: usize,
-    /// Number of plans/candidates rejected by the bounded raw-repair gate.
-    pub raw_repair_candidates_rejected: usize,
-    /// Aggregate lattice/search consumption across corrected passes only.
-    pub raw_repair_lattice_nodes: usize,
-    pub raw_repair_search_states: usize,
-    /// Whether a validated bounded tail was replayed with the current reading.
-    pub cross_commit_bridge_attempted: bool,
-    /// Combined candidates inspected before exact surface/right-ID matching.
-    pub cross_commit_bridge_candidates_examined: usize,
-    /// Ordinary current-only candidates whose cost was improved by the
-    /// combined lexical evidence.
-    pub cross_commit_bridge_candidates_rescored: usize,
-    /// Combined paths backed by a raw dictionary edge spanning the commit.
-    pub cross_commit_bridge_spanning_paths: usize,
-    /// Combined paths whose raw edges end exactly at the commit, carrying an
-    /// alternative typed terminal state together with its retained cost delta.
-    pub cross_commit_bridge_frontier_paths: usize,
-    pub cross_commit_bridge_lattice_nodes: usize,
-    pub cross_commit_bridge_search_states: usize,
-    pub cross_commit_bridge_terminal: Option<ConversionSearchTerminal>,
-}
-
-/// Candidates and their bounded-search terminal condition.
-#[derive(Debug)]
-pub struct ConversionResult<'a> {
-    candidates: &'a [ConversionCandidate],
-    diagnostics: ConversionDiagnostics,
-}
-
-impl<'a> ConversionResult<'a> {
-    pub fn candidates(&self) -> &'a [ConversionCandidate] {
-        self.candidates
-    }
-
-    pub const fn diagnostics(&self) -> ConversionDiagnostics {
-        self.diagnostics
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConversionError {
-    EmptyReading,
-    ReadingTooLong,
-    InvalidOptions,
-    Dictionary(crate::dictionary::Error),
-    LatticeFull,
-    NoPath,
-    OutputTooLong,
-    TooManySegments,
-}
-
-impl core::fmt::Display for ConversionError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::EmptyReading => f.write_str("conversion reading is empty"),
-            Self::ReadingTooLong => f.write_str("conversion reading exceeds the preedit limit"),
-            Self::InvalidOptions => f.write_str("conversion options are outside their bounds"),
-            Self::Dictionary(error) => write!(f, "dictionary lookup failed: {error}"),
-            Self::LatticeFull => f.write_str("conversion lattice reached its fixed node limit"),
-            Self::NoPath => f.write_str("conversion lattice has no complete path"),
-            Self::OutputTooLong => f.write_str("converted output exceeds the preedit limit"),
-            Self::TooManySegments => f.write_str("converted path exceeds the segment limit"),
-        }
-    }
-}
-
-impl std::error::Error for ConversionError {}
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Surface {
@@ -3868,27 +3588,6 @@ fn char_run(reading: &str, start: usize) -> CharRun {
         count += 1;
     }
     CharRun { end, chars: count }
-}
-
-fn is_ascii_alpha_digit_identifier(value: &str) -> bool {
-    let mut has_alpha = false;
-    let mut has_digit = false;
-    for byte in value.bytes() {
-        if byte.is_ascii_alphabetic() {
-            has_alpha = true;
-        } else if byte.is_ascii_digit() {
-            has_digit = true;
-        } else {
-            return false;
-        }
-    }
-    has_alpha && has_digit
-}
-
-fn is_mixed_unresolved_latin(value: &str) -> bool {
-    value
-        .chars()
-        .any(|character| character.is_ascii_alphabetic())
 }
 
 fn synthetic_run_cost(base: i64, per_character: i64, characters: usize) -> i64 {
