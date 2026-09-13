@@ -2135,3 +2135,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Phase 3.1 starts with `git mv` only: `conversion.rs` → `conversion/mod.rs` and the sibling tests follow. Public names stay `Converter` / `ConversionOptions` / `ConversionCandidate`. IRV production paths for CORE-CONVERSION and ENGINE-CANDIDATE now point at `conversion/mod.rs` so the missing-file gate does not fire.
 - A second commit moves candidate authority/evidence/origin/path-evidence into `conversion/evidence.rs` with `pub use` so facade paths stay. `Surface` is `pub(super)` for `PathEvidence::add_surface`. ENGINE-CANDIDATE IRV now includes `evidence.rs`. Search, ranking, and synthesis stay in `mod.rs`.
+
+## 2026-09-13 Extract conversion candidate assembly (#206)
+
+- Move `ConversionCandidate` / `ConversionSegment` and their methods into `conversion/candidates/assembly.rs`. Facade paths stay via `pub use`. Parent materializers keep writing fields through `pub(in crate::conversion)`. Search, ranking, synthesis, and raw-repair algorithms stay in `mod.rs`. ENGINE-CANDIDATE IRV now includes `assembly.rs`.

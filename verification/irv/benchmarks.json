@@ -39,7 +39,7 @@
       "issue_shape": "candidate order / ranking / evidence (#94, #108 type)",
       "critical": true,
       "entry_point": "crates/sakura-core/src/conversion/mod.rs (ranking) + crates/sakura-engine/src/candidate_projection.rs",
-      "production": ["crates/sakura-core/src/conversion/mod.rs", "crates/sakura-core/src/conversion/evidence.rs", "crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/candidate_projection.rs", "crates/sakura-engine/src/prediction.rs", "crates/sakura-engine/src/long_conversion.rs", "crates/sakura-rerank-proto/src/lib.rs", "crates/sakura-neural-worker/src/protocol.rs", "crates/sakura-neural-worker/src/sakura_scorer.rs", "crates/dictc/src/bin/neural_eval.rs"],
+      "production": ["crates/sakura-core/src/conversion/mod.rs", "crates/sakura-core/src/conversion/evidence.rs", "crates/sakura-core/src/conversion/candidates/assembly.rs", "crates/sakura-engine/src/dispatch.rs", "crates/sakura-engine/src/candidate_projection.rs", "crates/sakura-engine/src/prediction.rs", "crates/sakura-engine/src/long_conversion.rs", "crates/sakura-rerank-proto/src/lib.rs", "crates/sakura-neural-worker/src/protocol.rs", "crates/sakura-neural-worker/src/sakura_scorer.rs", "crates/dictc/src/bin/neural_eval.rs"],
       "tests": [],
       "contracts": [],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/session-and-later-findings.md", "docs/rules/performance.md", "docs/rules/overflow-packaging.md", "docs/decisions/product-direction.md"],
