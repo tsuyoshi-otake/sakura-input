@@ -2126,3 +2126,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 ## 2026-09-13 Enforce R1/R2/R8/R12/R13 in CI (#178)
 
 - Phase 2.8 makes the completed leaf-boundary rules blocking. CI keeps `-Advisory` for the still-open R3–R7 paths and now enforces R1, R2, R8, R9, R12, and R13. SelfTest rejects a workflow that drops that Enforce list.
+
+## 2026-09-13 Move conversion.rs into conversion/ (#206)
+
+- Phase 3.1 starts with `git mv` only: `conversion.rs` → `conversion/mod.rs` and the sibling tests follow. Public names stay `Converter` / `ConversionOptions` / `ConversionCandidate`. IRV production paths for CORE-CONVERSION and ENGINE-CANDIDATE now point at `conversion/mod.rs` so the missing-file gate does not fire. Leaf extraction is a later commit/PR.
