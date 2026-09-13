@@ -1,0 +1,4 @@
+# sakura-learning-format: 3
+sequence	day	left-context	right-context	reading	surface
+1	20708	3	4	synthetic-reading	Synthetic\tSurface
+3	20708	5	6	second-reading	Second\nSurface

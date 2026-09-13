@@ -8,18 +8,52 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 publish = false
+default-run = "ime-eval"
+
+[features]
+engine-fixture = []
 
 [[bin]]
 name = "ime-eval"
 path = "src/main.rs"
 
+# The capture integration test must receive Cargo's package-local
+# CARGO_BIN_EXE_ime_eval_sakura_engine path. Compile the shipping entry point as a
+# second binary of this non-published tool package rather than making the
+# engine depend on ime-eval.
+[[bin]]
+name = "ime_eval_sakura_engine"
+path = "../../crates/sakura-engine/src/main.rs"
+test = false
+bench = false
+required-features = ["engine-fixture"]
+
+[[test]]
+name = "pipe_round_trip"
+path = "tests/pipe_round_trip.rs"
+required-features = ["engine-fixture"]
+
 [dependencies]
 sakura-core = { path = "../../crates/sakura-core" }
+sakura-engine = { path = "../../crates/sakura-engine" }
 sakura-ipc = { path = "../../crates/sakura-ipc" }
 sakura-proto = { path = "../../crates/sakura-proto" }
 serde = { version = "=1.0.219", features = ["derive"] }
 serde_json = "=1.0.140"
 sha2 = "=0.10.9"
+
+# The package-local fixture binary compiles the shipping engine entry point.
+# Transitive dependencies are not in Rust's extern prelude, so its direct
+# `windows::` imports must be declared by this package as well.
+[target.'cfg(windows)'.dependencies.windows]
+workspace = true
+features = [
+    "Win32_Foundation",
+    "Win32_System_Console",
+]
+
+[dev-dependencies]
+dictc = { path = "../../crates/dictc" }
 
 [lints]
 workspace = true

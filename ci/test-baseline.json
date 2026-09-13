@@ -1,7 +1,7 @@
 {
   "schema": "sakura-test-baseline-v1",
-  "generated_utc": "2026-09-12T17:19:49.2154739Z",
-  "source_commit": "86371f4905785c4c132d881eb1e61d51ede934e1",
+  "generated_utc": "2026-09-12T21:44:13.5265118Z",
+  "source_commit": "6ce9b35fac14fc3299ffd0954f6da4789c118f20",
   "toolchain": {
     "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
     "rustc_verbose": [
@@ -19,10 +19,10 @@
     }
   },
   "invocation": {
-    "command": "cargo test --locked -p <workspace-package>",
+    "command": "cargo test --locked -p <workspace-package> [--features <package-features>]",
     "package_discovery": "cargo metadata --locked --no-deps --format-version 1",
-    "target_selection": "Cargo default package targets",
-    "feature_selection": "default features"
+    "target_selection": "Cargo package targets enabled by recorded features",
+    "feature_selection": "default features plus explicit per-package features"
   },
   "packages": [
     {
@@ -31,6 +31,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -184,11 +185,152 @@
       }
     },
     {
+      "package": "sakura-values",
+      "manifest": "crates/sakura-values/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "explicit_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_values",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-values/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_values",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-values/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 11,
+          "executed": 11,
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_values",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-values/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_values",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 11,
+        "executed": 11,
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-store",
+      "manifest": "crates/sakura-store/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [
+          "dpapi"
+        ],
+        "explicit_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_store",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-store/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_store",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-store/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 9,
+          "executed": 9,
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_store",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-store/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_store",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 9,
+        "executed": 9,
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
       "package": "sakura-proto",
       "manifest": "crates/sakura-proto/Cargo.toml",
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -205,6 +347,20 @@
           "expected_suites": [
             "unit",
             "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "golden_v22",
+          "kinds": [
+            "test"
+          ],
+          "source": "crates/sakura-proto/tests/golden_v22.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
           ],
           "exclusion_reason": null
         },
@@ -260,9 +416,25 @@
           "suite": "unit",
           "source": "crates/sakura-proto/src/lib.rs",
           "cargo_label": "Running src\\lib.rs",
-          "discovered": 67,
-          "executed": 67,
-          "passed": 67,
+          "discovered": 56,
+          "executed": 56,
+          "passed": 56,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "golden_v22",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "crates/sakura-proto/tests/golden_v22.rs",
+          "cargo_label": "Running tests\\golden_v22.rs",
+          "discovered": 6,
+          "executed": 6,
+          "passed": 6,
           "failed": 0,
           "ignored": 0,
           "measured": 0,
@@ -334,9 +506,9 @@
         }
       ],
       "totals": {
-        "discovered": 97,
-        "executed": 96,
-        "passed": 96,
+        "discovered": 92,
+        "executed": 91,
+        "passed": 91,
         "failed": 0,
         "ignored": 1
       }
@@ -347,6 +519,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -415,6 +588,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -513,6 +687,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -611,6 +786,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -641,7 +817,7 @@
             "e2e-host"
           ],
           "expected_suites": [],
-          "exclusion_reason": "required default features are not enabled: e2e-host"
+          "exclusion_reason": "required recorded features are not enabled: e2e-host"
         },
         {
           "name": "prediction_navigation_user32",
@@ -704,8 +880,11 @@
       "package": "sakura-engine",
       "manifest": "crates/sakura-engine/Cargo.toml",
       "features": {
-        "mode": "default",
+        "mode": "default-plus-explicit",
         "default_enabled": [],
+        "explicit_enabled": [
+          "dev-fixtures"
+        ],
         "all_features": false,
         "no_default_features": false
       },
@@ -761,21 +940,9 @@
           "source": "crates/sakura-engine/tests/appcontainer.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
-          "expected_suites": [
-            "integration"
+          "required_features": [
+            "dev-fixtures"
           ],
-          "exclusion_reason": null
-        },
-        {
-          "name": "context_intelligence_budget",
-          "kinds": [
-            "test"
-          ],
-          "source": "crates/sakura-engine/tests/context_intelligence_budget.rs",
-          "test": true,
-          "doctest": false,
-          "required_features": [],
           "expected_suites": [
             "integration"
           ],
@@ -789,7 +956,9 @@
           "source": "crates/sakura-engine/tests/cross_commit_learning.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -803,7 +972,9 @@
           "source": "crates/sakura-engine/tests/high_load_key_integrity.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -817,7 +988,9 @@
           "source": "crates/sakura-engine/tests/ipc_latency.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -831,7 +1004,9 @@
           "source": "crates/sakura-engine/tests/pipe_round_trip.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -859,7 +1034,9 @@
           "source": "crates/sakura-engine/tests/shipped_dictionary_ranking.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -873,7 +1050,9 @@
           "source": "crates/sakura-engine/tests/space_key_dispatch_pipe.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -887,7 +1066,9 @@
           "source": "crates/sakura-engine/tests/zero_alloc_dispatch.rs",
           "test": true,
           "doctest": false,
-          "required_features": [],
+          "required_features": [
+            "dev-fixtures"
+          ],
           "expected_suites": [
             "integration"
           ],
@@ -903,9 +1084,9 @@
           "suite": "unit",
           "source": "crates/sakura-engine/src/lib.rs",
           "cargo_label": "Running src\\lib.rs",
-          "discovered": 575,
-          "executed": 573,
-          "passed": 573,
+          "discovered": 513,
+          "executed": 511,
+          "passed": 511,
           "failed": 0,
           "ignored": 2,
           "measured": 0,
@@ -956,22 +1137,6 @@
           "passed": 4,
           "failed": 0,
           "ignored": 3,
-          "measured": 0,
-          "filtered_out": 0
-        },
-        {
-          "target": "context_intelligence_budget",
-          "target_kind": [
-            "test"
-          ],
-          "suite": "integration",
-          "source": "crates/sakura-engine/tests/context_intelligence_budget.rs",
-          "cargo_label": "Running tests\\context_intelligence_budget.rs",
-          "discovered": 3,
-          "executed": 2,
-          "passed": 2,
-          "failed": 0,
-          "ignored": 1,
           "measured": 0,
           "filtered_out": 0
         },
@@ -1031,9 +1196,9 @@
           "suite": "integration",
           "source": "crates/sakura-engine/tests/pipe_round_trip.rs",
           "cargo_label": "Running tests\\pipe_round_trip.rs",
-          "discovered": 12,
-          "executed": 12,
-          "passed": 12,
+          "discovered": 11,
+          "executed": 11,
+          "passed": 11,
           "failed": 0,
           "ignored": 0,
           "measured": 0,
@@ -1121,79 +1286,11 @@
         }
       ],
       "totals": {
-        "discovered": 676,
-        "executed": 631,
-        "passed": 631,
+        "discovered": 610,
+        "executed": 566,
+        "passed": 566,
         "failed": 0,
-        "ignored": 45
-      }
-    },
-    {
-      "package": "sakura-ai-proto",
-      "manifest": "crates/sakura-ai-proto/Cargo.toml",
-      "features": {
-        "mode": "default",
-        "default_enabled": [],
-        "all_features": false,
-        "no_default_features": false
-      },
-      "target_scope": [
-        {
-          "name": "sakura_ai_proto",
-          "kinds": [
-            "lib"
-          ],
-          "source": "crates/sakura-ai-proto/src/lib.rs",
-          "test": true,
-          "doctest": true,
-          "required_features": [],
-          "expected_suites": [
-            "unit",
-            "doc"
-          ],
-          "exclusion_reason": null
-        }
-      ],
-      "target_results": [
-        {
-          "target": "sakura_ai_proto",
-          "target_kind": [
-            "lib"
-          ],
-          "suite": "unit",
-          "source": "crates/sakura-ai-proto/src/lib.rs",
-          "cargo_label": "Running src\\lib.rs",
-          "discovered": 6,
-          "executed": 6,
-          "passed": 6,
-          "failed": 0,
-          "ignored": 0,
-          "measured": 0,
-          "filtered_out": 0
-        },
-        {
-          "target": "sakura_ai_proto",
-          "target_kind": [
-            "lib"
-          ],
-          "suite": "doc",
-          "source": "crates/sakura-ai-proto/src/lib.rs",
-          "cargo_label": "Doc-tests sakura_ai_proto",
-          "discovered": 0,
-          "executed": 0,
-          "passed": 0,
-          "failed": 0,
-          "ignored": 0,
-          "measured": 0,
-          "filtered_out": 0
-        }
-      ],
-      "totals": {
-        "discovered": 6,
-        "executed": 6,
-        "passed": 6,
-        "failed": 0,
-        "ignored": 0
+        "ignored": 44
       }
     },
     {
@@ -1202,6 +1299,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -2165,21 +2263,22 @@
       }
     },
     {
-      "package": "sakura-ime-eval",
-      "manifest": "tools/ime-eval/Cargo.toml",
+      "package": "sakura-rerank-proto",
+      "manifest": "crates/sakura-rerank-proto/Cargo.toml",
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
       "target_scope": [
         {
-          "name": "sakura_ime_eval",
+          "name": "sakura_rerank_proto",
           "kinds": [
             "lib"
           ],
-          "source": "tools/ime-eval/src/lib.rs",
+          "source": "crates/sakura-rerank-proto/src/lib.rs",
           "test": true,
           "doctest": true,
           "required_features": [],
@@ -2188,153 +2287,33 @@
             "doc"
           ],
           "exclusion_reason": null
-        },
-        {
-          "name": "ime-eval",
-          "kinds": [
-            "bin"
-          ],
-          "source": "tools/ime-eval/src/main.rs",
-          "test": true,
-          "doctest": false,
-          "required_features": [],
-          "expected_suites": [
-            "unit"
-          ],
-          "exclusion_reason": null
-        },
-        {
-          "name": "comparison",
-          "kinds": [
-            "test"
-          ],
-          "source": "tools/ime-eval/tests/comparison.rs",
-          "test": true,
-          "doctest": false,
-          "required_features": [],
-          "expected_suites": [
-            "integration"
-          ],
-          "exclusion_reason": null
-        },
-        {
-          "name": "phase1",
-          "kinds": [
-            "test"
-          ],
-          "source": "tools/ime-eval/tests/phase1.rs",
-          "test": true,
-          "doctest": false,
-          "required_features": [],
-          "expected_suites": [
-            "integration"
-          ],
-          "exclusion_reason": null
-        },
-        {
-          "name": "quality_stage1",
-          "kinds": [
-            "test"
-          ],
-          "source": "tools/ime-eval/tests/quality_stage1.rs",
-          "test": true,
-          "doctest": false,
-          "required_features": [],
-          "expected_suites": [
-            "integration"
-          ],
-          "exclusion_reason": null
         }
       ],
       "target_results": [
         {
-          "target": "sakura_ime_eval",
+          "target": "sakura_rerank_proto",
           "target_kind": [
             "lib"
           ],
           "suite": "unit",
-          "source": "tools/ime-eval/src/lib.rs",
+          "source": "crates/sakura-rerank-proto/src/lib.rs",
           "cargo_label": "Running src\\lib.rs",
-          "discovered": 12,
-          "executed": 12,
-          "passed": 12,
+          "discovered": 5,
+          "executed": 5,
+          "passed": 5,
           "failed": 0,
           "ignored": 0,
           "measured": 0,
           "filtered_out": 0
         },
         {
-          "target": "ime-eval",
-          "target_kind": [
-            "bin"
-          ],
-          "suite": "unit",
-          "source": "tools/ime-eval/src/main.rs",
-          "cargo_label": "Running src\\main.rs",
-          "discovered": 0,
-          "executed": 0,
-          "passed": 0,
-          "failed": 0,
-          "ignored": 0,
-          "measured": 0,
-          "filtered_out": 0
-        },
-        {
-          "target": "comparison",
-          "target_kind": [
-            "test"
-          ],
-          "suite": "integration",
-          "source": "tools/ime-eval/tests/comparison.rs",
-          "cargo_label": "Running tests\\comparison.rs",
-          "discovered": 12,
-          "executed": 12,
-          "passed": 12,
-          "failed": 0,
-          "ignored": 0,
-          "measured": 0,
-          "filtered_out": 0
-        },
-        {
-          "target": "phase1",
-          "target_kind": [
-            "test"
-          ],
-          "suite": "integration",
-          "source": "tools/ime-eval/tests/phase1.rs",
-          "cargo_label": "Running tests\\phase1.rs",
-          "discovered": 17,
-          "executed": 17,
-          "passed": 17,
-          "failed": 0,
-          "ignored": 0,
-          "measured": 0,
-          "filtered_out": 0
-        },
-        {
-          "target": "quality_stage1",
-          "target_kind": [
-            "test"
-          ],
-          "suite": "integration",
-          "source": "tools/ime-eval/tests/quality_stage1.rs",
-          "cargo_label": "Running tests\\quality_stage1.rs",
-          "discovered": 9,
-          "executed": 9,
-          "passed": 9,
-          "failed": 0,
-          "ignored": 0,
-          "measured": 0,
-          "filtered_out": 0
-        },
-        {
-          "target": "sakura_ime_eval",
+          "target": "sakura_rerank_proto",
           "target_kind": [
             "lib"
           ],
           "suite": "doc",
-          "source": "tools/ime-eval/src/lib.rs",
-          "cargo_label": "Doc-tests sakura_ime_eval",
+          "source": "crates/sakura-rerank-proto/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_rerank_proto",
           "discovered": 0,
           "executed": 0,
           "passed": 0,
@@ -2345,9 +2324,216 @@
         }
       ],
       "totals": {
-        "discovered": 50,
-        "executed": 50,
-        "passed": 50,
+        "discovered": 5,
+        "executed": 5,
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-ai-proto",
+      "manifest": "crates/sakura-ai-proto/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "explicit_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_ai_proto",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-ai-proto/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_ai_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-ai-proto/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 6,
+          "executed": 6,
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_ai_proto",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-ai-proto/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_ai_proto",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 6,
+        "executed": 6,
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "package": "sakura-context-research",
+      "manifest": "crates/sakura-context-research/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "explicit_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_context_research",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-context-research/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_context_research",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-context-research/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 22,
+          "executed": 21,
+          "passed": 21,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_context_research",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-context-research/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_context_research",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 22,
+        "executed": 21,
+        "passed": 21,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    {
+      "package": "sakura-oracles",
+      "manifest": "crates/sakura-oracles/Cargo.toml",
+      "features": {
+        "mode": "default",
+        "default_enabled": [],
+        "explicit_enabled": [],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_oracles",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-oracles/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_oracles",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-oracles/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 46,
+          "executed": 46,
+          "passed": 46,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_oracles",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-oracles/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_oracles",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 46,
+        "executed": 46,
+        "passed": 46,
         "failed": 0,
         "ignored": 0
       }
@@ -2358,10 +2544,26 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
       "target_scope": [
+        {
+          "name": "sakura_renderer",
+          "kinds": [
+            "lib"
+          ],
+          "source": "crates/sakura-renderer/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
         {
           "name": "sakura_renderer",
           "kinds": [
@@ -2451,16 +2653,32 @@
         {
           "target": "sakura_renderer",
           "target_kind": [
-            "bin"
+            "lib"
           ],
           "suite": "unit",
-          "source": "crates/sakura-renderer/src/main.rs",
-          "cargo_label": "Running src\\main.rs",
+          "source": "crates/sakura-renderer/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
           "discovered": 146,
           "executed": 145,
           "passed": 145,
           "failed": 0,
           "ignored": 1,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_renderer",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "crates/sakura-renderer/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
           "measured": 0,
           "filtered_out": 0
         },
@@ -2543,6 +2761,22 @@
           "ignored": 1,
           "measured": 0,
           "filtered_out": 0
+        },
+        {
+          "target": "sakura_renderer",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "crates/sakura-renderer/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_renderer",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
         }
       ],
       "totals": {
@@ -2559,6 +2793,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -2640,6 +2875,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -2738,6 +2974,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -2926,6 +3163,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -3007,6 +3245,7 @@
       "features": {
         "mode": "default",
         "default_enabled": [],
+        "explicit_enabled": [],
         "all_features": false,
         "no_default_features": false
       },
@@ -3051,14 +3290,251 @@
         "failed": 0,
         "ignored": 0
       }
+    },
+    {
+      "package": "sakura-ime-eval",
+      "manifest": "tools/ime-eval/Cargo.toml",
+      "features": {
+        "mode": "default-plus-explicit",
+        "default_enabled": [],
+        "explicit_enabled": [
+          "engine-fixture"
+        ],
+        "all_features": false,
+        "no_default_features": false
+      },
+      "target_scope": [
+        {
+          "name": "sakura_ime_eval",
+          "kinds": [
+            "lib"
+          ],
+          "source": "tools/ime-eval/src/lib.rs",
+          "test": true,
+          "doctest": true,
+          "required_features": [],
+          "expected_suites": [
+            "unit",
+            "doc"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "ime-eval",
+          "kinds": [
+            "bin"
+          ],
+          "source": "tools/ime-eval/src/main.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "unit"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "ime_eval_sakura_engine",
+          "kinds": [
+            "bin"
+          ],
+          "source": "crates/sakura-engine/src/main.rs",
+          "test": false,
+          "doctest": false,
+          "required_features": [
+            "engine-fixture"
+          ],
+          "expected_suites": [],
+          "exclusion_reason": "Cargo metadata disables test and doctest for this target"
+        },
+        {
+          "name": "comparison",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/comparison.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "phase1",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/phase1.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "pipe_round_trip",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/pipe_round_trip.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [
+            "engine-fixture"
+          ],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        },
+        {
+          "name": "quality_stage1",
+          "kinds": [
+            "test"
+          ],
+          "source": "tools/ime-eval/tests/quality_stage1.rs",
+          "test": true,
+          "doctest": false,
+          "required_features": [],
+          "expected_suites": [
+            "integration"
+          ],
+          "exclusion_reason": null
+        }
+      ],
+      "target_results": [
+        {
+          "target": "sakura_ime_eval",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "unit",
+          "source": "tools/ime-eval/src/lib.rs",
+          "cargo_label": "Running src\\lib.rs",
+          "discovered": 12,
+          "executed": 12,
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "ime-eval",
+          "target_kind": [
+            "bin"
+          ],
+          "suite": "unit",
+          "source": "tools/ime-eval/src/main.rs",
+          "cargo_label": "Running src\\main.rs",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "comparison",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/comparison.rs",
+          "cargo_label": "Running tests\\comparison.rs",
+          "discovered": 12,
+          "executed": 12,
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "phase1",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/phase1.rs",
+          "cargo_label": "Running tests\\phase1.rs",
+          "discovered": 17,
+          "executed": 17,
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "pipe_round_trip",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/pipe_round_trip.rs",
+          "cargo_label": "Running tests\\pipe_round_trip.rs",
+          "discovered": 1,
+          "executed": 1,
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "quality_stage1",
+          "target_kind": [
+            "test"
+          ],
+          "suite": "integration",
+          "source": "tools/ime-eval/tests/quality_stage1.rs",
+          "cargo_label": "Running tests\\quality_stage1.rs",
+          "discovered": 9,
+          "executed": 9,
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "target": "sakura_ime_eval",
+          "target_kind": [
+            "lib"
+          ],
+          "suite": "doc",
+          "source": "tools/ime-eval/src/lib.rs",
+          "cargo_label": "Doc-tests sakura_ime_eval",
+          "discovered": 0,
+          "executed": 0,
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "totals": {
+        "discovered": 51,
+        "executed": 51,
+        "passed": 51,
+        "failed": 0,
+        "ignored": 0
+      }
     }
   ],
   "totals": {
-    "packages": 16,
-    "suites": 94,
-    "discovered": 1988,
-    "executed": 1897,
-    "passed": 1897,
+    "packages": 21,
+    "suites": 107,
+    "discovered": 2011,
+    "executed": 1920,
+    "passed": 1920,
     "failed": 0,
     "ignored": 91
   }
