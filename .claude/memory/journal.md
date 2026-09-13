@@ -2130,3 +2130,23 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 ## 2026-09-13 Record major version for the architecture product release
 
 - Owner instructed that the product release of this architecture series is a major bump to 2.0.0, not 1.0.40. Workspace version stays 1.0.39 on intermediate PRs. The release job must align Cargo version, notes, installer, tag, and update-signing sequence. Signing policy is unchanged.
+
+## 2026-09-13 Move conversion.rs into conversion/ (#206)
+
+- Phase 3.1 starts with `git mv` only: `conversion.rs` → `conversion/mod.rs` and the sibling tests follow. Public names stay `Converter` / `ConversionOptions` / `ConversionCandidate`. IRV production paths for CORE-CONVERSION and ENGINE-CANDIDATE now point at `conversion/mod.rs` so the missing-file gate does not fire.
+- A second commit moves candidate authority/evidence/origin/path-evidence into `conversion/evidence.rs` with `pub use` so facade paths stay. `Surface` is `pub(super)` for `PathEvidence::add_surface`. ENGINE-CANDIDATE IRV now includes `evidence.rs`. Search, ranking, and synthesis stay in `mod.rs`.
+
+## 2026-09-13 Extract conversion candidate assembly (#206)
+
+- Move `ConversionCandidate` / `ConversionSegment` and their methods into `conversion/candidates/assembly.rs`. Facade paths stay via `pub use`. Parent materializers keep writing fields through `pub(in crate::conversion)`. Search, ranking, synthesis, and raw-repair algorithms stay in `mod.rs`. ENGINE-CANDIDATE IRV now includes `assembly.rs`.
+
+## 2026-09-13 Extract conversion synthesis so CORE-CONVERSION can drop mod.rs (#206)
+
+- Adding type leaves to the same IRV file set while `conversion/mod.rs` remains required does not lower Semantic IRV and can raise Physical IRV. Phase 3 acceptance is `IRV-CORE-CONVERSION` ≤1,200 and `IRV-ENGINE-CANDIDATE` ≤4,000. The next extract is therefore the #99 change reason, not more options/input/result files.
+- Move post-search synthesis into `conversion/synthesis/{punctuation,numerals,dates,single_kanji}.rs`. Lattice-time `add_numeric_forms` stays in `mod.rs` because it writes search nodes. Public names and research candidate ceilings are unchanged.
+- `IRV-CORE-CONVERSION` production now lists the synthesis files plus `assembly.rs` / `evidence.rs` / `numerals.rs` / `calendar.rs` / `width.rs`, and no longer lists `conversion/mod.rs`. Measured Physical IRV 7,071 → 3,442. Phase 3 target ≤1,200 remains open (width split is 3.3; do not update `baseline.json`). ENGINE-CANDIDATE is not given the synthesis files; it fell 16,282 → 15,837 only because `mod.rs` shrank.
+
+## 2026-09-13 Extract conversion ranking so ENGINE-CANDIDATE can drop mod.rs (#206)
+
+- Move #94/#108 filters into `conversion/ranking/{coherence,quality_gate,it_terms}.rs`. Search, raw-repair, and synthesis stay out of that directory. `char_class` remains with lattice because build_lattice still uses it.
+- `IRV-ENGINE-CANDIDATE` production replaces `conversion/mod.rs` with the ranking files plus `evidence.rs` and `assembly.rs`. Measured Physical IRV 15,837 → 11,958. Phase 3 target ≤4,000 remains open because `dispatch.rs` is still in the set (Phase 4). Do not update `baseline.json`.
