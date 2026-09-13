@@ -32,6 +32,7 @@ Read only the decision files relevant to the task:
 | Test output / Issue #111 | `docs/decisions/test-output.md` |
 | Product direction | `docs/decisions/product-direction.md` |
 | Release signing | `docs/decisions/release-signing.md` |
+| Architecture delivery release version | `docs/decisions/architecture-major-release.md` |
 | Update trust state / Issue #150 | `docs/decisions/update-trust-state.md` |
 | AI text / Issue #58 | `docs/decisions/issue-58-ai-text.md` |
 | Mode indicator / Issue #26 | `docs/decisions/issue-26-mode-indicator.md` |
