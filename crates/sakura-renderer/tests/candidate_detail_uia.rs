@@ -320,8 +320,8 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
     assert!(page_two.contains("selected 10 of 18"));
     assert!(page_two.contains("page-two-definition"));
     assert_relation_groups(&page_two, 0b0101);
-    let after = wait_for_moved_window(popup, before);
-    assert!(after.left >= moved_anchor.left || after.top >= moved_anchor.bottom);
+    let after = wait_for_popup_at_moved_anchor(popup, before, moved_anchor);
+    println!("caret-follow geometry: before={before:?} anchor={moved_anchor:?} after={after:?}");
 
     engine.stop();
     renderer.wait_for_exit();
@@ -1823,19 +1823,29 @@ fn wait_for_hidden_window(window: HWND) {
     }
 }
 
-fn wait_for_moved_window(
+fn wait_for_popup_at_moved_anchor(
     window: HWND,
     previous: windows::Win32::Foundation::RECT,
+    anchor: ScreenRect,
 ) -> windows::Win32::Foundation::RECT {
     let deadline = Instant::now() + PATIENT;
     loop {
         let current = window_rect(window);
-        if current.left != previous.left || current.top != previous.top {
+        // The candidate list is placed below the caret when it fits and above
+        // otherwise. A detail pane may extend the shared HWND to the left, so
+        // the HWND's left edge is not the candidate list's anchor edge.
+        // SAFETY: `window` is the live renderer HWND owned by this fixture.
+        let dpi = unsafe { GetDpiForWindow(window) };
+        let gap = scaled_logical_px(8, dpi);
+        let moved = current.left != previous.left || current.top != previous.top;
+        let below = current.top == anchor.bottom.saturating_add(gap);
+        let above = current.bottom == anchor.top.saturating_sub(gap);
+        if moved && (below || above) {
             return current;
         }
         assert!(
             Instant::now() < deadline,
-            "candidate popup did not follow caret"
+            "candidate popup did not settle against moved caret: previous={previous:?} anchor={anchor:?} current={current:?} dpi={dpi} gap={gap} moved={moved} below={below} above={above}"
         );
         sleep(Duration::from_millis(20));
     }
