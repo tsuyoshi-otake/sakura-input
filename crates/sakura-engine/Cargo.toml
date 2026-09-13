@@ -11,12 +11,54 @@ authors.workspace = true
 [features]
 default = []
 context-research = ["dep:sakura-context-research"]
+dev-fixtures = ["dep:dictc"]
 
 [[bin]]
 name = "sakura_engine"
 path = "src/main.rs"
 
+[[test]]
+name = "appcontainer"
+path = "tests/appcontainer.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "cross_commit_learning"
+path = "tests/cross_commit_learning.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "high_load_key_integrity"
+path = "tests/high_load_key_integrity.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "ipc_latency"
+path = "tests/ipc_latency.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "pipe_round_trip"
+path = "tests/pipe_round_trip.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "shipped_dictionary_ranking"
+path = "tests/shipped_dictionary_ranking.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "space_key_dispatch_pipe"
+path = "tests/space_key_dispatch_pipe.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
+name = "zero_alloc_dispatch"
+path = "tests/zero_alloc_dispatch.rs"
+required-features = ["dev-fixtures"]
+
 [dependencies]
+dictc = { path = "../dictc", optional = true }
 sakura-rerank-proto.workspace = true
 sakura-core.workspace = true
 sakura-context-research = { workspace = true, optional = true }
@@ -50,9 +92,7 @@ features = [
 ]
 
 [dev-dependencies]
-dictc = { path = "../dictc" }
 sakura-oracles.workspace = true
-sakura-ime-eval = { path = "../../tools/ime-eval" }
 
 [lints]
 workspace = true

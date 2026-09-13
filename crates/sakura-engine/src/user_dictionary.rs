@@ -303,7 +303,7 @@ pub fn default_path() -> io::Result<PathBuf> {
         .join("user.tsv"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 mod tests {
     use super::*;
     use sakura_core::{ConversionOptions, Converter};

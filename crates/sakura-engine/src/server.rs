@@ -46,7 +46,7 @@ use sakura_proto::{
     encode_response, peek_header, EngineTimingSite, ErrorCode, FaultPoint, OutputBuf, Request,
     RequestId, Response, MAX_FRAME,
 };
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 use sakura_proto::{AiTextOperation, AiTextStatus, SessionId};
 
 use sakura_ipc::debug_trace;
@@ -818,7 +818,7 @@ struct InstanceSlot {
 impl InstanceSlot {
     /// Claims a slot. Paired with the instance the caller just created, so
     /// the count and the live instances move together.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "dev-fixtures"))]
     fn claim(shared: &Arc<Shared>) -> Self {
         Self::claim_for(shared, Endpoint::Data)
     }
@@ -993,7 +993,7 @@ fn spawn_worker_with_instance(
     let slot = InstanceSlot::claim_for(shared, endpoint);
     let owned = Arc::clone(shared);
     let job = move || worker_with_gate(owned, instance, slot, endpoint, startup_gate);
-    #[cfg(test)]
+    #[cfg(all(test, feature = "dev-fixtures"))]
     if tests::FAIL_PIPE_SPAWN_AFTER.with(|remaining| match remaining.get() {
         Some(0) => {
             remaining.set(None);
@@ -1122,7 +1122,7 @@ const fn empty_accept_is_fatal(consecutive: u32) -> bool {
 /// `slot` is this instance's claim on the [`MAX_INSTANCES`] cap. It is
 /// owned here and nowhere else, so every way out of this function — a
 /// return below, a panic, the loop ending — gives the slot back.
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot, endpoint: Endpoint) {
     worker_with_gate(shared, instance, slot, endpoint, None);
 }
@@ -1295,7 +1295,7 @@ fn worker_with_gate(
 /// too many or too few, and neither loses a connection: a client that finds
 /// no free instance blocks in `CreateFileW` until one frees, which is what
 /// a named pipe does by design.
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 fn ensure_spare_instance(shared: &Arc<Shared>) {
     ensure_spare_instance_for(shared, Endpoint::Data);
 }
@@ -1784,7 +1784,7 @@ fn serve(
         };
         match reply {
             Reply::Output => {
-                #[cfg(test)]
+                #[cfg(all(test, feature = "dev-fixtures"))]
                 tests::BEFORE_OUTPUT.with(|hook| {
                     if let Some(hook) = hook.borrow_mut().take() {
                         hook();
@@ -1977,6 +1977,6 @@ fn report(shared: &Shared, args: core::fmt::Arguments<'_>) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 #[path = "server_tests.rs"]
 mod tests;

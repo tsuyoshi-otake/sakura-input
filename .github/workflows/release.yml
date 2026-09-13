@@ -113,7 +113,7 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture' -- -D warnings
       - name: Self-test dependency auditor gate
         shell: pwsh
         run: ./ci/ensure-cargo-audit.ps1 -SelfTest
@@ -127,7 +127,7 @@ jobs:
         run: ./ci/test-run-test-quiet.ps1
       - name: Test
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace }
+        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture' }
       - name: Prove test runners exited
         if: always()
         shell: pwsh
@@ -158,11 +158,11 @@ jobs:
 
       - name: Gate general Japanese surface coverage
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'general Japanese surface coverage gate' -Command { cargo test -p sakura-engine --test shipped_dictionary_ranking general_quality_floor_keeps_tate_vertical_in_the_candidate_page -- --ignored --exact --nocapture }
+        run: ./ci/run-test-quiet.ps1 -Name 'general Japanese surface coverage gate' -Command { cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking general_quality_floor_keeps_tate_vertical_in_the_candidate_page -- --ignored --exact --nocapture }
 
       - name: Gate learned homophones against cross-commit context
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'learned homophone cross-commit gate' -Command { cargo test -p sakura-engine --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture }
+        run: ./ci/run-test-quiet.ps1 -Name 'learned homophone cross-commit gate' -Command { cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture }
 
       - name: Prove dictionary integration test runners exited
         if: always()

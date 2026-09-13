@@ -1610,12 +1610,12 @@ impl ForgetPredictionDeepRecoveryFault {
 
 /// Test-only cross-layer fault after the replacement rename is confirmed but
 /// both publication and subsequent observation report errors.
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 pub(crate) struct ForgetPredictionCommittedObservationFault {
     _scope: ForgetFaultScope,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 impl ForgetPredictionCommittedObservationFault {
     pub(crate) fn install() -> Self {
         Self {
