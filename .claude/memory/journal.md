@@ -2170,3 +2170,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Move cross-commit IDs/tails and the correction map / `RawRepairPlan` into `conversion/{bridge,repair_plan}.rs`. Facade `pub use` keeps public names. Search and raw-repair algorithms stay in `mod.rs`.
 - These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
 - Wrapped `cargo test -p sakura-core --lib conversion` PASS. fmt check and process cleanup PASS.
+
+## 2026-09-13 Extract conversion search lattice and Viterbi types (#206)
+
+- Move `DictionaryEdgeBudget` / `Node` / `NodeSpec` / `CharClass` / `char_run` into `conversion/search/lattice.rs`, and `SearchState` / `HeapItem` / `PathClass` / `SearchRun` into `conversion/search/viterbi.rs`. Facade `pub(in crate::conversion)` keeps ranking and tests on the conversion names. `build_lattice` / `search_n_best` stay on `Converter` in `mod.rs`.
+- These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Adding search type leaves while `mod.rs` still owns the algorithms does not lower Semantic IRV. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. fmt check and process cleanup PASS.
