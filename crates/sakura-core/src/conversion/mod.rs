@@ -28,6 +28,7 @@ use crate::TextSink;
 
 mod candidates;
 mod evidence;
+mod ranking;
 mod synthesis;
 
 pub use candidates::{ConversionCandidate, ConversionSegment};
@@ -109,37 +110,6 @@ const DEFAULT_NOUN_ID: u16 = 1_851;
 /// relate to another. It exists so the tail reads as a character list
 /// rather than as more ranked conversions.
 const SINGLE_KANJI_ANNOTATION: &str = "単漢字";
-const MIN_COMPLETION_COHERENCE_CHARS: usize = 4;
-const COMPLETION_NODE_BUDGET: usize = 256;
-const COMPLETION_ENTRY_BUDGET: usize = 64;
-/// A word-sized reading is enough context to reward IT evidence without
-/// changing the ranking of a standalone homophone. The bounded per-word
-/// adjustment is deliberately smaller than an ordinary word cost and applies
-/// only to wholly lexical paths. A reviewed whole-phrase IT entry counts as
-/// one word; a compositional path can accumulate evidence from multiple words.
-const MIN_IT_COMPOUND_READING_CHARS: usize = 7;
-const IT_COMPOUND_WORD_BONUS: i64 = 1_200;
-const MAX_IT_COMPOUND_BOOST: i64 = 2_400;
-/// Once a trustworthy whole-reading entry exists, a much more expensive
-/// all-system segmentation is usually a mosaic of individually valid short
-/// words. Word-sized Japanese readings and atomic loanwords use this gate;
-/// long Japanese compounds still retain legitimate split alternatives.
-const EXACT_LEXICAL_COMPOSITE_COST_WINDOW: i64 = 4_000;
-/// A one-character hiragana lead segment carries no lexical evidence of its
-/// own: nothing in it says the user meant a phrase to start there. A path that
-/// opens with one and then needs a whole kanji word to finish the reading is a
-/// splice, not a parse, and those splices were burying real homophones on the
-/// first candidate page -- たいあん offered た慰安 above 対案, and きかん put
-/// き澗 ahead of 気管 and 旗艦 (Issue #94). This is the same rule as
-/// `EXACT_LEXICAL_COMPOSITE_COST_WINDOW`, held much tighter for the one path
-/// shape that is almost never a real segmentation. It stays a window rather
-/// than a ban so a cheap splice that happens to spell a real word survives:
-/// とじょう keeps と場 at +1190 over 途上.
-const KANA_FRAGMENT_SPLIT_COST_WINDOW: i64 = 1_500;
-/// Prefixes that genuinely attach to a following noun, so a path opening with
-/// one is a parse after all: ご意見, お名前, み仏.
-const KANA_PREFIX_MORPHEMES: [char; 3] = ['お', 'ご', 'み'];
-const MAX_EXACT_WORD_READING_CHARS: usize = 6;
 /// The conversion-side repair metadata is deliberately bounded.  These are
 /// heap-backed scratch limits (rather than stack arrays) because the engine
 /// worker may run with a small stack.
@@ -235,74 +205,6 @@ fn numeric_form_cost(source: &str, span: NumericSpan) -> i64 {
     } else {
         BARE_KANA_NUMBER_FORM_COST
     }
-}
-
-fn is_atomic_whole_reading_surface(surface: &str) -> bool {
-    let mut characters = surface.chars();
-    let Some(first) = characters.next() else {
-        return false;
-    };
-    if characters.next().is_none() {
-        return !first.is_whitespace();
-    }
-    surface.chars().all(|character| {
-        ('\u{30a0}'..='\u{30ff}').contains(&character)
-            || ('\u{ff65}'..='\u{ff9f}').contains(&character)
-            || character.is_ascii_alphanumeric()
-            || matches!(character, ' ' | '-' | '_' | '.' | '+' | '#' | '/')
-    })
-}
-
-/// Whether `candidate` opens with a bare one-character hiragana fragment and
-/// then spends a whole kanji or katakana word to finish the reading.
-fn is_kana_fragment_prefix_split(candidate: &ConversionCandidate) -> bool {
-    let segments = candidate.segments();
-    let (Some(first), Some(second)) = (segments.first(), segments.get(1)) else {
-        return false;
-    };
-    let text = candidate.text();
-    let Some(lead) = text.get(usize::from(first.text_start)..usize::from(first.text_end)) else {
-        return false;
-    };
-    let mut lead_characters = lead.chars();
-    let (Some(lead_character), None) = (lead_characters.next(), lead_characters.next()) else {
-        return false;
-    };
-    if !('\u{3041}'..='\u{3096}').contains(&lead_character)
-        || KANA_PREFIX_MORPHEMES.contains(&lead_character)
-    {
-        return false;
-    }
-    let Some(rest) = text.get(usize::from(second.text_start)..usize::from(second.text_end)) else {
-        return false;
-    };
-    rest.chars().next().is_some_and(|character| {
-        matches!(char_class(character), CharClass::Katakana)
-            || matches!(
-                character,
-                '\u{3400}'..='\u{4dbf}'
-                    | '\u{4e00}'..='\u{9fff}'
-                    | '\u{f900}'..='\u{faff}'
-                    | '\u{20000}'..='\u{2ffff}'
-            )
-    })
-}
-
-fn is_trustworthy_exact_surface(surface: &str) -> bool {
-    let mut characters = surface.chars();
-    if characters.next().is_none() || characters.next().is_none() {
-        return false;
-    }
-    is_atomic_whole_reading_surface(surface)
-        || surface.chars().all(|character| {
-            matches!(
-                character,
-                '\u{3400}'..='\u{4dbf}'
-                    | '\u{4e00}'..='\u{9fff}'
-                    | '\u{f900}'..='\u{faff}'
-                    | '\u{20000}'..='\u{2ffff}'
-            )
-        })
 }
 
 /// How many candidates a request for `reading` may actually receive, no
@@ -2400,151 +2302,6 @@ impl Converter {
         }
         self.candidates.push(fallback);
         true
-    }
-
-    /// A longer technical dictionary term is bounded evidence for the spelling
-    /// of its already-converted prefix. This resolves compound homophones
-    /// without manufacturing prefix entries or globally weakening Mozc costs.
-    fn apply_it_completion_coherence(
-        &mut self,
-        dictionary: &Dictionary<'_>,
-        reading: &str,
-        options: ConversionOptions,
-    ) -> Result<(), ConversionError> {
-        if reading.chars().count() < MIN_COMPLETION_COHERENCE_CHARS
-            || options.it_bias_per_mille == 0
-            || options.max_it_boost == 0
-        {
-            return Ok(());
-        }
-        let boost = i64::from(options.max_it_boost);
-        let mut boosted = 0u32;
-        let mut failure = None;
-        dictionary
-            .visit_descendant_entries(
-                reading,
-                COMPLETION_NODE_BUDGET,
-                COMPLETION_ENTRY_BUDGET,
-                |entry| {
-                    if !entry.flags.contains(EntryFlags::IT) {
-                        return true;
-                    }
-                    let mut completion = FixedStr::<MAX_PREEDIT_BYTES>::new();
-                    if let Err(error) = dictionary.write_surface(entry, &mut completion) {
-                        failure = Some(error);
-                        return false;
-                    }
-                    for (index, candidate) in self.candidates.iter_mut().enumerate() {
-                        let bit = 1u32.checked_shl(u32::try_from(index).unwrap_or(u32::MAX));
-                        if bit.is_none_or(|bit| boosted & bit != 0)
-                            || completion.len() <= candidate.text().len()
-                            || !completion.as_str().starts_with(candidate.text())
-                        {
-                            continue;
-                        }
-                        let bit = bit.unwrap_or(0);
-                        candidate.cost = candidate.cost.saturating_sub(boost);
-                        boosted |= bit;
-                    }
-                    true
-                },
-            )
-            .map_err(ConversionError::Dictionary)?;
-        if let Some(error) = failure {
-            return Err(ConversionError::Dictionary(error));
-        }
-        Ok(())
-    }
-
-    /// Rewards IT evidence across a complete word-sized reading rather than
-    /// globally repricing an ambiguous standalone word. A reviewed IT phrase
-    /// receives one unit of support, while a compositional candidate with two
-    /// technical words receives two. Short ordinary phrases are left to the
-    /// dictionary and connection matrix. This is a candidate-shape rule, not
-    /// a list of registered compounds.
-    fn apply_it_compound_coherence(&mut self, reading: &str, options: ConversionOptions) {
-        if reading.chars().count() < MIN_IT_COMPOUND_READING_CHARS || options.it_bias_per_mille == 0
-        {
-            return;
-        }
-
-        for candidate in &mut self.candidates {
-            let evidence = candidate.path_evidence();
-            if evidence.fallback_edges != 0
-                || evidence.generated_edges != 0
-                || evidence.spelling_edges != 0
-            {
-                continue;
-            }
-            let it_words = candidate.segments().iter().fold(0u16, |count, segment| {
-                count.saturating_add(u16::from(segment.it_word_count))
-            });
-            if it_words == 0 {
-                continue;
-            }
-            let boost = i64::from(it_words)
-                .saturating_mul(IT_COMPOUND_WORD_BONUS)
-                .min(MAX_IT_COMPOUND_BOOST);
-            candidate.cost = candidate.cost.saturating_sub(boost);
-        }
-    }
-
-    /// Protects trustworthy whole-reading lexical evidence from speculative
-    /// repair paths and the low-information tail of a fully lexical N-best
-    /// search. A repair remains available when no direct exact entry exists;
-    /// it is only suppressed when the dictionary already answers the query.
-    fn apply_exact_lexical_quality_gate(&mut self, reading: &str) {
-        let is_word_sized = reading.chars().count() <= MAX_EXACT_WORD_READING_CHARS;
-        let suppress_unconfirmed_repairs = self.candidates.iter().any(|candidate| {
-            candidate.system_entry_index().is_some()
-                && !candidate.path_evidence().has_unconfirmed_repair()
-                && is_trustworthy_exact_surface(candidate.text())
-        });
-        let Some(best_exact_cost) = self
-            .candidates
-            .iter()
-            .filter(|candidate| {
-                candidate.system_entry_index().is_some()
-                    && !candidate.path_evidence().has_unconfirmed_repair()
-                    && (is_word_sized || is_atomic_whole_reading_surface(candidate.text()))
-            })
-            .map(|candidate| candidate.cost)
-            .min()
-        else {
-            return;
-        };
-        let maximum_composite_cost =
-            best_exact_cost.saturating_add(EXACT_LEXICAL_COMPOSITE_COST_WINDOW);
-        self.candidates.retain(|candidate| {
-            let evidence = candidate.path_evidence();
-            !(suppress_unconfirmed_repairs && evidence.has_unconfirmed_repair())
-                && (candidate.system_entry_index().is_some()
-                    || evidence.user_edges != 0
-                    || evidence.system_edges < 2
-                    || evidence.fallback_edges != 0
-                    || evidence.generated_edges != 0
-                    || candidate.cost <= maximum_composite_cost)
-        });
-    }
-
-    /// Drops the kana-fragment splices described on
-    /// [`KANA_FRAGMENT_SPLIT_COST_WINDOW`]. The window is measured from the
-    /// cheapest whole-reading path, so a reading that produced no whole-reading
-    /// candidate at all keeps everything it found.
-    fn drop_kana_fragment_prefix_splits(&mut self) {
-        let Some(best_whole_reading_cost) = self
-            .candidates
-            .iter()
-            .filter(|candidate| candidate.segments().len() == 1)
-            .map(|candidate| candidate.cost)
-            .min()
-        else {
-            return;
-        };
-        let ceiling = best_whole_reading_cost.saturating_add(KANA_FRAGMENT_SPLIT_COST_WINDOW);
-        self.candidates.retain(|candidate| {
-            candidate.cost <= ceiling || !is_kana_fragment_prefix_split(candidate)
-        });
     }
 
     /// A generated day at a non-zero reading offset is only an ambiguous
