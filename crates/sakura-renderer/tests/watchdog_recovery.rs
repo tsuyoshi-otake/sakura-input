@@ -124,28 +124,20 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     let killed_at = Instant::now();
 
     let deadline = killed_at + RECOVERY_BUDGET;
-    let mut client = loop {
-        match Client::connect(PROBE) {
-            Ok(client) => {
-                println!("recovered after {:?}", killed_at.elapsed());
-                break client;
-            }
-            Err(_) => {
-                assert!(
-                    Instant::now() < deadline,
-                    "the engine was still gone {RECOVERY_BUDGET:?} after being killed, \
-                     with the renderer running: the watchdog did not restart it, and a \
-                     user hitting this would lose their IME until the next logon"
-                );
-                sleep(Duration::from_millis(100));
-            }
-        }
-    };
+    let mut client = connect_and_handshake_until(deadline).unwrap_or_else(|| {
+        panic!(
+            "the engine was still not serving {RECOVERY_BUDGET:?} after being killed, \
+             with the renderer running: the watchdog did not restart a working engine, and a \
+             user hitting this would lose their IME until the next logon"
+        )
+    });
+    println!("recovered after {:?}", killed_at.elapsed());
 
-    // Reachable is not the same as working. What the criterion promises is
-    // that typing resumes, so use the exact connection that proved recovery
-    // instead of opening a second pipe instance and racing the restarted engine.
-    let session = handshake_and_open(&mut client);
+    // Pipe ownership is not service readiness: the engine reserves its pipe
+    // name before loading runtime state. The recovery helper therefore keeps
+    // the exact connection that completed Hello, avoiding both a false-ready
+    // result and a second-instance race.
+    let session = open_session(&mut client);
     let mut composed = String::new();
     for c in "sa".chars() {
         if let Response::Output(output) = send(&mut client, session, char_key(c)) {
@@ -305,6 +297,12 @@ impl Spawned {
         );
         let child = Command::new(path)
             .env("SAKURA_DICTIONARY", dictionary)
+            // These GUI children do not have a test-visible stdio contract.
+            // Detaching them prevents a watchdog-spawned grandchild from
+            // retaining the workflow's captured output handles after panic.
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .unwrap_or_else(|error| panic!("could not start {what}: {error}"));
         Spawned {
@@ -355,13 +353,51 @@ fn required_dictionary() -> PathBuf {
 
 fn wait_until_serving(who: &str) {
     let deadline = Instant::now() + PATIENT;
-    while Instant::now() < deadline {
-        if Client::connect(PROBE).is_ok() {
-            return;
-        }
-        sleep(Duration::from_millis(20));
+    if connect_and_handshake_until(deadline).is_some() {
+        return;
     }
     panic!("{who} never started serving the pipe within {PATIENT:?}");
+}
+
+/// Connects to an engine that is ready to serve protocol requests.
+///
+/// Owning the named pipe is not enough: the engine reserves it before its
+/// runtime state is initialized and before server workers begin running. Keep
+/// each candidate only when Hello succeeds on that same connection, and keep
+/// every attempt inside the caller's absolute deadline.
+fn connect_and_handshake_until(deadline: Instant) -> Option<Client> {
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+
+        let connect_budget = PROBE.min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect(connect_budget) {
+            let now = Instant::now();
+            if now >= deadline {
+                return None;
+            }
+            let handshake_deadline = deadline.min(now + PATIENT);
+            if matches!(
+                client.call_until(
+                    &Request::Hello {
+                        client_version: PROTOCOL_VERSION,
+                    },
+                    handshake_deadline,
+                ),
+                Ok(Response::Hello { .. })
+            ) {
+                return Some(client);
+            }
+        }
+
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        sleep(Duration::from_millis(20).min(remaining));
+    }
 }
 
 /// Waits for the pipe to stop answering after a kill.
@@ -380,16 +416,7 @@ fn wait_until_silent() {
     panic!("the pipe was still answering {PATIENT:?} after the engine was killed");
 }
 
-fn handshake_and_open(client: &mut Client) -> SessionId {
-    match client.call(
-        &Request::Hello {
-            client_version: PROTOCOL_VERSION,
-        },
-        PATIENT,
-    ) {
-        Ok(Response::Hello { .. }) => {}
-        other => panic!("the restarted engine did not handshake: {other:?}"),
-    }
+fn open_session(client: &mut Client) -> SessionId {
     match client.call(
         &Request::CreateSession {
             process_name: "watchdog_recovery.exe".to_owned(),
