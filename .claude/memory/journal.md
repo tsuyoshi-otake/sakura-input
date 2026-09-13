@@ -2178,3 +2178,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Hosted all-mode run 34729225854 failed `appearance_switch_repaints_a_visible_candidate_popup` at the initial Dark assertion. Probe was `dpi=96 high_contrast_enabled=false sample=(6,14) expected=0x252525 actual=0x0C0C0C`. `0x0C0C0C` is not a palette color. The same assertion passed on hosted run 34720449429 at 6952d45; the only renderer test change after that run was the caret waiter.
 - GetDC/GetPixel on the hosted DWM composition is the flaky instrument. The test now RedrawWindow(UPDATENOW)s, PrintWindow(PW_CLIENTONLY|PW_RENDERFULLCONTENT, then PW_RENDERFULLCONTENT)s into a client-sized DIB, and GetPixel from that memory DC. Expected Dark/Light selected colors stay `0x252525` / `0xE2E5E8`. Production painting is unchanged.
+
+## 2026-09-13 Extract conversion options, input, and result leaves (#206)
+
+- Move `candidate_budget` / `ConversionOptions`, the classified `ConversionInput` pair, and `ConversionResult` / diagnostics / error into `conversion/{options,input,result}.rs`. Facade `pub use` keeps public names. Repair, bridge, search, and ranking stay in `mod.rs`.
+- These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Adding type leaves to the same reading set while the god file remains does not lower Semantic IRV. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. fmt check and process cleanup PASS.
