@@ -1,6 +1,6 @@
 # Oracle provenance
 
-source: `crates/sakura-oracles/src/space_key_dispatch_oracle.rs`
+source: `crates/sakura-engine/src/space_key_dispatch_oracle.rs`
 
 static production-import scan: pass
 

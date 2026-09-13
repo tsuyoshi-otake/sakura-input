@@ -1,6 +1,6 @@
 # Atomic-condition (C2) coverage — developer-history oracle
 
-Scope: `crates/sakura-oracles/src/developer_history_oracle.rs` predicates in `atomic_conditions`.
+Scope: `crates/sakura-engine/src/developer_history_oracle.rs` predicates in `atomic_conditions`.
 This is atomic-condition polarity coverage of the independent oracle, not MC/DC of the whole workspace and not line coverage claimed as C2.
 
 | condition | false | true |
