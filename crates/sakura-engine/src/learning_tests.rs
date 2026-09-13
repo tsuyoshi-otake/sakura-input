@@ -590,8 +590,6 @@ fn settings_snapshot_exports_verified_records_and_reports_a_torn_tail() {
     assert_eq!(snapshot.records[0].reading, "さくら");
     assert_eq!(snapshot.records[0].surface, "Sakura\tInput");
     assert_eq!(snapshot.ignored_tail_bytes, 4);
-    let export = snapshot.to_tsv();
-    assert!(export.contains("さくら\tSakura\\tInput\n"));
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
 

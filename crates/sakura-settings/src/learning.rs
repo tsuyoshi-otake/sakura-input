@@ -35,8 +35,44 @@ pub fn view(path: &Path) -> io::Result<LearningSnapshot> {
 
 pub fn export(source: &Path, destination: &Path) -> io::Result<usize> {
     let snapshot = view(source)?;
-    atomic_write(destination, snapshot.to_tsv().as_bytes())?;
+    atomic_write(destination, snapshot_to_tsv(&snapshot).as_bytes())?;
     Ok(snapshot.records.len())
+}
+
+/// Stable, UTF-8 TSV presentation owned by the settings surface. Text fields
+/// use backslash escaping because a committed surface may contain controls.
+pub fn snapshot_to_tsv(snapshot: &LearningSnapshot) -> String {
+    let mut output = format!(
+        "# sakura-learning-format: {}\nsequence\tday\tleft-context\tright-context\treading\tsurface\n",
+        snapshot.format_version
+    );
+    for record in &snapshot.records {
+        output.push_str(&record.sequence.to_string());
+        output.push('\t');
+        output.push_str(&record.day.to_string());
+        output.push('\t');
+        output.push_str(&record.left_context.to_string());
+        output.push('\t');
+        output.push_str(&record.right_context.to_string());
+        output.push('\t');
+        push_tsv_escaped(&mut output, &record.reading);
+        output.push('\t');
+        push_tsv_escaped(&mut output, &record.surface);
+        output.push('\n');
+    }
+    output
+}
+
+fn push_tsv_escaped(output: &mut String, value: &str) {
+    for character in value.chars() {
+        match character {
+            '\\' => output.push_str("\\\\"),
+            '\t' => output.push_str("\\t"),
+            '\r' => output.push_str("\\r"),
+            '\n' => output.push_str("\\n"),
+            other => output.push(other),
+        }
+    }
 }
 
 /// Clears through the running engine whenever its pipe exists. Direct file
@@ -121,5 +157,25 @@ mod tests {
             .expect("TSV")
             .contains("sequence\tday"));
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn learning_snapshot_tsv_preserves_exact_escaping() {
+        let snapshot = LearningSnapshot {
+            format_version: LEARNING_FORMAT_VERSION,
+            records: vec![sakura_engine::learning::LearningRecord {
+                sequence: 1,
+                day: 2,
+                left_context: 7,
+                right_context: 9,
+                reading: "さく\\ら".to_owned(),
+                surface: "Sakura\tInput\r\n".to_owned(),
+            }],
+            ignored_tail_bytes: 0,
+        };
+        assert_eq!(
+            snapshot_to_tsv(&snapshot),
+            "# sakura-learning-format: 3\nsequence\tday\tleft-context\tright-context\treading\tsurface\n1\t2\t7\t9\tさく\\\\ら\tSakura\\tInput\\r\\n\n"
+        );
     }
 }
