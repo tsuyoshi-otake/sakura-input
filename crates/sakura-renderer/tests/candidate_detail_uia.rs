@@ -1870,6 +1870,7 @@ fn surface_color_at(window: HWND, sample_x: i32, sample_y: i32) -> COLORREF {
     // SAFETY: only the known, live fixture window paints into the memory DC.
     let mut printed = unsafe { PrintWindow(window, memory, PW_CLIENTONLY | PW_RENDERFULLCONTENT) };
     if printed == 0 {
+        // SAFETY: same live fixture window and memory DC as the client-only try.
         printed = unsafe { PrintWindow(window, memory, PW_RENDERFULLCONTENT) };
     }
     let color = if printed != 0 {
