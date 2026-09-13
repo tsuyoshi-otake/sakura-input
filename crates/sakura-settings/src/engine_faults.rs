@@ -1,8 +1,8 @@
 //! Asks the running engine whether any artificial delay is armed in it.
 //!
 //! The engine ships with four deliberate delay points so a stress harness can
-//! hold a real `sakura_engine.exe` still at a named moment (see
-//! `sakura_engine::fault_injection`). They can only be armed by a command-line
+//! hold a real engine executable still at a named moment (see the engine
+//! fault-injection module). They can only be armed by a command-line
 //! argument that the engine accepts solely alongside a private test pipe, so a
 //! user's engine cannot have them on. This module exists so that claim is
 //! something a user can check rather than something they have to take on

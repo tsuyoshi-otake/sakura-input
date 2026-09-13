@@ -423,10 +423,11 @@ version = "1.0.39"
 dependencies = [
  "sakura-ai-proto",
  "sakura-core",
- "sakura-engine",
  "sakura-ipc",
  "sakura-proto",
  "sakura-reg",
+ "sakura-store",
+ "sakura-values",
  "windows",
  "windows-core",
 ]

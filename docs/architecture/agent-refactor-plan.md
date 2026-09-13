@@ -21,7 +21,7 @@
 |---|---|
 | god file | 16 ファイルが 1,900 行超。最大は `crates/sakura-engine/src/dispatch.rs` 16,850 行（production 6,409＋テスト 10,396）、`crates/sakura-tsf/src/text_service.rs` 9,192 行 |
 | テスト同居 | 大きいファイルの 30〜60% がインラインテスト。`cargo test -p sakura-renderer --lib` は `lib.rs` が無く存在しない |
-| 依存の逆流 | `sakura-core → sakura-proto`（18 参照、すべて値型）、`sakura-settings → sakura-engine`（2 ファイル形式を読むためだけ）、`renderer::indicator → candidate`、`pad ⇄ pad_rail` |
+| 依存の逆流 | `sakura-core → sakura-proto`（18 参照、すべて値型）、`renderer::indicator → candidate`、`pad ⇄ pad_rail`。`sakura-settings → sakura-engine` の Cargo 辺は 2.2d で除去（history の DPAPI frame scan は関数予算のため settings 残差） |
 | 隠れた結合 | reranker protocol が 2 crate に手書き重複（`neural-worker/src/protocol.rs:3-8`、`engine/src/long_conversion.rs:28-29`）。`TextService` の `RefCell` フィールドが 40 箇所から borrow |
 | 正当性ゲート | `cargo test --workspace` 1 本（`ci.yml:80`、記録上 6m58s）。DLL 1 MiB ゲートも TLC 実行も CI に無い |
 | 文書 | Issue 1 件あたり必読散文の中央値 ~170 KB。`CLAUDE.md` 40,118 B のうち約 10 KB が停止中調査、コード行番号引用 5/5 が stale |
@@ -181,7 +181,7 @@ critical ＝ 過去 1 年で最も Issue が集中し、かつ状態機械を含
 | 違反 | 証拠 | 影響 |
 |---|---|---|
 | `sakura-core → sakura-proto` | 18 参照、すべて `FixedStr/FixedVec/Overflow`、`Mode/KeyCode/KeyInput/Modifiers/AppearanceTheme/PadShortcut`、上限定数 3 つ。wire 型は 0 | core を触ると proto の codec テストまで読解圏に入る |
-| `sakura-settings → sakura-engine` | `settings/src/learning.rs:6`、`input_history.rs:8`。engine の record/codec を読むためだけ | settings の CLI 変更で engine 全体が build 対象 |
+| `sakura-settings → sakura-engine` | 2.2d で Cargo 辺と `sakura_engine` 識別子は空。learning は store `LearningLog`／`read_snapshot`、history 型は store、TSV／retention view と DPAPI frame scan は settings | writer lock／`ReplaceFileW` は engine。store に history `read_snapshot` を足すと関数予算超過 |
 | `renderer::indicator → candidate` | `indicator.rs:57,76,261,573`（定数 3 つと `monitor_work_area`） | indicator の Issue で candidate.rs 3,432 行が読解圏 |
 | `renderer::pad ⇄ pad_rail` | `pad_rail.rs:351` の `dpi_of` 1 関数 | 循環 |
 | `tsf::exports ⇄ class_factory` | tsf §2 | 循環 |
