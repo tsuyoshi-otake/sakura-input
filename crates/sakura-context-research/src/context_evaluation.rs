@@ -5,7 +5,7 @@
 //! the future fail-closed runtime contract. No production prediction caller,
 //! display list, settings surface, or worker is activated here.
 
-use sakura_neural_proto::{CandidateAuthority, MAX_PREDICTION_CANDIDATES};
+use sakura_context_proto::{CandidateAuthority, MAX_PREDICTION_CANDIDATES};
 
 use crate::prediction_snapshot::{PredictionSnapshot, SnapshotCorrelation, SnapshotSource};
 

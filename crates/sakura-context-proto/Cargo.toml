@@ -1,5 +1,5 @@
 [package]
-name = "sakura-neural-proto"
+name = "sakura-context-proto"
 description = "Dormant std-only contract for Sakura Context Intelligence tasks."
 version.workspace = true
 edition.workspace = true
