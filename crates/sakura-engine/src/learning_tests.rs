@@ -497,8 +497,8 @@ fn compaction_keeps_a_bounded_recent_source_of_truth_across_restart() {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         compact_state(&mut state, 1_024, 10).expect("compaction");
-        assert!(state.log.records <= 10);
-        assert!(state.log.bytes <= 1_024 + HEADER_LEN as u64);
+        assert!(state.log.test_records() <= 10);
+        assert!(state.log.test_bytes() <= 1_024 + HEADER_LEN as u64);
     }
     drop(service);
 
@@ -525,7 +525,7 @@ fn hard_log_ceiling_skips_a_write_without_extending_the_file() {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.log.bytes = MAX_LEARNING_LOG_BYTES;
+        state.log.test_set_bytes(MAX_LEARNING_LOG_BYTES);
     }
 
     service.learn("かな", "加奈", 3, 4);
@@ -549,7 +549,7 @@ fn maintenance_thread_flushes_and_reaches_an_explicit_join() {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .log
-            .dirty_records;
+            .test_dirty_records();
         if dirty == 0 {
             break;
         }
@@ -561,7 +561,7 @@ fn maintenance_thread_flushes_and_reaches_an_explicit_join() {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .log
-            .dirty_records,
+            .test_dirty_records(),
         0
     );
     maintenance.stop().expect("maintenance thread joined");
@@ -977,10 +977,7 @@ fn exact_prediction_recovery_repairs_a_torn_tail_after_failed_restore() {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         state
             .log
-            .file
-            .as_ref()
-            .expect("preserved old append owner")
-            .sync_data()
+            .test_sync_append_owner()
             .expect("sync preserved old append owner");
     }
     let verified_recovery_len = fs::metadata(&recovery)
@@ -1180,10 +1177,7 @@ fn exact_prediction_forget_restore_failure_keeps_a_restart_recovery_log_and_appe
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         state
             .log
-            .file
-            .as_ref()
-            .expect("backup append owner")
-            .sync_data()
+            .test_sync_append_owner()
             .expect("sync backup append owner");
     }
     assert!(snapshot_contains(&recovery, "reading", "surface"));
@@ -1218,7 +1212,7 @@ fn exact_prediction_forget_durable_failure_keeps_authoritative_state() {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.log.file = None;
+        state.log.test_disable_writer();
     }
 
     let error = service

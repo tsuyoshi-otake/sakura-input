@@ -7,14 +7,14 @@ use super::format::{
 
 const MAGIC: &[u8; 4] = b"SKLR";
 
-pub fn header(version: u16) -> [u8; HEADER_LEN] {
+pub(crate) fn header(version: u16) -> [u8; HEADER_LEN] {
     let mut header = [0u8; HEADER_LEN];
     header[..4].copy_from_slice(MAGIC);
     header[4..6].copy_from_slice(&version.to_le_bytes());
     header
 }
 
-pub fn read_header(bytes: &[u8]) -> io::Result<u16> {
+pub(crate) fn read_header(bytes: &[u8]) -> io::Result<u16> {
     if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -24,7 +24,7 @@ pub fn read_header(bytes: &[u8]) -> io::Result<u16> {
     Ok(u16::from_le_bytes([bytes[4], bytes[5]]))
 }
 
-pub fn encode_record(
+pub(crate) fn encode_record(
     reading: &str,
     surface: &str,
     left_context: u16,
@@ -58,7 +58,7 @@ pub fn encode_record(
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct DecodedRecord<'a> {
+pub(crate) struct DecodedRecord<'a> {
     pub day: u32,
     pub left_context: u16,
     pub right_context: u16,
@@ -66,7 +66,7 @@ pub struct DecodedRecord<'a> {
     pub surface: &'a str,
 }
 
-pub fn decode_record(payload: &[u8], version: u16) -> io::Result<DecodedRecord<'_>> {
+pub(crate) fn decode_record(payload: &[u8], version: u16) -> io::Result<DecodedRecord<'_>> {
     let (day_offset, left_context, right_context, lengths_offset) = match version {
         FORMAT_VERSION_1 => (0usize, 0u16, 0u16, 4usize),
         FORMAT_VERSION_2 if payload.first() == Some(&RECORD_COMMIT) => {
@@ -140,7 +140,11 @@ pub fn decode_record(payload: &[u8], version: u16) -> io::Result<DecodedRecord<'
     })
 }
 
-pub fn record_at(bytes: &[u8], version: u16, offset: usize) -> Option<(usize, DecodedRecord<'_>)> {
+pub(crate) fn record_at(
+    bytes: &[u8],
+    version: u16,
+    offset: usize,
+) -> Option<(usize, DecodedRecord<'_>)> {
     if offset > bytes.len() || bytes.len() - offset < RECORD_ENVELOPE_LEN {
         return None;
     }
@@ -163,7 +167,7 @@ pub fn record_at(bytes: &[u8], version: u16, offset: usize) -> Option<(usize, De
         .map(|record| (payload_end, record))
 }
 
-pub fn scan_records(bytes: &[u8], version: u16) -> io::Result<(usize, u64)> {
+pub(crate) fn scan_records(bytes: &[u8], version: u16) -> io::Result<(usize, u64)> {
     if read_header(bytes)? != version {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -179,7 +183,7 @@ pub fn scan_records(bytes: &[u8], version: u16) -> io::Result<(usize, u64)> {
     Ok((offset, records))
 }
 
-pub fn upgrade_to_current(bytes: &[u8], source_version: u16) -> io::Result<Vec<u8>> {
+pub(crate) fn upgrade_to_current(bytes: &[u8], source_version: u16) -> io::Result<Vec<u8>> {
     let mut upgraded = header(LEARNING_FORMAT_VERSION).to_vec();
     let mut offset = HEADER_LEN;
     while offset < bytes.len() {
@@ -205,7 +209,7 @@ pub fn upgrade_to_current(bytes: &[u8], source_version: u16) -> io::Result<Vec<u
     Ok(upgraded)
 }
 
-pub fn crc32(bytes: &[u8]) -> u32 {
+pub(crate) fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = !0u32;
     for byte in bytes {
         crc ^= u32::from(*byte);
@@ -215,4 +219,66 @@ pub fn crc32(bytes: &[u8]) -> u32 {
         }
     }
     !crc
+}
+
+#[cfg(test)]
+mod pre_extraction_fixture_tests {
+    use super::{crc32, encode_record, header, read_header, record_at, scan_records};
+    use crate::learning::format::{
+        HEADER_LEN, LEARNING_FORMAT_VERSION, REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
+    };
+
+    #[test]
+    fn pre_extraction_writer_fixture_preserves_all_fields_and_exact_bytes() {
+        let hex = include_str!("../../tests/fixtures/learning-v3-pre-extraction.hex").trim();
+        assert_eq!(hex.len() % 2, 0);
+        let bytes: Vec<_> = (0..hex.len())
+            .step_by(2)
+            .map(|index| u8::from_str_radix(&hex[index..index + 2], 16).unwrap())
+            .collect();
+        assert_eq!(read_header(&bytes).unwrap(), LEARNING_FORMAT_VERSION);
+        assert_eq!(
+            scan_records(&bytes, LEARNING_FORMAT_VERSION).unwrap(),
+            (bytes.len(), 3)
+        );
+        let expected = [
+            ("synthetic-reading", "Synthetic\tSurface", 3, 4),
+            (
+                "synthetic-suppression",
+                REPAIR_SUPPRESS_SURFACE,
+                REPAIR_SUPPRESS_CONTEXT,
+                REPAIR_SUPPRESS_CONTEXT,
+            ),
+            ("second-reading", "Second\nSurface", 5, 6),
+        ];
+        let mut offset = HEADER_LEN;
+        let mut encoded = header(LEARNING_FORMAT_VERSION).to_vec();
+        for (reading, surface, left, right) in expected {
+            let (next, record) = record_at(&bytes, LEARNING_FORMAT_VERSION, offset).unwrap();
+            assert_eq!(
+                (
+                    record.reading,
+                    record.surface,
+                    record.left_context,
+                    record.right_context,
+                    record.day
+                ),
+                (reading, surface, left, right, 20708)
+            );
+            let payload = encode_record(
+                record.reading,
+                record.surface,
+                record.left_context,
+                record.right_context,
+                record.day,
+            )
+            .unwrap();
+            encoded.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+            encoded.extend_from_slice(&crc32(&payload).to_le_bytes());
+            encoded.extend_from_slice(&payload);
+            offset = next;
+        }
+        assert_eq!(offset, bytes.len());
+        assert_eq!(encoded, bytes);
+    }
 }
