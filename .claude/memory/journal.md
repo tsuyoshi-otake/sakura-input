@@ -2122,3 +2122,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Phase 2.7 is a package/path rename only. SCV1 magic, WIRE_VERSION 2, and the existing 7 unit tests stay in the same lib.rs blob. Active manifests, source, CI baseline labels, and Cargo.lock drop the old package name. The plan's 2.7 verify command still searches for the old name; docs/history and that migration row keep it as provenance.
 - Research and dictc dataset imports now use sakura_context_proto. Engine keeps the unused-by-source dependency after the rename. No protocol bytes were edited.
+
+## 2026-09-13 Enforce R1/R2/R8/R12/R13 in CI (#178)
+
+- Phase 2.8 makes the completed leaf-boundary rules blocking. CI keeps `-Advisory` for the still-open R3–R7 paths and now enforces R1, R2, R8, R9, R12, and R13. SelfTest rejects a workflow that drops that Enforce list.
