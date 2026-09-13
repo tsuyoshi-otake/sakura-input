@@ -1,18 +1,19 @@
 {
-  "measured_at": "2026-09-12T14:48:13Z",
-  "commit": "97705a5",
+  "measured_at": "2026-09-13T02:44:23Z",
+  "commit": "be3b48c",
   "unconditional_docs": {
     "files": [
       ".claude/memory/rules.md",
+      "AGENTS.md",
       "CLAUDE.md"
     ],
-    "bytes": 85770,
+    "bytes": 9814,
     "budget_bytes": 24576
   },
   "thresholds": {
     "warn_physical_increase_ratio": 0.1,
     "fail_critical_increase_ratio": 0.25,
-    "rationale": "10% is below the smallest single-step change the plan expects to produce (Phase 1 test relocation removes 40-60%), so any +10% drift is a real regression, not noise. 25% on a critical benchmark equals re-merging one mid-sized module (~1,000 LOC into a 4,000 LOC set) and must block."
+    "rationale": "LOC over a fixed file inventory is deterministic; a +10% increase is reading-cost growth requiring explanation, not measurement noise. Keep the existing 10% WARN and 25% critical FAIL thresholds. The former Phase 1 40-60% estimate was corrected in #173 and is not the justification for these thresholds."
   },
   "benchmarks": [
     {
@@ -21,23 +22,24 @@
       "critical": true,
       "entry_point": "crates/sakura-engine/src/dispatch.rs::apply_action (Action::ModeKanaCycle)",
       "physical": {
-        "loc": 21664,
-        "bytes": 845745,
-        "file_count": 5,
-        "inline_test_loc": 16737,
-        "loc_excluding_inline_tests": 4927,
-        "with_unconditional_docs_bytes": 931515,
+        "loc": 10270,
+        "bytes": 430363,
+        "file_count": 12,
+        "inline_test_loc": 26,
+        "loc_excluding_inline_tests": 10244,
+        "with_unconditional_docs_bytes": 440177,
         "categories": {
           "production": {
             "files": [
               "crates/sakura-core/src/keymap.rs",
               "crates/sakura-engine/src/dispatch.rs",
-              "crates/sakura-engine/src/session.rs"
+              "crates/sakura-engine/src/session.rs",
+              "crates/sakura-values/src/input.rs"
             ],
-            "file_count": 3,
-            "loc": 21279,
-            "bytes": 831131,
-            "inline_test_loc": 16737
+            "file_count": 4,
+            "loc": 9298,
+            "bytes": 376075,
+            "inline_test_loc": 26
           },
           "tests": {
             "files": [],
@@ -57,10 +59,17 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/input-behavior.md",
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/session-and-later-findings.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 6,
+            "loc": 587,
+            "bytes": 39674,
             "inline_test_loc": 0
           },
           "config": {
@@ -92,24 +101,29 @@
       "critical": true,
       "entry_point": "crates/sakura-core/src/conversion.rs (ranking) + crates/sakura-engine/src/candidate_projection.rs",
       "physical": {
-        "loc": 26842,
-        "bytes": 1059791,
-        "file_count": 4,
-        "inline_test_loc": 19396,
-        "loc_excluding_inline_tests": 7446,
-        "with_unconditional_docs_bytes": 1145561,
+        "loc": 16259,
+        "bytes": 661458,
+        "file_count": 17,
+        "inline_test_loc": 897,
+        "loc_excluding_inline_tests": 15362,
+        "with_unconditional_docs_bytes": 671272,
         "categories": {
           "production": {
             "files": [
+              "crates/dictc/src/bin/neural_eval.rs",
               "crates/sakura-core/src/conversion.rs",
               "crates/sakura-engine/src/candidate_projection.rs",
               "crates/sakura-engine/src/dispatch.rs",
-              "crates/sakura-engine/src/prediction.rs"
+              "crates/sakura-engine/src/long_conversion.rs",
+              "crates/sakura-engine/src/prediction.rs",
+              "crates/sakura-neural-worker/src/protocol.rs",
+              "crates/sakura-neural-worker/src/sakura_scorer.rs",
+              "crates/sakura-rerank-proto/src/lib.rs"
             ],
-            "file_count": 4,
-            "loc": 26842,
-            "bytes": 1059791,
-            "inline_test_loc": 19396
+            "file_count": 9,
+            "loc": 15570,
+            "bytes": 613999,
+            "inline_test_loc": 897
           },
           "tests": {
             "files": [],
@@ -126,10 +140,19 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/product-direction.md",
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/overflow-packaging.md",
+              "docs/rules/performance.md",
+              "docs/rules/session-and-later-findings.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 8,
+            "loc": 689,
+            "bytes": 47459,
             "inline_test_loc": 0
           },
           "config": {
@@ -161,12 +184,12 @@
       "critical": true,
       "entry_point": "crates/sakura-tsf/src/text_service.rs (deferred / candidate_operation_active latches)",
       "physical": {
-        "loc": 13543,
-        "bytes": 554795,
-        "file_count": 8,
-        "inline_test_loc": 4685,
-        "loc_excluding_inline_tests": 8858,
-        "with_unconditional_docs_bytes": 640565,
+        "loc": 11610,
+        "bytes": 483817,
+        "file_count": 13,
+        "inline_test_loc": 1706,
+        "loc_excluding_inline_tests": 9904,
+        "with_unconditional_docs_bytes": 493631,
         "categories": {
           "production": {
             "files": [
@@ -177,9 +200,9 @@
               "crates/sakura-tsf/src/write_coordinator.rs"
             ],
             "file_count": 5,
-            "loc": 13210,
-            "bytes": 533874,
-            "inline_test_loc": 4685
+            "loc": 10961,
+            "bytes": 441510,
+            "inline_test_loc": 1706
           },
           "tests": {
             "files": [],
@@ -197,11 +220,16 @@
           },
           "docs": {
             "files": [
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/tsf-reentrancy.md",
+              "docs/rules/windows.md",
               "verification/revalidation-20260905.md"
             ],
-            "file_count": 1,
-            "loc": 65,
-            "bytes": 10108,
+            "file_count": 6,
+            "loc": 381,
+            "bytes": 31494,
             "inline_test_loc": 0
           },
           "config": {
@@ -236,12 +264,12 @@
       "critical": true,
       "entry_point": "crates/sakura-tsf/src/key_handler.rs",
       "physical": {
-        "loc": 13015,
-        "bytes": 531060,
-        "file_count": 6,
-        "inline_test_loc": 5006,
-        "loc_excluding_inline_tests": 8009,
-        "with_unconditional_docs_bytes": 616830,
+        "loc": 11375,
+        "bytes": 479677,
+        "file_count": 13,
+        "inline_test_loc": 1714,
+        "loc_excluding_inline_tests": 9661,
+        "with_unconditional_docs_bytes": 489491,
         "categories": {
           "production": {
             "files": [
@@ -251,9 +279,9 @@
               "crates/sakura-tsf/src/text_service.rs"
             ],
             "file_count": 4,
-            "loc": 12697,
-            "bytes": 519804,
-            "inline_test_loc": 5006
+            "loc": 10448,
+            "bytes": 427440,
+            "inline_test_loc": 1714
           },
           "tests": {
             "files": [],
@@ -270,10 +298,18 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/input-behavior.md",
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/session-and-later-findings.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/tsf-reentrancy.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 7,
+            "loc": 609,
+            "bytes": 40981,
             "inline_test_loc": 0
           },
           "config": {
@@ -308,12 +344,12 @@
       "critical": false,
       "entry_point": "crates/sakura-core/src/conversion.rs (special candidate synthesis)",
       "physical": {
-        "loc": 10355,
-        "bytes": 418312,
-        "file_count": 4,
-        "inline_test_loc": 3963,
-        "loc_excluding_inline_tests": 6392,
-        "with_unconditional_docs_bytes": 504082,
+        "loc": 7511,
+        "bytes": 319011,
+        "file_count": 12,
+        "inline_test_loc": 225,
+        "loc_excluding_inline_tests": 7286,
+        "with_unconditional_docs_bytes": 328825,
         "categories": {
           "production": {
             "files": [
@@ -323,9 +359,9 @@
               "crates/sakura-core/src/width.rs"
             ],
             "file_count": 4,
-            "loc": 10355,
-            "bytes": 418312,
-            "inline_test_loc": 3963
+            "loc": 6822,
+            "bytes": 271552,
+            "inline_test_loc": 225
           },
           "tests": {
             "files": [],
@@ -342,10 +378,19 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/product-direction.md",
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/overflow-packaging.md",
+              "docs/rules/performance.md",
+              "docs/rules/session-and-later-findings.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 8,
+            "loc": 689,
+            "bytes": 47459,
             "inline_test_loc": 0
           },
           "config": {
@@ -377,12 +422,12 @@
       "critical": false,
       "entry_point": "crates/sakura-core/src/dictionary.rs::image_format",
       "physical": {
-        "loc": 5306,
-        "bytes": 207843,
-        "file_count": 4,
-        "inline_test_loc": 485,
-        "loc_excluding_inline_tests": 4821,
-        "with_unconditional_docs_bytes": 293613,
+        "loc": 5202,
+        "bytes": 217339,
+        "file_count": 10,
+        "inline_test_loc": 0,
+        "loc_excluding_inline_tests": 5202,
+        "with_unconditional_docs_bytes": 227153,
         "categories": {
           "production": {
             "files": [
@@ -390,9 +435,9 @@
               "crates/sakura-core/src/dictionary.rs"
             ],
             "file_count": 2,
-            "loc": 4658,
-            "bytes": 179911,
-            "inline_test_loc": 485
+            "loc": 4176,
+            "bytes": 161131,
+            "inline_test_loc": 0
           },
           "tests": {
             "files": [
@@ -413,10 +458,17 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/issue-28-candidate-details.md",
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/overflow-packaging.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 6,
+            "loc": 378,
+            "bytes": 28276,
             "inline_test_loc": 0
           },
           "config": {
@@ -448,24 +500,25 @@
       "critical": false,
       "entry_point": "crates/sakura-engine/src/input_history.rs",
       "physical": {
-        "loc": 7797,
-        "bytes": 329935,
-        "file_count": 15,
-        "inline_test_loc": 3417,
-        "loc_excluding_inline_tests": 4380,
-        "with_unconditional_docs_bytes": 415705,
+        "loc": 2672,
+        "bytes": 101290,
+        "file_count": 8,
+        "inline_test_loc": 161,
+        "loc_excluding_inline_tests": 2511,
+        "with_unconditional_docs_bytes": 111104,
         "categories": {
           "production": {
             "files": [
               "crates/sakura-engine/src/input_history.rs",
-              "crates/sakura-proto/src/message.rs",
-              "crates/sakura-settings/src/cli.rs",
-              "crates/sakura-settings/src/input_history.rs"
+              "crates/sakura-store/src/crypto.rs",
+              "crates/sakura-store/src/input_history/codec.rs",
+              "crates/sakura-store/src/input_history/format.rs",
+              "crates/sakura-store/src/input_history/persistence.rs"
             ],
-            "file_count": 4,
-            "loc": 7148,
-            "bytes": 275712,
-            "inline_test_loc": 3417
+            "file_count": 5,
+            "loc": 2231,
+            "bytes": 81175,
+            "inline_test_loc": 161
           },
           "tests": {
             "files": [],
@@ -482,10 +535,12 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/developer-history.md"
+            ],
+            "file_count": 1,
+            "loc": 27,
+            "bytes": 2219,
             "inline_test_loc": 0
           },
           "config": {
@@ -497,21 +552,12 @@
           },
           "verification": {
             "files": [
-              "verification/history-clear-epoch.md",
-              "verification/history-compaction-publication.md",
-              "verification/history-control-barriers.md",
-              "verification/history-counter-exhaustion.md",
-              "verification/history-maintenance-plan.md",
-              "verification/history-read-failure-issue.md",
-              "verification/history-read-failure.md",
-              "verification/history-startup-scan.md",
-              "verification/history-stop-outcome.md",
-              "verification/history-store-ownership.md",
+              "verification/developer-history/correspondence-and-audit.md",
               "verification/tla/DeveloperHistory.tla"
             ],
-            "file_count": 11,
-            "loc": 649,
-            "bytes": 54223,
+            "file_count": 2,
+            "loc": 414,
+            "bytes": 17896,
             "inline_test_loc": 0
           }
         }
@@ -529,24 +575,25 @@
       "critical": false,
       "entry_point": "crates/sakura-renderer/src/candidate.rs",
       "physical": {
-        "loc": 5631,
-        "bytes": 213180,
-        "file_count": 4,
-        "inline_test_loc": 3940,
-        "loc_excluding_inline_tests": 1691,
-        "with_unconditional_docs_bytes": 298950,
+        "loc": 4581,
+        "bytes": 186281,
+        "file_count": 11,
+        "inline_test_loc": 543,
+        "loc_excluding_inline_tests": 4038,
+        "with_unconditional_docs_bytes": 196095,
         "categories": {
           "production": {
             "files": [
               "crates/sakura-renderer/src/candidate.rs",
               "crates/sakura-renderer/src/indicator.rs",
+              "crates/sakura-renderer/src/lib.rs",
               "crates/sakura-renderer/src/main.rs",
               "crates/sakura-renderer/src/theme.rs"
             ],
-            "file_count": 4,
-            "loc": 5631,
-            "bytes": 213180,
-            "inline_test_loc": 3940
+            "file_count": 5,
+            "loc": 4273,
+            "bytes": 161070,
+            "inline_test_loc": 543
           },
           "tests": {
             "files": [],
@@ -563,10 +610,17 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/issue-27-candidate-popup.md",
+              "docs/decisions/issue-28-candidate-details.md",
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 6,
+            "loc": 308,
+            "bytes": 25211,
             "inline_test_loc": 0
           },
           "config": {
@@ -598,12 +652,12 @@
       "critical": false,
       "entry_point": ".github/workflows/ci.yml",
       "physical": {
-        "loc": 1749,
-        "bytes": 76614,
-        "file_count": 10,
+        "loc": 5034,
+        "bytes": 257085,
+        "file_count": 22,
         "inline_test_loc": 0,
-        "loc_excluding_inline_tests": 1749,
-        "with_unconditional_docs_bytes": 162384,
+        "loc_excluding_inline_tests": 5034,
+        "with_unconditional_docs_bytes": 266899,
         "categories": {
           "production": {
             "files": [],
@@ -627,28 +681,41 @@
             "inline_test_loc": 0
           },
           "docs": {
-            "files": [],
-            "file_count": 0,
-            "loc": 0,
-            "bytes": 0,
+            "files": [
+              "docs/decisions/test-output.md",
+              "docs/rules/ci-verification.md",
+              "docs/rules/overflow-packaging.md",
+              "docs/rules/session-and-later-findings.md",
+              "docs/rules/this-machine.md",
+              "docs/rules/windows.md"
+            ],
+            "file_count": 6,
+            "loc": 655,
+            "bytes": 43940,
             "inline_test_loc": 0
           },
           "config": {
             "files": [
+              ".github/desktop-test-inventory.json",
               ".github/workflows/ci.yml",
+              ".github/workflows/desktop-tests.yml",
+              "ci/check-dependency-rules.ps1",
+              "ci/check-dll-size.ps1",
               "ci/check-process-clean.ps1",
               "ci/check-simd-assembly.ps1",
               "ci/dep-policy.ps1",
               "ci/ensure-cargo-audit.ps1",
+              "ci/record-test-baseline.ps1",
               "ci/release-workflow-policy.ps1",
+              "ci/run-formal-configuration.ps1",
               "ci/run-test-quiet.ps1",
               "ci/test-run-test-quiet.ps1",
               "ci/test-update-signing-v2.ps1",
               "ci/write-step-timings.ps1"
             ],
-            "file_count": 10,
-            "loc": 1749,
-            "bytes": 76614,
+            "file_count": 16,
+            "loc": 4379,
+            "bytes": 213145,
             "inline_test_loc": 0
           },
           "verification": {
@@ -673,12 +740,12 @@
       "critical": true,
       "entry_point": "CLAUDE.md",
       "physical": {
-        "loc": 1775,
-        "bytes": 125847,
-        "file_count": 2,
+        "loc": 1871,
+        "bytes": 131687,
+        "file_count": 3,
         "inline_test_loc": 0,
-        "loc_excluding_inline_tests": 1775,
-        "with_unconditional_docs_bytes": 211617,
+        "loc_excluding_inline_tests": 1871,
+        "with_unconditional_docs_bytes": 141501,
         "categories": {
           "production": {
             "files": [],
@@ -704,11 +771,12 @@
           "docs": {
             "files": [
               "DESIGN.md",
+              "docs/architecture/README.md",
               "README.md"
             ],
-            "file_count": 2,
-            "loc": 1775,
-            "bytes": 125847,
+            "file_count": 3,
+            "loc": 1871,
+            "bytes": 131687,
             "inline_test_loc": 0
           },
           "config": {
