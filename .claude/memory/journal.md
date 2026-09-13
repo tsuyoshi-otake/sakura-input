@@ -2135,6 +2135,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Phase 2.8 makes the completed leaf-boundary rules blocking. CI keeps `-Advisory` for the still-open R3–R7 paths and now enforces R1, R2, R8, R9, R12, and R13. SelfTest rejects a workflow that drops that Enforce list.
 
+## 2026-09-13 Record major version for the architecture product release
+
+- Owner instructed that the product release of this architecture series is a major bump to 2.0.0, not 1.0.40. Workspace version stays 1.0.39 on intermediate PRs. The release job must align Cargo version, notes, installer, tag, and update-signing sequence. Signing policy is unchanged.
+
 ## 2026-09-13 Require caret-adjacent popup placement after detail follow (#168)
 
 - Hosted all-mode run 34720449429 passed appearance sampling and bounded/oversized detail-width checks, then failed the later caret-follow assertion in `selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe`. The raw log printed work `RECT {0,0,1024,720}` at 96 DPI and the initial/short/long/oversized rectangles; it did not print the failed `after` rectangle. The assertion `after.left >= moved_anchor.left || after.top >= moved_anchor.bottom` rejects a permitted above-plus-left result.
