@@ -2129,4 +2129,5 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 ## 2026-09-13 Move conversion.rs into conversion/ (#206)
 
-- Phase 3.1 starts with `git mv` only: `conversion.rs` → `conversion/mod.rs` and the sibling tests follow. Public names stay `Converter` / `ConversionOptions` / `ConversionCandidate`. IRV production paths for CORE-CONVERSION and ENGINE-CANDIDATE now point at `conversion/mod.rs` so the missing-file gate does not fire. Leaf extraction is a later commit/PR.
+- Phase 3.1 starts with `git mv` only: `conversion.rs` → `conversion/mod.rs` and the sibling tests follow. Public names stay `Converter` / `ConversionOptions` / `ConversionCandidate`. IRV production paths for CORE-CONVERSION and ENGINE-CANDIDATE now point at `conversion/mod.rs` so the missing-file gate does not fire.
+- A second commit moves candidate authority/evidence/origin/path-evidence into `conversion/evidence.rs` with `pub use` so facade paths stay. `Surface` is `pub(super)` for `PathEvidence::add_surface`. ENGINE-CANDIDATE IRV now includes `evidence.rs`. Search, ranking, and synthesis stay in `mod.rs`.
