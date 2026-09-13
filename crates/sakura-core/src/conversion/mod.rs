@@ -12,15 +12,14 @@ use std::collections::BinaryHeap;
 use sakura_values::MAX_CANDIDATES;
 use sakura_values::{FixedStr, FixedVec, MAX_PREEDIT_BYTES, MAX_SEGMENTS};
 
-use crate::calendar::{date_offset_for_reading, date_surface_specs, CivilDate};
-use crate::dictionary::{Dictionary, Entry, EntryFlags, SingleKanjiVariant};
+use crate::calendar::CivilDate;
+use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::input_repair::{
     allows_system_entry, collect_repair_variants, english_spelling_katakana_reading, RepairKind,
     COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, MAX_REPAIR_VARIANTS,
 };
 use crate::numerals::{
-    is_decorative_numeral_char, is_numeric_day_surface, parse_numeric_prefix,
-    should_emit_numeric_span, NumericCounter, NumericSpan, NUMERIC_STYLES,
+    parse_numeric_prefix, should_emit_numeric_span, NumericCounter, NumericSpan, NUMERIC_STYLES,
 };
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
@@ -29,6 +28,7 @@ use crate::TextSink;
 
 mod candidates;
 mod evidence;
+mod synthesis;
 
 pub use candidates::{ConversionCandidate, ConversionSegment};
 pub use evidence::{
@@ -2387,208 +2387,6 @@ impl Converter {
         Ok(consume(result.candidates(), diagnostics))
     }
 
-    /// Appends the pinned single-kanji table to a finished candidate list.
-    ///
-    /// Single kanji are deliberately not lattice edges. こう alone names 315
-    /// characters in the pinned source, so admitting them as edges would spend
-    /// a one-mora reading's whole `MAX_LATTICE_NODES` budget on them and would
-    /// change the cost of every path that crosses them. Mozc reaches the same
-    /// conclusion and runs its single-kanji rewriter after conversion; this is
-    /// the same position in the pipeline. The tail therefore cannot move TOP-1
-    /// or reorder anything the search produced. It only fills slots the ranked
-    /// list left empty, and every appended cost sits above the whole ranked
-    /// list so a later re-sort keeps it at the end.
-    fn append_single_kanji(
-        &mut self,
-        dictionary: &Dictionary<'_>,
-        reading: &str,
-        wanted: usize,
-    ) -> Result<(), ConversionError> {
-        if self.candidates.len() >= wanted || !dictionary.has_single_kanji() {
-            return Ok(());
-        }
-        let reading_end =
-            u16::try_from(reading.len()).map_err(|_| ConversionError::ReadingTooLong)?;
-        let synthetic_id = if dictionary.class_count() > usize::from(DEFAULT_NOUN_ID) {
-            DEFAULT_NOUN_ID
-        } else {
-            0
-        };
-        // Measured against the ranked ceiling rather than the previous tail
-        // row: a cheap ranked list must not let its tail overtake anything.
-        let ranked_ceiling = self
-            .candidates
-            .iter()
-            .map(|candidate| candidate.cost)
-            .max()
-            .unwrap_or(0);
-        for (index, character) in dictionary.single_kanji(reading).enumerate() {
-            if self.candidates.len() >= wanted {
-                break;
-            }
-            let mut text = FixedStr::new();
-            if text.push(character).is_err() {
-                continue;
-            }
-            // A character the search already ranked keeps its ranked position
-            // and its own annotation.
-            if self
-                .candidates
-                .iter()
-                .any(|candidate| candidate.text() == text.as_str())
-            {
-                continue;
-            }
-            let Some(annotation) = single_kanji_annotation(dictionary, character) else {
-                continue;
-            };
-            let mut segments = FixedVec::new();
-            segments
-                .push(ConversionSegment {
-                    reading_start: 0,
-                    reading_end,
-                    text_start: 0,
-                    text_end: u16::try_from(text.len())
-                        .map_err(|_| ConversionError::OutputTooLong)?,
-                    left_id: synthetic_id,
-                    right_id: synthetic_id,
-                    flags: EntryFlags::NONE,
-                    word_count: 1,
-                    it_word_count: 0,
-                })
-                .map_err(|_| ConversionError::TooManySegments)?;
-            self.candidates.push(ConversionCandidate {
-                text,
-                annotation,
-                segments,
-                system_entry_index: NO_SYSTEM_ENTRY_INDEX,
-                synthetic_exact: false,
-                origin: CandidateOrigin::Direct,
-                // Not system-only, so the cross-commit bridge can neither
-                // anchor on an appended character nor transfer a contextual
-                // gain to one.
-                path_evidence: PathEvidence {
-                    generated_edges: 1,
-                    ..PathEvidence::default()
-                },
-                generated_day_suffix: false,
-                bridge_boundary_kind: None,
-                commit_bridge_tail: CommitBridgeTailStorage::default(),
-                cross_commit_rescored: false,
-                cost: ranked_ceiling.saturating_add(1 + i64::try_from(index).unwrap_or(0)),
-            });
-        }
-        Ok(())
-    }
-
-    /// Offers the whole punctuation family for a reading that is a single
-    /// punctuation mark, configured glyph first.
-    ///
-    /// The setting picks the default, not the vocabulary. Before this, a
-    /// reader who had chosen the full-width comma could not reach the touten
-    /// for one quoted sentence without opening the settings window: the width
-    /// choke point re-emits the configured glyph for whichever family member a
-    /// candidate carries, so four distinct candidates would all have rendered
-    /// as the same character. That collapse happens at display time, which is
-    /// why the fix is a candidate bit rather than a normalizer change -- each
-    /// appended row carries `synthetic_exact`, which `append_candidate_surface`
-    /// and both commit-only surface paths honour ahead of `normalize_into`.
-    ///
-    /// Rule 4's owned set stays four code points wide. The two half-width kana
-    /// marks are offerable without being claimed, and the ASCII pair keeps its
-    /// emit-but-never-reclaim direction: nothing here rewrites a character the
-    /// reader typed.
-    ///
-    /// Carrying `synthetic_exact` also suppresses learning and the exact cache
-    /// for these rows, which is what this feature wants: one quoted sentence's
-    /// touten must not train the ranker to override the reader's configured
-    /// mark on every later comma.
-    fn append_punctuation_family(
-        &mut self,
-        reading: &str,
-        style: PunctuationStyle,
-        wanted: usize,
-    ) -> Result<(), ConversionError> {
-        let Some(family) = style.family_reading(reading) else {
-            return Ok(());
-        };
-        let reading_end =
-            u16::try_from(reading.len()).map_err(|_| ConversionError::ReadingTooLong)?;
-        // Every family member the search already produced has to go: it would
-        // otherwise sit in the list without `synthetic_exact` and render as the
-        // configured glyph, putting a second copy of one row on the page. The
-        // appended set is a superset of what is dropped, so nothing the reader
-        // could reach before becomes unreachable.
-        self.candidates.retain(|candidate| {
-            let mut text = candidate.text().chars();
-            !matches!(
-                (text.next(), text.next()),
-                (Some(existing), None) if family.iter().any(|variant| variant.glyph == existing)
-            )
-        });
-        // Below every surviving candidate, so the configured glyph is TOP-1 and
-        // a later re-sort cannot interleave the family with anything else. This
-        // is the one appender allowed to take TOP-1, and only for a reading that
-        // is itself a single punctuation mark: the character it puts there is
-        // the one the page already showed.
-        let base = self
-            .candidates
-            .iter()
-            .map(|candidate| candidate.cost)
-            .min()
-            .unwrap_or(0)
-            .saturating_sub(i64::try_from(family.len()).unwrap_or(0));
-        for (index, variant) in family.into_iter().enumerate() {
-            let mut text = FixedStr::new();
-            text.push(variant.glyph)
-                .map_err(|_| ConversionError::OutputTooLong)?;
-            let mut annotation = FixedStr::new();
-            annotation
-                .push_str(variant.annotation)
-                .map_err(|_| ConversionError::OutputTooLong)?;
-            let mut segments = FixedVec::new();
-            segments
-                .push(ConversionSegment {
-                    reading_start: 0,
-                    reading_end,
-                    text_start: 0,
-                    text_end: u16::try_from(text.len())
-                        .map_err(|_| ConversionError::OutputTooLong)?,
-                    // Neutral connection class in both directions: a
-                    // punctuation mark must not hand the next conversion a
-                    // noun's right ID.
-                    left_id: 0,
-                    right_id: 0,
-                    flags: EntryFlags::NONE,
-                    word_count: 1,
-                    it_word_count: 0,
-                })
-                .map_err(|_| ConversionError::TooManySegments)?;
-            self.candidates.insert(
-                index,
-                ConversionCandidate {
-                    text,
-                    annotation,
-                    segments,
-                    system_entry_index: NO_SYSTEM_ENTRY_INDEX,
-                    synthetic_exact: true,
-                    origin: CandidateOrigin::Direct,
-                    path_evidence: PathEvidence {
-                        generated_edges: 1,
-                        ..PathEvidence::default()
-                    },
-                    generated_day_suffix: false,
-                    bridge_boundary_kind: None,
-                    commit_bridge_tail: CommitBridgeTailStorage::default(),
-                    cross_commit_rescored: false,
-                    cost: base.saturating_add(i64::try_from(index).unwrap_or(0)),
-                },
-            );
-        }
-        self.candidates.truncate(wanted.max(family.len()));
-        Ok(())
-    }
-
     fn ensure_lossless_fallback(&mut self, fallback: ConversionCandidate, wanted: usize) -> bool {
         if self
             .candidates
@@ -2749,17 +2547,6 @@ impl Converter {
         });
     }
 
-    /// `じつ` is a word ending (先日, 本日, 全日), not the day counter `にち`.
-    /// Numeric rewriter output and a 千+日 splice both look like "1000日" and
-    /// bury the word the user is typing.
-    fn drop_jitsu_day_counts(&mut self, reading: &str) {
-        if !reading.ends_with("じつ") {
-            return;
-        }
-        self.candidates
-            .retain(|candidate| !is_numeric_day_surface(candidate.text()));
-    }
-
     /// A generated day at a non-zero reading offset is only an ambiguous
     /// compound edge when a lexical node can actually precede it. Synthetic
     /// reading/katakana nodes are intentionally ignored: they do not provide
@@ -2774,28 +2561,6 @@ impl Converter {
             previous = node.next_at_end;
         }
         false
-    }
-
-    /// A fully covered, system-only path is stronger evidence than a
-    /// generated calendar suffix. This pass only moves the generated edge
-    /// behind that evidence; it does not remove it, so legitimate numeric
-    /// compounds remain available when no lexical interpretation exists.
-    fn demote_generated_day_suffixes(&mut self, reading_len: usize) {
-        let Some(best_lexical_cost) = self
-            .candidates
-            .iter()
-            .filter(|candidate| candidate.has_full_system_coverage(reading_len))
-            .map(|candidate| candidate.cost)
-            .min()
-        else {
-            return;
-        };
-        let floor = best_lexical_cost.saturating_add(1);
-        for candidate in &mut self.candidates {
-            if candidate.generated_day_suffix {
-                candidate.cost = candidate.cost.max(floor);
-            }
-        }
     }
 
     fn add_numeric_forms(
@@ -2863,194 +2628,6 @@ impl Converter {
                     surface: Surface::Generated(generated_index),
                 },
             )?;
-        }
-        Ok(())
-    }
-
-    fn prefer_numeric_forms(&mut self, reading: &str) -> Result<(), ConversionError> {
-        let Some(span) = parse_numeric_prefix(reading) else {
-            return Ok(());
-        };
-        if span.bytes != reading.len() || !should_emit_numeric_span(span) {
-            return Ok(());
-        }
-        let form_cost = numeric_form_cost(reading, span);
-        let mut forms = Vec::new();
-        for style in NUMERIC_STYLES {
-            let mut text = FixedStr::<MAX_PREEDIT_BYTES>::new();
-            if style.write(span, &mut text).is_err() {
-                continue;
-            }
-            forms.push((text, style));
-        }
-        // A whole-reading dictionary form carries lexical ranking evidence
-        // that the generated numeric rewriter does not. Keep generated forms
-        // authoritative when no such entry exists (for example 24日), but do
-        // not let a cheap synthetic 1日 displace the dictionary's 一日.
-        let lexical_form_cost = self
-            .candidates
-            .iter()
-            .filter(|candidate| candidate.system_entry_index().is_some())
-            .filter(|candidate| {
-                forms
-                    .iter()
-                    .any(|(form, _)| candidate.text() == form.as_str())
-            })
-            .map(|candidate| candidate.cost)
-            .min();
-        if let Some(lexical_cost) = lexical_form_cost {
-            for candidate in &mut self.candidates {
-                if candidate.path_evidence().generated_edges == 0 {
-                    continue;
-                }
-                let Some(index) = forms
-                    .iter()
-                    .position(|(form, _)| candidate.text() == form.as_str())
-                else {
-                    continue;
-                };
-                candidate.cost = candidate.cost.max(
-                    lexical_cost
-                        .saturating_add(1)
-                        .saturating_add(i64::try_from(index).unwrap_or(0)),
-                );
-            }
-        }
-        self.candidates.retain(|candidate| {
-            let text = candidate.text();
-            if text.chars().any(is_decorative_numeral_char) {
-                return false;
-            }
-            forms.iter().any(|(form, _)| text == form.as_str())
-                || text == reading
-                || candidate.system_entry_index().is_some()
-        });
-        for (index, (text, style)) in forms.iter().enumerate() {
-            if self
-                .candidates
-                .iter()
-                .any(|candidate| candidate.text() == text.as_str())
-            {
-                continue;
-            }
-            let mut annotation = FixedStr::new();
-            if annotation.push_str(style.annotation()).is_err() {
-                continue;
-            }
-            let mut segments = FixedVec::new();
-            let _ = segments.push(ConversionSegment {
-                reading_start: 0,
-                reading_end: u16::try_from(reading.len())
-                    .map_err(|_| ConversionError::ReadingTooLong)?,
-                text_start: 0,
-                text_end: u16::try_from(text.len()).map_err(|_| ConversionError::OutputTooLong)?,
-                left_id: 0,
-                right_id: 0,
-                flags: EntryFlags::NONE,
-                word_count: 1,
-                it_word_count: 0,
-            });
-            self.candidates.push(ConversionCandidate {
-                text: text.clone(),
-                annotation,
-                segments,
-                system_entry_index: NO_SYSTEM_ENTRY_INDEX,
-                synthetic_exact: false,
-                origin: CandidateOrigin::Direct,
-                path_evidence: PathEvidence {
-                    generated_edges: 1,
-                    ..PathEvidence::default()
-                },
-                generated_day_suffix: false,
-                bridge_boundary_kind: None,
-                commit_bridge_tail: CommitBridgeTailStorage::default(),
-                cross_commit_rescored: false,
-                cost: lexical_form_cost.map_or_else(
-                    || form_cost.saturating_add(i64::try_from(index).unwrap_or(0)),
-                    |lexical_cost| {
-                        lexical_cost
-                            .saturating_add(1)
-                            .saturating_add(i64::try_from(index).unwrap_or(0))
-                    },
-                ),
-            });
-        }
-        self.candidates.sort_by_key(|candidate| candidate.cost);
-        Ok(())
-    }
-
-    fn add_date_candidates(
-        &mut self,
-        reading: &str,
-        civil_date: Option<CivilDate>,
-    ) -> Result<(), ConversionError> {
-        let Some(offset) = date_offset_for_reading(reading) else {
-            return Ok(());
-        };
-        let Some(date) = civil_date.and_then(|today| today.add_days(offset)) else {
-            return Ok(());
-        };
-        if self.candidates.is_empty() {
-            return Ok(());
-        }
-        let base = self.candidates[0].clone();
-        let reading_end =
-            u16::try_from(reading.len()).map_err(|_| ConversionError::ReadingTooLong)?;
-        for (index, spec) in date_surface_specs(date).enumerate() {
-            if self.candidates.len() >= MAX_CONVERSION_CANDIDATES + GENERATED_VARIANT_SLACK {
-                break;
-            }
-            let mut text = FixedStr::new();
-            if spec.format.write(date, &mut text).is_err() {
-                continue;
-            }
-            if self
-                .candidates
-                .iter()
-                .any(|candidate| candidate.text() == text.as_str())
-            {
-                continue;
-            }
-            let mut annotation = FixedStr::new();
-            if annotation.push_str(spec.annotation).is_err() {
-                continue;
-            }
-            let mut segments = FixedVec::new();
-            let first = base.segments().first().copied().unwrap_or_default();
-            let last = base.segments().last().copied().unwrap_or(first);
-            segments
-                .push(ConversionSegment {
-                    reading_start: 0,
-                    reading_end,
-                    text_start: 0,
-                    text_end: u16::try_from(text.len())
-                        .map_err(|_| ConversionError::OutputTooLong)?,
-                    left_id: first.left_id,
-                    right_id: last.right_id,
-                    flags: EntryFlags::NONE,
-                    word_count: 1,
-                    it_word_count: 0,
-                })
-                .map_err(|_| ConversionError::TooManySegments)?;
-            self.candidates.push(ConversionCandidate {
-                text,
-                annotation,
-                segments,
-                system_entry_index: NO_SYSTEM_ENTRY_INDEX,
-                synthetic_exact: false,
-                origin: CandidateOrigin::Direct,
-                path_evidence: PathEvidence {
-                    generated_edges: 1,
-                    ..PathEvidence::default()
-                },
-                generated_day_suffix: false,
-                bridge_boundary_kind: None,
-                commit_bridge_tail: CommitBridgeTailStorage::default(),
-                cross_commit_rescored: false,
-                cost: base
-                    .cost
-                    .saturating_add(10 + i64::try_from(index).unwrap_or(0)),
-            });
         }
         Ok(())
     }
@@ -4167,28 +3744,6 @@ fn dictionary_has_exact_surface(
         return Err(ConversionError::Dictionary(error));
     }
     Ok(found)
-}
-
-/// Renders one appended character's annotation: 異体字（高） for a character
-/// the pinned rules relate to another, and a plain marker otherwise.
-///
-/// A note is built whole or not at all, so a bounded buffer that cannot hold
-/// the full relation never leaves a half-written label on a candidate.
-fn single_kanji_annotation(
-    dictionary: &Dictionary<'_>,
-    character: char,
-) -> Option<FixedStr<MAX_PREEDIT_BYTES>> {
-    let mut annotation = FixedStr::new();
-    let Some(SingleKanjiVariant { original, kind }) = dictionary.single_kanji_variant(character)
-    else {
-        annotation.push_str(SINGLE_KANJI_ANNOTATION).ok()?;
-        return Some(annotation);
-    };
-    annotation.push_str(kind.label()).ok()?;
-    annotation.push('（').ok()?;
-    annotation.push(original).ok()?;
-    annotation.push('）').ok()?;
-    Some(annotation)
 }
 
 fn make_lossless_fallback(
