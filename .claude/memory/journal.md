@@ -2150,3 +2150,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 
 - Move #94/#108 filters into `conversion/ranking/{coherence,quality_gate,it_terms}.rs`. Search, raw-repair, and synthesis stay out of that directory. `char_class` remains with lattice because build_lattice still uses it.
 - `IRV-ENGINE-CANDIDATE` production replaces `conversion/mod.rs` with the ranking files plus `evidence.rs` and `assembly.rs`. Measured Physical IRV 15,837 → 11,958. Phase 3 target ≤4,000 remains open because `dispatch.rs` is still in the set (Phase 4). Do not update `baseline.json`.
+
+## 2026-09-13 Point HISTORY-STORE IRV at store ownership after 2.2d (#178)
+
+- Phase 2.9 measures acceptance; it does not hide source. The previous inventory still listed `sakura-proto/src/message.rs` (IME wire), `sakura-settings/src/cli.rs` (the whole settings CLI), `sakura-settings/src/input_history.rs` (view/export/review consumer), the `verification/history-*.md` dated H2 notes, and generic rules already counted as unconditional docs. After 2.2d those are other Issue types.
+- The store/compaction/stats reading set is now the engine writer, the four store modules, `docs/decisions/developer-history.md`, DeveloperHistory TLA, and correspondence. File count and Physical LOC are re-measured against the previous baseline before any `-Out`. Do not drop a store module to make the budget.
+- Compare against the previous snapshot: `IRV-HISTORY-STORE` 7,797 → 2,672 physical LOC / 8 files (−65.7%). Meets ≤3,000 and ≤8. Production stays the engine writer plus the four store modules; proto, settings CLI, settings view/export, dated `verification/history-*.md`, and unconditional-doc duplicates are other Issue types after 2.2d.
+- On `be3b48c` (before merging #210), `IRV-CORE-CONVERSION` production was `calendar.rs`, `conversion.rs`, `numerals.rs`, `width.rs` — no proto. `-Out` recorded HISTORY-STORE 2,672/8, CORE-CONVERSION 7,511/12, CANDIDATE 16,259/17, CI 5,034.
+- After merging origin/main (#210), `benchmarks.json` keeps the 2.9 HISTORY-STORE set and the 3.1 CORE/CANDIDATE sets. Re-measure: HISTORY-STORE 2,672/8 (unchanged), CORE-CONVERSION 3,442/17 (no proto), ENGINE-CANDIDATE 11,958/21. Compare against the `be3b48c` snapshot is PASS. Then `-Out` records this combined inventory. Phase 3 targets ≤1,200 / ≤4,000 stay open; do not hide a miss.
