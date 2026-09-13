@@ -124,23 +124,27 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     let killed_at = Instant::now();
 
     let deadline = killed_at + RECOVERY_BUDGET;
-    loop {
-        if Client::connect(PROBE).is_ok() {
-            println!("recovered after {:?}", killed_at.elapsed());
-            break;
+    let mut client = loop {
+        match Client::connect(PROBE) {
+            Ok(client) => {
+                println!("recovered after {:?}", killed_at.elapsed());
+                break client;
+            }
+            Err(_) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "the engine was still gone {RECOVERY_BUDGET:?} after being killed, \
+                     with the renderer running: the watchdog did not restart it, and a \
+                     user hitting this would lose their IME until the next logon"
+                );
+                sleep(Duration::from_millis(100));
+            }
         }
-        assert!(
-            Instant::now() < deadline,
-            "the engine was still gone {RECOVERY_BUDGET:?} after being killed, \
-             with the renderer running: the watchdog did not restart it, and a \
-             user hitting this would lose their IME until the next logon"
-        );
-        sleep(Duration::from_millis(100));
-    }
+    };
 
     // Reachable is not the same as working. What the criterion promises is
-    // that typing resumes, so type.
-    let mut client = Client::connect(PATIENT).expect("the pipe just answered");
+    // that typing resumes, so use the exact connection that proved recovery
+    // instead of opening a second pipe instance and racing the restarted engine.
     let session = handshake_and_open(&mut client);
     let mut composed = String::new();
     for c in "sa".chars() {
