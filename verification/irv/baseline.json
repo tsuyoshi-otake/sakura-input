@@ -1,6 +1,6 @@
 {
-  "measured_at": "2026-09-13T02:44:23Z",
-  "commit": "be3b48c",
+  "measured_at": "2026-09-13T02:50:39Z",
+  "commit": "a640771",
   "unconditional_docs": {
     "files": [
       ".claude/memory/rules.md",
@@ -99,19 +99,23 @@
       "id": "IRV-ENGINE-CANDIDATE",
       "issue_shape": "candidate order / ranking / evidence (#94, #108 type)",
       "critical": true,
-      "entry_point": "crates/sakura-core/src/conversion.rs (ranking) + crates/sakura-engine/src/candidate_projection.rs",
+      "entry_point": "crates/sakura-core/src/conversion/ranking/coherence.rs + crates/sakura-engine/src/candidate_projection.rs",
       "physical": {
-        "loc": 16259,
-        "bytes": 661458,
-        "file_count": 17,
+        "loc": 11958,
+        "bytes": 484869,
+        "file_count": 21,
         "inline_test_loc": 897,
-        "loc_excluding_inline_tests": 15362,
-        "with_unconditional_docs_bytes": 671272,
+        "loc_excluding_inline_tests": 11061,
+        "with_unconditional_docs_bytes": 494683,
         "categories": {
           "production": {
             "files": [
               "crates/dictc/src/bin/neural_eval.rs",
-              "crates/sakura-core/src/conversion.rs",
+              "crates/sakura-core/src/conversion/candidates/assembly.rs",
+              "crates/sakura-core/src/conversion/evidence.rs",
+              "crates/sakura-core/src/conversion/ranking/coherence.rs",
+              "crates/sakura-core/src/conversion/ranking/it_terms.rs",
+              "crates/sakura-core/src/conversion/ranking/quality_gate.rs",
               "crates/sakura-engine/src/candidate_projection.rs",
               "crates/sakura-engine/src/dispatch.rs",
               "crates/sakura-engine/src/long_conversion.rs",
@@ -120,9 +124,9 @@
               "crates/sakura-neural-worker/src/sakura_scorer.rs",
               "crates/sakura-rerank-proto/src/lib.rs"
             ],
-            "file_count": 9,
-            "loc": 15570,
-            "bytes": 613999,
+            "file_count": 13,
+            "loc": 11269,
+            "bytes": 437410,
             "inline_test_loc": 897
           },
           "tests": {
@@ -342,25 +346,30 @@
       "id": "IRV-CORE-CONVERSION",
       "issue_shape": "punctuation / numeral / date candidate synthesis (#99 type)",
       "critical": false,
-      "entry_point": "crates/sakura-core/src/conversion.rs (special candidate synthesis)",
+      "entry_point": "crates/sakura-core/src/conversion/synthesis/punctuation.rs",
       "physical": {
-        "loc": 7511,
-        "bytes": 319011,
-        "file_count": 12,
+        "loc": 3442,
+        "bytes": 151812,
+        "file_count": 17,
         "inline_test_loc": 225,
-        "loc_excluding_inline_tests": 7286,
-        "with_unconditional_docs_bytes": 328825,
+        "loc_excluding_inline_tests": 3217,
+        "with_unconditional_docs_bytes": 161626,
         "categories": {
           "production": {
             "files": [
               "crates/sakura-core/src/calendar.rs",
-              "crates/sakura-core/src/conversion.rs",
+              "crates/sakura-core/src/conversion/candidates/assembly.rs",
+              "crates/sakura-core/src/conversion/evidence.rs",
+              "crates/sakura-core/src/conversion/synthesis/dates.rs",
+              "crates/sakura-core/src/conversion/synthesis/numerals.rs",
+              "crates/sakura-core/src/conversion/synthesis/punctuation.rs",
+              "crates/sakura-core/src/conversion/synthesis/single_kanji.rs",
               "crates/sakura-core/src/numerals.rs",
               "crates/sakura-core/src/width.rs"
             ],
-            "file_count": 4,
-            "loc": 6822,
-            "bytes": 271552,
+            "file_count": 9,
+            "loc": 2753,
+            "bytes": 104353,
             "inline_test_loc": 225
           },
           "tests": {
