@@ -12,17 +12,17 @@ const MAX_DOMAIN_BONUS: i16 = 200;
 
 /// Hash-only recent exact-choice signal used by the offline local baseline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SurfaceFingerprint {
-    pub hash: u64,
-    pub byte_len: u16,
+pub(crate) struct SurfaceFingerprint {
+    pub(crate) hash: u64,
+    pub(crate) byte_len: u16,
 }
 
 /// Existing engine-owned signals evaluated before introducing a model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct LocalBaselineSignals {
-    pub previous_right_id: u16,
-    pub domain_it_per_mille: u16,
-    pub recent_exact: Option<SurfaceFingerprint>,
+pub(crate) struct LocalBaselineSignals {
+    pub(crate) previous_right_id: u16,
+    pub(crate) domain_it_per_mille: u16,
+    pub(crate) recent_exact: Option<SurfaceFingerprint>,
 }
 
 /// Hash-only candidate features for deterministic offline replay.
@@ -30,23 +30,23 @@ pub struct LocalBaselineSignals {
 /// This intentionally contains no raw surface. The candidate generator retains
 /// ownership of text and supplies only its existing volatile fingerprint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LocalBaselineCandidate {
-    pub candidate_id: u64,
-    pub base_cost: i32,
-    pub authority: CandidateAuthority,
-    pub right_id: u16,
-    pub is_it: bool,
-    pub surface: SurfaceFingerprint,
+pub(crate) struct LocalBaselineCandidate {
+    pub(crate) candidate_id: u64,
+    pub(crate) base_cost: i32,
+    pub(crate) authority: CandidateAuthority,
+    pub(crate) right_id: u16,
+    pub(crate) is_it: bool,
+    pub(crate) surface: SurfaceFingerprint,
 }
 
 /// One scored row in the deterministic offline ranking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct LocalBaselineScore {
-    pub candidate_id: u64,
-    pub residual: i16,
-    pub adjusted_cost: i64,
-    pub structural_tier: u8,
-    pub original_index: u8,
+pub(crate) struct LocalBaselineScore {
+    pub(crate) candidate_id: u64,
+    pub(crate) residual: i16,
+    pub(crate) adjusted_cost: i64,
+    pub(crate) structural_tier: u8,
+    pub(crate) original_index: u8,
 }
 
 impl LocalBaselineScore {
@@ -65,20 +65,20 @@ impl LocalBaselineScore {
 
 /// Fixed-capacity result of the offline local baseline.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalBaselineRanking {
+pub(crate) struct LocalBaselineRanking {
     scores: [LocalBaselineScore; MAX_PREDICTION_CANDIDATES],
     len: usize,
 }
 
 impl LocalBaselineRanking {
-    pub fn as_slice(&self) -> &[LocalBaselineScore] {
+    pub(crate) fn as_slice(&self) -> &[LocalBaselineScore] {
         &self.scores[..self.len]
     }
 }
 
 /// Fail-closed validation errors for replay inputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalBaselineError {
+pub(crate) enum LocalBaselineError {
     TooManyCandidates,
     DuplicateCandidate,
 }
@@ -90,7 +90,7 @@ pub enum LocalBaselineError {
 /// tier zero and receive no residual. Ordinary candidates receive bounded
 /// bonus-only residuals from the existing grammatical, domain, and recent exact
 /// signals. Original index is the deterministic final tie-breaker.
-pub fn rank_local_baseline(
+pub(crate) fn rank_local_baseline(
     signals: LocalBaselineSignals,
     candidates: &[LocalBaselineCandidate],
 ) -> Result<LocalBaselineRanking, LocalBaselineError> {
