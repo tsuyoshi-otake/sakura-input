@@ -664,8 +664,8 @@ fn apply_persists_preferences_across_a_user32_relaunch() {
     });
     fixture.wait_for_exit();
 
-    let mut relaunched = fixture.relaunch();
-    let relaunched_root = SettingsFixture::wait_for_process_window(relaunched.id());
+    fixture.restart();
+    let relaunched_root = fixture.wait_for_restarted_window();
     let relaunched_cursor = CursorRestore::capture();
     raise_fixture_for_input(relaunched_root);
     let relaunched_tree =
@@ -684,7 +684,7 @@ fn apply_persists_preferences_across_a_user32_relaunch() {
         "the relaunch must read the dark appearance saved by Apply"
     );
     relaunched_cursor.key_press(VK_ESCAPE);
-    wait_for_process_exit(&mut relaunched);
+    fixture.wait_for_exit();
 }
 
 /// The stable root launcher can be clicked repeatedly, but all versioned
@@ -1934,6 +1934,54 @@ impl SettingsFixture {
         }
     }
 
+    fn restart(&mut self) {
+        self.child = spawn_settings_payload(&self.sandbox);
+    }
+
+    fn wait_for_restarted_window(&mut self) -> HWND {
+        const RESTART_READY_TIMEOUT: Duration = Duration::from_secs(15);
+
+        let process_id = self.child.id();
+        let start = Instant::now();
+        loop {
+            let owned_windows: Vec<HWND> = top_level_windows()
+                .into_iter()
+                .filter(|window| window_process_id(*window) == process_id)
+                .collect();
+            if let Some(window) = owned_windows.iter().copied().find(|window| {
+                class_name(*window) == "SakuraInputSettingsWindow" && is_visible(*window)
+            }) {
+                return window;
+            }
+            if let Some(status) = self
+                .child
+                .try_wait()
+                .expect("read relaunched settings payload state")
+            {
+                let observed: Vec<String> = owned_windows
+                    .iter()
+                    .map(|window| {
+                        format!(
+                            "class={:?} visible={}",
+                            class_name(*window),
+                            is_visible(*window)
+                        )
+                    })
+                    .collect();
+                panic!(
+                    "relaunched settings payload exited before publishing its root HWND: \
+                     status={status}, observed={observed:?}"
+                );
+            }
+            assert!(
+                start.elapsed() < RESTART_READY_TIMEOUT,
+                "relaunched settings payload did not publish its visible root HWND within \
+                 {RESTART_READY_TIMEOUT:?}"
+            );
+            sleep(INPUT_SETTLING);
+        }
+    }
+
     fn relaunch(&self) -> Child {
         spawn_settings_payload(&self.sandbox)
     }
@@ -1953,6 +2001,9 @@ fn settings_payload_executable() -> PathBuf {
 fn spawn_settings_payload(sandbox: &std::path::Path) -> Child {
     Command::new(settings_payload_executable())
         .env("LOCALAPPDATA", sandbox)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .expect("launch settings payload")
 }
