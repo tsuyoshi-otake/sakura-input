@@ -4,7 +4,7 @@
 //! unchanged. This module gives offline replay and a future context worker a
 //! bounded identity/correlation boundary without retaining candidate text.
 
-use sakura_neural_proto::{
+use sakura_context_proto::{
     CandidateAuthority, Fingerprint, MAX_CANDIDATE_SURFACE_BYTES, MAX_PREDICTION_CANDIDATES,
     MAX_READING_BYTES,
 };

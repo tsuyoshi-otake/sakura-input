@@ -441,7 +441,7 @@ jobs:
       # Rules become blocking individually when their migration completes.
       - name: Audit current and planned dependency boundaries
         shell: pwsh
-        run: ./ci/check-dependency-rules.ps1 -Advisory -Enforce R9
+        run: ./ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13
 
   irv-regression:
     name: irv-regression

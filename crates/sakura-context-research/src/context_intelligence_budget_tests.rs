@@ -10,7 +10,7 @@ use crate::context_intelligence::{ContextClearReason, SessionSemanticContext};
 use crate::prediction_snapshot::{
     DictionaryIdentity, PredictionSnapshot, SnapshotCandidateInput, SnapshotSource,
 };
-use sakura_neural_proto::CandidateAuthority;
+use sakura_context_proto::CandidateAuthority;
 use sakura_values::InputScope;
 
 thread_local! {

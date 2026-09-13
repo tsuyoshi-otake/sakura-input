@@ -5,10 +5,13 @@ use std::fmt::Write as _;
 use std::io;
 use std::path::Path;
 
-use sakura_engine::input_history::{
-    clear_path, read_snapshot, HistoryScope, InputHistoryRecord, InputHistorySnapshot,
-    InputHistorySnapshotExt, KeyHistoryRecord, INPUT_HISTORY_FORMAT_VERSION,
+use sakura_store::input_history::{
+    HistoryScope, InputHistoryRecord, InputHistorySnapshot, KeyHistoryRecord,
+    INPUT_HISTORY_FORMAT_VERSION,
 };
+
+use crate::history_file::{clear_path, read_snapshot};
+pub use crate::history_present::InputHistorySnapshotExt;
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
 use sakura_ipc::{Client, Endpoint, Fault};
 use sakura_proto::{Request, Response};
@@ -709,8 +712,9 @@ pub fn clear_offline(path: &Path) -> io::Result<ClearRoute> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_engine::input_history::{
-        CommitHistoryRecord, InputHistoryRecord, KeyHistoryRecord, ScopeClass,
+    use crate::history_file;
+    use sakura_store::input_history::{
+        CommitHistoryRecord, EngineHistoryRecord, InputHistoryRecord, KeyHistoryRecord,
     };
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -749,10 +753,34 @@ mod tests {
             }
         }
         let fixture = Fixture(temporary_path("retention-view"));
-        let service = sakura_engine::input_history::InputHistoryService::open(&fixture.0)
-            .expect("open isolated history");
-        service.record_commit(1, ScopeClass::Normal, "synthetic", "synthetic", 0, 0);
-        service.stop().expect("stop isolated history");
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        history_file::write_records(
+            &fixture.0,
+            &[
+                InputHistoryRecord::Engine(EngineHistoryRecord {
+                    sequence: 1,
+                    timestamp_ms: now_ms,
+                    session: 0,
+                    scope: HistoryScope::Normal,
+                    package_version: "1.0.39".to_owned(),
+                    release_label: "1.0.39 (unpackaged)".to_owned(),
+                }),
+                InputHistoryRecord::Commit(CommitHistoryRecord {
+                    sequence: 2,
+                    timestamp_ms: now_ms,
+                    session: 1,
+                    scope: HistoryScope::Normal,
+                    reading: "synthetic".to_owned(),
+                    surface: "synthetic".to_owned(),
+                    left_context: 0,
+                    right_context: 0,
+                }),
+            ],
+        )
+        .expect("write isolated history");
         let original = std::fs::read(&fixture.0).unwrap();
         let raw = read_snapshot(&fixture.0).unwrap();
         assert_eq!(raw.records.len(), 2);

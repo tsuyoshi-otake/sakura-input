@@ -41,7 +41,7 @@ $env:CARGO_HTTP_CHECK_REVOKE = 'false'
 ./ci/run-test-quiet.ps1 -Name 'engine and oracle tests' -Command { cargo test -p sakura-engine -p sakura-oracles --features sakura-engine/dev-fixtures --locked }
 ./ci/check-process-clean.ps1 -RepositoryRoot (Get-Location)
 ./ci/check-dependency-rules.ps1 -SelfTest
-./ci/check-dependency-rules.ps1 -Advisory -Enforce R9
+./ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13
 cargo build -p sakura-engine --release --locked
 cargo tree -p sakura-engine -e normal --locked
 ./ci/check-process-clean.ps1 -RepositoryRoot (Get-Location)

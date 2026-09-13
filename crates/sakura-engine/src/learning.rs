@@ -6,12 +6,13 @@
 //! both memory and lookup work stay O(1) as history grows. A joined maintenance
 //! thread flushes and compacts the source log before its hard disk ceiling.
 
-#[cfg(test)]
-use std::cell::RefCell;
 use std::collections::HashSet;
+#[cfg(test)]
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
-#[cfg(windows)]
+use std::io;
+#[cfg(test)]
+use std::io::Write;
+#[cfg(all(test, windows))]
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,15 +23,19 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::debug_trace;
 use sakura_proto::{EngineTimingSite, FixedStr, MAX_PREEDIT_BYTES};
-#[cfg(test)]
-use sakura_store::learning::RECORD_COMMIT;
-use sakura_store::learning::{
-    crc32, decode_record, encode_record, header, read_header, record_at, scan_records,
-    upgrade_to_current, DecodedRecord, FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN,
-    MAX_RECORD_BYTES, RECORD_ENVELOPE_LEN, REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
-};
 pub use sakura_store::learning::{
-    LearningRecord, LearningSnapshot, LEARNING_FORMAT_VERSION, MAX_LEARNING_LOG_BYTES,
+    read_snapshot, LearningRecord, LearningSnapshot, LEARNING_FORMAT_VERSION,
+    MAX_LEARNING_LOG_BYTES,
+};
+#[cfg(test)]
+use sakura_store::learning::{
+    test_crc32 as crc32, test_encode_record as encode_record, test_header as header,
+    test_read_header as read_header, test_read_within_bound as read_within_bound,
+    LearningFaultPoint as ForgetFaultPoint, LearningFaultScope as ForgetFaultScope,
+    FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN, RECORD_COMMIT, REPAIR_SUPPRESS_SURFACE,
+};
+use sakura_store::learning::{
+    LearningLog, LogForget, LogMaintenance, OperationReceipt, ReplayEvent, ReplayView,
 };
 
 use crate::session::text_hash;
@@ -47,10 +52,6 @@ pub const MAX_LEARNING_ENTRIES: usize = SLOT_COUNT;
 /// in one suggestion result.
 const MAX_PREDICTION_HISTORY_ENTRIES: usize = 128;
 const MAX_HISTORY_TEXT_BYTES: usize = 512;
-const COMPACTION_TRIGGER_BYTES: u64 = 16 * 1024 * 1024;
-const COMPACTION_TARGET_BYTES: usize = 8 * 1024 * 1024;
-const MAX_LOG_RECORDS: u64 = 50_000;
-const TARGET_LOG_RECORDS: u64 = 40_000;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
 /// A learned choice loses half of its effective evidence every 30 days.
 ///
@@ -536,145 +537,63 @@ impl PredictionHistory {
 }
 
 #[derive(Debug)]
-struct Log {
-    file: Option<File>,
-    path: Option<PathBuf>,
-    bytes: u64,
-    records: u64,
-    dirty_records: u64,
-    /// Artifacts from an interrupted exact-prediction deletion. They are
-    /// deliberately separate from the canonical log: a recovery backup is
-    /// restored only when the canonical path is absent, and stale artifacts
-    /// are never allowed to replace a newer canonical log.
-    forget_artifacts: ForgetArtifacts,
-}
-
-/// Bounded, deterministic recovery state for an exact-prediction deletion.
-///
-/// `restore_backup` is authoritative only while the canonical path is absent.
-/// Once a canonical log exists, every stored path is cleanup-only and is never
-/// replayed over that canonical log.
-#[derive(Debug, Default)]
-struct ForgetArtifacts {
-    restore_backup: Option<PathBuf>,
-    backup_cleanup: Vec<PathBuf>,
-    temporary_cleanup: Vec<PathBuf>,
-}
-
-impl ForgetArtifacts {
-    fn track_backup_cleanup(&mut self, path: PathBuf) {
-        if !self.backup_cleanup.iter().any(|known| known == &path) {
-            self.backup_cleanup.push(path);
-        }
-    }
-
-    fn track_temporary_cleanup(&mut self, path: PathBuf) {
-        if !self.temporary_cleanup.iter().any(|known| known == &path) {
-            self.temporary_cleanup.push(path);
-        }
-    }
-
-    fn settle(&mut self, canonical: &Path) -> io::Result<()> {
-        if let Some(backup) = self.restore_backup.clone() {
-            restore_forget_backup(canonical, &backup)?;
-            self.restore_backup = None;
-        }
-        settle_forget_cleanup(&mut self.backup_cleanup, ForgetArtifactKind::Backup)?;
-        settle_forget_cleanup(&mut self.temporary_cleanup, ForgetArtifactKind::Temporary)
-    }
-}
-
-#[derive(Debug)]
-enum AppendFailure {
-    AtCapacity,
-    Io,
-}
-
-impl Log {
-    fn memory() -> Self {
-        Self {
-            file: None,
-            path: None,
-            bytes: 0,
-            records: 0,
-            dirty_records: 0,
-            forget_artifacts: ForgetArtifacts::default(),
-        }
-    }
-
-    fn settle_forget_artifacts(&mut self) -> io::Result<()> {
-        let Some(path) = self.path.as_deref() else {
-            return Ok(());
-        };
-        self.forget_artifacts.settle(path)
-    }
-
-    fn append(
-        &mut self,
-        reading: &str,
-        surface: &str,
-        left_context: u16,
-        right_context: u16,
-        day: u32,
-    ) -> Result<(), AppendFailure> {
-        let payload = encode_record(reading, surface, left_context, right_context, day)
-            .map_err(|_| AppendFailure::Io)?;
-        self.append_payload(&payload)
-    }
-
-    fn append_repair_suppress(&mut self, reading: &str, day: u32) -> Result<(), AppendFailure> {
-        let payload = encode_record(
-            reading,
-            REPAIR_SUPPRESS_SURFACE,
-            REPAIR_SUPPRESS_CONTEXT,
-            REPAIR_SUPPRESS_CONTEXT,
-            day,
-        )
-        .map_err(|_| AppendFailure::Io)?;
-        self.append_payload(&payload)
-    }
-
-    fn append_payload(&mut self, payload: &[u8]) -> Result<(), AppendFailure> {
-        if self.path.is_none() {
-            return Ok(());
-        }
-        let Some(file) = self.file.as_mut() else {
-            return Err(AppendFailure::Io);
-        };
-        let length = u32::try_from(payload.len()).map_err(|_| AppendFailure::Io)?;
-        let frame_bytes = u64::try_from(RECORD_ENVELOPE_LEN + payload.len()).unwrap_or(u64::MAX);
-        if self.bytes.saturating_add(frame_bytes) > MAX_LEARNING_LOG_BYTES {
-            return Err(AppendFailure::AtCapacity);
-        }
-        let write_result = (|| -> io::Result<()> {
-            file.write_all(&length.to_le_bytes())?;
-            file.write_all(&crc32(payload).to_le_bytes())?;
-            file.write_all(payload)
-        })();
-        if let Err(error) = write_result {
-            // A partial frame may now be present. Disable this handle so no
-            // later valid frame is written beyond a torn tail that replay
-            // must stop at.
-            self.file = None;
-            let _ = error;
-            return Err(AppendFailure::Io);
-        }
-        self.bytes = self.bytes.saturating_add(frame_bytes);
-        self.records = self.records.saturating_add(1);
-        self.dirty_records = self.dirty_records.saturating_add(1);
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
 struct State {
     index: Index,
     prediction_history: PredictionHistory,
     /// Readings for which the user rejected automatic repair by resizing
     /// segments. Durable via CRC-framed suppress markers in the learning log.
     repair_suppress: HashSet<u64>,
-    log: Log,
+    log: LearningLog,
+    path: Option<PathBuf>,
     sequence: u64,
+}
+
+struct PreparedLearning {
+    index: Index,
+    prediction_history: PredictionHistory,
+    repair_suppress: HashSet<u64>,
+    sequence: u64,
+}
+
+fn prepare_learning(events: ReplayView<'_>) -> PreparedLearning {
+    let mut prepared = PreparedLearning {
+        index: Index::new(),
+        prediction_history: PredictionHistory::new(),
+        repair_suppress: HashSet::new(),
+        sequence: 0,
+    };
+    for event in events {
+        prepared.sequence = prepared.sequence.saturating_add(1);
+        match event {
+            ReplayEvent::Commit {
+                day,
+                left_context,
+                right_context,
+                reading,
+                surface,
+            } => {
+                prepared.index.learn(
+                    left_context,
+                    right_context,
+                    reading,
+                    surface,
+                    day,
+                    prepared.sequence,
+                );
+                prepared.prediction_history.learn(
+                    reading,
+                    surface,
+                    right_context,
+                    day,
+                    prepared.sequence,
+                );
+            }
+            ReplayEvent::RepairSuppress { reading, .. } => {
+                prepared.repair_suppress.insert(text_hash(reading));
+            }
+        }
+    }
+    prepared
 }
 
 /// Process-shared learning index and log writer.
@@ -742,7 +661,8 @@ impl LearningService {
                 index: Index::new(),
                 prediction_history: PredictionHistory::new(),
                 repair_suppress: HashSet::new(),
-                log: Log::memory(),
+                log: LearningLog::memory(),
+                path: None,
                 sequence: 0,
             }),
             generation: AtomicU64::new(0),
@@ -753,105 +673,21 @@ impl LearningService {
     }
 
     pub fn open(path: &Path) -> io::Result<Self> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        // Reconcile a prior exact-prediction deletion before this function is
-        // ever allowed to create an empty canonical log. In particular, a
-        // fixed recovery backup wins only when the canonical path is absent.
-        let forget_artifacts = recover_forget_artifacts_at_startup(path)?;
-        create_if_missing(path)?;
-
-        // Every append checks the same ceiling, so bytes past it can only be
-        // corruption or external tampering — and startup is the one place
-        // that must survive them. Reading is bounded here rather than
-        // refused, because `open` is allowed to discard an unusable tail:
-        // that is what its recovery does, and `replay`/`upgrade_to_current`
-        // both stop at the first record they cannot parse, so a cap landing
-        // mid-record loses nothing beyond the tail being dropped anyway.
-        let file_len = fs::metadata(path)?.len();
-        let mut bytes = Vec::new();
-        File::open(path)?
-            .take(MAX_LEARNING_LOG_BYTES)
-            .read_to_end(&mut bytes)?;
-        // Counted against the real file length, not the buffer: the bytes
-        // never read are discarded by the truncation below and have to be
-        // reported as recovered, or an oversized log would look clean.
-        let mut over_cap = file_len.saturating_sub(bytes.len() as u64);
-        let version = read_header(&bytes)?;
-        if matches!(version, FORMAT_VERSION_1 | FORMAT_VERSION_2) {
-            bytes = upgrade_to_current(&bytes, version)?;
-            // The upgrade gives every record the context fields the older
-            // formats had no room for, so a log that was inside the ceiling
-            // can be over it once upgraded. Publishing it whole would leave
-            // behind a file no rewrite can read again: the compaction a few
-            // lines below goes through `read_within_bound`, which refuses an
-            // over-cap file, so `open` itself would fail and the engine would
-            // spend that entire session on volatile learning.
-            //
-            // Publish only what fits instead. `replay` stops at the record
-            // the cap cut in half and the truncation below drops it, which is
-            // the handling a torn tail already gets. The excess joins
-            // `over_cap` because both are the same thing to a reader of
-            // `recovered_tail_bytes` — bytes this open discarded — even
-            // though one is counted before the upgrade and one after.
-            let cap = usize::try_from(MAX_LEARNING_LOG_BYTES).unwrap_or(usize::MAX);
-            if bytes.len() > cap {
-                over_cap = over_cap.saturating_add((bytes.len() - cap) as u64);
-                bytes.truncate(cap);
-            }
-            publish_upgrade(path, &bytes, version)?;
-        } else if version != LEARNING_FORMAT_VERSION {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("unsupported learning format version {version}"),
-            ));
-        }
-
-        let mut index = Index::new();
-        let mut prediction_history = PredictionHistory::new();
-        let mut repair_suppress = HashSet::new();
-        let (last_good, sequence) = replay(
-            &bytes,
-            LEARNING_FORMAT_VERSION,
-            &mut index,
-            &mut prediction_history,
-            &mut repair_suppress,
-        )?;
-        // `over_cap` is zero unless the file was oversized; when it is not,
-        // `last_good` indexes the capped buffer (or, after an upgrade, the
-        // rewritten one), so the truncation below drops both the unparseable
-        // tail and everything past the cap in a single `set_len`.
-        let recovered = over_cap
-            .saturating_add(u64::try_from(bytes.len().saturating_sub(last_good)).unwrap_or(0));
-        let file = OpenOptions::new().read(true).write(true).open(path)?;
-        if recovered > 0 {
-            file.set_len(u64::try_from(last_good).unwrap_or(u64::MAX))?;
-        }
-        let file = open_append(path)?;
-        let mut state = State {
-            index,
-            prediction_history,
-            repair_suppress,
-            log: Log {
-                file: Some(file),
-                path: Some(path.to_owned()),
-                bytes: u64::try_from(last_good).unwrap_or(u64::MAX),
-                records: sequence,
-                dirty_records: 0,
-                forget_artifacts,
-            },
-            sequence,
-        };
-        if state.log.bytes > COMPACTION_TRIGGER_BYTES || state.log.records > MAX_LOG_RECORDS {
-            compact_state(&mut state, COMPACTION_TARGET_BYTES, TARGET_LOG_RECORDS)?;
-        }
+        let (log, prepared, receipt) =
+            LearningLog::open(path, prepare_learning).map_err(|error| error.source)?;
         Ok(Self {
-            state: Mutex::new(state),
+            state: Mutex::new(State {
+                index: prepared.index,
+                prediction_history: prepared.prediction_history,
+                repair_suppress: prepared.repair_suppress,
+                log,
+                path: Some(path.to_owned()),
+                sequence: prepared.sequence,
+            }),
             generation: AtomicU64::new(0),
             skipped_writes: AtomicU64::new(0),
-            recovered_tail_bytes: AtomicU64::new(recovered),
-            maintenance_failures: AtomicU64::new(0),
+            recovered_tail_bytes: AtomicU64::new(receipt.recovered_tail_bytes),
+            maintenance_failures: AtomicU64::new(receipt.maintenance_failure_delta),
         })
     }
 
@@ -997,232 +833,49 @@ impl LearningService {
             return Ok(ForgetPredictionOutcome::NotFound);
         }
         let mut state = self.lock_state();
-        let Some(path) = state.log.path.clone() else {
-            return Ok(ForgetPredictionOutcome::Unavailable);
+        let transaction = {
+            let State {
+                index,
+                prediction_history,
+                repair_suppress,
+                log,
+                sequence,
+                ..
+            } = &mut *state;
+            log.forget_exact(reading, surface, prepare_learning, |prepared| {
+                *index = prepared.index;
+                *prediction_history = prepared.prediction_history;
+                *repair_suppress = prepared.repair_suppress;
+                *sequence = prepared.sequence;
+            })
         };
-        if let Err(error) = state.log.settle_forget_artifacts() {
-            self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-            return Err(error);
-        }
-        let file = state.log.file.as_ref().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::BrokenPipe, "learning log writer unavailable")
-        })?;
-        file.sync_data()?;
-
-        let source = read_within_bound(&path)?;
-        if read_header(&source)? != LEARNING_FORMAT_VERSION {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "learning log version changed during prediction deletion",
-            ));
-        }
-        let (last_good, _) = scan_records(&source, LEARNING_FORMAT_VERSION)?;
-        if last_good != source.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "learning log has an unverified tail during prediction deletion",
-            ));
-        }
-
-        let mut rewritten = header(LEARNING_FORMAT_VERSION).to_vec();
-        let mut offset = HEADER_LEN;
-        let mut removed = false;
-        while let Some((next, record)) = record_at(&source, LEARNING_FORMAT_VERSION, offset) {
-            if record.reading == reading && record.surface == surface {
-                removed = true;
-            } else {
-                rewritten.extend_from_slice(&source[offset..next]);
-            }
-            offset = next;
-        }
-        if !removed {
-            return Ok(ForgetPredictionOutcome::NotFound);
-        }
-
-        let mut rebuilt_index = Index::new();
-        let mut rebuilt_history = PredictionHistory::new();
-        let mut rebuilt_suppress = HashSet::new();
-        let (rebuilt_good, rebuilt_sequence) = replay(
-            &rewritten,
-            LEARNING_FORMAT_VERSION,
-            &mut rebuilt_index,
-            &mut rebuilt_history,
-            &mut rebuilt_suppress,
-        )?;
-        if rebuilt_good != rewritten.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "filtered learning log did not replay completely",
-            ));
-        }
-
-        let temporary = forget_temporary_path(&path);
-        let backup = forget_recovery_path(&path);
-        ensure_forget_transaction_paths_are_clear(&temporary, &backup)?;
-        if let Err(error) = write_forget_temporary(&temporary, &rewritten) {
-            state
-                .log
-                .forget_artifacts
-                .track_temporary_cleanup(temporary.clone());
-            return match state.log.settle_forget_artifacts() {
-                Ok(()) => Err(error),
-                Err(cleanup_error) => {
-                    self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                    Err(with_follow_up_error(
-                        "prediction deletion temporary write failed",
-                        error,
-                        cleanup_error,
-                    ))
+        match transaction {
+            Ok((outcome, receipt)) => {
+                self.apply_receipt(receipt);
+                match outcome {
+                    LogForget::NotFound => Ok(ForgetPredictionOutcome::NotFound),
+                    LogForget::Unavailable => Ok(ForgetPredictionOutcome::Unavailable),
+                    LogForget::Removed { removed: _ } => {
+                        drop(state);
+                        self.generation.fetch_add(1, Ordering::Release);
+                        Ok(ForgetPredictionOutcome::Removed)
+                    }
                 }
-            };
-        }
-
-        // The replacement append owner is opened *before* publication with
-        // FILE_SHARE_DELETE. The publication state machine can therefore keep
-        // an append owner for both logical versions: the old handle survives
-        // a failed publish, while this new handle becomes canonical on commit.
-        let replacement_file = match open_forget_replacement(&temporary) {
-            Ok(file) => file,
+            }
             Err(error) => {
-                state
-                    .log
-                    .forget_artifacts
-                    .track_temporary_cleanup(temporary.clone());
-                return match state.log.settle_forget_artifacts() {
-                    Ok(()) => Err(error),
-                    Err(cleanup_error) => {
-                        self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                        Err(with_follow_up_error(
-                            "prediction deletion replacement preparation failed",
-                            error,
-                            cleanup_error,
-                        ))
-                    }
-                };
-            }
-        };
-
-        if let Err(publish_error) = publish_forget_replacement(&path, &temporary, &backup) {
-            // Every publication error carries the last rename phase that
-            // returned success. Observation may refine an uncertain platform
-            // report, but a failed observation falls back to that confirmed
-            // phase instead of creating an indeterminate terminal state.
-            let ForgetPublishError {
-                confirmed_phase,
-                error,
-            } = publish_error;
-            let (publish_state, terminal_error, observation_succeeded) =
-                match observe_forget_publish_state(&path, &temporary, &backup, &source, &rewritten)
-                {
-                    Ok(observed) => {
-                        // Once the replacement rename returned success, no
-                        // later report may regress the transaction to failure.
-                        let resolved =
-                            if confirmed_phase == ForgetPublishPhase::ReplacementMovedToCanonical {
-                                ForgetPublishState::FilteredCanonical
-                            } else {
-                                observed
-                            };
-                        (resolved, error, true)
-                    }
-                    Err(observation_error) => {
-                        self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                        (
-                            confirmed_phase.fallback_state(),
-                            with_follow_up_error(
-                                "prediction deletion publish failed while observing recovery state",
-                                error,
-                                observation_error,
-                            ),
-                            false,
-                        )
-                    }
-                };
-            match publish_state {
-                ForgetPublishState::FilteredCanonical => {
-                    // Keep the unexpected platform report observable while
-                    // preserving the only correct logical terminal state.
-                    // Observation failures were counted above.
-                    if observation_succeeded {
-                        self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-                ForgetPublishState::OldCanonical { backup_present } => {
-                    state
-                        .log
-                        .forget_artifacts
-                        .track_temporary_cleanup(temporary);
-                    if backup_present {
-                        state.log.forget_artifacts.track_backup_cleanup(backup);
-                    }
-                    return match state.log.settle_forget_artifacts() {
-                        Ok(()) => Err(terminal_error),
-                        Err(recovery_error) => {
-                            self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                            Err(with_follow_up_error(
-                                "prediction deletion publish failed",
-                                terminal_error,
-                                recovery_error,
-                            ))
-                        }
-                    };
-                }
-                ForgetPublishState::RecoveryRequired => {
-                    // Once the first rename has moved old bytes to the
-                    // deterministic backup, a second-rename failure leaves
-                    // canonical absent. Record that state before trying
-                    // restoration, so a failed restore remains recoverable on
-                    // restart and the still-open old append handle can
-                    // continue safely in this process.
-                    state
-                        .log
-                        .forget_artifacts
-                        .track_temporary_cleanup(temporary);
-                    state.log.forget_artifacts.restore_backup = Some(backup);
-                    return match state.log.settle_forget_artifacts() {
-                        Ok(()) => Err(terminal_error),
-                        Err(recovery_error) => {
-                            self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                            Err(with_follow_up_error(
-                                "prediction deletion publish failed",
-                                terminal_error,
-                                recovery_error,
-                            ))
-                        }
-                    };
-                }
+                let receipt = error.receipt;
+                let source = error.source;
+                self.apply_receipt(receipt);
+                Err(source)
             }
         }
+    }
 
-        // From this point the filtered file is the durable authority. It has
-        // an already-open append owner, so no later I/O result can turn this
-        // committed deletion into a failure/beep outcome.
-        state.index = rebuilt_index;
-        state.prediction_history = rebuilt_history;
-        state.repair_suppress = rebuilt_suppress;
-        state.sequence = rebuilt_sequence;
-        state.log = Log {
-            file: Some(replacement_file),
-            path: Some(path),
-            bytes: u64::try_from(rewritten.len()).unwrap_or(u64::MAX),
-            records: rebuilt_sequence,
-            dirty_records: 0,
-            forget_artifacts: ForgetArtifacts {
-                restore_backup: None,
-                backup_cleanup: vec![backup],
-                temporary_cleanup: Vec::new(),
-            },
-        };
-        if state.log.settle_forget_artifacts().is_err() {
-            // The old bytes are now only a cleanup artifact. Keep its path in
-            // state for retry, count the observable failure, but preserve the
-            // committed outcome because canonical and in-memory authority are
-            // already the filtered log.
-            self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-        }
-        drop(state);
-        self.generation.fetch_add(1, Ordering::Release);
-        Ok(ForgetPredictionOutcome::Removed)
+    fn apply_receipt(&self, receipt: OperationReceipt) {
+        self.recovered_tail_bytes
+            .fetch_add(receipt.recovered_tail_bytes, Ordering::Relaxed);
+        self.maintenance_failures
+            .fetch_add(receipt.maintenance_failure_delta, Ordering::Relaxed);
     }
 
     pub fn skipped_writes(&self) -> u64 {
@@ -1246,38 +899,27 @@ impl LearningService {
             Err(TryLockError::WouldBlock) => return Ok(MaintenanceOutcome::Busy),
             Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
         };
-        if state.log.path.is_none() {
-            return Ok(MaintenanceOutcome::Idle);
-        }
-        if let Err(error) = state.log.settle_forget_artifacts() {
-            self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-            return Err(error);
-        }
-        if state.log.file.is_none()
-            || state.log.bytes > COMPACTION_TRIGGER_BYTES
-            || state.log.records > MAX_LOG_RECORDS
-        {
-            let result = compact_state(&mut state, COMPACTION_TARGET_BYTES, TARGET_LOG_RECORDS);
-            if result.is_err() {
-                self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
+        match state.log.maintain(prepare_learning) {
+            Ok((outcome, receipt)) => {
+                self.apply_receipt(receipt);
+                match outcome {
+                    LogMaintenance::NotDue => Ok(MaintenanceOutcome::Idle),
+                    LogMaintenance::Flushed => Ok(MaintenanceOutcome::Flushed),
+                    LogMaintenance::Compacted(prepared) => {
+                        state.index = prepared.index;
+                        state.prediction_history = prepared.prediction_history;
+                        state.repair_suppress = prepared.repair_suppress;
+                        state.sequence = prepared.sequence;
+                        Ok(MaintenanceOutcome::Compacted)
+                    }
+                }
             }
-            result.map(|()| MaintenanceOutcome::Compacted)
-        } else if state.log.dirty_records > 0 {
-            let result = state
-                .log
-                .file
-                .as_ref()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "log writer unavailable"))
-                .and_then(File::sync_data);
-            if result.is_err() {
-                state.log.file = None;
-                self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-                return result.map(|()| MaintenanceOutcome::Flushed);
+            Err(error) => {
+                let receipt = error.receipt;
+                let source = error.source;
+                self.apply_receipt(receipt);
+                Err(source)
             }
-            state.log.dirty_records = 0;
-            Ok(MaintenanceOutcome::Flushed)
-        } else {
-            Ok(MaintenanceOutcome::Idle)
         }
     }
 
@@ -1287,83 +929,27 @@ impl LearningService {
     /// no caller can observe an empty in-memory index backed by the old log.
     pub fn clear(&self) -> io::Result<u64> {
         let mut state = self.lock_state();
-        let cleared_records = state.log.records;
-        let Some(path) = state.log.path.clone() else {
-            state.index = Index::new();
-            state.prediction_history = PredictionHistory::new();
-            state.repair_suppress = HashSet::new();
-            state.sequence = 0;
-            state.log = Log::memory();
-            self.generation.fetch_add(1, Ordering::Release);
-            return Ok(cleared_records);
-        };
-
-        if let Err(error) = state.log.settle_forget_artifacts() {
-            self.maintenance_failures.fetch_add(1, Ordering::Relaxed);
-            return Err(error);
-        }
-
-        if let Some(file) = state.log.file.as_ref() {
-            file.sync_data()?;
-        }
-        let temporary = unique_sibling(&path, "clear.tmp");
-        let backup = unique_sibling(&path, "clear.bak");
-        write_new_file(&temporary, &header(LEARNING_FORMAT_VERSION))?;
-
-        state.log.file = None;
-        if let Err(error) = fs::rename(&path, &backup) {
-            state.log.file = open_append(&path).ok();
-            let _ = fs::remove_file(&temporary);
-            return Err(error);
-        }
-        if let Err(error) = fs::rename(&temporary, &path) {
-            let rollback = fs::rename(&backup, &path);
-            state.log.file = open_append(&path).ok();
-            let _ = fs::remove_file(&temporary);
-            return match rollback {
-                Ok(()) => Err(error),
-                Err(rollback_error) => Err(io::Error::new(
-                    rollback_error.kind(),
-                    format!("clear publish failed ({error}); rollback failed ({rollback_error})"),
-                )),
-            };
-        }
-        let file = match open_append(&path) {
-            Ok(file) => file,
-            Err(error) => {
-                let _ = fs::remove_file(&path);
-                let rollback = fs::rename(&backup, &path);
-                state.log.file = open_append(&path).ok();
-                return match rollback {
-                    Ok(()) => Err(error),
-                    Err(rollback_error) => Err(io::Error::new(
-                        rollback_error.kind(),
-                        format!(
-                            "cleared log could not be opened ({error}); rollback failed ({rollback_error})"
-                        ),
-                    )),
-                };
+        match state.log.clear(prepare_learning) {
+            Ok((cleared_records, prepared, receipt)) => {
+                self.apply_receipt(receipt);
+                state.index = prepared.index;
+                state.prediction_history = prepared.prediction_history;
+                state.repair_suppress = prepared.repair_suppress;
+                state.sequence = prepared.sequence;
+                self.generation.fetch_add(1, Ordering::Release);
+                Ok(cleared_records)
             }
-        };
-        let _ = fs::remove_file(&backup);
-        state.index = Index::new();
-        state.prediction_history = PredictionHistory::new();
-        state.repair_suppress = HashSet::new();
-        state.sequence = 0;
-        state.log = Log {
-            file: Some(file),
-            path: Some(path),
-            bytes: HEADER_LEN as u64,
-            records: 0,
-            dirty_records: 0,
-            forget_artifacts: ForgetArtifacts::default(),
-        };
-        self.generation.fetch_add(1, Ordering::Release);
-        Ok(cleared_records)
+            Err(error) => {
+                let receipt = error.receipt;
+                let source = error.source;
+                self.apply_receipt(receipt);
+                Err(source)
+            }
+        }
     }
 
     pub fn path(&self) -> Option<PathBuf> {
-        self.lock_state().log.path.clone()
+        self.lock_state().path.clone()
     }
 }
 
@@ -1438,154 +1024,6 @@ pub fn default_path() -> io::Result<PathBuf> {
         .join("log.bin"))
 }
 
-/// Reads a whole learning log, refusing one that is over the ceiling.
-///
-/// Unlike [`LearningService::open`], every caller of this either rewrites the
-/// file from what it read (compaction, exact prediction deletion) or reports
-/// it verbatim ([`read_snapshot`]). Neither may quietly work from a truncated
-/// prefix: the first would write it back over records the user was never told
-/// were lost, and the second would describe a damaged log as complete.
-///
-/// Reading one byte past the ceiling is what makes the refusal an answer
-/// about the file rather than about a `metadata` call that could race the
-/// read — which is why the bound lives in the read itself and not in a size
-/// check before it.
-fn read_within_bound(path: &Path) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    File::open(path)?
-        .take(MAX_LEARNING_LOG_BYTES.saturating_add(1))
-        .read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > MAX_LEARNING_LOG_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "learning log exceeds its hard size bound",
-        ));
-    }
-    Ok(bytes)
-}
-
-/// Reads the verified portion of a learning log without mutating it.
-/// Previous supported formats remain viewable even before the engine has had
-/// an opportunity to upgrade the file.
-pub fn read_snapshot(path: &Path) -> io::Result<LearningSnapshot> {
-    let bytes = read_within_bound(path)?;
-    let version = read_header(&bytes)?;
-    if !matches!(
-        version,
-        FORMAT_VERSION_1 | FORMAT_VERSION_2 | LEARNING_FORMAT_VERSION
-    ) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("unsupported learning format version {version}"),
-        ));
-    }
-
-    let mut offset = HEADER_LEN;
-    let mut sequence = 0u64;
-    let mut records = Vec::new();
-    while let Some((next, record)) = record_at(&bytes, version, offset) {
-        sequence = sequence.saturating_add(1);
-        if !is_repair_suppress(record) {
-            records.push(LearningRecord {
-                sequence,
-                day: record.day,
-                left_context: record.left_context,
-                right_context: record.right_context,
-                reading: record.reading.to_owned(),
-                surface: record.surface.to_owned(),
-            });
-        }
-        offset = next;
-    }
-    Ok(LearningSnapshot {
-        format_version: version,
-        records,
-        ignored_tail_bytes: u64::try_from(bytes.len().saturating_sub(offset)).unwrap_or(u64::MAX),
-    })
-}
-
-static NEXT_ARTIFACT: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ForgetArtifactKind {
-    Backup,
-    Temporary,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ForgetPublishState {
-    FilteredCanonical,
-    OldCanonical { backup_present: bool },
-    RecoveryRequired,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ForgetPublishPhase {
-    BeforeFirstRename,
-    OldMovedToRecovery,
-    ReplacementMovedToCanonical,
-}
-
-impl ForgetPublishPhase {
-    fn fallback_state(self) -> ForgetPublishState {
-        match self {
-            Self::BeforeFirstRename => ForgetPublishState::OldCanonical {
-                backup_present: false,
-            },
-            Self::OldMovedToRecovery => ForgetPublishState::RecoveryRequired,
-            Self::ReplacementMovedToCanonical => ForgetPublishState::FilteredCanonical,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ForgetPublishError {
-    confirmed_phase: ForgetPublishPhase,
-    error: io::Error,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ForgetFaultPoint {
-    ReplacementOwnerOpen,
-    Publish,
-    PublishMovesOldToRecovery,
-    PublishCommitsThenErrors,
-    PublishObservation,
-    RecoveryRestore,
-    BackupCleanup,
-    TemporaryCleanup,
-}
-
-#[cfg(test)]
-thread_local! {
-    static FORGET_FAULTS: RefCell<Vec<ForgetFaultPoint>> = const { RefCell::new(Vec::new()) };
-}
-
-#[cfg(test)]
-struct ForgetFaultScope;
-
-#[cfg(test)]
-impl ForgetFaultScope {
-    fn new(points: &[ForgetFaultPoint]) -> Self {
-        FORGET_FAULTS.with(|faults| {
-            let mut faults = faults.borrow_mut();
-            assert!(
-                faults.is_empty(),
-                "forget fault queue leaked from another test phase"
-            );
-            faults.extend_from_slice(points);
-        });
-        Self
-    }
-}
-
-#[cfg(test)]
-impl Drop for ForgetFaultScope {
-    fn drop(&mut self) {
-        FORGET_FAULTS.with(|faults| faults.borrow_mut().clear());
-    }
-}
-
 /// Test-only cross-layer fault for the state where the old canonical log has
 /// moved to recovery, publication observation fails, and immediate restoration
 /// also fails. Keeping the precise sequence here prevents production callers
@@ -1627,318 +1065,38 @@ impl ForgetPredictionCommittedObservationFault {
     }
 }
 
+fn unix_day() -> u32 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            u32::try_from(elapsed.as_secs() / 86_400).unwrap_or(u32::MAX)
+        })
+}
+
 #[cfg(test)]
-fn take_forget_fault(point: ForgetFaultPoint) -> bool {
-    FORGET_FAULTS.with(|faults| {
-        let mut faults = faults.borrow_mut();
-        if faults.first().copied() == Some(point) {
-            faults.remove(0);
-            true
-        } else {
-            false
-        }
-    })
+fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) -> io::Result<()> {
+    let prepared = state
+        .log
+        .test_compact(target_bytes, target_records, prepare_learning)
+        .map_err(|error| error.source)?;
+    state.index = prepared.index;
+    state.prediction_history = prepared.prediction_history;
+    state.repair_suppress = prepared.repair_suppress;
+    state.sequence = prepared.sequence;
+    Ok(())
 }
 
-#[cfg(not(test))]
-fn take_forget_fault(_point: ForgetFaultPoint) -> bool {
-    false
-}
-
-fn injected_forget_error(point: ForgetFaultPoint) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::PermissionDenied,
-        format!("injected exact-prediction deletion fault at {point:?}"),
-    )
-}
-
-fn with_follow_up_error(operation: &str, primary: io::Error, follow_up: io::Error) -> io::Error {
-    io::Error::new(
-        primary.kind(),
-        format!("{operation} ({primary}); follow-up failed ({follow_up})"),
-    )
-}
-
+#[cfg(test)]
 fn forget_temporary_path(path: &Path) -> PathBuf {
     path.with_extension("forget.tmp")
 }
 
+#[cfg(test)]
 fn forget_recovery_path(path: &Path) -> PathBuf {
     path.with_extension("forget.recovery")
 }
 
-/// This was the fixed backup name used by the pre-P1 two-rename flow. Honor
-/// it on startup so an interrupted older build is not replaced by a newly
-/// created empty canonical log.
-fn legacy_forget_backup_path(path: &Path) -> PathBuf {
-    path.with_extension("forget.bak")
-}
-
-fn path_exists(path: &Path) -> io::Result<bool> {
-    match fs::metadata(path) {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error),
-    }
-}
-
-/// Returns the verified prefix of a current-format recovery log. A final
-/// incomplete envelope or payload is a torn append and may be discarded, but
-/// every complete frame must satisfy the same length, checksum, and payload
-/// invariants as a canonical log.
-fn scan_repairable_current_recovery_log(bytes: &[u8]) -> io::Result<usize> {
-    if read_header(bytes)? != LEARNING_FORMAT_VERSION {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "exact-prediction recovery log has an unsupported format",
-        ));
-    }
-
-    let mut offset = HEADER_LEN;
-    while offset < bytes.len() {
-        if bytes.len() - offset < RECORD_ENVELOPE_LEN {
-            return Ok(offset);
-        }
-        let length = usize::try_from(u32::from_le_bytes(
-            bytes[offset..offset + 4]
-                .try_into()
-                .expect("checked complete record envelope"),
-        ))
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "record length overflow"))?;
-        if length > MAX_RECORD_BYTES {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "exact-prediction recovery log has an invalid complete record length",
-            ));
-        }
-        let expected_crc = u32::from_le_bytes(
-            bytes[offset + 4..offset + RECORD_ENVELOPE_LEN]
-                .try_into()
-                .expect("checked complete record envelope"),
-        );
-        let payload_start = offset + RECORD_ENVELOPE_LEN;
-        let payload_end = payload_start
-            .checked_add(length)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "record length overflow"))?;
-        if payload_end > bytes.len() {
-            return Ok(offset);
-        }
-        let payload = &bytes[payload_start..payload_end];
-        if crc32(payload) != expected_crc {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "exact-prediction recovery log has an invalid complete record checksum",
-            ));
-        }
-        decode_record(payload, LEARNING_FORMAT_VERSION).map_err(|error| {
-            io::Error::new(
-                error.kind(),
-                format!("exact-prediction recovery log has an invalid complete record ({error})"),
-            )
-        })?;
-        offset = payload_end;
-    }
-    Ok(offset)
-}
-
-/// Repairs only a torn final append before moving the recovery inode back to
-/// its canonical path. Until `sync_all` succeeds, the recovery path remains
-/// the sole authority and no canonical file is published.
-fn repair_forget_recovery_log(path: &Path) -> io::Result<()> {
-    let bytes = fs::read(path)?;
-    let last_good = scan_repairable_current_recovery_log(&bytes)?;
-    if last_good == bytes.len() {
-        return Ok(());
-    }
-
-    let file = OpenOptions::new().read(true).write(true).open(path)?;
-    file.set_len(u64::try_from(last_good).unwrap_or(u64::MAX))?;
-    file.sync_all()
-}
-
-fn restore_forget_backup(canonical: &Path, backup: &Path) -> io::Result<()> {
-    if path_exists(canonical)? {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "cannot restore exact-prediction recovery over an existing canonical log",
-        ));
-    }
-    repair_forget_recovery_log(backup)?;
-    if take_forget_fault(ForgetFaultPoint::RecoveryRestore) {
-        return Err(injected_forget_error(ForgetFaultPoint::RecoveryRestore));
-    }
-    fs::rename(backup, canonical)
-}
-
-fn recover_forget_artifacts_at_startup(path: &Path) -> io::Result<ForgetArtifacts> {
-    let mut artifacts = ForgetArtifacts::default();
-    let temporary = forget_temporary_path(path);
-    if path_exists(&temporary)? {
-        artifacts.track_temporary_cleanup(temporary);
-    }
-
-    let recovery = forget_recovery_path(path);
-    let legacy = legacy_forget_backup_path(path);
-    let mut backups = Vec::with_capacity(2);
-    for backup in [recovery, legacy] {
-        if path_exists(&backup)? {
-            backups.push(backup);
-        }
-    }
-
-    if path_exists(path)? {
-        for backup in backups {
-            artifacts.track_backup_cleanup(backup);
-        }
-        return Ok(artifacts);
-    }
-
-    match backups.as_slice() {
-        [] => Ok(artifacts),
-        [backup] => {
-            restore_forget_backup(path, backup)?;
-            Ok(artifacts)
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "multiple exact-prediction recovery logs exist while canonical is absent",
-        )),
-    }
-}
-
-fn settle_forget_cleanup(paths: &mut Vec<PathBuf>, kind: ForgetArtifactKind) -> io::Result<()> {
-    let index = 0;
-    while index < paths.len() {
-        match remove_forget_artifact(&paths[index], kind) {
-            Ok(()) => {
-                paths.swap_remove(index);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-    Ok(())
-}
-
-fn remove_forget_artifact(path: &Path, kind: ForgetArtifactKind) -> io::Result<()> {
-    let fault = match kind {
-        ForgetArtifactKind::Backup => ForgetFaultPoint::BackupCleanup,
-        ForgetArtifactKind::Temporary => ForgetFaultPoint::TemporaryCleanup,
-    };
-    if take_forget_fault(fault) {
-        return Err(injected_forget_error(fault));
-    }
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error),
-    }
-}
-
-fn ensure_forget_transaction_paths_are_clear(temporary: &Path, backup: &Path) -> io::Result<()> {
-    for (kind, path) in [("temporary", temporary), ("recovery", backup)] {
-        if path_exists(path)? {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!("exact-prediction deletion {kind} artifact still requires settlement"),
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn observe_forget_publish_state(
-    canonical: &Path,
-    temporary: &Path,
-    backup: &Path,
-    source: &[u8],
-    filtered: &[u8],
-) -> io::Result<ForgetPublishState> {
-    if take_forget_fault(ForgetFaultPoint::PublishObservation) {
-        return Err(injected_forget_error(ForgetFaultPoint::PublishObservation));
-    }
-    let backup_present = path_exists(backup)?;
-    let temporary_present = path_exists(temporary)?;
-    let canonical = match fs::read(canonical) {
-        Ok(bytes) => Some(bytes),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-        Err(error) => return Err(error),
-    };
-    match canonical.as_deref() {
-        Some(bytes) if bytes == filtered && !temporary_present => {
-            Ok(ForgetPublishState::FilteredCanonical)
-        }
-        Some(bytes) if bytes == source => Ok(ForgetPublishState::OldCanonical { backup_present }),
-        None if backup_present => Ok(ForgetPublishState::RecoveryRequired),
-        _ => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "exact-prediction deletion publish ended in an unrecognised filesystem state",
-        )),
-    }
-}
-
-fn write_forget_temporary(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
-}
-
-fn open_forget_replacement(path: &Path) -> io::Result<File> {
-    if take_forget_fault(ForgetFaultPoint::ReplacementOwnerOpen) {
-        return Err(injected_forget_error(
-            ForgetFaultPoint::ReplacementOwnerOpen,
-        ));
-    }
-    open_append(path)
-}
-
-fn publish_forget_replacement(
-    canonical: &Path,
-    replacement: &Path,
-    backup: &Path,
-) -> Result<(), ForgetPublishError> {
-    let mut confirmed_phase = ForgetPublishPhase::BeforeFirstRename;
-    if take_forget_fault(ForgetFaultPoint::Publish) {
-        return Err(ForgetPublishError {
-            confirmed_phase,
-            error: injected_forget_error(ForgetFaultPoint::Publish),
-        });
-    }
-    fs::rename(canonical, backup).map_err(|error| ForgetPublishError {
-        confirmed_phase,
-        error,
-    })?;
-    confirmed_phase = ForgetPublishPhase::OldMovedToRecovery;
-    if take_forget_fault(ForgetFaultPoint::PublishMovesOldToRecovery) {
-        return Err(ForgetPublishError {
-            confirmed_phase,
-            error: injected_forget_error(ForgetFaultPoint::PublishMovesOldToRecovery),
-        });
-    }
-    fs::rename(replacement, canonical).map_err(|error| ForgetPublishError {
-        confirmed_phase,
-        error,
-    })?;
-    confirmed_phase = ForgetPublishPhase::ReplacementMovedToCanonical;
-    if take_forget_fault(ForgetFaultPoint::PublishCommitsThenErrors) {
-        return Err(ForgetPublishError {
-            confirmed_phase,
-            error: injected_forget_error(ForgetFaultPoint::PublishCommitsThenErrors),
-        });
-    }
-    Ok(())
-}
-
-fn create_if_missing(path: &Path) -> io::Result<()> {
-    match OpenOptions::new().write(true).create_new(true).open(path) {
-        Ok(mut file) => {
-            file.write_all(&header(LEARNING_FORMAT_VERSION))?;
-            file.sync_all()
-        }
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(()),
-        Err(error) => Err(error),
-    }
-}
-
+#[cfg(test)]
 fn open_append(path: &Path) -> io::Result<File> {
     #[cfg(windows)]
     {
@@ -1954,204 +1112,6 @@ fn open_append(path: &Path) -> io::Result<File> {
     {
         OpenOptions::new().append(true).open(path)
     }
-}
-
-fn unique_sibling(path: &Path, suffix: &str) -> PathBuf {
-    let preferred = path.with_extension(suffix);
-    if !preferred.exists() {
-        return preferred;
-    }
-    let id = NEXT_ARTIFACT.fetch_add(1, Ordering::Relaxed);
-    path.with_extension(format!("{suffix}.{}.{id}", std::process::id()))
-}
-
-fn write_new_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let result = (|| -> io::Result<()> {
-        let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-        file.write_all(bytes)?;
-        file.sync_all()
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(path);
-    }
-    result
-}
-
-fn publish_upgrade(path: &Path, bytes: &[u8], source_version: u16) -> io::Result<()> {
-    let temporary = unique_sibling(path, "upgrade.tmp");
-    let backup = unique_sibling(path, &format!("v{source_version}.bak"));
-    write_new_file(&temporary, bytes)?;
-    if let Err(error) = fs::rename(path, &backup) {
-        let _ = fs::remove_file(&temporary);
-        return Err(error);
-    }
-    if let Err(error) = fs::rename(&temporary, path) {
-        let rollback = fs::rename(&backup, path);
-        let _ = fs::remove_file(&temporary);
-        return match rollback {
-            Ok(()) => Err(error),
-            Err(rollback_error) => Err(io::Error::new(
-                rollback_error.kind(),
-                format!("upgrade publish failed ({error}); rollback failed ({rollback_error})"),
-            )),
-        };
-    }
-    Ok(())
-}
-
-fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) -> io::Result<()> {
-    state.log.settle_forget_artifacts()?;
-    let path = state
-        .log
-        .path
-        .clone()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "learning log has no path"))?;
-    if let Some(file) = state.log.file.as_ref() {
-        file.sync_data()?;
-    }
-    let source = read_within_bound(&path)?;
-    if read_header(&source)? != LEARNING_FORMAT_VERSION {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "learning log version changed during compaction",
-        ));
-    }
-    let (last_good, total_records) = scan_records(&source, LEARNING_FORMAT_VERSION)?;
-    let mut first = HEADER_LEN;
-    let mut retained_records = total_records;
-    while retained_records > 1
-        && (retained_records > target_records || last_good.saturating_sub(first) > target_bytes)
-    {
-        let Some((next, _)) = record_at(&source, LEARNING_FORMAT_VERSION, first) else {
-            break;
-        };
-        first = next;
-        retained_records -= 1;
-    }
-
-    let retained_len = last_good.saturating_sub(first);
-    let mut compacted = Vec::with_capacity(HEADER_LEN + retained_len);
-    compacted.extend_from_slice(&header(LEARNING_FORMAT_VERSION));
-    compacted.extend_from_slice(&source[first..last_good]);
-    let mut rebuilt = Index::new();
-    let mut rebuilt_history = PredictionHistory::new();
-    let mut rebuilt_suppress = HashSet::new();
-    let (compacted_good, sequence) = replay(
-        &compacted,
-        LEARNING_FORMAT_VERSION,
-        &mut rebuilt,
-        &mut rebuilt_history,
-        &mut rebuilt_suppress,
-    )?;
-    if compacted_good != compacted.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "internally compacted learning log did not replay completely",
-        ));
-    }
-
-    let temporary = unique_sibling(&path, "compact.tmp");
-    let backup = unique_sibling(&path, "compact.bak");
-    write_new_file(&temporary, &compacted)?;
-    state.log.file = None;
-    if let Err(error) = fs::rename(&path, &backup) {
-        state.log.file = open_append(&path).ok();
-        let _ = fs::remove_file(&temporary);
-        return Err(error);
-    }
-    if let Err(error) = fs::rename(&temporary, &path) {
-        let rollback = fs::rename(&backup, &path);
-        state.log.file = open_append(&path).ok();
-        let _ = fs::remove_file(&temporary);
-        return match rollback {
-            Ok(()) => Err(error),
-            Err(rollback_error) => Err(io::Error::new(
-                rollback_error.kind(),
-                format!("compaction publish failed ({error}); rollback failed ({rollback_error})"),
-            )),
-        };
-    }
-    let file = match open_append(&path) {
-        Ok(file) => file,
-        Err(error) => {
-            let _ = fs::remove_file(&path);
-            let _ = fs::rename(&backup, &path);
-            state.log.file = open_append(&path).ok();
-            return Err(error);
-        }
-    };
-    let _ = fs::remove_file(&backup);
-    state.index = rebuilt;
-    state.prediction_history = rebuilt_history;
-    state.repair_suppress = rebuilt_suppress;
-    state.sequence = sequence;
-    state.log = Log {
-        file: Some(file),
-        path: Some(path),
-        bytes: u64::try_from(compacted.len()).unwrap_or(u64::MAX),
-        records: sequence,
-        dirty_records: 0,
-        forget_artifacts: ForgetArtifacts::default(),
-    };
-    Ok(())
-}
-
-fn unix_day() -> u32 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            u32::try_from(elapsed.as_secs() / 86_400).unwrap_or(u32::MAX)
-        })
-}
-
-fn is_repair_suppress(record: DecodedRecord<'_>) -> bool {
-    record.left_context == REPAIR_SUPPRESS_CONTEXT
-        && record.right_context == REPAIR_SUPPRESS_CONTEXT
-        && record.surface == REPAIR_SUPPRESS_SURFACE
-}
-
-fn replay(
-    bytes: &[u8],
-    version: u16,
-    index: &mut Index,
-    prediction_history: &mut PredictionHistory,
-    repair_suppress: &mut HashSet<u64>,
-) -> io::Result<(usize, u64)> {
-    if read_header(bytes)? != version {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "learning log header version mismatch",
-        ));
-    }
-    let mut offset = HEADER_LEN;
-    let mut sequence = 0u64;
-    while offset < bytes.len() {
-        let Some((payload_end, record)) = record_at(bytes, version, offset) else {
-            break;
-        };
-        sequence = sequence.saturating_add(1);
-        if is_repair_suppress(record) {
-            repair_suppress.insert(text_hash(record.reading));
-        } else {
-            index.learn(
-                record.left_context,
-                record.right_context,
-                record.reading,
-                record.surface,
-                record.day,
-                sequence,
-            );
-            prediction_history.learn(
-                record.reading,
-                record.surface,
-                record.right_context,
-                record.day,
-                sequence,
-            );
-        }
-        offset = payload_end;
-    }
-    Ok((offset, sequence))
 }
 
 #[cfg(test)]
