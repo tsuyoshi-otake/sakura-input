@@ -24,11 +24,13 @@ use sakura_proto::{
 };
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    COLORREF, HWND, LPARAM, LRESULT, POINT, RPC_E_CHANGED_MODE, WPARAM,
+    COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, RPC_E_CHANGED_MODE, WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    GetDC, GetMonitorInfoW, GetPixel, GetSysColor, MonitorFromRect, ReleaseDC, CLR_INVALID,
-    COLOR_HIGHLIGHT, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetMonitorInfoW, GetPixel,
+    GetSysColor, MonitorFromRect, RedrawWindow, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
+    CLR_INVALID, COLOR_HIGHLIGHT, DIB_RGB_COLORS, HDC, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    RDW_INVALIDATE, RDW_UPDATENOW,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
@@ -39,7 +41,7 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetCursorPos,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetClientRect, GetCursorPos,
     GetForegroundWindow, GetMessageW, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
     IsWindowVisible, PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW, SetCursorPos,
     SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW,
@@ -70,6 +72,13 @@ const FOREIGN_RIGHT_UP_INCREMENT: usize = 1 << 24;
 const INPUT_SETTLING: Duration = Duration::from_millis(250);
 const GW_HWNDNEXT: u32 = 2;
 const GW_HWNDPREV: u32 = 3;
+const PW_CLIENTONLY: u32 = 0x0000_0001;
+const PW_RENDERFULLCONTENT: u32 = 0x0000_0002;
+
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn PrintWindow(window: HWND, dc: HDC, flags: u32) -> i32;
+}
 
 #[test]
 #[ignore = "real renderer process; requires an interactive Windows desktop"]
@@ -1778,6 +1787,20 @@ fn wait_for_candidate_selected_color(
         if observed == expected {
             return observed;
         }
+        if observed == COLORREF(CLR_INVALID) {
+            assert!(
+                Instant::now() < deadline,
+                "candidate selected surface paint was never available: phase={phase} dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {}) expected={expected:?}",
+                probe.dpi,
+                probe.high_contrast_query_succeeded,
+                probe.high_contrast_enabled,
+                probe.system_highlight,
+                probe.sample_x,
+                probe.sample_y
+            );
+            sleep(Duration::from_millis(20));
+            continue;
+        }
         assert!(
             Instant::now() < deadline,
             "candidate selected surface mismatch: phase={phase} dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {}) expected={expected:?} actual={observed:?}",
@@ -1799,15 +1822,70 @@ fn candidate_surface_color(window: HWND) -> COLORREF {
 }
 
 fn surface_color_at(window: HWND, sample_x: i32, sample_y: i32) -> COLORREF {
-    // SAFETY: `window` is live and owned by the test renderer process, and the
-    // caller supplies a client coordinate for an immediate pixel sample.
-    let dc = unsafe { GetDC(Some(window)) };
-    assert!(!dc.is_invalid(), "acquire candidate popup paint DC");
-    // SAFETY: `dc` is live until the paired ReleaseDC immediately below.
-    let color = unsafe { GetPixel(dc, sample_x, sample_y) };
-    // SAFETY: balances the successful GetDC above for this exact HWND/DC pair.
-    let released = unsafe { ReleaseDC(Some(window), dc) };
-    assert_ne!(released, 0, "release candidate popup paint DC");
+    // Hosted DWM composition can make GetDC/GetPixel return 0x0C0C0C for a
+    // painted GDI popup. Sample the window's own client bits instead.
+    // SAFETY: `window` is live and owned by the test renderer process.
+    unsafe {
+        let _ = RedrawWindow(Some(window), None, None, RDW_INVALIDATE | RDW_UPDATENOW);
+    }
+    let mut client = RECT::default();
+    // SAFETY: `window` is live and `client` is a valid out-pointer.
+    unsafe { GetClientRect(window, &mut client) }.expect("candidate client rectangle");
+    let width = client.right - client.left;
+    let height = client.bottom - client.top;
+    if width <= sample_x || height <= sample_y || width <= 0 || height <= 0 {
+        return COLORREF(CLR_INVALID);
+    }
+
+    // SAFETY: creates a compatible memory DC owned by this sample.
+    let memory = unsafe { CreateCompatibleDC(None) };
+    if memory.is_invalid() {
+        return COLORREF(CLR_INVALID);
+    }
+    let info = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut();
+    // SAFETY: DIB storage lives until DeleteObject below.
+    let bitmap =
+        unsafe { CreateDIBSection(Some(memory), &info, DIB_RGB_COLORS, &mut bits, None, 0) };
+    let Ok(bitmap) = bitmap else {
+        // SAFETY: balances CreateCompatibleDC above.
+        unsafe {
+            let _ = DeleteDC(memory);
+        }
+        return COLORREF(CLR_INVALID);
+    };
+    // SAFETY: the live DIB is selected into the memory DC for PrintWindow.
+    let previous = unsafe { SelectObject(memory, bitmap.into()) };
+    // SAFETY: only the known, live fixture window paints into the memory DC.
+    let mut printed = unsafe { PrintWindow(window, memory, PW_CLIENTONLY | PW_RENDERFULLCONTENT) };
+    if printed == 0 {
+        printed = unsafe { PrintWindow(window, memory, PW_RENDERFULLCONTENT) };
+    }
+    let color = if printed != 0 {
+        // SAFETY: `memory` holds the just-printed client DIB.
+        unsafe { GetPixel(memory, sample_x, sample_y) }
+    } else {
+        COLORREF(CLR_INVALID)
+    };
+    // SAFETY: restore and release the objects created above.
+    unsafe {
+        if !previous.is_invalid() {
+            SelectObject(memory, previous);
+        }
+        let _ = DeleteObject(bitmap.into());
+        let _ = DeleteDC(memory);
+    }
     color
 }
 
