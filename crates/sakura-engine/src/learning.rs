@@ -22,22 +22,24 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::debug_trace;
 use sakura_proto::{EngineTimingSite, FixedStr, MAX_PREEDIT_BYTES};
+#[cfg(test)]
+use sakura_store::learning::RECORD_COMMIT;
+use sakura_store::learning::{
+    crc32, decode_record, encode_record, header, read_header, record_at, scan_records,
+    upgrade_to_current, DecodedRecord, FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN,
+    MAX_RECORD_BYTES, RECORD_ENVELOPE_LEN, REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
+};
+pub use sakura_store::learning::{
+    LearningRecord, LearningSnapshot, LEARNING_FORMAT_VERSION, MAX_LEARNING_LOG_BYTES,
+};
 
 use crate::session::text_hash;
 use crate::timing;
 
-const MAGIC: &[u8; 4] = b"SKLR";
-const HEADER_LEN: usize = 8;
-pub const LEARNING_FORMAT_VERSION: u16 = 3;
-const FORMAT_VERSION_1: u16 = 1;
-const FORMAT_VERSION_2: u16 = 2;
-const RECORD_ENVELOPE_LEN: usize = 8;
-const MAX_RECORD_BYTES: usize = 16 * 1024;
 const BUCKETS: usize = 32_768;
 const WAYS: usize = 3;
 const SLOT_COUNT: usize = BUCKETS * WAYS;
 pub const MAX_LEARNING_ENTRIES: usize = SLOT_COUNT;
-pub const MAX_LEARNING_LOG_BYTES: u64 = 20 * 1024 * 1024;
 /// Fixed number of exact `(reading, surface)` entries retained for prediction.
 ///
 /// This is a storage and ranking window, not a per-result display limit.  The
@@ -50,11 +52,6 @@ const COMPACTION_TARGET_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LOG_RECORDS: u64 = 50_000;
 const TARGET_LOG_RECORDS: u64 = 40_000;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
-const RECORD_COMMIT: u8 = 1;
-/// Marker context pair for a repair-suppress record encoded as a COMMIT frame.
-/// Keeps the learning format version unchanged while still using the CRC envelope.
-const REPAIR_SUPPRESS_CONTEXT: u16 = u16::MAX;
-const REPAIR_SUPPRESS_SURFACE: &str = "\u{E000}sakura-repair-suppress";
 /// A learned choice loses half of its effective evidence every 30 days.
 ///
 /// The same decay applies to exact-context and general preferences.  Exact
@@ -711,59 +708,6 @@ pub(crate) enum ForgetPredictionOutcome {
     Removed,
     NotFound,
     Unavailable,
-}
-
-/// One durable learning event exposed to the settings viewer/exporter.
-///
-/// Events intentionally remain an append-order history instead of an
-/// aggregation: exporting and clearing must be auditable, and retaining the
-/// original context ids lets diagnostics explain why an exact-context choice
-/// won over a general one.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LearningRecord {
-    pub sequence: u64,
-    pub day: u32,
-    pub left_context: u16,
-    pub right_context: u16,
-    pub reading: String,
-    pub surface: String,
-}
-
-/// A verified prefix of the checksummed learning log.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LearningSnapshot {
-    pub format_version: u16,
-    pub records: Vec<LearningRecord>,
-    /// Bytes after the last checksummed record. The engine repairs this tail
-    /// on open; a concurrent settings read reports it instead of presenting
-    /// an incomplete event as valid data.
-    pub ignored_tail_bytes: u64,
-}
-
-impl LearningSnapshot {
-    /// Stable, UTF-8 TSV export. Text fields use backslash escaping because a
-    /// committed surface may legitimately contain a tab or line break.
-    pub fn to_tsv(&self) -> String {
-        let mut output = format!(
-            "# sakura-learning-format: {}\nsequence\tday\tleft-context\tright-context\treading\tsurface\n",
-            self.format_version
-        );
-        for record in &self.records {
-            output.push_str(&record.sequence.to_string());
-            output.push('\t');
-            output.push_str(&record.day.to_string());
-            output.push('\t');
-            output.push_str(&record.left_context.to_string());
-            output.push('\t');
-            output.push_str(&record.right_context.to_string());
-            output.push('\t');
-            push_tsv_escaped(&mut output, &record.reading);
-            output.push('\t');
-            push_tsv_escaped(&mut output, &record.surface);
-            output.push('\n');
-        }
-        output
-    }
 }
 
 impl LearningService {
@@ -1541,7 +1485,7 @@ pub fn read_snapshot(path: &Path) -> io::Result<LearningSnapshot> {
     let mut records = Vec::new();
     while let Some((next, record)) = record_at(&bytes, version, offset) {
         sequence = sequence.saturating_add(1);
-        if !record.is_repair_suppress() {
+        if !is_repair_suppress(record) {
             records.push(LearningRecord {
                 sequence,
                 day: record.day,
@@ -1558,18 +1502,6 @@ pub fn read_snapshot(path: &Path) -> io::Result<LearningSnapshot> {
         records,
         ignored_tail_bytes: u64::try_from(bytes.len().saturating_sub(offset)).unwrap_or(u64::MAX),
     })
-}
-
-fn push_tsv_escaped(output: &mut String, value: &str) {
-    for character in value.chars() {
-        match character {
-            '\\' => output.push_str("\\\\"),
-            '\t' => output.push_str("\\t"),
-            '\r' => output.push_str("\\r"),
-            '\n' => output.push_str("\\n"),
-            other => output.push(other),
-        }
-    }
 }
 
 static NEXT_ARTIFACT: AtomicU64 = AtomicU64::new(1);
@@ -1678,12 +1610,12 @@ impl ForgetPredictionDeepRecoveryFault {
 
 /// Test-only cross-layer fault after the replacement rename is confirmed but
 /// both publication and subsequent observation report errors.
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 pub(crate) struct ForgetPredictionCommittedObservationFault {
     _scope: ForgetFaultScope,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dev-fixtures"))]
 impl ForgetPredictionCommittedObservationFault {
     pub(crate) fn install() -> Self {
         Self {
@@ -2172,145 +2104,10 @@ fn unix_day() -> u32 {
         })
 }
 
-fn header(version: u16) -> [u8; HEADER_LEN] {
-    let mut header = [0u8; HEADER_LEN];
-    header[..4].copy_from_slice(MAGIC);
-    header[4..6].copy_from_slice(&version.to_le_bytes());
-    header
-}
-
-fn read_header(bytes: &[u8]) -> io::Result<u16> {
-    if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid learning log header",
-        ));
-    }
-    Ok(u16::from_le_bytes([bytes[4], bytes[5]]))
-}
-
-fn encode_record(
-    reading: &str,
-    surface: &str,
-    left_context: u16,
-    right_context: u16,
-    day: u32,
-) -> io::Result<Vec<u8>> {
-    let reading_len = u16::try_from(reading.len())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "reading too long"))?;
-    let surface_len = u16::try_from(surface.len())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "surface too long"))?;
-    let capacity = 13usize
-        .checked_add(reading.len())
-        .and_then(|size| size.checked_add(surface.len()))
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "record too large"))?;
-    if capacity > MAX_RECORD_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "learning record exceeds its bound",
-        ));
-    }
-    let mut payload = Vec::with_capacity(capacity);
-    payload.push(RECORD_COMMIT);
-    payload.extend_from_slice(&day.to_le_bytes());
-    payload.extend_from_slice(&left_context.to_le_bytes());
-    payload.extend_from_slice(&right_context.to_le_bytes());
-    payload.extend_from_slice(&reading_len.to_le_bytes());
-    payload.extend_from_slice(&surface_len.to_le_bytes());
-    payload.extend_from_slice(reading.as_bytes());
-    payload.extend_from_slice(surface.as_bytes());
-    Ok(payload)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct DecodedRecord<'a> {
-    day: u32,
-    left_context: u16,
-    right_context: u16,
-    reading: &'a str,
-    surface: &'a str,
-}
-
-impl DecodedRecord<'_> {
-    fn is_repair_suppress(self) -> bool {
-        self.left_context == REPAIR_SUPPRESS_CONTEXT
-            && self.right_context == REPAIR_SUPPRESS_CONTEXT
-            && self.surface == REPAIR_SUPPRESS_SURFACE
-    }
-}
-
-fn decode_record(payload: &[u8], version: u16) -> io::Result<DecodedRecord<'_>> {
-    let (day_offset, left_context, right_context, lengths_offset) = match version {
-        FORMAT_VERSION_1 => (0usize, 0u16, 0u16, 4usize),
-        FORMAT_VERSION_2 if payload.first() == Some(&RECORD_COMMIT) => {
-            if payload.len() < 11 {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "short record"));
-            }
-            (
-                1usize,
-                u16::from_le_bytes([payload[5], payload[6]]),
-                0u16,
-                7usize,
-            )
-        }
-        LEARNING_FORMAT_VERSION if payload.first() == Some(&RECORD_COMMIT) => {
-            if payload.len() < 13 {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "short record"));
-            }
-            (
-                1usize,
-                u16::from_le_bytes([payload[5], payload[6]]),
-                u16::from_le_bytes([payload[7], payload[8]]),
-                9usize,
-            )
-        }
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "unknown learning record",
-            ));
-        }
-    };
-    if payload.len() < lengths_offset + 4 || payload.len() < day_offset + 4 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "short record"));
-    }
-    let day = u32::from_le_bytes(
-        payload[day_offset..day_offset + 4]
-            .try_into()
-            .expect("checked four bytes"),
-    );
-    let reading_len = usize::from(u16::from_le_bytes([
-        payload[lengths_offset],
-        payload[lengths_offset + 1],
-    ]));
-    let surface_len = usize::from(u16::from_le_bytes([
-        payload[lengths_offset + 2],
-        payload[lengths_offset + 3],
-    ]));
-    let text_start = lengths_offset + 4;
-    let reading_end = text_start
-        .checked_add(reading_len)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "record overflow"))?;
-    let surface_end = reading_end
-        .checked_add(surface_len)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "record overflow"))?;
-    if surface_end != payload.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "learning record length mismatch",
-        ));
-    }
-    let reading = core::str::from_utf8(&payload[text_start..reading_end])
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid reading UTF-8"))?;
-    let surface = core::str::from_utf8(&payload[reading_end..surface_end])
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid surface UTF-8"))?;
-    Ok(DecodedRecord {
-        day,
-        left_context,
-        right_context,
-        reading,
-        surface,
-    })
+fn is_repair_suppress(record: DecodedRecord<'_>) -> bool {
+    record.left_context == REPAIR_SUPPRESS_CONTEXT
+        && record.right_context == REPAIR_SUPPRESS_CONTEXT
+        && record.surface == REPAIR_SUPPRESS_SURFACE
 }
 
 fn replay(
@@ -2333,7 +2130,7 @@ fn replay(
             break;
         };
         sequence = sequence.saturating_add(1);
-        if record.is_repair_suppress() {
+        if is_repair_suppress(record) {
             repair_suppress.insert(text_hash(record.reading));
         } else {
             index.learn(
@@ -2355,83 +2152,6 @@ fn replay(
         offset = payload_end;
     }
     Ok((offset, sequence))
-}
-
-fn record_at(bytes: &[u8], version: u16, offset: usize) -> Option<(usize, DecodedRecord<'_>)> {
-    if offset > bytes.len() || bytes.len() - offset < RECORD_ENVELOPE_LEN {
-        return None;
-    }
-    let length = usize::try_from(u32::from_le_bytes(
-        bytes[offset..offset + 4].try_into().ok()?,
-    ))
-    .ok()?;
-    if length > MAX_RECORD_BYTES {
-        return None;
-    }
-    let expected_crc = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().ok()?);
-    let payload_start = offset + RECORD_ENVELOPE_LEN;
-    let payload_end = payload_start.checked_add(length)?;
-    let payload = bytes.get(payload_start..payload_end)?;
-    if crc32(payload) != expected_crc {
-        return None;
-    }
-    decode_record(payload, version)
-        .ok()
-        .map(|record| (payload_end, record))
-}
-
-fn scan_records(bytes: &[u8], version: u16) -> io::Result<(usize, u64)> {
-    if read_header(bytes)? != version {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "learning log header version mismatch",
-        ));
-    }
-    let mut offset = HEADER_LEN;
-    let mut records = 0u64;
-    while let Some((next, _)) = record_at(bytes, version, offset) {
-        offset = next;
-        records = records.saturating_add(1);
-    }
-    Ok((offset, records))
-}
-
-fn upgrade_to_current(bytes: &[u8], source_version: u16) -> io::Result<Vec<u8>> {
-    let mut upgraded = header(LEARNING_FORMAT_VERSION).to_vec();
-    let mut offset = HEADER_LEN;
-    while offset < bytes.len() {
-        let Some((payload_end, record)) = record_at(bytes, source_version, offset) else {
-            break;
-        };
-        let current = encode_record(
-            record.reading,
-            record.surface,
-            record.left_context,
-            record.right_context,
-            record.day,
-        )?;
-        upgraded.extend_from_slice(
-            &u32::try_from(current.len())
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "record too large"))?
-                .to_le_bytes(),
-        );
-        upgraded.extend_from_slice(&crc32(&current).to_le_bytes());
-        upgraded.extend_from_slice(&current);
-        offset = payload_end;
-    }
-    Ok(upgraded)
-}
-
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = !0u32;
-    for byte in bytes {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
 }
 
 #[cfg(test)]

@@ -314,7 +314,6 @@ dependencies = [
  "sakura-ai-proto",
  "sakura-context-research",
  "sakura-core",
- "sakura-ime-eval",
  "sakura-ipc",
  "sakura-neural-proto",
  "sakura-oracles",
@@ -330,12 +329,15 @@ dependencies = [
 name = "sakura-ime-eval"
 version = "1.0.39"
 dependencies = [
+ "dictc",
  "sakura-core",
+ "sakura-engine",
  "sakura-ipc",
  "sakura-proto",
  "serde",
  "serde_json",
  "sha2",
+ "windows",
 ]
 
 [[package]]
