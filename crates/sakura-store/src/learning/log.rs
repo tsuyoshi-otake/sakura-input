@@ -206,8 +206,7 @@ impl LearningLog {
         })?;
         let frame_bytes = u64::try_from(RECORD_ENVELOPE_LEN + payload.len()).unwrap_or(u64::MAX);
         if self.bytes.saturating_add(frame_bytes) > MAX_LEARNING_LOG_BYTES {
-            return Err(LearningLogError::without_receipt(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LearningLogError::without_receipt(io::Error::other(
                 "learning log is at capacity",
             )));
         }
