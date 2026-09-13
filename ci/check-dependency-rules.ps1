@@ -448,6 +448,11 @@ const MAX_CANDIDATE_BYTES: usize = 3 * 1024;
         $r5Negative = Get-R5Audit $renderer
         if ($r5Negative.Findings.Count -ne 2) { throw 'R5 negative fixture failed' }
 
+        $ciWorkflow = [IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/ci.yml'))
+        if ($ciWorkflow -notmatch '-Enforce R1,R2,R8,R9,R12,R13') {
+            throw 'CI workflow must enforce R1, R2, R8, R9, R12, and R13'
+        }
+
         Write-Host 'PASS: dependency rule fixtures cover metadata edges, rg-free source rejection, R5/R8 ownership, R9 placement, R12 values isolation, and R13 store isolation'
     }
     catch {
