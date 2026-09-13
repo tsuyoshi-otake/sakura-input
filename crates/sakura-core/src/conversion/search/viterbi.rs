@@ -6,7 +6,7 @@ use crate::dictionary::Dictionary;
 use crate::user_dictionary::UserDictionary;
 
 use super::super::{
-    connection_cost, make_candidate, CandidateMaterialization, ConversionError,
+    connection_cost, has_same_surface, make_candidate, CandidateMaterialization, ConversionError,
     ConversionSearchTerminal, Converter, LeftContextId, RightContextId, Surface, NONE, NONE_STATE,
 };
 use super::Node;
@@ -258,11 +258,7 @@ impl Converter {
                     }
                     Err(error) => return Err(error),
                 };
-                if self
-                    .candidates
-                    .iter()
-                    .all(|existing| existing.text() != candidate.text())
-                {
+                if !has_same_surface(&self.candidates, candidate.text()) {
                     self.candidates.push(candidate);
                     if self.candidates.len() >= wanted {
                         return Ok(SearchRun {

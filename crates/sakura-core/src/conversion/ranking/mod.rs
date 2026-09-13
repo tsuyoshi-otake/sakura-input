@@ -8,5 +8,7 @@ mod coherence;
 mod cost;
 mod it_terms;
 mod quality_gate;
+mod tie_break;
 
 pub(in crate::conversion) use cost::{connection_cost, numeric_form_cost, synthetic_run_cost};
+pub(in crate::conversion) use tie_break::sort_by_cost;

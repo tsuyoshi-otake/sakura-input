@@ -36,6 +36,7 @@ pub(in crate::conversion) use bridge::{
     BridgeBoundaryKind, CommitBridgeTailStorage, NO_COMMIT_BRIDGE_ENTRY, NO_SYSTEM_ENTRY_INDEX,
 };
 pub use bridge::{CommitBridgeTail, CrossCommitBridge, LeftContextId, RightContextId};
+pub(in crate::conversion) use candidates::has_same_surface;
 pub use candidates::{ConversionCandidate, ConversionSegment};
 pub use evidence::{
     CandidateAuthority, CandidateEvidence, CandidateEvidenceClass, CandidateOrigin, PathEvidence,
@@ -43,7 +44,9 @@ pub use evidence::{
 };
 pub use input::{ConversionInput, ConversionInputClass, LiteralPolicy};
 pub use options::{candidate_budget, ConversionOptions};
-pub(in crate::conversion) use ranking::{connection_cost, numeric_form_cost, synthetic_run_cost};
+pub(in crate::conversion) use ranking::{
+    connection_cost, numeric_form_cost, sort_by_cost, synthetic_run_cost,
+};
 pub use repair_plan::{
     CorrectionMap, CorrectionMapError, CorrectionRun, CorrectionRunKind, RawRepairBudget,
     RawRepairPlan,
@@ -463,11 +466,11 @@ impl Converter {
             }
             Err(error) => return Err(error),
         }
-        self.candidates.sort_by_key(|candidate| candidate.cost);
+        sort_by_cost(&mut self.candidates);
         self.candidates.truncate(options.max_candidates);
         let lossless_fallback_inserted =
             self.ensure_lossless_fallback(fallback, options.max_candidates);
-        self.candidates.sort_by_key(|candidate| candidate.cost);
+        sort_by_cost(&mut self.candidates);
         self.append_single_kanji(dictionary, reading, options.max_candidates)?;
         self.append_punctuation_family(reading, options.punctuation, options.max_candidates)?;
         debug_assert!(!self.candidates.is_empty());
@@ -819,8 +822,7 @@ impl Converter {
                             .saturating_add(1);
                     }
                 }
-                self.cross_commit_scratch
-                    .sort_by_key(|candidate| candidate.cost);
+                sort_by_cost(&mut self.cross_commit_scratch);
             }
         }
 
@@ -938,7 +940,7 @@ impl Converter {
             }
         }
 
-        self.candidates.sort_by_key(|candidate| candidate.cost);
+        sort_by_cost(&mut self.candidates);
         // A dictionary entry rendering exactly like the raw literal is already
         // represented by the policy-owned candidate. Do not duplicate it.
         self.candidates
@@ -1087,11 +1089,7 @@ impl Converter {
     }
 
     fn ensure_lossless_fallback(&mut self, fallback: ConversionCandidate, wanted: usize) -> bool {
-        if self
-            .candidates
-            .iter()
-            .any(|candidate| candidate.text() == fallback.text())
-        {
+        if has_same_surface(&self.candidates, fallback.text()) {
             return false;
         }
         if self.candidates.len() >= wanted {
