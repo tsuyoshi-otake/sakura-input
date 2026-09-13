@@ -78,8 +78,15 @@ const CONTROL_WATCH: Duration = Duration::from_secs(5);
 /// A connect attempt used to ask "is anything serving?", not to do work.
 const PROBE: Duration = Duration::from_millis(200);
 
-/// Long enough to cover a cold start under load.
+/// Long enough for an ordinary protocol call once the engine is ready.
 const PATIENT: Duration = Duration::from_secs(5);
+
+/// How long to allow a cold engine to load its dictionary and start workers.
+///
+/// Pipe ownership happens earlier and is deliberately not treated as ready.
+/// Hosted runners can take more than five seconds to initialize the release
+/// dictionary, so startup uses the same bounded ceiling as watchdog recovery.
+const STARTUP_BUDGET: Duration = RECOVERY_BUDGET;
 
 #[test]
 #[ignore = "starts, kills and restarts the engine singleton and puts a renderer on the desktop"]
@@ -352,11 +359,11 @@ fn required_dictionary() -> PathBuf {
 }
 
 fn wait_until_serving(who: &str) {
-    let deadline = Instant::now() + PATIENT;
+    let deadline = Instant::now() + STARTUP_BUDGET;
     if connect_and_handshake_until(deadline).is_some() {
         return;
     }
-    panic!("{who} never started serving the pipe within {PATIENT:?}");
+    panic!("{who} never started serving the pipe within {STARTUP_BUDGET:?}");
 }
 
 /// Connects to an engine that is ready to serve protocol requests.
