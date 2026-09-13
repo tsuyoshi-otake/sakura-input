@@ -7,6 +7,6 @@ mod lattice;
 mod viterbi;
 
 pub(in crate::conversion) use lattice::{
-    char_class, char_run, CharClass, CharRun, DictionaryEdgeBudget, Node, NodeSpec,
+    char_class, char_run, CharClass, DictionaryEdgeBudget, Node, NodeSpec,
 };
 pub(in crate::conversion) use viterbi::{HeapItem, PathClass, SearchRun, SearchState};
