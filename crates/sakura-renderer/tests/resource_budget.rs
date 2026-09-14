@@ -7,7 +7,7 @@ use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint};
 use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, ScreenRect, PROTOCOL_VERSION};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::ProcessStatus::{
@@ -117,7 +117,8 @@ fn renderer_with_candidates_stays_within_its_footprint_budget() {
         "renderer private working set is {private_working_set} bytes (budget {RENDERER_PRIVATE_WORKING_SET_BUDGET})"
     );
 
-    let _ = client.call(&Request::Shutdown, PATIENT);
+    drop(client);
+    shutdown_engine();
     engine.wait_for_exit();
     renderer.wait_for_exit();
 }
@@ -187,6 +188,39 @@ fn connect() -> Client {
         );
         sleep(Duration::from_millis(20).min(remaining));
     }
+}
+
+fn shutdown_engine() {
+    let deadline = Instant::now() + PATIENT;
+    let mut client = loop {
+        let now = Instant::now();
+        assert!(now < deadline, "control endpoint did not complete Hello");
+        let budget = Duration::from_millis(100).min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect_endpoint(Endpoint::Control, budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline,
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                break client;
+            }
+        }
+        sleep(Duration::from_millis(20).min(deadline.saturating_duration_since(Instant::now())));
+    };
+    assert!(
+        matches!(
+            client.call_until(&Request::Shutdown, deadline),
+            Ok(Response::Ok)
+        ),
+        "control endpoint did not acknowledge Shutdown"
+    );
 }
 
 fn send_key(client: &mut Client, session: u64, character: char) {
