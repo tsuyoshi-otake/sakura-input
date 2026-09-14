@@ -52,7 +52,7 @@ use std::process::{Child, Command};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint};
 use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, SessionId, PROTOCOL_VERSION};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Diagnostics::ToolHelp::{
@@ -173,10 +173,10 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     // still watching and it starts another one, and the test leaks the very
     // thing whose leak corrupts the next run.
     renderer.kill_now();
-    // Then ask the engine to stop rather than killing it, so the last engine
-    // standing is one that shut down the way a real one does.
-    let _ = client.call(&Request::Shutdown, PATIENT);
+    // Then ask the engine to stop over its administrative endpoint rather
+    // than killing it. Shutdown is intentionally not admitted on Data.
     drop(client);
+    shutdown_engine();
 
     let deadline = Instant::now() + PATIENT;
     loop {
@@ -493,6 +493,39 @@ fn wait_until_silent() {
         sleep(Duration::from_millis(20));
     }
     panic!("the pipe was still answering {PATIENT:?} after the engine was killed");
+}
+
+fn shutdown_engine() {
+    let deadline = Instant::now() + PATIENT;
+    let mut client = loop {
+        let now = Instant::now();
+        assert!(now < deadline, "control endpoint did not complete Hello");
+        let budget = PROBE.min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect_endpoint(Endpoint::Control, budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline,
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                break client;
+            }
+        }
+        sleep(Duration::from_millis(20).min(deadline.saturating_duration_since(Instant::now())));
+    };
+    assert!(
+        matches!(
+            client.call_until(&Request::Shutdown, deadline),
+            Ok(Response::Ok)
+        ),
+        "control endpoint did not acknowledge Shutdown"
+    );
 }
 
 fn open_session(client: &mut Client) -> SessionId {
