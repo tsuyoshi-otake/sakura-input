@@ -52,12 +52,13 @@ use std::process::{Child, Command};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint};
 use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, SessionId, PROTOCOL_VERSION};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
 
 /// How long to allow for the watchdog to notice and relaunch.
 ///
@@ -78,13 +79,24 @@ const CONTROL_WATCH: Duration = Duration::from_secs(5);
 /// A connect attempt used to ask "is anything serving?", not to do work.
 const PROBE: Duration = Duration::from_millis(200);
 
-/// Long enough to cover a cold start under load.
+/// Long enough for an ordinary protocol call once the engine is ready.
 const PATIENT: Duration = Duration::from_secs(5);
+
+/// How long to allow a cold engine to load its dictionary and start workers.
+///
+/// Pipe ownership happens earlier and is deliberately not treated as ready.
+/// Hosted runners can take more than five seconds to initialize the release
+/// dictionary, so startup uses the same bounded ceiling as watchdog recovery.
+const STARTUP_BUDGET: Duration = RECOVERY_BUDGET;
 
 #[test]
 #[ignore = "starts, kills and restarts the engine singleton and puts a renderer on the desktop"]
 fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     refuse_if_anything_is_already_running();
+    // From this point on every watched process belongs to this test. Recover
+    // them during unwinding too, so a failed assertion cannot hold the hosted
+    // runner's job open until its outer timeout.
+    let _process_cleanup = ProcessCleanup;
     let dictionary = required_dictionary();
 
     // ---- Control: no watchdog, so nothing should resurrect the engine ----
@@ -124,24 +136,20 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     let killed_at = Instant::now();
 
     let deadline = killed_at + RECOVERY_BUDGET;
-    loop {
-        if Client::connect(PROBE).is_ok() {
-            println!("recovered after {:?}", killed_at.elapsed());
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the engine was still gone {RECOVERY_BUDGET:?} after being killed, \
-             with the renderer running: the watchdog did not restart it, and a \
+    let mut client = connect_and_handshake_until(deadline).unwrap_or_else(|| {
+        panic!(
+            "the engine was still not serving {RECOVERY_BUDGET:?} after being killed, \
+             with the renderer running: the watchdog did not restart a working engine, and a \
              user hitting this would lose their IME until the next logon"
-        );
-        sleep(Duration::from_millis(100));
-    }
+        )
+    });
+    println!("recovered after {:?}", killed_at.elapsed());
 
-    // Reachable is not the same as working. What the criterion promises is
-    // that typing resumes, so type.
-    let mut client = Client::connect(PATIENT).expect("the pipe just answered");
-    let session = handshake_and_open(&mut client);
+    // Pipe ownership is not service readiness: the engine reserves its pipe
+    // name before loading runtime state. The recovery helper therefore keeps
+    // the exact connection that completed Hello, avoiding both a false-ready
+    // result and a second-instance race.
+    let session = open_session(&mut client);
     let mut composed = String::new();
     for c in "sa".chars() {
         if let Response::Output(output) = send(&mut client, session, char_key(c)) {
@@ -165,10 +173,24 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     // still watching and it starts another one, and the test leaks the very
     // thing whose leak corrupts the next run.
     renderer.kill_now();
-    // Then ask the engine to stop rather than killing it, so the last engine
-    // standing is one that shut down the way a real one does.
-    let _ = client.call(&Request::Shutdown, PATIENT);
+    // Then ask the engine to stop over its administrative endpoint rather
+    // than killing it. Shutdown is intentionally not admitted on Data.
     drop(client);
+    shutdown_engine();
+
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let left = running_processes();
+        if left.is_empty() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            eprintln!("graceful shutdown left {left:?}; force-stopping test-owned processes");
+            terminate_processes(&left);
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
 
     let deadline = Instant::now() + PATIENT;
     loop {
@@ -178,8 +200,7 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
         }
         assert!(
             Instant::now() < deadline,
-            "this test left {left:?} running, which would make the next run's \
-             control phase lie"
+            "could not clean up test-owned Sakura processes: {left:?}"
         );
         sleep(Duration::from_millis(100));
     }
@@ -223,12 +244,19 @@ fn refuse_if_anything_is_already_running() {
     );
 }
 
-/// The names of any Sakura Input processes currently running.
+/// A Sakura Input process visible in this logon session.
+#[derive(Debug)]
+struct RunningProcess {
+    name: String,
+    id: u32,
+}
+
+/// The Sakura Input processes currently running.
 ///
 /// Enumerated rather than inferred from the pipe, for the reason in
 /// [`refuse_if_anything_is_already_running`]: the process that matters most
 /// here is the one that holds no pipe of its own.
-fn running_processes() -> Vec<String> {
+fn running_processes() -> Vec<RunningProcess> {
     const WATCHED: [&str; 2] = ["sakura_engine.exe", "sakura_renderer.exe"];
 
     // SAFETY: `TH32CS_SNAPPROCESS` with pid 0 snapshots every process and is
@@ -259,7 +287,10 @@ fn running_processes() -> Vec<String> {
                         .unwrap_or(entry.szExeFile.len())],
                 );
                 if WATCHED.iter().any(|w| w.eq_ignore_ascii_case(&name)) {
-                    found.push(name);
+                    found.push(RunningProcess {
+                        name,
+                        id: entry.th32ProcessID,
+                    });
                 }
                 if Process32NextW(snapshot, &mut entry).is_err() {
                     break;
@@ -269,6 +300,50 @@ fn running_processes() -> Vec<String> {
         let _ = CloseHandle(snapshot);
     }
     found
+}
+
+/// Force-stops processes that this test owns after its clean-machine precheck.
+///
+/// This is a teardown fallback, not part of the watchdog assertion. It must
+/// also be safe during unwinding, so failures are diagnosed but never panic.
+fn terminate_processes(processes: &[RunningProcess]) {
+    for process in processes {
+        // SAFETY: the PID came from a live process snapshot. The handle is
+        // requested only for termination/synchronization and is closed below.
+        let handle = match unsafe { OpenProcess(PROCESS_TERMINATE, false, process.id) } {
+            Ok(handle) => handle,
+            Err(error) => {
+                eprintln!(
+                    "could not open test-owned {} (pid {}): {error}",
+                    process.name, process.id
+                );
+                continue;
+            }
+        };
+        // SAFETY: `handle` grants PROCESS_TERMINATE for this test-owned child
+        // or descendant. The handle remains live until it is closed below.
+        unsafe {
+            if let Err(error) = TerminateProcess(handle, 1) {
+                eprintln!(
+                    "could not terminate test-owned {} (pid {}): {error}",
+                    process.name, process.id
+                );
+            }
+            let _ = CloseHandle(handle);
+        }
+    }
+}
+
+struct ProcessCleanup;
+
+impl Drop for ProcessCleanup {
+    fn drop(&mut self) {
+        let left = running_processes();
+        if !left.is_empty() {
+            eprintln!("cleanup guard force-stopping {left:?}");
+            terminate_processes(&left);
+        }
+    }
 }
 
 /// A child process this test is responsible for, killed on drop.
@@ -301,6 +376,12 @@ impl Spawned {
         );
         let child = Command::new(path)
             .env("SAKURA_DICTIONARY", dictionary)
+            // These GUI children do not have a test-visible stdio contract.
+            // Detaching them prevents a watchdog-spawned grandchild from
+            // retaining the workflow's captured output handles after panic.
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .unwrap_or_else(|error| panic!("could not start {what}: {error}"));
         Spawned {
@@ -350,14 +431,52 @@ fn required_dictionary() -> PathBuf {
 }
 
 fn wait_until_serving(who: &str) {
-    let deadline = Instant::now() + PATIENT;
-    while Instant::now() < deadline {
-        if Client::connect(PROBE).is_ok() {
-            return;
-        }
-        sleep(Duration::from_millis(20));
+    let deadline = Instant::now() + STARTUP_BUDGET;
+    if connect_and_handshake_until(deadline).is_some() {
+        return;
     }
-    panic!("{who} never started serving the pipe within {PATIENT:?}");
+    panic!("{who} never started serving the pipe within {STARTUP_BUDGET:?}");
+}
+
+/// Connects to an engine that is ready to serve protocol requests.
+///
+/// Owning the named pipe is not enough: the engine reserves it before its
+/// runtime state is initialized and before server workers begin running. Keep
+/// each candidate only when Hello succeeds on that same connection, and keep
+/// every attempt inside the caller's absolute deadline.
+fn connect_and_handshake_until(deadline: Instant) -> Option<Client> {
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+
+        let connect_budget = PROBE.min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect(connect_budget) {
+            let now = Instant::now();
+            if now >= deadline {
+                return None;
+            }
+            let handshake_deadline = deadline.min(now + PATIENT);
+            if matches!(
+                client.call_until(
+                    &Request::Hello {
+                        client_version: PROTOCOL_VERSION,
+                    },
+                    handshake_deadline,
+                ),
+                Ok(Response::Hello { .. })
+            ) {
+                return Some(client);
+            }
+        }
+
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        sleep(Duration::from_millis(20).min(remaining));
+    }
 }
 
 /// Waits for the pipe to stop answering after a kill.
@@ -376,16 +495,40 @@ fn wait_until_silent() {
     panic!("the pipe was still answering {PATIENT:?} after the engine was killed");
 }
 
-fn handshake_and_open(client: &mut Client) -> SessionId {
-    match client.call(
-        &Request::Hello {
-            client_version: PROTOCOL_VERSION,
-        },
-        PATIENT,
-    ) {
-        Ok(Response::Hello { .. }) => {}
-        other => panic!("the restarted engine did not handshake: {other:?}"),
-    }
+fn shutdown_engine() {
+    let deadline = Instant::now() + PATIENT;
+    let mut client = loop {
+        let now = Instant::now();
+        assert!(now < deadline, "control endpoint did not complete Hello");
+        let budget = PROBE.min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect_endpoint(Endpoint::Control, budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline,
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                break client;
+            }
+        }
+        sleep(Duration::from_millis(20).min(deadline.saturating_duration_since(Instant::now())));
+    };
+    assert!(
+        matches!(
+            client.call_until(&Request::Shutdown, deadline),
+            Ok(Response::Ok)
+        ),
+        "control endpoint did not acknowledge Shutdown"
+    );
+}
+
+fn open_session(client: &mut Client) -> SessionId {
     match client.call(
         &Request::CreateSession {
             process_name: "watchdog_recovery.exe".to_owned(),

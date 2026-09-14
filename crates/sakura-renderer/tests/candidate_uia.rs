@@ -1,14 +1,14 @@
 //! Real-process candidate popup and UI Automation gate.
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint};
 use sakura_proto::{
     CandidateList, KeyCode, KeyInput, Modifiers, Output, Request, Response, ScreenRect,
-    CANDIDATE_PAGE_SIZE,
+    CANDIDATE_PAGE_SIZE, PROTOCOL_VERSION,
 };
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, RECT, RPC_E_CHANGED_MODE};
@@ -21,10 +21,12 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GetForegroundWindow, GetWindowRect, IsWindowVisible, SendMessageW, WM_DPICHANGED,
+    FindWindowExW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
+    SendMessageW, WM_DPICHANGED,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
+const STARTUP_BUDGET: Duration = Duration::from_secs(30);
 const MIN_WIDTH_96: i32 = 260;
 const MAX_WIDTH_96: i32 = 480;
 const ROW_HEIGHT_96: i32 = 28;
@@ -42,26 +44,28 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     );
     let dictionary = required_path("SAKURA_PHASE2_DICTIONARY");
     let app_data = IsolatedAppData::new("candidate-uia");
-    let renderer_path = PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer"));
-    let engine_path = renderer_path.with_file_name("sakura_engine.exe");
-    assert!(
-        engine_path.is_file(),
-        "build the release workspace first; missing {}",
-        engine_path.display()
-    );
+    let installed_layout = TemporaryInstalledLayout::new();
 
-    let engine = Command::new(&engine_path)
+    let engine = Command::new(installed_layout.engine_path())
         .env("SAKURA_DICTIONARY", &dictionary)
         .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn release engine");
     let mut engine = OwnedChild::new(engine, "engine");
     let mut client = connect();
-    let renderer = Command::new(&renderer_path)
+    let renderer = Command::new(installed_layout.renderer_path())
+        .env("SAKURA_DICTIONARY", &dictionary)
         .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn release renderer");
     let mut renderer = OwnedChild::new(renderer, "renderer");
+    let _ = wait_for_candidate_window(&mut renderer, false, Instant::now() + STARTUP_BUDGET);
 
     let session = create_session(&mut client);
     for character in "kannji".chars() {
@@ -74,18 +78,21 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         "the integration reading must exercise a second page"
     );
     assert_eq!(first_candidates.page_size, CANDIDATE_PAGE_SIZE as u16);
-
-    set_placement(
-        &mut client,
-        session,
-        ScreenRect {
-            left: 100,
-            top: 100,
-            right: 120,
-            bottom: 124,
-        },
+    assert!(
+        matches!(client.call(&Request::Ping, PATIENT), Ok(Response::Pong)),
+        "same-client Ping must observe the completed candidate publish"
     );
-    let candidate_window = wait_for_candidate_window();
+
+    let first_anchor = ScreenRect {
+        left: 100,
+        top: 100,
+        right: 120,
+        bottom: 124,
+    };
+    set_placement_visibility(&mut client, session, first_anchor, false);
+    set_placement_visibility(&mut client, session, first_anchor, true);
+    let candidate_window =
+        wait_for_candidate_window(&mut renderer, true, Instant::now() + STARTUP_BUDGET);
     let first_rect = window_rect(candidate_window);
     assert_popup_geometry(
         candidate_window,
@@ -245,9 +252,58 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         );
     }
 
-    let _ = client.call(&Request::Shutdown, PATIENT);
+    drop(client);
+    renderer.kill_now();
+    shutdown_engine();
     engine.wait_for_exit();
-    renderer.wait_for_exit();
+}
+
+struct TemporaryInstalledLayout {
+    root: PathBuf,
+    release: PathBuf,
+}
+
+impl TemporaryInstalledLayout {
+    fn new() -> Self {
+        let source_renderer = PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer"));
+        let source_engine = source_renderer.with_file_name("sakura_engine.exe");
+        assert!(
+            source_engine.is_file(),
+            "build the release workspace first; missing {}",
+            source_engine.display()
+        );
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after Unix epoch")
+            .as_nanos();
+        let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+            "candidate-uia-install-{}-{nonce}",
+            std::process::id()
+        ));
+        let release = root.join("versions").join("candidate-uia-release");
+        std::fs::create_dir_all(&release).expect("create temporary installed release directory");
+        std::fs::copy(&source_renderer, release.join("sakura_renderer.exe"))
+            .expect("copy release renderer into temporary installed layout");
+        std::fs::copy(&source_engine, release.join("sakura_engine.exe"))
+            .expect("copy release engine into temporary installed layout");
+
+        Self { root, release }
+    }
+
+    fn renderer_path(&self) -> PathBuf {
+        self.release.join("sakura_renderer.exe")
+    }
+
+    fn engine_path(&self) -> PathBuf {
+        self.release.join("sakura_engine.exe")
+    }
+}
+
+impl Drop for TemporaryInstalledLayout {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
 }
 
 struct IsolatedAppData(PathBuf);
@@ -283,16 +339,71 @@ fn required_path(name: &str) -> PathBuf {
 }
 
 fn connect() -> Client {
-    let deadline = Instant::now() + PATIENT;
+    let deadline = Instant::now() + STARTUP_BUDGET;
     loop {
-        match Client::connect(Duration::from_millis(100)) {
-            Ok(client) => return client,
-            Err(fault) if Instant::now() >= deadline => {
-                panic!("engine did not open its pipe after {PATIENT:?}: {fault:?}")
+        let now = Instant::now();
+        assert!(
+            now < deadline,
+            "engine did not complete Hello within {STARTUP_BUDGET:?}"
+        );
+        let connect_budget =
+            Duration::from_millis(100).min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect(connect_budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline.min(now + PATIENT),
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                return client;
             }
-            Err(_) => sleep(Duration::from_millis(20)),
         }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(
+            !remaining.is_zero(),
+            "engine did not complete Hello within {STARTUP_BUDGET:?}"
+        );
+        sleep(Duration::from_millis(20).min(remaining));
     }
+}
+
+fn shutdown_engine() {
+    let deadline = Instant::now() + PATIENT;
+    let mut client = loop {
+        let now = Instant::now();
+        assert!(now < deadline, "control endpoint did not complete Hello");
+        let budget = Duration::from_millis(100).min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect_endpoint(Endpoint::Control, budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline,
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                break client;
+            }
+        }
+        sleep(Duration::from_millis(20).min(deadline.saturating_duration_since(Instant::now())));
+    };
+    assert!(
+        matches!(
+            client.call_until(&Request::Shutdown, deadline),
+            Ok(Response::Ok)
+        ),
+        "control endpoint did not acknowledge Shutdown"
+    );
 }
 
 fn create_session(client: &mut Client) -> u64 {
@@ -335,13 +446,22 @@ fn named_key(code: KeyCode) -> KeyInput {
 }
 
 fn set_placement(client: &mut Client, session: u64, anchor: ScreenRect) {
+    set_placement_visibility(client, session, anchor, true);
+}
+
+fn set_placement_visibility(
+    client: &mut Client,
+    session: u64,
+    anchor: ScreenRect,
+    renderer_visible: bool,
+) {
     assert!(matches!(
         client.call(
             &Request::SetUiPlacement {
                 session,
                 anchor: Some(anchor),
                 document: None,
-                renderer_visible: true,
+                renderer_visible,
             },
             PATIENT,
         ),
@@ -349,25 +469,63 @@ fn set_placement(client: &mut Client, session: u64, anchor: ScreenRect) {
     ));
 }
 
-fn wait_for_candidate_window() -> HWND {
-    let deadline = Instant::now() + PATIENT;
+fn wait_for_candidate_window(
+    renderer: &mut OwnedChild,
+    require_visible: bool,
+    deadline: Instant,
+) -> HWND {
     loop {
-        // SAFETY: both class-name and optional title pointers are valid for
-        // the duration of this synchronous lookup.
-        let found =
-            unsafe { FindWindowW(windows::core::w!("SakuraInputCandidates"), PCWSTR::null()) };
-        if let Ok(window) = found {
-            // SAFETY: `FindWindowW` returned this HWND in the immediately
-            // preceding call; visibility querying does not retain it.
-            if unsafe { IsWindowVisible(window) }.as_bool() {
-                return window;
-            }
+        if let Some(window) = find_candidate_window(renderer.pid(), require_visible) {
+            return window;
         }
+        if let Some(status) = renderer
+            .child_mut()
+            .try_wait()
+            .expect("query renderer during window readiness")
+        {
+            panic!("renderer exited with {status} before its candidate window became ready");
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(
-            Instant::now() < deadline,
-            "candidate window did not become visible"
+            !remaining.is_zero(),
+            "the owned renderer candidate window did not become {} within the startup deadline",
+            if require_visible { "visible" } else { "ready" }
         );
-        sleep(Duration::from_millis(20));
+        sleep(Duration::from_millis(20).min(remaining));
+    }
+}
+
+fn find_candidate_window(renderer_pid: u32, require_visible: bool) -> Option<HWND> {
+    let mut after = None;
+    loop {
+        // SAFETY: the fixed class name and null title are valid for this
+        // synchronous top-level window enumeration step.
+        let found = unsafe {
+            FindWindowExW(
+                None,
+                after,
+                windows::core::w!("SakuraInputCandidates"),
+                PCWSTR::null(),
+            )
+        };
+        let Ok(window) = found else {
+            return None;
+        };
+        after = Some(window);
+        let mut owner_pid = 0;
+        // SAFETY: `window` came from the immediately preceding enumeration and
+        // `owner_pid` is a valid out-pointer for this synchronous query.
+        unsafe { GetWindowThreadProcessId(window, Some(&mut owner_pid)) };
+        let visible = if require_visible {
+            // SAFETY: `window` is the live HWND returned by the current
+            // enumeration step and visibility querying does not retain it.
+            unsafe { IsWindowVisible(window) }.as_bool()
+        } else {
+            true
+        };
+        if owner_pid == renderer_pid && visible {
+            return Some(window);
+        }
     }
 }
 
@@ -617,8 +775,21 @@ impl OwnedChild {
         }
     }
 
+    fn pid(&self) -> u32 {
+        self.child.as_ref().expect("child remains owned").id()
+    }
+
     fn child_mut(&mut self) -> &mut Child {
         self.child.as_mut().expect("child remains owned")
+    }
+
+    fn kill_now(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            child
+                .kill()
+                .unwrap_or_else(|error| panic!("could not kill {}: {error}", self.name));
+            let _ = child.wait();
+        }
     }
 
     fn wait_for_exit(&mut self) {
