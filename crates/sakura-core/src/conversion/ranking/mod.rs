@@ -5,5 +5,8 @@
 //! directory.
 
 mod coherence;
+mod cost;
 mod it_terms;
 mod quality_gate;
+
+pub(in crate::conversion) use cost::{connection_cost, numeric_form_cost, synthetic_run_cost};

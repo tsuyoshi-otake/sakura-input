@@ -15,7 +15,7 @@ use crate::calendar::CivilDate;
 use crate::dictionary::{Dictionary, Entry, EntryFlags};
 use crate::input_repair::RepairKind;
 use crate::numerals::{
-    parse_numeric_prefix, should_emit_numeric_span, NumericCounter, NumericSpan, NUMERIC_STYLES,
+    parse_numeric_prefix, should_emit_numeric_span, NumericCounter, NUMERIC_STYLES,
 };
 use crate::user_dictionary::UserDictionary;
 use crate::TextSink;
@@ -42,6 +42,7 @@ pub use evidence::{
 };
 pub use input::{ConversionInput, ConversionInputClass, LiteralPolicy};
 pub use options::{candidate_budget, ConversionOptions};
+pub(in crate::conversion) use ranking::{connection_cost, numeric_form_cost, synthetic_run_cost};
 pub use repair_plan::{
     CorrectionMap, CorrectionMapError, CorrectionRun, CorrectionRunKind, RawRepairBudget,
     RawRepairPlan,
@@ -142,17 +143,6 @@ const COUNTER_FORMS: [(&str, &str); 15] = [
     ("いっかい", "1回"),
     ("さんかい", "3回"),
 ];
-
-fn numeric_form_cost(source: &str, span: NumericSpan) -> i64 {
-    let has_explicit_digit = source
-        .chars()
-        .any(|character| character.is_ascii_digit() || ('０'..='９').contains(&character));
-    if span.counter.is_some() || has_explicit_digit {
-        NUMBER_FORM_COST
-    } else {
-        BARE_KANA_NUMBER_FORM_COST
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Surface {
@@ -1563,18 +1553,6 @@ impl Default for Converter {
     }
 }
 
-fn connection_cost(
-    dictionary: &Dictionary<'_>,
-    right_id: RightContextId,
-    left_id: LeftContextId,
-) -> i64 {
-    i64::from(
-        dictionary
-            .connection_cost(right_id.raw(), left_id.raw())
-            .unwrap_or(u16::MAX),
-    )
-}
-
 fn is_contextual_orthographic_sibling(anchor: &str, candidate: &str) -> bool {
     let anchor_chars = anchor.chars().count();
     let candidate_chars = candidate.chars().count();
@@ -1956,10 +1934,6 @@ fn write_katakana(
         TextSink::push(output, converted).map_err(|_| ConversionError::OutputTooLong)?;
     }
     Ok(())
-}
-
-fn synthetic_run_cost(base: i64, per_character: i64, characters: usize) -> i64 {
-    base.saturating_add(per_character.saturating_mul(characters as i64))
 }
 
 #[cfg(test)]
