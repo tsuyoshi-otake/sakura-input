@@ -58,6 +58,7 @@ use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
 
 /// How long to allow for the watchdog to notice and relaunch.
 ///
@@ -92,6 +93,10 @@ const STARTUP_BUDGET: Duration = RECOVERY_BUDGET;
 #[ignore = "starts, kills and restarts the engine singleton and puts a renderer on the desktop"]
 fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
     refuse_if_anything_is_already_running();
+    // From this point on every watched process belongs to this test. Recover
+    // them during unwinding too, so a failed assertion cannot hold the hosted
+    // runner's job open until its outer timeout.
+    let _process_cleanup = ProcessCleanup;
     let dictionary = required_dictionary();
 
     // ---- Control: no watchdog, so nothing should resurrect the engine ----
@@ -179,10 +184,23 @@ fn a_killed_engine_comes_back_only_when_the_renderer_is_watching() {
         if left.is_empty() {
             break;
         }
+        if Instant::now() >= deadline {
+            eprintln!("graceful shutdown left {left:?}; force-stopping test-owned processes");
+            terminate_processes(&left);
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let left = running_processes();
+        if left.is_empty() {
+            break;
+        }
         assert!(
             Instant::now() < deadline,
-            "this test left {left:?} running, which would make the next run's \
-             control phase lie"
+            "could not clean up test-owned Sakura processes: {left:?}"
         );
         sleep(Duration::from_millis(100));
     }
@@ -226,12 +244,19 @@ fn refuse_if_anything_is_already_running() {
     );
 }
 
-/// The names of any Sakura Input processes currently running.
+/// A Sakura Input process visible in this logon session.
+#[derive(Debug)]
+struct RunningProcess {
+    name: String,
+    id: u32,
+}
+
+/// The Sakura Input processes currently running.
 ///
 /// Enumerated rather than inferred from the pipe, for the reason in
 /// [`refuse_if_anything_is_already_running`]: the process that matters most
 /// here is the one that holds no pipe of its own.
-fn running_processes() -> Vec<String> {
+fn running_processes() -> Vec<RunningProcess> {
     const WATCHED: [&str; 2] = ["sakura_engine.exe", "sakura_renderer.exe"];
 
     // SAFETY: `TH32CS_SNAPPROCESS` with pid 0 snapshots every process and is
@@ -262,7 +287,10 @@ fn running_processes() -> Vec<String> {
                         .unwrap_or(entry.szExeFile.len())],
                 );
                 if WATCHED.iter().any(|w| w.eq_ignore_ascii_case(&name)) {
-                    found.push(name);
+                    found.push(RunningProcess {
+                        name,
+                        id: entry.th32ProcessID,
+                    });
                 }
                 if Process32NextW(snapshot, &mut entry).is_err() {
                     break;
@@ -272,6 +300,50 @@ fn running_processes() -> Vec<String> {
         let _ = CloseHandle(snapshot);
     }
     found
+}
+
+/// Force-stops processes that this test owns after its clean-machine precheck.
+///
+/// This is a teardown fallback, not part of the watchdog assertion. It must
+/// also be safe during unwinding, so failures are diagnosed but never panic.
+fn terminate_processes(processes: &[RunningProcess]) {
+    for process in processes {
+        // SAFETY: the PID came from a live process snapshot. The handle is
+        // requested only for termination/synchronization and is closed below.
+        let handle = match unsafe { OpenProcess(PROCESS_TERMINATE, false, process.id) } {
+            Ok(handle) => handle,
+            Err(error) => {
+                eprintln!(
+                    "could not open test-owned {} (pid {}): {error}",
+                    process.name, process.id
+                );
+                continue;
+            }
+        };
+        // SAFETY: `handle` grants PROCESS_TERMINATE for this test-owned child
+        // or descendant. The handle remains live until it is closed below.
+        unsafe {
+            if let Err(error) = TerminateProcess(handle, 1) {
+                eprintln!(
+                    "could not terminate test-owned {} (pid {}): {error}",
+                    process.name, process.id
+                );
+            }
+            let _ = CloseHandle(handle);
+        }
+    }
+}
+
+struct ProcessCleanup;
+
+impl Drop for ProcessCleanup {
+    fn drop(&mut self) {
+        let left = running_processes();
+        if !left.is_empty() {
+            eprintln!("cleanup guard force-stopping {left:?}");
+            terminate_processes(&left);
+        }
+    }
 }
 
 /// A child process this test is responsible for, killed on drop.
