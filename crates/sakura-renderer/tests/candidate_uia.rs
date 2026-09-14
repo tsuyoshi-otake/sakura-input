@@ -44,15 +44,9 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     );
     let dictionary = required_path("SAKURA_PHASE2_DICTIONARY");
     let app_data = IsolatedAppData::new("candidate-uia");
-    let renderer_path = PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer"));
-    let engine_path = renderer_path.with_file_name("sakura_engine.exe");
-    assert!(
-        engine_path.is_file(),
-        "build the release workspace first; missing {}",
-        engine_path.display()
-    );
+    let installed_layout = TemporaryInstalledLayout::new();
 
-    let engine = Command::new(&engine_path)
+    let engine = Command::new(installed_layout.engine_path())
         .env("SAKURA_DICTIONARY", &dictionary)
         .env("LOCALAPPDATA", app_data.path())
         .stdin(Stdio::null())
@@ -62,7 +56,8 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         .expect("spawn release engine");
     let mut engine = OwnedChild::new(engine, "engine");
     let mut client = connect();
-    let renderer = Command::new(&renderer_path)
+    let renderer = Command::new(installed_layout.renderer_path())
+        .env("SAKURA_DICTIONARY", &dictionary)
         .env("LOCALAPPDATA", app_data.path())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -261,6 +256,54 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     renderer.kill_now();
     shutdown_engine();
     engine.wait_for_exit();
+}
+
+struct TemporaryInstalledLayout {
+    root: PathBuf,
+    release: PathBuf,
+}
+
+impl TemporaryInstalledLayout {
+    fn new() -> Self {
+        let source_renderer = PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer"));
+        let source_engine = source_renderer.with_file_name("sakura_engine.exe");
+        assert!(
+            source_engine.is_file(),
+            "build the release workspace first; missing {}",
+            source_engine.display()
+        );
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after Unix epoch")
+            .as_nanos();
+        let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+            "candidate-uia-install-{}-{nonce}",
+            std::process::id()
+        ));
+        let release = root.join("versions").join("candidate-uia-release");
+        std::fs::create_dir_all(&release).expect("create temporary installed release directory");
+        std::fs::copy(&source_renderer, release.join("sakura_renderer.exe"))
+            .expect("copy release renderer into temporary installed layout");
+        std::fs::copy(&source_engine, release.join("sakura_engine.exe"))
+            .expect("copy release engine into temporary installed layout");
+
+        Self { root, release }
+    }
+
+    fn renderer_path(&self) -> PathBuf {
+        self.release.join("sakura_renderer.exe")
+    }
+
+    fn engine_path(&self) -> PathBuf {
+        self.release.join("sakura_engine.exe")
+    }
+}
+
+impl Drop for TemporaryInstalledLayout {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
 }
 
 struct IsolatedAppData(PathBuf);
