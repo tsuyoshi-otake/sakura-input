@@ -3,12 +3,12 @@
 use std::mem::size_of;
 use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::Client;
-use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, ScreenRect};
+use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, ScreenRect, PROTOCOL_VERSION};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::ProcessStatus::{
     K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2,
@@ -16,6 +16,7 @@ use windows::Win32::System::ProcessStatus::{
 
 const RENDERER_PRIVATE_WORKING_SET_BUDGET: usize = 10 * 1024 * 1024;
 const PATIENT: Duration = Duration::from_secs(5);
+const STARTUP_BUDGET: Duration = Duration::from_secs(30);
 
 #[test]
 #[ignore = "real release engine/renderer; set SAKURA_PHASE2_DICTIONARY"]
@@ -37,12 +38,18 @@ fn renderer_with_candidates_stays_within_its_footprint_budget() {
     let engine = Command::new(&engine_path)
         .env("SAKURA_DICTIONARY", &dictionary)
         .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn release engine");
     let mut engine = OwnedChild::new(engine, "engine");
     let mut client = connect();
     let renderer = Command::new(&renderer_path)
         .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn release renderer");
     let mut renderer = OwnedChild::new(renderer, "renderer");
@@ -148,15 +155,37 @@ fn required_path(name: &str) -> PathBuf {
 }
 
 fn connect() -> Client {
-    let deadline = Instant::now() + PATIENT;
+    let deadline = Instant::now() + STARTUP_BUDGET;
     loop {
-        match Client::connect(Duration::from_millis(100)) {
-            Ok(client) => return client,
-            Err(fault) if Instant::now() >= deadline => {
-                panic!("engine did not open its pipe after {PATIENT:?}: {fault:?}")
+        let now = Instant::now();
+        assert!(
+            now < deadline,
+            "engine did not complete Hello within {STARTUP_BUDGET:?}"
+        );
+        let connect_budget =
+            Duration::from_millis(100).min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect(connect_budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline.min(now + PATIENT),
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                return client;
             }
-            Err(_) => sleep(Duration::from_millis(20)),
         }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(
+            !remaining.is_zero(),
+            "engine did not complete Hello within {STARTUP_BUDGET:?}"
+        );
+        sleep(Duration::from_millis(20).min(remaining));
     }
 }
 
