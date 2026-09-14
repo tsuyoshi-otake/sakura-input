@@ -2214,3 +2214,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Move the one-slot corrected-pass orchestrator and its sibling admit/merge frames into `conversion/raw_repair.rs`. Public `convert_input_with_raw_repair_plans` / wrapper names stay on `Converter`.
 - This file is not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
 - Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
+
+## 2026-09-13 Extract conversion candidate dedup and ranking tie-break (#206)
+
+- Move same-surface admission into `conversion/candidates/dedup.rs` and stable cost order into `conversion/ranking/tie_break.rs`. This completes the named Phase 3.1 module tree.
+- These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.

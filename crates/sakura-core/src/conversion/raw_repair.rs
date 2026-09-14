@@ -2,9 +2,9 @@ use crate::dictionary::Dictionary;
 use crate::user_dictionary::UserDictionary;
 
 use super::{
-    CandidateOrigin, ConversionCandidate, ConversionDiagnostics, ConversionError, ConversionInput,
-    ConversionOptions, ConversionResult, ConversionSearchTerminal, Converter, RawRepairPlan,
-    RepairTier, MAX_CONVERSION_CANDIDATES, MAX_LATTICE_NODES, MAX_RAW_REPAIR_PLANS,
+    has_same_surface, CandidateOrigin, ConversionCandidate, ConversionDiagnostics, ConversionError,
+    ConversionInput, ConversionOptions, ConversionResult, ConversionSearchTerminal, Converter,
+    RawRepairPlan, RepairTier, MAX_CONVERSION_CANDIDATES, MAX_LATTICE_NODES, MAX_RAW_REPAIR_PLANS,
     MAX_SEARCH_STATES,
 };
 
@@ -240,11 +240,7 @@ impl Converter {
                 plan_id: plan.plan_id(),
                 tier: plan.tier(),
             };
-            if self
-                .raw_direct_scratch
-                .iter()
-                .any(|direct| direct.text() == candidate.text())
-            {
+            if has_same_surface(&self.raw_direct_scratch, candidate.text()) {
                 rejected = rejected.saturating_add(1);
                 continue;
             }
@@ -293,11 +289,7 @@ impl Converter {
             if self.candidates.len() >= max_candidates {
                 break;
             }
-            if self
-                .candidates
-                .iter()
-                .any(|existing| existing.text() == candidate.text())
-            {
+            if has_same_surface(&self.candidates, candidate.text()) {
                 continue;
             }
             self.candidates.push(candidate);
