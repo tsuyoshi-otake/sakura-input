@@ -62,16 +62,6 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         .expect("spawn release engine");
     let mut engine = OwnedChild::new(engine, "engine");
     let mut client = connect();
-    let renderer = Command::new(&renderer_path)
-        .env("LOCALAPPDATA", app_data.path())
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn release renderer");
-    let mut renderer = OwnedChild::new(renderer, "renderer");
-    let _ = wait_for_candidate_window(&mut renderer, false, Instant::now() + STARTUP_BUDGET);
-
     let session = create_session(&mut client);
     for character in "kannji".chars() {
         send_key(&mut client, session, char_key(character));
@@ -94,7 +84,20 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
             bottom: 124,
         },
     );
-    let candidate_window = wait_for_candidate_window(&mut renderer, true, Instant::now() + PATIENT);
+
+    // Start the renderer only after the engine retains a complete visible
+    // candidate snapshot. The renderer creates its hidden HWND before its
+    // watcher connects, so HWND existence alone is not WatchUi readiness.
+    let renderer = Command::new(&renderer_path)
+        .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn release renderer");
+    let mut renderer = OwnedChild::new(renderer, "renderer");
+    let candidate_window =
+        wait_for_candidate_window(&mut renderer, true, Instant::now() + STARTUP_BUDGET);
     let first_rect = window_rect(candidate_window);
     assert_popup_geometry(
         candidate_window,
