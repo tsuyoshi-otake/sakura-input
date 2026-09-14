@@ -2196,3 +2196,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Move `DictionaryEdgeBudget` / `Node` / `NodeSpec` / `CharClass` / `char_run` into `conversion/search/lattice.rs`, and `SearchState` / `HeapItem` / `PathClass` / `SearchRun` into `conversion/search/viterbi.rs`. Facade `pub(in crate::conversion)` keeps ranking and tests on the conversion names. `build_lattice` / `search_n_best` stay on `Converter` in `mod.rs`.
 - These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Adding search type leaves while `mod.rs` still owns the algorithms does not lower Semantic IRV. Do not update `baseline.json`.
 - Wrapped `cargo test -p sakura-core --lib conversion` PASS. fmt check and process cleanup PASS.
+
+## 2026-09-13 Move conversion search algorithms onto lattice and Viterbi (#206)
+
+- Move `reset` / `build_lattice` / repair edges / `add_node` / suffix costs onto `conversion/search/lattice.rs`, and `search_n_best` / Viterbi materialization onto `conversion/search/viterbi.rs`. `add_numeric_forms` stays on `Converter` in `mod.rs` because it writes generated day edges after search.
+- These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
