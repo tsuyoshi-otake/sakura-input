@@ -5,7 +5,6 @@
 //! does not grow the heap. Every search is finite: lattice nodes, A* states,
 //! candidates, and text are independently bounded.
 
-use core::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 #[cfg(not(any(feature = "research-top32", feature = "research-wide-candidates")))]
@@ -33,6 +32,7 @@ mod options;
 mod ranking;
 mod repair_plan;
 mod result;
+mod search;
 mod synthesis;
 
 pub(in crate::conversion) use bridge::{
@@ -52,6 +52,10 @@ pub use repair_plan::{
 };
 pub use result::{
     ConversionDiagnostics, ConversionError, ConversionResult, ConversionSearchTerminal,
+};
+pub(in crate::conversion) use search::{
+    char_class, char_run, CharClass, DictionaryEdgeBudget, HeapItem, Node, NodeSpec, PathClass,
+    SearchRun, SearchState,
 };
 
 const NONE: usize = usize::MAX;
@@ -144,64 +148,6 @@ const COUNTER_FORMS: [(&str, &str); 15] = [
     ("さんかい", "3回"),
 ];
 
-/// The per-reading-length cap on dictionary edges: the historical baseline
-/// rows first, then one edge per distinct surface up to
-/// [`MAX_DICTIONARY_SURFACES_PER_READING`].
-///
-/// The seen-surface set is converter-owned scratch, not a stack local. It used
-/// to be an inline `[u32; MAX_DICTIONARY_SURFACES_PER_READING]`, which was 64
-/// bytes while that bound was 12 and became 1,040 bytes when #94/#95 tied it
-/// to `MAX_CONVERSION_CANDIDATES`. A `Copy` struct that large is materialised
-/// once per `new` and once per move in an unoptimised build, and `build_lattice`
-/// constructed one for every reading start. The reservation this spends is the
-/// conversion worker's stack, which `worker_locals_fit_the_reserved_stack` in
-/// `sakura-engine` bounds and which multiplies by `MAX_INSTANCES` threads.
-///
-/// Both constraints have to hold at once: keep this struct a few words wide so
-/// the lattice frame stays small, and keep the capacity in the converter's
-/// process-lifetime arena so the conversion path itself never allocates —
-/// `conversion_into_reused_candidate_buffers_allocates_nothing` in
-/// `sakura-engine` fails the moment a reading start reserves a fresh one.
-#[derive(Debug)]
-struct DictionaryEdgeBudget {
-    baseline_edges: usize,
-    surfaces: Vec<u32>,
-}
-
-impl DictionaryEdgeBudget {
-    /// Called once per converter slot, off the conversion path.
-    fn new() -> Self {
-        Self {
-            baseline_edges: 0,
-            surfaces: Vec::with_capacity(MAX_DICTIONARY_SURFACES_PER_READING),
-        }
-    }
-
-    fn reset(&mut self) {
-        self.baseline_edges = 0;
-        // `clear` keeps the capacity reserved in `new`, and `admit` only ever
-        // pushes below `MAX_DICTIONARY_SURFACES_PER_READING`, so no reading
-        // start can force a reallocation.
-        self.surfaces.clear();
-    }
-
-    fn admit(&mut self, surface_id: u32) -> bool {
-        let known_surface = self.surfaces.contains(&surface_id);
-        if self.baseline_edges < BASE_DICTIONARY_EDGES_PER_READING {
-            self.baseline_edges += 1;
-            if !known_surface && self.surfaces.len() < MAX_DICTIONARY_SURFACES_PER_READING {
-                self.surfaces.push(surface_id);
-            }
-            return true;
-        }
-        if known_surface || self.surfaces.len() >= MAX_DICTIONARY_SURFACES_PER_READING {
-            return false;
-        }
-        self.surfaces.push(surface_id);
-        true
-    }
-}
-
 fn numeric_form_cost(source: &str, span: NumericSpan) -> i64 {
     let has_explicit_digit = source
         .chars()
@@ -225,68 +171,6 @@ pub(super) enum Surface {
     Katakana,
     Literal(&'static str),
     Generated(u16),
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Node {
-    start: usize,
-    end: usize,
-    left_id: u16,
-    right_id: u16,
-    local_cost: i64,
-    best_cost: i64,
-    best_previous: usize,
-    suffix_cost: i64,
-    next_from_start: usize,
-    next_at_end: usize,
-    surface: Surface,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct SearchState {
-    cost: i64,
-    node: u32,
-    parent: u32,
-    class: PathClass,
-    depth: u8,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct HeapItem {
-    estimate: i64,
-    sequence: u64,
-    state: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-enum PathClass {
-    Neutral,
-    Lexical,
-    Reading,
-    Katakana,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct SearchRun {
-    terminal: ConversionSearchTerminal,
-    states_pushed: usize,
-    incoherent_prefixes_pruned: usize,
-}
-
-impl Ord for HeapItem {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .estimate
-            .cmp(&self.estimate)
-            .then_with(|| other.sequence.cmp(&self.sequence))
-    }
-}
-
-impl PartialOrd for HeapItem {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 /// Reusable conversion arenas. Construct once per engine worker and reset for
@@ -2652,16 +2536,6 @@ impl Default for Converter {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct NodeSpec {
-    start: usize,
-    end: usize,
-    left_id: u16,
-    right_id: u16,
-    local_cost: i64,
-    surface: Surface,
-}
-
 fn connection_cost(
     dictionary: &Dictionary<'_>,
     right_id: RightContextId,
@@ -2741,23 +2615,6 @@ fn candidate_path_is_coherent(nodes: &[Node], path: &[usize]) -> bool {
 enum SurfaceKind {
     Reading,
     Katakana,
-}
-
-impl PathClass {
-    fn extend(self, surface: Surface) -> Option<Self> {
-        let next = match surface {
-            Surface::Dictionary { .. } | Surface::User(_) => Self::Lexical,
-            Surface::Reading => Self::Reading,
-            Surface::Katakana => Self::Katakana,
-            Surface::Literal(_) | Surface::Generated(_) => Self::Neutral,
-        };
-        match (self, next) {
-            (current, Self::Neutral) => Some(current),
-            (Self::Neutral, next) => Some(next),
-            (current, next) if current == next => Some(current),
-            _ => None,
-        }
-    }
 }
 
 fn dictionary_has_exact_surface(
@@ -3110,52 +2967,6 @@ fn write_katakana(
         TextSink::push(output, converted).map_err(|_| ConversionError::OutputTooLong)?;
     }
     Ok(())
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum CharClass {
-    Hiragana,
-    Katakana,
-    AsciiDigit,
-    AsciiLetter,
-    Other,
-}
-
-fn char_class(character: char) -> CharClass {
-    match character {
-        '\u{3040}'..='\u{309f}' | 'ー' => CharClass::Hiragana,
-        '\u{30a0}'..='\u{30ff}' | '\u{31f0}'..='\u{31ff}' => CharClass::Katakana,
-        '0'..='9' => CharClass::AsciiDigit,
-        'A'..='Z' | 'a'..='z' => CharClass::AsciiLetter,
-        _ => CharClass::Other,
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CharRun {
-    end: usize,
-    chars: usize,
-}
-
-fn char_run(reading: &str, start: usize) -> CharRun {
-    let mut characters = reading[start..].char_indices();
-    let Some((_, first)) = characters.next() else {
-        return CharRun {
-            end: start,
-            chars: 0,
-        };
-    };
-    let class = char_class(first);
-    let mut end = start + first.len_utf8();
-    let mut count = 1usize;
-    for (relative, character) in characters {
-        if char_class(character) != class {
-            break;
-        }
-        end = start + relative + character.len_utf8();
-        count += 1;
-    }
-    CharRun { end, chars: count }
 }
 
 fn synthetic_run_cost(base: i64, per_character: i64, characters: usize) -> i64 {
