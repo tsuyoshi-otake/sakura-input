@@ -118,9 +118,9 @@ fn renderer_with_candidates_stays_within_its_footprint_budget() {
     );
 
     drop(client);
+    renderer.kill_now();
     shutdown_engine();
     engine.wait_for_exit();
-    renderer.wait_for_exit();
 }
 
 struct IsolatedAppData(PathBuf);
@@ -297,6 +297,15 @@ impl OwnedChild {
 
     fn child_mut(&mut self) -> &mut Child {
         self.child.as_mut().expect("child remains owned")
+    }
+
+    fn kill_now(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            child
+                .kill()
+                .unwrap_or_else(|error| panic!("could not kill {}: {error}", self.name));
+            let _ = child.wait();
+        }
     }
 
     fn wait_for_exit(&mut self) {
