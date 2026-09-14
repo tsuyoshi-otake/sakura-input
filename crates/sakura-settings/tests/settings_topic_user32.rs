@@ -37,6 +37,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
+// Hosted runners can spend more than five seconds cold-starting the settings
+// payload under load. This is a bounded readiness ceiling, not a performance
+// target; keep interaction and process-exit waits on READY_TIMEOUT.
+const SETTINGS_STARTUP_BUDGET: Duration = Duration::from_secs(30);
 const INPUT_SETTLING: Duration = Duration::from_millis(25);
 const INPUT_MOUSE: u32 = 0;
 const INPUT_KEYBOARD: u32 = 1;
@@ -1920,15 +1924,16 @@ impl SettingsFixture {
     fn wait_for_process_window(process_id: u32) -> HWND {
         let start = Instant::now();
         loop {
-            if let Some(window) = top_level_windows()
-                .into_iter()
-                .find(|window| window_process_id(*window) == process_id && is_visible(*window))
-            {
+            if let Some(window) = top_level_windows().into_iter().find(|window| {
+                window_process_id(*window) == process_id
+                    && class_name(*window) == "SakuraInputSettingsWindow"
+                    && is_visible(*window)
+            }) {
                 return window;
             }
             assert!(
-                start.elapsed() < READY_TIMEOUT,
-                "settings payload did not publish a visible top-level HWND within {READY_TIMEOUT:?}"
+                start.elapsed() < SETTINGS_STARTUP_BUDGET,
+                "settings payload did not publish a visible root HWND within {SETTINGS_STARTUP_BUDGET:?}"
             );
             sleep(INPUT_SETTLING);
         }
