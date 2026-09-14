@@ -1215,6 +1215,74 @@ fn detail_width_is_constant_and_height_grows_then_caps_at_every_dpi() {
 }
 
 #[test]
+fn desktop_detail_width_fixture_keeps_the_pane_within_the_candidate_height() {
+    let list = candidates(
+        (0..18)
+            .map(|index| item(&format!("fixture-candidate-{index}"), ""))
+            .collect(),
+        0,
+        CandidateKind::Suggestion,
+    );
+    for dpi in [96, 120, 144, 192] {
+        let candidate_layout = layout(&list, dpi);
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: scaled(1280, dpi),
+            bottom: scaled(600, dpi),
+        };
+        let anchor = screen(
+            scaled(120, dpi),
+            scaled(120, dpi),
+            scaled(140, dpi),
+            scaled(144, dpi),
+        );
+        let make_detail = |definition: String| CandidateDetail {
+            reading: "fixture-reading".into(),
+            definition,
+            definition_truncated: false,
+            aliases: vec![],
+            related: vec![],
+            similar: vec![],
+            antonyms: vec![],
+        };
+        let short = detail_layout(
+            "fixture-candidate-0",
+            &make_detail("complete-definition".into()),
+            dpi,
+            work.bottom,
+        );
+        let long = detail_layout(
+            "fixture-candidate-0",
+            &make_detail(format!("long-complete-definition-{}", "x".repeat(160))),
+            dpi,
+            work.bottom,
+        );
+        assert!(long.height > short.height);
+        assert!(long.height <= candidate_layout.height);
+        let short = popup_placement(anchor, None, candidate_layout, Some(short), work);
+        let long = popup_placement(anchor, None, candidate_layout, Some(long), work);
+        assert!(short.layout.detail.is_some());
+        assert!(long.layout.detail.is_some());
+        assert_eq!(
+            long.window.right - long.window.left,
+            short.window.right - short.window.left
+        );
+        let oversized = detail_layout(
+            "fixture-candidate-0",
+            &make_detail(format!("long-complete-definition-{}", "x".repeat(880))),
+            dpi,
+            work.bottom,
+        );
+        let oversized = popup_placement(anchor, None, candidate_layout, Some(oversized), work);
+        assert!(
+            oversized.layout.detail.is_none(),
+            "oversized pane must not cover composition at DPI {dpi}"
+        );
+    }
+}
+
+#[test]
 fn wrapping_preserves_every_scalar_when_height_is_available() {
     for dpi in [96, 120, 144, 168, 192, 240] {
         for width in 1..=512 {

@@ -24,24 +24,32 @@ use sakura_proto::{
 };
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    COLORREF, HWND, LPARAM, LRESULT, POINT, RPC_E_CHANGED_MODE, WPARAM,
+    COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, RPC_E_CHANGED_MODE, WPARAM,
 };
-use windows::Win32::Graphics::Gdi::{GetDC, GetPixel, ReleaseDC, CLR_INVALID};
+use windows::Win32::Graphics::Gdi::{
+    CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetMonitorInfoW, GetPixel,
+    GetSysColor, MonitorFromRect, RedrawWindow, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
+    CLR_INVALID, COLOR_HIGHLIGHT, DIB_RGB_COLORS, HDC, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    RDW_INVALIDATE, RDW_UPDATENOW,
+};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
     COINIT_APARTMENTTHREADED,
 };
-use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
+use windows::Win32::UI::Accessibility::{
+    CUIAutomation, IUIAutomation, IUIAutomationElement, HCF_HIGHCONTRASTON, HIGHCONTRASTW,
+};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetCursorPos,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetClientRect, GetCursorPos,
     GetForegroundWindow, GetMessageW, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
     IsWindowVisible, PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW, SetCursorPos,
-    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, CS_HREDRAW,
-    CS_VREDRAW, GWLP_USERDATA, GWL_EXSTYLE, GWL_STYLE, HTCLIENT, HWND_TOPMOST, MA_NOACTIVATE, MSG,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DESTROY,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_RBUTTONDOWN, WM_RBUTTONUP,
-    WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW,
+    TranslateMessage, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, GWL_EXSTYLE, GWL_STYLE, HTCLIENT,
+    HWND_TOPMOST, MA_NOACTIVATE, MSG, SPI_GETHIGHCONTRAST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_CLOSE, WM_DESTROY, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_RBUTTONDOWN, WM_RBUTTONUP, WNDCLASSW,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -64,6 +72,13 @@ const FOREIGN_RIGHT_UP_INCREMENT: usize = 1 << 24;
 const INPUT_SETTLING: Duration = Duration::from_millis(250);
 const GW_HWNDNEXT: u32 = 2;
 const GW_HWNDPREV: u32 = 3;
+const PW_CLIENTONLY: u32 = 0x0000_0001;
+const PW_RENDERFULLCONTENT: u32 = 0x0000_0002;
+
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn PrintWindow(window: HWND, dc: HDC, flags: u32) -> i32;
+}
 
 #[test]
 #[ignore = "real renderer process; requires an interactive Windows desktop"]
@@ -198,6 +213,21 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
             .expect("candidate popup UIA element")
     };
     assert_noninteractive_popup(popup, &element);
+    let initial_rect = window_rect(popup);
+    let mut monitor_info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: initial_rect and monitor_info are live values for immediate queries.
+    unsafe {
+        let monitor = MonitorFromRect(&initial_rect, MONITOR_DEFAULTTONEAREST);
+        assert!(GetMonitorInfoW(monitor, &mut monitor_info).as_bool());
+        println!(
+            "detail geometry: dpi={} work={:?} initial={initial_rect:?}",
+            GetDpiForWindow(popup),
+            monitor_info.rcWork
+        );
+    }
 
     // Complete source-backed preview: UIA must include the complete text and
     // must not claim there is more source text when the flag is false.
@@ -205,12 +235,16 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
     engine.publish(state(2, 0, Some(full), anchor(120, 120)));
     let full_name = wait_for_name(&element, "complete-definition");
     assert!(!full_name.contains("Definition continues."));
-    let short_detail_rect = window_rect(popup);
+    let short_detail_rect = wait_for_wider_window(popup, initial_rect.right - initial_rect.left);
 
     // Changing only definition length must not alter the candidate/detail
     // horizontal rhythm. The fixed-width detail grows vertically to expose the
     // complete preview instead of making the popup jitter sideways.
-    let long_definition = format!("long-complete-definition-{}", "x".repeat(880));
+    // Keep this geometry fixture shorter than the nine-row candidate list.
+    // Oversized details may legitimately be omitted to avoid covering the
+    // composition on a short desktop; the separate long-preview check below
+    // retains the original 880-character UIA payload.
+    let long_definition = format!("long-complete-definition-{}", "x".repeat(160));
     engine.publish(state(
         3,
         0,
@@ -230,9 +264,24 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
             >= short_detail_rect.bottom - short_detail_rect.top
     );
 
+    let oversized_definition = format!("oversized-complete-definition-{}", "x".repeat(880));
+    engine.publish(state(
+        4,
+        0,
+        Some(detail(&oversized_definition, false, 0)),
+        anchor(120, 120),
+    ));
+    let oversized_name = wait_for_name(&element, "oversized-complete-definition");
+    assert!(oversized_name.contains(&oversized_definition));
+    assert!(!oversized_name.contains("Definition continues."));
+    println!(
+        "detail geometry: short={short_detail_rect:?} long={long_detail_rect:?} oversized={:?}",
+        window_rect(popup)
+    );
+
     // An update for a different selected candidate with no detail must clear
     // the prior detail rather than leave the old text associated with B.
-    engine.publish(state(4, 1, None, anchor(120, 120)));
+    engine.publish(state(5, 1, None, anchor(120, 120)));
     let cleared_name = wait_for_name(&element, "selected 2 of 18");
     assert!(
         !cleared_name.contains("Detail for selected candidate"),
@@ -242,7 +291,7 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
 
     // A truncated wire preview must keep the explicit continuation marker.
     let truncated = detail("preview-definition", true, 0b1111);
-    engine.publish(state(5, 1, Some(truncated), anchor(120, 120)));
+    engine.publish(state(6, 1, Some(truncated), anchor(120, 120)));
     let truncated_name = wait_for_name(&element, "preview-definition");
     assert!(truncated_name.contains("Definition continues."));
 
@@ -280,8 +329,8 @@ fn selected_detail_is_fresh_complete_and_noninteractive_over_an_owned_pipe() {
     assert!(page_two.contains("selected 10 of 18"));
     assert!(page_two.contains("page-two-definition"));
     assert_relation_groups(&page_two, 0b0101);
-    let after = wait_for_moved_window(popup, before);
-    assert!(after.left >= moved_anchor.left || after.top >= moved_anchor.bottom);
+    let after = wait_for_popup_at_moved_anchor(popup, before, moved_anchor);
+    println!("caret-follow geometry: before={before:?} anchor={moved_anchor:?} after={after:?}");
 
     engine.stop();
     renderer.wait_for_exit();
@@ -319,16 +368,34 @@ fn appearance_switch_repaints_a_visible_candidate_popup() {
     );
 
     let popup = wait_for_candidate_window(renderer.pid());
+    let probe = candidate_appearance_probe(popup);
+    println!(
+        "candidate appearance probe: dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {})",
+        probe.dpi,
+        probe.high_contrast_query_succeeded,
+        probe.high_contrast_enabled,
+        probe.system_highlight,
+        probe.sample_x,
+        probe.sample_y
+    );
+    let expected_dark = expected_candidate_selected(AppearanceTheme::Dark, probe);
     assert_eq!(
-        wait_for_surface_color(popup, COLORREF(0x0025_2525)),
-        COLORREF(0x0025_2525),
+        wait_for_candidate_selected_color(popup, expected_dark, "initial Dark", probe),
+        expected_dark,
         "the initial dark candidate frame must be painted before the switch"
     );
 
     engine.publish(state_with_theme(2, AppearanceTheme::Light, 0, None, anchor));
+    let expected_light = expected_candidate_selected(AppearanceTheme::Light, probe);
+    if probe.high_contrast_enabled {
+        println!(
+            "candidate appearance probe limitation: Dark and Light both resolve to the exact system highlight {:?} under High Contrast; both UiState values are published and asserted, but equal pixels cannot identify when the Light update was processed",
+            probe.system_highlight
+        );
+    }
     assert_eq!(
-        wait_for_surface_color(popup, COLORREF(0x00E2_E5E8)),
-        COLORREF(0x00E2_E5E8),
+        wait_for_candidate_selected_color(popup, expected_light, "published Light", probe),
+        expected_light,
         "the existing popup must repaint with the light selected-row surface"
     );
     assert!(
@@ -1595,6 +1662,21 @@ fn window_rect(window: HWND) -> windows::Win32::Foundation::RECT {
     rect
 }
 
+fn wait_for_wider_window(window: HWND, initial_width: i32) -> windows::Win32::Foundation::RECT {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let rect = window_rect(window);
+        if rect.right - rect.left > initial_width {
+            return rect;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "detail pane never enlarged the popup: {rect:?}, initial width={initial_width}"
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
 fn wait_for_indicator_state(window: HWND, expected: isize) {
     let deadline = Instant::now() + PATIENT;
     loop {
@@ -1635,16 +1717,176 @@ fn wait_for_surface_color(window: HWND, expected: COLORREF) -> COLORREF {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CandidateAppearanceProbe {
+    dpi: u32,
+    high_contrast_query_succeeded: bool,
+    high_contrast_enabled: bool,
+    system_highlight: COLORREF,
+    sample_x: i32,
+    sample_y: i32,
+}
+
+fn candidate_appearance_probe(window: HWND) -> CandidateAppearanceProbe {
+    // SAFETY: `window` is live and owned by the test renderer process.
+    let dpi = unsafe { GetDpiForWindow(window) };
+    let mut high_contrast = HIGHCONTRASTW {
+        cbSize: core::mem::size_of::<HIGHCONTRASTW>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: Windows fills the initialized HIGHCONTRASTW structure. This is
+    // the same read-only system query used by the renderer palette resolver.
+    let high_contrast_query_succeeded = unsafe {
+        SystemParametersInfoW(
+            SPI_GETHIGHCONTRAST,
+            high_contrast.cbSize,
+            Some((&mut high_contrast as *mut HIGHCONTRASTW).cast()),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+        .is_ok()
+    };
+    let high_contrast_enabled =
+        high_contrast_query_succeeded && (high_contrast.dwFlags.0 & HCF_HIGHCONTRASTON.0) != 0;
+    // SAFETY: COLOR_HIGHLIGHT is a valid system color index and the call has
+    // no ownership or lifetime requirements.
+    let system_highlight = COLORREF(unsafe { GetSysColor(COLOR_HIGHLIGHT) });
+    CandidateAppearanceProbe {
+        dpi,
+        high_contrast_query_succeeded,
+        high_contrast_enabled,
+        system_highlight,
+        sample_x: scaled_logical_px(6, dpi),
+        sample_y: scaled_logical_px(14, dpi),
+    }
+}
+
+fn expected_candidate_selected(
+    requested: AppearanceTheme,
+    probe: CandidateAppearanceProbe,
+) -> COLORREF {
+    if probe.high_contrast_enabled {
+        probe.system_highlight
+    } else {
+        match requested {
+            AppearanceTheme::Dark => COLORREF(0x0025_2525),
+            AppearanceTheme::Light => COLORREF(0x00E2_E5E8),
+            AppearanceTheme::Auto => panic!("appearance fixture requests only Dark or Light"),
+        }
+    }
+}
+
+fn wait_for_candidate_selected_color(
+    window: HWND,
+    expected: COLORREF,
+    phase: &str,
+    probe: CandidateAppearanceProbe,
+) -> COLORREF {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        let observed = surface_color_at(window, probe.sample_x, probe.sample_y);
+        if observed == expected {
+            return observed;
+        }
+        if observed == COLORREF(CLR_INVALID) {
+            assert!(
+                Instant::now() < deadline,
+                "candidate selected surface paint was never available: phase={phase} dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {}) expected={expected:?}",
+                probe.dpi,
+                probe.high_contrast_query_succeeded,
+                probe.high_contrast_enabled,
+                probe.system_highlight,
+                probe.sample_x,
+                probe.sample_y
+            );
+            sleep(Duration::from_millis(20));
+            continue;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "candidate selected surface mismatch: phase={phase} dpi={} high_contrast_query_succeeded={} high_contrast_enabled={} system_highlight={:?} sample=({}, {}) expected={expected:?} actual={observed:?}",
+            probe.dpi,
+            probe.high_contrast_query_succeeded,
+            probe.high_contrast_enabled,
+            probe.system_highlight,
+            probe.sample_x,
+            probe.sample_y
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
 fn candidate_surface_color(window: HWND) -> COLORREF {
     // SAFETY: `window` is live and owned by the test renderer process. The
     // client point (4, 1) is inside the selected row but outside text and rail.
-    let dc = unsafe { GetDC(Some(window)) };
-    assert!(!dc.is_invalid(), "acquire candidate popup paint DC");
-    // SAFETY: `dc` is live until the paired ReleaseDC immediately below.
-    let color = unsafe { GetPixel(dc, 4, 1) };
-    // SAFETY: balances the successful GetDC above for this exact HWND/DC pair.
-    let released = unsafe { ReleaseDC(Some(window), dc) };
-    assert_ne!(released, 0, "release candidate popup paint DC");
+    surface_color_at(window, 4, 1)
+}
+
+fn surface_color_at(window: HWND, sample_x: i32, sample_y: i32) -> COLORREF {
+    // Hosted DWM composition can make GetDC/GetPixel return 0x0C0C0C for a
+    // painted GDI popup. Sample the window's own client bits instead.
+    // SAFETY: `window` is live and owned by the test renderer process.
+    unsafe {
+        let _ = RedrawWindow(Some(window), None, None, RDW_INVALIDATE | RDW_UPDATENOW);
+    }
+    let mut client = RECT::default();
+    // SAFETY: `window` is live and `client` is a valid out-pointer.
+    unsafe { GetClientRect(window, &mut client) }.expect("candidate client rectangle");
+    let width = client.right - client.left;
+    let height = client.bottom - client.top;
+    if width <= sample_x || height <= sample_y || width <= 0 || height <= 0 {
+        return COLORREF(CLR_INVALID);
+    }
+
+    // SAFETY: creates a compatible memory DC owned by this sample.
+    let memory = unsafe { CreateCompatibleDC(None) };
+    if memory.is_invalid() {
+        return COLORREF(CLR_INVALID);
+    }
+    let info = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut();
+    // SAFETY: DIB storage lives until DeleteObject below.
+    let bitmap =
+        unsafe { CreateDIBSection(Some(memory), &info, DIB_RGB_COLORS, &mut bits, None, 0) };
+    let Ok(bitmap) = bitmap else {
+        // SAFETY: balances CreateCompatibleDC above.
+        unsafe {
+            let _ = DeleteDC(memory);
+        }
+        return COLORREF(CLR_INVALID);
+    };
+    // SAFETY: the live DIB is selected into the memory DC for PrintWindow.
+    let previous = unsafe { SelectObject(memory, bitmap.into()) };
+    // SAFETY: only the known, live fixture window paints into the memory DC.
+    let mut printed = unsafe { PrintWindow(window, memory, PW_CLIENTONLY | PW_RENDERFULLCONTENT) };
+    if printed == 0 {
+        // SAFETY: same live fixture window and memory DC as the client-only try.
+        printed = unsafe { PrintWindow(window, memory, PW_RENDERFULLCONTENT) };
+    }
+    let color = if printed != 0 {
+        // SAFETY: `memory` holds the just-printed client DIB.
+        unsafe { GetPixel(memory, sample_x, sample_y) }
+    } else {
+        COLORREF(CLR_INVALID)
+    };
+    // SAFETY: restore and release the objects created above.
+    unsafe {
+        if !previous.is_invalid() {
+            SelectObject(memory, previous);
+        }
+        let _ = DeleteObject(bitmap.into());
+        let _ = DeleteDC(memory);
+    }
     color
 }
 
@@ -1660,19 +1902,29 @@ fn wait_for_hidden_window(window: HWND) {
     }
 }
 
-fn wait_for_moved_window(
+fn wait_for_popup_at_moved_anchor(
     window: HWND,
     previous: windows::Win32::Foundation::RECT,
+    anchor: ScreenRect,
 ) -> windows::Win32::Foundation::RECT {
     let deadline = Instant::now() + PATIENT;
     loop {
         let current = window_rect(window);
-        if current.left != previous.left || current.top != previous.top {
+        // The candidate list is placed below the caret when it fits and above
+        // otherwise. A detail pane may extend the shared HWND to the left, so
+        // the HWND's left edge is not the candidate list's anchor edge.
+        // SAFETY: `window` is the live renderer HWND owned by this fixture.
+        let dpi = unsafe { GetDpiForWindow(window) };
+        let gap = scaled_logical_px(8, dpi);
+        let moved = current.left != previous.left || current.top != previous.top;
+        let below = current.top == anchor.bottom.saturating_add(gap);
+        let above = current.bottom == anchor.top.saturating_sub(gap);
+        if moved && (below || above) {
             return current;
         }
         assert!(
             Instant::now() < deadline,
-            "candidate popup did not follow caret"
+            "candidate popup did not settle against moved caret: previous={previous:?} anchor={anchor:?} current={current:?} dpi={dpi} gap={gap} moved={moved} below={below} above={above}"
         );
         sleep(Duration::from_millis(20));
     }
