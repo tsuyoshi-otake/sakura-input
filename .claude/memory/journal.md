@@ -2208,3 +2208,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Move `connection_cost` / `numeric_form_cost` / `synthetic_run_cost` into `conversion/ranking/cost.rs`. Facade `pub(in crate::conversion)` keeps search, assembly, and lattice-time numeric edges on the conversion names.
 - These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
 - Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
+
+## 2026-09-13 Extract conversion raw-repair algorithms (#206)
+
+- Move the one-slot corrected-pass orchestrator and its sibling admit/merge frames into `conversion/raw_repair.rs`. Public `convert_input_with_raw_repair_plans` / wrapper names stay on `Converter`.
+- This file is not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
+- Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
