@@ -21,7 +21,8 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GetForegroundWindow, GetWindowRect, IsWindowVisible, SendMessageW, WM_DPICHANGED,
+    FindWindowExW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
+    SendMessageW, WM_DPICHANGED,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -69,6 +70,7 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         .spawn()
         .expect("spawn release renderer");
     let mut renderer = OwnedChild::new(renderer, "renderer");
+    let _ = wait_for_candidate_window(&mut renderer, false, Instant::now() + STARTUP_BUDGET);
 
     let session = create_session(&mut client);
     for character in "kannji".chars() {
@@ -92,7 +94,7 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
             bottom: 124,
         },
     );
-    let candidate_window = wait_for_candidate_window();
+    let candidate_window = wait_for_candidate_window(&mut renderer, true, Instant::now() + PATIENT);
     let first_rect = window_rect(candidate_window);
     assert_popup_geometry(
         candidate_window,
@@ -412,25 +414,63 @@ fn set_placement(client: &mut Client, session: u64, anchor: ScreenRect) {
     ));
 }
 
-fn wait_for_candidate_window() -> HWND {
-    let deadline = Instant::now() + PATIENT;
+fn wait_for_candidate_window(
+    renderer: &mut OwnedChild,
+    require_visible: bool,
+    deadline: Instant,
+) -> HWND {
     loop {
-        // SAFETY: both class-name and optional title pointers are valid for
-        // the duration of this synchronous lookup.
-        let found =
-            unsafe { FindWindowW(windows::core::w!("SakuraInputCandidates"), PCWSTR::null()) };
-        if let Ok(window) = found {
-            // SAFETY: `FindWindowW` returned this HWND in the immediately
-            // preceding call; visibility querying does not retain it.
-            if unsafe { IsWindowVisible(window) }.as_bool() {
-                return window;
-            }
+        if let Some(window) = find_candidate_window(renderer.pid(), require_visible) {
+            return window;
         }
+        if let Some(status) = renderer
+            .child_mut()
+            .try_wait()
+            .expect("query renderer during window readiness")
+        {
+            panic!("renderer exited with {status} before its candidate window became ready");
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(
-            Instant::now() < deadline,
-            "candidate window did not become visible"
+            !remaining.is_zero(),
+            "the owned renderer candidate window did not become {} within the startup deadline",
+            if require_visible { "visible" } else { "ready" }
         );
-        sleep(Duration::from_millis(20));
+        sleep(Duration::from_millis(20).min(remaining));
+    }
+}
+
+fn find_candidate_window(renderer_pid: u32, require_visible: bool) -> Option<HWND> {
+    let mut after = None;
+    loop {
+        // SAFETY: the fixed class name and null title are valid for this
+        // synchronous top-level window enumeration step.
+        let found = unsafe {
+            FindWindowExW(
+                None,
+                after,
+                windows::core::w!("SakuraInputCandidates"),
+                PCWSTR::null(),
+            )
+        };
+        let Ok(window) = found else {
+            return None;
+        };
+        after = Some(window);
+        let mut owner_pid = 0;
+        // SAFETY: `window` came from the immediately preceding enumeration and
+        // `owner_pid` is a valid out-pointer for this synchronous query.
+        unsafe { GetWindowThreadProcessId(window, Some(&mut owner_pid)) };
+        let visible = if require_visible {
+            // SAFETY: `window` is the live HWND returned by the current
+            // enumeration step and visibility querying does not retain it.
+            unsafe { IsWindowVisible(window) }.as_bool()
+        } else {
+            true
+        };
+        if owner_pid == renderer_pid && visible {
+            return Some(window);
+        }
     }
 }
 
@@ -678,6 +718,10 @@ impl OwnedChild {
             child: Some(child),
             name,
         }
+    }
+
+    fn pid(&self) -> u32 {
+        self.child.as_ref().expect("child remains owned").id()
     }
 
     fn child_mut(&mut self) -> &mut Child {
