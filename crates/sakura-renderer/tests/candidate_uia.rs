@@ -62,6 +62,16 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         .expect("spawn release engine");
     let mut engine = OwnedChild::new(engine, "engine");
     let mut client = connect();
+    let renderer = Command::new(&renderer_path)
+        .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn release renderer");
+    let mut renderer = OwnedChild::new(renderer, "renderer");
+    let _ = wait_for_candidate_window(&mut renderer, false, Instant::now() + STARTUP_BUDGET);
+
     let session = create_session(&mut client);
     for character in "kannji".chars() {
         send_key(&mut client, session, char_key(character));
@@ -73,29 +83,19 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         "the integration reading must exercise a second page"
     );
     assert_eq!(first_candidates.page_size, CANDIDATE_PAGE_SIZE as u16);
-
-    set_placement(
-        &mut client,
-        session,
-        ScreenRect {
-            left: 100,
-            top: 100,
-            right: 120,
-            bottom: 124,
-        },
+    assert!(
+        matches!(client.call(&Request::Ping, PATIENT), Ok(Response::Pong)),
+        "same-client Ping must observe the completed candidate publish"
     );
 
-    // Start the renderer only after the engine retains a complete visible
-    // candidate snapshot. The renderer creates its hidden HWND before its
-    // watcher connects, so HWND existence alone is not WatchUi readiness.
-    let renderer = Command::new(&renderer_path)
-        .env("LOCALAPPDATA", app_data.path())
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn release renderer");
-    let mut renderer = OwnedChild::new(renderer, "renderer");
+    let first_anchor = ScreenRect {
+        left: 100,
+        top: 100,
+        right: 120,
+        bottom: 124,
+    };
+    set_placement_visibility(&mut client, session, first_anchor, false);
+    set_placement_visibility(&mut client, session, first_anchor, true);
     let candidate_window =
         wait_for_candidate_window(&mut renderer, true, Instant::now() + STARTUP_BUDGET);
     let first_rect = window_rect(candidate_window);
@@ -403,13 +403,22 @@ fn named_key(code: KeyCode) -> KeyInput {
 }
 
 fn set_placement(client: &mut Client, session: u64, anchor: ScreenRect) {
+    set_placement_visibility(client, session, anchor, true);
+}
+
+fn set_placement_visibility(
+    client: &mut Client,
+    session: u64,
+    anchor: ScreenRect,
+    renderer_visible: bool,
+) {
     assert!(matches!(
         client.call(
             &Request::SetUiPlacement {
                 session,
                 anchor: Some(anchor),
                 document: None,
-                renderer_visible: true,
+                renderer_visible,
             },
             PATIENT,
         ),
