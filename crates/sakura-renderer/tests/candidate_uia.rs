@@ -1,14 +1,14 @@
 //! Real-process candidate popup and UI Automation gate.
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_ipc::Client;
+use sakura_ipc::{Client, Endpoint};
 use sakura_proto::{
     CandidateList, KeyCode, KeyInput, Modifiers, Output, Request, Response, ScreenRect,
-    CANDIDATE_PAGE_SIZE,
+    CANDIDATE_PAGE_SIZE, PROTOCOL_VERSION,
 };
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, RECT, RPC_E_CHANGED_MODE};
@@ -25,6 +25,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
+const STARTUP_BUDGET: Duration = Duration::from_secs(30);
 const MIN_WIDTH_96: i32 = 260;
 const MAX_WIDTH_96: i32 = 480;
 const ROW_HEIGHT_96: i32 = 28;
@@ -53,12 +54,18 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
     let engine = Command::new(&engine_path)
         .env("SAKURA_DICTIONARY", &dictionary)
         .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn release engine");
     let mut engine = OwnedChild::new(engine, "engine");
     let mut client = connect();
     let renderer = Command::new(&renderer_path)
         .env("LOCALAPPDATA", app_data.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn release renderer");
     let mut renderer = OwnedChild::new(renderer, "renderer");
@@ -245,7 +252,8 @@ fn popup_follows_caret_pages_selects_by_digit_and_exposes_uia() {
         );
     }
 
-    let _ = client.call(&Request::Shutdown, PATIENT);
+    drop(client);
+    shutdown_engine();
     engine.wait_for_exit();
     renderer.wait_for_exit();
 }
@@ -283,16 +291,71 @@ fn required_path(name: &str) -> PathBuf {
 }
 
 fn connect() -> Client {
-    let deadline = Instant::now() + PATIENT;
+    let deadline = Instant::now() + STARTUP_BUDGET;
     loop {
-        match Client::connect(Duration::from_millis(100)) {
-            Ok(client) => return client,
-            Err(fault) if Instant::now() >= deadline => {
-                panic!("engine did not open its pipe after {PATIENT:?}: {fault:?}")
+        let now = Instant::now();
+        assert!(
+            now < deadline,
+            "engine did not complete Hello within {STARTUP_BUDGET:?}"
+        );
+        let connect_budget =
+            Duration::from_millis(100).min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect(connect_budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline.min(now + PATIENT),
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                return client;
             }
-            Err(_) => sleep(Duration::from_millis(20)),
         }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(
+            !remaining.is_zero(),
+            "engine did not complete Hello within {STARTUP_BUDGET:?}"
+        );
+        sleep(Duration::from_millis(20).min(remaining));
     }
+}
+
+fn shutdown_engine() {
+    let deadline = Instant::now() + PATIENT;
+    let mut client = loop {
+        let now = Instant::now();
+        assert!(now < deadline, "control endpoint did not complete Hello");
+        let budget = Duration::from_millis(100).min(deadline.saturating_duration_since(now));
+        if let Ok(mut client) = Client::connect_endpoint(Endpoint::Control, budget) {
+            let now = Instant::now();
+            if now < deadline
+                && matches!(
+                    client.call_until(
+                        &Request::Hello {
+                            client_version: PROTOCOL_VERSION,
+                        },
+                        deadline,
+                    ),
+                    Ok(Response::Hello { .. })
+                )
+            {
+                break client;
+            }
+        }
+        sleep(Duration::from_millis(20).min(deadline.saturating_duration_since(Instant::now())));
+    };
+    assert!(
+        matches!(
+            client.call_until(&Request::Shutdown, deadline),
+            Ok(Response::Ok)
+        ),
+        "control endpoint did not acknowledge Shutdown"
+    );
 }
 
 fn create_session(client: &mut Client) -> u64 {
