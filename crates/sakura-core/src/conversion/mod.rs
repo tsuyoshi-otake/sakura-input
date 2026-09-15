@@ -248,7 +248,7 @@ impl Converter {
 
     /// Supplies commit-history repair readings for the next conversion only.
     /// Each reading is looked up in the dictionary and attached to the typed
-    /// span with [`COMMIT_HISTORY_PENALTY`].
+    /// span with [`COMMIT_HISTORY_PENALTY`](crate::input_repair::COMMIT_HISTORY_PENALTY).
     pub fn set_commit_repair_readings(&mut self, readings: &[&str]) {
         self.commit_repair_readings.clear();
         for reading in readings {
