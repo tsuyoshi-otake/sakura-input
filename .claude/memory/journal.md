@@ -2220,3 +2220,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Move same-surface admission into `conversion/candidates/dedup.rs` and stable cost order into `conversion/ranking/tie_break.rs`. This completes the named Phase 3.1 module tree.
 - These files are not added to `IRV-CORE-CONVERSION` or `IRV-ENGINE-CANDIDATE`. Measured CORE-CONVERSION stays 3,442. Do not update `baseline.json`.
 - Wrapped `cargo test -p sakura-core --lib conversion` PASS. clippy `-D warnings`, fmt check, and process cleanup PASS.
+
+## 2026-09-15 Phase 3.1 post-merge acceptance and stale C2 report (#206, #219)
+
+- Symptom: on main `b8f9314`, `cargo test -p sakura-engine` passed but rewrote tracked `verification/developer-history/coverage/c2-report.md`, so a "tree unchanged after validation" guard failed.
+- Root cause: Phase 2.4 (#178) moved the oracle to `crates/sakura-oracles/src/`, but the committed report still named `crates/sakura-engine/src/`. The test regenerates the report from the current path.
+- Fix: commit the regenerated one-line scope path (#219, PR #220). The condition table is unchanged. `pbt-seed.txt` and `pbt-shrunk-counterexample.md` differed only in CRLF.
+- Fixed-corpus verification (plan row 3.1): `quality-core-capture` → `quality-score` → `quality-compare --side candidate` on `conversion-quality-stage1` (50 cases), same `system.dic` (SHA-256 `ca1b24fc…`) on both sides. Before = `5746a0d` (parent of the first split PR #210, not #213). After = `b8f9314`. top-1 12→12, recall@18 38→38, MRR@18 0.39413→0.39413, segment_exact 22→22, changed_cases 0, rank_improved/regressed 0. The capture and report JSON are identical once provenance (git SHA, evaluator hash, fingerprint) is excluded.
+- Other gates on `b8f9314`: C1 golden/roundtrip v22, R1/R2/R8/R12/R13, store/engine/settings/conversion tests, and IRV compare (all 0%) PASS. Desktop tests all-mode run 34910287304 had 31/31 passed and a clean cleanup.
+- Learning: `quality-compare` exits 0 even when metrics differ. Judge bit identity from the `summary` deltas and `changed_cases`, never from the exit code. The CI Installer artifact embeds the dictionary, so there is no standalone `system.dic` in it. Any gate that runs engine tests should also check that the tracked tree is unchanged, because regenerated verification reports go stale silently.
