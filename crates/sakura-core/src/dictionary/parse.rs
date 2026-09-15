@@ -3,9 +3,12 @@
 //!
 //! Record-level cross-table checks run afterwards in `Dictionary::validate_tables`.
 
+use super::validate::{
+    validate_boundary_table, validate_matrix_table, validate_single_kanji_table,
+};
 use super::{
-    image_format, read_u16, read_u32, to_usize, validate_boundary_table, validate_matrix_table,
-    validate_single_kanji_table, Details, Dictionary, Error, ImageVersion, SingleKanji, Table,
+    image_format, read_u16, read_u32, to_usize, Details, Dictionary, Error, ImageVersion,
+    SingleKanji, Table,
 };
 
 impl<'a> Dictionary<'a> {
