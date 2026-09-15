@@ -2331,3 +2331,23 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Iteration: include_str! path fix belonged to mod.rs (DEFAULT_TABLE stayed there); completion reads ReplayTrace::output so that field became pub(super); tests needed Overflow under cfg(test).
 - Verification: clippy -D warnings core+engine; cargo test -p sakura-core (lib+integration incl. zero_alloc) PASS; 299 lib tests listed (unchanged, 35 romaji); dependency rules PASS; IRV PASS; process-clean clean.
 - Learning: the split script chk() prefix match accepts any line for an empty expected string; assert blank separator lines with a separate exact check.
+## 2026-09-15 Phase 3.4 keymap split (#206)
+- Change: keymap.rs -> keymap/{mod,vocabulary,key_spec}.rs; tests moved beside. benchmarks.json IRV-ENGINE-KEY-MODE lists the three files.
+- Symptom: the planned name config.rs shadowed crate::config inside keymap; tests calling config::parse failed with E0425. Also Trigger is used by non-test KeyMap::find, so a cfg(test)-only import failed.
+- Fix: named the syntax module key_spec; Trigger imported unconditionally.
+- Verification: clippy -D warnings core+engine; core lib 299 tests listed (unchanged, 63 keymap); dependency rules self-test+enforced PASS; IRV PASS; process-clean clean.
+- Learning: before naming a child module, check that its name does not collide with a crate-root module the parent already imports (use crate::X::{self,..}).
+## 2026-09-15 Phase 3.3: split width/scan/mod.rs into leaves (#206)
+
+- Change: width/scan/mod.rs (1,036 lines) -> mod.rs (contract types + passthrough_len), lut.rs (tables, admits, scan_scalar), select.rs (records, startup, resolver), kernels_x86.rs (x86_64 kernels), test_support.rs (cfg(test) counters, path accounting, calibration). No function bodies changed; only pub(super) where a sibling or tests need an item.
+- Decision: the plan listed scalar.rs; folded scan_scalar into lut.rs because it is 7 lines defined by admits. Avx512ZmmThreshold stays in mod.rs so select.rs and kernels_x86.rs do not depend on each other.
+- Gotcha: simd_tests.rs uses `use super::*;` and also `cpu::detect_at_startup`; the old `use crate::cpu::{self, ...}` in mod.rs had provided `cpu`. Re-imported under cfg(test).
+- Verification: clippy -D warnings (core +/- simd-assembly-audit, engine); core lib 299 tests listed (unchanged) PASS; audit-feature tests PASS; width::scan:: 16 tests PASS; SIMD gate self-test 5/5 and real gate PASS (symbols now width::scan::lut / kernels_x86); IRV PASS; process-clean clean.
+
+## 2026-09-15 Phase 3.3 follow-up: R9 rejected test_support.rs (#206)
+
+- Symptom: PR #230 dependency-rules failed: `width/scan/mod.rs declares test-only file test_support.rs outside *_tests.rs/testing.rs`.
+- Root cause: ci/check-dependency-rules.ps1 R9 (enforced) requires every `#[cfg(test)] mod` file to be named `*_tests.rs` or `testing.rs`. I did not run the dependency-rules check locally before pushing.
+- Fix: renamed to width/scan/testing.rs.
+- Verification: dependency-rules -SelfTest and -Enforce R1,R2,R8,R9,R12,R13 PASS; clippy; audit-feature tests; SIMD agreement; assembly gate; process-clean.
+- Learning: for any module split, run `ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13` locally alongside fmt/clippy/IRV. Name test-only helper modules `testing.rs`.
