@@ -49,7 +49,7 @@ is pending, not proof of compliance. Check Cargo edges as well as Rust reference
 | R7 | settings presentation is a leaf | settings UI extraction |
 | R8 | request/response magic, version, bounds and codec have one rerank owner | rerank protocol extraction |
 | R9 | test-only source modules use the documented sibling/support convention | test relocation |
-| R10 | facade exports have evidenced consumers | facade cleanup |
+| R10 | facade exports have evidenced consumers | blocking since facade cleanup (`ci/check-facade.ps1`) |
 | R11 | standalone tool workspaces are audited by dependency policy | tool migration |
 | R12 | values is a std-only leaf with no wire codec | values extraction |
 | R13 | store has no runtime, queue, engine or proto ownership | store extraction |
