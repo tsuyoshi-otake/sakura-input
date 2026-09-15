@@ -2260,3 +2260,33 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Phase 3.2 starts with `git mv` only, as 3.1 did: `dictionary.rs` -> `dictionary/mod.rs`, and `dictionary_tests.rs` moves beside it under the same name so `#[path = "dictionary_tests.rs"]` still resolves without an edit.
 - `IRV-DICTIONARY-FORMAT` entry point, production, and semantic range in `benchmarks.json` now name `dictionary/mod.rs`. `measure-irv.ps1 -Compare` compares only physical LOC per id, so `baseline.json` is not updated. The `docs/contracts/README.md` link follows the move. Other `dictionary.rs` hits (`verification/high-load-input-integrity.md`, `space-key-dispatch/mutants-files.txt`) are `sakura-engine/src/dictionary.rs`, not this file.
 - Verified: wrapped `cargo test -p sakura-core --lib dictionary` PASS, IRV compare PASS (all 0%), fmt check, `git diff --check`, `check-process-clean.ps1` PASS.
+
+## 2026-09-15 Extract dictionary image layout into dictionary/format.rs (#206)
+
+- The inline `pub mod image_format { ... }` body moves verbatim into `dictionary/format.rs`, loaded as `#[path = "format.rs"] pub mod image_format;`. Public path `sakura_core::dictionary::image_format::*` is unchanged for dictc, sakura-ipc, and tests; no re-export was added. The module doc now cites `verification/dictionary-format-v2.md`.
+- No other crate defines the format constants (SKRADIC/LOUD/MSP1/SBD1 grep: only sakura-core; dictc tests search for `SBD1` bytes only). `ImageVersion`, parse, validate, LOUDS, lookup, and detail stay in `mod.rs`.
+- `IRV-DICTIONARY-FORMAT` enters at `format.rs`, lists it in production beside `mod.rs`, and its semantic range is `format.rs` 1-87. Physical 5,202 -> 5,207 (+0.1%, the new header lines). Do not update `baseline.json`.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 tests listed) and `cargo test -p dictc` PASS, clippy `-D warnings` for both, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
+
+## 2026-09-15 Extract dictionary header and directory parsing into dictionary/parse.rs (#206)
+
+- `Dictionary::parse` plus `validate_directory` / `required_table` / `optional_table` / `directory_table` / `expect_fixed_count` move into `dictionary/parse.rs` as a second `impl Dictionary` block. Grep proved the five helpers have no caller outside parse and each other. The child module reaches the parent-private table views, byte readers, and table validators through `super::`, so no visibility widened.
+- The little-endian readers (`read_u16` 35 uses, `read_u32` 52, `to_usize` 35) stay in `mod.rs` because lookup, detail, and validate share them; moving them into parse would make lookup depend on parse.
+- Line ranges were spliced from one snapshot of the original (1-16, `mod parse;`, 17-359, 611-1790, 1873-end), so no later range went stale. mod.rs 2,107 -> 1,775; parse.rs 344.
+- `IRV-DICTIONARY-FORMAT` production adds `parse.rs` because a #109-type change now reads the header parser there; omitting it would hide reading. Physical 5,202 -> 5,219 (+0.3%). Do not update `baseline.json`.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 listed) and `cargo test -p dictc` PASS, clippy `-D warnings`, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
+
+## 2026-09-15 Extract dictionary record and table validation into dictionary/validate.rs (#206)
+
+- `validate_tables`, `validate_v2_surfaces`, `validate_v2_annotations`, `validate_v2_annotation_index`, `validate_details`, `detail_text`, `validate_offsets`, and the optional-table validators (`validate_boundary_table`, `validate_single_kanji_table`, `validate_matrix_table`) move into `dictionary/validate.rs`.
+- Sibling visibility: `parse.rs` calls `validate_tables` and the three table validators, so only those four became `pub(super)`. `text_record` stays in `mod.rs` because `write_surface` / `write_annotation` also read through it (grep: mod.rs 782, 878).
+- Imports were generated from the identifiers present in each extracted body, then proven minimal by clippy `-D warnings` (unused imports would fail). Ranges were spliced from one snapshot (1-17, `mod validate;`, 18-930, 1287-1540, 1740-end). mod.rs 1,775 -> 1,221; validate.rs 571; parse.rs 347.
+- `IRV-DICTIONARY-FORMAT` production adds `validate.rs` (a #109-type change reads the validators). Physical 5,202 -> 5,239 (+0.7%). Do not update `baseline.json`.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 listed) and `cargo test -p dictc` PASS, clippy, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
+
+## 2026-09-15 Phase 3.2: extract LOUDS trie navigation into dictionary/louds.rs (#206)
+
+- Change: moved `Node` and `node`/`label`/`find_child`/`louds_bit` from `dictionary/mod.rs` into `dictionary/louds.rs`; the four accessors and Node fields are `pub(super)` (callers: lookup in mod.rs, validate.rs). `entry` stays in mod.rs (ENTR record decode, not trie). mod.rs 1,221 -> 1,154 lines; louds.rs 77 lines.
+- Method: spliced from one snapshot with line-content markers asserted before extraction; imports generated from identifiers in the body; clippy -D warnings proves none unused.
+- Verification: wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, clippy -D warnings, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5249 (+0.9%) PASS, check-process-clean PASS.
+- Learning: asserting the expected text at each boundary line before a sed splice turns stale line numbers into a hard stop instead of a silent mis-cut.
