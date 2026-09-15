@@ -44,7 +44,7 @@
 //! COM interface. The obligation is the same each time and is discharged
 //! the same way: the interface came from a `Result` this code already
 //! unwrapped, so the pointer is live and the apartment it was created in
-//! is still initialized (the caller holds a [`crate::ComApartment`]); and
+//! is still initialized (the caller holds a [`sakura_reg::ComApartment`]); and
 //! every `BSTR`/`VARIANT` argument is a temporary that outlives the call
 //! it is passed to. The per-site comments below add only what is specific
 //! to that site.
@@ -190,7 +190,7 @@ impl Location {
 /// while the install reported success (DESIGN 12.2). The caller is
 /// responsible for that; there is no way to detect it reliably from here.
 ///
-/// Requires an initialized apartment ([`crate::ComApartment`]).
+/// Requires an initialized apartment ([`sakura_reg::ComApartment`]).
 pub fn register(programs: &[&Path]) -> Result<()> {
     if programs.is_empty() {
         // A task with no actions registers successfully and does nothing,
@@ -406,7 +406,7 @@ pub fn current_account() -> Result<String> {
 fn bstr(s: &std::ffi::OsStr) -> BSTR {
     // `BSTR` is length-prefixed, so the wide form must not carry a
     // terminator; `os_to_wide` is the counted one of the pair.
-    BSTR::from_wide(&crate::wide::os_to_wide(s))
+    BSTR::from_wide(&sakura_reg::wide::os_to_wide(s))
 }
 
 /// Makes an account name usable as a task name.

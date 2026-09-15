@@ -5,23 +5,22 @@
 //! claims. Both `sakura_regtool.exe` and the DLL's own `DllRegisterServer` route
 //! through here, so a machine registered by either route ends up identical.
 //!
-//! Nothing here runs on the input path. Correctness and reversibility matter;
-//! speed does not.
+//! The TSF DLL links this crate for its GUID and description constants, which
+//! are plain data. The registration functions run only from `DllRegisterServer`,
+//! `DllUnregisterServer`, `sakura_regtool.exe`, or `sakura_logon.exe`, never on
+//! the input path; for them correctness and reversibility matter, speed does not.
+//! User preferences and the API-key store live in `sakura-user-prefs`; the logon
+//! and cleanup tasks, payload cleanup, and WER policy live in
+//! `sakura-install-maintenance`.
 
 #![cfg(windows)]
 
 pub mod com_server;
-pub mod diagnostics;
 pub mod guids;
-pub mod launcher;
-pub mod maintenance;
 pub mod module;
-pub mod payloads;
 pub mod profile;
 pub mod registry;
-pub mod user_preferences;
 pub mod user_profile;
-pub mod vscode_diagnostics;
 pub mod wide;
 
 use std::path::Path;

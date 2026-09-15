@@ -1,0 +1,24 @@
+[package]
+name = "sakura-user-prefs"
+description = "Per-user AI text preferences and the Credential Manager API-key store."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+sakura-reg.workspace = true
+windows-core.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
+    "Win32_System_Registry",
+]
+
+[lints]
+workspace = true

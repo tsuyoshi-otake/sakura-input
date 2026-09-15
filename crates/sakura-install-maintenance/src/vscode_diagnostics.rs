@@ -13,7 +13,7 @@ use windows::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND};
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, REG_EXPAND_SZ, REG_SZ};
 use windows_core::{Error, Result};
 
-use crate::registry::{RegKey, RegistryView};
+use sakura_reg::registry::{RegKey, RegistryView};
 
 const LOCAL_DUMPS: &str = r"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps";
 const TARGET_KEY: &str = r"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\Code.exe";
@@ -141,7 +141,7 @@ enum TargetRemovalScope {
     DeleteEmptyKey,
 }
 
-fn target_removal_scope(counts: crate::registry::RegistryCounts) -> TargetRemovalScope {
+fn target_removal_scope(counts: sakura_reg::registry::RegistryCounts) -> TargetRemovalScope {
     if counts.values == 0 && counts.subkeys == 0 {
         TargetRemovalScope::DeleteEmptyKey
     } else {
@@ -577,22 +577,22 @@ mod tests {
     #[test]
     fn registry_removal_scope_preserves_foreign_values_and_subkeys() {
         assert_eq!(
-            target_removal_scope(crate::registry::RegistryCounts {
+            target_removal_scope(sakura_reg::registry::RegistryCounts {
                 values: 0,
                 subkeys: 0,
             }),
             TargetRemovalScope::DeleteEmptyKey
         );
         for counts in [
-            crate::registry::RegistryCounts {
+            sakura_reg::registry::RegistryCounts {
                 values: 1,
                 subkeys: 0,
             },
-            crate::registry::RegistryCounts {
+            sakura_reg::registry::RegistryCounts {
                 values: 0,
                 subkeys: 1,
             },
-            crate::registry::RegistryCounts {
+            sakura_reg::registry::RegistryCounts {
                 values: 2,
                 subkeys: 3,
             },
