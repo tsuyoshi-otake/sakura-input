@@ -21,7 +21,8 @@
 
 #![cfg(windows)]
 
-use sakura_reg::{launcher, ComApartment};
+use sakura_install_maintenance::launcher;
+use sakura_reg::ComApartment;
 
 #[test]
 #[ignore = "creates and deletes a real scheduled task"]

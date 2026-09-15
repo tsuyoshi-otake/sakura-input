@@ -73,7 +73,8 @@ pub fn require_signed_in_user() -> Result<String, Mismatch> {
     }
 
     let session = signed_in_account().map_err(Mismatch::Undetermined)?;
-    let token = sakura_reg::launcher::current_account().map_err(Mismatch::Undetermined)?;
+    let token =
+        sakura_install_maintenance::launcher::current_account().map_err(Mismatch::Undetermined)?;
 
     // Windows account names are case-insensitive, and the two APIs do not
     // agree on casing: one reports what was typed at the logon prompt, the
@@ -93,7 +94,7 @@ fn session_id() -> windows::core::Result<u32> {
 }
 
 /// The account signed in to this session, as `DOMAIN\user` so it can be
-/// compared with [`sakura_reg::launcher::current_account`] directly.
+/// compared with [`sakura_install_maintenance::launcher::current_account`] directly.
 fn signed_in_account() -> windows::core::Result<String> {
     let user = session_string(WTSUserName)?;
     let domain = session_string(WTSDomainName)?;
