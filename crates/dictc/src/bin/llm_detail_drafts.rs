@@ -5,8 +5,8 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use dictc::llm_detail_targets::load_committed_targets;
-use dictc::llm_details::{
+use dictc_core::llm_detail_targets::load_committed_targets;
+use dictc_core::llm_details::{
     build_definition_drafts_jsonl, DraftDefinition, Relations, DRAFT_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};

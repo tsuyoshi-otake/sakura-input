@@ -712,7 +712,7 @@ jobs:
           }
       - name: Fuzz hostile dictionary images
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'hostile dictionary fuzz smoke' -Command { cargo test -p dictc --release --test dictionary_robustness sharded_hostile_dictionary_campaign -- --exact --ignored --nocapture }
+        run: ./ci/run-test-quiet.ps1 -Name 'hostile dictionary fuzz smoke' -Command { cargo test -p dictc-core --release --test dictionary_robustness sharded_hostile_dictionary_campaign -- --exact --ignored --nocapture }
       - name: Prove dictionary fuzz runner exited
         if: always()
         shell: pwsh

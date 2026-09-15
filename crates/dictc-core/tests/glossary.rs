@@ -1,7 +1,7 @@
-use dictc::glossary::{
+use dictc_core::glossary::{
     detail_sources, import, normalize_reading, parse_part, Importer, OverlayDefaults,
 };
-use dictc::{entries_to_tsv, parse_entries, parse_mozc_entries};
+use dictc_core::{entries_to_tsv, parse_entries, parse_mozc_entries};
 use sakura_core::dictionary::{DetailRelationKind, EntryFlags};
 
 const PART: &str = r#"[

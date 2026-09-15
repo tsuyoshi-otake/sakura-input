@@ -1,6 +1,6 @@
 ## Overflow-hazard test construction (dictionaries and prediction)
 
-- **`dictc::parse_entries` rejects any single `reading`/`surface` field over
+- **`dictc_core::parse_entries` rejects any single `reading`/`surface` field over
   `MAX_PREEDIT_BYTES` (1536 bytes) at compile time.** A dictionary TSV cannot
   contain an oversized field to use as an overflow-test fixture — `dictc`
   itself refuses to compile it. To construct a *runtime* overflow with a

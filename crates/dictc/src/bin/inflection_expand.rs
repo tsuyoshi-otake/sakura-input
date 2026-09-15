@@ -5,8 +5,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use dictc::inflection::{expand_inflections, parse_inflection_pos_catalog, InflectionReport};
-use dictc::{entries_to_tsv, parse_entries};
+use dictc_core::inflection::{expand_inflections, parse_inflection_pos_catalog, InflectionReport};
+use dictc_core::{entries_to_tsv, parse_entries};
 
 const OUTPUT_LICENSE: &str = "LicenseRef-Mozc-Dictionary";
 

@@ -1,6 +1,6 @@
 [package]
 name = "dictc"
-description = "Dictionary compiler: licensed TSV sources to Sakura's read-only mmap image."
+description = "Dictionary build command-line tools: thin binaries over dictc-core."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,8 +9,8 @@ repository.workspace = true
 authors.workspace = true
 
 [features]
-conversion-test-support = ["sakura-core/conversion-test-support"]
-research-top32 = ["sakura-core/research-top32"]
+conversion-test-support = ["dictc-core/conversion-test-support"]
+research-top32 = ["dictc-core/research-top32"]
 
 [[bin]]
 name = "dictc"
@@ -61,14 +61,12 @@ name = "compound-homophone-scan"
 path = "src/bin/compound_homophone_scan.rs"
 
 [dependencies]
-sakura-rerank-proto.workspace = true
+dictc-core = { path = "../dictc-core" }
 sakura-core.workspace = true
-sakura-context-proto.workspace = true
 sakura-proto.workspace = true
-quick-xml.workspace = true
-flate2.workspace = true
-# `dictc` is an offline build tool.  The LLM-detail release gate needs a
-# battle-tested strict JSON parser; runtime binaries never depend on this.
+sakura-rerank-proto.workspace = true
+# Offline JSON and hashing for the LLM-detail and evaluation binaries;
+# runtime binaries never depend on these (ci/dep-policy.ps1).
 serde = { version = "=1.0.219", features = ["derive"] }
 serde_json = "=1.0.140"
 sha2 = "=0.10.9"

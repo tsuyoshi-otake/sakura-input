@@ -1,5 +1,5 @@
-use dictc::inflection::{expand_inflections, parse_inflection_pos_catalog};
-use dictc::{compile, merge_entries, parse_connection, parse_entries, SourceEntry};
+use dictc_core::inflection::{expand_inflections, parse_inflection_pos_catalog};
+use dictc_core::{compile, merge_entries, parse_connection, parse_entries, SourceEntry};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::Dictionary;
 use sakura_core::ConversionMethod;
@@ -59,7 +59,7 @@ fn lemma(reading: &str, surface: &str, class_id: u16, cost: i32) -> SourceEntry 
         .remove(0)
 }
 
-fn catalog() -> dictc::inflection::InflectionPosCatalog {
+fn catalog() -> dictc_core::inflection::InflectionPosCatalog {
     parse_inflection_pos_catalog("id.def", POS).expect("fixture POS catalog")
 }
 
