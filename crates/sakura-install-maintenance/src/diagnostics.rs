@@ -7,7 +7,7 @@
 use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
 use windows_core::Result;
 
-use crate::registry::{RegKey, RegistryView};
+use sakura_reg::registry::{RegKey, RegistryView};
 
 const LOCAL_DUMPS: &str = r"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps";
 pub const DUMP_FOLDER: &str = r"%LOCALAPPDATA%\SakuraInput\dumps";

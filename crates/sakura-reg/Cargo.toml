@@ -18,16 +18,9 @@ features = [
     # RegCreateKeyExW takes a SECURITY_ATTRIBUTES pointer, so its binding is
     # gated behind Win32_Security even though registration passes None.
     "Win32_Security",
-    "Win32_Security_Credentials",
     "Win32_System_Com",
     "Win32_System_Registry",
     "Win32_System_LibraryLoader",
-    # The logon launcher task: its COM API, the VARIANTs its methods take,
-    # and GetUserNameExW for the account the trigger is scoped to.
-    "Win32_System_TaskScheduler",
-    "Win32_System_Variant",
-    "Win32_System_Ole",
-    "Win32_Security_Authentication_Identity",
     "Win32_UI_TextServices",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_Globalization",

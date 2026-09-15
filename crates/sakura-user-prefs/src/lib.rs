@@ -4,6 +4,8 @@
 //! 32-bit and a 64-bit host observe the same value without parsing configuration
 //! files on the keystroke path.
 
+#![cfg(windows)]
+
 use windows::Win32::Foundation::ERROR_NOT_FOUND;
 use windows::Win32::Security::Credentials::{
     CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE,
@@ -12,8 +14,8 @@ use windows::Win32::Security::Credentials::{
 use windows::Win32::System::Registry::HKEY_CURRENT_USER;
 use windows_core::{Result, HRESULT, PCWSTR, PWSTR};
 
-use crate::registry::{RegKey, RegistryView};
-use crate::wide::to_wide_nul;
+use sakura_reg::registry::{RegKey, RegistryView};
+use sakura_reg::wide::to_wide_nul;
 
 const KEY: &str = r"SOFTWARE\SakuraInput\Preferences";
 const AI_TEXT_KEY: &str = "AiTextKey";

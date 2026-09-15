@@ -322,9 +322,9 @@ dependencies = [
  "sakura-ipc",
  "sakura-oracles",
  "sakura-proto",
- "sakura-reg",
  "sakura-rerank-proto",
  "sakura-store",
+ "sakura-user-prefs",
  "sakura-values",
  "windows",
 ]
@@ -345,6 +345,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sakura-install-maintenance"
+version = "2.0.0"
+dependencies = [
+ "sakura-reg",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "sakura-ipc"
 version = "2.0.0"
 dependencies = [
@@ -357,6 +366,7 @@ dependencies = [
 name = "sakura-logon"
 version = "2.0.0"
 dependencies = [
+ "sakura-install-maintenance",
  "sakura-reg",
 ]
 
@@ -394,6 +404,7 @@ dependencies = [
 name = "sakura-regtool"
 version = "2.0.0"
 dependencies = [
+ "sakura-install-maintenance",
  "sakura-ipc",
  "sakura-proto",
  "sakura-reg",
@@ -427,6 +438,7 @@ dependencies = [
  "sakura-proto",
  "sakura-reg",
  "sakura-store",
+ "sakura-user-prefs",
  "sakura-values",
  "windows",
  "windows-core",
@@ -446,6 +458,16 @@ version = "2.0.0"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
+ "sakura-reg",
+ "sakura-user-prefs",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
+name = "sakura-user-prefs"
+version = "2.0.0"
+dependencies = [
  "sakura-reg",
  "windows",
  "windows-core",

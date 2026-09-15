@@ -2351,3 +2351,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Fix: renamed to width/scan/testing.rs.
 - Verification: dependency-rules -SelfTest and -Enforce R1,R2,R8,R9,R12,R13 PASS; clippy; audit-feature tests; SIMD agreement; assembly gate; process-clean.
 - Learning: for any module split, run `ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13` locally alongside fmt/clippy/IRV. Name test-only helper modules `testing.rs`.
+
+## 2026-09-15 — Phase 3.8 sakura-reg split (#206)
+
+- Change: moved `user_preferences.rs` into new crate `sakura-user-prefs`, and `launcher`, `maintenance`, `payloads`, `diagnostics`, `vscode_diagnostics` (+ `tests/launcher_roundtrip.rs`) into new crate `sakura-install-maintenance`. `sakura-reg` keeps GUIDs, registration, `registry`/`wide` primitives, `com_server`, `module`, `profile`, `user_profile` (per-user registration depends on `register_all`, so it stays; deviation from the plan's module list). Engine now depends on `sakura-user-prefs` instead of `sakura-reg`; TSF/settings add it; regtool/logon add `sakura-install-maintenance`. Fixed the false "Nothing here runs on the input path" doc (TSF links reg for GUID constants). Both crates carry charter READMEs; `ci/dep-policy.ps1` lists them as runtime crates.
+- Verification: clippy `-D warnings` on 8 affected packages PASS; `cargo test -p sakura-reg -p sakura-user-prefs -p sakura-install-maintenance` PASS (listed 16 / 1 / 21 = the original 36 unit + 2 integration); cargo doc with deny broken links PASS (after retargeting two `crate::ComApartment` links to `sakura_reg::ComApartment`); dep-policy + SelfTest, dependency rules, IRV, process-clean PASS.
+- Learning: moved modules keep intra-doc links to their old crate root (`crate::X`); `cargo build` does not flag them, only `cargo doc -D rustdoc::broken_intra_doc_links` does. Workspace `Cargo.toml` is CRLF, so strip CR before perl `\n` edits.
+- Note: `ci/test-baseline.json` still lists sakura-reg 36+2; it is recorded by `record-test-baseline.ps1` and not CI-gated, left unchanged.

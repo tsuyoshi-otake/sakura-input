@@ -320,7 +320,7 @@ fn connect() -> Result<ITaskService> {
 }
 
 fn bstr(s: &std::ffi::OsStr) -> BSTR {
-    BSTR::from_wide(&crate::wide::os_to_wide(s))
+    BSTR::from_wide(&sakura_reg::wide::os_to_wide(s))
 }
 
 #[cfg(test)]
