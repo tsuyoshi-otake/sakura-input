@@ -18,8 +18,8 @@ format、Clippy、workspaceテスト、Releaseビルド、installer生成を確�
 
 ## 導入方法
 
-このReleaseはowner承認済みのAuthenticode未署名版です。Windowsには「不明な発行元」と表示されます。GitHub Releaseから取得した `sakura_setup.exe` のSHA-256を `release-manifest-v2.txt` と照合して、手動インストールしてください。Sakura固有のmanifest署名は、Windowsのコード署名とは異なります。未署名版は自動更新で取得・実行されません。
+このReleaseはowner承認済みのAuthenticode未署名版です。Windowsには「不明な発行元」と表示されます。GitHub Releaseから取得した `sakura_setup.exe` のSHA-256を `release-manifest-v2.txt` と照合して、手動インストールしてください。Sakura固有のmanifest署名は、Windowsのコード署名とは異なります。更新機能を持つ1.0.x系では、Sakura固有のmanifest署名とSHA-256の検証に通り、manifestが未署名版であると明示している場合に限り、この未署名版も更新として導入されることがあります。manifestが署名済みを要求しているのにinstallerが未署名の場合は拒否します。
 
 ## 対応環境
 
-Windows 11 build 22000以降、x64、AVX対応CPU。32 bitホスト用DLLとARM64ネイティブ版は含みません。
+Windows 11 build 22000以降、x64、AVXとSSSE3の両方に対応したCPU。32 bitホスト用DLLとARM64ネイティブ版は含みません。
