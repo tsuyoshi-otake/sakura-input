@@ -2326,6 +2326,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: run-test-quiet SIMD kernel agreement PASS; IRV PASS; process-clean clean.
 - Learning: when moving a module, grep CI, scripts and rules for test filters naming the old path, and compare `--list` counts before and after. Exit 0 does not prove any test ran.
 
+## 2026-09-15 Phase 3.4 keymap split (#206)
+- Change: keymap.rs -> keymap/{mod,vocabulary,key_spec}.rs; tests moved beside. benchmarks.json IRV-ENGINE-KEY-MODE lists the three files.
+- Symptom: the planned name config.rs shadowed crate::config inside keymap; tests calling config::parse failed with E0425. Also Trigger is used by non-test KeyMap::find, so a cfg(test)-only import failed.
+- Fix: named the syntax module key_spec; Trigger imported unconditionally.
+- Verification: clippy -D warnings core+engine; core lib 299 tests listed (unchanged, 63 keymap); dependency rules self-test+enforced PASS; IRV PASS; process-clean clean.
+- Learning: before naming a child module, check that its name does not collide with a crate-root module the parent already imports (use crate::X::{self,..}).
 ## 2026-09-15 Phase 3.3: split width/scan/mod.rs into leaves (#206)
 
 - Change: width/scan/mod.rs (1,036 lines) -> mod.rs (contract types + passthrough_len), lut.rs (tables, admits, scan_scalar), select.rs (records, startup, resolver), kernels_x86.rs (x86_64 kernels), test_support.rs (cfg(test) counters, path accounting, calibration). No function bodies changed; only pub(super) where a sibling or tests need an item.
