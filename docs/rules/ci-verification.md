@@ -32,12 +32,12 @@
 - **`windows-latest` is not one machine, so a green CI run's differential
   SIMD coverage is not a fixed quantity.** Four runs of one workflow inside
   an hour drew three processors and two different ISA tiers. Since the
-  `simd::` tests only exercise kernels the host supports, and `cargo test`
+  SIMD kernel tests only exercise kernels the host supports, and `cargo test`
   captures stdout, the first two runs covered AVX-512 or did not with nothing
   readable afterwards to tell the two apart — worse than a known gap, and the
   same failure as a workflow that never runs.
 
-  Fixed by making each run state its own scope: a CI step re-runs `simd::`
+  Fixed by making each run state its own scope: a CI step re-runs `width::scan::`
   with `--nocapture` so the log prints `kernels under test: [...] (tier ...)`.
   It paid for itself immediately by producing the fourth row above and
   refuting the inference in the second. **Quote that line, never the CPU
@@ -46,7 +46,9 @@
   **AVX-512 verification is local, by the owner's decision (2026-07-31)**, and
   CI is not to be extended to *require* it — the step above only reports what
   happened to be covered. The standing obligation is therefore to run
-  `cargo test -p sakura-core --lib -- simd:: --nocapture` on this machine
+  `cargo test -p sakura-core --lib -- width::scan:: --nocapture` on this machine
+  (before #206 Phase 3.3 the filter was `simd::`; a filter naming a moved
+  module matches zero tests and still exits 0, so check the count)
   before releasing anything that touches the kernels. Since production now
   keeps AVX-512 bench-only, confirm the printed `kernels under test` includes
   the scalar, AVX/SSSE3, AVX2, and all three AVX-512BW+VL threshold variants;

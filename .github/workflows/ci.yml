@@ -530,10 +530,12 @@ jobs:
 
       # Keep --nocapture so a failure names the exact host-supported kernel
       # that disagreed with the scalar reference. Successful output remains
-      # one PASS line like every other test gate.
+      # one PASS line like every other test gate. The filter is the module
+      # path of the tests (`width::scan::tests`); the `simd` re-export in
+      # lib.rs does not rename test paths, so `simd::` would match zero tests.
       - name: Exercise the SIMD kernels this runner supports
         shell: pwsh
-        run: "./ci/run-test-quiet.ps1 -Name 'SIMD kernel agreement' -Command { cargo test -p sakura-core --lib -- simd:: --nocapture }"
+        run: "./ci/run-test-quiet.ps1 -Name 'SIMD kernel agreement' -Command { cargo test -p sakura-core --lib -- width::scan:: --nocapture }"
 
       - name: Prove SIMD test runner exited
         if: always()
