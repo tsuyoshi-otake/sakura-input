@@ -2267,3 +2267,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - No other crate defines the format constants (SKRADIC/LOUD/MSP1/SBD1 grep: only sakura-core; dictc tests search for `SBD1` bytes only). `ImageVersion`, parse, validate, LOUDS, lookup, and detail stay in `mod.rs`.
 - `IRV-DICTIONARY-FORMAT` enters at `format.rs`, lists it in production beside `mod.rs`, and its semantic range is `format.rs` 1-87. Physical 5,202 -> 5,207 (+0.1%, the new header lines). Do not update `baseline.json`.
 - Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 tests listed) and `cargo test -p dictc` PASS, clippy `-D warnings` for both, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
+
+## 2026-09-15 Extract dictionary header and directory parsing into dictionary/parse.rs (#206)
+
+- `Dictionary::parse` plus `validate_directory` / `required_table` / `optional_table` / `directory_table` / `expect_fixed_count` move into `dictionary/parse.rs` as a second `impl Dictionary` block. Grep proved the five helpers have no caller outside parse and each other. The child module reaches the parent-private table views, byte readers, and table validators through `super::`, so no visibility widened.
+- The little-endian readers (`read_u16` 35 uses, `read_u32` 52, `to_usize` 35) stay in `mod.rs` because lookup, detail, and validate share them; moving them into parse would make lookup depend on parse.
+- Line ranges were spliced from one snapshot of the original (1-16, `mod parse;`, 17-359, 611-1790, 1873-end), so no later range went stale. mod.rs 2,107 -> 1,775; parse.rs 344.
+- `IRV-DICTIONARY-FORMAT` production adds `parse.rs` because a #109-type change now reads the header parser there; omitting it would hide reading. Physical 5,202 -> 5,219 (+0.3%). Do not update `baseline.json`.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 listed) and `cargo test -p dictc` PASS, clippy `-D warnings`, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
