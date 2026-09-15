@@ -3,7 +3,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use dictc::{
+use dictc_core::{
     attach_entry_details, compile_with_tables, extract_entry_details, merge_entries,
     parse_category_entries, parse_connection, parse_entries, parse_mozc_connection,
     parse_mozc_entries, wordnet::import_lmf_gzip, OptionalTables, SourceDetail, SourceEntry,
@@ -308,7 +308,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     }
     // Reviewed descriptions are now details. Strip leftover list notes so a
     // `[calibration]` overlay comment or a baked category tag cannot ship.
-    dictc::clear_candidate_list_annotations(&mut entries);
+    dictc_core::clear_candidate_list_annotations(&mut entries);
     let mut details = glossary_details(glossary_directory.as_deref(), &entries)?;
     let glossary_detail_count = details.len();
     let glossary_relations = RelationCounts::from_details(&details);
@@ -341,7 +341,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     if let Some(path) = detail_coverage_output.as_deref() {
         atomic_write(
             path,
-            &dictc::llm_detail_targets::details_coverage_tsv(&details)?,
+            &dictc_core::llm_detail_targets::details_coverage_tsv(&details)?,
         )?;
     }
     if let (Some(release_directory), Some(targets_directory), Some(report_path)) = (
@@ -349,14 +349,14 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         llm_targets_directory.as_deref(),
         llm_report_path.as_deref(),
     ) {
-        let targets = dictc::llm_detail_targets::load_committed_targets(targets_directory)
+        let targets = dictc_core::llm_detail_targets::load_committed_targets(targets_directory)
             .map_err(|error| format!("{}: {error}", targets_directory.display()))?;
-        let llm_text = dictc::llm_details::load_committed_release_jsonl(
+        let llm_text = dictc_core::llm_details::load_committed_release_jsonl(
             release_directory,
             targets_directory,
             &targets,
         )?;
-        let imported = dictc::llm_details::import_release_jsonl(
+        let imported = dictc_core::llm_details::import_release_jsonl(
             &release_directory.display().to_string(),
             &llm_text,
             &targets,
@@ -367,7 +367,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         let _suppressed_after_import = merge_details(&mut details, imported.details);
         atomic_write(
             report_path,
-            dictc::llm_details::report_json(imported.report).as_bytes(),
+            dictc_core::llm_details::report_json(imported.report).as_bytes(),
         )?;
     }
     if let Some(report) = wordnet_report.as_ref() {
@@ -389,17 +389,19 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let boundaries = match (mozc_id_def_path.as_deref(), mozc_segmenter_path.as_deref()) {
         (Some(id_def_path), Some(segmenter_path)) => {
             let id_source = id_def_path.display().to_string();
-            let features =
-                dictc::segmenter::parse_mozc_pos_features(&id_source, &read_utf8(id_def_path)?)
-                    .map_err(|error| error.to_string())?;
+            let features = dictc_core::segmenter::parse_mozc_pos_features(
+                &id_source,
+                &read_utf8(id_def_path)?,
+            )
+            .map_err(|error| error.to_string())?;
             let rules_source = segmenter_path.display().to_string();
-            let rules = dictc::segmenter::parse_mozc_segmenter_rules(
+            let rules = dictc_core::segmenter::parse_mozc_segmenter_rules(
                 &rules_source,
                 &read_utf8(segmenter_path)?,
             )
             .map_err(|error| error.to_string())?;
             Some(
-                dictc::segmenter::build_boundaries(&rules_source, &features, &rules)
+                dictc_core::segmenter::build_boundaries(&rules_source, &features, &rules)
                     .map_err(|error| error.to_string())?,
             )
         }
@@ -410,7 +412,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         mozc_variant_rule_path.as_deref(),
     ) {
         (Some(single_kanji_path), Some(variant_path)) => Some(
-            dictc::single_kanji::SingleKanjiTable::build(
+            dictc_core::single_kanji::SingleKanjiTable::build(
                 &single_kanji_path.display().to_string(),
                 &read_utf8(single_kanji_path)?,
                 &variant_path.display().to_string(),
@@ -534,11 +536,11 @@ fn glossary_details(
     for path in paths {
         let text = read_utf8(&path)?;
         terms.extend(
-            dictc::glossary::parse_part(&path.display().to_string(), &text)
+            dictc_core::glossary::parse_part(&path.display().to_string(), &text)
                 .map_err(|error| error.to_string())?,
         );
     }
-    Ok(dictc::glossary::detail_sources(&terms, entries))
+    Ok(dictc_core::glossary::detail_sources(&terms, entries))
 }
 
 fn merge_details(base: &mut Vec<SourceDetail>, overlay: Vec<SourceDetail>) -> usize {
@@ -572,7 +574,7 @@ fn merge_details(base: &mut Vec<SourceDetail>, overlay: Vec<SourceDetail>) -> us
 }
 
 fn wordnet_report_json(
-    report: &dictc::wordnet::ImportReport,
+    report: &dictc_core::wordnet::ImportReport,
     glossary_detail_count: usize,
     glossary_relations: RelationCounts,
     wordnet_detail_count: usize,

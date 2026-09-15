@@ -4,12 +4,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use dictc::category::DictionaryCategory;
-use dictc::llm_detail_targets::{
+use dictc_core::category::DictionaryCategory;
+use dictc_core::llm_detail_targets::{
     coverage_from_annotated_entries, file_sha256, parse_allowlist_tsv, parse_coverage_tsv,
     select_targets, write_batches, CategorizedSourceEntry, CoveredIdentity,
 };
-use dictc::{parse_category_entries, parse_entries};
+use dictc_core::{parse_category_entries, parse_entries};
 
 #[derive(Clone, Copy)]
 enum InputFormat {

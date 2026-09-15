@@ -13,6 +13,7 @@ name = "sakura_logon"
 path = "src/main.rs"
 
 [dependencies]
+sakura-install-maintenance.workspace = true
 sakura-reg.workspace = true
 
 [lints]

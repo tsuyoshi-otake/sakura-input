@@ -76,15 +76,15 @@ fn dispatcher_with_probe_conversion_fixture() -> Dispatcher {
         "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
         "\u{304b}\u{306a}\t\u{4eee}\u{540d}\t0\t0\t100\t100\t\tprobe fixture\n",
     );
-    let entries = dictc::parse_entries("probe-conversion.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("probe-conversion.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "probe-conversion-matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("dictionary image")
             .into_boxed_slice(),
     );

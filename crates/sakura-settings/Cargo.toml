@@ -24,6 +24,7 @@ sakura-store.workspace = true
 sakura-values.workspace = true
 sakura-proto.workspace = true
 sakura-reg.workspace = true
+sakura-user-prefs.workspace = true
 windows-core.workspace = true
 
 [dependencies.windows]

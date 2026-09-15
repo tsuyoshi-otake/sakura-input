@@ -28,10 +28,18 @@ flowchart TD
   engine. Settings must not import engine to inspect persistent records.
 - `sakura-rerank-proto` owns the complete SKNR/SKNS v1 framing contract; worker model
   loading and engine ranking/fallback policy remain outside it.
+- `sakura-reg` owns GUIDs, registration, and registry primitives. `sakura-user-prefs`
+  owns per-user AI preferences and the API-key store; `sakura-install-maintenance`
+  owns logon/cleanup tasks, payload cleanup, and WER policy. Neither may be imported
+  by `sakura-reg`.
 - TSF owns host COM lifetime; its `session/` state layer must remain Windows-free.
   Renderer owns drawing, not candidate ordering or input semantics.
 - Oracles are development-only. Context research is feature-gated and cannot
   become a general-purpose crate for unrelated code.
+- Offline tools are root workspace members (`tools/candidate-sweep`,
+  `tools/conversion-eval`, `tools/ime-eval`). Only `tools/candidate-snapshot`
+  stays a nested workspace, because it is copied into historical release
+  worktrees; `ci/dep-policy.ps1` audits its `Cargo.lock` (R11).
 
 ## Dependency rules
 

@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use dictc::{compile, parse_connection, parse_entries};
+use dictc_core::{compile, parse_connection, parse_entries};
 use sakura_core::Preferences;
 use sakura_engine::dictionary::ConversionService;
 use sakura_engine::dispatch::{Dispatcher, Reply};

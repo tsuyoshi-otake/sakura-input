@@ -140,15 +140,15 @@ fn conversion_fixture() -> Arc<ConversionService> {
         )
         .expect("write fixture entry");
     }
-    let entries = dictc::parse_entries("conversion.tsv", &source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("conversion.tsv", &source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -168,15 +168,15 @@ fn numeric_focus_conversion_dispatcher() -> Dispatcher {
         "じょうい\t上位候補三\t0\t0\t300\t300\t\tfixture\n",
         "ちょっきん\t直近\t0\t0\t100\t100\t\tprimary\n",
     );
-    let entries = dictc::parse_entries("numeric-focus.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("numeric-focus.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -194,15 +194,15 @@ fn visible_projection_conversion_dispatcher() -> Dispatcher {
         "だいさんばん\t第３番\t0\t0\t200\t200\t\twidth duplicate\n",
         "だいさんばん\t別候補\t0\t0\t300\t300\t\tsecond visible candidate\n",
     );
-    let entries = dictc::parse_entries("visible-projection.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("visible-projection.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "visible-projection-matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let details = [
-        dictc::SourceDetail {
+        dictc_core::SourceDetail {
             reading: "だいさんばん".into(),
             surface: "第3番".into(),
             left_id: 0,
@@ -210,7 +210,7 @@ fn visible_projection_conversion_dispatcher() -> Dispatcher {
             description: "Stable first representative detail.".into(),
             relations: vec![],
         },
-        dictc::SourceDetail {
+        dictc_core::SourceDetail {
             reading: "だいさんばん".into(),
             surface: "別候補".into(),
             left_id: 0,
@@ -220,7 +220,7 @@ fn visible_projection_conversion_dispatcher() -> Dispatcher {
         },
     ];
     let image = Box::leak(
-        dictc::compile_with_details(&entries, &matrix, &details)
+        dictc_core::compile_with_details(&entries, &matrix, &details)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -238,15 +238,15 @@ fn raw_repair_conversion_dispatcher() -> Dispatcher {
         "ないか\t内科\t0\t0\t120\t120\t\tcompound segment\n",
         "にいく\tに行く\t0\t0\t120\t120\t\tcompound segment\n",
     );
-    let entries = dictc::parse_entries("raw-repair-dispatch.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("raw-repair-dispatch.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "raw-repair-dispatch-matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -1519,18 +1519,18 @@ fn detail_conversion_fixture() -> Arc<ConversionService> {
         "a\tA\t0\t0\t100\t100\t\tfixture\n",
         "b\tB\t0\t0\t100\t100\t\tfixture\n",
     );
-    let entries = dictc::parse_entries("details-conversion.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("details-conversion.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "details-conversion-matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile_with_details(
+        dictc_core::compile_with_details(
             &entries,
             &matrix,
-            &[dictc::SourceDetail {
+            &[dictc_core::SourceDetail {
                 reading: "kana".into(),
                 surface: "Kana".into(),
                 left_id: 0,
@@ -1591,8 +1591,8 @@ fn shifted_ascii_english_conversion_dispatcher() -> Dispatcher {
             "claude\tClaude Code\t0\t0\t150\t150\tit\tfixture\n",
             "openai\tOpenAI\t0\t0\t100\t100\tit\tfixture\n",
         );
-    let mut entries = dictc::parse_entries("shifted-ascii.tsv", source).expect("entries");
-    let mut curated = dictc::parse_entries(
+    let mut entries = dictc_core::parse_entries("shifted-ascii.tsv", source).expect("entries");
+    let mut curated = dictc_core::parse_entries(
         "data/curated-terms.tsv",
         include_str!("../../../data/curated-terms.tsv"),
     )
@@ -1602,14 +1602,14 @@ fn shifted_ascii_english_conversion_dispatcher() -> Dispatcher {
         entry.right_id = 0;
     }
     entries.extend(curated);
-    let matrix = dictc::parse_connection(
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -1621,15 +1621,15 @@ fn shifted_ascii_english_conversion_dispatcher() -> Dispatcher {
 
 fn prediction_dispatcher() -> (Dispatcher, crate::prediction::PredictionRuntime) {
     let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t1\t100\t100\tpredict\tcommon\nかなた\t彼方\t0\t2\t200\t200\tpredict\tdirection\nかながわ\t神奈川\t0\t3\t300\t300\tpredict\tprefecture\n";
-    let entries = dictc::parse_entries("prediction.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("prediction.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t4\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -1659,15 +1659,15 @@ fn phase_one_prediction_conversion() -> Arc<ConversionService> {
 }
 
 fn prediction_conversion_from_source(file_name: &str, source: &str) -> Arc<ConversionService> {
-    let entries = dictc::parse_entries(file_name, source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries(file_name, source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -1752,15 +1752,15 @@ fn phase_one_learning_path(name: &str) -> PathBuf {
 
 fn segmented_conversion_dispatcher() -> Dispatcher {
     let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nきょう\t今日\t0\t0\t100\t100\t\tcommon\nきょう\t京\t0\t0\t200\t200\t\talternative\nです\tです\t0\t0\t100\t100\t\tcommon\nです\tDESU\t0\t0\t200\t200\tit\tIT\n";
-    let entries = dictc::parse_entries("segments.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("segments.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -1771,15 +1771,15 @@ fn segmented_conversion_dispatcher() -> Dispatcher {
 
 fn contextual_conversion_dispatcher() -> Dispatcher {
     let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nいしゃ\t医者\t3\t3\t100\t100\t\tcontext source\nに\tに\t3\t3\t100\t100\t\tparticle\nいった\t言った\t1\t1\t50\t50\t\tgeneric\nいった\t行った\t2\t2\t100\t100\t\tcontextual\nおわり\t終わり。\t3\t3\t100\t100\t\tboundary\n";
-    let entries = dictc::parse_entries("context.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("context.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t4\ndefault\t0\ncost\t3\t1\t1000\ncost\t3\t2\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -6735,15 +6735,15 @@ fn ms_ime_predicting_named_keys_do_not_leak_to_the_host_application() {
 #[test]
 fn atok_predicting_muhenkan_applies_a_temporary_katakana_transform_without_leaking() {
     let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t1\t100\t100\tpredict\tcommon\nかなた\t彼方\t0\t2\t200\t200\tpredict\tdirection\nかながわ\t神奈川\t0\t3\t300\t300\tpredict\tprefecture\n";
-    let entries = dictc::parse_entries("prediction.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("prediction.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t4\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -8868,15 +8868,15 @@ fn oversized_numbered_candidate_dispatcher() -> Dispatcher {
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n{first_reading}\t短\t0\t0\t100\t100\t\tshort-dictionary-surface\nです\t{second_surface}\t0\t0\t100\t100\t\tlarge-default\n"
         );
     let entries =
-        dictc::parse_entries("numbered-candidate-overflow.tsv", &source).expect("entries");
-    let matrix = dictc::parse_connection(
+        dictc_core::parse_entries("numbered-candidate-overflow.tsv", &source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );
@@ -9038,15 +9038,16 @@ fn oversized_render_segment_dispatcher() -> Dispatcher {
     let source = format!(
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nきょう\tA\t0\t0\t100\t100\t\tc0\nきょう\tB\t0\t0\t200\t200\t\tc1\nきょう\tC\t0\t0\t300\t300\t\tc2\nきょう\tD\t0\t0\t400\t400\t\tc3\nです\t{huge_ascii}\t0\t0\t100\t100\t\thuge-only\n"
         );
-    let entries = dictc::parse_entries("render-segment-overflow.tsv", &source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries =
+        dictc_core::parse_entries("render-segment-overflow.tsv", &source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );

@@ -1,0 +1,33 @@
+[package]
+name = "sakura-conversion-eval"
+description = "Offline conversion evaluators: corpus accuracy, reranker offline eval, and compound homophone survey."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "corpus-eval"
+path = "src/bin/corpus_eval.rs"
+
+[[bin]]
+name = "neural-eval"
+path = "src/bin/neural_eval.rs"
+
+[[bin]]
+name = "compound-homophone-scan"
+path = "src/bin/compound_homophone_scan.rs"
+
+[dependencies]
+sakura-core = { path = "../../crates/sakura-core" }
+sakura-proto = { path = "../../crates/sakura-proto" }
+sakura-rerank-proto = { path = "../../crates/sakura-rerank-proto" }
+# neural-eval report serialization; offline only (ci/dep-policy.ps1).
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.140"
+
+[lints]
+workspace = true

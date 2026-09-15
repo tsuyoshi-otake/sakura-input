@@ -182,15 +182,15 @@ fn english_conversion_dispatcher() -> Dispatcher {
         "claude\tClaude Code\t0\t0\t150\t150\tit\tfixture\n",
         "openai\tOpenAI\t0\t0\t100\t100\tit\tfixture\n",
     );
-    let entries = dictc::parse_entries("shift-latin-order.tsv", source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("shift-latin-order.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("image")
             .into_boxed_slice(),
     );

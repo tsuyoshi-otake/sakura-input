@@ -15,7 +15,7 @@ from the planned target; an analysis document does not mean the target exists.
 | Engine state, ranking, history | `crates/sakura-engine` | `docs/architecture/analysis/engine.md` | FUTURE target documented |
 | TSF/COM and edit sessions | `crates/sakura-tsf` | `docs/architecture/analysis/tsf.md` | FUTURE target documented |
 | Renderer and settings | `crates/sakura-renderer`, `crates/sakura-settings` | `docs/architecture/analysis/renderer-settings.md` | FUTURE target documented |
-| Dictionary, contracts, tools | `crates/dictc`, `tools`, `data` | `docs/architecture/analysis/contracts-dictc-tools.md` | FUTURE target documented |
+| Dictionary, contracts, tools | `crates/dictc-core`, `crates/dictc`, `tools`, `data` | `docs/architecture/analysis/contracts-dictc-tools.md` | FUTURE target documented |
 | Documentation, verification, CI | `docs`, `verification`, `ci`, `.github/workflows` | `docs/architecture/analysis/docs-verification-ci.md` | FUTURE target documented |
 | Cross-layer refactor | all rows above | `docs/architecture/agent-refactor-plan.md` | FUTURE phased plan |
 
@@ -46,6 +46,32 @@ Read only the decision files relevant to the task:
 Consult `.claude/memory/rules.md` for verified rules relevant to the code or
 command being changed. These rules include machine-specific Cargo constraints,
 Windows process behavior, performance evidence, and state-machine lessons.
+
+## Merging several PRs (owner instruction, 2026-09-15)
+
+To save time, do not merge a series of ready PRs one by one through CI. The
+`main` ruleset requires strict up-to-date checks, so every merge makes the next
+PR stale and costs another full CI run (six PRs took about 2 hours). Whenever
+possible, integrate locally instead:
+
+1. In a scratchpad worktree from `origin/main`, merge each PR head in order.
+   Resolve `.claude/memory/journal.md` by keeping both sides; stop on any other
+   conflict and resolve it by hand. Check for leftover conflict markers.
+2. Run the CI gates locally on the integrated tree: fmt check, clippy
+   `-D warnings` and wrapped `cargo test --workspace` with the `release.yml`
+   feature set, `ci/check-dependency-rules.ps1`, `ci/check-facade.ps1`,
+   `ci/dep-policy.ps1` (with `-SelfTest`), IRV compare, release build with
+   `ci/check-dll-size.ps1`, and `ci/check-process-clean.ps1`.
+3. Push the integrated branch and open one PR for it. The ruleset has no bypass
+   actors, so a direct push to `main` is rejected. That PR needs only one CI run.
+   After it merges, PRs whose heads are contained in `main` show as merged;
+   then delete their branches.
+
+Push a release tag only after the commit is on `main`. A tag push starts
+`release.yml` even when the tagged commit is not on `main`.
+
+Tests rewrite tracked `verification/` files; commit them only when
+`git diff --ignore-cr-at-eol` shows a real change.
 
 ## Stable product floor
 

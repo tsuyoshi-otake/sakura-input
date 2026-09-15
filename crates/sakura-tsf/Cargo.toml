@@ -27,6 +27,7 @@ bench = false
 sakura-ipc.workspace = true
 sakura-proto.workspace = true
 sakura-reg.workspace = true
+sakura-user-prefs.workspace = true
 windows-core.workspace = true
 
 [dependencies.windows]

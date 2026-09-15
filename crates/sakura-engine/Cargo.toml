@@ -11,7 +11,7 @@ authors.workspace = true
 [features]
 default = []
 context-research = ["dep:sakura-context-research"]
-dev-fixtures = ["dep:dictc"]
+dev-fixtures = ["dep:dictc-core"]
 
 [[bin]]
 name = "sakura_engine"
@@ -58,7 +58,7 @@ path = "tests/zero_alloc_dispatch.rs"
 required-features = ["dev-fixtures"]
 
 [dependencies]
-dictc = { path = "../dictc", optional = true }
+dictc-core = { path = "../dictc-core", optional = true }
 sakura-rerank-proto.workspace = true
 sakura-core.workspace = true
 sakura-context-research = { workspace = true, optional = true }
@@ -66,7 +66,7 @@ sakura-ai-proto.workspace = true
 sakura-ipc.workspace = true
 sakura-context-proto.workspace = true
 sakura-proto.workspace = true
-sakura-reg.workspace = true
+sakura-user-prefs.workspace = true
 sakura-store.workspace = true
 sakura-values.workspace = true
 
