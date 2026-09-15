@@ -1,6 +1,6 @@
 # Atomic-condition (C2) coverage — Space-key-dispatch oracle
 
-Scope: `crates/sakura-engine/src/space_key_dispatch_oracle.rs` predicates in `atomic_conditions`.
+Scope: `crates/sakura-oracles/src/space_key_dispatch_oracle.rs` predicates in `atomic_conditions`.
 This is atomic-condition polarity coverage of the independent oracle, not MC/DC of `dispatch.rs`.
 
 | condition | false | true |
