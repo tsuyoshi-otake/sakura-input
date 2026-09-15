@@ -10,7 +10,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use dictc::{
+use dictc_core::{
     entries_to_category_tsv, merge_entries, parse_category_entries, parse_entries, SourceEntry,
 };
 use sakura_core::dictionary::EntryFlags;

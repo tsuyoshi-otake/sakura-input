@@ -8,7 +8,7 @@
 //! exactly. The ignored target takes the same shard/iteration environment
 //! variables as the other long campaigns.
 
-use dictc::{
+use dictc_core::{
     entries_to_tsv, parse_connection, parse_mozc_connection, parse_mozc_entries, ConnectionMatrix,
 };
 use sakura_core::dictionary::EntryFlags;

@@ -1,4 +1,4 @@
-use dictc::{parse_mozc_entries, MozcTrimmer, TrimPolicy};
+use dictc_core::{parse_mozc_entries, MozcTrimmer, TrimPolicy};
 
 #[test]
 fn trimmer_filters_deduplicates_and_caps_each_reading_deterministically() {

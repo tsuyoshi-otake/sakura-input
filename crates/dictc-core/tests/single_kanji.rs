@@ -7,8 +7,8 @@
 //! contains that a naive encoder would corrupt — characters outside the BMP,
 //! and readings whose byte order differs from their scalar order.
 
-use dictc::single_kanji::SingleKanjiTable;
-use dictc::{compile, compile_with_tables, parse_connection, parse_entries, OptionalTables};
+use dictc_core::single_kanji::SingleKanjiTable;
+use dictc_core::{compile, compile_with_tables, parse_connection, parse_entries, OptionalTables};
 use sakura_core::dictionary::{Dictionary, SingleKanjiVariantKind};
 
 const ENTRIES: &str = "# license: BSD-3-Clause\n\

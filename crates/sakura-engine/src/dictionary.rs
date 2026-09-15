@@ -544,19 +544,19 @@ mod tests {
     }
 
     fn image() -> &'static [u8] {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t0\t100\t100\tit\tIT用語\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         )
@@ -643,15 +643,15 @@ mod tests {
         for index in 0..12 {
             tsv.push_str(&format!("あき\t秋{index}\t0\t0\t{index}\t{index}\t\t\n"));
         }
-        let entries = dictc::parse_entries("fixture.tsv", &tsv).expect("entries");
-        let matrix = dictc::parse_connection(
+        let entries = dictc_core::parse_entries("fixture.tsv", &tsv).expect("entries");
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -693,19 +693,19 @@ mod tests {
 
     #[test]
     fn raw_repair_admits_full_system_only_completion_and_preserves_direct() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nないか\t内科\t0\t0\t1\t1\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -797,19 +797,19 @@ mod tests {
 
     #[test]
     fn raw_repair_input_preserves_mixed_exact_only_direct_before_repair() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nないk\tHOSTILE\t0\t0\t0\t0\t\t\nないか\t内科\t0\t0\t1\t1\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -873,19 +873,19 @@ mod tests {
 
     #[test]
     fn classified_exact_top1_keeps_literal_at_candidate_zero() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nesp32\tSystemExact\t0\t0\t1\t1\t\t\nesp32\tSpellingExact\t0\t0\t0\t0\tcorrection\t\nesp\tPartial\t0\t0\t0\t0\t\t\n2\tGeneratedLike\t0\t0\t0\t0\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1011,19 +1011,19 @@ mod tests {
 
     #[test]
     fn input_repair_recovers_extra_n_and_skips_when_master_is_off() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nこんにちは\t今日は\t0\t0\t100\t100\t\t\nこんんにちは\t誤\t0\t0\t50\t50\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1062,19 +1062,19 @@ mod tests {
 
     #[test]
     fn conversion_rejects_advanced_reading_only_repair_but_keeps_rule_repairs() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nないか\t内科\t0\t0\t1\t1\t\t\nこんにちは\t今日は\t0\t0\t100\t100\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1109,19 +1109,19 @@ mod tests {
 
     #[test]
     fn english_spelling_hint_finds_katakana_loanwords() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nアップル\tアップル\t0\t0\t100\t100\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1142,19 +1142,19 @@ mod tests {
 
     #[test]
     fn spelling_correction_entries_follow_the_unified_admission_gate() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nあい\t藍\t0\t0\t50\t50\tcorrection\t\nあい\t愛\t0\t0\t100\t100\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1217,19 +1217,19 @@ mod tests {
 
     #[test]
     fn commit_repair_hints_only_cover_the_full_query_span() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nこんにちは\t今日は\t0\t0\t100\t100\t\t\nにちは\t日は\t0\t0\t10\t10\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1296,15 +1296,15 @@ mod tests {
             tsv.push_str(&format!("あい\t藍{index}\t0\t0\t1\t1\tcorrection\t\n"));
         }
         tsv.push_str("あい\t愛\t0\t0\t100\t100\t\t\n");
-        let entries = dictc::parse_entries("fixture.tsv", &tsv).expect("entries");
-        let matrix = dictc::parse_connection(
+        let entries = dictc_core::parse_entries("fixture.tsv", &tsv).expect("entries");
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1336,7 +1336,7 @@ mod tests {
     fn single_segment_repair_budget_tracks_admitted_exact_edges() {
         use sakura_core::ConversionMethod;
 
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
@@ -1344,13 +1344,13 @@ mod tests {
         .expect("matrix");
 
         // exact 0: only the repaired reading is in the dictionary.
-        let zero = dictc::parse_entries(
+        let zero = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nおはよう\tお早う\t0\t0\t50\t50\t\t\n",
         )
         .expect("entries");
         let zero_bytes = Box::leak(
-            dictc::compile(&zero, &matrix)
+            dictc_core::compile(&zero, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1369,13 +1369,13 @@ mod tests {
         assert!(repaired, "exact 0 must leave full repair budget");
 
         // exact 1: one exact surface plus a repair target both fit.
-        let one = dictc::parse_entries(
+        let one = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nおはよ\t御はよ\t0\t0\t80\t80\t\t\nおはよう\tお早う\t0\t0\t50\t50\t\t\n",
         )
         .expect("entries");
         let one_bytes = Box::leak(
-            dictc::compile(&one, &matrix)
+            dictc_core::compile(&one, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1407,9 +1407,9 @@ mod tests {
             ));
         }
         max_tsv.push_str("おはよう\tお早う\t0\t0\t1\t1\t\t\n");
-        let max = dictc::parse_entries("fixture.tsv", &max_tsv).expect("entries");
+        let max = dictc_core::parse_entries("fixture.tsv", &max_tsv).expect("entries");
         let max_bytes = Box::leak(
-            dictc::compile(&max, &matrix)
+            dictc_core::compile(&max, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1434,19 +1434,19 @@ mod tests {
 
     #[test]
     fn suppress_skip_blocks_every_repair_source_for_the_same_reading() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nあい\t藍\t0\t0\t10\t10\tcorrection\t\nあい\t愛\t0\t0\t100\t100\t\t\nおはよう\tお早う\t0\t0\t20\t20\t\t\nこんにちは\t今日は\t0\t0\t30\t30\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         );
@@ -1539,19 +1539,19 @@ mod tests {
 
     #[test]
     fn converting_today_offers_local_reiwa_and_gregorian_date_surfaces() {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "today.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nきょう\t今日\t0\t0\t100\t100\t\tcommon\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         let bytes = Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("image")
                 .into_boxed_slice(),
         );

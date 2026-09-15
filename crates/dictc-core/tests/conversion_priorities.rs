@@ -10,7 +10,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use dictc::{merge_entries, parse_entries, SourceEntry};
+use dictc_core::{merge_entries, parse_entries, SourceEntry};
 use sakura_core::dictionary::EntryFlags;
 
 /// Upstream files every Arabic digit under one numeral class.

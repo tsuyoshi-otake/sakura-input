@@ -421,7 +421,7 @@ pub fn test_dictionary(local_app_data: &Path) -> PathBuf {
     let directory = local_app_data.join("engine-fixture");
     std::fs::create_dir(&directory).expect("create owned fixture directory");
     let path = directory.join("system.dic");
-    let mut entries = dictc::parse_entries(
+    let mut entries = dictc_core::parse_entries(
         "engine-fixture.tsv",
         concat!(
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
@@ -433,7 +433,7 @@ pub fn test_dictionary(local_app_data: &Path) -> PathBuf {
     )
     .expect("parse engine fixture entries");
     entries.extend(
-        dictc::parse_entries(
+        dictc_core::parse_entries(
             "engine-shifted-english.tsv",
             concat!(
                 "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
@@ -446,13 +446,13 @@ pub fn test_dictionary(local_app_data: &Path) -> PathBuf {
         )
         .expect("parse shifted English fixture entries"),
     );
-    let matrix = dictc::parse_connection(
+    let matrix = dictc_core::parse_connection(
         "engine-fixture-matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("parse engine fixture matrix");
-    let image = dictc::compile(&entries, &matrix).expect("compile engine fixture dictionary");
+    let image = dictc_core::compile(&entries, &matrix).expect("compile engine fixture dictionary");
     std::fs::write(&path, image).expect("write owned fixture dictionary");
     path
 }

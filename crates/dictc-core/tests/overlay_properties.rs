@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use dictc::{
+use dictc_core::{
     compile, entries_to_category_tsv, entries_to_tsv, merge_entries, parse_category_entries,
     parse_connection, parse_entries, SourceEntry,
 };
@@ -435,7 +435,7 @@ fn rank(candidates: &[String], surface: &str, context: &str) -> usize {
 
 fn top_candidates(
     entries: &[SourceEntry],
-    matrix: &dictc::ConnectionMatrix,
+    matrix: &dictc_core::ConnectionMatrix,
     reading: &str,
 ) -> Vec<String> {
     let image = compile(entries, matrix).expect("fixture image");

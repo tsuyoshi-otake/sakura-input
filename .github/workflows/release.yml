@@ -154,7 +154,7 @@ jobs:
         shell: pwsh
         run: |
           $env:SAKURA_PHASE2_DICTIONARY = Join-Path $env:GITHUB_WORKSPACE 'artifacts/release/system.dic'
-          ./ci/run-test-quiet.ps1 -Name 'non-initial allomorph conversion gate' -Command { cargo test -p dictc --test conversion real_dictionary_balances_non_initial_fragments_and_productive_bound_forms -- --ignored --nocapture }
+          ./ci/run-test-quiet.ps1 -Name 'non-initial allomorph conversion gate' -Command { cargo test -p dictc-core --test conversion real_dictionary_balances_non_initial_fragments_and_productive_bound_forms -- --ignored --nocapture }
 
       - name: Gate general Japanese surface coverage
         shell: pwsh

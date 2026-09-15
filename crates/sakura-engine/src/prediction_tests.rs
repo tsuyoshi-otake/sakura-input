@@ -19,15 +19,15 @@ fn prediction_fixture_conversion(rows: &str) -> Arc<ConversionService> {
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
         );
     source.push_str(rows);
-    let entries = dictc::parse_entries("fixture.tsv", &source).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("fixture.tsv", &source).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let bytes = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("compile")
             .into_boxed_slice(),
     );
@@ -926,19 +926,19 @@ fn prediction_limits_displayed_history_candidates_without_trimming_retention() {
 
 #[test]
 fn spelling_correction_follows_the_unified_prediction_gate() {
-    let entries = dictc::parse_entries(
+    let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nあい\t藍\t0\t0\t10\t1\tcorrection,predict\t\nあい\t愛\t0\t0\t100\t50\tpredict\t\nあいう\t愛う\t0\t0\t90\t40\tpredict\t\n",
         )
         .expect("entries");
-    let matrix = dictc::parse_connection(
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let bytes = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("compile")
             .into_boxed_slice(),
     );
@@ -1040,15 +1040,15 @@ fn gated_spelling_correction_does_not_pollute_prediction_budget() {
             10 + index
         ));
     }
-    let entries = dictc::parse_entries("fixture.tsv", &tsv).expect("entries");
-    let matrix = dictc::parse_connection(
+    let entries = dictc_core::parse_entries("fixture.tsv", &tsv).expect("entries");
+    let matrix = dictc_core::parse_connection(
         "matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("matrix");
     let bytes = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("compile")
             .into_boxed_slice(),
     );

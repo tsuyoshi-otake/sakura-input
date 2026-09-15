@@ -254,7 +254,7 @@ if ($offenders.Count -gt 0) {
 
 foreach ($crate in $RuntimeCrates) {
     # Dev-dependencies compile test fixtures (the engine intentionally uses
-    # dictc there) but cannot enter the shipping runtime binary.
+    # dictc-core there) but cannot enter the shipping runtime binary.
     $tree = & cargo tree --locked -p $crate --edges normal --prefix none 2>$null
     if ($LASTEXITCODE -ne 0) {
         throw "could not inspect resolved dependency graph for runtime crate '$crate'"

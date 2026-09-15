@@ -5,8 +5,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use dictc::glossary::{parse_part, ImportResult, Importer, OverlayDefaults};
-use dictc::{entries_to_tsv, parse_mozc_entries, MOZC_UPSTREAM_COMMIT};
+use dictc_core::glossary::{parse_part, ImportResult, Importer, OverlayDefaults};
+use dictc_core::{entries_to_tsv, parse_mozc_entries, MOZC_UPSTREAM_COMMIT};
 
 const GLOSSARY_REPOSITORY: &str =
     "https://github.com/systemexe-research-and-development/smile-chat";
