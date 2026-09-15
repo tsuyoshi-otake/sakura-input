@@ -2296,3 +2296,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Change: moved `Dictionary::detail_at` and `impl DictionaryDetail` (Issue #30 reader over DIDX/DREC/DREL/DTOF/DTXT) from `dictionary/mod.rs` into `dictionary/detail.rs`. No visibility widened (child module reaches private fields/readers via `super::`). mod.rs 1,154 -> 989 lines; detail.rs 178 lines. Branch `claude/phase32-dictionary-detail`, stacked on PR #227.
 - Verification: clippy -D warnings, wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5262 (+1.2%) PASS, check-process-clean PASS.
 - Learning: my first module doc named the detail tables DETI/DETR/DETT from memory; `format.rs` defines DIDX/DREC/DREL/DTOF/DTXT. Take table tags in docs from the constants by grep, not recall.
+
+## 2026-09-15 Phase 3.2: extract dictionary lookup queries into dictionary/lookup.rs (#206)
+
+- Change: moved bunsetsu/connection/single-kanji/trie-search/prediction/visitor/surface/annotation queries from `dictionary/mod.rs` into `dictionary/lookup.rs` (522 lines). mod.rs keeps shared types, count accessors, `text_record`/`entry` (used by lookup and validate) and byte readers: 989 -> 480 lines. Leaf layout format/parse/validate/louds/lookup/detail is now complete. Branch `claude/phase32-dictionary-lookup`, stacked on detail branch.
+- Verification: clippy -D warnings, wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5275 (1.4%) PASS, check-process-clean PASS.
+- Learning: splice header line numbers shifted because `cargo fmt` reordered `mod` items; the boundary assertion stopped the cut. Locate header anchors by grep, not by remembered line number. Also, an earlier Edit to benchmarks.json left `"detail.rs","mod.rs"` without a space; fixed in this commit.
