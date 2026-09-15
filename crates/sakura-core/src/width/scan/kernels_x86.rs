@@ -7,7 +7,7 @@
 
 use super::lut::{scan_scalar, BIT_LUT};
 #[cfg(test)]
-use super::test_support::note_avx_ssse3_xmm_call;
+use super::testing::note_avx_ssse3_xmm_call;
 use super::{Avx512ZmmThreshold, Lut};
 
 /// 16 bytes at a time — the x86-64 floor (DESIGN 3.2).
