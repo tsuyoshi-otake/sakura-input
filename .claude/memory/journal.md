@@ -2326,6 +2326,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: run-test-quiet SIMD kernel agreement PASS; IRV PASS; process-clean clean.
 - Learning: when moving a module, grep CI, scripts and rules for test filters naming the old path, and compare `--list` counts before and after. Exit 0 does not prove any test ran.
 
+## 2026-09-15 Phase 3.4 romaji split (#206)
+- Change: romaji.rs -> romaji/{mod,table,fsm,replay,completion}.rs; Table methods spread across per-file impl blocks; tests moved beside.
+- Iteration: include_str! path fix belonged to mod.rs (DEFAULT_TABLE stayed there); completion reads ReplayTrace::output so that field became pub(super); tests needed Overflow under cfg(test).
+- Verification: clippy -D warnings core+engine; cargo test -p sakura-core (lib+integration incl. zero_alloc) PASS; 299 lib tests listed (unchanged, 35 romaji); dependency rules PASS; IRV PASS; process-clean clean.
+- Learning: the split script chk() prefix match accepts any line for an empty expected string; assert blank separator lines with a separate exact check.
 ## 2026-09-15 Phase 3.4 preferences split (#206)
 - Change: preferences.rs -> preferences/{mod,model,profiles,parse,serialize}.rs; tests moved beside.
 - Iteration: compiler-driven import trimming; tests needed pub(super) on NotationStyle::payload, parse_punctuation, mode_name, punctuation_name plus cfg(test) re-imports of width/values types that the old file imported at top level.
