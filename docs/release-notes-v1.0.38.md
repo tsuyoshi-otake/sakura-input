@@ -18,7 +18,7 @@ VS Codeクラッシュの原因特定や完全な解消を示すリリースで�
 
 ## 導入方法
 
-このReleaseはowner承認済みのAuthenticode未署名版です。Windowsには「不明な発行元」と表示されます。GitHub Releaseから取得した `sakura_setup.exe` のSHA-256を `release-manifest-v2.txt` と照合して、手動インストールしてください。Sakura固有のmanifest署名は、Windowsのコード署名とは異なります。未署名版は自動更新で取得・実行されません。
+このReleaseはowner承認済みのAuthenticode未署名版です。Windowsには「不明な発行元」と表示されます。GitHub Releaseから取得した `sakura_setup.exe` のSHA-256を `release-manifest-v2.txt` と照合して、手動インストールしてください。Sakura固有のmanifest署名は、Windowsのコード署名とは異なります。（2026-09-15訂正）自動更新では、固定公開鍵によるSakura manifest署名とinstallerのSHA-256を検証します。manifestが `authenticode=unsigned` を宣言し、installerが正確に未署名である場合に限り、この未署名版も更新として導入されます。以前の「未署名版は自動更新で取得・実行されません」という記載は誤りでした。
 
 ## 対応環境
 
