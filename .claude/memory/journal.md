@@ -2331,6 +2331,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Iteration: include_str! path fix belonged to mod.rs (DEFAULT_TABLE stayed there); completion reads ReplayTrace::output so that field became pub(super); tests needed Overflow under cfg(test).
 - Verification: clippy -D warnings core+engine; cargo test -p sakura-core (lib+integration incl. zero_alloc) PASS; 299 lib tests listed (unchanged, 35 romaji); dependency rules PASS; IRV PASS; process-clean clean.
 - Learning: the split script chk() prefix match accepts any line for an empty expected string; assert blank separator lines with a separate exact check.
+## 2026-09-15 Phase 3.4 preferences split (#206)
+- Change: preferences.rs -> preferences/{mod,model,profiles,parse,serialize}.rs; tests moved beside.
+- Iteration: compiler-driven import trimming; tests needed pub(super) on NotationStyle::payload, parse_punctuation, mode_name, punctuation_name plus cfg(test) re-imports of width/values types that the old file imported at top level.
+- Verification: clippy -D warnings core+engine+settings; core lib 299 tests listed (unchanged, 30 preferences); settings tests PASS; dependency rules PASS; IRV PASS; process-clean clean.
+- Process note: PR #230 merge was refused as BEHIND main (repo requires up-to-date head even without classic branch protection). A `;` after the failed merge still ran `git branch -D`; chain post-merge cleanup with `&&` only.
 ## 2026-09-15 Phase 3.4 keymap split (#206)
 - Change: keymap.rs -> keymap/{mod,vocabulary,key_spec}.rs; tests moved beside. benchmarks.json IRV-ENGINE-KEY-MODE lists the three files.
 - Symptom: the planned name config.rs shadowed crate::config inside keymap; tests calling config::parse failed with E0425. Also Trigger is used by non-test KeyMap::find, so a cfg(test)-only import failed.
