@@ -29,14 +29,6 @@ name = "inflection-expand"
 path = "src/bin/inflection_expand.rs"
 
 [[bin]]
-name = "corpus-eval"
-path = "src/bin/corpus_eval.rs"
-
-[[bin]]
-name = "neural-eval"
-path = "src/bin/neural_eval.rs"
-
-[[bin]]
 name = "category-split"
 path = "src/bin/category_split.rs"
 
@@ -56,15 +48,9 @@ path = "src/bin/llm_detail_promote.rs"
 name = "context-dataset"
 path = "src/bin/context_dataset.rs"
 
-[[bin]]
-name = "compound-homophone-scan"
-path = "src/bin/compound_homophone_scan.rs"
-
 [dependencies]
 dictc-core = { path = "../dictc-core" }
 sakura-core.workspace = true
-sakura-proto.workspace = true
-sakura-rerank-proto.workspace = true
 # Offline JSON and hashing for the LLM-detail and evaluation binaries;
 # runtime binaries never depend on these (ci/dep-policy.ps1).
 serde = { version = "=1.0.219", features = ["derive"] }
