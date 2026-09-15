@@ -63,8 +63,6 @@ version = "2.0.0"
 dependencies = [
  "dictc-core",
  "sakura-core",
- "sakura-proto",
- "sakura-rerank-proto",
  "serde",
  "serde_json",
  "sha2",
@@ -315,6 +313,17 @@ version = "2.0.0"
 dependencies = [
  "sakura-context-proto",
  "sakura-values",
+]
+
+[[package]]
+name = "sakura-conversion-eval"
+version = "2.0.0"
+dependencies = [
+ "sakura-core",
+ "sakura-proto",
+ "sakura-rerank-proto",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

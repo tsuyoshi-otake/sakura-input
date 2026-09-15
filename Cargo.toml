@@ -22,6 +22,7 @@ members = [
     "crates/sakura-neural-worker",
     "crates/sakura-ai-proto",
     "crates/sakura-ai-worker",
+    "tools/conversion-eval",
     "tools/ime-eval",
 ]
 

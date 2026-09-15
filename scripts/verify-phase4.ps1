@@ -326,7 +326,7 @@ try {
     )
     Write-FormatReport
     Invoke-Gate -Name 'held-out quality and conversion latency' -CheckProcesses -Arguments @(
-        'cargo', 'run', '--locked', '--release', '-p', 'dictc', '--bin', 'corpus-eval', '--',
+        'cargo', 'run', '--locked', '--release', '-p', 'sakura-conversion-eval', '--bin', 'corpus-eval', '--',
         '--dictionary', $dictionaryPath,
         '--corpus', (Join-Path $repository 'corpus\held-out.tsv'),
         '--baseline', (Join-Path $repository 'corpus\mozc-baseline.tsv'),

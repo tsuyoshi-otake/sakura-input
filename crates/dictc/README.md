@@ -7,7 +7,6 @@ Thin command-line binaries for the offline dictionary build. `scripts/build-dict
 ## Owns
 
 - Argument parsing, file I/O, and exit codes for these binaries: `dictc`, `mozc-trim`, `inflection-expand`, `glossary-import`, `category-split`, `llm-detail-targets`, `llm-detail-drafts`, `llm-detail-promote`, and `context-dataset`.
-- Also, until they move to `tools/`, the evaluation binaries `corpus-eval`, `neural-eval`, and `compound-homophone-scan`.
 
 ## Must not own
 
@@ -17,7 +16,7 @@ Thin command-line binaries for the offline dictionary build. `scripts/build-dict
 
 ## Allowed dependencies
 
-- Normal: `dictc-core`, `sakura-core`, `sakura-proto`, `sakura-rerank-proto`, `serde`, `serde_json`, `sha2`, `unicode-normalization`.
+- Normal: `dictc-core`, `sakura-core`, `serde`, `serde_json`, `sha2`, `unicode-normalization`.
 - Development and build: none.
 
 ## Allowed consumers
