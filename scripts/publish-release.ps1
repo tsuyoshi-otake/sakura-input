@@ -45,8 +45,10 @@ function Invoke-Gh { param([Parameter(Mandatory)][string[]]$Arguments,[switch]$A
 
 # Verify the candidate's GitHub artifact provenance before creating a public
 # release. The application signature is deliberately created locally below.
-$remoteCommitRecord = Invoke-Gh @('api',"repos/$repository/commits/$tag")
-$remoteCommit = (($remoteCommitRecord.Lines -join "`n") | ConvertFrom-Json).sha
+# Ask gh for the sha only: the full commit JSON embeds file patches, and a large
+# non-ASCII patch is re-decoded by the console code page into invalid JSON.
+$remoteCommitRecord = Invoke-Gh @('api',"repos/$repository/commits/$tag",'--jq','.sha')
+$remoteCommit = (($remoteCommitRecord.Lines -join '').Trim())
 if ([string]$remoteCommit -cne $sourceCommit) { throw "remote tag commit does not match manifest source_commit: $remoteCommit vs $sourceCommit" }
 Invoke-Gh @('attestation','verify',$installer,'--repo',$repository,'--signer-workflow','tsuyoshi-otake/sakura-input/.github/workflows/release.yml','--source-digest',$sourceCommit,'--signer-digest',$sourceCommit) | Out-Null
 Invoke-Gh @('attestation','verify',$manifest,'--repo',$repository,'--signer-workflow','tsuyoshi-otake/sakura-input/.github/workflows/release.yml','--source-digest',$sourceCommit,'--signer-digest',$sourceCommit) | Out-Null
