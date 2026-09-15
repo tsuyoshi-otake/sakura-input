@@ -1,0 +1,33 @@
+# Sakura Input 2.0.2
+
+不要になった内部コードを整理した保守リリースです。**変換結果、キー操作、設定画面、通信プロトコル、更新の挙動は変えていません。**
+
+## 主な変更
+
+- Shift+Latin の開発用 oracle から、参照されていない accessor を削除しました。
+- TSF の変換キー所有権テストを、廃止済みの中間 adapter ではなく、現在の `ConversionKeyDisposition` 契約へ直接接続しました。
+- exact undo terminalization から、製品コードの判断に使われないテスト観測専用フィールドを削除しました。settlement、journal drain、disconnect の観測可能な結果は引き続き検証します。
+- candidate projection のテスト専用 helper をテストビルドだけへ限定し、製品コードで使われている処理の不要な dead-code 抑制を削除しました。
+
+## 検証と残る課題
+
+format、Clippy、workspace テスト、Release ビルド、installer 生成を確認してリリースします。辞書入力と engine・TSF DLL 間のプロトコル版 22 は変更していません。
+
+高負荷時に文字が失われる問題（#148）と、VS Code で入力中に落ちる問題は、このリリースでも解消していません。ダーク表示と Windows ハイコントラストでの候補ポップアップの目視確認（#168）も残っています。
+
+## 導入方法
+
+この Release は owner 承認済みの Authenticode 未署名版です。Windows には「不明な発行元」と表示されます。GitHub Release から取得した `sakura_setup.exe` の SHA-256 を `release-manifest-v2.txt` と照合して、手動インストールしてください。Sakura 固有の manifest 署名は、Windows のコード署名とは異なります。
+
+更新機能を持つ版では、次の条件をすべて満たす場合に限り、この未署名版も自動更新で導入されることがあります。条件の詳細は [`verification/update-signing-v2.md`](../verification/update-signing-v2.md) にあります。
+
+- Sakura 固有の manifest 署名の検証に通る。
+- manifest が未署名版であると明示している。
+- installer のサイズと SHA-256 が manifest と一致する。
+- Windows の署名検証が「署名なし」（`TRUST_E_NOSIGNATURE`）を返す。
+
+manifest が署名済みを要求しているのに installer が未署名の場合や、それ以外の署名検証の失敗は、未署名とは扱わず拒否します。
+
+## 対応環境
+
+Windows 11 build 22000 以降、x64、AVX と SSSE3 の両方に対応した CPU。32 bit ホスト用 DLL と ARM64 ネイティブ版は含みません。
