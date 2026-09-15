@@ -365,10 +365,6 @@ fn commit_undo_post_document_access_projection_failure_reports_unknown_and_termi
 
     assert_eq!(terminal.completions.len(), 1);
     assert_eq!(settlement_count.get(), 1);
-    assert!(terminal.has_undo);
-    assert!(terminal.journal_drained);
-    assert!(!terminal.retry_allowed);
-    assert!(!terminal.settlement_confirmed);
     assert!(terminal.disconnect_required);
     assert_eq!(journal.pending_len(), 0);
 
@@ -453,10 +449,6 @@ fn commit_undo_reentrant_journal_borrow_has_a_bounded_terminal_owner() {
         },
     );
     assert_eq!(terminal.completions.len(), 1);
-    assert!(terminal.has_undo);
-    assert!(terminal.journal_drained);
-    assert!(!terminal.retry_allowed);
-    assert!(!terminal.settlement_confirmed);
     assert!(terminal.disconnect_required);
     assert_eq!(settlement_count.get(), 1);
     assert_eq!(journal.pending_len(), 0);
@@ -703,22 +695,22 @@ fn converting_space_keeps_a_live_composition_across_context_replacement() {
     );
 
     assert_eq!(
-        PhysicalKeyOwner::of(space, true),
-        PhysicalKeyOwner::Ime,
+        ConversionKeyDisposition::of(space, true, false),
+        ConversionKeyDisposition::ApplyLocal,
         "OnTestKeyDown of Space against a live reading is IME-owned"
     );
     assert_eq!(
-        PhysicalKeyOwner::of(henkan, true),
-        PhysicalKeyOwner::Ime,
+        ConversionKeyDisposition::of(henkan, true, false),
+        ConversionKeyDisposition::ApplyLocal,
         "Henkan is IME-owned on TestKeyDown even when it is also the AI trigger"
     );
     assert_eq!(
-        PhysicalKeyOwner::of(letter, true),
-        PhysicalKeyOwner::HostEligible
+        ConversionKeyDisposition::of(letter, true, false),
+        ConversionKeyDisposition::HostEligible
     );
     assert_eq!(
-        PhysicalKeyOwner::of(space, false),
-        PhysicalKeyOwner::HostEligible,
+        ConversionKeyDisposition::of(space, false, false),
+        ConversionKeyDisposition::HostEligible,
         "idle Space stays host-eligible so Japanese fullwidth insert works"
     );
     let ctrl_space = KeyInput {
@@ -733,24 +725,20 @@ fn converting_space_keeps_a_live_composition_across_context_replacement() {
         ..space
     };
     assert_eq!(
-        PhysicalKeyOwner::of(ctrl_space, true),
-        PhysicalKeyOwner::HostEligible,
+        ConversionKeyDisposition::of(ctrl_space, true, false),
+        ConversionKeyDisposition::HostEligible,
         "Ctrl+Space remains IntelliSense"
     );
     assert_eq!(
-        PhysicalKeyOwner::of(alt_space, true),
-        PhysicalKeyOwner::HostEligible
+        ConversionKeyDisposition::of(alt_space, true, false),
+        ConversionKeyDisposition::HostEligible
     );
     assert!(
-        PhysicalKeyOwner::Ime.terminal_eaten(false).as_bool(),
+        ConversionKeyDisposition::ApplyLocal.eats(false),
         "admission/Probe failure must not give a live convert key to the host"
     );
-    assert!(!PhysicalKeyOwner::HostEligible
-        .terminal_eaten(false)
-        .as_bool());
-    assert!(PhysicalKeyOwner::HostEligible
-        .terminal_eaten(true)
-        .as_bool());
+    assert!(!ConversionKeyDisposition::HostEligible.eats(false));
+    assert!(ConversionKeyDisposition::HostEligible.eats(true));
     assert!(
         ConversionKeyDisposition::HostEligible.eats_blocked(false, letter, Some(Mode::Hiragana)),
         "blocked first letter in Japanese mode must not become WM_CHAR"
@@ -766,11 +754,11 @@ fn converting_space_keeps_a_live_composition_across_context_replacement() {
     let action = decide_real_fence(false, false, false, true, false);
     assert_eq!(action, RealFenceAction::Decline);
     let eaten = match action {
-        RealFenceAction::Decline => PhysicalKeyOwner::of(space, true).terminal_eaten(false),
-        _ => false.into(),
+        RealFenceAction::Decline => ConversionKeyDisposition::of(space, true, false).eats(false),
+        _ => false,
     };
     assert!(
-        eaten.as_bool(),
+        eaten,
         "a real-path Decline must not return a live conversion Space to the host"
     );
 

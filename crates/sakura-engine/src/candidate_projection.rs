@@ -108,7 +108,7 @@ impl CandidateProjection {
     /// and again only when a hash collision needs an exact UTF-8 comparison.
     /// The callback receives a reusable bounded sink owned by this module, so
     /// projection construction itself never allocates.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn build(
         raw_count: usize,
         render: impl FnMut(usize, &mut FixedStr<MAX_PREEDIT_BYTES>) -> Result<(), Overflow>,
@@ -206,17 +206,16 @@ impl CandidateProjection {
         Ok(projection)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) const fn raw_count(&self) -> usize {
         self.raw_count
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) const fn visible_count(&self) -> usize {
         self.visible_count
     }
 
-    #[allow(dead_code)]
     pub(crate) const fn is_complete(&self) -> bool {
         !self.truncated
     }
