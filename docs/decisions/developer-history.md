@@ -17,7 +17,7 @@ sakura_settings.exe config set developer-mode off
 - engine：`crates/sakura-engine/src/input_history.rs`
 - TSFスコープ連携：`crates/sakura-tsf/src/text_service.rs`、`crates/sakura-tsf/src/engine.rs`
 - 設定CLI：`crates/sakura-settings/src/cli.rs`
-- プロトコル：`crates/sakura-proto/src/message.rs`
+- プロトコル：`crates/sakura-proto/src/message/`（`request.rs`・`response.rs`・`ui_state.rs`）
 - 設計：`DESIGN.md` §5.4.1
 
 履歴には、実キーごとのキーコード・文字・修飾キー・リピート・消費結果・状態／モード遷移・表示前後のpreedit・commit／削除・アクション・セッション／連番を記録します。変換commitにはreading、surface、左右の文脈も記録します。`test_only`入力は必ず除外してください。
