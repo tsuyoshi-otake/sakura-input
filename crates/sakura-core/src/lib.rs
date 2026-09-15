@@ -40,45 +40,36 @@ pub mod text;
 pub mod user_dictionary;
 pub mod width;
 
-pub use calendar::{
-    date_offset_for_reading, date_surface_specs, is_today_date_reading, CivilDate, DateFormat,
-    DateSurfaceSpec, JapaneseEraYear, Weekday,
-};
-pub use config::{parse as parse_config, Document, ErrorKind, ParseError, Value};
+// Flat re-exports exist only for items with a caller outside their module
+// path; `ci/check-facade.ps1` (R10) fails on any that loses its last one.
+// Everything else stays reachable through its `pub mod` path.
+pub use calendar::{CivilDate, DateFormat};
+pub use config::ParseError;
 pub use conversion::{
-    candidate_budget, CandidateAuthority, CandidateEvidence, CandidateEvidenceClass,
-    CandidateOrigin, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics, ConversionError,
-    ConversionInput, ConversionInputClass, ConversionOptions, ConversionResult,
-    ConversionSearchTerminal, ConversionSegment, Converter, CrossCommitBridge, LeftContextId,
-    LiteralPolicy, PathEvidence, RawRepairBudget, RawRepairPlan, RepairTier, RightContextId,
-    MAX_CONVERSION_CANDIDATES, MAX_CROSS_COMMIT_CURRENT_BYTES, MAX_CROSS_COMMIT_TAIL_BYTES,
-    MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS,
+    CandidateEvidence, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics,
+    ConversionError, ConversionInput, ConversionOptions, ConversionSearchTerminal,
+    ConversionSegment, Converter, CrossCommitBridge, RightContextId, MAX_CONVERSION_CANDIDATES,
+    MAX_CROSS_COMMIT_CURRENT_BYTES, MAX_CROSS_COMMIT_TAIL_BYTES,
 };
-pub use cpu::{CpuFeatures, UnsupportedCpu};
-pub use dictionary::{Dictionary, Entry, EntryFlags, PrefixMatch};
-pub use editing::{identifier_into, transform_into, IdentifierStyle, SegmentTransform};
+pub use dictionary::{Dictionary, EntryFlags};
+pub use editing::{transform_into, SegmentTransform};
 pub use input_repair::{
-    allows_system_entry, collect_repair_variants, contextual_punctuation_swap,
-    english_spelling_katakana_reading, RepairKind, RepairVariant, RepairVariantList,
-    ADVANCED_REPAIR_PENALTY, COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY,
-    MAX_PREDICTION_REPAIR_VARIANTS, MAX_REPAIR_VARIANTS, REPAIR_PENALTY,
+    allows_system_entry, collect_repair_variants, contextual_punctuation_swap, RepairKind,
+    MAX_PREDICTION_REPAIR_VARIANTS, MAX_REPAIR_VARIANTS,
 };
-pub use keymap::{Action, KeyMap, KeyMapError, KeyMapErrorKind, Preset, State};
+pub use keymap::{KeyMap, Preset};
 pub use preferences::{
     default_app_profiles, is_valid_profile_process_name, parse_preferences,
-    resolve_context_preferences, serialize_preferences, serialize_preferences_with_profiles,
-    AppProfile, ContextPreferences, ConversionMethod, InputMethod, InputSupport,
-    NeuralRerankerScope, NotationStyle, ParsedPreferences, Preferences, ShiftSpaceBehavior,
-    SpaceWidth, SuggestAccept, CONFIG_FORMAT_VERSION,
+    resolve_context_preferences, serialize_preferences_with_profiles, AppProfile,
+    ContextPreferences, ConversionMethod, InputMethod, InputSupport, NeuralRerankerScope,
+    NotationStyle, Preferences, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
+    CONFIG_FORMAT_VERSION,
 };
-pub use romaji::{Input, Table, TableError, TableErrorKind};
+pub use romaji::Input;
 pub use sakura_values::{AppearanceTheme, PadShortcut};
-pub use simd::{KernelMetadata, KernelSet, WidthScanStrategy, WidthScanStrategyId};
 pub use text::TextSink;
 pub use user_dictionary::{
-    UserDictionary, UserDictionaryEntry, UserDictionaryError, UserDictionaryErrorKind,
-    UserPartOfSpeech, UserPosSpec, MAX_USER_DICTIONARY_ENTRIES, USER_DICTIONARY_FORMAT_VERSION,
+    UserDictionary, UserDictionaryEntry, UserDictionaryError, UserPartOfSpeech,
+    MAX_USER_DICTIONARY_ENTRIES,
 };
-pub use width::{
-    BracketStyle, CommaMark, Normalizer, PeriodMark, PunctuationStyle, Width, WidthPolicy,
-};
+pub use width::{BracketStyle, CommaMark, Normalizer, PeriodMark, PunctuationStyle, Width};
