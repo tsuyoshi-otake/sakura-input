@@ -2308,3 +2308,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Evidence: on `claude/phase32-dictionary-lookup` (c77bb11), `cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking -- --ignored --skip issue_83_cross_commit_bridge_release_percentiles` PASS (36 tests) against `artifacts/release/system.dic` 37,383,196 bytes, SHA-256 ca1b24fc7f3113998fc73e2722a10865ce36f1eae7f39d7e16170a333febb63f. check-process-clean PASS.
 - Symptom on first runs: the target needs `--features dev-fixtures`; `issue_83_cross_commit_bridge_release_percentiles` panics by design outside `--release` (timing guard), not a reader failure.
 - Finding: the 39,349,040-byte / b7d08643... identity quoted in #206 matches release notes v1.0.2-v1.0.6 only; v1.0.7 changed the data. The dictc writer is unchanged by #226-#228, so compiled bytes cannot change from this split; a rebuild comparison needs the private `-SystemCategoryDirectory` source.
+
+## 2026-09-15 Phase 3.3: move width.rs and simd.rs under width/ and width/scan/ (#206)
+
+- Change: `git mv` only: width.rs -> width/mod.rs, simd.rs -> width/scan/mod.rs, tests beside them. `pub mod scan;` in width/mod.rs; lib.rs `pub use width::scan as simd;` keeps `sakura_core::simd::startup` for engine main.rs and width_bench.
+- Also closed #206 checkboxes 3.1 (acceptance evidence already in the 2026-09-15 post-merge entry, box was never ticked) and 3.2 (identity note: the 39,349,040-byte hash is the v1.0.2-v1.0.6 image).
+- Risk checked: kernel symbols become `_ZN11sakura_core5width4scan...`. `ci/check-simd-assembly.ps1` Get-FunctionBody matches `_ZN[^
+]*<name>\d+h...E`, so it is path-agnostic. Local -SelfTest 5/5 mutants rejected; real gate passed with the new symbols.
+- Verification: fmt, git diff --check, clippy -D warnings (core with simd-assembly-audit, engine), wrapped `cargo test -p sakura-core --lib` and `--features simd-assembly-audit` PASS (299 lib tests), IRV CORE-CONVERSION 3442 -> 3444 PASS, check-process-clean PASS.
+- Learning: before moving a module that a CI gate audits by symbol, read the matcher; a path-anchored regex would have failed only in CI.

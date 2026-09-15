@@ -34,7 +34,8 @@ pub mod keymap;
 pub mod numerals;
 pub mod preferences;
 pub mod romaji;
-pub mod simd;
+/// Compatibility path: the kernels live in [`width::scan`] (Phase 3.3, #206).
+pub use width::scan as simd;
 pub mod text;
 pub mod user_dictionary;
 pub mod width;
