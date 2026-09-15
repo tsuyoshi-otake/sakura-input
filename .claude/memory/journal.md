@@ -2283,3 +2283,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Imports were generated from the identifiers present in each extracted body, then proven minimal by clippy `-D warnings` (unused imports would fail). Ranges were spliced from one snapshot (1-17, `mod validate;`, 18-930, 1287-1540, 1740-end). mod.rs 1,775 -> 1,221; validate.rs 571; parse.rs 347.
 - `IRV-DICTIONARY-FORMAT` production adds `validate.rs` (a #109-type change reads the validators). Physical 5,202 -> 5,239 (+0.7%). Do not update `baseline.json`.
 - Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 listed) and `cargo test -p dictc` PASS, clippy, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
+
+## 2026-09-15 Phase 3.2: extract LOUDS trie navigation into dictionary/louds.rs (#206)
+
+- Change: moved `Node` and `node`/`label`/`find_child`/`louds_bit` from `dictionary/mod.rs` into `dictionary/louds.rs`; the four accessors and Node fields are `pub(super)` (callers: lookup in mod.rs, validate.rs). `entry` stays in mod.rs (ENTR record decode, not trie). mod.rs 1,221 -> 1,154 lines; louds.rs 77 lines.
+- Method: spliced from one snapshot with line-content markers asserted before extraction; imports generated from identifiers in the body; clippy -D warnings proves none unused.
+- Verification: wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, clippy -D warnings, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5249 (+0.9%) PASS, check-process-clean PASS.
+- Learning: asserting the expected text at each boundary line before a sed splice turns stale line numbers into a hard stop instead of a silent mis-cut.

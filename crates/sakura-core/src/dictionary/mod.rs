@@ -14,6 +14,7 @@ use crate::TextSink;
 
 #[path = "format.rs"]
 pub mod image_format;
+mod louds;
 mod parse;
 mod validate;
 
@@ -948,44 +949,6 @@ impl<'a> Dictionary<'a> {
         data.get(start..end).ok_or(Error::BadEntry)
     }
 
-    fn node(&self, index: usize) -> Result<Node, Error> {
-        if index >= self.node_count {
-            return Err(Error::BadTree);
-        }
-        let at = index
-            .checked_mul(self.version.node_len())
-            .ok_or(Error::BadTree)?;
-        if self.version == ImageVersion::V1 && read_u32(self.nodes, at + 12) != Some(0) {
-            return Err(Error::BadTree);
-        }
-        Ok(Node {
-            first_child: to_usize(read_u32(self.nodes, at).ok_or(Error::BadTree)?)?,
-            child_count: usize::from(read_u16(self.nodes, at + 4).ok_or(Error::BadTree)?),
-            value_count: usize::from(read_u16(self.nodes, at + 6).ok_or(Error::BadTree)?),
-            value_start: to_usize(read_u32(self.nodes, at + 8).ok_or(Error::BadTree)?)?,
-        })
-    }
-
-    fn label(&self, index: usize) -> Result<char, Error> {
-        if index >= self.node_count {
-            return Err(Error::BadTree);
-        }
-        let scalar = match self.version {
-            ImageVersion::V1 => {
-                let at = index.checked_mul(4).ok_or(Error::BadTree)?;
-                read_u32(self.labels, at).ok_or(Error::BadTree)?
-            }
-            ImageVersion::V2 => {
-                let at = index
-                    .checked_mul(image_format::NODE_LEN_V2)
-                    .and_then(|at| at.checked_add(12))
-                    .ok_or(Error::BadTree)?;
-                read_u32(self.nodes, at).ok_or(Error::BadTree)?
-            }
-        };
-        char::from_u32(scalar).ok_or(Error::BadTree)
-    }
-
     fn entry(&self, index: usize) -> Result<Entry, Error> {
         if index >= self.entry_count {
             return Err(Error::BadEntry);
@@ -1027,28 +990,6 @@ impl<'a> Dictionary<'a> {
                 })
             }
         }
-    }
-
-    fn find_child(&self, node: Node, wanted: char) -> Option<usize> {
-        let mut low = node.first_child;
-        let mut high = node.first_child.checked_add(node.child_count)?;
-        while low < high {
-            let mid = low + (high - low) / 2;
-            let label = self.label(mid).ok()?;
-            match label.cmp(&wanted) {
-                core::cmp::Ordering::Less => low = mid + 1,
-                core::cmp::Ordering::Greater => high = mid,
-                core::cmp::Ordering::Equal => return Some(mid),
-            }
-        }
-        None
-    }
-
-    fn louds_bit(&self, index: usize) -> Result<bool, Error> {
-        if index >= self.louds_bits {
-            return Err(Error::BadTree);
-        }
-        bit_at(self.louds, index).ok_or(Error::BadTree)
     }
 }
 
@@ -1173,14 +1114,6 @@ impl<'a> DictionaryDetail<'a> {
             .ok_or(Error::BadTable(image_format::TAG_DETAIL_TEXT))?;
         core::str::from_utf8(bytes).map_err(|_| Error::BadUtf8)
     }
-}
-
-#[derive(Clone, Copy)]
-struct Node {
-    first_child: usize,
-    child_count: usize,
-    value_start: usize,
-    value_count: usize,
 }
 
 fn align_up_4(value: usize) -> Option<usize> {
