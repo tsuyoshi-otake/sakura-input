@@ -56,7 +56,7 @@ mod kernels_x86;
 mod lut;
 mod select;
 #[cfg(test)]
-mod test_support;
+mod testing;
 
 #[cfg(test)]
 use crate::cpu;
@@ -69,7 +69,7 @@ pub use select::startup;
 use lut::scan_scalar;
 use select::active_width_scan;
 #[cfg(test)]
-use test_support::note_selected_width_scan_call;
+use testing::note_selected_width_scan_call;
 
 // `simd_tests.rs` reaches every leaf through `use super::*;`, so the private
 // items it exercises are gathered here rather than widened beyond `scan`.
@@ -83,7 +83,7 @@ use lut::passes_through;
 #[cfg(test)]
 use select::resolve_kernel_set;
 #[cfg(test)]
-use test_support::{
+use testing::{
     avx512_path_counts_for_normalizer_runs, avx512_path_counts_for_scan,
     avx512_zmm_threshold_for_diagnostic, format_avx512_path, Avx512PathCounts, AVX_SSSE3_XMM_CALLS,
     SELECTED_WIDTH_SCAN_CALLS,
