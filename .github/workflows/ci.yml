@@ -442,6 +442,13 @@ jobs:
       - name: Audit current and planned dependency boundaries
         shell: pwsh
         run: ./ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13
+      - name: Self-test facade caller resolver (R10)
+        shell: pwsh
+        run: ./ci/check-facade.ps1 -SelfTest
+      # R10 is blocking since Phase 3.5 (#206): every flat sakura_core re-export needs a caller.
+      - name: Audit sakura_core facade re-exports (R10)
+        shell: pwsh
+        run: ./ci/check-facade.ps1
 
   irv-regression:
     name: irv-regression
