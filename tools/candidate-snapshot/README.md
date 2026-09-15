@@ -61,6 +61,8 @@ artifacts also emit newer origin/path-evidence fields as `null`/unsupported.
 
 The fixed registry dependencies are `serde 1.0.219`, `serde_json 1.0.140`,
 and `sha2 0.10.9`. No dependency is added to a shipping Sakura crate.
+Because the root lock never sees this nested workspace, `ci/dep-policy.ps1`
+reads the committed `Cargo.lock` here too and applies the same allowlist (R11).
 The committed lockfile, including transitive registry packages, was audited
 against crates.io on 2026-08-25; its newest selected release was 34 days old,
 so every package cleared the repository's seven-day quarantine.

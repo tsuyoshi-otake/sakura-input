@@ -36,6 +36,10 @@ flowchart TD
   Renderer owns drawing, not candidate ordering or input semantics.
 - Oracles are development-only. Context research is feature-gated and cannot
   become a general-purpose crate for unrelated code.
+- Offline tools are root workspace members (`tools/candidate-sweep`,
+  `tools/conversion-eval`, `tools/ime-eval`). Only `tools/candidate-snapshot`
+  stays a nested workspace, because it is copied into historical release
+  worktrees; `ci/dep-policy.ps1` audits its `Cargo.lock` (R11).
 
 ## Dependency rules
 
