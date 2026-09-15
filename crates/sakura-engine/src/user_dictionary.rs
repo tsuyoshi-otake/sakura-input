@@ -312,19 +312,19 @@ mod tests {
     static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
     fn image() -> &'static [u8] {
-        let entries = dictc::parse_entries(
+        let entries = dictc_core::parse_entries(
             "fixture.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t0\t100\t100\t\t\n",
         )
         .expect("entries");
-        let matrix = dictc::parse_connection(
+        let matrix = dictc_core::parse_connection(
             "matrix.tsv",
             "# license: MIT\nclasses\t1\ndefault\t0\n",
             false,
         )
         .expect("matrix");
         Box::leak(
-            dictc::compile(&entries, &matrix)
+            dictc_core::compile(&entries, &matrix)
                 .expect("compile")
                 .into_boxed_slice(),
         )

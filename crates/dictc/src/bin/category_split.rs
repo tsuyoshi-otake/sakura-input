@@ -5,10 +5,10 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use dictc::category::{
+use dictc_core::category::{
     classify_existing_entry, is_address_layer_entry, parse_mozc_pos_catalog, DictionaryCategory,
 };
-use dictc::{entries_to_category_tsv, merge_entries, parse_entries, SourceEntry};
+use dictc_core::{entries_to_category_tsv, merge_entries, parse_entries, SourceEntry};
 
 enum InputLayer {
     SystemCategory(DictionaryCategory),
@@ -336,7 +336,7 @@ mod tests {
     use std::ffi::OsString;
     use std::fs;
 
-    use dictc::category::DictionaryCategory;
+    use dictc_core::category::DictionaryCategory;
 
     use super::run;
 

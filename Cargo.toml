@@ -19,6 +19,7 @@ members = [
     "crates/sakura-regtool",
     "crates/sakura-logon",
     "crates/sakura-settings",
+    "crates/dictc-core",
     "crates/dictc",
     "crates/sakura-neural-worker",
     "crates/sakura-ai-proto",

@@ -5,13 +5,13 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use dictc::llm_detail_targets::{load_committed_targets, TARGET_SCHEMA_VERSION};
-use dictc::llm_details::{
+use dictc_core::llm_detail_targets::{load_committed_targets, TARGET_SCHEMA_VERSION};
+use dictc_core::llm_details::{
     canonical_review_fingerprint, import_release_jsonl, load_committed_release_jsonl,
     parse_drafts_jsonl, promote_drafts, promotion_report_json, IndependentReview, ReviewDecision,
     RELEASE_MANIFEST_SCHEMA_VERSION, SCHEMA_VERSION,
 };
-use dictc::{parse_category_entries, SourceDetail, SourceEntry};
+use dictc_core::{parse_category_entries, SourceDetail, SourceEntry};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use dictc::{
+use dictc_core::{
     attach_entry_details, clear_candidate_list_annotations, compile, compile_with_details,
     extract_entry_details, parse_category_entries, parse_connection, parse_entries,
 };
@@ -12,11 +12,11 @@ const HEADER: &str = concat!(
     "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n"
 );
 
-fn entries(body: &str) -> Vec<dictc::SourceEntry> {
+fn entries(body: &str) -> Vec<dictc_core::SourceEntry> {
     parse_entries("fixture.tsv", &format!("{HEADER}{body}")).expect("valid fixture")
 }
 
-fn data_entries(name: &str) -> Vec<dictc::SourceEntry> {
+fn data_entries(name: &str) -> Vec<dictc_core::SourceEntry> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")

@@ -1,4 +1,4 @@
-use dictc::{compile, parse_connection, parse_entries};
+use dictc_core::{compile, parse_connection, parse_entries};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 use sakura_core::user_dictionary::UserDictionary;

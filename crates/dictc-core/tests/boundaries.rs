@@ -6,8 +6,10 @@
 //! one-morpheme segments and made the whole-reading candidate 下 unreachable
 //! from the candidate window.
 
-use dictc::segmenter::{build_boundaries, parse_mozc_pos_features, parse_mozc_segmenter_rules};
-use dictc::{compile, compile_with_tables, parse_connection, parse_entries, OptionalTables};
+use dictc_core::segmenter::{
+    build_boundaries, parse_mozc_pos_features, parse_mozc_segmenter_rules,
+};
+use dictc_core::{compile, compile_with_tables, parse_connection, parse_entries, OptionalTables};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 
@@ -30,7 +32,7 @@ const SEGMENTER: &str = "# an ancillary word continues the current bunsetsu\n\
 * ^(助詞|助動詞) false\n\
 * * true\n";
 
-fn fixture_boundaries() -> dictc::segmenter::BunsetsuBoundaries {
+fn fixture_boundaries() -> dictc_core::segmenter::BunsetsuBoundaries {
     let features = parse_mozc_pos_features("id.def", ID_DEF).expect("features");
     let rules = parse_mozc_segmenter_rules("segmenter.def", SEGMENTER).expect("rules");
     build_boundaries("segmenter.def", &features, &rules).expect("boundaries")

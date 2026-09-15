@@ -1,8 +1,8 @@
-use dictc::{
+use dictc_core::{
     compile, compile_with_details, parse_connection, parse_entries, SourceDetail,
     SourceDetailRelation,
 };
-use dictc::{glossary, wordnet};
+use dictc_core::{glossary, wordnet};
 use sakura_core::dictionary::{DetailRelationKind, Dictionary};
 use sakura_proto::FixedStr;
 

@@ -6,10 +6,10 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use dictc::context_corpus::{commit_extraction, extract_articles, verify_extraction};
-use dictc::context_dataset::load_pinned_source;
-use dictc::context_dataset::{build_dataset, verify_dataset, BuildConfig};
-use dictc::context_rerank_import::{
+use dictc_core::context_corpus::{commit_extraction, extract_articles, verify_extraction};
+use dictc_core::context_dataset::load_pinned_source;
+use dictc_core::context_dataset::{build_dataset, verify_dataset, BuildConfig};
+use dictc_core::context_rerank_import::{
     import_rerank_snapshot, verify_rerank_import, RerankImportConfig,
 };
 
