@@ -2290,3 +2290,21 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Method: spliced from one snapshot with line-content markers asserted before extraction; imports generated from identifiers in the body; clippy -D warnings proves none unused.
 - Verification: wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, clippy -D warnings, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5249 (+0.9%) PASS, check-process-clean PASS.
 - Learning: asserting the expected text at each boundary line before a sed splice turns stale line numbers into a hard stop instead of a silent mis-cut.
+
+## 2026-09-15 Phase 3.2: extract reviewed dictionary details into dictionary/detail.rs (#206)
+
+- Change: moved `Dictionary::detail_at` and `impl DictionaryDetail` (Issue #30 reader over DIDX/DREC/DREL/DTOF/DTXT) from `dictionary/mod.rs` into `dictionary/detail.rs`. No visibility widened (child module reaches private fields/readers via `super::`). mod.rs 1,154 -> 989 lines; detail.rs 178 lines. Branch `claude/phase32-dictionary-detail`, stacked on PR #227.
+- Verification: clippy -D warnings, wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5262 (+1.2%) PASS, check-process-clean PASS.
+- Learning: my first module doc named the detail tables DETI/DETR/DETT from memory; `format.rs` defines DIDX/DREC/DREL/DTOF/DTXT. Take table tags in docs from the constants by grep, not recall.
+
+## 2026-09-15 Phase 3.2: extract dictionary lookup queries into dictionary/lookup.rs (#206)
+
+- Change: moved bunsetsu/connection/single-kanji/trie-search/prediction/visitor/surface/annotation queries from `dictionary/mod.rs` into `dictionary/lookup.rs` (522 lines). mod.rs keeps shared types, count accessors, `text_record`/`entry` (used by lookup and validate) and byte readers: 989 -> 480 lines. Leaf layout format/parse/validate/louds/lookup/detail is now complete. Branch `claude/phase32-dictionary-lookup`, stacked on detail branch.
+- Verification: clippy -D warnings, wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5275 (1.4%) PASS, check-process-clean PASS.
+- Learning: splice header line numbers shifted because `cargo fmt` reordered `mod` items; the boundary assertion stopped the cut. Locate header anchors by grep, not by remembered line number. Also, an earlier Edit to benchmarks.json left `"detail.rs","mod.rs"` without a space; fixed in this commit.
+
+## 2026-09-15 Phase 3.2: shipped dictionary through the split reader; #206 identity is stale (#206)
+
+- Evidence: on `claude/phase32-dictionary-lookup` (c77bb11), `cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking -- --ignored --skip issue_83_cross_commit_bridge_release_percentiles` PASS (36 tests) against `artifacts/release/system.dic` 37,383,196 bytes, SHA-256 ca1b24fc7f3113998fc73e2722a10865ce36f1eae7f39d7e16170a333febb63f. check-process-clean PASS.
+- Symptom on first runs: the target needs `--features dev-fixtures`; `issue_83_cross_commit_bridge_release_percentiles` panics by design outside `--release` (timing guard), not a reader failure.
+- Finding: the 39,349,040-byte / b7d08643... identity quoted in #206 matches release notes v1.0.2-v1.0.6 only; v1.0.7 changed the data. The dictc writer is unchanged by #226-#228, so compiled bytes cannot change from this split; a rebuild comparison needs the private `-SystemCategoryDirectory` source.
