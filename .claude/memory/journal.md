@@ -2325,3 +2325,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Fix: filter changed to `width::scan::` in ci.yml, verify-phase1.ps1 and docs/rules/ci-verification.md. Caught before merging PR #229.
 - Verification: run-test-quiet SIMD kernel agreement PASS; IRV PASS; process-clean clean.
 - Learning: when moving a module, grep CI, scripts and rules for test filters naming the old path, and compare `--list` counts before and after. Exit 0 does not prove any test ran.
+
+## 2026-09-15 Phase 3.3: split width/scan/mod.rs into leaves (#206)
+
+- Change: width/scan/mod.rs (1,036 lines) -> mod.rs (contract types + passthrough_len), lut.rs (tables, admits, scan_scalar), select.rs (records, startup, resolver), kernels_x86.rs (x86_64 kernels), test_support.rs (cfg(test) counters, path accounting, calibration). No function bodies changed; only pub(super) where a sibling or tests need an item.
+- Decision: the plan listed scalar.rs; folded scan_scalar into lut.rs because it is 7 lines defined by admits. Avx512ZmmThreshold stays in mod.rs so select.rs and kernels_x86.rs do not depend on each other.
+- Gotcha: simd_tests.rs uses `use super::*;` and also `cpu::detect_at_startup`; the old `use crate::cpu::{self, ...}` in mod.rs had provided `cpu`. Re-imported under cfg(test).
+- Verification: clippy -D warnings (core +/- simd-assembly-audit, engine); core lib 299 tests listed (unchanged) PASS; audit-feature tests PASS; width::scan:: 16 tests PASS; SIMD gate self-test 5/5 and real gate PASS (symbols now width::scan::lut / kernels_x86); IRV PASS; process-clean clean.
