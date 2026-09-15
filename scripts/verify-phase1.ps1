@@ -214,7 +214,7 @@ try {
     ) -CheckProcesses
     Invoke-Gate -Name 'core zero-allocation gate' -Arguments @('cargo', 'test', '-p', 'sakura-core', '--test', 'zero_alloc') -CheckProcesses
     Invoke-Gate -Name 'engine handoff zero-allocation gate' -Arguments @('cargo', 'test', '-p', 'sakura-engine', '--test', 'zero_alloc_dispatch') -CheckProcesses
-    Invoke-Gate -Name 'named SIMD kernel agreement' -Arguments @('cargo', 'test', '-p', 'sakura-core', '--lib', '--', 'simd::', '--nocapture') -CheckProcesses
+    Invoke-Gate -Name 'named SIMD kernel agreement' -Arguments @('cargo', 'test', '-p', 'sakura-core', '--lib', '--', 'width::scan::', '--nocapture') -CheckProcesses
 
     $env:LOCALAPPDATA = $latencyAppData
     $env:SAKURA_IPC_LATENCY_REPORT = $latencyReportPath

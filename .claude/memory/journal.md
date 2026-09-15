@@ -2317,3 +2317,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 ]*<name>\d+h...E`, so it is path-agnostic. Local -SelfTest 5/5 mutants rejected; real gate passed with the new symbols.
 - Verification: fmt, git diff --check, clippy -D warnings (core with simd-assembly-audit, engine), wrapped `cargo test -p sakura-core --lib` and `--features simd-assembly-audit` PASS (299 lib tests), IRV CORE-CONVERSION 3442 -> 3444 PASS, check-process-clean PASS.
 - Learning: before moving a module that a CI gate audits by symbol, read the matcher; a path-anchored regex would have failed only in CI.
+
+## 2026-09-15 Phase 3.3 follow-up: SIMD test filter silently matched zero tests (#206)
+
+- Symptom: after moving simd.rs to width/scan/, `cargo test -p sakura-core --lib -- simd:: --list` listed 0 tests (width::scan:: lists 16). The CI step "Exercise the SIMD kernels this runner supports" and scripts/verify-phase1.ps1 would have passed without running any kernel-agreement test.
+- Root cause: `pub use width::scan as simd;` keeps the API path, but libtest filters match the module path where tests are defined, not re-export paths.
+- Fix: filter changed to `width::scan::` in ci.yml, verify-phase1.ps1 and docs/rules/ci-verification.md. Caught before merging PR #229.
+- Verification: run-test-quiet SIMD kernel agreement PASS; IRV PASS; process-clean clean.
+- Learning: when moving a module, grep CI, scripts and rules for test filters naming the old path, and compare `--list` counts before and after. Exit 0 does not prove any test ran.
