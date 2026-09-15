@@ -2357,6 +2357,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: dependency-rules -SelfTest and -Enforce R1,R2,R8,R9,R12,R13 PASS; clippy; audit-feature tests; SIMD agreement; assembly gate; process-clean.
 - Learning: for any module split, run `ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13` locally alongside fmt/clippy/IRV. Name test-only helper modules `testing.rs`.
 
+## 2026-09-15 Phase 3.6 proto message split (#206)
+
+- Work: crates/sakura-proto/src/message.rs (1,276 lines) -> message/{mod,tags,header,request,response,ui_state}.rs. No body/wire/public path change; PROTOCOL_VERSION 22.
+- Verification: clippy -D warnings, cargo test -p sakura-proto PASS (92 listed; message unit tests 7 before/after), workspace all-targets build, dep rules, IRV, process-clean PASS.
+- Failure found: the split compiled and tested clean but cargo doc reported 11 new unresolved intra-doc links ([`Request::SetMode`] in response.rs, [`decode_request`] in header.rs, etc.), because doc links resolve in the new file scope. Fix: explicit (super::X) link targets. Learning (second time today, see 3.5): after any module split or re-export change, run cargo doc and compare warnings to main; compiler, clippy and tests do not check intra-doc links.
+- Also: PR #231 merge made #232 BEHIND with a journal.md conflict; resolved in a scratchpad worktree (keep both appended sides) so the in-progress branch stayed untouched.
 ## 2026-09-15 Phase 3.5 facade pruning and R10 (#206)
 
 - Work: added ci/check-facade.ps1 (Rust-aware caller resolver over cargo metadata targets, tools/, docs outside history; comments/strings blanked; glob import = caller of all). Removed 54 of 117 flat sakura_core re-exports with zero callers; 63 remain. R10 blocking in the dependency-rules CI job.
