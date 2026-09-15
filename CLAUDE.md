@@ -62,8 +62,13 @@ possible, integrate locally instead:
    feature set, `ci/check-dependency-rules.ps1`, `ci/check-facade.ps1`,
    `ci/dep-policy.ps1` (with `-SelfTest`), IRV compare, release build with
    `ci/check-dll-size.ps1`, and `ci/check-process-clean.ps1`.
-3. Push the integrated branch to `main` (owner bypass). PRs whose heads are
-   contained in `main` show as merged; then delete their branches.
+3. Push the integrated branch and open one PR for it. The ruleset has no bypass
+   actors, so a direct push to `main` is rejected. That PR needs only one CI run.
+   After it merges, PRs whose heads are contained in `main` show as merged;
+   then delete their branches.
+
+Push a release tag only after the commit is on `main`. A tag push starts
+`release.yml` even when the tagged commit is not on `main`.
 
 Tests rewrite tracked `verification/` files; commit them only when
 `git diff --ignore-cr-at-eol` shows a real change.
