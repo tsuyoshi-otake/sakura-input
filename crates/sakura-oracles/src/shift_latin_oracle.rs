@@ -53,11 +53,6 @@ impl OracleState {
         text.push_str(&self.composing);
         text
     }
-
-    #[allow(dead_code)]
-    pub fn composing_or_empty(&self) -> &str {
-        &self.composing
-    }
 }
 
 fn is_latin_letter(character: char) -> bool {

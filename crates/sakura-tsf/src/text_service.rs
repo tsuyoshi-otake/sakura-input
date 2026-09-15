@@ -432,13 +432,8 @@ struct OutputSubmission {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 struct UnknownUndoTerminalization<T> {
     completions: Vec<Completion<T>>,
-    has_undo: bool,
-    journal_drained: bool,
-    retry_allowed: bool,
-    settlement_confirmed: bool,
     disconnect_required: bool,
 }
 
@@ -473,10 +468,6 @@ fn terminalize_unknown_undo_after_document_access<T>(
     let journal_drained = journal.is_empty();
     UnknownUndoTerminalization {
         completions,
-        has_undo,
-        journal_drained,
-        retry_allowed: false,
-        settlement_confirmed,
         disconnect_required: !journal_drained || (has_undo && !settlement_confirmed),
     }
 }
@@ -574,38 +565,6 @@ fn resolve_convert_write_source(
         ConvertWriteSource::Callback
     } else {
         ConvertWriteSource::Absorb
-    }
-}
-
-/// Who owns this physical keystroke for TSF `eaten` routing.
-///
-/// `Ime` is a live reading plus Space/Henkan. The host must never receive
-/// that key: `OnTestKeyDown = FALSE` lets Chromium insert a document space
-/// into the composition, and later `OnKeyDown` work cannot take it back.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-enum PhysicalKeyOwner {
-    HostEligible,
-    Ime,
-}
-
-#[allow(dead_code)]
-impl PhysicalKeyOwner {
-    fn of(key: KeyInput, live_composition: bool) -> Self {
-        match ConversionKeyDisposition::of(key, live_composition, false) {
-            ConversionKeyDisposition::ApplyLocal => Self::Ime,
-            ConversionKeyDisposition::HostEligible | ConversionKeyDisposition::AbsorbPeer => {
-                Self::HostEligible
-            }
-        }
-    }
-
-    fn terminal_eaten(self, engine_consumed: bool) -> BOOL {
-        let disposition = match self {
-            Self::Ime => ConversionKeyDisposition::ApplyLocal,
-            Self::HostEligible => ConversionKeyDisposition::HostEligible,
-        };
-        disposition.eats(engine_consumed).into()
     }
 }
 
