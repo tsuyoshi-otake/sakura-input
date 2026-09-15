@@ -2371,3 +2371,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Learning: when pruning re-exports, run cargo doc with broken_intra_doc_links denied; a source-path caller scan misses bare intra-doc links.
 - Learning: a PowerShell function returning `, $list` passes the list as ONE pipeline object, so `| Where-Object` filters nothing; iterate with foreach instead.
 - Learning: never put a bare `cat > file` with no stdin in a Bash tool command; it blocks until timeout.
+## 2026-09-15 Phase 3.7 sakura-ipc security split (#206)
+
+- Change: `crates/sakura-ipc/src/security.rs` (1,440 lines) -> `security/{mod,admission,server_trust,process,server_trust_tests}.rs`. Dependencies: server_trust -> admission -> process. Public `sakura_ipc::security::*` paths unchanged via re-exports in mod.rs.
+- Why: client admission (pipe name/SDDL/CLIENT_ACCESS/ClientTrust) and the #104 server image-path trust policy change for different reasons; #104 tests now live only in `server_trust_tests.rs`.
+- Verification: clippy -D warnings, `cargo test -p sakura-ipc` PASS (46 listed; 16 #[test] before/after; 7 in server_trust_tests), workspace build, `cargo doc -D rustdoc::broken_intra_doc_links` PASS, dependency rules, IRV, process-clean.
+- Learning: the three ServerTrustPolicy variant links (`[Exact]` etc.) were already unresolved before the split; `Self::Variant` targets fix them. Link strings containing `#` break `sed s#..#`; use `|` as the delimiter.

@@ -7,9 +7,15 @@ Until each migration is complete, the linked current source remains canonical. A
 | Planned contract document | Owner | Current canonical source | Migration status |
 | --- | --- | --- | --- |
 | `input-scope.md` | `sakura-tsf` | [`text_service.rs`](../../crates/sakura-tsf/src/text_service.rs) input-scope classification and fail-closed policy | Planned for Phase 7.5; `sakura-tsf` remains the policy owner after the `InputScope` value type moves to `sakura-values`. |
+<<<<<<< HEAD
 | `ipc-v1.md` | `sakura-proto` | [`lib.rs`](../../crates/sakura-proto/src/lib.rs), [`message/`](../../crates/sakura-proto/src/message/mod.rs), and [`wire.rs`](../../crates/sakura-proto/src/wire.rs) | Planned for Phase 7.5; current protocol constants, messages, bounds, and codec remain canonical until then. |
 | `ipc-pipe-security.md` | `sakura-ipc` | [`security.rs`](../../crates/sakura-ipc/src/security.rs) pipe endpoint, name, and SDDL | Planned for Phase 7.5; the Phase 3 security split preserves `sakura-ipc` ownership. |
 | `ipc-server-trust.md` | `sakura-ipc` | [`security.rs`](../../crates/sakura-ipc/src/security.rs) server verification and client admission | Planned for Phase 7.5; the Phase 3 security split preserves `sakura-ipc` ownership. |
+=======
+| `ipc-v1.md` | `sakura-proto` | [`lib.rs`](../../crates/sakura-proto/src/lib.rs), [`message.rs`](../../crates/sakura-proto/src/message.rs), and [`wire.rs`](../../crates/sakura-proto/src/wire.rs) | Planned for Phase 7.5; current protocol constants, messages, bounds, and codec remain canonical until then. |
+| `ipc-pipe-security.md` | `sakura-ipc` | [`security/admission.rs`](../../crates/sakura-ipc/src/security/admission.rs) pipe endpoint, name, SDDL, and client classification | Planned for Phase 7.5; the Phase 3 security split preserves `sakura-ipc` ownership. |
+| `ipc-server-trust.md` | `sakura-ipc` | [`security/server_trust.rs`](../../crates/sakura-ipc/src/security/server_trust.rs) server image-path policy and named refusals (#104) | Planned for Phase 7.5; the Phase 3 security split preserves `sakura-ipc` ownership. |
+>>>>>>> origin/claude/phase37-ipc-security
 | `ipc-client-deadline.md` | `sakura-ipc` | [`client.rs`](../../crates/sakura-ipc/src/client.rs) call deadline and late-reply handling, with transport failure semantics in [`transport.rs`](../../crates/sakura-ipc/src/transport.rs) | Planned for Phase 7.5; the Phase 3 client/transport split preserves `sakura-ipc` ownership. |
 | `ipc-diagnostics.md` | `sakura-diagnostics` | [`diagnostics.rs`](../../crates/sakura-ipc/src/diagnostics.rs) | Planned for Phase 7.5; implementation is currently in `sakura-ipc` and moves to the optional `sakura-diagnostics` crate in Phase 3. |
 | `debug-trace.md` | `sakura-diagnostics` | [`debug_trace.rs`](../../crates/sakura-ipc/src/debug_trace.rs) | Planned for Phase 7.5; implementation is currently in `sakura-ipc` and moves to the optional `sakura-diagnostics` crate in Phase 3. |
