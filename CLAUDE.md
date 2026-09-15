@@ -15,7 +15,7 @@ from the planned target; an analysis document does not mean the target exists.
 | Engine state, ranking, history | `crates/sakura-engine` | `docs/architecture/analysis/engine.md` | FUTURE target documented |
 | TSF/COM and edit sessions | `crates/sakura-tsf` | `docs/architecture/analysis/tsf.md` | FUTURE target documented |
 | Renderer and settings | `crates/sakura-renderer`, `crates/sakura-settings` | `docs/architecture/analysis/renderer-settings.md` | FUTURE target documented |
-| Dictionary, contracts, tools | `crates/dictc`, `tools`, `data` | `docs/architecture/analysis/contracts-dictc-tools.md` | FUTURE target documented |
+| Dictionary, contracts, tools | `crates/dictc-core`, `crates/dictc`, `tools`, `data` | `docs/architecture/analysis/contracts-dictc-tools.md` | FUTURE target documented |
 | Documentation, verification, CI | `docs`, `verification`, `ci`, `.github/workflows` | `docs/architecture/analysis/docs-verification-ci.md` | FUTURE target documented |
 | Cross-layer refactor | all rows above | `docs/architecture/agent-refactor-plan.md` | FUTURE phased plan |
 

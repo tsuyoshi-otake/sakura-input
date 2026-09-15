@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use dictc::{compile_with_details, parse_connection, parse_entries, SourceDetail};
+use dictc_core::{compile_with_details, parse_connection, parse_entries, SourceDetail};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::Dictionary;
 use sakura_core::ConversionMethod;

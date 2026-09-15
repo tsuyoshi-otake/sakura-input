@@ -1,4 +1,4 @@
-use dictc::{compile, merge_entries, parse_connection, parse_entries};
+use dictc_core::{compile, merge_entries, parse_connection, parse_entries};
 use sakura_core::dictionary::{image_format as format, Dictionary, EntryFlags};
 
 const ENTRIES: &str = "# license: BSD-3-Clause\n\
@@ -55,7 +55,7 @@ fn table(image: &[u8], tag: [u8; 4]) -> (&[u8], usize) {
     (&image[offset..offset + len], count)
 }
 
-fn compile_text(source: &str, text: &str) -> Result<Vec<u8>, dictc::Error> {
+fn compile_text(source: &str, text: &str) -> Result<Vec<u8>, dictc_core::Error> {
     let entries = parse_entries(source, text)?;
     let connection = parse_connection("connection.tsv", CONNECTION, false).expect("matrix");
     compile(&entries, &connection)

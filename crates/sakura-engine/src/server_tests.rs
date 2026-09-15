@@ -385,19 +385,19 @@ fn configuration_publisher_replaces_input_snapshot_and_repaints_theme() {
 }
 
 fn prediction_conversion_fixture() -> Arc<ConversionService> {
-    let entries = dictc::parse_entries(
+    let entries = dictc_core::parse_entries(
             "server-prediction.tsv",
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t0\t100\t100\tit\tIT用語\n",
         )
         .expect("prediction entries");
-    let matrix = dictc::parse_connection(
+    let matrix = dictc_core::parse_connection(
         "server-prediction-matrix.tsv",
         "# license: MIT\nclasses\t1\ndefault\t0\n",
         false,
     )
     .expect("prediction matrix");
     let image = Box::leak(
-        dictc::compile(&entries, &matrix)
+        dictc_core::compile(&entries, &matrix)
             .expect("prediction dictionary")
             .into_boxed_slice(),
     );

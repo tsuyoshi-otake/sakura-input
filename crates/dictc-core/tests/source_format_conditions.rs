@@ -16,7 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use dictc::{
+use dictc_core::{
     parse_connection, parse_mozc_connection, parse_mozc_entries, ConnectionMatrix, SourceEntry,
     FROZEN_CLASS_COUNT,
 };
@@ -139,7 +139,7 @@ fn render_matrix(matrix: &ConnectionMatrix) -> String {
     format!("classes={classes} cells=[{}]", cells.join(","))
 }
 
-fn check(label: &str, outcome: &Outcome, parsed: Result<String, dictc::Error>) {
+fn check(label: &str, outcome: &Outcome, parsed: Result<String, dictc_core::Error>) {
     match (outcome, parsed) {
         (Outcome::Accepted(expected), Ok(rendered)) => {
             assert_eq!(&rendered, expected, "{label}");
@@ -160,7 +160,7 @@ fn check(label: &str, outcome: &Outcome, parsed: Result<String, dictc::Error>) {
     }
 }
 
-fn run(cases: Vec<Case>, parse: impl Fn(&str, bool) -> Result<String, dictc::Error>) {
+fn run(cases: Vec<Case>, parse: impl Fn(&str, bool) -> Result<String, dictc_core::Error>) {
     for case in cases {
         let label = format!(
             "{} ({})",

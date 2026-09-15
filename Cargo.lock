@@ -61,6 +61,20 @@ dependencies = [
 name = "dictc"
 version = "2.0.0"
 dependencies = [
+ "dictc-core",
+ "sakura-core",
+ "sakura-proto",
+ "sakura-rerank-proto",
+ "serde",
+ "serde_json",
+ "sha2",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "dictc-core"
+version = "2.0.0"
+dependencies = [
  "flate2",
  "quick-xml",
  "sakura-context-proto",
@@ -314,7 +328,7 @@ dependencies = [
 name = "sakura-engine"
 version = "2.0.0"
 dependencies = [
- "dictc",
+ "dictc-core",
  "sakura-ai-proto",
  "sakura-context-proto",
  "sakura-context-research",
@@ -333,7 +347,7 @@ dependencies = [
 name = "sakura-ime-eval"
 version = "2.0.0"
 dependencies = [
- "dictc",
+ "dictc-core",
  "sakura-core",
  "sakura-engine",
  "sakura-ipc",

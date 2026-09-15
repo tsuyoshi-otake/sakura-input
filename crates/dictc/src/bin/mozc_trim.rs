@@ -5,7 +5,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use dictc::{
+use dictc_core::{
     category::{
         mark_non_initial_allomorphs_with_boundary_policy, parse_mozc_pos_catalog,
         parse_non_initial_boundary_policy, NonInitialBoundaryReport,

@@ -1,4 +1,4 @@
-use dictc::{compile, parse_mozc_connection, parse_mozc_entries};
+use dictc_core::{compile, parse_mozc_connection, parse_mozc_entries};
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 
 const MOZC_ENTRIES: &str = "かんじ\t1\t2\t1200\t漢字\n\

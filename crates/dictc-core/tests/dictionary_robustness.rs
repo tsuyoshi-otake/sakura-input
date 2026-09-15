@@ -4,7 +4,7 @@
 //! shard/iteration environment variables as CI's long campaigns, so a failure
 //! is reproducible without saving attacker-controlled files in the repository.
 
-use dictc::{compile_with_details, parse_connection, parse_entries, SourceDetail};
+use dictc_core::{compile_with_details, parse_connection, parse_entries, SourceDetail};
 use sakura_core::dictionary::{DetailRelationKind, Dictionary};
 use sakura_proto::{FixedStr, MAX_PREEDIT_BYTES};
 
@@ -68,7 +68,7 @@ fn fixture() -> Vec<u8> {
             left_id: 1,
             right_id: 1,
             description: "仮名の説明。".to_owned(),
-            relations: vec![dictc::SourceDetailRelation {
+            relations: vec![dictc_core::SourceDetailRelation {
                 kind: DetailRelationKind::Related,
                 target: "関数".to_owned(),
             }],

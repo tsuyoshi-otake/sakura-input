@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use dictc::{merge_entries, parse_entries};
+use dictc_core::{merge_entries, parse_entries};
 use sakura_core::dictionary::EntryFlags;
 
 const REQUIRED_TERMS: &[(&str, &str)] = &[
