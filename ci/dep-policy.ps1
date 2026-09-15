@@ -118,7 +118,8 @@ $IsolatedWorkerRuntime = [ordered]@{
 # A dependency admitted for dictc must not therefore become available to an IME
 # runtime transitively. Check the resolved graph, not just direct manifests.
 $RuntimeCrates = @(
-    'sakura-core', 'sakura-proto', 'sakura-ipc', 'sakura-reg', 'sakura-tsf',
+    'sakura-core', 'sakura-proto', 'sakura-ipc', 'sakura-reg', 'sakura-user-prefs',
+    'sakura-install-maintenance', 'sakura-tsf',
     'sakura-engine', 'sakura-renderer', 'sakura-regtool', 'sakura-logon', 'sakura-settings'
 )
 $OfflineDetailParserCrates = @(

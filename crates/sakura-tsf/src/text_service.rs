@@ -65,10 +65,8 @@ use sakura_proto::{
     KeyCode, KeyInput, Mode, Modifiers, Output, Preedit, ScreenRect, UndoCommitOutcome,
     MAX_PREEDIT_BYTES,
 };
-use sakura_reg::{
-    user_preferences::{read_ai_text_key, AiTextKey},
-    CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DESCRIPTION,
-};
+use sakura_reg::{CLSID_SAKURA_TSF, GUID_PRESERVEDKEY_IME_TOGGLE, TEXT_SERVICE_DESCRIPTION};
+use sakura_user_prefs::{read_ai_text_key, AiTextKey};
 
 use crate::ai_wait_cursor;
 use crate::candidate_ui::CandidateUi;

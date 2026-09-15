@@ -6,8 +6,9 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use sakura_install_maintenance::launcher;
 use sakura_logon::{execute, write_status, Component};
-use sakura_reg::{com_server, launcher, user_profile, ComApartment, RegistryView};
+use sakura_reg::{com_server, user_profile, ComApartment, RegistryView};
 
 fn main() {
     let executable = std::env::current_exe().ok();
