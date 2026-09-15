@@ -14,6 +14,8 @@
 //! [`TextSink`]. It knows nothing about romaji, dictionaries, or TSF — only
 //! Unicode code points and the three settings that govern them.
 
+pub mod scan;
+
 use crate::editing::{half_katakana, katakana_char};
 use crate::simd;
 use crate::text::TextSink;
