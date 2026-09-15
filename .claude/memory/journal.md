@@ -2254,3 +2254,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Fix: add a dated correction to the decision file that cites the contract. The fail-closed rule stays. Correct the install paragraph of the 1.0.38 and 1.0.39 notes in the repository and in their published GitHub Release bodies. The 1.0.21–1.0.32 notes predate #90 and were accurate when written, so they are left as history.
 - Learning: when an owner-decision file and a later contract disagree, check the code and the contract table first, then correct the decision file with a date. Do not let release-note boilerplate propagate from one release to the next.
 - Review (CodeRabbit on PR #224): the note sentence omitted the size check and the exact `TRUST_E_NOSIGNATURE` condition. Both notes and both published Release bodies now state all conditions and link `verification/update-signing-v2.md` (75c7961). This resolves the open item in the entry above.
+
+## 2026-09-15 Move dictionary.rs into dictionary/ (#206)
+
+- Phase 3.2 starts with `git mv` only, as 3.1 did: `dictionary.rs` -> `dictionary/mod.rs`, and `dictionary_tests.rs` moves beside it under the same name so `#[path = "dictionary_tests.rs"]` still resolves without an edit.
+- `IRV-DICTIONARY-FORMAT` entry point, production, and semantic range in `benchmarks.json` now name `dictionary/mod.rs`. `measure-irv.ps1 -Compare` compares only physical LOC per id, so `baseline.json` is not updated. The `docs/contracts/README.md` link follows the move. Other `dictionary.rs` hits (`verification/high-load-input-integrity.md`, `space-key-dispatch/mutants-files.txt`) are `sakura-engine/src/dictionary.rs`, not this file.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` PASS, IRV compare PASS (all 0%), fmt check, `git diff --check`, `check-process-clean.ps1` PASS.
