@@ -2290,3 +2290,9 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Method: spliced from one snapshot with line-content markers asserted before extraction; imports generated from identifiers in the body; clippy -D warnings proves none unused.
 - Verification: wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, clippy -D warnings, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5249 (+0.9%) PASS, check-process-clean PASS.
 - Learning: asserting the expected text at each boundary line before a sed splice turns stale line numbers into a hard stop instead of a silent mis-cut.
+
+## 2026-09-15 Phase 3.2: extract reviewed dictionary details into dictionary/detail.rs (#206)
+
+- Change: moved `Dictionary::detail_at` and `impl DictionaryDetail` (Issue #30 reader over DIDX/DREC/DREL/DTOF/DTXT) from `dictionary/mod.rs` into `dictionary/detail.rs`. No visibility widened (child module reaches private fields/readers via `super::`). mod.rs 1,154 -> 989 lines; detail.rs 178 lines. Branch `claude/phase32-dictionary-detail`, stacked on PR #227.
+- Verification: clippy -D warnings, wrapped `cargo test -p sakura-core --lib dictionary` PASS, `cargo test -p dictc` PASS, fmt check, git diff --check, IRV IRV-DICTIONARY-FORMAT 5202 -> 5262 (+1.2%) PASS, check-process-clean PASS.
+- Learning: my first module doc named the detail tables DETI/DETR/DETT from memory; `format.rs` defines DIDX/DREC/DREL/DTOF/DTXT. Take table tags in docs from the constants by grep, not recall.
