@@ -2260,3 +2260,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Phase 3.2 starts with `git mv` only, as 3.1 did: `dictionary.rs` -> `dictionary/mod.rs`, and `dictionary_tests.rs` moves beside it under the same name so `#[path = "dictionary_tests.rs"]` still resolves without an edit.
 - `IRV-DICTIONARY-FORMAT` entry point, production, and semantic range in `benchmarks.json` now name `dictionary/mod.rs`. `measure-irv.ps1 -Compare` compares only physical LOC per id, so `baseline.json` is not updated. The `docs/contracts/README.md` link follows the move. Other `dictionary.rs` hits (`verification/high-load-input-integrity.md`, `space-key-dispatch/mutants-files.txt`) are `sakura-engine/src/dictionary.rs`, not this file.
 - Verified: wrapped `cargo test -p sakura-core --lib dictionary` PASS, IRV compare PASS (all 0%), fmt check, `git diff --check`, `check-process-clean.ps1` PASS.
+
+## 2026-09-15 Extract dictionary image layout into dictionary/format.rs (#206)
+
+- The inline `pub mod image_format { ... }` body moves verbatim into `dictionary/format.rs`, loaded as `#[path = "format.rs"] pub mod image_format;`. Public path `sakura_core::dictionary::image_format::*` is unchanged for dictc, sakura-ipc, and tests; no re-export was added. The module doc now cites `verification/dictionary-format-v2.md`.
+- No other crate defines the format constants (SKRADIC/LOUD/MSP1/SBD1 grep: only sakura-core; dictc tests search for `SBD1` bytes only). `ImageVersion`, parse, validate, LOUDS, lookup, and detail stay in `mod.rs`.
+- `IRV-DICTIONARY-FORMAT` enters at `format.rs`, lists it in production beside `mod.rs`, and its semantic range is `format.rs` 1-87. Physical 5,202 -> 5,207 (+0.1%, the new header lines). Do not update `baseline.json`.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 tests listed) and `cargo test -p dictc` PASS, clippy `-D warnings` for both, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
