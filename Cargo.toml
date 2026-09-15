@@ -8,6 +8,8 @@ members = [
     "crates/sakura-context-proto",
     "crates/sakura-ipc",
     "crates/sakura-reg",
+    "crates/sakura-user-prefs",
+    "crates/sakura-install-maintenance",
     "crates/sakura-tsf",
     "crates/sakura-engine",
     "crates/sakura-rerank-proto",
@@ -17,15 +19,18 @@ members = [
     "crates/sakura-regtool",
     "crates/sakura-logon",
     "crates/sakura-settings",
+    "crates/dictc-core",
     "crates/dictc",
     "crates/sakura-neural-worker",
     "crates/sakura-ai-proto",
     "crates/sakura-ai-worker",
+    "tools/candidate-sweep",
+    "tools/conversion-eval",
     "tools/ime-eval",
 ]
 
 [workspace.package]
-version = "2.0.0"
+version = "2.0.1"
 edition = "2021"
 rust-version = "1.96"
 license = "MIT"
@@ -45,6 +50,8 @@ sakura-context-proto = { path = "crates/sakura-context-proto" }
 sakura-ai-proto = { path = "crates/sakura-ai-proto" }
 sakura-ipc = { path = "crates/sakura-ipc" }
 sakura-reg = { path = "crates/sakura-reg" }
+sakura-user-prefs = { path = "crates/sakura-user-prefs" }
+sakura-install-maintenance = { path = "crates/sakura-install-maintenance" }
 sakura-engine = { path = "crates/sakura-engine" }
 sakura-context-research = { path = "crates/sakura-context-research" }
 sakura-oracles = { path = "crates/sakura-oracles" }

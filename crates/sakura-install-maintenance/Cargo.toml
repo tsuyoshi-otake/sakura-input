@@ -1,0 +1,30 @@
+[package]
+name = "sakura-install-maintenance"
+description = "Logon launcher and cleanup tasks, payload cleanup, and WER dump policy for Sakura Input."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+sakura-reg.workspace = true
+windows-core.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_Foundation",
+    "Win32_System_Registry",
+    # The logon launcher and cleanup tasks: their COM API, the VARIANTs its
+    # methods take, and GetUserNameExW for the account the trigger is scoped to.
+    "Win32_System_Com",
+    "Win32_System_TaskScheduler",
+    "Win32_System_Variant",
+    "Win32_System_Ole",
+    "Win32_Security_Authentication_Identity",
+]
+
+[lints]
+workspace = true

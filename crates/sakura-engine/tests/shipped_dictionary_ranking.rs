@@ -2055,7 +2055,7 @@ fn issue_101_pruned_fuzzy_paths_stay_reachable_from_their_own_reading() {
 /// that silently ships as a dead row.
 #[test]
 fn issue_101_curated_kana_readings_are_well_formed() {
-    let curated = dictc::parse_entries(
+    let curated = dictc_core::parse_entries(
         "data/curated-terms.tsv",
         include_str!("../../../data/curated-terms.tsv"),
     )

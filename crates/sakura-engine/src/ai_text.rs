@@ -15,7 +15,9 @@ use std::time::{Duration, Instant};
 
 use sakura_ai_proto::{Auth, Effort, Operation, Provider, Request, ServiceTier, Status, Style};
 use sakura_proto::{AiTextOperation, AiTextStatus, SessionId};
-use sakura_reg::user_preferences::{self, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle};
+use sakura_user_prefs::{
+    self as user_preferences, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle,
+};
 use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const MAX_JOBS: usize = 1;

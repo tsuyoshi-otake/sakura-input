@@ -32,13 +32,14 @@ use sakura_core::{
     UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
-use sakura_reg::user_preferences::{
-    self, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle, AiTextKey, AiTextPreferences,
-};
 use sakura_settings::configuration::ConfigurationDocument;
 use sakura_settings::formats::DictionaryFormat;
 use sakura_settings::user_dictionary::{self, ImportMode};
 use sakura_settings::{diagnostics, learning, paths, updater};
+use sakura_user_prefs::{
+    self as user_preferences, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle, AiTextKey,
+    AiTextPreferences,
+};
 use windows::core::{Result as WindowsResult, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, COLORREF, ERROR_ALREADY_EXISTS, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,

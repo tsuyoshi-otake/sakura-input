@@ -1,15 +1,13 @@
 [package]
 name = "sakura-candidate-sweep"
 description = "Offline sweep of the conversion candidate limit against latency and homophone coverage"
-version = "1.0.32"
-edition = "2021"
-rust-version = "1.96"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
 publish = false
-
-[workspace]
-resolver = "2"
-members = ["."]
 
 [features]
 default = []
@@ -19,6 +17,3 @@ wide = ["sakura-core/research-wide-candidates"]
 
 [dependencies]
 sakura-core = { path = "../../crates/sakura-core" }
-
-[profile.release]
-debug = false

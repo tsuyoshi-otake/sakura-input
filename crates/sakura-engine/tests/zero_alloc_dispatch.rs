@@ -18,7 +18,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::sync::Arc;
 
-use dictc::{compile, parse_connection, parse_entries};
+use dictc_core::{compile, parse_connection, parse_entries};
 use sakura_core::{
     ConversionInput, ConversionOptions, CrossCommitBridge, Preferences, RightContextId,
 };
