@@ -112,8 +112,8 @@
       "id": "IRV-DICTIONARY-FORMAT",
       "issue_shape": "dictionary image format / reader-writer conformance (#109 type)",
       "critical": false,
-      "entry_point": "crates/sakura-core/src/dictionary.rs::image_format",
-      "production": ["crates/sakura-core/src/dictionary.rs", "crates/dictc/src/lib.rs"],
+      "entry_point": "crates/sakura-core/src/dictionary/mod.rs::image_format",
+      "production": ["crates/sakura-core/src/dictionary/mod.rs", "crates/dictc/src/lib.rs"],
       "tests": ["crates/dictc/tests/image.rs"],
       "contracts": ["verification/dictionary-format-v2.md"],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/overflow-packaging.md", "docs/decisions/issue-28-candidate-details.md"],
@@ -122,7 +122,7 @@
       "semantic": {
         "method": "agent-verified (docs/architecture/analysis/core-proto.md §9, contracts-dictc-tools.md §8)",
         "ranges": [
-          {"file": "crates/sakura-core/src/dictionary.rs", "start": 20, "end": 103, "why": "image_format"}
+          {"file": "crates/sakura-core/src/dictionary/mod.rs", "start": 20, "end": 103, "why": "image_format"}
         ],
         "estimated_loc": 1150,
         "target_loc_after": 1150
