@@ -122,6 +122,14 @@ $RuntimeCrates = @(
     'sakura-install-maintenance', 'sakura-tsf',
     'sakura-engine', 'sakura-renderer', 'sakura-regtool', 'sakura-logon', 'sakura-settings'
 )
+# Tools that stay nested Cargo workspaces keep their own lockfile, which the
+# root lock never sees (R11). candidate-snapshot stays nested on purpose: the
+# directory is copied into historical release worktrees so its relative
+# sakura-core path resolves to that release's core. Its lock is audited against
+# the same rule, with its own package names counted as workspace crates.
+$NestedToolWorkspaces = @(
+    'tools/candidate-snapshot'
+)
 $OfflineDetailParserCrates = @(
     'serde', 'serde_derive', 'serde_json', 'itoa', 'memchr', 'ryu', 'sha2', 'digest',
     'block-buffer', 'crypto-common', 'generic-array', 'typenum', 'version_check',
@@ -220,6 +228,19 @@ function Invoke-SelfTest {
         }
     }
 
+    # R11: every nested tool workspace must still be readable, or the audit of
+    # its lock would silently stop. A stale entry fails here, not as a pass.
+    foreach ($tool in $NestedToolWorkspaces) {
+        $toolRoot = Join-Path $repoRoot $tool
+        try {
+            $names = Get-WorkspaceCrateName -Manifest (Join-Path $toolRoot 'Cargo.toml')
+            if ($names.Count -eq 0) { $failures.Add("nested tool '$tool' declares no package") }
+            $null = Get-LockedPackageName -Lock (Join-Path $toolRoot 'Cargo.lock')
+        } catch {
+            $failures.Add("nested tool '$tool' cannot be audited: $_")
+        }
+    }
+
     if ($failures.Count -gt 0) {
         Write-Host 'dep-policy self-test FAILED:' -ForegroundColor Red
         $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
@@ -235,10 +256,25 @@ if ($SelfTest) {
 
 $workspaceCrates = Get-WorkspaceCrateName -Manifest $ManifestFile
 $packages = Get-LockedPackageName -Lock $LockFile
-$offenders = Get-DisallowedPackage -PackageName $packages -WorkspaceCrate $workspaceCrates
+$offenders = New-Object System.Collections.Generic.List[string]
+foreach ($name in (Get-DisallowedPackage -PackageName $packages -WorkspaceCrate $workspaceCrates)) {
+    $offenders.Add($name)
+}
 
 Write-Host ("Checked {0} locked packages against the full-scratch rule (DESIGN.md 3.1)." -f (
         $packages | Sort-Object -Unique).Count)
+
+foreach ($tool in $NestedToolWorkspaces) {
+    $toolRoot = Join-Path $repoRoot $tool
+    $toolCrates = @($workspaceCrates) + @(
+        Get-WorkspaceCrateName -Manifest (Join-Path $toolRoot 'Cargo.toml'))
+    $toolPackages = Get-LockedPackageName -Lock (Join-Path $toolRoot 'Cargo.lock')
+    foreach ($name in (Get-DisallowedPackage -PackageName $toolPackages -WorkspaceCrate $toolCrates)) {
+        $offenders.Add("$name (in $tool/Cargo.lock)")
+    }
+    Write-Host ("Checked {0} locked packages in nested tool workspace {1}." -f (
+            $toolPackages | Sort-Object -Unique).Count, $tool)
+}
 
 if ($offenders.Count -gt 0) {
     Write-Host ''
