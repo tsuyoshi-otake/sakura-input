@@ -77,7 +77,7 @@ is not authorized for redistribution, so this remains an engineering evaluation
 rather than release or production-default evidence.
 
 ```powershell
-cargo run --locked --release -p dictc --bin neural-eval -- `
+cargo run --locked --release -p sakura-conversion-eval --bin neural-eval -- `
   --dictionary <system.dic> `
   --corpus corpus\held-out.tsv `
   --worker <staging-dir>\sakura_neural_worker.exe `
