@@ -2239,14 +2239,6 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Learning: `ci/run-test-quiet.ps1` needs `pwsh -Command`. Under `pwsh -File` the `-Command` argument arrives as a string, the wrapper fails to bind it, and the outer exit code can still read 0. When one generated report goes stale, regenerate and check all its siblings in the same fix.
 - Review (Codex on PR #222, both confirmed in code). (1) The notes said an unsigned build is never fetched by auto-update. This was false, and 1.0.39's notes said the same. `updater.rs:565` accepts `(AuthenticodePolicy::Unsigned, AuthenticodeStatus::Unsigned)` once the manifest signature and SHA-256 pass. This has been so since #90 (bb2d2c6). (2) The CPU floor is AVX + SSSE3 (`setup.iss` `InitializeSetup`, `+avx,+ssse3`), not AVX alone. Learning: take release-note boilerplate from the code and the installer checks, not from the previous notes.
 
-<<<<<<< HEAD
-## 2026-09-15 Correct the stale "unsigned builds are not auto-updated" statement
-
-- Symptom: Codex review on PR #222 found that the release notes said an unsigned build is never fetched or run by automatic update.
-- Root cause: `docs/decisions/release-signing.md` (2026-08-22) says so, and the 1.0.38 and 1.0.39 notes copied it. But since #90 (bb2d2c6) the v2 contract makes an unsigned release eligible. The eligibility row is at `verification/update-signing-v2.md:177`, and `updater.rs:565` accepts it. The conditions are all three of: the pinned manifest signature declares `authenticode=unsigned`; the size and SHA-256 match; `WinVerifyTrust` returns exactly `TRUST_E_NOSIGNATURE`. DESIGN.md and the 1.0.36 notes were already correct.
-- Fix: add a dated correction to the decision file that cites the contract. The fail-closed rule stays. Correct the install paragraph of the 1.0.38 and 1.0.39 notes in the repository and in their published GitHub Release bodies. The 1.0.21–1.0.32 notes predate #90 and were accurate when written, so they are left as history.
-- Learning: when an owner-decision file and a later contract disagree, check the code and the contract table first, then correct the decision file with a date. Do not let release-note boilerplate propagate from one release to the next.
-=======
 ## 2026-09-15 2.0.0 published (#221)
 
 - Merged PR #222 at exact head `d09cc52` → `2eac402`; annotated tag `v2.0.0` → `2eac402`. `release.yml` run 34925429911 success. Candidate: `sakura_setup.exe` 24,532,452 bytes, sha256 `8bc4059b94a3711159cf8377bcbf0c65e8a4048af1f921f6ca792ba1f0bc9c1c`, manifest `release_sequence=8`, `authenticode=unsigned`, `signing-status.txt` `unsigned-owner-approved`; both `gh attestation verify` with source/signer digest `2eac402` PASS.
@@ -2254,4 +2246,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Symptom: the first `publish-release.ps1` run hung >10 min with 0 CPU in the child `verify-update-manifest.ps1` right after signing, before any GitHub mutation. `Get-AuthenticodeSignature` alone took 0.3 s. Cause not proven; the run was launched from Git Bash with stdin as an open pipe. Fix: killed only that exact tree (56008/86764), confirmed no release existed, removed the partial `.sig` (the script requires exactly two candidate files), reran with `pwsh -NonInteractive ... < /dev/null` — completed in about a minute.
 - Learning: run release PowerShell from Git Bash with `-NonInteractive` and stdin closed; a stale `.sig` from an interrupted run blocks the rerun by design.
 - Open: the old handoff text said the updater refuses unsigned auto-update, but `updater.rs` accepts `authenticode=unsigned` + NotSigned since #90; decision docs and 1.0.39 notes should be reconciled separately.
->>>>>>> origin/main
+
+## 2026-09-15 Correct the stale "unsigned builds are not auto-updated" statement
+
+- Symptom: Codex review on PR #222 found that the release notes said an unsigned build is never fetched or run by automatic update.
+- Root cause: `docs/decisions/release-signing.md` (2026-08-22) says so, and the 1.0.38 and 1.0.39 notes copied it. But since #90 (bb2d2c6) the v2 contract makes an unsigned release eligible. The eligibility row is at `verification/update-signing-v2.md:177`, and `updater.rs:565` accepts it. The conditions are all three of: the pinned manifest signature declares `authenticode=unsigned`; the size and SHA-256 match; `WinVerifyTrust` returns exactly `TRUST_E_NOSIGNATURE`. DESIGN.md and the 1.0.36 notes were already correct.
+- Fix: add a dated correction to the decision file that cites the contract. The fail-closed rule stays. Correct the install paragraph of the 1.0.38 and 1.0.39 notes in the repository and in their published GitHub Release bodies. The 1.0.21–1.0.32 notes predate #90 and were accurate when written, so they are left as history.
+- Learning: when an owner-decision file and a later contract disagree, check the code and the contract table first, then correct the decision file with a date. Do not let release-note boilerplate propagate from one release to the next.
+- Review (CodeRabbit on PR #224): the note sentence omitted the size check and the exact `TRUST_E_NOSIGNATURE` condition. Both notes and both published Release bodies now state all conditions and link `verification/update-signing-v2.md` (75c7961). This resolves the open item in the entry above.
