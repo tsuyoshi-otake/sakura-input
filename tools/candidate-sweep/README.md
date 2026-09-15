@@ -10,14 +10,13 @@ latency, lattice/state consumption, the search terminal, and the resulting
 candidate count for every (reading, limit) pair, against a real dictionary
 image.
 
-The directory is a nested Cargo workspace with no registry dependencies, so
-`Cargo.lock` holds only the two path packages and nothing enters the shipping
-crates.
+The package is a root workspace member (Phase 3.10, #206), so clippy, the
+workspace tests and `ci/dep-policy.ps1` cover it. It has no registry
+dependencies. `wide` is not a default feature, so a plain workspace build keeps
+the shipping candidate bound; only an explicit `--features` request enables it.
 
 ```powershell
-cargo generate-lockfile --offline --manifest-path tools/candidate-sweep/Cargo.toml
-cargo build --release --offline --features wide `
-  --manifest-path tools/candidate-sweep/Cargo.toml
+cargo build --locked --release -p sakura-candidate-sweep --features wide
 ```
 
 `--features wide` enables `sakura-core/research-wide-candidates`, which raises
@@ -26,7 +25,7 @@ refuses any limit above the shipping bound, because `ConversionOptions`
 validation would reject it. Shipping targets never enable either feature.
 
 ```powershell
-.\tools\candidate-sweep\target\x86_64-pc-windows-msvc\release\sakura-candidate-sweep.exe `
+.\target\x86_64-pc-windows-msvc\release\sakura-candidate-sweep.exe `
   --dictionary artifacts\release\system.dic `
   --readings eval\corpus\behavioral\candidate-limit-issue95\readings.txt `
   --limits 9,18,27,36,54,72,108,162,256,512 `
