@@ -2340,3 +2340,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Fix: renamed to width/scan/testing.rs.
 - Verification: dependency-rules -SelfTest and -Enforce R1,R2,R8,R9,R12,R13 PASS; clippy; audit-feature tests; SIMD agreement; assembly gate; process-clean.
 - Learning: for any module split, run `ci/check-dependency-rules.ps1 -Advisory -Enforce R1,R2,R8,R9,R12,R13` locally alongside fmt/clippy/IRV. Name test-only helper modules `testing.rs`.
+
+## 2026-09-15 Phase 3.5 facade pruning and R10 (#206)
+
+- Work: added ci/check-facade.ps1 (Rust-aware caller resolver over cargo metadata targets, tools/, docs outside history; comments/strings blanked; glob import = caller of all). Removed 54 of 117 flat sakura_core re-exports with zero callers; 63 remain. R10 blocking in the dependency-rules CI job.
+- Verification: -SelfTest PASS, audit PASS; build --workspace --all-targets, both out-of-workspace tools, clippy -D warnings, cargo test -p sakura-core (299 lib tests), dep rules, IRV, process-clean all PASS.
+- Failure found: cargo doc with -D rustdoc::broken_intra_doc_links failed on conversion/mod.rs [`COMMIT_HISTORY_PENALTY`], which resolved through the removed crate-root re-export. Build and clippy do not see intra-doc links. Fix: explicit crate::input_repair path.
+- Learning: when pruning re-exports, run cargo doc with broken_intra_doc_links denied; a source-path caller scan misses bare intra-doc links.
+- Learning: a PowerShell function returning `, $list` passes the list as ONE pipeline object, so `| Where-Object` filters nothing; iterate with foreach instead.
+- Learning: never put a bare `cat > file` with no stdin in a Bash tool command; it blocks until timeout.
