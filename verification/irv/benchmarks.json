@@ -113,7 +113,7 @@
       "issue_shape": "dictionary image format / reader-writer conformance (#109 type)",
       "critical": false,
       "entry_point": "crates/sakura-core/src/dictionary/format.rs",
-      "production": ["crates/sakura-core/src/dictionary/format.rs", "crates/sakura-core/src/dictionary/parse.rs", "crates/sakura-core/src/dictionary/mod.rs", "crates/dictc/src/lib.rs"],
+      "production": ["crates/sakura-core/src/dictionary/format.rs", "crates/sakura-core/src/dictionary/parse.rs", "crates/sakura-core/src/dictionary/validate.rs", "crates/sakura-core/src/dictionary/mod.rs", "crates/dictc/src/lib.rs"],
       "tests": ["crates/dictc/tests/image.rs"],
       "contracts": ["verification/dictionary-format-v2.md"],
       "docs": ["docs/rules/ci-verification.md", "docs/rules/windows.md", "docs/rules/this-machine.md", "docs/decisions/test-output.md", "docs/rules/overflow-packaging.md", "docs/decisions/issue-28-candidate-details.md"],

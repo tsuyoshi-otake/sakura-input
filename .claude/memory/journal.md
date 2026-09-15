@@ -2275,3 +2275,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Line ranges were spliced from one snapshot of the original (1-16, `mod parse;`, 17-359, 611-1790, 1873-end), so no later range went stale. mod.rs 2,107 -> 1,775; parse.rs 344.
 - `IRV-DICTIONARY-FORMAT` production adds `parse.rs` because a #109-type change now reads the header parser there; omitting it would hide reading. Physical 5,202 -> 5,219 (+0.3%). Do not update `baseline.json`.
 - Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 listed) and `cargo test -p dictc` PASS, clippy `-D warnings`, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
+
+## 2026-09-15 Extract dictionary record and table validation into dictionary/validate.rs (#206)
+
+- `validate_tables`, `validate_v2_surfaces`, `validate_v2_annotations`, `validate_v2_annotation_index`, `validate_details`, `detail_text`, `validate_offsets`, and the optional-table validators (`validate_boundary_table`, `validate_single_kanji_table`, `validate_matrix_table`) move into `dictionary/validate.rs`.
+- Sibling visibility: `parse.rs` calls `validate_tables` and the three table validators, so only those four became `pub(super)`. `text_record` stays in `mod.rs` because `write_surface` / `write_annotation` also read through it (grep: mod.rs 782, 878).
+- Imports were generated from the identifiers present in each extracted body, then proven minimal by clippy `-D warnings` (unused imports would fail). Ranges were spliced from one snapshot (1-17, `mod validate;`, 18-930, 1287-1540, 1740-end). mod.rs 1,775 -> 1,221; validate.rs 571; parse.rs 347.
+- `IRV-DICTIONARY-FORMAT` production adds `validate.rs` (a #109-type change reads the validators). Physical 5,202 -> 5,239 (+0.7%). Do not update `baseline.json`.
+- Verified: wrapped `cargo test -p sakura-core --lib dictionary` (22 listed) and `cargo test -p dictc` PASS, clippy, fmt, `git diff --check`, IRV compare PASS, process cleanup PASS.
