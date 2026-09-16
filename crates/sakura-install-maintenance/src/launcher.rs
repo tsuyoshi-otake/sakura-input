@@ -50,6 +50,7 @@
 //! to that site.
 
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{ERROR_MORE_DATA, E_INVALIDARG, VARIANT_FALSE, VARIANT_TRUE};
 use windows::Win32::Security::Authentication::Identity::{GetUserNameExW, NameSamCompatible};
@@ -57,7 +58,8 @@ use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 use windows::Win32::System::TaskScheduler::{
     IExecAction, ILogonTrigger, ITaskFolder, ITaskService, TaskScheduler, TASK_ACTION_EXEC,
     TASK_CREATE_OR_UPDATE, TASK_ENUM_HIDDEN, TASK_INSTANCES_IGNORE_NEW,
-    TASK_LOGON_INTERACTIVE_TOKEN, TASK_RUNLEVEL_LUA, TASK_TRIGGER_LOGON,
+    TASK_LOGON_INTERACTIVE_TOKEN, TASK_RUNLEVEL_LUA, TASK_STATE_QUEUED, TASK_STATE_RUNNING,
+    TASK_TRIGGER_LOGON,
 };
 use windows::Win32::System::Variant::VARIANT;
 use windows_core::{Error, Interface, Result, BSTR, HRESULT, PWSTR};
@@ -352,6 +354,108 @@ pub fn is_registered() -> bool {
     }
 }
 
+/// Task Scheduler's `LastTaskResult` while an instance is still running.
+const SCHED_S_TASK_RUNNING: i32 = 0x0004_1301;
+
+/// Task Scheduler's `LastTaskResult` for a task that has never run.
+const SCHED_S_TASK_HAS_NOT_RUN: i32 = 0x0004_1303;
+
+/// How a [`run_now_and_wait`] call ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunOutcome {
+    /// The instance finished; this is the bootstrap's own exit code.
+    Finished(i32),
+    /// The instance was still running when the wait budget ran out.
+    TimedOut,
+}
+
+/// One observation of the task while waiting for the instance we started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Observation {
+    /// The registered task reports a running or queued instance.
+    busy: bool,
+    /// `LastRunTime` moved past the value read before `Run`.
+    ran_since_request: bool,
+    /// The instance handle `Run` returned no longer refers to a live instance.
+    instance_gone: bool,
+    last_result: i32,
+}
+
+/// Decides whether the instance started by [`run_now_and_wait`] has finished.
+///
+/// A task whose previous run landed in the same second as this request leaves
+/// `LastRunTime` unchanged, so a vanished instance handle also counts as
+/// evidence that our instance ran. The result codes that mean "running" or
+/// "never ran" are not exit codes and keep the wait going.
+fn finished(observation: Observation) -> Option<i32> {
+    let ran = observation.ran_since_request || observation.instance_gone;
+    let settled = !matches!(
+        observation.last_result,
+        SCHED_S_TASK_RUNNING | SCHED_S_TASK_HAS_NOT_RUN
+    );
+    (!observation.busy && ran && settled).then_some(observation.last_result)
+}
+
+/// Runs the calling user's logon task now and waits for that instance to end.
+///
+/// The Task Scheduler service creates the instance, so the bootstrap and the
+/// engine and renderer it starts belong to neither the caller's process tree
+/// nor the caller's job. An installer started by a shell that is later closed
+/// (for example an agent's `Start-Process -Wait` session, whose job kills every
+/// member) therefore cannot take the IME down with it (#252).
+///
+/// Requires an initialized apartment ([`sakura_reg::ComApartment`]). A missing
+/// task, or a task this account may not run, is an `Err` so the caller can
+/// choose a fallback.
+pub fn run_now_and_wait(budget: Duration) -> Result<RunOutcome> {
+    let service = connect()?;
+    let account = current_account()?;
+    let location = Location::resolve(&service, &account, false)?;
+    let name = BSTR::from(location.name.as_str());
+
+    // SAFETY: `location.folder` is live; a missing task is an `Err`.
+    let task = unsafe { location.folder.GetTask(&name) }?;
+    // SAFETY: `task` is live. A task that never ran reports zero or an error,
+    // and either is a usable "before" value.
+    let before = unsafe { task.LastRunTime() }.unwrap_or(0.0);
+    // SAFETY: `task` is live; the empty VARIANT means "no parameters".
+    let instance = unsafe { task.Run(&VARIANT::default()) }?;
+
+    let deadline = Instant::now() + budget;
+    loop {
+        // Re-read the registration on every poll so each property reflects the
+        // service's current state rather than a cached snapshot.
+        // SAFETY: as for the `GetTask` above.
+        let task = unsafe { location.folder.GetTask(&name) }?;
+        // SAFETY: `instance` came from `Run`; `Refresh` fails once the instance
+        // it names has ended, which is what "gone" records.
+        let instance_gone = unsafe { instance.Refresh() }.is_err()
+            || !matches!(
+                unsafe { instance.State() },
+                Ok(TASK_STATE_RUNNING | TASK_STATE_QUEUED)
+            );
+        // SAFETY: `task` is live for the three property reads below.
+        let observation = unsafe {
+            Observation {
+                busy: matches!(task.State(), Ok(TASK_STATE_RUNNING | TASK_STATE_QUEUED)),
+                ran_since_request: task.LastRunTime().is_ok_and(|at| at > before),
+                instance_gone,
+                last_result: task.LastTaskResult().unwrap_or(SCHED_S_TASK_HAS_NOT_RUN),
+            }
+        };
+        if let Some(code) = finished(observation) {
+            return Ok(RunOutcome::Finished(code));
+        }
+        if Instant::now() >= deadline {
+            return Ok(RunOutcome::TimedOut);
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Short enough that a normal bootstrap adds well under a second to install.
+const POLL_INTERVAL: Duration = Duration::from_millis(200);
+
 fn connect() -> Result<ITaskService> {
     // SAFETY: `CoCreateInstance` needs an initialized apartment, which the
     // caller holds (see the module's Safety note); `service` is then a live
@@ -446,6 +550,50 @@ mod tests {
             let name = sanitize(account);
             assert!(!name.contains(['\\', '/', ':']), "{name}");
         }
+    }
+
+    fn observed(busy: bool, ran: bool, gone: bool, last_result: i32) -> Observation {
+        Observation {
+            busy,
+            ran_since_request: ran,
+            instance_gone: gone,
+            last_result,
+        }
+    }
+
+    #[test]
+    fn a_finished_run_reports_the_bootstrap_exit_code() {
+        assert_eq!(finished(observed(false, true, true, 0)), Some(0));
+        assert_eq!(finished(observed(false, true, true, 10)), Some(10));
+    }
+
+    #[test]
+    fn a_busy_or_unsettled_task_keeps_waiting() {
+        assert_eq!(finished(observed(true, true, false, 0)), None);
+        assert_eq!(
+            finished(observed(false, true, true, SCHED_S_TASK_RUNNING)),
+            None
+        );
+        assert_eq!(
+            finished(observed(false, true, true, SCHED_S_TASK_HAS_NOT_RUN)),
+            None
+        );
+    }
+
+    /// Before the service has picked the request up, the task is idle and still
+    /// shows the previous run's result. That stale result must not be reported
+    /// as the outcome of the run just requested.
+    #[test]
+    fn a_previous_result_is_not_mistaken_for_the_requested_run() {
+        assert_eq!(finished(observed(false, false, false, 0)), None);
+        assert_eq!(finished(observed(false, false, false, 4)), None);
+    }
+
+    /// `LastRunTime` has one-second resolution, so a run in the same second as
+    /// the previous one is recognised by its instance ending instead.
+    #[test]
+    fn an_ended_instance_counts_as_a_run_when_the_timestamp_did_not_move() {
+        assert_eq!(finished(observed(false, false, true, 0)), Some(0));
     }
 
     #[test]

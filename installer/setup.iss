@@ -70,9 +70,9 @@ en.PostInstallAi=Configure Sakura Input AI text transformation
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "2.0.2"
+#define AppProductVersion "2.0.3"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\2.0.2-dev"
+#define AppVersionedDir "{app}\versions\2.0.3-dev"
 #endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0
@@ -239,10 +239,14 @@ Filename: "{app}\sakura_regtool.exe"; Parameters: "--configure-diagnostics"; Fla
 ; Per-user: adds Sakura Input to this account's input list, ensures the stable
 ; logon task exists, and runs that same stable bootstrap once for the current
 ; desktop (user_profile::enable + launcher::register_if_missing +
-; sakura_logon.exe). An existing task is preserved across updates; only a
-; missing task is created. Starting the bootstrap here is required because an
-; update stops the old engine before switching payloads, while a logon task does
-; not run again until the next sign-in. This must land in the *signed-in* user's HKCU,
+; launcher::run_now_and_wait). An existing task is preserved across updates;
+; only a missing task is created. Starting the bootstrap here is required
+; because an update stops the old engine before switching payloads, while a
+; logon task does not run again until the next sign-in. The bootstrap runs as
+; that task, started by the Task Scheduler service, so the engine and renderer
+; are not descendants of Setup and do not die with whatever job Setup's own
+; caller is in (#252); only a task that cannot be run at all falls back to
+; starting sakura_logon.exe directly. This must land in the *signed-in* user's HKCU,
 ; never the elevated installer's -- under "run as different user",
 ; SCCM/Intune, or a SYSTEM deployment, the elevated process's HKCU is a
 ; different hive, and writing there would enable the IME for an account

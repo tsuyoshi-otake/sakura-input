@@ -40,7 +40,10 @@ Properties the script must hold to, learned from how IMEs fail:
   fresh per-user registration; existing logon tasks are not rewritten.
   `--enable-profile` also waits for the stable logon bootstrap after the update,
   so the newly active engine and renderer start in the current desktop instead
-  of waiting for the next sign-in.
+  of waiting for the next sign-in. It runs that bootstrap as the logon task
+  through Task Scheduler rather than as its own child, so closing the shell or
+  job that started Setup (for example `Start-Process -Wait` from an agent
+  session) does not also kill the engine and renderer (#252).
 - **Two install-time preconditions gate everything else (DESIGN 3.2/12.2).**
   `MinVersion=10.0.22000` refuses anything older than Windows 11, and
   `InitializeSetup` refuses a CPU without the AVX + SSSE3 baseline before any
