@@ -255,7 +255,68 @@ fn enable_profile(logon_stub: Option<PathBuf>) -> Result<(), String> {
 /// sign-in, so `--enable-profile` must also bootstrap this session before it
 /// reports success. The signed-in-user guard above ensures this process never
 /// starts the IME in an elevated installer's or SYSTEM account's session.
+///
+/// The bootstrap runs as the logon task itself, started by the Task Scheduler
+/// service, rather than as a child of this process. A child would place the
+/// engine and renderer in the installer caller's process tree and job, and a
+/// caller that closes its job (an agent shell running `Start-Process -Wait`,
+/// then stopping the wait) would kill both at once (#252). Only when the task
+/// cannot be run at all does this fall back to a direct child, because an IME
+/// started that way is still better than none.
 fn start_current_session(logon_stub: &Path) -> Result<(), String> {
+    match after_task_run(launcher::run_now_and_wait(BOOTSTRAP_BUDGET)) {
+        TaskBootstrap::Done(result) => result,
+        TaskBootstrap::Fallback(reason) => {
+            println!(
+                "{reason}; starting the bootstrap directly, so this session's IME \
+                 is tied to the installer's caller until the next sign-in"
+            );
+            start_current_session_directly(logon_stub)
+        }
+    }
+}
+
+/// The bootstrap only repairs registration and starts two processes, so a run
+/// still going after this long is stuck rather than slow.
+const BOOTSTRAP_BUDGET: Duration = Duration::from_secs(60);
+
+/// What [`start_current_session`] does after asking for a logon task run.
+#[derive(Debug, PartialEq, Eq)]
+enum TaskBootstrap {
+    /// The run was requested; its result (success, failure, hang, or unknown)
+    /// is final.
+    Done(Result<(), String>),
+    /// The run was never requested; start the bootstrap directly.
+    Fallback(String),
+}
+
+/// Maps a logon task run to the installer's result.
+///
+/// A run that was requested and then failed, hung, or could not be observed is
+/// not retried directly: a second bootstrap would race the first, and the
+/// failure is what the installer log should show.
+fn after_task_run(run: windows::core::Result<launcher::RunOutcome>) -> TaskBootstrap {
+    TaskBootstrap::Done(match run {
+        Ok(launcher::RunOutcome::Finished(0)) => Ok(()),
+        Ok(launcher::RunOutcome::Finished(code)) => Err(format!(
+            "current-session bootstrap failed with exit code {code}"
+        )),
+        Ok(launcher::RunOutcome::TimedOut) => Err(format!(
+            "current-session bootstrap did not finish within {} s",
+            BOOTSTRAP_BUDGET.as_secs()
+        )),
+        Ok(launcher::RunOutcome::Unobserved(error)) => Err(format!(
+            "current-session bootstrap was requested but its result could not be read \
+             within {} s: {error}",
+            BOOTSTRAP_BUDGET.as_secs()
+        )),
+        Err(error) => {
+            return TaskBootstrap::Fallback(format!("running the logon task failed: {error}"))
+        }
+    })
+}
+
+fn start_current_session_directly(logon_stub: &Path) -> Result<(), String> {
     let working_dir = logon_stub
         .parent()
         .ok_or_else(|| "logon bootstrap path has no parent directory".to_owned())?;
@@ -327,5 +388,54 @@ fn explain(action: &str, error: &Error) -> String {
         )
     } else {
         message
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{after_task_run, launcher::RunOutcome, TaskBootstrap};
+    use windows::core::Error;
+    use windows::Win32::Foundation::E_ACCESSDENIED;
+
+    #[test]
+    fn a_successful_task_run_completes_the_bootstrap() {
+        assert_eq!(
+            after_task_run(Ok(RunOutcome::Finished(0))),
+            TaskBootstrap::Done(Ok(()))
+        );
+    }
+
+    #[test]
+    fn a_failed_task_run_reports_the_bootstrap_bitmask_without_a_direct_retry() {
+        let TaskBootstrap::Done(Err(message)) = after_task_run(Ok(RunOutcome::Finished(12))) else {
+            panic!("a failed run must be final");
+        };
+        assert!(message.contains("exit code 12"), "{message}");
+    }
+
+    #[test]
+    fn a_hung_task_run_is_a_failure_not_a_fallback() {
+        let TaskBootstrap::Done(Err(message)) = after_task_run(Ok(RunOutcome::TimedOut)) else {
+            panic!("a hung run must be final");
+        };
+        assert!(message.contains("did not finish"), "{message}");
+    }
+
+    #[test]
+    fn an_unobserved_task_run_is_a_failure_not_a_fallback() {
+        let unobserved = RunOutcome::Unobserved(Error::from(E_ACCESSDENIED));
+        let TaskBootstrap::Done(Err(message)) = after_task_run(Ok(unobserved)) else {
+            panic!("a requested run must never start a second bootstrap");
+        };
+        assert!(message.contains("could not be read"), "{message}");
+    }
+
+    #[test]
+    fn a_task_that_cannot_run_falls_back_to_a_direct_bootstrap() {
+        let TaskBootstrap::Fallback(reason) = after_task_run(Err(Error::from(E_ACCESSDENIED)))
+        else {
+            panic!("an unrunnable task must fall back");
+        };
+        assert!(reason.contains("running the logon task failed"), "{reason}");
     }
 }
