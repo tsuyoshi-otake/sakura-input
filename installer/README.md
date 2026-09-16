@@ -43,7 +43,13 @@ Properties the script must hold to, learned from how IMEs fail:
   of waiting for the next sign-in. It runs that bootstrap as the logon task
   through Task Scheduler rather than as its own child, so closing the shell or
   job that started Setup (for example `Start-Process -Wait` from an agent
-  session) does not also kill the engine and renderer (#252).
+  session) does not also kill the engine and renderer (#252). That guarantee
+  holds only when Task Scheduler accepts the run request. If the task cannot
+  be run at all (missing, disabled, or the service unreachable), regtool falls
+  back to starting the bootstrap as its own child, and that session's engine
+  and renderer stay tied to Setup's caller until the next sign-in. Once the run
+  request is accepted, a timeout or an unreadable result is a failure, never a
+  second direct start.
 - **Two install-time preconditions gate everything else (DESIGN 3.2/12.2).**
   `MinVersion=10.0.22000` refuses anything older than Windows 11, and
   `InitializeSetup` refuses a CPU without the AVX + SSSE3 baseline before any
