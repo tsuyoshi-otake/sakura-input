@@ -360,13 +360,16 @@ const SCHED_S_TASK_RUNNING: i32 = 0x0004_1301;
 /// Task Scheduler's `LastTaskResult` for a task that has never run.
 const SCHED_S_TASK_HAS_NOT_RUN: i32 = 0x0004_1303;
 
-/// How a [`run_now_and_wait`] call ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How a [`run_now_and_wait`] call ended after the run was requested.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunOutcome {
     /// The instance finished; this is the bootstrap's own exit code.
     Finished(i32),
     /// The instance was still running when the wait budget ran out.
     TimedOut,
+    /// The run was requested, but the task could no longer be read when the
+    /// wait budget ran out. The bootstrap may have run; its result is unknown.
+    Unobserved(Error),
 }
 
 /// One observation of the task while waiting for the instance we started.
@@ -376,24 +379,37 @@ struct Observation {
     busy: bool,
     /// `LastRunTime` moved past the value read before `Run`.
     ran_since_request: bool,
-    /// The instance handle `Run` returned no longer refers to a live instance.
-    instance_gone: bool,
     last_result: i32,
 }
 
 /// Decides whether the instance started by [`run_now_and_wait`] has finished.
 ///
-/// A task whose previous run landed in the same second as this request leaves
-/// `LastRunTime` unchanged, so a vanished instance handle also counts as
-/// evidence that our instance ran. The result codes that mean "running" or
-/// "never ran" are not exit codes and keep the wait going.
+/// Only a moved `LastRunTime` counts as evidence that the requested run
+/// happened; until then the task still shows the previous run's result. The
+/// result codes that mean "running" or "never ran" are not exit codes and keep
+/// the wait going.
 fn finished(observation: Observation) -> Option<i32> {
-    let ran = observation.ran_since_request || observation.instance_gone;
     let settled = !matches!(
         observation.last_result,
         SCHED_S_TASK_RUNNING | SCHED_S_TASK_HAS_NOT_RUN
     );
-    (!observation.busy && ran && settled).then_some(observation.last_result)
+    (!observation.busy && observation.ran_since_request && settled)
+        .then_some(observation.last_result)
+}
+
+/// Decides what one poll means once the run has been requested.
+///
+/// A failed read is not a reason to stop: the run is already in the service's
+/// hands, so the caller must neither report it finished nor start a second
+/// bootstrap. The wait continues, and only an expired budget turns the last
+/// poll into an outcome.
+fn after_poll(poll: &Result<Observation>, expired: bool) -> Option<RunOutcome> {
+    match poll {
+        Ok(observation) => finished(*observation)
+            .map(RunOutcome::Finished)
+            .or(expired.then_some(RunOutcome::TimedOut)),
+        Err(error) => expired.then(|| RunOutcome::Unobserved(error.clone())),
+    }
 }
 
 /// Runs the calling user's logon task now and waits for that instance to end.
@@ -404,9 +420,10 @@ fn finished(observation: Observation) -> Option<i32> {
 /// (for example an agent's `Start-Process -Wait` session, whose job kills every
 /// member) therefore cannot take the IME down with it (#252).
 ///
-/// Requires an initialized apartment ([`sakura_reg::ComApartment`]). A missing
-/// task, or a task this account may not run, is an `Err` so the caller can
-/// choose a fallback.
+/// Requires an initialized apartment ([`sakura_reg::ComApartment`]). `Err`
+/// means the run was never requested (for example the task is missing or this
+/// account may not run it), so the caller may choose a fallback. Every failure
+/// after the request is an [`RunOutcome`] instead.
 pub fn run_now_and_wait(budget: Duration) -> Result<RunOutcome> {
     let service = connect()?;
     let account = current_account()?;
@@ -419,37 +436,30 @@ pub fn run_now_and_wait(budget: Duration) -> Result<RunOutcome> {
     // and either is a usable "before" value.
     let before = unsafe { task.LastRunTime() }.unwrap_or(0.0);
     // SAFETY: `task` is live; the empty VARIANT means "no parameters".
-    let instance = unsafe { task.Run(&VARIANT::default()) }?;
+    unsafe { task.Run(&VARIANT::default()) }?;
 
     let deadline = Instant::now() + budget;
     loop {
-        // Re-read the registration on every poll so each property reflects the
-        // service's current state rather than a cached snapshot.
-        // SAFETY: as for the `GetTask` above.
-        let task = unsafe { location.folder.GetTask(&name) }?;
-        // SAFETY: `instance` came from `Run`; `Refresh` fails once the instance
-        // it names has ended, which is what "gone" records.
-        let instance_gone = unsafe { instance.Refresh() }.is_err()
-            || !matches!(
-                unsafe { instance.State() },
-                Ok(TASK_STATE_RUNNING | TASK_STATE_QUEUED)
-            );
-        // SAFETY: `task` is live for the three property reads below.
-        let observation = unsafe {
-            Observation {
-                busy: matches!(task.State(), Ok(TASK_STATE_RUNNING | TASK_STATE_QUEUED)),
-                ran_since_request: task.LastRunTime().is_ok_and(|at| at > before),
-                instance_gone,
-                last_result: task.LastTaskResult().unwrap_or(SCHED_S_TASK_HAS_NOT_RUN),
-            }
-        };
-        if let Some(code) = finished(observation) {
-            return Ok(RunOutcome::Finished(code));
-        }
-        if Instant::now() >= deadline {
-            return Ok(RunOutcome::TimedOut);
+        let poll = observe(&location.folder, &name, before);
+        if let Some(outcome) = after_poll(&poll, Instant::now() >= deadline) {
+            return Ok(outcome);
         }
         std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Reads the registration afresh, so each property reflects the service's
+/// current state rather than a cached snapshot.
+fn observe(folder: &ITaskFolder, name: &BSTR, before: f64) -> Result<Observation> {
+    // SAFETY: `folder` is live for the duration of the call; a task deleted
+    // since `Run` is an `Err`, and `task` is live for the property reads.
+    unsafe {
+        let task = folder.GetTask(name)?;
+        Ok(Observation {
+            busy: matches!(task.State()?, TASK_STATE_RUNNING | TASK_STATE_QUEUED),
+            ran_since_request: task.LastRunTime()? > before,
+            last_result: task.LastTaskResult()?,
+        })
     }
 }
 
@@ -552,32 +562,49 @@ mod tests {
         }
     }
 
-    fn observed(busy: bool, ran: bool, gone: bool, last_result: i32) -> Observation {
-        Observation {
+    fn observed(busy: bool, ran: bool, last_result: i32) -> Result<Observation> {
+        Ok(Observation {
             busy,
             ran_since_request: ran,
-            instance_gone: gone,
             last_result,
+        })
+    }
+
+    fn unreadable() -> Result<Observation> {
+        Err(Error::from(E_INVALIDARG))
+    }
+
+    /// `sakura_logon` exits with a bitmask (task 1, profile 2, engine 4,
+    /// renderer 8); every value, zero included, is the run's own result.
+    #[test]
+    fn a_finished_run_reports_the_bootstrap_exit_code() {
+        for code in [0, 1, 4, 8, 12, 15] {
+            for expired in [false, true] {
+                assert_eq!(
+                    after_poll(&observed(false, true, code), expired),
+                    Some(RunOutcome::Finished(code)),
+                    "code {code}, expired {expired}"
+                );
+            }
         }
     }
 
     #[test]
-    fn a_finished_run_reports_the_bootstrap_exit_code() {
-        assert_eq!(finished(observed(false, true, true, 0)), Some(0));
-        assert_eq!(finished(observed(false, true, true, 10)), Some(10));
-    }
-
-    #[test]
-    fn a_busy_or_unsettled_task_keeps_waiting() {
-        assert_eq!(finished(observed(true, true, false, 0)), None);
-        assert_eq!(
-            finished(observed(false, true, true, SCHED_S_TASK_RUNNING)),
-            None
-        );
-        assert_eq!(
-            finished(observed(false, true, true, SCHED_S_TASK_HAS_NOT_RUN)),
-            None
-        );
+    fn a_busy_or_unsettled_task_keeps_waiting_until_the_budget_expires() {
+        let unfinished = [
+            observed(true, true, 0),
+            observed(true, true, SCHED_S_TASK_RUNNING),
+            observed(false, true, SCHED_S_TASK_RUNNING),
+            observed(false, true, SCHED_S_TASK_HAS_NOT_RUN),
+        ];
+        for poll in &unfinished {
+            assert_eq!(after_poll(poll, false), None, "{poll:?}");
+            assert_eq!(
+                after_poll(poll, true),
+                Some(RunOutcome::TimedOut),
+                "{poll:?}"
+            );
+        }
     }
 
     /// Before the service has picked the request up, the task is idle and still
@@ -585,15 +612,39 @@ mod tests {
     /// as the outcome of the run just requested.
     #[test]
     fn a_previous_result_is_not_mistaken_for_the_requested_run() {
-        assert_eq!(finished(observed(false, false, false, 0)), None);
-        assert_eq!(finished(observed(false, false, false, 4)), None);
+        for stale in [0, 4] {
+            assert_eq!(after_poll(&observed(false, false, stale), false), None);
+            assert_eq!(
+                after_poll(&observed(false, false, stale), true),
+                Some(RunOutcome::TimedOut)
+            );
+        }
     }
 
-    /// `LastRunTime` has one-second resolution, so a run in the same second as
-    /// the previous one is recognised by its instance ending instead.
+    /// A read that fails after `Run` must neither end the wait early nor claim
+    /// a result: the bootstrap is already in the service's hands.
     #[test]
-    fn an_ended_instance_counts_as_a_run_when_the_timestamp_did_not_move() {
-        assert_eq!(finished(observed(false, false, true, 0)), Some(0));
+    fn an_unreadable_task_keeps_waiting_and_then_reports_the_run_as_unobserved() {
+        assert_eq!(after_poll(&unreadable(), false), None);
+        assert_eq!(
+            after_poll(&unreadable(), true),
+            Some(RunOutcome::Unobserved(Error::from(E_INVALIDARG)))
+        );
+    }
+
+    /// The sequence a normal run produces: requested but not yet started,
+    /// running, then finished. Only the last poll ends the wait, with the run's
+    /// own result rather than the previous one.
+    #[test]
+    fn a_normal_run_sequence_ends_with_the_new_result() {
+        let polls = [
+            observed(false, false, 0),
+            observed(true, true, SCHED_S_TASK_RUNNING),
+            unreadable(),
+            observed(false, true, 12),
+        ];
+        let outcomes: Vec<_> = polls.iter().map(|poll| after_poll(poll, false)).collect();
+        assert_eq!(outcomes, [None, None, None, Some(RunOutcome::Finished(12))]);
     }
 
     #[test]

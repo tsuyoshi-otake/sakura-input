@@ -283,17 +283,18 @@ const BOOTSTRAP_BUDGET: Duration = Duration::from_secs(60);
 /// What [`start_current_session`] does after asking for a logon task run.
 #[derive(Debug, PartialEq, Eq)]
 enum TaskBootstrap {
-    /// The task ran (or hung); its result is final.
+    /// The run was requested; its result (success, failure, hang, or unknown)
+    /// is final.
     Done(Result<(), String>),
-    /// The task could not be run at all; start the bootstrap directly.
+    /// The run was never requested; start the bootstrap directly.
     Fallback(String),
 }
 
 /// Maps a logon task run to the installer's result.
 ///
-/// A run that started and then failed or hung is not retried directly: a
-/// second bootstrap would race the first, and the failure is what the installer
-/// log should show.
+/// A run that was requested and then failed, hung, or could not be observed is
+/// not retried directly: a second bootstrap would race the first, and the
+/// failure is what the installer log should show.
 fn after_task_run(run: windows::core::Result<launcher::RunOutcome>) -> TaskBootstrap {
     TaskBootstrap::Done(match run {
         Ok(launcher::RunOutcome::Finished(0)) => Ok(()),
@@ -302,6 +303,11 @@ fn after_task_run(run: windows::core::Result<launcher::RunOutcome>) -> TaskBoots
         )),
         Ok(launcher::RunOutcome::TimedOut) => Err(format!(
             "current-session bootstrap did not finish within {} s",
+            BOOTSTRAP_BUDGET.as_secs()
+        )),
+        Ok(launcher::RunOutcome::Unobserved(error)) => Err(format!(
+            "current-session bootstrap was requested but its result could not be read \
+             within {} s: {error}",
             BOOTSTRAP_BUDGET.as_secs()
         )),
         Err(error) => {
@@ -409,10 +415,19 @@ mod tests {
 
     #[test]
     fn a_hung_task_run_is_a_failure_not_a_fallback() {
-        assert!(matches!(
-            after_task_run(Ok(RunOutcome::TimedOut)),
-            TaskBootstrap::Done(Err(_))
-        ));
+        let TaskBootstrap::Done(Err(message)) = after_task_run(Ok(RunOutcome::TimedOut)) else {
+            panic!("a hung run must be final");
+        };
+        assert!(message.contains("did not finish"), "{message}");
+    }
+
+    #[test]
+    fn an_unobserved_task_run_is_a_failure_not_a_fallback() {
+        let unobserved = RunOutcome::Unobserved(Error::from(E_ACCESSDENIED));
+        let TaskBootstrap::Done(Err(message)) = after_task_run(Ok(unobserved)) else {
+            panic!("a requested run must never start a second bootstrap");
+        };
+        assert!(message.contains("could not be read"), "{message}");
     }
 
     #[test]
