@@ -541,7 +541,12 @@ impl PublicationFixture {
 impl Drop for PublicationFixture {
     fn drop(&mut self) {
         let directory = self.transaction();
-        for name in ["replacement.bin", "previous.bin"] {
+        for name in [
+            "replacement.bin",
+            "previous.bin",
+            "publication.bin",
+            "unexpected.bin",
+        ] {
             match fs::remove_file(directory.join(name)) {
                 Ok(()) => {}
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -557,7 +562,7 @@ impl Drop for PublicationFixture {
 }
 
 #[test]
-fn publication_partial_windows_outcomes_preserve_candidates_and_refuse_reopen() {
+fn publication_partial_windows_outcomes_recover_only_after_owner_validation() {
     for code in [1175, 1176, 1177, 5] {
         let fixture = PublicationFixture::new(&format!("partial-{code}"));
         append_records(fixture.path(), &[key_record(1, now_ms())]);
@@ -575,14 +580,20 @@ fn publication_partial_windows_outcomes_preserve_candidates_and_refuse_reopen() 
             assert!(fs::read(fixture.path()).unwrap() == original);
         }
         assert!(open_append(fixture.path()).is_err());
-        assert!(InputHistoryService::open(fixture.path()).is_err());
         assert!(clear_path(fixture.path()).is_err());
         assert_eq!(fixture.path().exists(), code != 1177);
+        let service = InputHistoryService::open(fixture.path()).unwrap();
+        service.stop().unwrap();
+        assert!(!fixture.transaction().exists());
+        assert_eq!(
+            read_snapshot(fixture.path()).unwrap().records[0].sequence(),
+            1
+        );
     }
 }
 
 #[test]
-fn publication_injected_stage_errors_remain_unavailable_without_cleanup() {
+fn publication_injected_stage_errors_recover_on_next_owned_open() {
     for point in [
         "temp_written",
         "temp_synced",
@@ -609,7 +620,349 @@ fn publication_injected_stage_errors_remain_unavailable_without_cleanup() {
         }
         assert!(read_snapshot(fixture.path()).is_err());
         assert!(clear_path(fixture.path()).is_err());
+        let service = InputHistoryService::open(fixture.path()).unwrap();
+        service.stop().unwrap();
+        assert!(!fixture.transaction().exists());
+        assert_eq!(
+            read_snapshot(fixture.path()).unwrap().records[0].sequence(),
+            1
+        );
     }
+}
+
+#[test]
+fn publication_legacy_recovery_compares_decoded_records_not_randomized_ciphertext() {
+    let fixture = PublicationFixture::new("legacy-equivalent");
+    let other = ReadFailureFixture(temporary_path("legacy-equivalent-other"));
+    let record = key_record(1, now_ms());
+    append_records(fixture.path(), std::slice::from_ref(&record));
+    append_records(&other.0, &[record]);
+    fs::create_dir(fixture.transaction()).unwrap();
+    fs::rename(&other.0, fixture.transaction().join("previous.bin")).unwrap();
+    assert_ne!(
+        fs::read(fixture.path()).unwrap(),
+        fs::read(fixture.transaction().join("previous.bin")).unwrap()
+    );
+    let service = InputHistoryService::open(fixture.path()).unwrap();
+    service.stop().unwrap();
+    assert!(!fixture.transaction().exists());
+    assert_eq!(
+        read_snapshot(fixture.path()).unwrap().records[0].sequence(),
+        1
+    );
+}
+
+#[test]
+fn publication_recovery_preserves_ambiguous_or_corrupt_participants() {
+    for damage in [
+        "canonical",
+        "backup",
+        "manifest",
+        "unknown",
+        "legacy-different",
+    ] {
+        let fixture = PublicationFixture::new(damage);
+        append_records(fixture.path(), &[key_record(1, now_ms())]);
+        PUBLICATION_CUT.with(|cut| cut.set(Some("replaced")));
+        assert!(compact_file(fixture.path()).is_err());
+        match damage {
+            "canonical" => {
+                fs::write(fixture.path(), b"opaque canonical").unwrap();
+            }
+            "backup" => {
+                fs::write(fixture.transaction().join("previous.bin"), b"opaque backup").unwrap();
+            }
+            "manifest" => {
+                fs::write(
+                    fixture.transaction().join("publication.bin"),
+                    b"opaque plan",
+                )
+                .unwrap();
+            }
+            "unknown" => {
+                fs::write(fixture.transaction().join("unexpected.bin"), b"unrelated").unwrap();
+            }
+            "legacy-different" => {
+                fs::remove_file(fixture.transaction().join("publication.bin")).unwrap();
+                let mut file = OpenOptions::new()
+                    .append(true)
+                    .open(fixture.path())
+                    .unwrap();
+                append_encrypted(
+                    &mut file,
+                    &protect(&key_record(2, now_ms()).encode().unwrap()).unwrap(),
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let before = fs::read(fixture.path()).unwrap();
+        let backup = fs::read(fixture.transaction().join("previous.bin")).unwrap();
+        assert!(
+            InputHistoryService::open(fixture.path()).is_err(),
+            "{damage}"
+        );
+        assert_eq!(fs::read(fixture.path()).unwrap(), before, "{damage}");
+        assert_eq!(
+            fs::read(fixture.transaction().join("previous.bin")).unwrap(),
+            backup
+        );
+    }
+}
+
+fn condition_history_image(sequence: u64) -> Vec<u8> {
+    let payload = protect(&key_record(sequence, now_ms()).encode().unwrap()).unwrap();
+    let mut image = header().to_vec();
+    image.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    image.extend_from_slice(&crc32(&payload).to_le_bytes());
+    image.extend_from_slice(&payload);
+    image
+}
+
+fn condition_publication_plan(old: &[u8], new: &[u8]) -> Vec<u8> {
+    let mut plan = b"SKCP0001".to_vec();
+    plan.extend_from_slice(&Sha256::digest(old).unwrap());
+    plan.extend_from_slice(&Sha256::digest(new).unwrap());
+    protect(&plan).unwrap()
+}
+
+fn assert_condition_recovery(fixture: &PublicationFixture, expected_error: Option<&str>) {
+    let canonical = fs::read(fixture.path()).unwrap();
+    let mut participants: Vec<_> = fs::read_dir(fixture.transaction())
+        .unwrap()
+        .map(|entry| {
+            let path = entry.unwrap().path();
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    participants.sort_by(|left, right| left.0.cmp(&right.0));
+    // Isolate recovery under the production ownership lock. Service startup
+    // subsequently appends its lifecycle record, which is a different effect.
+    let _owner = acquire_store_owner(fixture.path()).unwrap();
+    let result = recover_compaction(fixture.path()).map(|summary| summary.is_some());
+    if let Some(expected) = expected_error {
+        assert_eq!(result.unwrap_err().to_string(), expected);
+        assert!(fs::read(fixture.path()).unwrap() == canonical);
+        for (path, bytes) in &participants {
+            assert!(fs::read(path).unwrap() == *bytes);
+        }
+        assert_eq!(
+            fs::read_dir(fixture.transaction()).unwrap().count(),
+            participants.len()
+        );
+    } else {
+        assert!(result.unwrap());
+        assert!(fs::read(fixture.path()).unwrap() == canonical);
+        assert!(!fixture.transaction().exists());
+    }
+}
+
+#[test]
+fn mcc_mcdc_recovery_participant_mismatches() {
+    // The four rows are explicit truth-table expectations. The 00/10 and
+    // 00/01 pairs change only one input and change the observed rejection.
+    for legacy in [false, true] {
+        for (backup_differs, temp_differs, rejected) in [
+            (false, false, false),
+            (false, true, true),
+            (true, false, true),
+            (true, true, true),
+        ] {
+            let fixture = PublicationFixture::new("condition-participants");
+            let canonical = condition_history_image(1);
+            let replacement = if legacy {
+                canonical.clone()
+            } else {
+                condition_history_image(2)
+            };
+            let other = condition_history_image(3);
+            fs::write(fixture.path(), &canonical).unwrap();
+            fs::create_dir(fixture.transaction()).unwrap();
+            fs::write(
+                fixture.transaction().join("previous.bin"),
+                if backup_differs { &other } else { &canonical },
+            )
+            .unwrap();
+            fs::write(
+                fixture.transaction().join("replacement.bin"),
+                if temp_differs { &other } else { &replacement },
+            )
+            .unwrap();
+            if !legacy {
+                fs::write(
+                    fixture.transaction().join("publication.bin"),
+                    condition_publication_plan(&canonical, &replacement),
+                )
+                .unwrap();
+            }
+            let message = if legacy {
+                "ambiguous legacy history transaction"
+            } else {
+                "history recovery participant mismatch"
+            };
+            assert_condition_recovery(&fixture, rejected.then_some(message));
+            println!(
+                "decision-evidence {} {}{} {}",
+                if legacy {
+                    "history.legacy_mismatch"
+                } else {
+                    "history.planned_mismatch"
+                },
+                u8::from(backup_differs),
+                u8::from(temp_differs),
+                u8::from(rejected)
+            );
+        }
+    }
+}
+
+#[test]
+fn mcc_mcdc_recovery_canonical_generation() {
+    for (matches_old, matches_new, accepted) in [
+        (false, false, false),
+        (false, true, true),
+        (true, false, true),
+        (true, true, true),
+    ] {
+        let fixture = PublicationFixture::new("condition-generation");
+        let canonical = condition_history_image(1);
+        let other = condition_history_image(2);
+        let old = if matches_old { &canonical } else { &other };
+        let new = if matches_new { &canonical } else { &other };
+        fs::write(fixture.path(), &canonical).unwrap();
+        fs::create_dir(fixture.transaction()).unwrap();
+        fs::write(
+            fixture.transaction().join("publication.bin"),
+            condition_publication_plan(old, new),
+        )
+        .unwrap();
+        assert_condition_recovery(
+            &fixture,
+            (!accepted).then_some("ambiguous history canonical generation"),
+        );
+        println!(
+            "decision-evidence history.canonical_generation {}{} {}",
+            u8::from(matches_old),
+            u8::from(matches_new),
+            u8::from(accepted)
+        );
+    }
+}
+
+#[test]
+fn mcc_mcdc_recovery_plan_shape() {
+    for (wrong_length, wrong_magic, rejected) in [
+        (false, false, false),
+        (false, true, true),
+        (true, false, true),
+        (true, true, true),
+    ] {
+        let fixture = PublicationFixture::new("condition-plan");
+        let canonical = condition_history_image(1);
+        let mut plan = unprotect(&condition_publication_plan(&canonical, &canonical)).unwrap();
+        if wrong_magic {
+            plan[0] = b'X';
+        }
+        // A long plan leaves the magic independently observable. Separate
+        // malformed/torn tests cover too-short data and DPAPI failure.
+        if wrong_length {
+            plan.push(0);
+        }
+        fs::write(fixture.path(), &canonical).unwrap();
+        fs::create_dir(fixture.transaction()).unwrap();
+        fs::write(
+            fixture.transaction().join("publication.bin"),
+            protect(&plan).unwrap(),
+        )
+        .unwrap();
+        assert_condition_recovery(
+            &fixture,
+            rejected.then_some("invalid history recovery plan"),
+        );
+        println!(
+            "decision-evidence history.plan_shape {}{} {}",
+            u8::from(wrong_length),
+            u8::from(wrong_magic),
+            u8::from(rejected)
+        );
+    }
+}
+
+#[test]
+fn capacity_compaction_keeps_newest_records_and_reuses_protected_frames() {
+    let fixture = PublicationFixture::new("capacity-batch");
+    let records: Vec<_> = (1..=20)
+        .map(|sequence| key_record(sequence, now_ms()))
+        .collect();
+    append_records(fixture.path(), &records);
+    let before = fs::read(fixture.path()).unwrap();
+    let mut ranges = Vec::new();
+    scan_frames_with(&before, |record, range| {
+        ranges.push((record.sequence(), range));
+        Ok(())
+    })
+    .unwrap();
+    let tail_start = ranges[15].1.start;
+    let limit = (HEADER_LEN + before.len() - tail_start) as u64;
+    compact_file_to_limit(fixture.path(), limit).unwrap();
+    let after = fs::read(fixture.path()).unwrap();
+    assert_eq!(&after[HEADER_LEN..], &before[tail_start..]);
+    let retained = read_snapshot(fixture.path()).unwrap();
+    assert_eq!(retained.records.len(), 5);
+    assert_eq!(retained.records[0].sequence(), 16);
+    assert_eq!(retained.records[4].sequence(), 20);
+}
+
+#[test]
+fn capacity_pressure_reclaims_a_batch_and_accepts_subsequent_records() {
+    let fixture = PublicationFixture::new("capacity-full");
+    let mut record = key_record(1, now_ms());
+    if let InputHistoryRecord::Key(key) = &mut record {
+        key.action = "x".repeat(15_000);
+    }
+    let payload = record.encode().unwrap();
+    let protected = protect(&payload).unwrap();
+    let mut frame = Vec::new();
+    frame.extend_from_slice(&(protected.len() as u32).to_le_bytes());
+    frame.extend_from_slice(&crc32(&protected).to_le_bytes());
+    frame.extend_from_slice(&protected);
+    let mut file = File::create(fixture.path()).unwrap();
+    file.write_all(&header()).unwrap();
+    let count = (MAX_INPUT_HISTORY_BYTES as usize - HEADER_LEN) / frame.len();
+    for _ in 0..count {
+        file.write_all(&frame).unwrap();
+    }
+    drop(file);
+    let mut writer = Some(open_append(fixture.path()).unwrap());
+    let mut retention = RetentionPlan::default();
+    append_payload(
+        fixture.path(),
+        &mut writer,
+        &payload,
+        now_ms(),
+        &mut retention,
+    )
+    .unwrap();
+    let compacted_len = writer.as_ref().unwrap().metadata().unwrap().len();
+    assert!(compacted_len <= MAX_INPUT_HISTORY_BYTES * 7 / 8 + frame.len() as u64);
+    for _ in 0..10 {
+        append_payload(
+            fixture.path(),
+            &mut writer,
+            &payload,
+            now_ms(),
+            &mut retention,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        writer.as_ref().unwrap().metadata().unwrap().len(),
+        compacted_len + 10 * frame.len() as u64
+    );
+    drop(writer);
+    assert!(!fixture.transaction().exists());
+    validate_compaction_file(fixture.path()).unwrap();
 }
 
 #[test]

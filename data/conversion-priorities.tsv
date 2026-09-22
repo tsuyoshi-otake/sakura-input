@@ -49,12 +49,24 @@
 # source and the final entry to agree on cost and flags. Pricing them here
 # would replace the edge that file describes and break that check, so the
 # edge keeps one owner and the numbers live next to the description.
+# Issues #60/#108: preserve ordinary lexical units instead of memorizing
+# complete logged sentences. Restore upstream 漢字 pricing so the ordinary
+# noun 感じ is not displaced after adjectival modifiers. Supply the missing
+# maintainer / response-measure words and calibrate existing lexical edges
+# that lost to a shorter homophone splice. Keep POS identities and alternate
+# spellings; the ね/値 correction affects only that suffix reading, not ち/値.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
+かんじへんかん	漢字変換	1841	1841	4500	5700	it,predict	
+くろっく	クロック	1841	1841	3500	4700	predict	
+こうていてき	肯定的	1841	2032	4200	5400	predict	
+たいおうさく	対応策	1851	1851	4500	5700	predict	
+たげんご	多言語	2600	1851	2600	3800	predict	
+ね	値	1949	1949	4300	-		
+めんてなー	メンテナー	1851	1851	4500	5700	it,predict	
 あさごはん	朝ご飯	1851	1851	4300	5500	predict	
 いち	1	2044	2044	3639	4839	predict	
 いどうとどけ	異動届	1851	1851	3600	4800	predict	
 かいぎょう	改行	1841	1841	2500	3700	predict	
-かんじ	漢字	1851	1851	2500	3700	predict	
 がいちゅう	外注	1841	1841	4780	5980	predict	
 きのう	昨日	1841	1841	1100	2300	predict	
 きのう	昨日	1909	1909	1100	2300	predict	

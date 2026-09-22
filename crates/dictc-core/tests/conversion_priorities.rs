@@ -65,7 +65,19 @@ fn every_row_keeps_the_prediction_status_its_own_cost_earns() {
         // priced above that line can be non-predictive without hiding a loss:
         // Issue #94 re-prices 対案 and 禁則 to 6078 and 6776, still above the
         // line their upstream edges were already on.
-        if entry.word_cost <= PREDICTION_COST_LIMIT {
+        if (
+            entry.reading.as_str(),
+            entry.surface.as_str(),
+            entry.left_id,
+            entry.right_id,
+        ) == ("ね", "値", 1949, 1949)
+        {
+            // This bound suffix remains non-predictive like its upstream row.
+            // Repricing it to stop お願い値 must not introduce a standalone
+            // suggestion. Other 値 readings and noun identities are untouched.
+            assert_eq!(entry.flags, EntryFlags::NONE);
+            assert_eq!(entry.prediction_cost, i32::MAX);
+        } else if entry.word_cost <= PREDICTION_COST_LIMIT {
             assert!(
                 entry.flags.contains(EntryFlags::PREDICTION),
                 "row is not offered to prediction: {context}"

@@ -21,7 +21,7 @@ use sakura_proto::{FixedStr, Overflow, MAX_CANDIDATES, MAX_PREEDIT_BYTES};
 
 /// One more than the largest representable raw/visible index.  `u16::MAX` is
 /// reserved as the invalid mapping marker; the wire list itself is bounded by
-/// `MAX_CANDIDATES` (currently 256).
+/// `MAX_CANDIDATES`.
 const INVALID_INDEX: u16 = u16::MAX;
 
 /// Keep the load factor at or below 50%.  The table is deliberately fixed and
@@ -84,7 +84,6 @@ pub(crate) struct CandidateProjection {
     truncated: bool,
     raw_to_visible: [u16; MAX_CANDIDATES],
     visible_to_raw: [u16; MAX_CANDIDATES],
-    slots: [Slot; TABLE_CAPACITY],
 }
 
 impl Default for CandidateProjection {
@@ -95,7 +94,6 @@ impl Default for CandidateProjection {
             truncated: false,
             raw_to_visible: [INVALID_INDEX; MAX_CANDIDATES],
             visible_to_raw: [INVALID_INDEX; MAX_CANDIDATES],
-            slots: [Slot::default(); TABLE_CAPACITY],
         }
     }
 }
@@ -143,6 +141,10 @@ impl CandidateProjection {
             raw_count,
             ..Self::default()
         };
+        // Deduplication scratch is only needed during construction. Returning
+        // it through every projection consumer multiplied the worker stack
+        // footprint as display capacity grew. The result needs just mappings.
+        let mut slots = [Slot::default(); TABLE_CAPACITY];
 
         for raw_index in 0..raw_count {
             let mut surface = FixedStr::<MAX_PREEDIT_BYTES>::new();
@@ -161,14 +163,14 @@ impl CandidateProjection {
             let mut mapped = false;
 
             for _ in 0..MAX_PROBES {
-                let slot = projection.slots[slot_index];
+                let slot = slots[slot_index];
                 if !slot.occupied {
                     let visible_index = projection.visible_count;
                     let raw_index =
                         u16::try_from(raw_index).map_err(|_| ProjectionError::TooManyCandidates)?;
                     let visible_index = u16::try_from(visible_index)
                         .map_err(|_| ProjectionError::TooManyCandidates)?;
-                    projection.slots[slot_index] = Slot {
+                    slots[slot_index] = Slot {
                         hash,
                         raw_index,
                         visible_index,
@@ -338,5 +340,43 @@ mod tests {
         assert_eq!(projection.raw_index(0), Some(0));
         assert_eq!(projection.visible_index(0), Some(0));
         assert_eq!(projection.visible_index(1), None);
+    }
+
+    #[test]
+    fn mcc_mcdc_projection_tail_overflow() {
+        let oversized = "あ".repeat(MAX_PREEDIT_BYTES / 3 + 1);
+        for (allow_tail, has_prefix, truncated) in [
+            (false, false, false),
+            (false, true, false),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let overflow_index = usize::from(has_prefix);
+            let result = CandidateProjection::build_internal(
+                overflow_index + 1,
+                |index, output| {
+                    output.push_str(if index == overflow_index {
+                        &oversized
+                    } else {
+                        "first"
+                    })
+                },
+                allow_tail,
+            );
+            if truncated {
+                let projection = result.unwrap();
+                assert!(projection.truncated);
+                assert_eq!(projection.visible_count(), 1);
+                assert_eq!(projection.raw_index(0), Some(0));
+            } else {
+                assert_eq!(result, Err(ProjectionError::SurfaceOverflow));
+            }
+            println!(
+                "decision-evidence projection.tail_overflow {}{} {}",
+                u8::from(allow_tail),
+                u8::from(has_prefix),
+                u8::from(truncated)
+            );
+        }
     }
 }

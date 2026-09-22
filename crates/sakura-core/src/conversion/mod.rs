@@ -72,10 +72,10 @@ const BASE_DICTIONARY_EDGES_PER_READING: usize = 12;
 /// affordable homophones the shipped dictionary already held: きかん stopped at
 /// き澗 without ever reaching 気管 or 旗艦, and きゅう spent its twelfth surface
 /// on the rare name kanji 邱 and dropped the digit spelling 9 (Issue #94).
-/// The budget tracks the conversion candidate limit rather than the wire
-/// constant: a research build that raises the limit must widen the dictionary
-/// span with it, or the extra slots fill with multi-morpheme paths instead of
-/// the homophones the sweep is measuring (Issue #95).
+/// This search bound stays independent of the single-kanji transport tail.
+#[cfg(not(any(feature = "research-top32", feature = "research-wide-candidates")))]
+const MAX_DICTIONARY_SURFACES_PER_READING: usize = 256;
+#[cfg(any(feature = "research-top32", feature = "research-wide-candidates"))]
 const MAX_DICTIONARY_SURFACES_PER_READING: usize = MAX_CONVERSION_CANDIDATES;
 /// Cross-commit context is deliberately word-sized. It exists to recover a
 /// lexical edge split by an explicit commit, not to replay an unbounded
@@ -126,7 +126,7 @@ const SINGLE_KANJI_ANNOTATION: &str = "単漢字";
 pub const MAX_CORRECTION_RUNS: usize = 32;
 pub const MAX_RAW_REPAIR_PLANS: usize = 8;
 pub const DEFAULT_MAX_RAW_REPAIR_PASSES: usize = 4;
-pub const DEFAULT_MAX_RAW_REPAIR_CANDIDATES: usize = MAX_CONVERSION_CANDIDATES;
+pub const DEFAULT_MAX_RAW_REPAIR_CANDIDATES: usize = 256;
 pub const DEFAULT_MAX_RAW_REPAIR_LATTICE_NODES: usize = MAX_LATTICE_NODES;
 pub const DEFAULT_MAX_RAW_REPAIR_SEARCH_STATES: usize = MAX_SEARCH_STATES;
 
@@ -398,6 +398,9 @@ impl Converter {
         {
             return Err(ConversionError::InvalidOptions);
         }
+        // Single-kanji tails have a separate display budget. They must not
+        // widen N-best search or lose their slots when that search is full.
+        let display_limit = options.max_candidates;
         // Only a short reading's candidate list pays for a wide ceiling
         // (Issue #95; see `candidate_budget`'s doc comment for the p95
         // numbers). Clamp down, never up, so a caller that already asked
@@ -471,7 +474,7 @@ impl Converter {
         let lossless_fallback_inserted =
             self.ensure_lossless_fallback(fallback, options.max_candidates);
         sort_by_cost(&mut self.candidates);
-        self.append_single_kanji(dictionary, reading, options.max_candidates)?;
+        self.append_single_kanji(dictionary, reading, display_limit)?;
         self.append_punctuation_family(reading, options.punctuation, options.max_candidates)?;
         debug_assert!(!self.candidates.is_empty());
         Ok(ConversionResult {
@@ -521,18 +524,8 @@ impl Converter {
         {
             return Err(ConversionError::InvalidOptions);
         }
-        // Same reading-length clamp as `convert_with_user_dictionary_detailed`
-        // (see its comment and `candidate_budget`'s doc comment). The
-        // `LiteralPolicy::Ranked` arm below delegates to that function, which
-        // clamps again on the same reading -- harmless, since the clamp only
-        // narrows and is idempotent, so do not "fix" the apparent duplicate.
-        #[cfg(not(feature = "research-wide-candidates"))]
-        let options = ConversionOptions {
-            max_candidates: options
-                .max_candidates
-                .min(candidate_budget(input.lookup_reading)),
-            ..options
-        };
+        // Ranked conversion owns its search clamp and independent tail limit.
+        // Clamping here as well would silently discard the display allowance.
         match input.literal_policy {
             LiteralPolicy::Ranked => {
                 // Keep the legacy implementation in one place. Restore the
@@ -883,6 +876,13 @@ impl Converter {
         input: ConversionInput<'_>,
         options: ConversionOptions,
     ) -> Result<ConversionResult<'a>, ConversionError> {
+        #[cfg(not(feature = "research-wide-candidates"))]
+        let options = ConversionOptions {
+            max_candidates: options
+                .max_candidates
+                .min(candidate_budget(input.lookup_reading)),
+            ..options
+        };
         self.reset(input.lookup_reading.len());
         self.initial_right_id = options.initial_right_id;
         let exact = make_synthetic_exact(
