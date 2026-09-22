@@ -1259,14 +1259,19 @@ fn worker_with_gate(
 
         ensure_spare_instance_for(&shared, endpoint);
 
-        match serve(
+        let outcome = serve(
             &shared,
             &instance,
             endpoint,
             client_trust,
             &mut dispatcher,
             &mut connection,
-        ) {
+        );
+        // A disconnected/crashed host cannot send Revert or DeleteSession.
+        // Finalize its published UI before this worker accepts another client;
+        // the renderer's separate, healthy watch pipe may still be displaying it.
+        shared.ui.clear_connection(dispatcher.ui_owner());
+        match outcome {
             Outcome::Closed => {}
             Outcome::Failed(fault) => report(&shared, format_args!("{fault}")),
             Outcome::Shutdown => {
