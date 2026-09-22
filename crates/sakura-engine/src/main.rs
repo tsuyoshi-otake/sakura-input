@@ -240,26 +240,6 @@ fn run(
             )
         }
     };
-    let input_history = if preferences.developer_mode {
-        match sakura_engine::input_history::default_path()
-            .and_then(|path| sakura_engine::input_history::InputHistoryService::open(&path))
-        {
-            Ok(history) => {
-                sakura_ipc::debug_trace::set_enabled(true);
-                Some(history)
-            }
-            Err(error) => {
-                if verbose {
-                    eprintln!(
-                        "sakura-engine: developer input history unavailable; continuing without it: {error}"
-                    );
-                }
-                None
-            }
-        }
-    } else {
-        None
-    };
     let prediction_requested =
         preferences.prediction_enabled || profiles.iter().any(|profile| profile.prediction_enabled);
     let profiles = Arc::<[sakura_core::AppProfile]>::from(profiles);
@@ -305,10 +285,10 @@ fn run(
         conversion,
         learning,
         prediction_runtime.as_ref().map(|runtime| runtime.service()),
-        input_history.as_ref().map(Arc::clone),
+        None,
         preferences,
         Arc::clone(&profiles),
-    );
+    )?;
     let server = match long_conversion_runtime.as_ref() {
         Some(runtime) => server.with_long_conversion(runtime.service()),
         None => server,
@@ -335,12 +315,8 @@ fn run(
         if let Some(path) = config_path {
             eprintln!("sakura-engine: configuration: {}", path.display());
         }
-        if let Some(history) = input_history.as_ref() {
-            if let Some(path) = history.path() {
-                eprintln!("sakura-engine: developer input history: {}", path.display());
-            }
-        } else if preferences.developer_mode {
-            eprintln!("sakura-engine: developer input history: unavailable");
+        if preferences.developer_mode {
+            eprintln!("sakura-engine: developer input history: starting asynchronously");
         }
         if let Some(watcher) = user_dictionary_watcher.as_ref() {
             eprintln!(
@@ -370,9 +346,6 @@ fn run(
     }
     if let Some(runtime) = prediction_runtime {
         let _ = runtime.stop();
-    }
-    if let Some(history) = input_history {
-        let _ = history.stop();
     }
     result
 }
