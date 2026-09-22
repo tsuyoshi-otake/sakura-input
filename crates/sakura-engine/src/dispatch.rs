@@ -4785,6 +4785,7 @@ fn begin_conversion(
     session.begin_conversion();
     session.selected_candidate = initial_selection;
     let mut segments: FixedVec<ConversionSegment, MAX_SEGMENTS> = FixedVec::new();
+    let mut selected_surface = FixedStr::<MAX_PREEDIT_BYTES>::new();
     let cached = session.cached_surface_fingerprint(session.preedit.as_str());
     let initial_context = session.carry_right_id();
     let options = conversion_options(session, initial_context, learning);
@@ -4935,6 +4936,38 @@ fn begin_conversion(
                 };
                 chosen_selection = i16::try_from(visible_selected).unwrap_or(i16::MAX);
                 let candidate = &candidates[raw_selected];
+                if selected_surface.push_str(candidate.text()).is_err() {
+                    return false;
+                }
+                // A registered single-character reading is one selectable
+                // unit. Splitting e.g. まいくろりっとる into several segments
+                // hides its whole-reading tail from every focused list.
+                // Preserve the chosen surface and terminal POS while allowing
+                // the usual explicit segment-resize commands afterward.
+                // Selection is already clamped to the direct prefix above;
+                // the projection retains the first raw representative.
+                if raw_repair_plans.is_empty()
+                    && service
+                        .dictionary()
+                        .single_kanji(session.preedit.as_str())
+                        .next()
+                        .is_some()
+                {
+                    let Some(first) = candidate.segments().first() else {
+                        return false;
+                    };
+                    let mut whole = *first;
+                    for next in candidate.segments().iter().skip(1) {
+                        whole.reading_end = next.reading_end;
+                        whole.text_end = next.text_end;
+                        whole.right_id = next.right_id;
+                        whole.flags = whole.flags | next.flags;
+                        whole.word_count = whole.word_count.saturating_add(next.word_count);
+                        whole.it_word_count =
+                            whole.it_word_count.saturating_add(next.it_word_count);
+                    }
+                    return segments.push(whole).is_ok();
+                }
                 for segment in candidate.segments() {
                     let mut mapped = *segment;
                     if candidate.origin() != CandidateOrigin::Direct {
@@ -4965,13 +4998,102 @@ fn begin_conversion(
     if invalid_mapping {
         session.suppress_raw_provenance();
     }
-    if !matches!(initialized, Some(true)) || !session.set_segments(segments.as_slice()) {
+    let mut selections = [0i16; MAX_SEGMENTS];
+    selections[0] = chosen_selection;
+    let selections =
+        if matches!(initialized, Some(true)) && segments.len() > 1 && raw_repair_plans.is_empty() {
+            conversion.and_then(|service| {
+                initial_segment_selections(
+                    session,
+                    service,
+                    learning,
+                    segments.as_slice(),
+                    selected_surface.as_str(),
+                )
+            })
+        } else {
+            Some(selections)
+        };
+    if !matches!(initialized, Some(true))
+        || selections.is_none()
+        || !session.set_segments(segments.as_slice())
+    {
         session.cancel_conversion();
         out.beep = true;
-    } else {
-        session.set_segment_selection(0, chosen_selection);
+    } else if let Some(selections) = selections {
+        for (index, selection) in selections.into_iter().enumerate().take(segments.len()) {
+            session.set_segment_selection(index, selection);
+        }
     }
     Ok(())
+}
+
+/// Whole-reading and segment-local candidate indices are different domains.
+/// Preserve the selected path's surfaces when initializing each segment, using
+/// the same contextual query and visible projection as rendering and commit.
+/// Run after the whole-reading callback releases its conversion-pool lease.
+fn initial_segment_selections(
+    session: &Session,
+    service: &ConversionService,
+    learning: Option<&LearningService>,
+    segments: &[ConversionSegment],
+    selected_surface: &str,
+) -> Option<[i16; MAX_SEGMENTS]> {
+    let mut selections = [0i16; MAX_SEGMENTS];
+    let mut right_id = session.carry_right_id();
+    for (index, segment) in segments.iter().enumerate() {
+        let reading = session
+            .preedit
+            .as_str()
+            .get(usize::from(segment.reading_start)..usize::from(segment.reading_end))?;
+        let surface =
+            selected_surface.get(usize::from(segment.text_start)..usize::from(segment.text_end))?;
+        let options = conversion_options(session, right_id, learning);
+        let bridge = (index == 0)
+            .then(|| session.cross_commit_bridge())
+            .flatten();
+        let (selection, next_right_id) = with_session_conversion_input(
+            service,
+            learning,
+            ConversionInput::ordinary(reading),
+            options,
+            bridge,
+            |candidates, _| {
+                // Bounded segment search can omit a full-path surface. Its
+                // deterministic fallback is the first visible segment row,
+                // never a whole-reading index applied to this different list.
+                let raw = candidates
+                    .iter()
+                    .position(|candidate| candidate.text() == surface)
+                    .unwrap_or(0);
+                let (visible, representative) = match project_conversion_candidates(
+                    candidates,
+                    "",
+                    SegmentTransform::None,
+                    0,
+                    &session.normalizer,
+                    session.mode,
+                ) {
+                    Ok(projection) => {
+                        let visible = projection.visible_index(raw)?;
+                        (visible, projection.raw_index(visible)?)
+                    }
+                    // Rendering owns the overflow response. Keep conversion
+                    // active and its selections intact until it reports it.
+                    Err(ProjectionError::SurfaceOverflow) => (raw, raw),
+                    Err(_) => return None,
+                };
+                Some((
+                    i16::try_from(visible).ok()?,
+                    candidate_meta(service, candidates.get(representative)?).right_id,
+                ))
+            },
+        )
+        .ok()??;
+        selections[index] = selection;
+        right_id = next_right_id;
+    }
+    Some(selections)
 }
 
 /// Uses the Shift-started ASCII sequence as the dictionary reading when the

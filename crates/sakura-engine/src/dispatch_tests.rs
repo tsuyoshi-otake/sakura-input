@@ -159,6 +159,56 @@ fn conversion_dispatcher() -> Dispatcher {
     Dispatcher::new_with_conversion(conversion_fixture()).expect("shipped defaults")
 }
 
+#[test]
+fn initial_segments_preserve_the_whole_path_surface_instead_of_local_top_rows() {
+    // The suffix makes 伊 the best whole path, although 位 wins the isolated
+    // middle-segment query. A whole-path index is not a segment-local index.
+    let entries = dictc_core::parse_entries(
+        "selected-path.tsv",
+        concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "あ\t亜\t0\t0\t0\t0\t\t\n",
+            "い\t伊\t0\t2\t100\t100\t\t\n",
+            "い\t位\t0\t1\t0\t0\t\t\n",
+            "う\t宇\t2\t0\t0\t0\t\t\n",
+        ),
+    )
+    .unwrap();
+    let matrix = dictc_core::parse_connection(
+        "selected-path-matrix.tsv",
+        "# license: MIT\nclasses\t3\ndefault\t0\ncost\t1\t2\t1000\n",
+        false,
+    )
+    .unwrap();
+    let image = Box::leak(
+        dictc_core::compile(&entries, &matrix)
+            .unwrap()
+            .into_boxed_slice(),
+    );
+    let service = Arc::new(ConversionService::from_static_bytes(image).unwrap());
+    let mut dispatcher = Dispatcher::new_with_conversion(service).unwrap();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "selected-path.exe");
+    type_word(&mut dispatcher, session, "aiu", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(out.preedit_text(), "亜伊宇");
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("亜伊宇"));
+}
+
 fn numeric_focus_conversion_dispatcher() -> Dispatcher {
     let source = concat!(
         "# license: MIT\n",
@@ -7457,15 +7507,15 @@ fn the_session_table_reports_busy_once_full() {
 }
 
 #[test]
-fn hello_with_the_previous_v21_version_is_rejected() {
+fn hello_with_the_previous_v22_version_is_rejected() {
     assert_eq!(
-        PROTOCOL_VERSION, 22,
-        "the fault-injection status snapshot adds a v22 request and response"
+        PROTOCOL_VERSION, 23,
+        "v23 carries the independent single-kanji candidate tail"
     );
     let mut dispatcher = builtin_dispatcher();
     let mut out = OutputBuf::new();
 
-    let reply = dispatcher.dispatch(&Request::Hello { client_version: 21 }, &mut out);
+    let reply = dispatcher.dispatch(&Request::Hello { client_version: 22 }, &mut out);
 
     assert_eq!(
         reply,
@@ -7474,10 +7524,10 @@ fn hello_with_the_previous_v21_version_is_rejected() {
 }
 
 #[test]
-fn hello_with_v22_version_is_accepted() {
+fn hello_with_v23_version_is_accepted() {
     assert_eq!(
-        PROTOCOL_VERSION, 22,
-        "the fault-injection status snapshot adds a v22 request and response"
+        PROTOCOL_VERSION, 23,
+        "v23 carries the independent single-kanji candidate tail"
     );
     let mut dispatcher = builtin_dispatcher();
     let mut out = OutputBuf::new();

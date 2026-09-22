@@ -234,6 +234,43 @@ fn single_kanji_fill_the_slots_the_ranked_list_left_empty() {
 }
 
 #[test]
+fn single_kanji_remain_reachable_after_a_saturated_search() {
+    let listed: String = (0x4e00..0x4e00 + 315).filter_map(char::from_u32).collect();
+    let rows: Vec<_> = (0..256)
+        .map(|index| fixture_entry("こう", &format!("候補{index}"), index, EntryFlags::NONE))
+        .collect();
+    let bytes = synthetic_dictionary_with_single_kanji(&rows, &[("こう", &listed)], &[]);
+    let dictionary = Dictionary::parse(&bytes).unwrap();
+    let mut converter = Converter::new();
+    let result = converter
+        .convert_detailed(&dictionary, "こう", ConversionOptions::default())
+        .unwrap();
+    assert_eq!(result.candidates()[0].text(), "候補0");
+    for character in listed.chars() {
+        assert!(
+            result
+                .candidates()
+                .iter()
+                .any(|c| c.text() == character.to_string()),
+            "missing {character}"
+        );
+    }
+    assert!(result.candidates().len() > 256);
+}
+
+#[test]
+fn long_single_kanji_reading_keeps_its_tail_without_widening_search() {
+    let reading = "まいくろりっとる";
+    let rows: Vec<_> = (0..108)
+        .map(|index| fixture_entry(reading, &format!("候補{index}"), index, EntryFlags::NONE))
+        .collect();
+    let bytes = synthetic_dictionary_with_single_kanji(&rows, &[(reading, "竗")], &[]);
+    let listed = converted(&bytes, reading, MAX_CONVERSION_CANDIDATES);
+    assert!(listed.iter().any(|(text, _)| text == "竗"));
+    assert_eq!(listed.len(), candidate_budget(reading) + 1);
+}
+
+#[test]
 fn the_appended_tail_never_changes_the_ranked_list() {
     let rows = [
         fixture_entry("ひ", "日", 100, EntryFlags::NONE),
@@ -262,6 +299,53 @@ fn the_tail_stops_at_the_candidate_limit() {
     // The limit, not the character list, is what stops the tail: one slot
     // leaves room for the ranked entry alone.
     assert_eq!(converted(&single_kanji_fixture(), "ひ", 1).len(), 1);
+}
+
+#[test]
+fn mcc_mcdc_single_kanji_tail_guard() {
+    for (full, absent, skipped) in [
+        (false, false, false),
+        (false, true, true),
+        (true, false, true),
+        (true, true, true),
+    ] {
+        let bytes = if absent {
+            synthetic_dictionary(&[fixture_entry("ひ", "日", 100, EntryFlags::NONE)])
+        } else {
+            single_kanji_fixture()
+        };
+        let dictionary = Dictionary::parse(&bytes).unwrap();
+        let mut converter = Converter::new();
+        converter
+            .convert(
+                &dictionary,
+                "ひ",
+                ConversionOptions {
+                    max_candidates: 1,
+                    ..ConversionOptions::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(converter.candidates.len(), 1);
+        assert_eq!(converter.candidates[0].text(), "日");
+        converter
+            .append_single_kanji(&dictionary, "ひ", if full { 1 } else { 8 })
+            .unwrap();
+        assert_eq!(converter.candidates.len() == 1, skipped);
+        assert_eq!(converter.candidates[0].text(), "日");
+        if !skipped {
+            assert!(converter
+                .candidates
+                .iter()
+                .any(|candidate| candidate.text() == "火"));
+        }
+        println!(
+            "decision-evidence core.single_kanji_guard {}{} {}",
+            u8::from(full),
+            u8::from(absent),
+            u8::from(skipped)
+        );
+    }
 }
 
 /// Issue #95: far more single-kanji characters than the pre-#95 ceiling
@@ -317,9 +401,19 @@ fn a_short_reading_can_receive_more_than_eighteen_candidates_now() {
 /// past eight characters -- so it keeps the pre-#95 ceiling even when
 /// the caller explicitly asks for the full 256.
 #[test]
-fn a_long_reading_still_holds_at_eighteen_even_at_the_full_ceiling() {
+fn a_long_reading_search_still_holds_at_eighteen_even_at_the_full_ceiling() {
     let long_reading = "ひ".repeat(9);
-    let bytes = dictionary_with_many_single_kanji(&long_reading);
+    let rows: Vec<_> = (0..64)
+        .map(|index| {
+            fixture_entry(
+                &long_reading,
+                &format!("候補{index}"),
+                index,
+                EntryFlags::NONE,
+            )
+        })
+        .collect();
+    let bytes = synthetic_dictionary(&rows);
     let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
     let mut converter = Converter::new();
     let candidates = converter

@@ -525,18 +525,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v22_hello_roundtrips_and_v21_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 21;
+fn protocol_v23_hello_roundtrips_and_v22_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 22;
     assert_eq!(
-        PROTOCOL_VERSION, 22,
-        "the fault-injection status snapshot changes the request and response wire contract"
+        PROTOCOL_VERSION, 23,
+        "the expanded candidate capacity changes the wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 20, &mut request_frame).expect("encode v22 request");
+    encode_request(&request, 20, &mut request_frame).expect("encode v23 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -557,7 +557,7 @@ fn protocol_v22_hello_roundtrips_and_v21_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 20, &mut response_frame).expect("encode v22 response");
+    encode_response(&response, 20, &mut response_frame).expect("encode v23 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()

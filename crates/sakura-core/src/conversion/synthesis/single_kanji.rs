@@ -4,8 +4,8 @@ use crate::dictionary::{Dictionary, EntryFlags, SingleKanjiVariant};
 
 use super::super::{
     CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate, ConversionError,
-    ConversionSegment, Converter, PathEvidence, DEFAULT_NOUN_ID, NO_SYSTEM_ENTRY_INDEX,
-    SINGLE_KANJI_ANNOTATION,
+    ConversionSegment, Converter, PathEvidence, DEFAULT_NOUN_ID, MAX_CONVERSION_CANDIDATES,
+    NO_SYSTEM_ENTRY_INDEX, SINGLE_KANJI_ANNOTATION,
 };
 
 impl Converter {
@@ -17,8 +17,8 @@ impl Converter {
     /// change the cost of every path that crosses them. Mozc reaches the same
     /// conclusion and runs its single-kanji rewriter after conversion; this is
     /// the same position in the pipeline. The tail therefore cannot move TOP-1
-    /// or reorder anything the search produced. It only fills slots the ranked
-    /// list left empty, and every appended cost sits above the whole ranked
+    /// or reorder anything the search produced. It uses separate display
+    /// slots, and every appended cost sits above the whole ranked
     /// list so a later re-sort keeps it at the end.
     pub(in crate::conversion) fn append_single_kanji(
         &mut self,
@@ -44,23 +44,29 @@ impl Converter {
             .map(|candidate| candidate.cost)
             .max()
             .unwrap_or(0);
+        // Index single-character surfaces once. Scanning all accumulated
+        // candidates for each tail character made a saturated tail quadratic.
+        let mut seen = [0u32; MAX_CONVERSION_CANDIDATES.next_power_of_two() * 2];
+        for candidate in &self.candidates {
+            let mut chars = candidate.text().chars();
+            if let Some(character) = chars.next() {
+                if chars.next().is_none() {
+                    insert_character(&mut seen, character);
+                }
+            }
+        }
         for (index, character) in dictionary.single_kanji(reading).enumerate() {
             if self.candidates.len() >= wanted {
                 break;
             }
-            let mut text = FixedStr::new();
-            if text.push(character).is_err() {
-                continue;
-            }
             // A character the search already ranked keeps its ranked position
             // and its own annotation.
-            if self
-                .candidates
-                .iter()
-                .any(|candidate| candidate.text() == text.as_str())
-            {
+            if !insert_character(&mut seen, character) {
                 continue;
             }
+            let mut text = FixedStr::new();
+            text.push(character)
+                .map_err(|_| ConversionError::OutputTooLong)?;
             let Some(annotation) = single_kanji_annotation(dictionary, character) else {
                 continue;
             };
@@ -104,6 +110,22 @@ impl Converter {
     }
 }
 
+fn insert_character(seen: &mut [u32], character: char) -> bool {
+    let key = u32::from(character) + 1;
+    let mut index = key.wrapping_mul(2_654_435_761) as usize % seen.len();
+    for _ in 0..seen.len() {
+        if seen[index] == key {
+            return false;
+        }
+        if seen[index] == 0 {
+            seen[index] = key;
+            return true;
+        }
+        index = (index + 1) % seen.len();
+    }
+    false // Unreachable at the <= 50% load factor; never loop without a bound.
+}
+
 /// Renders one appended character's annotation: 異体字（高） for a character
 /// the pinned rules relate to another, and a plain marker otherwise.
 ///
@@ -124,4 +146,23 @@ fn single_kanji_annotation(
     annotation.push(original).ok()?;
     annotation.push('）').ok()?;
     Some(annotation)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::insert_character;
+
+    #[test]
+    fn collision_duplicates_wraparound_and_full_table_remain_bounded() {
+        // All four keys collide modulo four. The last new key must stop
+        // after one full traversal, and a duplicate must preserve the table.
+        let mut seen = [0; 4];
+        for character in ['一', '丄', '丈', '丌'] {
+            assert!(insert_character(&mut seen, character));
+        }
+        let before = seen;
+        assert!(!insert_character(&mut seen, '丄'));
+        assert!(!insert_character(&mut seen, '丐'));
+        assert_eq!(seen, before);
+    }
 }

@@ -15,9 +15,9 @@ const CANDIDATE_BUDGET_SHORT: usize = 256;
 const CANDIDATE_BUDGET_MEDIUM: usize = 108;
 const CANDIDATE_BUDGET_LONG: usize = 18;
 
-/// How many candidates a request for `reading` may actually receive, no
-/// matter how high the caller's `max_candidates` or
-/// [`MAX_CONVERSION_CANDIDATES`] itself goes.
+/// How many ranked candidates N-best search may produce for `reading`.
+/// Dictionary single-kanji tails use the caller's separate display allowance;
+/// they do not spend search states or widen this limit.
 ///
 /// Issue #95 raised [`MAX_CONVERSION_CANDIDATES`] from 18 to 256 so a short
 /// reading could reach the single-kanji and homophone surfaces the old
