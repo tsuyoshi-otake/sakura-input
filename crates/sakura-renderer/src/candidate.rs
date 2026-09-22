@@ -314,11 +314,7 @@ impl CandidateWindow {
             )
             .is_ok();
             if !display_positioned {
-                self.state.visible = false;
-                self.state.accessibility.hide();
-                let _ = clear_delete_overlay_region(self.delete_overlay);
-                let _ = ShowWindow(self.delete_overlay, SW_HIDE);
-                let _ = ShowWindow(self.window, SW_HIDE);
+                self.hide();
                 return;
             }
             let _ = InvalidateRect(Some(self.window), None, false);
@@ -344,9 +340,8 @@ impl CandidateWindow {
                 // A failed region update must not leave a stale interactive
                 // surface above the input-disabled display popup.
                 if !overlay_positioned {
-                    // Do not let a later overlay-only DPI message reveal this
-                    // target region at its old screen position.
-                    self.state.visible = false;
+                    self.hide();
+                    return;
                 }
                 let _ = clear_delete_overlay_region(self.delete_overlay);
                 let _ = ShowWindow(self.delete_overlay, SW_HIDE);
@@ -355,13 +350,7 @@ impl CandidateWindow {
     }
 
     pub fn hide(&mut self) {
-        self.state.accessibility.hide();
-        self.state.visible = false;
-        // SAFETY: the popup is live for this object's lifetime.
-        unsafe {
-            hide_delete_overlay(self.delete_overlay);
-            let _ = ShowWindow(self.window, SW_HIDE);
-        }
+        hide_candidate_surfaces(&mut self.state);
     }
 
     /// The popup's current screen rectangle, only while it is visible.
@@ -907,18 +896,12 @@ fn refresh_delete_overlay_for_dpi(state: &mut PaintState) -> bool {
 
 fn apply_display_dpi_change(window: HWND, value: LPARAM) {
     let Some(rect) = suggested_rect(value) else {
-        // A malformed transition must not leave an independently visible
-        // target surface from the previous DPI arrangement.
-        hide_delete_overlay_for_display(window);
+        // Neither surface can remain visible after placement is invalidated.
+        hide_candidate_surfaces_for_display(window);
         return;
     };
     if !set_window_rect(window, rect, None) {
-        hide_delete_overlay_for_display(window);
-        // SAFETY: this is the display HWND that received the failed position
-        // request, so hiding it cannot affect another popup.
-        unsafe {
-            let _ = ShowWindow(window, SW_HIDE);
-        }
+        hide_candidate_surfaces_for_display(window);
         return;
     }
     // SAFETY: CandidateWindow owns the stable pointer until display teardown.
@@ -929,8 +912,7 @@ fn apply_display_dpi_change(window: HWND, value: LPARAM) {
     // SAFETY: window messages are serialized on the renderer thread.
     let state = unsafe { &mut *state };
     if !set_window_rect(state.delete_overlay, rect, Some(HWND_TOPMOST)) {
-        state.visible = false;
-        hide_delete_overlay(state.delete_overlay);
+        hide_candidate_surfaces(state);
         return;
     }
     let _ = refresh_delete_overlay_for_dpi(state);
@@ -945,16 +927,30 @@ fn apply_overlay_dpi_change(window: HWND, _value: LPARAM) {
     hide_delete_overlay(window);
 }
 
-fn hide_delete_overlay_for_display(display_window: HWND) {
+fn hide_candidate_surfaces_for_display(display_window: HWND) {
     // SAFETY: this only reads the shared pointer installed by CandidateWindow.
     let state = unsafe { GetWindowLongPtrW(display_window, GWLP_USERDATA) } as *mut PaintState;
     if !state.is_null() {
         // SAFETY: CandidateWindow owns the box until it clears the window data
         // during teardown, and WM_DPICHANGED is serialized on its UI thread.
         let state = unsafe { &mut *state };
-        state.visible = false;
-        state.accessibility.hide();
-        hide_delete_overlay(state.delete_overlay);
+        hide_candidate_surfaces(state);
+    } else {
+        // SAFETY: this is the display HWND that received the failed transition.
+        unsafe {
+            let _ = ShowWindow(display_window, SW_HIDE);
+        }
+    }
+}
+
+/// Native display, click targets, and accessibility share one visibility state.
+fn hide_candidate_surfaces(state: &mut PaintState) {
+    state.visible = false;
+    state.accessibility.hide();
+    hide_delete_overlay(state.delete_overlay);
+    // SAFETY: PaintState belongs to this live popup on its owning UI thread.
+    unsafe {
+        let _ = ShowWindow(state.display_window, SW_HIDE);
     }
 }
 
