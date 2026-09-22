@@ -141,6 +141,7 @@ impl HistoryRuntime {
             if enabled {
                 state.phase = Phase::Starting(generation);
             } else {
+                sakura_ipc::debug_trace::set_enabled(false);
                 if let Some(service) = state.service.take() {
                     state.retiring.push(service);
                 }
@@ -171,6 +172,12 @@ impl HistoryRuntime {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !state.shutdown {
                 state.shutdown = true;
+                // Only an enabled owner can have published the engine trace.
+                // Dropping the disabled startup placeholder must not clear a
+                // replacement runtime's already-published trace.
+                if state.desired_enabled {
+                    sakura_ipc::debug_trace::set_enabled(false);
+                }
                 state.desired_enabled = false;
                 state.generation = state.generation.saturating_add(1);
                 if let Some(service) = state.service.take() {

@@ -129,6 +129,67 @@ fn keys_during_history_open(enabled_at_start: bool) {
 }
 
 #[test]
+fn disabling_developer_history_stops_engine_trace_until_reenabled() {
+    let mut engine = Engine::spawn_isolated_with_setup(|profile| configuration(profile, true));
+    let mut settings = engine.client();
+    let _ = session_for(&mut settings, "history-trace-settings.exe");
+    let mut host = engine.client();
+    let session = session_for(&mut host, "history-trace-host.exe");
+    let trace = engine.local_app_data().join("SakuraInput/logs/debug.tsv");
+    let wait_active = |settings: &mut sakura_ipc::Client, expected: bool| {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if matches!(settings.call(&Request::InputHistoryStats, PATIENT),
+                Ok(Response::InputHistoryStats { active, .. }) if active == expected)
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "history active did not become {expected}"
+            );
+            sleep(Duration::from_millis(10));
+        }
+    };
+    let key = |host: &mut sakura_ipc::Client| {
+        assert!(matches!(
+            host.call(
+                &Request::SendKey {
+                    session,
+                    key: named_key(KeyCode::Escape),
+                },
+                PATIENT
+            ),
+            Ok(Response::Output(_))
+        ));
+    };
+    wait_active(&mut settings, true);
+    key(&mut host);
+    let before = fs::read(&trace).unwrap();
+    assert!(!before.is_empty(), "enabled engine trace emitted records");
+    configuration(engine.local_app_data(), false);
+    wait_active(&mut settings, false);
+    for _ in 0..32 {
+        key(&mut host);
+    }
+    assert_eq!(
+        fs::read(&trace).unwrap(),
+        before,
+        "disabled engine kept tracing"
+    );
+    configuration(engine.local_app_data(), true);
+    wait_active(&mut settings, true);
+    key(&mut host);
+    assert!(
+        fs::read(&trace).unwrap().len() > before.len(),
+        "reenabling restored trace"
+    );
+    drop(host);
+    drop(settings);
+    assert!(engine.cleanup().unwrap().status.success());
+}
+
+#[test]
 #[ignore = "requires preserved 64 MiB fixture and release timing run"]
 fn large_history_hot_activation_keeps_independent_keys_available() {
     keys_during_history_open(false);
@@ -153,7 +214,7 @@ fn full_history_keeps_all_1200_commits_and_stops_promptly() {
             "sakura-history-capacity-{}-{nonce}",
             std::process::id()
         ));
-    fs::create_dir(&root).unwrap();
+    fs::create_dir_all(&root).unwrap();
     let path = root.join("input.bin");
     fs::copy(fixture(), &path).unwrap();
     let bytes = fs::metadata(&path).unwrap().len();
