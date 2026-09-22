@@ -12,6 +12,10 @@ publication, retirement and joined shutdown. Configuration publication owns
 enable/disable changes; an older request snapshot cannot create a new generation.
 A failed opening is terminal until an explicit disable/enable transition.
 Initialization does not retroactively record input received while inactive.
+Disabling the runtime also disables its engine-process diagnostic trace under
+the publication lock. Enabled-owner shutdown clears that flag; the disabled
+startup placeholder cannot clear its replacement's active trace. This leaves
+the separate TSF process's tracing state untouched.
 
 Interrupted replacement files can be discarded only when a valid protected
 publication plan identifies the intact canonical as the old generation and no
@@ -43,7 +47,7 @@ drops from 1,200 synthetic commits followed by 35,257 ms in stop.
 Integrated verification, 2026-09-22:
 
 - Workspace tests with `sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture`:
-  1,973 passed, zero failed, 97 ignored across 114 reported suites. Three ignored
+  1,974 passed, zero failed, 97 ignored across 114 reported suites. Three ignored
   tests are the separately executed large-store release acceptance cases.
 - Instrumented core and engine library tests: 836 passed, zero failed, five
   ignored. `ci/check-conversion-conditions.ps1` reports MCC 28/28 combinations,
@@ -59,9 +63,15 @@ Integrated verification, 2026-09-22:
 - `cargo build --workspace --release --locked` passes. The TSF DLL gate and
   its self-test pass: 440,832 bytes against a 1,048,576-byte cap.
 - IRV self-test passes. The comparison exits successfully with warnings:
-  history 2,672 to 6,350 LOC (+137.6%), CI 5,034 to 5,630 LOC (+11.8%). The
+  history 2,672 to 6,418 LOC (+140.2%), CI 5,034 to 5,630 LOC (+11.8%). The
   history inventory now counts its previously omitted test file as well as the
   new lifecycle and regression files; thresholds and baseline were not reset.
+- A private-process trace regression first failed on continued writes after
+  developer-mode OFF. After correction, 32 keys leave the trace byte-for-byte
+  unchanged; ON resumes recording in both debug and release builds. File
+  contents, not path metadata length,
+  establish this invariant. The capacity fixture creates missing parent
+  directories so an absent user `tmp` directory does not prevent the test.
 
 The three opt-in release acceptance tests passed (three run, zero failed,
 two unrelated harness tests filtered), with these single-run observations:
@@ -123,6 +133,8 @@ existing writer still owns accepted records and durable file mutations.
 Recovery owns generation validation; compaction uses the identity of the
 already validated image to verify publication. Dependencies remain one-way
 from server/runtime to the history service and store; no dependency is added.
+The lifecycle owner also retires the engine's developer trace with its mode;
+it never changes another process's diagnostic state.
 The visible compatibility change is that enabled history becomes active after
 asynchronous initialization; it no longer delays engine readiness or keys.
 An early shutdown still joins an unfinished opening scan and can therefore
