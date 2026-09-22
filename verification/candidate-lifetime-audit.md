@@ -143,6 +143,12 @@ The mandatory publication check identified pre-existing author metadata in Git
 history. The owner requested an anonymization assessment before publishing.
 The read-only assessment is kept outside the public repository. No remote
 history, branch protection, tag, published release, or installed binary was
-changed during this preparation. Release workflow dictionary gates, published
-asset verification, and reinstallation still require completion after that
-decision; a local release-profile build is not a published installer.
+changed during this preparation. After reviewing the measured impact, the owner
+authorized the recommended exception on 2026-09-22: retain the already-public
+author metadata and proceed with 2.0.4 publication and reinstallation. This is
+an exception for this release, not authorization to rewrite history or change
+repository visibility. The repeated four-part preflight found the same existing
+tracked-file matches, no credential-pattern matches, and an MIT LICENSE.
+Release workflow dictionary gates, published asset verification, and
+reinstallation still require completion; a local release-profile build is not
+a published installer.
