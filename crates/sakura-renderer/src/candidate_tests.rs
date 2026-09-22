@@ -2,6 +2,166 @@ use super::*;
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::Candidate;
 
+#[test]
+fn failed_overlay_placement_hides_the_owned_popup_and_can_recover() {
+    use std::sync::mpsc;
+    use windows::Win32::UI::WindowsAndMessaging::IsWindowVisible;
+
+    let _com = crate::accessibility::ComApartment::new().expect("COM apartment");
+    let mut candidates = CandidateWindow::new(mpsc::sync_channel(1).0, mpsc::sync_channel(1).0)
+        .expect("candidate windows");
+    candidates.update(&crate::tests::candidate_state(1));
+    let overlay = candidates.delete_overlay;
+    // Route placement to an invalid handle while PaintState retains the real
+    // owned surfaces. Restore it before asserting so teardown always owns both.
+    candidates.delete_overlay = HWND::default();
+    candidates.update(&crate::tests::candidate_state(2));
+    candidates.delete_overlay = overlay;
+    assert!(candidates.popup_rect().is_none());
+    // SAFETY: both handles belong to this fixture and remain live.
+    unsafe {
+        assert!(!IsWindowVisible(candidates.window).as_bool());
+        assert!(!IsWindowVisible(overlay).as_bool());
+    }
+    candidates.update(&crate::tests::candidate_state(3));
+    assert!(candidates.popup_rect().is_some());
+    // SAFETY: a fresh snapshot restores these same live owned windows.
+    unsafe {
+        assert!(IsWindowVisible(candidates.window).as_bool());
+        assert!(IsWindowVisible(overlay).as_bool());
+    }
+}
+
+#[test]
+fn invalid_dpi_transition_hides_both_native_candidate_surfaces_and_can_recover() {
+    use std::sync::mpsc;
+    use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, SendMessageW};
+
+    let _com = crate::accessibility::ComApartment::new().expect("COM apartment");
+    let mut candidates = CandidateWindow::new(mpsc::sync_channel(1).0, mpsc::sync_channel(1).0)
+        .expect("candidate windows");
+    for revision in [1, 2] {
+        candidates.update(&crate::tests::candidate_state(revision));
+        assert!(candidates.popup_rect().is_some());
+        // SAFETY: all HWNDs belong to this fixture. The missing suggested
+        // rectangle exercises the explicitly supported malformed DPI branch.
+        unsafe {
+            assert!(IsWindowVisible(candidates.window).as_bool());
+            assert!(IsWindowVisible(candidates.delete_overlay).as_bool());
+            SendMessageW(candidates.window, WM_DPICHANGED, None, None);
+            assert!(candidates.popup_rect().is_none());
+            assert!(!IsWindowVisible(candidates.delete_overlay).as_bool());
+            assert!(
+                !IsWindowVisible(candidates.window).as_bool(),
+                "invalid DPI left the display visible after state became hidden"
+            );
+        }
+    }
+}
+
+#[test]
+fn lost_feed_hides_native_popup_and_click_targets_without_replaying_stale_updates() {
+    use std::sync::{mpsc, Arc, Mutex};
+    use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, SendMessageW};
+
+    struct Fixture {
+        host: HWND,
+        app: Box<crate::App>,
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            // SAFETY: this fixture owns the hidden host and clears its app
+            // pointer before either the host or boxed app is destroyed.
+            unsafe {
+                SetWindowLongPtrW(self.host, GWLP_USERDATA, 0);
+                let _ = DestroyWindow(self.host);
+            }
+        }
+    }
+    impl Fixture {
+        fn report(&self, signal: crate::watch::Signal) {
+            crate::report(self.host.0 as isize, &self.app.mailbox, signal);
+        }
+
+        fn dispatch(&self) {
+            // SAFETY: a synchronous dispatch on the owning UI thread; no
+            // reference into app is held while the window procedure runs.
+            unsafe {
+                SendMessageW(self.host, crate::WM_UI, None, None);
+            }
+        }
+
+        fn assert_visible(&self, expected: bool) {
+            assert_eq!(self.app.candidates.popup_rect().is_some(), expected);
+            // SAFETY: these are this fixture's live, owned windows, never
+            // windows found by a global class lookup or the installed IME.
+            unsafe {
+                assert_eq!(
+                    IsWindowVisible(self.app.candidates.window).as_bool(),
+                    expected
+                );
+                assert_eq!(
+                    IsWindowVisible(self.app.candidates.delete_overlay).as_bool(),
+                    expected
+                );
+            }
+        }
+    }
+
+    let _com = crate::accessibility::ComApartment::new().expect("COM apartment");
+    let indicator = crate::indicator::Indicator::new().expect("indicator");
+    let candidates = CandidateWindow::new(mpsc::sync_channel(1).0, mpsc::sync_channel(1).0)
+        .expect("candidate windows");
+    let host = crate::create_host().expect("hidden renderer host");
+    let mut fixture = Fixture {
+        host,
+        app: Box::new(crate::App {
+            indicator,
+            candidates,
+            pad: None,
+            pad_theme: AppearanceTheme::Auto,
+            raw_input: crate::raw_input::RawInputOwner::new(host, 0),
+            pad_shortcut: sakura_proto::PadShortcut::Disabled,
+            pad_config_generation: 0,
+            shown_indicator: None,
+            mailbox: Arc::new(Mutex::new(None)),
+            history_delete_completions: mpsc::channel().1,
+            candidate_commit_completions: mpsc::channel().1,
+        }),
+    };
+    // SAFETY: the app's Box has a stable address and Fixture clears it in Drop.
+    unsafe {
+        SetWindowLongPtrW(host, GWLP_USERDATA, (&raw mut *fixture.app) as isize);
+    }
+    let snapshot =
+        |revision| crate::watch::Signal::Ui(Box::new(crate::tests::candidate_state(revision)));
+    fixture.report(snapshot(17));
+    fixture.dispatch();
+    fixture.assert_visible(true);
+
+    // An old update was posted but not yet drawn when the feed failed.
+    fixture.report(snapshot(18));
+    fixture.report(crate::watch::Signal::Unavailable);
+    fixture.dispatch();
+    fixture.assert_visible(false);
+    assert_eq!(fixture.app.shown_indicator, None);
+    assert_eq!(fixture.app.pad_theme, AppearanceTheme::Dark);
+    fixture.dispatch(); // leftover WM_UI cannot replay the old snapshot
+    fixture.assert_visible(false);
+
+    // Reconnection can reset the engine revision. A pending invalidation
+    // must not hide the newer snapshot when the UI pump finally catches up.
+    fixture.report(crate::watch::Signal::Unavailable);
+    fixture.report(snapshot(1));
+    fixture.dispatch();
+    fixture.assert_visible(true);
+    fixture.dispatch();
+    fixture.assert_visible(true);
+    fixture.report(crate::watch::Signal::Unavailable);
+    fixture.dispatch();
+    fixture.assert_visible(false);
+}
+
 fn candidates(items: Vec<Candidate>, selected: u16, kind: CandidateKind) -> CandidateList {
     CandidateList {
         kind,

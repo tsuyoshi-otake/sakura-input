@@ -907,10 +907,20 @@ impl UiBoard {
     }
 
     pub fn clear_session_from(&self, connection: u64, session: SessionId) {
+        self.clear_candidates_owned_by(|owner| owner == (connection, session));
+    }
+
+    /// Ends candidate ownership when a host pipe closes, even if the host
+    /// could not send a terminal session command. A newer peer's popup survives.
+    pub fn clear_connection(&self, connection: u64) {
+        self.clear_candidates_owned_by(|(owner, _)| owner == connection);
+    }
+
+    fn clear_candidates_owned_by(&self, matches: impl FnOnce((u64, SessionId)) -> bool) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        if state.candidate_owner != Some((connection, session)) {
+        if !state.candidate_owner.is_some_and(matches) {
             return;
         }
         state.revision = state.revision.wrapping_add(1);
@@ -918,6 +928,7 @@ impl UiBoard {
         state.candidates.clear();
         state.candidate_detail.clear();
         state.candidate_owner = None;
+        state.pending_candidate_commit = None;
         state.candidate_learning_generation = 0;
         state.anchor = None;
         state.document = None;
@@ -1527,6 +1538,52 @@ mod tests {
         let still = look(&board, 0);
         assert_eq!(still.revision, placed.revision);
         assert!(still.candidates.is_some());
+    }
+
+    #[test]
+    fn disconnected_connection_clears_only_its_candidates_and_pending_click() {
+        let board = UiBoard::new();
+        board.publish_output_from(11, 7, &candidate_output(0), 0);
+        let anchor = ScreenRect {
+            left: 10,
+            top: 20,
+            right: 30,
+            bottom: 40,
+        };
+        assert!(board.publish_placement_from(11, 7, Some(anchor), Some(anchor), true));
+        let visible = look(&board, 0);
+        assert!(board.queue_candidate_commit(visible.revision, 0));
+
+        board.clear_connection(12);
+        assert_eq!(look(&board, 0).revision, visible.revision);
+        assert_eq!(
+            board.pending_candidate_commit(11, 7),
+            Some((visible.revision, 0))
+        );
+
+        board.clear_connection(11);
+        let hidden = look(&board, visible.revision);
+        assert!(hidden.candidates.is_none());
+        assert!(hidden.candidate_detail.is_none());
+        assert!(hidden.anchor.is_none());
+        assert!(hidden.document.is_none());
+        assert!(!hidden.renderer_visible);
+        assert_eq!(board.pending_candidate_commit(11, 7), None);
+        assert!(!board.queue_candidate_commit(visible.revision, 0));
+        board.clear_connection(11);
+        assert_eq!(look(&board, 0).revision, hidden.revision);
+
+        // Session ids can coincide on separate host connections. A late old
+        // disconnect must neither hide nor move a newer owner's candidate UI.
+        board.publish_output_from(12, 7, &candidate_output(0), 0);
+        assert!(board.publish_placement_from(12, 7, Some(anchor), None, true));
+        let replacement = look(&board, 0);
+        board.clear_connection(11);
+        let still = look(&board, 0);
+        assert_eq!(still.revision, replacement.revision);
+        assert!(still.candidates.is_some());
+        assert_eq!(still.anchor, Some(anchor));
+        assert!(still.renderer_visible);
     }
 
     #[test]
