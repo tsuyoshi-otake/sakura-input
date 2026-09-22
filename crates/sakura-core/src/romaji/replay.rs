@@ -121,17 +121,6 @@ impl ReplayTrace {
         self.carry_overlap.min(self.pending.len())
     }
 
-    /// Returns whether the replay has exactly one local structural signal.
-    ///
-    /// A single raw passthrough or a single unresolved pending prefix is the
-    /// only shape that can be considered by a Phase 1 caller.  The public
-    /// completion planner is stricter and currently admits raw passthrough
-    /// only; ordinary `n`/`k` prefixes must not become repairs by themselves.
-    pub fn has_one_local_anomaly(&self) -> bool {
-        (self.raw_passthrough_count() == 1 && self.pending.is_empty())
-            || (self.raw_passthrough_count() == 0 && !self.pending.is_empty())
-    }
-
     fn push_event(
         &mut self,
         output: &str,

@@ -329,11 +329,6 @@ impl Descriptor {
         Self::from_sddl(&sddl()?)
     }
 
-    /// The descriptor for a named-pipe endpoint.
-    pub fn for_endpoint(endpoint: Endpoint) -> Result<Self> {
-        Self::from_sddl(&sddl_for(endpoint)?)
-    }
-
     /// A `SECURITY_ATTRIBUTES` pointing at this descriptor.
     ///
     /// Borrows `self`, because the returned struct holds a raw pointer that

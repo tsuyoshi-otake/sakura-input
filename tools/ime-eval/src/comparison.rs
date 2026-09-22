@@ -328,16 +328,6 @@ pub fn compare_files(
     compare(&before, &after, side)
 }
 
-/// Alias kept explicit for callers that want to distinguish this operation
-/// from other comparison utilities in the evaluation tool.
-pub fn compare_scoreboards(
-    before: &QualityScoreboard,
-    after: &QualityScoreboard,
-    side: ComparisonSide,
-) -> Result<QualityComparison, Error> {
-    compare(before, after, side)
-}
-
 fn validate_scoreboard(scoreboard: &QualityScoreboard, name: &str) -> Result<(), Error> {
     if scoreboard.schema_version != QUALITY_SCHEMA_VERSION {
         return Err(err(format!(

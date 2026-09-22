@@ -190,18 +190,6 @@ impl AiEffort {
             _ => None,
         }
     }
-
-    pub const fn api_value(self) -> Option<&'static str> {
-        match self {
-            Self::ProviderDefault => None,
-            Self::None => Some("none"),
-            Self::Low => Some("low"),
-            Self::Medium => Some("medium"),
-            Self::High => Some("high"),
-            Self::XHigh => Some("xhigh"),
-            Self::Max => Some("max"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

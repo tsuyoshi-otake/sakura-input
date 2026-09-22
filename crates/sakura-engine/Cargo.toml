@@ -38,6 +38,11 @@ path = "tests/high_load_key_integrity.rs"
 required-features = ["dev-fixtures"]
 
 [[test]]
+name = "history_maintenance"
+path = "tests/history_maintenance.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
 name = "ipc_latency"
 path = "tests/ipc_latency.rs"
 required-features = ["dev-fixtures"]

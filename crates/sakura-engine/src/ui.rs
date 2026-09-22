@@ -899,13 +899,8 @@ impl UiBoard {
         true
     }
 
-    /// Clears candidate UI owned by `session`, leaving another session's
-    /// newer popup untouched. Used by non-`Output` terminal commands such as
-    /// revert and session deletion.
-    pub fn clear_session(&self, session: SessionId) {
-        self.clear_session_from(0, session);
-    }
-
+    /// Clears candidate UI owned by this connection and session, leaving a
+    /// newer popup untouched. Used by revert and session deletion.
     pub fn clear_session_from(&self, connection: u64, session: SessionId) {
         self.clear_candidates_owned_by(|owner| owner == (connection, session));
     }
