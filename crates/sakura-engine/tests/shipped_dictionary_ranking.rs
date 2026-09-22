@@ -439,6 +439,164 @@ fn open_dispatcher_with_input_method(input_method: InputMethod) -> Dispatcher {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn history_audit_ordinary_phrases_keep_the_selected_surface_through_commit() {
+    let mut failures = Vec::new();
+    for (reading, expected) in [
+        ("みたいなかんじ", "みたいな感じ"),
+        ("ねだんいちらんもちょうだい", "値段一覧も頂戴"),
+        ("めんてなー", "メンテナー"),
+        ("くろっくせいぎょ", "クロック制御"),
+        ("じゃあほかもおねがいね", "じゃあほかもお願いね"),
+        ("たいおうさく", "対応策"),
+        ("こうていてきな", "肯定的な"),
+        ("たげんごはんえい", "多言語反映"),
+        ("かんじへんかん", "漢字変換"),
+        ("せっていち", "設定値"),
+        ("きたいち", "期待値"),
+        ("ちょうだいなかんすう", "長大な関数"),
+    ] {
+        let mut dispatcher = open_dispatcher_with_input_method(InputMethod::Kana);
+        let session = create_normal_session(&mut dispatcher, "quality-regression.exe");
+        for ch in reading.chars() {
+            send_key(&mut dispatcher, session, char_key(ch));
+        }
+        let converted = send_key(&mut dispatcher, session, space_key()).to_output();
+        let committed = send_key(&mut dispatcher, session, enter_key()).to_output();
+        let surface: String = converted
+            .preedit
+            .as_ref()
+            .expect("converted preedit")
+            .segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect();
+        if surface != expected || committed.commit.as_deref() != Some(expected) {
+            failures.push(format!(
+                "{reading}: preedit={:?}, commit={:?}, expected={expected}",
+                surface, committed.commit
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn history_audit_single_kanji_tails_are_selectable_and_committable() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for reading in [
+        "こう",
+        "しょう",
+        "みだり",
+        "でかぐらむ",
+        "でしぐらむ",
+        "へくとぐらむ",
+        "せんちぐらむ",
+        "でかりっとる",
+        "まいくろりっとる",
+        "へくとりっとる",
+        "せんちりっとる",
+        "でかめーとる",
+        "へくとめーとる",
+    ] {
+        let mut dispatcher = Dispatcher::new_with_configuration(
+            Arc::clone(&conversion),
+            Arc::new(LearningService::memory()),
+            Preferences {
+                input_method: InputMethod::Kana,
+                ..Preferences::default()
+            },
+        )
+        .unwrap();
+        let session = create_normal_session(&mut dispatcher, "single-kanji-regression.exe");
+        for ch in reading.chars() {
+            send_key(&mut dispatcher, session, char_key(ch));
+        }
+        let converted = send_key(&mut dispatcher, session, space_key()).to_output();
+        let list = converted.candidates.expect("single-kanji candidate list");
+        let registered: Vec<_> = conversion.dictionary().single_kanji(reading).collect();
+        assert!(!registered.is_empty());
+        let missing: String = registered
+            .iter()
+            .filter(|ch| !list.items.iter().any(|item| item.text == ch.to_string()))
+            .collect();
+        if !missing.is_empty() {
+            failures.push(format!("{reading}: missing {missing}"));
+            continue;
+        }
+        let target = registered.last().unwrap().to_string();
+        let index = list
+            .items
+            .iter()
+            .position(|item| item.text == target)
+            .unwrap();
+        // Renderer clicks refer to the displayed page, after navigating there.
+        // The production server rejects intents for rows on other pages.
+        for _ in 0..index / sakura_proto::CANDIDATE_PAGE_SIZE {
+            send_key(
+                &mut dispatcher,
+                session,
+                KeyInput {
+                    code: KeyCode::PageDown,
+                    ..enter_key()
+                },
+            );
+        }
+        let mut committed = OutputBuf::new();
+        assert!(matches!(
+            dispatcher.dispatch(
+                &Request::CommitCandidate {
+                    session,
+                    revision: 0,
+                    candidate_index: index as u16,
+                },
+                &mut committed
+            ),
+            Reply::Output
+        ));
+        assert_eq!(
+            committed.to_output().commit.as_deref(),
+            Some(target.as_str()),
+            "{reading}"
+        );
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn history_audit_romaji_and_explicit_homophone_choices_remain_usable() {
+    for (romaji, expected) in [
+        ("mitainakannji", "みたいな感じ"),
+        ("nedannitirannmotyoudai", "値段一覧も頂戴"),
+        ("tagengohannei", "多言語反映"),
+    ] {
+        let mut dispatcher = open_dispatcher_with_input_method(InputMethod::Romaji);
+        let session = create_normal_session(&mut dispatcher, "romaji-regression.exe");
+        assert_eq!(
+            commit_converted_romaji(&mut dispatcher, session, romaji),
+            expected,
+            "{romaji}"
+        );
+    }
+    for (romaji, alternate) in [("kannji", "漢字"), ("tyoudai", "長大"), ("ne", "値")] {
+        let mut dispatcher = open_dispatcher_with_input_method(InputMethod::Romaji);
+        let session = create_normal_session(&mut dispatcher, "homophone-regression.exe");
+        assert_eq!(
+            commit_named_converted_romaji(&mut dispatcher, session, romaji, alternate),
+            alternate
+        );
+        // A deliberate choice continues to outrank the default on repetition.
+        assert_eq!(
+            commit_converted_romaji(&mut dispatcher, session, romaji),
+            alternate
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_83_shipped_path_uses_a_costed_typed_frontier() {
     let conversion = open_conversion();
     let prefix_right = conversion

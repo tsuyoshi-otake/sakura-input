@@ -1022,12 +1022,8 @@ mod tests {
 
     #[test]
     fn candidate_list_pages_correctly_at_the_full_candidate_ceiling() {
-        // Issue #95 raised `MAX_CANDIDATES` to 256 so a one-mora reading (a
-        // pinned single-kanji table entry, a common homophone run) can be
-        // carried in full; at `CANDIDATE_PAGE_SIZE` 9 that is ceil(256/9)
-        // = 29 pages, not the 2 pages the wire format used to top out at.
-        // Paging arithmetic must hold at the new ceiling, not just at the
-        // old one.
+        // The 768 display slots carry ranked results and the independent
+        // single-kanji tail. Nine rows per page produce 86 bounded pages.
         let items: Vec<Candidate> = (0..crate::MAX_CANDIDATES)
             .map(|index| Candidate {
                 text: format!("c{index}"),
@@ -1044,11 +1040,11 @@ mod tests {
             page_size: crate::CANDIDATE_PAGE_SIZE as u16,
         };
 
-        assert_eq!(candidates.page_count(), 29);
-        assert_eq!(candidates.current_page(), 28);
-        assert_eq!(candidates.page_start(28), Some(252));
-        assert_eq!(candidates.page_start(29), None);
-        assert_eq!(candidates.current_page_range(), 252..256);
+        assert_eq!(candidates.page_count(), 86);
+        assert_eq!(candidates.current_page(), 85);
+        assert_eq!(candidates.page_start(85), Some(765));
+        assert_eq!(candidates.page_start(86), None);
+        assert_eq!(candidates.current_page_range(), 765..768);
     }
 
     #[test]

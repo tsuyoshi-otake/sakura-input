@@ -19,10 +19,11 @@ pub const CANDIDATE_PAGE_SIZE: usize = 9;
 /// commercial IME lists 210 under ひ (Issue #95). The frame therefore
 /// carries a paging-sized list rather than a two-page one.
 ///
-/// This is the ceiling, not the working limit. What a given reading may
-/// actually spend is `sakura_core::conversion::candidate_budget`, which
-/// keeps a long reading at its former bound.
-pub const MAX_CANDIDATES: usize = 256;
+/// Search still spends at most 256/108/18 candidates by reading length.
+/// The remaining transport slots carry the independently appended single-kanji
+/// table (315 characters for the widest shipped reading). Text arenas and
+/// numbered page size stay bounded independently of this row count.
+pub const MAX_CANDIDATES: usize = 768;
 
 /// Fixed storage for all candidate surfaces or annotations in an `OutputBuf`.
 pub const MAX_CANDIDATE_TEXT_BYTES: usize = MAX_PREEDIT_BYTES * CANDIDATE_PAGE_SIZE;

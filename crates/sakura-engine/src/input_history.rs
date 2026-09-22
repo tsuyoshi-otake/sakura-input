@@ -11,6 +11,7 @@
 //! failure to enqueue or persist a record is observable through counters and
 //! never changes the key reply.
 
+use std::borrow::Cow;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -24,6 +25,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_store::crypto::{DpapiSealer, Sealer};
 use sakura_values::{AiTextOperation, AiTextStatus, InputScope};
+mod digest;
+use digest::Sha256;
 use windows::Win32::Storage::FileSystem::{
     FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT,
 };
@@ -104,8 +107,7 @@ const fn ai_status_name(status: AiTextStatus) -> &'static str {
 
 use sakura_store::input_history::persistence::{
     compaction_transaction_path, exceeds_history_size,
-    replace_history_file as store_replace_history_file, retained_records, retention_cutoff,
-    RETENTION,
+    replace_history_file as store_replace_history_file, retention_cutoff, RETENTION,
 };
 pub use sakura_store::input_history::persistence::{default_path, MAX_INPUT_HISTORY_BYTES};
 pub use sakura_store::input_history::{
@@ -364,8 +366,15 @@ impl fmt::Debug for InputHistoryService {
 impl InputHistoryService {
     pub fn open(path: &Path) -> io::Result<Arc<Self>> {
         let store_owner = acquire_store_owner(path)?;
+        let recovery = recover_compaction(path)?;
         ensure_file(path)?;
-        let recovered = repair_file(path)?;
+        // Recovery already validates the complete chosen image under the same
+        // store ownership. Reuse its identifier/retention summary instead of
+        // decrypting a full history again before the writer can start.
+        let recovered = match recovery {
+            Some(summary) => summary,
+            None => repair_file(path)?,
+        };
         if recovered.last_sequence == u64::MAX || recovered.last_session == u64::MAX {
             return Err(invalid_data("input history stored identifiers exhausted"));
         }
@@ -988,7 +997,10 @@ fn append_payload(
         if let Some(mut previous) = file.take() {
             previous.flush()?;
         }
-        *retention = compact_file(path)?;
+        // Reclaim a batch, not just this frame: otherwise a full unexpired
+        // history is rewritten and rejects every subsequent key forever.
+        let headroom = (MAX_INPUT_HISTORY_BYTES / 8).max(frame_len);
+        *retention = compact_file_to_limit(path, MAX_INPUT_HISTORY_BYTES - headroom)?;
         *file = Some(open_append(path)?);
     }
     if file.is_none() {
@@ -1154,6 +1166,18 @@ fn scan_frames(
     bytes: &[u8],
     mut records: Option<&mut Vec<InputHistoryRecord>>,
 ) -> io::Result<ScanSummary> {
+    scan_frames_with(bytes, |record, _| {
+        if let Some(records) = records.as_deref_mut() {
+            records.push(record);
+        }
+        Ok(())
+    })
+}
+
+fn scan_frames_with(
+    bytes: &[u8],
+    mut visit: impl FnMut(InputHistoryRecord, std::ops::Range<usize>) -> io::Result<()>,
+) -> io::Result<ScanSummary> {
     if bytes.len() < HEADER_LEN || &bytes[..4] != MAGIC {
         return Err(invalid_data("invalid input history header"));
     }
@@ -1184,9 +1208,7 @@ fn scan_frames(
         last_sequence = last_sequence.max(record.sequence());
         last_session = last_session.max(record.session());
         retention.observe(record.timestamp_ms());
-        if let Some(records) = records.as_deref_mut() {
-            records.push(record);
-        }
+        visit(record, offset..payload_end)?;
         offset = payload_end;
     }
     Ok(ScanSummary {
@@ -1199,43 +1221,86 @@ fn scan_frames(
 }
 
 fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
-    let snapshot = match read_snapshot(path) {
-        Ok(snapshot) => snapshot,
+    compact_file_to_limit(path, MAX_INPUT_HISTORY_BYTES)
+}
+
+fn compact_file_to_limit(path: &Path, limit: u64) -> io::Result<RetentionPlan> {
+    if !(HEADER_LEN as u64..=MAX_INPUT_HISTORY_BYTES).contains(&limit) {
+        return Err(invalid_data("invalid history compaction limit"));
+    }
+    require_no_compaction_transaction(path)?;
+    let bytes = match read_bounded_history(path) {
+        Ok(bytes) => bytes,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             return Ok(RetentionPlan::default())
         }
         Err(error) => return Err(error),
     };
-    let records = retained_records(snapshot.records, now_ms());
-    let mut encoded = Vec::with_capacity(records.len());
+    let cutoff = retention_cutoff(now_ms());
+    let current_format = bytes.get(4..6) == Some(&INPUT_HISTORY_FORMAT_VERSION.to_le_bytes());
+    let mut frames = Vec::new();
+    scan_frames_with(&bytes, |record, range| {
+        if record.timestamp_ms() >= cutoff {
+            let frame = if current_format {
+                // Validated ciphertext is reusable. Avoid retaining every
+                // decoded String and re-protecting the entire 64 MiB store.
+                Cow::Borrowed(&bytes[range])
+            } else {
+                let protected = protect(&record.encode()?)?;
+                let mut frame = Vec::with_capacity(FRAME_HEADER_LEN + protected.len());
+                frame.extend_from_slice(&(protected.len() as u32).to_le_bytes());
+                frame.extend_from_slice(&crc32(&protected).to_le_bytes());
+                frame.extend_from_slice(&protected);
+                Cow::Owned(frame)
+            };
+            frames.push((record.sequence(), record.timestamp_ms(), frame));
+        }
+        Ok(())
+    })?;
+    frames.sort_by_key(|frame| frame.0);
     let mut total = HEADER_LEN as u64;
     let mut retention = RetentionPlan::default();
-    for record in records.into_iter().rev() {
-        let payload = record.encode()?;
-        let protected = protect(&payload)?;
-        let frame_len = FRAME_HEADER_LEN as u64 + protected.len() as u64;
-        if exceeds_history_size(total, frame_len) {
+    let mut first = frames.len();
+    for (_, timestamp, frame) in frames.iter().rev() {
+        if total.saturating_add(frame.len() as u64) > limit {
             break;
         }
-        total += frame_len;
-        retention.observe(record.timestamp_ms());
-        encoded.push(protected);
+        total += frame.len() as u64;
+        retention.observe(*timestamp);
+        first -= 1;
     }
-    encoded.reverse();
+    let mut digest = Sha256::new()?;
+    digest.update(&header())?;
+    for (_, _, frame) in &frames[first..] {
+        digest.update(frame)?;
+    }
+    let expected = digest.finish()?;
     // This exclusive directory is also the unresolved-transaction marker.
-    // Never adopt, overwrite or clean up a directory created by another run.
+    // A pending directory is handled only by validated startup recovery.
+    // Compaction itself never adopts or overwrites an existing transaction.
     let transaction = compaction_transaction_path(path)?;
     fs::create_dir(&transaction)?;
     let temp = transaction.join("replacement.bin");
     let backup = transaction.join("previous.bin");
+    let manifest = transaction.join("publication.bin");
+    let mut plan = b"SKCP0001".to_vec();
+    plan.extend_from_slice(&Sha256::digest(&bytes)?);
+    plan.extend_from_slice(&expected);
+    let mut plan_file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&manifest)?;
+    plan_file.write_all(&protect(&plan)?)?;
+    plan_file.sync_all()?;
+    drop(plan_file);
     let mut replacement = OpenOptions::new()
         .create_new(true)
         .read(true)
         .write(true)
         .open(&temp)?;
     replacement.write_all(&header())?;
-    for payload in &encoded {
-        append_encrypted(&mut replacement, payload)?;
+    for (_, _, frame) in &frames[first..] {
+        replacement.write_all(frame)?;
     }
     #[cfg(test)]
     tests::publication_cut("temp_written")?;
@@ -1243,7 +1308,7 @@ fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
     #[cfg(test)]
     tests::publication_cut("temp_synced")?;
     drop(replacement);
-    let expected = validate_compaction_file(&temp)?;
+    validate_compaction_file(&temp)?;
     #[cfg(test)]
     let _publication_guard = tests::lock_replacement_if_requested(&temp);
     replace_history_file(path, &temp, &backup)?;
@@ -1259,12 +1324,14 @@ fn compact_file(path: &Path) -> io::Result<RetentionPlan> {
         .sync_all()?;
     #[cfg(test)]
     tests::publication_cut("canonical_synced")?;
-    if validate_compaction_file(path)? != expected {
+    validate_compaction_file(path)?;
+    if Sha256::digest(&read_bounded_history(path)?)? != expected {
         return Err(invalid_data("input history published replacement mismatch"));
     }
     fs::remove_file(&backup)?;
     #[cfg(test)]
     tests::publication_cut("backup_removed")?;
+    fs::remove_file(&manifest)?;
     fs::remove_dir(&transaction)?;
     Ok(retention)
 }
@@ -1279,9 +1346,151 @@ fn require_no_compaction_transaction(path: &Path) -> io::Result<()> {
     }
 }
 
+fn read_bounded_history(path: &Path) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_INPUT_HISTORY_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_INPUT_HISTORY_BYTES {
+        return Err(invalid_data("input history exceeds hard size bound"));
+    }
+    Ok(bytes)
+}
+
+/// Only the store owner may recover. Every existing participant is fully
+/// validated before any mutation; unknown files, opaque data and ambiguous
+/// generations remain intact. The DPAPI-protected plan binds both images by
+/// SHA-256, independently of per-frame CRC checks and randomized encryption.
+fn recover_compaction(path: &Path) -> io::Result<Option<ScanSummary>> {
+    let transaction = compaction_transaction_path(path)?;
+    let metadata = match fs::symlink_metadata(&transaction) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    use std::os::windows::fs::MetadataExt;
+    const REPARSE_POINT: u32 = 0x400;
+    if !metadata.is_dir() || metadata.file_attributes() & REPARSE_POINT != 0 {
+        return Err(invalid_data("unsafe history transaction directory"));
+    }
+    for entry in fs::read_dir(&transaction)? {
+        let entry = entry?;
+        let metadata = fs::symlink_metadata(entry.path())?;
+        if !matches!(
+            entry.file_name().to_str(),
+            Some("publication.bin" | "replacement.bin" | "previous.bin")
+        ) || !metadata.is_file()
+            || metadata.file_attributes() & REPARSE_POINT != 0
+        {
+            return Err(invalid_data("unknown history transaction participant"));
+        }
+    }
+    struct Image {
+        hash: [u8; 32],
+        logical: [u8; 32],
+        summary: ScanSummary,
+    }
+    let load = |file: &Path| -> io::Result<Option<Image>> {
+        match fs::symlink_metadata(file) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+            Ok(metadata)
+                if !metadata.is_file() || metadata.file_attributes() & REPARSE_POINT != 0 =>
+            {
+                return Err(invalid_data("unsafe history recovery file"))
+            }
+            Ok(_) => {}
+        }
+        let bytes = read_bounded_history(file)?;
+        let mut logical = Sha256::new()?;
+        let summary = scan_frames_with(&bytes, |record, _| {
+            let encoded = record.encode()?;
+            logical.update(&(encoded.len() as u64).to_le_bytes())?;
+            logical.update(&encoded)?;
+            Ok(())
+        })?;
+        if summary.valid_end != bytes.len() {
+            return Err(invalid_data("incomplete history recovery file"));
+        }
+        Ok(Some(Image {
+            hash: Sha256::digest(&bytes)?,
+            logical: logical.finish()?,
+            summary,
+        }))
+    };
+    let canonical = load(path)?;
+    let backup_path = transaction.join("previous.bin");
+    let temp_path = transaction.join("replacement.bin");
+    let backup = load(&backup_path)?;
+    let temp = load(&temp_path)?;
+    let manifest_path = transaction.join("publication.bin");
+    let manifest = match File::open(&manifest_path) {
+        Ok(file) => {
+            let mut protected = Vec::new();
+            file.take(4097).read_to_end(&mut protected)?;
+            if protected.len() > 4096 {
+                return Err(invalid_data("oversized history recovery plan"));
+            }
+            let plan = unprotect(&protected)?;
+            if plan.len() != 72 || &plan[..8] != b"SKCP0001" {
+                return Err(invalid_data("invalid history recovery plan"));
+            }
+            Some(plan)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    if let Some(plan) = manifest.as_ref() {
+        let old = &plan[8..40];
+        let new = &plan[40..72];
+        if backup.as_ref().is_some_and(|image| image.hash != old)
+            || temp.as_ref().is_some_and(|image| image.hash != new)
+        {
+            return Err(invalid_data("history recovery participant mismatch"));
+        }
+        match canonical.as_ref() {
+            Some(image) if image.hash == old || image.hash == new => {}
+            None if backup.is_some() => fs::rename(&backup_path, path)?,
+            _ => return Err(invalid_data("ambiguous history canonical generation")),
+        }
+    } else {
+        // Older versions had no plan. Only discard redundant images whose
+        // complete decoded records equal canonical, including frame order.
+        // An empty marker left after successful cleanup is also unambiguous.
+        let Some(image) = canonical.as_ref() else {
+            return Err(invalid_data(
+                "missing canonical for legacy history recovery",
+            ));
+        };
+        if backup
+            .as_ref()
+            .is_some_and(|other| other.logical != image.logical)
+            || temp
+                .as_ref()
+                .is_some_and(|other| other.logical != image.logical)
+        {
+            return Err(invalid_data("ambiguous legacy history transaction"));
+        }
+    }
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?
+        .sync_all()?;
+    for file in [&backup_path, &temp_path, &manifest_path] {
+        match fs::remove_file(file) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    fs::remove_dir(transaction)?;
+    Ok(canonical.or(backup).map(|image| image.summary))
+}
+
 /// Bounded complete schema/CRC/DPAPI validation; CRC here is an integrity
 /// comparison, not cryptographic authentication or a recovery generation.
-fn validate_compaction_file(path: &Path) -> io::Result<(usize, u32)> {
+fn validate_compaction_file(path: &Path) -> io::Result<()> {
     let mut bytes = Vec::new();
     File::open(path)?
         .take(MAX_INPUT_HISTORY_BYTES + 1)
@@ -1295,7 +1504,7 @@ fn validate_compaction_file(path: &Path) -> io::Result<(usize, u32)> {
     if summary.valid_end != bytes.len() || summary.format_version != INPUT_HISTORY_FORMAT_VERSION {
         return Err(invalid_data("input history replacement is incomplete"));
     }
-    Ok((bytes.len(), crc32(&bytes)))
+    Ok(())
 }
 
 fn replace_history_file(path: &Path, temp: &Path, backup: &Path) -> io::Result<()> {
