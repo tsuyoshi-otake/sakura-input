@@ -235,6 +235,9 @@ pub fn spawn_history_deleter(
 pub enum Signal {
     /// New state to draw.
     Ui(Box<UiState>),
+    /// The last snapshot is no longer authoritative. Hide transient UI while
+    /// the watcher owns recovery; only a fresh snapshot may show it again.
+    Unavailable,
     /// The feed has ended for good and the renderer should exit: the engine
     /// said it was stopping, or it is gone and not coming back.
     Ended,
@@ -318,8 +321,8 @@ fn run(sink: &impl Fn(Signal), binding: &PipeBinding) {
 
     loop {
         match binding.connect() {
-            Ok(client) => {
-                let ending = follow(client, sink);
+            Ok(mut client) => {
+                let ending = follow(|request, budget| client.call(request, budget), sink);
                 if ending == Ending::Deliberate || binding.is_test() {
                     sink(Signal::Ended);
                     return;
@@ -377,8 +380,11 @@ fn retry_schedule(ending: Ending, current: Duration) -> Option<(Duration, Durati
 
 /// Handshakes, then reports every state the engine publishes until the
 /// connection ends.
-fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
-    match client.call(
+fn follow(
+    mut call: impl FnMut(&Request, Duration) -> Result<Response, Fault>,
+    sink: &impl Fn(Signal),
+) -> Ending {
+    match call(
         &Request::Hello {
             client_version: PROTOCOL_VERSION,
         },
@@ -391,7 +397,10 @@ fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
         // backoff will slow the retries down, and if the mismatch is
         // because an upgrade replaced the engine mid-session, the next
         // connection is to the new one and simply works.
-        _ => return Ending::ProtocolRejected,
+        _ => {
+            sink(Signal::Unavailable);
+            return Ending::ProtocolRejected;
+        }
     }
 
     // Nobody's revision, so the first call is answered immediately with
@@ -399,7 +408,7 @@ fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
     // change mode.
     let mut since = 0;
     loop {
-        match client.call(&Request::WatchUi { since }, WATCH_BUDGET) {
+        match call(&Request::WatchUi { since }, WATCH_BUDGET) {
             Ok(Response::Ui(state)) => {
                 if state.stopping {
                     return Ending::Deliberate;
@@ -413,9 +422,13 @@ fn follow(mut client: Client, sink: &impl Fn(Signal)) -> Ending {
                     sink(Signal::Ui(Box::new(state)));
                 }
             }
-            Ok(_) => return Ending::ConnectionLost,
-            Err(Fault::Disconnected) => return Ending::ConnectionLost,
-            Err(_) => return Ending::ConnectionLost,
+            _ => {
+                // Publish invalidation before returning to run's reconnect
+                // backoff. The last candidate snapshot cannot remain an
+                // interactive popup while its engine feed is unavailable.
+                sink(Signal::Unavailable);
+                return Ending::ConnectionLost;
+            }
         }
     }
 }
@@ -485,6 +498,93 @@ fn engine_path() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
+    fn hello() -> Result<Response, Fault> {
+        Ok(Response::Hello {
+            server_version: PROTOCOL_VERSION,
+            engine_version: [2, 0, 3],
+        })
+    }
+
+    #[test]
+    fn lost_feed_invalidates_candidates_before_returning_to_recovery() {
+        for failure in [
+            Err(Fault::Disconnected),
+            Err(Fault::Timeout),
+            Ok(Response::Pong),
+        ] {
+            let state = crate::tests::candidate_state(17);
+            let mut replies = [
+                hello(),
+                Ok(Response::Ui(state.clone())),
+                Ok(Response::Ui(state.clone())), // unchanged heartbeat
+                failure,
+            ]
+            .into_iter();
+            let signals = RefCell::new(Vec::new());
+            let mut calls = 0;
+            let ending = follow(
+                |request, budget| {
+                    if calls == 0 {
+                        assert!(matches!(request, Request::Hello { .. }));
+                        assert_eq!(budget, PATIENT_CONNECT);
+                    } else {
+                        assert_eq!(
+                            *request,
+                            Request::WatchUi {
+                                since: if calls == 1 { 0 } else { 17 }
+                            }
+                        );
+                        assert_eq!(budget, WATCH_BUDGET);
+                    }
+                    calls += 1;
+                    replies.next().expect("no retry inside the feed")
+                },
+                &|signal| signals.borrow_mut().push(signal),
+            );
+            assert_eq!(ending, Ending::ConnectionLost);
+            assert_eq!(calls, 4);
+            assert_eq!(
+                signals.into_inner(),
+                [Signal::Ui(Box::new(state)), Signal::Unavailable]
+            );
+        }
+    }
+
+    #[test]
+    fn rejected_handshake_invalidates_the_previous_feed() {
+        let signals = RefCell::new(Vec::new());
+        assert_eq!(
+            follow(|_, _| Ok(Response::Pong), &|signal| signals
+                .borrow_mut()
+                .push(signal)),
+            Ending::ProtocolRejected
+        );
+        assert_eq!(signals.into_inner(), [Signal::Unavailable]);
+    }
+
+    #[test]
+    fn reconnected_feed_accepts_a_reset_revision_and_deliberate_stop() {
+        let state = crate::tests::candidate_state(1);
+        let mut stopping = state.clone();
+        stopping.stopping = true;
+        let mut replies = [
+            hello(),
+            Ok(Response::Ui(state.clone())),
+            Ok(Response::Ui(stopping)),
+        ]
+        .into_iter();
+        let signals = RefCell::new(Vec::new());
+        assert_eq!(
+            follow(
+                |_, _| replies.next().expect("stop ends the feed"),
+                &|signal| signals.borrow_mut().push(signal)
+            ),
+            Ending::Deliberate
+        );
+        assert_eq!(signals.into_inner(), [Signal::Ui(Box::new(state))]);
+    }
 
     /// The poll budget has to outlast the engine's heartbeat or every idle
     /// poll times out and the watchdog restarts a healthy engine.

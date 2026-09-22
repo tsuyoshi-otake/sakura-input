@@ -43,7 +43,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::{mpsc::Receiver, Arc, Mutex};
 
-use sakura_proto::{AppearanceTheme, Mode, PadShortcut, UiState};
+use sakura_proto::{AppearanceTheme, Mode, PadShortcut};
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::Threading::CreateMutexW;
@@ -141,7 +141,7 @@ struct App {
     shown_indicator: Option<(Mode, AppearanceTheme)>,
     /// A latest-value mailbox shared with the blocking watcher. Multiple
     /// engine revisions can coalesce while the UI thread is busy painting.
-    mailbox: Arc<Mutex<Option<UiState>>>,
+    mailbox: Arc<Mutex<Option<Signal>>>,
     history_delete_completions: Receiver<HistoryDeleteCompletion>,
     candidate_commit_completions: Receiver<CandidateCommitCompletion>,
 }
@@ -363,14 +363,17 @@ fn indicator_change_shows(
 }
 
 /// Hands a watcher signal to the UI thread.
-fn report(target: isize, mailbox: &Mutex<Option<UiState>>, signal: Signal) {
+fn report(target: isize, mailbox: &Mutex<Option<Signal>>, signal: Signal) {
     let window = HWND(target as *mut c_void);
     let message = match signal {
-        Signal::Ui(state) => {
+        update @ (Signal::Ui(_) | Signal::Unavailable) => {
             let mut slot = mailbox
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            *slot = Some(*state);
+            // Invalidation shares the latest-value slot with snapshots. An
+            // older queued WM_UI must not resurrect the disconnected feed,
+            // nor may a delayed invalidation hide a freshly reconnected one.
+            *slot = Some(update);
             WM_UI
         }
         Signal::Ended => WM_ENDED,
@@ -420,7 +423,11 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .take();
-            if let Some(state) = state {
+            if let Some(Signal::Unavailable) = state {
+                app.candidates.hide();
+                app.indicator.hide();
+                app.shown_indicator = None;
+            } else if let Some(Signal::Ui(state)) = state {
                 let next = state.mode.map(|mode| (mode, state.appearance_theme));
                 app.pad_theme = state.appearance_theme;
                 if let Some(pad) = app.pad.as_mut() {
@@ -640,7 +647,37 @@ fn message_time_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_proto::Mode;
+    use sakura_proto::{Mode, UiState};
+
+    pub(super) fn candidate_state(revision: u64) -> UiState {
+        UiState {
+            revision,
+            appearance_theme: AppearanceTheme::Dark,
+            pad_shortcut: PadShortcut::Disabled,
+            mode: Some(Mode::Hiragana),
+            candidates: Some(sakura_proto::CandidateList {
+                kind: sakura_proto::CandidateKind::Conversion,
+                presentation: sakura_proto::types::CandidatePresentation::Expanded,
+                items: vec![sakura_proto::Candidate {
+                    text: "変換".to_owned(),
+                    annotation: String::new(),
+                    deletable_history: false,
+                }],
+                selected: 0,
+                page_size: 9,
+            }),
+            candidate_detail: None,
+            anchor: Some(sakura_proto::ScreenRect {
+                left: 100,
+                top: 100,
+                right: 120,
+                bottom: 124,
+            }),
+            document: None,
+            renderer_visible: true,
+            stopping: false,
+        }
+    }
 
     /// The watcher's application messages must stay distinct.
     #[test]

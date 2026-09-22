@@ -23,6 +23,11 @@ path = "tests/appcontainer.rs"
 required-features = ["dev-fixtures"]
 
 [[test]]
+name = "candidate_lifetime_pipe"
+path = "tests/candidate_lifetime_pipe.rs"
+required-features = ["dev-fixtures"]
+
+[[test]]
 name = "cross_commit_learning"
 path = "tests/cross_commit_learning.rs"
 required-features = ["dev-fixtures"]
