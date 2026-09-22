@@ -2,6 +2,8 @@
 
 UI/UX改善、入力状態の再現、変換経路の調査に使う明示的な開発者モードです。既定は無効で、設定から明示的に有効化した場合だけengineが履歴サービスを起動します。
 
+履歴の初期化は専用ワーカーで行います。既存ファイルの検証中もengineは入力を処理し、`history stats`は`active=false`を返します。初期化が完了するまでの入力は後から記録しません。初期化中に無効化した場合、その世代を有効なサービスとして公開せず終了します。初期化の失敗は入力ごとに再試行せず、明示的な無効化→有効化で再試行します。engine終了時は初期化と履歴ライターの終了を待つため、初期化途中の終了時間はファイル検証時間に依存します。
+
 ```powershell
 sakura_settings.exe config set developer-mode on
 sakura_settings.exe history show
@@ -15,6 +17,7 @@ sakura_settings.exe config set developer-mode off
 
 - 保存先：`%LOCALAPPDATA%\SakuraInput\history\input.bin`
 - engine：`crates/sakura-engine/src/input_history.rs`
+- 起動・有効化・終了の所有者：`crates/sakura-engine/src/history_runtime.rs`
 - TSFスコープ連携：`crates/sakura-tsf/src/text_service.rs`、`crates/sakura-tsf/src/engine.rs`
 - 設定CLI：`crates/sakura-settings/src/cli.rs`
 - プロトコル：`crates/sakura-proto/src/message/`（`request.rs`・`response.rs`・`ui_state.rs`）

@@ -41,7 +41,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-use sakura_core::{default_app_profiles, AppProfile, AppearanceTheme, Preferences};
+use sakura_core::{default_app_profiles, AppProfile, Preferences};
 use sakura_proto::{
     encode_response, peek_header, EngineTimingSite, ErrorCode, FaultPoint, OutputBuf, Request,
     RequestId, Response, MAX_FRAME,
@@ -59,6 +59,7 @@ use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::fault_injection;
+use crate::history_runtime::HistoryRuntime;
 use crate::input_history::InputHistoryService;
 use crate::learning::{ForgetPredictionOutcome, LearningService};
 use crate::long_conversion::{LongConversionRuntime, LongConversionService};
@@ -81,10 +82,8 @@ struct RuntimeConfiguration {
 struct DynamicRuntimes {
     prediction: Option<PredictionRuntime>,
     long_conversion: Option<LongConversionRuntime>,
-    input_history: Option<Arc<InputHistoryService>>,
     prediction_failed: bool,
     long_conversion_failed: bool,
-    input_history_failed: bool,
 }
 
 #[derive(Debug, Default)]
@@ -212,8 +211,9 @@ struct Shared {
     conversion: Option<Arc<ConversionService>>,
     /// Process-wide synchronized personalization index and durable log.
     learning: Option<Arc<LearningService>>,
-    /// Explicitly enabled developer interaction history.
-    input_history: Option<Arc<InputHistoryService>>,
+    /// Sole lifecycle owner for developer interaction history. Opening and
+    /// stopping never execute on a request thread or under dynamic_runtimes.
+    history_runtime: HistoryRuntime,
     /// One process-wide AI job owner. Its fixed capacity of one prevents
     /// separate TSF pipe connections from multiplying outbound requests.
     ai_text: Arc<AiTextService>,
@@ -245,8 +245,14 @@ impl Shared {
             profiles: Arc::from(profiles),
         };
         match self.configuration.write() {
-            Ok(mut current) => *current = configuration,
-            Err(poisoned) => *poisoned.into_inner() = configuration,
+            Ok(mut current) => {
+                self.history_runtime.configure(preferences.developer_mode);
+                *current = configuration;
+            }
+            Err(poisoned) => {
+                self.history_runtime.configure(preferences.developer_mode);
+                *poisoned.into_inner() = configuration;
+            }
         }
         // Appearance is carried in the same atomic snapshot, but the renderer
         // board still gets its narrow notification so an open popup repaints
@@ -338,36 +344,6 @@ impl Shared {
             }
         }
 
-        if !history_requested {
-            // Dropping the dynamic owner stops its writer. A cold-start
-            // Shared owner is left in place for shutdown ordering; the
-            // dispatcher still receives None below so new keys are not
-            // recorded while developer-mode is off.
-            dynamic.input_history = None;
-            dynamic.input_history_failed = false;
-        } else if self.input_history.is_none()
-            && dynamic.input_history.is_none()
-            && !dynamic.input_history_failed
-        {
-            match crate::input_history::default_path()
-                .and_then(|path| InputHistoryService::open(&path))
-            {
-                Ok(service) => {
-                    sakura_ipc::debug_trace::set_enabled(true);
-                    dynamic.input_history = Some(service);
-                }
-                Err(error) => {
-                    dynamic.input_history_failed = true;
-                    report(
-                        self,
-                        format_args!(
-                            "developer input history could not be enabled from settings: {error}"
-                        ),
-                    );
-                }
-            }
-        }
-
         RuntimeServiceSnapshot {
             prediction: if prediction_requested {
                 self.prediction
@@ -387,9 +363,7 @@ impl Shared {
                 None
             },
             input_history: if history_requested {
-                self.input_history
-                    .clone()
-                    .or_else(|| dynamic.input_history.clone())
+                self.history_runtime.service()
             } else {
                 None
             },
@@ -418,8 +392,6 @@ impl Server {
             verbose,
             None,
             None,
-            None,
-            None,
             preferences,
             Arc::from(default_app_profiles(preferences)),
         )
@@ -435,42 +407,9 @@ impl Server {
             verbose,
             Some(conversion),
             None,
-            None,
-            None,
             preferences,
             Arc::from(default_app_profiles(preferences)),
         )
-    }
-
-    /// Builds the production server with dictionary conversion and a shared
-    /// personalization store. Every pipe worker receives the same service.
-    pub fn with_services(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-    ) -> windows::core::Result<Self> {
-        let preferences = Preferences::default();
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            None,
-            None,
-            preferences,
-            Arc::from(default_app_profiles(preferences)),
-        )
-    }
-
-    /// Builds the production server with all process-wide services and the
-    /// validated user configuration captured at startup.
-    pub fn with_configuration(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        preferences: Preferences,
-    ) -> windows::core::Result<Self> {
-        let profiles = Arc::from(default_app_profiles(preferences));
-        Self::with_configuration_and_profiles(verbose, conversion, learning, preferences, profiles)
     }
 
     pub fn with_configuration_and_profiles(
@@ -484,85 +423,6 @@ impl Server {
             verbose,
             Some(conversion),
             Some(learning),
-            None,
-            None,
-            preferences,
-            profiles,
-        )
-    }
-
-    pub fn with_configuration_and_profiles_and_history(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        preferences: Preferences,
-        profiles: Arc<[AppProfile]>,
-        input_history: Arc<InputHistoryService>,
-    ) -> windows::core::Result<Self> {
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            None,
-            Some(input_history),
-            preferences,
-            profiles,
-        )
-    }
-
-    /// Builds the production server with the persistent prediction worker.
-    pub fn with_runtime_configuration(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        prediction: Arc<PredictionService>,
-        preferences: Preferences,
-    ) -> windows::core::Result<Self> {
-        let profiles = Arc::from(default_app_profiles(preferences));
-        Self::with_runtime_configuration_and_profiles(
-            verbose,
-            conversion,
-            learning,
-            prediction,
-            preferences,
-            profiles,
-        )
-    }
-
-    pub fn with_runtime_configuration_and_profiles(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        prediction: Arc<PredictionService>,
-        preferences: Preferences,
-        profiles: Arc<[AppProfile]>,
-    ) -> windows::core::Result<Self> {
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            Some(prediction),
-            None,
-            preferences,
-            profiles,
-        )
-    }
-
-    pub fn with_runtime_configuration_and_profiles_and_history(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        prediction: Arc<PredictionService>,
-        preferences: Preferences,
-        profiles: Arc<[AppProfile]>,
-        input_history: Arc<InputHistoryService>,
-    ) -> windows::core::Result<Self> {
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            Some(prediction),
-            Some(input_history),
             preferences,
             profiles,
         )
@@ -572,14 +432,19 @@ impl Server {
         verbose: bool,
         conversion: Option<Arc<ConversionService>>,
         learning: Option<Arc<LearningService>>,
-        prediction: Option<Arc<PredictionService>>,
-        input_history: Option<Arc<InputHistoryService>>,
         preferences: Preferences,
         profiles: Arc<[AppProfile]>,
     ) -> windows::core::Result<Self> {
         let (shutdown, stopped) = mpsc::channel();
         let name = security::pipe_name()?;
         let sddl = security::sddl()?;
+        let history_runtime = HistoryRuntime::new(None, preferences.developer_mode, verbose)
+            .map_err(|error| {
+                windows::core::Error::new(
+                    windows::Win32::Foundation::E_FAIL,
+                    format!("start developer input history lifecycle: {error}"),
+                )
+            })?;
         Ok(Server {
             shared: Arc::new(Shared {
                 renderer_name: security::pipe_name_for(Endpoint::Renderer)?,
@@ -605,9 +470,9 @@ impl Server {
                 composition_fence: Arc::new(CompositionFence::new()),
                 conversion,
                 learning,
-                input_history,
+                history_runtime,
                 ai_text: Arc::new(AiTextService::default()),
-                prediction,
+                prediction: None,
                 long_conversion: None,
                 dynamic_runtimes: Mutex::new(DynamicRuntimes::default()),
                 configuration: RwLock::new(RuntimeConfiguration {
@@ -642,13 +507,24 @@ impl Server {
         input_history: Option<Arc<InputHistoryService>>,
         preferences: Preferences,
         profiles: Arc<[AppProfile]>,
-    ) -> Self {
+    ) -> windows::core::Result<Self> {
+        let history_runtime = HistoryRuntime::new(
+            input_history,
+            preferences.developer_mode,
+            self.shared.verbose,
+        )
+        .map_err(|error| {
+            windows::core::Error::new(
+                windows::Win32::Foundation::E_FAIL,
+                format!("start developer input history lifecycle: {error}"),
+            )
+        })?;
         let shared = Arc::get_mut(&mut self.shared)
             .expect("startup services precede shared callbacks and workers");
         shared.conversion = Some(conversion);
         shared.learning = Some(learning);
         shared.prediction = prediction;
-        shared.input_history = input_history;
+        shared.history_runtime = history_runtime;
         shared.ui = UiBoard::with_appearance_theme_and_pad_shortcut(
             preferences.appearance_theme,
             preferences.pad_shortcut,
@@ -657,23 +533,12 @@ impl Server {
             preferences,
             profiles,
         });
-        self
+        Ok(self)
     }
 
     /// The pipe this server listens on.
     pub fn pipe_name(&self) -> &str {
         &self.shared.name
-    }
-
-    /// Returns the narrow theme-only callback kept for callers that already
-    /// have an appearance edge. The complete configuration watcher should use
-    /// [`Self::configuration_publisher`] so keymap and conversion policy are
-    /// applied at the next input boundary as well.
-    pub fn appearance_theme_publisher(&self) -> impl Fn(AppearanceTheme) + Send + 'static {
-        let shared = Arc::clone(&self.shared);
-        move |appearance_theme| {
-            shared.ui.set_appearance_theme(appearance_theme);
-        }
     }
 
     /// Callback used by the complete configuration watcher. The snapshot is
@@ -759,6 +624,10 @@ impl Server {
                 format_args!("no pipe instances left; ending so a fresh engine can take over"),
             );
         }
+        // The lifecycle thread may still be validating a large store. It owns
+        // every history generation, so process shutdown joins it and any
+        // writer it opened before returning control to `main`.
+        self.shared.history_runtime.stop();
         Ok(())
     }
 }

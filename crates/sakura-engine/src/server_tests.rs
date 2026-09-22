@@ -33,7 +33,8 @@ fn test_shared(learning: Arc<LearningService>) -> Shared {
         composition_fence: Arc::new(CompositionFence::new()),
         conversion: None,
         learning: Some(learning),
-        input_history: None,
+        history_runtime: HistoryRuntime::new(None, false, false)
+            .expect("start test history lifecycle"),
         ai_text: Arc::new(AiTextService::default()),
         prediction: None,
         long_conversion: None,
@@ -340,8 +341,7 @@ fn configured_dark_appearance_reaches_the_ui_state() {
         appearance_theme: sakura_core::AppearanceTheme::Dark,
         ..Preferences::default()
     };
-    let server =
-        Server::build(false, None, None, None, None, preferences, Arc::from([])).expect("server");
+    let server = Server::build(false, None, None, preferences, Arc::from([])).expect("server");
 
     assert_eq!(
         look(&server.shared.ui, 0).appearance_theme,
@@ -351,16 +351,8 @@ fn configured_dark_appearance_reaches_the_ui_state() {
 
 #[test]
 fn configuration_publisher_replaces_input_snapshot_and_repaints_theme() {
-    let server = Server::build(
-        false,
-        None,
-        None,
-        None,
-        None,
-        Preferences::default(),
-        Arc::from([]),
-    )
-    .expect("server");
+    let server =
+        Server::build(false, None, None, Preferences::default(), Arc::from([])).expect("server");
     let publish = server.configuration_publisher();
     let preferences = Preferences {
         appearance_theme: sakura_core::AppearanceTheme::Dark,
@@ -476,29 +468,43 @@ fn optional_input_history_follows_a_live_developer_mode_change() {
         developer_mode: true,
         ..Preferences::default()
     };
-    let services = server.shared.runtime_services(&enabled, &[]);
-    assert!(
-        services.input_history.is_some(),
-        "enabling developer-mode must open history without an engine restart"
-    );
+    server.shared.publish_configuration(enabled, Vec::new());
+    let activation_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let services = server.shared.runtime_services(&enabled, &[]);
+        if services.input_history.is_some() {
+            break;
+        }
+        assert!(
+            Instant::now() < activation_deadline,
+            "enabling developer-mode must open history without an engine restart"
+        );
+        std::thread::yield_now();
+    }
 
     let disabled = Preferences {
         developer_mode: false,
         ..Preferences::default()
     };
+    server.shared.publish_configuration(disabled, Vec::new());
     let services = server.shared.runtime_services(&disabled, &[]);
     assert!(
         services.input_history.is_none(),
         "disabling developer-mode must detach history at the next boundary"
     );
-    let dynamic = server
-        .shared
-        .dynamic_runtimes
-        .lock()
-        .expect("dynamic runtime lock");
     assert!(
-        dynamic.input_history.is_none(),
-        "disabled dynamic history owner must be dropped"
+        server.shared.history_runtime.service().is_none(),
+        "disabled history must stay detached"
+    );
+    let stale_services = server.shared.runtime_services(&enabled, &[]);
+    assert!(
+        stale_services.input_history.is_none(),
+        "an older request snapshot must not undo the published disabled state"
+    );
+    std::thread::sleep(Duration::from_millis(20));
+    assert!(
+        server.shared.history_runtime.service().is_none(),
+        "stale request snapshots must not start another generation"
     );
 
     match previous {

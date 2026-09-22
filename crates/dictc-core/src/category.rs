@@ -91,25 +91,6 @@ impl DictionaryCategory {
             Self::OrthographyVariants => "14_表記ゆれ.tsv",
         }
     }
-
-    pub const fn display_name(self) -> &'static str {
-        match self {
-            Self::GrammarFunction => "文法・機能語",
-            Self::Inflectional => "活用語",
-            Self::GeneralLexicon => "一般語",
-            Self::FixedExpressions => "慣用句・定型表現",
-            Self::NumericTimeUnits => "数値・日付・単位",
-            Self::PersonNames => "人名",
-            Self::PlaceNames => "地名",
-            Self::OrganizationsProducts => "組織名・製品名",
-            Self::KatakanaLoanwords => "外来語・カタカナ語",
-            Self::AbbreviationsAscii => "略語・英数字",
-            Self::ItEngineering => "IT・技術用語",
-            Self::SpecialistDomains => "専門用語",
-            Self::SymbolsEmoji => "記号・絵文字",
-            Self::OrthographyVariants => "表記ゆれ",
-        }
-    }
 }
 
 /// POS labels parsed from Mozc's pinned `id.def` file.
