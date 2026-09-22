@@ -86,16 +86,6 @@ impl Aggregate {
         }
     }
 
-    pub fn quality_delta(&self) -> Option<f64> {
-        if self.gradable == 0 {
-            None
-        } else {
-            Some(
-                (self.candidate_better as f64 - self.baseline_better as f64) / self.gradable as f64,
-            )
-        }
-    }
-
     pub fn unstable_rate(&self) -> Option<f64> {
         let judged = self.gradable + self.ungradable + self.unstable;
         if judged == 0 {

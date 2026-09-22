@@ -41,7 +41,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-use sakura_core::{default_app_profiles, AppProfile, AppearanceTheme, Preferences};
+use sakura_core::{default_app_profiles, AppProfile, Preferences};
 use sakura_proto::{
     encode_response, peek_header, EngineTimingSite, ErrorCode, FaultPoint, OutputBuf, Request,
     RequestId, Response, MAX_FRAME,
@@ -392,8 +392,6 @@ impl Server {
             verbose,
             None,
             None,
-            None,
-            None,
             preferences,
             Arc::from(default_app_profiles(preferences)),
         )
@@ -409,42 +407,9 @@ impl Server {
             verbose,
             Some(conversion),
             None,
-            None,
-            None,
             preferences,
             Arc::from(default_app_profiles(preferences)),
         )
-    }
-
-    /// Builds the production server with dictionary conversion and a shared
-    /// personalization store. Every pipe worker receives the same service.
-    pub fn with_services(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-    ) -> windows::core::Result<Self> {
-        let preferences = Preferences::default();
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            None,
-            None,
-            preferences,
-            Arc::from(default_app_profiles(preferences)),
-        )
-    }
-
-    /// Builds the production server with all process-wide services and the
-    /// validated user configuration captured at startup.
-    pub fn with_configuration(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        preferences: Preferences,
-    ) -> windows::core::Result<Self> {
-        let profiles = Arc::from(default_app_profiles(preferences));
-        Self::with_configuration_and_profiles(verbose, conversion, learning, preferences, profiles)
     }
 
     pub fn with_configuration_and_profiles(
@@ -458,85 +423,6 @@ impl Server {
             verbose,
             Some(conversion),
             Some(learning),
-            None,
-            None,
-            preferences,
-            profiles,
-        )
-    }
-
-    pub fn with_configuration_and_profiles_and_history(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        preferences: Preferences,
-        profiles: Arc<[AppProfile]>,
-        input_history: Arc<InputHistoryService>,
-    ) -> windows::core::Result<Self> {
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            None,
-            Some(input_history),
-            preferences,
-            profiles,
-        )
-    }
-
-    /// Builds the production server with the persistent prediction worker.
-    pub fn with_runtime_configuration(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        prediction: Arc<PredictionService>,
-        preferences: Preferences,
-    ) -> windows::core::Result<Self> {
-        let profiles = Arc::from(default_app_profiles(preferences));
-        Self::with_runtime_configuration_and_profiles(
-            verbose,
-            conversion,
-            learning,
-            prediction,
-            preferences,
-            profiles,
-        )
-    }
-
-    pub fn with_runtime_configuration_and_profiles(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        prediction: Arc<PredictionService>,
-        preferences: Preferences,
-        profiles: Arc<[AppProfile]>,
-    ) -> windows::core::Result<Self> {
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            Some(prediction),
-            None,
-            preferences,
-            profiles,
-        )
-    }
-
-    pub fn with_runtime_configuration_and_profiles_and_history(
-        verbose: bool,
-        conversion: Arc<ConversionService>,
-        learning: Arc<LearningService>,
-        prediction: Arc<PredictionService>,
-        preferences: Preferences,
-        profiles: Arc<[AppProfile]>,
-        input_history: Arc<InputHistoryService>,
-    ) -> windows::core::Result<Self> {
-        Self::build(
-            verbose,
-            Some(conversion),
-            Some(learning),
-            Some(prediction),
-            Some(input_history),
             preferences,
             profiles,
         )
@@ -546,23 +432,19 @@ impl Server {
         verbose: bool,
         conversion: Option<Arc<ConversionService>>,
         learning: Option<Arc<LearningService>>,
-        prediction: Option<Arc<PredictionService>>,
-        input_history: Option<Arc<InputHistoryService>>,
         preferences: Preferences,
         profiles: Arc<[AppProfile]>,
     ) -> windows::core::Result<Self> {
         let (shutdown, stopped) = mpsc::channel();
         let name = security::pipe_name()?;
         let sddl = security::sddl()?;
-        let history_runtime =
-            HistoryRuntime::new(input_history, preferences.developer_mode, verbose).map_err(
-                |error| {
-                    windows::core::Error::new(
-                        windows::Win32::Foundation::E_FAIL,
-                        format!("start developer input history lifecycle: {error}"),
-                    )
-                },
-            )?;
+        let history_runtime = HistoryRuntime::new(None, preferences.developer_mode, verbose)
+            .map_err(|error| {
+                windows::core::Error::new(
+                    windows::Win32::Foundation::E_FAIL,
+                    format!("start developer input history lifecycle: {error}"),
+                )
+            })?;
         Ok(Server {
             shared: Arc::new(Shared {
                 renderer_name: security::pipe_name_for(Endpoint::Renderer)?,
@@ -590,7 +472,7 @@ impl Server {
                 learning,
                 history_runtime,
                 ai_text: Arc::new(AiTextService::default()),
-                prediction,
+                prediction: None,
                 long_conversion: None,
                 dynamic_runtimes: Mutex::new(DynamicRuntimes::default()),
                 configuration: RwLock::new(RuntimeConfiguration {
@@ -657,17 +539,6 @@ impl Server {
     /// The pipe this server listens on.
     pub fn pipe_name(&self) -> &str {
         &self.shared.name
-    }
-
-    /// Returns the narrow theme-only callback kept for callers that already
-    /// have an appearance edge. The complete configuration watcher should use
-    /// [`Self::configuration_publisher`] so keymap and conversion policy are
-    /// applied at the next input boundary as well.
-    pub fn appearance_theme_publisher(&self) -> impl Fn(AppearanceTheme) + Send + 'static {
-        let shared = Arc::clone(&self.shared);
-        move |appearance_theme| {
-            shared.ui.set_appearance_theme(appearance_theme);
-        }
     }
 
     /// Callback used by the complete configuration watcher. The snapshot is

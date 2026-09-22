@@ -491,13 +491,6 @@ pub fn named_key(code: KeyCode) -> KeyInput {
     }
 }
 
-pub fn test_named_key(code: KeyCode) -> KeyInput {
-    KeyInput {
-        test_only: true,
-        ..named_key(code)
-    }
-}
-
 /// What a text service would draw: every segment's text, in order.
 pub fn visible(preedit: Option<sakura_proto::Preedit>) -> String {
     preedit

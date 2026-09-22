@@ -341,8 +341,7 @@ fn configured_dark_appearance_reaches_the_ui_state() {
         appearance_theme: sakura_core::AppearanceTheme::Dark,
         ..Preferences::default()
     };
-    let server =
-        Server::build(false, None, None, None, None, preferences, Arc::from([])).expect("server");
+    let server = Server::build(false, None, None, preferences, Arc::from([])).expect("server");
 
     assert_eq!(
         look(&server.shared.ui, 0).appearance_theme,
@@ -352,16 +351,8 @@ fn configured_dark_appearance_reaches_the_ui_state() {
 
 #[test]
 fn configuration_publisher_replaces_input_snapshot_and_repaints_theme() {
-    let server = Server::build(
-        false,
-        None,
-        None,
-        None,
-        None,
-        Preferences::default(),
-        Arc::from([]),
-    )
-    .expect("server");
+    let server =
+        Server::build(false, None, None, Preferences::default(), Arc::from([])).expect("server");
     let publish = server.configuration_publisher();
     let preferences = Preferences {
         appearance_theme: sakura_core::AppearanceTheme::Dark,

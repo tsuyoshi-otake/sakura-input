@@ -374,28 +374,9 @@ impl ConversionService {
         self.with_raw_repair_conversion_input_hints(original_input, plans, options, &[], consume)
     }
 
-    /// Hint-aware form of [`Self::with_raw_repair_conversion`].  Commit
-    /// history is installed once on the selected converter; the core raw
-    /// conversion API consumes that one-shot state in the direct pass and
-    /// never recreates it for corrected readings.
-    pub fn with_raw_repair_conversion_hints<R>(
-        &self,
-        original_reading: &str,
-        plans: &[RawRepairPlan],
-        options: ConversionOptions,
-        commit_repair_readings: &[&str],
-        consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
-    ) -> Result<R, ConvertFailure> {
-        self.with_raw_repair_conversion_input_hints(
-            ConversionInput::ordinary(original_reading),
-            plans,
-            options,
-            commit_repair_readings,
-            consume,
-        )
-    }
-
     /// Hint-aware input form of [`Self::with_raw_repair_conversion`].
+    /// Commit history is installed once on the selected converter; the core
+    /// consumes it in the direct pass, not in corrected-reading passes.
     pub fn with_raw_repair_conversion_input_hints<R>(
         &self,
         original_input: ConversionInput<'_>,
