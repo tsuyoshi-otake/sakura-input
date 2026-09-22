@@ -88,7 +88,8 @@ $catalog = @(
     @('history.planned_mismatch', 'crates/sakura-engine/src/input_history.rs', 'if backup.as_ref().is_some_and(|image| image.hash != old)', 2, 'backup mismatch, replacement mismatch'),
     @('history.legacy_mismatch', 'crates/sakura-engine/src/input_history.rs', 'if backup', 6, 'backup differs, replacement differs'),
     @('history.canonical_generation', 'crates/sakura-engine/src/input_history.rs', 'Some(image) if image.hash == old || image.hash == new => {}', 1, 'matches old, matches new'),
-    @('history.plan_shape', 'crates/sakura-engine/src/input_history.rs', 'if plan.len() != 72 || &plan[..8] != b"SKCP0001" {', 1, 'wrong length, wrong magic')
+    @('history.plan_shape', 'crates/sakura-engine/src/input_history.rs', 'if plan.len() != 72 || &plan[..8] != b"SKCP0001" {', 1, 'wrong length, wrong magic'),
+    @('history.interrupted_rollback', 'crates/sakura-engine/src/input_history.rs', 'if !(canonical_matches_old && backup_absent) {', 1, 'canonical matches old, backup absent; authorization before negated rejection')
 )
 $log = [IO.File]::ReadAllText([IO.Path]::GetFullPath($LogPath))
 if ($log -match 'test result: FAILED' -or $log -notmatch 'test result: ok\.') { throw 'Evidence is not a passing test log' }
@@ -103,14 +104,18 @@ $coverage = [IO.File]::ReadAllText([IO.Path]::GetFullPath($BranchCoveragePath)) 
 $lines = [Collections.Generic.List[string]]::new()
 $lines.Add('# Conversion correction condition evidence')
 $lines.Add('')
-$lines.Add('Scope: six explicitly listed production decisions. MCC and unique-cause MC/DC are witnessed by real-operation fixtures, with both sides of every corresponding atomic branch confirmed by LLVM branch counters. This is not compiler-generated MC/DC or whole-workspace MC/DC coverage.')
+$lines.Add("Scope: $($catalog.Count) explicitly listed production decisions. MCC and unique-cause MC/DC are witnessed by real-operation fixtures, with both sides of every corresponding atomic branch confirmed by LLVM branch counters. This is not compiler-generated MC/DC or whole-workspace MC/DC coverage.")
 $lines.Add('')
 $lines.Add('| Decision (condition order) | MCC | MC/DC | Independent pairs | Atomic branch outcomes | LF-normalized source SHA-256 |')
 $lines.Add('|---|---:|---:|---|---:|---|')
+$totalCombinations = 0
+$totalConditions = 0
 foreach ($item in $catalog) {
     $id, $relative, $anchor, $span, $description = $item
     if (-not $observations.ContainsKey($id)) { throw "Missing $id" }
     $result = Measure-Decision $observations[$id]
+    $totalCombinations += $result.Combinations
+    $totalConditions += $result.Conditions
     $path = Join-Path $root $relative
     $source = [IO.File]::ReadAllLines($path)
     $positions = @(for ($i=0; $i -lt $source.Length; $i++) { if ($source[$i].Trim() -ceq $anchor) { $i+1 } })
@@ -133,4 +138,4 @@ $lines.Add('For OR decisions the pairs are 00/10 and 00/01; for AND decisions th
 $lines.Add('')
 $lines.Add('Multiple instrumented test binaries can report the same atomic source range. Their counters are summed by that exact range; distinct operands remain distinct. The checker also requires both outcomes for each operand, rather than accepting a test executable exit code as coverage.')
 [IO.File]::WriteAllLines([IO.Path]::GetFullPath($OutputPath), $lines)
-'PASS: 24/24 combinations, 12/12 independently effective conditions, 24/24 atomic branch outcomes (six decisions)'
+"PASS: $totalCombinations/$totalCombinations combinations, $totalConditions/$totalConditions independently effective conditions, $($totalConditions*2)/$($totalConditions*2) atomic branch outcomes ($($catalog.Count) decisions)"

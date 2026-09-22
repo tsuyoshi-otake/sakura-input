@@ -1308,7 +1308,9 @@ fn compact_file_to_limit(path: &Path, limit: u64) -> io::Result<RetentionPlan> {
     #[cfg(test)]
     tests::publication_cut("temp_synced")?;
     drop(replacement);
-    validate_compaction_file(&temp)?;
+    #[cfg(test)]
+    capacity_tests::corrupt_replacement_if_requested(&temp);
+    verify_compaction_image(&temp, total, &expected)?;
     #[cfg(test)]
     let _publication_guard = tests::lock_replacement_if_requested(&temp);
     replace_history_file(path, &temp, &backup)?;
@@ -1324,10 +1326,9 @@ fn compact_file_to_limit(path: &Path, limit: u64) -> io::Result<RetentionPlan> {
         .sync_all()?;
     #[cfg(test)]
     tests::publication_cut("canonical_synced")?;
-    validate_compaction_file(path)?;
-    if Sha256::digest(&read_bounded_history(path)?)? != expected {
-        return Err(invalid_data("input history published replacement mismatch"));
-    }
+    #[cfg(test)]
+    capacity_tests::corrupt_canonical_if_requested(path);
+    verify_compaction_image(path, total, &expected)?;
     fs::remove_file(&backup)?;
     #[cfg(test)]
     tests::publication_cut("backup_removed")?;
@@ -1357,8 +1358,134 @@ fn read_bounded_history(path: &Path) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// Only the store owner may recover. Every existing participant is fully
-/// validated before any mutation; unknown files, opaque data and ambiguous
+/// Proves that a durable publication is exactly the image constructed from
+/// the authenticated source scan. The source scan has already DPAPI-opened
+/// and decoded every retained frame; repeating that expensive operation for
+/// the temporary and canonical copies adds no stronger identity guarantee.
+fn verify_compaction_image(path: &Path, expected_len: u64, expected: &[u8; 32]) -> io::Result<()> {
+    if expected_len > MAX_INPUT_HISTORY_BYTES {
+        return Err(invalid_data(
+            "input history replacement exceeds hard size bound",
+        ));
+    }
+    let mut file = File::open(path)?;
+    if file.metadata()?.len() != expected_len {
+        return Err(invalid_data("input history replacement length mismatch"));
+    }
+    verify_compaction_reader(&mut file, expected_len, expected)
+}
+
+fn verify_compaction_reader(
+    reader: &mut impl Read,
+    expected_len: u64,
+    expected: &[u8; 32],
+) -> io::Result<()> {
+    let mut digest = Sha256::new()?;
+    let mut observed_len = 0u64;
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        observed_len = observed_len.saturating_add(read as u64);
+        if observed_len > expected_len {
+            return Err(invalid_data("input history replacement length mismatch"));
+        }
+        digest.update(&buffer[..read])?;
+    }
+    if observed_len != expected_len || digest.finish()? != *expected {
+        return Err(invalid_data("input history published replacement mismatch"));
+    }
+    Ok(())
+}
+
+struct RecoveryImage {
+    hash: [u8; 32],
+    logical: [u8; 32],
+    summary: ScanSummary,
+}
+
+enum RecoveryReplacement {
+    Missing,
+    Complete(RecoveryImage),
+    Interrupted,
+}
+
+enum RecoveryImageScan {
+    Complete(RecoveryImage),
+    Incomplete,
+}
+
+fn read_recovery_participant(file: &Path) -> io::Result<Option<Vec<u8>>> {
+    use std::os::windows::fs::MetadataExt;
+    const REPARSE_POINT: u32 = 0x400;
+    match fs::symlink_metadata(file) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+        Ok(metadata) if !metadata.is_file() || metadata.file_attributes() & REPARSE_POINT != 0 => {
+            return Err(invalid_data("unsafe history recovery file"));
+        }
+        Ok(_) => {}
+    }
+    read_bounded_history(file).map(Some)
+}
+
+fn scan_recovery_image(bytes: &[u8]) -> io::Result<RecoveryImageScan> {
+    let mut logical = Sha256::new()?;
+    let summary = scan_frames_with(bytes, |record, _| {
+        let encoded = record.encode()?;
+        logical.update(&(encoded.len() as u64).to_le_bytes())?;
+        logical.update(&encoded)?;
+        Ok(())
+    })?;
+    if summary.valid_end != bytes.len() {
+        return Ok(RecoveryImageScan::Incomplete);
+    }
+    Ok(RecoveryImageScan::Complete(RecoveryImage {
+        hash: Sha256::digest(bytes)?,
+        logical: logical.finish()?,
+        summary,
+    }))
+}
+
+fn decode_recovery_image(bytes: &[u8]) -> io::Result<RecoveryImage> {
+    match scan_recovery_image(bytes)? {
+        RecoveryImageScan::Complete(image) => Ok(image),
+        RecoveryImageScan::Incomplete => Err(invalid_data("incomplete history recovery file")),
+    }
+}
+
+fn load_recovery_image(file: &Path) -> io::Result<Option<RecoveryImage>> {
+    read_recovery_participant(file)?
+        .as_deref()
+        .map(decode_recovery_image)
+        .transpose()
+}
+
+fn load_recovery_replacement(file: &Path, expected_hash: &[u8]) -> io::Result<RecoveryReplacement> {
+    let Some(bytes) = read_recovery_participant(file)? else {
+        return Ok(RecoveryReplacement::Missing);
+    };
+    if bytes.len() < HEADER_LEN {
+        return Ok(RecoveryReplacement::Interrupted);
+    }
+    let image = match scan_recovery_image(&bytes)? {
+        RecoveryImageScan::Complete(image) => image,
+        RecoveryImageScan::Incomplete => {
+            return Ok(RecoveryReplacement::Interrupted);
+        }
+    };
+    if image.hash != expected_hash && bytes.len() == HEADER_LEN {
+        return Ok(RecoveryReplacement::Interrupted);
+    }
+    Ok(RecoveryReplacement::Complete(image))
+}
+
+/// Only the store owner may recover. Existing images are fully validated
+/// before mutation, except that an unfinished replacement may be discarded
+/// when the authenticated plan proves the intact canonical is the old image
+/// and no backup exists. Unknown files, opaque complete images and ambiguous
 /// generations remain intact. The DPAPI-protected plan binds both images by
 /// SHA-256, independently of per-frame CRC checks and randomized encryption.
 fn recover_compaction(path: &Path) -> io::Result<Option<ScanSummary>> {
@@ -1385,44 +1512,10 @@ fn recover_compaction(path: &Path) -> io::Result<Option<ScanSummary>> {
             return Err(invalid_data("unknown history transaction participant"));
         }
     }
-    struct Image {
-        hash: [u8; 32],
-        logical: [u8; 32],
-        summary: ScanSummary,
-    }
-    let load = |file: &Path| -> io::Result<Option<Image>> {
-        match fs::symlink_metadata(file) {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error),
-            Ok(metadata)
-                if !metadata.is_file() || metadata.file_attributes() & REPARSE_POINT != 0 =>
-            {
-                return Err(invalid_data("unsafe history recovery file"))
-            }
-            Ok(_) => {}
-        }
-        let bytes = read_bounded_history(file)?;
-        let mut logical = Sha256::new()?;
-        let summary = scan_frames_with(&bytes, |record, _| {
-            let encoded = record.encode()?;
-            logical.update(&(encoded.len() as u64).to_le_bytes())?;
-            logical.update(&encoded)?;
-            Ok(())
-        })?;
-        if summary.valid_end != bytes.len() {
-            return Err(invalid_data("incomplete history recovery file"));
-        }
-        Ok(Some(Image {
-            hash: Sha256::digest(&bytes)?,
-            logical: logical.finish()?,
-            summary,
-        }))
-    };
-    let canonical = load(path)?;
+    let canonical = load_recovery_image(path)?;
     let backup_path = transaction.join("previous.bin");
     let temp_path = transaction.join("replacement.bin");
-    let backup = load(&backup_path)?;
-    let temp = load(&temp_path)?;
+    let backup = load_recovery_image(&backup_path)?;
     let manifest_path = transaction.join("publication.bin");
     let manifest = match File::open(&manifest_path) {
         Ok(file) => {
@@ -1443,6 +1536,19 @@ fn recover_compaction(path: &Path) -> io::Result<Option<ScanSummary>> {
     if let Some(plan) = manifest.as_ref() {
         let old = &plan[8..40];
         let new = &plan[40..72];
+        let temp = match load_recovery_replacement(&temp_path, new)? {
+            RecoveryReplacement::Missing => None,
+            RecoveryReplacement::Complete(image) => Some(image),
+            RecoveryReplacement::Interrupted => {
+                let canonical_matches_old =
+                    canonical.as_ref().is_some_and(|image| image.hash == old);
+                let backup_absent = backup.is_none();
+                if !(canonical_matches_old && backup_absent) {
+                    return Err(invalid_data("ambiguous interrupted history replacement"));
+                }
+                None
+            }
+        };
         if backup.as_ref().is_some_and(|image| image.hash != old)
             || temp.as_ref().is_some_and(|image| image.hash != new)
         {
@@ -1462,6 +1568,7 @@ fn recover_compaction(path: &Path) -> io::Result<Option<ScanSummary>> {
                 "missing canonical for legacy history recovery",
             ));
         };
+        let temp = load_recovery_image(&temp_path)?;
         if backup
             .as_ref()
             .is_some_and(|other| other.logical != image.logical)
@@ -1490,6 +1597,7 @@ fn recover_compaction(path: &Path) -> io::Result<Option<ScanSummary>> {
 
 /// Bounded complete schema/CRC/DPAPI validation; CRC here is an integrity
 /// comparison, not cryptographic authentication or a recovery generation.
+#[cfg(test)]
 fn validate_compaction_file(path: &Path) -> io::Result<()> {
     let mut bytes = Vec::new();
     File::open(path)?
@@ -1595,3 +1703,11 @@ fn crc32(bytes: &[u8]) -> u32 {
 #[cfg(test)]
 #[path = "input_history_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "input_history/capacity_tests.rs"]
+mod capacity_tests;
+
+#[cfg(test)]
+#[path = "input_history/recovery_tests.rs"]
+mod recovery_tests;

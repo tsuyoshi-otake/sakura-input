@@ -35,6 +35,7 @@ pub mod dictionary;
 pub mod dispatch;
 pub mod event_log;
 pub mod fault_injection;
+mod history_runtime;
 pub mod input_history;
 pub mod learning;
 pub mod long_conversion;
