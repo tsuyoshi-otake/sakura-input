@@ -162,11 +162,19 @@ fn disabling_developer_history_stops_engine_trace_until_reenabled() {
             ),
             Ok(Response::Output(_))
         ));
+        // Output precedes this key's UI publication and trace. A request on
+        // the same sequential connection fences those remaining side effects.
+        assert!(matches!(
+            host.call(&Request::InputHistoryStats, PATIENT),
+            Ok(Response::InputHistoryStats { .. })
+        ));
     };
     wait_active(&mut settings, true);
     key(&mut host);
     let before = fs::read(&trace).unwrap();
-    assert!(!before.is_empty(), "enabled engine trace emitted records");
+    let enabled_trace = std::str::from_utf8(&before).unwrap();
+    assert!(enabled_trace.contains("\tkey_result\t"));
+    assert!(enabled_trace.contains("\tui_publish\t"));
     configuration(engine.local_app_data(), false);
     wait_active(&mut settings, false);
     for _ in 0..32 {

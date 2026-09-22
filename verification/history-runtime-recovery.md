@@ -63,14 +63,16 @@ Integrated verification, 2026-09-22:
 - `cargo build --workspace --release --locked` passes. The TSF DLL gate and
   its self-test pass: 440,832 bytes against a 1,048,576-byte cap.
 - IRV self-test passes. The comparison exits successfully with warnings:
-  history 2,672 to 6,418 LOC (+140.2%), CI 5,034 to 5,630 LOC (+11.8%). The
+  history 2,672 to 6,426 LOC (+140.5%), CI 5,034 to 5,630 LOC (+11.8%). The
   history inventory now counts its previously omitted test file as well as the
   new lifecycle and regression files; thresholds and baseline were not reset.
 - A private-process trace regression first failed on continued writes after
   developer-mode OFF. After correction, 32 keys leave the trace byte-for-byte
   unchanged; ON resumes recording in both debug and release builds. File
-  contents, not path metadata length,
-  establish this invariant. The capacity fixture creates missing parent
+  contents establish this invariant. A same-connection request fences the
+  preceding key's post-response UI publication before each comparison; receiving
+  its Output alone does not establish that its trace writes have completed.
+  The capacity fixture creates missing parent
   directories so an absent user `tmp` directory does not prevent the test.
 
 The three opt-in release acceptance tests passed (three run, zero failed,
@@ -127,6 +129,9 @@ identified stale request snapshots as a possible source of re-enabling history;
 configuration publication must therefore remain the only desired-state writer.
 The persistence change needed crash-state matrices and large-store timings,
 not inspection of users' actual text.
+The trace regression also needed the server reply/publication ordering contract:
+an Output response precedes UI publication, while a subsequent request on the
+same connection fences that earlier key's remaining side effects.
 
 **C. Impact:** history-runtime owns service generations and retirement. The
 existing writer still owns accepted records and durable file mutations.
