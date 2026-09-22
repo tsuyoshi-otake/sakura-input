@@ -16,8 +16,8 @@
 //! composing session is torn down with its reading still live. The next
 //! Space then finds an idle host and commits U+3000 into the user's
 //! document — the measured #102 symptom.
-//! [`CompositionFence::release_after_teardown`] arms a one-shot latch for
-//! that host so the Space right after a broken link can be absorbed.
+//! Finalizing an owned claim with `teardown = true` arms a one-shot latch
+//! for that host so the Space right after a broken link can be absorbed.
 //!
 //! The two fences are read through deliberately different queries, and the
 //! difference is the whole safety argument:
@@ -35,13 +35,20 @@
 //! covers the failure, can never permanently swallow a full-width space,
 //! and holds no wall clock — so the independent oracle in
 //! `sakura-oracles::space_key_dispatch_oracle` models it exactly rather than
-//! approximately. A composition that ends the way it was meant to still
-//! uses [`CompositionFence::release`] and arms nothing.
+//! approximately. A composition that ends normally releases
+//! its owned claim with `teardown = false` and arms nothing.
+//!
+//! Pending latches retain the most recently armed 1,024 distinct host names
+//! (#259). Rearming refreshes that host; at capacity the oldest pending host
+//! loses its latch. No time expiry or extra Space absorption is introduced.
+//! Live claims are separate and are never evicted by this history bound.
 
 use sakura_ipc::ConnectionProbe;
 use sakura_proto::SessionId;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, MutexGuard};
+
+const MAX_PENDING_TEARDOWNS: usize = 1_024;
 
 /// Shared across every pipe worker in one engine process.
 #[derive(Debug, Default)]
@@ -53,9 +60,11 @@ pub struct CompositionFence {
 struct FenceState {
     /// Number of live composing/converting claims per host process name.
     counts: HashMap<Box<str>, u32>,
-    /// Hosts that lost a live reading to a teardown and have not yet spent
-    /// the one Space that loss entitles them to absorb.
-    torn_down: HashSet<Box<str>>,
+    /// Hosts that lost a live reading and still owe one-shot recovery,
+    /// oldest first; bounded independently of lifetime session count.
+    /// Linear operations inspect at most 1,024 short names,
+    /// while live-claim lookups remain hash-based.
+    torn_down: VecDeque<Box<str>>,
     /// Only claims for the queried host are inspected. Inactive records stay
     /// until their owner finalizes, so late teardown cannot spend them twice.
     owned: HashMap<Box<str>, HashMap<(u64, SessionId), OwnedClaim>>,
@@ -106,7 +115,7 @@ impl CompositionFence {
         let active = !probe.as_ref().is_some_and(ConnectionProbe::is_disconnected);
         claims.insert((owner, session), OwnedClaim { probe, active });
         if active {
-            state.torn_down.remove(key.as_ref());
+            state.disarm_teardown(key.as_ref());
             *state.counts.entry(key).or_default() += 1;
         }
     }
@@ -130,39 +139,7 @@ impl CompositionFence {
             state.owned.remove(key.as_ref());
         }
         if claim.active && state.release_count(key.as_ref()) && teardown {
-            state.torn_down.insert(key);
-        }
-    }
-
-    pub fn acquire(&self, process_name: &str) {
-        let key = normalize_process_name(process_name);
-        let mut state = self.lock();
-        // Composing again is proof the link recovered, so the teardown has
-        // nothing left to protect and its latch must not survive to eat a
-        // Space the user types much later.
-        state.torn_down.remove(key.as_ref());
-        *state.counts.entry(key).or_insert(0) += 1;
-    }
-
-    /// The composition ended the way it was supposed to — committed,
-    /// cancelled, or replaced. The host stops fencing immediately.
-    pub fn release(&self, process_name: &str) {
-        let key = normalize_process_name(process_name);
-        self.lock().release_count(key.as_ref());
-    }
-
-    /// The claim was torn down while its reading was still live: the
-    /// session was deleted mid-composition, or its connection reset. Arms
-    /// the one-shot latch so the Space that follows a dropped link is not
-    /// committed as a document space by the session that replaced it.
-    pub fn release_after_teardown(&self, process_name: &str) {
-        let key = normalize_process_name(process_name);
-        let mut state = self.lock();
-        // Only a host that was actually composing has anything to protect.
-        // A teardown with no claim arms nothing, so an ordinary idle Space
-        // still inserts its space.
-        if state.release_count(key.as_ref()) {
-            state.torn_down.insert(key);
+            state.arm_teardown(key);
         }
     }
 
@@ -181,7 +158,7 @@ impl CompositionFence {
         if state.counts.get(key.as_ref()).copied().unwrap_or_default() > 0 {
             return false;
         }
-        state.torn_down.remove(key.as_ref())
+        state.disarm_teardown(key.as_ref())
     }
 
     fn lock(&self) -> MutexGuard<'_, FenceState> {
@@ -192,6 +169,24 @@ impl CompositionFence {
 }
 
 impl FenceState {
+    fn arm_teardown(&mut self, key: Box<str>) {
+        self.disarm_teardown(key.as_ref());
+        if self.torn_down.len() == MAX_PENDING_TEARDOWNS {
+            // Pop before push so the backing allocation never grows for a
+            // transient capacity + 1 entry.
+            self.torn_down.pop_front();
+        }
+        self.torn_down.push_back(key);
+    }
+
+    fn disarm_teardown(&mut self, key: &str) -> bool {
+        let Some(index) = self.torn_down.iter().position(|name| name.as_ref() == key) else {
+            return false;
+        };
+        self.torn_down.remove(index);
+        true
+    }
+
     fn retire_disconnected(&mut self, key: &str) {
         let mut retired = 0;
         if let Some(claims) = self.owned.get_mut(key) {
@@ -209,7 +204,7 @@ impl FenceState {
         }
         for _ in 0..retired {
             if self.release_count(key) {
-                self.torn_down.insert(Box::from(key));
+                self.arm_teardown(Box::from(key));
             }
         }
     }
@@ -237,36 +232,155 @@ mod tests {
     use super::*;
 
     #[test]
+    fn historical_host_names_are_bounded_and_newest_recovery_is_one_shot() {
+        let fence = CompositionFence::new();
+        for index in 0..10_000 {
+            let name = format!("host-{index:05}.exe");
+            fence.acquire_owned(&name, 1, 1, None);
+            fence.release_owned(&name, 1, 1, true);
+        }
+        {
+            let state = fence.lock();
+            assert!(state.counts.is_empty());
+            assert!(state.owned.is_empty());
+            assert_eq!(state.torn_down.len(), 1_024);
+        }
+        assert!(!fence.consume_teardown("host-00000.exe"));
+        for index in 8_976..10_000 {
+            let name = format!("host-{index:05}.exe");
+            assert!(fence.consume_teardown(&name));
+            assert!(!fence.consume_teardown(&name));
+        }
+    }
+
+    #[test]
+    fn rearming_refreshes_recency_without_banking_spaces_or_growing_storage() {
+        let fence = CompositionFence::new();
+        for index in 0..MAX_PENDING_TEARDOWNS {
+            let name = format!("host-{index:05}.exe");
+            fence.acquire_owned(&name, 1, 1, None);
+            fence.release_owned(&name, 1, 1, true);
+        }
+        let capacity = fence.lock().torn_down.capacity();
+        fence.acquire_owned("HOST-00000.EXE", 1, 1, None);
+        fence.release_owned("host-00000.exe", 1, 1, true);
+        fence.acquire_owned("new.exe", 1, 1, None);
+        fence.release_owned("new.exe", 1, 1, true);
+        assert_eq!(fence.lock().torn_down.capacity(), capacity);
+        assert_eq!(fence.lock().torn_down.len(), MAX_PENDING_TEARDOWNS);
+        assert!(!fence.consume_teardown("host-00001.exe"));
+        assert!(fence.consume_teardown("host-00000.exe"));
+        assert!(!fence.consume_teardown("host-00000.exe"));
+        assert!(fence.consume_teardown("new.exe"));
+    }
+
+    #[test]
+    fn a_repeated_teardown_refreshes_a_host_with_a_surviving_claim() {
+        let fence = CompositionFence::new();
+        for session in 1..=3 {
+            fence.acquire_owned("active.exe", 1, session, None);
+        }
+        fence.release_owned("active.exe", 1, 1, true);
+        for index in 1..MAX_PENDING_TEARDOWNS {
+            let name = format!("host-{index:05}.exe");
+            fence.acquire_owned(&name, 2, 1, None);
+            fence.release_owned(&name, 2, 1, true);
+        }
+        fence.release_owned("active.exe", 1, 2, true);
+        fence.acquire_owned("new.exe", 2, 1, None);
+        fence.release_owned("new.exe", 2, 1, true);
+        assert!(fence.any_active("active.exe"));
+        assert!(!fence.consume_teardown("active.exe"));
+        assert!(!fence.consume_teardown("host-00001.exe"));
+        fence.release_owned("active.exe", 1, 3, false);
+        assert!(fence.consume_teardown("active.exe"));
+        assert!(!fence.consume_teardown("active.exe"));
+    }
+
+    #[test]
+    fn saturation_never_evicts_a_live_claim() {
+        let fence = CompositionFence::new();
+        fence.acquire_owned("active.exe", 1, 1, None);
+        for index in 0..MAX_PENDING_TEARDOWNS + 1 {
+            let name = format!("host-{index:05}.exe");
+            fence.acquire_owned(&name, 2, 1, None);
+            fence.release_owned(&name, 2, 1, true);
+        }
+        assert!(fence.any_active("active.exe"));
+        assert!(!fence.consume_teardown("active.exe"));
+        fence.release_owned("active.exe", 1, 1, true);
+        assert!(!fence.any_active("active.exe"));
+        assert!(fence.consume_teardown("active.exe"));
+    }
+
+    #[test]
+    fn repeated_binding_and_wrong_or_late_finalization_cannot_rearm() {
+        let fence = CompositionFence::new();
+        fence.acquire_owned("host.exe", 1, 1, None);
+        fence.acquire_owned("host.exe", 1, 1, None);
+        fence.release_owned("host.exe", 2, 1, true);
+        fence.release_owned("host.exe", 1, 2, true);
+        assert!(fence.any_active("host.exe"));
+        fence.release_owned("host.exe", 1, 1, true);
+        assert!(!fence.any_active("host.exe"));
+        assert!(fence.consume_teardown("host.exe"));
+        fence.release_owned("host.exe", 1, 1, true);
+        assert!(!fence.consume_teardown("host.exe"));
+        assert!(fence.lock().owned.is_empty());
+    }
+
+    #[test]
+    fn concurrent_distinct_owners_finalize_under_the_same_history_bound() {
+        let fence = CompositionFence::new();
+        std::thread::scope(|scope| {
+            for owner in 0..4 {
+                let fence = &fence;
+                scope.spawn(move || {
+                    for session in 0..1_000 {
+                        let name = format!("host-{owner}-{session}.exe");
+                        fence.acquire_owned(&name, owner, session, None);
+                        fence.release_owned(&name, owner, session, true);
+                    }
+                });
+            }
+        });
+        let state = fence.lock();
+        assert!(state.counts.is_empty());
+        assert!(state.owned.is_empty());
+        assert_eq!(state.torn_down.len(), MAX_PENDING_TEARDOWNS);
+    }
+
+    #[test]
     fn peer_becomes_active_only_after_acquire() {
         let fence = CompositionFence::new();
         assert!(!fence.any_active("cursor.exe"));
-        fence.acquire("cursor.exe");
+        fence.acquire_owned("cursor.exe", 1, 1, None);
         assert!(fence.any_active("cursor.exe"));
         assert!(!fence.any_active("notepad.exe"));
-        fence.release("cursor.exe");
+        fence.release_owned("cursor.exe", 1, 1, false);
         assert!(!fence.any_active("cursor.exe"));
     }
 
     #[test]
     fn process_name_matching_is_ascii_case_insensitive() {
         let fence = CompositionFence::new();
-        fence.acquire("Cursor.exe");
+        fence.acquire_owned("Cursor.exe", 1, 1, None);
         assert!(fence.any_active("cursor.exe"));
-        fence.release("CURSOR.EXE");
+        fence.release_owned("CURSOR.EXE", 1, 1, false);
         assert!(!fence.any_active("Cursor.exe"));
-        fence.acquire("Cursor.exe");
-        fence.release_after_teardown("CURSOR.EXE");
+        fence.acquire_owned("Cursor.exe", 1, 1, None);
+        fence.release_owned("CURSOR.EXE", 1, 1, true);
         assert!(fence.consume_teardown("cursor.exe"));
     }
 
     #[test]
     fn two_claims_keep_the_host_active_until_both_release() {
         let fence = CompositionFence::new();
-        fence.acquire("app.exe");
-        fence.acquire("app.exe");
-        fence.release("app.exe");
+        fence.acquire_owned("app.exe", 1, 1, None);
+        fence.acquire_owned("app.exe", 2, 1, None);
+        fence.release_owned("app.exe", 1, 1, false);
         assert!(fence.any_active("app.exe"));
-        fence.release("app.exe");
+        fence.release_owned("app.exe", 2, 1, false);
         assert!(!fence.any_active("app.exe"));
     }
 
@@ -276,8 +390,8 @@ mod tests {
     #[test]
     fn a_teardown_owes_exactly_one_absorption() {
         let fence = CompositionFence::new();
-        fence.acquire("claude.exe");
-        fence.release_after_teardown("claude.exe");
+        fence.acquire_owned("claude.exe", 1, 1, None);
+        fence.release_owned("claude.exe", 1, 1, true);
         assert!(fence.consume_teardown("claude.exe"));
         assert!(!fence.consume_teardown("claude.exe"));
     }
@@ -289,16 +403,16 @@ mod tests {
     #[test]
     fn a_pending_teardown_is_invisible_to_any_active() {
         let fence = CompositionFence::new();
-        fence.acquire("claude.exe");
-        fence.release_after_teardown("claude.exe");
+        fence.acquire_owned("claude.exe", 1, 1, None);
+        fence.release_owned("claude.exe", 1, 1, true);
         assert!(!fence.any_active("claude.exe"));
     }
 
     #[test]
     fn a_latch_does_not_leak_to_a_different_executable() {
         let fence = CompositionFence::new();
-        fence.acquire("claude.exe");
-        fence.release_after_teardown("claude.exe");
+        fence.acquire_owned("claude.exe", 1, 1, None);
+        fence.release_owned("claude.exe", 1, 1, true);
         assert!(!fence.any_active("notepad.exe"));
         assert!(!fence.consume_teardown("notepad.exe"));
         assert!(fence.consume_teardown("claude.exe"));
@@ -307,7 +421,7 @@ mod tests {
     #[test]
     fn teardown_without_a_claim_arms_nothing() {
         let fence = CompositionFence::new();
-        fence.release_after_teardown("claude.exe");
+        fence.release_owned("claude.exe", 1, 1, true);
         assert!(!fence.any_active("claude.exe"));
         assert!(!fence.consume_teardown("claude.exe"));
     }
@@ -318,12 +432,12 @@ mod tests {
     #[test]
     fn a_surviving_claim_holds_the_latch_back() {
         let fence = CompositionFence::new();
-        fence.acquire("claude.exe");
-        fence.acquire("claude.exe");
-        fence.release_after_teardown("claude.exe");
+        fence.acquire_owned("claude.exe", 1, 1, None);
+        fence.acquire_owned("claude.exe", 2, 1, None);
+        fence.release_owned("claude.exe", 1, 1, true);
         assert!(fence.any_active("claude.exe"));
         assert!(!fence.consume_teardown("claude.exe"));
-        fence.release("claude.exe");
+        fence.release_owned("claude.exe", 2, 1, false);
         assert!(!fence.any_active("claude.exe"));
         assert!(fence.consume_teardown("claude.exe"));
     }
@@ -333,10 +447,10 @@ mod tests {
     #[test]
     fn a_new_claim_disarms_a_pending_latch() {
         let fence = CompositionFence::new();
-        fence.acquire("claude.exe");
-        fence.release_after_teardown("claude.exe");
-        fence.acquire("claude.exe");
-        fence.release("claude.exe");
+        fence.acquire_owned("claude.exe", 1, 1, None);
+        fence.release_owned("claude.exe", 1, 1, true);
+        fence.acquire_owned("claude.exe", 2, 1, None);
+        fence.release_owned("claude.exe", 2, 1, false);
         assert!(!fence.any_active("claude.exe"));
         assert!(!fence.consume_teardown("claude.exe"));
     }
@@ -347,8 +461,8 @@ mod tests {
     fn each_teardown_rearms_the_latch() {
         let fence = CompositionFence::new();
         for _ in 0..3 {
-            fence.acquire("claude.exe");
-            fence.release_after_teardown("claude.exe");
+            fence.acquire_owned("claude.exe", 1, 1, None);
+            fence.release_owned("claude.exe", 1, 1, true);
             assert!(fence.consume_teardown("claude.exe"));
         }
         assert!(!fence.consume_teardown("claude.exe"));
