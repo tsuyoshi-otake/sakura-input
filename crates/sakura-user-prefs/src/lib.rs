@@ -387,13 +387,18 @@ fn invalid_credential_data() -> windows_core::Error {
     ))
 }
 
-pub fn write_api_key(api_key: &str) -> Result<()> {
+/// Validates an API key without reading or writing credentials.
+pub fn validate_api_key(api_key: &str) -> Result<()> {
     let trimmed = api_key.trim();
     if trimmed.is_empty() || trimmed.len() > MAX_API_KEY_BYTES {
-        return Err(windows_core::Error::from_hresult(HRESULT::from_win32(
-            windows::Win32::Foundation::ERROR_INVALID_DATA.0,
-        )));
+        return Err(invalid_credential_data());
     }
+    Ok(())
+}
+
+pub fn write_api_key(api_key: &str) -> Result<()> {
+    validate_api_key(api_key)?;
+    let trimmed = api_key.trim();
     let mut target = to_wide_nul(API_KEY_TARGET);
     let mut user = to_wide_nul("Sakura Input AI");
     let mut blob = trimmed.as_bytes().to_vec();
@@ -427,6 +432,10 @@ pub fn clear_api_key() -> Result<()> {
 mod tests {
     use super::*;
 
+    fn invalid_data_code() -> HRESULT {
+        HRESULT::from_win32(windows::Win32::Foundation::ERROR_INVALID_DATA.0)
+    }
+
     #[test]
     fn dword_mapping_is_total_for_declared_values_and_fail_closed_otherwise() {
         for value in AiTextKey::ALL {
@@ -440,5 +449,47 @@ mod tests {
         }
         assert_eq!(AiStyle::from_dword(10), None);
         assert_eq!(AiStyle::from_dword(u32::MAX), None);
+    }
+
+    #[test]
+    fn api_key_validation_rejects_empty_and_whitespace_only_values() {
+        assert_eq!(
+            validate_api_key("").unwrap_err().code(),
+            invalid_data_code()
+        );
+        assert_eq!(
+            validate_api_key(" \t\r\n ").unwrap_err().code(),
+            invalid_data_code()
+        );
+    }
+
+    #[test]
+    fn api_key_validation_accepts_trimmed_value_at_exact_byte_limit() {
+        let api_key = format!("  {}\n", "a".repeat(MAX_API_KEY_BYTES));
+        assert_eq!(api_key.trim().len(), MAX_API_KEY_BYTES);
+        validate_api_key(&api_key).unwrap();
+    }
+
+    #[test]
+    fn api_key_validation_rejects_value_over_byte_limit() {
+        let api_key = "a".repeat(MAX_API_KEY_BYTES + 1);
+        assert_eq!(
+            validate_api_key(&api_key).unwrap_err().code(),
+            invalid_data_code()
+        );
+    }
+
+    #[test]
+    fn api_key_validation_counts_multibyte_utf8_bytes() {
+        let exact = "é".repeat(MAX_API_KEY_BYTES / "é".len());
+        assert_eq!(exact.len(), MAX_API_KEY_BYTES);
+        validate_api_key(&exact).unwrap();
+
+        let over = format!("{exact}é");
+        assert_eq!(over.len(), MAX_API_KEY_BYTES + "é".len());
+        assert_eq!(
+            validate_api_key(&over).unwrap_err().code(),
+            invalid_data_code()
+        );
     }
 }
