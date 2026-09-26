@@ -186,6 +186,9 @@ impl PadProtectionEngine {
         };
         let mut password = password;
         let mut attempt_failure = None;
+        let memo_cutover = store
+            .has_protected_memo_cutover()
+            .map_err(|_| ProtectionError::new(FailurePhase::Unlock, FailureReason::Storage))?;
         let loaded = if pending_cutover {
             let mut primary_opened = false;
             store
@@ -198,6 +201,19 @@ impl PadProtectionEngine {
                         primary_opened = result.is_ok();
                         result
                     }
+                })
+                .map(|document| LoadOutcome {
+                    document,
+                    recovered_from_backup: false,
+                })
+        } else if memo_cutover {
+            // A completed memo-protection transition forbids reopening a
+            // pre-protection v3 backup. Authenticate candidates with a fresh
+            // password session, enforce the durable generation floor, and
+            // repair an interrupted primary before exposing an editable Pad.
+            store
+                .recover_protected_memo_cutover(|path| {
+                    self.unlock_path(path, vault_id, &password, &mut attempt_failure)
                 })
                 .map(|document| LoadOutcome {
                     document,
@@ -554,6 +570,31 @@ pub struct ProtectedSaveActor {
 }
 
 impl ProtectedSaveActor {
+    /// Write a mixed plain/protected v4 document on the same bounded save
+    /// mailbox used by the whole-Pad vault. The caller authenticates any
+    /// newly created or resealed memo with its own worker session before it
+    /// submits the snapshot; locked memo envelopes stay opaque to this actor.
+    pub fn spawn_v4(store: PadStore, confirmed_doc: PadDocument) -> Result<Self, FailureReason> {
+        if confirmed_doc.document_id == [0; 16] {
+            return Err(FailureReason::Stale);
+        }
+        let confirmed_doc = Arc::new(confirmed_doc);
+        let mailbox = new_mailbox(Arc::clone(&confirmed_doc));
+        let worker_mailbox = Arc::clone(&mailbox);
+        let (done_tx, done) = mpsc::channel();
+        let join = thread::Builder::new()
+            .name("sakura-pad-v4-save".into())
+            .spawn(move || v4_save_loop(worker_mailbox, store, confirmed_doc, done_tx))
+            .map_err(|_| FailureReason::Worker)?;
+        Ok(Self {
+            mailbox,
+            done,
+            join: Some(join),
+            cancellation: None,
+            finished: false,
+        })
+    }
+
     /// Move an already authenticated engine into the storage thread. The
     /// caller must have stopped the legacy StorageWorker before constructing
     /// this actor. A failed spawn leaves `engine` to Drop and reap its child.
@@ -602,7 +643,13 @@ impl ProtectedSaveActor {
                 document: next,
             });
         }
-        if next.generation <= state.last_submitted_generation {
+        let binding_id = state
+            .latest
+            .as_ref()
+            .map_or(state.confirmed_document.document_id, |doc| doc.document_id);
+        if next.generation <= state.last_submitted_generation
+            || (binding_id != [0; 16] && next.document_id != binding_id)
+        {
             return Err(RejectedSnapshot {
                 reason: SubmitRejectReason::Stale,
                 document: next,
@@ -714,6 +761,27 @@ fn protected_save_loop(
         engine.save(&store, expected, next)
     });
     engine.lock();
+    let _ = done.send(());
+}
+
+fn v4_save_loop(
+    mailbox: Arc<SaveMailbox>,
+    store: PadStore,
+    confirmed: Arc<PadDocument>,
+    done: mpsc::Sender<()>,
+) {
+    run_save_loop(mailbox, confirmed, |expected, next| {
+        store.write_v4(expected, next).map_err(|error| {
+            let reason = match error {
+                StorageError::StaleProtectedDocument | StorageError::LegacyChanged => {
+                    FailureReason::Stale
+                }
+                StorageError::ProtectedVerification => FailureReason::Authentication,
+                _ => FailureReason::Storage,
+            };
+            ProtectionError::new(FailurePhase::Save, reason)
+        })
+    });
     let _ = done.send(());
 }
 
@@ -856,6 +924,20 @@ mod actor_tests {
     }
 
     #[test]
+    fn first_memo_scope_binding_cannot_be_dropped_by_a_newer_pending_snapshot() {
+        let mut actor = scripted_actor(|_, _| Ok(WriteOutcome::Replaced));
+        let mut first_protected = document(2);
+        first_protected.document_id = [7; 16];
+        assert!(actor.submit(first_protected).is_ok());
+        let rejected = actor.submit(document(3)).err().unwrap();
+        assert_eq!(rejected.reason, SubmitRejectReason::Stale);
+        assert_eq!(rejected.document.document_id, [0; 16]);
+        let locked = actor.finish_lock(Duration::from_secs(2));
+        assert_eq!(locked.status, ProtectedLockStatus::Saved);
+        assert_eq!(locked.confirmed_document.document_id, [7; 16]);
+    }
+
+    #[test]
     fn failure_keeps_latest_unsaved_snapshot_and_stops_retries() {
         let (started, observed) = mpsc::channel();
         let (release, gate) = mpsc::channel();
@@ -911,7 +993,8 @@ mod actor_tests {
 #[cfg(test)]
 mod process_tests {
     use super::*;
-    use crate::pad_storage::PadMemo;
+    use crate::memo_protection::MemoProtectionSession;
+    use crate::pad_storage::{MemoPayloadV1, PadMemo};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -950,6 +1033,42 @@ mod process_tests {
 
     fn engine(image: &Path) -> PadProtectionEngine {
         PadProtectionEngine::new(Duration::from_secs(20)).with_worker_image(image.to_path_buf())
+    }
+
+    #[test]
+    fn v4_actor_persists_plain_edit_after_migration_with_exact_base() {
+        let isolated = IsolatedPad::new();
+        let store = PadStore::at(&isolated.0);
+        let mut legacy = PadDocument {
+            generation: 1,
+            ..PadDocument::default()
+        };
+        legacy.memos.push(PadMemo::new(1, "plain", "first", 1));
+        store.write(&legacy).unwrap();
+        let migrated = store
+            .migrate_to_v4(
+                &legacy,
+                |id, old| {
+                    let mut next = old.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        let mut actor = ProtectedSaveActor::spawn_v4(store.clone(), migrated.clone()).unwrap();
+        let mut changed = migrated.clone();
+        changed.generation += 1;
+        changed
+            .find_mut(1)
+            .unwrap()
+            .edit("plain edited", "second", 2)
+            .unwrap();
+        assert!(actor.submit(changed.clone()).is_ok());
+        let lock = actor.finish_lock(Duration::from_secs(2));
+        assert_eq!(lock.status, ProtectedLockStatus::Saved);
+        assert_eq!(*lock.confirmed_document, changed);
+        assert_eq!(store.load_v4().unwrap().document, changed);
     }
 
     /// Cargo does not build another package's binary for renderer unit tests.
@@ -994,5 +1113,88 @@ mod process_tests {
         assert_eq!(final_loaded.document, edited);
         assert!(!final_loaded.recovered_from_backup);
         final_open.lock();
+    }
+
+    #[test]
+    #[ignore = "requires SAKURA_PAD_SESSION_TEST_EXE"]
+    fn real_worker_whole_pad_and_memo_require_independent_passwords() {
+        let image = PathBuf::from(
+            std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+                .expect("set SAKURA_PAD_SESSION_TEST_EXE to the built absolute session image"),
+        );
+        assert!(image.is_absolute() && image.is_file());
+        let isolated = IsolatedPad::new();
+        let store = PadStore::at(&isolated.0);
+        let mut legacy = PadDocument {
+            generation: 1,
+            ..PadDocument::default()
+        };
+        legacy
+            .memos
+            .push(PadMemo::new(1, "private title", "private body", 1));
+        legacy
+            .memos
+            .push(PadMemo::new(2, "ordinary", "still readable", 1));
+        store.write(&legacy).unwrap();
+
+        let mut outer = engine(&image);
+        outer.enroll(&store, &legacy, password()).unwrap();
+        outer.lock();
+        let loaded = outer.unlock(&store, password()).unwrap();
+        let vault_id = store.protected_vault_id().unwrap();
+        let mut memo = MemoProtectionSession::new(vault_id, 1, Duration::from_secs(20))
+            .unwrap()
+            .with_worker_image(image.clone());
+        let frame = MemoPayloadV1::encode("private title", "private body").unwrap();
+        let envelope = memo
+            .create(
+                SecretBytes::new(b"independent memo password".to_vec()),
+                SecretBytes::new(frame),
+            )
+            .unwrap();
+        memo.lock();
+        let mut next = loaded.document.clone();
+        next.document_id = vault_id;
+        next.generation += 1;
+        next.find_mut(1)
+            .unwrap()
+            .protect_with_envelope(envelope.to_vec())
+            .unwrap();
+        assert_eq!(
+            outer.save(&store, &loaded.document, &next).unwrap(),
+            WriteOutcome::Replaced
+        );
+        outer.lock();
+
+        let mut reopened_outer = engine(&image);
+        let reopened = reopened_outer.unlock(&store, password()).unwrap();
+        assert_eq!(reopened.document, next);
+        assert!(reopened.document.find(1).unwrap().plain_content().is_none());
+        assert_eq!(
+            reopened.document.find(2).unwrap().plain_content(),
+            Some(("ordinary", "still readable"))
+        );
+        reopened_outer.lock();
+
+        let mut wrong_memo = MemoProtectionSession::new(vault_id, 1, Duration::from_secs(20))
+            .unwrap()
+            .with_worker_image(image.clone());
+        assert!(wrong_memo
+            .unlock(password(), SecretBytes::new(envelope.to_vec()),)
+            .is_err());
+        let mut right_memo = MemoProtectionSession::new(vault_id, 1, Duration::from_secs(20))
+            .unwrap()
+            .with_worker_image(image);
+        let opened = right_memo
+            .unlock(
+                SecretBytes::new(b"independent memo password".to_vec()),
+                envelope,
+            )
+            .unwrap();
+        assert_eq!(
+            MemoPayloadV1::decode(&opened).unwrap(),
+            ("private title".to_owned(), "private body".to_owned())
+        );
+        right_memo.lock();
     }
 }
