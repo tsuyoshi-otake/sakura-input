@@ -773,8 +773,7 @@ fn clear_owned_path(path: &Path) -> io::Result<u64> {
     let mut file = OpenOptions::new().read(true).write(true).open(path)?;
     file.set_len(0)?;
     file.seek(SeekFrom::Start(0))?;
-    file.write_all(&header())?;
-    file.flush()?;
+    write_cleared_header(&mut file)?;
     Ok(before)
 }
 
@@ -852,12 +851,15 @@ fn writer_loop_with_file(
     // A later successful sync cannot recover an earlier failed append. Keep
     // that loss observable at barriers until a successful explicit Clear.
     let mut append_failed = false;
+    // A failed rollback leaves an uncertain frame boundary. Only a successful
+    // Clear or a validated service reopen may permit writes again.
+    let mut append_blocked = false;
     loop {
         let wait = compaction_interval.saturating_sub(last_compaction.elapsed());
         let command = match receiver.recv_timeout(wait) {
             Ok(command) => command,
             Err(RecvTimeoutError::Timeout) => {
-                if retention.is_due(now_ms()) {
+                if !append_blocked && retention.is_due(now_ms()) {
                     match compact_writer_file(&path, &mut file) {
                         Ok(updated) => retention = updated,
                         Err(_) => {
@@ -882,8 +884,14 @@ fn writer_loop_with_file(
                 if epoch < cleared_epoch {
                     continue;
                 }
-                let result =
-                    append_payload(&path, &mut file, &payload, timestamp_ms, &mut retention);
+                let result = append_payload(
+                    &path,
+                    &mut file,
+                    &payload,
+                    timestamp_ms,
+                    &mut retention,
+                    &mut append_blocked,
+                );
                 match result {
                     Ok(()) => {
                         appends_since_compaction = appends_since_compaction.saturating_add(1);
@@ -920,8 +928,15 @@ fn writer_loop_with_file(
                 let result = clear_writer_file(&path, &mut file);
                 if result.is_err() {
                     stats.record_persistence_failure();
+                    if file.is_none() {
+                        // Clear relinquished the old handle and may have left
+                        // an incomplete header. Reopening is not validation.
+                        append_failed = true;
+                        append_blocked = true;
+                    }
                 } else {
                     append_failed = false;
+                    append_blocked = false;
                     retention = RetentionPlan::default();
                 }
                 let _ = reply.send(result);
@@ -983,7 +998,13 @@ fn append_payload(
     payload: &[u8],
     timestamp_ms: u64,
     retention: &mut RetentionPlan,
+    append_blocked: &mut bool,
 ) -> io::Result<()> {
+    if *append_blocked {
+        return Err(io::Error::other(
+            "input history append requires Clear or reopen",
+        ));
+    }
     if payload.len() > MAX_RECORD_BYTES {
         return Err(invalid_data("input history record is too large"));
     }
@@ -1017,7 +1038,12 @@ fn append_payload(
     // An I/O error can follow a complete write. Track possible expiry once
     // writing begins, but do not schedule maintenance for pre-write rejection.
     retention.observe(timestamp_ms);
-    append_encrypted(file, &protected)?;
+    if let Err(error) = append_encrypted(file, &protected) {
+        // Never append a later frame behind a partial header or ciphertext.
+        // Restoring the cursor also covers the non-append handle from Clear.
+        *append_blocked = rollback_append(file, current_len).is_err();
+        return Err(error);
+    }
     #[cfg(test)]
     if tests::FAIL_AFTER_APPEND.with(|fail| fail.replace(false)) {
         return Err(io::Error::other("synthetic post-write failure"));
@@ -1025,7 +1051,21 @@ fn append_payload(
     Ok(())
 }
 
+fn rollback_append(file: &mut File, original_len: u64) -> io::Result<()> {
+    #[cfg(test)]
+    if tests::FAIL_APPEND_ROLLBACK.with(|fail| fail.replace(false)) {
+        return Err(io::Error::other("synthetic history rollback failure"));
+    }
+    file.set_len(original_len)?;
+    file.seek(SeekFrom::Start(original_len))?;
+    Ok(())
+}
+
 fn append_encrypted(file: &mut File, protected: &[u8]) -> io::Result<()> {
+    #[cfg(test)]
+    let mut fault = tests::HistoryWriteFault::append(file);
+    #[cfg(test)]
+    let file = &mut fault;
     let length = u32::try_from(protected.len())
         .map_err(|_| invalid_data("protected input history record is too large"))?;
     file.write_all(&length.to_le_bytes())?;
@@ -1049,10 +1089,19 @@ fn clear_writer_file(path: &Path, file: &mut Option<File>) -> io::Result<u64> {
         .write(true)
         .truncate(true)
         .open(path)?;
-    replacement.write_all(&header())?;
-    replacement.flush()?;
+    write_cleared_header(&mut replacement)?;
     *file = Some(replacement);
     Ok(cleared)
+}
+
+fn write_cleared_header(file: &mut File) -> io::Result<()> {
+    #[cfg(test)]
+    let mut fault = tests::HistoryWriteFault::clear(file);
+    #[cfg(test)]
+    let file = &mut fault;
+    file.write_all(&header())?;
+    file.flush()?;
+    file.sync_all()
 }
 
 fn ensure_file(path: &Path) -> io::Result<()> {
@@ -1075,11 +1124,16 @@ fn ensure_file(path: &Path) -> io::Result<()> {
 
 fn open_append(path: &Path) -> io::Result<File> {
     ensure_file(path)?;
-    OpenOptions::new()
+    // Windows append-only handles cannot truncate a failed frame. The store's
+    // sole writer owns this read/write handle and starts at the validated EOF.
+    let mut file = OpenOptions::new()
         .create(true)
         .read(true)
-        .append(true)
-        .open(path)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+    file.seek(SeekFrom::End(0))?;
+    Ok(file)
 }
 
 fn repair_file(path: &Path) -> io::Result<ScanSummary> {

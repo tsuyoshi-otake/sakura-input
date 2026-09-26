@@ -28,3 +28,7 @@ sakura_settings.exe config set developer-mode off
 Password、URL、Email、Digitsは機微スコープとして常に除外します。未分類または未知の入力スコープも保存してはいけません。TSFはキーをengineへ渡す前に`ITfInputScope`を分類し、分類失敗・未知値はfail-closedにします。履歴サービスの入口でも`Normal`かつ明示的に分類済みのレコードだけを受け付けるため、この二重防御を維持してください。
 
 保存は現在のWindowsユーザー向けDPAPI、有界1,024件キュー、30日保持、64 MiB上限、アイドル時を含む定期compactで行います。キーパスをブロックしないため、キュー落ち・保存失敗は`history stats`の累積カウンタで確認します。`history clear`、`history export`、`history stats`の結果は明示的な成功／失敗として扱ってください。
+
+履歴の追記途中で保存に失敗した場合、ライターは書き込み前のファイル長と位置を復元してから後続レコードを受け付けます。復元にも失敗した場合は、追記と定期compactを停止し、保存失敗カウンタとFlush／終了時のエラーで通知します。成功した`history clear`、または無効化→有効化後のファイル検証に成功した場合に記録を再開します。失敗したClearでは停止状態を解除しません。復元に成功しても、失敗した記録があることは成功したClearまでFlush／終了結果に残します。検証は[部分追記の復旧記録](../../verification/history-append-recovery.md)を参照してください。
+
+Clear自身が元の書き込みハンドルを手放した後で失敗した場合も、追記と定期compactを停止します。不完全なヘッダーを通常の追記で開き直してはいけません。engine経由とオフラインのどちらも、空の履歴ヘッダーを書き、OSへの同期が成功してからClear成功を返します。消去前の状態へ戻す原子性や電源断への保証は含みません。検証は[Clear失敗の記録](../../verification/history-clear-failure.md)を参照してください。
