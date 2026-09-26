@@ -115,6 +115,7 @@ const LOCK_PASSWORD_ID: i32 = 118;
 const LOCK_UNLOCK_ID: i32 = 119;
 const LOCK_STATUS_ID: i32 = 120;
 const LOCK_PASSWORD_LABEL_ID: i32 = 121;
+const LOCK_METHOD_ID: i32 = LOCK_PASSWORD_LABEL_ID;
 const PROTECT_ID: i32 = 122;
 const ENROLL_PASSWORD_ID: i32 = 125;
 const ENROLL_HEADLINE_ID: i32 = 123;
@@ -180,7 +181,7 @@ fn migrated_protected_pad_starts_and_reopens_without_legacy_text() {
         let label = control(pad, LOCK_PASSWORD_LABEL_ID);
         assert_eq!(text_of(headline), "Sakura Pad はロックされています");
         assert_eq!(text_of(status), "パスワードを入力して解除してください");
-        assert_eq!(text_of(label), "パスワード");
+        assert_eq!(text_of(label), "パスワードで解除 · 復旧キーに切替");
         assert_eq!(text_of(unlock), "解除");
         assert!(
             // SAFETY: unlock is a live child of the test-owned Pad HWND.
@@ -643,6 +644,230 @@ fn start_recoverable_memo_enrollment(
 }
 
 #[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen() {
+    const PASSWORD: &str = "pad recovery enrollment 56bc";
+    const TITLE: &str = "whole recovery title 20bf";
+    const BODY: &str = "whole recovery body 8c91";
+    let app_data = IsolatedAppData::new("pad-whole-recovery");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if store.load().ok().and_then(|loaded| {
+            loaded
+                .document
+                .find(1)
+                .and_then(pad_storage::PadMemo::plain_content)
+                .map(|content| content == (TITLE, BODY))
+        }) == Some(true)
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click(pad, PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let key_field = control(pad, ENROLL_PASSWORD_ID);
+    let key = Zeroizing::new(text_of(key_field));
+    assert!(key.starts_with("SPRK1-"));
+    assert!(visible(key_field));
+    assert_eq!(
+        // SAFETY: the edit belongs to the isolated live Pad; style bits are
+        // read without modifying its key text.
+        unsafe { GetWindowLongPtrW(key_field, GWL_STYLE) } as u32 & 0x24,
+        0x04,
+        "recovery key must be unmasked and multiline"
+    );
+    assert!(
+        store.load().is_ok(),
+        "key display must precede cutover intent"
+    );
+    assert!(!visible(control(pad, ENROLL_CONFIRM_PASSWORD_ID)));
+    capture(pad, "pad-recovery-key");
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    assert!(
+        matches!(
+            store.load(),
+            Err(pad_storage::StorageError::ProtectedCutover)
+        ),
+        "confirmed whole-Pad protection must reject legacy loading"
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    click(pad, LOCK_METHOD_ID);
+    wait_for_text(
+        control(pad, LOCK_METHOD_ID),
+        "recovery unlock mode",
+        |value| value == "復旧キーで解除 · パスワードに切替",
+    );
+    set_text(pad, LOCK_PASSWORD_ID, &key);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_control(pad, TITLE_ID);
+    wait_for_text(control(pad, TITLE_ID), "recovery-unlocked Pad", |value| {
+        value == TITLE
+    });
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    // SAFETY: both HWNDs belong to this fixture. Close and reopen to force
+    // a fresh worker session for the independent password path.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_control(pad, TITLE_ID);
+    wait_for_text(control(pad, TITLE_ID), "password-unlocked Pad", |value| {
+        value == TITLE
+    });
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn cancelling_whole_pad_recovery_key_display_restores_legacy_writer() {
+    let app_data = IsolatedAppData::new("pad-whole-recovery-cancel");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    set_text(pad, TITLE_ID, "whole recovery cancelled title");
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    click(pad, PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, "whole recovery cancel 34a5");
+    set_text(
+        pad,
+        ENROLL_CONFIRM_PASSWORD_ID,
+        "whole recovery cancel 34a5",
+    );
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad cancellation key",
+        |value| value == "復旧キーを保存してください",
+    );
+    assert!(text_of(control(pad, ENROLL_PASSWORD_ID)).starts_with("SPRK1-"));
+    assert!(
+        store.load().is_ok(),
+        "display cannot publish cutover intent"
+    );
+    click(pad, ENROLL_CANCEL_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, TITLE_ID);
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "whole recovery cancelled title"
+    );
+    assert!(
+        store.load().is_ok(),
+        "cancel must leave legacy data readable"
+    );
+    set_text(pad, BODY_ID, "legacy writer restored 33d0");
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if store.load().ok().and_then(|loaded| {
+            loaded
+                .document
+                .find(1)
+                .and_then(pad_storage::PadMemo::plain_content)
+                .map(|(_, body)| body == "legacy writer restored 33d0")
+        }) == Some(true)
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "legacy writer did not resume");
+        sleep(Duration::from_millis(30));
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn windows_lock_clears_unconfirmed_whole_pad_recovery_key() {
+    let app_data = IsolatedAppData::new("pad-whole-recovery-session-lock");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    set_text(pad, TITLE_ID, "session-lock recovery title");
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    click(pad, PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, "session lock recovery 03ac");
+    set_text(
+        pad,
+        ENROLL_CONFIRM_PASSWORD_ID,
+        "session lock recovery 03ac",
+    );
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery before session lock",
+        |value| value == "復旧キーを保存してください",
+    );
+    let key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(key.starts_with("SPRK1-"));
+    // SAFETY: this simulated WTS notification is sent only to the isolated
+    // Pad HWND; it does not lock the user's Windows session.
+    unsafe {
+        SendMessageW(
+            pad,
+            WM_WTSSESSION_CHANGE,
+            Some(WPARAM(WTS_SESSION_LOCK as usize)),
+            None,
+        );
+    }
+    assert_no_child_text_contains(pad, &[key.as_str()]);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    assert!(
+        store.load().is_ok(),
+        "session-lock cancellation cannot publish protected intent"
+    );
+    // SAFETY: the host belongs to the same isolated renderer and only opens
+    // this test Pad after its cancellation path reached a terminal state.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("show isolated Pad after simulated session lock");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, TITLE_ID);
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "session-lock recovery title"
+    );
+    assert!(store.load().is_ok());
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
 #[ignore = "real renderer process; requires an interactive Windows desktop"]
 fn enrollment_prompt_can_cancel_without_cutover() {
     let app_data = IsolatedAppData::new("pad-enroll-cancel");
@@ -663,12 +888,13 @@ fn enrollment_prompt_can_cancel_without_cutover() {
     }
     assert_eq!(
         text_of(control(pad, ENROLL_STATUS_ID)),
-        "パスワードを失うと復元できません"
+        "保護時に復旧キーを一度表示します"
     );
     set_text(pad, ENROLL_PASSWORD_ID, "discard this secret");
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, "discard this secret");
     click(pad, ENROLL_CANCEL_ID);
     wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, TITLE_ID);
     assert_eq!(
         text_of(control(pad, TITLE_ID)),
         "enrollment cancellation sentinel"
