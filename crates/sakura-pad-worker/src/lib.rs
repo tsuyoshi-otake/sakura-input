@@ -2,9 +2,12 @@
 //!
 //! The experimental stdio worker exposes a bounded authenticated envelope
 //! scoped to one vault or one memo. It does not yet own production storage,
-//! migration, unlocked sessions or renderer integration.
+//! migration, a production unlocked-session owner or renderer integration.
 
 pub mod envelope;
 pub mod protocol;
+pub mod session_protocol;
 
-pub use envelope::{open, seal, EnvelopeError, Scope, MAX_PLAINTEXT_BYTES};
+pub use envelope::{
+    open, seal, unlock, EnvelopeError, Scope, UnlockedEnvelope, MAX_PLAINTEXT_BYTES,
+};

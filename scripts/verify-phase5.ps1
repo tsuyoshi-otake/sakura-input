@@ -194,6 +194,7 @@ function Test-ReleaseBundle {
         (Join-Path $bundleRoot 'payload\sakura_tsf.dll'),
         (Join-Path $bundleRoot 'payload\sakura_engine.exe'),
         (Join-Path $bundleRoot 'payload\sakura_renderer.exe'),
+        (Join-Path $bundleRoot 'payload\sakura_pad_session.exe'),
         (Join-Path $bundleRoot 'payload\sakura_regtool.exe'),
         (Join-Path $bundleRoot 'payload\sakura_logon.exe'),
         (Join-Path $bundleRoot 'payload\sakura_settings.exe'),
@@ -253,7 +254,7 @@ function Test-ReleaseBundle {
                 $packageReport.dictionary_provenance_sha256 -cne (Get-Sha256 $dictionaryReportPath)) {
                 throw 'dictionary provenance report is invalid or not linked from the installer build report'
             }
-            $expectedPayloadCount = if ($dictionarySchema -eq 2) { 16 } else { 14 }
+            $expectedPayloadCount = if ($dictionarySchema -eq 2) { 17 } else { 15 }
             if ($packageReport.schema_version -ne 1 -or $packageReport.version -cne '1.0.0' -or
                 $packageReport.compiler.warnings -ne 0 -or @($packageReport.payloads).Count -ne $expectedPayloadCount -or
                 [string]::IsNullOrWhiteSpace([string]$packageReport.build_id)) {
@@ -322,7 +323,7 @@ function Test-ReleaseBundle {
             }
 
             $binaryNames = @(
-                'sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe',
+                'sakura_tsf.dll', 'sakura_engine.exe', 'sakura_renderer.exe', 'sakura_pad_session.exe',
                 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe',
                 'sakura_settings_payload.exe'
             )

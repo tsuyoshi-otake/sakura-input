@@ -450,6 +450,7 @@ fn input_tree_lists_only_real_sakura_topics_through_association() {
             "推測変換",
             "連想変換",
             "アプリ別の設定",
+            "Sakura Pad",
         ]
     );
     assert!(

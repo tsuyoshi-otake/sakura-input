@@ -13,7 +13,12 @@ publish = false
 name = "sakura_pad_worker"
 path = "src/main.rs"
 
+[[bin]]
+name = "sakura_pad_session"
+path = "src/session_main.rs"
+
 [dependencies]
+sakura-pad-session-proto.workspace = true
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
 zeroize = "=1.8.2"

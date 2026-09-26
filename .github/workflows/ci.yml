@@ -535,6 +535,19 @@ jobs:
             throw 'a test process survived its invocation'
           }
 
+      - name: Test real Pad password worker across process restart
+        shell: pwsh
+        run: |
+          cargo build --locked -p sakura-pad-worker --bin sakura_pad_session
+          if ($LASTEXITCODE -ne 0) { throw 'Pad session worker build failed' }
+          $env:SAKURA_PAD_SESSION_TEST_EXE = (Resolve-Path 'target/x86_64-pc-windows-msvc/debug/sakura_pad_session.exe').Path
+          try {
+            ./ci/run-test-quiet.ps1 -Name 'Pad real worker enrollment and save' -Command { cargo test --locked -p sakura-renderer --lib pad_protection::process_tests::real_worker_enroll_reopen_save_and_relock -- --ignored --exact --test-threads=1 }
+          } finally {
+            ./ci/check-process-clean.ps1 -RepositoryRoot $env:GITHUB_WORKSPACE
+            if ($LASTEXITCODE -ne 0) { throw 'a Pad test process survived its invocation' }
+          }
+
       # Keep --nocapture so a failure names the exact host-supported kernel
       # that disagreed with the scalar reference. Successful output remains
       # one PASS line like every other test gate. The filter is the module

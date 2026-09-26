@@ -557,6 +557,13 @@ name = "sakura-oracles"
 version = "2.0.7"
 
 [[package]]
+name = "sakura-pad-session-proto"
+version = "2.0.7"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "sakura-pad-worker"
 version = "2.0.7"
 dependencies = [
@@ -565,6 +572,7 @@ dependencies = [
  "argon2",
  "ghash",
  "polyval",
+ "sakura-pad-session-proto",
  "windows",
  "zeroize",
 ]
@@ -600,9 +608,11 @@ name = "sakura-renderer"
 version = "2.0.7"
 dependencies = [
  "sakura-ipc",
+ "sakura-pad-session-proto",
  "sakura-proto",
  "windows",
  "windows-core",
+ "zeroize",
 ]
 
 [[package]]

@@ -201,6 +201,7 @@ jobs:
             'target/x86_64-pc-windows-msvc/release/sakura_engine.exe',
             'target/x86_64-pc-windows-msvc/release/sakura_ai_worker.exe',
             'target/x86_64-pc-windows-msvc/release/sakura_renderer.exe',
+            'target/x86_64-pc-windows-msvc/release/sakura_pad_session.exe',
             'target/x86_64-pc-windows-msvc/release/sakura_regtool.exe',
             'target/x86_64-pc-windows-msvc/release/sakura_logon.exe',
             'target/x86_64-pc-windows-msvc/release/sakura_settings.exe',
@@ -284,6 +285,7 @@ jobs:
             target/x86_64-pc-windows-msvc/release/sakura_engine.exe
             target/x86_64-pc-windows-msvc/release/sakura_ai_worker.exe
             target/x86_64-pc-windows-msvc/release/sakura_renderer.exe
+            target/x86_64-pc-windows-msvc/release/sakura_pad_session.exe
             target/x86_64-pc-windows-msvc/release/sakura_regtool.exe
             target/x86_64-pc-windows-msvc/release/sakura_logon.exe
             target/x86_64-pc-windows-msvc/release/sakura_settings.exe
@@ -501,6 +503,7 @@ jobs:
             "$root/sakura_engine.exe",
             "$root/sakura_ai_worker.exe",
             "$root/sakura_renderer.exe",
+            "$root/sakura_pad_session.exe",
             "$root/sakura_regtool.exe",
             "$root/sakura_logon.exe",
             "$root/sakura_settings.exe",
@@ -571,7 +574,7 @@ jobs:
           [IO.File]::Copy('THIRD_PARTY_NOTICES.md', 'release-bundle/provenance/THIRD_PARTY_NOTICES.md', $true)
           [IO.File]::Copy('THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt', 'release-bundle/provenance/THIRD_PARTY_LICENSES/japanese-wordnet-1.1-NICT.txt', $true)
           $release = 'target/x86_64-pc-windows-msvc/release'
-          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_ai_worker.exe', 'sakura_renderer.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe', 'sakura_neural_worker.exe')) {
+          foreach ($name in @('sakura_tsf.dll', 'sakura_engine.exe', 'sakura_ai_worker.exe', 'sakura_renderer.exe', 'sakura_pad_session.exe', 'sakura_regtool.exe', 'sakura_logon.exe', 'sakura_settings.exe', 'sakura_settings_payload.exe', 'sakura_neural_worker.exe')) {
             [IO.File]::Copy((Join-Path $release $name), (Join-Path 'release-bundle/payload' $name), $true)
           }
           [IO.Directory]::CreateDirectory('release-bundle/payload/neural/sakura-rerank-tiny-v1') | Out-Null

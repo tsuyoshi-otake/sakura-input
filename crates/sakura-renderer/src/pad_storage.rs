@@ -14,6 +14,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
@@ -59,6 +60,9 @@ const LEGACY_HEADER_LEN: usize = 8 + 2 + 2 + 8 + 4 + 4;
 const LEGACY_MEMO_ID: u64 = 1;
 
 const MAX_PROTECTED_BYTES: u64 = 24 * 1024 * 1024;
+const PROTECTED_MAGIC: [u8; 8] = *b"SKRLPAD3";
+const PROTECTED_VERSION: u16 = 3;
+const VAULT_ID_LEN: usize = 16;
 
 /// A newer `SKRLPADn` magic in DPAPI plaintext identifies a future document
 /// format and must not be treated as corruption during recovery. This only
@@ -499,6 +503,10 @@ pub enum StorageError {
     MissingLocalAppData,
     CryptoBufferTooLarge,
     TempConflict,
+    LegacyChanged,
+    ProtectedCutover,
+    ProtectedVerification,
+    StaleProtectedDocument,
 }
 
 impl std::fmt::Display for StorageError {
@@ -516,6 +524,16 @@ impl std::fmt::Display for StorageError {
             Self::TempConflict => {
                 f.write_str("a newer or unreadable pad recovery file is already present")
             }
+            Self::LegacyChanged => {
+                f.write_str("pad changed while protected migration was prepared")
+            }
+            Self::ProtectedCutover => {
+                f.write_str("pad protected cutover requires protected recovery")
+            }
+            Self::ProtectedVerification => {
+                f.write_str("protected pad copy failed open verification")
+            }
+            Self::StaleProtectedDocument => f.write_str("protected pad changed before this save"),
         }
     }
 }
@@ -543,6 +561,12 @@ pub struct PadStore {
     path: PathBuf,
     backup: PathBuf,
     temp: PathBuf,
+    lock: PathBuf,
+    protected_path: PathBuf,
+    protected_backup: PathBuf,
+    protected_temp: PathBuf,
+    intent: PathBuf,
+    marker: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -563,6 +587,12 @@ impl PadStore {
             path: directory.join("memo.bin"),
             backup: directory.join("memo.bin.bak"),
             temp: directory.join("memo.bin.tmp"),
+            lock: directory.join("memo.bin.lock"),
+            protected_path: directory.join("memo.v3.bin"),
+            protected_backup: directory.join("memo.v3.bin.bak"),
+            protected_temp: directory.join("memo.v3.bin.tmp"),
+            intent: directory.join("memo.v3.committing"),
+            marker: directory.join("memo.v3.marker"),
         }
     }
 
@@ -572,6 +602,12 @@ impl PadStore {
     }
 
     pub fn load(&self) -> Result<LoadOutcome, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        self.load_unlocked()
+    }
+
+    fn load_unlocked(&self) -> Result<LoadOutcome, StorageError> {
+        self.require_legacy_mode()?;
         match read_document(&self.path) {
             Ok(document) => {
                 return Ok(LoadOutcome {
@@ -605,7 +641,7 @@ impl PadStore {
             Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
             Err(_) => {}
         }
-        if self.path.exists() || self.backup.exists() || self.temp.exists() {
+        if self.path.try_exists()? || self.backup.try_exists()? || self.temp.try_exists()? {
             // Existing but unreadable data is a partial failure, not an empty
             // document.  The UI may still start empty, but the worker's caller
             // can display the error/recovery state and must not save over it.
@@ -618,6 +654,8 @@ impl PadStore {
     }
 
     pub fn write(&self, document: &PadDocument) -> Result<WriteOutcome, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        self.require_legacy_mode()?;
         let mut encoded = document.encode()?;
         let protected_result = protect(&encoded);
         encoded.fill(0);
@@ -627,7 +665,7 @@ impl PadStore {
         }
         prepare_temp(&self.temp, document.generation)?;
         write_flushed_temp(&self.temp, &protected)?;
-        if !self.path.exists() {
+        if !self.path.try_exists()? {
             // First write: the target does not exist, so MoveFileExW is the
             // only operation and it gets WRITE_THROUGH for the directory
             // entry.  If a concurrent writer wins, leave the temp file for
@@ -642,6 +680,414 @@ impl PadStore {
             Ok(WriteOutcome::Replaced)
         }
     }
+
+    fn exclusive_writer(&self) -> Result<File, StorageError> {
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        // A persistent lock pathname is harmless. The exclusive Windows handle
+        // is released on process death, unlike a create_new lockfile.
+        Ok(OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(&self.lock)?)
+    }
+
+    fn require_legacy_mode(&self) -> Result<(), StorageError> {
+        // Presence is authoritative, including a damaged marker. A tombstone
+        // also blocks fallback if both independent markers are lost.
+        if self.intent.try_exists()? || self.marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        for path in [&self.path, &self.backup, &self.temp] {
+            if path.try_exists()? {
+                if let Err(error @ StorageError::UnsupportedVersion(_)) = read_document(path) {
+                    return Err(error);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn require_active_protected(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        // Both independently protected signals are required. Their presence
+        // blocks legacy readers even if either signal is damaged.
+        if !self.intent.try_exists()? || !self.marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let intent_id = read_protected_signal(&self.intent, b"committing")?;
+        let marker_id = read_protected_signal(&self.marker, b"committed")?;
+        if intent_id != marker_id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(intent_id)
+    }
+
+    pub fn protected_vault_id(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        let _lock = self.exclusive_writer()?;
+        self.require_active_protected()
+    }
+
+    /// Read only the durable cutover intent's identity. This is a recovery
+    /// hint, never authorization to display content: the caller must still
+    /// authenticate both protected copies before publishing a final marker.
+    pub fn pending_vault_id(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        read_protected_signal(&self.intent, b"committing")
+    }
+
+    /// Open authenticated v3 primary first, then its published backup. The
+    /// callback must return the vault ID authenticated by that envelope, not
+    /// an ID supplied separately by the caller. No legacy or unpublished temp
+    /// bytes are consulted in protected mode.
+    pub fn load_protected<F>(&self, mut open_v3: F) -> Result<LoadOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        self.load_protected_unlocked(&mut open_v3)
+    }
+
+    fn load_protected_unlocked<F>(&self, open_v3: &mut F) -> Result<LoadOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let vault_id = self.require_active_protected()?;
+        match open_v3(&self.protected_path) {
+            Ok((opened_id, document)) if opened_id == vault_id => Ok(LoadOutcome {
+                document,
+                recovered_from_backup: false,
+            }),
+            Ok(_) => Err(StorageError::ProtectedVerification),
+            Err(error @ StorageError::UnsupportedVersion(_)) => Err(error),
+            Err(_) => match open_v3(&self.protected_backup) {
+                Ok((opened_id, document)) if opened_id == vault_id => Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: true,
+                }),
+                Ok(_) => Err(StorageError::ProtectedVerification),
+                Err(error @ StorageError::UnsupportedVersion(_)) => Err(error),
+                Err(_) => Err(StorageError::ProtectedVerification),
+            },
+        }
+    }
+
+    /// Compare the authenticated published document with the caller's exact
+    /// expected value, verify the staged ciphertext opens as `next`, then
+    /// atomically publish it while retaining one protected recovery copy.
+    pub fn write_protected<F>(
+        &self,
+        expected: &PadDocument,
+        next: &PadDocument,
+        encrypted_v3: &[u8],
+        open_v3: F,
+    ) -> Result<WriteOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.write_protected_with_hook(expected, next, encrypted_v3, open_v3, |_| Ok(()))
+    }
+
+    fn write_protected_with_hook<F, H>(
+        &self,
+        expected: &PadDocument,
+        next: &PadDocument,
+        encrypted_v3: &[u8],
+        mut open_v3: F,
+        mut hook: H,
+    ) -> Result<WriteOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(ProtectedWritePoint) -> Result<(), StorageError>,
+    {
+        if next.generation <= expected.generation
+            || encrypted_v3.is_empty()
+            || encrypted_v3.len() as u64 > MAX_PROTECTED_BYTES
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let mut validated = next.encode()?;
+        validated.fill(0);
+        let _lock = self.exclusive_writer()?;
+        let vault_id = self.require_active_protected()?;
+        let loaded = self.load_protected_unlocked(&mut open_v3)?;
+        if loaded.recovered_from_backup {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if loaded.document != *expected {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        if self.protected_temp.try_exists()? {
+            return Err(StorageError::TempConflict);
+        }
+        write_flushed_temp(&self.protected_temp, encrypted_v3)?;
+        hook(ProtectedWritePoint::Staged)?;
+        let (opened_id, opened) =
+            open_v3(&self.protected_temp).map_err(|_| StorageError::ProtectedVerification)?;
+        if opened_id != vault_id || opened != *next {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(ProtectedWritePoint::Verified)?;
+        replace_update(
+            &self.protected_path,
+            &self.protected_temp,
+            &self.protected_backup,
+        )?;
+        hook(ProtectedWritePoint::Published)?;
+        Ok(WriteOutcome::Replaced)
+    }
+
+    /// Stage already-encrypted v3 bytes, open *both* durable copies through the
+    /// caller's future-format reader, and cut over only if the exact legacy
+    /// document and generation still match. The caller owns future-format
+    /// encryption and recovery; this store never decrypts the staged bytes.
+    /// An error after publishing `intent` is terminal for legacy load/write.
+    pub fn migrate_to_protected<F>(
+        &self,
+        expected_legacy: &PadDocument,
+        expected_generation: u64,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        open_v3: F,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.migrate_to_protected_with_hook(
+            expected_legacy,
+            expected_generation,
+            vault_id,
+            encrypted_v3,
+            open_v3,
+            |_| Ok(()),
+        )
+    }
+
+    fn migrate_to_protected_with_hook<F, H>(
+        &self,
+        expected_legacy: &PadDocument,
+        expected_generation: u64,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        mut open_v3: F,
+        mut hook: H,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(MigrationPoint) -> Result<(), StorageError>,
+    {
+        if vault_id == [0; VAULT_ID_LEN]
+            || expected_legacy.generation != expected_generation
+            || encrypted_v3.is_empty()
+            || encrypted_v3.len() as u64 > MAX_PROTECTED_BYTES
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let _lock = self.exclusive_writer()?;
+        self.require_legacy_mode()?;
+        self.require_expected_legacy(expected_legacy)?;
+        // An interrupted pre-intent attempt can reuse only byte-identical
+        // staged copies. Unknown protected evidence is never overwritten.
+        stage_protected_copy(&self.protected_temp, &self.protected_path, encrypted_v3)?;
+        hook(MigrationPoint::FirstProtectedCopy)?;
+        stage_protected_copy(&self.protected_temp, &self.protected_backup, encrypted_v3)?;
+        if self.protected_temp.try_exists()? {
+            return Err(StorageError::TempConflict);
+        }
+        hook(MigrationPoint::SecondProtectedCopy)?;
+        for path in [&self.protected_path, &self.protected_backup] {
+            let (opened_id, opened) =
+                open_v3(path).map_err(|_| StorageError::ProtectedVerification)?;
+            if opened_id != vault_id || opened != *expected_legacy {
+                return Err(StorageError::ProtectedVerification);
+            }
+        }
+        hook(MigrationPoint::CopiesVerified)?;
+        // The exclusive writer handle makes this the final legacy comparison.
+        // Before intent exists, any failure leaves legacy publication intact.
+        self.require_expected_legacy(expected_legacy)?;
+        remove_if_present(&signal_temp_path(&self.intent))?;
+        publish_protected_signal(&self.intent, b"committing", vault_id)?;
+        hook(MigrationPoint::IntentPublished)?;
+        // Retirement starts only after durable intent. Every subsequent error
+        // leaves new-build load/write closed to v1/v2, with v3 copies intact.
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        hook(MigrationPoint::LegacyRecoveryRetired)?;
+        let mut tombstone = Vec::from(PROTECTED_MAGIC);
+        tombstone.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        let protected_tombstone = protect(&tombstone)?;
+        let retire_temp = self.path.with_extension("bin.retire.tmp");
+        write_flushed_temp(&retire_temp, &protected_tombstone)?;
+        if self.path.try_exists()? {
+            replace_without_backup(&self.path, &retire_temp)?;
+        } else {
+            // A never-saved empty Pad has no legacy primary to replace.
+            // Intent is already durable, so first publication cannot expose
+            // a v2 document or leave an old backup behind.
+            move_first_write(&retire_temp, &self.path)?;
+        }
+        hook(MigrationPoint::LegacyTombstoned)?;
+        publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        hook(MigrationPoint::FinalMarkerPublished)?;
+        Ok(())
+    }
+
+    fn require_expected_legacy(&self, expected: &PadDocument) -> Result<(), StorageError> {
+        let primary_exists = self.path.try_exists()?;
+        let loaded = self.load_unlocked()?;
+        if loaded.recovered_from_backup
+            || loaded.document != *expected
+            || (!primary_exists && *expected != PadDocument::default())
+        {
+            return Err(StorageError::LegacyChanged);
+        }
+        Ok(())
+    }
+
+    /// Resume only an interrupted protected cutover. Recovery consults v3
+    /// copies exclusively; no legacy document can authorize the transition.
+    pub fn recover_protected_cutover<F>(&self, mut open_v3: F) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let vault_id = read_protected_signal(&self.intent, b"committing")?;
+        if self.marker.try_exists()?
+            && read_protected_signal(&self.marker, b"committed")? != vault_id
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let (primary_id, primary) =
+            open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        let (backup_id, backup) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if primary_id != vault_id || backup_id != vault_id || primary != backup {
+            return Err(StorageError::ProtectedVerification);
+        }
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        let mut tombstone = Vec::from(PROTECTED_MAGIC);
+        tombstone.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        let protected_tombstone = protect(&tombstone)?;
+        let retire_temp = self.path.with_extension("bin.retire.tmp");
+        // A previous replacement may already have completed. Do not create a
+        // legacy backup or touch the tombstone on that path.
+        let already_tombstoned = match read_document(&self.path) {
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION)) => true,
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            _ => false,
+        };
+        if !already_tombstoned {
+            remove_if_present(&retire_temp)?;
+            write_flushed_temp(&retire_temp, &protected_tombstone)?;
+            if self.path.try_exists()? {
+                replace_without_backup(&self.path, &retire_temp)?;
+            } else {
+                move_first_write(&retire_temp, &self.path)?;
+            }
+        }
+        if !self.marker.try_exists()? {
+            // A crash during final marker creation may leave only its flushed
+            // temp. Intent already commits this path to v3-only recovery.
+            remove_if_present(&signal_temp_path(&self.marker))?;
+            publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        }
+        Ok(primary)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MigrationPoint {
+    FirstProtectedCopy,
+    SecondProtectedCopy,
+    CopiesVerified,
+    IntentPublished,
+    LegacyRecoveryRetired,
+    LegacyTombstoned,
+    FinalMarkerPublished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProtectedWritePoint {
+    Staged,
+    Verified,
+    Published,
+}
+
+fn remove_if_present(path: &Path) -> Result<(), StorageError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn stage_protected_copy(temp: &Path, target: &Path, bytes: &[u8]) -> Result<(), StorageError> {
+    if target.try_exists()? {
+        if fs::metadata(target)?.len() != bytes.len() as u64 || fs::read(target)? != bytes {
+            return Err(StorageError::TempConflict);
+        }
+        return Ok(());
+    }
+    if temp.try_exists()? {
+        return Err(StorageError::TempConflict);
+    }
+    write_flushed_temp(temp, bytes)?;
+    move_first_write(temp, target)
+}
+
+fn publish_protected_signal(
+    path: &Path,
+    state: &[u8],
+    vault_id: [u8; VAULT_ID_LEN],
+) -> Result<(), StorageError> {
+    if vault_id == [0; VAULT_ID_LEN] {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut plaintext = Vec::from(PROTECTED_MAGIC);
+    plaintext.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(state);
+    plaintext.extend_from_slice(&vault_id);
+    let protected = protect(&plaintext)?;
+    let temp = signal_temp_path(path);
+    write_flushed_temp(&temp, &protected)?;
+    move_first_write(&temp, path)
+}
+
+fn read_protected_signal(path: &Path, state: &[u8]) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+    let plaintext = read_decrypted(path).map_err(|_| StorageError::ProtectedCutover)?;
+    let prefix_len = PROTECTED_MAGIC.len() + 2 + state.len();
+    if plaintext.len() != prefix_len + VAULT_ID_LEN
+        || plaintext[..PROTECTED_MAGIC.len()] != PROTECTED_MAGIC
+        || plaintext[PROTECTED_MAGIC.len()..PROTECTED_MAGIC.len() + 2]
+            != PROTECTED_VERSION.to_le_bytes()
+        || &plaintext[PROTECTED_MAGIC.len() + 2..prefix_len] != state
+    {
+        return Err(StorageError::ProtectedCutover);
+    }
+    let vault_id: [u8; VAULT_ID_LEN] = plaintext[prefix_len..]
+        .try_into()
+        .map_err(|_| StorageError::ProtectedCutover)?;
+    if vault_id == [0; VAULT_ID_LEN] {
+        return Err(StorageError::ProtectedCutover);
+    }
+    Ok(vault_id)
+}
+
+fn signal_temp_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(".tmp");
+    PathBuf::from(name)
 }
 
 fn write_flushed_temp(path: &Path, bytes: &[u8]) -> Result<(), StorageError> {
@@ -698,6 +1144,24 @@ fn replace_update(target: &Path, temp: &Path, backup: &Path) -> Result<(), Stora
             windows::core::PCWSTR(target_wide.as_ptr()),
             windows::core::PCWSTR(temp_wide.as_ptr()),
             windows::core::PCWSTR(backup_wide.as_ptr()),
+            REPLACE_FILE_FLAGS(0),
+            None,
+            None,
+        )?
+    }
+    Ok(())
+}
+
+fn replace_without_backup(target: &Path, temp: &Path) -> Result<(), StorageError> {
+    let target_wide = path_wide(target);
+    let temp_wide = path_wide(temp);
+    // SAFETY: both NUL-terminated buffers live for the synchronous call.
+    // Null backup deliberately prevents publishing readable legacy bytes.
+    unsafe {
+        ReplaceFileW(
+            windows::core::PCWSTR(target_wide.as_ptr()),
+            windows::core::PCWSTR(temp_wide.as_ptr()),
+            windows::core::PCWSTR::null(),
             REPLACE_FILE_FLAGS(0),
             None,
             None,
@@ -1021,8 +1485,10 @@ fn worker_loop(
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Barrier;
 
     static NEXT: AtomicU64 = AtomicU64::new(1);
+    const TEST_VAULT_ID: [u8; VAULT_ID_LEN] = [7; VAULT_ID_LEN];
 
     fn temp_dir() -> PathBuf {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
@@ -1390,5 +1856,602 @@ mod tests {
         source.entry(next, 1_700_000_006).unwrap();
         assert_eq!(source.next_id(), 3);
         assert_eq!(source.live().count(), 1);
+    }
+
+    fn open_staged(
+        expected: &PadDocument,
+        path: &Path,
+    ) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError> {
+        if fs::read(path)? != b"future encrypted payload" {
+            return Err(StorageError::ProtectedVerification);
+        }
+        Ok((TEST_VAULT_ID, expected.clone()))
+    }
+
+    #[test]
+    fn a_never_saved_empty_pad_can_cut_over_without_publishing_v2() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let empty = PadDocument::default();
+        assert_eq!(store.load().unwrap().document, empty);
+        assert!(!store.path.exists());
+        store
+            .migrate_to_protected(
+                &empty,
+                empty.generation,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&empty, path),
+            )
+            .unwrap();
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert_eq!(read_decrypted(&store.path).unwrap()[..8], PROTECTED_MAGIC);
+        assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+        assert_eq!(
+            store
+                .load_protected(|path| open_staged(&empty, path))
+                .unwrap()
+                .document,
+            empty
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_migration_verifies_both_copies_and_retires_legacy_recovery() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("legacy", "private", 5);
+        store.write(&old).unwrap();
+        store.write(&one("legacy", "private", 6)).unwrap();
+        let expected = one("legacy", "private", 6);
+        fs::write(&store.temp, protect(&old.encode().unwrap()).unwrap()).unwrap();
+        store
+            .migrate_to_protected(
+                &expected,
+                6,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&expected, path),
+            )
+            .unwrap();
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert!(store.intent.exists());
+        assert!(store.marker.exists());
+        assert_eq!(read_decrypted(&store.path).unwrap()[..8], PROTECTED_MAGIC);
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            store.write(&expected),
+            Err(StorageError::ProtectedCutover)
+        ));
+        fs::write(&store.marker, b"corrupt marker").unwrap();
+        fs::remove_file(&store.protected_path).unwrap();
+        fs::remove_file(&store.protected_backup).unwrap();
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        fs::remove_file(&store.intent).unwrap();
+        fs::remove_file(&store.marker).unwrap();
+        assert!(matches!(
+            store.load(),
+            Err(StorageError::UnsupportedVersion(3))
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_migration_refuses_changed_legacy_and_backup_recovery() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = one("original", "body", 1);
+        store.write(&expected).unwrap();
+        let next = one("edit", "body", 2);
+        assert!(matches!(
+            store.migrate_to_protected(
+                &expected,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| {
+                    let _ = fs::read(path)?;
+                    fs::write(&store.path, protect(&next.encode().unwrap()).unwrap())?;
+                    Ok((TEST_VAULT_ID, expected.clone()))
+                }
+            ),
+            Err(StorageError::LegacyChanged)
+        ));
+        assert_eq!(store.load().unwrap().document, next);
+        assert!(!store.intent.exists());
+        assert!(!store.marker.exists());
+        let _ = fs::remove_dir_all(&directory);
+
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        store.write(&expected).unwrap();
+        store.write(&next).unwrap();
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        assert!(matches!(
+            store.migrate_to_protected(
+                &expected,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |_| { Ok((TEST_VAULT_ID, expected.clone())) }
+            ),
+            Err(StorageError::LegacyChanged)
+        ));
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn failed_open_of_second_protected_copy_preserves_legacy_publication() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = one("legacy", "body", 1);
+        store.write(&expected).unwrap();
+        let mut opened = Vec::new();
+        let result = store.migrate_to_protected(
+            &expected,
+            1,
+            TEST_VAULT_ID,
+            b"future encrypted payload",
+            |path| {
+                opened.push(path.to_path_buf());
+                if path == store.protected_backup.as_path() {
+                    Err(StorageError::ProtectedVerification)
+                } else {
+                    open_staged(&expected, path)
+                }
+            },
+        );
+        assert!(matches!(result, Err(StorageError::ProtectedVerification)));
+        assert_eq!(
+            opened,
+            vec![store.protected_path.clone(), store.protected_backup.clone()]
+        );
+        assert_eq!(store.load().unwrap().document, expected);
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn interruption_boundaries_keep_legacy_before_intent_and_recover_only_v3_after() {
+        let points = [
+            MigrationPoint::FirstProtectedCopy,
+            MigrationPoint::SecondProtectedCopy,
+            MigrationPoint::CopiesVerified,
+            MigrationPoint::IntentPublished,
+            MigrationPoint::LegacyRecoveryRetired,
+            MigrationPoint::LegacyTombstoned,
+            MigrationPoint::FinalMarkerPublished,
+        ];
+        for point in points {
+            let directory = temp_dir();
+            let store = PadStore::at(&directory);
+            let previous = one("previous", "backup", 1);
+            let expected = one("current", "body", 2);
+            store.write(&previous).unwrap();
+            store.write(&expected).unwrap();
+            let result = store.migrate_to_protected_with_hook(
+                &expected,
+                2,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&expected, path),
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected interruption")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            let before_intent = matches!(
+                point,
+                MigrationPoint::FirstProtectedCopy
+                    | MigrationPoint::SecondProtectedCopy
+                    | MigrationPoint::CopiesVerified
+            );
+            if before_intent {
+                assert!(matches!(
+                    store.pending_vault_id(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert_eq!(store.load().unwrap().document, expected, "{point:?}");
+                assert!(store.backup.exists(), "{point:?}");
+                store
+                    .migrate_to_protected(
+                        &expected,
+                        2,
+                        TEST_VAULT_ID,
+                        b"future encrypted payload",
+                        |path| open_staged(&expected, path),
+                    )
+                    .unwrap();
+                assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+            } else {
+                assert_eq!(store.pending_vault_id().unwrap(), TEST_VAULT_ID);
+                assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+                assert!(matches!(
+                    store.write(&expected),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert!(matches!(
+                    store.recover_protected_cutover(|path| {
+                        let (_, document) = open_staged(&expected, path)?;
+                        Ok(([9; VAULT_ID_LEN], document))
+                    }),
+                    Err(StorageError::ProtectedVerification)
+                ));
+                assert_eq!(
+                    store
+                        .recover_protected_cutover(|path| open_staged(&expected, path))
+                        .unwrap(),
+                    expected,
+                    "{point:?}"
+                );
+                assert!(!store.backup.exists(), "{point:?}");
+                assert!(!store.temp.exists(), "{point:?}");
+                assert!(store.marker.exists(), "{point:?}");
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn load_and_write_cannot_observe_legacy_across_migration_cutover() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = one("before", "private", 1);
+        store.write(&expected).unwrap();
+        let at_verification = Arc::new(Barrier::new(2));
+        let finish_verification = Arc::new(Barrier::new(2));
+        let thread_store = store.clone();
+        let thread_expected = expected.clone();
+        let arrived = Arc::clone(&at_verification);
+        let release = Arc::clone(&finish_verification);
+        let migration = thread::spawn(move || {
+            thread_store.migrate_to_protected_with_hook(
+                &thread_expected,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&thread_expected, path),
+                |point| {
+                    if point == MigrationPoint::CopiesVerified {
+                        arrived.wait();
+                        release.wait();
+                    }
+                    Ok(())
+                },
+            )
+        });
+        at_verification.wait();
+        // While migration owns the writer handle, neither operation may
+        // return a legacy document or publish a legacy save.
+        assert!(store.load().is_err());
+        assert!(store.write(&expected).is_err());
+        finish_verification.wait();
+        migration.join().unwrap().unwrap();
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            store.write(&expected),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_signal_temp_paths_do_not_overlap() {
+        let store = PadStore::at(temp_dir());
+        assert_ne!(
+            signal_temp_path(&store.intent),
+            signal_temp_path(&store.marker)
+        );
+        assert_ne!(signal_temp_path(&store.intent), store.protected_temp);
+    }
+
+    fn open_protected_test(
+        old: &PadDocument,
+        next: &PadDocument,
+        path: &Path,
+    ) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError> {
+        let encrypted = fs::read(path)?;
+        if encrypted == b"future encrypted payload" {
+            Ok((TEST_VAULT_ID, old.clone()))
+        } else if encrypted == b"new encrypted payload" {
+            Ok((TEST_VAULT_ID, next.clone()))
+        } else {
+            Err(StorageError::ProtectedVerification)
+        }
+    }
+
+    fn migrated_store() -> (PathBuf, PadStore, PadDocument) {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("protected", "first", 1);
+        store.write(&old).unwrap();
+        store
+            .migrate_to_protected(
+                &old,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&old, path),
+            )
+            .unwrap();
+        (directory, store, old)
+    }
+
+    #[test]
+    fn protected_vault_identity_rejects_swapped_envelopes_and_old_signals() {
+        let (directory, store, old) = migrated_store();
+        let next = one("next", "body", 2);
+        assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+        // A valid envelope from another vault is not backup-recoverable.
+        assert!(matches!(
+            store.load_protected(|path| {
+                let (_, document) = open_protected_test(&old, &next, path)?;
+                Ok(([9; VAULT_ID_LEN], document))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert!(matches!(
+            store.write_protected(&old, &next, b"new encrypted payload", |path| {
+                let (_, document) = open_protected_test(&old, &next, path)?;
+                Ok(([9; VAULT_ID_LEN], document))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        // The interim marker shape lacked an identity. Presence still blocks
+        // legacy load, but it can no longer authorize a protected open.
+        let mut old_signal = Vec::from(PROTECTED_MAGIC);
+        old_signal.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        old_signal.extend_from_slice(b"committed");
+        fs::write(&store.marker, protect(&old_signal).unwrap()).unwrap();
+        assert!(matches!(
+            store.protected_vault_id(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            store.load_protected(|path| open_protected_test(&old, &next, path)),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let mut other_signal = old_signal;
+        other_signal.extend_from_slice(&[9; VAULT_ID_LEN]);
+        fs::write(&store.marker, protect(&other_signal).unwrap()).unwrap();
+        assert!(matches!(
+            store.protected_vault_id(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(
+            store.recover_protected_cutover(|path| open_staged(&old, path)),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn migration_requires_nonzero_and_matching_authenticated_vault_id() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("legacy", "body", 1);
+        store.write(&old).unwrap();
+        assert!(matches!(
+            store.migrate_to_protected(
+                &old,
+                1,
+                [0; VAULT_ID_LEN],
+                b"future encrypted payload",
+                |path| { open_staged(&old, path) }
+            ),
+            Err(StorageError::InvalidFormat)
+        ));
+        assert!(matches!(
+            store.migrate_to_protected(
+                &old,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| {
+                    let (_, document) = open_staged(&old, path)?;
+                    Ok(([9; VAULT_ID_LEN], document))
+                }
+            ),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(store.load().unwrap().document, old);
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_load_uses_primary_then_authenticated_backup_only() {
+        let (directory, store, old) = migrated_store();
+        let next = one("later", "second", 2);
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            LoadOutcome {
+                document: old.clone(),
+                recovered_from_backup: false,
+            }
+        );
+        fs::write(&store.protected_path, b"corrupt primary").unwrap();
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            LoadOutcome {
+                document: old.clone(),
+                recovered_from_backup: true,
+            }
+        );
+        fs::write(&store.protected_backup, b"corrupt backup").unwrap();
+        fs::write(&store.protected_temp, b"future encrypted payload").unwrap();
+        assert!(matches!(
+            store.load_protected(|path| open_protected_test(&old, &next, path)),
+            Err(StorageError::ProtectedVerification)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_write_rejects_stale_and_recovery_then_keeps_protected_backup() {
+        let (directory, store, old) = migrated_store();
+        let next = one("later", "second", 2);
+        let stale = one("stale", "first", 1);
+        assert!(matches!(
+            store.write_protected(&stale, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            }),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert!(!store.protected_temp.exists());
+        assert!(matches!(
+            store.write_protected(&old, &next, b"new encrypted payload", |path| {
+                let (id, document) = open_protected_test(&old, &next, path)?;
+                Ok((
+                    if path == store.protected_temp.as_path() {
+                        [9; VAULT_ID_LEN]
+                    } else {
+                        id
+                    },
+                    document,
+                ))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            old
+        );
+        fs::remove_file(&store.protected_temp).unwrap();
+        assert_eq!(
+            store
+                .write_protected(&old, &next, b"new encrypted payload", |path| {
+                    open_protected_test(&old, &next, path)
+                })
+                .unwrap(),
+            WriteOutcome::Replaced
+        );
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"future encrypted payload"
+        );
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        fs::write(&store.protected_path, b"corrupt primary").unwrap();
+        assert!(matches!(
+            store.write_protected(&old, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_write_faults_have_explicit_before_and_after_publication_states() {
+        for point in [
+            ProtectedWritePoint::Staged,
+            ProtectedWritePoint::Verified,
+            ProtectedWritePoint::Published,
+        ] {
+            let (directory, store, old) = migrated_store();
+            let next = one("later", "second", 2);
+            let result = store.write_protected_with_hook(
+                &old,
+                &next,
+                b"new encrypted payload",
+                |path| open_protected_test(&old, &next, path),
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected interruption")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            let loaded = store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap();
+            if point == ProtectedWritePoint::Published {
+                assert_eq!(loaded.document, next);
+                assert_eq!(
+                    fs::read(&store.protected_backup).unwrap(),
+                    b"future encrypted payload"
+                );
+            } else {
+                assert_eq!(loaded.document, old);
+                assert_eq!(
+                    fs::read(&store.protected_temp).unwrap(),
+                    b"new encrypted payload"
+                );
+            }
+            assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn protected_write_serializes_reads_and_other_writes() {
+        let (directory, store, old) = migrated_store();
+        let next = one("later", "second", 2);
+        let at_verified = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let thread_store = store.clone();
+        let thread_old = old.clone();
+        let thread_next = next.clone();
+        let arrived = Arc::clone(&at_verified);
+        let finish = Arc::clone(&release);
+        let writer = thread::spawn(move || {
+            thread_store.write_protected_with_hook(
+                &thread_old,
+                &thread_next,
+                b"new encrypted payload",
+                |path| open_protected_test(&thread_old, &thread_next, path),
+                |point| {
+                    if point == ProtectedWritePoint::Verified {
+                        arrived.wait();
+                        finish.wait();
+                    }
+                    Ok(())
+                },
+            )
+        });
+        at_verified.wait();
+        assert!(store
+            .load_protected(|path| open_protected_test(&old, &next, path))
+            .is_err());
+        assert!(store
+            .write_protected(&old, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            })
+            .is_err());
+        release.wait();
+        writer.join().unwrap().unwrap();
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        let _ = fs::remove_dir_all(directory);
     }
 }

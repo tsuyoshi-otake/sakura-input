@@ -164,6 +164,7 @@ Source: "..\target\x86_64-pc-windows-msvc\release\sakura_tsf.dll"; DestDir: "{#A
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_engine.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_ai_worker.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_renderer.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_pad_session.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_regtool.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_logon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings.exe"; DestDir: "{app}"; Flags: ignoreversion

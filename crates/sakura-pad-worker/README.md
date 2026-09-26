@@ -1,9 +1,15 @@
-# Sakura Pad crypto worker — experimental foundation (#269)
+# Sakura Pad crypto and session worker (#269)
 
-This executable is not installed and the renderer does not call it. Existing
-Pad files still use the v2 current-user DPAPI format. This crate alone does
-not supply Pad passwords, unlocked sessions, recovery, or memo protection.
-The [product plan](../../docs/plans/sakura-pad-protection.md) owns those flows.
+The renderer now calls the sibling `sakura_pad_session` executable for
+whole-Pad password protection. Existing Pad files remain in the v2
+current-user DPAPI format until the user explicitly enables protection; that
+transaction publishes a protected v3 store. The installer inventory includes
+the session executable, but no user installation or real-data migration has
+been performed by this work. The older one-request `sakura_pad_worker`
+executable remains an isolated prototype and is not installed. Recovery-key
+and per-memo primitives in this crate are not connected to the Pad UI yet.
+The [product plan](../../docs/plans/sakura-pad-protection.md) owns the
+remaining flows.
 
 ## Current contract
 
@@ -15,7 +21,8 @@ environment. Its fixed watchdog exits after 30 seconds, including time spent
 waiting for input; expiry yields no successful response. The owning caller
 must concurrently drain stdout, enforce its own deadline, cancel/reap the
 exact child, and invalidate the request generation before accepting a result.
-This is a protocol prototype, not the future unlocked-key session service.
+This one-request path is a protocol prototype; the persistent session below
+owns the unlocked keys for the renderer's whole-Pad password path.
 
 `protocol.rs` owns framing/limits and content-free terminal statuses. Integers
 are little-endian. Request: `SKRPWR01`, u64 nonzero request ID, u8 operation
@@ -29,11 +36,21 @@ There are no automatic retries. The ID is correlation, not authorization.
 
 `envelope.rs` owns the experimental encrypted envelope. `seal` and `open`
 authenticate a nonzero 16-byte vault ID and an optional nonzero memo ID.
+`unlock` authenticates once and returns zeroizing plaintext with an opaque
+`UnlockedEnvelope`. Its `reseal` method supports repeated changed saves without
+reentering the password or repeating Argon2id. The session retains a zeroizing
+data key and password-derived wrapping key, plus the authenticated header;
+it does not retain the password or expose raw keys. Dropping the session clears
+its owned keys. The v1 envelope is used by the persistent session below.
 The envelope has an 89-byte header, a 48-byte wrapped random data key, and
 ciphertext with a 16-byte authentication tag. The header binds format/cipher,
 scope, exact KDF profile, salt, both nonces and plaintext length. Distinct AAD
 purposes separate key wrapping from content encryption. There is no DPAPI or
 weak-key alternative path. This envelope is not the future Pad document format.
+Each `reseal` generates independent CNG wrap and payload nonces and rewraps the
+same data key because the v1 wrapping AAD authenticates the full header,
+including the payload nonce and length. The scope, KDF profile, and salt stay
+bound to the original authenticated envelope.
 
 The password KDF is Argon2id v1.3, 64 MiB / 3 passes / 1 lane. Unknown profiles
 and oversized inputs are rejected before KDF allocation. AES-256-GCM uses a
@@ -54,12 +71,60 @@ so enabling its feature does not establish whole-cipher-state erasure. Stack,
 register, allocator, pipe, OS and library copies are not claimed erased.
 The one-request child lifetime bounds retention in this preparatory worker.
 
-Before shipping: define the long-lived unlocked-key owner; independent
-per-memo key access and recovery; authenticated policy and document schema;
-atomic v1/v2 migration including backup/temp handling and fault injection;
-renderer locking/masking/IME-input-scope behavior; trusted worker launch,
-save/cancel epochs, idle/sleep/session-lock behavior, clipboard policy, and
-installer inventory. YubiKey PRF and TOTP are not implemented here.
+## Persistent session
+
+`sakura_pad_session` is a separate stdio binary launched by the renderer. It accepts
+length-prefixed frames defined by the wire-only `sakura-pad-session-proto` crate,
+authenticates an encrypted envelope once with `Unlock`, or enrolls a new one
+with `Create`, then uses the opaque `UnlockedEnvelope` to `Reseal` changed plaintext without
+another password. `Lock` drops the active keys and `Shutdown` drops them and
+exits after a success response. Clean stdin EOF also ends the process.
+The renderer owns the process lifetime, requests and save epochs, while
+`PadStore` owns durable migration and protected publication.
+
+The request body is `SKRPSS01`, nonzero u64 request ID, nonzero u64 generation,
+u8 operation (1 Unlock, 2 Reseal, 3 Lock, 4 Shutdown, 5 Verify, 6 Create,
+7 CreateRecoverable, 8 UnlockPasswordV2, 9 UnlockRecoveryV2), 16-byte vault ID,
+u64 memo ID, u16 password length, u32 payload length, password, payload. A u32 body
+length precedes it. Unlock and Create supply vault/memo/password; Unlock's
+payload is an existing encrypted envelope, while Create's payload is initial
+plaintext and its response is an encrypted envelope. Create seals and opens
+once to retain an authenticated session; enrollment performs the KDF twice.
+Reseal supplies plaintext. Verify supplies an
+encrypted envelope and returns authenticated plaintext using the active keys.
+Lock and Shutdown
+carry no payload. Request IDs strictly increase for the child lifetime, and a
+new Unlock generation must exceed every earlier generation. Failed Unlock
+consumes its generation. A stale generation or repeated request ID receives a
+content-free `Stale` response. Reseal without active keys receives `Locked`.
+The response body is `SKRPSR01`, echoed ID and generation, u8 status, u32
+payload length, payload, also length-prefixed. A malformed, truncated, or
+oversized frame gets one `InvalidRequest` response with zero IDs and payload;
+the worker then exits. All failure statuses have empty payloads. Password and
+plaintext frame copies are zeroized on drop. These IDs provide correlation and
+replay rejection within one trusted child, not peer authentication.
+
+Frames are limited before allocation (8 MiB plaintext, at most 8 MiB plus 153
+bytes of v1 envelope overhead or 214 bytes of v2 envelope overhead, and at
+most 1024 password bytes). The recoverable creation response contains one
+bounded, length-delimited envelope and a canonical 77-byte display key; the
+protocol parser rejects truncated, extra, or malformed data. The v2 format
+explicitly permits password **or** recovery-key unlock, with separately
+authenticated data-key wraps. This is a recovery route, not a two-factor
+policy. The UI currently uses only v1; v2 creation, key display/confirmation,
+and recovery unlock are not available to users. A watchdog
+terminates the child after 60 seconds without a completed response or five
+minutes of total life, even with a blocked pipe. The parent must still own the
+exact child, drain responses, enforce its own deadline, and reap it on cancel.
+Watchdog expiry exits with code 124 and cannot guarantee a response frame.
+
+Before shipping the complete protection plan: connect and verify a recovery
+registration flow, independent per-memo keys and locked entries, YubiKey PRF,
+optional local TOTP confirmation, idle/sleep behavior, UI Automation and
+clipboard checks, and end-to-end failure recovery. This draft's renderer
+already provides the password-based whole-Pad path, an authenticated protected
+store cutover, locked native surface, explicit save epochs, session-lock
+masking, and installer inventory. YubiKey PRF and TOTP are not implemented.
 
 ## Verification
 
