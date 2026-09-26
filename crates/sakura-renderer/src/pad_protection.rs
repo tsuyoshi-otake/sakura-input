@@ -12,9 +12,11 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use sakura_pad_session_proto::{Operation, Request, SecretBytes, Status, MAX_PAYLOAD_BYTES};
+use sakura_pad_session_proto::{
+    parse_created_recovery, Operation, Request, SecretBytes, Status, MAX_PAYLOAD_BYTES,
+};
 use windows::Win32::Security::Cryptography::{BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::pad_crypto_client::{ClientError, PadCryptoCancellation, PadCryptoClient};
 use crate::pad_storage::{
@@ -56,6 +58,16 @@ impl ProtectionError {
     }
 }
 
+/// Prepared recoverable cutover. No durable intent exists until `confirm_recoverable_enroll`.
+/// Dropping this value abandons the attempt; its ciphertext is zeroized.
+#[allow(missing_debug_implementations)]
+pub struct PreparedPadRecovery {
+    expected_legacy: PadDocument,
+    vault_id: [u8; 16],
+    sealed: SecretBytes,
+    epoch: u64,
+}
+
 /// One authenticated Pad vault session. Its methods block and must never run
 /// on the window/message-pump thread. The caller stops the legacy StorageWorker
 /// before calling `enroll`; this engine cannot enforce that other thread's
@@ -90,9 +102,12 @@ impl PadProtectionEngine {
         self
     }
 
+    /// Test fixture for an older v1 Pad without a recovery key. Production
+    /// enrollment uses `prepare_recoverable_enroll` instead.
     /// Seal the exact published legacy document, verify both staged copies,
     /// and publish the protected cutover. An error after intent is terminal for
     /// legacy persistence and requires explicit protected recovery.
+    #[cfg(test)]
     pub fn enroll(
         &mut self,
         store: &PadStore,
@@ -158,6 +173,108 @@ impl PadProtectionEngine {
         Ok(())
     }
 
+    /// Prepare a v2 whole-Pad vault and return its one-time display key.
+    /// The caller must present the key and obtain explicit confirmation before
+    /// calling `confirm_recoverable_enroll`. This method writes no durable Pad
+    /// bytes or cutover signal. A new prepare invalidates the old worker session.
+    pub fn prepare_recoverable_enroll(
+        &mut self,
+        store: &PadStore,
+        expected_legacy: &PadDocument,
+        password: SecretBytes,
+    ) -> Result<(PreparedPadRecovery, Zeroizing<String>), ProtectionError> {
+        self.lock();
+        let loaded = store.load().map_err(|_| {
+            ProtectionError::new(FailurePhase::BeforeIntent, FailureReason::Storage)
+        })?;
+        if loaded.recovered_from_backup || loaded.document != *expected_legacy {
+            return Err(ProtectionError::new(
+                FailurePhase::BeforeIntent,
+                FailureReason::Stale,
+            ));
+        }
+        let vault_id = new_vault_id()?;
+        self.fresh_session(FailurePhase::BeforeIntent)?;
+        let encoded = match expected_legacy.encode() {
+            Ok(bytes) => SecretBytes::new(bytes),
+            Err(_) => {
+                self.lock();
+                return Err(ProtectionError::new(
+                    FailurePhase::BeforeIntent,
+                    FailureReason::Storage,
+                ));
+            }
+        };
+        let result = self
+            .exchange(Operation::CreateRecoverable, vault_id, password, encoded)
+            .map_err(|reason| ProtectionError::new(FailurePhase::BeforeIntent, reason))
+            .and_then(|payload| {
+                let created = parse_created_recovery(&payload).map_err(|_| {
+                    ProtectionError::new(FailurePhase::BeforeIntent, FailureReason::Protocol)
+                })?;
+                Ok((
+                    SecretBytes::new(created.envelope.to_vec()),
+                    Zeroizing::new(created.recovery_key.to_owned()),
+                ))
+            });
+        match result {
+            Ok((sealed, key)) => {
+                self.vault_id = Some(vault_id);
+                Ok((
+                    PreparedPadRecovery {
+                        expected_legacy: expected_legacy.clone(),
+                        vault_id,
+                        sealed,
+                        epoch: self.epoch,
+                    },
+                    key,
+                ))
+            }
+            Err(error) => {
+                self.lock();
+                Err(error)
+            }
+        }
+    }
+
+    /// Commit only after the caller confirms that the one-time key was saved.
+    /// The store rechecks the exact legacy document while holding its writer
+    /// lock, verifies both protected copies, and then publishes cutover intent.
+    pub fn confirm_recoverable_enroll(
+        &mut self,
+        store: &PadStore,
+        prepared: PreparedPadRecovery,
+    ) -> Result<(), ProtectionError> {
+        if self.vault_id != Some(prepared.vault_id) || self.epoch != prepared.epoch {
+            return Err(ProtectionError::new(
+                FailurePhase::BeforeIntent,
+                FailureReason::Stale,
+            ));
+        }
+        let migration = store.migrate_to_protected(
+            &prepared.expected_legacy,
+            prepared.expected_legacy.generation,
+            prepared.vault_id,
+            &prepared.sealed,
+            |path| self.verify_path(path, prepared.vault_id),
+        );
+        if let Err(error) = migration {
+            let phase = match store.load() {
+                Ok(_) => FailurePhase::BeforeIntent,
+                Err(StorageError::ProtectedCutover) => FailurePhase::CutoverPending,
+                Err(_) => FailurePhase::Uncertain,
+            };
+            self.lock();
+            let reason = if matches!(error, StorageError::LegacyChanged) {
+                FailureReason::Stale
+            } else {
+                FailureReason::Storage
+            };
+            return Err(ProtectionError::new(phase, reason));
+        }
+        Ok(())
+    }
+
     /// Open primary or backup under the authenticated vault scope. An active
     /// marker allows backup fallback, each with a fresh worker and epoch. A
     /// pending cutover instead requires authentication of *both* protected
@@ -167,6 +284,26 @@ impl PadProtectionEngine {
         &mut self,
         store: &PadStore,
         password: SecretBytes,
+    ) -> Result<LoadOutcome, ProtectionError> {
+        self.unlock_with_credential(store, password, false)
+    }
+
+    /// Open only a v2 whole-Pad envelope using its canonical recovery key.
+    /// V1 and unknown formats are rejected; authentication failure never
+    /// authorizes a backup with another envelope format.
+    pub fn unlock_with_recovery(
+        &mut self,
+        store: &PadStore,
+        canonical_key: SecretBytes,
+    ) -> Result<LoadOutcome, ProtectionError> {
+        self.unlock_with_credential(store, canonical_key, true)
+    }
+
+    fn unlock_with_credential(
+        &mut self,
+        store: &PadStore,
+        credential: SecretBytes,
+        recovery: bool,
     ) -> Result<LoadOutcome, ProtectionError> {
         self.lock();
         let (vault_id, pending_cutover) = match store.protected_vault_id() {
@@ -184,8 +321,9 @@ impl PadProtectionEngine {
                 ));
             }
         };
-        let mut password = password;
+        let mut password = credential;
         let mut attempt_failure = None;
+        let mut auth_rejected = false;
         let memo_cutover = store
             .has_protected_memo_cutover()
             .map_err(|_| ProtectionError::new(FailurePhase::Unlock, FailureReason::Storage))?;
@@ -193,11 +331,20 @@ impl PadProtectionEngine {
             let mut primary_opened = false;
             store
                 .recover_protected_cutover(|path| {
+                    if auth_rejected {
+                        return Err(StorageError::ProtectedVerification);
+                    }
                     if primary_opened {
                         self.verify_path(path, vault_id)
                     } else {
-                        let result =
-                            self.unlock_path(path, vault_id, &password, &mut attempt_failure);
+                        let result = self.unlock_path(
+                            path,
+                            vault_id,
+                            &password,
+                            recovery,
+                            &mut attempt_failure,
+                        );
+                        auth_rejected = attempt_failure == Some(FailureReason::Authentication);
                         primary_opened = result.is_ok();
                         result
                     }
@@ -213,7 +360,13 @@ impl PadProtectionEngine {
             // repair an interrupted primary before exposing an editable Pad.
             store
                 .recover_protected_memo_cutover(|path| {
-                    self.unlock_path(path, vault_id, &password, &mut attempt_failure)
+                    if auth_rejected {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                    let result =
+                        self.unlock_path(path, vault_id, &password, recovery, &mut attempt_failure);
+                    auth_rejected = attempt_failure == Some(FailureReason::Authentication);
+                    result
                 })
                 .map(|document| LoadOutcome {
                     document,
@@ -221,7 +374,13 @@ impl PadProtectionEngine {
                 })
         } else {
             store.load_protected(|path| {
-                self.unlock_path(path, vault_id, &password, &mut attempt_failure)
+                if auth_rejected {
+                    return Err(StorageError::ProtectedVerification);
+                }
+                let result =
+                    self.unlock_path(path, vault_id, &password, recovery, &mut attempt_failure);
+                auth_rejected = attempt_failure == Some(FailureReason::Authentication);
+                result
             })
         };
         password.zeroize();
@@ -246,6 +405,7 @@ impl PadProtectionEngine {
         path: &Path,
         vault_id: [u8; 16],
         password: &SecretBytes,
+        recovery: bool,
         attempt_failure: &mut Option<FailureReason>,
     ) -> Result<([u8; 16], PadDocument), StorageError> {
         if let Err(error) = self.fresh_session(FailurePhase::Unlock) {
@@ -262,8 +422,21 @@ impl PadProtectionEngine {
         };
         // Request owns a zeroizing copy; the caller's password is erased at
         // the end of unlock, including failed primary/backup attempts.
+        let operation = if bytes.starts_with(b"SKRPENV2") {
+            if recovery {
+                Operation::UnlockRecoveryV2
+            } else {
+                Operation::UnlockPasswordV2
+            }
+        } else if bytes.starts_with(b"SKRPENV1") && !recovery {
+            Operation::Unlock
+        } else {
+            record_failure(attempt_failure, FailureReason::Authentication);
+            self.lock();
+            return Err(StorageError::ProtectedVerification);
+        };
         let opened = self.exchange(
-            Operation::Unlock,
+            operation,
             vault_id,
             SecretBytes::new(password.to_vec()),
             bytes,
@@ -1113,6 +1286,153 @@ mod process_tests {
         assert_eq!(final_loaded.document, edited);
         assert!(!final_loaded.recovered_from_backup);
         final_open.lock();
+    }
+
+    #[test]
+    #[ignore = "requires SAKURA_PAD_SESSION_TEST_EXE"]
+    fn real_worker_recovery_prepare_confirm_reopen_and_save() {
+        let image = PathBuf::from(
+            std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+                .expect("set SAKURA_PAD_SESSION_TEST_EXE to the built absolute session image"),
+        );
+        assert!(image.is_absolute() && image.is_file());
+        let isolated = IsolatedPad::new();
+        let store = PadStore::at(&isolated.0);
+        let mut original = PadDocument {
+            generation: 1,
+            ..PadDocument::default()
+        };
+        original
+            .memos
+            .push(PadMemo::new(1, "title", "private body", 1));
+        store.write(&original).unwrap();
+
+        let mut enrollment = engine(&image);
+        let (abandoned, abandoned_key) = enrollment
+            .prepare_recoverable_enroll(&store, &original, password())
+            .unwrap();
+        assert!(abandoned_key.starts_with("SPRK1-"));
+        assert_eq!(store.load().unwrap().document, original);
+        drop(abandoned);
+        drop(abandoned_key);
+        enrollment.lock();
+        assert_eq!(store.load().unwrap().document, original);
+
+        let (stale, stale_key) = enrollment
+            .prepare_recoverable_enroll(&store, &original, password())
+            .unwrap();
+        let mut changed = original.clone();
+        changed.generation += 1;
+        store.write(&changed).unwrap();
+        assert_eq!(
+            enrollment.confirm_recoverable_enroll(&store, stale),
+            Err(ProtectionError::new(
+                FailurePhase::BeforeIntent,
+                FailureReason::Stale
+            ))
+        );
+        drop(stale_key);
+        assert_eq!(store.load().unwrap().document, changed);
+
+        let (prepared, recovery_key) = enrollment
+            .prepare_recoverable_enroll(&store, &changed, password())
+            .unwrap();
+        assert_eq!(store.load().unwrap().document, changed);
+        enrollment
+            .confirm_recoverable_enroll(&store, prepared)
+            .unwrap();
+        enrollment.lock();
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+
+        let mut wrong = engine(&image);
+        let mut wrong_key = recovery_key.as_bytes().to_vec();
+        wrong_key[6] = if wrong_key[6] == b'A' { b'B' } else { b'A' };
+        let error = wrong
+            .unlock_with_recovery(&store, SecretBytes::new(wrong_key))
+            .unwrap_err();
+        assert_eq!(error.reason, FailureReason::Authentication);
+        let mut recovered = engine(&image);
+        let loaded = recovered
+            .unlock_with_recovery(&store, SecretBytes::new(recovery_key.as_bytes().to_vec()))
+            .unwrap();
+        assert_eq!(loaded.document, changed);
+        assert!(!loaded.recovered_from_backup);
+        let mut next = loaded.document.clone();
+        next.generation += 1;
+        next.memos
+            .push(PadMemo::new(2, "second", "after recovery", 2));
+        recovered.save(&store, &loaded.document, &next).unwrap();
+        recovered.lock();
+
+        let mut reopened = engine(&image);
+        assert_eq!(reopened.unlock(&store, password()).unwrap().document, next);
+        reopened.lock();
+        let mut recovery_again = engine(&image);
+        assert_eq!(
+            recovery_again
+                .unlock_with_recovery(&store, SecretBytes::new(recovery_key.as_bytes().to_vec()))
+                .unwrap()
+                .document,
+            next
+        );
+        recovery_again.lock();
+
+        // A replayed v1 primary must not let either credential silently open
+        // the valid older v2 backup after authentication of the primary fails.
+        let foreign = IsolatedPad::new();
+        let foreign_store = PadStore::at(&foreign.0);
+        let mut old_vault = engine(&image);
+        let foreign_document = foreign_store.load().unwrap().document;
+        old_vault
+            .enroll(&foreign_store, &foreign_document, password())
+            .unwrap();
+        old_vault.lock();
+        std::fs::copy(
+            foreign.0.join("memo.v3.bin"),
+            isolated.0.join("memo.v3.bin"),
+        )
+        .unwrap();
+        assert!(isolated.0.join("memo.v3.bin.bak").exists());
+        let mut replay = engine(&image);
+        assert_eq!(
+            replay.unlock(&store, password()).unwrap_err().reason,
+            FailureReason::Authentication
+        );
+        assert_eq!(
+            replay
+                .unlock_with_recovery(&store, SecretBytes::new(recovery_key.as_bytes().to_vec()))
+                .unwrap_err()
+                .reason,
+            FailureReason::Authentication
+        );
+    }
+
+    #[test]
+    #[ignore = "requires SAKURA_PAD_SESSION_TEST_EXE"]
+    fn real_worker_v1_envelope_rejects_recovery_route() {
+        let image = PathBuf::from(
+            std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+                .expect("set SAKURA_PAD_SESSION_TEST_EXE to the built absolute session image"),
+        );
+        assert!(image.is_absolute() && image.is_file());
+        let isolated = IsolatedPad::new();
+        let store = PadStore::at(&isolated.0);
+        let original = store.load().unwrap().document;
+        let mut enrollment = engine(&image);
+        enrollment.enroll(&store, &original, password()).unwrap();
+        enrollment.lock();
+        let mut recovery = engine(&image);
+        assert_eq!(
+            recovery
+                .unlock_with_recovery(&store, SecretBytes::new(b"SPRK1-invalid".to_vec()))
+                .unwrap_err()
+                .reason,
+            FailureReason::Authentication
+        );
+        assert_eq!(
+            recovery.unlock(&store, password()).unwrap().document,
+            original
+        );
     }
 
     #[test]
