@@ -49,16 +49,17 @@ use windows::Win32::UI::WindowsAndMessaging::{
     RegisterClassW, SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos,
     SetWindowTextW, ShowWindow, BN_CLICKED, BS_OWNERDRAW, CREATESTRUCTW, EN_CHANGE, ES_AUTOHSCROLL,
     ES_AUTOVSCROLL, ES_LEFT, ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN, FLASHWINFO, GA_ROOT,
-    GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, IDC_ARROW, LBN_DBLCLK, LBN_SELCHANGE,
-    LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWFIXED, LB_ADDSTRING,
-    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE,
-    WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
-    WM_CTLCOLORSTATIC, WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT,
-    WM_GETMINMAXINFO, WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE,
-    WM_NCDESTROY, WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE,
-    WM_SYSCHAR, WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WNDCLASSW, WNDPROC, WS_CHILD,
-    WS_CLIPCHILDREN, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
+    GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, HWND_TOPMOST, IDC_ARROW, LBN_DBLCLK,
+    LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWFIXED,
+    LB_ADDSTRING, LB_DELETESTRING, LB_GETTOPINDEX, LB_INSERTSTRING, LB_RESETCONTENT, LB_SETCURSEL,
+    LB_SETITEMHEIGHT, LB_SETTOPINDEX, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_CHAR, WM_CLOSE,
+    WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
+    WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO,
+    WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY,
+    WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR,
+    WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WNDCLASSW, WNDPROC, WS_CHILD, WS_CLIPCHILDREN,
+    WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
 };
 
 use crate::pad_caption;
@@ -864,7 +865,7 @@ impl PadWindow {
         // window, which clears the pointer in `WM_NCDESTROY`.
         let hwnd = unsafe {
             CreateWindowExW(
-                WINDOW_EX_STYLE::default(),
+                WS_EX_TOPMOST,
                 PAD_CLASS,
                 windows::core::w!("Sakura Pad"),
                 WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
@@ -934,6 +935,18 @@ impl PadWindow {
                 );
                 pad_caption::cloak(self.hwnd, false);
             }
+            // Keep the pad above ordinary windows whenever it is requested.
+            // NOACTIVATE leaves foreground ownership to the explicit call
+            // below, so enforcing z-order does not itself steal focus.
+            let _ = SetWindowPos(
+                self.hwnd,
+                Some(HWND_TOPMOST),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
             if !SetForegroundWindow(self.hwnd).as_bool() {
                 flash(self.hwnd);
             }
@@ -964,6 +977,11 @@ impl PadWindow {
 
 impl Drop for PadWindow {
     fn drop(&mut self) {
+        // Shutdown can precede the edit timer. The worker can flush only
+        // snapshots it has received, so capture while the controls still live.
+        if self.state.capture_controls() {
+            self.state.publish(self.hwnd);
+        }
         // SAFETY: the timers and window belong to this object.
         unsafe {
             let _ = KillTimer(Some(self.hwnd), PAD_EDIT_TIMER);
@@ -2586,7 +2604,51 @@ impl PadState {
     fn sync_rows(&mut self) {
         if pad_list::rows(&self.document, &self.query) != self.rows {
             self.refresh_list();
+            return;
         }
+        // Stable row IDs do not imply stable titles. Keep the LISTBOX's
+        // accessible label in sync with the owner-drawn text without resetting
+        // the list's selection or scroll position on each debounced edit.
+        let Some(index) = self.rows.iter().position(|id| *id == self.active) else {
+            return;
+        };
+        let Some(memo) = self.document.find(self.active) else {
+            return;
+        };
+        let label: Vec<u16> = pad_list::display_title(memo)
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let selection = selected_row(self.list).unwrap_or(usize::MAX);
+        // SAFETY: the list belongs to this state and the string outlives the
+        // synchronous insert. These messages do not send selection notifications.
+        unsafe {
+            let top = SendMessageW(self.list, LB_GETTOPINDEX, None, None);
+            let removed = SendMessageW(self.list, LB_DELETESTRING, Some(WPARAM(index)), None);
+            if removed.0 < 0
+                || SendMessageW(
+                    self.list,
+                    LB_INSERTSTRING,
+                    Some(WPARAM(index)),
+                    Some(LPARAM(label.as_ptr() as isize)),
+                )
+                .0 < 0
+            {
+                self.refresh_list();
+                return;
+            }
+            let _ = SendMessageW(self.list, LB_SETCURSEL, Some(WPARAM(selection)), None);
+            if top.0 >= 0 {
+                let _ = SendMessageW(
+                    self.list,
+                    LB_SETTOPINDEX,
+                    Some(WPARAM(top.0 as usize)),
+                    None,
+                );
+            }
+        }
+        // Invalidate after capture; EN_CHANGE still paints the previous snapshot.
+        self.invalidate_rows();
     }
 
     fn mark_dirty(&mut self, window: HWND) {
@@ -2659,6 +2721,7 @@ impl PadState {
             // The memo just left behind may belong somewhere else now. This
             // is the moment to move it: the user is no longer reading it.
             self.refresh_list();
+            self.publish(window);
         }
         self.update_status();
         self.invalidate_rows();
@@ -2766,7 +2829,10 @@ impl PadState {
     }
 
     fn copy_memo(&mut self, window: HWND) {
-        self.capture_controls();
+        if self.capture_controls() {
+            self.sync_rows();
+            self.publish(window);
+        }
         let Some(memo) = self.document.find(self.active) else {
             self.notify("メモがありません".to_owned());
             self.update_status();

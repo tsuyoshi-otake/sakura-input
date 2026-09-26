@@ -35,10 +35,12 @@ use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, GetClientRect, GetDlgItem, GetSystemMetrics, GetWindow, GetWindowLongPtrW,
     GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW,
-    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER, ICON_BIG,
-    ICON_SMALL, LB_GETCOUNT, SM_CXVSCROLL, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, WM_APP,
-    WM_COMMAND, WM_GETFONT, WM_GETICON, WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW,
-    WS_EX_DLGMODALFRAME, WS_EX_TOOLWINDOW,
+    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER,
+    HWND_NOTOPMOST, ICON_BIG, ICON_SMALL, LBN_SELCHANGE, LB_GETCOUNT, LB_GETCURSEL, LB_GETTEXT,
+    LB_GETTEXTLEN, LB_GETTOPINDEX, LB_SETCURSEL, LB_SETTOPINDEX, SM_CXVSCROLL, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WM_APP, WM_CLOSE, WM_COMMAND, WM_GETFONT, WM_GETICON,
+    WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW, WS_EX_DLGMODALFRAME,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -150,8 +152,59 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
         owner.is_some_and(|owner| !owner.is_invalid()),
         "an unowned window gets a taskbar button whatever its styles say"
     );
+    assert_ne!(
+        ex_style & WS_EX_TOPMOST.0,
+        0,
+        "the pad must open as a topmost window"
+    );
+
+    // A later show request restores topmost state even if another window
+    // changed the pad's z-order while it was open.
+    // SAFETY: both HWNDs belong to this fixture; the host message is the
+    // production path that summons or refocuses the pad.
+    unsafe {
+        SetWindowPos(
+            pad,
+            Some(HWND_NOTOPMOST),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        )
+        .expect("temporarily lower the pad");
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("request the pad again");
+    }
+    let deadline = Instant::now() + PATIENT;
+    // SAFETY: the fixture-owned pad remains live throughout this bounded wait.
+    while (unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0) == 0 {
+        assert!(
+            Instant::now() < deadline,
+            "the pad did not return to topmost state"
+        );
+        sleep(Duration::from_millis(20));
+    }
 
     seed_memos(pad);
+
+    // Closing hides the singleton. Reopening must retain both its contents
+    // and its topmost status.
+    // SAFETY: both handles belong to the fixture, and WM_CLOSE only hides Pad.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        assert!(!IsWindowVisible(pad).as_bool());
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("reopen pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    assert_ne!(
+        // SAFETY: the same fixture-owned window was just observed visible.
+        unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+        0
+    );
 
     // --- Two panes -------------------------------------------------------
     resize_client(pad, WIDE_LOGICAL, TALL_LOGICAL);
@@ -273,6 +326,9 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
     // the desktop's clipboard away from whoever is at it.
     // SAFETY: `pad` is live and the identifier is a plain integer.
     let status_control = unsafe { GetDlgItem(Some(pad), STATUS_ID) }.expect("the status exists");
+    // Seed edits save asynchronously. Let that older completion finish before
+    // asserting a notice's lifetime, otherwise it can replace the notice.
+    wait_for_text(status_control, "seed storage completion", str::is_empty);
     click(pad, SYNC_ID);
     let notice = wait_for_text(status_control, "a notice", |value| value.contains("GitHub"));
     let slot = client_rect(status_control);
@@ -469,8 +525,222 @@ fn typing_into_a_fresh_pad_puts_the_memo_in_the_list() {
         "the heading counts the memos it lists, and it reads {heading:?}"
     );
 
+    // Renaming this only row cannot change its identity or sort position.
+    // Its native label must still change, including the accessibility text.
+    for title in ["会議メモ 🌸", "修正したタイトル", ""] {
+        set_text(pad, TITLE_ID, title);
+        let expected = if title.is_empty() { "無題" } else { title };
+        wait_for_row_text(list, 0, expected);
+        assert_eq!(row_count(list), 1);
+        assert_eq!(text_of(control(pad, TITLE_ID)), title);
+    }
+
     engine.stop();
     renderer.wait_for_exit();
+}
+
+/// A selection change can consume the edited controls before their debounce
+/// timer fires. That capture must still reach the storage worker.
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn a_title_edited_just_before_switching_memos_survives_restart() {
+    pending_title_survives_restart(PendingTitleAction::Select);
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn a_title_edited_just_before_a_failed_copy_survives_restart() {
+    pending_title_survives_restart(PendingTitleAction::Copy);
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn a_title_edited_just_before_shutdown_survives_restart() {
+    pending_title_survives_restart(PendingTitleAction::Shutdown);
+}
+
+enum PendingTitleAction {
+    Select,
+    Copy,
+    Shutdown,
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn renaming_a_scrolled_title_preserves_selection_and_scroll() {
+    let app_data = IsolatedAppData::new("pad-title-scroll");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    resize_client(pad, WIDE_LOGICAL, 400);
+    let list = list_of(pad);
+    for index in 0..12 {
+        if index > 0 {
+            click(pad, NEW_ID);
+            wait_for_text(control(pad, TITLE_ID), "new memo", str::is_empty);
+        }
+        set_text(pad, TITLE_ID, &format!("メモ {index}"));
+        wait_for_row_text(list, 0, &format!("メモ {index}"));
+    }
+    // Created order keeps this memo's position stable while its title changes.
+    // SAFETY: all messages target this fixture's live list or its parent.
+    unsafe {
+        // Sort completion is the synchronous command return, not its brief
+        // status notice, which a storage completion can immediately replace.
+        SendMessageW(pad, WM_COMMAND, Some(WPARAM(SORT_ID as usize)), None);
+        SendMessageW(list, LB_SETCURSEL, Some(WPARAM(3)), None);
+        SendMessageW(
+            pad,
+            WM_COMMAND,
+            Some(WPARAM(LIST_ID as usize | ((LBN_SELCHANGE as usize) << 16))),
+            None,
+        );
+        SendMessageW(list, LB_SETTOPINDEX, Some(WPARAM(2)), None);
+        assert_eq!(SendMessageW(list, LB_GETTOPINDEX, None, None).0, 2);
+    }
+    set_text(pad, TITLE_ID, "スクロール中の変更 🌸");
+    wait_for_row_text(list, 3, "スクロール中の変更 🌸");
+    // SAFETY: these queries read only this fixture's live list.
+    unsafe {
+        assert_eq!(SendMessageW(list, LB_GETCURSEL, None, None).0, 3);
+        assert_eq!(SendMessageW(list, LB_GETTOPINDEX, None, None).0, 2);
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn pending_title_survives_restart(action: PendingTitleAction) {
+    let app_data = IsolatedAppData::new("pad-title-save");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let list = list_of(pad);
+    set_text(pad, TITLE_ID, "最初のメモ");
+    wait_for_row_text(list, 0, "最初のメモ");
+    click(pad, NEW_ID);
+    wait_for_text(control(pad, TITLE_ID), "new memo", str::is_empty);
+    set_text(pad, TITLE_ID, "編集前");
+    click(pad, SORT_ID);
+    wait_for_row_text(list, 0, "編集前");
+    wait_for_text(control(pad, STATUS_ID), "initial save", |s| {
+        !s.contains("保存中")
+    });
+
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // Hold the clipboard open in this process so the copy fails without
+    // replacing the user's clipboard. The guard releases it even on panic.
+    struct ClipboardGuard;
+    impl Drop for ClipboardGuard {
+        fn drop(&mut self) {
+            // SAFETY: this thread successfully opened the clipboard below.
+            unsafe {
+                let _ = windows::Win32::System::DataExchange::CloseClipboard();
+            }
+        }
+    }
+    let clipboard = if matches!(action, PendingTitleAction::Copy) {
+        // SAFETY: the fixture only opens and closes; it never empties or writes.
+        unsafe { windows::Win32::System::DataExchange::OpenClipboard(None) }
+            .expect("hold clipboard");
+        Some(ClipboardGuard)
+    } else {
+        None
+    };
+    let started = Instant::now();
+    set_text(pad, TITLE_ID, "切り替え直前のタイトル 🌸");
+    // Synchronous sends consume the edit before the 100 ms edit timer.
+    // SAFETY: these live controls belong to this fixture; neither message
+    // carries a pointer and selecting a row uses the public notification.
+    unsafe {
+        match action {
+            PendingTitleAction::Select => {
+                SendMessageW(list, LB_SETCURSEL, Some(WPARAM(1)), None);
+                SendMessageW(
+                    pad,
+                    WM_COMMAND,
+                    Some(WPARAM(LIST_ID as usize | ((LBN_SELCHANGE as usize) << 16))),
+                    Some(LPARAM(list.0 as isize)),
+                );
+            }
+            PendingTitleAction::Copy => {
+                SendMessageW(pad, WM_COMMAND, Some(WPARAM(SHARE_ID as usize)), None);
+            }
+            PendingTitleAction::Shutdown => {
+                SendMessageW(host, WM_CLOSE, None, None);
+            }
+        }
+    }
+    assert!(
+        started.elapsed() < Duration::from_millis(100),
+        "fixture missed the pending-edit window"
+    );
+    if matches!(action, PendingTitleAction::Select) {
+        assert_eq!(text_of(control(pad, TITLE_ID)), "最初のメモ");
+    }
+    if matches!(action, PendingTitleAction::Copy) {
+        assert_eq!(text_of(control(pad, STATUS_ID)), "コピーできません");
+    }
+    drop(clipboard);
+    engine.stop();
+    renderer.wait_for_exit();
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    assert_eq!(row_count(list_of(pad)), 2);
+    assert_eq!(row_text(list_of(pad), 0), "切り替え直前のタイトル 🌸");
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn open_test_pad(engine: &FixtureEngine, app_data: &IsolatedAppData) -> (OwnedChild, HWND) {
+    let renderer = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")))
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn test-owned renderer");
+    let renderer = OwnedChild::new(renderer, "renderer");
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: this host belongs to the child this fixture owns.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("open pad");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    (renderer, pad)
+}
+
+fn row_text(list: HWND, index: usize) -> String {
+    // SAFETY: LB_GETTEXT is marshalled by Windows for this LBS_HASSTRINGS
+    // list, and the length-bounded buffer outlives the synchronous send.
+    unsafe {
+        let length = SendMessageW(list, LB_GETTEXTLEN, Some(WPARAM(index)), None).0;
+        assert!(length >= 0, "missing list row {index}");
+        // The row can be renamed between the two sends. Reserve the whole
+        // documented title limit plus NUL, not just the previous title length.
+        assert!(length <= 256);
+        let mut buffer = vec![0_u16; 257];
+        let copied = SendMessageW(
+            list,
+            LB_GETTEXT,
+            Some(WPARAM(index)),
+            Some(LPARAM(buffer.as_mut_ptr() as isize)),
+        )
+        .0;
+        assert!(copied >= 0);
+        String::from_utf16_lossy(&buffer[..copied as usize])
+    }
+}
+
+fn wait_for_row_text(list: HWND, index: usize, expected: &str) {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if row_count(list) > index as isize && row_text(list, index) == expected {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "row {index} never changed to {expected:?}"
+        );
+        sleep(Duration::from_millis(20));
+    }
 }
 
 /// Opens a real pad, seeds it, and leaves it on screen to be looked at.
