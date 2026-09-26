@@ -14,7 +14,19 @@ use std::time::Duration;
 
 mod pages;
 mod presentation;
+mod save;
+#[cfg(test)]
+mod save_tests;
 mod tabs;
+
+// Native-window tests share desktop focus even though each owns its HWNDs.
+#[cfg(test)]
+fn native_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    GUARD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 use pages::*;
 use presentation::{BoxRect, Presentation, TextRole};
 use windows::Win32::UI::Controls::{
@@ -581,14 +593,31 @@ struct UpdateControls {
 
 #[derive(Debug, Clone, Copy)]
 enum UpdateOperation {
-    Check,
-    Apply,
+    AutomaticCheck,
+    ManualCheck,
+    ManualInstall,
 }
 
 #[derive(Debug)]
 enum UpdateCompletion {
-    Check(updater::UpdateCheckOutcome),
-    Apply(updater::UpdateOutcome),
+    Check {
+        origin: UpdateOperation,
+        outcome: updater::UpdateCheckOutcome,
+    },
+    Install(updater::UpdateOutcome),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UpdateModal {
+    None,
+    Error,
+    OfferInstall(updater::Version),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct UpdatePresentation {
+    message: String,
+    modal: UpdateModal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -739,8 +768,10 @@ pub fn run() -> Result<(), String> {
     unsafe {
         SetWindowLongPtrW(window, GWLP_USERDATA, app as isize);
         if (*app).update_preferences.enabled {
-            if let Err(error) = (*app).start_update(UpdateOperation::Check) {
-                (*app).set_status(&format!("自動更新の確認を開始できませんでした: {error}"));
+            if let Err(error) = (*app).start_update(UpdateOperation::AutomaticCheck) {
+                let message = format!("自動更新の確認を開始できませんでした: {error}");
+                set_text((*app).update_controls.result, &message);
+                (*app).set_status(&message);
             }
         }
         let _ = ShowWindow(window, SW_SHOW);
@@ -930,9 +961,8 @@ impl App {
             return Ok(());
         }
         if source == self.general.input_support_reset {
-            self.configuration.preferences.input_support = InputSupport::default();
-            self.load_input_support_controls();
-            self.set_status("入力支援の初期値に戻しました。");
+            self.populate_input_support_controls(InputSupport::default());
+            self.set_status("入力支援を初期値に戻しました。適用で保存します。");
             return Ok(());
         }
         if source == self.page_topics && notification == LBN_SELCHANGE as u16 {
@@ -990,7 +1020,7 @@ impl App {
             return self.save_update_preference();
         }
         if source == self.update_controls.check {
-            return self.start_update(UpdateOperation::Check);
+            return self.start_update(UpdateOperation::ManualCheck);
         }
         if source == self.update_controls.apply {
             if !confirm(
@@ -999,7 +1029,7 @@ impl App {
                 self.set_status("更新のインストールを取り消しました。");
                 return Ok(());
             }
-            return self.start_update(UpdateOperation::Apply);
+            return self.start_update(UpdateOperation::ManualInstall);
         }
         Ok(())
     }
@@ -1510,33 +1540,57 @@ impl App {
     }
 
     fn save_global_settings(&mut self) -> Result<(), String> {
-        self.configuration.preferences.keymap_preset = match combo_index(self.general.keymap) {
+        let path = self.configuration_path.clone();
+        self.save_global_settings_to(&mut save::NativeSettingsStore {
+            configuration_path: &path,
+        })
+    }
+
+    fn save_global_settings_to(
+        &mut self,
+        store: &mut impl save::SettingsStore,
+    ) -> Result<(), String> {
+        let prepared = self.prepare_global_settings()?;
+        let provider = prepared.ai_preferences.provider;
+        prepared
+            .persist(&mut self.configuration, store)
+            .map_err(display)?;
+        set_text(self.general.ai_api_key, "");
+        self.refresh_ai_provider_controls(provider);
+        self.set_status("既定の設定を保存しました。");
+        Ok(())
+    }
+
+    /// Read and validate all edited fields before touching any saved state or store.
+    fn prepare_global_settings(&self) -> Result<save::PreparedSave, String> {
+        let mut configuration = self.configuration.clone();
+        configuration.preferences.keymap_preset = match combo_index(self.general.keymap) {
             Some(0) => Preset::MsIme,
             Some(1) => Preset::Atok,
             _ => return Err("キー設定を選択してください。".to_owned()),
         };
-        self.configuration.preferences.input_method = input_method_from_checks(
+        configuration.preferences.input_method = input_method_from_checks(
             is_checked(self.general.input_method_romaji),
             is_checked(self.general.input_method_kana),
         )?;
-        self.configuration.preferences.default_mode =
+        configuration.preferences.default_mode =
             mode_from_index(combo_index(self.general.default_mode))?;
-        self.configuration.preferences.pad_shortcut =
+        configuration.preferences.pad_shortcut =
             pad_shortcut_from_index(combo_index(self.general.pad_shortcut))?;
-        self.configuration.preferences.conversion_method =
+        configuration.preferences.conversion_method =
             conversion_method_from_index(combo_index(self.general.conversion_assist_method))?;
-        self.configuration.preferences.prediction_enabled = is_checked(self.general.prediction);
-        self.configuration.preferences.association_enabled = is_checked(self.general.association);
-        self.save_input_support_controls();
-        self.configuration.preferences.suggest_accept =
+        configuration.preferences.prediction_enabled = is_checked(self.general.prediction);
+        configuration.preferences.association_enabled = is_checked(self.general.association);
+        configuration.preferences.input_support = self.input_support_from_controls();
+        configuration.preferences.suggest_accept =
             suggest_from_index(combo_index(self.general.suggest))?;
-        self.configuration.preferences.appearance_theme =
+        configuration.preferences.appearance_theme =
             appearance_from_index(combo_index(self.general.appearance))?;
-        self.configuration.preferences.neural_reranker_scope =
+        configuration.preferences.neural_reranker_scope =
             neural_reranker_scope_from_index(combo_index(self.general.neural_reranker_scope))?;
-        self.configuration.preferences.space_width =
+        configuration.preferences.space_width =
             space_width_from_index(combo_index(self.general.input_assist_space_width))?;
-        self.configuration.preferences.shift_space_behavior =
+        configuration.preferences.shift_space_behavior =
             shift_space_behavior_from_index(combo_index(self.general.input_assist_shift_space))?;
         let ai_text_key = ai_text_key_from_index(combo_index(self.general.ai_text_key))?;
         let ai_provider = self.selected_ai_provider()?;
@@ -1566,26 +1620,14 @@ impl App {
                 "Tier",
             )?,
         };
-        self.configuration.preferences.normalizer = self.normalizer_from_controls()?;
-        self.configuration
-            .save(&self.configuration_path)
-            .map_err(display)?;
-        user_preferences::write_ai_text_key(ai_text_key).map_err(display)?;
-        user_preferences::write_ai_text_preferences(&ai_preferences).map_err(display)?;
-        let mut api_key = window_text(self.general.ai_api_key);
-        if !api_key.trim().is_empty() {
-            user_preferences::write_api_key(&api_key).map_err(display)?;
-            // The credential API has copied the value. Erase the edit control
-            // and this temporary buffer instead of retaining a second copy.
-            set_text(self.general.ai_api_key, "");
-            // SAFETY: zero is valid UTF-8, and the String is not observed until
-            // it is dropped immediately after this block.
-            unsafe { api_key.as_bytes_mut() }.fill(0);
-            api_key.clear();
-        }
-        self.refresh_ai_provider_controls(ai_provider);
-        self.set_status("既定の設定を保存しました。");
-        Ok(())
+        configuration.preferences.normalizer = self.normalizer_from_controls()?;
+        let api_key = save::ApiKeyDraft::new(window_text(self.general.ai_api_key))?;
+        Ok(save::PreparedSave {
+            configuration,
+            ai_text_key,
+            ai_preferences,
+            api_key,
+        })
     }
 
     fn selected_ai_provider(&self) -> Result<AiProvider, String> {
@@ -1600,7 +1642,10 @@ impl App {
     }
 
     fn load_input_support_controls(&self) {
-        let support = self.configuration.preferences.input_support;
+        self.populate_input_support_controls(self.configuration.preferences.input_support);
+    }
+
+    fn populate_input_support_controls(&self, support: InputSupport) {
         set_checked(self.general.input_support_enabled, support.enabled);
         set_checked(
             self.general.input_support_commit_based,
@@ -1647,8 +1692,8 @@ impl App {
         self.sync_input_support_enabled_state();
     }
 
-    fn save_input_support_controls(&mut self) {
-        let support = InputSupport {
+    fn input_support_from_controls(&self) -> InputSupport {
+        InputSupport {
             enabled: is_checked(self.general.input_support_enabled),
             commit_based: is_checked(self.general.input_support_commit_based),
             advanced: is_checked(self.general.input_support_advanced),
@@ -1665,8 +1710,7 @@ impl App {
             comma_after_digit: is_checked(self.general.input_support_comma_after_digit),
             middle_dot_after_digit: is_checked(self.general.input_support_middle_dot_after_digit),
             long_vowel_after_alnum: is_checked(self.general.input_support_long_vowel_after_alnum),
-        };
-        self.configuration.preferences.input_support = support;
+        }
     }
 
     fn sync_input_support_enabled_state(&self) {
@@ -2048,7 +2092,8 @@ impl App {
             });
         let normalizer = notation_style_from_index(combo_index(self.general.profile_notation))?
             .map_or(inherited, NotationStyle::normalizer);
-        self.configuration
+        let mut configuration = self.configuration.clone();
+        configuration
             .upsert_profile(AppProfile {
                 process_name: process_name.clone(),
                 default_mode: mode_from_index(combo_index(self.general.profile_mode))?,
@@ -2057,9 +2102,10 @@ impl App {
                 suggest_accept: suggest_from_index(combo_index(self.general.profile_suggest))?,
             })
             .map_err(display)?;
-        self.configuration
+        configuration
             .save(&self.configuration_path)
             .map_err(display)?;
+        self.configuration = configuration;
         self.populate_profile_list();
         self.set_status(&format!("アプリ別設定を保存しました: {process_name}"));
         Ok(())
@@ -2067,12 +2113,14 @@ impl App {
 
     fn delete_profile(&mut self) -> Result<(), String> {
         let process_name = required_text(self.general.profile_process, "実行ファイル名")?;
-        self.configuration
+        let mut configuration = self.configuration.clone();
+        configuration
             .remove_profile(&process_name)
             .map_err(display)?;
-        self.configuration
+        configuration
             .save(&self.configuration_path)
             .map_err(display)?;
+        self.configuration = configuration;
         self.populate_profile_list();
         set_text(self.general.profile_process, "");
         self.set_status(&format!("アプリ別設定を削除しました: {process_name}"));
@@ -2332,7 +2380,11 @@ impl App {
             "自動更新の確認を無効にしました。"
         });
         if enabled && !was_enabled {
-            self.start_update(UpdateOperation::Check)?;
+            if let Err(error) = self.start_update(UpdateOperation::AutomaticCheck) {
+                let message = format!("自動更新の確認を開始できませんでした: {error}");
+                set_text(self.update_controls.result, &message);
+                self.set_status(&message);
+            }
         }
         Ok(())
     }
@@ -2349,9 +2401,14 @@ impl App {
             .spawn(move || {
                 let window = HWND(window_value as *mut c_void);
                 let completion = std::panic::catch_unwind(|| match operation {
-                    UpdateOperation::Check => UpdateCompletion::Check(updater::check_real(enabled)),
-                    UpdateOperation::Apply => {
-                        UpdateCompletion::Apply(updater::apply_real(enabled, &update_paths))
+                    UpdateOperation::AutomaticCheck | UpdateOperation::ManualCheck => {
+                        UpdateCompletion::Check {
+                            origin: operation,
+                            outcome: updater::check_real(enabled),
+                        }
+                    }
+                    UpdateOperation::ManualInstall => {
+                        UpdateCompletion::Install(updater::apply_real(enabled, &update_paths))
                     }
                 })
                 .unwrap_or_else(|_| {
@@ -2360,11 +2417,14 @@ impl App {
                         message: "更新処理が予期せず終了しました。".to_owned(),
                     };
                     match operation {
-                        UpdateOperation::Check => {
-                            UpdateCompletion::Check(updater::UpdateCheckOutcome::Failed(failure))
+                        UpdateOperation::AutomaticCheck | UpdateOperation::ManualCheck => {
+                            UpdateCompletion::Check {
+                                origin: operation,
+                                outcome: updater::UpdateCheckOutcome::Failed(failure),
+                            }
                         }
-                        UpdateOperation::Apply => {
-                            UpdateCompletion::Apply(updater::UpdateOutcome::Failed {
+                        UpdateOperation::ManualInstall => {
+                            UpdateCompletion::Install(updater::UpdateOutcome::Failed {
                                 version: None,
                                 failure,
                             })
@@ -2394,8 +2454,10 @@ impl App {
             .map_err(|error| format!("更新処理を開始できませんでした: {error}"))?;
         self.update_in_flight = true;
         let message = match operation {
-            UpdateOperation::Check => "署名済みリリースの情報を確認しています…",
-            UpdateOperation::Apply => {
+            UpdateOperation::AutomaticCheck | UpdateOperation::ManualCheck => {
+                "署名済みリリースの情報を確認しています…"
+            }
+            UpdateOperation::ManualInstall => {
                 "署名済みインストーラーをダウンロードして検証しています。終了しないでください…"
             }
         };
@@ -2406,54 +2468,72 @@ impl App {
 
     fn finish_update(&mut self, completion: UpdateCompletion) {
         self.update_in_flight = false;
-        let available_version = match &completion {
-            UpdateCompletion::Check(updater::UpdateCheckOutcome::Available(manifest)) => {
-                Some(manifest.version)
-            }
-            _ => None,
-        };
-        let (message, failed) = match completion {
-            UpdateCompletion::Check(outcome) => {
-                let failed = matches!(outcome, updater::UpdateCheckOutcome::Failed(_));
-                (Self::describe_update_check(&outcome), failed)
-            }
-            UpdateCompletion::Apply(outcome) => {
-                let failed = outcome.is_failure();
-                (Self::describe_update(&outcome), failed)
-            }
-        };
+        let presentation = Self::present_update_completion(&completion);
+        let message = presentation.message;
         set_text(self.update_controls.result, &message.replace('\n', "\r\n"));
         self.set_status(&message.replace(['\r', '\n'], " "));
-        if failed {
-            message_box(
-                Some(self.window),
-                &message,
-                "Sakura Input の更新",
-                MB_OK | MB_ICONERROR,
-            );
-        }
-        if let Some(version) = available_version {
-            let prompt = Self::update_available_prompt(version);
-            if message_box(
-                Some(self.window),
-                &prompt,
-                "Sakura Input の更新",
-                MB_YESNO | MB_ICONINFORMATION,
-            ) == IDYES
-            {
-                if let Err(error) = self.start_update(UpdateOperation::Apply) {
-                    let message = format!("更新のインストールを開始できませんでした: {error}");
-                    self.set_status(&message);
-                    message_box(
-                        Some(self.window),
-                        &message,
-                        "Sakura Input の更新",
-                        MB_OK | MB_ICONERROR,
-                    );
-                }
-            } else {
-                self.set_status(&format!("Sakura Input {version} の更新を保留しました。"));
+        match presentation.modal {
+            UpdateModal::None => {}
+            UpdateModal::Error => {
+                message_box(
+                    Some(self.window),
+                    &message,
+                    "Sakura Input の更新",
+                    MB_OK | MB_ICONERROR,
+                );
             }
+            UpdateModal::OfferInstall(version) => {
+                let prompt = Self::update_available_prompt(version);
+                if message_box(
+                    Some(self.window),
+                    &prompt,
+                    "Sakura Input の更新",
+                    MB_YESNO | MB_ICONINFORMATION,
+                ) == IDYES
+                {
+                    if let Err(error) = self.start_update(UpdateOperation::ManualInstall) {
+                        let message = format!("更新のインストールを開始できませんでした: {error}");
+                        self.set_status(&message);
+                        message_box(
+                            Some(self.window),
+                            &message,
+                            "Sakura Input の更新",
+                            MB_OK | MB_ICONERROR,
+                        );
+                    }
+                } else {
+                    self.set_status(&format!("Sakura Input {version} の更新を保留しました。"));
+                }
+            }
+        }
+    }
+
+    fn present_update_completion(completion: &UpdateCompletion) -> UpdatePresentation {
+        match completion {
+            UpdateCompletion::Check { origin, outcome } => {
+                let modal = match (origin, outcome) {
+                    (
+                        UpdateOperation::ManualCheck,
+                        updater::UpdateCheckOutcome::Available(manifest),
+                    ) => UpdateModal::OfferInstall(manifest.version),
+                    (UpdateOperation::ManualCheck, updater::UpdateCheckOutcome::Failed(_)) => {
+                        UpdateModal::Error
+                    }
+                    _ => UpdateModal::None,
+                };
+                UpdatePresentation {
+                    message: Self::describe_update_check(outcome),
+                    modal,
+                }
+            }
+            UpdateCompletion::Install(outcome) => UpdatePresentation {
+                message: Self::describe_update(outcome),
+                modal: if outcome.is_failure() {
+                    UpdateModal::Error
+                } else {
+                    UpdateModal::None
+                },
+            },
         }
     }
 
@@ -4498,3 +4578,7 @@ unsafe extern "system" fn window_procedure(
 #[cfg(test)]
 #[path = "ui_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ui/update_tests.rs"]
+mod update_tests;
