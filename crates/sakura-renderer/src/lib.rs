@@ -26,6 +26,7 @@ mod accessibility;
 mod candidate;
 mod glyph;
 mod indicator;
+mod memo_protection;
 mod pad;
 mod pad_caption;
 mod pad_crypto_client;

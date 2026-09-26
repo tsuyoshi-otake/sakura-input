@@ -6,17 +6,21 @@
 画面試作は [`docs/prototypes/sakura-pad-protection.html`](../prototypes/sakura-pad-protection.html)。
 実際の秘密を入力せず、画面内の固定デモ値だけで操作する。
 既存のメモはユーザーが明示的に保護を有効にするまで従来の DPAPI 保存を使う。
-開発中のPadには全体パスワード保護の経路が接続されたが、全計画の完了を意味しない。
+開発中の Pad には全体・個別メモのパスワード保護経路が接続されたが、全計画の完了を意味しない。
 実データの移行・リリース・インストール・外部サービス導入は行っていない。
 
 進捗: 既存 Pad の最前面・タイトル保存修正は `6e23d78`。
 rendererから独立した常駐暗号workerを呼び、明示的な全体保護設定で旧Padを
 検証付きv3保存へ切り替える。再起動後のパスワード解除・暗号化保存・Windows
 ロック時の表示マスクは、隔離したデータと実プロセスで確認した。設定画面に
-Sakura Pad専用ページとPadを開く入口を追加した。復旧キーの暗号形式とworker通信は
-テスト済みだが、登録・表示・解除UIには未接続。個別メモ保護、YubiKey、TOTP、
-自動ロックと復旧の本実装も未完了。現状の検証と限界は
-`verification/sakura-pad-protected-store.md` に記録する。旧形式への後退防止の
+Sakura Pad専用ページとPadを開く入口を追加した。個別メモは v4 と全体保護 v3 の
+どちらでも独立したパスワードで保護でき、ロック時の一覧・検索・コピーは内容を伏せる。
+新しい個別保護では復旧キーを一度表示し、Pad 外への保存確認後に保護を確定する。
+解除・キャンセル・再表示は実 Windows UI と独立 worker で検証した。
+YubiKey による鍵保護、TOTP の画面と永続状態、全体保護の復旧キー、
+自動ロック・保護設定変更・障害注入の総合検証は未完了。現状の検証と限界は
+`verification/sakura-pad-protected-store.md` と
+`verification/sakura-pad-memo-protection.md` に記録する。旧形式への後退防止の
 初期検証は `verification/sakura-pad-protection-foundation.md` を参照。
 ユーザーは YubiKey 5 シリーズを所有。FIDO 接続と Windows WebAuthn API v9
 を読み取り確認したが、キーでの PRF 登録・解除成功を確認したものではない。
