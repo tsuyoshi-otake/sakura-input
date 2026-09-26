@@ -75,6 +75,8 @@ sakura_settings.exe update status
 `shift-space` は Shift+スペース（スペースの逆／常に全角／常に半角）を設定します。
 変換中の Space は候補・文節操作を優先し、これらのアイドル時空白設定で上書きしません。
 
+設定画面の入力・変換設定は［適用］または［OK］で保存し、［キャンセル］では未適用の変更を破棄します。アプリ別設定の［追加／更新］や［削除］はその場で保存されますが、別ページの未適用の変更は保存しません。全体の保存が途中で失敗した場合は、保存済み・保存を確認できない項目・未実行の範囲を表示します。保存済みの変更はキャンセルでは戻らないため、原因を解消してから再度［適用］してください。
+
 ### GPT-5.6 Lunaによる文章変換・校正
 
 設定画面の「AI文章変換」で、送信先、Endpoint、認証方式、APIキー、変換スタイル、Effort、Tier、文章変換キーを設定できます。使用モデルは`gpt-5.6-luna`固定、API方式はResponsesのみです。文章変換キーの既定値はSpace右側の`変換`で、`Caps Lock`または無効にも変更できます。入力中はSakuraのpreeditを、入力がなければホストアプリの選択文字列を変換します。対象文字列がない場合は、`変換`の再変換や`Caps Lock`の入力モード切替といった従来動作を保ちます。校正はタスクバーのSakura Inputメニューにある「選択中文字列を校正」から明示的に実行します。
@@ -85,7 +87,7 @@ sakura_settings.exe update status
 
 AI処理は明示操作時だけ開始し、同時に1件までです。キーの押しっぱなし、連打、同一内容の短時間再送では重複リクエストを作りません。結果待ちの間にフォーカス、選択範囲、元文字列、入力スコープが変わった場合は結果を適用しません。Password、URL、Email、Digits、未知・未分類の入力欄とテスト専用入力では送信しません。開発者モードでは、暗号化された入力履歴へ結果、状態、プロバイダー、スタイル、遅延、試行回数、取得できたトークン数を記録し、`history stats`でAIリクエスト回数とトークン合計を確認できます。
 
-自動更新の確認は既定で有効です。設定画面または `sakura_settings.exe update disable` で明示的に無効化できます。無効化していない場合、設定アプリ起動時にGitHub Releasesの更新を確認します。利用可能な更新があれば確認ダイアログを表示し、同意した場合だけインストーラーを取得・検証・実行します。更新チャンネルは、Authenticode と Sakura 固有の detached application signature を別々に検証します。Authenticode 署名済みリリースは従来どおり `WinVerifyTrust` を通過する必要があります。owner 承認の Authenticode 未署名リリースでも、canonical `release-manifest-v2.txt` と `release-manifest-v2.sig` が Sakura の固定公開鍵で検証でき、`WinVerifyTrust` が正確に `TRUST_E_NOSIGNATURE` を返す場合だけ自動更新できます。公開鍵、trust epoch、release sequence、鍵の rotation／recovery、Authenticode 判定表は [update-signing v2 contract](verification/update-signing-v2.md) に固定しています。v1.0.33 は旧 updater からの手動 bridge であり、v2 対応 updater の導入後に自動更新を開始します。インストーラーは HTTPS で取得し、固定された配布元、サイズ、SHA-256、署名ポリシーをすべて検証してから実行します。設定の root 実行ファイルは安定ランチャーで、実体は現在の versioned payload から起動します。
+自動更新の確認は既定で有効です。設定画面または `sakura_settings.exe update disable` で明示的に無効化できます。無効化していない場合、設定アプリ起動時にGitHub Releasesの更新を確認し、結果を「更新の状態」に表示します。起動時の確認ではダイアログを表示せず、画面やフォーカスを切り替えず、インストールも開始しません。「今すぐ確認」で利用可能な更新を確認した場合は確認ダイアログを表示し、同意した場合だけインストーラーを取得・検証・実行します。更新チャンネルは、Authenticode と Sakura 固有の detached application signature を別々に検証します。Authenticode 署名済みリリースは従来どおり `WinVerifyTrust` を通過する必要があります。owner 承認の Authenticode 未署名リリースでも、canonical `release-manifest-v2.txt` と `release-manifest-v2.sig` が Sakura の固定公開鍵で検証でき、`WinVerifyTrust` が正確に `TRUST_E_NOSIGNATURE` を返す場合だけ自動更新できます。公開鍵、trust epoch、release sequence、鍵の rotation／recovery、Authenticode 判定表は [update-signing v2 contract](verification/update-signing-v2.md) に固定しています。v1.0.33 は旧 updater からの手動 bridge であり、v2 対応 updater の導入後に自動更新を開始します。インストーラーは HTTPS で取得し、固定された配布元、サイズ、SHA-256、署名ポリシーをすべて検証してから実行します。設定の root 実行ファイルは安定ランチャーで、実体は現在の versioned payload から起動します。
 
 ## Sakura Pad（ローカルメモ）
 

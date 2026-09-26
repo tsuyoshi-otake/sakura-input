@@ -224,6 +224,7 @@ fn capacity_pressure_reclaims_a_batch_and_accepts_subsequent_records() {
         &payload,
         now_ms(),
         &mut retention,
+        &mut false,
     )
     .unwrap();
     let compacted_len = writer.as_ref().unwrap().metadata().unwrap().len();
@@ -235,6 +236,7 @@ fn capacity_pressure_reclaims_a_batch_and_accepts_subsequent_records() {
             &payload,
             now_ms(),
             &mut retention,
+            &mut false,
         )
         .unwrap();
     }

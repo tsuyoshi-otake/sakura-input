@@ -309,6 +309,7 @@ fn input_assist_space_controls_have_stable_orders() {
 
 #[test]
 fn light_initial_frame_shows_only_the_selected_input_topic() {
+    let _desktop = native_test_guard();
     register_window_class().expect("settings window class registers");
     let window = create_main_window().expect("settings root window creates");
     let mut app = Box::new(App::new(window).expect("settings controls create"));
@@ -395,6 +396,7 @@ fn light_initial_frame_shows_only_the_selected_input_topic() {
 
 #[test]
 fn settings_window_uses_the_sakura_input_icon() {
+    let _desktop = native_test_guard();
     register_window_class().expect("settings window class registers");
     let window = create_main_window().expect("settings root window creates");
     let icons = apply_window_icons(window).expect("Sakura Input icon asset loads");

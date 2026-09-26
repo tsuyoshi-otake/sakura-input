@@ -302,7 +302,8 @@ fn maintenance_prewrite_rejection_does_not_schedule_expiry() {
         &mut file,
         &vec![0; MAX_RECORD_BYTES + 1],
         1,
-        &mut retention
+        &mut retention,
+        &mut false,
     )
     .is_err());
     assert_eq!(retention.oldest_timestamp_ms, Some(now));
@@ -1236,6 +1237,511 @@ fn barriers_report_missing_handle_and_real_sync_failure() {
     // failure, not an injected helper that simply returns its expectation.
     let read_only = File::open(&fixture.0).unwrap();
     assert!(sync_writer_file(&Some(read_only), false).is_err());
+}
+
+thread_local! {
+    static FAIL_APPEND_AFTER_BYTES: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+    pub(super) static FAIL_APPEND_ROLLBACK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static FAIL_CLEAR_AFTER_BYTES: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+    static FAIL_CLEAR_SYNC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub(super) struct HistoryWriteFault<'a> {
+    file: &'a mut File,
+    remaining: Option<usize>,
+}
+
+impl<'a> HistoryWriteFault<'a> {
+    pub(super) fn append(file: &'a mut File) -> Self {
+        Self {
+            file,
+            remaining: FAIL_APPEND_AFTER_BYTES.with(|fault| fault.take()),
+        }
+    }
+
+    pub(super) fn clear(file: &'a mut File) -> Self {
+        Self {
+            file,
+            remaining: FAIL_CLEAR_AFTER_BYTES.with(|fault| fault.take()),
+        }
+    }
+
+    pub(super) fn sync_all(&self) -> io::Result<()> {
+        if FAIL_CLEAR_SYNC.with(|fail| fail.replace(false)) {
+            return Err(io::Error::other("synthetic Clear synchronization failure"));
+        }
+        self.file.sync_all()
+    }
+}
+
+impl Write for HistoryWriteFault<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let Some(remaining) = self.remaining else {
+            return self.file.write(bytes);
+        };
+        if remaining == 0 {
+            return Err(io::Error::other("synthetic partial history append"));
+        }
+        let written = self.file.write(&bytes[..bytes.len().min(remaining)])?;
+        self.remaining = Some(remaining - written);
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.remaining == Some(0) {
+            return Err(io::Error::other("synthetic history flush failure"));
+        }
+        self.file.flush()
+    }
+}
+
+#[test]
+fn partial_append_restores_frame_boundary_before_later_records() {
+    let timestamp = now_ms();
+    let payload = key_record(2, timestamp).encode().unwrap();
+    let frame_len = FRAME_HEADER_LEN + protect(&payload).unwrap().len();
+    for after_clear in [false, true] {
+        for cut in [0, 1, 4, 7, 8, 9, frame_len - 1, frame_len] {
+            let fixture = ReadFailureFixture(temporary_path("partial-append"));
+            append_records(&fixture.0, &[key_record(1, timestamp)]);
+            let mut file = Some(open_append(&fixture.0).unwrap());
+            if after_clear {
+                clear_writer_file(&fixture.0, &mut file).unwrap();
+            }
+            let before = fs::read(&fixture.0).unwrap();
+            let mut retention = RetentionPlan::default();
+            let mut blocked = false;
+            FAIL_APPEND_AFTER_BYTES.with(|fault| fault.set(Some(cut)));
+            let failed = append_payload(
+                &fixture.0,
+                &mut file,
+                &payload,
+                timestamp,
+                &mut retention,
+                &mut blocked,
+            );
+            let after_failure = fs::read(&fixture.0).unwrap();
+            let next = key_record(3, timestamp);
+            append_payload(
+                &fixture.0,
+                &mut file,
+                &next.encode().unwrap(),
+                timestamp,
+                &mut retention,
+                &mut blocked,
+            )
+            .unwrap();
+            sync_writer_file(&file, false).unwrap();
+            let snapshot = read_snapshot(&fixture.0);
+            drop(file);
+            assert!(failed.is_err(), "fault must fire at {cut}");
+            assert!(!blocked, "successful rollback must permit later appends");
+            let snapshot = snapshot.unwrap_or_else(|error| {
+                panic!("later record is unreadable: cut={cut}, after_clear={after_clear}: {error}")
+            });
+            let expected = if after_clear {
+                vec![next]
+            } else {
+                vec![key_record(1, timestamp), next]
+            };
+            assert_eq!(snapshot.records, expected);
+            assert_eq!(snapshot.ignored_tail_bytes, 0);
+            assert!(
+                after_failure == before,
+                "failed append changed the valid prefix: cut={cut}, after_clear={after_clear}"
+            );
+        }
+    }
+}
+
+#[test]
+fn partial_append_failed_rollback_preserves_tail_and_blocks_retries() {
+    let fixture = ReadFailureFixture(temporary_path("rollback-blocked"));
+    let timestamp = now_ms();
+    let first = key_record(1, timestamp);
+    append_records(&fixture.0, std::slice::from_ref(&first));
+    let mut file = Some(open_append(&fixture.0).unwrap());
+    let mut retention = RetentionPlan::default();
+    let mut blocked = false;
+    FAIL_APPEND_AFTER_BYTES.with(|fault| fault.set(Some(9)));
+    FAIL_APPEND_ROLLBACK.with(|fail| fail.set(true));
+    assert!(append_payload(
+        &fixture.0,
+        &mut file,
+        &key_record(2, timestamp).encode().unwrap(),
+        timestamp,
+        &mut retention,
+        &mut blocked,
+    )
+    .is_err());
+    assert!(blocked);
+    let damaged = fs::read(&fixture.0).unwrap();
+    for sequence in 3..6 {
+        assert!(append_payload(
+            &fixture.0,
+            &mut file,
+            &key_record(sequence, timestamp).encode().unwrap(),
+            timestamp,
+            &mut retention,
+            &mut blocked,
+        )
+        .is_err());
+        assert!(fs::read(&fixture.0).unwrap() == damaged);
+    }
+    drop(file);
+    // A validated reopen repairs the structural tail and accepts new records.
+    let service = InputHistoryService::open(&fixture.0).unwrap();
+    service.flush().unwrap();
+    service.stop().unwrap();
+    let snapshot = read_snapshot(&fixture.0).unwrap();
+    assert_eq!(snapshot.records.len(), 2);
+    assert_eq!(snapshot.records[0], first);
+    assert_eq!(snapshot.ignored_tail_bytes, 0);
+}
+
+#[test]
+fn partial_append_barriers_report_loss_and_clear_resumes_writing() {
+    for rollback_fails in [false, true] {
+        let fixture = ReadFailureFixture(temporary_path("partial-append-clear"));
+        ensure_file(&fixture.0).unwrap();
+        let timestamp = now_ms();
+        let (sender, receiver) = mpsc::sync_channel(8);
+        for sequence in 1..=2 {
+            sender
+                .send(Command::Append {
+                    epoch: 0,
+                    timestamp_ms: timestamp,
+                    payload: key_record(sequence, timestamp).encode().unwrap(),
+                })
+                .unwrap();
+        }
+        let (before, before_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: before }).unwrap();
+        let (clear, clear_result) = mpsc::channel();
+        sender
+            .send(Command::Clear {
+                epoch: 1,
+                reply: clear,
+            })
+            .unwrap();
+        let next = key_record(3, timestamp);
+        sender
+            .send(Command::Append {
+                epoch: 1,
+                timestamp_ms: timestamp,
+                payload: next.encode().unwrap(),
+            })
+            .unwrap();
+        let (after, after_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: after }).unwrap();
+        let (stop, stop_result) = mpsc::channel();
+        sender.send(Command::Shutdown { reply: stop }).unwrap();
+        let stats = Arc::new(InputHistoryStats::default());
+        FAIL_APPEND_AFTER_BYTES.with(|fault| fault.set(Some(9)));
+        FAIL_APPEND_ROLLBACK.with(|fail| fail.set(rollback_fails));
+        writer_loop_with_interval(
+            fixture.0.clone(),
+            receiver,
+            Arc::clone(&stats),
+            Duration::from_secs(3600),
+        );
+        assert!(before_result.try_recv().unwrap().is_err());
+        assert_eq!(
+            clear_result.try_recv().unwrap().unwrap(),
+            u64::from(!rollback_fails)
+        );
+        after_result.try_recv().unwrap().unwrap();
+        stop_result.try_recv().unwrap().unwrap();
+        assert_eq!(
+            stats.persistence_failures(),
+            if rollback_fails { 3 } else { 2 }
+        );
+        let snapshot = read_snapshot(&fixture.0).unwrap();
+        assert_eq!(snapshot.records, vec![next]);
+        assert_eq!(snapshot.ignored_tail_bytes, 0);
+    }
+}
+
+#[test]
+fn partial_append_failed_clear_keeps_writes_blocked_and_shutdown_reports_loss() {
+    let fixture = PublicationFixture::new("partial-append-failed-clear");
+    ensure_file(fixture.path()).unwrap();
+    let file = open_append(fixture.path()).unwrap();
+    // An unresolved publication rejects Clear before it can replace the file.
+    fs::create_dir(compaction_transaction_path(fixture.path()).unwrap()).unwrap();
+    let (sender, receiver) = mpsc::sync_channel(5);
+    let timestamp = now_ms();
+    sender
+        .send(Command::Append {
+            epoch: 0,
+            timestamp_ms: timestamp,
+            payload: key_record(1, timestamp).encode().unwrap(),
+        })
+        .unwrap();
+    let (clear, clear_result) = mpsc::channel();
+    sender
+        .send(Command::Clear {
+            epoch: 1,
+            reply: clear,
+        })
+        .unwrap();
+    sender
+        .send(Command::Append {
+            epoch: 1,
+            timestamp_ms: timestamp,
+            payload: key_record(2, timestamp).encode().unwrap(),
+        })
+        .unwrap();
+    let (flush, flush_result) = mpsc::channel();
+    sender.send(Command::Flush { reply: flush }).unwrap();
+    let (stop, stop_result) = mpsc::channel();
+    sender.send(Command::Shutdown { reply: stop }).unwrap();
+    let stats = Arc::new(InputHistoryStats::default());
+    FAIL_APPEND_AFTER_BYTES.with(|fault| fault.set(Some(9)));
+    FAIL_APPEND_ROLLBACK.with(|fail| fail.set(true));
+    writer_loop_with_file(
+        fixture.path().to_owned(),
+        receiver,
+        Arc::clone(&stats),
+        Some(file),
+        Duration::from_secs(3600),
+        RetentionPlan::default(),
+    );
+    assert!(clear_result.try_recv().unwrap().is_err());
+    assert!(flush_result.try_recv().unwrap().is_err());
+    assert!(stop_result.try_recv().unwrap().is_err());
+    assert_eq!(stats.persistence_failures(), 5);
+    assert_eq!(
+        fs::metadata(fixture.path()).unwrap().len(),
+        (HEADER_LEN + 9) as u64
+    );
+}
+
+#[test]
+fn partial_append_failed_rollback_skips_idle_maintenance() {
+    let fixture = PublicationFixture::new("partial-append-idle");
+    ensure_file(fixture.path()).unwrap();
+    let file = open_append(fixture.path()).unwrap();
+    let (sender, receiver) = mpsc::sync_channel(2);
+    sender
+        .send(Command::Append {
+            epoch: 0,
+            timestamp_ms: 1,
+            payload: key_record(1, 1).encode().unwrap(),
+        })
+        .unwrap();
+    let (stop, stop_result) = mpsc::channel();
+    AFTER_MAINTENANCE.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            sender.send(Command::Shutdown { reply: stop }).unwrap();
+        }));
+    });
+    let stats = Arc::new(InputHistoryStats::default());
+    FAIL_APPEND_AFTER_BYTES.with(|fault| fault.set(Some(9)));
+    FAIL_APPEND_ROLLBACK.with(|fail| fail.set(true));
+    writer_loop_with_file(
+        fixture.path().to_owned(),
+        receiver,
+        Arc::clone(&stats),
+        Some(file),
+        Duration::from_millis(1),
+        RetentionPlan::default(),
+    );
+    assert!(stop_result.try_recv().unwrap().is_err());
+    assert_eq!(
+        stats.persistence_failures(),
+        2,
+        "idle must not retry damaged storage"
+    );
+    assert_eq!(
+        fs::metadata(fixture.path()).unwrap().len(),
+        (HEADER_LEN + 9) as u64
+    );
+}
+
+#[test]
+fn failed_clear_header_blocks_append_and_keeps_barriers_failed() {
+    for cut in [1, 0, 4, HEADER_LEN - 1, HEADER_LEN] {
+        let fixture = ReadFailureFixture(temporary_path("clear-interrupted"));
+        let timestamp = now_ms();
+        append_records(&fixture.0, &[key_record(1, timestamp)]);
+        let (sender, receiver) = mpsc::sync_channel(4);
+        let (clear, clear_result) = mpsc::channel();
+        sender
+            .send(Command::Clear {
+                epoch: 1,
+                reply: clear,
+            })
+            .unwrap();
+        sender
+            .send(Command::Append {
+                epoch: 1,
+                timestamp_ms: timestamp,
+                payload: key_record(2, timestamp).encode().unwrap(),
+            })
+            .unwrap();
+        let (flush, flush_result) = mpsc::channel();
+        sender.send(Command::Flush { reply: flush }).unwrap();
+        let (stop, stop_result) = mpsc::channel();
+        sender.send(Command::Shutdown { reply: stop }).unwrap();
+        FAIL_CLEAR_AFTER_BYTES.with(|fault| fault.set(Some(cut)));
+        writer_loop_with_interval(
+            fixture.0.clone(),
+            receiver,
+            Arc::new(InputHistoryStats::default()),
+            Duration::from_secs(3600),
+        );
+        assert!(clear_result.try_recv().unwrap().is_err());
+        assert!(
+            flush_result.try_recv().unwrap().is_err(),
+            "Flush hid failed Clear at cut={cut}; snapshot error={:?}",
+            read_snapshot(&fixture.0).err()
+        );
+        assert!(
+            stop_result.try_recv().unwrap().is_err(),
+            "Shutdown hid failed Clear at cut={cut}"
+        );
+        assert_eq!(
+            fs::read(&fixture.0).unwrap(),
+            header()[..cut],
+            "write continued after failed Clear"
+        );
+    }
+}
+
+#[test]
+fn failed_clear_sync_is_reported_by_live_and_offline_paths() {
+    for offline in [false, true] {
+        let fixture = ReadFailureFixture(temporary_path("clear-sync"));
+        append_records(&fixture.0, &[key_record(1, now_ms())]);
+        let mut file = if offline {
+            None
+        } else {
+            Some(open_append(&fixture.0).unwrap())
+        };
+        FAIL_CLEAR_SYNC.with(|fail| fail.set(true));
+        let result = if offline {
+            clear_path(&fixture.0)
+        } else {
+            clear_writer_file(&fixture.0, &mut file)
+        };
+        FAIL_CLEAR_SYNC.with(|fail| fail.set(false));
+        let kept_handle = file.is_some();
+        drop(file);
+        assert!(
+            result.is_err(),
+            "Clear ignored synchronization failure: offline={offline}"
+        );
+        assert!(
+            !kept_handle,
+            "live writer published an unsynchronized Clear handle"
+        );
+        clear_path(&fixture.0).unwrap();
+        assert_eq!(fs::read(&fixture.0).unwrap(), header());
+    }
+}
+
+#[test]
+fn failed_clear_header_recovers_only_after_successful_clear() {
+    let fixture = ReadFailureFixture(temporary_path("clear-retry"));
+    let timestamp = now_ms();
+    append_records(&fixture.0, &[key_record(1, timestamp)]);
+    let (sender, receiver) = mpsc::sync_channel(6);
+    let (first, first_result) = mpsc::channel();
+    sender
+        .send(Command::Clear {
+            epoch: 1,
+            reply: first,
+        })
+        .unwrap();
+    let (before, before_result) = mpsc::channel();
+    sender.send(Command::Flush { reply: before }).unwrap();
+    let (retry, retry_result) = mpsc::channel();
+    sender
+        .send(Command::Clear {
+            epoch: 2,
+            reply: retry,
+        })
+        .unwrap();
+    let record = key_record(2, timestamp);
+    sender
+        .send(Command::Append {
+            epoch: 2,
+            timestamp_ms: timestamp,
+            payload: record.encode().unwrap(),
+        })
+        .unwrap();
+    let (after, after_result) = mpsc::channel();
+    sender.send(Command::Flush { reply: after }).unwrap();
+    let (stop, stop_result) = mpsc::channel();
+    sender.send(Command::Shutdown { reply: stop }).unwrap();
+    FAIL_CLEAR_AFTER_BYTES.with(|fault| fault.set(Some(1)));
+    writer_loop_with_interval(
+        fixture.0.clone(),
+        receiver,
+        Arc::new(InputHistoryStats::default()),
+        Duration::from_secs(3600),
+    );
+    assert!(first_result.try_recv().unwrap().is_err());
+    assert!(before_result.try_recv().unwrap().is_err());
+    retry_result.try_recv().unwrap().unwrap();
+    after_result.try_recv().unwrap().unwrap();
+    stop_result.try_recv().unwrap().unwrap();
+    let snapshot = read_snapshot(&fixture.0).unwrap();
+    assert_eq!(snapshot.records, vec![record]);
+    assert_eq!(snapshot.ignored_tail_bytes, 0);
+}
+
+#[test]
+fn failed_clear_preflight_preserves_owned_handle_and_existing_bytes() {
+    let fixture = PublicationFixture::new("clear-preflight");
+    append_records(fixture.path(), &[key_record(1, now_ms())]);
+    let before = fs::read(fixture.path()).unwrap();
+    let mut file = Some(open_append(fixture.path()).unwrap());
+    fs::create_dir(fixture.transaction()).unwrap();
+    assert!(clear_writer_file(fixture.path(), &mut file).is_err());
+    assert!(
+        file.is_some(),
+        "preflight refusal must retain the unmodified writer"
+    );
+    assert_eq!(fs::read(fixture.path()).unwrap(), before);
+    drop(file);
+}
+
+#[test]
+fn failed_clear_header_skips_idle_maintenance() {
+    let fixture = PublicationFixture::new("clear-failed-idle");
+    append_records(fixture.path(), &[key_record(1, 1)]);
+    let (sender, receiver) = mpsc::sync_channel(2);
+    let (clear, clear_result) = mpsc::channel();
+    sender
+        .send(Command::Clear {
+            epoch: 1,
+            reply: clear,
+        })
+        .unwrap();
+    let (stop, stop_result) = mpsc::channel();
+    AFTER_MAINTENANCE.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            sender.send(Command::Shutdown { reply: stop }).unwrap();
+        }));
+    });
+    let stats = Arc::new(InputHistoryStats::default());
+    FAIL_CLEAR_AFTER_BYTES.with(|fault| fault.set(Some(1)));
+    writer_loop_with_interval(
+        fixture.path().to_owned(),
+        receiver,
+        Arc::clone(&stats),
+        Duration::from_millis(1),
+    );
+    assert!(clear_result.try_recv().unwrap().is_err());
+    assert!(stop_result.try_recv().unwrap().is_err());
+    assert_eq!(
+        stats.persistence_failures(),
+        2,
+        "maintenance must not reopen failed Clear"
+    );
+    assert_eq!(fs::read(fixture.path()).unwrap(), header()[..1]);
 }
 
 #[test]
